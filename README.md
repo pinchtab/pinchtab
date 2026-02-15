@@ -68,76 +68,14 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.browser-bridge
 
 ## Features
 
-### 🌲 Accessibility-First Snapshots
-The primary interface. Returns a structured tree of every element on the page with stable refs (`e0`, `e1`, `e2`...) that agents can click, type into, or read.
-
-```bash
-curl localhost:18800/snapshot?tabId=X
-```
-```json
-{
-  "url": "https://x.com/search?q=%24hims",
-  "title": "$hims - Search / X",
-  "count": 47,
-  "nodes": [
-    {"ref": "e0", "role": "searchbox", "name": "Search query", "nodeId": 206},
-    {"ref": "e1", "role": "link", "name": "Deep Value Investing @DeepIceValue", "nodeId": 412},
-    {"ref": "e2", "role": "button", "name": "Like", "nodeId": 445}
-  ]
-}
-```
-
-### 🎯 Smart Filters
-Don't waste tokens on 200 nodes when you need 10 buttons:
-```bash
-# Only interactive elements (buttons, links, inputs)
-curl localhost:18800/snapshot?tabId=X&filter=interactive
-
-# Limit tree depth
-curl localhost:18800/snapshot?tabId=X&depth=3
-```
-
-### 🖱️ Direct Actions
-Click, type, fill — by accessibility ref or CSS selector:
-```bash
-# Click by ref
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"click","ref":"e5"}'
-
-# Type in a field
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"type","ref":"e0","text":"$hims"}'
-
-# Press a key
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"press","key":"Enter"}'
-
-# By CSS selector
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"click","selector":"button.submit"}'
-```
-
-### 🕵️ Stealth Mode
-Pinchtab patches `navigator.webdriver`, spoofs user agent, hides automation flags. Sites like X.com and Google treat it as a normal browser. Log in, stay logged in.
-
-### 💾 Session Persistence
-Chrome profile saved at `~/.browser-bridge/chrome-profile/`. Cookies, localStorage, auth tokens — all persist across restarts. Tabs are saved to `~/.browser-bridge/sessions.json` on shutdown.
-
-### 📝 Text Extraction
-Get raw page text (body innerText) without the tree overhead:
-```bash
-curl localhost:18800/text?tabId=X
-```
-
-### ⚡ JavaScript Evaluation
-Escape hatch for anything the API doesn't cover:
-```bash
-curl -X POST localhost:18800/evaluate \
-  -d '{"tabId":"X","expression":"document.querySelectorAll(\".tweet\").length"}'
-```
-
-### 📸 Screenshot (Opt-in)
-Available when you need visual verification. Not the default:
-```bash
-curl localhost:18800/screenshot?tabId=X          # base64 JSON
-curl localhost:18800/screenshot?tabId=X&raw=true  # raw JPEG
-```
+- 🌲 **Accessibility-first** — structured tree with stable refs (`e0`, `e1`...) for click, type, read
+- 🎯 **Smart filters** — `?filter=interactive` returns only buttons/links/inputs (~75% fewer tokens)
+- 🖱️ **Direct actions** — click, type, fill, press, focus by ref or CSS selector
+- 🕵️ **Stealth mode** — patches `navigator.webdriver`, spoofs UA, hides automation flags
+- 💾 **Session persistence** — cookies, auth, tabs survive restarts
+- 📝 **Text extraction** — raw `innerText` for minimal token cost
+- ⚡ **JS evaluation** — escape hatch for anything the API doesn't cover
+- 📸 **Screenshots** — JPEG with quality control for visual verification
 
 ## Full API
 
