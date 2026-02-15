@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#1a1a2e" stroke="#FFD700" stroke-width="8"/>
+  
+  <!-- Crab claw / pinch - left -->
+  <path d="M120 200 Q80 160 100 120 Q120 80 160 100 Q180 110 170 140 L160 170 Z" 
+        fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
+  <path d="M120 200 Q80 240 100 280 Q120 320 160 300 Q180 290 170 260 L160 230 Z" 
+        fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
+  
+  <!-- Crab claw / pinch - right -->
+  <path d="M392 200 Q432 160 412 120 Q392 80 352 100 Q332 110 342 140 L352 170 Z" 
+        fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
+  <path d="M392 200 Q432 240 412 280 Q392 320 352 300 Q332 290 342 260 L352 230 Z" 
+        fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
+  
+  <!-- Body - banana shaped -->
+  <ellipse cx="256" cy="260" rx="100" ry="80" fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
+  
+  <!-- Banana curve stripe -->
+  <path d="M180 240 Q256 200 332 240" fill="none" stroke="#FFA500" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Eyes - screen/monitor style -->
+  <rect x="215" y="230" width="30" height="24" rx="4" fill="#1a1a2e" stroke="#00ff88" stroke-width="2"/>
+  <rect x="267" y="230" width="30" height="24" rx="4" fill="#1a1a2e" stroke="#00ff88" stroke-width="2"/>
+  
+  <!-- Eye glow / pupils -->
+  <rect x="222" y="237" width="8" height="10" rx="2" fill="#00ff88"/>
+  <rect x="274" y="237" width="8" height="10" rx="2" fill="#00ff88"/>
+  <rect x="232" y="239" width="5" height="6" rx="1" fill="#00ff88" opacity="0.5"/>
+  <rect x="284" y="239" width="5" height="6" rx="1" fill="#00ff88" opacity="0.5"/>
+  
+  <!-- Smile -->
+  <path d="M235 270 Q256 285 277 270" fill="none" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Little legs -->
+  <line x1="200" y1="320" x2="185" y2="360" stroke="#FFD700" stroke-width="6" stroke-linecap="round"/>
+  <line x1="230" y1="330" x2="220" y2="370" stroke="#FFD700" stroke-width="6" stroke-linecap="round"/>
+  <line x1="282" y1="330" x2="292" y2="370" stroke="#FFD700" stroke-width="6" stroke-linecap="round"/>
+  <line x1="312" y1="320" x2="327" y2="360" stroke="#FFD700" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Tab / browser tab on head -->
+  <path d="M220 195 L220 175 L240 165 L272 165 L292 175 L292 195" 
+        fill="#1a1a2e" stroke="#FFD700" stroke-width="3"/>
+  <circle cx="235" cy="178" r="3" fill="#ff4444"/>
+  <circle cx="249" cy="178" r="3" fill="#FFD700"/>
+  <circle cx="263" cy="178" r="3" fill="#00ff88"/>
+  
+  <!-- Antenna -->
+  <line x1="256" y1="165" x2="256" y2="135" stroke="#FFD700" stroke-width="3"/>
+  <circle cx="256" cy="130" r="6" fill="#00ff88" stroke="#1a1a2e" stroke-width="2"/>
+</svg>

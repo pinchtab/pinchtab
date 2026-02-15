@@ -1,75 +1,195 @@
-# Browser Bridge
+<p align="center">
+  <img src="assets/logo-banner.svg" alt="pinchtab" width="600"/>
+</p>
 
-Local browser control service for AI agents. Runs on your machine, connects to your Chrome, survives restarts.
+<p align="center">
+  <strong>Browser control for AI agents.</strong><br/>
+  12MB Go binary. Zero config. Accessibility-first.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/lang-Go-00ADD8?style=flat-square" alt="Go"/>
+  <img src="https://img.shields.io/badge/binary-12MB-FFD700?style=flat-square" alt="12MB"/>
+  <img src="https://img.shields.io/badge/interface-HTTP-00ff88?style=flat-square" alt="HTTP"/>
+  <img src="https://img.shields.io/badge/license-MIT-888?style=flat-square" alt="MIT"/>
+</p>
+
+---
 
 ## Why
 
-Agents need a browser that:
-- **Persists sessions** — cookies, auth, tabs survive Chrome/agent restarts
-- **Is directly controllable** — any agent talks to it via HTTP, no SDK needed
-- **Uses accessibility trees** — not screenshots. 4x cheaper, works with any LLM
-- **Stays out of the way** — zero config, single process, no cloud
+AI agents need browsers. Current options are either:
+- **Screenshot-based** — expensive (vision model tokens), slow, unreliable
+- **Framework-locked** — MCP-only, Python-only, requires specific agent
+- **Cloud-first** — want you on their servers, not your machine
 
-## Architecture
-
-```
-┌─────────────┐     HTTP :18800    ┌──────────────┐      CDP       ┌─────────┐
-│  Any Agent  │ ──────────────►   │ Browser      │ ─────────────► │ Chrome  │
-│  (OpenClaw, │  snapshot, act,   │ Bridge       │  DevTools      │         │
-│   PicoClaw, │  navigate, eval   │              │  Protocol      │         │
-│   curl)     │                   │  sessions +  │                │         │
-└─────────────┘                   │  tab state   │                └─────────┘
-                                  └──────────────┘
-```
-
-## API
-
-```bash
-# What's open
-curl localhost:18800/tabs
-
-# See the page (accessibility tree — cheap, structured, actionable)
-curl localhost:18800/snapshot?tabId=X
-
-# Interact
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"click","ref":"e5"}'
-curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"type","ref":"e12","text":"hello"}'
-
-# Navigate
-curl -X POST localhost:18800/navigate -d '{"tabId":"X","url":"https://example.com"}'
-
-# Run JS
-curl -X POST localhost:18800/evaluate -d '{"tabId":"X","expression":"document.title"}'
-
-# Visual check (opt-in, expensive)
-curl localhost:18800/screenshot?tabId=X
-
-# Readable text (like reader mode)
-curl localhost:18800/text?tabId=X
-```
-
-## Sessions
-
-Browser Bridge saves tab state (URLs, positions) to `~/.browser-bridge/sessions.json`. When Chrome restarts, it restores your tabs. When the bridge restarts, it reconnects.
-
-Auth cookies, localStorage, sessionStorage — all live in Chrome's profile. Bridge doesn't touch them, they just persist naturally.
+Pinchtab is different:
+- **Accessibility tree as primary interface** — 4x cheaper than screenshots, works with any LLM
+- **Plain HTTP API** — any agent, any language, even `curl`
+- **Self-contained** — launches its own Chrome, manages the process
+- **Stealth mode** — bypasses bot detection (Google, X/Twitter, etc.)
+- **Persistent sessions** — log in once, stays logged in across restarts
 
 ## Quick Start
 
 ```bash
-# 1. Start Chrome with remote debugging
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+# Build
+go build -o pinchtab .
 
-# 2. Start the bridge  
-node server.js
+# Run (launches Chrome window — you can see and interact)
+./pinchtab
 
-# 3. Use it
-curl localhost:18800/health
+# Run headless
+BRIDGE_HEADLESS=true ./pinchtab
 ```
 
-## Not Goals
+Chrome opens. You log into your sites. Agents drive the rest.
 
-- Not a product, not a cloud service
-- Not a scraping tool
-- Not trying to replace Playwright MCP
-- No plugin system, no SDK, no React UI
+## Features
+
+### 🌲 Accessibility-First Snapshots
+The primary interface. Returns a structured tree of every element on the page with stable refs (`e0`, `e1`, `e2`...) that agents can click, type into, or read.
+
+```bash
+curl localhost:18800/snapshot?tabId=X
+```
+```json
+{
+  "url": "https://x.com/search?q=%24hims",
+  "title": "$hims - Search / X",
+  "count": 47,
+  "nodes": [
+    {"ref": "e0", "role": "searchbox", "name": "Search query", "nodeId": 206},
+    {"ref": "e1", "role": "link", "name": "Deep Value Investing @DeepIceValue", "nodeId": 412},
+    {"ref": "e2", "role": "button", "name": "Like", "nodeId": 445}
+  ]
+}
+```
+
+### 🎯 Smart Filters
+Don't waste tokens on 200 nodes when you need 10 buttons:
+```bash
+# Only interactive elements (buttons, links, inputs)
+curl localhost:18800/snapshot?tabId=X&filter=interactive
+
+# Limit tree depth
+curl localhost:18800/snapshot?tabId=X&depth=3
+```
+
+### 🖱️ Direct Actions
+Click, type, fill — by accessibility ref or CSS selector:
+```bash
+# Click by ref
+curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"click","ref":"e5"}'
+
+# Type in a field
+curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"type","ref":"e0","text":"$hims"}'
+
+# Press a key
+curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"press","key":"Enter"}'
+
+# By CSS selector
+curl -X POST localhost:18800/action -d '{"tabId":"X","kind":"click","selector":"button.submit"}'
+```
+
+### 🕵️ Stealth Mode
+Pinchtab patches `navigator.webdriver`, spoofs user agent, hides automation flags. Sites like X.com and Google treat it as a normal browser. Log in, stay logged in.
+
+### 💾 Session Persistence
+Chrome profile saved at `~/.browser-bridge/chrome-profile/`. Cookies, localStorage, auth tokens — all persist across restarts. Tabs are saved to `~/.browser-bridge/sessions.json` on shutdown.
+
+### 📝 Text Extraction
+Get readable page text without the tree overhead:
+```bash
+curl localhost:18800/text?tabId=X
+```
+
+### ⚡ JavaScript Evaluation
+Escape hatch for anything the API doesn't cover:
+```bash
+curl -X POST localhost:18800/evaluate \
+  -d '{"tabId":"X","expression":"document.querySelectorAll(\".tweet\").length"}'
+```
+
+### 📸 Screenshot (Opt-in)
+Available when you need visual verification. Not the default:
+```bash
+curl localhost:18800/screenshot?tabId=X          # base64 JSON
+curl localhost:18800/screenshot?tabId=X&raw=true  # raw JPEG
+```
+
+## Full API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Connection status |
+| `GET` | `/tabs` | List open tabs |
+| `GET` | `/snapshot` | Accessibility tree (primary interface) |
+| `GET` | `/screenshot` | JPEG screenshot (opt-in) |
+| `GET` | `/text` | Readable page text |
+| `POST` | `/navigate` | Go to URL |
+| `POST` | `/action` | Click, type, fill, press, focus |
+| `POST` | `/evaluate` | Execute JavaScript |
+| `POST` | `/tab` | Open/close tabs |
+
+### Query Parameters (snapshot)
+| Param | Description |
+|-------|-------------|
+| `tabId` | Target tab (default: first tab) |
+| `filter=interactive` | Only buttons, links, inputs |
+| `depth=N` | Max tree depth |
+
+## Configuration
+
+All via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BRIDGE_PORT` | `18800` | HTTP server port |
+| `BRIDGE_TOKEN` | *(none)* | Bearer token for auth |
+| `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
+| `BRIDGE_PROFILE` | `~/.browser-bridge/chrome-profile` | Chrome profile directory |
+| `BRIDGE_STATE_DIR` | `~/.browser-bridge` | State/session storage |
+| `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
+
+## Architecture
+
+```
+┌─────────────┐     HTTP :18800    ┌──────────────┐                ┌─────────┐
+│  Any Agent  │ ──────────────►   │  Pinchtab    │  ── CDP ──►   │ Chrome  │
+│  (OpenClaw, │  snapshot, act,   │              │                │         │
+│   PicoClaw, │  navigate, eval   │  stealth +   │                │  your   │
+│   curl,     │                   │  sessions +  │                │  tabs   │
+│   scripts)  │                   │  a11y tree   │                │         │
+└─────────────┘                   └──────────────┘                └─────────┘
+```
+
+## Why Not Screenshots?
+
+| | Screenshots | Accessibility Tree |
+|---|---|---|
+| **Tokens** | ~2,000/image | ~200-500/page |
+| **Speed** | Render → encode → transfer | Instant structured data |
+| **Reliability** | Vision model guesses coordinates | Deterministic refs |
+| **LLM requirement** | Vision model required | Any text LLM works |
+| **Cost (10-step task)** | ~$0.06 | ~$0.015 |
+
+Playwright MCP, OpenClaw, and Browser Use all default to accessibility trees for the same reason.
+
+## Compared To
+
+| | Pinchtab | Steel Browser | Playwright MCP | OpenClaw Browser |
+|---|---|---|---|---|
+| A11y snapshots | ✅ | ❌ | ✅ | ✅ |
+| Element interaction | ✅ | ❌ | ✅ | ✅ |
+| Interface | HTTP | HTTP | MCP | Internal |
+| Any agent | ✅ | ✅ | ❌ | ❌ |
+| Stealth mode | ✅ | ✅ | ❌ | ❌ |
+| Session persistence | ✅ | ✅ | ❌ | ❌ |
+| Self-launching Chrome | ✅ | Docker | ❌ | ✅ |
+| Single binary | ✅ 12MB | ❌ | ❌ | ❌ |
+| Lines of code | ~600 | ~12,000 | ~5,000 | — |
+
+## License
+
+MIT

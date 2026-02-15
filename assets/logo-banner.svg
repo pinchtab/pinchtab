@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <!-- Background -->
+  <rect width="800" height="200" rx="12" fill="#1a1a2e"/>
+  <rect x="2" y="2" width="796" height="196" rx="10" fill="none" stroke="#FFD700" stroke-width="3"/>
+  
+  <!-- Mini mascot -->
+  <!-- Body -->
+  <ellipse cx="100" cy="105" rx="45" ry="36" fill="#FFD700" stroke="#1a1a2e" stroke-width="3"/>
+  
+  <!-- Pinch claws -->
+  <path d="M55 90 Q35 70 50 55 Q60 48 68 60 L65 80 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="2"/>
+  <path d="M55 90 Q35 110 50 125 Q60 132 68 120 L65 100 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="2"/>
+  <path d="M145 90 Q165 70 150 55 Q140 48 132 60 L135 80 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="2"/>
+  <path d="M145 90 Q165 110 150 125 Q140 132 132 120 L135 100 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <rect x="82" y="93" width="14" height="12" rx="2" fill="#1a1a2e" stroke="#00ff88" stroke-width="1.5"/>
+  <rect x="104" y="93" width="14" height="12" rx="2" fill="#1a1a2e" stroke="#00ff88" stroke-width="1.5"/>
+  <rect x="86" y="96" width="4" height="5" rx="1" fill="#00ff88"/>
+  <rect x="108" y="96" width="4" height="5" rx="1" fill="#00ff88"/>
+  
+  <!-- Browser tab on head -->
+  <path d="M82 75 L82 65 L90 60 L110 60 L118 65 L118 75" fill="#1a1a2e" stroke="#FFD700" stroke-width="2"/>
+  <circle cx="92" cy="67" r="2" fill="#ff4444"/>
+  <circle cx="100" cy="67" r="2" fill="#FFD700"/>
+  <circle cx="108" cy="67" r="2" fill="#00ff88"/>
+  
+  <!-- Antenna -->
+  <line x1="100" y1="60" x2="100" y2="45" stroke="#FFD700" stroke-width="2"/>
+  <circle cx="100" cy="42" r="4" fill="#00ff88"/>
+  
+  <!-- Smile -->
+  <path d="M91 112 Q100 120 109 112" fill="none" stroke="#1a1a2e" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Legs -->
+  <line x1="78" y1="133" x2="70" y2="150" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>
+  <line x1="90" y1="137" x2="85" y2="154" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>
+  <line x1="110" y1="137" x2="115" y2="154" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>
+  <line x1="122" y1="133" x2="130" y2="150" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Text: pinchtab -->
+  <text x="180" y="95" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="52" font-weight="800" fill="#FFD700" letter-spacing="-1">pinchtab</text>
+  
+  <!-- Tagline -->
+  <text x="182" y="130" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="16" fill="#888" letter-spacing="0.5">browser control for AI agents</text>
+  
+  <!-- Feature pills -->
+  <rect x="182" y="145" width="65" height="22" rx="4" fill="none" stroke="#00ff88" stroke-width="1.5"/>
+  <text x="194" y="160" font-family="monospace" font-size="11" fill="#00ff88">a11y-first</text>
+  
+  <rect x="257" y="145" width="45" height="22" rx="4" fill="none" stroke="#FFD700" stroke-width="1.5"/>
+  <text x="266" y="160" font-family="monospace" font-size="11" fill="#FFD700">HTTP</text>
+  
+  <rect x="312" y="145" width="55" height="22" rx="4" fill="none" stroke="#ff6b6b" stroke-width="1.5"/>
+  <text x="320" y="160" font-family="monospace" font-size="11" fill="#ff6b6b">stealth</text>
+  
+  <rect x="377" y="145" width="75" height="22" rx="4" fill="none" stroke="#888" stroke-width="1.5"/>
+  <text x="385" y="160" font-family="monospace" font-size="11" fill="#888">12MB binary</text>
+</svg>

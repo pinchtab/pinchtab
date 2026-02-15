@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#1a1a2e"/>
+  
+  <!-- Pinch claw left -->
+  <path d="M28 55 Q15 40 22 28 Q28 20 36 28 L34 45 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="1.5"/>
+  <path d="M28 55 Q15 70 22 82 Q28 90 36 82 L34 65 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="1.5"/>
+  
+  <!-- Pinch claw right -->
+  <path d="M100 55 Q113 40 106 28 Q100 20 92 28 L94 45 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="1.5"/>
+  <path d="M100 55 Q113 70 106 82 Q100 90 92 82 L94 65 Z" fill="#FFD700" stroke="#1a1a2e" stroke-width="1.5"/>
+  
+  <!-- Body -->
+  <ellipse cx="64" cy="65" rx="30" ry="24" fill="#FFD700" stroke="#1a1a2e" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <rect x="51" y="58" width="10" height="8" rx="2" fill="#1a1a2e" stroke="#00ff88" stroke-width="1"/>
+  <rect x="67" y="58" width="10" height="8" rx="2" fill="#1a1a2e" stroke="#00ff88" stroke-width="1"/>
+  <rect x="54" y="60" width="3" height="4" rx="1" fill="#00ff88"/>
+  <rect x="70" y="60" width="3" height="4" rx="1" fill="#00ff88"/>
+  
+  <!-- Tab -->
+  <path d="M52 45 L52 38 L56 35 L72 35 L76 38 L76 45" fill="#1a1a2e" stroke="#FFD700" stroke-width="1.5"/>
+  <circle cx="59" cy="39" r="1.5" fill="#ff4444"/>
+  <circle cx="64" cy="39" r="1.5" fill="#FFD700"/>
+  <circle cx="69" cy="39" r="1.5" fill="#00ff88"/>
+  
+  <!-- Antenna -->
+  <line x1="64" y1="35" x2="64" y2="24" stroke="#FFD700" stroke-width="1.5"/>
+  <circle cx="64" cy="22" r="3" fill="#00ff88"/>
+  
+  <!-- Smile -->
+  <path d="M58 74 Q64 79 70 74" fill="none" stroke="#1a1a2e" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
