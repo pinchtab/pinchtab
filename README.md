@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-banner.svg" alt="pinchtab" width="600"/>
+  <img src="assets/pinchtab-mascot-transparent.png" alt="pinchtab" width="200"/>
 </p>
 
 <p align="center">
@@ -210,7 +210,7 @@ Everything else is Go standard library.
 ## Works with OpenClaw
 
 <p align="center">
-  <img src="assets/works-with-openclaw.png" alt="Works with OpenClaw" width="500"/>
+  <img src="assets/pinchtab-mascot-transparent.png" alt="Works with OpenClaw" width="150"/>
 </p>
 
 Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use Pinchtab as your agent's browser backend for faster, cheaper web automation.
