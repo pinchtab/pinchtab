@@ -1,4 +1,4 @@
-module github.com/luigi-agosti/pinchtab
+module github.com/pinchtab/pinchtab
 
 go 1.25.0
 

@@ -191,17 +191,17 @@ Everything else is Go standard library.
 
 ## Requirements
 
-- **Go 1.24+** (build from source) or download a [prebuilt binary](https://github.com/luigi-agosti/pinchtab/releases)
+- **Go 1.24+** (build from source) or download a [prebuilt binary](https://github.com/pinchtab/pinchtab/releases)
 - **Google Chrome** or Chromium installed
 
 ## Install
 
 ```bash
 # From source
-go install github.com/luigi-agosti/pinchtab@latest
+go install github.com/pinchtab/pinchtab@latest
 
 # Or clone and build
-git clone https://github.com/luigi-agosti/pinchtab.git
+git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
 go build -o pinchtab .
 ```
@@ -209,7 +209,7 @@ go build -o pinchtab .
 ## Development
 
 ```bash
-git clone https://github.com/luigi-agosti/pinchtab.git
+git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
 go build -o pinchtab .
 ./pinchtab
