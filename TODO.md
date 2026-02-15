@@ -44,11 +44,12 @@ Split into 8 files (single package):
 - [x] `//go:embed stealth.js` — stealth script in separate file
 - [x] Chrome opts grouped by concern (profile, stealth, perf, UI, identity)
 
-## P3: Bugs & Robustness
-- [ ] **Navigate uses `page.Navigate` + DOMContentLoaded** — `chromedp.Navigate` waits for full load event which never fires on SPAs (X, Gmail). Root cause of session restore hangs.
-- [ ] **Request logging middleware** — log method/path/status/duration with slog
-- [ ] **Default port conflict** — 18800 conflicts with OpenClaw's `openclaw` profile. Change default or document.
-- [ ] **Clean up ActionFunc signature** — `press` awkwardly uses text param for key. Unify or pass full request struct.
+## Done ✅ (P3)
+- [x] Navigate uses raw `Page.navigate` + 500ms sleep (not chromedp.Navigate full load)
+- [x] Restore is non-blocking (fire-and-forget goroutines, server starts instantly)
+- [x] Request logging middleware (method/path/status/ms via slog)
+- [x] Port changed 18800 → 9867, state dir ~/.browser-bridge → ~/.pinchtab
+- [x] ActionFunc takes full `actionRequest` struct (no more fragmented params)
 
 ## P4: Testability
 - [ ] Extract `Browser` interface (navigate, screenshot, evaluate)
