@@ -18,7 +18,7 @@ func navigatePage(ctx context.Context, url string) error {
 			p := map[string]any{"url": url}
 			var navResult json.RawMessage
 			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Page.navigate", p, &navResult); err != nil {
-				return fmt.Errorf("Page.navigate: %w", err)
+				return fmt.Errorf("page.navigate: %w", err)
 			}
 
 			var resp struct {

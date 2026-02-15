@@ -10,8 +10,8 @@ func TestEnvOr(t *testing.T) {
 		t.Errorf("expected fallback, got %s", got)
 	}
 
-	os.Setenv("PINCHTAB_TEST_SET", "value")
-	defer os.Unsetenv("PINCHTAB_TEST_SET")
+	_ = os.Setenv("PINCHTAB_TEST_SET", "value")
+	defer func() { _ = os.Unsetenv("PINCHTAB_TEST_SET") }()
 	if got := envOr("PINCHTAB_TEST_SET", "fallback"); got != "value" {
 		t.Errorf("expected value, got %s", got)
 	}
