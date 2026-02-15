@@ -1,7 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="240" fill="#1a1a2e" stroke="#FFD700" stroke-width="8"/>
-  
   <!-- Crab claw / pinch - left -->
   <path d="M120 200 Q80 160 100 120 Q120 80 160 100 Q180 110 170 140 L160 170 Z" 
         fill="#FFD700" stroke="#1a1a2e" stroke-width="4"/>
