@@ -277,8 +277,8 @@ go test ./...
 
 ### Agents
 
-<a href="https://github.com/bosh-code"><img src="https://github.com/bosh-code.png" width="60" style="border-radius:50%" alt="Bosch"/></a>
-<a href="https://github.com/mario-agent"><img src="https://github.com/mario-agent.png" width="60" style="border-radius:50%" alt="Mario"/></a>
+<a href="https://github.com/luigiagent"><img src="https://github.com/luigiagent.png" width="60" style="border-radius:50%" alt="Bosch"/></a>
+<a href="https://github.com/luigiagent"><img src="https://github.com/luigiagent.png" width="60" style="border-radius:50%" alt="Mario"/></a>
 
 ## Works with OpenClaw
 
