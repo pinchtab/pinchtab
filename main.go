@@ -944,12 +944,20 @@ func restoreState() {
 
 	restored := 0
 	for _, tab := range state.Tabs {
+		// Skip problematic URLs
+		if strings.Contains(tab.URL, "/sorry/") || strings.Contains(tab.URL, "about:blank") {
+			continue
+		}
 		ctx, cancel := chromedp.NewContext(bridge.browserCtx)
-		if err := chromedp.Run(ctx, chromedp.Navigate(tab.URL)); err != nil {
+		// Timeout per tab — don't let one hung page block startup
+		tCtx, tCancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := chromedp.Run(tCtx, chromedp.Navigate(tab.URL)); err != nil {
+			tCancel()
 			cancel()
 			log.Printf("Failed to restore tab %s: %v", tab.URL, err)
 			continue
 		}
+		tCancel()
 		newID := string(chromedp.FromContext(ctx).Target.TargetID)
 		bridge.tabs[newID] = &TabEntry{ctx: ctx, cancel: cancel}
 		restored++
