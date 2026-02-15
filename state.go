@@ -117,7 +117,7 @@ func (b *Bridge) RestoreState() {
 		go func(tabCtx context.Context, url string) {
 			tCtx, tCancel := context.WithTimeout(tabCtx, 10*time.Second)
 			defer tCancel()
-			chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			_ = chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 				p := map[string]any{"url": url}
 				return chromedp.FromContext(ctx).Target.Execute(ctx, "Page.navigate", p, nil)
 			}))

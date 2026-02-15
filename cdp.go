@@ -71,7 +71,7 @@ func typeByNodeID(ctx context.Context, backendNodeID int64, text string) error {
 				"functionDeclaration": "function() { this.scrollIntoViewIfNeeded(); }",
 				"arguments":           []any{},
 			}
-			chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", scrollP, nil)
+			_ = chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", scrollP, nil)
 
 			p := map[string]any{"backendNodeId": backendNodeID}
 			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", p, nil); err != nil {

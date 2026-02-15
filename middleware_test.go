@@ -19,7 +19,7 @@ func TestJsonResp(t *testing.T) {
 		t.Errorf("expected application/json, got %s", ct)
 	}
 	var body map[string]string
-	json.NewDecoder(w.Body).Decode(&body)
+	_ = json.NewDecoder(w.Body).Decode(&body)
 	if body["status"] != "ok" {
 		t.Errorf("expected ok, got %s", body["status"])
 	}
@@ -33,7 +33,7 @@ func TestJsonErr(t *testing.T) {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
 	var body map[string]string
-	json.NewDecoder(w.Body).Decode(&body)
+	_ = json.NewDecoder(w.Body).Decode(&body)
 	if body["error"] != "something broke" {
 		t.Errorf("expected 'something broke', got %s", body["error"])
 	}

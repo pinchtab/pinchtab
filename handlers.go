@@ -95,7 +95,7 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	b.mu.Unlock()
 
 	var url, title string
-	chromedp.Run(tCtx,
+	_ = chromedp.Run(tCtx,
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
@@ -183,7 +183,7 @@ func (b *Bridge) handleText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var url, title string
-	chromedp.Run(tCtx,
+	_ = chromedp.Run(tCtx,
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
@@ -233,7 +233,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	b.mu.Unlock()
 
 	var url, title string
-	chromedp.Run(tCtx,
+	_ = chromedp.Run(tCtx,
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
@@ -433,7 +433,7 @@ func (b *Bridge) handleTab(w http.ResponseWriter, r *http.Request) {
 		b.mu.Unlock()
 
 		var curURL, title string
-		chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
+		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
 		jsonResp(w, 200, map[string]any{"tabId": newTargetID, "url": curURL, "title": title})
 
 	case tabActionClose:
