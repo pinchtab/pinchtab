@@ -44,7 +44,7 @@ curl -X POST localhost:18800/action -d '{"kind":"click","ref":"e5"}'
 - **5-13x cheaper** than screenshots or full snapshots for read-heavy tasks ([real measurements](#token-efficiency--real-numbers))
 - **Plain HTTP API** — not locked to any agent framework
 - **Self-contained** — 12MB binary, launches its own Chrome, zero config
-- **Stealth mode** — bypasses bot detection (Google, X/Twitter, etc.)
+- **Stealth mode** — bypasses bot detection on major sites
 - **Persistent sessions** — log in once, stays logged in across restarts
 
 ## Quick Start
@@ -64,7 +64,7 @@ Chrome opens. You log into your sites. Agents drive the rest.
 
 ### First-Time Login
 
-Pinchtab launches its own Chrome with a persistent profile at `~/.browser-bridge/chrome-profile/`. The first time you run it, you'll need to log into any sites you want agents to access (X/Twitter, Google, etc.) — just do it in the Chrome window that opens. Cookies and sessions persist across restarts, so you only need to do this once.
+Pinchtab launches its own Chrome with a persistent profile at `~/.browser-bridge/chrome-profile/`. The first time you run it, log into any sites you want agents to access — just do it in the Chrome window that opens. Cookies and sessions persist across restarts, so you only need to do this once.
 
 ## Features
 
