@@ -84,6 +84,18 @@ Split into 8 files (single package):
 - [x] **Better /text** — Readability-style extraction (`readability.js`), strips nav/footer/aside/ads, prefers article/main. `?mode=raw` for old innerText.
 - [x] **Split handlers.go** — snapshot handler extracted to `handler_snapshot.go`
 
+## Future: Desktop App Restructure
+When a second binary (desktop app via Wails) is needed, restructure to:
+```
+cmd/pinchtab/main.go        # CLI binary
+cmd/pinchtab-app/main.go    # desktop binary
+internal/server/             # current Go files move here
+internal/config/
+app/                         # Wails desktop layer
+frontend/                    # dashboard HTML/JS
+```
+Until then, flat structure is correct. Don't premature-abstract.
+
 ## P7: Nice to Have
 - [ ] **File-based output** — `?output=file` saves snapshot to disk, returns path (Playwright CLI approach)
 - [ ] **Compact format** — YAML or indented text instead of JSON
