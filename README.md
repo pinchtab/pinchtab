@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong>Browser control for AI agents.</strong><br/>
-  12MB Go binary. Zero config. Accessibility-first.
+  12MB Go binary. Zero config. Accessibility-first.<br/><br/>
+  🦀 <em>PINCH! PINCH!</em>
 </p>
 
 <p align="center">

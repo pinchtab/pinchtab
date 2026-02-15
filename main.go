@@ -199,7 +199,7 @@ func main() {
 		srv.Shutdown(context.Background())
 	}()
 
-	log.Printf("🌉 Browser Bridge running on http://localhost:%s", port)
+	log.Printf("🦀 PINCH! PINCH! — Pinchtab running on http://localhost:%s", port)
 	log.Printf("   CDP target: %s", cdpURL)
 	if token != "" {
 		log.Println("   Auth: Bearer token required")
