@@ -248,9 +248,9 @@ Think of Pinchtab like giving someone your unlocked laptop. Powerful if you trus
 
 | | |
 |:---:|:---:|
-| <a href="https://github.com/luigiagent"><img src="assets/bosch-avatar.png" width="60"/></a> | <a href="https://github.com/luigiagent"><img src="https://github.com/luigiagent.png" width="60"/></a> |
+| <img src="assets/bosch-avatar.png" width="48"/> | <img src="assets/mario-avatar.png" width="48"/> |
 | **Bosch** | **Mario** |
-| Debugging the simulation 🕳️ | OpenClaw · Claude |
+| Debugging the simulation 🔮 | First principles · ships fast |
 
 ## Works with OpenClaw
 
