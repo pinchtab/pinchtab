@@ -9,9 +9,9 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// navigatePage uses raw CDP Page.navigate + polls for a non-blank URL.
+// navigatePage uses raw CDP Page.navigate + polls document.readyState for completion.
 // Unlike chromedp.Navigate which waits for the full load event (hangs on SPAs),
-// this fires navigation and waits up to 5s for the page to start loading.
+// this fires navigation and waits for interactive/complete state or timeout.
 func navigatePage(ctx context.Context, url string) error {
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -29,9 +29,34 @@ func navigatePage(ctx context.Context, url string) error {
 			}
 			return nil
 		}),
-		// Brief sleep to let the page start rendering — not a full load wait.
-		// Agents should use /snapshot to confirm readiness.
-		chromedp.Sleep(500*time.Millisecond),
+		// Poll document.readyState until interactive/complete or timeout
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			deadline := time.Now().Add(10 * time.Second)
+			for time.Now().Before(deadline) {
+				var readyState string
+				evalP := map[string]any{
+					"expression": "document.readyState",
+				}
+				var evalResult json.RawMessage
+				if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", evalP, &evalResult); err == nil {
+					var evalResp struct {
+						Result struct {
+							Value string `json:"value"`
+						} `json:"result"`
+					}
+					if json.Unmarshal(evalResult, &evalResp) == nil {
+						readyState = evalResp.Result.Value
+						if readyState == "interactive" || readyState == "complete" {
+							return nil // Page is ready for interaction
+						}
+					}
+				}
+				// Check every 200ms to avoid excessive polling
+				time.Sleep(200 * time.Millisecond)
+			}
+			// Timeout reached, but don't fail - page might still be usable
+			return nil
+		}),
 	)
 }
 

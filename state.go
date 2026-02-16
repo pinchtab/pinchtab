@@ -82,7 +82,7 @@ func (b *Bridge) SaveState() {
 	}
 }
 
-// RestoreState reopens tabs from the last saved session.
+// RestoreState reopens tabs from the last saved session with concurrency limiting.
 func (b *Bridge) RestoreState() {
 	path := filepath.Join(stateDir, "sessions.json")
 	data, err := os.ReadFile(path)
@@ -94,28 +94,55 @@ func (b *Bridge) RestoreState() {
 		return
 	}
 
+	if len(state.Tabs) == 0 {
+		return
+	}
+
+	// Limit concurrent tab creation to avoid overwhelming Chrome
+	const maxConcurrentTabs = 3
+	const maxConcurrentNavs = 2
+	
+	tabSem := make(chan struct{}, maxConcurrentTabs)
+	navSem := make(chan struct{}, maxConcurrentNavs)
+	
 	restored := 0
 	for _, tab := range state.Tabs {
 		if strings.Contains(tab.URL, "/sorry/") || strings.Contains(tab.URL, "about:blank") {
 			continue
 		}
+
+		// Acquire semaphore for tab creation
+		tabSem <- struct{}{}
+		
+		// Small delay between tab creations to spread load
+		if restored > 0 {
+			time.Sleep(200 * time.Millisecond)
+		}
+
 		ctx, cancel := chromedp.NewContext(b.browserCtx)
 		// Just initialize the tab context (attaches to Chrome) — don't navigate yet.
-		// The agent will navigate when it needs the tab.
 		if err := chromedp.Run(ctx); err != nil {
 			cancel()
+			<-tabSem // Release semaphore
 			slog.Warn("restore tab failed", "url", tab.URL, "err", err)
 			continue
 		}
+		
 		newID := string(chromedp.FromContext(ctx).Target.TargetID)
 		b.mu.Lock()
 		b.tabs[newID] = &TabEntry{ctx: ctx, cancel: cancel}
 		b.mu.Unlock()
 		restored++
 
-		// Fire-and-forget navigate — don't block on page load
+		// Fire-and-forget navigate with concurrency limiting
 		go func(tabCtx context.Context, url string) {
-			tCtx, tCancel := context.WithTimeout(tabCtx, 10*time.Second)
+			defer func() { <-tabSem }() // Release tab semaphore when done
+			
+			// Acquire navigation semaphore
+			navSem <- struct{}{}
+			defer func() { <-navSem }()
+			
+			tCtx, tCancel := context.WithTimeout(tabCtx, 15*time.Second)
 			defer tCancel()
 			_ = chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 				p := map[string]any{"url": url}
@@ -124,6 +151,6 @@ func (b *Bridge) RestoreState() {
 		}(ctx, tab.URL)
 	}
 	if restored > 0 {
-		slog.Info("restored tabs", "count", restored)
+		slog.Info("restored tabs", "count", restored, "concurrent_limit", maxConcurrentTabs)
 	}
 }
