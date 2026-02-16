@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/pinchtab-mascot-transparent.png" alt="pinchtab" width="200"/>
+  <img src="assets/pinchtab-mascot.png" alt="pinchtab" width="200"/>
 </p>
 
 <p align="center">

@@ -19,8 +19,17 @@ var version = "dev"
 var bridge Bridge
 
 func main() {
+	// Load configuration from file or environment
+	loadConfig()
+
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
 		fmt.Printf("pinchtab %s\n", version)
+		os.Exit(0)
+	}
+
+	// Handle config generation
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		handleConfigCommand()
 		os.Exit(0)
 	}
 
