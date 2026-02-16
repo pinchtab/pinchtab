@@ -134,6 +134,7 @@ func main() {
 	mux.HandleFunc("GET /text", bridge.handleText)
 	mux.HandleFunc("POST /navigate", bridge.handleNavigate)
 	mux.HandleFunc("POST /action", bridge.handleAction)
+	mux.HandleFunc("POST /actions", bridge.handleActions)
 	mux.HandleFunc("POST /evaluate", bridge.handleEvaluate)
 	mux.HandleFunc("POST /tab", bridge.handleTab)
 

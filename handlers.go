@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
@@ -367,7 +368,7 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.NodeID == 0 {
 			jsonResp(w, 400, map[string]string{
-				"error": fmt.Sprintf("ref %s not found — take a /snapshot first", req.Ref),
+				"error": fmt.Sprintf("ref %s not found - take a /snapshot first", req.Ref),
 			})
 			return
 		}
@@ -380,7 +381,7 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 			kinds = append(kinds, k)
 		}
 		jsonResp(w, 400, map[string]string{
-			"error": fmt.Sprintf("missing required field 'kind' — valid values: %s", strings.Join(kinds, ", ")),
+			"error": fmt.Sprintf("missing required field 'kind' - valid values: %s", strings.Join(kinds, ", ")),
 		})
 		return
 	}
@@ -391,7 +392,7 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 			kinds = append(kinds, k)
 		}
 		jsonResp(w, 400, map[string]string{
-			"error": fmt.Sprintf("unknown action: %s — valid values: %s", req.Kind, strings.Join(kinds, ", ")),
+			"error": fmt.Sprintf("unknown action: %s - valid values: %s", req.Kind, strings.Join(kinds, ", ")),
 		})
 		return
 	}
@@ -403,6 +404,166 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResp(w, 200, result)
+}
+
+// ── POST /actions (batch) ──────────────────────────────────
+
+type actionsRequest struct {
+	TabID       string          `json:"tabId"`       // Default tab for all actions
+	Actions     []actionRequest `json:"actions"`     // Array of actions to execute
+	StopOnError bool            `json:"stopOnError"` // Stop processing on first error (default: false)
+}
+
+type actionResult struct {
+	Index   int            `json:"index"` // Which action this result is for
+	Success bool           `json:"success"`
+	Result  map[string]any `json:"result,omitempty"`
+	Error   string         `json:"error,omitempty"`
+}
+
+func (b *Bridge) handleActions(w http.ResponseWriter, r *http.Request) {
+	var req actionsRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		jsonErr(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+
+	if len(req.Actions) == 0 {
+		jsonResp(w, 400, map[string]string{"error": "actions array is empty"})
+		return
+	}
+
+	// Resolve tab context once for all actions
+	ctx, resolvedTabID, err := b.TabContext(req.TabID)
+	if err != nil {
+		jsonErr(w, 404, err)
+		return
+	}
+
+	results := make([]actionResult, 0, len(req.Actions))
+	registry := b.actionRegistry()
+
+	// Process each action sequentially
+	for i, action := range req.Actions {
+		// Use action's tabId if specified, otherwise use request's default
+		if action.TabID == "" {
+			action.TabID = resolvedTabID
+		} else if action.TabID != resolvedTabID {
+			// Different tab requested - need new context
+			ctx, resolvedTabID, err = b.TabContext(action.TabID)
+			if err != nil {
+				results = append(results, actionResult{
+					Index:   i,
+					Success: false,
+					Error:   fmt.Sprintf("tab not found: %v", err),
+				})
+				if req.StopOnError {
+					break
+				}
+				continue
+			}
+		}
+
+		// Create timeout context for this action
+		tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
+
+		// Resolve ref if needed (same logic as single action)
+		if action.Ref != "" && action.NodeID == 0 && action.Selector == "" {
+			cache := b.GetRefCache(resolvedTabID)
+			if cache != nil {
+				if nid, ok := cache.refs[action.Ref]; ok {
+					action.NodeID = nid
+				}
+			}
+			if action.NodeID == 0 {
+				tCancel()
+				results = append(results, actionResult{
+					Index:   i,
+					Success: false,
+					Error:   fmt.Sprintf("ref %s not found - take a /snapshot first", action.Ref),
+				})
+				if req.StopOnError {
+					break
+				}
+				continue
+			}
+		}
+
+		// Validate and execute action
+		if action.Kind == "" {
+			tCancel()
+			results = append(results, actionResult{
+				Index:   i,
+				Success: false,
+				Error:   "missing required field 'kind'",
+			})
+			if req.StopOnError {
+				break
+			}
+			continue
+		}
+
+		fn, ok := registry[action.Kind]
+		if !ok {
+			tCancel()
+			kinds := make([]string, 0, len(registry))
+			for k := range registry {
+				kinds = append(kinds, k)
+			}
+			results = append(results, actionResult{
+				Index:   i,
+				Success: false,
+				Error:   fmt.Sprintf("unknown action: %s - valid values: %s", action.Kind, strings.Join(kinds, ", ")),
+			})
+			if req.StopOnError {
+				break
+			}
+			continue
+		}
+
+		// Execute the action
+		actionRes, err := fn(tCtx, action)
+		tCancel()
+
+		if err != nil {
+			results = append(results, actionResult{
+				Index:   i,
+				Success: false,
+				Error:   fmt.Sprintf("action %s: %v", action.Kind, err),
+			})
+			if req.StopOnError {
+				break
+			}
+		} else {
+			results = append(results, actionResult{
+				Index:   i,
+				Success: true,
+				Result:  actionRes,
+			})
+		}
+
+		// Small delay between actions to avoid overwhelming the browser
+		if i < len(req.Actions)-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	jsonResp(w, 200, map[string]any{
+		"results":    results,
+		"total":      len(req.Actions),
+		"successful": countSuccessful(results),
+		"failed":     len(req.Actions) - countSuccessful(results),
+	})
+}
+
+func countSuccessful(results []actionResult) int {
+	count := 0
+	for _, r := range results {
+		if r.Success {
+			count++
+		}
+	}
+	return count
 }
 
 // ── POST /evaluate ─────────────────────────────────────────
