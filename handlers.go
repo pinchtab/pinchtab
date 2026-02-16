@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +55,7 @@ func (b *Bridge) handleTabs(w http.ResponseWriter, r *http.Request) {
 
 func (b *Bridge) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
+	output := r.URL.Query().Get("output") // "file" to save to disk
 
 	ctx, _, err := b.TabContext(tabID)
 	if err != nil {
@@ -83,6 +86,36 @@ func (b *Bridge) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 		}),
 	); err != nil {
 		jsonErr(w, 500, fmt.Errorf("screenshot: %w", err))
+		return
+	}
+
+	// Handle file output
+	if output == "file" {
+		// Create screenshots directory if it doesn't exist
+		screenshotDir := filepath.Join(stateDir, "screenshots")
+		if err := os.MkdirAll(screenshotDir, 0755); err != nil {
+			jsonErr(w, 500, fmt.Errorf("create screenshot dir: %w", err))
+			return
+		}
+
+		// Generate filename with timestamp
+		timestamp := time.Now().Format("20060102-150405")
+		filename := fmt.Sprintf("screenshot-%s.jpg", timestamp)
+		filePath := filepath.Join(screenshotDir, filename)
+
+		// Write to file
+		if err := os.WriteFile(filePath, buf, 0644); err != nil {
+			jsonErr(w, 500, fmt.Errorf("write screenshot: %w", err))
+			return
+		}
+
+		// Return path instead of data
+		jsonResp(w, 200, map[string]any{
+			"path":      filePath,
+			"size":      len(buf),
+			"format":    "jpeg",
+			"timestamp": timestamp,
+		})
 		return
 	}
 

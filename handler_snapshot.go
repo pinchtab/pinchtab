@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -17,6 +20,7 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 	doDiff := r.URL.Query().Get("diff") == "true"
 	format := r.URL.Query().Get("format") // "text" for indented tree
+	output := r.URL.Query().Get("output") // "file" to save to disk
 	maxDepthStr := r.URL.Query().Get("depth")
 	maxDepth := -1
 	if maxDepthStr != "" {
@@ -72,6 +76,73 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
+
+	// Handle file output
+	if output == "file" {
+		// Create snapshots directory if it doesn't exist
+		snapshotDir := filepath.Join(stateDir, "snapshots")
+		if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+			jsonErr(w, 500, fmt.Errorf("create snapshot dir: %w", err))
+			return
+		}
+
+		// Generate filename with timestamp
+		timestamp := time.Now().Format("20060102-150405")
+		var filename string
+		var content []byte
+
+		if format == "text" {
+			filename = fmt.Sprintf("snapshot-%s.txt", timestamp)
+			textContent := fmt.Sprintf("# %s\n# %s\n# %d nodes\n# %s\n\n%s",
+				title, url, len(flat), time.Now().Format(time.RFC3339),
+				formatSnapshotText(flat))
+			content = []byte(textContent)
+		} else {
+			filename = fmt.Sprintf("snapshot-%s.json", timestamp)
+			data := map[string]any{
+				"url":       url,
+				"title":     title,
+				"timestamp": time.Now().Format(time.RFC3339),
+				"nodes":     flat,
+				"count":     len(flat),
+			}
+			if doDiff && prevNodes != nil {
+				added, changed, removed := diffSnapshot(prevNodes, flat)
+				data["diff"] = true
+				data["added"] = added
+				data["changed"] = changed
+				data["removed"] = removed
+				data["counts"] = map[string]int{
+					"added":   len(added),
+					"changed": len(changed),
+					"removed": len(removed),
+					"total":   len(flat),
+				}
+			}
+			var err error
+			content, err = json.MarshalIndent(data, "", "  ")
+			if err != nil {
+				jsonErr(w, 500, fmt.Errorf("marshal snapshot: %w", err))
+				return
+			}
+		}
+
+		// Write to file
+		filePath := filepath.Join(snapshotDir, filename)
+		if err := os.WriteFile(filePath, content, 0644); err != nil {
+			jsonErr(w, 500, fmt.Errorf("write snapshot: %w", err))
+			return
+		}
+
+		// Return path instead of data
+		jsonResp(w, 200, map[string]any{
+			"path":      filePath,
+			"size":      len(content),
+			"format":    format,
+			"timestamp": timestamp,
+		})
+		return
+	}
 
 	if doDiff && prevNodes != nil {
 		added, changed, removed := diffSnapshot(prevNodes, flat)
