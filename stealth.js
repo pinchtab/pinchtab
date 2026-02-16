@@ -51,15 +51,7 @@ Object.defineProperty(navigator, 'languages', {
   get: () => ['en-US', 'en'],
 });
 
-// Enhanced device memory (avoid detection of low-resource automation)
-Object.defineProperty(navigator, 'deviceMemory', {
-  get: () => 8,
-});
-
-// Hardware concurrency (realistic for modern systems)  
-Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => 8,
-});
+// Hardware values defined later with proper seeding
 
 // Platform information (consistent with User-Agent)
 Object.defineProperty(navigator, 'platform', {
@@ -85,17 +77,7 @@ WebGLRenderingContext.prototype.getParameter = function(parameter) {
 };
 
 // Mouse event realism (add slight randomness)
-const originalAddEventListener = EventTarget.prototype.addEventListener;
-EventTarget.prototype.addEventListener = function(type, listener, options) {
-  if (type === 'mousemove' && Math.random() < 0.1) {
-    // Occasionally add slight delay to make mouse movement less perfect
-    const wrappedListener = function(event) {
-      setTimeout(() => listener(event), Math.random() * 2);
-    };
-    return originalAddEventListener.call(this, type, wrappedListener, options);
-  }
-  return originalAddEventListener.call(this, type, listener, options);
-};
+// Mouse event handling - removed wrapper as it can break legitimate functionality
 
 // Canvas fingerprinting noise
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -103,25 +85,50 @@ const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
 HTMLCanvasElement.prototype.toDataURL = function(...args) {
-  // Add noise but don't modify the actual canvas
-  const dataURL = originalToDataURL.apply(this, args);
-  
-  // For fingerprinting, we just need to return slightly different values
-  // without actually corrupting the visual canvas
-  if (args[0] && args[0].includes('image/png')) {
-    // Add a tiny variation to PNG encoding
-    return dataURL.slice(0, -10) + Math.random().toString(36).substr(2, 10);
+  const context = this.getContext('2d');
+  if (context && this.width > 0 && this.height > 0) {
+    // Create a temporary canvas for noise injection
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = this.width;
+    tempCanvas.height = this.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Copy current canvas
+    tempCtx.drawImage(this, 0, 0);
+    
+    // Add imperceptible noise to a few pixels
+    const imageData = tempCtx.getImageData(0, 0, this.width, this.height);
+    const pixelCount = Math.min(10, Math.floor(imageData.data.length / 400));
+    
+    for (let i = 0; i < pixelCount; i++) {
+      const idx = Math.floor(seededRandom(sessionSeed + i) * (imageData.data.length / 4)) * 4;
+      // Tiny 1-bit changes
+      if (imageData.data[idx] < 255) imageData.data[idx] += 1;
+      if (imageData.data[idx + 1] < 255) imageData.data[idx + 1] += 1;
+    }
+    
+    tempCtx.putImageData(imageData, 0, 0);
+    return originalToDataURL.apply(tempCanvas, args);
   }
   
-  return dataURL;
+  return originalToDataURL.apply(this, args);
 };
 
 HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
-  // Wrap the callback to add slight delay (more human-like)
-  const wrappedCallback = function(blob) {
-    setTimeout(() => callback(blob), Math.random() * 5);
-  };
-  return originalToBlob.call(this, wrappedCallback, type, quality);
+  // Use toDataURL which has noise, then convert to blob
+  const dataURL = this.toDataURL(type, quality);
+  const arr = dataURL.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  const blob = new Blob([u8arr], {type: mime});
+  
+  // Add human-like async delay
+  setTimeout(() => callback(blob), 5 + seededRandom(sessionSeed + 1000) * 10);
 };
 
 CanvasRenderingContext2D.prototype.getImageData = function(...args) {
@@ -145,11 +152,17 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
 const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
 CanvasRenderingContext2D.prototype.measureText = function(text) {
   const metrics = originalMeasureText.apply(this, arguments);
-  const noise = 0.01 * Math.random();
-  return {
-    ...metrics,
-    width: metrics.width * (1 + noise)
-  };
+  const noise = 0.0001 + (seededRandom(sessionSeed + text.length) * 0.0002);
+  
+  // Return a proper TextMetrics object
+  return new Proxy(metrics, {
+    get(target, prop) {
+      if (prop === 'width') {
+        return target.width * (1 + noise);
+      }
+      return target[prop];
+    }
+  });
 };
 
 // WebRTC IP leak prevention - hide local IPs
@@ -165,17 +178,27 @@ if (window.RTCPeerConnection) {
   window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
 
-// Timezone spoofing
+// Timezone spoofing - configurable via window.__pinchtab_timezone
 Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
-  value: function() { return -300; } // EST
+  value: function() { 
+    return window.__pinchtab_timezone || new Date().getTimezoneOffset();
+  }
 });
 
-// Hardware concurrency spoofing
+// Hardware values - seeded and consistent per session
+const sessionSeed = Date.now() % 1000000;
+const seededRandom = (seed) => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
+
+const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2; // 2,4,6,8,10,12
+const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
+
 Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => 4 + Math.floor(Math.random() * 4)
+  get: () => hardwareCore
 });
 
-// Device memory spoofing
 Object.defineProperty(navigator, 'deviceMemory', {
-  get: () => 4 + Math.floor(Math.random() * 4) * 2
+  get: () => deviceMem
 });

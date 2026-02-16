@@ -75,16 +75,16 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 
 // humanClick performs a click with natural mouse movement and timing
 func humanClick(ctx context.Context, x, y float64) error {
-	// Skip mouse movement if we're close enough (within 50 pixels)
-	// This avoids timeout issues and is more realistic
-	skipMovement := false
+	// Start from a position near the target (more realistic than cross-screen movements)
+	startOffsetX := (rand.Float64()-0.5)*200 + 50 // 50-250 pixels away
+	startOffsetY := (rand.Float64()-0.5)*200 + 50
+	startX := x + startOffsetX
+	startY := y + startOffsetY
 
-	// Just move directly to near the target first
-	startX := x + (rand.Float64()-0.5)*100
-	startY := y + (rand.Float64()-0.5)*100
-
-	if !skipMovement {
-		// Quick movement to general area
+	// Only do movement if we're far enough away
+	distance := math.Sqrt(startOffsetX*startOffsetX + startOffsetY*startOffsetY)
+	if distance > 30 {
+		// Quick jump to general area
 		if err := chromedp.Run(ctx,
 			chromedp.ActionFunc(func(ctx context.Context) error {
 				return input.DispatchMouseEvent(input.MouseMoved, startX, startY).Do(ctx)
