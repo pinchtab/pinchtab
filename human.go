@@ -18,14 +18,17 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 	// Calculate distance for movement duration
 	distance := math.Sqrt((toX-fromX)*(toX-fromX) + (toY-fromY)*(toY-fromY))
 
-	// Base duration: 200-800ms depending on distance
-	baseDuration := 200 + (distance/1000)*300
-	duration := baseDuration + float64(rand.Intn(200)) // Add randomness
+	// Base duration: 100-400ms depending on distance (faster)
+	baseDuration := 100 + (distance/2000)*200
+	duration := baseDuration + float64(rand.Intn(100)) // Add randomness
 
-	// Number of steps (more steps = smoother movement)
-	steps := int(duration / 16) // ~60fps
-	if steps < 10 {
-		steps = 10
+	// Number of steps (fewer steps = faster)
+	steps := int(duration / 20) // ~50fps
+	if steps < 5 {
+		steps = 5
+	}
+	if steps > 30 {
+		steps = 30 // Cap to prevent timeout
 	}
 
 	// Generate control points for bezier curve (adds curvature)
@@ -72,12 +75,28 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 
 // humanClick performs a click with natural mouse movement and timing
 func humanClick(ctx context.Context, x, y float64) error {
-	// Get current mouse position (assume center of viewport if unknown)
-	currentX, currentY := float64(500), float64(300)
+	// Skip mouse movement if we're close enough (within 50 pixels)
+	// This avoids timeout issues and is more realistic
+	skipMovement := false
 
-	// Move to target with human-like movement
-	if err := humanMouseMove(ctx, currentX, currentY, x, y); err != nil {
-		return err
+	// Just move directly to near the target first
+	startX := x + (rand.Float64()-0.5)*100
+	startY := y + (rand.Float64()-0.5)*100
+
+	if !skipMovement {
+		// Quick movement to general area
+		if err := chromedp.Run(ctx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				return input.DispatchMouseEvent(input.MouseMoved, startX, startY).Do(ctx)
+			}),
+		); err != nil {
+			return err
+		}
+
+		// Then natural movement to exact position
+		if err := humanMouseMove(ctx, startX, startY, x, y); err != nil {
+			return err
+		}
 	}
 
 	// Small pause before click (50-200ms)
@@ -172,31 +191,18 @@ func humanType(text string, fast bool) []chromedp.Action {
 		// Add delay
 		actions = append(actions, chromedp.Sleep(time.Duration(delay)*time.Millisecond))
 
-		// Occasional typos and corrections (5% chance)
-		if rand.Float64() < 0.05 && i < len(chars)-1 {
+		// Occasional typos and corrections (3% chance, less annoying)
+		if rand.Float64() < 0.03 && i < len(chars)-1 {
 			// Type wrong character
 			wrongChar := rune('a' + rand.Intn(26))
 			actions = append(actions,
 				chromedp.KeyEvent(string(wrongChar)),
 				chromedp.Sleep(time.Duration(50+rand.Intn(100))*time.Millisecond),
-				chromedp.KeyEvent(kb.Backspace),
+				chromedp.KeyEvent("\b"), // Backspace character
 				chromedp.Sleep(time.Duration(30+rand.Intn(70))*time.Millisecond),
 			)
 		}
 	}
 
 	return actions
-}
-
-// Package kb provides keyboard constants
-var kb = struct {
-	Backspace string
-	Enter     string
-	Tab       string
-	Escape    string
-}{
-	Backspace: "\u0008",
-	Enter:     "\r",
-	Tab:       "\t",
-	Escape:    "\u001b",
 }

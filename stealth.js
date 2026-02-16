@@ -103,33 +103,41 @@ const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
 HTMLCanvasElement.prototype.toDataURL = function(...args) {
-  const context = this.getContext('2d');
-  if (context) {
-    const width = this.width;
-    const height = this.height;
-    const imageData = context.getImageData(0, 0, width, height);
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + (Math.random() - 0.5) * 0.5));
-      imageData.data[i+1] = Math.min(255, Math.max(0, imageData.data[i+1] + (Math.random() - 0.5) * 0.5));
-      imageData.data[i+2] = Math.min(255, Math.max(0, imageData.data[i+2] + (Math.random() - 0.5) * 0.5));
-    }
-    context.putImageData(imageData, 0, 0);
+  // Add noise but don't modify the actual canvas
+  const dataURL = originalToDataURL.apply(this, args);
+  
+  // For fingerprinting, we just need to return slightly different values
+  // without actually corrupting the visual canvas
+  if (args[0] && args[0].includes('image/png')) {
+    // Add a tiny variation to PNG encoding
+    return dataURL.slice(0, -10) + Math.random().toString(36).substr(2, 10);
   }
-  return originalToDataURL.apply(this, args);
+  
+  return dataURL;
 };
 
-HTMLCanvasElement.prototype.toBlob = function(callback, ...args) {
-  const dataURL = this.toDataURL();
-  originalToBlob.call(this, callback, ...args);
+HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+  // Wrap the callback to add slight delay (more human-like)
+  const wrappedCallback = function(blob) {
+    setTimeout(() => callback(blob), Math.random() * 5);
+  };
+  return originalToBlob.call(this, wrappedCallback, type, quality);
 };
 
 CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   const imageData = originalGetImageData.apply(this, args);
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + (Math.random() - 0.5) * 0.3));
-    imageData.data[i+1] = Math.min(255, Math.max(0, imageData.data[i+1] + (Math.random() - 0.5) * 0.3));
-    imageData.data[i+2] = Math.min(255, Math.max(0, imageData.data[i+2] + (Math.random() - 0.5) * 0.3));
+  
+  // Only add noise to a few pixels to maintain visual integrity
+  // This is enough to change fingerprint without breaking functionality
+  const pixelCount = imageData.data.length / 4;
+  const noisyPixels = Math.min(10, pixelCount * 0.0001); // Very few pixels
+  
+  for (let i = 0; i < noisyPixels; i++) {
+    const pixelIndex = Math.floor(Math.random() * pixelCount) * 4;
+    // Tiny changes that won't be visible
+    imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (Math.random() > 0.5 ? 1 : -1)));
   }
+  
   return imageData;
 };
 
@@ -144,20 +152,17 @@ CanvasRenderingContext2D.prototype.measureText = function(text) {
   };
 };
 
-// WebRTC IP leak prevention
+// WebRTC IP leak prevention - hide local IPs
 if (window.RTCPeerConnection) {
-  window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
-    construct: function(target, args) {
-      const pc = new target(...args);
-      pc.createDataChannel = new Proxy(pc.createDataChannel, {
-        apply: function() { throw new Error('WebRTC blocked'); }
-      });
-      pc.createOffer = new Proxy(pc.createOffer, {
-        apply: function() { throw new Error('WebRTC blocked'); }
-      });
-      return pc;
+  const originalRTCPeerConnection = window.RTCPeerConnection;
+  window.RTCPeerConnection = function(config, constraints) {
+    // Force TURN relay to hide local IPs
+    if (config && config.iceServers) {
+      config.iceTransportPolicy = 'relay';
     }
-  });
+    return new originalRTCPeerConnection(config, constraints);
+  };
+  window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
 
 // Timezone spoofing
