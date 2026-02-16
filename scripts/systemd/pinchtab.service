@@ -1,0 +1,28 @@
+[Unit]
+Description=Pinchtab Browser Automation Bridge
+Documentation=https://github.com/pinchtab/pinchtab
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/local/bin/pinchtab
+Restart=always
+RestartSec=5
+
+# Environment
+Environment="BRIDGE_PORT=9867"
+Environment="BRIDGE_HEADLESS=true"
+Environment="BRIDGE_PROFILE=%h/.pinchtab/chrome-profile"
+Environment="DISPLAY=:0"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
