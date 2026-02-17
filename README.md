@@ -324,7 +324,7 @@ Think of Pinchtab like giving someone your unlocked laptop. Powerful if you trus
 Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use Pinchtab as your agent's browser backend for faster, cheaper web automation.
 
 <p align="right">
-  <img src="assets/pinchtab-openclaw.jpg" alt="Pinchtab + OpenClaw" height="140"/>
+  <img src="assets/pinchtab-openclaw.png" alt="Pinchtab + OpenClaw" height="140"/>
 </p>
 
 ## Star History
