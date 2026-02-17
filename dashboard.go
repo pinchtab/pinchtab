@@ -447,6 +447,77 @@ const dashboardHTML = `<!DOCTYPE html>
   .profile-chip .psize { color: #555; margin-left: 8px; }
   .profile-chip .psource { color: #f5c542; font-size: 10px; margin-left: 6px; }
 
+  /* View toggle */
+  .view-toggle { margin-left: auto; display: flex; gap: 4px; }
+  .view-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #aaa;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .view-btn.active { border-color: #f5c542; color: #f5c542; }
+
+  /* Live view */
+  .live-view { height: calc(100vh - 60px); display: flex; flex-direction: column; }
+  .live-toolbar { padding: 12px 24px; border-bottom: 1px solid #222; }
+  .screencast-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .screen-tile {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .screen-tile .tile-header {
+    padding: 8px 12px;
+    background: #151515;
+    border-bottom: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  .screen-tile .tile-header .tile-url {
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+  .screen-tile .tile-header .tile-id { color: #f5c542; font-weight: 600; }
+  .screen-tile .tile-header .tile-status {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-left: 8px;
+  }
+  .screen-tile .tile-header .tile-status.streaming { background: #4ade80; }
+  .screen-tile .tile-header .tile-status.connecting { background: #fbbf24; }
+  .screen-tile .tile-header .tile-status.error { background: #f87171; }
+  .screen-tile canvas {
+    width: 100%;
+    background: #000;
+    cursor: pointer;
+  }
+  .screen-tile .tile-footer {
+    padding: 4px 12px;
+    background: #0d0d0d;
+    font-size: 11px;
+    color: #555;
+    display: flex;
+    gap: 12px;
+  }
+
   .empty-state {
     text-align: center;
     color: #444;
@@ -504,9 +575,23 @@ const dashboardHTML = `<!DOCTYPE html>
 <header>
   <h1>🦀 Pinchtab</h1>
   <div class="status"><span class="dot"></span>Live</div>
+  <div class="view-toggle">
+    <button class="view-btn active" data-view="feed" onclick="switchView('feed')">📋 Feed</button>
+    <button class="view-btn" data-view="live" onclick="switchView('live')">📺 Live</button>
+  </div>
 </header>
 
-<div class="container">
+<!-- Live screencast view (hidden by default) -->
+<div id="live-view" class="live-view" style="display:none">
+  <div class="live-toolbar">
+    <button onclick="refreshTabs()" style="background:#333;color:#e0e0e0;border:1px solid #444;padding:6px 14px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px">↻ Refresh Tabs</button>
+    <span id="live-tab-count" style="color:#666;font-size:12px;margin-left:12px"></span>
+  </div>
+  <div id="screencast-grid" class="screencast-grid"></div>
+</div>
+
+<!-- Feed view (default) -->
+<div id="feed-view" class="container">
   <div class="agents-panel">
     <h2>Agents</h2>
     <div id="agents-list">
@@ -529,6 +614,8 @@ const dashboardHTML = `<!DOCTYPE html>
     </div>
   </div>
 </div>
+
+</div><!-- end feed-view -->
 
 <div class="profiles-bar" id="profiles-bar"></div>
 
@@ -744,6 +831,120 @@ function timeAgo(d) {
 connect();
 loadProfiles();
 setInterval(loadProfiles, 30000);
+
+// ---------------------------------------------------------------------------
+// View switching
+// ---------------------------------------------------------------------------
+function switchView(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-view="'+view+'"]').classList.add('active');
+  document.getElementById('feed-view').style.display = view === 'feed' ? 'flex' : 'none';
+  document.getElementById('live-view').style.display = view === 'live' ? 'flex' : 'none';
+  if (view === 'live') refreshTabs();
+}
+
+// ---------------------------------------------------------------------------
+// Screencast
+// ---------------------------------------------------------------------------
+const screencastSockets = {};
+
+async function refreshTabs() {
+  // Clean up existing connections
+  Object.values(screencastSockets).forEach(s => s.close());
+  Object.keys(screencastSockets).forEach(k => delete screencastSockets[k]);
+
+  try {
+    const res = await fetch('/screencast/tabs');
+    const tabs = await res.json();
+    const grid = document.getElementById('screencast-grid');
+    document.getElementById('live-tab-count').textContent = tabs.length + ' tab(s)';
+
+    if (tabs.length === 0) {
+      grid.innerHTML = '<div class="empty-state"><div class="crab">🦀</div>No tabs open.</div>';
+      return;
+    }
+
+    grid.innerHTML = tabs.map(t => ` + "`" + `
+      <div class="screen-tile" id="tile-${t.id}">
+        <div class="tile-header">
+          <span>
+            <span class="tile-id">${t.id.substring(0, 8)}</span>
+            <span class="tile-status connecting" id="status-${t.id}"></span>
+          </span>
+          <span class="tile-url" id="url-${t.id}">${esc(t.url || 'about:blank')}</span>
+        </div>
+        <canvas id="canvas-${t.id}" width="800" height="600"></canvas>
+        <div class="tile-footer">
+          <span id="fps-${t.id}">—</span>
+          <span id="size-${t.id}">—</span>
+        </div>
+      </div>
+    ` + "`" + `).join('');
+
+    // Start screencast for each tab
+    tabs.forEach(t => startScreencast(t.id));
+  } catch (e) {
+    console.error('Failed to load tabs', e);
+  }
+}
+
+function startScreencast(tabId) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = proto + '//' + location.host + '/screencast?tabId=' + tabId + '&quality=50&maxWidth=800';
+  const socket = new WebSocket(wsUrl);
+  socket.binaryType = 'arraybuffer';
+  screencastSockets[tabId] = socket;
+
+  const canvas = document.getElementById('canvas-' + tabId);
+  if (!canvas) return;
+  const ctx2d = canvas.getContext('2d');
+
+  let frameCount = 0;
+  let lastFpsTime = Date.now();
+
+  const statusEl = document.getElementById('status-' + tabId);
+  const fpsEl = document.getElementById('fps-' + tabId);
+  const sizeEl = document.getElementById('size-' + tabId);
+
+  socket.onopen = () => {
+    if (statusEl) { statusEl.className = 'tile-status streaming'; }
+  };
+
+  socket.onmessage = (evt) => {
+    const blob = new Blob([evt.data], { type: 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx2d.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+
+    frameCount++;
+    const now = Date.now();
+    if (now - lastFpsTime >= 1000) {
+      if (fpsEl) fpsEl.textContent = frameCount + ' fps';
+      if (sizeEl) sizeEl.textContent = (evt.data.byteLength / 1024).toFixed(0) + ' KB/frame';
+      frameCount = 0;
+      lastFpsTime = now;
+    }
+  };
+
+  socket.onerror = () => {
+    if (statusEl) { statusEl.className = 'tile-status error'; }
+  };
+
+  socket.onclose = () => {
+    if (statusEl) { statusEl.className = 'tile-status error'; }
+  };
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  Object.values(screencastSockets).forEach(s => s.close());
+});
 </script>
 </body>
 </html>`

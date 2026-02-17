@@ -271,6 +271,8 @@ func main() {
 	mux.HandleFunc("POST /cookies", bridge.handleSetCookies)
 	mux.HandleFunc("GET /stealth/status", bridge.handleStealthStatus)
 	mux.HandleFunc("POST /fingerprint/rotate", bridge.handleFingerprintRotate)
+	mux.HandleFunc("GET /screencast", bridge.handleScreencast)
+	mux.HandleFunc("GET /screencast/tabs", bridge.handleScreencastAll)
 	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(welcomeHTML))
