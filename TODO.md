@@ -36,6 +36,12 @@ P2 (K11 file path, blockImages on CreateTab) — all resolved.
 
 ### Minor
 - [ ] **humanType global rand** — Accept `*rand.Rand` for reproducible tests.
+- [ ] **Batch empty array** — Return specific error instead of generic decode error.
+- [ ] **Canvas noise in headless** — `TestCanvasNoiseApplied` fails (headless Chrome limitation, `full` stealth only).
+- [ ] **`hardwareConcurrency` redefine warning** — Suppress warning during fingerprint rotation.
+
+### Release
+- [ ] **Tag v0.4.0** — Pre-release tests pass (186/189, 98.4%). Ready to tag.
 
 ---
 
