@@ -171,6 +171,13 @@ func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelF
 	// Inject stealth script before navigation so it applies to the first page load
 	b.injectStealth(ctx)
 
+	// Apply global resource blocking on new tabs
+	if blockMedia {
+		_ = setResourceBlocking(ctx, mediaBlockPatterns)
+	} else if blockImages {
+		_ = setResourceBlocking(ctx, imageBlockPatterns)
+	}
+
 	navURL := "about:blank"
 	if url != "" {
 		navURL = url

@@ -22,6 +22,7 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	doDiff := r.URL.Query().Get("diff") == "true"
 	format := r.URL.Query().Get("format") // "text" for indented tree
 	output := r.URL.Query().Get("output") // "file" to save to disk
+	outputPath := r.URL.Query().Get("path") // custom file path for output=file
 	maxDepthStr := r.URL.Query().Get("depth")
 	maxDepth := -1
 	if maxDepthStr != "" {
@@ -157,8 +158,16 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Write to file
+		// Write to file — use custom path if provided, otherwise default
 		filePath := filepath.Join(snapshotDir, filename)
+		if outputPath != "" {
+			filePath = outputPath
+			// Ensure parent directory exists for custom paths
+			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+				jsonErr(w, 500, fmt.Errorf("create output dir: %w", err))
+				return
+			}
+		}
 		if err := os.WriteFile(filePath, content, 0644); err != nil {
 			jsonErr(w, 500, fmt.Errorf("write snapshot: %w", err))
 			return
