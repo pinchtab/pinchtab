@@ -140,8 +140,8 @@
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
-| CF1 | Config file | Create `~/.pinchtab/config.json` with port override, start | Uses config port |
-| CF2 | Env overrides config | Set `BRIDGE_PORT` env + config file port | Env wins |
+| CF1 | Config file | Create `~/.pinchtab/config.json` with port override, start | Uses config port | ✅ Unit test |
+| CF2 | Env overrides config | Set `BRIDGE_PORT` env + config file port | Env wins | ✅ Unit test |
 | CF3 | CDP_URL external Chrome | `CDP_URL=ws://... ./pinchtab` | Connects to existing Chrome, no launch |
 | CF4 | Custom profile dir | `BRIDGE_PROFILE=/tmp/test-profile ./pinchtab` | Uses specified profile |
 | CF5 | No restore | `BRIDGE_NO_RESTORE=true ./pinchtab` | Doesn't restore previous tabs |

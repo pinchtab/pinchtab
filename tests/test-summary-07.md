@@ -1,6 +1,6 @@
 # Pinchtab Test Summary — Hour 07
 
-**Date:** 2026-02-17 07:00 UTC  
+**Date:** 2026-02-17 07:18 UTC  
 **Branch:** autorun  
 **Action:** Odd hour — summarize & fix
 
@@ -11,36 +11,37 @@
 | Report | Unit Tests | Integration | Notes |
 |--------|-----------|-------------|-------|
 | mario-test-00 (00:00) | 70 pass | 7 pass, 1 skip | Baseline |
-| bosch-test-00 (00:30) | — (curl-based) | — | 24/26 scenarios pass, 1 fail (TB3 script bug), 1 skip |
-| bosch-test-02 (02:00) | — (curl-based) | — | Same as above, more endpoint coverage |
-| test-summary (05:00) | — | — | Bosch summary: 28/55 core scenarios tested |
-| **This run (07:00)** | **74 pass** | **not re-run** | +4 new unit tests, 1 bug fix |
+| bosch-test-00 (00:30) | — (curl) | — | 24/26 scenarios pass |
+| bosch-test-02 (02:00) | — (curl) | — | More endpoint coverage |
+| test-summary-05 (05:00) | — | — | 28/55 core scenarios tested |
+| test-summary-07 (07:00) | 74 pass | — | +4 tests, 1 bug fix (CreateTab nil panic) |
+| **This run (07:18)** | **78 pass** | **not re-run** | +4 new config/utility tests |
 
 ## What Changed This Hour
-
-### Bug Fix: `CreateTab` panic with nil browser context
-- **Problem:** Calling `POST /navigate {"newTab": true}` when no browser context exists caused a **panic** (`cannot create context from nil parent`). This could happen if Chrome crashes (K1/ER1 scenario) and an agent tries to open a new tab.
-- **Fix:** Added nil check in `Bridge.CreateTab()` — now returns a clean error instead of panicking.
-- **Test:** `TestHandleNavigate_NewTabNoChrome` — verifies 500 response, no panic.
 
 ### New Unit Tests (+4)
 | Test | Covers | Plan Scenario |
 |------|--------|---------------|
-| `TestHandleSetCookies_BadJSON` | Bad JSON body on POST /cookies | C4 |
-| `TestHandleSetCookies_MissingURL` | Missing URL field | (implicit C2 validation) |
-| `TestHandleNavigate_WaitTitleClamp` | `waitTitle` > 30 clamped | N3/K3 feature |
-| `TestHandleNavigate_NewTabNoChrome` | newTab with no browser → no panic | N4 + ER1 edge case |
+| `TestMaskToken` | Token masking utility (5 cases) | CF1/show config |
+| `TestDefaultConfig` | Default config values correct | CF1 |
+| `TestLoadConfig_FromFile` | Config file loading | CF1 |
+| `TestLoadConfig_EnvOverridesFile` | Env vars override config file | CF2 |
+
+These tests cover **Section 1.11 (Configuration)** scenarios CF1 and CF2 from the test plan — config file loading and environment variable precedence.
+
+### No Failures Found
+All 78 unit tests pass. No bugs to fix this cycle.
 
 ## Progress Toward v1.0 Release Criteria (Section 9)
 
 ### P0 — Must Pass
 | Criterion | Status | Notes |
 |-----------|--------|-------|
-| All Section 1 scenarios pass (headless) | 🟡 28/55 tested | Need more curl-based coverage |
-| K1 (active tab tracking) fixed | ✅ FIXED | Confirmed in bosch-test-00 |
-| K2 (tab close hangs) fixed | 🔧 FIX APPLIED | Needs re-verification with valid tabId |
-| Zero crashes | ✅ | **Fixed one panic path this hour** |
-| `go test ./...` 100% pass | ✅ 74/74 | Up from 70 |
+| All Section 1 scenarios pass (headless) | 🟡 ~30/55 tested | Config tests added |
+| K1 (active tab tracking) fixed | ✅ FIXED | Confirmed earlier |
+| K2 (tab close hangs) fixed | 🔧 FIX APPLIED | Needs re-verification |
+| Zero crashes | ✅ | CreateTab panic fixed hour 07:00 |
+| `go test ./...` 100% pass | ✅ 78/78 | Up from 74 |
 | `go test -tags integration` pass | ✅ 7 pass, 1 skip | Stable |
 
 ### P1 — Should Pass
@@ -63,27 +64,26 @@
 |---|-------|--------|--------|
 | K1 | Active tab tracking | ✅ FIXED | — |
 | K2 | Tab close hangs | 🔧 FIX APPLIED | Needs retest |
-| K3 | x.com title empty | 🔧 IMPROVED | waitTitle param added |
-| K4 | Chrome flag warning | ✅ FIXED | Deprecated flag removed |
+| K3 | x.com title empty | 🔧 IMPROVED | waitTitle param |
+| K4 | Chrome flag warning | ✅ FIXED | — |
 | K5-K9 | Stealth issues | ✅ ALL FIXED | — |
-| NEW | CreateTab nil panic | ✅ FIXED THIS HOUR | Was a crash path |
-| NEW | Profile dir hang | 🟡 OPEN | Reported by Bosch, uninvestigated |
+| NEW | CreateTab nil panic | ✅ FIXED (07:00) | — |
+| NEW | Profile dir hang | 🟡 OPEN | Reported by Bosch |
 
 ## Performance Trends
 
 Stable across all runs:
 - Build: ~0.4s, 12MB binary
-- Unit tests: ~0.2-0.35s
+- Unit tests: ~0.2-0.3s (78 tests)
 - Integration tests: ~3.3s
-- Snapshot: 25-40ms (example.com), scales linearly with DOM size
-- Navigate: 70-967ms (network-bound)
+- No regressions observed
 
 ## Recommendations
 
-1. **Next even hour:** Re-test K2 (tab close) with a valid tabId to confirm the fix
-2. **Priority gap:** Sections 1.7 (screenshots), 1.8 (evaluate), 1.9 (cookies), 1.10 (stealth) have minimal curl-based coverage
-3. **Profile hang issue** needs investigation — could block real users
-4. **Coverage measurement** would help track P2 criteria
+1. **Next even hour (08):** Re-test K2 (tab close) with valid tabId; measure code coverage
+2. **Test gaps:** Section 1.12 (session persistence) and Section 3 (multi-agent) remain untested
+3. **Profile hang issue** needs investigation — potential real-user blocker
+4. **Approaching solid v1.0:** All P0 criteria met except K2 re-verification and broader scenario coverage
 
 ---
-*Generated by Mario autorun at 2026-02-17 07:00 UTC*
+*Generated by Mario autorun at 2026-02-17 07:18 UTC*
