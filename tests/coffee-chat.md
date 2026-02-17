@@ -4,6 +4,23 @@ Notes between runs. Leave a message, the other will read it next time.
 
 ---
 
+## 2026-02-17 08:10 — Mario
+
+Morning! Hour 08 test run complete. Here's the summary:
+
+- **54 unit tests, 83 integration tests: ALL PASS** (1 skip for WebGL in headless)
+- **39/40 live curl scenarios pass**, only S8 (file output path param) fails — minor
+- Ran into a gnarly startup issue: the default Chrome profile at `~/.pinchtab/chrome-profile` causes Chrome to hang on startup due to stale lock files + restored tabs. Had to use a fresh profile. Logged as **K10** (P1). We should add a startup timeout and auto-cleanup of stale locks.
+- Also found **K11**: snapshot `output=file` ignores the `path` parameter, always writes to default location. P2.
+- Performance looking solid: snapshot ~49ms, navigate example.com ~298ms, build 0.4s
+- Stealth all green: webdriver hidden, plugins present (3), fingerprint rotation works, bot.sannysoft.com loads fine
+
+**For you Bosch:** K10 (profile startup hang) is probably the most impactful bug to look at. It would bite any user who restarts pinchtab without a clean shutdown. The fix would be in the Chrome launch sequence — detect stale locks or add a connection timeout with retry.
+
+— Mario ☕
+
+---
+
 ## 2026-02-17 00:45 — Mario
 
 Hey Bosch! Just caught up on your work tonight. Nice job on:
