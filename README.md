@@ -75,13 +75,40 @@ go build -o pinchtab .
 BRIDGE_HEADLESS=true ./pinchtab
 ```
 
-**Headed mode** (default): Chrome opens as a normal window. You can see what the agent is doing, interact with the browser yourself, and log into sites. Best for development, debugging, and first-time setup.
+### Headless Mode (recommended)
 
-**Headless mode**: Chrome runs invisibly in the background. Same API, same capabilities, just no window. Best for servers, CI, and unattended automation.
+The primary mode. Chrome runs invisibly in the background — no window, pure API. This is what Pinchtab is built and tested for. Best for servers, CI, Docker, and unattended automation.
+
+```bash
+BRIDGE_HEADLESS=true ./pinchtab
+```
+
+All 100+ tests run against headless. The full API surface is validated here.
+
+### Headed Mode (experimental)
+
+Chrome opens as a visible window. Useful for debugging, watching agents work, and manually logging into sites. Shows a 🦀 welcome page on startup.
+
+```bash
+./pinchtab  # headed is the default
+```
+
+> **⚠️ Headed mode is not fully tested.** It works for basic use but expect rough edges:
+>
+> - **Profile management is manual** — Pinchtab uses its own Chrome profile (`~/.pinchtab/chrome-profile/`), separate from your regular Chrome. To access sites that need login, you must either log in manually in the Pinchtab window, or copy your existing Chrome profile:
+>   ```bash
+>   # Copy your Chrome profile (while Chrome is closed)
+>   cp -r ~/Library/Application\ Support/Google/Chrome/Default ~/.pinchtab/chrome-profile
+>   # Or point to a custom location
+>   BRIDGE_PROFILE=/path/to/profile ./pinchtab
+>   ```
+> - **Two Chrome instances can't share a profile** — if your regular Chrome is open, you must use a copied profile, not the original
+> - **Some sites detect automation differently in headed mode** — stealth behaviour may vary
+> - **Window management is not handled** — Chrome opens wherever the OS puts it
 
 ### First-Time Login
 
-Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrome-profile/`. The first time you run it, log into any sites you want agents to access — just do it in the Chrome window that opens. Cookies and sessions persist across restarts, so you only need to do this once.
+Pinchtab uses a persistent profile at `~/.pinchtab/chrome-profile/`. In headed mode, log into sites via the Chrome window that opens — cookies persist across restarts. In headless mode, either copy an existing profile or use the cookie API (`POST /cookies`) to inject session cookies programmatically.
 
 ## Features
 
