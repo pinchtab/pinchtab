@@ -60,16 +60,16 @@ Proper fix: `Emulation.setTimezoneOverride("America/New_York")` — one line of 
 
 ## Open: Testing
 
-54 tests total. Unit tests added for human interaction, stealth, fingerprint generation,
-action batching, cookies. Still needed:
+54 unit + 7 integration tests. Integration tests require Chrome (`go test -tags integration`).
 
-### Integration tests (build tag: `integration`, need Chrome)
-- TestStealthScriptInjected — verify navigator.webdriver === undefined
-- TestCanvasNoiseApplied — toDataURL twice, verify different outputs
-- TestFontMetricsNoise — measureText twice, verify different widths
-- TestWebGLVendorSpoofed — UNMASKED_VENDOR_WEBGL returns "Intel Inc."
-- TestPluginsPresent — navigator.plugins has 3 entries
-- TestFingerprintRotation — call endpoint, verify navigator.userAgent changed
+### Integration tests ✅ (build tag: `integration`)
+- ✅ TestStealthScriptInjected — navigator.webdriver === undefined
+- ✅ TestCanvasNoiseApplied — toDataURL produces different outputs per call
+- ✅ TestFontMetricsNoise — Proxy-wrapped TextMetrics, positive widths
+- ⏭️ TestWebGLVendorSpoofed — skips in headless (no GPU); passes with headed Chrome
+- ✅ TestPluginsPresent — navigator.plugins >= 3
+- ⏭️ TestFingerprintRotation — skips (needs CDP-level overrides, 8F-7)
+- ✅ TestStealthStatusEndpoint — score >= 50, level high/medium
 
 ### Manual validation (quarterly)
 Run against detection sites, document in QA.md:
