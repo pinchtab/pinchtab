@@ -128,3 +128,73 @@ func TestRestoreState_InvalidJSON(t *testing.T) {
 	// Should not panic on invalid JSON
 	b.RestoreState()
 }
+
+func TestWasUncleanExit_Crashed(t *testing.T) {
+	tmp := t.TempDir()
+	origProfile := profileDir
+	profileDir = tmp
+	defer func() { profileDir = origProfile }()
+
+	defaultDir := filepath.Join(tmp, "Default")
+	os.MkdirAll(defaultDir, 0755)
+	os.WriteFile(filepath.Join(defaultDir, "Preferences"),
+		[]byte(`{"profile":{"exit_type":"Crashed","exited_cleanly":false}}`), 0644)
+
+	if !wasUncleanExit() {
+		t.Error("expected wasUncleanExit to return true for Crashed exit_type")
+	}
+}
+
+func TestWasUncleanExit_Normal(t *testing.T) {
+	tmp := t.TempDir()
+	origProfile := profileDir
+	profileDir = tmp
+	defer func() { profileDir = origProfile }()
+
+	defaultDir := filepath.Join(tmp, "Default")
+	os.MkdirAll(defaultDir, 0755)
+	os.WriteFile(filepath.Join(defaultDir, "Preferences"),
+		[]byte(`{"profile":{"exit_type":"Normal","exited_cleanly":true}}`), 0644)
+
+	if wasUncleanExit() {
+		t.Error("expected wasUncleanExit to return false for Normal exit_type")
+	}
+}
+
+func TestWasUncleanExit_NoFile(t *testing.T) {
+	tmp := t.TempDir()
+	origProfile := profileDir
+	profileDir = tmp
+	defer func() { profileDir = origProfile }()
+
+	if wasUncleanExit() {
+		t.Error("expected wasUncleanExit to return false when no Preferences file exists")
+	}
+}
+
+func TestClearChromeSessions(t *testing.T) {
+	tmp := t.TempDir()
+	origProfile := profileDir
+	profileDir = tmp
+	defer func() { profileDir = origProfile }()
+
+	sessionsDir := filepath.Join(tmp, "Default", "Sessions")
+	os.MkdirAll(sessionsDir, 0755)
+	os.WriteFile(filepath.Join(sessionsDir, "Session_1"), []byte("data"), 0644)
+
+	clearChromeSessions()
+
+	if _, err := os.Stat(sessionsDir); !os.IsNotExist(err) {
+		t.Error("expected Sessions dir to be removed")
+	}
+}
+
+func TestClearChromeSessions_NoDir(t *testing.T) {
+	tmp := t.TempDir()
+	origProfile := profileDir
+	profileDir = tmp
+	defer func() { profileDir = origProfile }()
+
+	// Should not panic when dir doesn't exist
+	clearChromeSessions()
+}
