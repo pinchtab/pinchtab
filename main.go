@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -224,6 +225,11 @@ func main() {
 	bridge.initActionRegistry()
 	bridge.locks = newLockManager()
 
+	// Profile manager + dashboard
+	profilesDir := filepath.Join(filepath.Dir(profileDir), "profiles")
+	profMgr := NewProfileManager(profilesDir)
+	dashboard := NewDashboard()
+
 	// Register the initial tab
 	initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
 	bridge.tabs[string(initTargetID)] = &TabEntry{ctx: browserCtx}
@@ -270,7 +276,11 @@ func main() {
 		_, _ = w.Write([]byte(welcomeHTML))
 	})
 
-	srv := &http.Server{Addr: ":" + port, Handler: loggingMiddleware(corsMiddleware(authMiddleware(mux)))}
+	// Profile management + dashboard
+	profMgr.RegisterHandlers(mux)
+	dashboard.RegisterHandlers(mux)
+
+	srv := &http.Server{Addr: ":" + port, Handler: dashboard.TrackingMiddleware(profMgr, loggingMiddleware(corsMiddleware(authMiddleware(mux))))}
 
 	// Shutdown orchestration — used by both signal handler and /shutdown endpoint.
 	shutdownOnce := &sync.Once{}
