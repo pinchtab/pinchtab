@@ -1,5 +1,5 @@
 // Enhanced stealth script injected into every new document via page.AddScriptToEvaluateOnNewDocument.
-// Hides automation indicators from sophisticated bot detection systems like X.com.
+// Hides automation indicators from sophisticated bot detection systems.
 
 // Session-stable seed injected by Go at launch time via __pinchtab_seed.
 // Falls back to a fixed value if not set (shouldn't happen in normal operation).
