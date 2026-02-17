@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"log/slog"
+
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -206,48 +209,49 @@ func (b *Bridge) handleFingerprintRotate(w http.ResponseWriter, r *http.Request)
 
 	fp := generateFingerprint(req)
 
-	script := fmt.Sprintf(`
-(function() {
-  Object.defineProperty(navigator, 'userAgent', { get: () => %q });
-  Object.defineProperty(navigator, 'platform', { get: () => %q });
-  Object.defineProperty(navigator, 'vendor', { get: () => %q });
-
-  Object.defineProperty(screen, 'width', { get: () => %d });
-  Object.defineProperty(screen, 'height', { get: () => %d });
-  Object.defineProperty(screen, 'availWidth', { get: () => %d });
-  Object.defineProperty(screen, 'availHeight', { get: () => %d });
-
-  Object.defineProperty(navigator, 'language', { get: () => %q });
-  Object.defineProperty(navigator, 'languages', { get: () => [%q] });
-
-  Date.prototype.getTimezoneOffset = function() { return %d; };
-
-  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => %d });
-  Object.defineProperty(navigator, 'deviceMemory', { get: () => %d });
-
-  console.log('Fingerprint rotated successfully');
-})();
-	`, fp.UserAgent, fp.Platform, fp.Vendor,
-		fp.ScreenWidth, fp.ScreenHeight, fp.ScreenWidth-20, fp.ScreenHeight-80,
-		fp.Language, fp.Language, fp.TimezoneOffset,
-		fp.CPUCores, fp.Memory)
-
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
+	// CDP-level overrides (undetectable — no JS property redefinition)
 	if err := chromedp.Run(tCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			if req.Timezone != 0 {
-				script = fmt.Sprintf("window.__pinchtab_timezone = %d;", req.Timezone) + script
+			// UA, platform, accept-language at network level
+			err := emulation.SetUserAgentOverride(fp.UserAgent).
+				WithPlatform(fp.Platform).
+				WithAcceptLanguage(fp.Language).
+				Do(ctx)
+			if err != nil {
+				return fmt.Errorf("setUserAgentOverride: %w", err)
 			}
+			return nil
+		}),
+	); err != nil {
+		jsonErr(w, 500, fmt.Errorf("CDP UA override: %w", err))
+		return
+	}
 
+	// JS overrides for properties CDP doesn't cover (screen, hardware, vendor)
+	script := fmt.Sprintf(`
+(function() {
+  Object.defineProperty(screen, 'width', { get: () => %d, configurable: true });
+  Object.defineProperty(screen, 'height', { get: () => %d, configurable: true });
+  Object.defineProperty(screen, 'availWidth', { get: () => %d, configurable: true });
+  Object.defineProperty(screen, 'availHeight', { get: () => %d, configurable: true });
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => %d, configurable: true });
+  Object.defineProperty(navigator, 'deviceMemory', { get: () => %d, configurable: true });
+})();
+	`, fp.ScreenWidth, fp.ScreenHeight, fp.ScreenWidth-20, fp.ScreenHeight-80,
+		fp.CPUCores, fp.Memory)
+
+	if err := chromedp.Run(tCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
 			return err
 		}),
 		chromedp.Evaluate(script, nil),
 	); err != nil {
-		jsonErr(w, 500, fmt.Errorf("inject fingerprint: %w", err))
-		return
+		// Non-fatal: CDP overrides already applied for the important bits
+		slog.Warn("JS fingerprint extras failed", "err", err)
 	}
 
 	jsonResp(w, 200, map[string]any{

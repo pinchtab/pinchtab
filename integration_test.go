@@ -262,9 +262,7 @@ func TestFingerprintRotation(t *testing.T) {
 
 	navigateAndWait(t, b, "data:text/html,<h1>rotate</h1>")
 
-	// Call /fingerprint/rotate — stealth.js already defines navigator properties
-	// as non-configurable, so rotation uses AddScriptToEvaluateOnNewDocument
-	// which takes effect on next navigation.
+	// Call /fingerprint/rotate — now uses CDP-level SetUserAgentOverride (8F-7)
 	body := `{"os":"windows","browser":"edge","screen":"1920x1080"}`
 	req := httptest.NewRequest("POST", "/fingerprint/rotate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -272,33 +270,34 @@ func TestFingerprintRotation(t *testing.T) {
 	b.handleFingerprintRotate(w, req)
 
 	resp := w.Result()
-	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("fingerprint/rotate returned %d: %s", resp.StatusCode, respBody)
+	}
 
-	// The rotation may fail on current page due to non-configurable properties.
-	// This is a known limitation (8F-7 TODO: use CDP-level overrides instead).
-	// For now, verify the endpoint returns a valid fingerprint in the response.
-	if resp.StatusCode == 200 {
-		var rotateResp map[string]any
-		json.Unmarshal(respBody, &rotateResp)
+	var rotateResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&rotateResp)
 
-		fp, ok := rotateResp["fingerprint"].(map[string]any)
-		if !ok {
-			t.Fatal("response missing fingerprint object")
-		}
-		newUA, _ := fp["userAgent"].(string)
-		if !strings.Contains(newUA, "Edg/") {
-			t.Errorf("expected Edge UA in fingerprint, got: %s", newUA)
-		}
-		if rotateResp["status"] != "rotated" {
-			t.Errorf("expected status=rotated, got %v", rotateResp["status"])
-		}
-	} else if resp.StatusCode == 500 {
-		// Known issue: stealth.js defines properties as non-configurable
-		// CDP-level rotation (8F-7) would fix this
-		t.Logf("fingerprint rotation hit non-configurable property (expected): %s", respBody)
-		t.Skip("fingerprint rotation requires CDP-level overrides (8F-7) — skipping")
-	} else {
-		t.Fatalf("unexpected status %d: %s", resp.StatusCode, respBody)
+	fp, ok := rotateResp["fingerprint"].(map[string]any)
+	if !ok {
+		t.Fatal("response missing fingerprint object")
+	}
+	newUA, _ := fp["userAgent"].(string)
+	if !strings.Contains(newUA, "Edg/") {
+		t.Errorf("expected Edge UA in fingerprint, got: %s", newUA)
+	}
+
+	// Verify UA changed in browser (CDP override is immediate, no navigation needed)
+	ctx2, _, _ := b.TabContext("")
+	tCtx2, cancel2 := context.WithTimeout(ctx2, 5*time.Second)
+	defer cancel2()
+
+	var uaAfter string
+	if err := chromedp.Run(tCtx2, chromedp.Evaluate(`navigator.userAgent`, &uaAfter)); err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if !strings.Contains(uaAfter, "Edg/") {
+		t.Errorf("browser UA after rotation = %q, expected Edge UA", uaAfter)
 	}
 }
 
