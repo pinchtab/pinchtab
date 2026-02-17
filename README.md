@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/pinchtab-mascot.png" alt="pinchtab" width="200"/>
+  <img src="assets/pinchtab-headless.png" alt="pinchtab" width="200"/>
 </p>
 
 <p align="center">
@@ -325,7 +325,7 @@ Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — th
 
 <p align="right">
   <img src="assets/openclaw-logo.svg" alt="OpenClaw" height="120"/>
-  <img src="assets/pinchtab-icon.png" alt="Pinchtab" height="80"/>
+  <img src="assets/pinchtab-headless.png" alt="Pinchtab" height="80"/>
 </p>
 
 ## Star History
