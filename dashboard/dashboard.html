@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🦀 Pinchtab Dashboard</title>
+<link rel="stylesheet" href="/dashboard/styles.css">
+
+</head>
+<body>
+<header>
+  <h1>🦀 Pinchtab</h1>
+  <div class="status"><span class="dot"></span>Live</div>
+  <div class="view-toggle">
+    <button class="view-btn active" data-view="feed" onclick="switchView('feed')">🤖 Agents</button>
+    <button class="view-btn" data-view="profiles" onclick="switchView('profiles')">📁 Profiles</button>
+    <button class="view-btn" data-view="live" onclick="switchView('live')">📺 Live</button>
+    <button class="view-btn" data-view="settings" onclick="switchView('settings')">⚙️</button>
+  </div>
+</header>
+
+<!-- Live screencast view (hidden by default) -->
+<div id="live-view" class="live-view" style="display:none">
+  <div class="live-toolbar">
+    <button onclick="refreshTabs()" style="background:#333;color:#e0e0e0;border:1px solid #444;padding:6px 14px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px">↻ Refresh Tabs</button>
+    <span id="live-tab-count" style="color:#666;font-size:12px;margin-left:12px"></span>
+  </div>
+  <div id="screencast-grid" class="screencast-grid"></div>
+</div>
+
+<!-- Profiles view -->
+<div id="profiles-view" class="instances-view" style="display:none">
+  <div class="inst-toolbar">
+    <button onclick="showCreateProfileModal()" class="launch-btn">+ New Profile</button>
+    <button onclick="loadProfiles()" class="refresh-btn">↻ Refresh</button>
+  </div>
+  <div id="profiles-grid" class="instances-grid">
+    <div class="empty-state"><div class="crab">🦀</div>No profiles yet.<br>Click <b>+ New Profile</b> to create one.</div>
+  </div>
+</div>
+
+<!-- Create profile modal -->
+<div class="modal-overlay" id="create-profile-modal">
+  <div class="modal">
+    <h3>📁 New Profile</h3>
+    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Name</label>
+    <input id="create-name" placeholder="e.g. personal, work, scraping" />
+    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Import from (optional — Chrome user data path)</label>
+    <input id="create-source" placeholder="e.g. /Users/you/Library/Application Support/Google/Chrome" />
+    <div class="btn-row" style="margin-top:16px">
+      <button class="secondary" onclick="closeCreateProfileModal()">Cancel</button>
+      <button onclick="doCreateProfile()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm/Alert modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Confirm</h3>
+    <p id="confirm-message" style="color:#ccc;margin:12px 0 20px;font-size:14px;line-height:1.5"></p>
+    <div class="btn-row">
+      <button class="secondary" id="confirm-cancel">Cancel</button>
+      <button class="danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Launch profile modal -->
+<div class="modal-overlay" id="launch-modal">
+  <div class="modal">
+    <h3>🚀 Launch Profile</h3>
+    <input id="launch-name" type="hidden" />
+    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Port</label>
+    <input id="launch-port" placeholder="e.g. 9868" />
+    <label style="color:#888;font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <input type="checkbox" id="launch-headless" checked /> Headless
+    </label>
+    <div class="btn-row">
+      <button class="secondary" onclick="closeLaunchModal()">Cancel</button>
+      <button onclick="doLaunch()">Launch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings view -->
+<div id="settings-view" class="settings-view" style="display:none">
+  <div class="settings-container">
+    <h2 class="settings-title">⚙️ Settings</h2>
+
+    <div class="settings-section">
+      <h3>📺 Screencast</h3>
+      <div class="setting-row">
+        <label>Frame Rate</label>
+        <div class="setting-control">
+          <input type="range" id="set-fps" min="1" max="15" value="1" oninput="document.getElementById('fps-val').textContent=this.value+' fps'">
+          <span id="fps-val" class="setting-value">1 fps</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Quality</label>
+        <div class="setting-control">
+          <input type="range" id="set-quality" min="10" max="80" value="30" oninput="document.getElementById('quality-val').textContent=this.value+'%'">
+          <span id="quality-val" class="setting-value">30%</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Max Width</label>
+        <div class="setting-control">
+          <select id="set-maxwidth">
+            <option value="400">400px</option>
+            <option value="600">600px</option>
+            <option value="800" selected>800px</option>
+            <option value="1024">1024px</option>
+            <option value="1280">1280px</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>🛡️ Stealth</h3>
+      <div class="setting-row">
+        <label>Level</label>
+        <div class="setting-control">
+          <select id="set-stealth" onchange="applyStealth()">
+            <option value="light">Light (default — works with X, Gmail)</option>
+            <option value="full">Full (canvas noise, WebGL, fonts)</option>
+          </select>
+        </div>
+      </div>
+      <div id="stealth-info" class="setting-info"></div>
+    </div>
+
+    <div class="settings-section">
+      <h3>🌐 Browser</h3>
+      <div class="setting-row">
+        <label>Block Images</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-block-images"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Block Media</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-block-media"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>No Animations</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-no-animations"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>📊 Server Info</h3>
+      <div id="server-info" class="server-info">Loading...</div>
+    </div>
+
+    <div class="settings-actions">
+      <button onclick="applySettings()" class="launch-btn">Apply & Reconnect Live</button>
+      <button onclick="loadSettings()" class="refresh-btn">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feed view (default) -->
+<div id="feed-view" class="container">
+  <div class="agents-panel">
+    <h2>Agents</h2>
+    <div id="agents-list">
+      <div class="empty-state"><div class="crab">🦀</div>No agents connected yet.<br>Make an API call with <code>X-Agent-Id</code> header.</div>
+    </div>
+  </div>
+
+  <div class="feed-panel">
+    <div class="feed-header">
+      <h2>Activity Feed</h2>
+      <div class="filter-btns">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="navigate">Navigate</button>
+        <button class="filter-btn" data-filter="snapshot">Snapshot</button>
+        <button class="filter-btn" data-filter="actions">Actions</button>
+      </div>
+    </div>
+    <div id="feed-list" class="feed-list">
+      <div class="empty-state"><div class="crab">🦀</div>Waiting for events...</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end feed-view -->
+
+<!-- Profile management modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Manage Profile</h3>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script src="/dashboard/scripts.js"></script>
+
+</body>
+</html>
