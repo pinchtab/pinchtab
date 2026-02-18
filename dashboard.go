@@ -766,6 +766,18 @@ const dashboardHTML = `<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Confirm/Alert modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Confirm</h3>
+    <p id="confirm-message" style="color:#ccc;margin:12px 0 20px;font-size:14px;line-height:1.5"></p>
+    <div class="btn-row">
+      <button class="secondary" id="confirm-cancel">Cancel</button>
+      <button class="danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- Launch profile modal -->
 <div class="modal-overlay" id="launch-modal">
   <div class="modal">
@@ -1028,25 +1040,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
-// Load profiles
-async function loadProfiles() {
-  try {
-    const res = await fetch('/profiles');
-    const profiles = await res.json();
-    const bar = document.getElementById('profiles-bar');
-    if (!profiles || profiles.length === 0) {
-      bar.innerHTML = '<div style="color:#555;font-size:12px;padding:4px">No profiles managed yet. Use POST /profiles/create or /profiles/import.</div>';
-      return;
-    }
-    bar.innerHTML = profiles.map(p => ` + "`" + `
-      <div class="profile-chip" onclick="showProfileModal('${esc(p.name)}')">
-        <span class="pname">${esc(p.name)}</span>
-        <span class="psize">${p.sizeMB.toFixed(1)}MB</span>
-        <span class="psource">${p.source}</span>
-      </div>
-    ` + "`" + `).join('');
-  } catch (e) {}
-}
+// Old loadProfiles removed — see unified version below
 
 function showProfileModal(name) {
   const modal = document.getElementById('modal');
@@ -1069,7 +1063,7 @@ function closeModal() {
 }
 
 async function resetProfile(name) {
-  if (!confirm('Reset profile "' + name + '"? This clears session data, cookies, and cache.')) return;
+  if (!await appConfirm('Reset profile "' + name + '"? This clears session data, cookies, and cache.', '🔄 Reset Profile')) return;
   await fetch('/profiles/' + name + '/reset', { method: 'POST' });
   closeModal();
   loadProfiles();
@@ -1148,6 +1142,35 @@ document.getElementById('modal').addEventListener('click', (e) => {
 });
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function appConfirm(message, title, isDanger) {
+  return new Promise((resolve) => {
+    document.getElementById('confirm-title').textContent = title || 'Confirm';
+    document.getElementById('confirm-message').textContent = message;
+    const okBtn = document.getElementById('confirm-ok');
+    okBtn.textContent = 'Confirm';
+    okBtn.style.display = '';
+    okBtn.className = isDanger !== false ? 'danger' : '';
+    document.getElementById('confirm-cancel').textContent = 'Cancel';
+    document.getElementById('confirm-modal').classList.add('open');
+    const cleanup = () => { document.getElementById('confirm-modal').classList.remove('open'); };
+    okBtn.onclick = () => { cleanup(); resolve(true); };
+    document.getElementById('confirm-cancel').onclick = () => { cleanup(); resolve(false); };
+  });
+}
+function appAlert(message, title) {
+  return new Promise((resolve) => {
+    document.getElementById('confirm-title').textContent = title || 'Notice';
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-ok').style.display = 'none';
+    document.getElementById('confirm-cancel').textContent = 'OK';
+    document.getElementById('confirm-modal').classList.add('open');
+    document.getElementById('confirm-cancel').onclick = () => {
+      document.getElementById('confirm-modal').classList.remove('open');
+      resolve();
+    };
+  });
+}
 function timeAgo(d) {
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 5) return 'just now';
@@ -1161,6 +1184,7 @@ connect();
 // ---------------------------------------------------------------------------
 // View switching
 // ---------------------------------------------------------------------------
+let profilesInterval = null;
 function switchView(view) {
   document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('[data-view="'+view+'"]').classList.add('active');
@@ -1171,6 +1195,11 @@ function switchView(view) {
   if (view === 'live') refreshTabs();
   if (view === 'profiles') loadProfiles();
   if (view === 'settings') loadSettings();
+  // Auto-refresh profiles every 3s while on that view
+  if (profilesInterval) { clearInterval(profilesInterval); profilesInterval = null; }
+  if (view === 'profiles') {
+    profilesInterval = setInterval(loadProfiles, 3000);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1263,7 +1292,12 @@ function renderProfileCard(name, sizeMB, source, inst) {
             + '<button onclick="viewInstanceLogs(\'' + esc(inst.id) + '\')">📄 Logs</button>'
             + '<button onclick="resetProfile(\'' + esc(name) + '\')">🔄 Reset</button>'
             + '<button class="danger" onclick="stopInstance(\'' + esc(inst.id) + '\')">⏹ Stop</button>'
-          : '<button onclick="launchProfile(\'' + esc(name) + '\')">🚀 Launch</button>'
+          : (getProfileHeadless(name)
+              ? '<button onclick="launchProfile(\'' + esc(name) + '\')">🚀 Launch</button>'
+                + '<button onclick="launchHeaded(\'' + esc(name) + '\')">🖥️ Headed</button>'
+              : '<button onclick="launchHeaded(\'' + esc(name) + '\')">🖥️ Launch</button>'
+                + '<button onclick="launchProfile(\'' + esc(name) + '\')">🚀 Headless</button>'
+            )
             + '<button onclick="resetProfile(\'' + esc(name) + '\')">🔄 Reset</button>'
             + '<button onclick="viewAnalytics(\'' + esc(name) + '\')">📊 Analytics</button>'
             + '<button class="danger" onclick="deleteProfile(\'' + esc(name) + '\')">🗑️ Delete</button>'
@@ -1285,7 +1319,7 @@ async function doCreateProfile() {
   const name = document.getElementById('create-name').value.trim();
   const source = document.getElementById('create-source').value.trim();
 
-  if (!name) { alert('Name required'); return; }
+  if (!name) { await appAlert('Name required'); return; }
   closeCreateProfileModal();
 
   try {
@@ -1303,15 +1337,36 @@ async function doCreateProfile() {
       });
     }
     loadProfiles();
-  } catch (e) { alert('Failed: ' + e.message); }
+  } catch (e) { await appAlert('Failed: ' + e.message, 'Error'); }
 }
 
-function launchProfile(name) {
+function getProfilePort(name) {
+  const saved = localStorage.getItem('pinchtab-port-' + name);
+  if (saved) return saved;
+  // Auto-assign based on profile index: 9868, 9869, ...
+  const cards = document.querySelectorAll('#profiles-grid .inst-card');
+  let idx = 0;
+  cards.forEach((c, i) => { if (c.querySelector('.inst-name')?.textContent === name) idx = i; });
+  return String(9867 + Math.max(idx, 1));
+}
+function saveProfilePort(name, port, headless) {
+  localStorage.setItem('pinchtab-port-' + name, port);
+  localStorage.setItem('pinchtab-headless-' + name, headless ? '1' : '0');
+}
+function getProfileHeadless(name) {
+  const saved = localStorage.getItem('pinchtab-headless-' + name);
+  if (saved !== null) return saved === '1';
+  return true; // default headless
+}
+function openLaunchModal(name, headless) {
   document.getElementById('launch-name').value = name;
-  document.getElementById('launch-port').value = '';
+  document.getElementById('launch-port').value = getProfilePort(name);
+  document.getElementById('launch-headless').checked = headless;
   document.getElementById('launch-modal').classList.add('open');
   document.getElementById('launch-port').focus();
 }
+function launchProfile(name) { openLaunchModal(name, true); }
+function launchHeaded(name) { openLaunchModal(name, false); }
 function closeLaunchModal() {
   document.getElementById('launch-modal').classList.remove('open');
 }
@@ -1321,8 +1376,9 @@ async function doLaunch() {
   const port = document.getElementById('launch-port').value.trim();
   const headless = document.getElementById('launch-headless').checked;
 
-  if (!name || !port) { alert('Port required'); return; }
+  if (!name || !port) { await appAlert('Port required'); return; }
 
+  saveProfilePort(name, port, headless);
   closeLaunchModal();
 
   try {
@@ -1333,18 +1389,18 @@ async function doLaunch() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert('Launch failed: ' + (data.error || 'unknown'));
+      await appAlert('Launch failed: ' + (data.error || 'unknown'), 'Error');
       return;
     }
     // Poll until running
     pollInstanceStatus(data.id);
   } catch (e) {
-    alert('Launch error: ' + e.message);
+    await appAlert('Launch error: ' + e.message, 'Error');
   }
 }
 
 async function deleteProfile(name) {
-  if (!confirm('Delete profile "' + name + '"? This removes all data.')) return;
+  if (!await appConfirm('Delete profile "' + name + '"? This removes all data.', '🗑️ Delete Profile')) return;
   await fetch('/profiles/' + name, { method: 'DELETE' });
   loadProfiles();
 }
@@ -1368,7 +1424,7 @@ function pollInstanceStatus(id) {
 }
 
 async function stopInstance(id) {
-  if (!confirm('Stop instance ' + id + '?')) return;
+  if (!await appConfirm('Stop instance ' + id + '?', '⏹ Stop Instance')) return;
   await fetch('/instances/' + id + '/stop', { method: 'POST' });
   setTimeout(loadProfiles, 1000);
 }
@@ -1620,7 +1676,7 @@ function updateStealthInfo(data) {
   el.textContent = tips[data.level] || '';
 }
 
-function applySettings() {
+async function applySettings() {
   screencastSettings.fps = parseInt(document.getElementById('set-fps').value);
   screencastSettings.quality = parseInt(document.getElementById('set-quality').value);
   screencastSettings.maxWidth = parseInt(document.getElementById('set-maxwidth').value);
@@ -1632,7 +1688,7 @@ function applySettings() {
   Object.values(screencastSockets).forEach(s => s.close());
   Object.keys(screencastSockets).forEach(k => delete screencastSockets[k]);
 
-  alert('Settings saved. Switch to Live view to see changes.');
+  await appAlert('Settings saved. Switch to Live view to see changes.', '⚙️ Settings');
 }
 
 function getScreencastParams() {
@@ -1643,7 +1699,7 @@ async function applyStealth() {
   // Stealth level change would need a restart — just inform the user
   const level = document.getElementById('set-stealth').value;
   updateStealthInfo({ level });
-  alert('Stealth level change requires restarting Pinchtab with BRIDGE_STEALTH=' + level);
+  await appAlert('Stealth level change requires restarting Pinchtab with BRIDGE_STEALTH=' + level, '🛡️ Stealth');
 }
 </script>
 </body>

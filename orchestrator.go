@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -155,6 +156,8 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*Instance, erro
 		"BRIDGE_NO_DASHBOARD=true",
 	)
 
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	logBuf := newRingBuffer(64 * 1024) // 64KB log buffer
 	cmd.Stdout = logBuf
 	cmd.Stderr = logBuf
@@ -246,8 +249,9 @@ func (o *Orchestrator) Stop(id string) error {
 		time.Sleep(2 * time.Second)
 	}
 
-	// Force kill if still running
+	// Force kill the whole process group (including Chrome children)
 	if inst.cmd.ProcessState == nil || !inst.cmd.ProcessState.Exited() {
+		_ = syscall.Kill(-inst.cmd.Process.Pid, syscall.SIGKILL)
 		inst.cancel()
 	}
 
