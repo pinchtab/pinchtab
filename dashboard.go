@@ -724,7 +724,7 @@ const dashboardHTML = `<!DOCTYPE html>
   <h1>🦀 Pinchtab</h1>
   <div class="status"><span class="dot"></span>Live</div>
   <div class="view-toggle">
-    <button class="view-btn active" data-view="feed" onclick="switchView('feed')">📋 Feed</button>
+    <button class="view-btn active" data-view="feed" onclick="switchView('feed')">🤖 Agents</button>
     <button class="view-btn" data-view="instances" onclick="switchView('instances')">🖥️ Instances</button>
     <button class="view-btn" data-view="live" onclick="switchView('live')">📺 Live</button>
     <button class="view-btn" data-view="settings" onclick="switchView('settings')">⚙️</button>
