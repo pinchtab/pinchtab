@@ -43,6 +43,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Dashboard-only mode — no Chrome, just UI + orchestrator
+	if len(os.Args) > 1 && os.Args[1] == "dashboard" {
+		runDashboard()
+		return
+	}
+
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		slog.Error("cannot create state dir", "err", err)
 		os.Exit(1)

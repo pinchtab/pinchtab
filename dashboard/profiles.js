@@ -37,7 +37,10 @@ async function loadProfiles() {
     const grid = document.getElementById('profiles-grid');
     const cards = [];
 
-    cards.push(renderMainCard(tabsData.tabs ? tabsData.tabs.length : 0));
+    // Only show Main card if we're running in embedded mode (bridge serves /health with no "mode")
+    if (!health.mode) {
+      cards.push(renderMainCard(tabsData.tabs ? tabsData.tabs.length : 0));
+    }
 
     profiles.forEach(p => {
       cards.push(renderProfileCard(p.name, p.sizeMB, p.source, running[p.name] || null));
