@@ -451,6 +451,59 @@ const dashboardHTML = `<!DOCTYPE html>
   .profile-chip .psize { color: #555; margin-left: 8px; }
   .profile-chip .psource { color: #f5c542; font-size: 10px; margin-left: 6px; }
 
+  /* Settings view */
+  .settings-view { height: calc(100vh - 60px); overflow-y: auto; }
+  .settings-container { max-width: 600px; margin: 0 auto; padding: 24px; }
+  .settings-title { color: #f5c542; font-size: 18px; margin-bottom: 24px; }
+  .settings-section {
+    background: #151515;
+    border: 1px solid #222;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .settings-section h3 { color: #e0e0e0; font-size: 14px; margin-bottom: 14px; }
+  .setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-row label { color: #888; font-size: 13px; }
+  .setting-control { display: flex; align-items: center; gap: 10px; }
+  .setting-value { color: #f5c542; font-size: 13px; min-width: 50px; text-align: right; }
+  .setting-control input[type="range"] {
+    width: 140px;
+    accent-color: #f5c542;
+  }
+  .setting-control select {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .setting-info {
+    font-size: 11px;
+    color: #666;
+    margin-top: 8px;
+    padding: 8px;
+    background: #0d0d0d;
+    border-radius: 4px;
+  }
+  .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: #888; }
+  .toggle input { accent-color: #f5c542; }
+  .toggle-label { min-width: 24px; }
+  .server-info { font-size: 12px; color: #888; line-height: 1.8; }
+  .server-info .info-row { display: flex; justify-content: space-between; }
+  .server-info .info-label { color: #666; }
+  .server-info .info-val { color: #e0e0e0; }
+  .settings-actions { display: flex; gap: 8px; margin-top: 8px; }
+
   /* Instances view */
   .instances-view { height: calc(100vh - 60px); display: flex; flex-direction: column; }
   .inst-toolbar {
@@ -674,6 +727,7 @@ const dashboardHTML = `<!DOCTYPE html>
     <button class="view-btn active" data-view="feed" onclick="switchView('feed')">📋 Feed</button>
     <button class="view-btn" data-view="instances" onclick="switchView('instances')">🖥️ Instances</button>
     <button class="view-btn" data-view="live" onclick="switchView('live')">📺 Live</button>
+    <button class="view-btn" data-view="settings" onclick="switchView('settings')">⚙️</button>
   </div>
 </header>
 
@@ -712,6 +766,89 @@ const dashboardHTML = `<!DOCTYPE html>
     <div class="btn-row">
       <button class="secondary" onclick="closeLaunchModal()">Cancel</button>
       <button onclick="doLaunch()">Launch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings view -->
+<div id="settings-view" class="settings-view" style="display:none">
+  <div class="settings-container">
+    <h2 class="settings-title">⚙️ Settings</h2>
+
+    <div class="settings-section">
+      <h3>📺 Screencast</h3>
+      <div class="setting-row">
+        <label>Frame Rate</label>
+        <div class="setting-control">
+          <input type="range" id="set-fps" min="1" max="15" value="1" oninput="document.getElementById('fps-val').textContent=this.value+' fps'">
+          <span id="fps-val" class="setting-value">1 fps</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Quality</label>
+        <div class="setting-control">
+          <input type="range" id="set-quality" min="10" max="80" value="30" oninput="document.getElementById('quality-val').textContent=this.value+'%'">
+          <span id="quality-val" class="setting-value">30%</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Max Width</label>
+        <div class="setting-control">
+          <select id="set-maxwidth">
+            <option value="400">400px</option>
+            <option value="600">600px</option>
+            <option value="800" selected>800px</option>
+            <option value="1024">1024px</option>
+            <option value="1280">1280px</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>🛡️ Stealth</h3>
+      <div class="setting-row">
+        <label>Level</label>
+        <div class="setting-control">
+          <select id="set-stealth" onchange="applyStealth()">
+            <option value="light">Light (default — works with X, Gmail)</option>
+            <option value="full">Full (canvas noise, WebGL, fonts)</option>
+          </select>
+        </div>
+      </div>
+      <div id="stealth-info" class="setting-info"></div>
+    </div>
+
+    <div class="settings-section">
+      <h3>🌐 Browser</h3>
+      <div class="setting-row">
+        <label>Block Images</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-block-images"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Block Media</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-block-media"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>No Animations</label>
+        <div class="setting-control">
+          <label class="toggle"><input type="checkbox" id="set-no-animations"><span class="toggle-label">Off</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>📊 Server Info</h3>
+      <div id="server-info" class="server-info">Loading...</div>
+    </div>
+
+    <div class="settings-actions">
+      <button onclick="applySettings()" class="launch-btn">Apply & Reconnect Live</button>
+      <button onclick="loadSettings()" class="refresh-btn">Reset</button>
     </div>
   </div>
 </div>
@@ -963,8 +1100,10 @@ function switchView(view) {
   document.getElementById('feed-view').style.display = view === 'feed' ? 'flex' : 'none';
   document.getElementById('instances-view').style.display = view === 'instances' ? 'flex' : 'none';
   document.getElementById('live-view').style.display = view === 'live' ? 'flex' : 'none';
+  document.getElementById('settings-view').style.display = view === 'settings' ? 'block' : 'none';
   if (view === 'live') refreshTabs();
   if (view === 'instances') loadInstances();
+  if (view === 'settings') loadSettings();
 }
 
 // ---------------------------------------------------------------------------
@@ -1138,7 +1277,7 @@ async function viewInstanceLive(id, port) {
 }
 
 function startScreencastDirect(tabId, port) {
-  const wsUrl = 'ws://localhost:' + port + '/screencast?tabId=' + tabId + '&quality=30&maxWidth=800&fps=1';
+  const wsUrl = 'ws://localhost:' + port + '/screencast?tabId=' + tabId + getScreencastParams();
   const socket = new WebSocket(wsUrl);
   socket.binaryType = 'arraybuffer';
   screencastSockets[tabId] = socket;
@@ -1223,7 +1362,7 @@ async function refreshTabs() {
 
 function startScreencast(tabId) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = proto + '//' + location.host + '/screencast?tabId=' + tabId + '&quality=30&maxWidth=800&fps=1';
+  const wsUrl = proto + '//' + location.host + '/screencast?tabId=' + tabId + getScreencastParams();
   const socket = new WebSocket(wsUrl);
   socket.binaryType = 'arraybuffer';
   screencastSockets[tabId] = socket;
@@ -1278,6 +1417,85 @@ function startScreencast(tabId) {
 window.addEventListener('beforeunload', () => {
   Object.values(screencastSockets).forEach(s => s.close());
 });
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+const screencastSettings = { fps: 1, quality: 30, maxWidth: 800 };
+
+async function loadSettings() {
+  // Load stealth status
+  try {
+    const res = await fetch('/stealth/status');
+    const data = await res.json();
+    document.getElementById('set-stealth').value = data.level || 'light';
+    updateStealthInfo(data);
+  } catch(e) {}
+
+  // Load server health info
+  try {
+    const res = await fetch('/health');
+    const data = await res.json();
+    const tabs = await fetch('/tabs').then(r => r.json());
+    document.getElementById('server-info').innerHTML = ` + "`" + `
+      <div class="info-row"><span class="info-label">Status</span><span class="info-val">${data.status}</span></div>
+      <div class="info-row"><span class="info-label">Tabs</span><span class="info-val">${tabs.tabs ? tabs.tabs.length : 0}</span></div>
+      <div class="info-row"><span class="info-label">CDP</span><span class="info-val">${data.cdp || 'embedded'}</span></div>
+      <div class="info-row"><span class="info-label">Port</span><span class="info-val">${location.port || '80'}</span></div>
+    ` + "`" + `;
+  } catch(e) {
+    document.getElementById('server-info').textContent = 'Failed to load server info';
+  }
+
+  // Restore saved settings from localStorage
+  const saved = JSON.parse(localStorage.getItem('pinchtab-settings') || '{}');
+  if (saved.fps) { document.getElementById('set-fps').value = saved.fps; document.getElementById('fps-val').textContent = saved.fps + ' fps'; screencastSettings.fps = saved.fps; }
+  if (saved.quality) { document.getElementById('set-quality').value = saved.quality; document.getElementById('quality-val').textContent = saved.quality + '%'; screencastSettings.quality = saved.quality; }
+  if (saved.maxWidth) { document.getElementById('set-maxwidth').value = saved.maxWidth; screencastSettings.maxWidth = saved.maxWidth; }
+
+  // Toggle labels
+  document.querySelectorAll('.toggle input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      cb.parentElement.querySelector('.toggle-label').textContent = cb.checked ? 'On' : 'Off';
+    });
+  });
+}
+
+function updateStealthInfo(data) {
+  const el = document.getElementById('stealth-info');
+  if (!data || !data.level) { el.textContent = ''; return; }
+  const tips = {
+    light: 'Patches webdriver, CDP markers, plugins, languages, permissions. Works with X.com and Gmail.',
+    full: 'Adds canvas noise, WebGL vendor spoofing, font metrics randomization. May break some sites (e.g. X.com crypto).'
+  };
+  el.textContent = tips[data.level] || '';
+}
+
+function applySettings() {
+  screencastSettings.fps = parseInt(document.getElementById('set-fps').value);
+  screencastSettings.quality = parseInt(document.getElementById('set-quality').value);
+  screencastSettings.maxWidth = parseInt(document.getElementById('set-maxwidth').value);
+
+  // Save to localStorage
+  localStorage.setItem('pinchtab-settings', JSON.stringify(screencastSettings));
+
+  // Reconnect all screencasts with new settings
+  Object.values(screencastSockets).forEach(s => s.close());
+  Object.keys(screencastSockets).forEach(k => delete screencastSockets[k]);
+
+  alert('Settings saved. Switch to Live view to see changes.');
+}
+
+function getScreencastParams() {
+  return '&quality=' + screencastSettings.quality + '&maxWidth=' + screencastSettings.maxWidth + '&fps=' + screencastSettings.fps;
+}
+
+async function applyStealth() {
+  // Stealth level change would need a restart — just inform the user
+  const level = document.getElementById('set-stealth').value;
+  updateStealthInfo({ level });
+  alert('Stealth level change requires restarting Pinchtab with BRIDGE_STEALTH=' + level);
+}
 </script>
 </body>
 </html>`
