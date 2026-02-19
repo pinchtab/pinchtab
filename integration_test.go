@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,8 +20,16 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+func skipIfNoChrome(t *testing.T) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping integration test in CI (no Chrome)")
+	}
+}
+
 func testBridge(t *testing.T) (*Bridge, func()) {
 	t.Helper()
+	skipIfNoChrome(t)
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Headless,
