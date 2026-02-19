@@ -11,7 +11,6 @@ import (
 func TestHandleTabLock(t *testing.T) {
 	b := &Bridge{locks: newLockManager()}
 
-	// Lock a tab
 	body, _ := json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-a", "timeoutSec": 10})
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))
@@ -30,7 +29,6 @@ func TestHandleTabLock(t *testing.T) {
 		t.Fatalf("expected owner=agent-a: %v", resp)
 	}
 
-	// Conflict from different owner
 	body, _ = json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-b"})
 	w = httptest.NewRecorder()
 	r, _ = http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))
@@ -45,7 +43,6 @@ func TestHandleTabUnlock(t *testing.T) {
 	b := &Bridge{locks: newLockManager()}
 	_ = b.locks.Lock("t1", "agent-a", 0)
 
-	// Wrong owner
 	body, _ := json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-b"})
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "/tab/unlock", bytes.NewReader(body))
@@ -54,7 +51,6 @@ func TestHandleTabUnlock(t *testing.T) {
 		t.Fatalf("expected 409, got %d", w.Code)
 	}
 
-	// Correct owner
 	body, _ = json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-a"})
 	w = httptest.NewRecorder()
 	r, _ = http.NewRequest("POST", "/tab/unlock", bytes.NewReader(body))
@@ -67,7 +63,6 @@ func TestHandleTabUnlock(t *testing.T) {
 func TestHandleTabLockValidation(t *testing.T) {
 	b := &Bridge{locks: newLockManager()}
 
-	// Missing fields
 	body, _ := json.Marshal(map[string]any{"tabId": "t1"})
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))

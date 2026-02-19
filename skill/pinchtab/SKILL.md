@@ -45,6 +45,12 @@ metadata:
         - name: BRIDGE_NO_ANIMATIONS
           optional: true
           description: "Disable CSS animations/transitions globally (true/false)"
+        - name: BRIDGE_TIMEZONE
+          optional: true
+          description: "Force browser timezone (IANA tz, e.g. Europe/Rome)"
+        - name: BRIDGE_CHROME_VERSION
+          optional: true
+          description: "Chrome version string used by fingerprint rotation profiles"
         - name: CHROME_BINARY
           optional: true
           description: "Path to Chrome/Chromium binary (auto-detected if not set)"
@@ -63,6 +69,24 @@ metadata:
         - name: CDP_URL
           optional: true
           description: "Connect to existing Chrome DevTools instead of launching"
+        - name: BRIDGE_NO_DASHBOARD
+          optional: true
+          description: "Disable dashboard/orchestrator endpoints on instance processes"
+        - name: PINCHTAB_AUTO_LAUNCH
+          optional: true
+          description: "Dashboard mode: auto-launch default profile instance on startup"
+        - name: PINCHTAB_DEFAULT_PROFILE
+          optional: true
+          description: "Dashboard mode: default profile name for auto-launch"
+        - name: PINCHTAB_DEFAULT_PORT
+          optional: true
+          description: "Dashboard mode: default port for auto-launched profile"
+        - name: PINCHTAB_HEADED
+          optional: true
+          description: "Dashboard mode: when set, auto-launched profile runs headed"
+        - name: PINCHTAB_DASHBOARD_URL
+          optional: true
+          description: "Base dashboard URL used by `pinchtab connect` helper"
 ---
 
 # Pinchtab
@@ -71,20 +95,53 @@ Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 
 ## Setup
 
-Ensure Pinchtab is running:
+Start Pinchtab in one of these modes:
 
 ```bash
-# Headless (default for automation)
-BRIDGE_HEADLESS=true pinchtab &
-
-# With UI (debugging)
+# Headless (default) — no UI, pure automation (lowest token cost when using /text and filtered snapshots)
 pinchtab &
+
+# Headed — visible Chrome for human + agent workflows
+BRIDGE_HEADLESS=false pinchtab &
+
+# Dashboard/orchestrator — profile manager + launcher, no browser in dashboard process
+pinchtab dashboard &
 ```
 
 Default port: `9867`. Override with `BRIDGE_PORT=9868`.
 Auth: set `BRIDGE_TOKEN=<secret>` and pass `Authorization: Bearer <secret>`.
 
 Base URL for all examples: `http://localhost:9867`
+
+Token savings come from the API shape (`/text`, `/snapshot?filter=interactive&format=compact`), not from headless vs headed alone.
+
+### Headed mode definition
+
+Headed mode means a real visible Chrome window managed by Pinchtab.
+
+- Human can open profile(s), log in, pass 2FA/captcha, and validate page state
+- Agent then calls Pinchtab HTTP APIs against that same running profile instance
+- Session state persists in the profile directory, so follow-up runs reuse cookies/storage
+
+In dashboard workflows, the dashboard process itself does not launch Chrome; it launches profile instances that run Chrome (headed or headless).
+
+To resolve a running profile endpoint from dashboard state:
+
+```bash
+pinchtab connect <profile-name>
+```
+
+Recommended human + agent flow:
+
+```bash
+# human
+pinchtab dashboard
+# setup profile + launch profile instance
+
+# agent
+PINCHTAB_BASE_URL="$(pinchtab connect <profile-name>)"
+curl "$PINCHTAB_BASE_URL/health"
+```
 
 ## Core Workflow
 
@@ -334,10 +391,12 @@ curl http://localhost:9867/health
 
 ## Environment Variables
 
+### Core runtime
+
 | Var | Default | Description |
 |---|---|---|
 | `BRIDGE_PORT` | `9867` | HTTP port |
-| `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
+| `BRIDGE_HEADLESS` | `true` | Run Chrome headless |
 | `BRIDGE_TOKEN` | (none) | Bearer auth token |
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile dir |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
@@ -346,12 +405,25 @@ curl http://localhost:9867/health
 | `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading |
 | `BRIDGE_BLOCK_MEDIA` | `false` | Block all media (images + fonts + CSS + video) |
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions |
+| `BRIDGE_TIMEZONE` | (none) | Force browser timezone (IANA tz) |
+| `BRIDGE_CHROME_VERSION` | `144.0.7559.133` | Chrome version string used by fingerprint rotation |
 | `CHROME_BINARY` | (auto) | Path to Chrome/Chromium binary |
 | `CHROME_FLAGS` | (none) | Extra Chrome flags (space-separated) |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |
 | `CDP_URL` | (none) | Connect to existing Chrome DevTools |
+| `BRIDGE_NO_DASHBOARD` | `false` | Disable dashboard/orchestrator endpoints on instance processes |
+
+### Dashboard mode (`pinchtab dashboard`)
+
+| Var | Default | Description |
+|---|---|---|
+| `PINCHTAB_AUTO_LAUNCH` | `false` | Auto-launch a default profile at dashboard startup |
+| `PINCHTAB_DEFAULT_PROFILE` | `default` | Profile name for auto-launch |
+| `PINCHTAB_DEFAULT_PORT` | `9867` | Port for auto-launched profile |
+| `PINCHTAB_HEADED` | (unset) | If set, auto-launched profile is headed; unset means headless |
+| `PINCHTAB_DASHBOARD_URL` | `http://localhost:$BRIDGE_PORT` | CLI helper base URL for `pinchtab connect` |
 
 ## Tips
 

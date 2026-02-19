@@ -68,51 +68,102 @@ Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](s
 # Build
 go build -o pinchtab .
 
-# Headed mode (default) — Chrome window visible, human can watch and interact
+# Headless mode (default) — no window, pure automation (best for token-efficient API flows)
 ./pinchtab
 
-# Headless mode — no window, pure automation
-BRIDGE_HEADLESS=true ./pinchtab
+# Headed mode — visible window for operator-in-the-loop flows
+BRIDGE_HEADLESS=false ./pinchtab
 ```
 
-### Headless Mode (recommended)
+### Run Modes
+
+| Mode | Command | Notes |
+|---|---|---|
+| Headless (default) | `./pinchtab` | Launches managed Chrome without UI |
+| Headed | `BRIDGE_HEADLESS=false ./pinchtab` | Launches managed Chrome with visible window |
+| Dashboard / orchestrator | `./pinchtab dashboard` | Runs control plane only (profiles + instances), no browser in dashboard process |
+| Remote CDP | `CDP_URL=http://localhost:9222 ./pinchtab` | Connects to an existing Chrome instead of launching one |
+
+Common runtime options:
+
+```bash
+# Custom port
+BRIDGE_PORT=9870 ./pinchtab
+
+# Custom profile directory
+BRIDGE_PROFILE=/path/to/profile ./pinchtab
+
+# Enable API auth
+BRIDGE_TOKEN=your-secret-token ./pinchtab
+```
+
+### Headless Mode
 
 <img src="assets/pinchtab-headless.png" width="64" alt="Pinchtab" />
 
-The primary mode. Chrome runs invisibly in the background — no window, pure API. This is what Pinchtab is built and tested for. Best for servers, CI, Docker, and unattended automation.
+Chrome runs invisibly in the background — no window, pure API. Best for servers, CI, Docker, and unattended automation. Token savings come from using `/text` and filtered snapshot formats (`/snapshot?filter=interactive&format=compact`) rather than vision/screenshot-heavy flows.
 
 ```bash
-BRIDGE_HEADLESS=true ./pinchtab
+./pinchtab
 ```
 
-All 100+ tests run against headless. The full API surface is validated here.
+All core API flows are validated in headless mode.
 
-### Headed Mode (experimental)
+### Headed Mode (operator-in-the-loop)
 
 <img src="assets/pinchtab-headed.png" width="128" alt="Pinchtab headed mode" />
 
-Chrome opens as a visible window. Useful for debugging, watching agents work, and manually logging into sites. Shows the Pinchtab mascot on the welcome page.
+Headed mode is for mixed human + agent workflows:
 
+- Human signs in, solves captchas/2FA, validates page state
+- Agent continues through HTTP API against the same profile
+- Team can watch automation behavior in real time
+
+You can run headed mode in two ways:
+
+1. Single local instance:
 ```bash
-./pinchtab  # headed is the default
+BRIDGE_HEADLESS=false ./pinchtab
 ```
 
-> **⚠️ Headed mode is not fully tested.** It works for basic use but expect rough edges:
->
-> - **Profile management is manual** — Pinchtab uses its own Chrome profile (`~/.pinchtab/chrome-profile/`), separate from your regular Chrome. To access sites that need login, you must either log in manually in the Pinchtab window, or copy your existing Chrome profile:
->   ```bash
->   # Copy your Chrome profile (while Chrome is closed)
->   cp -r ~/Library/Application\ Support/Google/Chrome/Default ~/.pinchtab/chrome-profile
->   # Or point to a custom location
->   BRIDGE_PROFILE=/path/to/profile ./pinchtab
->   ```
-> - **Two Chrome instances can't share a profile** — if your regular Chrome is open, you must use a copied profile, not the original
-> - **Some sites detect automation differently in headed mode** — stealth behaviour may vary
-> - **Window management is not handled** — Chrome opens wherever the OS puts it
+2. Dashboard-managed profiles (recommended for headed ops):
+```bash
+./pinchtab dashboard
+```
+Open `http://localhost:9867/dashboard` and:
+- create/import profiles
+- launch headed instances per profile/port
+- stop profiles gracefully
+- open Live popup for a specific running profile
+- inspect Info (status, tabs, feed summary, logs)
+
+When a profile is launched, your agent targets that profile instance URL (for example `http://localhost:9868`), not the dashboard URL.
+
+Helper command to resolve a running profile URL from dashboard state:
+
+```bash
+pinchtab connect <profile-name>
+# -> http://localhost:<profile-port>
+```
+
+Recommended human + agent flow:
+
+```bash
+# human operator
+pinchtab dashboard
+# create/import profile, then launch it from the dashboard
+
+# agent process
+PINCHTAB_BASE_URL="$(pinchtab connect <profile-name>)"
+curl "$PINCHTAB_BASE_URL/health"
+```
 
 ### First-Time Login
 
-Pinchtab uses a persistent profile at `~/.pinchtab/chrome-profile/`. In headed mode, log into sites via the Chrome window that opens — cookies persist across restarts. In headless mode, either copy an existing profile or use the cookie API (`POST /cookies`) to inject session cookies programmatically.
+Pinchtab keeps persistent profiles. Default single-instance profile: `~/.pinchtab/chrome-profile/`.
+Dashboard-managed profiles: `~/.pinchtab/profiles/<profile-name>/`.
+
+In headed mode, log into sites in the visible Chrome window once; cookies and local storage persist across restarts. In headless mode, either copy an existing profile or inject cookies via `POST /cookies`.
 
 ## Features
 
@@ -176,13 +227,13 @@ Pinchtab uses a persistent profile at `~/.pinchtab/chrome-profile/`. In headed m
 
 ## Configuration
 
-All via environment variables:
+### Core runtime
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BRIDGE_PORT` | `9867` | HTTP server port |
 | `BRIDGE_TOKEN` | *(none)* | Bearer token for auth |
-| `BRIDGE_HEADLESS` | `false` | Run Chrome headless (no window) |
+| `BRIDGE_HEADLESS` | `true` | Run Chrome headless (no window) |
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile directory |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
@@ -190,12 +241,25 @@ All via environment variables:
 | `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading |
 | `BRIDGE_BLOCK_MEDIA` | `false` | Block all media (images + fonts + CSS + video) |
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions globally |
+| `BRIDGE_TIMEZONE` | *(none)* | Force browser timezone (IANA tz, e.g. `Europe/Rome`) |
+| `BRIDGE_CHROME_VERSION` | `144.0.7559.133` | Chrome version string used by fingerprint rotation profiles |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |
 | `CHROME_BINARY` | *(auto)* | Path to Chrome/Chromium binary |
 | `CHROME_FLAGS` | *(none)* | Extra Chrome flags (space-separated) |
 | `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
+| `BRIDGE_NO_DASHBOARD` | `false` | Disable embedded dashboard/orchestrator endpoints on instance processes |
+
+### Dashboard mode (`./pinchtab dashboard`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PINCHTAB_AUTO_LAUNCH` | `false` | Auto-launch a default profile instance at dashboard startup |
+| `PINCHTAB_DEFAULT_PROFILE` | `default` | Profile name used by auto-launch |
+| `PINCHTAB_DEFAULT_PORT` | `9867` | Port used by auto-launch |
+| `PINCHTAB_HEADED` | *(unset)* | If set, auto-launched instance is headed; unset means headless |
+| `PINCHTAB_DASHBOARD_URL` | `http://localhost:$BRIDGE_PORT` | CLI helper base URL for `pinchtab connect` |
 
 ## Architecture
 
@@ -331,9 +395,8 @@ Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — th
 
 <a href="https://star-history.com/#pinchtab/pinchtab&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&theme=dark&v=20260219" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&v=20260219" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&v=20260219" />
  </picture>
 </a>
-

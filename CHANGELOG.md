@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased (v0.4.0)
+## Unreleased
+
+- TBD
+
+## v0.5.0
+
+### Added
+- **Dashboard orchestrator mode** — `pinchtab dashboard` runs profiles/instances without launching a browser in the dashboard process
+- **Profile lifecycle APIs** — launch, stop-by-profile, per-profile instance status, and aggregated tabs across running instances
+- **`pinchtab connect <profile>`** — resolve a running profile instance URL from dashboard state
+- **Direct launch backup command** in dashboard launch modal for manual fallback
+- **Run helper script** — `scripts/run_pinchtab.sh` for local build + start convenience
+
+### Changed
+- **Default runtime mode** — `pinchtab` now starts headless by default; use `BRIDGE_HEADLESS=false` for headed mode
+- **Headed-first dashboard UX** — profile launches from dashboard are headed, with profile state and account details shown in cards
+- **Live view UX** — live screencast moved from dedicated screen to profile-scoped popup modal
+- **Profiles view defaults** — dashboard opens on Profiles, with profile/status actions prioritized
+- **UI refresh** — icon-based branding + updated color system and action hierarchy
+
+### Fixed
+- **Startup/health handling** for orchestrated instances with clearer timeout errors and stale-start conflict handling
+- **Profile stop flow** now supports graceful stop semantics from the dashboard
+- **Status consistency** between process state and dashboard instance cards
+
+### Docs
+- Updated run mode documentation (headed/headless/dashboard)
+- Expanded architecture and skill docs for headed mode workflows and environment variables
+- Refreshed third-party license coverage
+
+## v0.4.0
 
 ### Added
 - **Tab locking** — `POST /tab/lock`, `POST /tab/unlock` with timeout-based deadlock prevention for multi-agent coordination

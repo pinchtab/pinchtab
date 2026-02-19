@@ -6,7 +6,7 @@ import (
 )
 
 func TestDisableAnimationsCSSContent(t *testing.T) {
-	// Verify the injected CSS contains the critical rules
+
 	if !strings.Contains(disableAnimationsCSS, "animation: none !important") {
 		t.Error("missing animation: none rule")
 	}
@@ -38,8 +38,8 @@ func TestDisableAnimationsCSSIsIIFE(t *testing.T) {
 }
 
 func TestNoAnimationsConfigDefault(t *testing.T) {
-	// Default should be false (env not set in tests)
-	if noAnimations {
+
+	if cfg.NoAnimations {
 		t.Error("noAnimations should default to false")
 	}
 }

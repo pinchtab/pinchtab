@@ -8,12 +8,11 @@ import (
 )
 
 func TestStealthJavaScript(t *testing.T) {
-	// Test that stealth.js is syntactically valid
+
 	content := stealthScript
 
-	// Check for key stealth features
 	features := []string{
-		"navigator, 'webdriver'", // Object.defineProperty
+		"navigator, 'webdriver'",
 		"sessionSeed",
 		"seededRandom",
 		"toDataURL",
@@ -29,7 +28,6 @@ func TestStealthJavaScript(t *testing.T) {
 		}
 	}
 
-	// Check no duplicate sessionSeed definitions
 	count := strings.Count(content, "const sessionSeed")
 	if count != 1 {
 		t.Errorf("expected 1 sessionSeed definition, found %d", count)
@@ -55,7 +53,7 @@ func TestGetStealthRecommendations(t *testing.T) {
 		{
 			name:     "all enabled",
 			features: allFeatures,
-			wantRecs: 1, // Get "Stealth mode is well configured"
+			wantRecs: 1,
 		},
 		{
 			name: "canvas disabled",
@@ -68,7 +66,7 @@ func TestGetStealthRecommendations(t *testing.T) {
 				"font_spoofing":         true,
 				"audio_noise":           true,
 			},
-			wantRecs: 1, // Just canvas
+			wantRecs: 1,
 		},
 		{
 			name: "multiple disabled",
@@ -81,7 +79,7 @@ func TestGetStealthRecommendations(t *testing.T) {
 				"font_spoofing":         true,
 				"audio_noise":           true,
 			},
-			wantRecs: 3, // UA + lang + WebRTC
+			wantRecs: 3,
 		},
 	}
 
@@ -108,7 +106,7 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "windows",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/" + chromeVersion,
+			wantUA:   "Chrome/" + cfg.ChromeVersion,
 			wantPlat: "Win32",
 		},
 		{
@@ -117,7 +115,7 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "mac",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/" + chromeVersion,
+			wantUA:   "Chrome/" + cfg.ChromeVersion,
 			wantPlat: "MacIntel",
 		},
 		{
@@ -126,8 +124,8 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "random",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/" + chromeVersion, // Should use configured chromeVersion
-			wantPlat: "",                        // Could be Win32, MacIntel, or Linux
+			wantUA:   "Chrome/" + cfg.ChromeVersion,
+			wantPlat: "",
 		},
 	}
 
@@ -143,7 +141,6 @@ func TestGenerateFingerprint(t *testing.T) {
 				t.Errorf("expected platform %s, got %s", tt.wantPlat, fp.Platform)
 			}
 
-			// Check all fields are populated
 			if fp.UserAgent == "" {
 				t.Error("UserAgent is empty")
 			}
@@ -155,9 +152,7 @@ func TestGenerateFingerprint(t *testing.T) {
 }
 
 func TestHandleStealthStatus(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
@@ -179,7 +174,6 @@ func TestHandleStealthStatus(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	// Check response structure
 	if resp.Level == "" {
 		t.Error("level is empty")
 	}
@@ -193,7 +187,6 @@ func TestHandleStealthStatus(t *testing.T) {
 		t.Error("chrome_flags is empty")
 	}
 
-	// Verify score calculation
 	enabled := 0
 	for _, v := range resp.Features {
 		if v {

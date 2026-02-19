@@ -40,10 +40,10 @@ func TestJsonErr(t *testing.T) {
 }
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
-	// When token is empty, all requests pass through
-	origToken := token
-	token = ""
-	defer func() { token = origToken }()
+
+	origToken := cfg.Token
+	cfg.Token = ""
+	defer func() { cfg.Token = origToken }()
 
 	called := false
 	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +61,9 @@ func TestAuthMiddleware_NoToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
-	origToken := token
-	token = "secret123"
-	defer func() { token = origToken }()
+	origToken := cfg.Token
+	cfg.Token = "secret123"
+	defer func() { cfg.Token = origToken }()
 
 	called := false
 	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,9 +82,9 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	origToken := token
-	token = "secret123"
-	defer func() { token = origToken }()
+	origToken := cfg.Token
+	cfg.Token = "secret123"
+	defer func() { cfg.Token = origToken }()
 
 	called := false
 	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +109,6 @@ func TestCorsMiddleware(t *testing.T) {
 		w.WriteHeader(200)
 	}))
 
-	// OPTIONS should return 204
 	req := httptest.NewRequest("OPTIONS", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -120,7 +119,6 @@ func TestCorsMiddleware(t *testing.T) {
 		t.Error("missing CORS origin header")
 	}
 
-	// GET should pass through with CORS headers
 	req = httptest.NewRequest("GET", "/test", nil)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

@@ -45,7 +45,7 @@ func TestInteractiveRoles(t *testing.T) {
 }
 
 func TestBuildSnapshot(t *testing.T) {
-	// Simulate raw a11y nodes
+
 	nodes := []rawAXNode{
 		{
 			NodeID:           "root",
@@ -84,12 +84,10 @@ func TestBuildSnapshot(t *testing.T) {
 
 	flat, refs := buildSnapshot(nodes, "", -1)
 
-	// Should have 3 entries: WebArea, button, textbox (ignored + generic + none filtered)
 	if len(flat) != 3 {
 		t.Fatalf("expected 3 nodes, got %d: %+v", len(flat), flat)
 	}
 
-	// Check refs map
 	if refs["e0"] != 1 {
 		t.Errorf("e0 should map to nodeID 1, got %d", refs["e0"])
 	}
@@ -100,7 +98,6 @@ func TestBuildSnapshot(t *testing.T) {
 		t.Errorf("e2 should map to nodeID 20, got %d", refs["e2"])
 	}
 
-	// Check depth
 	if flat[0].Depth != 0 {
 		t.Errorf("root depth should be 0, got %d", flat[0].Depth)
 	}
@@ -108,7 +105,6 @@ func TestBuildSnapshot(t *testing.T) {
 		t.Errorf("button depth should be 1, got %d", flat[1].Depth)
 	}
 
-	// Check focused property
 	if !flat[2].Focused {
 		t.Error("textbox should be focused")
 	}
@@ -181,9 +177,9 @@ func TestDiffSnapshot(t *testing.T) {
 		{Ref: "e2", Role: "link", Name: "Old Link", NodeID: 30},
 	}
 	curr := []A11yNode{
-		{Ref: "e0", Role: "button", Name: "Submit", NodeID: 10},              // unchanged
-		{Ref: "e1", Role: "textbox", Name: "Email", NodeID: 20, Value: "hi"}, // changed (value)
-		{Ref: "e3", Role: "link", Name: "New Link", NodeID: 40},              // added
+		{Ref: "e0", Role: "button", Name: "Submit", NodeID: 10},
+		{Ref: "e1", Role: "textbox", Name: "Email", NodeID: 20, Value: "hi"},
+		{Ref: "e3", Role: "link", Name: "New Link", NodeID: 40},
 	}
 
 	added, changed, removed := diffSnapshot(prev, curr)

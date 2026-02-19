@@ -14,17 +14,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ── GET /snapshot ──────────────────────────────────────────
-
 func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	filter := r.URL.Query().Get("filter")
 	doDiff := r.URL.Query().Get("diff") == "true"
-	format := r.URL.Query().Get("format")          // "text", "yaml", "compact"
-	output := r.URL.Query().Get("output")          // "file" to save to disk
-	outputPath := r.URL.Query().Get("path")        // custom file path for output=file
-	selector := r.URL.Query().Get("selector")      // CSS selector to scope snapshot
-	maxTokensStr := r.URL.Query().Get("maxTokens") // truncate output to ~N tokens
+	format := r.URL.Query().Get("format")
+	output := r.URL.Query().Get("output")
+	outputPath := r.URL.Query().Get("path")
+	selector := r.URL.Query().Get("selector")
+	maxTokensStr := r.URL.Query().Get("maxTokens")
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 	maxDepthStr := r.URL.Query().Get("depth")
 	maxDepth := -1
@@ -46,11 +44,11 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
+	tCtx, tCancel := context.WithTimeout(ctx, cfg.ActionTimeout)
 	defer tCancel()
 	go cancelOnClientDone(r.Context(), tCancel)
 
-	if reqNoAnim && !noAnimations {
+	if reqNoAnim && !cfg.NoAnimations {
 		disableAnimationsOnce(tCtx)
 	}
 
@@ -73,12 +71,11 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If a CSS selector is specified, scope the tree to that element's subtree.
 	if selector != "" {
 		var scopeNodeID int64
 		if err := chromedp.Run(tCtx,
 			chromedp.ActionFunc(func(ctx context.Context) error {
-				// Use DOM.querySelector to find the element
+
 				p := map[string]any{"nodeId": 0, "selector": selector}
 				// First get the document node
 				var docResult json.RawMessage
@@ -133,7 +130,6 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	flat, refs := buildSnapshot(treeResp.Nodes, filter, maxDepth)
 
-	// Truncate to maxTokens if specified (rough: 1 token ≈ 4 bytes)
 	truncated := false
 	if maxTokens > 0 {
 		flat, truncated = truncateToTokens(flat, maxTokens, format)
@@ -147,7 +143,6 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Cache ref→nodeID mapping and nodes for this tab
 	b.SetRefCache(resolvedTabID, &refCache{refs: refs, nodes: flat})
 
 	var url, title string
@@ -156,16 +151,14 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		chromedp.Title(&title),
 	)
 
-	// Handle file output
 	if output == "file" {
-		// Create snapshots directory if it doesn't exist
-		snapshotDir := filepath.Join(stateDir, "snapshots")
+
+		snapshotDir := filepath.Join(cfg.StateDir, "snapshots")
 		if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 			jsonErr(w, 500, fmt.Errorf("create snapshot dir: %w", err))
 			return
 		}
 
-		// Generate filename with timestamp
 		timestamp := time.Now().Format("20060102-150405")
 		var filename string
 		var content []byte
@@ -235,11 +228,10 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Write to file — use custom path if provided, otherwise default
 		filePath := filepath.Join(snapshotDir, filename)
 		if outputPath != "" {
 			filePath = outputPath
-			// Ensure parent directory exists for custom paths
+
 			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 				jsonErr(w, 500, fmt.Errorf("create output dir: %w", err))
 				return
@@ -250,7 +242,6 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Return path instead of data
 		jsonResp(w, 200, map[string]any{
 			"path":      filePath,
 			"size":      len(content),
@@ -281,7 +272,7 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	switch format {
 	case "compact":
-		// One-line-per-node format, minimal tokens. Similar to OpenClaw aria refs.
+
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		_, _ = fmt.Fprintf(w, "# %s | %s | %d nodes", title, url, len(flat))

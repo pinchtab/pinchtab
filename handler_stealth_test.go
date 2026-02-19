@@ -8,7 +8,7 @@ import (
 
 func TestHandleStealthStatus_NoTab_ReturnsStatic(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
 
@@ -17,7 +17,7 @@ func TestHandleStealthStatus_NoTab_ReturnsStatic(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
-	// Should contain level and score
+
 	body := w.Body.String()
 	if !searchString(body, "level") || !searchString(body, "score") {
 		t.Errorf("expected level and score in response, got: %s", body)
@@ -35,8 +35,6 @@ func TestHandleFingerprintRotate_InvalidJSON(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
-
-// ── generateFingerprint ────────────────────────────────────
 
 func TestGenerateFingerprint_Windows(t *testing.T) {
 	fp := generateFingerprint(fingerprintRequest{OS: "windows"})
@@ -70,11 +68,10 @@ func TestGenerateFingerprint_Random(t *testing.T) {
 }
 
 func TestGenerateFingerprint_UnknownOS(t *testing.T) {
-	// Unknown OS — should return empty fingerprint (no match in map)
+
 	fp := generateFingerprint(fingerprintRequest{OS: "freebsd"})
-	// Will have screen/language/timezone from random selection below
-	// but platform/UA won't be set from the map
-	_ = fp // just ensure no panic
+
+	_ = fp
 }
 
 func TestGenerateFingerprint_WithBrowser(t *testing.T) {
@@ -83,8 +80,6 @@ func TestGenerateFingerprint_WithBrowser(t *testing.T) {
 		t.Error("expected non-empty user agent")
 	}
 }
-
-// ── getStealthRecommendations ──────────────────────────────
 
 func TestGetStealthRecommendations_AllEnabled(t *testing.T) {
 	features := map[string]bool{
@@ -115,17 +110,15 @@ func TestGetStealthRecommendations_Partial(t *testing.T) {
 		"timezone_spoofed":    true,
 	}
 	recs := getStealthRecommendations(features)
-	// Should have 4 recommendations (the 4 missing features)
+
 	if len(recs) != 4 {
 		t.Errorf("expected 4 recommendations, got %d: %v", len(recs), recs)
 	}
 }
 
-// ── sendStealthResponse ────────────────────────────────────
-
 func TestSendStealthResponse_HighScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	features := map[string]bool{
 		"a": true, "b": true, "c": true, "d": true, "e": true,
 	}
@@ -143,7 +136,7 @@ func TestSendStealthResponse_HighScore(t *testing.T) {
 
 func TestSendStealthResponse_LowScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	features := map[string]bool{
 		"a": true, "b": false, "c": false, "d": false, "e": false,
 		"f": false, "g": false, "h": false, "i": false, "j": false,
@@ -159,8 +152,8 @@ func TestSendStealthResponse_LowScore(t *testing.T) {
 
 func TestSendStealthResponse_MediumScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
-	// 6/10 = 60%
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
+
 	features := map[string]bool{
 		"a": true, "b": true, "c": true, "d": true, "e": true,
 		"f": true, "g": false, "h": false, "i": false, "j": false,
@@ -173,8 +166,6 @@ func TestSendStealthResponse_MediumScore(t *testing.T) {
 		t.Errorf("expected medium level, got: %s", body)
 	}
 }
-
-// ── staticStealthFeatures ──────────────────────────────────
 
 func TestStaticStealthFeatures_HasEntries(t *testing.T) {
 	features := staticStealthFeatures()

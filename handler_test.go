@@ -8,13 +8,16 @@ import (
 
 // newTestBridge creates a Bridge with initialized maps (no Chrome).
 func newTestBridge() *Bridge {
-	return &Bridge{
+	b := &Bridge{}
+	b.TabManager = &TabManager{
 		tabs:      make(map[string]*TabEntry),
 		snapshots: make(map[string]*refCache),
 	}
+	return b
 }
 
-// ── Validation / error path tests (no Chrome needed) ──────
+// newTestBridgeWithTabs is an alias used across test files.
+var newTestBridgeWithTabs = newTestBridge
 
 func TestHandleNavigate_MissingURL(t *testing.T) {
 	b := newTestBridge()
@@ -46,7 +49,6 @@ func TestHandleNavigate_NoTab(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleNavigate(w, req)
 
-	// No tabs open → TabContext returns error → 404
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
@@ -54,16 +56,12 @@ func TestHandleNavigate_NoTab(t *testing.T) {
 
 func TestHandleAction_UnknownKind(t *testing.T) {
 	b := newTestBridge()
-	// Use nodeId directly to skip ref resolution, and tabId to skip ListTargets
-	// TabContext will fail (no browser) but we need it to succeed for this test
-	// So we test the "unknown action" path via a tab with no Chrome → 404 first
-	// Actually, let's just test that bad JSON and missing tab return proper codes
+
 	body := `{"kind": "explode", "selector": "button"}`
 	req := httptest.NewRequest("POST", "/action", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	b.handleAction(w, req)
 
-	// No tab → 404 (not 400), because TabContext fails first
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
@@ -77,7 +75,6 @@ func TestHandleAction_RefNotFound_NoCache(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleAction(w, req)
 
-	// No tab → 404
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
@@ -209,8 +206,6 @@ func TestHandleScreenshot_NoTab(t *testing.T) {
 	}
 }
 
-// ── Cookie error paths ────────────────────────────────────
-
 func TestHandleSetCookies_BadJSON(t *testing.T) {
 	b := newTestBridge()
 	req := httptest.NewRequest("POST", "/cookies", strings.NewReader("{broken"))
@@ -234,15 +229,12 @@ func TestHandleSetCookies_MissingURL(t *testing.T) {
 	}
 }
 
-// ── Health & Tabs (Section 1.1, 1.6) ─────────────────────
-
 func TestHandleHealth_NoBrowser(t *testing.T) {
 	b := newTestBridge()
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
 	b.handleHealth(w, req)
 
-	// No browser → status "disconnected" but still 200
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
@@ -258,7 +250,6 @@ func TestHandleTabs_NoBrowser(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleTabs(w, req)
 
-	// No browser connection → 500
 	if w.Code != 500 {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
@@ -266,7 +257,7 @@ func TestHandleTabs_NoBrowser(t *testing.T) {
 
 func TestHandleScreenshot_QualityParam(t *testing.T) {
 	b := newTestBridge()
-	// Quality param is parsed but no tab → 404; test it doesn't panic
+
 	req := httptest.NewRequest("GET", "/screenshot?quality=50", nil)
 	w := httptest.NewRecorder()
 	b.handleScreenshot(w, req)
@@ -282,7 +273,6 @@ func TestHandleScreenshot_InvalidQuality(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleScreenshot(w, req)
 
-	// Invalid quality falls back to default, still 404 (no tab)
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
@@ -295,24 +285,19 @@ func TestHandleNavigate_InvalidURL(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleNavigate(w, req)
 
-	// No tabs → 404, but the invalid URL is accepted at parse level
-	// (validation happens at Chrome level)
 	if w.Code != 404 {
 		t.Errorf("expected 404 (no tab), got %d", w.Code)
 	}
 }
 
-// ── Navigate edge cases ──────────────────────────────────
-
 func TestHandleNavigate_WaitTitleClamp(t *testing.T) {
-	// waitTitle > 30 should be clamped; this tests the parse path
+
 	b := newTestBridge()
 	body := `{"url": "https://example.com", "waitTitle": 999}`
 	req := httptest.NewRequest("POST", "/navigate", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	b.handleNavigate(w, req)
 
-	// No tabs → 404, but the parse/clamp code runs without panic
 	if w.Code != 404 {
 		t.Errorf("expected 404 (no tab), got %d", w.Code)
 	}
@@ -325,13 +310,10 @@ func TestHandleNavigate_NewTabNoChrome(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.handleNavigate(w, req)
 
-	// newTab with no browser context → should return 500, not panic
 	if w.Code != 500 {
 		t.Errorf("expected 500 (no browser), got %d", w.Code)
 	}
 }
-
-// ── RefCache methods ──────────────────────────────────────
 
 func TestGetSetDeleteRefCache(t *testing.T) {
 	b := newTestBridge()

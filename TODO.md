@@ -34,6 +34,13 @@ P2 (K11 file path, blockImages on CreateTab) — all resolved.
 - [x] **CSS animation disabling** — `BRIDGE_NO_ANIMATIONS` env + `?noAnimations=true` per-request.
 - [ ] **Randomized window sizes** — Avoid automation fingerprint.
 
+### Code Quality
+- [x] **Extract TabManager from Bridge** — Tabs, snapshots, and ref cache in own struct with setup hook.
+- [ ] **installStableBinary streaming** — Use `io.Copy` with file streams instead of reading entire binary into memory.
+- [x] **Interfaces for ProfileManager/Orchestrator** — `ProfileService` and `OrchestratorService` interfaces with compile-time checks.
+- [ ] **proxy_ws.go proper HTTP** — Replace raw `backend.Write` of HTTP headers with proper request construction.
+- [x] **Dashboard SSE keepalive** — 30s keepalive comments on SSE connections.
+
 ### Minor
 - [ ] **humanType global rand** — Accept `*rand.Rand` for reproducible tests.
 - [ ] **Batch empty array** — Return specific error instead of generic decode error.

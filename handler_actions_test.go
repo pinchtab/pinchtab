@@ -29,9 +29,7 @@ func TestHandleActions_EmptyArray(t *testing.T) {
 }
 
 func TestHandleActions_NoTabError(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	body := `{
 		"actions": [
@@ -51,9 +49,7 @@ func TestHandleActions_NoTabError(t *testing.T) {
 }
 
 func TestHandleGetCookies_NoTab(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/cookies", nil)
 	w := httptest.NewRecorder()
@@ -104,9 +100,7 @@ func TestHandleSetCookies_EmptyCookies(t *testing.T) {
 }
 
 func TestHandleStealthStatus_NoTabs(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
@@ -122,7 +116,6 @@ func TestHandleStealthStatus_NoTabs(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	// Should have stealth features even without tabs
 	features, ok := resp["features"].(map[string]interface{})
 	if !ok {
 		t.Error("expected features map")
@@ -132,16 +125,13 @@ func TestHandleStealthStatus_NoTabs(t *testing.T) {
 		t.Error("expected non-empty features")
 	}
 
-	// Check score exists
 	if _, ok := resp["score"].(float64); !ok {
 		t.Error("expected score")
 	}
 }
 
 func TestHandleFingerprintRotate_NoTab(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	body := `{"os": "windows", "browser": "chrome"}`
 	req := httptest.NewRequest("POST", "/fingerprint/rotate", bytes.NewReader([]byte(body)))
@@ -160,7 +150,6 @@ func TestActionRegistry_HumanActions(t *testing.T) {
 	b.initActionRegistry()
 	registry := b.actions
 
-	// Check new human actions exist
 	if _, ok := registry[actionHumanClick]; !ok {
 		t.Error("humanClick action not registered")
 	}
@@ -169,7 +158,6 @@ func TestActionRegistry_HumanActions(t *testing.T) {
 		t.Error("humanType action not registered")
 	}
 
-	// Verify total count increased
 	expectedActions := []string{
 		actionClick, actionType, actionFill, actionPress,
 		actionFocus, actionHover, actionSelect, actionScroll,

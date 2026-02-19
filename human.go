@@ -13,35 +13,39 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// humanRand is the seeded random source for human simulation.
+// Initialized in main() alongside the stealth seed for reproducibility.
+var humanRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+// SetHumanRandSeed sets the human simulation random seed for reproducible behavior.
+func SetHumanRandSeed(seed int64) {
+	humanRand = rand.New(rand.NewSource(seed))
+}
+
 // humanMouseMove performs natural mouse movement with bezier curves
 func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
-	// Calculate distance for movement duration
+
 	distance := math.Sqrt((toX-fromX)*(toX-fromX) + (toY-fromY)*(toY-fromY))
 
-	// Base duration: 100-400ms depending on distance (faster)
 	baseDuration := 100 + (distance/2000)*200
-	duration := baseDuration + float64(rand.Intn(100)) // Add randomness
+	duration := baseDuration + float64(humanRand.Intn(100))
 
-	// Number of steps (fewer steps = faster)
-	steps := int(duration / 20) // ~50fps
+	steps := int(duration / 20)
 	if steps < 5 {
 		steps = 5
 	}
 	if steps > 30 {
-		steps = 30 // Cap to prevent timeout
+		steps = 30
 	}
 
-	// Generate control points for bezier curve (adds curvature)
-	cp1X := fromX + (toX-fromX)*0.25 + (rand.Float64()-0.5)*50
-	cp1Y := fromY + (toY-fromY)*0.25 + (rand.Float64()-0.5)*50
-	cp2X := fromX + (toX-fromX)*0.75 + (rand.Float64()-0.5)*50
-	cp2Y := fromY + (toY-fromY)*0.75 + (rand.Float64()-0.5)*50
+	cp1X := fromX + (toX-fromX)*0.25 + (humanRand.Float64()-0.5)*50
+	cp1Y := fromY + (toY-fromY)*0.25 + (humanRand.Float64()-0.5)*50
+	cp2X := fromX + (toX-fromX)*0.75 + (humanRand.Float64()-0.5)*50
+	cp2Y := fromY + (toY-fromY)*0.75 + (humanRand.Float64()-0.5)*50
 
-	// Move along bezier curve
 	for i := 0; i <= steps; i++ {
 		t := float64(i) / float64(steps)
 
-		// Cubic bezier formula
 		oneMinusT := 1 - t
 		x := oneMinusT*oneMinusT*oneMinusT*fromX +
 			3*oneMinusT*oneMinusT*t*cp1X +
@@ -53,9 +57,8 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 			3*oneMinusT*t*t*cp2Y +
 			t*t*t*toY
 
-		// Add small jitter to make it more human
-		x += (rand.Float64() - 0.5) * 2
-		y += (rand.Float64() - 0.5) * 2
+		x += (humanRand.Float64() - 0.5) * 2
+		y += (humanRand.Float64() - 0.5) * 2
 
 		if err := chromedp.Run(ctx,
 			chromedp.ActionFunc(func(ctx context.Context) error {
@@ -65,8 +68,7 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 			return err
 		}
 
-		// Variable delay between movements
-		delay := time.Duration(16+rand.Intn(8)) * time.Millisecond
+		delay := time.Duration(16+humanRand.Intn(8)) * time.Millisecond
 		time.Sleep(delay)
 	}
 
@@ -75,16 +77,15 @@ func humanMouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 
 // humanClick performs a click with natural mouse movement and timing
 func humanClick(ctx context.Context, x, y float64) error {
-	// Start from a position near the target (more realistic than cross-screen movements)
-	startOffsetX := (rand.Float64()-0.5)*200 + 50 // 50-250 pixels away
-	startOffsetY := (rand.Float64()-0.5)*200 + 50
+
+	startOffsetX := (humanRand.Float64()-0.5)*200 + 50
+	startOffsetY := (humanRand.Float64()-0.5)*200 + 50
 	startX := x + startOffsetX
 	startY := y + startOffsetY
 
-	// Only do movement if we're far enough away
 	distance := math.Sqrt(startOffsetX*startOffsetX + startOffsetY*startOffsetY)
 	if distance > 30 {
-		// Quick jump to general area
+
 		if err := chromedp.Run(ctx,
 			chromedp.ActionFunc(func(ctx context.Context) error {
 				return input.DispatchMouseEvent(input.MouseMoved, startX, startY).Do(ctx)
@@ -93,16 +94,13 @@ func humanClick(ctx context.Context, x, y float64) error {
 			return err
 		}
 
-		// Then natural movement to exact position
 		if err := humanMouseMove(ctx, startX, startY, x, y); err != nil {
 			return err
 		}
 	}
 
-	// Small pause before click (50-200ms)
-	time.Sleep(time.Duration(50+rand.Intn(150)) * time.Millisecond)
+	time.Sleep(time.Duration(50+humanRand.Intn(150)) * time.Millisecond)
 
-	// Mouse down
 	if err := chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return input.DispatchMouseEvent(input.MousePressed, x, y).
@@ -114,12 +112,10 @@ func humanClick(ctx context.Context, x, y float64) error {
 		return err
 	}
 
-	// Hold for realistic duration (30-120ms)
-	time.Sleep(time.Duration(30+rand.Intn(90)) * time.Millisecond)
+	time.Sleep(time.Duration(30+humanRand.Intn(90)) * time.Millisecond)
 
-	// Mouse up (with slight position variance)
-	releaseX := x + (rand.Float64()-0.5)*2
-	releaseY := y + (rand.Float64()-0.5)*2
+	releaseX := x + (humanRand.Float64()-0.5)*2
+	releaseY := y + (humanRand.Float64()-0.5)*2
 
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -149,13 +145,11 @@ func humanClickElement(ctx context.Context, nodeID cdp.NodeID) error {
 		return fmt.Errorf("invalid box model")
 	}
 
-	// Calculate center with slight randomness
 	centerX := (box.Content[0] + box.Content[2]) / 2
 	centerY := (box.Content[1] + box.Content[5]) / 2
 
-	// Add small random offset (humans don't click exact center)
-	offsetX := (rand.Float64() - 0.5) * 10
-	offsetY := (rand.Float64() - 0.5) * 10
+	offsetX := (humanRand.Float64() - 0.5) * 10
+	offsetY := (humanRand.Float64() - 0.5) * 10
 
 	return humanClick(ctx, centerX+offsetX, centerY+offsetY)
 }
@@ -164,7 +158,6 @@ func humanClickElement(ctx context.Context, nodeID cdp.NodeID) error {
 func humanType(text string, fast bool) []chromedp.Action {
 	actions := []chromedp.Action{}
 
-	// Base typing speed (ms per character)
 	baseDelay := 80
 	if fast {
 		baseDelay = 40
@@ -172,34 +165,29 @@ func humanType(text string, fast bool) []chromedp.Action {
 
 	chars := []rune(text)
 	for i, char := range chars {
-		// Type the character
+
 		actions = append(actions, chromedp.KeyEvent(string(char)))
 
-		// Calculate delay
-		delay := baseDelay + rand.Intn(baseDelay/2)
+		delay := baseDelay + humanRand.Intn(baseDelay/2)
 
-		// Occasionally pause longer (thinking)
-		if rand.Float64() < 0.05 {
-			delay += rand.Intn(500)
+		if humanRand.Float64() < 0.05 {
+			delay += humanRand.Intn(500)
 		}
 
-		// Faster for repeated characters
 		if i > 0 && chars[i-1] == char {
 			delay = delay / 2
 		}
 
-		// Add delay
 		actions = append(actions, chromedp.Sleep(time.Duration(delay)*time.Millisecond))
 
-		// Occasional typos and corrections (3% chance, less annoying)
-		if rand.Float64() < 0.03 && i < len(chars)-1 {
-			// Type wrong character
-			wrongChar := rune('a' + rand.Intn(26))
+		if humanRand.Float64() < 0.03 && i < len(chars)-1 {
+
+			wrongChar := rune('a' + humanRand.Intn(26))
 			actions = append(actions,
 				chromedp.KeyEvent(string(wrongChar)),
-				chromedp.Sleep(time.Duration(50+rand.Intn(100))*time.Millisecond),
-				chromedp.KeyEvent("\b"), // Backspace character
-				chromedp.Sleep(time.Duration(30+rand.Intn(70))*time.Millisecond),
+				chromedp.Sleep(time.Duration(50+humanRand.Intn(100))*time.Millisecond),
+				chromedp.KeyEvent("\b"),
+				chromedp.Sleep(time.Duration(30+humanRand.Intn(70))*time.Millisecond),
 			)
 		}
 	}

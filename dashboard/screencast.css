@@ -1,0 +1,80 @@
+  .live-popup {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 380px;
+    max-height: 72vh;
+  }
+  .live-toolbar {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .live-count {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .screencast-grid {
+    flex: 1;
+    min-height: 320px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 12px;
+    padding: 16px 0 0;
+    overflow-y: auto;
+  }
+  .screencast-grid.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .screencast-grid.empty .empty-state {
+    padding: 0;
+  }
+  .screen-tile {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .screen-tile .tile-header {
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  .screen-tile .tile-header .tile-url {
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+  .screen-tile .tile-header .tile-id { color: var(--primary); font-weight: 600; }
+  .screen-tile .tile-header .tile-status {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-left: 8px;
+  }
+  .screen-tile .tile-header .tile-status.streaming { background: var(--success); }
+  .screen-tile .tile-header .tile-status.connecting { background: var(--warning); }
+  .screen-tile .tile-header .tile-status.error { background: var(--danger); }
+  .screen-tile canvas {
+    width: 100%;
+    background: #000;
+    cursor: pointer;
+  }
+  .screen-tile .tile-footer {
+    padding: 4px 12px;
+    background: var(--bg-subtle);
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    gap: 12px;
+  }

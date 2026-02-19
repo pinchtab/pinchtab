@@ -1,14 +1,5 @@
-// Enhanced stealth script injected into every new document via page.AddScriptToEvaluateOnNewDocument.
-// Hides automation indicators from sophisticated bot detection systems.
-
-// Session-stable seed injected by Go at launch time via __pinchtab_seed.
-// Falls back to a fixed value if not set (shouldn't happen in normal operation).
-// This seed is constant across all page loads within the same Pinchtab session,
-// so hardware fingerprint values stay consistent (as they would in a real browser).
 const sessionSeed = (typeof __pinchtab_seed !== 'undefined') ? __pinchtab_seed : 42;
 
-// Mulberry32 PRNG — simple, fast, uniform distribution, deterministic.
-// Much better than Math.sin() which produces visible patterns.
 const seededRandom = (function() {
   const cache = {};
   return function(seed) {
@@ -22,18 +13,15 @@ const seededRandom = (function() {
   };
 })();
 
-// Hide webdriver flag completely
 Object.defineProperty(navigator, 'webdriver', { 
   get: () => undefined,
   configurable: true 
 });
 
-// Remove automation-related window properties
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
 
-// Fix chrome runtime to look more realistic
 if (!window.chrome) { window.chrome = {}; }
 if (!window.chrome.runtime) {
   window.chrome.runtime = {
@@ -42,7 +30,6 @@ if (!window.chrome.runtime) {
   };
 }
 
-// Enhanced permissions API
 const originalQuery = window.navigator.permissions.query;
 window.navigator.permissions.query = (parameters) => (
   parameters.name === 'notifications' ?
@@ -50,7 +37,6 @@ window.navigator.permissions.query = (parameters) => (
     originalQuery(parameters)
 );
 
-// Realistic plugins array (common plugins)
 Object.defineProperty(navigator, 'plugins', {
   get: () => [{
     name: 'Chrome PDF Plugin',
@@ -67,31 +53,23 @@ Object.defineProperty(navigator, 'plugins', {
   }],
 });
 
-// Realistic language preferences
 Object.defineProperty(navigator, 'languages', {
   get: () => ['en-US', 'en'],
 });
 
-// Hardware values defined later with proper seeding
 
-// Platform information (consistent with User-Agent)
 Object.defineProperty(navigator, 'platform', {
   get: () => 'MacIntel',
 });
 
-// Fix missing properties that indicate automation
 Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 100,
 });
 
-// Stealth level: 'light' = basic automation hiding only, 'full' = all fingerprint spoofing.
-// Light mode avoids canvas/WebGL/font overrides that can break sites like X.com.
-// Set via __pinchtab_stealth_level (injected by Go). Default: 'light'.
 const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
 
 if (stealthLevel === 'full') {
 
-// Spoof WebGL for fingerprint resistance
 const getParameter = WebGLRenderingContext.prototype.getParameter;
 WebGLRenderingContext.prototype.getParameter = function(parameter) {
   if (parameter === 37445) return 'Intel Inc.';
@@ -99,7 +77,6 @@ WebGLRenderingContext.prototype.getParameter = function(parameter) {
   return getParameter.apply(this, arguments);
 };
 
-// Canvas fingerprinting noise
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
@@ -148,7 +125,6 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   return imageData;
 };
 
-// Font fingerprinting protection
 const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
 CanvasRenderingContext2D.prototype.measureText = function(text) {
   const metrics = originalMeasureText.apply(this, arguments);
@@ -161,7 +137,6 @@ CanvasRenderingContext2D.prototype.measureText = function(text) {
   });
 };
 
-// WebRTC IP leak prevention
 if (window.RTCPeerConnection) {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function(config, constraints) {
@@ -171,9 +146,8 @@ if (window.RTCPeerConnection) {
   window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
 
-} // end stealthLevel === 'full'
+}
 
-// Timezone spoofing - configurable via window.__pinchtab_timezone
 const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
 Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
   value: function() { 
@@ -181,8 +155,7 @@ Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
   }
 });
 
-// Use the already-defined sessionSeed and seededRandom from top of file
-const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2; // 2,4,6,8,10,12
+const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
 const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
 
 Object.defineProperty(navigator, 'hardwareConcurrency', {

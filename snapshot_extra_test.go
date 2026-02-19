@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// ── formatSnapshotCompact ──────────────────────────────────
-
 func TestFormatSnapshotCompact_Basic(t *testing.T) {
 	nodes := []A11yNode{
 		{Ref: "e0", Role: "button", Name: "Submit"},
@@ -54,8 +52,6 @@ func TestFormatSnapshotCompact_NoName(t *testing.T) {
 	}
 }
 
-// ── truncateToTokens ───────────────────────────────────────
-
 func TestTruncateToTokens_NoTruncation(t *testing.T) {
 	nodes := []A11yNode{
 		{Ref: "e0", Role: "button", Name: "OK"},
@@ -89,7 +85,7 @@ func TestTruncateToTokens_Formats(t *testing.T) {
 	for i := range nodes {
 		nodes[i] = A11yNode{Ref: "e0", Role: "button", Name: "Click me"}
 	}
-	// JSON format estimates more tokens per node, so should truncate sooner
+
 	jsonResult, _ := truncateToTokens(nodes, 100, "json")
 	compactResult, _ := truncateToTokens(nodes, 100, "compact")
 	if len(jsonResult) > len(compactResult) {
@@ -107,8 +103,6 @@ func TestTruncateToTokens_Empty(t *testing.T) {
 	}
 }
 
-// ── filterSubtree ──────────────────────────────────────────
-
 func TestFilterSubtree_Found(t *testing.T) {
 	nodes := []rawAXNode{
 		{NodeID: "root", BackendDOMNodeID: 1, ChildIDs: []string{"child1", "child2"}},
@@ -117,7 +111,7 @@ func TestFilterSubtree_Found(t *testing.T) {
 		{NodeID: "grandchild", BackendDOMNodeID: 4},
 		{NodeID: "other", BackendDOMNodeID: 5},
 	}
-	// Scope to child1 subtree (should include child1 + grandchild)
+
 	result := filterSubtree(nodes, 2)
 	if len(result) != 2 {
 		t.Errorf("expected 2 nodes, got %d", len(result))
@@ -136,7 +130,7 @@ func TestFilterSubtree_NotFound(t *testing.T) {
 		{NodeID: "root", BackendDOMNodeID: 1},
 		{NodeID: "child", BackendDOMNodeID: 2},
 	}
-	// Non-existent scope — returns all nodes
+
 	result := filterSubtree(nodes, 999)
 	if len(result) != 2 {
 		t.Errorf("expected all nodes returned, got %d", len(result))
@@ -149,14 +143,12 @@ func TestFilterSubtree_RootScope(t *testing.T) {
 		{NodeID: "child", BackendDOMNodeID: 2, ChildIDs: []string{"grandchild"}},
 		{NodeID: "grandchild", BackendDOMNodeID: 3},
 	}
-	// Scope to root — should include everything
+
 	result := filterSubtree(nodes, 1)
 	if len(result) != 3 {
 		t.Errorf("expected 3 nodes, got %d", len(result))
 	}
 }
-
-// ── diffSnapshot ───────────────────────────────────────────
 
 func TestDiffSnapshot_Added(t *testing.T) {
 	prev := []A11yNode{{Ref: "e0", Role: "button", Name: "OK", NodeID: 1}}
@@ -204,8 +196,6 @@ func TestDiffSnapshot_Empty(t *testing.T) {
 	}
 }
 
-// ── rawAXValue.String ──────────────────────────────────────
-
 func TestRawAXValue_String_Normal(t *testing.T) {
 	v := &rawAXValue{Type: "string", Value: json.RawMessage(`"hello"`)}
 	if got := v.String(); got != "hello" {
@@ -229,17 +219,15 @@ func TestRawAXValue_String_NilValue(t *testing.T) {
 
 func TestRawAXValue_String_NonString(t *testing.T) {
 	v := &rawAXValue{Type: "number", Value: json.RawMessage(`42`)}
-	// Falls back to trimming quotes
+
 	if got := v.String(); got != "42" {
 		t.Errorf("expected 42, got %q", got)
 	}
 }
 
-// ── handleSnapshot noTab ───────────────────────────────────
-
 func TestHandleSnapshot_InvalidFilter(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/snapshot?filter=bogus", nil)
 	w := httptest.NewRecorder()
 	b.handleSnapshot(w, req)
@@ -250,7 +238,7 @@ func TestHandleSnapshot_InvalidFilter(t *testing.T) {
 
 func TestHandleScreenshot_RawParam(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/screenshot?raw=true&tabId=nonexistent", nil)
 	w := httptest.NewRecorder()
 	b.handleScreenshot(w, req)
@@ -261,7 +249,7 @@ func TestHandleScreenshot_RawParam(t *testing.T) {
 
 func TestHandleNavigate_WithTimeout(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","timeout":5,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -273,7 +261,7 @@ func TestHandleNavigate_WithTimeout(t *testing.T) {
 
 func TestHandleNavigate_WithBlockImages(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","blockImages":true,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -285,7 +273,7 @@ func TestHandleNavigate_WithBlockImages(t *testing.T) {
 
 func TestHandleNavigate_WaitTitle(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","waitTitle":true,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()

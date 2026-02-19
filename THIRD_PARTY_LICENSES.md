@@ -54,6 +54,24 @@ Pinchtab depends on the following open-source packages. All are compatible with 
 - **URL:** https://github.com/golang/sys
 - **Purpose:** Go system call wrappers
 
+### github.com/ledongthuc/pdf
+- **License:** BSD 3-Clause
+- **Copyright:** (c) 2009 The Go Authors
+- **URL:** https://github.com/ledongthuc/pdf
+- **Purpose:** Transitive dependency in module graph (test tooling chain)
+
+### github.com/orisano/pixelmatch
+- **License:** MIT
+- **Copyright:** (c) 2022 orisano
+- **URL:** https://github.com/orisano/pixelmatch
+- **Purpose:** Transitive dependency in module graph (test tooling chain)
+
+### gopkg.in/check.v1
+- **License:** BSD-style
+- **Copyright:** (c) 2010-2013 Gustavo Niemeyer
+- **URL:** https://gopkg.in/check.v1
+- **Purpose:** Transitive dependency in module graph (test tooling chain)
+
 ### gopkg.in/yaml.v3
 - **License:** Apache 2.0 / MIT
 - **Copyright:** (c) 2006-2011 Kirill Simonov, (c) 2011-2019 Canonical Ltd
@@ -72,6 +90,9 @@ Pinchtab depends on the following open-source packages. All are compatible with 
 | gobwas/httphead | MIT | ✅ |
 | gobwas/pool | MIT | ✅ |
 | golang.org/x/sys | BSD 3-Clause | ✅ |
-| gopkg.in/yaml.v3 | Apache 2.0/MIT | ✅ |
+| github.com/ledongthuc/pdf | BSD 3-Clause | ✅ |
+| github.com/orisano/pixelmatch | MIT | ✅ |
+| gopkg.in/check.v1 | BSD-style | ✅ |
+| gopkg.in/yaml.v3 | Apache 2.0 / MIT | ✅ |
 
-All dependencies are MIT, BSD 3-Clause, or Apache 2.0 licensed, fully compatible with Pinchtab's MIT license.
+All dependencies are MIT, BSD-style, or Apache 2.0 licensed, compatible with Pinchtab's MIT license.

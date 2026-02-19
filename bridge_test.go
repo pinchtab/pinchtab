@@ -6,10 +6,7 @@ import (
 )
 
 func TestRefCacheConcurrency(t *testing.T) {
-	b := &Bridge{
-		tabs:      make(map[string]*TabEntry),
-		snapshots: make(map[string]*refCache),
-	}
+	b := newTestBridgeWithTabs()
 
 	// Simulate concurrent reads/writes to snapshot cache
 	var wg sync.WaitGroup
@@ -19,14 +16,12 @@ func TestRefCacheConcurrency(t *testing.T) {
 			defer wg.Done()
 			tabID := "tab1"
 
-			// Write
 			b.mu.Lock()
 			b.snapshots[tabID] = &refCache{refs: map[string]int64{
 				"e0": int64(i),
 			}}
 			b.mu.Unlock()
 
-			// Read
 			b.mu.RLock()
 			cache := b.snapshots[tabID]
 			b.mu.RUnlock()
@@ -39,12 +34,8 @@ func TestRefCacheConcurrency(t *testing.T) {
 }
 
 func TestRefCacheLookup(t *testing.T) {
-	b := &Bridge{
-		tabs:      make(map[string]*TabEntry),
-		snapshots: make(map[string]*refCache),
-	}
+	b := newTestBridgeWithTabs()
 
-	// No cache → nil
 	b.mu.RLock()
 	cache := b.snapshots["tab1"]
 	b.mu.RUnlock()
@@ -52,7 +43,6 @@ func TestRefCacheLookup(t *testing.T) {
 		t.Error("expected nil cache for unknown tab")
 	}
 
-	// Set cache
 	b.mu.Lock()
 	b.snapshots["tab1"] = &refCache{refs: map[string]int64{
 		"e0": 100,
@@ -60,7 +50,6 @@ func TestRefCacheLookup(t *testing.T) {
 	}}
 	b.mu.Unlock()
 
-	// Lookup
 	b.mu.RLock()
 	cache = b.snapshots["tab1"]
 	b.mu.RUnlock()

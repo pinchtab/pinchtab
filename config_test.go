@@ -17,6 +17,35 @@ func TestEnvOr(t *testing.T) {
 	}
 }
 
+func TestEnvBoolOr(t *testing.T) {
+	if got := envBoolOr("PINCHTAB_TEST_BOOL_UNSET", true); !got {
+		t.Error("expected fallback true for unset env")
+	}
+	if got := envBoolOr("PINCHTAB_TEST_BOOL_UNSET", false); got {
+		t.Error("expected fallback false for unset env")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "true")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", false); !got {
+		t.Error("expected true from env true")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "false")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", true); got {
+		t.Error("expected false from env false")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "1")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", false); !got {
+		t.Error("expected true from env 1")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "0")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", true); got {
+		t.Error("expected false from env 0")
+	}
+}
+
 func TestHomeDir(t *testing.T) {
 	h := homeDir()
 	if h == "" {
@@ -32,7 +61,7 @@ func TestMaskToken(t *testing.T) {
 		{"short", "***"},
 		{"12345678", "***"},
 		{"123456789", "1234...6789"},
-		{"my-super-secret-token", "my-s...oken"},
+		{"my-super-secret-cfg.Token", "my-s...oken"},
 	}
 	for _, tt := range tests {
 		if got := maskToken(tt.input); got != tt.want {
@@ -42,62 +71,58 @@ func TestMaskToken(t *testing.T) {
 }
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := defaultConfig()
-	if cfg.Port != "9867" {
-		t.Errorf("default port = %q, want 9867", cfg.Port)
+	fc := defaultFileConfig()
+	if fc.Port != "9867" {
+		t.Errorf("default Port = %q, want 9867", fc.Port)
 	}
-	if !cfg.Headless {
+	if fc.Headless == nil || !*fc.Headless {
 		t.Error("default config should be headless")
 	}
-	if cfg.NoRestore {
-		t.Error("default config should not have noRestore")
+	if fc.NoRestore {
+		t.Error("default config should not have NoRestore")
 	}
-	if cfg.TimeoutSec != 15 {
-		t.Errorf("default timeout = %d, want 15", cfg.TimeoutSec)
+	if fc.TimeoutSec != 15 {
+		t.Errorf("default timeout = %d, want 15", fc.TimeoutSec)
 	}
-	if cfg.NavigateSec != 30 {
-		t.Errorf("default navigate timeout = %d, want 30", cfg.NavigateSec)
+	if fc.NavigateSec != 30 {
+		t.Errorf("default navigate timeout = %d, want 30", fc.NavigateSec)
 	}
 }
 
 func TestLoadConfig_FromFile(t *testing.T) {
-	// Save original values
-	origPort := port
-	defer func() { port = origPort }()
 
-	// Create a temp config file
+	origPort := cfg.Port
+	defer func() { cfg.Port = origPort }()
+
 	dir := t.TempDir()
 	configPath := dir + "/config.json"
 	_ = os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
 
-	// Ensure env vars don't interfere
 	t.Setenv("BRIDGE_PORT", "")
 	t.Setenv("BRIDGE_CONFIG", configPath)
 
 	loadConfig()
-	if port != "7777" {
-		t.Errorf("loadConfig from file: port = %q, want 7777", port)
+	if cfg.Port != "7777" {
+		t.Errorf("loadConfig from file: port = %q, want 7777", cfg.Port)
 	}
 }
 
 func TestLoadConfig_EnvOverridesFile(t *testing.T) {
-	origPort := port
-	defer func() { port = origPort }()
+	origPort := cfg.Port
+	defer func() { cfg.Port = origPort }()
 
 	dir := t.TempDir()
 	configPath := dir + "/config.json"
 	_ = os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
 
-	// Set BRIDGE_PORT env — loadConfig should NOT override port from file
 	t.Setenv("BRIDGE_CONFIG", configPath)
 	t.Setenv("BRIDGE_PORT", "8888")
 
-	// Simulate what happens: port was set at init from env, so set it manually
-	port = "8888"
+	cfg.Port = "8888"
 	loadConfig()
-	// File says 7777, but env is set so loadConfig should leave port alone
-	if port != "8888" {
-		t.Errorf("env should override file: port = %q, want 8888", port)
+
+	if cfg.Port != "8888" {
+		t.Errorf("env should override file: port = %q, want 8888", cfg.Port)
 	}
 }
 
@@ -106,21 +131,20 @@ func TestLoadConfig_InvalidJSON(t *testing.T) {
 	configPath := dir + "/config.json"
 	_ = os.WriteFile(configPath, []byte("{broken json!!!"), 0644)
 
-	// Save and restore global state
-	origPort := port
-	defer func() { port = origPort }()
+	origPort := cfg.Port
+	defer func() { cfg.Port = origPort }()
 
 	t.Setenv("BRIDGE_CONFIG", configPath)
 	t.Setenv("BRIDGE_PORT", "")
-	port = "9867"
-	loadConfig() // should not panic, should keep defaults
-	if port != "9867" {
-		t.Errorf("invalid config should not change port, got %q", port)
+	cfg.Port = "9867"
+	loadConfig()
+	if cfg.Port != "9867" {
+		t.Errorf("invalid config should not change port, got %q", cfg.Port)
 	}
 }
 
 func TestConstants(t *testing.T) {
-	// Verify constants are what handlers expect
+
 	if actionClick != "click" {
 		t.Error("actionClick mismatch")
 	}

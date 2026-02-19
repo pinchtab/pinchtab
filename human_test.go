@@ -7,7 +7,7 @@ import (
 )
 
 func TestHumanMouseMove(t *testing.T) {
-	// Test bezier calculation
+
 	testCases := []struct {
 		name     string
 		fromX    float64
@@ -30,7 +30,7 @@ func TestHumanMouseMove(t *testing.T) {
 			fromY:    0,
 			toX:      1000,
 			toY:      1000,
-			maxSteps: 30, // Should be capped
+			maxSteps: 30,
 		},
 		{
 			name:     "tiny distance",
@@ -38,22 +38,20 @@ func TestHumanMouseMove(t *testing.T) {
 			fromY:    100,
 			toX:      105,
 			toY:      105,
-			maxSteps: 5, // Should be minimum
+			maxSteps: 5,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test distance calculation
+
 			distance := math.Sqrt((tc.toX-tc.fromX)*(tc.toX-tc.fromX) + (tc.toY-tc.fromY)*(tc.toY-tc.fromY))
 
-			// Test duration calculation (from human.go logic)
 			baseDuration := 100 + (distance/2000)*200
 			if baseDuration < 100 {
 				t.Error("base duration too low")
 			}
 
-			// Test steps calculation
 			steps := int(baseDuration / 20)
 			if steps < 5 {
 				steps = 5
@@ -69,14 +67,10 @@ func TestHumanMouseMove(t *testing.T) {
 	}
 }
 
-// Note: bezier and getTypingPattern are unexported functions.
-// We test the public-facing behavior through action handlers instead.
-
 func TestTypingTiming(t *testing.T) {
-	// Test that typing delays are reasonable
+
 	startTime := time.Now()
 
-	// Simulate typing pattern delays
 	baseDelay := 50
 	variations := []int{0, 20, 50, 100, 150}
 
@@ -86,7 +80,6 @@ func TestTypingTiming(t *testing.T) {
 		totalDelay += delay
 	}
 
-	// Average should be around 50-150ms per character
 	avgDelay := totalDelay / 10
 	if avgDelay < 30 || avgDelay > 200 {
 		t.Errorf("average typing delay out of range: %dms", avgDelay)

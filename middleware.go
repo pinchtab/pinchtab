@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
 
 // statusWriter wraps ResponseWriter to capture the status code.
+// It preserves Hijacker and Flusher interfaces for WebSocket/SSE support.
 type statusWriter struct {
 	http.ResponseWriter
 	code int
@@ -18,6 +21,19 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(code int) {
 	w.code = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter is not a Hijacker")
+}
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -36,9 +52,9 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token != "" {
+		if cfg.Token != "" {
 			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+token {
+			if auth != "Bearer "+cfg.Token {
 				jsonErr(w, 401, fmt.Errorf("unauthorized"))
 				return
 			}

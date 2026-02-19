@@ -13,8 +13,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// ── GET /cookies ───────────────────────────────────────────
-
 func (b *Bridge) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	url := r.URL.Query().Get("url")
@@ -45,7 +43,6 @@ func (b *Bridge) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Filter by name if specified
 	if name != "" {
 		filtered := make([]*network.Cookie, 0)
 		for _, c := range cookies {
@@ -56,7 +53,6 @@ func (b *Bridge) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 		cookies = filtered
 	}
 
-	// Convert to simpler format
 	result := make([]map[string]any, len(cookies))
 	for i, c := range cookies {
 		result[i] = map[string]any{
@@ -79,8 +75,6 @@ func (b *Bridge) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 		"count":   len(result),
 	})
 }
-
-// ── POST /cookies ──────────────────────────────────────────
 
 type cookieRequest struct {
 	TabID   string             `json:"tabId"`

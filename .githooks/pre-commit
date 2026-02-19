@@ -1,6 +1,4 @@
 #!/bin/sh
-# Pre-commit hook: format, vet, test
-
 set -e
 
 echo "🦀 pre-commit: gofmt..."

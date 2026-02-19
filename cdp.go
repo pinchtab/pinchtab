@@ -29,9 +29,9 @@ func navigatePage(ctx context.Context, url string) error {
 			}
 			return nil
 		}),
-		// Poll document.readyState until interactive/complete or context deadline.
+
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			// Use context deadline if set, otherwise fall back to 10s.
+
 			deadline, ok := ctx.Deadline()
 			if !ok {
 				deadline = time.Now().Add(10 * time.Second)
@@ -51,14 +51,14 @@ func navigatePage(ctx context.Context, url string) error {
 					if json.Unmarshal(evalResult, &evalResp) == nil {
 						readyState = evalResp.Result.Value
 						if readyState == "interactive" || readyState == "complete" {
-							return nil // Page is ready for interaction
+							return nil
 						}
 					}
 				}
-				// Check every 200ms to avoid excessive polling
+
 				time.Sleep(200 * time.Millisecond)
 			}
-			// Timeout reached, but don't fail - page might still be usable
+
 			return nil
 		}),
 	)
@@ -174,20 +174,20 @@ func scrollByNodeID(ctx context.Context, backendNodeID int64) error {
 
 // URL patterns for blocking resources via Network.setBlockedURLs.
 var imageBlockPatterns = []string{
-	// Common image extensions
+
 	"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg", "*.ico",
 	"*.bmp", "*.tiff", "*.avif", "*.jfif",
-	// Common CDN image paths
+
 	"*/images/*", "*/img/*", "*/photos/*", "*/thumbnails/*",
 	"*imagedelivery.net*", "*images.unsplash.com*", "*pbs.twimg.com*",
 }
 
 var mediaBlockPatterns = append(imageBlockPatterns,
-	// Fonts
+
 	"*.woff", "*.woff2", "*.ttf", "*.otf", "*.eot",
-	// Video/Audio
+
 	"*.mp4", "*.webm", "*.ogg", "*.mp3", "*.wav", "*.m3u8",
-	// CSS (aggressive)
+
 	"*.css",
 )
 
@@ -195,7 +195,7 @@ var mediaBlockPatterns = append(imageBlockPatterns,
 // Pass nil to clear the blocklist.
 func setResourceBlocking(ctx context.Context, patterns []string) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		// Enable Network domain (idempotent).
+
 		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Network.enable", nil, nil); err != nil {
 			return fmt.Errorf("network enable: %w", err)
 		}
