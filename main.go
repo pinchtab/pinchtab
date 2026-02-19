@@ -95,8 +95,7 @@ func main() {
 	applyTimezone(browserCtx)
 
 	bridge.browserCtx = browserCtx
-	bridge.tabs = make(map[string]*TabEntry)
-	bridge.snapshots = make(map[string]*refCache)
+	bridge.InitTabManager()
 	bridge.initActionRegistry()
 	bridge.locks = newLockManager()
 
@@ -106,7 +105,7 @@ func main() {
 	orchestrator := NewOrchestrator(profilesDir)
 
 	initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
-	bridge.tabs[string(initTargetID)] = &TabEntry{ctx: browserCtx}
+	bridge.RegisterTab(string(initTargetID), browserCtx)
 	slog.Info("initial tab", "id", string(initTargetID))
 
 	if !cfg.Headless {

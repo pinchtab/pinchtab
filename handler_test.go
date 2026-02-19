@@ -8,11 +8,16 @@ import (
 
 // newTestBridge creates a Bridge with initialized maps (no Chrome).
 func newTestBridge() *Bridge {
-	return &Bridge{
+	b := &Bridge{}
+	b.TabManager = &TabManager{
 		tabs:      make(map[string]*TabEntry),
 		snapshots: make(map[string]*refCache),
 	}
+	return b
 }
+
+// newTestBridgeWithTabs is an alias used across test files.
+var newTestBridgeWithTabs = newTestBridge
 
 func TestHandleNavigate_MissingURL(t *testing.T) {
 	b := newTestBridge()

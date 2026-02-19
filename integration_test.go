@@ -47,12 +47,11 @@ func testBridge(t *testing.T) (*Bridge, func()) {
 	b := &Bridge{
 		allocCtx:   allocCtx,
 		browserCtx: browserCtx,
-		tabs:       make(map[string]*TabEntry),
-		snapshots:  make(map[string]*refCache),
 	}
+	b.InitTabManager()
 
 	initID := string(chromedp.FromContext(browserCtx).Target.TargetID)
-	b.tabs[initID] = &TabEntry{ctx: browserCtx}
+	b.RegisterTab(initID, browserCtx)
 
 	return b, func() {
 		browserCancel()

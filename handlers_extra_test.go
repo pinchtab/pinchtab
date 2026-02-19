@@ -12,7 +12,7 @@ import (
 
 func TestHandleHealth_Response(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
 	b.handleHealth(w, req)
@@ -224,10 +224,12 @@ func TestLoadConfig_ConfigFileAllFields(t *testing.T) {
 // handler dispatch logic without needing Chrome.
 func newBridgeWithFakeTab() *Bridge {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
-	b.snapshots = make(map[string]*refCache)
+	b.TabManager = &TabManager{
+		tabs:      make(map[string]*TabEntry),
+		snapshots: make(map[string]*refCache),
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	_ = cancel
-	b.tabs["tab1"] = &TabEntry{ctx: ctx, cancel: cancel}
+	b.RegisterTab("tab1", ctx)
 	return b
 }

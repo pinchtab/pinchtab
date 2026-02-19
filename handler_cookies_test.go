@@ -21,7 +21,7 @@ func TestHandleSetCookies_InvalidJSON(t *testing.T) {
 
 func TestHandleSetCookies_NoTab(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","cookies":[{"name":"a","value":"b"}],"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/cookies", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -36,7 +36,7 @@ func TestHandleSetCookies_NoTab(t *testing.T) {
 func TestHandleGetCookies_NameFilter(t *testing.T) {
 
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/cookies?name=session_id&tabId=nonexistent", nil)
 	w := httptest.NewRecorder()
 

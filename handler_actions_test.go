@@ -29,9 +29,7 @@ func TestHandleActions_EmptyArray(t *testing.T) {
 }
 
 func TestHandleActions_NoTabError(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	body := `{
 		"actions": [
@@ -51,9 +49,7 @@ func TestHandleActions_NoTabError(t *testing.T) {
 }
 
 func TestHandleGetCookies_NoTab(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/cookies", nil)
 	w := httptest.NewRecorder()
@@ -104,9 +100,7 @@ func TestHandleSetCookies_EmptyCookies(t *testing.T) {
 }
 
 func TestHandleStealthStatus_NoTabs(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
@@ -137,9 +131,7 @@ func TestHandleStealthStatus_NoTabs(t *testing.T) {
 }
 
 func TestHandleFingerprintRotate_NoTab(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	body := `{"os": "windows", "browser": "chrome"}`
 	req := httptest.NewRequest("POST", "/fingerprint/rotate", bytes.NewReader([]byte(body)))

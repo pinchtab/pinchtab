@@ -152,9 +152,7 @@ func TestGenerateFingerprint(t *testing.T) {
 }
 
 func TestHandleStealthStatus(t *testing.T) {
-	b := &Bridge{
-		tabs: make(map[string]*TabEntry),
-	}
+	b := newTestBridgeWithTabs()
 
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()

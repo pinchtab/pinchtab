@@ -8,7 +8,7 @@ import (
 
 func TestHandleStealthStatus_NoTab_ReturnsStatic(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
 
@@ -118,7 +118,7 @@ func TestGetStealthRecommendations_Partial(t *testing.T) {
 
 func TestSendStealthResponse_HighScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	features := map[string]bool{
 		"a": true, "b": true, "c": true, "d": true, "e": true,
 	}
@@ -136,7 +136,7 @@ func TestSendStealthResponse_HighScore(t *testing.T) {
 
 func TestSendStealthResponse_LowScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	features := map[string]bool{
 		"a": true, "b": false, "c": false, "d": false, "e": false,
 		"f": false, "g": false, "h": false, "i": false, "j": false,
@@ -152,7 +152,7 @@ func TestSendStealthResponse_LowScore(t *testing.T) {
 
 func TestSendStealthResponse_MediumScore(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 
 	features := map[string]bool{
 		"a": true, "b": true, "c": true, "d": true, "e": true,

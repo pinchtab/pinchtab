@@ -35,7 +35,7 @@ P2 (K11 file path, blockImages on CreateTab) — all resolved.
 - [ ] **Randomized window sizes** — Avoid automation fingerprint.
 
 ### Code Quality
-- [ ] **Extract TabManager from Bridge** — Bridge is a semi-god object. Split tabs + snapshots management into its own `TabManager` struct.
+- [x] **Extract TabManager from Bridge** — Tabs, snapshots, and ref cache in own struct with setup hook.
 - [ ] **installStableBinary streaming** — Use `io.Copy` with file streams instead of reading entire binary into memory.
 - [x] **Interfaces for ProfileManager/Orchestrator** — `ProfileService` and `OrchestratorService` interfaces with compile-time checks.
 - [ ] **proxy_ws.go proper HTTP** — Replace raw `backend.Write` of HTTP headers with proper request construction.

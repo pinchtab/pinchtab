@@ -227,7 +227,7 @@ func TestRawAXValue_String_NonString(t *testing.T) {
 
 func TestHandleSnapshot_InvalidFilter(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/snapshot?filter=bogus", nil)
 	w := httptest.NewRecorder()
 	b.handleSnapshot(w, req)
@@ -238,7 +238,7 @@ func TestHandleSnapshot_InvalidFilter(t *testing.T) {
 
 func TestHandleScreenshot_RawParam(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	req := httptest.NewRequest("GET", "/screenshot?raw=true&tabId=nonexistent", nil)
 	w := httptest.NewRecorder()
 	b.handleScreenshot(w, req)
@@ -249,7 +249,7 @@ func TestHandleScreenshot_RawParam(t *testing.T) {
 
 func TestHandleNavigate_WithTimeout(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","timeout":5,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestHandleNavigate_WithTimeout(t *testing.T) {
 
 func TestHandleNavigate_WithBlockImages(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","blockImages":true,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -273,7 +273,7 @@ func TestHandleNavigate_WithBlockImages(t *testing.T) {
 
 func TestHandleNavigate_WaitTitle(t *testing.T) {
 	b := &Bridge{}
-	b.tabs = make(map[string]*TabEntry)
+	b.TabManager = &TabManager{tabs: make(map[string]*TabEntry), snapshots: make(map[string]*refCache)}
 	body := `{"url":"https://example.com","waitTitle":true,"tabId":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()

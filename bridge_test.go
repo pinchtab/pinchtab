@@ -6,10 +6,7 @@ import (
 )
 
 func TestRefCacheConcurrency(t *testing.T) {
-	b := &Bridge{
-		tabs:      make(map[string]*TabEntry),
-		snapshots: make(map[string]*refCache),
-	}
+	b := newTestBridgeWithTabs()
 
 	// Simulate concurrent reads/writes to snapshot cache
 	var wg sync.WaitGroup
@@ -37,10 +34,7 @@ func TestRefCacheConcurrency(t *testing.T) {
 }
 
 func TestRefCacheLookup(t *testing.T) {
-	b := &Bridge{
-		tabs:      make(map[string]*TabEntry),
-		snapshots: make(map[string]*refCache),
-	}
+	b := newTestBridgeWithTabs()
 
 	b.mu.RLock()
 	cache := b.snapshots["tab1"]
