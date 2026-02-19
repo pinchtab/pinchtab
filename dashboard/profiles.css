@@ -31,8 +31,8 @@
     gap: 8px;
   }
   .launch-btn {
-    background: transparent;
-    color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-dark);
     border: 1px solid var(--primary);
     padding: 8px 18px;
     border-radius: 6px;
@@ -43,11 +43,14 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
-  .launch-btn:hover { background: var(--primary-soft); }
+  .launch-btn:hover {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+  }
   .refresh-btn {
-    background: #1e293b;
-    color: #cbd5e1;
-    border: 1px solid #334155;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-subtle);
+    border: 1px solid var(--border-light);
     padding: 8px 14px;
     border-radius: 6px;
     cursor: pointer;
@@ -57,7 +60,7 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
-  .refresh-btn:hover { background: #243244; }
+  .refresh-btn:hover { background: rgba(255, 255, 255, 0.08); }
   .instances-grid {
     flex: 1;
     display: grid;
@@ -72,6 +75,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24);
   }
   .inst-card .inst-header {
     padding: 14px 16px;
@@ -136,11 +140,11 @@
   .inst-card .inst-actions button.btn-feed {
     background: transparent;
     border-color: transparent;
-    color: #94a3b8;
+    color: var(--text-muted);
   }
   .inst-card .inst-actions button.btn-feed:hover {
-    border-color: #334155;
-    color: #cbd5e1;
+    border-color: var(--border-light);
+    color: var(--text-subtle);
   }
   .inst-card .inst-actions button.danger {
     background: var(--danger);
@@ -162,7 +166,7 @@
     color: var(--text-subtle);
     padding: 10px;
     border-radius: 6px;
-    font-family: var(--font);
+    font-family: var(--font-mono);
     font-size: 11px;
     line-height: 1.45;
     margin-bottom: 10px;

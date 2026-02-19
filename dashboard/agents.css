@@ -6,6 +6,7 @@
     padding: 16px;
   }
   .agents-panel h2 {
+    font-family: var(--font-heading);
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -68,7 +69,13 @@
     justify-content: space-between;
     align-items: center;
   }
-  .feed-header h2 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+  .feed-header h2 {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
   .feed-header .filter-btns { display: flex; gap: 6px; }
   .feed-header .filter-btn {
     background: var(--bg-hover);
@@ -80,7 +87,11 @@
     cursor: pointer;
     font-family: inherit;
   }
-  .feed-header .filter-btn.active { border-color: var(--primary); color: var(--primary); }
+  .feed-header .filter-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(251, 191, 36, 0.08);
+  }
 
   .feed-list {
     flex: 1;
@@ -120,7 +131,7 @@
     margin-right: 4px;
   }
   .method.GET { background: #1a3a2a; color: var(--success); }
-  .method.POST { background: #1a2a3a; color: #60a5fa; }
+  .method.POST { background: rgba(251, 191, 36, 0.12); color: var(--primary); }
   .method.DELETE { background: var(--danger-bg); color: var(--danger); }
   .event-row .duration { color: var(--text-dim); text-align: right; font-size: 12px; }
   .event-row .status-code { text-align: right; font-size: 12px; }

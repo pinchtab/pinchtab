@@ -85,83 +85,84 @@
 
 
 <div id="settings-view" class="settings-view" style="display:none">
-  <div class="settings-container">
-    <h2 class="settings-title">⚙️ Settings</h2>
-
-    <div class="settings-section">
-      <h3>📺 Screencast</h3>
-      <div class="setting-row">
-        <label>Frame Rate</label>
-        <div class="setting-control">
-          <input type="range" id="set-fps" min="1" max="15" value="1" oninput="document.getElementById('fps-val').textContent=this.value+' fps'">
-          <span id="fps-val" class="setting-value">1 fps</span>
-        </div>
-      </div>
-      <div class="setting-row">
-        <label>Quality</label>
-        <div class="setting-control">
-          <input type="range" id="set-quality" min="10" max="80" value="30" oninput="document.getElementById('quality-val').textContent=this.value+'%'">
-          <span id="quality-val" class="setting-value">30%</span>
-        </div>
-      </div>
-      <div class="setting-row">
-        <label>Max Width</label>
-        <div class="setting-control">
-          <select id="set-maxwidth">
-            <option value="400">400px</option>
-            <option value="600">600px</option>
-            <option value="800" selected>800px</option>
-            <option value="1024">1024px</option>
-            <option value="1280">1280px</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>🛡️ Stealth</h3>
-      <div class="setting-row">
-        <label>Level</label>
-        <div class="setting-control">
-          <select id="set-stealth" onchange="applyStealth()">
-            <option value="light">Light (default — works with X, Gmail)</option>
-            <option value="full">Full (canvas noise, WebGL, fonts)</option>
-          </select>
-        </div>
-      </div>
-      <div id="stealth-info" class="setting-info"></div>
-    </div>
-
-    <div class="settings-section">
-      <h3>🌐 Browser</h3>
-      <div class="setting-row">
-        <label>Block Images</label>
-        <div class="setting-control">
-          <label class="toggle"><input type="checkbox" id="set-block-images"><span class="toggle-label">Off</span></label>
-        </div>
-      </div>
-      <div class="setting-row">
-        <label>Block Media</label>
-        <div class="setting-control">
-          <label class="toggle"><input type="checkbox" id="set-block-media"><span class="toggle-label">Off</span></label>
-        </div>
-      </div>
-      <div class="setting-row">
-        <label>No Animations</label>
-        <div class="setting-control">
-          <label class="toggle"><input type="checkbox" id="set-no-animations"><span class="toggle-label">Off</span></label>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>📊 Server Info</h3>
-      <div id="server-info" class="server-info">Loading...</div>
-    </div>
-
-    <div class="settings-actions">
+  <div class="settings-fixed-actions">
+    <div class="settings-fixed-actions-inner">
       <button onclick="applySettings()" class="launch-btn">Apply Settings</button>
       <button onclick="loadSettings()" class="refresh-btn">Reset</button>
+    </div>
+  </div>
+  <div class="settings-scroll">
+    <div class="settings-container">
+      <div class="settings-section">
+        <h3>📺 Screencast</h3>
+        <div class="setting-row">
+          <label>Frame Rate</label>
+          <div class="setting-control">
+            <input type="range" id="set-fps" min="1" max="15" value="1" oninput="document.getElementById('fps-val').textContent=this.value+' fps'">
+            <span id="fps-val" class="setting-value">1 fps</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>Quality</label>
+          <div class="setting-control">
+            <input type="range" id="set-quality" min="10" max="80" value="30" oninput="document.getElementById('quality-val').textContent=this.value+'%'">
+            <span id="quality-val" class="setting-value">30%</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>Max Width</label>
+          <div class="setting-control">
+            <select id="set-maxwidth">
+              <option value="400">400px</option>
+              <option value="600">600px</option>
+              <option value="800" selected>800px</option>
+              <option value="1024">1024px</option>
+              <option value="1280">1280px</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>🛡️ Stealth</h3>
+        <div class="setting-row">
+          <label>Level</label>
+          <div class="setting-control">
+            <select id="set-stealth" onchange="applyStealth()">
+              <option value="light">Light (default)</option>
+              <option value="full">Full (canvas noise, WebGL, fonts)</option>
+            </select>
+          </div>
+        </div>
+        <div id="stealth-info" class="setting-info"></div>
+      </div>
+
+      <div class="settings-section">
+        <h3>🌐 Browser</h3>
+        <div class="setting-row">
+          <label>Block Images</label>
+          <div class="setting-control">
+            <label class="toggle"><input type="checkbox" id="set-block-images"><span class="toggle-label">Off</span></label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>Block Media</label>
+          <div class="setting-control">
+            <label class="toggle"><input type="checkbox" id="set-block-media"><span class="toggle-label">Off</span></label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>No Animations</label>
+          <div class="setting-control">
+            <label class="toggle"><input type="checkbox" id="set-no-animations"><span class="toggle-label">Off</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>📊 Server Info</h3>
+        <div id="server-info" class="server-info">Loading...</div>
+      </div>
     </div>
   </div>
 </div>
