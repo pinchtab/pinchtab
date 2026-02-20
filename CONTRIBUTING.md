@@ -7,7 +7,7 @@ git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
 
 # Build
-go build -o pinchtab .
+go build -o pinchtab ./cmd/pinchtab
 
 # Run (headed — Chrome window opens)
 ./pinchtab
@@ -26,7 +26,7 @@ Requires **Go 1.25+** and **Google Chrome**.
 1. Make your changes
 2. Format: `gofmt -w .`
 3. Test: `go test ./... -count=1`
-4. Lint: `golangci-lint run ./...` (v2.9.0+)
+4. Lint: `golangci-lint run ./...`
 5. Commit — pre-commit hook runs checks automatically
 6. Push: `git pull --rebase && git push`
 
@@ -41,38 +41,31 @@ go test ./... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
 
-Tests don't require a running Chrome instance.
+Most tests use a `mockBridge` and do not require a running Chrome instance.
 
 ## Project Layout
 
-Single Go package, all files in root:
+The project follows the standard Go `internal/` pattern to ensure encapsulation and clean boundaries:
 
-- `main.go` — entry point, Chrome launch, routes
-- `handlers.go` — HTTP handlers (navigate, screenshot, tabs, lock)
-- `handler_snapshot.go` — snapshot handler (a11y tree, format, file output)
-- `handler_actions.go` — action/actions handlers
-- `handler_cookies.go` — cookie get/set
-- `handler_stealth.go` — stealth status, fingerprint rotation
-- `snapshot.go` — a11y tree parsing
-- `cdp.go` — Chrome DevTools Protocol helpers
-- `bridge.go` — tab management, Chrome lifecycle
-- `config.go` — environment config, embedded assets
-- `lock.go` — tab locking for multi-agent coordination
-- `animations.go` — CSS animation disabling
-- `human.go` — human-like interaction (bezier mouse, typing)
-- `state.go` — session persistence
-- `middleware.go` — auth, CORS, logging
-- `stealth.js` — stealth script (light/full modes)
-- `welcome.html` — headed mode welcome page
+- `cmd/pinchtab/` — Application entry points and CLI commands.
+- `internal/bridge/` — Core CDP logic, tab management, and state logic.
+- `internal/handlers/` — HTTP API handlers and middleware.
+- `internal/orchestrator/` — Multi-instance lifecycle and process management.
+- `internal/profiles/` — Chrome profile management and user identity discovery.
+- `internal/dashboard/` — Backend logic and static assets for the web UI.
+- `internal/assets/` — Centralized embedded files (stealth scripts, CSS).
+- `internal/human/` — Human-like interaction simulation (Bezier mouse paths, natural typing).
+- `internal/web/` — Shared HTTP and JSON utilities.
 
 ## Style
 
 - `gofmt` enforced (CI + pre-commit)
-- Handle all error returns
-- Lowercase error strings, wrap with `%w`
-- Tests next to source (`foo.go` → `foo_test.go`)
-- No new dependencies without good reason
+- Adhere to **SOLID** principles, specifically using interfaces for dependency inversion.
+- Handle all error returns explicitly.
+- Lowercase error strings, wrap with `%w`.
+- Tests should live in the same package as the source code.
+- No new dependencies without significant technical justification.
 
 ## For AI Agents
 
-See [AGENTS.md](AGENTS.md) for detailed conventions and patterns.
+See [AGENTS.md](AGENTS.md) for detailed conventions and patterns when contributing via an agentic workflow.
