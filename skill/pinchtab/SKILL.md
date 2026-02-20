@@ -187,6 +187,20 @@ curl -X POST http://localhost:9867/stop/278be873adeb
 curl http://localhost:9867/profiles/Pinchtab%20org/instance
 ```
 
+### Launch by name (alternative)
+
+```bash
+# Via /launch endpoint (name-based)
+curl -X POST http://localhost:9867/launch \
+  -H 'Content-Type: application/json' \
+  -d '{"profile": "work", "port": "9868", "headless": true}'
+
+# Via /instances/launch (dashboard compat)
+curl -X POST http://localhost:9867/instances/launch \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "work", "port": "9868"}'
+```
+
 ### Typical agent flow with profiles
 
 ```bash
@@ -409,7 +423,12 @@ Locked tabs show `owner` and `lockedUntil` in `/tabs`. Returns 409 on conflict.
 # Execute multiple actions in sequence
 curl -X POST http://localhost:9867/actions \
   -H 'Content-Type: application/json' \
-  -d '[{"kind":"click","ref":"e3"},{"kind":"type","ref":"e3","text":"hello"},{"kind":"press","key":"Enter"}]'
+  -d '{"actions":[{"kind":"click","ref":"e3"},{"kind":"type","ref":"e3","text":"hello"},{"kind":"press","key":"Enter"}]}'
+
+# Stop on first error (default: false, continues through all)
+curl -X POST http://localhost:9867/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"tabId":"TARGET_ID","actions":[...],"stopOnError":true}'
 ```
 
 ### Cookies
