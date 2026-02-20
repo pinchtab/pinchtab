@@ -11,7 +11,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Detected macOS - using launchd"
     if [ ! -f "$PINCHTAB_BIN" ]; then
         echo "Building pinchtab..."
-        (cd "$SCRIPT_DIR/.." && go build -o pinchtab .)
+        (cd "$SCRIPT_DIR/.." && go build -o pinchtab ./cmd/pinchtab)
     fi
     echo "Installing pinchtab to /usr/local/bin..."
     sudo cp "$PINCHTAB_BIN" /usr/local/bin/pinchtab
@@ -36,7 +36,7 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Detected Linux - using systemd"
     if [ ! -f "$PINCHTAB_BIN" ]; then
         echo "Building pinchtab..."
-        (cd "$SCRIPT_DIR/.." && go build -o pinchtab .)
+        (cd "$SCRIPT_DIR/.." && go build -o pinchtab ./cmd/pinchtab)
     fi
     echo "Installing pinchtab to /usr/local/bin..."
     sudo cp "$PINCHTAB_BIN" /usr/local/bin/pinchtab

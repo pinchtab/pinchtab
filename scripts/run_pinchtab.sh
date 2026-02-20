@@ -8,7 +8,7 @@ BIN_PATH="$BIN_DIR/pinchtab"
 mkdir -p "$BIN_DIR"
 cd "$ROOT_DIR"
 
-go build -o "$BIN_PATH" .
+go build -o "$BIN_PATH" ./cmd/pinchtab
 
 if [ "$#" -eq 0 ]; then
   set -- dashboard

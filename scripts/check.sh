@@ -41,7 +41,7 @@ fi
 success_step "Go Vet"
 
 check_step "Build"
-if ! go build -o pinchtab .; then
+if ! go build -o pinchtab ./cmd/pinchtab; then
     error_step "Build"
 fi
 success_step "Build"

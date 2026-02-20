@@ -66,7 +66,7 @@ Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](s
 
 ```bash
 # Build
-go build -o pinchtab .
+go build -o pinchtab ./cmd/pinchtab
 
 # Headless mode (default) — no window, pure automation (best for token-efficient API flows)
 ./pinchtab
@@ -360,7 +360,7 @@ go install github.com/pinchtab/pinchtab@latest
 # Or clone and build
 git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
-go build -o pinchtab .
+go build -o pinchtab ./cmd/pinchtab
 ```
 
 ## Development
@@ -368,7 +368,7 @@ go build -o pinchtab .
 ```bash
 git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
-go build -o pinchtab .
+go build -o pinchtab ./cmd/pinchtab
 ./pinchtab
 
 # Run tests (38 tests)

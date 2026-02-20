@@ -255,7 +255,7 @@ function updateLaunchCommand() {
   const profilePath = profilePathRaw || '<PROFILE_PATH>';
   const statePath = profilePath + '/.pinchtab-state';
   const prefix = profilePathRaw ? '' : '# replace <PROFILE_PATH> first\n';
-  const cmd = '(test -x ./bin/pinchtab || go build -o ./bin/pinchtab .) && '
+  const cmd = '(test -x ./bin/pinchtab || go build -o ./bin/pinchtab ./cmd/pinchtab) && '
     + 'BRIDGE_PORT=' + shellQuote(port || '9868') + ' '
     + 'BRIDGE_PROFILE=' + shellQuote(profilePath) + ' '
     + 'BRIDGE_STATE_DIR=' + shellQuote(statePath) + ' '

@@ -5,7 +5,7 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -ldflags="-s -w" -o pinchtab .
+RUN go build -ldflags="-s -w" -o pinchtab ./cmd/pinchtab
 
 # Runtime stage
 FROM alpine:latest
