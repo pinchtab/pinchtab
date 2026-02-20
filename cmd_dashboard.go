@@ -34,6 +34,7 @@ func runDashboard() {
 	dashboard := NewDashboard(nil)
 	orchestrator := NewOrchestrator(profilesDir)
 	orchestrator.SetProfileManager(profMgr)
+	dashboard.SetInstanceLister(orchestrator)
 
 	mux := http.NewServeMux()
 

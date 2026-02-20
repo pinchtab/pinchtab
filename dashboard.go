@@ -45,12 +45,23 @@ type AgentEvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 }
 
+// InstanceLister returns running instances (provided by Orchestrator).
+type InstanceLister interface {
+	List() []Instance
+}
+
 type Dashboard struct {
-	cfg      DashboardConfig
-	agents   map[string]*AgentActivity
-	sseConns map[chan AgentEvent]struct{}
-	cancel   context.CancelFunc
-	mu       sync.RWMutex
+	cfg       DashboardConfig
+	agents    map[string]*AgentActivity
+	sseConns  map[chan AgentEvent]struct{}
+	cancel    context.CancelFunc
+	instances InstanceLister
+	mu        sync.RWMutex
+}
+
+// SetInstanceLister sets the orchestrator for aggregating agents from child instances.
+func (d *Dashboard) SetInstanceLister(il InstanceLister) {
+	d.instances = il
 }
 
 func NewDashboard(cfg *DashboardConfig) *Dashboard {
@@ -155,7 +166,41 @@ func (d *Dashboard) GetAgents() []AgentActivity {
 	for _, a := range d.agents {
 		agents = append(agents, *a)
 	}
+
+	// Aggregate agents from running child instances.
+	if d.instances != nil {
+		for _, inst := range d.instances.List() {
+			if inst.Status != "running" || inst.Port == "" {
+				continue
+			}
+			remote := d.fetchRemoteAgents(inst.Port, inst.Name)
+			agents = append(agents, remote...)
+		}
+	}
 	return agents
+}
+
+func (d *Dashboard) fetchRemoteAgents(port, profileName string) []AgentActivity {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/dashboard/agents")
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var remote []AgentActivity
+	if err := json.NewDecoder(resp.Body).Decode(&remote); err != nil {
+		return nil
+	}
+	for i := range remote {
+		if remote[i].Profile == "" {
+			remote[i].Profile = profileName
+		}
+	}
+	return remote
 }
 
 func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {

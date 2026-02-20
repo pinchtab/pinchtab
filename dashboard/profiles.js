@@ -1,6 +1,38 @@
 'use strict';
 
 let profilesLoading = false;
+let detailsLiveContext = null;
+
+async function refreshDetailsLive() {
+  if (!detailsLiveContext) return;
+  closeScreencastSockets();
+
+  const grid = document.getElementById('details-screencast-grid');
+  const countEl = document.getElementById('details-live-count');
+  if (!grid || !countEl) return;
+
+  try {
+    const result = await loadInstanceStreams(
+      detailsLiveContext.instanceId,
+      detailsLiveContext.port
+    );
+    if (!result.ok) {
+      countEl.textContent = 'Unavailable';
+      renderLiveEmpty(grid, 'Live view unavailable.');
+      return;
+    }
+    countEl.textContent = result.countLabel;
+    if (!Array.isArray(result.streams) || result.streams.length === 0) {
+      renderLiveEmpty(grid, result.emptyMessage || 'No tabs open.');
+      return;
+    }
+    renderStreams(grid, result.streams);
+  } catch (e) {
+    countEl.textContent = 'Error';
+    renderLiveEmpty(grid, 'Failed to load live view.');
+    console.error('Details live refresh failed', e);
+  }
+}
 const profileByName = {};
 
 async function fetchJSONOr(url, fallback) {
@@ -385,71 +417,92 @@ async function viewProfileDetails(name, instanceID) {
     tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Account: <span style="color:var(--text)">' + esc(profileInfo.accountEmail || profileInfo.accountName) + '</span></div>';
   }
 
+  // === LIVE TAB ===
   let tabLive = '';
+  if (isRunning && state && state.port) {
+    tabLive += '<div class="live-popup">';
+    tabLive += '<div class="live-toolbar">';
+    tabLive += '<button class="refresh-btn" id="details-live-refresh">Refresh</button>';
+    tabLive += '<span id="details-live-count" class="live-count">' + tabsCount + ' tab(s)</span>';
+    tabLive += '</div>';
+    tabLive += '<div id="details-screencast-grid" class="screencast-grid empty">';
+    tabLive += '<div class="empty-state"><span class="spinner"></span>Loading live view...</div>';
+    tabLive += '</div>';
+    tabLive += '</div>';
+  } else {
+    tabLive += '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:var(--text-faint);font-size:14px">';
+    tabLive += 'Instance not running. Launch the profile to see live view.';
+    tabLive += '</div>';
+  }
+
+  // === LOGS TAB ===
+  let tabLogs = '';
 
   // Tabs & agents
-  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">TABS (' + tabsCount + ')</h4>';
+  tabLogs += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">TABS (' + tabsCount + ')</h4>';
   if (isRunning && Array.isArray(liveTabs)) {
     const profileTabs = name === 'main' ? liveTabs : liveTabs.filter(t => t.instanceName === name);
     if (profileTabs.length > 0) {
       profileTabs.forEach(tab => {
         const tabTitle = tab.title || 'Untitled';
         const tabUrl = tab.url || '';
-        tabLive += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">';
-        tabLive += '<div style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabTitle) + '</div>';
-        tabLive += '<div style="color:var(--text-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabUrl) + '</div>';
-        tabLive += '</div>';
+        tabLogs += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">';
+        tabLogs += '<div style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabTitle) + '</div>';
+        tabLogs += '<div style="color:var(--text-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabUrl) + '</div>';
+        tabLogs += '</div>';
       });
     } else {
-      tabLive += '<p style="color:var(--text-faint);font-size:12px">No tabs open.</p>';
+      tabLogs += '<p style="color:var(--text-faint);font-size:12px">No tabs open.</p>';
     }
   } else {
-    tabLive += '<p style="color:var(--text-faint);font-size:12px">Instance not running.</p>';
+    tabLogs += '<p style="color:var(--text-faint);font-size:12px">Instance not running.</p>';
   }
 
-  tabLive += '<div style="margin-top:16px"></div>';
-  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">AGENTS (' + agentsForProfile.length + ')</h4>';
+  tabLogs += '<div style="margin-top:16px"></div>';
+  tabLogs += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">AGENTS (' + agentsForProfile.length + ')</h4>';
   if (agentsForProfile.length > 0) {
     agentsForProfile.forEach(a => {
-      tabLive += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(a.agentId) + ' — ' + esc(a.status) + '</div>';
+      tabLogs += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(a.agentId) + ' — ' + esc(a.status) + '</div>';
     });
   } else {
-    tabLive += '<p style="color:var(--text-faint);font-size:12px">No agents connected.</p>';
+    tabLogs += '<p style="color:var(--text-faint);font-size:12px">No agents connected.</p>';
   }
 
   // Activity
-  tabLive += '<div style="margin-top:16px"></div>';
+  tabLogs += '<div style="margin-top:16px"></div>';
   if (analytics && analytics.totalActions > 0) {
-    tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY (' + analytics.totalActions + ' actions)</h4>';
+    tabLogs += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY (' + analytics.totalActions + ' actions)</h4>';
     if (analytics.topEndpoints) {
       analytics.topEndpoints.forEach(e => {
-        tabLive += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(e.endpoint) + ' — ' + e.count + 'x, avg ' + e.avgMs + 'ms</div>';
+        tabLogs += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(e.endpoint) + ' — ' + e.count + 'x, avg ' + e.avgMs + 'ms</div>';
       });
     }
   } else {
-    tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY</h4>';
-    tabLive += '<p style="color:var(--text-faint);font-size:12px">No tracked actions yet.</p>';
+    tabLogs += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY</h4>';
+    tabLogs += '<p style="color:var(--text-faint);font-size:12px">No tracked actions yet.</p>';
   }
 
   // Logs
-  tabLive += '<div style="margin-top:16px"></div>';
-  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">LOGS</h4>';
+  tabLogs += '<div style="margin-top:16px"></div>';
+  tabLogs += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">LOGS</h4>';
   if (!logsText) {
-    tabLive += '<p style="color:var(--text-faint);font-size:12px">No instance logs available.</p>';
+    tabLogs += '<p style="color:var(--text-faint);font-size:12px">No instance logs available.</p>';
   } else {
-    tabLive += '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-size:11px;max-height:30vh;overflow:auto;color:var(--text-subtle);white-space:pre-wrap">' + esc(logsText) + '</pre>';
+    tabLogs += '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-size:11px;max-height:30vh;overflow:auto;color:var(--text-subtle);white-space:pre-wrap">' + esc(logsText) + '</pre>';
   }
 
   // Assemble with tabs
   let html = '';
   html += '<div class="details-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">';
   html += '<button class="details-tab active" onclick="switchDetailsTab(this, \'details-pane-profile\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid var(--primary);color:var(--text-bright);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Profile</button>';
-  html += '<button class="details-tab" onclick="switchDetailsTab(this, \'details-pane-live\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Live & Logs</button>';
+  html += '<button class="details-tab" onclick="switchDetailsTab(this, \'details-pane-live\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Live</button>';
+  html += '<button class="details-tab" onclick="switchDetailsTab(this, \'details-pane-logs\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Logs</button>';
   html += '</div>';
 
   html += '<div style="height:400px;overflow-y:auto">';
   html += '<div id="details-pane-profile">' + tabProfile + '</div>';
   html += '<div id="details-pane-live" style="display:none">' + tabLive + '</div>';
+  html += '<div id="details-pane-logs" style="display:none">' + tabLogs + '</div>';
   html += '</div>';
 
   // Footer buttons
@@ -461,7 +514,24 @@ async function viewProfileDetails(name, instanceID) {
   html += '</div>';
   html += '</div>';
 
-  showModal('DETAILS', html, ' ', { wide: true });
+  showModal('DETAILS', html, ' ', {
+    wide: true,
+    onClose: () => {
+      closeScreencastSockets();
+      detailsLiveContext = null;
+    }
+  });
+
+  // Set up live screencast context for this profile
+  if (isRunning && state && state.port) {
+    detailsLiveContext = {
+      instanceId: finalInstanceID,
+      port: state.port,
+      name: name
+    };
+    const refreshBtn = document.getElementById('details-live-refresh');
+    if (refreshBtn) refreshBtn.onclick = () => refreshDetailsLive();
+  }
 }
 
 function switchDetailsTab(btn, paneId) {
@@ -475,7 +545,15 @@ function switchDetailsTab(btn, paneId) {
   btn.classList.add('active');
   document.getElementById('details-pane-profile').style.display = 'none';
   document.getElementById('details-pane-live').style.display = 'none';
+  document.getElementById('details-pane-logs').style.display = 'none';
   document.getElementById(paneId).style.display = '';
+
+  // Start/stop screencast when switching to/from Live tab
+  if (paneId === 'details-pane-live' && detailsLiveContext) {
+    refreshDetailsLive();
+  } else {
+    closeScreencastSockets();
+  }
 }
 
 async function saveProfileMetadata(name) {

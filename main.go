@@ -115,6 +115,7 @@ func main() {
 	dashboard := NewDashboard(nil)
 	orchestrator := NewOrchestrator(profilesDir)
 	orchestrator.SetProfileManager(profMgr)
+	dashboard.SetInstanceLister(orchestrator)
 
 	initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
 	bridge.RegisterTab(string(initTargetID), browserCtx)
