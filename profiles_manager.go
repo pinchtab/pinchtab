@@ -19,6 +19,11 @@ type ProfileManager struct {
 	mu      sync.RWMutex
 }
 
+type ProfileMeta struct {
+	UseWhen     string `json:"useWhen,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type ProfileInfo struct {
 	Name              string    `json:"name"`
 	Path              string    `json:"path"`
@@ -29,6 +34,8 @@ type ProfileInfo struct {
 	AccountEmail      string    `json:"accountEmail,omitempty"`
 	AccountName       string    `json:"accountName,omitempty"`
 	HasAccount        bool      `json:"hasAccount,omitempty"`
+	UseWhen           string    `json:"useWhen,omitempty"`
+	Description       string    `json:"description,omitempty"`
 }
 
 func NewProfileManager(baseDir string) *ProfileManager {
@@ -82,6 +89,7 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileInfo, error) {
 	}
 
 	chromeProfileName, accountEmail, accountName, hasAccount := readChromeProfileIdentity(dir)
+	meta := readProfileMeta(dir)
 
 	return ProfileInfo{
 		Name:              name,
@@ -93,6 +101,8 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileInfo, error) {
 		AccountEmail:      accountEmail,
 		AccountName:       accountName,
 		HasAccount:        hasAccount,
+		UseWhen:           meta.UseWhen,
+		Description:       meta.Description,
 	}, nil
 }
 
@@ -122,6 +132,15 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 	return nil
 }
 
+// ImportWithMeta imports a profile with metadata
+func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMeta) error {
+	if err := pm.Import(name, sourcePath); err != nil {
+		return err
+	}
+	dest := filepath.Join(pm.baseDir, name)
+	return writeProfileMeta(dest, meta)
+}
+
 func (pm *ProfileManager) Create(name string) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -131,6 +150,15 @@ func (pm *ProfileManager) Create(name string) error {
 		return fmt.Errorf("profile %q already exists", name)
 	}
 	return os.MkdirAll(filepath.Join(dest, "Default"), 0755)
+}
+
+// CreateWithMeta creates a profile with metadata
+func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {
+	if err := pm.Create(name); err != nil {
+		return err
+	}
+	dest := filepath.Join(pm.baseDir, name)
+	return writeProfileMeta(dest, meta)
 }
 
 func (pm *ProfileManager) Reset(name string) error {
@@ -174,6 +202,21 @@ func (pm *ProfileManager) Reset(name string) error {
 
 	slog.Info("profile reset", "name", name)
 	return nil
+}
+
+func (pm *ProfileManager) Rename(oldName, newName string) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	oldDir := filepath.Join(pm.baseDir, oldName)
+	newDir := filepath.Join(pm.baseDir, newName)
+	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+		return fmt.Errorf("profile %q not found", oldName)
+	}
+	if _, err := os.Stat(newDir); err == nil {
+		return fmt.Errorf("profile %q already exists", newName)
+	}
+	return os.Rename(oldDir, newDir)
 }
 
 func (pm *ProfileManager) Delete(name string) error {
@@ -301,4 +344,42 @@ func readJSON(path string, out any) bool {
 		return false
 	}
 	return true
+}
+
+func readProfileMeta(profileDir string) ProfileMeta {
+	var meta ProfileMeta
+	readJSON(filepath.Join(profileDir, "profile.json"), &meta)
+	return meta
+}
+
+func writeProfileMeta(profileDir string, meta ProfileMeta) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(profileDir, "profile.json"), data, 0644)
+}
+
+// UpdateMeta updates the profile metadata (useWhen, description)
+func (pm *ProfileManager) UpdateMeta(name string, meta map[string]string) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	dir := filepath.Join(pm.baseDir, name)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return fmt.Errorf("profile %q not found", name)
+	}
+
+	// Read existing metadata
+	existing := readProfileMeta(dir)
+
+	// Update fields if provided
+	if useWhen, ok := meta["useWhen"]; ok {
+		existing.UseWhen = useWhen
+	}
+	if description, ok := meta["description"]; ok {
+		existing.Description = description
+	}
+
+	return writeProfileMeta(dir, existing)
 }

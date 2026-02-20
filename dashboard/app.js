@@ -15,7 +15,7 @@ function switchView(view) {
 
   if (profilesInterval) { clearInterval(profilesInterval); profilesInterval = null; }
   if (view === 'profiles') {
-    profilesInterval = setInterval(loadProfiles, 3000);
+    profilesInterval = setInterval(loadProfiles, 10000);
   }
 }
 

@@ -104,8 +104,8 @@
     font-size: 13px;
     padding: 3px 0;
   }
-  .inst-card .inst-row .label { color: var(--text-dim); }
-  .inst-card .inst-row .value { color: var(--text-bright); }
+  .inst-card .inst-row .label { color: var(--text-dim); min-width: 80px; flex-shrink: 0; }
+  .inst-card .inst-row .value { color: var(--text-bright); text-align: right; }
   .inst-card .inst-actions {
     padding: 10px 16px;
     border-top: 1px solid var(--border);

@@ -84,7 +84,6 @@ function renderMainCard(tabCount) {
         <span class="inst-badge running">running :${location.port || '9867'}</span>
       </div>
       <div class="inst-body">
-        <div class="inst-row"><span class="label">Tabs</span><span class="value">${tabCount}</span></div>
         <div class="inst-row"><span class="label">Port</span><span class="value">${location.port || '9867'}</span></div>
       </div>
       <div class="inst-actions">
@@ -102,6 +101,7 @@ function renderProfileCard(profile, inst) {
   const accountText = profile.accountEmail || profile.accountName || '';
   const accountValue = accountText || '--';
   const chromeProfileName = profile.chromeProfileName || '';
+  const useWhen = profile.useWhen || '';
   const status = inst ? inst.status : 'stopped';
   const isRunning = status === 'running';
   const isError = status === 'error';
@@ -115,19 +115,11 @@ function renderProfileCard(profile, inst) {
 
   let actions = '';
   if (isRunning) {
-    actions =
-      '<button onclick="viewInstanceLive(\'' + esc(inst.id) + '\', \'' + esc(inst.port) + '\')">Live</button>'
-      + '<button class="btn-feed" onclick="viewProfileInfo(\'' + esc(name) + '\', \'' + esc(inst.id) + '\')">Info</button>'
-      + '<button class="danger" onclick="stopProfile(\'' + esc(name) + '\')">Stop</button>';
-  } else if (inst && (status === 'starting' || status === 'stopping')) {
-    actions =
-      '<button class="btn-feed" onclick="viewProfileInfo(\'' + esc(name) + '\', \'' + esc(inst.id) + '\')">Info</button>'
+    actions = '<button onclick="viewProfileDetails(\'' + esc(name) + '\', \'' + esc(inst.id) + '\')">Details</button>'
       + '<button class="danger" onclick="stopProfile(\'' + esc(name) + '\')">Stop</button>';
   } else {
-    actions =
-      '<button class="btn-launch" onclick="openLaunchModal(\'' + esc(name) + '\')">Launch</button>'
-      + '<button class="btn-feed" onclick="viewProfileInfo(\'' + esc(name) + '\', \'' + esc(inst ? inst.id : '') + '\')">Info</button>'
-      + '<button class="danger" onclick="deleteProfile(\'' + esc(name) + '\')">Delete</button>';
+    actions = '<button onclick="viewProfileDetails(\'' + esc(name) + '\', \'' + esc(inst ? inst.id : '') + '\')">Details</button>'
+      + '<button class="btn-launch" onclick="openLaunchModal(\'' + esc(name) + '\')">Launch</button>';
   }
 
   return `
@@ -138,11 +130,8 @@ function renderProfileCard(profile, inst) {
       </div>
       <div class="inst-body">
         <div class="inst-row"><span class="label">Size</span><span class="value">${sizeMB ? sizeMB.toFixed(0) + ' MB' : '—'}</span></div>
-        <div class="inst-row"><span class="label">Source</span><span class="value">${esc(source)}</span></div>
-        ${chromeProfileName ? '<div class="inst-row"><span class="label">Chrome</span><span class="value">' + esc(chromeProfileName) + '</span></div>' : ''}
         <div class="inst-row"><span class="label">Account</span><span class="value">${esc(accountValue)}</span></div>
-        <div class="inst-row"><span class="label">Tabs</span><span class="value">${tabsValue}</span></div>
-        <div class="inst-row"><span class="label">PID</span><span class="value">${pidValue}</span></div>
+        <div class="inst-row" style="align-items:flex-start"><span class="label">Use when</span><span class="value" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;height:3.9em;line-height:1.3em;text-align:left">${useWhen ? esc(useWhen) : '<span style="color:var(--text-faint)">—</span>'}</span></div>
         ${isError && inst && inst.error ? '<div class="inst-row"><span class="label">Error</span><span class="value">' + esc(inst.error) + '</span></div>' : ''}
       </div>
       <div class="inst-actions">
@@ -164,23 +153,26 @@ function closeCreateProfileModal() {
 
 async function doCreateProfile() {
   const name = document.getElementById('create-name').value.trim();
+  const useWhen = document.getElementById('create-usewhen').value.trim();
   const source = document.getElementById('create-source').value.trim();
 
   if (!name) { await appAlert('Name required'); return; }
   closeCreateProfileModal();
 
   try {
+    const body = { name, useWhen };
     if (source) {
+      body.source = source;
       await fetch('/profiles/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, source })
+        body: JSON.stringify(body)
       });
     } else {
       await fetch('/profiles/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify(body)
       });
     }
     loadProfiles();
@@ -335,9 +327,10 @@ async function stopProfile(name) {
   setTimeout(loadProfiles, 700);
 }
 
-async function viewProfileInfo(name, instanceID) {
+async function viewProfileDetails(name, instanceID) {
   const encName = encodeURIComponent(name);
-  const [analytics, agents, liveTabs, state] = await Promise.all([
+  const [profileInfo, analytics, agents, liveTabs, state] = await Promise.all([
+    fetchJSONOr('/profiles', []).then(profiles => profiles.find(p => p.name === name) || {}),
     fetchJSONOr('/profiles/' + encName + '/analytics', null),
     fetchJSONOr('/dashboard/agents', []),
     fetchJSONOr('/instances/tabs', []),
@@ -364,43 +357,161 @@ async function viewProfileInfo(name, instanceID) {
   const status = state && state.status ? state.status : 'stopped';
   const port = state && state.port ? state.port : '-';
   const pid = state && state.pid ? state.pid : '-';
+  const isRunning = status === 'running';
 
-  let html = '';
-  html += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">STATUS</h4>';
-  html += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">State: <span style="color:var(--text)">' + esc(status) + '</span></div>';
-  html += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Port: <span style="color:var(--text)">' + esc(String(port)) + '</span></div>';
-  html += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:12px">PID: <span style="color:var(--text)">' + esc(String(pid)) + '</span></div>';
+  // Build tab content: Profile & Live/Logs
+  let tabProfile = '';
+  
+  // Metadata
+  tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Name</label>';
+  tabProfile += '<input id="profile-name" value="' + esc(name) + '" style="width:100%;margin-bottom:12px" />';
+  tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Use this profile when</label>';
+  tabProfile += '<textarea id="profile-usewhen" style="width:100%;min-height:80px;margin-bottom:16px;resize:vertical">' + esc(profileInfo.useWhen || '') + '</textarea>';
 
-  html += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">LIVE</h4>';
-  html += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Tabs open: <span style="color:var(--text)">' + tabsCount + '</span></div>';
-  html += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:12px">Agents: <span style="color:var(--text)">' + agentsForProfile.length + '</span></div>';
+  // Status
+  tabProfile += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">STATUS</h4>';
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">State: <span style="color:var(--text)">' + esc(status) + '</span></div>';
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Port: <span style="color:var(--text)">' + esc(String(port)) + '</span></div>';
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">PID: <span style="color:var(--text)">' + esc(String(pid)) + '</span></div>';
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Size: <span style="color:var(--text)">' + (profileInfo.sizeMB ? profileInfo.sizeMB.toFixed(0) + ' MB' : '—') + '</span></div>';
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Source: <span style="color:var(--text)">' + esc(profileInfo.source || '—') + '</span></div>';
+  if (profileInfo.path) {
+    tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Path: <span style="color:var(--text);font-size:11px;font-family:var(--font-mono)">' + esc(profileInfo.path) + '</span></div>';
+  }
+  if (profileInfo.chromeProfileName) {
+    tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Chrome: <span style="color:var(--text)">' + esc(profileInfo.chromeProfileName) + '</span></div>';
+  }
+  if (profileInfo.accountEmail || profileInfo.accountName) {
+    tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Account: <span style="color:var(--text)">' + esc(profileInfo.accountEmail || profileInfo.accountName) + '</span></div>';
+  }
 
+  let tabLive = '';
+
+  // Tabs & agents
+  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">TABS (' + tabsCount + ')</h4>';
+  if (isRunning && Array.isArray(liveTabs)) {
+    const profileTabs = name === 'main' ? liveTabs : liveTabs.filter(t => t.instanceName === name);
+    if (profileTabs.length > 0) {
+      profileTabs.forEach(tab => {
+        const tabTitle = tab.title || 'Untitled';
+        const tabUrl = tab.url || '';
+        tabLive += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">';
+        tabLive += '<div style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabTitle) + '</div>';
+        tabLive += '<div style="color:var(--text-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tabUrl) + '</div>';
+        tabLive += '</div>';
+      });
+    } else {
+      tabLive += '<p style="color:var(--text-faint);font-size:12px">No tabs open.</p>';
+    }
+  } else {
+    tabLive += '<p style="color:var(--text-faint);font-size:12px">Instance not running.</p>';
+  }
+
+  tabLive += '<div style="margin-top:16px"></div>';
+  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">AGENTS (' + agentsForProfile.length + ')</h4>';
+  if (agentsForProfile.length > 0) {
+    agentsForProfile.forEach(a => {
+      tabLive += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(a.agentId) + ' — ' + esc(a.status) + '</div>';
+    });
+  } else {
+    tabLive += '<p style="color:var(--text-faint);font-size:12px">No agents connected.</p>';
+  }
+
+  // Activity
+  tabLive += '<div style="margin-top:16px"></div>';
   if (analytics && analytics.totalActions > 0) {
-    html += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">FEED (' + analytics.totalActions + ' actions)</h4>';
+    tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY (' + analytics.totalActions + ' actions)</h4>';
     if (analytics.topEndpoints) {
       analytics.topEndpoints.forEach(e => {
-        html += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(e.endpoint) + ' - ' + e.count + 'x, avg ' + e.avgMs + 'ms</div>';
+        tabLive += '<div style="font-size:12px;color:var(--text-subtle);padding:2px 0">' + esc(e.endpoint) + ' — ' + e.count + 'x, avg ' + e.avgMs + 'ms</div>';
       });
-    }
-    if (analytics.suggestions) {
-      html += '<div style="margin-top:8px">';
-      analytics.suggestions.forEach(s => {
-        html += '<p style="color:var(--text-bright);font-size:12px;margin-bottom:4px">' + esc(s) + '</p>';
-      });
-      html += '</div>';
     }
   } else {
-    html += '<p style="color:var(--text-faint);font-size:12px;margin-bottom:12px">No tracked actions yet.</p>';
+    tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">ACTIVITY</h4>';
+    tabLive += '<p style="color:var(--text-faint);font-size:12px">No tracked actions yet.</p>';
   }
 
-  html += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">LOGS</h4>';
+  // Logs
+  tabLive += '<div style="margin-top:16px"></div>';
+  tabLive += '<h4 style="color:var(--text-muted);font-size:12px;margin-bottom:8px">LOGS</h4>';
   if (!logsText) {
-    html += '<p style="color:var(--text-faint);font-size:12px">No instance logs available for this profile.</p>';
+    tabLive += '<p style="color:var(--text-faint);font-size:12px">No instance logs available.</p>';
   } else {
-    html += '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-size:11px;max-height:45vh;overflow:auto;color:var(--text-subtle);white-space:pre-wrap">' + esc(logsText) + '</pre>';
+    tabLive += '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-size:11px;max-height:30vh;overflow:auto;color:var(--text-subtle);white-space:pre-wrap">' + esc(logsText) + '</pre>';
   }
 
-  showModal('INFO: ' + name, html, null, { wide: true });
+  // Assemble with tabs
+  let html = '';
+  html += '<div class="details-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">';
+  html += '<button class="details-tab active" onclick="switchDetailsTab(this, \'details-pane-profile\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid var(--primary);color:var(--text-bright);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Profile</button>';
+  html += '<button class="details-tab" onclick="switchDetailsTab(this, \'details-pane-live\')" style="flex:1;padding:10px;background:none;border:none;border-radius:0;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Live & Logs</button>';
+  html += '</div>';
+
+  html += '<div style="height:400px;overflow-y:auto">';
+  html += '<div id="details-pane-profile">' + tabProfile + '</div>';
+  html += '<div id="details-pane-live" style="display:none">' + tabLive + '</div>';
+  html += '</div>';
+
+  // Footer buttons
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">';
+  html += '<button class="danger" onclick="deleteProfileFromDetails(\'' + esc(name) + '\')">Delete</button>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button onclick="saveProfileMetadata(\'' + esc(name) + '\')">Save</button>';
+  html += '<button class="secondary" onclick="closeModal()">Close</button>';
+  html += '</div>';
+  html += '</div>';
+
+  showModal('DETAILS', html, ' ', { wide: true });
+}
+
+function switchDetailsTab(btn, paneId) {
+  btn.closest('.details-tabs').querySelectorAll('.details-tab').forEach(t => {
+    t.style.borderBottomColor = 'transparent';
+    t.style.color = 'var(--text-muted)';
+    t.classList.remove('active');
+  });
+  btn.style.borderBottomColor = 'var(--primary)';
+  btn.style.color = 'var(--text-bright)';
+  btn.classList.add('active');
+  document.getElementById('details-pane-profile').style.display = 'none';
+  document.getElementById('details-pane-live').style.display = 'none';
+  document.getElementById(paneId).style.display = '';
+}
+
+async function saveProfileMetadata(name) {
+  const useWhen = document.getElementById('profile-usewhen').value.trim();
+  const newName = document.getElementById('profile-name').value.trim();
+  
+  try {
+    const res = await fetch('/profiles/' + encodeURIComponent(name), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ useWhen, name: newName })
+    });
+    
+    if (res.ok) {
+      closeModal();
+      loadProfiles();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await appAlert('Save failed: ' + (data.error || res.statusText), 'Error');
+    }
+  } catch (e) {
+    await appAlert('Save error: ' + e.message, 'Error');
+  }
+}
+
+async function deleteProfileFromDetails(name) {
+  closeModal();
+  if (!await appConfirm('Delete profile "' + name + '"? This removes all data.', '🗑️ Delete Profile')) return;
+  
+  try {
+    await fetch('/profiles/' + encodeURIComponent(name), { method: 'DELETE' });
+    profilesLoading = false;
+    loadProfiles();
+  } catch (e) {
+    await appAlert('Delete failed: ' + e.message, 'Error');
+  }
 }
 
 const launchPortInput = document.getElementById('launch-port');

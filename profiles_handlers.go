@@ -11,6 +11,7 @@ func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /profiles", pm.handleList)
 	mux.HandleFunc("POST /profiles/import", pm.handleImport)
 	mux.HandleFunc("POST /profiles/create", pm.handleCreate)
+	mux.HandleFunc("PATCH /profiles/{name}", pm.handleUpdate)
 	mux.HandleFunc("POST /profiles/{name}/reset", pm.handleReset)
 	mux.HandleFunc("DELETE /profiles/{name}", pm.handleDelete)
 	mux.HandleFunc("GET /profiles/{name}/logs", pm.handleLogs)
@@ -28,8 +29,10 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name   string `json:"name"`
-		Source string `json:"source"`
+		Name        string `json:"name"`
+		Source      string `json:"source"`
+		UseWhen     string `json:"useWhen"`
+		Description string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON"))
@@ -39,16 +42,31 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, fmt.Errorf("name and source required"))
 		return
 	}
-	if err := pm.Import(req.Name, req.Source); err != nil {
-		jsonErr(w, http.StatusConflict, err)
-		return
+
+	// Import with metadata if provided
+	if req.UseWhen != "" || req.Description != "" {
+		meta := ProfileMeta{
+			UseWhen:     req.UseWhen,
+			Description: req.Description,
+		}
+		if err := pm.ImportWithMeta(req.Name, req.Source, meta); err != nil {
+			jsonErr(w, http.StatusConflict, err)
+			return
+		}
+	} else {
+		if err := pm.Import(req.Name, req.Source); err != nil {
+			jsonErr(w, http.StatusConflict, err)
+			return
+		}
 	}
 	jsonResp(w, http.StatusCreated, map[string]string{"status": "imported", "name": req.Name})
 }
 
 func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		UseWhen     string `json:"useWhen"`
+		Description string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON"))
@@ -58,9 +76,22 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, fmt.Errorf("name required"))
 		return
 	}
-	if err := pm.Create(req.Name); err != nil {
-		jsonErr(w, http.StatusConflict, err)
-		return
+
+	// Create with metadata if provided
+	if req.UseWhen != "" || req.Description != "" {
+		meta := ProfileMeta{
+			UseWhen:     req.UseWhen,
+			Description: req.Description,
+		}
+		if err := pm.CreateWithMeta(req.Name, meta); err != nil {
+			jsonErr(w, http.StatusConflict, err)
+			return
+		}
+	} else {
+		if err := pm.Create(req.Name); err != nil {
+			jsonErr(w, http.StatusConflict, err)
+			return
+		}
 	}
 	jsonResp(w, http.StatusCreated, map[string]string{"status": "created", "name": req.Name})
 }
@@ -94,6 +125,44 @@ func (pm *ProfileManager) handleAnalytics(w http.ResponseWriter, r *http.Request
 	name := r.PathValue("name")
 	report := pm.Analytics(name)
 	jsonResp(w, http.StatusOK, report)
+}
+
+func (pm *ProfileManager) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var req struct {
+		Name        string `json:"name"`
+		UseWhen     string `json:"useWhen"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON"))
+		return
+	}
+
+	meta := map[string]string{
+		"useWhen":     req.UseWhen,
+		"description": req.Description,
+	}
+	if err := pm.UpdateMeta(name, meta); err != nil {
+		jsonErr(w, http.StatusNotFound, err)
+		return
+	}
+
+	if req.Name != "" && req.Name != name {
+		if err := pm.Rename(name, req.Name); err != nil {
+			jsonErr(w, http.StatusConflict, err)
+			return
+		}
+		name = req.Name
+	}
+
+	// Return updated profile info
+	info, err := pm.profileInfo(name)
+	if err != nil {
+		jsonErr(w, http.StatusNotFound, err)
+		return
+	}
+	jsonResp(w, http.StatusOK, info)
 }
 
 func (pm *ProfileManager) TrackingMiddleware(profileName string, next http.Handler) http.Handler {

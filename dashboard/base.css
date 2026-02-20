@@ -148,13 +148,15 @@
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
   }
   .modal.modal-wide {
-    width: min(1100px, 95vw);
+    width: 560px;
+    max-width: 95vw;
   }
   .modal h3 {
     font-family: var(--font-heading);
     color: var(--text-bright);
     margin-bottom: 16px;
     letter-spacing: -0.01em;
+    text-align: center;
   }
   .modal input, .modal select {
     width: 100%;

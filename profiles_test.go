@@ -309,3 +309,104 @@ func TestProfileHandlerDelete(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestProfileMetaReadWrite(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	// Create profile with metadata
+	meta := ProfileMeta{
+		UseWhen:     "I need to access work email",
+		Description: "Work profile for corporate tasks",
+	}
+	if err := pm.CreateWithMeta("work-profile", meta); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read back the metadata
+	readMeta := readProfileMeta(filepath.Join(dir, "work-profile"))
+	if readMeta.UseWhen != "I need to access work email" {
+		t.Errorf("expected useWhen 'I need to access work email', got %q", readMeta.UseWhen)
+	}
+	if readMeta.Description != "Work profile for corporate tasks" {
+		t.Errorf("expected description 'Work profile for corporate tasks', got %q", readMeta.Description)
+	}
+}
+
+func TestProfileUpdateMeta(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	// Create profile
+	_ = pm.Create("updatable")
+
+	// Update metadata via PATCH
+	body := `{"useWhen":"Updated use case","description":"Updated description"}`
+	req := httptest.NewRequest("PATCH", "/profiles/updatable", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify response contains updated metadata
+	var updatedProfile ProfileInfo
+	if err := json.NewDecoder(w.Body).Decode(&updatedProfile); err != nil {
+		t.Fatal(err)
+	}
+	if updatedProfile.UseWhen != "Updated use case" {
+		t.Errorf("expected useWhen 'Updated use case', got %q", updatedProfile.UseWhen)
+	}
+}
+
+func TestProfileCreateWithUseWhen(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	// Create profile with useWhen
+	body := `{"name":"test-usewhen","useWhen":"For testing purposes"}`
+	req := httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 201 {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify profile list includes useWhen
+	profiles, err := pm.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(profiles))
+	}
+	if profiles[0].UseWhen != "For testing purposes" {
+		t.Errorf("expected useWhen 'For testing purposes', got %q", profiles[0].UseWhen)
+	}
+}
+
+func TestProfileListIncludesUseWhen(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+
+	// Create profile with metadata
+	meta := ProfileMeta{UseWhen: "Personal browsing"}
+	_ = pm.CreateWithMeta("personal", meta)
+
+	// List profiles and check useWhen is included
+	profiles, err := pm.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(profiles))
+	}
+	if profiles[0].UseWhen != "Personal browsing" {
+		t.Errorf("expected useWhen 'Personal browsing', got %q", profiles[0].UseWhen)
+	}
+}
