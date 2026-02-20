@@ -268,6 +268,12 @@ Need to distinguish Pinchtab's Chrome from your regular browser? Use `CHROME_BIN
 
 See **[docs/identifying-instances.md](docs/identifying-instances.md)** for the full guide with examples.
 
+## Chrome Lifecycle & Orchestration
+
+Pinchtab doesn't just run Chrome — it manages hardened, detection-resistant instances with pre-flight stealth injection, automatic lock file cleanup, retry logic, and per-tab context lifecycle management.
+
+See **[docs/chrome-lifecycle.md](docs/chrome-lifecycle.md)** for the full deep dive covering allocator strategy, launch flag hardening, instance orchestration, and tab management.
+
 ## Architecture
 
 ```
