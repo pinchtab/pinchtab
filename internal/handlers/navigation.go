@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -109,7 +110,12 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
-		web.Error(w, 500, fmt.Errorf("navigate: %w", err))
+		code := 500
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
+			code = 400
+		}
+		web.Error(w, code, fmt.Errorf("navigate: %w", err))
 		return
 	}
 

@@ -74,7 +74,7 @@ async function loadProfiles() {
     profiles.forEach(p => { profileByName[p.name] = p; });
 
     const profileNames = new Set(profiles.map(p => p.name));
-    const extraInstances = instances.filter(i => !profileNames.has(i.name));
+    const extraInstances = instances.filter(i => !profileNames.has(i.name) && i.status !== 'stopped');
 
     const grid = document.getElementById('profiles-grid');
     const cards = [];
