@@ -87,7 +87,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	o.mu.Unlock()
 
 	if !exitedEarly {
-		_ = <-waitCh
+		<-waitCh
 	}
 	o.mu.Lock()
 	if inst.Status == "running" || inst.Status == "stopping" {

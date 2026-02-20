@@ -18,7 +18,7 @@ func TestEnvOr(t *testing.T) {
 
 	val := "set"
 	_ = os.Setenv(key, val)
-	defer os.Unsetenv(key)
+	defer func() { _ = os.Unsetenv(key) }()
 	if got := envOr(key, fallback); got != val {
 		t.Errorf("envOr() = %v, want %v", got, val)
 	}
@@ -105,7 +105,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 
 func TestLoadConfigEnvOverrides(t *testing.T) {
 	_ = os.Setenv("BRIDGE_PORT", "1234")
-	defer os.Unsetenv("BRIDGE_PORT")
+	defer func() { _ = os.Unsetenv("BRIDGE_PORT") }()
 
 	cfg := Load()
 	if cfg.Port != "1234" {
@@ -127,7 +127,7 @@ func TestLoadConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	_ = os.Setenv("BRIDGE_CONFIG", configPath)
-	defer os.Unsetenv("BRIDGE_CONFIG")
+	defer func() { _ = os.Unsetenv("BRIDGE_CONFIG") }()
 
 	// Create a dummy config file
 	configData := `{

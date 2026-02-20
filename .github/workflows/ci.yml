@@ -33,7 +33,7 @@ jobs:
         run: go vet ./...
 
       - name: Build
-        run: go build -o pinchtab .
+        run: go build -o pinchtab ./cmd/pinchtab
 
       - name: Test with coverage
         run: go test ./... -v -count=1 -coverprofile=coverage.out -covermode=atomic
