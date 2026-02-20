@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -17,6 +18,8 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogs)
 	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
 	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
+	mux.HandleFunc("POST /start/{id}", o.handleStartByID)
+	mux.HandleFunc("POST /stop/{id}", o.handleStopByID)
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +138,79 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 
 	targetURL := fmt.Sprintf("ws://localhost:%s/screencast?tabId=%s", inst.Port, tabID)
 	jsonResp(w, 200, map[string]string{"wsUrl": targetURL})
+}
+
+func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if o.profiles == nil {
+		jsonErr(w, 500, fmt.Errorf("profile manager not configured"))
+		return
+	}
+	name, err := o.profiles.FindByID(id)
+	if err != nil {
+		jsonErr(w, 404, err)
+		return
+	}
+
+	// Optional port from request body; auto-allocate if not provided.
+	var req struct {
+		Port     string `json:"port"`
+		Headless bool   `json:"headless"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	port := req.Port
+	if port == "" {
+		p, err := findFreePort()
+		if err != nil {
+			jsonErr(w, 500, fmt.Errorf("failed to allocate port: %w", err))
+			return
+		}
+		port = p
+	}
+
+	slog.Info("start-by-id request", "profileId", id, "profile", name, "port", port, "headless", req.Headless)
+	inst, err := o.Launch(name, port, req.Headless)
+	if isStartingConflict(err) {
+		slog.Warn("start-by-id blocked by starting instance; stopping and retrying", "profile", name)
+		if stopErr := o.StopProfile(name); stopErr != nil {
+			jsonErr(w, 409, err)
+			return
+		}
+		inst, err = o.Launch(name, port, req.Headless)
+	}
+	if err != nil {
+		jsonErr(w, 409, err)
+		return
+	}
+	jsonResp(w, 201, inst)
+}
+
+func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if o.profiles == nil {
+		jsonErr(w, 500, fmt.Errorf("profile manager not configured"))
+		return
+	}
+	name, err := o.profiles.FindByID(id)
+	if err != nil {
+		jsonErr(w, 404, err)
+		return
+	}
+	if err := o.StopProfile(name); err != nil {
+		jsonErr(w, 404, err)
+		return
+	}
+	jsonResp(w, 200, map[string]string{"status": "stopped", "id": id, "name": name})
+}
+
+func findFreePort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = l.Close()
+	return fmt.Sprintf("%d", port), nil
 }
 
 func isStartingConflict(err error) bool {

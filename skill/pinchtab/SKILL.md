@@ -146,6 +146,68 @@ PINCHTAB_BASE_URL="$(pinchtab connect <profile-name>)"
 curl "$PINCHTAB_BASE_URL/health"
 ```
 
+## Profile Management (Dashboard Mode)
+
+When running `pinchtab dashboard`, profiles are managed via the dashboard API on port 9867.
+
+### List profiles
+
+```bash
+curl http://localhost:9867/profiles
+```
+
+Returns array of profiles with `id`, `name`, `accountEmail`, `useWhen`, etc.
+
+### Start a profile by ID
+
+```bash
+# Auto-allocate port (recommended)
+curl -X POST http://localhost:9867/start/278be873adeb
+
+# With specific port and headless mode
+curl -X POST http://localhost:9867/start/278be873adeb \
+  -H 'Content-Type: application/json' \
+  -d '{"port": "9868", "headless": true}'
+```
+
+Returns the instance info including the allocated `port`. Use that port for all subsequent API calls (navigate, snapshot, action, etc.).
+
+### Stop a profile by ID
+
+```bash
+curl -X POST http://localhost:9867/stop/278be873adeb
+```
+
+### Check profile instance status
+
+```bash
+curl http://localhost:9867/profiles/Pinchtab%20org/instance
+```
+
+### Typical agent flow with profiles
+
+```bash
+# 1. List profiles to find the right one
+PROFILES=$(curl -s http://localhost:9867/profiles)
+# Pick the profile ID you need
+
+# 2. Start the profile
+INSTANCE=$(curl -s -X POST http://localhost:9867/start/$PROFILE_ID)
+PORT=$(echo $INSTANCE | jq -r .port)
+
+# 3. Use the instance (all API calls go to the instance port)
+curl -X POST http://localhost:$PORT/navigate -H 'Content-Type: application/json' \
+  -d '{"url": "https://mail.google.com"}'
+curl http://localhost:$PORT/snapshot?maxTokens=4000
+
+# 4. Stop when done
+curl -s -X POST http://localhost:9867/stop/$PROFILE_ID
+```
+
+### Profile IDs
+
+Each profile gets a stable 12-char hex ID (SHA-256 of name, truncated) stored in `profile.json`. The ID is generated at creation time and never changes. Use IDs instead of names in automation — they're URL-safe and stable.
+
 ## Core Workflow
 
 The typical agent loop:

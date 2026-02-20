@@ -33,6 +33,7 @@ func runDashboard() {
 	profMgr := NewProfileManager(profilesDir)
 	dashboard := NewDashboard(nil)
 	orchestrator := NewOrchestrator(profilesDir)
+	orchestrator.SetProfileManager(profMgr)
 
 	mux := http.NewServeMux()
 

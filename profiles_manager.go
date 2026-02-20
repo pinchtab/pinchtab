@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -13,6 +15,12 @@ import (
 	"time"
 )
 
+// profileID generates a stable 12-char hex ID from the profile name.
+func profileID(name string) string {
+	h := sha256.Sum256([]byte(name))
+	return hex.EncodeToString(h[:6])
+}
+
 type ProfileManager struct {
 	baseDir string
 	tracker *ActionTracker
@@ -20,11 +28,13 @@ type ProfileManager struct {
 }
 
 type ProfileMeta struct {
+	ID          string `json:"id,omitempty"`
 	UseWhen     string `json:"useWhen,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
 type ProfileInfo struct {
+	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`
 	Path              string    `json:"path"`
 	CreatedAt         time.Time `json:"createdAt"`
@@ -91,7 +101,14 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileInfo, error) {
 	chromeProfileName, accountEmail, accountName, hasAccount := readChromeProfileIdentity(dir)
 	meta := readProfileMeta(dir)
 
+	// Backfill ID for profiles created before ID generation was added.
+	if meta.ID == "" {
+		meta.ID = profileID(name)
+		_ = writeProfileMeta(dir, meta)
+	}
+
 	return ProfileInfo{
+		ID:                meta.ID,
 		Name:              name,
 		Path:              dir,
 		CreatedAt:         fi.ModTime(),
@@ -137,6 +154,9 @@ func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMe
 	if err := pm.Import(name, sourcePath); err != nil {
 		return err
 	}
+	if meta.ID == "" {
+		meta.ID = profileID(name)
+	}
 	dest := filepath.Join(pm.baseDir, name)
 	return writeProfileMeta(dest, meta)
 }
@@ -156,6 +176,9 @@ func (pm *ProfileManager) Create(name string) error {
 func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {
 	if err := pm.Create(name); err != nil {
 		return err
+	}
+	if meta.ID == "" {
+		meta.ID = profileID(name)
 	}
 	dest := filepath.Join(pm.baseDir, name)
 	return writeProfileMeta(dest, meta)
@@ -382,4 +405,25 @@ func (pm *ProfileManager) UpdateMeta(name string, meta map[string]string) error 
 	}
 
 	return writeProfileMeta(dir, existing)
+}
+
+// FindByID returns the profile name matching the given ID, or empty string if not found.
+func (pm *ProfileManager) FindByID(id string) (string, error) {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	entries, err := os.ReadDir(pm.baseDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		meta := readProfileMeta(filepath.Join(pm.baseDir, entry.Name()))
+		if meta.ID == id {
+			return entry.Name(), nil
+		}
+	}
+	return "", fmt.Errorf("profile with id %q not found", id)
 }

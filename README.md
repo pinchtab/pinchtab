@@ -262,6 +262,14 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `PINCHTAB_HEADED` | *(unset)* | If set, auto-launched instance is headed; unset means headless |
 | `PINCHTAB_DASHBOARD_URL` | `http://localhost:$BRIDGE_PORT` | CLI helper base URL for `pinchtab connect` |
 
+## Headed Mode: Human + Agent Workflows
+
+Headed mode lets humans and agents share the same browser session. Human logs in, handles 2FA and CAPTCHAs. Agent takes over via HTTP API — same cookies, same session. Profiles persist across restarts, so you log in once and automate forever.
+
+The dashboard exposes `POST /start/{id}` and `POST /stop/{id}` for easy profile lifecycle management — agents can spin up a profile, do their work, and shut it down with three API calls.
+
+See **[docs/headed-mode-guide.md](docs/headed-mode-guide.md)** for the full walkthrough with real examples.
+
 ## Identifying Pinchtab Chrome Instances
 
 Need to distinguish Pinchtab's Chrome from your regular browser? Use `CHROME_BINARY` to point at a renamed Chrome copy, `CHROME_FLAGS` to tag instances in `ps`, or rely on the separate profile directory that's already built-in.

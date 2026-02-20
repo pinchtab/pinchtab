@@ -16,6 +16,7 @@ type Orchestrator struct {
 	instances map[string]*Instance
 	baseDir   string
 	binary    string
+	profiles  *ProfileManager
 	mu        sync.RWMutex
 	client    *http.Client
 }
@@ -97,6 +98,11 @@ func NewOrchestrator(baseDir string) *Orchestrator {
 		binary:    binary,
 		client:    &http.Client{Timeout: 3 * time.Second},
 	}
+}
+
+// SetProfileManager sets the profile manager for ID-based lookups.
+func (o *Orchestrator) SetProfileManager(pm *ProfileManager) {
+	o.profiles = pm
 }
 
 func installStableBinary(src, dst string) error {
