@@ -152,7 +152,7 @@ func main() {
 		}
 	}
 
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: dashboard.TrackingMiddleware(
+	srv := &http.Server{Addr: cfg.ListenAddr(), Handler: dashboard.TrackingMiddleware(
 		[]EventObserver{profileObserver},
 		loggingMiddleware(corsMiddleware(authMiddleware(mux))),
 	)}

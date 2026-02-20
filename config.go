@@ -48,6 +48,7 @@ var welcomeHTML string
 // RuntimeConfig holds all runtime configuration in a single struct.
 // Loaded once at startup from environment variables and optional config file.
 type RuntimeConfig struct {
+	Bind             string
 	Port             string
 	CdpURL           string
 	Token            string
@@ -112,6 +113,11 @@ func homeDir() string {
 	return h
 }
 
+// ListenAddr returns bind:port for http.Server.Addr.
+func (c *RuntimeConfig) ListenAddr() string {
+	return c.Bind + ":" + c.Port
+}
+
 // FileConfig is the JSON config file format.
 type FileConfig struct {
 	Port        string `json:"port"`
@@ -129,6 +135,7 @@ type FileConfig struct {
 func loadConfig() {
 	// Populate from environment with defaults
 	cfg = RuntimeConfig{
+		Bind:             envOr("BRIDGE_BIND", "127.0.0.1"),
 		Port:             envOr("BRIDGE_PORT", "9867"),
 		CdpURL:           os.Getenv("CDP_URL"),
 		Token:            os.Getenv("BRIDGE_TOKEN"),
