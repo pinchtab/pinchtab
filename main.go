@@ -19,6 +19,17 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// commonWindowSizes are real-world desktop resolutions from StatCounter data.
+var commonWindowSizes = [][2]int{
+	{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900},
+	{1280, 720}, {1600, 900}, {2560, 1440}, {1280, 800},
+}
+
+func randomWindowSize() (int, int) {
+	s := commonWindowSizes[rand.Intn(len(commonWindowSizes))]
+	return s[0], s[1]
+}
+
 // version is set by goreleaser via ldflags
 var version = "dev"
 
@@ -255,7 +266,7 @@ func buildChromeOpts() []chromedp.ExecAllocatorOption {
 
 		chromedp.Flag("js-flags", "--random-seed=1157259157"),
 
-		chromedp.WindowSize(1366, 768),
+		chromedp.WindowSize(randomWindowSize()),
 	}
 
 	if cfg.ChromeBinary != "" {
