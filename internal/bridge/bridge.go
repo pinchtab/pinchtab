@@ -22,9 +22,9 @@ type RefCache struct {
 }
 
 type Bridge struct {
-	AllocCtx      context.Context
-	BrowserCtx    context.Context
-	Config        *config.RuntimeConfig
+	AllocCtx   context.Context
+	BrowserCtx context.Context
+	Config     *config.RuntimeConfig
 	*TabManager
 	StealthScript string
 	Actions       map[string]ActionFunc

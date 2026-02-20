@@ -11,13 +11,13 @@ func TestEnvOr(t *testing.T) {
 	key := "PINCHTAB_TEST_ENV"
 	fallback := "default"
 
-	os.Unsetenv(key)
+	_ = os.Unsetenv(key)
 	if got := envOr(key, fallback); got != fallback {
 		t.Errorf("envOr() = %v, want %v", got, fallback)
 	}
 
 	val := "set"
-	os.Setenv(key, val)
+	_ = os.Setenv(key, val)
 	defer os.Unsetenv(key)
 	if got := envOr(key, fallback); got != val {
 		t.Errorf("envOr() = %v, want %v", got, val)
@@ -28,17 +28,17 @@ func TestEnvIntOr(t *testing.T) {
 	key := "PINCHTAB_TEST_INT"
 	fallback := 42
 
-	os.Unsetenv(key)
+	_ = os.Unsetenv(key)
 	if got := envIntOr(key, fallback); got != fallback {
 		t.Errorf("envIntOr() = %v, want %v", got, fallback)
 	}
 
-	os.Setenv(key, "100")
+	_ = os.Setenv(key, "100")
 	if got := envIntOr(key, fallback); got != 100 {
 		t.Errorf("envIntOr() = %v, want %v", got, 100)
 	}
 
-	os.Setenv(key, "invalid")
+	_ = os.Setenv(key, "invalid")
 	if got := envIntOr(key, fallback); got != fallback {
 		t.Errorf("envIntOr() = %v, want %v", got, fallback)
 	}
@@ -48,7 +48,7 @@ func TestEnvBoolOr(t *testing.T) {
 	key := "PINCHTAB_TEST_BOOL"
 	fallback := true
 
-	os.Unsetenv(key)
+	_ = os.Unsetenv(key)
 	if got := envBoolOr(key, fallback); got != fallback {
 		t.Errorf("envBoolOr() = %v, want %v", got, fallback)
 	}
@@ -63,7 +63,7 @@ func TestEnvBoolOr(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		os.Setenv(key, tt.val)
+		_ = os.Setenv(key, tt.val)
 		if got := envBoolOr(key, fallback); got != tt.want {
 			t.Errorf("envBoolOr(%q) = %v, want %v", tt.val, got, tt.want)
 		}
@@ -89,10 +89,10 @@ func TestMaskToken(t *testing.T) {
 
 func TestLoadConfigDefaults(t *testing.T) {
 	// Clear relevant env vars
-	os.Unsetenv("BRIDGE_PORT")
-	os.Unsetenv("BRIDGE_BIND")
-	os.Unsetenv("CDP_URL")
-	os.Unsetenv("BRIDGE_TOKEN")
+	_ = os.Unsetenv("BRIDGE_PORT")
+	_ = os.Unsetenv("BRIDGE_BIND")
+	_ = os.Unsetenv("CDP_URL")
+	_ = os.Unsetenv("BRIDGE_TOKEN")
 
 	cfg := Load()
 	if cfg.Port != "9867" {
@@ -104,7 +104,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 }
 
 func TestLoadConfigEnvOverrides(t *testing.T) {
-	os.Setenv("BRIDGE_PORT", "1234")
+	_ = os.Setenv("BRIDGE_PORT", "1234")
 	defer os.Unsetenv("BRIDGE_PORT")
 
 	cfg := Load()
@@ -126,7 +126,7 @@ func TestDefaultFileConfig(t *testing.T) {
 func TestLoadConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
-	os.Setenv("BRIDGE_CONFIG", configPath)
+	_ = os.Setenv("BRIDGE_CONFIG", configPath)
 	defer os.Unsetenv("BRIDGE_CONFIG")
 
 	// Create a dummy config file

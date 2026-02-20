@@ -28,7 +28,7 @@ func TestIsInstanceHealthyStatus(t *testing.T) {
 func TestInstanceBaseURLs(t *testing.T) {
 	port := "1234"
 	urls := instanceBaseURLs(port)
-	
+
 	expected := []string{
 		"http://127.0.0.1:1234",
 		"http://[::1]:1234",

@@ -22,7 +22,7 @@ func TestStatusWriter(t *testing.T) {
 	// Test default code
 	w2 := httptest.NewRecorder()
 	sw2 := &StatusWriter{ResponseWriter: w2, Code: 200}
-	sw2.Write([]byte("ok"))
+	_, _ = sw2.Write([]byte("ok"))
 	if sw2.Code != 200 {
 		t.Errorf("expected default code 200, got %d", sw2.Code)
 	}

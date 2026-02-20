@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestHandleTabLock(t *testing.T) {
-	b := bridge.New(nil, nil, nil)
+	b := bridge.New(context.Background(), context.Background(), nil)
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
 
 	body, _ := json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-a", "timeoutSec": 10})
@@ -45,7 +46,7 @@ func TestHandleTabLock(t *testing.T) {
 }
 
 func TestHandleTabUnlock(t *testing.T) {
-	b := bridge.New(nil, nil, nil)
+	b := bridge.New(context.Background(), context.Background(), nil)
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
 	_ = b.Lock("t1", "agent-a", 10*time.Minute)
 
@@ -67,7 +68,7 @@ func TestHandleTabUnlock(t *testing.T) {
 }
 
 func TestHandleTabLockValidation(t *testing.T) {
-	b := bridge.New(nil, nil, nil)
+	b := bridge.New(context.Background(), context.Background(), nil)
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
 
 	body, _ := json.Marshal(map[string]any{"tabId": "t1"})

@@ -8,7 +8,7 @@ import (
 
 func TestReadChromeProfileIdentity(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// 1. Test empty profile
 	name, email, accName, hasAcc := readChromeProfileIdentity(tmpDir)
 	if name != "" || email != "" || accName != "" || hasAcc != false {

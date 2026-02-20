@@ -23,7 +23,7 @@ func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
 	if m.failTab {
 		return nil, "", fmt.Errorf("tab not found")
 	}
-	// We need a context that chromedp.Run won't complain about, 
+	// We need a context that chromedp.Run won't complain about,
 	// even if it's not fully functional for real CDP commands.
 	ctx, _ := chromedp.NewContext(context.Background())
 	return ctx, "tab1", nil

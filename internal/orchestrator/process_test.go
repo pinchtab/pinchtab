@@ -10,7 +10,6 @@ import (
 
 type mockRunner struct {
 	runCalled bool
-	failRun   bool
 	portAvail bool
 }
 
