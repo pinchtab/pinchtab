@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
@@ -38,6 +43,8 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 		bridge.ClearChromeSessions(cfg.ProfileDir)
 	}
 
+	killOrphanedChrome(cfg.ProfileDir)
+
 	slog.Info("launching Chrome", "profile", cfg.ProfileDir, "headless", cfg.Headless)
 
 	opts := buildChromeOpts(cfg)
@@ -45,6 +52,47 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	bridge.MarkCleanExit(cfg.ProfileDir)
 	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	return ctx, cancel, opts
+}
+
+// killOrphanedChrome finds and kills Chrome processes that were spawned by a
+// previous Pinchtab instance using the same profile directory. We identify our
+// processes by matching --user-data-dir=<profileDir> in the command line args,
+// which is unique to Pinchtab-managed Chrome and won't match the user's Chrome.
+func killOrphanedChrome(profileDir string) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		return
+	}
+
+	// Use ps to find Chrome processes with our profile dir in the args
+	marker := "--user-data-dir=" + profileDir
+	out, err := exec.Command("ps", "axo", "pid,args").Output()
+	if err != nil {
+		return
+	}
+
+	var killed int
+	for _, line := range bytes.Split(out, []byte("\n")) {
+		lineStr := strings.TrimSpace(string(line))
+		if !strings.Contains(lineStr, marker) {
+			continue
+		}
+		parts := strings.SplitN(lineStr, " ", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(parts[0])
+		if err != nil || pid == os.Getpid() {
+			continue
+		}
+		if proc, err := os.FindProcess(pid); err == nil {
+			if err := proc.Signal(syscall.SIGTERM); err == nil {
+				killed++
+			}
+		}
+	}
+	if killed > 0 {
+		slog.Warn("killed orphaned Chrome processes", "count", killed, "profileDir", profileDir)
+	}
 }
 
 func buildChromeOpts(cfg *config.RuntimeConfig) []chromedp.ExecAllocatorOption {
