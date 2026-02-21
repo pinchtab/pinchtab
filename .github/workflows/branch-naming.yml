@@ -1,0 +1,40 @@
+name: Branch Naming
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-branch-name:
+    name: Branch Name Convention
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        run: |
+          BRANCH="${GITHUB_HEAD_REF}"
+          echo "Branch: $BRANCH"
+
+          # Allow long-running branches
+          if [[ "$BRANCH" =~ ^(main|develop|staging)$ ]]; then
+            echo "✅ Long-running branch: $BRANCH"
+            exit 0
+          fi
+
+          # Enforce prefix/description pattern
+          PATTERN="^(feature|fix|hotfix|docs|chore|refactor|test)/[a-z0-9][a-z0-9-]*$"
+          if [[ ! "$BRANCH" =~ $PATTERN ]]; then
+            echo "❌ Branch name '$BRANCH' doesn't match convention."
+            echo ""
+            echo "Expected format: <prefix>/<description>"
+            echo "  Prefixes: feature, fix, hotfix, docs, chore, refactor, test"
+            echo "  Description: lowercase, hyphens, no special chars"
+            echo ""
+            echo "Examples:"
+            echo "  feature/42-add-search-filter"
+            echo "  fix/chrome-orphan-cleanup"
+            echo "  hotfix/critical-api-fix"
+            echo "  docs/update-docker-guide"
+            exit 1
+          fi
+
+          echo "✅ Branch name '$BRANCH' follows convention."
