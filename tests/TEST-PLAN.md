@@ -125,20 +125,23 @@
 
 ### 1.10 File Upload
 
+**Test assets:** `tests/assets/upload-test.html` (HTML page with file inputs), `tests/assets/test-upload.png` (1x1 PNG).
+Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/assets/upload-test.html"}`
+
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
-| UP1 | Upload local file | Navigate to page with file input, `POST /upload {"selector":"input[type=file]","paths":["/tmp/test.jpg"]}` | `{"status":"ok","files":1}` |
-| UP2 | Upload base64 data URL | `POST /upload {"files":["data:image/png;base64,..."]}` | `{"status":"ok","files":1}` |
-| UP3 | Upload raw base64 | `POST /upload {"files":["iVBOR..."]}` | `{"status":"ok","files":1}` |
-| UP4 | Upload multiple files | `POST /upload {"paths":["/tmp/a.jpg","/tmp/b.png"]}` | `{"status":"ok","files":2}` |
-| UP5 | Combined paths + base64 | `POST /upload {"paths":["/tmp/a.jpg"],"files":["data:image/png;base64,..."]}` | `{"status":"ok","files":2}` |
-| UP6 | Default selector | `POST /upload {"paths":["/tmp/test.jpg"]}` (no selector) | Uses `input[type=file]`, succeeds |
-| UP7 | Invalid selector | `POST /upload {"selector":"#nonexistent","paths":["/tmp/test.jpg"]}` | 500, selector error |
+| UP1 | Upload local file | `POST /upload {"selector":"#single","paths":["tests/assets/test-upload.png"]}` | `{"status":"ok","files":1}` |
+| UP2 | Upload base64 data URL | `POST /upload {"selector":"#single","files":["data:image/png;base64,..."]}` | `{"status":"ok","files":1}` |
+| UP3 | Upload raw base64 | `POST /upload {"selector":"#single","files":["iVBOR..."]}` | `{"status":"ok","files":1}` |
+| UP4 | Upload multiple files | `POST /upload {"selector":"#multi","paths":["tests/assets/test-upload.png","tests/assets/test-upload.png"]}` | `{"status":"ok","files":2}` |
+| UP5 | Combined paths + base64 | `POST /upload {"selector":"#multi","paths":["tests/assets/test-upload.png"],"files":["data:image/png;base64,..."]}` | `{"status":"ok","files":2}` |
+| UP6 | Default selector | `POST /upload {"paths":["tests/assets/test-upload.png"]}` (no selector) | Uses `input[type=file]`, succeeds |
+| UP7 | Invalid selector | `POST /upload {"selector":"#nonexistent","paths":["tests/assets/test-upload.png"]}` | 500, selector error |
 | UP8 | Missing files and paths | `POST /upload {"selector":"input[type=file]"}` | 400, error |
 | UP9 | File not found | `POST /upload {"paths":["/tmp/nonexistent.jpg"]}` | 400, file not found |
 | UP10 | Invalid base64 | `POST /upload {"files":["not-valid!!!"]}` | 400, decode error |
 | UP11 | Bad JSON body | `POST /upload {broken` | 400, parse error |
-| UP12 | No tab | `POST /upload {"paths":["/tmp/test.jpg"]}` with no tabs | Error |
+| UP12 | No tab | `POST /upload {"paths":["tests/assets/test-upload.png"]}` with no tabs | Error |
 
 ### 1.11 Stealth
 
