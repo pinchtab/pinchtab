@@ -30,6 +30,18 @@ type SessionState struct {
 	SavedAt string     `json:"savedAt"`
 }
 
+func isTransientURL(url string) bool {
+	switch url {
+	case "about:blank", "chrome://newtab/", "chrome://new-tab-page/":
+		return true
+	}
+	return strings.HasPrefix(url, "chrome://") ||
+		strings.HasPrefix(url, "chrome-extension://") ||
+		strings.HasPrefix(url, "devtools://") ||
+		strings.HasPrefix(url, "file://") ||
+		strings.Contains(url, "localhost:")
+}
+
 func MarkCleanExit(profileDir string) {
 	prefsPath := filepath.Join(profileDir, "Default", "Preferences")
 	data, err := os.ReadFile(prefsPath)
@@ -71,14 +83,20 @@ func (b *Bridge) SaveState() {
 	}
 
 	tabs := make([]TabState, 0, len(targets))
+	seen := make(map[string]bool, len(targets))
 	for _, t := range targets {
-		if t.URL != "" && t.URL != "about:blank" && t.URL != "chrome://newtab/" {
-			tabs = append(tabs, TabState{
-				ID:    string(t.TargetID),
-				URL:   t.URL,
-				Title: t.Title,
-			})
+		if t.URL == "" || isTransientURL(t.URL) {
+			continue
 		}
+		if seen[t.URL] {
+			continue
+		}
+		seen[t.URL] = true
+		tabs = append(tabs, TabState{
+			ID:    string(t.TargetID),
+			URL:   t.URL,
+			Title: t.Title,
+		})
 	}
 
 	state := SessionState{

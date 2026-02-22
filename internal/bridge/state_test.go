@@ -126,6 +126,37 @@ func TestWasUncleanExit_Normal(t *testing.T) {
 	}
 }
 
+func TestIsTransientURL(t *testing.T) {
+	transient := []string{
+		"about:blank",
+		"chrome://newtab/",
+		"chrome://new-tab-page/",
+		"chrome://settings/",
+		"chrome-extension://abc/popup.html",
+		"devtools://devtools/inspector.html",
+		"file:///tmp/test.html",
+		"http://localhost:9867/welcome",
+		"http://localhost:3000/dashboard",
+	}
+	for _, u := range transient {
+		if !isTransientURL(u) {
+			t.Errorf("expected transient: %s", u)
+		}
+	}
+
+	persistent := []string{
+		"https://example.com",
+		"https://github.com/pinchtab/pinchtab",
+		"https://www.google.com/search?q=test",
+		"https://httpbin.org/get",
+	}
+	for _, u := range persistent {
+		if isTransientURL(u) {
+			t.Errorf("expected persistent: %s", u)
+		}
+	}
+}
+
 func TestClearChromeSessions(t *testing.T) {
 	tmp := t.TempDir()
 	sessionsDir := filepath.Join(tmp, "Default", "Sessions")
