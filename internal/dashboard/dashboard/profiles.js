@@ -222,10 +222,22 @@ function saveProfilePort(name, port) {
   localStorage.setItem('pinchtab-port-' + name, port);
 }
 
+function getLaunchHeadlessPref() {
+  const v = localStorage.getItem('pinchtab-launch-headless');
+  if (v == null) return false;
+  return v === 'true';
+}
+
+function setLaunchHeadlessPref(value) {
+  localStorage.setItem('pinchtab-launch-headless', String(!!value));
+}
+
 function openLaunchModal(name) {
   document.getElementById('launch-name').value = name;
   document.getElementById('launch-port').value = getProfilePort(name);
   document.getElementById('launch-profile-path').value = (profileByName[name] && profileByName[name].path) || '';
+  const headlessInput = document.getElementById('launch-headless');
+  if (headlessInput) headlessInput.checked = getLaunchHeadlessPref();
   updateLaunchCommand();
   document.getElementById('launch-modal').classList.add('open');
   document.getElementById('launch-port').focus();
@@ -243,6 +255,7 @@ function updateLaunchCommand() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
   const profilePathRaw = document.getElementById('launch-profile-path').value.trim();
+  const headless = !!(document.getElementById('launch-headless') && document.getElementById('launch-headless').checked);
   const profilePath = profilePathRaw || '<PROFILE_PATH>';
   const statePath = profilePath + '/.pinchtab-state';
   const prefix = profilePathRaw ? '' : '# replace <PROFILE_PATH> first\n';
@@ -250,7 +263,7 @@ function updateLaunchCommand() {
     + 'BRIDGE_PORT=' + shellQuote(port || '9868') + ' '
     + 'BRIDGE_PROFILE=' + shellQuote(profilePath) + ' '
     + 'BRIDGE_STATE_DIR=' + shellQuote(statePath) + ' '
-    + 'BRIDGE_HEADLESS=false BRIDGE_NO_RESTORE=true BRIDGE_NO_DASHBOARD=true '
+    + 'BRIDGE_HEADLESS=' + (headless ? 'true' : 'false') + ' BRIDGE_NO_RESTORE=true BRIDGE_NO_DASHBOARD=true '
     + './bin/pinchtab';
   document.getElementById('launch-command').value = prefix + cmd;
 }
@@ -273,7 +286,8 @@ async function copyLaunchCommand() {
 async function doLaunch() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
-  const headless = false;
+  const headlessInput = document.getElementById('launch-headless');
+  const headless = !!(headlessInput && headlessInput.checked);
 
   if (!name || !port) { await appAlert('Port required'); return; }
   if (port === String(location.port || '9867')) {
@@ -282,6 +296,7 @@ async function doLaunch() {
   }
 
   saveProfilePort(name, port);
+  setLaunchHeadlessPref(headless);
   closeLaunchModal();
 
   try {
@@ -586,6 +601,10 @@ async function deleteProfileFromDetails(name) {
 const launchPortInput = document.getElementById('launch-port');
 if (launchPortInput) {
   launchPortInput.addEventListener('input', updateLaunchCommand);
+}
+const launchHeadlessInput = document.getElementById('launch-headless');
+if (launchHeadlessInput) {
+  launchHeadlessInput.addEventListener('change', updateLaunchCommand);
 }
 
 document.getElementById('modal').addEventListener('click', (e) => {
