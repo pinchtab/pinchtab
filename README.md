@@ -197,6 +197,8 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `POST` | `/tab` | Open/close tabs |
 | `POST` | `/tab/lock` | Lock tab for exclusive agent access |
 | `POST` | `/tab/unlock` | Release tab lock |
+| `POST` | `/upload` | Set files on `<input type=file>` elements |
+| `GET` | `/download` | Download URL using browser session |
 
 ### Query Parameters (snapshot)
 | Param | Description |
