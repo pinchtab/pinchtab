@@ -76,9 +76,9 @@
     <input id="launch-profile-path" type="hidden" />
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Port</label>
     <input id="launch-port" placeholder="e.g. 9868" />
-    <label style="color:#ccc;font-size:12px;display:flex;align-items:center;gap:8px;margin:10px 0 12px">
-      <input id="launch-headless" type="checkbox" />
-      Launch headless (recommended for Docker/VPS)
+    <label class="toggle" style="margin:10px 0 12px;white-space:nowrap">
+      <span style="flex:1">Headless — best for Docker/VPS</span>
+      <input id="launch-headless" type="checkbox" style="width:16px;flex:none;margin:0" />
     </label>
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Direct launch command (backup)</label>
     <textarea id="launch-command" class="launch-command" readonly></textarea>
