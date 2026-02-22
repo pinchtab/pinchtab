@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/runtime"
