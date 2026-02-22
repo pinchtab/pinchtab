@@ -12,8 +12,9 @@ import (
 )
 
 type TabEntry struct {
-	Ctx    context.Context
-	Cancel context.CancelFunc
+	Ctx      context.Context
+	Cancel   context.CancelFunc
+	Accessed bool
 }
 
 type RefCache struct {

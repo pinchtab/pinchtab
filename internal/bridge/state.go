@@ -82,6 +82,7 @@ func (b *Bridge) SaveState() {
 		return
 	}
 
+	accessed := b.AccessedTabIDs()
 	tabs := make([]TabState, 0, len(targets))
 	seen := make(map[string]bool, len(targets))
 	for _, t := range targets {
@@ -89,6 +90,9 @@ func (b *Bridge) SaveState() {
 			continue
 		}
 		if seen[t.URL] {
+			continue
+		}
+		if !accessed[string(t.TargetID)] {
 			continue
 		}
 		seen[t.URL] = true

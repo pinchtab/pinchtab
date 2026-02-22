@@ -19,6 +19,7 @@ type TabManager struct {
 	browserCtx context.Context
 	config     *config.RuntimeConfig
 	tabs       map[string]*TabEntry
+	accessed   map[string]bool
 	snapshots  map[string]*RefCache
 	onTabSetup TabSetupFunc
 	mu         sync.RWMutex
@@ -29,9 +30,27 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, onTabS
 		browserCtx: browserCtx,
 		config:     cfg,
 		tabs:       make(map[string]*TabEntry),
+		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
 		onTabSetup: onTabSetup,
 	}
+}
+
+func (tm *TabManager) markAccessed(tabID string) {
+	tm.mu.Lock()
+	tm.accessed[tabID] = true
+	tm.mu.Unlock()
+}
+
+// AccessedTabIDs returns the set of tab IDs that were accessed this session.
+func (tm *TabManager) AccessedTabIDs() map[string]bool {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	out := make(map[string]bool, len(tm.accessed))
+	for k := range tm.accessed {
+		out[k] = true
+	}
+	return out
 }
 
 func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) {
@@ -49,6 +68,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 	tm.mu.RLock()
 	if entry, ok := tm.tabs[tabID]; ok && entry.Ctx != nil {
 		tm.mu.RUnlock()
+		tm.markAccessed(tabID)
 		return entry.Ctx, tabID, nil
 	}
 	tm.mu.RUnlock()
@@ -57,6 +77,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 	defer tm.mu.Unlock()
 
 	if entry, ok := tm.tabs[tabID]; ok && entry.Ctx != nil {
+		tm.accessed[tabID] = true
 		return entry.Ctx, tabID, nil
 	}
 
@@ -118,6 +139,7 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	newTargetID := string(chromedp.FromContext(ctx).Target.TargetID)
 	tm.mu.Lock()
 	tm.tabs[newTargetID] = &TabEntry{Ctx: ctx, Cancel: cancel}
+	tm.accessed[newTargetID] = true
 	tm.mu.Unlock()
 
 	return newTargetID, ctx, cancel, nil
