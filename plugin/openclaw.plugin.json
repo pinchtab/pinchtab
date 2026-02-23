@@ -1,0 +1,32 @@
+{
+  "id": "pinchtab",
+  "name": "Pinchtab",
+  "description": "Browser control for AI agents via Pinchtab HTTP API. Navigate, snapshot accessibility tree, act on elements, extract text.",
+  "version": "0.1.0",
+  "skills": ["../skill/pinchtab"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "Pinchtab instance base URL",
+        "default": "http://localhost:9867"
+      },
+      "token": {
+        "type": "string",
+        "description": "Bearer auth token (BRIDGE_TOKEN)"
+      },
+      "timeout": {
+        "type": "number",
+        "description": "Default request timeout in milliseconds",
+        "default": 30000
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": { "label": "Base URL", "placeholder": "http://localhost:9867" },
+    "token": { "label": "Auth Token", "sensitive": true },
+    "timeout": { "label": "Timeout (ms)", "placeholder": "30000" }
+  }
+}
