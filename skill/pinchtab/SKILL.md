@@ -1,5 +1,6 @@
 ---
 name: pinchtab
+version: 0.6.2
 description: >
   Control a headless or headed Chrome browser via Pinchtab's HTTP API. Use for web automation,
   scraping, form filling, navigation, and multi-tab workflows. Pinchtab exposes the accessibility

@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -150,11 +152,54 @@ func buildChromeOpts(cfg *config.RuntimeConfig) []chromedp.ExecAllocatorOption {
 	return opts
 }
 
-func startChrome(allocCtx context.Context, seededScript string) (context.Context, context.CancelFunc, error) {
-	bCtx, bCancel := chromedp.NewContext(allocCtx)
-
+func startChrome(allocCtx context.Context, cfg *config.RuntimeConfig, seededScript string) (context.Context, context.CancelFunc, error) {
 	startCtx, startDone := context.WithTimeout(context.Background(), chromeStartTimeout)
 	defer startDone()
+
+	// For CDP_URL (remote allocator), ensure we have a target available.
+	// Remote Chrome instances may not have any windows open yet.
+	if cfg.CdpURL != "" {
+		// Get or create a target for the remote browser
+		getCtx, getCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		targets, err := func() ([]*target.Info, error) {
+			var tgts []*target.Info
+			getErr := chromedp.Run(getCtx,
+				chromedp.ActionFunc(func(ctx context.Context) error {
+					var err error
+					tgts, err = target.GetTargets().Do(ctx)
+					return err
+				}),
+			)
+			return tgts, getErr
+		}()
+		getCancel()
+
+		targetID := target.ID("")
+		if err == nil && len(targets) > 0 {
+			// Use first existing target
+			targetID = targets[0].TargetID
+		} else {
+			// Try to create a new target
+			createCtx, createCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = chromedp.Run(createCtx,
+				chromedp.ActionFunc(func(ctx context.Context) error {
+					tID, err := target.CreateTarget("about:blank").Do(ctx)
+					if err == nil {
+						targetID = tID
+					}
+					return nil // Don't fail, will try with browser context
+				}),
+			)
+			createCancel()
+		}
+
+		bCtx, bCancel := chromedp.NewContext(allocCtx,
+			chromedp.WithTargetID(targetID),
+		)
+		return bCtx, bCancel, nil
+	}
+
+	bCtx, bCancel := chromedp.NewContext(allocCtx)
 
 	errCh := make(chan error, 1)
 	go func() {

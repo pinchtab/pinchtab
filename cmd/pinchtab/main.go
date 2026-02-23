@@ -74,7 +74,7 @@ func main() {
 	human.SetHumanRandSeed(int64(stealthSeed))
 	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript
 
-	browserCtx, browserCancel, err := startChrome(allocCtx, seededScript)
+	browserCtx, browserCancel, err := startChrome(allocCtx, cfg, seededScript)
 	if err != nil {
 		slog.Warn("Chrome startup failed, clearing sessions and retrying once", "err", err)
 
@@ -85,7 +85,7 @@ func main() {
 		allocCtx, allocCancel, _ = setupAllocator(cfg)
 		_ = chromeOpts // used implicitly via setupAllocator
 
-		browserCtx, browserCancel, err = startChrome(allocCtx, seededScript)
+		browserCtx, browserCancel, err = startChrome(allocCtx, cfg, seededScript)
 		if err != nil {
 			slog.Error("Chrome failed to start after retry",
 				"err", err,
@@ -112,9 +112,15 @@ func main() {
 	orch.SetProfileManager(profMgr)
 	dash.SetInstanceLister(orch)
 
-	initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
-	b.RegisterTab(string(initTargetID), browserCtx)
-	slog.Info("initial tab", "id", string(initTargetID))
+	// For CDP_URL mode, the initial target might not exist yet.
+	// Tabs will be registered when they're created or discovered.
+	if cfg.CdpURL == "" {
+		initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
+		b.RegisterTab(string(initTargetID), browserCtx)
+		slog.Info("initial tab", "id", string(initTargetID))
+	} else {
+		slog.Info("CDP_URL mode: skipping initial tab registration")
+	}
 
 	if !cfg.Headless {
 		go func() {

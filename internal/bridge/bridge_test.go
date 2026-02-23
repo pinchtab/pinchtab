@@ -1,8 +1,11 @@
 package bridge
 
 import (
+	"context"
 	"sync"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func newTestBridge() *Bridge {
@@ -62,5 +65,27 @@ func TestRefCacheLookup(t *testing.T) {
 	}
 	if _, ok := cache.Refs["e99"]; ok {
 		t.Error("e99 should not exist")
+	}
+}
+
+func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
+	// Test that TabManager can be initialized without a valid browser context.
+	// This is the case for remote allocators (CDP_URL mode) where the browser
+	// context is established lazily.
+	cfg := &config.RuntimeConfig{
+		CdpURL: "ws://localhost:9222/devtools/browser/test",
+	}
+
+	// Use context.TODO() instead of nil to avoid lint warnings
+	ctx := context.TODO()
+	tm := NewTabManager(ctx, cfg, nil)
+	if tm == nil {
+		t.Error("TabManager should be created")
+	}
+
+	// Attempting to create a tab with an invalid context should fail gracefully
+	_, _, _, err := tm.CreateTab("about:blank")
+	if err == nil {
+		t.Error("CreateTab should fail when browserCtx is invalid")
 	}
 }

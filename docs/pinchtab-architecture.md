@@ -3,15 +3,28 @@
 ## Overview
 
 Pinchtab is an HTTP server (Go binary, ~12MB) that wraps Chrome DevTools Protocol (CDP)
-to give AI agents browser control via a simple REST API. It self-launches Chrome,
-manages tabs, and exposes the accessibility tree as flat JSON with stable refs.
+to give AI agents browser control via a simple REST API. 
+
+**Self-hosted mode (default):** Pinchtab launches and manages its own Chrome instance.
 
 ```
 ┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌──────────────┐
 │   AI Agent  │ ────────────▶ │   Pinchtab   │ ─────────────▶ │    Chrome    │
-│  (any LLM)  │ ◀──────────── │  (Go binary) │ ◀───────────── │ headed/headless │
+│  (any LLM)  │ ◀──────────── │  (Go binary) │ ◀───────────── │ self-launched │
 └─────────────┘    JSON/text  └──────────────┘   WebSocket    └──────────────┘
 ```
+
+**Remote Chrome mode (CDP_URL):** Pinchtab connects to an existing Chrome instance via CDP_URL.
+
+```
+┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌──────────────┐
+│  Multiple   │ ────────────▶ │  Multiple    │ ─────────────▶ │  Shared      │
+│  Agents     │ ◀──────────── │  Pinchtab    │ ◀───────────── │  Chrome      │
+│             │    JSON/text  │  instances   │   WebSocket    │  instance    │
+└─────────────┘               └──────────────┘                └──────────────┘
+```
+
+See [docs/cdp-url-shared-chrome.md](cdp-url-shared-chrome.md) for multi-agent resource sharing and container deployment patterns.
 
 Agents never touch CDP directly. They send HTTP requests, get back JSON.
 The accessibility tree (a11y) is the primary interface — not screenshots, not DOM.

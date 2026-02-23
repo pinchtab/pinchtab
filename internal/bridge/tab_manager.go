@@ -115,7 +115,32 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 			return "", nil, nil, fmt.Errorf("tab limit reached (%d/%d) — close a tab first", len(targets), tm.config.MaxTabs)
 		}
 	}
-	ctx, cancel := chromedp.NewContext(tm.browserCtx)
+
+	// Use target.CreateTarget CDP protocol call to create a new tab.
+	// This works for both local and remote (CDP_URL) allocators.
+	navURL := "about:blank"
+	if url != "" {
+		navURL = url
+	}
+
+	var targetID target.ID
+	createCtx, createCancel := context.WithTimeout(tm.browserCtx, 10*time.Second)
+	if err := chromedp.Run(createCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			targetID, err = target.CreateTarget(navURL).Do(ctx)
+			return err
+		}),
+	); err != nil {
+		createCancel()
+		return "", nil, nil, fmt.Errorf("create target: %w", err)
+	}
+	createCancel()
+
+	// Create a context for the new tab
+	ctx, cancel := chromedp.NewContext(tm.browserCtx,
+		chromedp.WithTargetID(targetID),
+	)
 
 	if tm.onTabSetup != nil {
 		tm.onTabSetup(ctx)
@@ -127,16 +152,7 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		_ = SetResourceBlocking(ctx, ImageBlockPatterns)
 	}
 
-	navURL := "about:blank"
-	if url != "" {
-		navURL = url
-	}
-	if err := NavigatePage(ctx, navURL); err != nil {
-		cancel()
-		return "", nil, nil, fmt.Errorf("new tab: %w", err)
-	}
-
-	newTargetID := string(chromedp.FromContext(ctx).Target.TargetID)
+	newTargetID := string(targetID)
 	tm.mu.Lock()
 	tm.tabs[newTargetID] = &TabEntry{Ctx: ctx, Cancel: cancel}
 	tm.accessed[newTargetID] = true

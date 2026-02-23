@@ -109,6 +109,31 @@ Chrome runs invisibly in the background — no window, pure API. Best for server
 
 All core API flows are validated in headless mode.
 
+### Remote Chrome via CDP_URL
+
+Instead of launching your own Chrome, connect to an existing instance:
+
+```bash
+# Start Chrome with debugging enabled (localhost only)
+chrome --remote-debugging-port=9222 &
+
+# Get the WebSocket URL
+CDP_URL=$(curl http://localhost:9222/json/version | jq -r '.webSocketDebuggerUrl')
+
+# Connect Pinchtab to it
+export CDP_URL
+./pinchtab
+```
+
+**Use cases:**
+- 🤝 **Multi-agent resource sharing** — All agents share one Chrome (save 1.3GB per agent)
+- 🧪 **Integration testing** — Multiple test scripts use the same browser and session
+- 🐳 **Docker/containers** — Chrome in one container, Pinchtab in another
+
+**⚠️ Security:** Chrome's DevTools Protocol has no authentication. Only expose the CDP port locally or via SSH tunnel. See **[docs/cdp-url-shared-chrome.md#security](docs/cdp-url-shared-chrome.md#security)** for details.
+
+See **[docs/cdp-url-shared-chrome.md](docs/cdp-url-shared-chrome.md)** for detailed setup and use cases.
+
 ### Headed Mode (operator-in-the-loop)
 
 <img src="assets/pinchtab-headed.png" width="128" alt="Pinchtab headed mode" />
@@ -389,6 +414,7 @@ When you log into sites through Pinchtab's Chrome window, those sessions — coo
 - **Set `BRIDGE_TOKEN`** — without it, anyone on your network can control your browser. In production, this is non-negotiable.
 - **Treat `~/.pinchtab/` as sensitive** — it contains your Chrome profile with all saved sessions and cookies. Guard it like you'd guard your passwords.
 - **Pinchtab binds to all interfaces by default** — use a firewall or reverse proxy if you're on a shared network.
+- **If using `CDP_URL`:** Chrome's DevTools Protocol has no authentication. **Never expose the CDP port to the network.** Only use localhost or SSH tunnels. See [docs/cdp-url-shared-chrome.md#security](docs/cdp-url-shared-chrome.md#security) for details.
 - **Start with low-risk accounts.** Don't point an experimental agent at your primary email or bank account on day one. Test with throwaway accounts first.
 - **No data leaves your machine** — all processing is local. But the agents you connect might send data wherever they want.
 
