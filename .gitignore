@@ -1,6 +1,6 @@
 node_modules/
 browser-bridge
-pinchtab
+/pinchtab
 coverage.out
 
 # OpenClaw workspace files (should never be committed)
