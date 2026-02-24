@@ -274,6 +274,7 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions globally |
 | `BRIDGE_TIMEZONE` | *(none)* | Force browser timezone (IANA tz, e.g. `Europe/Rome`) |
 | `BRIDGE_CHROME_VERSION` | `144.0.7559.133` | Chrome version string used by fingerprint rotation profiles |
+| `BRIDGE_USER_AGENT` | (none) | Custom User-Agent string; also overrides Sec-Ch-Ua client hints via CDP |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |

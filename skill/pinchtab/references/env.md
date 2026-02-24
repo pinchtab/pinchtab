@@ -18,6 +18,7 @@
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions |
 | `BRIDGE_TIMEZONE` | (none) | Force browser timezone (IANA tz) |
 | `BRIDGE_CHROME_VERSION` | `144.0.7559.133` | Chrome version for fingerprint rotation |
+| `BRIDGE_USER_AGENT` | (none) | Custom User-Agent string; also overrides Sec-Ch-Ua client hints via CDP |
 | `CHROME_BINARY` | (auto) | Path to Chrome/Chromium binary |
 | `CHROME_FLAGS` | (none) | Extra Chrome flags (space-separated) |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |
