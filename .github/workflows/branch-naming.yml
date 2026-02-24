@@ -21,12 +21,12 @@ jobs:
           fi
 
           # Enforce prefix/description pattern
-          PATTERN="^(feature|fix|hotfix|docs|chore|refactor|test)/[a-z0-9][a-z0-9-]*$"
+          PATTERN="^(feature|feat|fix|hotfix|docs|chore|refactor|test)/[a-z0-9][a-z0-9-]*$"
           if [[ ! "$BRANCH" =~ $PATTERN ]]; then
             echo "❌ Branch name '$BRANCH' doesn't match convention."
             echo ""
             echo "Expected format: <prefix>/<description>"
-            echo "  Prefixes: feature, fix, hotfix, docs, chore, refactor, test"
+            echo "  Prefixes: feature, feat, fix, hotfix, docs, chore, refactor, test"
             echo "  Description: lowercase, hyphens, no special chars"
             echo ""
             echo "Examples:"

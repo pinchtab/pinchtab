@@ -19,6 +19,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/uameta"
 )
 
 func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption) {
@@ -236,5 +237,21 @@ func applyTimezone(browserCtx context.Context, cfg *config.RuntimeConfig) {
 		slog.Warn("timezone override failed", "tz", cfg.Timezone, "err", err)
 	} else {
 		slog.Info("timezone override", "tz", cfg.Timezone)
+	}
+}
+
+func applyUserAgentOverride(browserCtx context.Context, cfg *config.RuntimeConfig) {
+	override := uameta.Build(cfg.UserAgent, cfg.ChromeVersion)
+	if override == nil {
+		return
+	}
+	if err := chromedp.Run(browserCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return override.Do(ctx)
+		}),
+	); err != nil {
+		slog.Warn("user-agent override failed", "err", err)
+	} else {
+		slog.Info("user-agent override applied")
 	}
 }

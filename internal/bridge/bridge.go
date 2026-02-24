@@ -9,6 +9,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/uameta"
 )
 
 type TabEntry struct {
@@ -60,6 +61,13 @@ func (b *Bridge) injectStealth(ctx context.Context) {
 }
 
 func (b *Bridge) tabSetup(ctx context.Context) {
+	if override := uameta.Build(b.Config.UserAgent, b.Config.ChromeVersion); override != nil {
+		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return override.Do(c)
+		})); err != nil {
+			slog.Warn("ua override failed on tab setup", "err", err)
+		}
+	}
 	b.injectStealth(ctx)
 	if b.Config.NoAnimations {
 		b.InjectNoAnimations(ctx)

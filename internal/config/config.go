@@ -26,6 +26,7 @@ type RuntimeConfig struct {
 	MaxTabs          int
 	ChromeBinary     string
 	ChromeExtraFlags string
+	UserAgent        string
 	NoAnimations     bool
 	StealthLevel     string
 	ActionTimeout    time.Duration
@@ -107,6 +108,7 @@ func Load() *RuntimeConfig {
 		MaxTabs:          envIntOr("BRIDGE_MAX_TABS", 20),
 		ChromeBinary:     os.Getenv("CHROME_BINARY"),
 		ChromeExtraFlags: os.Getenv("CHROME_FLAGS"),
+		UserAgent:        os.Getenv("BRIDGE_USER_AGENT"),
 		NoAnimations:     os.Getenv("BRIDGE_NO_ANIMATIONS") == "true",
 		StealthLevel:     envOr("BRIDGE_STEALTH", "light"),
 		ActionTimeout:    15 * time.Second,
