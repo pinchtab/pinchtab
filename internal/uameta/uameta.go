@@ -10,10 +10,23 @@ import (
 
 // Build creates a SetUserAgentOverride action with full UserAgentMetadata.
 // chromeVersion should be the full version (e.g. "144.0.7559.133").
-// If empty, returns nil.
+// If userAgent is empty, generates a default one based on the platform.
+// If chromeVersion is also empty, returns nil.
 func Build(userAgent, chromeVersion string) *emulation.SetUserAgentOverrideParams {
-	if userAgent == "" {
+	if chromeVersion == "" {
 		return nil
+	}
+
+	// If no custom user agent is provided, generate a default one based on OS
+	if userAgent == "" {
+		switch runtime.GOOS {
+		case "darwin":
+			userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
+		case "windows":
+			userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
+		default:
+			userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
+		}
 	}
 
 	major := chromeVersion

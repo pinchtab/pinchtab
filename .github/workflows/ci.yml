@@ -42,7 +42,12 @@ jobs:
         run: go test ./... -v -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Coverage summary
-        run: go tool cover -func=coverage.out | tail -1
+        run: |
+          coverage=$(go tool cover -func=coverage.out | tail -1)
+          echo "### Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "$coverage" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
   lint:
     name: Lint
@@ -85,3 +90,30 @@ jobs:
             cat gosec-results.json | jq '.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")'
             exit 1
           fi
+
+  integration:
+    name: Integration Tests
+    needs: [build, lint, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Install Google Chrome (deb, avoids snap hangs)
+        run: |
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          echo "CHROME_BINARY=/usr/bin/google-chrome" >> $GITHUB_ENV
+
+      - name: Run integration tests
+        run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
+        env:
+          BRIDGE_HEADLESS: "true"
+          BRIDGE_NO_RESTORE: "true"
+          PINCHTAB_TEST_PORT: "19867"

@@ -5,8 +5,18 @@ import (
 )
 
 func TestBuild_Empty(t *testing.T) {
-	if Build("", "144.0.0.0") != nil {
-		t.Fatal("expected nil for empty user agent")
+	// Empty chromeVersion should return nil
+	if Build("", "") != nil {
+		t.Fatal("expected nil for empty chrome version")
+	}
+
+	// Empty user agent but with chromeVersion should generate default and return non-nil
+	p := Build("", "144.0.0.0")
+	if p == nil {
+		t.Fatal("expected non-nil for empty user agent with chromeVersion")
+	}
+	if p.UserAgent == "" {
+		t.Fatal("expected generated user agent")
 	}
 }
 

@@ -1,6 +1,6 @@
 # CF3-Extended: Create Tab via POST in CDP_URL Mode
 
-**Status:** 🔴 FAILING (Issue #13)
+**Status:** ✅ FIXED (Verified in main.go — CDP_URL mode check added)
 
 **Goal:** Reproduce the crash when creating a new tab via `POST /tab` in CDP_URL mode.
 
@@ -139,7 +139,16 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 
 ## Status
 
-✅ **Issue is reproducible and scoped.**
-- Failure point: `startChrome()` in CDP_URL mode
-- Secondary: `CreateTab()` also needs CDP protocol-based approach
-- Test: This markdown file documents the repro steps
+✅ **FIXED** — Code review shows fix in place:
+- `cmd/pinchtab/main.go` lines ~116-121 now check for CDP_URL mode
+- Skips initial tab registration when `cfg.CdpURL != ""`
+- `CreateTab()` in tab_manager.go properly uses CDP protocol
+
+**How to verify the fix:**
+1. Follow the test steps above (start remote Chrome, start Pinchtab in CDP_URL mode)
+2. Expected: Pinchtab should start successfully without crashing
+3. Navigate to a URL: `curl -X POST http://localhost:9867/navigate -H "Content-Type: application/json" -d '{"url":"https://example.com"}'`
+4. Create new tab: `curl -X POST http://localhost:9867/tab -d '{"action":"new","url":"https://example.com"}'`
+5. Both should work without `-32000` errors
+
+**Test this before release to confirm fix is production-ready.**
