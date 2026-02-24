@@ -86,3 +86,55 @@ func TestSnapshot_MaxTokens(t *testing.T) {
 		t.Fatalf("expected 200, got %d", code)
 	}
 }
+
+// S9: Snapshot with specific tabId
+func TestSnapshot_WithTabId(t *testing.T) {
+	// Create first tab and navigate to example.com
+	code, body := httpPost(t, "/tab", map[string]string{
+		"action": "new",
+		"url":    "https://example.com",
+	})
+	if code != 200 {
+		t.Skip("could not create first tab")
+	}
+	var tab1Data map[string]any
+	_ = json.Unmarshal(body, &tab1Data)
+	tab1ID, ok := tab1Data["tabId"].(string)
+	if !ok || tab1ID == "" {
+		t.Skip("no tabId in response")
+	}
+
+	// Create second tab and navigate to httpbin.org
+	code, body = httpPost(t, "/tab", map[string]string{
+		"action": "new",
+		"url":    "https://httpbin.org",
+	})
+	if code != 200 {
+		t.Skip("could not create second tab")
+	}
+	var tab2Data map[string]any
+	_ = json.Unmarshal(body, &tab2Data)
+	tab2ID, ok := tab2Data["tabId"].(string)
+	if !ok || tab2ID == "" {
+		t.Skip("no tabId in response")
+	}
+
+	// Get snapshot from tab2 (should contain httpbin content)
+	code, body = httpGet(t, "/snapshot?tabId="+tab2ID)
+	if code != 200 {
+		t.Fatalf("expected 200 for /snapshot?tabId=%s, got %d", tab2ID, code)
+	}
+	snapshotText := string(body)
+	// httpbin.org should have "httpbin" or "HTTP" in its snapshot
+	if !strings.Contains(snapshotText, "httpbin") && !strings.Contains(snapshotText, "HTTP") {
+		t.Error("expected httpbin-related content in tab2 snapshot")
+	}
+}
+
+// S10: Snapshot with non-existent tabId
+func TestSnapshot_NoTab(t *testing.T) {
+	code, _ := httpGet(t, "/snapshot?tabId=nonexistent_xyz")
+	if code == 200 {
+		t.Errorf("expected error (400/404) for non-existent tab, got %d", code)
+	}
+}
