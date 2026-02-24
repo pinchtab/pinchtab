@@ -1,7 +1,7 @@
 {
   "id": "pinchtab",
   "name": "Pinchtab",
-  "description": "Browser control for AI agents via Pinchtab HTTP API. Navigate, snapshot accessibility tree, act on elements, extract text, evaluate JS.",
+  "description": "Browser control for AI agents via Pinchtab. Single tool, all actions: navigate, snapshot, click, type, text, screenshot, evaluate, pdf. Minimal context bloat.",
   "version": "0.1.0",
   "skills": ["../skill/pinchtab"],
   "configSchema": {

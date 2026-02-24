@@ -1,8 +1,8 @@
 /**
  * Pinchtab OpenClaw Plugin
  *
- * Exposes browser control as agent tools: navigate, snapshot, action, text, screenshot.
- * Wraps Pinchtab's HTTP API so agents get structured tool calls instead of shelling out to curl.
+ * Single-tool design: one `pinchtab` tool with an `action` parameter.
+ * Minimal context bloat — one tool definition covers all browser operations.
  */
 
 interface PluginConfig {
@@ -23,7 +23,7 @@ function getConfig(api: PluginApi): PluginConfig {
 async function pinchtabFetch(
   cfg: PluginConfig,
   path: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: { method?: string; body?: unknown; rawResponse?: boolean } = {},
 ): Promise<any> {
   const base = cfg.baseUrl || "http://localhost:9867";
   const url = `${base}${path}`;
@@ -42,6 +42,7 @@ async function pinchtabFetch(
       body: opts.body ? JSON.stringify(opts.body) : undefined,
       signal: controller.signal,
     });
+    if (opts.rawResponse) return res;
     const text = await res.text();
     if (!res.ok) {
       return { error: `${res.status} ${res.statusText}`, body: text };
@@ -55,127 +56,44 @@ async function pinchtabFetch(
     if (err?.name === "AbortError") {
       return { error: `Request timed out after ${timeout}ms: ${path}` };
     }
-    return { error: `Connection failed: ${err?.message || err}. Is Pinchtab running at ${base}?` };
+    return {
+      error: `Connection failed: ${err?.message || err}. Is Pinchtab running at ${base}?`,
+    };
   } finally {
     clearTimeout(timer);
   }
 }
 
+function textResult(data: any): any {
+  const text =
+    typeof data === "string" ? data : data?.text ?? JSON.stringify(data, null, 2);
+  return { content: [{ type: "text", text }] };
+}
+
 export default function register(api: PluginApi) {
-  // --- navigate ---
   api.registerTool(
     {
-      name: "pinchtab_navigate",
-      description:
-        "Navigate to a URL in Pinchtab browser. Returns page info after navigation.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "URL to navigate to" },
-          tabId: { type: "string", description: "Target tab ID (optional)" },
-          newTab: {
-            type: "boolean",
-            description: "Open in new tab",
-          },
-          blockImages: {
-            type: "boolean",
-            description: "Block image loading",
-          },
-          timeout: {
-            type: "number",
-            description: "Navigation timeout in seconds",
-          },
-        },
-        required: ["url"],
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const body: any = { url: params.url };
-        if (params.tabId) body.tabId = params.tabId;
-        if (params.newTab) body.newTab = true;
-        if (params.blockImages) body.blockImages = true;
-        if (params.timeout) body.timeout = params.timeout;
-        const result = await pinchtabFetch(cfg, "/navigate", { body });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      },
-    },
-    { optional: true },
-  );
+      name: "pinchtab",
+      description: `Browser control via Pinchtab. Actions:
+- navigate: go to URL (url, tabId?, newTab?, blockImages?, timeout?)
+- snapshot: accessibility tree (filter?, format?, selector?, maxTokens?, depth?, diff?, tabId?)
+- click/type/press/fill/hover/scroll/select/focus: act on element (ref, text?, key?, value?, scrollY?, waitNav?, tabId?)
+- text: extract readable text (mode?, tabId?)
+- tabs: list/new/close tabs (tabAction?, url?, tabId?)
+- screenshot: JPEG screenshot (quality?, tabId?)
+- evaluate: run JS (expression, tabId?)
+- pdf: export page as PDF (landscape?, scale?, tabId?)
+- health: check connectivity
 
-  // --- snapshot ---
-  api.registerTool(
-    {
-      name: "pinchtab_snapshot",
-      description:
-        "Get accessibility tree snapshot from current page. Returns refs (e.g. e0, e5) for use with pinchtab_action. Use filter=interactive and format=compact for best token efficiency.",
+Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=interactive&format=compact for interactions (~3,600), diff=true on subsequent snapshots.`,
       parameters: {
         type: "object",
         properties: {
-          tabId: { type: "string", description: "Target tab ID" },
-          filter: {
-            type: "string",
-            enum: ["interactive", "all"],
-            description:
-              "Filter nodes: 'interactive' for buttons/links/inputs only (recommended)",
-          },
-          format: {
-            type: "string",
-            enum: ["json", "compact", "text", "yaml"],
-            description:
-              "Output format: 'compact' is most token-efficient (recommended)",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector to scope snapshot (e.g. 'main')",
-          },
-          maxTokens: {
-            type: "number",
-            description: "Truncate output to ~N tokens",
-          },
-          depth: { type: "number", description: "Max tree depth" },
-          diff: {
-            type: "boolean",
-            description:
-              "Only return changes since last snapshot (great for multi-step workflows)",
-          },
-        },
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const query = new URLSearchParams();
-        if (params.tabId) query.set("tabId", params.tabId);
-        if (params.filter) query.set("filter", params.filter);
-        if (params.format) query.set("format", params.format);
-        if (params.selector) query.set("selector", params.selector);
-        if (params.maxTokens) query.set("maxTokens", String(params.maxTokens));
-        if (params.depth) query.set("depth", String(params.depth));
-        if (params.diff) query.set("diff", "true");
-        const qs = query.toString();
-        const result = await pinchtabFetch(cfg, `/snapshot${qs ? `?${qs}` : ""}`);
-        const text =
-          typeof result === "string"
-            ? result
-            : result?.text ?? JSON.stringify(result, null, 2);
-        return { content: [{ type: "text", text }] };
-      },
-    },
-    { optional: true },
-  );
-
-  // --- action ---
-  api.registerTool(
-    {
-      name: "pinchtab_action",
-      description:
-        "Perform an action on a page element by ref (from snapshot). Supports click, type, press, fill, hover, scroll, select, focus.",
-      parameters: {
-        type: "object",
-        properties: {
-          kind: {
+          action: {
             type: "string",
             enum: [
+              "navigate",
+              "snapshot",
               "click",
               "type",
               "press",
@@ -184,251 +102,223 @@ export default function register(api: PluginApi) {
               "scroll",
               "select",
               "focus",
+              "text",
+              "tabs",
+              "screenshot",
+              "evaluate",
+              "pdf",
+              "health",
             ],
-            description: "Action type",
+            description: "Action to perform",
           },
+          url: { type: "string", description: "URL for navigate or new tab" },
           ref: {
             type: "string",
             description: "Element ref from snapshot (e.g. e5)",
           },
-          text: {
-            type: "string",
-            description: "Text to type or fill",
-          },
+          text: { type: "string", description: "Text to type or fill" },
           key: {
             type: "string",
             description: "Key to press (e.g. Enter, Tab, Escape)",
           },
+          expression: {
+            type: "string",
+            description: "JavaScript expression for evaluate",
+          },
           selector: {
             type: "string",
-            description: "CSS selector (alternative to ref)",
+            description: "CSS selector for snapshot scope or action target",
           },
-          value: {
+          filter: {
             type: "string",
-            description: "Value for select dropdown",
+            enum: ["interactive", "all"],
+            description: "Snapshot filter: interactive = buttons/links/inputs only",
           },
+          format: {
+            type: "string",
+            enum: ["json", "compact", "text", "yaml"],
+            description: "Snapshot format: compact is most token-efficient",
+          },
+          maxTokens: {
+            type: "number",
+            description: "Truncate snapshot to ~N tokens",
+          },
+          depth: { type: "number", description: "Max snapshot tree depth" },
+          diff: {
+            type: "boolean",
+            description: "Snapshot diff: only changes since last snapshot",
+          },
+          value: { type: "string", description: "Value for select dropdown" },
           scrollY: {
             type: "number",
             description: "Pixels to scroll vertically",
           },
-          tabId: { type: "string", description: "Target tab ID" },
           waitNav: {
             type: "boolean",
             description: "Wait for navigation after action",
           },
-        },
-        required: ["kind"],
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const body: any = { kind: params.kind };
-        for (const k of [
-          "ref",
-          "text",
-          "key",
-          "selector",
-          "value",
-          "scrollY",
-          "tabId",
-          "waitNav",
-        ]) {
-          if (params[k] !== undefined) body[k] = params[k];
-        }
-        const result = await pinchtabFetch(cfg, "/action", { body });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      },
-    },
-    { optional: true },
-  );
-
-  // --- text ---
-  api.registerTool(
-    {
-      name: "pinchtab_text",
-      description:
-        "Extract readable text from current page (readability mode). Cheapest option at ~1K tokens. Returns url, title, text.",
-      parameters: {
-        type: "object",
-        properties: {
           tabId: { type: "string", description: "Target tab ID" },
-          mode: {
-            type: "string",
-            enum: ["readability", "raw"],
-            description: "Extraction mode (default: readability)",
-          },
-        },
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const query = new URLSearchParams();
-        if (params.tabId) query.set("tabId", params.tabId);
-        if (params.mode) query.set("mode", params.mode);
-        const qs = query.toString();
-        const result = await pinchtabFetch(cfg, `/text${qs ? `?${qs}` : ""}`);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      },
-    },
-    { optional: true },
-  );
-
-  // --- tabs ---
-  api.registerTool(
-    {
-      name: "pinchtab_tabs",
-      description:
-        "List open browser tabs or manage tabs (new, close). Returns tab IDs for use with other tools.",
-      parameters: {
-        type: "object",
-        properties: {
-          action: {
+          tabAction: {
             type: "string",
             enum: ["list", "new", "close"],
-            description: "Tab action (default: list)",
+            description: "Tab sub-action (default: list)",
           },
-          url: {
-            type: "string",
-            description: "URL for new tab",
+          newTab: { type: "boolean", description: "Open URL in new tab" },
+          blockImages: { type: "boolean", description: "Block image loading" },
+          timeout: {
+            type: "number",
+            description: "Navigation timeout in seconds",
           },
-          tabId: {
-            type: "string",
-            description: "Tab ID to close",
-          },
-        },
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const action = params.action || "list";
-        if (action === "list") {
-          const result = await pinchtabFetch(cfg, "/tabs");
-          return {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          };
-        }
-        const body: any = { action };
-        if (params.url) body.url = params.url;
-        if (params.tabId) body.tabId = params.tabId;
-        const result = await pinchtabFetch(cfg, "/tab", { body });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      },
-    },
-    { optional: true },
-  );
-
-  // --- screenshot ---
-  api.registerTool(
-    {
-      name: "pinchtab_screenshot",
-      description:
-        "Take a screenshot of the current page. Returns JPEG image as base64.",
-      parameters: {
-        type: "object",
-        properties: {
-          tabId: { type: "string", description: "Target tab ID" },
           quality: {
             type: "number",
             description: "JPEG quality 1-100 (default: 80)",
           },
-        },
-      },
-      async execute(_id: string, params: any) {
-        const cfg = getConfig(api);
-        const query = new URLSearchParams();
-        if (params.tabId) query.set("tabId", params.tabId);
-        if (params.quality) query.set("quality", String(params.quality));
-        const qs = query.toString();
-        const base = cfg.baseUrl || "http://localhost:9867";
-        const url = `${base}/screenshot${qs ? `?${qs}` : ""}`;
-        const headers: Record<string, string> = {};
-        if (cfg.token) headers["Authorization"] = `Bearer ${cfg.token}`;
-
-        const controller = new AbortController();
-        const timeout = cfg.timeout || 30000;
-        const timer = setTimeout(() => controller.abort(), timeout);
-
-        try {
-          const res = await fetch(url, { headers, signal: controller.signal });
-          if (!res.ok) {
-            const text = await res.text();
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Screenshot failed: ${res.status} ${text}`,
-                },
-              ],
-            };
-          }
-          const buf = await res.arrayBuffer();
-          const b64 = Buffer.from(buf).toString("base64");
-          return {
-            content: [
-              {
-                type: "image",
-                data: b64,
-                mimeType: "image/jpeg",
-              },
-            ],
-          };
-        } finally {
-          clearTimeout(timer);
-        }
-      },
-    },
-    { optional: true },
-  );
-
-  // --- evaluate ---
-  api.registerTool(
-    {
-      name: "pinchtab_evaluate",
-      description:
-        "Execute JavaScript in the current page and return the result. Use for extracting specific data or performing actions not covered by other tools.",
-      parameters: {
-        type: "object",
-        properties: {
-          expression: {
+          mode: {
             type: "string",
-            description: "JavaScript expression to evaluate",
+            enum: ["readability", "raw"],
+            description: "Text extraction mode",
           },
-          tabId: { type: "string", description: "Target tab ID" },
+          landscape: { type: "boolean", description: "PDF landscape orientation" },
+          scale: { type: "number", description: "PDF print scale (default: 1.0)" },
         },
-        required: ["expression"],
+        required: ["action"],
       },
       async execute(_id: string, params: any) {
         const cfg = getConfig(api);
-        const body: any = { expression: params.expression };
-        if (params.tabId) body.tabId = params.tabId;
-        const result = await pinchtabFetch(cfg, "/evaluate", { body });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      },
-    },
-    { optional: true },
-  );
+        const { action } = params;
 
-  // --- health ---
-  api.registerTool(
-    {
-      name: "pinchtab_health",
-      description:
-        "Check if Pinchtab is running and responsive. Use to verify connectivity before other operations.",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
-      async execute() {
-        const cfg = getConfig(api);
-        const result = await pinchtabFetch(cfg, "/health");
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
+        // --- navigate ---
+        if (action === "navigate") {
+          const body: any = { url: params.url };
+          if (params.tabId) body.tabId = params.tabId;
+          if (params.newTab) body.newTab = true;
+          if (params.blockImages) body.blockImages = true;
+          if (params.timeout) body.timeout = params.timeout;
+          return textResult(await pinchtabFetch(cfg, "/navigate", { body }));
+        }
+
+        // --- snapshot ---
+        if (action === "snapshot") {
+          const query = new URLSearchParams();
+          if (params.tabId) query.set("tabId", params.tabId);
+          if (params.filter) query.set("filter", params.filter);
+          if (params.format) query.set("format", params.format);
+          if (params.selector) query.set("selector", params.selector);
+          if (params.maxTokens) query.set("maxTokens", String(params.maxTokens));
+          if (params.depth) query.set("depth", String(params.depth));
+          if (params.diff) query.set("diff", "true");
+          const qs = query.toString();
+          return textResult(
+            await pinchtabFetch(cfg, `/snapshot${qs ? `?${qs}` : ""}`),
+          );
+        }
+
+        // --- element actions ---
+        const elementActions = [
+          "click",
+          "type",
+          "press",
+          "fill",
+          "hover",
+          "scroll",
+          "select",
+          "focus",
+        ];
+        if (elementActions.includes(action)) {
+          const body: any = { kind: action };
+          for (const k of [
+            "ref",
+            "text",
+            "key",
+            "selector",
+            "value",
+            "scrollY",
+            "tabId",
+            "waitNav",
+          ]) {
+            if (params[k] !== undefined) body[k] = params[k];
+          }
+          return textResult(await pinchtabFetch(cfg, "/action", { body }));
+        }
+
+        // --- text ---
+        if (action === "text") {
+          const query = new URLSearchParams();
+          if (params.tabId) query.set("tabId", params.tabId);
+          if (params.mode) query.set("mode", params.mode);
+          const qs = query.toString();
+          return textResult(
+            await pinchtabFetch(cfg, `/text${qs ? `?${qs}` : ""}`),
+          );
+        }
+
+        // --- tabs ---
+        if (action === "tabs") {
+          const tabAction = params.tabAction || "list";
+          if (tabAction === "list") {
+            return textResult(await pinchtabFetch(cfg, "/tabs"));
+          }
+          const body: any = { action: tabAction };
+          if (params.url) body.url = params.url;
+          if (params.tabId) body.tabId = params.tabId;
+          return textResult(await pinchtabFetch(cfg, "/tab", { body }));
+        }
+
+        // --- screenshot ---
+        if (action === "screenshot") {
+          const query = new URLSearchParams();
+          if (params.tabId) query.set("tabId", params.tabId);
+          if (params.quality) query.set("quality", String(params.quality));
+          const qs = query.toString();
+          try {
+            const res = await pinchtabFetch(
+              cfg,
+              `/screenshot${qs ? `?${qs}` : ""}`,
+              { rawResponse: true },
+            );
+            if (res instanceof Response) {
+              if (!res.ok) {
+                return textResult({
+                  error: `Screenshot failed: ${res.status} ${await res.text()}`,
+                });
+              }
+              const buf = await res.arrayBuffer();
+              const b64 = Buffer.from(buf).toString("base64");
+              return {
+                content: [{ type: "image", data: b64, mimeType: "image/jpeg" }],
+              };
+            }
+            return textResult(res);
+          } catch (err: any) {
+            return textResult({ error: `Screenshot failed: ${err?.message}` });
+          }
+        }
+
+        // --- evaluate ---
+        if (action === "evaluate") {
+          const body: any = { expression: params.expression };
+          if (params.tabId) body.tabId = params.tabId;
+          return textResult(await pinchtabFetch(cfg, "/evaluate", { body }));
+        }
+
+        // --- pdf ---
+        if (action === "pdf") {
+          const query = new URLSearchParams();
+          if (params.tabId) query.set("tabId", params.tabId);
+          if (params.landscape) query.set("landscape", "true");
+          if (params.scale) query.set("scale", String(params.scale));
+          const qs = query.toString();
+          return textResult(
+            await pinchtabFetch(cfg, `/pdf${qs ? `?${qs}` : ""}`),
+          );
+        }
+
+        // --- health ---
+        if (action === "health") {
+          return textResult(await pinchtabFetch(cfg, "/health"));
+        }
+
+        return textResult({ error: `Unknown action: ${action}` });
       },
     },
     { optional: true },
