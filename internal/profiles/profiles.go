@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -165,7 +164,7 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 	}
 
 	slog.Info("importing profile", "name", name, "source", sourcePath)
-	if err := exec.Command("cp", "-a", sourcePath, dest).Run(); err != nil { //nolint:gosec // sourcePath validated above
+	if err := copyDir(sourcePath, dest); err != nil {
 		return fmt.Errorf("copy failed: %w", err)
 	}
 
