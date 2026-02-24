@@ -47,6 +47,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(os.Args) > 1 && (os.Args[1] == "help" || os.Args[1] == "--help" || os.Args[1] == "-h") {
+		printHelp()
+		os.Exit(0)
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "config" {
 		config.HandleConfigCommand(cfg)
 		os.Exit(0)
@@ -59,6 +64,11 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "dashboard" {
 		runDashboard(cfg)
+		return
+	}
+
+	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
+		runCLI(cfg)
 		return
 	}
 

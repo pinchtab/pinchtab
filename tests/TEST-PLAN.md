@@ -179,7 +179,30 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | CF4 | Custom profile dir | `BRIDGE_PROFILE=/tmp/test-profile ./pinchtab` | Uses specified profile |
 | CF5 | No restore | `BRIDGE_NO_RESTORE=true ./pinchtab` | Doesn't restore previous tabs |
 
-### 1.14 Session Persistence
+### 1.14 CLI Subcommands
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| CL1 | Navigate | `pinchtab nav https://example.com` | JSON with title and url |
+| CL2 | Snapshot interactive | `pinchtab snap -i -c` | Compact output, interactive elements only |
+| CL3 | Snapshot diff | `pinchtab snap -d` | Only changes since last snapshot |
+| CL4 | Click | `pinchtab click e5` | Action success |
+| CL5 | Type | `pinchtab type e12 hello world` | Text typed into element |
+| CL6 | Press | `pinchtab press Enter` | Key pressed |
+| CL7 | Text extract | `pinchtab text` | JSON with url, title, text |
+| CL8 | Text raw | `pinchtab text --raw` | Raw innerText |
+| CL9 | Screenshot | `pinchtab ss -o /tmp/test.jpg` | File saved, size reported |
+| CL10 | Evaluate | `pinchtab eval "document.title"` | Returns page title |
+| CL11 | PDF | `pinchtab pdf -o /tmp/test.pdf` | PDF file saved |
+| CL12 | Tabs list | `pinchtab tabs` | JSON array of tabs |
+| CL13 | Tab new | `pinchtab tabs new https://example.com` | New tab opened |
+| CL14 | Health | `pinchtab health` | JSON with status ok |
+| CL15 | Help | `pinchtab help` | Help text with all commands |
+| CL16 | Custom URL | `PINCHTAB_URL=http://localhost:9877 pinchtab health` | Connects to custom URL |
+| CL17 | Auth token | `PINCHTAB_TOKEN=secret pinchtab health` (server has BRIDGE_TOKEN=secret) | Auth succeeds |
+| CL18 | Server down | `pinchtab health` (no server running) | Error: connection failed |
+
+### 1.15 Session Persistence
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|

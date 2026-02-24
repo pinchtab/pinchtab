@@ -54,6 +54,16 @@ curl -X POST http://localhost:9867/instances/launch \
   -d '{"name": "work", "port": "9868"}'
 ```
 
+## CLI usage with profiles
+
+The CLI doesn't have profile subcommands yet — use `curl` for profile management.
+Once a profile instance is running, point the CLI at it:
+
+```bash
+# Get the instance port, then use CLI
+PINCHTAB_URL=http://localhost:9868 pinchtab snap -i
+```
+
 ## Typical agent flow
 
 ```bash

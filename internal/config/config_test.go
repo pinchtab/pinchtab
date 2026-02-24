@@ -150,3 +150,15 @@ func TestLoadConfigFile(t *testing.T) {
 		t.Errorf("file ActionTimeout = %v, want 60s", cfg.ActionTimeout)
 	}
 }
+
+func TestListenAddr(t *testing.T) {
+	cfg := &RuntimeConfig{Bind: "127.0.0.1", Port: "9867"}
+	if got := cfg.ListenAddr(); got != "127.0.0.1:9867" {
+		t.Errorf("expected 127.0.0.1:9867, got %s", got)
+	}
+
+	cfg = &RuntimeConfig{Bind: "0.0.0.0", Port: "8080"}
+	if got := cfg.ListenAddr(); got != "0.0.0.0:8080" {
+		t.Errorf("expected 0.0.0.0:8080, got %s", got)
+	}
+}
