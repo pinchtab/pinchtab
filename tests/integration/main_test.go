@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 
 	// Start server
 	cmd := exec.Command("/tmp/pinchtab-test")
-	cmd.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"BRIDGE_PORT="+port,
 		"BRIDGE_HEADLESS=true",
 		"BRIDGE_NO_RESTORE=true",
@@ -43,6 +43,11 @@ func TestMain(m *testing.M) {
 		fmt.Sprintf("BRIDGE_STATE_DIR=%s", mustTempDir()),
 		fmt.Sprintf("BRIDGE_PROFILE=%s", mustTempDir()),
 	)
+	// Pass CHROME_BINARY if set by CI workflow or environment
+	if chromeBinary := os.Getenv("CHROME_BINARY"); chromeBinary != "" {
+		env = append(env, "CHROME_BINARY="+chromeBinary)
+	}
+	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
