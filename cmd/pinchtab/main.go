@@ -100,6 +100,7 @@ func main() {
 	defer browserCancel()
 
 	applyTimezone(browserCtx, cfg)
+	applyUserAgentOverride(browserCtx, cfg)
 
 	b := bridge.New(allocCtx, browserCtx, cfg)
 	b.StealthScript = seededScript
