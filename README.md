@@ -15,6 +15,7 @@
   <a href="https://github.com/pinchtab/pinchtab/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pinchtab/pinchtab?style=flat-square&color=888" alt="License"/></a>
   <a href="https://github.com/pinchtab/pinchtab/releases"><img src="https://img.shields.io/github/downloads/pinchtab/pinchtab/total?style=flat-square&color=00ff88&label=downloads" alt="Downloads"/></a>
   <img src="https://img.shields.io/badge/binary-12MB-FFD700?style=flat-square" alt="12MB"/>
+  <a href="https://x.com/pinchtabdev"><img src="https://img.shields.io/badge/follow-@pinchtabdev-000?style=flat-square&logo=x&logoColor=white" alt="X/Twitter"/></a>
 </p>
 
 ---
