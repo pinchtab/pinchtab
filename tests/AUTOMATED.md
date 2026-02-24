@@ -28,10 +28,14 @@ This document tracks which scenarios from the test plan are now covered by autom
 - ✅ **S4** — Text format output
 - ✅ **S5** — YAML format output
 - ✅ **S5** (variant) — maxTokens parameter
+- ✅ **S9** — Snapshot with tabId parameter (specific tab extraction)
+- ✅ **S10** — Snapshot no tab error (bad tabId returns error)
 
 ### Text Extraction
 - ✅ **T1** — Readability mode (`GET /text`)
 - ✅ **T2** — Raw mode (`GET /text?mode=raw`)
+- ✅ **T3** — Text with tabId parameter (specific tab extraction)
+- ✅ **T4** — Text no tab error (bad tabId returns error)
 
 ### Actions
 - ✅ **A1** — Click by ref
@@ -39,11 +43,14 @@ This document tracks which scenarios from the test plan are now covered by autom
 - ✅ **A3** — Fill by ref
 - ✅ **A4** — Press key
 - ✅ **A5** — Focus element
+- ✅ **A6** — Hover action
+- ✅ **A7** — Select option
 - ✅ **A8** — Scroll page
 - ✅ **A9** — Unknown kind returns 400
 - ✅ **A10** — Missing kind returns 400
 - ✅ **A11** — Ref not found error
 - ✅ **A12** — CSS selector click
+- ✅ **A13** — Action no tab error (bad tabId)
 - ✅ **A14** — Batch actions
 - ✅ **A15** — Batch empty returns 400
 
@@ -51,7 +58,9 @@ This document tracks which scenarios from the test plan are now covered by autom
 - ✅ **TB1** — List tabs
 - ✅ **TB2** — New tab
 - ✅ **TB3** — Close tab
+- ✅ **TB4** — Close without tabId returns 400
 - ✅ **TB5** — Bad action returns 400
+- ✅ **TB6** — Max tabs limit behavior
 
 ### Screenshots
 - ✅ **SS1** — Basic screenshot (base64)
@@ -87,10 +96,16 @@ This document tracks which scenarios from the test plan are now covered by autom
 
 *Note: ST2 (canvas noise) skipped — unreliable in headless CI. ST7 replaced with specific tab rotation test.*
 
+### Error Handling & Edge Cases
+- ✅ **ER5** — Unicode content (CJK/emoji/RTL) handling in snapshot & text
+- ✅ **ER6** — Empty page (about:blank) handling in snapshot & text
+
 ### Configuration Extended
+- ✅ **CF4** — Custom profile directory (`BRIDGE_PROFILE` env var)
+- ✅ **CF5** — No restore flag (`BRIDGE_NO_RESTORE=true`)
+- ✅ **CF6** (variant) — Chrome version override via TEST_CHROME_VERSION
 - ✅ **CF7** — Chrome version default in UA
 - ✅ **CF8** — Chrome version persists after fingerprint rotate
-- ✅ **CF6** (variant) — Chrome version override via TEST_CHROME_VERSION
 
 ---
 
@@ -107,28 +122,16 @@ The following scenarios require manual testing or deployment-specific setups:
 - **S6** — Snapshot diff mode
 - **S7** — Snapshot diff first call
 - **S8** — Snapshot file output
-- **S9** — Snapshot with tabId filter
-- **S10** — Snapshot no tab error
 - **S11** — Large page snapshot (20K+ tokens)
 - **S12** — Ref stability across snapshots
-- **T3** — Text with tabId
-- **T4** — Text no tab
 - **T5** — Token efficiency
-- **A6** — Hover action
-- **A7** — Select option
-- **A13** — Action no tab error
 - **A16-A17** — Human click/type (bezier movement)
-- **TB4** — Close without tabId (400)
-- **TB6** — Max tabs limit
 - **UP1-UP12** — File upload (requires test assets)
-- **CF1-CF5** — Config file precedence (requires file setup)
-- **CF3** — CDP_URL external Chrome
-- **CF4** — Custom profile directory
-- **CF5** — No restore flag
+- **CF1-CF3** — Config file precedence & CDP_URL (requires file setup)
 - **SP1-SP3** — Session persistence (requires restart)
 - **HM1-HM3** — Headed mode (requires display)
 - **MA1-MA8** — Multi-agent scenarios
-- **ER1-ER8** — Error handling & edge cases
+- **ER1-ER4, ER7-ER8** — Additional error handling edge cases
 - **Docker (D1-D7)** — Requires Docker, deployment testing
 - **Dashboard** — Requires manual profile management
 
@@ -144,9 +147,23 @@ Token usage, speed benchmarks, and Chrome startup metrics tracked separately in 
 
 ## Statistics
 
-**Automated:** 48 scenarios  
-**Manual/Future:** ~50+ scenarios  
-**Total Coverage:** 98+ test scenarios across health, nav, snapshot, text, actions, tabs, screenshots, eval, PDF, cookies, stealth, and config
+**Automated:** 61 scenarios (13 new easy wins + 2 CF4/CF5)
+- Health: 1
+- Navigation: 6
+- Snapshot: 8
+- Text: 4
+- Actions: 15
+- Tabs: 6
+- Screenshots: 2
+- Eval: 4
+- PDF: 5
+- Cookies: 5
+- Stealth: 6
+- Error Handling: 2
+- Configuration: 5
+
+**Manual/Future:** ~37 scenarios (reduced from ~50)  
+**Total Coverage:** 98 test scenarios across health, nav, snapshot, text, actions, tabs, screenshots, eval, PDF, cookies, stealth, error handling, and config
 
 ---
 
