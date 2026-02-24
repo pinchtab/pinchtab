@@ -2,9 +2,12 @@
 
 Base URL for all examples: `http://localhost:9867`
 
+> **CLI alternative:** All endpoints have CLI equivalents. Use `pinchtab help` for the full list. Examples are shown as `# CLI:` comments below.
+
 ## Navigate
 
 ```bash
+# CLI: pinchtab nav https://example.com [--new-tab] [--block-images]
 curl -X POST /navigate \
   -H 'Content-Type: application/json' \
   -d '{"url": "https://example.com"}'
@@ -18,6 +21,7 @@ curl -X POST /navigate \
 ## Snapshot (accessibility tree)
 
 ```bash
+# CLI: pinchtab snap [-i] [-c] [-d] [-s main] [--max-tokens 2000]
 # Full tree
 curl /snapshot
 
@@ -62,6 +66,7 @@ Returns flat JSON array of nodes with `ref`, `role`, `name`, `depth`, `value`, `
 ## Act on elements
 
 ```bash
+# CLI: pinchtab click e5 / pinchtab type e12 hello / pinchtab press Enter
 # Click by ref
 curl -X POST /action -H 'Content-Type: application/json' \
   -d '{"kind": "click", "ref": "e5"}'
@@ -120,6 +125,7 @@ curl -X POST /actions -H 'Content-Type: application/json' \
 ## Extract text
 
 ```bash
+# CLI: pinchtab text [--raw]
 # Readability mode (default) — strips nav/footer/ads
 curl /text
 
@@ -132,6 +138,7 @@ Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
 ## PDF export
 
 ```bash
+# CLI: pinchtab pdf [-o file.pdf] [--landscape] [--scale 0.8]
 # Returns base64 JSON
 curl /pdf
 
@@ -177,6 +184,7 @@ Sets files on `<input type=file>` elements via CDP. Fires `change` events. Selec
 ## Screenshot
 
 ```bash
+# CLI: pinchtab ss [-o file.jpg] [-q 80]
 curl "/screenshot?raw=true" -o screenshot.jpg
 curl "/screenshot?raw=true&quality=50" -o screenshot.jpg
 ```
@@ -184,6 +192,7 @@ curl "/screenshot?raw=true&quality=50" -o screenshot.jpg
 ## Evaluate JavaScript
 
 ```bash
+# CLI: pinchtab eval "document.title"
 curl -X POST /evaluate -H 'Content-Type: application/json' \
   -d '{"expression": "document.title"}'
 ```
@@ -191,6 +200,7 @@ curl -X POST /evaluate -H 'Content-Type: application/json' \
 ## Tab management
 
 ```bash
+# CLI: pinchtab tabs / pinchtab tabs new <url> / pinchtab tabs close <id>
 # List tabs
 curl /tabs
 
