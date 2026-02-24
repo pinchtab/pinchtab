@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -60,6 +61,33 @@ func (b *Bridge) injectStealth(ctx context.Context) {
 }
 
 func (b *Bridge) tabSetup(ctx context.Context) {
+	if b.Config.UserAgent != "" {
+		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return emulation.SetUserAgentOverride(b.Config.UserAgent).
+				WithAcceptLanguage("en-US,en").
+				WithPlatform("MacIntel").
+				WithUserAgentMetadata(&emulation.UserAgentMetadata{
+					Platform:        "macOS",
+					PlatformVersion: "14.0.0",
+					Architecture:    "arm",
+					Bitness:         "64",
+					Mobile:          false,
+					Brands: []*emulation.UserAgentBrandVersion{
+						{Brand: "Not(A:Brand", Version: "99"},
+						{Brand: "Google Chrome", Version: "133"},
+						{Brand: "Chromium", Version: "133"},
+					},
+					FullVersionList: []*emulation.UserAgentBrandVersion{
+						{Brand: "Not(A:Brand", Version: "99.0.0.0"},
+						{Brand: "Google Chrome", Version: "133.0.6943.141"},
+						{Brand: "Chromium", Version: "133.0.6943.141"},
+					},
+				}).
+				Do(c)
+		})); err != nil {
+			slog.Warn("ua override failed on tab setup", "err", err)
+		}
+	}
 	b.injectStealth(ctx)
 	if b.Config.NoAnimations {
 		b.InjectNoAnimations(ctx)
