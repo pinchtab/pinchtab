@@ -51,6 +51,11 @@ async function pinchtabFetch(
     } catch {
       return { text };
     }
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      return { error: `Request timed out after ${timeout}ms: ${path}` };
+    }
+    return { error: `Connection failed: ${err?.message || err}. Is Pinchtab running at ${base}?` };
   } finally {
     clearTimeout(timer);
   }
@@ -373,6 +378,36 @@ export default function register(api: PluginApi) {
         } finally {
           clearTimeout(timer);
         }
+      },
+    },
+    { optional: true },
+  );
+
+  // --- evaluate ---
+  api.registerTool(
+    {
+      name: "pinchtab_evaluate",
+      description:
+        "Execute JavaScript in the current page and return the result. Use for extracting specific data or performing actions not covered by other tools.",
+      parameters: {
+        type: "object",
+        properties: {
+          expression: {
+            type: "string",
+            description: "JavaScript expression to evaluate",
+          },
+          tabId: { type: "string", description: "Target tab ID" },
+        },
+        required: ["expression"],
+      },
+      async execute(_id: string, params: any) {
+        const cfg = getConfig(api);
+        const body: any = { expression: params.expression };
+        if (params.tabId) body.tabId = params.tabId;
+        const result = await pinchtabFetch(cfg, "/evaluate", { body });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       },
     },
     { optional: true },
