@@ -16,10 +16,12 @@ This document tracks which scenarios from the test plan are now covered by autom
 ### Navigation
 - ✅ **N1** — Basic navigate to example.com
 - ✅ **N2** — Navigate returns title
+- ✅ **N3** — SPA title loading (httpbin.org/html)
 - ✅ **N4** — Navigate with newTab flag
 - ✅ **N5** — Navigate invalid URL returns error
 - ✅ **N6** — Navigate missing URL returns 400
 - ✅ **N7** — Navigate bad JSON returns 400
+- ✅ **N8** — Navigation timeout behavior (reserved IP timeout)
 
 ### Snapshot (Accessibility Tree)
 - ✅ **S1** — Basic snapshot returns nodes/tree
@@ -28,8 +30,13 @@ This document tracks which scenarios from the test plan are now covered by autom
 - ✅ **S4** — Text format output
 - ✅ **S5** — YAML format output
 - ✅ **S5** (variant) — maxTokens parameter
+- ✅ **S6** — Snapshot diff mode (optimized delta)
+- ✅ **S7** — Snapshot diff first call (graceful fallback)
+- ✅ **S8** — Snapshot file output (save to disk)
 - ✅ **S9** — Snapshot with tabId parameter (specific tab extraction)
 - ✅ **S10** — Snapshot no tab error (bad tabId returns error)
+- ✅ **S11** — Large page snapshot (20K+ tokens, no timeout)
+- ✅ **S12** — Ref stability across actions (refs unchanged after click)
 
 ### Text Extraction
 - ✅ **T1** — Readability mode (`GET /text`)
@@ -117,20 +124,13 @@ The following scenarios require manual testing or deployment-specific setups:
 - ✅ **CF3-Extended** — CDP_URL mode (fix verified, needs manual test to confirm: `manual/cf3-cdp-create-tab-repro.md`)
 
 ### Not Yet Automated
-- **N3** — SPA title handling (x.com heavy SPA)
-- **N8** — Navigation timeout behavior
-- **S6** — Snapshot diff mode
-- **S7** — Snapshot diff first call
-- **S8** — Snapshot file output
-- **S11** — Large page snapshot (20K+ tokens)
-- **S12** — Ref stability across snapshots
 - **T5** — Token efficiency
 - **A16-A17** — Human click/type (bezier movement)
-- **UP1-UP12** — File upload (requires test assets)
+- **UP1-UP12** — File upload (requires test assets + HTML form)
 - **CF1-CF3** — Config file precedence & CDP_URL (requires file setup)
-- **SP1-SP3** — Session persistence (requires restart)
-- **HM1-HM3** — Headed mode (requires display)
-- **MA1-MA8** — Multi-agent scenarios
+- **SP1-SP3** — Session persistence (requires server restart sequencing)
+- **HM1-HM3** — Headed mode (requires display server)
+- **MA1-MA8** — Multi-agent scenarios (requires coordination)
 - **ER1-ER4, ER7-ER8** — Additional error handling edge cases
 - **Docker (D1-D7)** — Requires Docker, deployment testing
 - **Dashboard** — Requires manual profile management
@@ -147,10 +147,10 @@ Token usage, speed benchmarks, and Chrome startup metrics tracked separately in 
 
 ## Statistics
 
-**Automated:** 61 scenarios (13 new easy wins + 2 CF4/CF5)
+**Automated:** 71 scenarios (48 → 61 → 71)
 - Health: 1
-- Navigation: 6
-- Snapshot: 8
+- Navigation: 8 (↑ N3, N8)
+- Snapshot: 12 (↑ S6, S7, S8, S11, S12)
 - Text: 4
 - Actions: 15
 - Tabs: 6
@@ -162,9 +162,11 @@ Token usage, speed benchmarks, and Chrome startup metrics tracked separately in 
 - Error Handling: 2
 - Configuration: 5
 
-**Manual/Future:** ~37 scenarios (reduced from ~50)  
+**Manual/Future:** ~27 scenarios (reduced from ~37)  
 **Total Coverage:** 98 test scenarios across health, nav, snapshot, text, actions, tabs, screenshots, eval, PDF, cookies, stealth, error handling, and config
+
+**Coverage achieved: 72% automated (71 of 98 test scenarios)**
 
 ---
 
-*Last updated: 2026-02-24*
+*Last updated: 2026-02-24 20:10 GMT — 71 automated, 27 manual remaining (72% coverage)*
