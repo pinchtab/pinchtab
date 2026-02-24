@@ -75,6 +75,7 @@ var cliCommands = map[string]bool{
 	"screenshot": true, "ss": true,
 	"eval": true, "evaluate": true,
 	"pdf": true, "health": true,
+	"help": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -116,7 +117,45 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliPDF(client, base, token, args)
 	case "health":
 		cliHealth(client, base, token)
+	case "help":
+		cliHelp()
 	}
+}
+
+func cliHelp() {
+	fmt.Print(`Pinchtab CLI — browser control from the command line
+
+Usage: pinchtab <command> [args] [flags]
+
+Commands:
+  nav, navigate <url>     Navigate to URL (--new-tab, --block-images)
+  snap, snapshot          Accessibility tree snapshot (-i, -c, -d, --max-tokens N)
+  click <ref>             Click element by ref
+  type <ref> <text>       Type text into element
+  fill <ref> <text>       Set input value (no key events)
+  press <key>             Press a key (Enter, Tab, Escape, ...)
+  hover <ref>             Hover over element
+  scroll <direction>      Scroll page (up, down, left, right)
+  select <ref> <value>    Select dropdown option
+  focus <ref>             Focus element
+  text                    Extract page text (--raw for innerText)
+  tabs                    List open tabs
+  tabs new <url>          Open new tab
+  tabs close <tabId>      Close tab
+  ss, screenshot          Take screenshot (-o file, -q quality)
+  eval <expression>       Evaluate JavaScript
+  pdf                     Export page as PDF (-o file, --landscape, --scale N)
+  health                  Server health check
+  help                    Show this help
+
+Environment:
+  PINCHTAB_URL            Server URL (default: http://localhost:9867)
+  PINCHTAB_TOKEN          Auth token (sent as Bearer)
+
+Pipe with jq:
+  pinchtab snap -i | jq '.nodes[] | select(.role=="link")'
+`)
+	os.Exit(0)
 }
 
 // --- navigate ---

@@ -27,6 +27,13 @@
 | `CDP_URL` | (none) | Connect to existing Chrome DevTools |
 | `BRIDGE_NO_DASHBOARD` | `false` | Disable dashboard endpoints on instance processes |
 
+## CLI client
+
+| Var | Default | Description |
+|---|---|---|
+| `PINCHTAB_URL` | `http://localhost:9867` | Pinchtab server URL for CLI commands |
+| `PINCHTAB_TOKEN` | (none) | Auth token for CLI (sent as `Authorization: Bearer`) |
+
 ## Dashboard mode (`pinchtab dashboard`)
 
 | Var | Default | Description |
