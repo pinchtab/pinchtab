@@ -105,7 +105,7 @@ func TestText_TokenEfficiency(t *testing.T) {
 	}
 	// Simple sanity check: text should be reasonable size (not huge, not tiny)
 	if len(text) < 50 {
-		t.Warnf("text is very small (%d bytes), may not be representative", len(text))
+		t.Logf("text is very small (%d bytes), may not be representative", len(text))
 	}
 	t.Logf("extracted %d words from google.com", len(words))
 }
