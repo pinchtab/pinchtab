@@ -35,7 +35,20 @@ func TestMain(m *testing.M) {
 
 	// Start server
 	cmd := exec.Command("/tmp/pinchtab-test")
-	env := append(os.Environ(),
+	
+	// Build environment for subprocess
+	// Start with a filtered set of inherited env vars, then add test-specific ones
+	baseEnv := os.Environ()
+	env := []string{}
+	for _, e := range baseEnv {
+		// Skip any pre-existing BRIDGE_* and PINCHTAB_* vars to avoid conflicts
+		if !strings.HasPrefix(e, "BRIDGE_") && !strings.HasPrefix(e, "PINCHTAB_") {
+			env = append(env, e)
+		}
+	}
+	
+	// Add test-specific environment
+	env = append(env,
 		"BRIDGE_PORT="+port,
 		"BRIDGE_HEADLESS=true",
 		"BRIDGE_NO_RESTORE=true",
@@ -43,10 +56,18 @@ func TestMain(m *testing.M) {
 		fmt.Sprintf("BRIDGE_STATE_DIR=%s", mustTempDir()),
 		fmt.Sprintf("BRIDGE_PROFILE=%s", mustTempDir()),
 	)
+	
 	// Pass CHROME_BINARY if set by CI workflow or environment
 	if chromeBinary := os.Getenv("CHROME_BINARY"); chromeBinary != "" {
 		env = append(env, "CHROME_BINARY="+chromeBinary)
 	}
+	
+	// Pass BRIDGE_CHROME_VERSION if TEST_CHROME_VERSION is set
+	if testChromeVersion := os.Getenv("TEST_CHROME_VERSION"); testChromeVersion != "" {
+		fmt.Fprintf(os.Stderr, "TestMain: setting BRIDGE_CHROME_VERSION=%s from TEST_CHROME_VERSION\n", testChromeVersion)
+		env = append(env, "BRIDGE_CHROME_VERSION="+testChromeVersion)
+	}
+	
 	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
