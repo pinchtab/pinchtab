@@ -9,6 +9,9 @@ on:
         description: 'Skill version (e.g. 0.2.0, without v prefix)'
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     name: Publish to ClawHub
