@@ -151,7 +151,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	if output == "file" {
 		snapshotDir := filepath.Join(h.Config.StateDir, "snapshots")
-		if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		if err := os.MkdirAll(snapshotDir, 0750); err != nil {
 			web.Error(w, 500, fmt.Errorf("create snapshot dir: %w", err))
 			return
 		}
@@ -227,13 +227,18 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 		filePath := filepath.Join(snapshotDir, filename)
 		if outputPath != "" {
-			filePath = outputPath
-			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			safe, err := web.SafePath(h.Config.StateDir, outputPath)
+			if err != nil {
+				web.Error(w, 400, fmt.Errorf("invalid path: %w", err))
+				return
+			}
+			filePath = safe
+			if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
 				web.Error(w, 500, fmt.Errorf("create output dir: %w", err))
 				return
 			}
 		}
-		if err := os.WriteFile(filePath, content, 0644); err != nil {
+		if err := os.WriteFile(filePath, content, 0600); err != nil {
 			web.Error(w, 500, fmt.Errorf("write snapshot: %w", err))
 			return
 		}

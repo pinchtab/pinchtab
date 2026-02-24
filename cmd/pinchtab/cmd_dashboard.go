@@ -92,7 +92,11 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
 	)
 
-	srv := &http.Server{Addr: cfg.Bind + ":" + dashPort, Handler: handler}
+	srv := &http.Server{
+		Addr:              cfg.Bind + ":" + dashPort,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	autoLaunch := strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "1") ||
 		strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "true") ||

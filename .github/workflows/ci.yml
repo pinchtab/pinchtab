@@ -55,3 +55,30 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec
+        run: gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 -fmt=json -out=gosec-results.json ./... || true
+
+      - name: Check critical findings
+        run: |
+          # Fail on G112 (Slowloris), G204 (command injection)
+          ISSUES=$(cat gosec-results.json | jq '[.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")] | length')
+          echo "Critical issues: $ISSUES"
+          cat gosec-results.json | jq '.Stats'
+          if [ "$ISSUES" -gt 0 ]; then
+            cat gosec-results.json | jq '.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")'
+            exit 1
+          fi

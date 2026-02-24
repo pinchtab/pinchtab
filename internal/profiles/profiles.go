@@ -155,12 +155,21 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		}
 	}
 
+	// Validate source path exists and is a directory
+	srcInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("source path invalid: %w", err)
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source path must be a directory")
+	}
+
 	slog.Info("importing profile", "name", name, "source", sourcePath)
-	if err := exec.Command("cp", "-a", sourcePath, dest).Run(); err != nil {
+	if err := exec.Command("cp", "-a", sourcePath, dest).Run(); err != nil { //nolint:gosec // sourcePath validated above
 		return fmt.Errorf("copy failed: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0600); err != nil {
 		slog.Warn("failed to write import marker", "err", err)
 	}
 	return nil

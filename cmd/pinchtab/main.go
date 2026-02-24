@@ -177,7 +177,11 @@ func main() {
 		handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
 	)
 
-	srv := &http.Server{Addr: cfg.ListenAddr(), Handler: handler}
+	srv := &http.Server{
+		Addr:              cfg.ListenAddr(),
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	setupSignalHandler(doShutdown, func() {
 		orch.ForceShutdown()

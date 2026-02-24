@@ -61,7 +61,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	if output == "file" {
 		screenshotDir := filepath.Join(h.Config.StateDir, "screenshots")
-		if err := os.MkdirAll(screenshotDir, 0755); err != nil {
+		if err := os.MkdirAll(screenshotDir, 0750); err != nil {
 			web.Error(w, 500, fmt.Errorf("create screenshot dir: %w", err))
 			return
 		}
@@ -70,7 +70,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		filename := fmt.Sprintf("screenshot-%s.jpg", timestamp)
 		filePath := filepath.Join(screenshotDir, filename)
 
-		if err := os.WriteFile(filePath, buf, 0644); err != nil {
+		if err := os.WriteFile(filePath, buf, 0600); err != nil {
 			web.Error(w, 500, fmt.Errorf("write screenshot: %w", err))
 			return
 		}
@@ -140,15 +140,26 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		savePath := r.URL.Query().Get("path")
 		if savePath == "" {
 			pdfDir := filepath.Join(h.Config.StateDir, "pdfs")
-			if err := os.MkdirAll(pdfDir, 0755); err != nil {
+			if err := os.MkdirAll(pdfDir, 0750); err != nil {
 				web.Error(w, 500, fmt.Errorf("create pdf dir: %w", err))
 				return
 			}
 			timestamp := time.Now().Format("20060102-150405")
 			savePath = filepath.Join(pdfDir, fmt.Sprintf("page-%s.pdf", timestamp))
+		} else {
+			safe, err := web.SafePath(h.Config.StateDir, savePath)
+			if err != nil {
+				web.Error(w, 400, fmt.Errorf("invalid path: %w", err))
+				return
+			}
+			savePath = safe
+			if err := os.MkdirAll(filepath.Dir(savePath), 0750); err != nil {
+				web.Error(w, 500, fmt.Errorf("create dir: %w", err))
+				return
+			}
 		}
 
-		if err := os.WriteFile(savePath, buf, 0644); err != nil {
+		if err := os.WriteFile(savePath, buf, 0600); err != nil {
 			web.Error(w, 500, fmt.Errorf("write pdf: %w", err))
 			return
 		}
