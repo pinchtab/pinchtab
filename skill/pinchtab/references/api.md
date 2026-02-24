@@ -129,6 +129,24 @@ curl "/text?mode=raw"
 
 Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
 
+## PDF export
+
+```bash
+# Returns base64 JSON
+curl /pdf
+
+# Raw PDF bytes
+curl "/pdf?raw=true" -o page.pdf
+
+# Save to disk
+curl "/pdf?output=file&path=/tmp/page.pdf"
+
+# Landscape with custom scale
+curl "/pdf?landscape=true&scale=0.8&raw=true" -o page.pdf
+```
+
+Wraps `Page.printToPDF`. Prints background graphics by default.
+
 ## Download files
 
 ```bash

@@ -215,6 +215,7 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `GET` | `/tabs` | List open tabs |
 | `GET` | `/snapshot` | Accessibility tree (primary interface) |
 | `GET` | `/screenshot` | JPEG screenshot (opt-in) |
+| `GET` | `/pdf` | PDF export of current page |
 | `GET` | `/text` | Readable page text (readability or raw) |
 | `POST` | `/navigate` | Go to URL |
 | `POST` | `/action` | Click, type, fill, press, focus, hover, select, scroll |
@@ -247,6 +248,16 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `quality=N` | JPEG quality (default: 80) |
 | `noAnimations=true` | Disable CSS animations before capture |
 | `output=file` | Save screenshot to disk instead of returning |
+
+### Query Parameters (pdf)
+| Param | Description |
+|-------|-------------|
+| `tabId` | Target tab (default: first tab) |
+| `landscape=true` | Landscape orientation |
+| `scale=N` | Print scale (default: 1.0) |
+| `raw=true` | Return raw PDF bytes |
+| `output=file` | Save PDF to disk |
+| `path=/custom/path` | Custom file path (with `output=file`) |
 
 ### Query Parameters (text)
 | Param | Description |

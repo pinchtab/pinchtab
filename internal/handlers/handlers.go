@@ -33,6 +33,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /tabs", h.HandleTabs)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)
+	mux.HandleFunc("GET /pdf", h.HandlePDF)
 	mux.HandleFunc("GET /text", h.HandleText)
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
 	mux.HandleFunc("POST /action", h.HandleAction)
