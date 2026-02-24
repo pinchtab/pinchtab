@@ -143,7 +143,20 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | UP11 | Bad JSON body | `POST /upload {broken` | 400, parse error |
 | UP12 | No tab | `POST /upload {"paths":["tests/assets/test-upload.png"]}` with no tabs | Error |
 
-### 1.11 Stealth
+### 1.11 PDF Export
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| PD1 | PDF base64 | Navigate to page, `GET /pdf` | JSON with `format: "pdf"` and `base64` field |
+| PD2 | PDF raw bytes | `GET /pdf?raw=true` | Content-Type `application/pdf`, valid PDF bytes |
+| PD3 | PDF save to file | `GET /pdf?output=file` | JSON with `path` and `size` |
+| PD4 | PDF custom path | `GET /pdf?output=file&path=/tmp/test.pdf` | File written to `/tmp/test.pdf` |
+| PD5 | PDF landscape | `GET /pdf?landscape=true&raw=true` | Valid PDF in landscape |
+| PD6 | PDF scale | `GET /pdf?scale=0.5&raw=true` | Valid PDF with scaled content |
+| PD7 | PDF no tab | `GET /pdf` with no tabs | 404 error |
+| PD8 | PDF specific tab | `GET /pdf?tabId=TAB_ID` | PDF of specified tab |
+
+### 1.12 Stealth
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
@@ -156,7 +169,7 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | ST7 | Fingerprint no tab | `POST /fingerprint/rotate {}` with no tabs | Error |
 | ST8 | Bot detection site | Navigate to `bot.sannysoft.com` | Most checks pass (green) |
 
-### 1.12 Configuration
+### 1.13 Configuration
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
@@ -166,7 +179,7 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | CF4 | Custom profile dir | `BRIDGE_PROFILE=/tmp/test-profile ./pinchtab` | Uses specified profile |
 | CF5 | No restore | `BRIDGE_NO_RESTORE=true ./pinchtab` | Doesn't restore previous tabs |
 
-### 1.13 Session Persistence
+### 1.14 Session Persistence
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
