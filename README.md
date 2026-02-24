@@ -9,10 +9,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/lang-Go-00ADD8?style=flat-square" alt="Go"/>
+  <a href="https://github.com/pinchtab/pinchtab/releases/latest"><img src="https://img.shields.io/github/v/release/pinchtab/pinchtab?style=flat-square&color=FFD700" alt="Release"/></a>
+  <a href="https://github.com/pinchtab/pinchtab/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pinchtab/pinchtab/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"/></a>
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.25+"/>
+  <a href="https://github.com/pinchtab/pinchtab/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pinchtab/pinchtab?style=flat-square&color=888" alt="License"/></a>
+  <a href="https://github.com/pinchtab/pinchtab/releases"><img src="https://img.shields.io/github/downloads/pinchtab/pinchtab/total?style=flat-square&color=00ff88&label=downloads" alt="Downloads"/></a>
   <img src="https://img.shields.io/badge/binary-12MB-FFD700?style=flat-square" alt="12MB"/>
-  <img src="https://img.shields.io/badge/interface-HTTP-00ff88?style=flat-square" alt="HTTP"/>
-  <img src="https://img.shields.io/badge/license-MIT-888?style=flat-square" alt="MIT"/>
 </p>
 
 ---
