@@ -80,6 +80,12 @@ One tool definition, many actions — keeps context lean:
 
 **Token strategy:** `text` for reading, `snapshot` with `filter=interactive&format=compact` for interactions, `diff=true` on subsequent snapshots, `screenshot` only for visual verification.
 
+## Security Notes
+
+- **`evaluate`** executes arbitrary JavaScript in the page — restrict to trusted agents and domains
+- Use `BRIDGE_TOKEN` to gate API access; rotate regularly
+- In production, run behind HTTPS reverse proxy (Caddy/nginx)
+
 ## Requirements
 
 - Running Pinchtab instance (Go binary or Docker)
