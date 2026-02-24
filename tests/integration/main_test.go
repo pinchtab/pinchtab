@@ -235,3 +235,29 @@ func navigate(t *testing.T, url string) {
 		t.Fatalf("navigate to %s failed with %d", url, code)
 	}
 }
+
+// extractRefs extracts ref identifiers from a snapshot JSON
+func extractRefs(snapshot map[string]any) []string {
+	refs := []string{}
+	walkSnapshot(snapshot, func(m map[string]any) {
+		if ref, ok := m["ref"].(string); ok && ref != "" {
+			refs = append(refs, ref)
+		}
+	})
+	return refs
+}
+
+// walkSnapshot recursively walks through snapshot structure to find all objects
+func walkSnapshot(v any, fn func(map[string]any)) {
+	switch val := v.(type) {
+	case map[string]any:
+		fn(val)
+		for _, child := range val {
+			walkSnapshot(child, fn)
+		}
+	case []any:
+		for _, item := range val {
+			walkSnapshot(item, fn)
+		}
+	}
+}
