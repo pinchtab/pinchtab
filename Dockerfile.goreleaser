@@ -1,0 +1,35 @@
+FROM alpine:latest
+
+LABEL org.opencontainers.image.source="https://github.com/pinchtab/pinchtab"
+LABEL org.opencontainers.image.description="Browser control for AI agents"
+
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    dumb-init
+
+RUN adduser -D -g '' pinchtab && \
+    mkdir -p /data && \
+    chown pinchtab:pinchtab /data
+
+COPY pinchtab /usr/local/bin/pinchtab
+
+USER pinchtab
+WORKDIR /data
+
+ENV BRIDGE_BIND=0.0.0.0 \
+    BRIDGE_PORT=9867 \
+    BRIDGE_HEADLESS=true \
+    BRIDGE_STATE_DIR=/data \
+    BRIDGE_PROFILE=/data/chrome-profile \
+    CHROME_BINARY=/usr/bin/chromium-browser \
+    CHROME_FLAGS="--no-sandbox --disable-gpu"
+
+EXPOSE 9867
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["pinchtab"]

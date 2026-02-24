@@ -29,6 +29,38 @@ changelog:
       - '^ci:'
       - '^chore:'
 
+dockers:
+  - image_templates:
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/pinchtab/pinchtab"
+    goos: linux
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-arm64"
+    use: buildx
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/pinchtab/pinchtab"
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/pinchtab/pinchtab:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-amd64"
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/pinchtab/pinchtab:latest"
+    image_templates:
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-amd64"
+      - "ghcr.io/pinchtab/pinchtab:{{ .Version }}-arm64"
+
 release:
   github:
     owner: pinchtab
