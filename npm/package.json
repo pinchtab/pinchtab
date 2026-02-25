@@ -1,0 +1,37 @@
+{
+  "name": "pinchtab",
+  "version": "0.7.0",
+  "description": "Browser control API for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pinchtab": "bin/pinchtab"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/integration.test.js",
+    "postinstall": "node scripts/postinstall.js",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "scripts"
+  ],
+  "keywords": [
+    "browser",
+    "automation",
+    "api",
+    "agent",
+    "ai"
+  ],
+  "author": "Mario <mario@giagolab.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
