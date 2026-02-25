@@ -14,10 +14,9 @@ builds:
 
 archives:
   # Output bare binaries directly (no archives)
+  # Note: goreleaser auto-adds .exe for Windows, so don't include it in the template
   - format: binary
-    # Linux/macOS: pinchtab-linux-amd64, pinchtab-darwin-arm64, etc.
-    # Windows: pinchtab-windows-amd64.exe
-    name_template: "{{ if eq .Os \"windows\" }}pinchtab-{{ .Os }}-{{ .Arch }}.exe{{ else }}pinchtab-{{ .Os }}-{{ .Arch }}{{ end }}"
+    name_template: "pinchtab-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
