@@ -30,23 +30,66 @@ metadata:
 
 Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 
+**Security Note:** Pinchtab runs a local Chrome browser under your control. It does not access your credentials, exfiltrate data, or connect to external services. All interactions stay local unless you explicitly navigate to external sites. Binary distributed via [GitHub releases](https://github.com/pinchtab/pinchtab/releases) with checksums. See [TRUST.md](TRUST.md) for full security model and VirusTotal flag explanation.
+
+## Quick Start (Agent Workflow)
+
+The 30-second pattern for browser tasks:
+
+```bash
+# 1. Start Pinchtab (runs forever, local on :9867)
+pinchtab &
+
+# 2. In your agent, follow this loop:
+#    a) Navigate to a URL
+#    b) Snapshot the page (get refs like e0, e5, e12)
+#    c) Act on a ref (click e5, type e12 "search text")
+#    d) Snapshot again to see the result
+#    e) Repeat step c-d until done
+```
+
+**That's it.** Refs are stable—you don't need to re-snapshot before every action. Only snapshot when the page changes significantly.
+
 ## Setup
 
 ```bash
-# Headless (default)
+# Headless (default) — no visible window
 pinchtab &
 
-# Headed — visible Chrome for human + agent workflows
+# Headed — visible Chrome window for human debugging
 BRIDGE_HEADLESS=false pinchtab &
 
-# Dashboard/orchestrator — profile manager + launcher
+# With auth token
+BRIDGE_TOKEN="your-secret-token" pinchtab &
+
+# Custom port
+BRIDGE_PORT=8080 pinchtab &
+
+# Dashboard/orchestrator — profile manager + tab launcher
 pinchtab dashboard &
 ```
 
-Default port: `9867`. Auth: set `BRIDGE_TOKEN=<secret>` and pass `Authorization: Bearer <secret>`.
+Default: **port 9867**, no auth required (local). Set `BRIDGE_TOKEN` for remote access.
 
-For dashboard/profile workflows, see [references/profiles.md](references/profiles.md).
-For all environment variables, see [references/env.md](references/env.md).
+For advanced setup, see [references/profiles.md](references/profiles.md) and [references/env.md](references/env.md).
+
+## What a Snapshot Looks Like
+
+After calling `/snapshot`, you get the page's accessibility tree as JSON—flat list of elements with refs:
+
+```json
+{
+  "refs": [
+    {"id": "e0", "role": "link", "text": "Sign In", "selector": "a[href='/login']"},
+    {"id": "e1", "role": "textbox", "label": "Email", "selector": "input[name='email']"},
+    {"id": "e2", "role": "button", "text": "Submit", "selector": "button[type='submit']"}
+  ],
+  "text": "... readable text version of page ...",
+  "title": "Login Page"
+}
+```
+
+Then you act on refs: `click e0`, `type e1 "user@example.com"`, `press e2 Enter`.
 
 ## Core Workflow
 
@@ -89,6 +132,28 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 
 **Strategy**: Start with `?filter=interactive&format=compact`. Use `?diff=true` on subsequent snapshots. Use `/text` when you only need readable content. Full `/snapshot` only when needed.
 
+## Agent Optimization
+
+**Validated Feb 2026**: Testing with AI agents revealed a critical pattern for reliable, token-efficient scraping.
+
+**See the full guide:** [docs/agent-optimization.md](../../docs/agent-optimization.md)
+
+### Quick Summary
+
+**The 3-second pattern** — wait after navigate before snapshot:
+
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}' && \
+sleep 3 && \
+curl http://localhost:9867/snapshot | jq '.nodes[] | select(.name | length > 15) | .name'
+```
+
+**Token savings:** 93% reduction (3,842 → 272 tokens) when using prescriptive instructions vs. exploratory agent approach.
+
+For detailed findings, system prompt templates, and site-specific notes, see [docs/agent-optimization.md](../../docs/agent-optimization.md).
+
 ## Tips
 
 - **Always pass `tabId` explicitly** when working with multiple tabs
@@ -97,3 +162,4 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 - Pinchtab persists sessions — tabs survive restarts (disable with `BRIDGE_NO_RESTORE=true`)
 - Chrome profile is persistent — cookies/logins carry over between runs
 - Use `BRIDGE_BLOCK_IMAGES=true` or `"blockImages": true` on navigate for read-heavy tasks
+- **Wait 3+ seconds after navigate before snapshot** — Chrome needs time to render 2000+ accessibility tree nodes
