@@ -42,13 +42,35 @@ function getBinaryName(platform) {
   return `pinchtab-${os}-${archName}`;
 }
 
-function getBinDir() {
-  return path.join(os.homedir(), '.pinchtab', 'bin');
+function getBinaryPath(binaryName) {
+  // Allow override via environment variable (useful for Docker, dev, containers)
+  if (process.env.PINCHTAB_BINARY_PATH) {
+    return process.env.PINCHTAB_BINARY_PATH;
+  }
+
+  return path.join(os.homedir(), '.pinchtab', 'bin', binaryName);
 }
 
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    const httpsOptions = new URL(url);
+
+    // Proxy support for corporate environments
+    if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY) {
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+      try {
+        const proxy = new URL(proxyUrl);
+        httpsOptions.agent = new https.Agent({
+          host: proxy.hostname,
+          port: proxy.port,
+          keepAlive: true,
+        });
+      } catch (err) {
+        console.warn(`Warning: Invalid proxy URL ${proxyUrl}, ignoring`);
+      }
+    }
+
+    https.get(url, httpsOptions, (response) => {
       if (response.statusCode === 404) {
         reject(new Error(`Not found: ${url}`));
         return;
@@ -106,8 +128,7 @@ function verifySHA256(filePath, expectedHash) {
 
 async function downloadBinary(platform, version) {
   const binaryName = getBinaryName(platform);
-  const binDir = getBinDir();
-  const binaryPath = path.join(binDir, binaryName);
+  const binaryPath = getBinaryPath(binaryName);
 
   // Skip if already exists
   if (fs.existsSync(binaryPath)) {
@@ -129,7 +150,8 @@ async function downloadBinary(platform, version) {
   const expectedHash = checksums.get(binaryName);
   const downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${binaryName}`;
 
-  // Ensure directory exists
+  // Ensure directory exists (unless using custom PINCHTAB_BINARY_PATH)
+  const binDir = path.dirname(binaryPath);
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
@@ -193,6 +215,9 @@ async function downloadBinary(platform, version) {
     console.error('  • Check your internet connection');
     console.error('  • Verify the release exists: https://github.com/pinchtab/pinchtab/releases');
     console.error('  • Try again: npm rebuild pinchtab');
+    if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY) {
+      console.error('  • Check proxy settings (HTTPS_PROXY / HTTP_PROXY)');
+    }
     process.exit(1);
   }
 })();

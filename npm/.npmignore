@@ -1,0 +1,31 @@
+# Source files
+src/
+tests/
+*.ts
+tsconfig.json
+
+# Build artifacts
+dist/
+*.map
+
+# Dev dependencies
+node_modules/
+package-lock.json
+.git
+.github
+.gitignore
+.npmignore
+
+# Docs
+*.md
+!LICENSE
+
+# Config
+.gitignore
+.env*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

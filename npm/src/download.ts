@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as crypto from 'crypto';
+import { detectPlatform, getBinaryName, getBinaryPath } from './platform';
 
 const GITHUB_REPO = 'pinchtab/pinchtab';
 
@@ -12,46 +13,27 @@ function getVersion(): string {
   return pkg.version;
 }
 
-interface Platform {
-  os: 'darwin' | 'linux' | 'windows';
-  arch: 'x64' | 'arm64';
-}
-
-function detectPlatform(): Platform {
-  const platform = process.platform as any;
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-
-  const osMap: Record<string, 'darwin' | 'linux' | 'windows'> = {
-    darwin: 'darwin',
-    linux: 'linux',
-    win32: 'windows',
-  };
-
-  const os = osMap[platform];
-  if (!os) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-
-  return { os, arch };
-}
-
-function getBinaryName(platform: Platform): string {
-  const { os, arch } = platform;
-  const archName = arch === 'arm64' ? 'arm64' : 'x64';
-
-  if (os === 'windows') {
-    return `pinchtab-${os}-${archName}.exe`;
-  }
-  return `pinchtab-${os}-${archName}`;
-}
-
-function getBinDir(): string {
-  return path.join(process.env.HOME || process.env.USERPROFILE || '', '.pinchtab', 'bin');
-}
-
 function fetchUrl(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    let agent: https.Agent | undefined;
+
+    // Proxy support for corporate environments
+    const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+    if (proxyUrl) {
+      try {
+        const proxy = new URL(proxyUrl);
+        const proxyPort = proxy.port ? parseInt(proxy.port, 10) : 8080;
+        agent = new https.Agent({
+          host: proxy.hostname,
+          port: proxyPort,
+          keepAlive: true,
+        });
+      } catch (err) {
+        console.warn(`Warning: Invalid proxy URL ${proxyUrl}, ignoring`);
+      }
+    }
+
+    const request = https.get(url, agent ? { agent } : {}, (response) => {
       if (response.statusCode === 404) {
         reject(new Error(`Not found: ${url}`));
         return;
@@ -66,7 +48,9 @@ function fetchUrl(url: string): Promise<Buffer> {
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => resolve(Buffer.concat(chunks)));
       response.on('error', reject);
-    }).on('error', reject);
+    });
+
+    request.on('error', reject);
   });
 }
 
@@ -105,10 +89,9 @@ function verifySHA256(filePath: string, expectedHash: string): boolean {
   return actualHash.toLowerCase() === expectedHash.toLowerCase();
 }
 
-async function downloadBinary(platform: Platform, version: string): Promise<void> {
+async function downloadBinary(platform: any, version: string): Promise<void> {
   const binaryName = getBinaryName(platform);
-  const binDir = getBinDir();
-  const binaryPath = path.join(binDir, binaryName);
+  const binaryPath = getBinaryPath(binaryName);
 
   // Skip if already exists
   if (fs.existsSync(binaryPath)) {
@@ -130,7 +113,8 @@ async function downloadBinary(platform: Platform, version: string): Promise<void
   const expectedHash = checksums.get(binaryName)!;
   const downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${binaryName}`;
 
-  // Ensure directory exists
+  // Ensure directory exists (unless using custom PINCHTAB_BINARY_PATH)
+  const binDir = path.dirname(binaryPath);
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
@@ -185,7 +169,6 @@ export async function ensureBinary(): Promise<string> {
 
   await downloadBinary(platform, version);
 
-  const binDir = getBinDir();
   const binaryName = getBinaryName(platform);
-  return path.join(binDir, binaryName);
+  return getBinaryPath(binaryName);
 }

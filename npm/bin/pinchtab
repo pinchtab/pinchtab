@@ -3,6 +3,7 @@
 const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
+const fs = require('fs');
 
 function getBinaryName() {
   const platform = process.platform;
@@ -19,7 +20,27 @@ function getBinaryName() {
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
-const binaryPath = path.join(os.homedir(), '.pinchtab', 'bin', getBinaryName());
+function getBinaryPath() {
+  // Allow override via environment variable
+  if (process.env.PINCHTAB_BINARY_PATH) {
+    return process.env.PINCHTAB_BINARY_PATH;
+  }
+
+  return path.join(os.homedir(), '.pinchtab', 'bin', getBinaryName());
+}
+
+const binaryPath = getBinaryPath();
+
+// Check binary exists
+if (!fs.existsSync(binaryPath)) {
+  console.error('❌ Pinchtab binary not found at:');
+  console.error(`  ${binaryPath}`);
+  console.error('\nTo fix this, run:');
+  console.error('  npm rebuild pinchtab');
+  console.error('\nOr set a custom binary path:');
+  console.error(`  PINCHTAB_BINARY_PATH=/path/to/binary pinchtab`);
+  process.exit(1);
+}
 
 const proc = spawn(binaryPath, process.argv.slice(2), {
   stdio: 'inherit',

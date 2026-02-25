@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { detectPlatform, getBinaryName, getBinaryPath } from './platform';
 import {
   SnapshotParams,
   SnapshotResponse,
@@ -13,6 +14,7 @@ import {
 } from './types';
 
 export * from './types';
+export * from './platform';
 
 export class Pinchtab {
   private baseUrl: string;
@@ -36,7 +38,7 @@ export class Pinchtab {
     }
 
     if (!binaryPath) {
-      binaryPath = await this.getBinaryPath();
+      binaryPath = await this.getBinaryPathInternal();
     }
 
     this.binaryPath = binaryPath;
@@ -136,38 +138,20 @@ export class Pinchtab {
   /**
    * Get the path to the Pinchtab binary
    */
-  private async getBinaryPath(): Promise<string> {
-    const homedir = require('os').homedir();
-    const defaultPath = path.join(homedir, '.pinchtab', 'bin', this.getBinaryName());
+  private async getBinaryPathInternal(): Promise<string> {
+    const platform = detectPlatform();
+    const binaryName = getBinaryName(platform);
+    const binaryPath = getBinaryPath(binaryName);
 
-    if (fs.existsSync(defaultPath)) {
-      return defaultPath;
+    if (!fs.existsSync(binaryPath)) {
+      throw new Error(
+        `Pinchtab binary not found at ${binaryPath}.\n` +
+        `Please run: npm rebuild pinchtab\n` +
+        `Or set PINCHTAB_BINARY_PATH=/path/to/binary`
+      );
     }
 
-    // Try relative to package
-    const relativePath = path.join(__dirname, '..', 'bin', this.getBinaryName());
-    if (fs.existsSync(relativePath)) {
-      return relativePath;
-    }
-
-    throw new Error(
-      `Pinchtab binary not found. Please run: npm run postinstall or ensure the binary is in ~/.pinchtab/bin/`
-    );
-  }
-
-  private getBinaryName(): string {
-    const platform = process.platform;
-    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-
-    if (platform === 'darwin') {
-      return `pinchtab-darwin-${arch}`;
-    } else if (platform === 'linux') {
-      return `pinchtab-linux-${arch}`;
-    } else if (platform === 'win32') {
-      return `pinchtab-windows-${arch}.exe`;
-    }
-
-    throw new Error(`Unsupported platform: ${platform}`);
+    return binaryPath;
   }
 }
 
