@@ -17,13 +17,14 @@ import (
 )
 
 type Orchestrator struct {
-	instances map[string]*InstanceInternal
-	baseDir   string
-	binary    string
-	profiles  *profiles.ProfileManager
-	runner    HostRunner
-	mu        sync.RWMutex
-	client    *http.Client
+	instances      map[string]*InstanceInternal
+	baseDir        string
+	binary         string
+	profiles       *profiles.ProfileManager
+	runner         HostRunner
+	mu             sync.RWMutex
+	client         *http.Client
+	childAuthToken string
 }
 
 type InstanceInternal struct {
@@ -67,11 +68,12 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 	}
 
 	return &Orchestrator{
-		instances: make(map[string]*InstanceInternal),
-		baseDir:   baseDir,
-		binary:    binary,
-		runner:    runner,
-		client:    &http.Client{Timeout: 3 * time.Second},
+		instances:      make(map[string]*InstanceInternal),
+		baseDir:        baseDir,
+		binary:         binary,
+		runner:         runner,
+		client:         &http.Client{Timeout: 3 * time.Second},
+		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 	}
 }
 

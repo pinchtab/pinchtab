@@ -36,7 +36,15 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		time.Sleep(instanceHealthPollInterval)
 
 		for _, baseURL := range instanceBaseURLs(inst.Port) {
-			resp, err := o.client.Get(baseURL + "/health")
+			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
+			if reqErr != nil {
+				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
+				continue
+			}
+			if o.childAuthToken != "" {
+				req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+			}
+			resp, err := o.client.Do(req)
 			if err == nil {
 				_ = resp.Body.Close()
 				lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
@@ -103,7 +111,15 @@ type remoteTab struct {
 }
 
 func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
-	resp, err := o.client.Get(baseURL + "/screencast/tabs")
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/screencast/tabs", nil)
+	if err != nil {
+		return nil, err
+	}
+	if o.childAuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+	}
+
+	resp, err := o.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -55,12 +56,13 @@ type InstanceLister interface {
 }
 
 type Dashboard struct {
-	cfg       DashboardConfig
-	agents    map[string]*AgentActivity
-	sseConns  map[chan AgentEvent]struct{}
-	cancel    context.CancelFunc
-	instances InstanceLister
-	mu        sync.RWMutex
+	cfg            DashboardConfig
+	agents         map[string]*AgentActivity
+	sseConns       map[chan AgentEvent]struct{}
+	cancel         context.CancelFunc
+	instances      InstanceLister
+	childAuthToken string
+	mu             sync.RWMutex
 }
 
 // SetInstanceLister sets the orchestrator for aggregating agents from child instances.
@@ -115,6 +117,9 @@ func (d *Dashboard) subscribeChildSSE(ctx context.Context, port, profileName str
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return
+		}
+		if d.childAuthToken != "" {
+			req.Header.Set("Authorization", "Bearer "+d.childAuthToken)
 		}
 		client := &http.Client{Timeout: 0} // no timeout for SSE
 		resp, err := client.Do(req)
@@ -184,10 +189,11 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Dashboard{
-		cfg:      c,
-		agents:   make(map[string]*AgentActivity),
-		sseConns: make(map[chan AgentEvent]struct{}),
-		cancel:   cancel,
+		cfg:            c,
+		agents:         make(map[string]*AgentActivity),
+		sseConns:       make(map[chan AgentEvent]struct{}),
+		cancel:         cancel,
+		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 	}
 	go d.reaper(ctx)
 	return d
