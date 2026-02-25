@@ -16,7 +16,7 @@ function getVersion() {
 
 function detectPlatform() {
   const platform = process.platform;
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
 
   const osMap = {
     darwin: 'darwin',
@@ -34,7 +34,7 @@ function detectPlatform() {
 
 function getBinaryName(platform) {
   const { os, arch } = platform;
-  const archName = arch === 'arm64' ? 'arm64' : 'x64';
+  const archName = arch === 'arm64' ? 'arm64' : 'amd64';
 
   if (os === 'windows') {
     return `pinchtab-${os}-${archName}.exe`;

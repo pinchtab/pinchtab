@@ -3,12 +3,12 @@ import * as os from 'os';
 
 export interface Platform {
   os: 'darwin' | 'linux' | 'windows';
-  arch: 'x64' | 'arm64';
+  arch: 'amd64' | 'arm64';
 }
 
 export function detectPlatform(): Platform {
   const platform = process.platform as any;
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
 
   const osMap: Record<string, 'darwin' | 'linux' | 'windows'> = {
     darwin: 'darwin',
@@ -26,7 +26,7 @@ export function detectPlatform(): Platform {
 
 export function getBinaryName(platform: Platform): string {
   const { os, arch } = platform;
-  const archName = arch === 'arm64' ? 'arm64' : 'x64';
+  const archName = arch === 'arm64' ? 'arm64' : 'amd64';
 
   if (os === 'windows') {
     return `pinchtab-${os}-${archName}.exe`;

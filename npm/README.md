@@ -15,14 +15,15 @@ npm install -g pinchtab
 ```
 
 On install, the postinstall script automatically:
-1. Detects your OS and CPU architecture
+1. Detects your OS and CPU architecture (darwin/linux/windows, amd64/arm64)
 2. Downloads the precompiled Pinchtab binary from GitHub Releases
-3. Verifies integrity (SHA256 checksum)
-4. Stores in `~/.pinchtab/bin/<version>/` (version-specific to avoid conflicts)
+   - Example: `pinchtab-darwin-amd64`, `pinchtab-linux-arm64.exe` (Windows)
+3. Verifies integrity (SHA256 checksum from `checksums.txt`)
+4. Stores in `~/.pinchtab/bin/0.7.1/` (version-specific to avoid conflicts)
 5. Makes it executable
 
 **Requirements:**
-- Internet connection on first install
+- Internet connection on first install (to download binary from GitHub Releases)
 - Node.js 16+
 - macOS, Linux, or Windows
 
