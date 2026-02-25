@@ -84,7 +84,13 @@ jobs:
       - name: Update npm package version
         working-directory: npm
         run: |
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          CURRENT=$(jq -r .version package.json)
+          DESIRED=${{ steps.version.outputs.version }}
+          if [ "$CURRENT" != "$DESIRED" ]; then
+            npm version "$DESIRED" --no-git-tag-version
+          else
+            echo "Version already correct: $CURRENT"
+          fi
 
       - name: Build TypeScript
         working-directory: npm
