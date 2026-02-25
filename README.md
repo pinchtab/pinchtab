@@ -50,6 +50,58 @@ curl -X POST localhost:9867/action -d '{"kind":"click","ref":"e5"}'
 - **Stealth mode** — bypasses bot detection on major sites
 - **Persistent sessions** — log in once, stays logged in across restarts
 
+## Installation
+
+### One-liner (macOS/Linux)
+
+```bash
+curl -fsSL https://pinchtab.com/install.sh | bash
+```
+
+Then:
+```bash
+pinchtab                              # Start the server
+# In another terminal:
+pinchtab nav https://httpbin.org      # Navigate
+pinchtab snap                         # Get snapshot
+```
+
+**Requirements:**
+- Node.js 18+ (for npm install)
+- macOS or Linux
+
+**Troubleshooting:**
+
+**Command not found / PATH issue:**
+```bash
+# npm -g may be in an unusual location
+npm config get prefix  # Find where global packages go
+export PATH="$(npm config get prefix)/bin:$PATH"
+```
+
+**Permission denied (EACCES):**
+```bash
+# Option 1: Use nvm (recommended, fresh Node install)
+curl https://github.com/nvm-sh/nvm/raw/master/install.sh | bash
+nvm install node
+npm install -g pinchtab
+
+# Option 2: User prefix (no sudo)
+npm install -g --prefix ~/.local pinchtab
+export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.bashrc or ~/.zshrc
+
+# Option 3: Change npm prefix globally
+mkdir ~/.npm-global && npm config set prefix '~/.npm-global'
+export PATH=~/.npm-global/bin:$PATH  # Add to ~/.bashrc or ~/.zshrc
+```
+
+### npm (manual)
+
+```bash
+npm install -g pinchtab
+pinchtab --version
+```
+
 ## Quick Start
 
 ### Docker (easiest)
@@ -273,7 +325,7 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 The same `pinchtab` binary doubles as a CLI client. Start the server, then use subcommands:
 
 ```bash
-pinchtab nav https://example.com        # Navigate
+pinchtab nav https://httpbin.org/html    # Navigate
 pinchtab snap -i -c                      # Snapshot (interactive, compact)
 pinchtab click e5                        # Click element by ref
 pinchtab type e12 hello world            # Type into element
@@ -283,7 +335,7 @@ pinchtab ss -o page.jpg                  # Screenshot
 pinchtab eval "document.title"           # Run JavaScript
 pinchtab pdf -o page.pdf --landscape     # Export PDF
 pinchtab tabs                            # List tabs
-pinchtab tabs new https://example.com    # Open new tab
+pinchtab tabs new https://httpbin.org    # Open new tab
 pinchtab health                          # Check server
 ```
 
