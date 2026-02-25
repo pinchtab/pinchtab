@@ -1,5 +1,22 @@
 name: Release
 
+# Automatic release pipeline triggered on tag push (v0.7.0, etc.)
+# 
+# Pipeline:
+#   1. Checkout tag
+#   2. Build Go binary + create GitHub release (goreleaser)
+#   3. Publish npm package (with postinstall binary download support)
+#   4. Build & push Docker images
+#
+# Secrets required:
+#   - NPM_TOKEN: npm authentication (https://docs.npmjs.com/creating-and-viewing-access-tokens)
+#   - DOCKERHUB_USER / DOCKERHUB_TOKEN: Docker Hub credentials
+#   - GITHUB_TOKEN: Automatic (GitHub Actions)
+#
+# To create a release:
+#   git tag v0.7.0
+#   git push origin v0.7.0
+
 on:
   push:
     tags: ['v*']
@@ -40,6 +57,44 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Extract version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION=${TAG#v}  # Remove 'v' prefix
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update npm package version
+        working-directory: npm
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+      - name: Build TypeScript
+        working-directory: npm
+        run: npm run build
+
+      - name: Publish to npm
+        working-directory: npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   docker:
     name: Docker Image
