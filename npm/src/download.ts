@@ -76,7 +76,7 @@ async function downloadChecksums(version: string): Promise<Map<string, string>> 
   } catch (err) {
     throw new Error(
       `Failed to download checksums: ${(err as Error).message}. ` +
-      `Ensure v${version} is released on GitHub with checksums.txt`
+        `Ensure v${version} is released on GitHub with checksums.txt`
     );
   }
 }
@@ -106,7 +106,7 @@ async function downloadBinary(platform: any, version: string): Promise<void> {
   if (!checksums.has(binaryName)) {
     throw new Error(
       `Binary not found in checksums: ${binaryName}. ` +
-      `Available: ${Array.from(checksums.keys()).join(', ')}`
+        `Available: ${Array.from(checksums.keys()).join(', ')}`
     );
   }
 
@@ -125,41 +125,43 @@ async function downloadBinary(platform: any, version: string): Promise<void> {
 
     const file = fs.createWriteStream(binaryPath);
 
-    https.get(downloadUrl, (response) => {
-      if (response.statusCode !== 200) {
-        fs.unlink(binaryPath, () => {});
-        reject(new Error(`HTTP ${response.statusCode}: ${downloadUrl}`));
-        return;
-      }
-
-      response.pipe(file);
-
-      file.on('finish', () => {
-        file.close();
-
-        // Verify checksum
-        if (!verifySHA256(binaryPath, expectedHash)) {
+    https
+      .get(downloadUrl, (response) => {
+        if (response.statusCode !== 200) {
           fs.unlink(binaryPath, () => {});
-          reject(
-            new Error(
-              `Checksum verification failed for ${binaryName}. ` +
-              `Download may be corrupted. Please try again.`
-            )
-          );
+          reject(new Error(`HTTP ${response.statusCode}: ${downloadUrl}`));
           return;
         }
 
-        // Make executable
-        fs.chmodSync(binaryPath, 0o755);
-        console.log(`✓ Verified and installed: ${binaryPath}`);
-        resolve();
-      });
+        response.pipe(file);
 
-      file.on('error', (err) => {
-        fs.unlink(binaryPath, () => {});
-        reject(err);
-      });
-    }).on('error', reject);
+        file.on('finish', () => {
+          file.close();
+
+          // Verify checksum
+          if (!verifySHA256(binaryPath, expectedHash)) {
+            fs.unlink(binaryPath, () => {});
+            reject(
+              new Error(
+                `Checksum verification failed for ${binaryName}. ` +
+                  `Download may be corrupted. Please try again.`
+              )
+            );
+            return;
+          }
+
+          // Make executable
+          fs.chmodSync(binaryPath, 0o755);
+          console.log(`✓ Verified and installed: ${binaryPath}`);
+          resolve();
+        });
+
+        file.on('error', (err) => {
+          fs.unlink(binaryPath, () => {});
+          reject(err);
+        });
+      })
+      .on('error', reject);
   });
 }
 

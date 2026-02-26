@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as os from 'os';
 
 export interface Platform {
   os: 'darwin' | 'linux' | 'windows';
