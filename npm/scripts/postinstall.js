@@ -192,7 +192,6 @@ async function downloadBinary(platform, version) {
     console.log(`Downloading from ${downloadUrl}...`);
 
     const file = fs.createWriteStream(binaryPath);
-    let currentUrl = downloadUrl;
     let redirectCount = 0;
     const maxRedirects = 5;
 
@@ -257,7 +256,7 @@ async function downloadBinary(platform, version) {
         .on('error', reject);
     };
 
-    performDownload(currentUrl);
+    performDownload(downloadUrl);
   });
 }
 
