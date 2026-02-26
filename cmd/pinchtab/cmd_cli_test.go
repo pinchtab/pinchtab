@@ -103,6 +103,19 @@ func TestCLINavigateWithFlags(t *testing.T) {
 	}
 }
 
+func TestCLINavigateWithBlockAds(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cliNavigate(client, m.base(), "", []string{"https://example.com", "--block-ads"})
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["blockAds"] != true {
+		t.Error("expected blockAds=true")
+	}
+}
+
 // --- snapshot tests ---
 
 func TestCLISnapshot(t *testing.T) {

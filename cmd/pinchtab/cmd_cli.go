@@ -128,7 +128,7 @@ func cliHelp() {
 Usage: pinchtab <command> [args] [flags]
 
 Commands:
-  nav, navigate <url>     Navigate to URL (--new-tab, --block-images)
+  nav, navigate <url>     Navigate to URL (--new-tab, --block-images, --block-ads)
   snap, snapshot          Accessibility tree snapshot (-i, -c, -d, --max-tokens N)
   click <ref>             Click element by ref
   type <ref> <text>       Type text into element
@@ -162,7 +162,7 @@ Pipe with jq:
 
 func cliNavigate(client *http.Client, base, token string, args []string) {
 	if len(args) < 1 {
-		fatal("Usage: pinchtab nav <url> [--new-tab] [--block-images]")
+		fatal("Usage: pinchtab nav <url> [--new-tab] [--block-images] [--block-ads]")
 	}
 	body := map[string]any{"url": args[0]}
 	for _, a := range args[1:] {
@@ -171,6 +171,8 @@ func cliNavigate(client *http.Client, base, token string, args []string) {
 			body["newTab"] = true
 		case "--block-images":
 			body["blockImages"] = true
+		case "--block-ads":
+			body["blockAds"] = true
 		}
 	}
 	doPost(client, base, token, "/navigate", body)
