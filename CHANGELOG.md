@@ -13,7 +13,7 @@
 - **Integration test stability** — Added retry logic, increased timeouts, and better error reporting for flaky tests (#50)
 
 ### Security
-- **SSRF Prevention** — Added port validation to prevent Server-Side Request Forgery in orchestrator health checks. Blocks sensitive ports and validates port range (1024-65535) (#50)
+- **SSRF Prevention** — Added input validation to prevent Server-Side Request Forgery in orchestrator health checks. Validates port format and restricts connections to localhost only (#50)
 
 ### Docs
 - **Definition of Done** — Added DEFINITION_OF_DONE.md and GitHub PR template with streamlined, actionable checklist (PR #48)

@@ -12,14 +12,13 @@ func TestValidatePort(t *testing.T) {
 	}{
 		{"valid port", "8080", false},
 		{"valid high port", "65000", false},
+		{"valid pinchtab port", "9867", false},
+		{"mysql port allowed", "3306", false},
+		{"redis port allowed", "6379", false},
 		{"empty port", "", true},
 		{"non-numeric", "abc", true},
-		{"too low", "80", true},
+		{"too low", "0", true},
 		{"too high", "70000", true},
-		{"mysql port", "3306", true},
-		{"redis port", "6379", true},
-		{"postgres port", "5432", true},
-		{"elasticsearch", "9200", true},
 	}
 
 	for _, tt := range tests {

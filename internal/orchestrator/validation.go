@@ -18,31 +18,10 @@ func ValidatePort(port string) error {
 		return fmt.Errorf("invalid port number: %s", port)
 	}
 
-	// Check valid port range
-	if portNum < 1024 || portNum > 65535 {
-		return fmt.Errorf("port must be between 1024 and 65535")
-	}
-
-	// Disallow common sensitive ports
-	blockedPorts := []int{
-		3306,  // MySQL
-		5432,  // PostgreSQL
-		6379,  // Redis
-		9200,  // Elasticsearch
-		27017, // MongoDB
-		11211, // Memcached
-		2049,  // NFS
-		111,   // RPC
-		22,    // SSH (if somehow in high range)
-		25,    // SMTP
-		110,   // POP3
-		143,   // IMAP
-	}
-
-	for _, blocked := range blockedPorts {
-		if portNum == blocked {
-			return fmt.Errorf("port %d is not allowed", portNum)
-		}
+	// Check valid port range - allow all valid TCP ports
+	// Pinchtab instances can run on any available port
+	if portNum < 1 || portNum > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
 	}
 
 	return nil
