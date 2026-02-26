@@ -12,9 +12,6 @@
 - **WebSocket proxy standards** — Improved HTTP header formatting using `fmt.Fprintf` and `textproto.CanonicalMIMEHeaderKey` (#50)
 - **Integration test stability** — Added retry logic, increased timeouts, and better error reporting for flaky tests (#50)
 
-### Security
-- **Input Validation** — Added port validation to prevent invalid input in orchestrator health checks. Validates port format and range (1-65535) (#50)
-
 ### Docs
 - **Definition of Done** — Added DEFINITION_OF_DONE.md and GitHub PR template with streamlined, actionable checklist (PR #48)
 
