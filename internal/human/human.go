@@ -19,6 +19,19 @@ func SetHumanRandSeed(seed int64) {
 	humanRand = rand.New(rand.NewSource(seed))
 }
 
+// Config allows injecting a custom random source for testing
+type Config struct {
+	Rand *rand.Rand
+}
+
+// getRand returns the configured random source or the global default
+func (c *Config) getRand() *rand.Rand {
+	if c != nil && c.Rand != nil {
+		return c.Rand
+	}
+	return humanRand
+}
+
 func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 	distance := math.Sqrt((toX-fromX)*(toX-fromX) + (toY-fromY)*(toY-fromY))
 	baseDuration := 100 + (distance/2000)*200
@@ -144,6 +157,12 @@ func ClickElement(ctx context.Context, nodeID cdp.NodeID) error {
 }
 
 func Type(text string, fast bool) []chromedp.Action {
+	return TypeWithConfig(text, fast, nil)
+}
+
+// TypeWithConfig generates typing actions with optional custom random source
+func TypeWithConfig(text string, fast bool, cfg *Config) []chromedp.Action {
+	rng := cfg.getRand()
 	actions := []chromedp.Action{}
 
 	baseDelay := 80
@@ -154,22 +173,22 @@ func Type(text string, fast bool) []chromedp.Action {
 	chars := []rune(text)
 	for i, char := range chars {
 		actions = append(actions, chromedp.KeyEvent(string(char)))
-		delay := baseDelay + humanRand.Intn(baseDelay/2)
-		if humanRand.Float64() < 0.05 {
-			delay += humanRand.Intn(500)
+		delay := baseDelay + rng.Intn(baseDelay/2)
+		if rng.Float64() < 0.05 {
+			delay += rng.Intn(500)
 		}
 		if i > 0 && chars[i-1] == char {
 			delay = delay / 2
 		}
 		actions = append(actions, chromedp.Sleep(time.Duration(delay)*time.Millisecond))
 
-		if humanRand.Float64() < 0.03 && i < len(chars)-1 {
-			wrongChar := rune('a' + humanRand.Intn(26))
+		if rng.Float64() < 0.03 && i < len(chars)-1 {
+			wrongChar := rune('a' + rng.Intn(26))
 			actions = append(actions,
 				chromedp.KeyEvent(string(wrongChar)),
-				chromedp.Sleep(time.Duration(50+humanRand.Intn(100))*time.Millisecond),
+				chromedp.Sleep(time.Duration(50+rng.Intn(100))*time.Millisecond),
 				chromedp.KeyEvent("\b"),
-				chromedp.Sleep(time.Duration(30+humanRand.Intn(70))*time.Millisecond),
+				chromedp.Sleep(time.Duration(30+rng.Intn(70))*time.Millisecond),
 			)
 		}
 	}
