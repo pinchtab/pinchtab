@@ -51,6 +51,10 @@ function getBinaryPath(binaryName) {
   return path.join(os.homedir(), '.pinchtab', 'bin', binaryName);
 }
 
+function getBinDir() {
+  return path.join(os.homedir(), '.pinchtab', 'bin');
+}
+
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const httpsOptions = new URL(url);
