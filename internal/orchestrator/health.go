@@ -36,7 +36,9 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		time.Sleep(instanceHealthPollInterval)
 
 		for _, baseURL := range instanceBaseURLs(inst.Port) {
-			// Validate URL components to prevent SSRF
+			// Note: We validate port format but not host restrictions to support
+			// Docker deployments where instances run in different containers.
+			// The orchestrator only checks instances it manages.
 			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
 			if reqErr != nil {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
