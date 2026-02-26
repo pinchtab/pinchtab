@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- TBD
+### Added
+- **PDF export parameters** — `/pdf` API now supports full PrintToPDFParams: `paperWidth`, `paperHeight`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `pageRanges`, `displayHeaderFooter`, `headerTemplate`, `footerTemplate`, `generateTaggedPDF`, `generateDocumentOutline`, `preferCSSPageSize` (#45, PR #48)
+- **Installer branding** — install.sh now uses yellow accent color (#fbbf24) and crab icon 🦀 for consistency (PR #48)
+
+### Docs
+- **Definition of Done** — Added DEFINITION_OF_DONE.md and GitHub PR template with streamlined, actionable checklist (PR #48)
 
 ## v0.5.0
 

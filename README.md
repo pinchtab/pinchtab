@@ -305,14 +305,32 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 | `output=file` | Save screenshot to disk instead of returning |
 
 ### Query Parameters (pdf)
-| Param | Description |
-|-------|-------------|
-| `tabId` | Target tab (default: first tab) |
-| `landscape=true` | Landscape orientation |
-| `scale=N` | Print scale (default: 1.0) |
-| `raw=true` | Return raw PDF bytes |
-| `output=file` | Save PDF to disk |
-| `path=/custom/path` | Custom file path (with `output=file`) |
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `tabId` | string | first tab | Target tab |
+| **Layout** | | | |
+| `paperWidth` | float | 8.5 | Paper width in inches |
+| `paperHeight` | float | 11.0 | Paper height in inches |
+| `landscape` | bool | false | Landscape orientation |
+| `marginTop` | float | 0.4 | Top margin in inches |
+| `marginBottom` | float | 0.4 | Bottom margin in inches |
+| `marginLeft` | float | 0.4 | Left margin in inches |
+| `marginRight` | float | 0.4 | Right margin in inches |
+| **Content** | | | |
+| `scale` | float | 1.0 | Print scale (0.1–2.0) |
+| `pageRanges` | string | all | Pages to export (e.g., `1-3,5`) |
+| `preferCSSPageSize` | bool | false | Honor CSS @page size |
+| **Header/Footer** | | | |
+| `displayHeaderFooter` | bool | false | Show header and footer |
+| `headerTemplate` | string | — | HTML for header (supports `<span class=date/title/url/pageNumber/totalPages>`) |
+| `footerTemplate` | string | — | HTML for footer (same format as header) |
+| **Accessibility** | | | |
+| `generateTaggedPDF` | bool | false | Generate accessible/tagged PDF |
+| `generateDocumentOutline` | bool | false | Embed document outline |
+| **Output** | | | |
+| `output=file` | string | JSON | Save to disk instead of returning base64 |
+| `path=/custom/path` | string | auto | Custom file path (with `output=file`) |
+| `raw=true` | bool | false | Return raw PDF bytes instead of JSON |
 
 ### Query Parameters (text)
 | Param | Description |

@@ -88,4 +88,76 @@ func TestPDF_Scale(t *testing.T) {
 	}
 }
 
-// PD7: PDF no tab — tested implicitly (hard to close all tabs safely)
+// PD7: PDF with custom paper size
+func TestPDF_CustomPaperSize(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?paperWidth=7&paperHeight=9&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid PDF with custom paper size")
+	}
+}
+
+// PD8: PDF with custom margins
+func TestPDF_CustomMargins(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?marginTop=0.75&marginLeft=0.75&marginRight=0.75&marginBottom=0.75&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid PDF with custom margins")
+	}
+}
+
+// PD9: PDF with page ranges
+func TestPDF_PageRanges(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?pageRanges=1&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid PDF with page ranges")
+	}
+}
+
+// PD10: PDF with header/footer
+func TestPDF_HeaderFooter(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?displayHeaderFooter=true&headerTemplate=%3Cspan%20class=url%3E%3C/span%3E&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid PDF with header/footer")
+	}
+}
+
+// PD11: PDF with accessibility and outline
+func TestPDF_AccessiblePDF(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?generateTaggedPDF=true&generateDocumentOutline=true&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid accessible PDF")
+	}
+}
+
+// PD12: PDF with preferCSSPageSize
+func TestPDF_PreferCSSPageSize(t *testing.T) {
+	navigate(t, "https://example.com")
+	code, body := httpGet(t, "/pdf?preferCSSPageSize=true&raw=true")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Error("expected valid PDF with CSS page size")
+	}
+}
+
+// PD13: PDF no tab — tested implicitly (hard to close all tabs safely)
