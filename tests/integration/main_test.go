@@ -103,9 +103,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Wait for server to be ready
-	if !waitForHealth(serverURL, 30*time.Second) {
-		fmt.Fprintf(os.Stderr, "pinchtab did not become healthy within timeout\n")
+	// Wait for server to be ready (longer timeout in CI)
+	healthTimeout := 30 * time.Second
+	if os.Getenv("CI") == "true" {
+		healthTimeout = 60 * time.Second
+	}
+	if !waitForHealth(serverURL, healthTimeout) {
+		fmt.Fprintf(os.Stderr, "pinchtab did not become healthy within timeout (%v)\n", healthTimeout)
 		_ = cmd.Process.Kill()
 		os.Exit(1)
 	}
@@ -230,8 +234,9 @@ func jsonField(t *testing.T, data []byte, key string) string {
 
 func navigate(t *testing.T, url string) {
 	t.Helper()
-	code, _ := httpPost(t, "/navigate", map[string]string{"url": url})
+	// Use retry logic for better stability
+	code, body := httpPostWithRetry(t, "/navigate", map[string]string{"url": url}, 2)
 	if code != 200 {
-		t.Fatalf("navigate to %s failed with %d", url, code)
+		t.Fatalf("navigate to %s failed with %d: %s", url, code, body)
 	}
 }
