@@ -12,7 +12,8 @@ describe('Pinchtab npm Integration Tests', () => {
   before(async () => {
     // Check if binary exists before running tests
     const binDir = path.join(os.homedir(), '.pinchtab', 'bin');
-    const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : 'windows';
+    const platform =
+      process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : 'windows';
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
     const ext = platform === 'windows' ? '.exe' : '';
     const binaryPath = path.join(binDir, `pinchtab-${platform}-${arch}${ext}`);
@@ -62,16 +63,16 @@ describe('Pinchtab npm Integration Tests', () => {
 
   test('should start server (requires binary)', async () => {
     const client = new Pinchtab({ port: testPort });
-    
+
     try {
       await client.start();
       // Give server a moment to be ready
-      await new Promise(r => setTimeout(r, 1000));
-      
+      await new Promise((r) => setTimeout(r, 1000));
+
       // Try a simple health check
       const response = await fetch(`http://localhost:${testPort}/`);
       assert.ok(response.status !== undefined);
-      
+
       await client.stop();
     } catch (err) {
       const errorMsg = (err as Error).message;
@@ -85,22 +86,22 @@ describe('Pinchtab npm Integration Tests', () => {
 
   test('should handle missing binary gracefully', async () => {
     const client = new Pinchtab({ port: 9998 });
-    
+
     try {
       await client.start('/nonexistent/path/to/binary');
       // If we get here, the binary exists (unusual test environment)
     } catch (err) {
       assert.ok(err instanceof Error);
       assert.ok(
-        (err as Error).message.includes('Failed to start') || 
-        (err as Error).message.includes('ENOENT')
+        (err as Error).message.includes('Failed to start') ||
+          (err as Error).message.includes('ENOENT')
       );
     }
   });
 
   test('should reject invalid request to non-running server', async () => {
     const client = new Pinchtab({ port: 9997 });
-    
+
     try {
       await client.snapshot();
       // Should not reach here

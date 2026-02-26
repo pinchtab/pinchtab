@@ -141,7 +141,7 @@ export class Pinchtab {
   private async getBinaryPathInternal(): Promise<string> {
     const platform = detectPlatform();
     const binaryName = getBinaryName(platform);
-    
+
     // Try version-specific path first
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
     const binaryPath = getBinaryPath(binaryName, pkg.version);
@@ -149,8 +149,8 @@ export class Pinchtab {
     if (!fs.existsSync(binaryPath)) {
       throw new Error(
         `Pinchtab binary not found at ${binaryPath}.\n` +
-        `Please run: npm rebuild pinchtab\n` +
-        `Or set PINCHTAB_BINARY_PATH=/path/to/binary`
+          `Please run: npm rebuild pinchtab\n` +
+          `Or set PINCHTAB_BINARY_PATH=/path/to/binary`
       );
     }
 

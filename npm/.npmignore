@@ -1,27 +1,26 @@
-# Source files
+# Source files (not needed in published package)
 src/
 tests/
 *.ts
+!scripts/postinstall.js
 tsconfig.json
-
-# Build artifacts
-dist/
-*.map
 
 # Dev dependencies
 node_modules/
-package-lock.json
 .git
 .github
 .gitignore
 .npmignore
+
+# Build artifacts to exclude
+*.map
+dist/tests/
 
 # Docs
 *.md
 !LICENSE
 
 # Config
-.gitignore
 .env*
 
 # IDE

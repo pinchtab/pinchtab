@@ -94,7 +94,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: npm
-        run: npm install
+        run: npm ci --ignore-scripts
 
       - name: Build TypeScript
         working-directory: npm

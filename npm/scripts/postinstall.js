@@ -51,6 +51,10 @@ function getBinaryPath(binaryName) {
   return path.join(os.homedir(), '.pinchtab', 'bin', binaryName);
 }
 
+function getBinDir() {
+  return path.join(os.homedir(), '.pinchtab', 'bin');
+}
+
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const httpsOptions = new URL(url);
@@ -70,22 +74,24 @@ function fetchUrl(url) {
       }
     }
 
-    https.get(url, httpsOptions, (response) => {
-      if (response.statusCode === 404) {
-        reject(new Error(`Not found: ${url}`));
-        return;
-      }
+    https
+      .get(url, httpsOptions, (response) => {
+        if (response.statusCode === 404) {
+          reject(new Error(`Not found: ${url}`));
+          return;
+        }
 
-      if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}: ${url}`));
-        return;
-      }
+        if (response.statusCode !== 200) {
+          reject(new Error(`HTTP ${response.statusCode}: ${url}`));
+          return;
+        }
 
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    }).on('error', reject);
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+      })
+      .on('error', reject);
   });
 }
 
@@ -113,7 +119,7 @@ async function downloadChecksums(version) {
   } catch (err) {
     throw new Error(
       `Failed to download checksums: ${err.message}\n` +
-      `Ensure v${version} is released on GitHub with checksums.txt`
+        `Ensure v${version} is released on GitHub with checksums.txt`
     );
   }
 }
@@ -145,8 +151,8 @@ async function downloadBinary(platform, version) {
   if (!checksums.has(binaryName)) {
     throw new Error(
       `Binary not found in checksums: ${binaryName}\n` +
-      `Available: ${Array.from(checksums.keys()).join(', ')}\n` +
-      `\nMake sure v${version} release has binaries compiled (not just Docker images).`
+        `Available: ${Array.from(checksums.keys()).join(', ')}\n` +
+        `\nMake sure v${version} release has binaries compiled (not just Docker images).`
     );
   }
 
@@ -164,41 +170,43 @@ async function downloadBinary(platform, version) {
 
     const file = fs.createWriteStream(binaryPath);
 
-    https.get(downloadUrl, (response) => {
-      if (response.statusCode !== 200) {
-        fs.unlink(binaryPath, () => {});
-        reject(new Error(`HTTP ${response.statusCode}: ${downloadUrl}`));
-        return;
-      }
-
-      response.pipe(file);
-
-      file.on('finish', () => {
-        file.close();
-
-        // Verify checksum
-        if (!verifySHA256(binaryPath, expectedHash)) {
+    https
+      .get(downloadUrl, (response) => {
+        if (response.statusCode !== 200) {
           fs.unlink(binaryPath, () => {});
-          reject(
-            new Error(
-              `Checksum verification failed for ${binaryName}\n` +
-              `Downloaded file may be corrupted. Please try installing again.`
-            )
-          );
+          reject(new Error(`HTTP ${response.statusCode}: ${downloadUrl}`));
           return;
         }
 
-        // Make executable
-        fs.chmodSync(binaryPath, 0o755);
-        console.log(`✓ Verified and installed: ${binaryPath}`);
-        resolve();
-      });
+        response.pipe(file);
 
-      file.on('error', (err) => {
-        fs.unlink(binaryPath, () => {});
-        reject(err);
-      });
-    }).on('error', reject);
+        file.on('finish', () => {
+          file.close();
+
+          // Verify checksum
+          if (!verifySHA256(binaryPath, expectedHash)) {
+            fs.unlink(binaryPath, () => {});
+            reject(
+              new Error(
+                `Checksum verification failed for ${binaryName}\n` +
+                  `Downloaded file may be corrupted. Please try installing again.`
+              )
+            );
+            return;
+          }
+
+          // Make executable
+          fs.chmodSync(binaryPath, 0o755);
+          console.log(`✓ Verified and installed: ${binaryPath}`);
+          resolve();
+        });
+
+        file.on('error', (err) => {
+          fs.unlink(binaryPath, () => {});
+          reject(err);
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -207,36 +215,38 @@ async function downloadBinary(platform, version) {
   try {
     const platform = detectPlatform();
     const version = getVersion();
-    
+
     // Ensure binary was successfully downloaded
     // (If PINCHTAB_BINARY_PATH is set, skip download but trust the binary exists)
     if (!process.env.PINCHTAB_BINARY_PATH) {
       const binaryPath = getBinaryPath(getBinaryName(platform));
       const binDir = path.dirname(binaryPath);
-      
+
       // Create version-specific directory
       const versionDir = path.join(binDir, version);
       if (!fs.existsSync(versionDir)) {
         fs.mkdirSync(versionDir, { recursive: true });
       }
-      
+
       await downloadBinary(platform, version);
-      
+
       // Verify binary exists after download
       const finalPath = path.join(versionDir, getBinaryName(platform));
       if (!fs.existsSync(finalPath)) {
         throw new Error(
           `Binary was not successfully downloaded to ${finalPath}\n` +
-          `This usually means the GitHub release doesn't have the binary for your platform.`
+            `This usually means the GitHub release doesn't have the binary for your platform.`
         );
       }
     }
-    
+
     console.log('✓ Pinchtab setup complete');
     process.exit(0);
   } catch (err) {
     console.error('\n✗ Failed to setup Pinchtab:');
-    console.error(`  ${(err instanceof Error ? err.message : String(err)).split('\n').join('\n  ')}`);
+    console.error(
+      `  ${(err instanceof Error ? err.message : String(err)).split('\n').join('\n  ')}`
+    );
     console.error('\nTroubleshooting:');
     console.error('  • Check your internet connection');
     console.error('  • Verify the release exists: https://github.com/pinchtab/pinchtab/releases');

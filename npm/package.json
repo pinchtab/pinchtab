@@ -1,6 +1,6 @@
 {
   "name": "pinchtab",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Browser control API for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,15 +11,18 @@
   "homepage": "https://github.com/pinchtab/pinchtab#readme",
   "bugs": "https://github.com/pinchtab/pinchtab/issues",
   "scripts": {
-    "build": "tsc",
+    "lint": "eslint src tests scripts",
+    "format": "prettier --write src tests scripts",
+    "format:check": "prettier --check src tests scripts",
+    "build": "npm run lint && npm run format:check && tsc",
     "test": "node --test dist/tests/integration.test.js",
     "postinstall": "node scripts/postinstall.js",
     "prepare": "npm run build"
   },
   "files": [
-    "dist",
+    "dist/src",
     "bin",
-    "scripts",
+    "scripts/postinstall.js",
     "LICENSE"
   ],
   "keywords": [
@@ -37,7 +40,11 @@
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "eslint": "^8.54.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "prettier": "^3.1.0"
   },
   "engines": {
     "node": ">=16"

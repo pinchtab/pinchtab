@@ -1,0 +1,147 @@
+name: npm Package Verification
+
+on:
+  pull_request:
+    paths:
+      - 'npm/**'
+      - '.github/workflows/npm-verify.yml'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  verify:
+    name: Verify npm Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: npm
+        run: npm ci
+
+      - name: Lint (ESLint)
+        working-directory: npm
+        run: npm run lint
+
+      - name: Format Check (Prettier)
+        working-directory: npm
+        run: npm run format:check
+
+      - name: Build TypeScript
+        working-directory: npm
+        run: tsc
+
+      - name: Run tests
+        working-directory: npm
+        run: npm test
+
+      - name: Check for source .ts files in package
+        working-directory: npm
+        run: |
+          SOURCES=$(npm pack --dry-run 2>&1 | grep -E "src/.*\.ts$" | grep -v "\.d\.ts" || true)
+          if [ -n "$SOURCES" ]; then
+            echo "❌ ERROR: Source .ts files in package:"
+            echo "$SOURCES"
+            exit 1
+          fi
+          echo "✅ No source .ts files in package"
+
+      - name: Check for test files in package
+        working-directory: npm
+        run: |
+          TESTS=$(npm pack --dry-run 2>&1 | grep "dist/tests" || true)
+          if [ -n "$TESTS" ]; then
+            echo "❌ ERROR: Test files in package:"
+            echo "$TESTS"
+            exit 1
+          fi
+          echo "✅ No test files in package"
+
+      - name: Check for source maps in package
+        working-directory: npm
+        run: |
+          MAPS=$(npm pack --dry-run 2>&1 | grep "\.map$" || true)
+          if [ -n "$MAPS" ]; then
+            echo "❌ ERROR: Source maps in package:"
+            echo "$MAPS"
+            exit 1
+          fi
+          echo "✅ No source maps in package"
+
+      - name: Verify required files exist
+        working-directory: npm
+        run: |
+          REQUIRED=(
+            "dist/src/index.js"
+            "dist/src/index.d.ts"
+            "scripts/postinstall.js"
+            "bin/pinchtab"
+            "LICENSE"
+          )
+          
+          PACK_OUTPUT=$(npm pack --dry-run 2>&1)
+          
+          for file in "${REQUIRED[@]}"; do
+            if echo "$PACK_OUTPUT" | grep -q "$file"; then
+              echo "✅ $file"
+            else
+              echo "❌ Missing: $file"
+              exit 1
+            fi
+          done
+
+      - name: Check postinstall.js syntax
+        working-directory: npm
+        run: |
+          node -c scripts/postinstall.js
+          echo "✅ postinstall.js valid JavaScript"
+
+      - name: Verify package metadata
+        working-directory: npm
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            const checks = [
+              { name: 'name', value: pkg.name === 'pinchtab' },
+              { name: 'version', value: !!pkg.version },
+              { name: 'files array', value: Array.isArray(pkg.files) && pkg.files.length > 0 },
+              { name: 'postinstall script', value: !!pkg.scripts.postinstall },
+              { name: 'bin.pinchtab', value: !!pkg.bin.pinchtab }
+            ];
+            
+            let failed = false;
+            checks.forEach(check => {
+              if (check.value) {
+                console.log('✅', check.name);
+              } else {
+                console.log('❌', check.name, 'missing or invalid');
+                failed = true;
+              }
+            });
+            
+            if (failed) process.exit(1);
+          "
+
+      - name: Check package size
+        working-directory: npm
+        run: |
+          SIZE=$(npm pack --dry-run 2>&1 | tail -1 | awk '{print $NF}' | tr -d 'B')
+          echo "📦 Package size: ${SIZE}B"
+          if [ "$SIZE" -gt 100000 ]; then
+            echo "⚠️  Warning: Package is large (>100KB)"
+          fi
+
+      - name: Security audit
+        working-directory: npm
+        run: npm audit --audit-level=moderate || true
+
+      - name: List package contents
+        working-directory: npm
+        run: |
+          echo "📦 Package will contain:"
+          npm pack --dry-run 2>&1 | grep "notice" | awk '{print "  " $3 " (" $2 ")"}'
