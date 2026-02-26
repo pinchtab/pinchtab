@@ -44,19 +44,19 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 	defer func() { _ = client.Close() }()
 
 	writer := bufio.NewWriter(backend)
-	
+
 	_, _ = fmt.Fprintf(writer, "%s %s HTTP/1.1\r\n", r.Method, path)
 	_, _ = fmt.Fprintf(writer, "Host: %s\r\n", host)
-	
+
 	for name, values := range r.Header {
 		canonicalName := textproto.CanonicalMIMEHeaderKey(name)
 		for _, value := range values {
 			_, _ = fmt.Fprintf(writer, "%s: %s\r\n", canonicalName, value)
 		}
 	}
-	
+
 	_, _ = fmt.Fprintf(writer, "\r\n")
-	
+
 	if err := writer.Flush(); err != nil {
 		slog.Error("ws proxy: failed to write request", "err", err)
 		return
@@ -71,6 +71,6 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 		_, _ = io.Copy(backend, client)
 		done <- struct{}{}
 	}()
-	
+
 	<-done
 }

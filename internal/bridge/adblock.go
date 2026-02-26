@@ -34,7 +34,7 @@ var AdBlockPatterns = []string{
 	"*pingdom.net/*",
 	"*newrelic.com/*",
 	"*nr-data.net/*",
-	
+
 	// Ad networks
 	"*doubleclick.net/*",
 	"*googleadservices.com/*",
