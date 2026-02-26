@@ -89,7 +89,7 @@ function verifySHA256(filePath: string, expectedHash: string): boolean {
   return actualHash.toLowerCase() === expectedHash.toLowerCase();
 }
 
-async function downloadBinary(platform: any, version: string): Promise<void> {
+async function downloadBinary(platform: ReturnType<typeof detectPlatform>, version: string): Promise<void> {
   const binaryName = getBinaryName(platform);
   const binaryPath = getBinaryPath(binaryName, version);
 

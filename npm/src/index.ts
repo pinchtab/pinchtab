@@ -108,7 +108,7 @@ export class Pinchtab {
   /**
    * Make a request to the Pinchtab API
    */
-  private async request<T = any>(path: string, body?: any): Promise<T> {
+  private async request<T = Record<string, unknown>>(path: string, body?: Record<string, unknown>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
 
     const controller = new AbortController();
@@ -121,7 +121,7 @@ export class Pinchtab {
           'Content-Type': 'application/json',
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal as any,
+        signal: controller.signal as AbortSignal,
       });
 
       if (!response.ok) {

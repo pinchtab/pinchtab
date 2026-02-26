@@ -6,7 +6,7 @@ export interface Platform {
 }
 
 export function detectPlatform(): Platform {
-  const platform = process.platform as any;
+  const platform = process.platform as string;
   const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
 
   const osMap: Record<string, 'darwin' | 'linux' | 'windows'> = {
