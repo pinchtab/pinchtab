@@ -1,6 +1,6 @@
 {
   "name": "pinchtab",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Browser control API for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

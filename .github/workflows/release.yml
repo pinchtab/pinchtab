@@ -92,6 +92,10 @@ jobs:
             echo "Version already correct: $CURRENT"
           fi
 
+      - name: Install dependencies
+        working-directory: npm
+        run: npm install
+
       - name: Build TypeScript
         working-directory: npm
         run: npm run build
