@@ -23,6 +23,7 @@ type RuntimeConfig struct {
 	Timezone         string
 	BlockImages      bool
 	BlockMedia       bool
+	BlockAds         bool
 	MaxTabs          int
 	ChromeBinary     string
 	ChromeExtraFlags string
@@ -105,6 +106,7 @@ func Load() *RuntimeConfig {
 		Timezone:         os.Getenv("BRIDGE_TIMEZONE"),
 		BlockImages:      os.Getenv("BRIDGE_BLOCK_IMAGES") == "true",
 		BlockMedia:       os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",
+		BlockAds:         envBoolOr("BRIDGE_BLOCK_ADS", false),
 		MaxTabs:          envIntOr("BRIDGE_MAX_TABS", 20),
 		ChromeBinary:     os.Getenv("CHROME_BINARY"),
 		ChromeExtraFlags: os.Getenv("CHROME_FLAGS"),

@@ -24,6 +24,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		Timeout     float64 `json:"timeout"`
 		BlockImages *bool   `json:"blockImages"`
 		BlockMedia  *bool   `json:"blockMedia"`
+		BlockAds    *bool   `json:"blockAds"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -50,17 +51,35 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		navTimeout = time.Duration(req.Timeout * float64(time.Second))
 	}
 
+	// Build block patterns based on request and config
 	var blockPatterns []string
-	if req.BlockMedia != nil && *req.BlockMedia {
-		blockPatterns = bridge.MediaBlockPatterns
-	} else if req.BlockImages != nil && *req.BlockImages {
-		blockPatterns = bridge.ImageBlockPatterns
-	} else if req.BlockImages != nil && !*req.BlockImages {
-		blockPatterns = nil
-	} else if h.Config.BlockMedia {
-		blockPatterns = bridge.MediaBlockPatterns
-	} else if h.Config.BlockImages {
-		blockPatterns = bridge.ImageBlockPatterns
+
+	// Handle explicit request overrides first
+	blockAds := h.Config.BlockAds
+	if req.BlockAds != nil {
+		blockAds = *req.BlockAds
+	}
+
+	blockMedia := h.Config.BlockMedia
+	if req.BlockMedia != nil {
+		blockMedia = *req.BlockMedia
+	}
+
+	blockImages := h.Config.BlockImages
+	if req.BlockImages != nil {
+		blockImages = *req.BlockImages
+	}
+
+	// Combine patterns based on flags
+	if blockAds {
+		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.AdBlockPatterns)
+	}
+
+	if blockMedia {
+		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.MediaBlockPatterns)
+	} else if blockImages {
+		// Only block images if not already blocking all media
+		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.ImageBlockPatterns)
 	}
 
 	if req.NewTab {
@@ -74,7 +93,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		defer tCancel()
 		go web.CancelOnClientDone(r.Context(), tCancel)
 
-		if blockPatterns != nil {
+		if len(blockPatterns) > 0 {
 			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 		}
 
@@ -103,9 +122,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
 
-	if blockPatterns != nil {
+	if len(blockPatterns) > 0 {
 		_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
-	} else if h.Config.BlockImages {
+	} else {
+		// Clear any existing blocking patterns
 		_ = bridge.SetResourceBlocking(tCtx, nil)
 	}
 
