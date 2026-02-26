@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: curl -fsSL https://pinchtab.com/install.sh | bash
 
 BOLD='\033[1m'
-ACCENT='\033[38;2;255;77;77m'       # coral #ff4d4d
+ACCENT='\033[38;2;251;191;36m'      # yellow #fbbf24
 INFO='\033[38;2;136;146;176m'       # muted #8892b0
 SUCCESS='\033[38;2;0;229;204m'      # cyan #00e5cc
 ERROR='\033[38;2;230;57;70m'        # red #e63946
@@ -76,7 +76,7 @@ detect_os() {
 
 print_banner() {
     echo -e "${ACCENT}${BOLD}"
-    echo "  🦞 Pinchtab Installer"
+    echo "  🦀 Pinchtab Installer"
     echo -e "${NC}${INFO}  ${TAGLINE}${NC}"
     echo ""
 }
