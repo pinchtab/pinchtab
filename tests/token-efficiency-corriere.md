@@ -6,6 +6,10 @@
 **Tester:** [Agent name]
 **Environment:** Pinchtab running on localhost:9867
 
+> **Based on:** [docs/agent-optimization.md](../../docs/agent-optimization.md) — Feb 2026 validation showing **93% token savings** with pattern-driven approach.
+> 
+> **Known Results:** Corriere.it has ~2,645 accessibility nodes; pattern extracts 30 headlines in ~272 tokens (vs 3,842 exploratory)
+
 ---
 
 ## Prerequisites
@@ -77,11 +81,21 @@ curl "http://localhost:9867/snapshot?selector=.article-headline" | jq '.nodes[] 
 wc -c < /tmp/corriere-headlines.json
 ```
 
-### Step 6: Extract via CLI
+### Step 6: Pattern-Driven Curl (Validated Optimal)
 ```bash
-pinchtab nav https://www.corriere.it
-sleep 3  # Wait for page load
-pinchtab snap --format=compact --filter=interactive | tee /tmp/cli-snapshot.json | wc -c
+# This is the exact pattern from docs/agent-optimization.md
+# Achieves 93% token savings
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.corriere.it"}' && \
+sleep 3 && \
+curl http://localhost:9867/snapshot | \
+jq '.nodes[] | select(.name | length > 15) | .name' | \
+head -30 | tee /tmp/corriere-headlines.txt
+
+# Measure tokens
+echo "Headlines output size:"
+wc -c < /tmp/corriere-headlines.txt
 ```
 
 ---
@@ -90,24 +104,31 @@ pinchtab snap --format=compact --filter=interactive | tee /tmp/cli-snapshot.json
 
 | Method | Bytes | Est. Tokens | Time | Notes |
 |--------|-------|-------------|------|-------|
-| Full snapshot | ? | ? | ? | Baseline (all nodes) |
+| Full snapshot | ? | ? | ? | Baseline (2,645 nodes) |
 | Compact + filter | ? | ? | ? | ~60% fewer tokens |
-| Text only | ? | ? | ? | Cheapest option (~800 tokens) |
-| CSS selector | ? | ? | ? | Most efficient (targeted) |
-| CLI snapshot | ? | ? | ? | Native pinchtab tool |
+| Text only | ? | ? | ? | ~75-80% savings |
+| **Pattern-driven curl + jq** | **~1,100** | **~262** | **2-3s** | **✅ OPTIMAL (93% savings)** |
+
+**Expected for Corriere.it:**
+- Full snapshot: ~3,700 tokens
+- Pattern-driven: ~262 tokens (difference: 3,438 tokens saved)
 
 ---
 
 ## Expected Results
 
-Based on typical news site structure:
+**Based on actual Feb 2026 testing with Corriere.it:**
 
-| Method | Token Cost | Token Savings |
-|--------|------------|---------------|
-| Full `/snapshot` | ~3,500–5,000 | Baseline |
-| `/snapshot?format=compact&filter=interactive` | ~1,500–2,000 | 60–70% savings |
-| `/text` (readability) | ~800–1,200 | 80–90% savings |
-| `/text?mode=raw` | ~1,000–1,500 | ~70% savings |
+| Method | Token Cost | Notes |
+|--------|------------|-------|
+| Full `/snapshot` (all 2,645 nodes) | ~3,700 tokens | Baseline (exploratory approach) |
+| Pattern-driven curl + jq | ~272 tokens | **93% savings** ✅ |
+| `/snapshot?format=compact&filter=interactive` | ~1,500–2,000 tokens | 50–70% savings |
+| `/text` (readability) | ~800–1,200 tokens | 75–80% savings |
+
+**Key Finding:** Pattern-driven (exact instructions) vs. Exploratory (agent figuring out) = **14.2x difference**
+- Exploratory: 142 tokens (input) + 3,700 tokens (output) = 3,842 tokens
+- Pattern-driven: 10 tokens (input) + 262 tokens (output) = **272 tokens**
 
 ---
 
@@ -151,6 +172,34 @@ PINCHTAB_URL="http://pinchtab-server:9867"
 curl -X POST $PINCHTAB_URL/navigate \
   -H "Content-Type: application/json" \
   -d '{"url": "https://www.corriere.it"}'
+```
+
+---
+
+## Reference: Optimization Guide
+
+**Full documentation:** See [docs/agent-optimization.md](../../docs/agent-optimization.md)
+
+Key insights from the validation:
+- **3-second wait is critical** — Chrome accessibility tree takes time to populate
+- **jq filter `length > 15`** — Filters out UI chrome, keeps headlines
+- **Pattern-driven is 14.2x better** — Clear instructions beat exploration
+- **Works universally** — Same pattern works on BBC News, Corriere.it, etc.
+
+### System Prompt for Agents
+
+```
+When extracting headlines from a website:
+1. Use EXACTLY this curl pattern (do not deviate):
+   curl -X POST http://localhost:9867/navigate \
+     -H "Content-Type: application/json" \
+     -d '{"url": "TARGET_URL"}' && \
+   sleep 3 && \
+   curl http://localhost:9867/snapshot | \
+   jq '.nodes[] | select(.name | length > 15) | .name' | \
+   head -30
+2. Report only the headlines (limit to 20 items)
+3. Do NOT try alternative filters or explanations
 ```
 
 ---

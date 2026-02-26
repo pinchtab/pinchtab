@@ -2,6 +2,8 @@
 
 **For agents without Pinchtab to replicate token efficiency testing.**
 
+> **Reference:** Based on [docs/agent-optimization.md](../../docs/agent-optimization.md) — validated Feb 2026 with Corriere.it, BBC News.
+
 ## Quick Start
 
 Copy these steps into your session and run sequentially.
@@ -183,3 +185,30 @@ After confirming token efficiency:
    ```
 
 3. **Test on other news sites:** Replace corriere.it with any site and rerun
+
+---
+
+## BONUS: Pattern-Driven Approach (93% Savings) ✅
+
+**This is the VALIDATED optimal method from docs/agent-optimization.md**
+
+Instead of exploring different approaches, use this exact pattern:
+
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.corriere.it"}' && \
+sleep 3 && \
+curl http://localhost:9867/snapshot | \
+jq '.nodes[] | select(.name | length > 15) | .name' | \
+head -30
+```
+
+**Why it works:**
+- Navigate + 3-second wait = full accessibility tree (2,645 nodes on Corriere.it)
+- jq filter = extract only headline-length text
+- `head -30` = limit output (saves tokens)
+
+**Token cost:** ~272 tokens (vs 3,842 exploratory)
+
+**Lesson:** Clear instructions beat exploration by 14.2x ✅
