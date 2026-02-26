@@ -108,6 +108,7 @@ export class Pinchtab {
   /**
    * Make a request to the Pinchtab API
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async request<T = any>(path: string, body?: any): Promise<T> {
     const url = `${this.baseUrl}${path}`;
 
@@ -121,7 +122,7 @@ export class Pinchtab {
           'Content-Type': 'application/json',
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal as any,
+        signal: controller.signal as AbortSignal,
       });
 
       if (!response.ok) {

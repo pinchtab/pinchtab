@@ -7,7 +7,7 @@ export interface SnapshotParams {
 
 export interface SnapshotResponse {
   html: string;
-  refs?: Record<string, any>;
+  refs?: Record<string, unknown>;
 }
 
 export interface TabClickParams {

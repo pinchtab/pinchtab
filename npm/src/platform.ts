@@ -6,7 +6,7 @@ export interface Platform {
 }
 
 export function detectPlatform(): Platform {
-  const platform = process.platform as any;
+  const platform = process.platform as string;
 
   // Only support x64 (amd64) and arm64
   let arch: 'amd64' | 'arm64';
