@@ -150,7 +150,45 @@ curl "/pdf?output=file&path=/tmp/page.pdf"
 
 # Landscape with custom scale
 curl "/pdf?landscape=true&scale=0.8&raw=true" -o page.pdf
+
+# Custom paper size (Letter: 8.5x11, A4: 8.27x11.69)
+curl "/pdf?paperWidth=8.5&paperHeight=11&marginTop=0.5&marginLeft=0.5&raw=true" -o custom.pdf
+
+# Export specific pages
+curl "/pdf?pageRanges=1-5&raw=true" -o pages.pdf
+
+# With header/footer
+curl "/pdf?displayHeaderFooter=true&headerTemplate=%3Cspan%20class=title%3E%3C/span%3E&raw=true" -o header.pdf
+
+# Accessible PDF with document outline
+curl "/pdf?generateTaggedPDF=true&generateDocumentOutline=true&raw=true" -o accessible.pdf
+
+# Honor CSS page size
+curl "/pdf?preferCSSPageSize=true&raw=true" -o css-sized.pdf
 ```
+
+**Query Parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `paperWidth` | float | 8.5 | Paper width in inches |
+| `paperHeight` | float | 11.0 | Paper height in inches |
+| `landscape` | bool | false | Landscape orientation |
+| `marginTop` | float | 0.4 | Top margin in inches |
+| `marginBottom` | float | 0.4 | Bottom margin in inches |
+| `marginLeft` | float | 0.4 | Left margin in inches |
+| `marginRight` | float | 0.4 | Right margin in inches |
+| `scale` | float | 1.0 | Print scale (0.1–2.0) |
+| `pageRanges` | string | all | Pages to export (e.g., `1-3,5`) |
+| `displayHeaderFooter` | bool | false | Show header and footer |
+| `headerTemplate` | string | — | HTML template for header |
+| `footerTemplate` | string | — | HTML template for footer |
+| `preferCSSPageSize` | bool | false | Honor CSS `@page` size |
+| `generateTaggedPDF` | bool | false | Generate accessible/tagged PDF |
+| `generateDocumentOutline` | bool | false | Embed document outline |
+| `output` | string | JSON | `file` to save to disk, default returns base64 |
+| `path` | string | auto | Custom file path (with `output=file`) |
+| `raw` | bool | false | Return raw PDF bytes instead of JSON |
 
 Wraps `Page.printToPDF`. Prints background graphics by default.
 
