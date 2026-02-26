@@ -104,6 +104,12 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Validate port to prevent SSRF
+	if err := ValidatePort(req.Port); err != nil {
+		web.Error(w, 400, fmt.Errorf("invalid port: %w", err))
+		return
+	}
+
 	inst, err := o.Launch(req.Name, req.Port, req.Headless)
 	if err != nil {
 		web.Error(w, 409, err)

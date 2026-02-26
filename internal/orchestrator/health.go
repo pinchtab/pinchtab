@@ -36,10 +36,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		time.Sleep(instanceHealthPollInterval)
 
 		for _, baseURL := range instanceBaseURLs(inst.Port) {
-			// Suppress CodeQL alert: baseURL comes from trusted orchestrator configuration
-			// (port-based child instance list), not user input. This is intentional design:
-			// agents request the orchestrator to probe known child instances.
-			// lgtm[go/request-forgery]
+			// Validate URL components to prevent SSRF
 			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
 			if reqErr != nil {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
@@ -141,6 +138,12 @@ func isInstanceHealthyStatus(code int) bool {
 }
 
 func instanceBaseURLs(port string) []string {
+	// Port should already be validated, but double-check
+	if err := ValidatePort(port); err != nil {
+		// Return empty slice if port is invalid
+		return []string{}
+	}
+
 	return []string{
 		fmt.Sprintf("http://127.0.0.1:%s", port),
 		fmt.Sprintf("http://[::1]:%s", port),
