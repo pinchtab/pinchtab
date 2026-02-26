@@ -41,9 +41,9 @@
   "devDependencies": {
     "typescript": "^5.3.0",
     "@types/node": "^20.0.0",
-    "eslint": "^9.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
     "prettier": "^3.2.0"
   },
   "engines": {
