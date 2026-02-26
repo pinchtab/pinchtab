@@ -11,7 +11,7 @@
 - [x] **humanType global rand** — ~~Accept `*rand.Rand` parameter instead of global variable for better testability and concurrency safety.~~ ✅ Added `Config` struct and `TypeWithConfig` function (PR #50)
 
 ### Feature Enhancements
-- [ ] **Ad blocking** — Basic tracker blocking for cleaner snapshots (block common analytics/ad domains).
+- [x] **Ad blocking** — ~~Basic tracker blocking for cleaner snapshots (block common analytics/ad domains).~~ ✅ Blocks 100+ ad/tracking domains (PR #50)
 - [ ] **API Naming Consistency** — Clarify profile vs instance distinction:
   - Profile = Chrome profile directory (stable 12-char hex ID)
   - Instance = running Pinchtab process (composite ID like "name-port")
