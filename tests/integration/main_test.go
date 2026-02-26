@@ -235,8 +235,8 @@ func jsonField(t *testing.T, data []byte, key string) string {
 func navigate(t *testing.T, url string) {
 	t.Helper()
 	// Use retry logic for better stability
-	code, body := httpPostWithRetry(t, "/navigate", map[string]string{"url": url}, 2)
+	code, body := httpPostWithRetry(t, "/navigate", map[string]any{"url": url}, 2)
 	if code != 200 {
-		t.Fatalf("navigate to %s failed with %d: %s", url, code, body)
+		t.Fatalf("navigate to %s failed with %d: %s", url, code, string(body))
 	}
 }

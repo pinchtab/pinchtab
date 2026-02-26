@@ -85,7 +85,7 @@ func TestNavigate_Timeout(t *testing.T) {
 func TestNavigate_SPATitle(t *testing.T) {
 	// Use a page that definitely has a title - example.com has "Example Domain" as title
 	// Use retry logic for stability in CI/slow environments
-	code, body := httpPostWithRetry(t, "/navigate", map[string]string{"url": "https://example.com"}, 2)
+	code, body := httpPostWithRetry(t, "/navigate", map[string]any{"url": "https://example.com"}, 2)
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
