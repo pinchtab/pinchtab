@@ -254,7 +254,10 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 - 🖱️ **Direct actions** — click, type, fill, press, focus, hover, select, scroll by ref or CSS selector
 - 🕵️ **Stealth mode** — patches `navigator.webdriver`, spoofs UA, hides automation flags
 - 💾 **Session persistence** — cookies, auth, tabs survive restarts
-- 🚫 **Image blocking** — skip image downloads for faster, leaner browsing (`BRIDGE_BLOCK_IMAGES` or per-request)
+- 🚫 **Resource blocking** — Skip downloads for faster, leaner browsing:
+  - Images: `BRIDGE_BLOCK_IMAGES` or `--block-images`
+  - Media: `BRIDGE_BLOCK_MEDIA` (images + video + audio)  
+  - Ads/tracking: `BRIDGE_BLOCK_ADS` or `--block-ads` (100+ domains)
 - 🎬 **Animation disabling** — freeze CSS animations/transitions for consistent snapshots (`BRIDGE_NO_ANIMATIONS` or `?noAnimations=true`)
 - 📝 **Text extraction** — readability mode (strips nav/ads) or raw `innerText`
 - 🔄 **Smart diff** — `?diff=true` returns only changes since last snapshot
@@ -383,6 +386,7 @@ Full help: `pinchtab help`
 | `BRIDGE_MAX_TABS` | `20` | Max open tabs (0 = unlimited) |
 | `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading |
 | `BRIDGE_BLOCK_MEDIA` | `false` | Block all media (images + fonts + CSS + video) |
+| `BRIDGE_BLOCK_ADS` | `false` | Block ads and tracking domains (100+ patterns) |
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions globally |
 | `BRIDGE_TIMEZONE` | *(none)* | Force browser timezone (IANA tz, e.g. `Europe/Rome`) |
 | `BRIDGE_CHROME_VERSION` | `144.0.7559.133` | Chrome version string used by fingerprint rotation profiles |
