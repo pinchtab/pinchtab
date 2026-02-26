@@ -228,7 +228,21 @@ async function downloadBinary(platform, version) {
         fs.mkdirSync(versionDir, { recursive: true });
       }
 
-      await downloadBinary(platform, version);
+      // Try to download, but don't fail if release doesn't exist yet
+      // (useful during CI/release workflows)
+      try {
+        await downloadBinary(platform, version);
+      } catch (downloadErr) {
+        const errMsg = downloadErr instanceof Error ? downloadErr.message : String(downloadErr);
+        // If it's a 404 (release doesn't exist), warn but don't fail
+        if (errMsg.includes('404') || errMsg.includes('Not found')) {
+          console.warn('\n⚠ Pinchtab binary not yet available (release in progress).');
+          console.warn('  On first use, run: npm rebuild pinchtab');
+          process.exit(0);
+        }
+        // Real errors should fail
+        throw downloadErr;
+      }
 
       // Verify binary exists after download
       const finalPath = path.join(versionDir, getBinaryName(platform));
