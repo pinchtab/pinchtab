@@ -69,3 +69,13 @@ The project follows the standard Go `internal/` pattern to ensure encapsulation 
 ## For AI Agents
 
 See [AGENTS.md](AGENTS.md) for detailed conventions and patterns when contributing via an agentic workflow.
+
+## ⚠️ Pre-commit Hook Setup Required
+
+To prevent formatting issues, run this after cloning:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This enforces gofmt, go vet, and tests before each commit.
