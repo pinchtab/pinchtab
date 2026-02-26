@@ -10,6 +10,7 @@
 ### Changed
 - **Human package testability** — Added `Config` struct and `TypeWithConfig` function to inject custom random source for deterministic testing (#50)
 - **WebSocket proxy standards** — Improved HTTP header formatting using `fmt.Fprintf` and `textproto.CanonicalMIMEHeaderKey` (#50)
+- **Integration test stability** — Added retry logic, increased timeouts, and better error reporting for flaky tests (#50)
 
 ### Docs
 - **Definition of Done** — Added DEFINITION_OF_DONE.md and GitHub PR template with streamlined, actionable checklist (PR #48)
