@@ -2,6 +2,7 @@ package human
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -52,4 +53,27 @@ func TestMouseMove(t *testing.T) {
 func TestClick(t *testing.T) {
 	ctx, _ := chromedp.NewContext(context.Background())
 	_ = Click(ctx, 50, 50)
+}
+
+func TestTypeWithConfig(t *testing.T) {
+	// Test with fixed seed for reproducibility
+	cfg := &Config{
+		Rand: rand.New(rand.NewSource(12345)),
+	}
+
+	// Generate actions twice with same config - should be identical
+	actions1 := TypeWithConfig("hello", false, cfg)
+
+	// Reset the rand source to same seed
+	cfg.Rand = rand.New(rand.NewSource(12345))
+	actions2 := TypeWithConfig("hello", false, cfg)
+
+	if len(actions1) != len(actions2) {
+		t.Errorf("expected same number of actions with same seed, got %d and %d", len(actions1), len(actions2))
+	}
+
+	// Verify at least some actions were generated
+	if len(actions1) < 10 {
+		t.Errorf("expected at least 10 actions, got %d", len(actions1))
+	}
 }

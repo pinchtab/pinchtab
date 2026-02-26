@@ -1,19 +1,22 @@
 package handlers
 
 import (
+	"bufio"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 )
 
 // ProxyWebSocket does a raw TCP tunnel for WebSocket connections.
-// This is the simplest approach — no frame parsing, just bidirectional copy.
+// Uses proper HTTP request construction for standards compliance.
 func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
-
-	wsTarget := strings.Replace(targetURL, "http://", "", 1)
-	wsTarget = strings.Replace(wsTarget, "https://", "", 1)
+	// Parse target URL
+	wsTarget := strings.TrimPrefix(targetURL, "http://")
+	wsTarget = strings.TrimPrefix(wsTarget, "https://")
 
 	host := wsTarget
 	path := "/"
@@ -22,6 +25,7 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 		path = wsTarget[idx:]
 	}
 
+	// Connect to backend
 	backend, err := net.Dial("tcp", host)
 	if err != nil {
 		http.Error(w, "backend unavailable", http.StatusBadGateway)
@@ -30,6 +34,7 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 	}
 	defer func() { _ = backend.Close() }()
 
+	// Hijack client connection
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "server doesn't support hijacking", http.StatusInternalServerError)
@@ -42,18 +47,44 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 	}
 	defer func() { _ = client.Close() }()
 
-	reqLine := r.Method + " " + path + " HTTP/1.1\r\n"
-	_, _ = backend.Write([]byte(reqLine))
-	_, _ = backend.Write([]byte("Host: " + host + "\r\n"))
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			_, _ = backend.Write([]byte(k + ": " + v + "\r\n"))
+	// Write properly formatted HTTP request to backend
+	writer := bufio.NewWriter(backend)
+
+	// Request line
+	_, _ = fmt.Fprintf(writer, "%s %s HTTP/1.1\r\n", r.Method, path)
+
+	// Host header (required for HTTP/1.1)
+	_, _ = fmt.Fprintf(writer, "Host: %s\r\n", host)
+
+	// Copy other headers (using canonical header format)
+	for name, values := range r.Header {
+		// textproto.CanonicalMIMEHeaderKey ensures proper header formatting
+		canonicalName := textproto.CanonicalMIMEHeaderKey(name)
+		for _, value := range values {
+			_, _ = fmt.Fprintf(writer, "%s: %s\r\n", canonicalName, value)
 		}
 	}
-	_, _ = backend.Write([]byte("\r\n"))
 
+	// End of headers
+	_, _ = fmt.Fprintf(writer, "\r\n")
+
+	// Flush the buffered request
+	if err := writer.Flush(); err != nil {
+		slog.Error("ws proxy: failed to write request", "err", err)
+		return
+	}
+
+	// Bidirectional copy between client and backend
 	done := make(chan struct{}, 2)
-	go func() { _, _ = io.Copy(client, backend); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(backend, client); done <- struct{}{} }()
+	go func() {
+		_, _ = io.Copy(client, backend)
+		done <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(backend, client)
+		done <- struct{}{}
+	}()
+
+	// Wait for one direction to complete
 	<-done
 }
