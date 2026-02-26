@@ -144,6 +144,8 @@ jobs:
       - name: Run integration tests
         run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
         env:
+          CI: "true"
           BRIDGE_HEADLESS: "true"
           BRIDGE_NO_RESTORE: "true"
           PINCHTAB_TEST_PORT: "19867"
+          PINCHTAB_TEST_RETRY: "true"
