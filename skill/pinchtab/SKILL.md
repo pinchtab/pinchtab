@@ -25,17 +25,7 @@ metadata:
 
 Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 
-### Security & Trust Model
-
-Pinchtab runs entirely locally. It does not phone home, does not exfiltrate data, and has no external dependencies.
-
-Important safety notes:
-- It controls a real Chrome instance. If you point BRIDGE_PROFILE at a profile with logins, the agent can read/write cookies/localStorage and interact with authenticated sites (exactly like any browser automation tool).
-- Always use a dedicated empty profile for automation.
-- BRIDGE_TOKEN is strongly recommended whenever BRIDGE_BIND is not 127.0.0.1.
-- File read/write endpoints exist for snapshots/downloads — they respect the OS permissions of the user running pinchtab.
-
-See [TRUST.md](TRUST.md) and the full security model. Binary distributed via [GitHub releases](https://github.com/pinchtab/pinchtab/releases) with checksums.
+**Security Note:** Pinchtab runs entirely locally. It does not contact external services, send telemetry, or exfiltrate data. However, it controls a real Chrome instance — if pointed at a profile with saved logins, agents can access authenticated sites. Always use a dedicated empty profile and set BRIDGE_TOKEN when exposing the API. See [TRUST.md](TRUST.md) for the full security model.
 
 ## Quick Start (Agent Workflow)
 
