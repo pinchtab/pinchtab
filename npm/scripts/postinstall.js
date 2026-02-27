@@ -81,7 +81,7 @@ function fetchUrl(url, maxRedirects = 5) {
             port: proxy.port,
             keepAlive: true,
           });
-        } catch (err) {
+        } catch (_err) {
           console.warn(`Warning: Invalid proxy URL ${proxyUrl}, ignoring`);
         }
       }
@@ -104,7 +104,7 @@ function fetchUrl(url, maxRedirects = 5) {
             // Resolve relative URLs
             try {
               redirectUrl = new URL(redirectUrl, currentUrl).toString();
-            } catch (err) {
+            } catch (_err) {
               reject(new Error(`Invalid redirect URL from ${currentUrl}: ${redirectUrl}`));
               return;
             }
@@ -195,7 +195,7 @@ async function downloadBinary(platform, version) {
           fs.unlinkSync(binaryPath);
         }
       }
-    } catch (err) {
+    } catch (_err) {
       console.warn(`⚠ Could not verify existing binary, re-downloading...`);
       try {
         fs.unlinkSync(binaryPath);
@@ -257,7 +257,7 @@ async function downloadBinary(platform, version) {
             // Resolve relative URLs
             try {
               redirectUrl = new URL(redirectUrl, url).toString();
-            } catch (err) {
+            } catch (_err) {
               fs.unlink(tempPath, () => {});
               reject(new Error(`Invalid redirect URL from ${url}: ${redirectUrl}`));
               return;

@@ -85,7 +85,7 @@ const os = __importStar(require('os'));
     // Clean up: stop server if running
     try {
       await pinch.stop();
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
   });
