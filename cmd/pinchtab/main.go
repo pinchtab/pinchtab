@@ -142,6 +142,7 @@ func main() {
 
 	if !cfg.NoRestore {
 		go b.RestoreState()
+		go logTabStatsOnStartup(b)
 	}
 
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
@@ -248,4 +249,75 @@ func runStartupHealthCheck(cfg *config.RuntimeConfig) {
 	} else {
 		slog.Warn("startup health check unexpected status", "status", resp.StatusCode)
 	}
+}
+
+func logTabStatsOnStartup(b *bridge.Bridge) {
+	// Wait for restore to complete (give it a moment)
+	time.Sleep(500 * time.Millisecond)
+
+	targets, err := b.ListTargets()
+	if err != nil {
+		slog.Warn("failed to list tabs on startup", "err", err)
+		return
+	}
+
+	if len(targets) == 0 {
+		slog.Info("tabs restored", "count", 0)
+		return
+	}
+
+	// Group tabs by domain
+	domains := make(map[string]int)
+	typeMap := make(map[string]int)
+
+	for _, t := range targets {
+		domain := extractDomain(t.URL)
+		domains[domain]++
+		typeMap[t.Type]++
+	}
+
+	// Build log message with domains and types
+	var domainList []string
+	for domain, count := range domains {
+		if domain == "" {
+			domainList = append(domainList, fmt.Sprintf("unknown=%d", count))
+		} else {
+			domainList = append(domainList, fmt.Sprintf("%s=%d", domain, count))
+		}
+	}
+
+	var typeList []string
+	for t, count := range typeMap {
+		typeList = append(typeList, fmt.Sprintf("%s=%d", t, count))
+	}
+
+	slog.Info("tabs restored",
+		"count", len(targets),
+		"domains", strings.Join(domainList, " "),
+		"types", strings.Join(typeList, " "))
+}
+
+func extractDomain(urlStr string) string {
+	// Extract domain from URL for grouping
+	if urlStr == "" {
+		return ""
+	}
+
+	// Simple domain extraction (remove protocol and path)
+	urlStr = strings.TrimPrefix(urlStr, "http://")
+	urlStr = strings.TrimPrefix(urlStr, "https://")
+	urlStr = strings.TrimPrefix(urlStr, "www.")
+
+	// Get domain part only
+	if idx := strings.Index(urlStr, "/"); idx > 0 {
+		urlStr = urlStr[:idx]
+	}
+
+	// Get main domain (e.g., example.com from sub.example.com)
+	parts := strings.Split(urlStr, ".")
+	if len(parts) > 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+
+	return urlStr
 }
