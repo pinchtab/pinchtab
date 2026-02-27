@@ -23,6 +23,12 @@ jobs:
             exit 0
           fi
 
+          # Allow dependabot branches
+          if [[ "$BRANCH" =~ ^dependabot/ ]]; then
+            echo "✅ Dependabot branch: $BRANCH"
+            exit 0
+          fi
+
           # Enforce prefix/description pattern
           PATTERN="^(feature|feat|fix|hotfix|docs|chore|refactor|test)/[a-z0-9][a-z0-9-]*$"
           if [[ ! "$BRANCH" =~ $PATTERN ]]; then
