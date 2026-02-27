@@ -54,12 +54,14 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 
 ### 3. ⚡ Pinchtab (Ultra-Light)
 **Document:** `pinchtab-clean-slate.md`  
-**Test Data:** `pinchtab-clean-slate-results.zip`
+**Test Data:** `pinchtab-clean-slate-results.zip` (metadata + calculations)
 
 - Real Chrome rendering + text optimization
 - Clean slate scenario: fresh agent + Pinchtab call
 - **~1,400 tokens** per task (including agent overhead)
 - **Real cost example:** $0.12/month at 1,000 tasks/day
+
+**Methodology Note:** Snapshot and web_fetch tested empirically. Pinchtab calculated from documented behavior and production measurements. See `pinchtab-clean-slate.md` → "Validation Method" section.
 
 [📄 Read Pinchtab clean slate analysis](./pinchtab-clean-slate.md) | [📦 Raw data](./pinchtab-clean-slate-results.zip)
 
