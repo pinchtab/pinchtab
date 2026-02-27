@@ -205,6 +205,9 @@ func main() {
 		slog.Info("auth enabled")
 	} else {
 		slog.Info("auth disabled (set BRIDGE_TOKEN to enable)")
+		if cfg.Bind == "0.0.0.0" {
+			slog.Warn("⚠️ Binding to 0.0.0.0 with no BRIDGE_TOKEN — API is unauthenticated!")
+		}
 	}
 
 	go runStartupHealthCheck(cfg)

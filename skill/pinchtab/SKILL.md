@@ -13,24 +13,19 @@ metadata:
     emoji: "🦀"
     requires:
       bins: ["pinchtab"]
-      env:
-        - name: BRIDGE_TOKEN
-          secret: true
-          optional: true
-          description: "Bearer auth token for Pinchtab API"
-        - name: BRIDGE_PORT
-          optional: true
-          description: "HTTP port (default: 9867)"
-        - name: BRIDGE_HEADLESS
-          optional: true
-          description: "Run Chrome headless (true/false)"
+      env: |
+        BRIDGE_TOKEN (optional, secret) - Bearer auth token for Pinchtab API
+        BRIDGE_PORT (optional) - HTTP port, default 9867
+        BRIDGE_HEADLESS (optional) - true/false for headless Chrome
+        BRIDGE_PROFILE (optional) - Chrome profile directory
+        BRIDGE_BIND (optional) - Bind address, default 127.0.0.1
 ---
 
 # Pinchtab
 
 Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 
-**Security Note:** Pinchtab runs a local Chrome browser under your control. It does not access your credentials, exfiltrate data, or connect to external services. All interactions stay local unless you explicitly navigate to external sites. Binary distributed via [GitHub releases](https://github.com/pinchtab/pinchtab/releases) with checksums. See [TRUST.md](TRUST.md) for full security model and VirusTotal flag explanation.
+**Security Note:** Pinchtab runs entirely locally. It does not contact external services, send telemetry, or exfiltrate data. However, it controls a real Chrome instance — if pointed at a profile with saved logins, agents can access authenticated sites. Always use a dedicated empty profile and set BRIDGE_TOKEN when exposing the API. See [TRUST.md](TRUST.md) for the full security model.
 
 ## Quick Start (Agent Workflow)
 
@@ -49,6 +44,18 @@ pinchtab &
 ```
 
 **That's it.** Refs are stable—you don't need to re-snapshot before every action. Only snapshot when the page changes significantly.
+
+### Recommended Secure Setup
+
+```bash
+# Best practice for AI agents
+BRIDGE_BIND=127.0.0.1 \
+BRIDGE_TOKEN="your-strong-secret" \
+BRIDGE_PROFILE=~/.pinchtab/automation-profile \
+pinchtab &
+```
+
+**Never expose to 0.0.0.0 without a token. Never point at your daily Chrome profile.**
 
 ## Setup
 
