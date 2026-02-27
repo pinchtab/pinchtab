@@ -22,7 +22,10 @@ MODES:
   pinchtab dashboard        Start profile manager/orchestrator
   pinchtab connect <name>   Get URL for a running profile
 
-CLI (requires running server):
+QUICK START (requires running server):
+  pinchtab quick <url>                  Navigate + analyze page (beginner-friendly)
+
+CLI COMMANDS:
   pinchtab nav <url>                    Navigate to URL
   pinchtab snap [-i] [-c] [-d]         Snapshot accessibility tree
   pinchtab click <ref>                  Click element
@@ -96,7 +99,7 @@ var cliCommands = map[string]bool{
 	"screenshot": true, "ss": true,
 	"eval": true, "evaluate": true,
 	"pdf": true, "health": true,
-	"help": true,
+	"help": true, "quick": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -119,6 +122,13 @@ func runCLI(cfg *config.RuntimeConfig) {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
+	// Check if server is running (except for help)
+	if cmd != "help" {
+		if !checkServerAndGuide(client, base, token) {
+			return
+		}
+	}
+
 	switch cmd {
 	case "nav", "navigate":
 		cliNavigate(client, base, token, args)
@@ -138,6 +148,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliPDF(client, base, token, args)
 	case "health":
 		cliHealth(client, base, token)
+	case "quick":
+		cliQuick(client, base, token, args)
 	case "help":
 		cliHelp()
 	}
@@ -148,7 +160,18 @@ func cliHelp() {
 
 Usage: pinchtab <command> [args] [flags]
 
+QUICK START:
+  pinchtab quick <url>    Navigate and show page structure (combines nav + snap)
+
+WORKFLOW:
+  1. Start server:        pinchtab                  (runs on :9867)
+  2. Navigate:           pinchtab nav https://example.com
+  3. See page:           pinchtab snap             (shows clickable refs)
+  4. Interact:           pinchtab click e5         (click element)
+  5. Check result:       pinchtab snap             (see changes)
+
 Commands:
+  quick <url>             Navigate and analyze page (beginner-friendly)
   nav, navigate <url>     Navigate to URL (--new-tab, --block-images, --block-ads)
   snap, snapshot          Accessibility tree snapshot (-i, -c, -d, --max-tokens N)
   click <ref>             Click element by ref
@@ -196,7 +219,8 @@ func cliNavigate(client *http.Client, base, token string, args []string) {
 			body["blockAds"] = true
 		}
 	}
-	doPost(client, base, token, "/navigate", body)
+	result := doPost(client, base, token, "/navigate", body)
+	suggestNextAction("navigate", result)
 }
 
 // --- snapshot ---
@@ -235,7 +259,8 @@ func cliSnapshot(client *http.Client, base, token string, args []string) {
 			}
 		}
 	}
-	doGet(client, base, token, "/snapshot", params)
+	result := doGet(client, base, token, "/snapshot", params)
+	suggestNextAction("snapshot", result)
 }
 
 // --- element actions ---
@@ -503,6 +528,45 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 	fmt.Printf("Saved %s (%d bytes)\n", outFile, len(data))
 }
 
+// --- quick command ---
+
+func cliQuick(client *http.Client, base, token string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab quick <url>")
+	}
+
+	fmt.Println("🦀 Navigating to", args[0], "...")
+
+	// Navigate
+	navBody := map[string]any{"url": args[0]}
+	navResult := doPost(client, base, token, "/navigate", navBody)
+
+	// Small delay for page to stabilize
+	time.Sleep(1 * time.Second)
+
+	fmt.Println("\n📋 Page structure:")
+
+	// Snapshot with interactive filter
+	snapParams := url.Values{}
+	snapParams.Set("filter", "interactive")
+	snapParams.Set("compact", "true")
+	doGet(client, base, token, "/snapshot", snapParams)
+
+	// Extract info from navigation result
+	if title, ok := navResult["title"].(string); ok {
+		fmt.Printf("\n📌 Title: %s\n", title)
+	}
+	if urlStr, ok := navResult["url"].(string); ok {
+		fmt.Printf("🔗 URL: %s\n", urlStr)
+	}
+
+	fmt.Println("\n💡 Quick actions:")
+	fmt.Println("  pinchtab click <ref>        # Click an element (use refs from above)")
+	fmt.Println("  pinchtab type <ref> <text>  # Type into input field")
+	fmt.Println("  pinchtab screenshot         # Take a screenshot")
+	fmt.Println("  pinchtab pdf -o output.pdf  # Save as PDF")
+}
+
 // --- health ---
 
 func cliHealth(client *http.Client, base, token string) {
@@ -511,7 +575,7 @@ func cliHealth(client *http.Client, base, token string) {
 
 // --- helpers ---
 
-func doGet(client *http.Client, base, token, path string, params url.Values) {
+func doGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
 	u := base + path
 	if len(params) > 0 {
 		u += "?" + params.Encode()
@@ -539,6 +603,11 @@ func doGet(client *http.Client, base, token, path string, params url.Values) {
 	} else {
 		fmt.Println(string(body))
 	}
+
+	// Parse and return result
+	var result map[string]any
+	json.Unmarshal(body, &result)
+	return result
 }
 
 func doGetRaw(client *http.Client, base, token, path string, params url.Values) []byte {
@@ -564,7 +633,7 @@ func doGetRaw(client *http.Client, base, token, path string, params url.Values) 
 	return body
 }
 
-func doPost(client *http.Client, base, token, path string, body map[string]any) {
+func doPost(client *http.Client, base, token, path string, body map[string]any) map[string]any {
 	data, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
@@ -589,6 +658,129 @@ func doPost(client *http.Client, base, token, path string, body map[string]any) 
 	} else {
 		fmt.Println(string(respBody))
 	}
+
+	// Parse and return result for suggestions
+	var result map[string]any
+	json.Unmarshal(respBody, &result)
+	return result
+}
+
+// checkServerAndGuide checks if pinchtab server is running and provides guidance
+func checkServerAndGuide(client *http.Client, base, token string) bool {
+	req, _ := http.NewRequest("GET", base+"/health", nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "dial tcp") {
+			fmt.Fprintf(os.Stderr, `❌ Pinchtab server is not running on %s
+
+To start the server:
+  pinchtab                    # Run in foreground (recommended for beginners)
+  pinchtab &                  # Run in background
+  pinchtab --port 9868        # Use different port
+
+Then try your command again:
+  %s
+
+Learn more: https://github.com/pinchtab/pinchtab#quick-start
+`, base, strings.Join(os.Args, " "))
+			return false
+		}
+		// Other connection errors
+		fmt.Fprintf(os.Stderr, "❌ Cannot connect to Pinchtab server: %v\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Fprintf(os.Stderr, "❌ Authentication required. Set BRIDGE_TOKEN or PINCHTAB_TOKEN environment variable.\n")
+		return false
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "❌ Server error %d: %s\n", resp.StatusCode, string(body))
+		return false
+	}
+
+	return true
+}
+
+// suggestNextAction provides helpful suggestions based on the current command and state
+func suggestNextAction(cmd string, result map[string]any) {
+	switch cmd {
+	case "nav", "navigate":
+		fmt.Fprintf(os.Stderr, "\n💡 Next steps:\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab snap              # See page structure\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab screenshot         # Capture visual\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab click <ref>        # Click an element\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab pdf -o output.pdf  # Save as PDF\n")
+
+	case "snap", "snapshot":
+		refs := extractRefs(result)
+		if len(refs) > 0 {
+			fmt.Fprintf(os.Stderr, "\n💡 Found %d interactive elements. Try:\n", len(refs))
+			for i, ref := range refs[:min(3, len(refs))] {
+				fmt.Fprintf(os.Stderr, "  pinchtab click %s    # %s\n", ref.id, ref.desc)
+				if i >= 2 {
+					break
+				}
+			}
+			if len(refs) > 3 {
+				fmt.Fprintf(os.Stderr, "  ... and %d more\n", len(refs)-3)
+			}
+		}
+
+	case "click", "type", "fill":
+		fmt.Fprintf(os.Stderr, "\n💡 Action completed. To see results:\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab snap              # See updated page\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab screenshot         # Visual confirmation\n")
+	}
+}
+
+type refInfo struct {
+	id   string
+	desc string
+}
+
+func extractRefs(data map[string]any) []refInfo {
+	var refs []refInfo
+
+	// Handle different snapshot formats
+	if elements, ok := data["elements"].([]any); ok {
+		for _, elem := range elements {
+			if m, ok := elem.(map[string]any); ok {
+				if ref, ok := m["ref"].(string); ok && ref != "" {
+					desc := ""
+					if role, ok := m["role"].(string); ok {
+						desc = role
+					}
+					if name, ok := m["name"].(string); ok && name != "" {
+						desc += ": " + name
+					}
+					// Only include interactive elements
+					if role, ok := m["role"].(string); ok {
+						if role == "button" || role == "link" || role == "textbox" ||
+							role == "checkbox" || role == "radio" || role == "combobox" {
+							refs = append(refs, refInfo{id: ref, desc: desc})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return refs
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func fatal(format string, args ...any) {

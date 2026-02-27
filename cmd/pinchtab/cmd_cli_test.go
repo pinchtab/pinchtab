@@ -14,7 +14,7 @@ func TestIsCLICommand(t *testing.T) {
 	valid := []string{"nav", "navigate", "snap", "snapshot", "click", "type",
 		"press", "fill", "hover", "scroll", "select", "focus",
 		"text", "tabs", "tab", "screenshot", "ss", "eval", "evaluate",
-		"pdf", "health"}
+		"pdf", "health", "quick"}
 
 	for _, cmd := range valid {
 		if !isCLICommand(cmd) {
@@ -581,9 +581,49 @@ func TestDoPostContentType(t *testing.T) {
 	defer m.close()
 	client := m.server.Client()
 
-	doPost(client, m.base(), "", "/action", map[string]any{"kind": "click"})
+	_ = doPost(client, m.base(), "", "/action", map[string]any{"kind": "click"})
 	ct := m.lastHeaders.Get("Content-Type")
 	if ct != "application/json" {
 		t.Errorf("expected application/json, got %q", ct)
+	}
+}
+
+// --- server guidance tests ---
+
+func TestCheckServerAndGuide(t *testing.T) {
+	// Test successful connection
+	m := newMockServer()
+	m.response = `{"status":"ok"}`
+	defer m.close()
+	client := m.server.Client()
+
+	result := checkServerAndGuide(client, m.base(), "")
+	if !result {
+		t.Error("expected checkServerAndGuide to return true for working server")
+	}
+
+	// Test auth required (401)
+	m2 := newMockServer()
+	m2.statusCode = 401
+	m2.response = `{"error":"unauthorized"}`
+	defer m2.close()
+	client2 := m2.server.Client()
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	result2 := checkServerAndGuide(client2, m2.base(), "")
+
+	w.Close()
+	os.Stderr = oldStderr
+	output, _ := io.ReadAll(r)
+
+	if result2 {
+		t.Error("expected checkServerAndGuide to return false for 401")
+	}
+	if !strings.Contains(string(output), "Authentication required") {
+		t.Error("expected auth error message")
 	}
 }
