@@ -451,6 +451,69 @@ func TestCLIPDF(t *testing.T) {
 	}
 }
 
+func TestCLIPDFAllOptions(t *testing.T) {
+	m := newMockServer()
+	m.response = "FAKEPDFDATA"
+	defer m.close()
+	client := m.server.Client()
+
+	outFile := t.TempDir() + "/test.pdf"
+	args := []string{
+		"-o", outFile,
+		"--landscape",
+		"--scale", "1.5",
+		"--paper-width", "11",
+		"--paper-height", "8.5",
+		"--margin-top", "1",
+		"--margin-bottom", "1",
+		"--margin-left", "0.5",
+		"--margin-right", "0.5",
+		"--page-ranges", "1-3,5",
+		"--prefer-css-page-size",
+		"--display-header-footer",
+		"--header-template", "<span class='title'></span>",
+		"--footer-template", "<span class='pageNumber'></span>",
+		"--generate-tagged-pdf",
+		"--generate-document-outline",
+		"--tab", "tab-123",
+	}
+
+	cliPDF(client, m.base(), "", args)
+
+	// Check all parameters were set correctly
+	expectedParams := []string{
+		"landscape=true",
+		"scale=1.5",
+		"paperWidth=11",
+		"paperHeight=8.5",
+		"marginTop=1",
+		"marginBottom=1",
+		"marginLeft=0.5",
+		"marginRight=0.5",
+		"pageRanges=1-3%2C5", // URL encoded
+		"preferCSSPageSize=true",
+		"displayHeaderFooter=true",
+		"generateTaggedPDF=true",
+		"generateDocumentOutline=true",
+		"tabId=tab-123",
+		"raw=true",
+	}
+
+	for _, expected := range expectedParams {
+		if !strings.Contains(m.lastQuery, expected) {
+			t.Errorf("expected %s in query, got %s", expected, m.lastQuery)
+		}
+	}
+
+	// Check encoded HTML templates are present
+	if !strings.Contains(m.lastQuery, "headerTemplate=") || !strings.Contains(m.lastQuery, "span") {
+		t.Error("expected headerTemplate with HTML content")
+	}
+	if !strings.Contains(m.lastQuery, "footerTemplate=") || !strings.Contains(m.lastQuery, "pageNumber") {
+		t.Error("expected footerTemplate with HTML content")
+	}
+}
+
 // --- health tests ---
 
 func TestCLIHealth(t *testing.T) {

@@ -37,7 +37,7 @@ CLI (requires running server):
   pinchtab tabs [new <url>|close <id>]  Manage tabs
   pinchtab ss [-o file] [-q 80]         Screenshot
   pinchtab eval <expression>            Run JavaScript
-  pinchtab pdf [-o file] [--landscape]  Export page as PDF
+  pinchtab pdf [-o file] [options]     Export page as PDF (see PDF FLAGS)
   pinchtab health                       Check server status
 
 SNAPSHOT FLAGS:
@@ -48,6 +48,27 @@ SNAPSHOT FLAGS:
   --max-tokens N       Truncate to ~N tokens
   --depth N            Max tree depth
   --tab ID             Target specific tab
+
+PDF FLAGS:
+  -o, --output FILE          Output filename (default: page-{timestamp}.pdf)
+  --landscape                Landscape orientation
+  --paper-width N            Paper width in inches (default: 8.5)
+  --paper-height N           Paper height in inches (default: 11)
+  --margin-top N             Top margin in inches (default: 0.4)
+  --margin-bottom N          Bottom margin in inches (default: 0.4)
+  --margin-left N            Left margin in inches (default: 0.4)
+  --margin-right N           Right margin in inches (default: 0.4)
+  --scale N                  Print scale 0.1-2.0 (default: 1.0)
+  --page-ranges RANGE        Pages to export (e.g., "1-3,5")
+  --prefer-css-page-size     Honor CSS @page size
+  --display-header-footer    Show header and footer
+  --header-template HTML     HTML template for header
+  --footer-template HTML     HTML template for footer
+  --generate-tagged-pdf      Generate accessible/tagged PDF
+  --generate-document-outline  Embed document outline
+  --file-output              Save to disk (server-side)
+  --path PATH                Custom file path (with --file-output)
+  --tab ID                   Target specific tab
 
 ENVIRONMENT:
   PINCHTAB_URL         Server URL (default: http://127.0.0.1:9867)
@@ -396,6 +417,75 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 				i++
 				params.Set("tabId", args[i])
 			}
+		// Paper dimensions
+		case "--paper-width":
+			if i+1 < len(args) {
+				i++
+				params.Set("paperWidth", args[i])
+			}
+		case "--paper-height":
+			if i+1 < len(args) {
+				i++
+				params.Set("paperHeight", args[i])
+			}
+		// Margins
+		case "--margin-top":
+			if i+1 < len(args) {
+				i++
+				params.Set("marginTop", args[i])
+			}
+		case "--margin-bottom":
+			if i+1 < len(args) {
+				i++
+				params.Set("marginBottom", args[i])
+			}
+		case "--margin-left":
+			if i+1 < len(args) {
+				i++
+				params.Set("marginLeft", args[i])
+			}
+		case "--margin-right":
+			if i+1 < len(args) {
+				i++
+				params.Set("marginRight", args[i])
+			}
+		// Content options
+		case "--page-ranges":
+			if i+1 < len(args) {
+				i++
+				params.Set("pageRanges", args[i])
+			}
+		case "--prefer-css-page-size":
+			params.Set("preferCSSPageSize", "true")
+		// Header/Footer
+		case "--display-header-footer":
+			params.Set("displayHeaderFooter", "true")
+		case "--header-template":
+			if i+1 < len(args) {
+				i++
+				params.Set("headerTemplate", args[i])
+			}
+		case "--footer-template":
+			if i+1 < len(args) {
+				i++
+				params.Set("footerTemplate", args[i])
+			}
+		// Accessibility
+		case "--generate-tagged-pdf":
+			params.Set("generateTaggedPDF", "true")
+		case "--generate-document-outline":
+			params.Set("generateDocumentOutline", "true")
+		// Output options
+		case "--file-output":
+			params.Del("raw")
+			params.Set("output", "file")
+		case "--path":
+			if i+1 < len(args) {
+				i++
+				params.Set("path", args[i])
+			}
+		case "--raw":
+			params.Set("raw", "true")
 		}
 	}
 

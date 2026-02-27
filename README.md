@@ -354,7 +354,7 @@ pinchtab press Enter                     # Press key
 pinchtab text                            # Extract readable text
 pinchtab ss -o page.jpg                  # Screenshot
 pinchtab eval "document.title"           # Run JavaScript
-pinchtab pdf -o page.pdf --landscape     # Export PDF
+pinchtab pdf -o page.pdf --landscape --page-ranges "1-3,5"  # Export PDF with options
 pinchtab tabs                            # List tabs
 pinchtab tabs new https://httpbin.org    # Open new tab
 pinchtab health                          # Check server
