@@ -44,7 +44,7 @@ jobs:
               - 'internal/**'
 
   build:
-    name: Build & Test
+    name: Build & Vet
     needs: changes
     if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
