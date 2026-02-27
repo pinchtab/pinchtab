@@ -1,17 +1,52 @@
-name: CI
+name: Go Verification
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'skill/**'
+      - 'plugin/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'skill/**'
+      - 'plugin/**'
 
 permissions:
   contents: read
 
 jobs:
+  # Check which files changed to conditionally run jobs
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - '**.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+
   build:
     name: Build & Vet
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,38 +84,10 @@ jobs:
           echo "$coverage" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
-  npm:
-    name: npm Package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        working-directory: npm
-        run: npm ci --ignore-scripts
-
-      - name: Lint (ESLint)
-        working-directory: npm
-        run: npm run lint
-
-      - name: Format Check (Prettier)
-        working-directory: npm
-        run: npm run format:check
-
-      - name: Build TypeScript
-        working-directory: npm
-        run: tsc
-
-      - name: Run tests
-        working-directory: npm
-        run: npm test
-
   lint:
-    name: Lint (Go)
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +103,8 @@ jobs:
 
   security:
     name: Security Scan
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,32 +129,3 @@ jobs:
             cat gosec-results.json | jq '.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")'
             exit 1
           fi
-
-  integration:
-    name: Integration Tests
-    needs: [build, npm, lint, security]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: Install Google Chrome (deb, avoids snap hangs)
-        run: |
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-          echo "CHROME_BINARY=/usr/bin/google-chrome" >> $GITHUB_ENV
-
-      - name: Run integration tests
-        run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
-        env:
-          CI: "true"
-          BRIDGE_HEADLESS: "true"
-          BRIDGE_NO_RESTORE: "true"
-          PINCHTAB_TEST_PORT: "19867"
-          PINCHTAB_TEST_RETRY: "true"

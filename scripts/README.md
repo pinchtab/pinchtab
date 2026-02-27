@@ -1,76 +1,40 @@
-# Pinchtab Scripts
+# Scripts
 
-## Auto-Start Setup
+Development and CI helper scripts.
 
-### Quick Install
+## Security Scanning
 
+### `run-gosec.sh`
+
+Run the gosec security scanner locally with the same configuration as CI.
+
+**Usage:**
 ```bash
-./scripts/install-autostart.sh
+./scripts/run-gosec.sh
 ```
 
-This will:
-- Build and install pinchtab to `/usr/local/bin`
-- Configure auto-start on boot
-- Start the service immediately
+**What it checks:**
+- G112 (Slowloris vulnerability)
+- G204 (Command injection)
 
-### macOS (launchd)
+**Performance notes:**
+- CI runs in ~1-2 minutes (GitHub runners)
+- Local runs may take 3-5+ minutes depending on your machine
+- **Tip:** If it's too slow, just push and let CI run it (with conditional execution, it only runs when Go files change)
 
-The installer creates a LaunchAgent that:
-- Runs pinchtab on login
-- Restarts automatically if it crashes
-- Logs to `/tmp/pinchtab.*.log`
+**CI behavior:**
+- ✅ Only runs when Go files (`.go`, `go.mod`, `go.sum`) change
+- ⏭️ Skipped when only docs/workflows change (path filtering)
+- Same exclusions as local scan
+- Faster on GitHub runners (optimized VMs)
 
-Manual control:
-```bash
-# Start/stop
-launchctl start com.pinchtab.bridge
-launchctl stop com.pinchtab.bridge
+**First run:**
+- Installs gosec to `~/go/bin/gosec`
+- Results saved to `gosec-results.json`
+- Exits with code 1 if critical issues found (same as CI)
 
-# Check status
-launchctl list | grep pinchtab
-
-# View logs
-tail -f /tmp/pinchtab.*.log
-```
-
-### Linux (systemd)
-
-The installer creates a systemd user service that:
-- Runs pinchtab on boot
-- Restarts automatically if it crashes
-- Logs to systemd journal
-
-Manual control:
-```bash
-# Start/stop
-sudo systemctl start pinchtab@$USER
-sudo systemctl stop pinchtab@$USER
-
-# Check status
-sudo systemctl status pinchtab@$USER
-
-# View logs
-sudo journalctl -u pinchtab@$USER -f
-```
-
-### Uninstall
-
-```bash
-./scripts/uninstall-autostart.sh
-```
-
-### Custom Configuration
-
-Edit environment variables in:
-- **macOS**: `~/Library/LaunchAgents/com.pinchtab.bridge.plist`
-- **Linux**: `/etc/systemd/system/pinchtab@.service`
-
-Common environment variables:
-- `BRIDGE_PORT` - HTTP port (default: 9867)
-- `BRIDGE_TOKEN` - Auth token (optional)
-- `BRIDGE_HEADLESS` - Run Chrome headless (default: true)
-- `BRIDGE_PROFILE` - Chrome profile directory
-
-## Other Scripts
-
-- `check.sh` - Run all pre-push checks (format, vet, build, test)
+**Alternative:**
+If gosec is too slow locally, you can:
+1. Just push your changes - CI will run it (only on Go changes)
+2. Use our conditional workflow - it skips when no Go files changed
+3. Trust the CI check - it's fast and runs on every PR
