@@ -31,7 +31,7 @@ describe('Pinchtab npm Integration Tests', () => {
     // Clean up: stop server if running
     try {
       await pinch.stop();
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
   });
