@@ -1,76 +1,31 @@
-# Pinchtab Scripts
+# Scripts
 
-## Auto-Start Setup
+Development and CI helper scripts.
 
-### Quick Install
+## Security Scanning
 
+### `run-gosec.sh`
+
+Run the gosec security scanner locally with the same configuration as CI.
+
+**Usage:**
 ```bash
-./scripts/install-autostart.sh
+./scripts/run-gosec.sh
 ```
 
-This will:
-- Build and install pinchtab to `/usr/local/bin`
-- Configure auto-start on boot
-- Start the service immediately
+**What it checks:**
+- G112 (Slowloris vulnerability)
+- G204 (Command injection)
 
-### macOS (launchd)
+**Notes:**
+- First run will install gosec to `~/go/bin/gosec`
+- Scan takes 1-2 minutes (same as CI)
+- Results saved to `gosec-results.json`
+- Exits with code 1 if critical issues found (same as CI)
 
-The installer creates a LaunchAgent that:
-- Runs pinchtab on login
-- Restarts automatically if it crashes
-- Logs to `/tmp/pinchtab.*.log`
+**CI behavior:**
+- Only runs when Go files (`.go`, `go.mod`, `go.sum`) change
+- Skipped when only docs/workflows change (path filtering)
+- Same exclusions as local scan
 
-Manual control:
-```bash
-# Start/stop
-launchctl start com.pinchtab.bridge
-launchctl stop com.pinchtab.bridge
-
-# Check status
-launchctl list | grep pinchtab
-
-# View logs
-tail -f /tmp/pinchtab.*.log
-```
-
-### Linux (systemd)
-
-The installer creates a systemd user service that:
-- Runs pinchtab on boot
-- Restarts automatically if it crashes
-- Logs to systemd journal
-
-Manual control:
-```bash
-# Start/stop
-sudo systemctl start pinchtab@$USER
-sudo systemctl stop pinchtab@$USER
-
-# Check status
-sudo systemctl status pinchtab@$USER
-
-# View logs
-sudo journalctl -u pinchtab@$USER -f
-```
-
-### Uninstall
-
-```bash
-./scripts/uninstall-autostart.sh
-```
-
-### Custom Configuration
-
-Edit environment variables in:
-- **macOS**: `~/Library/LaunchAgents/com.pinchtab.bridge.plist`
-- **Linux**: `/etc/systemd/system/pinchtab@.service`
-
-Common environment variables:
-- `BRIDGE_PORT` - HTTP port (default: 9867)
-- `BRIDGE_TOKEN` - Auth token (optional)
-- `BRIDGE_HEADLESS` - Run Chrome headless (default: true)
-- `BRIDGE_PROFILE` - Chrome profile directory
-
-## Other Scripts
-
-- `check.sh` - Run all pre-push checks (format, vet, build, test)
+**Tip:** Run this before pushing to catch security issues early!
