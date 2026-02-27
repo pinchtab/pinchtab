@@ -37,42 +37,44 @@ An agent with **zero prior context** spawns, calls Pinchtab once per site, extra
 **Methodology:** Response sizes derived from documented Pinchtab behavior (compact format output) and production measurements. See [Validation Method](#validation-method) section for details.
 
 #### BBC.com
-- **HTTP response size (calculated):** ~3-4 KB (compact format, limited titles)
-- **Est tokens:** ~800-1,000
-- **Titles extracted:** 10 (estimated)
-- **Sample:** Breaking News, World News, Sports, Business, Innovation...
-- **Agent + Pinchtab total:** 500 + 900 = **1,400 tokens**
+- **HTTP response size (measured):** 7,335 bytes
+- **Response lines:** 153
+- **Pinchtab tokens:** ~1,834 (7,335 ÷ 4)
+- **Node count:** 149 (semantic accessibility tree)
+- **Agent + Pinchtab total:** 500 + 1,834 = **2,334 tokens**
 
 #### Corriere.it
-- **HTTP response size (calculated):** ~2-3 KB (compact, curated)
-- **Est tokens:** ~600-800
-- **Titles extracted:** 10 (estimated)
-- **Sample:** Sanremo scaletta, Iran Asse Cina, Legge elettorale, Epstein deposizione...
-- **Agent + Pinchtab total:** 500 + 700 = **1,200 tokens**
+- **HTTP response size (measured):** 7,737 bytes
+- **Response lines:** 133
+- **Pinchtab tokens:** ~1,934 (7,737 ÷ 4)
+- **Node count:** 128 (semantic accessibility tree)
+- **Agent + Pinchtab total:** 500 + 1,934 = **2,434 tokens**
 
 #### Daily Mail.co.uk
-- **HTTP response size (calculated):** ~4-5 KB (compact, dense)
-- **Est tokens:** ~1,000-1,300
-- **Titles extracted:** 10 (estimated)
-- **Sample:** Ian Huntley assault, Hillary Clinton testimony, Starmer polls, dental condition...
-- **Agent + Pinchtab total:** 500 + 1,150 = **1,650 tokens**
+- **HTTP response size (measured):** 7,531 bytes
+- **Response lines:** 108
+- **Pinchtab tokens:** ~1,883 (7,531 ÷ 4)
+- **Node count:** 104 (semantic accessibility tree)
+- **Agent + Pinchtab total:** 500 + 1,883 = **2,383 tokens**
 
 ---
 
 ## Summary Table
 
-### Per-Site Breakdown (Agent + Pinchtab)
+### Per-Site Breakdown (Agent + Pinchtab) - EMPIRICALLY MEASURED
 
-| Site | Pinchtab | Agent OH | **Total** | vs Snapshot | vs web_fetch |
-|------|----------|----------|----------|-------------|-------------|
-| BBC | 900 | 500 | **1,400** | 11,250 / 1,400 = 8x lighter | 4,700 / 1,400 = 3.4x lighter |
-| Corriere | 700 | 500 | **1,200** | 95,000 / 1,200 = 79x lighter | 3,275 / 1,200 = 2.7x lighter |
-| Daily Mail | 1,150 | 500 | **1,650** | 87,500 / 1,650 = 53x lighter | 12,500 / 1,650 = 7.6x lighter |
-| **Average** | **920** | **500** | **1,417** | **~47x lighter** | **~4.6x lighter** |
+| Site | Response | Pinchtab | Agent OH | **Total** | vs Snapshot | vs web_fetch |
+|------|----------|----------|----------|----------|-------------|-------------|
+| BBC | 7.3 KB | 1,834 | 500 | **2,334** | 11,250 / 2,334 = 4.8x lighter | 4,700 / 2,334 = 2.0x lighter |
+| Corriere | 7.7 KB | 1,934 | 500 | **2,434** | 95,000 / 2,434 = 39x lighter | 3,275 / 2,434 = 1.3x lighter |
+| Daily Mail | 7.5 KB | 1,883 | 500 | **2,383** | 87,500 / 2,383 = 36.7x lighter | 12,500 / 2,383 = 5.2x lighter |
+| **Average** | **7.5 KB** | **1,884** | **500** | **2,384** | **~27x lighter** | **~3x lighter** |
+
+**Data source:** Empirically tested via Pinchtab API on Feb 27, 2026
 
 ---
 
-## Cost Implications
+## Cost Implications (Real Data)
 
 ### Single Task (Fresh Agent)
 
@@ -80,11 +82,11 @@ An agent with **zero prior context** spawns, calls Pinchtab once per site, extra
 |--------|----------|---------|--------------|---------------|
 | **Snapshot** | 500 | 64,583 | **65,083** | $0.000195 |
 | **web_fetch** | 500 | 6,825 | **7,325** | $0.000022 |
-| **Pinchtab** | 500 | 900 | **1,400** | **$0.000004** |
+| **Pinchtab** | 500 | 1,884 | **2,384** | **$0.000007** |
 
 **Pinchtab cost advantage:**
-- vs. Snapshot: **98% cheaper** ($0.000191 saved per task)
-- vs. web_fetch: **82% cheaper** ($0.000018 saved per task)
+- vs. Snapshot: **96.3% cheaper** ($0.000188 saved per task)
+- vs. web_fetch: **68% cheaper** ($0.000015 saved per task)
 
 ### At Scale (1,000 tasks/day)
 
@@ -92,11 +94,23 @@ An agent with **zero prior context** spawns, calls Pinchtab once per site, extra
 |--------|-----------|--------------|-------------|
 | **Snapshot** | $0.195 | $5.85 | $70.20 |
 | **web_fetch** | $0.022 | $0.66 | $7.92 |
-| **Pinchtab** | **$0.004** | **$0.12** | **$1.44** |
+| **Pinchtab** | **$0.007** | **$0.21** | **$2.52** |
 
 **Monthly savings with Pinchtab:**
-- vs. Snapshot: **$5.73/month** = **$68.76/year**
-- vs. web_fetch: **$0.54/month** = **$6.48/year**
+- vs. Snapshot: **$5.64/month** = **$67.68/year**
+- vs. web_fetch: **$0.45/month** = **$5.40/year**
+
+### At Enterprise Scale (10,000 tasks/day)
+
+| Method | Daily Cost | Monthly Cost | Annual Cost |
+|--------|-----------|--------------|-------------|
+| **Snapshot** | $1.95 | $58.50 | $702.00 |
+| **web_fetch** | $0.22 | $6.60 | $79.20 |
+| **Pinchtab** | **$0.07** | **$2.10** | **$25.20** |
+
+**Annual savings with Pinchtab:**
+- vs. Snapshot: **$676.80/year**
+- vs. web_fetch: **$54.00/year**
 
 ---
 
@@ -250,26 +264,49 @@ If agent spawns for each task:
 
 ## Validation Method
 
-### Snapshot & web_fetch: Empirically Tested ✅
-- OpenClaw `browser snapshot`: Actual API calls to BBC, Corriere, Daily Mail
-- web_fetch: Actual Readability extraction from real sites
-- Token counts: Measured directly from response sizes
+### All Three Methods: Empirically Tested ✅
 
-### Pinchtab: Calculated from Known Behavior
-Due to network sandbox constraints in test environment, Pinchtab response sizes are **calculated from:**
-1. **Documented Pinchtab behavior:** `/snapshot` returns compact text representation (~2-5 KB for typical news pages)
-2. **Empirical measurements:** Real-world deployments show Pinchtab /snapshot averaging 1-2 KB responses
-3. **Comparative analysis:** Known to be 80-95% lighter than snapshots, 50-70% lighter than web_fetch
+**Test Date:** February 27, 2026  
+**Sites:** BBC.com, Corriere.it, Daily Mail.co.uk  
+**API Flow:** POST /tab {"action":"new","url":"..."} → GET /snapshot?tabId=X&format=text
 
-**Confidence:** HIGH (grounded in production data, not pure speculation)
+#### Snapshot (OpenClaw)
+- Actual API calls using OpenClaw's default isolated browser
+- Full semantic DOM + accessibility tree
+- Measured: 11K-95K tokens across test sites
 
-**If you want to validate further:**
-```bash
-# Real-world Pinchtab test (requires network access)
-pinchtab server
-curl 'http://localhost:9867/snapshot?url=https://www.bbc.com&format=text&maxTokens=2000'
-# Measure response size (should be 2-4 KB for news pages)
+#### web_fetch (Readability)
+- Actual text extraction via Readability parser
+- Boilerplate removal (nav, ads, sidebars)
+- Measured: 3K-12K tokens across test sites
+
+#### Pinchtab (Real-Chrome + Text Optimization)
+- **Proper API flow:** POST /tab to create tab + navigate, GET /snapshot with tabId
+- Text-based accessibility tree (semantic HTML representation)
+- **Measured empirically:** 7.3-7.7 KB responses = ~1,834-1,934 tokens per site
+
+**Response Format:**
 ```
+# BBC - Home
+# https://www.bbc.co.uk/
+# 149 nodes
+
+e0 RootWebArea "BBC - Home" [focused]
+  e1 banner
+  e2 main
+  e3 contentinfo
+    e4 region "Cookies on the BBC website"
+    e5 navigation "BBC"
+      e6 list
+        e7 heading "Sport headlines"
+        ...
+```
+
+**Why this matters:**
+- Returns semantic, clickable element refs (e0, e1, e2...)
+- Not just text (unlike web_fetch) — can act on elements
+- Real Chrome rendering (unlike Readability) — handles JavaScript
+- ~7.5 KB average response size
 
 ---
 
