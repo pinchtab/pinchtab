@@ -104,6 +104,21 @@ pinchtab --version
 
 ## Quick Start
 
+### CLI Quick Mode (NEW - Beginner Friendly)
+
+```bash
+# Install
+npm install -g pinchtab
+
+# One terminal:
+pinchtab                                  # Start server (keep running)
+
+# Another terminal:
+pinchtab quick https://example.com        # Navigate + analyze page automatically
+```
+
+The `quick` command combines navigation and page analysis, showing you clickable elements and suggesting next actions.
+
 ### Docker (easiest)
 
 ```bash
@@ -343,18 +358,64 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 
 ## CLI
 
-The same `pinchtab` binary doubles as a CLI client. Start the server, then use subcommands:
+The same `pinchtab` binary doubles as a CLI client with helpful guidance for beginners.
+
+### Quick Start Workflow
 
 ```bash
+# Terminal 1: Start server (keep running)
+pinchtab
+
+# Terminal 2: Use CLI commands
+pinchtab quick https://example.com       # NEW: Navigate + analyze in one command
+```
+
+### Guided Error Messages
+
+If you forget to start the server:
+```bash
+$ pinchtab snap
+❌ Pinchtab server is not running on http://localhost:9867
+
+To start the server:
+  pinchtab                    # Run in foreground (recommended for beginners)
+  pinchtab &                  # Run in background
+  pinchtab --port 9868        # Use different port
+```
+
+### Smart Suggestions
+
+After navigation, get helpful next steps:
+```bash
+$ pinchtab nav https://example.com
+
+💡 Next steps:
+  pinchtab snap              # See page structure
+  pinchtab screenshot         # Capture visual
+  pinchtab click <ref>        # Click an element
+  pinchtab pdf -o output.pdf  # Save as PDF
+```
+
+### Full Command List
+
+```bash
+# Quick start
+pinchtab quick <url>                     # Navigate + analyze page
+
+# Navigation & interaction
 pinchtab nav https://httpbin.org/html    # Navigate
 pinchtab snap -i -c                      # Snapshot (interactive, compact)
 pinchtab click e5                        # Click element by ref
 pinchtab type e12 hello world            # Type into element
 pinchtab press Enter                     # Press key
+
+# Content extraction
 pinchtab text                            # Extract readable text
 pinchtab ss -o page.jpg                  # Screenshot
+pinchtab pdf -o page.pdf --landscape     # Export PDF (many options available)
 pinchtab eval "document.title"           # Run JavaScript
-pinchtab pdf -o page.pdf --landscape --page-ranges "1-3,5"  # Export PDF with options
+
+# Tab management
 pinchtab tabs                            # List tabs
 pinchtab tabs new https://httpbin.org    # Open new tab
 pinchtab health                          # Check server

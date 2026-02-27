@@ -5,6 +5,7 @@
 ### Added
 - **PDF export parameters** — `/pdf` API now supports full PrintToPDFParams: `paperWidth`, `paperHeight`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `pageRanges`, `displayHeaderFooter`, `headerTemplate`, `footerTemplate`, `generateTaggedPDF`, `generateDocumentOutline`, `preferCSSPageSize` (#45, PR #48)
 - **Complete PDF CLI options** — `pinchtab pdf` command now supports all PDF export parameters matching the API functionality. Includes paper dimensions, margins, page ranges, headers/footers, and accessibility options (#54)
+- **Simplified CLI usage** — New `pinchtab quick <url>` command combines navigation and page analysis. Added helpful error messages when server isn't running, smart suggestions after commands, and improved workflow documentation for beginners
 - **Installer branding** — install.sh now uses yellow accent color (#fbbf24) and crab icon 🦀 for consistency (PR #48)
 - **Ad blocking** — New `blockAds` option blocks 100+ tracking/analytics domains for cleaner snapshots. Available via env var `BRIDGE_BLOCK_ADS=true`, CLI flag `--block-ads`, and API parameter (#50)
 
