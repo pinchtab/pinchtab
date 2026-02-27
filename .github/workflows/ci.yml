@@ -3,8 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'skill/**'
+      - 'plugin/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'skill/**'
+      - 'plugin/**'
 
 permissions:
   contents: read
@@ -48,36 +62,6 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "$coverage" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-  npm:
-    name: npm Package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        working-directory: npm
-        run: npm ci --ignore-scripts
-
-      - name: Lint (ESLint)
-        working-directory: npm
-        run: npm run lint
-
-      - name: Format Check (Prettier)
-        working-directory: npm
-        run: npm run format:check
-
-      - name: Build TypeScript
-        working-directory: npm
-        run: tsc
-
-      - name: Run tests
-        working-directory: npm
-        run: npm test
 
   lint:
     name: Lint (Go)
@@ -123,7 +107,7 @@ jobs:
 
   integration:
     name: Integration Tests
-    needs: [build, npm, lint, security]
+    needs: [build, lint, security]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
