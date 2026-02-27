@@ -46,19 +46,28 @@ jobs:
   build:
     name: Build & Vet
     needs: changes
-    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if no Go changes
+        if: needs.changes.outputs.go != 'true'
+        run: |
+          echo "⏭️ No Go files changed, skipping build"
+          echo "This is expected for docs/workflow-only changes"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.go == 'true'
 
       - uses: actions/setup-go@v5
+        if: needs.changes.outputs.go == 'true'
         with:
           go-version: '1.26'
 
       - name: Download deps
+        if: needs.changes.outputs.go == 'true'
         run: go mod download
 
       - name: Format check
+        if: needs.changes.outputs.go == 'true'
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -68,15 +77,19 @@ jobs:
           fi
 
       - name: Vet
+        if: needs.changes.outputs.go == 'true'
         run: go vet ./...
 
       - name: Build
+        if: needs.changes.outputs.go == 'true'
         run: go build -o pinchtab ./cmd/pinchtab
 
       - name: Test with coverage
+        if: needs.changes.outputs.go == 'true'
         run: go test ./... -v -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Coverage summary
+        if: needs.changes.outputs.go == 'true'
         run: |
           coverage=$(go tool cover -func=coverage.out | tail -1)
           echo "### Coverage" >> $GITHUB_STEP_SUMMARY
@@ -87,16 +100,22 @@ jobs:
   lint:
     name: Lint
     needs: changes
-    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if no Go changes
+        if: needs.changes.outputs.go != 'true'
+        run: echo "⏭️ No Go files changed, skipping lint"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.go == 'true'
 
       - uses: actions/setup-go@v5
+        if: needs.changes.outputs.go == 'true'
         with:
           go-version: '1.26'
 
       - name: golangci-lint
+        if: needs.changes.outputs.go == 'true'
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
@@ -104,22 +123,30 @@ jobs:
   security:
     name: Security Scan
     needs: changes
-    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if no Go changes
+        if: needs.changes.outputs.go != 'true'
+        run: echo "⏭️ No Go files changed, skipping security scan"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.go == 'true'
 
       - uses: actions/setup-go@v5
+        if: needs.changes.outputs.go == 'true'
         with:
           go-version: '1.26'
 
       - name: Install gosec
+        if: needs.changes.outputs.go == 'true'
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec
+        if: needs.changes.outputs.go == 'true'
         run: gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 -fmt=json -out=gosec-results.json ./... || true
 
       - name: Check critical findings
+        if: needs.changes.outputs.go == 'true'
         run: |
           # Fail on G112 (Slowloris), G204 (command injection)
           ISSUES=$(cat gosec-results.json | jq '[.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")] | length')
