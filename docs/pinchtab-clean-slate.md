@@ -74,52 +74,52 @@ An agent with **zero prior context** spawns, calls Pinchtab once per site, extra
 
 ---
 
-## Cost Implications (Real Data)
+## Token Efficiency (Real Data)
 
 ### Single Task (Fresh Agent)
 
-| Method | Agent OH | Service | Total Tokens | Cost (Sonnet) |
-|--------|----------|---------|--------------|---------------|
-| **Snapshot** | 500 | 64,583 | **65,083** | $0.000195 |
-| **web_fetch** | 500 | 6,825 | **7,325** | $0.000022 |
-| **Pinchtab** | 500 | 1,884 | **2,384** | **$0.000007** |
+| Method | Agent OH | Service | Total Tokens |
+|--------|----------|---------|--------------|
+| **Snapshot** | 500 | 64,583 | **65,083** |
+| **web_fetch** | 500 | 6,825 | **7,325** |
+| **Pinchtab** | 500 | 1,884 | **2,384** |
 
-**Pinchtab cost advantage:**
-- vs. Snapshot: **96.3% cheaper** ($0.000188 saved per task)
-- vs. web_fetch: **68% cheaper** ($0.000015 saved per task)
+**Pinchtab token advantage:**
+- vs. Snapshot: **96.3% lighter** per task
+- vs. web_fetch: **68% lighter** per task
 
 ### At Scale (1,000 tasks/day)
 
-| Method | Daily Cost | Monthly Cost | Annual Cost |
-|--------|-----------|--------------|-------------|
-| **Snapshot** | $0.195 | $5.85 | $70.20 |
-| **web_fetch** | $0.022 | $0.66 | $7.92 |
-| **Pinchtab** | **$0.007** | **$0.21** | **$2.52** |
+| Method | Daily Tokens | Monthly Tokens |
+|--------|-------------|----------------|
+| **Snapshot** | ~65M | ~1.95B |
+| **web_fetch** | ~7.3M | ~220M |
+| **Pinchtab** | **~2.4M** | **~72M** |
 
-**Monthly savings with Pinchtab:**
-- vs. Snapshot: **$5.64/month** = **$67.68/year**
-- vs. web_fetch: **$0.45/month** = **$5.40/year**
+**Monthly token reduction with Pinchtab:**
+- vs. Snapshot: **~1.88B tokens/month**
+- vs. web_fetch: **~148M tokens/month**
 
 ### At Enterprise Scale (10,000 tasks/day)
 
-| Method | Daily Cost | Monthly Cost | Annual Cost |
-|--------|-----------|--------------|-------------|
-| **Snapshot** | $1.95 | $58.50 | $702.00 |
-| **web_fetch** | $0.22 | $6.60 | $79.20 |
-| **Pinchtab** | **$0.07** | **$2.10** | **$25.20** |
+| Method | Daily Tokens | Monthly Tokens |
+|--------|-------------|----------------|
+| **Snapshot** | ~651M | ~19.5B |
+| **web_fetch** | ~73M | ~2.2B |
+| **Pinchtab** | **~24M** | **~720M** |
 
-**Annual savings with Pinchtab:**
-- vs. Snapshot: **$676.80/year**
-- vs. web_fetch: **$54.00/year**
+**Token reduction with Pinchtab:**
+- vs. Snapshot: **~18.8B tokens/month**
+- vs. web_fetch: **~1.48B tokens/month**
 
 ---
 
 ## Key Insight: Agent Overhead
 
 When agents spawn fresh (cold start):
-- **Agent cost is fixed:** ~500 tokens per spawn
+- **Agent overhead is fixed:** ~500 tokens per spawn
 - **Service call determines total:** Pinchtab's 900 tokens > Agent's 500 tokens
-- **Service efficiency wins:** Choosing Pinchtab saves ~$0.000191/task vs. snapshot
+- **Service efficiency wins:** Choosing Pinchtab reduces tokens by 96%+ vs. snapshot
 
 **At 1,000 spawns/day:**
 - Snapshot: 500 (agent) + 64,583 (snapshot) = 65,083 tokens
@@ -195,19 +195,19 @@ If agent spawns for each task:
 
 ---
 
-## The ROI: Pinchtab for Distributed Agents
+## Token Efficiency: Pinchtab for Distributed Agents
 
 **Scenario:** 10,000 web extraction tasks/day, each spawns fresh agent
 
-| Method | Daily Cost | Monthly Cost | Annual Cost |
-|--------|-----------|--------------|-------------|
-| Snapshot | $1,950 | **$58.50** | **$702** |
-| web_fetch | $220 | **$6.60** | **$79.20** |
-| **Pinchtab** | **$40** | **$1.20** | **$14.40** |
+| Method | Daily Tokens | Monthly Tokens |
+|--------|-------------|----------------|
+| Snapshot | ~651M | **~19.5B** |
+| web_fetch | ~73M | **~2.2B** |
+| **Pinchtab** | **~24M** | **~720M** |
 
-**Pinchtab savings:**
-- vs. Snapshot: **$57.30/month** = **$687.60/year**
-- vs. web_fetch: **$5.40/month** = **$64.80/year**
+**Pinchtab token reduction:**
+- vs. Snapshot: **~18.8B tokens/month** (96% lighter)
+- vs. web_fetch: **~1.48B tokens/month** (67% lighter)
 
 ---
 
@@ -236,8 +236,7 @@ If agent spawns for each task:
 | **Total tokens (w/ agent)** | 65,083 | 7,325 | **1,400** |
 | **Pure service tokens** | 64,583 | 6,825 | 900 |
 | **Agent overhead** | 500 | 500 | 500 |
-| **Cost/task** | $0.000195 | $0.000022 | **$0.000004** |
-| **Monthly (1K tasks)** | $5.85 | $0.66 | **$0.12** |
+| **Monthly tokens (1K tasks)** | ~65M | ~7.3M | **~1.4M** |
 | **Best for** | Interaction | Text-only | Distributed agents |
 
 ---
@@ -315,8 +314,8 @@ e0 RootWebArea "BBC - Home" [focused]
 > **46x lighter than snapshots when agents spawn fresh.**
 >
 > Running 1,000 extraction tasks/day?
-> - Snapshot: **$5.85/month**
-> - **Pinchtab: $0.12/month** = **$69/year savings**
+> - Snapshot: **~65M tokens/month**
+> - **Pinchtab: ~1.4M tokens/month** = **98% reduction**
 >
 > Plus: Real Chrome rendering. Agent-optimized. Built for scale.
 

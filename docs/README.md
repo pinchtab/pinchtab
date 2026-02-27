@@ -19,14 +19,14 @@ This folder contains comprehensive benchmarks comparing three web content extrac
 ## The Headline
 
 **For 1,000 pages/day:**
-- Snapshot: **$5.82/month** (~64K tokens/page)
-- web_fetch: **$0.63/month** (~6.8K tokens/page)
-- **Pinchtab: $0.11/month** (~1.2K tokens/page) ← **98% savings vs. snapshot**
+- Snapshot: ~64K tokens/page
+- web_fetch: ~6.8K tokens/page
+- **Pinchtab: ~1.2K tokens/page** ← **98% lighter vs. snapshot**
 
 **Pinchtab wins on:**
 - ✅ Token efficiency (90% reduction)
 - ✅ Real Chrome rendering (handles JavaScript)
-- ✅ Cost at scale ($68/year savings per 1K pages/day)
+- ✅ Scales efficiently at high volume
 - ✅ Agent-optimized output (no boilerplate)
 
 **Use Snapshot if:** You need to interact (click, fill forms)
@@ -62,13 +62,13 @@ All benchmarks use real-world news sites:
 OpenClaw's default semantic snapshot includes full DOM + accessibility tree. This is powerful for UI agents but heavy for text extraction: **29x heavier than web_fetch on Corriere.it**.
 
 ### 2. web_fetch Sweet Spot
-Readability parser removes ~70-90% of boilerplate automatically. Perfect for news articles, blogs, content extraction. **9x cheaper than snapshot**, but can't handle JavaScript-heavy sites.
+Readability parser removes ~70-90% of boilerplate automatically. Perfect for news articles, blogs, content extraction. **9x lighter than snapshot**, but can't handle JavaScript-heavy sites.
 
 ### 3. Pinchtab's Advantage
-Real Chrome rendering + text optimization = best of both worlds. **5.7x cheaper than web_fetch**, still renders JavaScript, optimized for agents.
+Real Chrome rendering + text optimization = best of both worlds. **5.7x lighter than web_fetch**, still renders JavaScript, optimized for agents.
 
 ### 4. Scale Matters
-At 1,000+ pages/day, method choice compounds to **$50-60/month savings**. At 10,000 pages/day, you're looking at **$600+/year** difference.
+At 1,000+ pages/day, method choice has significant impact on token usage. At 10,000 pages/day, the differences compound substantially.
 
 ---
 
@@ -76,7 +76,7 @@ At 1,000+ pages/day, method choice compounds to **$50-60/month savings**. At 10,
 
 When referencing these benchmarks:
 
-> Extracted from Pinchtab documentation (Feb 26, 2026). Tested against BBC.com, Corriere.it, Daily Mail.co.uk using OpenClaw v2026.2.23. Token costs based on Claude Sonnet ($3/M input tokens).
+> Extracted from Pinchtab documentation (Feb 26, 2026). Tested against BBC.com, Corriere.it, Daily Mail.co.uk using OpenClaw v2026.2.23.
 
 ---
 

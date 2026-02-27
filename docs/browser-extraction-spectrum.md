@@ -17,7 +17,6 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 | element coordinates        minimal structure                 
 |
 | 64K tokens avg             6.8K tokens avg                  1.2K tokens avg
-| $0.194/page (1K/day)       $0.021/page (1K/day)             $0.0036/page (1K/day)
 |
 |════════════════════════════════════════════════════════════════════════════════════|
 ```
@@ -30,8 +29,6 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 |--------|----------|-----------|----------|
 | **Avg Size** | 258 KB | 27 KB | ~2 KB (est) |
 | **Avg Tokens** | 64,583 | 6,825 | 1,200 |
-| **Cost/Page** | $0.000194 | $0.000021 | $0.0000036 |
-| **Monthly (1K pages)** | $5.82 | $0.63 | $0.11 |
 | **Interactive** | ✅ Yes | ❌ No | ❌ No |
 | **Structure Info** | ✅ Yes | ❌ No | ⚠️ Limited |
 | **Rendering** | ✅ Yes | ❌ No | ✅ Yes |
@@ -45,57 +42,33 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 
 ### BBC (Portal Layout, Low Content Density)
 
-| Method | Size | Tokens | Articles | Cost |
-|--------|------|--------|----------|------|
-| Snapshot | 45 KB | 11,250 | 17 | $0.000034 |
-| web_fetch | 18.8 KB | 4,700 | 15 | $0.000014 |
-| Pinchtab | ~2 KB (est) | 400 | 8-10 | $0.0000012 |
-| **Savings (web vs snap)** | **58%** | **58%** | — | **58%** |
-| **Savings (pin vs snap)** | **96%** | **96%** | — | **96%** |
+| Method | Size | Tokens | Articles |
+|--------|------|--------|----------|
+| Snapshot | 45 KB | 11,250 | 17 |
+| web_fetch | 18.8 KB | 4,700 | 15 |
+| Pinchtab | ~2 KB (est) | 400 | 8-10 |
+| **Savings (web vs snap)** | **58%** | **58%** | — |
+| **Savings (pin vs snap)** | **96%** | **96%** | — |
 
 ### Corriere (News Hub, Very High Density)
 
-| Method | Size | Tokens | Articles | Cost |
-|--------|------|--------|----------|------|
-| Snapshot | 380 KB | 95,000 | 100+ | $0.000285 |
-| web_fetch | 13.1 KB | 3,275 | 18 | $0.000010 |
-| Pinchtab | ~2 KB (est) | 400 | 8-10 | $0.0000012 |
-| **Savings (web vs snap)** | **97%** | **97%** | — | **97%** |
-| **Savings (pin vs snap)** | **99.5%** | **99.5%** | — | **99.5%** |
+| Method | Size | Tokens | Articles |
+|--------|------|--------|----------|
+| Snapshot | 380 KB | 95,000 | 100+ |
+| web_fetch | 13.1 KB | 3,275 | 18 |
+| Pinchtab | ~2 KB (est) | 400 | 8-10 |
+| **Savings (web vs snap)** | **97%** | **97%** | — |
+| **Savings (pin vs snap)** | **99.5%** | **99.5%** | — |
 
 ### Daily Mail (News + Clickbait, Very High Density)
 
-| Method | Size | Tokens | Articles | Cost |
-|--------|------|--------|----------|------|
-| Snapshot | 350 KB | 87,500 | 150+ | $0.000263 |
-| web_fetch | 50 KB | 12,500 | 20 | $0.000038 |
-| Pinchtab | ~2 KB (est) | 400 | 8-10 | $0.0000012 |
-| **Savings (web vs snap)** | **86%** | **86%** | — | **86%** |
-| **Savings (pin vs snap)** | **99.4%** | **99.4%** | — | **99.4%** |
-
----
-
-## Cost At Scale
-
-### 1,000 Pages/Day
-
-| Method | Daily Cost | Monthly Cost | Annual Cost |
-|--------|-----------|--------------|-------------|
-| **Snapshot** | $0.194 | $5.82 | $69.84 |
-| **web_fetch** | $0.021 | $0.63 | $7.56 |
-| **Pinchtab** | $0.0036 | $0.11 | $1.35 |
-| **Savings (web vs snap)** | $0.173 | **$5.19** | **$62.28** |
-| **Savings (pin vs snap)** | $0.190 | **$5.71** | **$68.49** |
-
-### 10,000 Pages/Day (Enterprise)
-
-| Method | Daily Cost | Monthly Cost | Annual Cost |
-|--------|-----------|--------------|-------------|
-| **Snapshot** | $1.94 | $58.20 | $698.40 |
-| **web_fetch** | $0.21 | $6.30 | $75.60 |
-| **Pinchtab** | $0.036 | $1.08 | $12.96 |
-| **Savings (web vs snap)** | $1.73 | **$51.90** | **$622.80** |
-| **Savings (pin vs snap)** | $1.90 | **$57.12** | **$685.44** |
+| Method | Size | Tokens | Articles |
+|--------|------|--------|----------|
+| Snapshot | 350 KB | 87,500 | 150+ |
+| web_fetch | 50 KB | 12,500 | 20 |
+| Pinchtab | ~2 KB (est) | 400 | 8-10 |
+| **Savings (web vs snap)** | **86%** | **86%** | — |
+| **Savings (pin vs snap)** | **99.4%** | **99.4%** | — |
 
 ---
 
@@ -145,17 +118,16 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 
 ## Real-World Scenarios
 
-### Scenario A: News Aggregator Bot (Fast + Cheap)
+### Scenario A: News Aggregator Bot (Fast + Efficient)
 
 **Requirements:**
 - Crawl 10-20 news sites daily
 - Extract headlines, summaries
 - No interaction needed
-- Cost matters
+- Token efficiency matters
 
 **Recommendation:** **web_fetch**
-- Why: Fast, built-in, 97% cheaper than snapshot
-- Cost: $0.02/day for 20 sites
+- Why: Fast, built-in, 97% lighter than snapshot
 - Tradeoff: Can't handle JS-heavy sites
 
 **Alternative:** Pinchtab if you hit JS-heavy sites (add real Chrome)
@@ -168,11 +140,10 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 - Read 1,000+ pages/day
 - Extract accurate data
 - Real Chrome rendering needed (JS heavy)
-- Minimize token cost
+- Minimize token usage
 
 **Recommendation:** **Pinchtab**
 - Why: Real Chrome rendering + 90% token savings
-- Cost: $0.11/month (vs. $5.82 snapshot)
 - Tradeoff: Requires binary, no form filling
 
 **Alternative:** web_fetch if no JS rendering needed
@@ -189,8 +160,7 @@ HEAVYWEIGHT SNAPSHOT          LIGHTWEIGHT WEB_FETCH          ULTRA-LIGHTWEIGHT P
 
 **Recommendation:** **Snapshot**
 - Why: Only option with form support + interaction
-- Cost: $0.19/page but necessary
-- Tradeoff: Expensive but feature-complete
+- Tradeoff: Higher token usage but feature-complete
 
 **No alternative:** You need the full DOM.
 
@@ -245,13 +215,13 @@ Output: Cheap default, escalate when needed
 
 For teams extracting **1K+ pages/day**:
 
-- **Snapshot costs:** $174/month (1K pages)
-- **Pinchtab costs:** $3.30/month (1K pages)
-- **Savings:** **$170.70/month** = **$2,048/year**
+- **Snapshot:** ~64K tokens per page
+- **Pinchtab:** ~1.2K tokens per page
+- **Reduction:** **98% token savings**
 
 Plus: Real Chrome rendering (JS support), better text quality, agent-optimized.
 
-**Breakeven:** ~50 pages/day. Beyond that, Pinchtab wins.
+**Efficiency matters:** At scale (50+ pages/day), token reduction compounds significantly.
 
 ---
 
@@ -279,9 +249,6 @@ A: No. Snapshot has form support + element refs for clicking. Pinchtab is text-o
 
 **Q: Should I always use Pinchtab over web_fetch?**
 A: Only if you need real Chrome rendering (JS) or at scale (1K+ pages/day). web_fetch is simpler for text-only, no-JS sites.
-
-**Q: What's the token cost of Pinchtab vs. GPT-4?**
-A: ~$0.0000036 per page (Sonnet). GPT-4 would be 10x higher (~$0.000036), so Pinchtab saves you money even vs. other models.
 
 **Q: Can web_fetch handle authentication?**
 A: No, it fetches raw HTML. Use Snapshot or Pinchtab if cookies/auth required.

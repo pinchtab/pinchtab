@@ -25,12 +25,12 @@ For each site (BBC, Corriere, Daily Mail):
 
 ### Data
 
-| Site | Extract Size | Est. Tokens | Articles Found | Cost (Sonnet) |
-|------|--------------|------------|-----------------|---------------|
-| **BBC** | 18.8 KB | ~4,700 | 15-20 | $0.000014 |
-| **Corriere** | 13.1 KB | ~3,275 | 15-20 | $0.000010 |
-| **Daily Mail** | 50 KB | ~12,500 | 20+ | $0.000038 |
-| **Average** | **27.3 KB** | **~6,825** | **~19** | **$0.000021** |
+| Site | Extract Size | Est. Tokens | Articles Found |
+|------|--------------|------------|----------------|
+| **BBC** | 18.8 KB | ~4,700 | 15-20 |
+| **Corriere** | 13.1 KB | ~3,275 | 15-20 |
+| **Daily Mail** | 50 KB | ~12,500 | 20+ |
+| **Average** | **27.3 KB** | **~6,825** | **~19** |
 
 ---
 
@@ -51,11 +51,11 @@ For each site (BBC, Corriere, Daily Mail):
 3. Converts to plain text or markdown
 4. Returns cleaned content
 
-**Token cost per site:**
-- BBC: **4,700 tokens** ($0.000014)
-- Corriere: **3,275 tokens** ($0.000010)
-- Daily Mail: **12,500 tokens** ($0.000038)
-- **Average: 6,825 tokens** ($0.000021 per page)
+**Token usage per site:**
+- BBC: **4,700 tokens**
+- Corriere: **3,275 tokens**
+- Daily Mail: **12,500 tokens**
+- **Average: 6,825 tokens per page**
 
 **Pros:**
 - ✅ **82% lighter than snapshots** (29x smaller on Corriere)
@@ -79,7 +79,6 @@ For each site (BBC, Corriere, Daily Mail):
 |--------|-----------|----------|-----------|
 | **Size** | 27.3 KB | 258 KB | 10.4x heavier (snapshot) |
 | **Tokens** | 6,825 | 64,583 | 9.5x heavier (snapshot) |
-| **Token Cost** | $0.000021 | $0.000194 | 9.2x more expensive (snapshot) |
 | **Interactivity** | ❌ No | ✅ Yes | Snapshot wins |
 | **Structure Info** | ❌ No | ✅ Yes | Snapshot wins |
 | **Speed** | ✅ Fast | ⚠️ Slow | web_fetch wins |
@@ -91,7 +90,6 @@ For each site (BBC, Corriere, Daily Mail):
 | Aspect | web_fetch | Pinchtab | Winner |
 |--------|-----------|----------|--------|
 | **Tokens** | 6,825 | ~1,200 | Pinchtab (5.7x lighter) |
-| **Cost** | $0.000021 | $0.0000036 | Pinchtab (83% cheaper) |
 | **Rendering** | ❌ No | ✅ Real Chrome | Pinchtab |
 | **Selectors** | ❌ No | ✅ CSS filtering | Pinchtab |
 | **Setup** | ✅ Built-in | Requires binary | web_fetch |
@@ -99,27 +97,27 @@ For each site (BBC, Corriere, Daily Mail):
 
 ---
 
-## Cost Implications
+## Token Efficiency Comparison
 
-### Per-Page Economics
+### Per-Page Token Usage
 
-| Method | Tokens | Cost (Sonnet) | Monthly (1K pages) |
-|--------|--------|---------------|--------------------|
-| **Snapshot** | ~64,583 | $0.000194 | $5.82 |
-| **web_fetch** | ~6,825 | $0.000021 | $0.63 |
-| **Pinchtab** | ~1,200 | $0.0000036 | $0.11 |
+| Method | Tokens | Monthly Tokens (1K pages) |
+|--------|--------|---------------------------|
+| **Snapshot** | ~64,583 | ~1.94B |
+| **web_fetch** | ~6,825 | ~205M |
+| **Pinchtab** | ~1,200 | ~36M |
 
-### Savings Tiers
+### Token Reduction
 
 **web_fetch vs. Snapshot:**
-- Per page: saves $0.000173
-- 1K pages/day: saves $0.173/day = **$5.19/month**
-- 10K pages/day: saves $1.73/day = **$51.90/month**
+- Per page: **~57,758 tokens lighter**
+- 1K pages/day: **~1.74B tokens/month saved**
+- 10K pages/day: **~17.4B tokens/month saved**
 
 **Pinchtab vs. web_fetch:**
-- Per page: saves $0.000017
-- 1K pages/day: saves $0.017/day = **$0.51/month**
-- 10K pages/day: saves $0.17/day = **$5.10/month**
+- Per page: **~5,625 tokens lighter**
+- 1K pages/day: **~169M tokens/month saved**
+- 10K pages/day: **~1.69B tokens/month saved**
 
 ---
 
@@ -170,11 +168,11 @@ For each site (BBC, Corriere, Daily Mail):
 **Goal:** Extract headlines and summary text from news sites
 
 **Tool choices:**
-1. **Best:** web_fetch (~3K tokens avg, $0.63/month)
-2. **Acceptable:** Snapshot (~65K tokens avg, $5.82/month) — 9x more expensive
+1. **Best:** web_fetch (~3K tokens avg)
+2. **Acceptable:** Snapshot (~65K tokens avg) — 9x heavier
 3. **N/A:** Pinchtab — no advantage over web_fetch here
 
-**Recommendation:** Use web_fetch. Fast, cheap, simple. Readability removes ads automatically.
+**Recommendation:** Use web_fetch. Fast, lightweight, simple. Readability removes ads automatically.
 
 ---
 
@@ -193,12 +191,12 @@ For each site (BBC, Corriere, Daily Mail):
 
 ### Scenario 3: High-Volume Agent Crawl (10,000 pages/day)
 
-**Goal:** Crawl pages, extract text, minimize costs
+**Goal:** Crawl pages, extract text, minimize token usage
 
 **Tool choices:**
-1. **Best:** Pinchtab (~1.2K tokens, $0.11/month)
-2. **Good:** web_fetch (~6.8K tokens, $0.63/month) — 6x more expensive
-3. **Expensive:** Snapshot (~65K tokens, $5.82/month) — 52x more expensive
+1. **Best:** Pinchtab (~1.2K tokens)
+2. **Good:** web_fetch (~6.8K tokens) — 6x heavier
+3. **Heavy:** Snapshot (~65K tokens) — 52x heavier
 
 **Recommendation:** Pinchtab dominates at scale. Real Chrome rendering + minimal tokens.
 
@@ -210,7 +208,7 @@ For each site (BBC, Corriere, Daily Mail):
 2. **Readability parsing removes boilerplate automatically** — no manual filtering needed
 3. **Pinchtab still beats web_fetch 5-10x** on token efficiency
 4. **web_fetch excels at content extraction**, not interaction
-5. **At scale, Pinchtab ROI emerges** (~$5+/month on 1K pages/day)
+5. **At scale, token efficiency compounds** — method choice has significant impact
 
 ---
 
@@ -274,7 +272,6 @@ Contents:
 
 **Token estimation:**
 - web_fetch text: **4 characters ≈ 1 token** (content-heavy)
-- Claude Sonnet pricing: **$3 per million tokens**
 
 **Readability parsing:**
 - Industry standard algorithm (used by Pocket, Safari Reader)

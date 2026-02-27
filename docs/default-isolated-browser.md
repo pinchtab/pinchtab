@@ -48,12 +48,6 @@ For each site (BBC, Corriere, Daily Mail):
 - Interactive element metadata (buttons, links, forms)
 - Element references for agent reasoning
 
-**Token cost per site:**
-- BBC: **$0.000034** (Sonnet pricing)
-- Corriere: **$0.000285**
-- Daily Mail: **$0.000263**
-- **Total: $0.00058 per 3-page batch**
-
 **Pros:**
 - ✅ Complete structural information
 - ✅ Accessibility-first design
@@ -74,11 +68,11 @@ For each site (BBC, Corriere, Daily Mail):
 - Markdown formatting
 - No DOM, no accessibility tree
 
-**Token cost:**
-- BBC: ~4,700 tokens ($0.000014)
-- Corriere: ~3,275 tokens ($0.000010)
-- Daily Mail: ~12,500 tokens ($0.000038)
-- **Total: ~20,475 tokens per 3-page batch** (~82% savings vs. snapshot)
+**Token usage:**
+- BBC: ~4,700 tokens
+- Corriere: ~3,275 tokens
+- Daily Mail: ~12,500 tokens
+- **Total: ~20,475 tokens per 3-page batch** (~82% lighter vs. snapshot)
 
 **Pros:**
 - ✅ Fast (no rendering)
@@ -99,9 +93,9 @@ For each site (BBC, Corriere, Daily Mail):
 - Optional: CSS selector-based filtering
 - Real Chrome rendering (not Readability parser)
 
-**Token cost (estimated):**
+**Token usage (estimated):**
 - ~800-1,200 tokens per page
-- **Total: ~2,400-3,600 tokens per 3-page batch** (~90% savings vs. snapshot)
+- **Total: ~2,400-3,600 tokens per 3-page batch** (~90% lighter vs. snapshot)
 
 **Pros:**
 - ✅ 90% token reduction
@@ -115,27 +109,27 @@ For each site (BBC, Corriere, Daily Mail):
 
 ---
 
-## Cost Implications
+## Token Efficiency Comparison
 
-### Per-Page Economics
+### Per-Page Tokens
 
-| Method | Tokens | Cost (Sonnet) | Relative Cost |
-|--------|--------|---------------|---------------|
-| Full Snapshot | ~64,583 avg | $0.000194 | 100% (baseline) |
-| web_fetch | ~6,825 avg | $0.000021 | 11% |
-| **Pinchtab** | **~1,000 avg** | **$0.000003** | **1.5%** |
+| Method | Tokens | Relative Efficiency |
+|--------|--------|---------------------|
+| Full Snapshot | ~64,583 avg | 100% (baseline) |
+| web_fetch | ~6,825 avg | 11% |
+| **Pinchtab** | **~1,000 avg** | **1.5%** |
 
 ### At Scale (1,000 pages/day)
 
-| Method | Daily Cost | Monthly Cost |
-|--------|-----------|--------------|
-| Full Snapshot | $0.194 | **$5.82** |
-| web_fetch | $0.021 | **$0.63** |
-| **Pinchtab** | **$0.003** | **$0.09** |
+| Method | Daily Tokens | Monthly Tokens |
+|--------|-------------|----------------|
+| Full Snapshot | ~64.6M | **~1.94B** |
+| web_fetch | ~6.8M | **~205M** |
+| **Pinchtab** | **~1M** | **~30M** |
 
-**Monthly savings with Pinchtab:**
-- vs. snapshots: **$5.73/month** per 1K pages/day
-- vs. web_fetch: **$0.54/month** per 1K pages/day
+**Token reduction with Pinchtab:**
+- vs. snapshots: **~98.5% reduction** per 1K pages/day
+- vs. web_fetch: **~85% reduction** per 1K pages/day
 
 ---
 
@@ -177,7 +171,6 @@ Contents:
 ## Footnotes
 
 **Token estimation methodology:**
-- Claude Sonnet pricing: $3 per million input tokens
 - Text: 4 characters ≈ 1 token (human-readable content)
 - JSON structure: 2 characters ≈ 1 token (brackets, colons, quotes)
 - Actual usage may vary by content type

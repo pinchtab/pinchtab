@@ -7,18 +7,18 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 ### Results at a Glance
 
 #### Long-Lived Agent (Service Tokens Only)
-| Method | Avg Size | Avg Tokens | Cost/1K pages | Best For |
-|--------|----------|-----------|----------------|----------|
-| **Snapshot** | 258 KB | 64,583 | $5.82/month | Interactive workflows, forms |
-| **web_fetch** | 27 KB | 6,825 | $0.63/month | Text extraction, blogs, news |
-| **Pinchtab** | ~2 KB | 900 | $0.03/month | Scale + real Chrome rendering |
+| Method | Avg Size | Avg Tokens | Best For |
+|--------|----------|-----------|----------|
+| **Snapshot** | 258 KB | 64,583 | Interactive workflows, forms |
+| **web_fetch** | 27 KB | 6,825 | Text extraction, blogs, news |
+| **Pinchtab** | ~2 KB | 900 | Scale + real Chrome rendering |
 
 #### Fresh Agent per Task (Agent + Service)
-| Method | Agent OH | Service | Total | Cost/1K tasks |
-|--------|----------|---------|-------|----------------|
-| **Snapshot** | 500 | 64,583 | 65,083 | $5.85/month |
-| **web_fetch** | 500 | 6,825 | 7,325 | $0.66/month |
-| **Pinchtab** | 500 | 920 | **1,417** | **$0.12/month** |
+| Method | Agent OH | Service | Total |
+|--------|----------|---------|-------|
+| **Snapshot** | 500 | 64,583 | 65,083 |
+| **web_fetch** | 500 | 6,825 | 7,325 |
+| **Pinchtab** | 500 | 920 | **1,417** |
 
 *Fresh agent scenario shows Pinchtab's 47x advantage when spawning new agents per task.*
 
@@ -33,7 +33,6 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 - Full semantic snapshot with DOM + accessibility tree
 - High-fidelity for UI agents, expensive for text extraction
 - **11K-95K tokens** depending on site complexity
-- **Real cost example:** $5.82/month at 1,000 pages/day
 
 [📄 Read snapshot analysis](./default-isolated-browser.md) | [📦 Raw data](./snapshot-test-results.zip)
 
@@ -46,7 +45,6 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 - Readability parser removes 70-90% boilerplate
 - Perfect for articles, blogs, content extraction
 - **3.3K-12.5K tokens** with minimal structure
-- **Real cost example:** $0.63/month at 1,000 pages/day
 
 [📄 Read web_fetch analysis](./web-fetch-lightweight.md) | [📦 Raw data](./webfetch-test-results.zip)
 
@@ -59,7 +57,6 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 - Real Chrome rendering + text optimization
 - Clean slate scenario: fresh agent + Pinchtab call
 - **~1,400 tokens** per task (including agent overhead)
-- **Real cost example:** $0.12/month at 1,000 tasks/day
 
 **Methodology Note:** Snapshot and web_fetch tested empirically. Pinchtab calculated from documented behavior and production measurements. See `pinchtab-clean-slate.md` → "Validation Method" section.
 
@@ -75,7 +72,7 @@ Three extraction methods tested on **BBC.com**, **Corriere.it**, **Daily Mail.co
 
 This single document covers:
 - Complete feature matrix (all three methods)
-- Cost analysis at scale (1K-10K pages/day)
+- Performance analysis at scale (1K-10K pages/day)
 - Decision tree (when to use each)
 - Real-world scenarios + architecture patterns
 - Use case recommendations
@@ -99,16 +96,14 @@ This single document covers:
 - web_fetch: 4 chars (text) = 1 token
 - Pinchtab: 4 chars (text) = 1 token
 
-**Pricing:** Claude Sonnet @ $3/M input tokens
-
 ---
 
 ## Key Takeaways
 
 1. **Snapshot is heavy but powerful** — Full DOM + refs for clicking, 9-29x heavier
-2. **web_fetch is the sweet spot for text** — Built-in, 82% cheaper, handles news/articles
-3. **Pinchtab owns the scale game** — 90% savings vs. snapshot, real Chrome rendering
-4. **Cost compounds** — At 10K pages/day, choice = $600+/year difference
+2. **web_fetch is the sweet spot for text** — Built-in, 82% lighter, handles news/articles
+3. **Pinchtab owns the scale game** — 90% token savings vs. snapshot, real Chrome rendering
+4. **Token efficiency compounds** — At 10K pages/day, method choice has significant impact
 
 ---
 
@@ -138,8 +133,6 @@ This single document covers:
 - Snapshot: 64,583 tokens (snapshot-test-results.zip)
 - web_fetch: 6,825 tokens (webfetch-test-results.zip)
 - **Pinchtab: 1,200 tokens** ← 5.7x lighter than web_fetch
-
-**The ROI:** $68/year saved per 1,000 pages/day, plus better rendering.
 
 ---
 
