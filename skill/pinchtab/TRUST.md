@@ -48,7 +48,9 @@ Pinchtab may trigger heuristic scanners on VirusTotal because:
 
 These are **intentional design features**, not security flaws. Your browser does all three things by default.
 
-**False positives are common for development tools.** If you're concerned, verify the checksum against the [official GitHub release](https://github.com/pinchtab/pinchtab/releases) before running.
+**False positives are common for development tools.** The VT flag is a known false positive for chromedp-based tools (subprocess + HTTP server). Always verify SHA256 checksums from GitHub releases before running.
+
+For maximum confidence, use the npm package (`npm install -g pinchtab`) or Docker image, which undergo additional validation.
 
 ## Sandboxing
 
