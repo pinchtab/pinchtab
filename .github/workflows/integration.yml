@@ -47,17 +47,25 @@ jobs:
   integration:
     name: Integration Tests
     needs: changes
-    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Skip if no Go changes
+        if: needs.changes.outputs.go != 'true'
+        run: |
+          echo "⏭️ No Go files changed, skipping integration tests"
+          echo "This is expected for docs/workflow-only changes"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.go == 'true'
 
       - uses: actions/setup-go@v5
+        if: needs.changes.outputs.go == 'true'
         with:
           go-version: '1.26'
 
       - name: Install Google Chrome (deb, avoids snap hangs)
+        if: needs.changes.outputs.go == 'true'
         run: |
           wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
           echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
@@ -66,6 +74,7 @@ jobs:
           echo "CHROME_BINARY=/usr/bin/google-chrome" >> $GITHUB_ENV
 
       - name: Run integration tests
+        if: needs.changes.outputs.go == 'true'
         run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
         env:
           CI: "true"
