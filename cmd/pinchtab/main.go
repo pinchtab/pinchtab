@@ -202,12 +202,16 @@ func main() {
 	})
 
 	slog.Info("🦀 PINCH! PINCH!", "port", cfg.Port, "cdp", cfg.CdpURL, "stealth", cfg.StealthLevel)
+
+	// Log startup configuration
+	logStartupConfig(cfg)
+
 	if cfg.Token != "" {
 		slog.Info("auth enabled")
 	} else {
 		slog.Info("auth disabled (set BRIDGE_TOKEN to enable)")
 		if cfg.Bind == "0.0.0.0" {
-			slog.Warn("⚠️ Binding to 0.0.0.0 with no BRIDGE_TOKEN — API is unauthenticated!")
+			slog.Warn("⚠️ Binding to 0.0.0.0 with no BRIDGE_TOKEN - API is unauthenticated!")
 		}
 	}
 
@@ -320,4 +324,42 @@ func extractDomain(urlStr string) string {
 	}
 
 	return urlStr
+}
+
+func logStartupConfig(cfg *config.RuntimeConfig) {
+	// Build config summary
+	slog.Info("startup configuration",
+		"bind", cfg.Bind,
+		"port", cfg.Port,
+		"headless", cfg.Headless,
+		"stealth", cfg.StealthLevel,
+		"block_ads", cfg.BlockAds,
+		"block_images", cfg.BlockImages,
+		"block_media", cfg.BlockMedia,
+		"restore", !cfg.NoRestore,
+		"animations", !cfg.NoAnimations,
+		"max_tabs", cfg.MaxTabs,
+		"action_timeout", cfg.ActionTimeout.String(),
+		"navigate_timeout", cfg.NavigateTimeout.String(),
+	)
+
+	if cfg.CdpURL != "" {
+		slog.Info("using external chrome", "cdp_url", cfg.CdpURL)
+	}
+
+	if cfg.ChromeBinary != "" {
+		slog.Info("custom chrome binary", "path", cfg.ChromeBinary)
+	}
+
+	if cfg.Timezone != "" {
+		slog.Info("timezone override", "tz", cfg.Timezone)
+	}
+
+	if cfg.UserAgent != "" {
+		slog.Info("custom user agent", "ua_length", len(cfg.UserAgent))
+	}
+
+	if cfg.ChromeExtraFlags != "" {
+		slog.Info("extra chrome flags", "flags", cfg.ChromeExtraFlags)
+	}
 }
