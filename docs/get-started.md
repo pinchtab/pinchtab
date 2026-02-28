@@ -128,8 +128,11 @@ pinchtab text --raw
 ### Take a Screenshot
 
 ```bash
+# Save screenshot
 pinchtab screenshot -o page.jpg
-pinchtab screenshot -o page.jpg -q 75  # Lower quality
+
+# Lower quality
+pinchtab screenshot -o page.jpg -q 75
 ```
 
 ### Export as PDF
@@ -154,7 +157,9 @@ pinchtab snap -i -c
 # Or fill a form
 pinchtab fill e3 "user@example.com"
 pinchtab fill e5 "password"
-pinchtab click e7  # Submit button
+
+# Submit button
+pinchtab click e7
 ```
 
 ### Multiple Tabs
@@ -189,23 +194,23 @@ PinchTab is **tab-centric**, not URL-centric:
 
 ### Typical Workflow
 
-```
-1. Navigate to a page
-   pinchtab nav https://example.com
+```bash
+# 1. Navigate to a page
+pinchtab nav https://example.com
 
-2. Get page structure
-   pinchtab snap -i -c    # See buttons, links, inputs
+# 2. Get page structure (see buttons, links, inputs)
+pinchtab snap -i -c
 
-3. Interact with page
-   pinchtab click e5      # Click element
-   pinchtab type e3 "text"  # Type text
+# 3. Interact with page
+pinchtab click e5
+pinchtab type e3 "text"
 
-4. Verify changes
-   pinchtab snap -i -c    # Check new state
+# 4. Verify changes
+pinchtab snap -i -c
 
-5. Capture result
-   pinchtab screenshot    # Take screenshot
-   pinchtab pdf -o out.pdf  # Export PDF
+# 5. Capture result
+pinchtab screenshot
+pinchtab pdf -o out.pdf
 ```
 
 ---
@@ -398,9 +403,9 @@ pkill pinchtab
 sleep 2
 pinchtab &
 
-# Tab and session restored
+# Tab and session restored (already authenticated)
 pinchtab nav https://example.com/dashboard
-pinchtab snap  # Already authenticated
+pinchtab snap
 ```
 
 ### Scenario 4: Generate PDF Report

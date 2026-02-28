@@ -119,14 +119,29 @@ pinchtab snapshot              # Alias
 
 **Options:**
 ```bash
-pinchtab snap -i               # Interactive only (buttons, links, inputs)
-pinchtab snap -c               # Compact format (most token-efficient)
-pinchtab snap -d               # Diff only (changes since last snapshot)
-pinchtab snap -i -c            # Combine flags
-pinchtab snap -s "main > form" # CSS selector scope
-pinchtab snap --max-tokens 1000  # Truncate to ~1000 tokens
-pinchtab snap --depth 3        # Max tree depth
-pinchtab snap --tab <tabId>    # Target specific tab
+# Interactive only (buttons, links, inputs)
+pinchtab snap -i
+
+# Compact format (most token-efficient)
+pinchtab snap -c
+
+# Diff only (changes since last snapshot)
+pinchtab snap -d
+
+# Combine flags
+pinchtab snap -i -c
+
+# CSS selector scope
+pinchtab snap -s "main > form"
+
+# Truncate to ~1000 tokens
+pinchtab snap --max-tokens 1000
+
+# Max tree depth
+pinchtab snap --depth 3
+
+# Target specific tab
+pinchtab snap --tab <tabId>
 ```
 
 **Flags:**
@@ -169,7 +184,8 @@ pinchtab click <ref>
 
 **Example:**
 ```bash
-pinchtab click e5          # Click element with ref e5
+# Click element with ref e5
+pinchtab click e5
 ```
 
 #### Type Text
