@@ -34,7 +34,7 @@ curl -s -X POST http://localhost:9867/action \
 
 ---
 
-## Core Characteristics
+## Characteristics
 
 - **Tab-Centric** — Everything revolves around tabs, not URLs
 - **Stateful** — Sessions persist between requests. Log in once, stay logged in across restarts
@@ -44,7 +44,7 @@ curl -s -X POST http://localhost:9867/action \
 
 ---
 
-## Key Features
+## Features
 
 - 🌲 **Accessibility Tree** — Structured DOM with stable refs (e0, e1...) for click, type, read. No coordinate guessing.
 - 🎯 **Smart Filters** — `?filter=interactive` returns only buttons, links, inputs. Fewer tokens per snapshot.
@@ -58,113 +58,6 @@ curl -s -X POST http://localhost:9867/action \
 
 ---
 
-## Architecture
-
-PinchTab sits between your tools/agents and Chrome:
-
-```text
-┌─────────────────────────────────────────┐
-│         Your Tool/Agent                  │
-│   (CLI, curl, Python, Node.js, etc.)    │
-└──────────────┬──────────────────────────┘
-               │
-               │ HTTP
-               ↓
-┌─────────────────────────────────────────┐
-│    PinchTab HTTP Server (Go)            │
-│  ┌─────────────────────────────────┐    │
-│  │  Tab Manager                     │    │
-│  │  (tracks tabs + sessions)        │    │
-│  └─────────────────────────────────┘    │
-│  ┌─────────────────────────────────┐    │
-│  │  Chrome DevTools Protocol (CDP) │    │
-│  └─────────────────────────────────┘    │
-└──────────────┬──────────────────────────┘
-               │
-               │ CDP WebSocket
-               ↓
-┌─────────────────────────────────────────┐
-│        Chrome Browser                   │
-│  (Headless, headed, or external)        │
-└─────────────────────────────────────────┘
-```
-
----
-
-## Core Concepts
-
-### Tab-Centric Design
-
-Every operation targets a specific tab by `tabId`. Create a tab first:
-
-```bash
-curl -X POST http://localhost:9867/tab \
-  -d '{"action":"new","url":"https://example.com"}' | jq '.tabId'
-# Returns: "abc123"
-```
-
-Then use that `tabId` for all subsequent operations.
-
-**Get page snapshot:**
-```bash
-curl "http://localhost:9867/snapshot?tabId=abc123"
-```
-
-**Extract text:**
-```bash
-curl "http://localhost:9867/text?tabId=abc123"
-```
-
-**Perform action (click):**
-```bash
-curl -X POST http://localhost:9867/action \
-  -d '{"kind":"click","ref":"e5","tabId":"abc123"}'
-```
-
-### Refs Instead of Coordinates
-
-The accessibility tree provides **stable element references** instead of pixel coordinates:
-
-```json
-{
-  "elements": [
-    {"ref": "e0", "role": "heading", "name": "Title"},
-    {"ref": "e5", "role": "button", "name": "Submit"},
-    {"ref": "e8", "role": "input", "name": "Email"}
-  ]
-}
-```
-
-Click or interact by ref:
-
-```bash
-curl -X POST http://localhost:9867/action \
-  -d '{"kind":"click","ref":"e5","tabId":"abc123"}'
-```
-
-### Persistent Sessions
-
-Tabs, cookies, and login state survive server restarts:
-
-```bash
-# Login
-pinchtab nav https://example.com/login
-pinchtab fill e3 user@example.com
-pinchtab fill e5 password
-pinchtab click e7
-
-# Restart the server
-pkill pinchtab
-sleep 2
-./pinchtab
-
-# Tab is restored, still logged in
-pinchtab nav https://example.com/dashboard
-pinchtab snap  # Works without re-login
-```
-
----
-
 ## Support & Community
 
 - **GitHub Issues** — https://github.com/pinchtab/pinchtab/issues
@@ -175,4 +68,4 @@ pinchtab snap  # Works without re-login
 
 ## License
 
-Apache 2.0 — Free and open source.
+[MIT](https://github.com/pinchtab/pinchtab?tab=MIT-1-ov-file#readme)

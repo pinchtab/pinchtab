@@ -2,13 +2,15 @@
   "main": [
     "overview.md",
     "get-started.md",
-    "showcase.md"
+    "showcase.md",
+    "core-concepts.md"
   ],
   "references": [
     "references/cli-commands.md",
     "references/curl-commands.md"
   ],
   "architecture": [
+    "architecture/architecture-overview.md",
     "architecture/pinchtab-architecture.md",
     "architecture/chrome-lifecycle-and-orchestration.md",
     "architecture/building.md"
