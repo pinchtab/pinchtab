@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -24,13 +25,19 @@ type RefCache struct {
 }
 
 type Bridge struct {
-	AllocCtx   context.Context
-	BrowserCtx context.Context
-	Config     *config.RuntimeConfig
+	AllocCtx      context.Context
+	AllocCancel   context.CancelFunc
+	BrowserCtx    context.Context
+	BrowserCancel context.CancelFunc
+	Config        *config.RuntimeConfig
 	*TabManager
 	StealthScript string
 	Actions       map[string]ActionFunc
 	Locks         *LockManager
+
+	// Lazy initialization
+	initMu      sync.Mutex
+	initialized bool
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
@@ -39,7 +46,8 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		BrowserCtx: browserCtx,
 		Config:     cfg,
 	}
-	if cfg != nil {
+	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
+	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, b.tabSetup)
 	}
 	b.Locks = NewLockManager()
@@ -84,6 +92,39 @@ func (b *Bridge) Unlock(tabID, owner string) error {
 
 func (b *Bridge) TabLockInfo(tabID string) *LockInfo {
 	return b.Locks.Get(tabID)
+}
+
+func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	b.initMu.Lock()
+	defer b.initMu.Unlock()
+
+	if b.initialized && b.BrowserCtx != nil {
+		return nil // Already initialized
+	}
+
+	if b.BrowserCtx != nil {
+		return nil // Already has browser context
+	}
+
+	// This will be implemented via a callback from cmd/pinchtab/browser.go
+	// For now, return an error if not initialized
+	return fmt.Errorf("browser not initialized and EnsureChrome not implemented")
+}
+
+func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) {
+	b.initMu.Lock()
+	defer b.initMu.Unlock()
+
+	b.AllocCtx = allocCtx
+	b.AllocCancel = allocCancel
+	b.BrowserCtx = browserCtx
+	b.BrowserCancel = browserCancel
+	b.initialized = true
+
+	// Now initialize TabManager with the browser context
+	if b.Config != nil && b.TabManager == nil {
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.tabSetup)
+	}
 }
 
 func (b *Bridge) BrowserContext() context.Context {
