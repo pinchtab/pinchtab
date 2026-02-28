@@ -1,4 +1,4 @@
-# Remote Chrome via CDP_URL
+# Remote Chrome
 
 By default, Pinchtab launches its own isolated Chrome instance. But sometimes you want to **connect to an existing Chrome** instead — to share one browser across multiple agents, save memory in container environments, or integrate with external Chrome setups.
 
@@ -323,7 +323,7 @@ spec:
   - name: chrome
     ports:
     - containerPort: 9222  # No hostPort = not exposed to outside
-    
+
   - name: pinchtab
     env:
     - name: CDP_URL

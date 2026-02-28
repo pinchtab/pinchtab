@@ -1,4 +1,4 @@
-# Chrome Lifecycle & Orchestration
+# Orchestration
 
 Pinchtab is a Go-based bridge and orchestrator for Chrome. It doesn't just "run" a browser; it manages a fleet of "sanitized" Chrome instances, hardened against detection and optimized for automation.
 
