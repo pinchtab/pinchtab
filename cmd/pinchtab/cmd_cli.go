@@ -347,11 +347,27 @@ func cliTabs(client *http.Client, base, token string, args []string) {
 	}
 	switch args[0] {
 	case "new":
-		body := map[string]any{"action": "new"}
+		url := ""
 		if len(args) > 1 {
-			body["url"] = args[1]
+			url = args[1]
+		}
+
+		// Check if any instances are running
+		instances := getInstances(client, base, token)
+		if len(instances) == 0 {
+			// No instances, auto-launch default
+			fmt.Fprintf(os.Stderr, "📍 No instances running, launching default...\n")
+			launchInstance(client, base, token, "default")
+			fmt.Fprintf(os.Stderr, "✅ Instance launched\n")
+		}
+
+		// Create tab
+		body := map[string]any{"action": "new"}
+		if url != "" {
+			body["url"] = url
 		}
 		doPost(client, base, token, "/tab", body)
+
 	case "close":
 		if len(args) < 2 {
 			fatal("Usage: pinchtab tab close <tabId>")
@@ -363,6 +379,43 @@ func cliTabs(client *http.Client, base, token string, args []string) {
 	default:
 		fatal("Usage: pinchtab tabs [new <url>|close <tabId>]")
 	}
+}
+
+// getInstances fetches the list of running instances
+func getInstances(client *http.Client, base, token string) []map[string]any {
+	resp, err := http.NewRequest("GET", base+"/instances", nil)
+	if err != nil {
+		return nil
+	}
+	if token != "" {
+		resp.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	result, err := client.Do(resp)
+	if err != nil || result.StatusCode >= 400 {
+		return nil
+	}
+	defer func() { _ = result.Body.Close() }()
+
+	var data map[string]any
+	json.NewDecoder(result.Body).Decode(&data)
+
+	if instances, ok := data["instances"].([]interface{}); ok {
+		converted := make([]map[string]any, len(instances))
+		for i, inst := range instances {
+			if m, ok := inst.(map[string]any); ok {
+				converted[i] = m
+			}
+		}
+		return converted
+	}
+	return nil
+}
+
+// launchInstance launches a default instance
+func launchInstance(client *http.Client, base, token string, profile string) {
+	body := map[string]any{"profile": profile}
+	doPost(client, base, token, "/instances/launch", body)
 }
 
 // --- screenshot ---
