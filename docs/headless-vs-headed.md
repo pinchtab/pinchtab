@@ -30,16 +30,6 @@ pinchtab --headless
 - **Cloud servers** — VPS, Lambda, container orchestration
 - **Production workflows** — Long-running tasks, batch processing
 
-### Performance
-
-Headless is **faster** for most operations:
-
-```text
-Navigate:          200-500ms (no rendering)
-Snapshot:          100-300ms (no painting)
-Click + verify:    300-700ms (no visual feedback)
-```
-
 ---
 
 ## Headed Mode
@@ -68,18 +58,6 @@ pinchtab --headed
 - **Live demonstrations** — Show what your automation is doing
 - **Interactive debugging** — Watch and modify behavior in real-time
 - **Manual collaboration** — A human watches and guides the automation
-
-### Performance
-
-Headed is **slower** due to rendering:
-
-```text
-Navigate:          400-900ms (rendering overhead)
-Snapshot:          300-800ms (painting + encoding)
-Click + verify:    800-1500ms (visual confirmation)
-```
-
-Expect **2-3x latency increase** compared to headless.
 
 ---
 
