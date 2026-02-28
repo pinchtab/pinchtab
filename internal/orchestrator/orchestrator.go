@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
 type Orchestrator struct {
-	instances      map[string]*InstanceInternal
+	instances      map[string]*InstanceInternal // keyed by instance ID
 	baseDir        string
 	binary         string
 	profiles       *profiles.ProfileManager
@@ -27,6 +28,7 @@ type Orchestrator struct {
 	client         *http.Client
 	childAuthToken string
 	portAllocator  *PortAllocator
+	idMgr          *idutil.Manager
 }
 
 type InstanceInternal struct {
@@ -77,6 +79,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		client:         &http.Client{Timeout: 3 * time.Second},
 		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 		portAllocator:  NewPortAllocator(9868, 9968),
+		idMgr:          idutil.NewManager(),
 	}
 	return orch
 }
@@ -124,9 +127,9 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	for _, inst := range o.instances {
 		if inst.Port == port && instanceIsActive(inst) {
 			o.mu.Unlock()
-			return nil, fmt.Errorf("port %s already in use by instance %q", port, inst.Name)
+			return nil, fmt.Errorf("port %s already in use by instance %q", port, inst.ProfileName)
 		}
-		if inst.Name == name && instanceIsActive(inst) {
+		if inst.ProfileName == name && instanceIsActive(inst) {
 			o.mu.Unlock()
 			return nil, fmt.Errorf("profile %q already has an active instance (%s)", name, inst.Status)
 		}
@@ -136,10 +139,13 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 		return nil, fmt.Errorf("port %s is already in use on this machine", port)
 	}
 
-	id := fmt.Sprintf("%s-%s", name, port)
-	if inst, ok := o.instances[id]; ok && inst.Status == "running" {
+	// Generate hash-based IDs
+	profileID := o.idMgr.ProfileID(name)
+	instanceID := o.idMgr.InstanceID(profileID, name)
+
+	if inst, ok := o.instances[instanceID]; ok && inst.Status == "running" {
 		o.mu.Unlock()
-		return nil, fmt.Errorf("instance %q already running", id)
+		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}
 
 	o.mu.Unlock()
@@ -167,7 +173,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	})
 
 	logBuf := newRingBuffer(64 * 1024)
-	slog.Info("starting instance process", "id", id, "binary", o.binary, "port", port, "profile", profilePath)
+	slog.Info("starting instance process", "id", instanceID, "profile", name, "port", port)
 
 	cmd, err := o.runner.Run(context.Background(), o.binary, env, logBuf, logBuf)
 	if err != nil {
@@ -176,13 +182,13 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 
 	inst := &InstanceInternal{
 		Instance: bridge.Instance{
-			ID:        id,
-			Name:      name,
-			Profile:   profilePath,
-			Port:      port,
-			Headless:  headless,
-			Status:    "starting",
-			StartTime: time.Now(),
+			ID:          instanceID,
+			ProfileID:   profileID,
+			ProfileName: name,
+			Port:        port,
+			Headless:    headless,
+			Status:      "starting",
+			StartTime:   time.Now(),
 		},
 		URL:    fmt.Sprintf("http://localhost:%s", port),
 		cmd:    cmd,
@@ -190,7 +196,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	}
 
 	o.mu.Lock()
-	o.instances[id] = inst
+	o.instances[instanceID] = inst
 	o.mu.Unlock()
 
 	go o.monitor(inst)
@@ -268,7 +274,7 @@ func (o *Orchestrator) StopProfile(name string) error {
 	o.mu.RLock()
 	ids := make([]string, 0, 1)
 	for id, inst := range o.instances {
-		if inst.Name == name && instanceIsActive(inst) {
+		if inst.ProfileName == name && instanceIsActive(inst) {
 			ids = append(ids, id)
 		}
 	}
@@ -452,8 +458,8 @@ func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
 		}
 		for _, tab := range tabs {
 			all = append(all, bridge.InstanceTab{
+				ID:         tab.ID,
 				InstanceID: inst.ID,
-				TabID:      tab.ID,
 				URL:        tab.URL,
 			})
 		}

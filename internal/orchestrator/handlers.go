@@ -177,7 +177,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 
 	instances := o.List()
 	for _, inst := range instances {
-		if inst.Name == name && (inst.Status == "running" || inst.Status == "starting") {
+		if inst.ProfileName == name && (inst.Status == "running" || inst.Status == "starting") {
 			web.JSON(w, 200, map[string]any{
 				"name":    name,
 				"running": inst.Status == "running",

@@ -102,18 +102,19 @@ type AnalyticsReport struct {
 }
 
 type Instance struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Profile   string    `json:"profile"`
-	Port      string    `json:"port"`
-	Headless  bool      `json:"headless"`
-	Status    string    `json:"status"`
-	StartTime time.Time `json:"startTime"`
+	ID          string    `json:"id"`              // Hash-based ID: inst_XXXXXXXX
+	ProfileID   string    `json:"profileId"`       // Hash-based profile ID: prof_XXXXXXXX
+	ProfileName string    `json:"profileName"`     // Human-readable profile name (for display only)
+	Port        string    `json:"port"`            // Internal: instance port
+	Headless    bool      `json:"headless"`        // Mode: headless vs headed
+	Status      string    `json:"status"`          // Status: starting/running/stopping/stopped/error
+	StartTime   time.Time `json:"startTime"`       // When instance was created
+	Error       string    `json:"error,omitempty"` // Error message if status=error
 }
 
 type InstanceTab struct {
-	InstanceID string `json:"instanceId"`
-	TabID      string `json:"tabId"`
+	ID         string `json:"id"`         // Hash-based tab ID: tab_XXXXXXXX
+	InstanceID string `json:"instanceId"` // Hash-based instance ID: inst_XXXXXXXX
 	URL        string `json:"url"`
 	Title      string `json:"title"`
 }

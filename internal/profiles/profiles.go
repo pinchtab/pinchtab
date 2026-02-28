@@ -1,8 +1,6 @@
 package profiles
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -13,11 +11,15 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 )
 
+var idMgr = idutil.NewManager()
+
+// profileID generates a stable hash-based ID from profile name
+// Returns format: prof_XXXXXXXX
 func profileID(name string) string {
-	h := sha256.Sum256([]byte(name))
-	return hex.EncodeToString(h[:6])
+	return idMgr.ProfileID(name)
 }
 
 type ProfileManager struct {

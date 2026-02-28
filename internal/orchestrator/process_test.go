@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 )
 
 type mockRunner struct {
@@ -43,8 +44,9 @@ func TestLaunch_Mocked(t *testing.T) {
 	if !runner.runCalled {
 		t.Error("expected runner.Run to be called")
 	}
-	if inst.ID != "test-prof-9999" {
-		t.Errorf("expected ID test-prof-9999, got %s", inst.ID)
+	// Check that ID has the correct hash-based format (inst_XXXXXXXX)
+	if !idutil.IsValidID(inst.ID, "inst") {
+		t.Errorf("expected ID format inst_XXXXXXXX, got %s", inst.ID)
 	}
 }
 

@@ -48,18 +48,18 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
-	_, _ = o.Launch("p1", "9001", true)
+	inst, _ := o.Launch("p1", "9001", true)
 
 	// Simulate stop
 	alive = false
-	err := o.Stop("p1-9001")
+	err := o.Stop(inst.ID)
 	if err != nil {
 		t.Fatalf("Stop failed: %v", err)
 	}
 
-	inst := o.List()[0]
-	if inst.Status != "stopped" {
-		t.Errorf("expected status stopped, got %s", inst.Status)
+	instStatus := o.List()[0]
+	if instStatus.Status != "stopped" {
+		t.Errorf("expected status stopped, got %s", instStatus.Status)
 	}
 }
 
@@ -72,11 +72,14 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
 	o.mu.Lock()
-	o.instances["p1-9001"] = &InstanceInternal{
+	instID := o.idMgr.InstanceID(o.idMgr.ProfileID("p1"), "p1")
+	o.instances[instID] = &InstanceInternal{
 		Instance: bridge.Instance{
-			ID:     "p1-9001",
-			Name:   "p1",
-			Status: "running",
+			ID:          instID,
+			ProfileID:   o.idMgr.ProfileID("p1"),
+			ProfileName: "p1",
+			Port:        "9001",
+			Status:      "running",
 		},
 		URL: "http://localhost:9001",
 	}

@@ -94,7 +94,7 @@ func (d *Dashboard) relayChildEvents() {
 			if _, ok := tracked[inst.Port]; !ok {
 				ctx, cancel := context.WithCancel(context.Background())
 				tracked[inst.Port] = cancel
-				go d.subscribeChildSSE(ctx, inst.Port, inst.Name)
+				go d.subscribeChildSSE(ctx, inst.Port, inst.ProfileName)
 			}
 		}
 
