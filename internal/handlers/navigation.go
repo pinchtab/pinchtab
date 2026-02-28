@@ -41,6 +41,12 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to creating new tab (API design: /navigate always creates new tab)
+	// Unless explicitly reusing an existing tab by specifying TabID
+	if req.TabID == "" {
+		req.NewTab = true
+	}
+
 	titleWait := time.Duration(0)
 	if req.WaitTitle > 0 {
 		if req.WaitTitle > 30 {

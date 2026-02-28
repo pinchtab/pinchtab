@@ -170,6 +170,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 		"BRIDGE_STATE_DIR":  instanceStateDir,
 		"BRIDGE_HEADLESS":   headlessStr,
 		"BRIDGE_NO_RESTORE": "true",
+		"BRIDGE_ONLY":       "1",
 	})
 
 	logBuf := newRingBuffer(64 * 1024)

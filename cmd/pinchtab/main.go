@@ -53,6 +53,12 @@ func main() {
 		return
 	}
 
+	// Check if running as bridge-only instance (spawned by orchestrator)
+	if os.Getenv("BRIDGE_ONLY") == "1" {
+		runBridgeServer(cfg)
+		return
+	}
+
 	// Default: run dashboard mode
 	// (includes 'pinchtab' with no args and unrecognized args like 'dashboard')
 	runDashboard(cfg)
