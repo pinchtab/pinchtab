@@ -24,7 +24,7 @@
 
 ## What is PinchTab?
 
-PinchTab is a **standalone HTTP server** that gives AI agents direct control over a Chrome browser. Instead of being locked into a specific framework, you can use PinchTab from anywhere — your AI agent, bash scripts, curl, Python, Go, Node.js, or any language.
+PinchTab is a **standalone HTTP server** that gives AI agents direct control over a Chrome browser.
 
 ### Key Features
 
