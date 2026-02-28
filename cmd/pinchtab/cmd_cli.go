@@ -15,7 +15,7 @@ import (
 )
 
 func printHelp() {
-	fmt.Printf(`pinchtab %s — Browser control for AI agents
+	fmt.Printf(`pinchtab %s - Browser control for AI agents
 
 MODES:
   pinchtab                  Start server (default port 9867)
@@ -42,6 +42,7 @@ CLI COMMANDS:
   pinchtab eval <expression>            Run JavaScript
   pinchtab pdf [-o file] [options]     Export page as PDF (see PDF FLAGS)
   pinchtab instances                    List running instances
+  pinchtab profiles                     List available profiles
   pinchtab health                       Check server status
 
 SNAPSHOT FLAGS:
@@ -100,7 +101,7 @@ var cliCommands = map[string]bool{
 	"screenshot": true, "ss": true,
 	"eval": true, "evaluate": true,
 	"pdf": true, "health": true,
-	"help": true, "quick": true, "instances": true,
+	"help": true, "quick": true, "instances": true, "profiles": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -151,6 +152,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliHealth(client, base, token)
 	case "instances":
 		cliInstances(client, base, token)
+	case "profiles":
+		cliProfiles(client, base, token)
 	case "quick":
 		cliQuick(client, base, token, args)
 	case "help":
@@ -159,7 +162,7 @@ func runCLI(cfg *config.RuntimeConfig) {
 }
 
 func cliHelp() {
-	fmt.Print(`Pinchtab CLI — browser control from the command line
+	fmt.Print(`Pinchtab CLI - browser control from the command line
 
 Usage: pinchtab <command> [args] [flags]
 
@@ -656,6 +659,27 @@ func cliInstances(client *http.Client, base, token string) {
 		fmt.Println()
 	} else {
 		fmt.Println("No running instances")
+	}
+}
+
+// --- profiles ---
+
+func cliProfiles(client *http.Client, base, token string) {
+	result := doGet(client, base, token, "/profiles", nil)
+
+	// Display profiles in a friendly format
+	if profiles, ok := result["profiles"].([]interface{}); ok && len(profiles) > 0 {
+		fmt.Println()
+		for _, prof := range profiles {
+			if m, ok := prof.(map[string]any); ok {
+				name, _ := m["name"].(string)
+
+				fmt.Printf("👤 %s\n", name)
+			}
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("No profiles available")
 	}
 }
 
