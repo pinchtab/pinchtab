@@ -81,15 +81,6 @@ async function loadProfiles() {
     const grid = document.getElementById('profiles-grid');
     const cards = [];
 
-    if (!health.mode) {
-      // Not in dashboard mode — show a banner instead of the Main card
-      const banner = document.getElementById('bridge-mode-banner');
-      if (banner) banner.style.display = 'block';
-    } else {
-      const banner = document.getElementById('bridge-mode-banner');
-      if (banner) banner.style.display = 'none';
-    }
-
     profiles.forEach(p => {
       cards.push(renderProfileCard(p, instanceByName[p.name] || null));
     });
