@@ -159,6 +159,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		os.Exit(130)
 	}()
 
+	// Periodic health check: log tabs and Chrome process info every 30 seconds
+	go periodicHealthCheck(orch)
+
 	slog.Info("dashboard ready", "url", fmt.Sprintf("http://localhost:%s/dashboard", dashPort))
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
@@ -228,4 +231,40 @@ func isWebSocketUpgrade(r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// periodicHealthCheck logs instance and Chrome process status every 30 seconds
+func periodicHealthCheck(orch *orchestrator.Orchestrator) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Get instance information
+		instances := orch.List()
+		if len(instances) == 0 {
+			continue // No instances running, skip logging
+		}
+
+		// Count instances by headedness
+		headedCount := 0
+		headlessCount := 0
+
+		for _, inst := range instances {
+			if inst.Headless {
+				headlessCount++
+			} else {
+				headedCount++
+			}
+		}
+
+		// Get tabs across all instances
+		allTabs := orch.AllTabs()
+
+		slog.Info("health check",
+			"instances", len(instances),
+			"headed", headedCount,
+			"headless", headlessCount,
+			"total_tabs", len(allTabs),
+		)
+	}
 }
