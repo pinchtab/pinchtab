@@ -1,10 +1,10 @@
-# Pinchtab Documentation
+# Pinchtab
 
 Welcome to Pinchtab — browser control for AI agents, scripts, and automation workflows.
 
 ## What is Pinchtab?
 
-Pinchtab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Instead of being locked into a specific agent framework, you can interact with it from anywhere — any AI agent, any programming language, or even `curl`.
+Pinchtab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Instead of being locked into a specific agent framework, you can interact with it from anywhere — any AI agent, any programming language, or `curl`.
 
 ```bash
 # It's just HTTP. Use it anywhere.

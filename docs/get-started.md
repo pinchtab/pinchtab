@@ -1,6 +1,6 @@
-# Getting Started with Pinchtab
+# Getting Started with PinchTab
 
-Get Pinchtab running in 5 minutes, from zero to browser automation.
+Get PinchTab running in 5 minutes, from zero to browser automation.
 
 ---
 
