@@ -1,9 +1,10 @@
 {
   "main": [
     "overview.md",
+    "core-concepts.md",
+    "headless-vs-headed.md",
     "get-started.md",
-    "showcase.md",
-    "core-concepts.md"
+    "showcase.md"
   ],
   "references": [
     "references/cli-commands.md",
