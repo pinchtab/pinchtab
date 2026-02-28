@@ -8,6 +8,7 @@
     "showcase.md"
   ],
   "references": [
+    "references/endpoints.md",
     "references/cli-commands.md",
     "references/curl-commands.md"
   ],
