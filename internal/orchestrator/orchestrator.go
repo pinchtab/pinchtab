@@ -348,6 +348,9 @@ func (o *Orchestrator) Logs(id string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("instance %q not found", id)
 	}
+	if inst.logBuf == nil {
+		return "", nil
+	}
 	return inst.logBuf.String(), nil
 }
 
