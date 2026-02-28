@@ -201,8 +201,8 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 
 	go o.monitor(inst)
 
-	// Initialize Chrome in the background after instance starts
-	go o.initializeInstanceChrome(inst)
+	// Note: Chrome initialization happens lazily on first handler request
+	// This avoids race conditions during instance startup
 
 	return &inst.Instance, nil
 }
@@ -294,85 +294,6 @@ func (o *Orchestrator) StopProfile(name string) error {
 		return fmt.Errorf("failed to stop profile %q: %s", name, strings.Join(errs, "; "))
 	}
 	return nil
-}
-
-func (o *Orchestrator) initializeInstanceChrome(inst *InstanceInternal) {
-	// Wait for instance to be running before initializing Chrome
-	maxWait := 60 * time.Second
-	pollInterval := 100 * time.Millisecond
-	started := time.Now()
-
-	for time.Since(started) < maxWait {
-		o.mu.RLock()
-		status := inst.Status
-		url := inst.URL
-		o.mu.RUnlock()
-
-		if status == "running" && url != "" {
-			break
-		}
-
-		if status == "error" || status == "stopped" {
-			slog.Debug("instance not running, skipping chrome init", "id", inst.ID, "status", status)
-			return
-		}
-
-		time.Sleep(pollInterval)
-	}
-
-	o.mu.RLock()
-	status := inst.Status
-	url := inst.URL
-	id := inst.ID
-	o.mu.RUnlock()
-
-	if status != "running" {
-		slog.Warn("instance did not reach running state before chrome init timeout", "id", id, "status", status)
-		o.mu.Lock()
-		inst.Status = "error"
-		inst.Error = "chrome initialization timeout - instance did not become running"
-		o.mu.Unlock()
-		return
-	}
-
-	// Call /ensure-chrome on the instance to initialize Chrome
-	ensureChromeURL := url + "/ensure-chrome"
-	req, err := http.NewRequest(http.MethodPost, ensureChromeURL, nil)
-	if err != nil {
-		slog.Error("failed to create chrome init request", "id", id, "err", err)
-		o.mu.Lock()
-		inst.Status = "error"
-		inst.Error = fmt.Sprintf("chrome initialization failed: %v", err)
-		o.mu.Unlock()
-		return
-	}
-
-	if o.childAuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
-	}
-
-	resp, err := o.client.Do(req)
-	if err != nil {
-		slog.Error("chrome initialization request failed", "id", id, "err", err)
-		o.mu.Lock()
-		inst.Status = "error"
-		inst.Error = fmt.Sprintf("chrome initialization failed: %v", err)
-		o.mu.Unlock()
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.Error("chrome initialization returned error", "id", id, "status", resp.StatusCode, "body", string(body))
-		o.mu.Lock()
-		inst.Status = "error"
-		inst.Error = fmt.Sprintf("chrome initialization failed with status %d", resp.StatusCode)
-		o.mu.Unlock()
-		return
-	}
-
-	slog.Info("chrome initialized successfully", "id", id)
 }
 
 func (o *Orchestrator) markStopped(id string) {
