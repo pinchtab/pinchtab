@@ -1,6 +1,6 @@
-# Pinchtab Curl/API Commands
+# Curl Reference
 
-Complete HTTP API reference for Pinchtab. Use `curl` or any HTTP client to interact with the API directly.
+Complete HTTP API reference. Use `curl` or any HTTP client to interact with the API directly.
 
 ## Quick Start
 

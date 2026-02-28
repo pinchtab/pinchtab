@@ -1,6 +1,6 @@
-# PinchTab API Reference
+# API Reference
 
-Complete HTTP API reference for PinchTab instances, tabs, and browser operations.
+Complete HTTP API reference for instances, tabs, and browser operations.
 
 ## Overview
 

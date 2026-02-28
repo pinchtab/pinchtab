@@ -1,6 +1,6 @@
-# Pinchtab CLI Commands
+# CLI Reference
 
-Complete reference for all `pinchtab` CLI commands. Requires a running Pinchtab server (except for `help`).
+Complete reference for all `pinchtab` CLI commands. Requires a running PinchTab server (except for `help`).
 
 ## Quick Start
 

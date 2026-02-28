@@ -12,7 +12,7 @@
   "blanks-around-headings": false,
   "blanks-around-lists": false,
   "blanks-around-fences": false,
-  "emphasis-as-heading": false,
+  "no-emphasis-as-heading": false,
   "no-multiple-blank-lines": {
     "maximum": 2
   },
