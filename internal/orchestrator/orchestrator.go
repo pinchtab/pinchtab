@@ -25,6 +25,7 @@ type Orchestrator struct {
 	mu             sync.RWMutex
 	client         *http.Client
 	childAuthToken string
+	portAllocator  *PortAllocator
 }
 
 type InstanceInternal struct {
@@ -67,18 +68,25 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		}
 	}
 
-	return &Orchestrator{
+	orch := &Orchestrator{
 		instances:      make(map[string]*InstanceInternal),
 		baseDir:        baseDir,
 		binary:         binary,
 		runner:         runner,
 		client:         &http.Client{Timeout: 3 * time.Second},
 		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
+		portAllocator:  NewPortAllocator(9868, 9968),
 	}
+	return orch
 }
 
 func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {
 	o.profiles = pm
+}
+
+// SetPortRange configures the port allocation range
+func (o *Orchestrator) SetPortRange(start, end int) {
+	o.portAllocator = NewPortAllocator(start, end)
 }
 
 func installStableBinary(src, dst string) error {

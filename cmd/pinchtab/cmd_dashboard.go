@@ -42,6 +42,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	dash := dashboard.NewDashboard(nil)
 	orch := orchestrator.NewOrchestrator(profilesDir)
 	orch.SetProfileManager(profMgr)
+	orch.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
 	dash.SetInstanceLister(orch)
 
 	mux := http.NewServeMux()
