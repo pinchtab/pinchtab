@@ -108,14 +108,16 @@ Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 
 ## Why PinchTab?
 
-| Aspect | PinchTab | OpenClaw Browser | Playwright |
-|--------|----------|-----------------|-----------|
-| **Interface** | HTTP (any agent) | Framework-locked | Framework-locked |
-| **Tokens/page** | ~800 (text) | ~10,000+ | N/A |
-| **Stealth mode** | ✅ | ❌ | ❌ |
-| **Persistent sessions** | ✅ | ❌ | ❌ |
-| **Binary size** | ✅ 12MB | ❌ | ❌ |
-| **Multi-instance** | ✅ | ❌ | ❌ |
+| Aspect | PinchTab |
+|--------|----------|
+| **Tokens performance** | ✅ |
+| **Headless and Headed** | ✅ |
+| **Profile** | ✅ |
+| **Stealth mode** | ✅ |
+| **Persistent sessions** | ✅ |
+| **Binary size** | ✅ |
+| **Multi-instance** | ✅ |
+| **Remote Chrome** | ✅ |
 
 ---
 
