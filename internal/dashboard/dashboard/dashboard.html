@@ -20,6 +20,7 @@
   <div class="status"><span class="dot"></span>Live</div>
   <div class="view-toggle">
     <button class="view-btn active" data-view="profiles" onclick="switchView('profiles')">Profiles</button>
+    <button class="view-btn" data-view="instances" onclick="switchView('instances')">Instances</button>
     <button class="view-btn" data-view="feed" onclick="switchView('feed')">Agents</button>
     <button class="view-btn" data-view="settings" onclick="switchView('settings')">Settings</button>
   </div>
@@ -33,6 +34,15 @@
   </div>
   <div id="profiles-grid" class="instances-grid">
     <div class="empty-state"><div class="crab">🦀</div>No profiles yet.<br>Click <b>+ New Profile</b> to create one.</div>
+  </div>
+</div>
+
+<div id="instances-view" class="instances-view" style="display:none">
+  <div class="inst-toolbar">
+    <button onclick="loadInstances()" class="refresh-btn">Refresh</button>
+  </div>
+  <div id="instances-grid" class="instances-grid">
+    <div class="empty-state"><div class="crab">🦀</div>No running instances.<br>Launch a profile to start one.</div>
   </div>
 </div>
 
@@ -217,6 +227,7 @@
 <script src="/dashboard/settings.js"></script>
 <script src="/dashboard/screencast.js"></script>
 <script src="/dashboard/profiles.js"></script>
+<script src="/dashboard/instances.js"></script>
 <script src="/dashboard/app.js"></script>
 
 </body>
