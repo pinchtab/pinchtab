@@ -1,29 +1,18 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"math/rand"
-	"net/http"
 	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
 	"time"
 
-	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/assets"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/dashboard"
-	"github.com/pinchtab/pinchtab/internal/handlers"
-	"github.com/pinchtab/pinchtab/internal/human"
-	"github.com/pinchtab/pinchtab/internal/orchestrator"
-	"github.com/pinchtab/pinchtab/internal/profiles"
 )
+
+var version = "dev"
+
+// Keep these for backwards compatibility / existing code
+const chromeStartTimeout = 15 * time.Second
 
 var commonWindowSizes = [][2]int{
 	{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900},
@@ -34,10 +23,6 @@ func randomWindowSize() (int, int) {
 	s := commonWindowSizes[rand.Intn(len(commonWindowSizes))]
 	return s[0], s[1]
 }
-
-var version = "dev"
-
-const chromeStartTimeout = 15 * time.Second
 
 func main() {
 	cfg := config.Load()
@@ -62,304 +47,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "dashboard" {
-		runDashboard(cfg)
-		return
-	}
-
+	// CLI commands
 	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
 		runCLI(cfg)
 		return
 	}
 
-	if err := os.MkdirAll(cfg.StateDir, 0755); err != nil {
-		slog.Error("cannot create state dir", "err", err)
-		os.Exit(1)
-	}
-
-	allocCtx, allocCancel, chromeOpts := setupAllocator(cfg)
-	defer allocCancel()
-
-	stealthSeed := rand.Intn(1000000000)
-	human.SetHumanRandSeed(int64(stealthSeed))
-	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript
-
-	browserCtx, browserCancel, err := startChrome(allocCtx, cfg, seededScript)
-	if err != nil {
-		slog.Warn("Chrome startup failed, clearing sessions and retrying once", "err", err)
-
-		allocCancel()
-		bridge.ClearChromeSessions(cfg.ProfileDir)
-		bridge.MarkCleanExit(cfg.ProfileDir)
-
-		allocCtx, allocCancel, _ = setupAllocator(cfg)
-		_ = chromeOpts // used implicitly via setupAllocator
-
-		browserCtx, browserCancel, err = startChrome(allocCtx, cfg, seededScript)
-		if err != nil {
-			slog.Error("Chrome failed to start after retry",
-				"err", err,
-				"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
-				"profile", cfg.ProfileDir,
-			)
-			allocCancel()
-			os.Exit(1)
-		}
-		slog.Info("Chrome started on retry")
-	}
-	defer browserCancel()
-
-	applyTimezone(browserCtx, cfg)
-	applyUserAgentOverride(browserCtx, cfg)
-
-	b := bridge.New(allocCtx, browserCtx, cfg)
-	b.StealthScript = seededScript
-	b.InitActionRegistry()
-
-	profilesDir := filepath.Join(filepath.Dir(cfg.ProfileDir), "profiles")
-	profMgr := profiles.NewProfileManager(profilesDir)
-	dash := dashboard.NewDashboard(nil)
-	orch := orchestrator.NewOrchestrator(profilesDir)
-	orch.SetProfileManager(profMgr)
-	dash.SetInstanceLister(orch)
-
-	// For CDP_URL mode, the initial target might not exist yet.
-	// Tabs will be registered when they're created or discovered.
-	if cfg.CdpURL == "" {
-		initTargetID := chromedp.FromContext(browserCtx).Target.TargetID
-		b.RegisterTab(string(initTargetID), browserCtx)
-		slog.Info("initial tab", "id", string(initTargetID))
-	} else {
-		slog.Info("CDP_URL mode: skipping initial tab registration")
-	}
-
-	if !cfg.Headless {
-		go func() {
-			time.Sleep(200 * time.Millisecond)
-			_ = chromedp.Run(browserCtx, chromedp.Navigate("http://localhost:"+cfg.Port+"/welcome"))
-		}()
-	}
-
-	if !cfg.NoRestore {
-		go b.RestoreState()
-		go logTabStatsOnStartup(b)
-	}
-
-	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
-	defer cleanupCancel()
-	go b.CleanStaleTabs(cleanupCtx, 30*cfg.ActionTimeout)
-
-	mux := http.NewServeMux()
-	h := handlers.New(b, cfg, profMgr, dash, orch)
-
-	shutdownOnce := &sync.Once{}
-	doShutdown := func() {
-		shutdownOnce.Do(func() {
-			slog.Info("shutting down, saving state...")
-			orch.Shutdown()
-			cleanupCancel()
-			b.SaveState()
-			bridge.MarkCleanExit(cfg.ProfileDir)
-
-			browserCancel()
-			allocCancel()
-			slog.Info("chrome closed")
-		})
-	}
-
-	h.RegisterRoutes(mux, doShutdown)
-
-	profileObserver := func(evt dashboard.AgentEvent) {
-		if evt.Profile != "" {
-			profMgr.RecordAction(evt.Profile, bridge.ActionRecord{
-				Timestamp:  evt.Timestamp,
-				Method:     strings.SplitN(evt.Action, " ", 2)[0],
-				Endpoint:   strings.SplitN(evt.Action, " ", 2)[1],
-				URL:        evt.URL,
-				TabID:      evt.TabID,
-				DurationMs: evt.DurationMs,
-				Status:     evt.Status,
-			})
-		}
-	}
-
-	handler := dash.TrackingMiddleware(
-		[]dashboard.EventObserver{profileObserver},
-		handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
-	)
-
-	srv := &http.Server{
-		Addr:              cfg.ListenAddr(),
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-
-	setupSignalHandler(doShutdown, func() {
-		orch.ForceShutdown()
-		cleanupCancel()
-		browserCancel()
-		allocCancel()
-	})
-
-	slog.Info("🦀 PINCH! PINCH!", "port", cfg.Port, "cdp", cfg.CdpURL, "stealth", cfg.StealthLevel)
-
-	// Log startup configuration
-	logStartupConfig(cfg)
-
-	if cfg.Token != "" {
-		slog.Info("auth enabled")
-	} else {
-		slog.Info("auth disabled (set BRIDGE_TOKEN to enable)")
-		if cfg.Bind == "0.0.0.0" {
-			slog.Warn("⚠️ Binding to 0.0.0.0 with no BRIDGE_TOKEN - API is unauthenticated!")
-		}
-	}
-
-	go runStartupHealthCheck(cfg)
-
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		slog.Error("server", "err", err)
-		os.Exit(1)
-	}
-}
-
-func setupSignalHandler(shutdownFn func(), forceFn func()) {
-	go func() {
-		sig := make(chan os.Signal, 2)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		go shutdownFn()
-		<-sig
-		slog.Warn("force shutdown requested")
-		forceFn()
-		os.Exit(130)
-	}()
-}
-
-func runStartupHealthCheck(cfg *config.RuntimeConfig) {
-	time.Sleep(500 * time.Millisecond)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://localhost:%s/health", cfg.Port))
-	if err != nil {
-		slog.Error("startup health check failed",
-			"err", err,
-			"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
-		)
-		return
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		slog.Info("startup health check passed")
-	} else {
-		slog.Warn("startup health check unexpected status", "status", resp.StatusCode)
-	}
-}
-
-func logTabStatsOnStartup(b *bridge.Bridge) {
-	// Wait for restore to complete (give it a moment)
-	time.Sleep(500 * time.Millisecond)
-
-	targets, err := b.ListTargets()
-	if err != nil {
-		slog.Warn("failed to list tabs on startup", "err", err)
-		return
-	}
-
-	if len(targets) == 0 {
-		slog.Info("tabs restored", "count", 0)
-		return
-	}
-
-	// Group tabs by domain
-	domains := make(map[string]int)
-	typeMap := make(map[string]int)
-
-	for _, t := range targets {
-		domain := extractDomain(t.URL)
-		domains[domain]++
-		typeMap[t.Type]++
-	}
-
-	// Build log message with domains and types
-	var domainList []string
-	for domain, count := range domains {
-		if domain == "" {
-			domainList = append(domainList, fmt.Sprintf("unknown=%d", count))
-		} else {
-			domainList = append(domainList, fmt.Sprintf("%s=%d", domain, count))
-		}
-	}
-
-	var typeList []string
-	for t, count := range typeMap {
-		typeList = append(typeList, fmt.Sprintf("%s=%d", t, count))
-	}
-
-	slog.Info("tabs restored",
-		"count", len(targets),
-		"domains", strings.Join(domainList, " "),
-		"types", strings.Join(typeList, " "))
-}
-
-func extractDomain(urlStr string) string {
-	// Extract domain from URL for grouping
-	if urlStr == "" {
-		return ""
-	}
-
-	// Simple domain extraction (remove protocol and path)
-	urlStr = strings.TrimPrefix(urlStr, "http://")
-	urlStr = strings.TrimPrefix(urlStr, "https://")
-	urlStr = strings.TrimPrefix(urlStr, "www.")
-
-	// Get domain part only
-	if idx := strings.Index(urlStr, "/"); idx > 0 {
-		urlStr = urlStr[:idx]
-	}
-
-	// Get main domain (e.g., example.com from sub.example.com)
-	parts := strings.Split(urlStr, ".")
-	if len(parts) > 2 {
-		return strings.Join(parts[len(parts)-2:], ".")
-	}
-
-	return urlStr
-}
-
-func logStartupConfig(cfg *config.RuntimeConfig) {
-	// Build config summary
-	slog.Info("startup configuration",
-		"bind", cfg.Bind,
-		"port", cfg.Port,
-		"headless", cfg.Headless,
-		"stealth", cfg.StealthLevel,
-		"block_ads", cfg.BlockAds,
-		"block_images", cfg.BlockImages,
-		"block_media", cfg.BlockMedia,
-		"restore", !cfg.NoRestore,
-		"animations", !cfg.NoAnimations,
-		"max_tabs", cfg.MaxTabs,
-		"action_timeout", cfg.ActionTimeout.String(),
-		"navigate_timeout", cfg.NavigateTimeout.String(),
-	)
-
-	if cfg.CdpURL != "" {
-		slog.Info("using external chrome", "cdp_url", cfg.CdpURL)
-	}
-
-	if cfg.ChromeBinary != "" {
-		slog.Info("custom chrome binary", "path", cfg.ChromeBinary)
-	}
-
-	if cfg.Timezone != "" {
-		slog.Info("timezone override", "tz", cfg.Timezone)
-	}
-
-	if cfg.UserAgent != "" {
-		slog.Info("custom user agent", "ua_length", len(cfg.UserAgent))
-	}
-
-	if cfg.ChromeExtraFlags != "" {
-		slog.Info("extra chrome flags", "flags", cfg.ChromeExtraFlags)
-	}
+	// Default: run dashboard mode
+	// (includes 'pinchtab' with no args and unrecognized args like 'dashboard')
+	runDashboard(cfg)
 }
