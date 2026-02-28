@@ -8,8 +8,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-DOCS_JSON="docs/docs.json"
 DOCS_DIR="docs"
+DOCS_JSON="$DOCS_DIR/index.json"
 
 # Check if docs.json exists
 if [ ! -f "$DOCS_JSON" ]; then
