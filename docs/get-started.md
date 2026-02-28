@@ -106,7 +106,7 @@ pinchtab quick https://example.com
   pinchtab pdf -o output.pdf  # Save as PDF
 ```
 
-✅ **You're running Pinchtab!**
+✅ **You're running PinchTab!**
 
 ---
 
@@ -176,7 +176,7 @@ pinchtab snap --tab abc123def456
 
 ### Key Concept: Tab-Centric
 
-Pinchtab is **tab-centric**, not URL-centric:
+PinchTab is **tab-centric**, not URL-centric:
 
 ```
 ❌ WRONG: pinchtab snap https://example.com
@@ -212,7 +212,7 @@ Pinchtab is **tab-centric**, not URL-centric:
 
 ## Using with curl (HTTP API)
 
-You don't need the CLI. Pinchtab is HTTP:
+You don't need the CLI. PinchTab is HTTP:
 
 ```bash
 # Health check
@@ -393,7 +393,7 @@ pinchtab fill e3 "user@example.com"
 pinchtab fill e5 "password"
 pinchtab click e7
 
-# Later, even after restarting Pinchtab, you're still logged in
+# Later, even after restarting PinchTab, you're still logged in
 pkill pinchtab
 sleep 2
 pinchtab &
@@ -529,7 +529,7 @@ pinchtab click <new-ref>
 → [Docker deployment guide](guides/docker.md)
 
 ### 6. Understand the Architecture
-→ [How Pinchtab works](architecture/pinchtab-architecture.md)
+→ [How PinchTab works](architecture/pinchtab-architecture.md)
 
 ---
 
@@ -658,7 +658,7 @@ pinchtab snap > snapshot.json
 
 ## What's Next?
 
-1. ✅ You've installed and run Pinchtab
+1. ✅ You've installed and run PinchTab
 2. 📚 Learn more → [Full documentation](overview.md)
 3. 🎯 Try workflows → [Practical examples](showcase.md)
 4. 🔧 Go deeper → [Architecture docs](architecture/)

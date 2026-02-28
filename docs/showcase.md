@@ -1,10 +1,10 @@
-# Pinchtab API Workflows: Getting Started
+# PinchTab API Workflows: Getting Started
 
-Learn the correct way to use Pinchtab's API through practical, step-by-step examples.
+Learn the correct way to use PinchTab's API through practical, step-by-step examples.
 
 ## Core Concept: Tab-Centric Design
 
-Pinchtab is **tab-centric**, not URL-centric. This is the key to understanding the API.
+PinchTab is **tab-centric**, not URL-centric. This is the key to understanding the API.
 
 ### Why Tab-Centric?
 
@@ -30,7 +30,7 @@ curl '/snapshot?url=https://example.com'
 
 ## The Complete Workflow Pattern
 
-Every Pinchtab workflow follows this pattern:
+Every PinchTab workflow follows this pattern:
 
 ```
 1. Create tab (+ navigate to URL)  → Get tabId

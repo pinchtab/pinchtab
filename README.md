@@ -24,7 +24,7 @@
 
 Most agent browser tools (OpenClaw, Playwright MCP, Browser Use) are tightly coupled — they only work inside their own framework. If you switch agents or want to script something in bash, you're out of luck.
 
-Pinchtab is a standalone HTTP server. Any agent, any language, even `curl`:
+PinchTab is a standalone HTTP server. Any agent, any language, even `curl`:
 
 ```bash
 # Read a page — 800 tokens instead of 10,000
@@ -34,7 +34,7 @@ curl localhost:9867/text?tabId=X
 curl -X POST localhost:9867/action -d '{"kind":"click","ref":"e5"}'
 ```
 
-| | Pinchtab | OpenClaw Browser |
+| | PinchTab | OpenClaw Browser |
 |---|---|---|
 | **Tokens per page** | **~800** (`/text`) / ~3,600 (interactive) | ~10,000+ (full snapshot) |
 | Interface | HTTP — any agent, any language | Internal only |
@@ -128,9 +128,9 @@ curl http://localhost:9867/health
 
 ### With your AI agent
 
-> Install Pinchtab and set it up for browser automation.
+> Install PinchTab and set it up for browser automation.
 
-Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](skill/pinchtab/SKILL.md). Just ask.
+Your agent can clone, build, and configure PinchTab using the [OpenClaw skill](skill/pinchtab/SKILL.md). Just ask.
 
 ### Manual
 
@@ -169,7 +169,7 @@ BRIDGE_TOKEN=your-secret-token ./pinchtab
 
 ### Headless Mode
 
-<img src="assets/pinchtab-headless.png" width="64" alt="Pinchtab" />
+<img src="assets/pinchtab-headless.png" width="64" alt="PinchTab" />
 
 Chrome runs invisibly in the background — no window, pure API. Best for servers, CI, Docker, and unattended automation. Token savings come from using `/text` and filtered snapshot formats (`/snapshot?filter=interactive&format=compact`) rather than vision/screenshot-heavy flows.
 
@@ -190,7 +190,7 @@ chrome --remote-debugging-port=9222 &
 # Get the WebSocket URL
 CDP_URL=$(curl http://localhost:9222/json/version | jq -r '.webSocketDebuggerUrl')
 
-# Connect Pinchtab to it
+# Connect PinchTab to it
 export CDP_URL
 ./pinchtab
 ```
@@ -198,7 +198,7 @@ export CDP_URL
 **Use cases:**
 - 🤝 **Multi-agent resource sharing** — All agents share one Chrome (save 1.3GB per agent)
 - 🧪 **Integration testing** — Multiple test scripts use the same browser and session
-- 🐳 **Docker/containers** — Chrome in one container, Pinchtab in another
+- 🐳 **Docker/containers** — Chrome in one container, PinchTab in another
 
 **⚠️ Security:** Chrome's DevTools Protocol has no authentication. Only expose the CDP port locally or via SSH tunnel. See **[docs/cdp-url-shared-chrome.md#security](docs/cdp-url-shared-chrome.md#security)** for details.
 
@@ -206,7 +206,7 @@ See **[docs/cdp-url-shared-chrome.md](docs/cdp-url-shared-chrome.md)** for detai
 
 ### Headed Mode (operator-in-the-loop)
 
-<img src="assets/pinchtab-headed.png" width="128" alt="Pinchtab headed mode" />
+<img src="assets/pinchtab-headed.png" width="128" alt="PinchTab headed mode" />
 
 Headed mode is for mixed human + agent workflows:
 
@@ -257,7 +257,7 @@ curl "$PINCHTAB_BASE_URL/health"
 
 ### First-Time Login
 
-Pinchtab keeps persistent profiles. Default single-instance profile: `~/.pinchtab/chrome-profile/`.
+PinchTab keeps persistent profiles. Default single-instance profile: `~/.pinchtab/chrome-profile/`.
 Dashboard-managed profiles: `~/.pinchtab/profiles/<profile-name>/`.
 
 In headed mode, log into sites in the visible Chrome window once; cookies and local storage persist across restarts. In headless mode, either copy an existing profile or inject cookies via `POST /cookies`.
@@ -375,7 +375,7 @@ pinchtab quick https://example.com       # NEW: Navigate + analyze in one comman
 If you forget to start the server:
 ```bash
 $ pinchtab snap
-❌ Pinchtab server is not running on http://localhost:9867
+❌ PinchTab server is not running on http://localhost:9867
 
 To start the server:
   pinchtab                    # Run in foreground (recommended for beginners)
@@ -478,15 +478,15 @@ The dashboard exposes `POST /start/{id}` and `POST /stop/{id}` for easy profile 
 
 See **[docs/headed-mode-guide.md](docs/headed-mode-guide.md)** for the full walkthrough with real examples.
 
-## Identifying Pinchtab Chrome Instances
+## Identifying PinchTab Chrome Instances
 
-Need to distinguish Pinchtab's Chrome from your regular browser? Use `CHROME_BINARY` to point at a renamed Chrome copy, `CHROME_FLAGS` to tag instances in `ps`, or rely on the separate profile directory that's already built-in.
+Need to distinguish PinchTab's Chrome from your regular browser? Use `CHROME_BINARY` to point at a renamed Chrome copy, `CHROME_FLAGS` to tag instances in `ps`, or rely on the separate profile directory that's already built-in.
 
 See **[docs/identifying-instances.md](docs/identifying-instances.md)** for the full guide with examples.
 
 ## Chrome Lifecycle & Orchestration
 
-Pinchtab doesn't just run Chrome — it manages hardened, detection-resistant instances with pre-flight stealth injection, automatic lock file cleanup, retry logic, and per-tab context lifecycle management.
+PinchTab doesn't just run Chrome — it manages hardened, detection-resistant instances with pre-flight stealth injection, automatic lock file cleanup, retry logic, and per-tab context lifecycle management.
 
 See **[docs/chrome-lifecycle.md](docs/chrome-lifecycle.md)** for the full deep dive covering allocator strategy, launch flag hardening, instance orchestration, and tab management.
 
@@ -494,7 +494,7 @@ See **[docs/chrome-lifecycle.md](docs/chrome-lifecycle.md)** for the full deep d
 
 ```
 ┌─────────────┐     HTTP :9867    ┌──────────────┐                ┌─────────┐
-│  Any Agent  │ ──────────────►   │  Pinchtab    │  ── CDP ──►    │ Chrome  │
+│  Any Agent  │ ──────────────►   │  PinchTab    │  ── CDP ──►    │ Chrome  │
 │  (OpenClaw, │  snapshot, act,   │              │                │         │
 │   PicoClaw, │  navigate, eval   │  stealth +   │                │  your   │
 │   curl,     │                   │  sessions +  │                │  tabs   │
@@ -535,8 +535,8 @@ For read-heavy tasks (monitoring feeds, scraping search results), `/text` at ~80
 |---|---|---|
 | Screenshots (vision) | ~100,000 | $0.30 |
 | Full snapshots | ~525,000 | $0.16 |
-| Pinchtab `/text` | ~40,000 | $0.01 |
-| Pinchtab interactive filter | ~180,000 | $0.05 |
+| PinchTab `/text` | ~40,000 | $0.01 |
+| PinchTab interactive filter | ~180,000 | $0.05 |
 
 Use `/text` when you only need content. Use `?filter=interactive` when you need to act. Use the full snapshot when you need page structure.
 
@@ -582,22 +582,22 @@ go test ./...
 
 ## ⚠️ Security — Read This
 
-**Pinchtab gives AI agents full control of a real browser with your real accounts.**
+**PinchTab gives AI agents full control of a real browser with your real accounts.**
 
-When you log into sites through Pinchtab's Chrome window, those sessions — cookies, tokens, saved passwords — persist in `~/.pinchtab/chrome-profile/`. Any agent with HTTP access to Pinchtab can then act as you: read your email, post on your behalf, make purchases, access sensitive data.
+When you log into sites through PinchTab's Chrome window, those sessions — cookies, tokens, saved passwords — persist in `~/.pinchtab/chrome-profile/`. Any agent with HTTP access to PinchTab can then act as you: read your email, post on your behalf, make purchases, access sensitive data.
 
 **This is by design.** That's what makes it useful. But it means:
 
-- **You are responsible for what agents do with your accounts.** Pinchtab is a tool, not a guardrail. If you give an agent access to your bank and it does something stupid, that's on you.
+- **You are responsible for what agents do with your accounts.** PinchTab is a tool, not a guardrail. If you give an agent access to your bank and it does something stupid, that's on you.
 - **Set `BRIDGE_TOKEN`** — without it, anyone on your network can control your browser. In production, this is non-negotiable.
 - **Treat `~/.pinchtab/` as sensitive** — it contains your Chrome profile with all saved sessions and cookies. Guard it like you'd guard your passwords.
-- **Pinchtab binds to all interfaces by default** — use a firewall or reverse proxy if you're on a shared network.
+- **PinchTab binds to all interfaces by default** — use a firewall or reverse proxy if you're on a shared network.
 - **If using `CDP_URL`:** Chrome's DevTools Protocol has no authentication. **Never expose the CDP port to the network.** Only use localhost or SSH tunnels. See [docs/cdp-url-shared-chrome.md#security](docs/cdp-url-shared-chrome.md#security) for details.
 - **Start with low-risk accounts.** Don't point an experimental agent at your primary email or bank account on day one. Test with throwaway accounts first.
 - **No data leaves your machine** — all processing is local. But the agents you connect might send data wherever they want.
 
-Think of Pinchtab like giving someone your unlocked laptop. Powerful if you trust them. Dangerous if you don't.
+Think of PinchTab like giving someone your unlocked laptop. Powerful if you trust them. Dangerous if you don't.
 
 ## Works with any agent
 
-Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use Pinchtab as your agent's browser backend for faster, cheaper web automation.
+PinchTab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use PinchTab as your agent's browser backend for faster, cheaper web automation.

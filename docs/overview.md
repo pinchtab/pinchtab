@@ -1,10 +1,10 @@
-# Pinchtab
+# PinchTab
 
-Welcome to Pinchtab — browser control for AI agents, scripts, and automation workflows.
+Welcome to PinchTab — browser control for AI agents, scripts, and automation workflows.
 
-## What is Pinchtab?
+## What is PinchTab?
 
-Pinchtab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Instead of being locked into a specific agent framework, you can interact with it from anywhere — any AI agent, any programming language, or `curl`.
+PinchTab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Instead of being locked into a specific agent framework, you can interact with it from anywhere — any AI agent, any programming language, or `curl`.
 
 ```bash
 # It's just HTTP. Use it anywhere.
@@ -15,7 +15,7 @@ curl -X POST http://localhost:9867/action -d '{"kind":"click","ref":"e5"}'
 
 ---
 
-## Why Pinchtab?
+## Why PinchTab?
 
 ### The Problem
 
@@ -28,7 +28,7 @@ You can't use the same browser automation across different agents.
 
 ### The Solution
 
-Pinchtab is **framework-agnostic HTTP server**:
+PinchTab is **framework-agnostic HTTP server**:
 - ✅ Works with any AI agent (Claude, ChatGPT, local models)
 - ✅ Works with any language (bash, Python, Node.js, Go)
 - ✅ Works with any tool (curl, Postman, your own scripts)
@@ -74,7 +74,7 @@ Create, switch, and close tabs. Work with multiple pages simultaneously.
 
 ## Quick Comparison
 
-| Feature | Pinchtab | OpenClaw Browser | Playwright | Selenium |
+| Feature | PinchTab | OpenClaw Browser | Playwright | Selenium |
 |---------|----------|------------------|-----------|----------|
 | **Interface** | HTTP (any agent) | Framework-locked | Framework-locked | WebDriver |
 | **Tokens/page** | ~800 (text) | ~10,000+ | N/A | N/A |
@@ -93,7 +93,7 @@ Create, switch, and close tabs. Work with multiple pages simultaneously.
 
 ```
 Reading a 1,500-word article:
-  Pinchtab /text:        800-900 tokens    (5-13x cheaper)
+  PinchTab /text:        800-900 tokens    (5-13x cheaper)
   OpenClaw snapshot:     ~3,600 tokens
   Full screenshot:       ~10,000 tokens
   Vision + screenshot:   ~20,000 tokens
@@ -111,7 +111,7 @@ PDF generation:          2-5 seconds
 ### Binary Size
 
 ```
-Pinchtab:               12MB (includes Chrome)
+PinchTab:               12MB (includes Chrome)
 Node.js equivalent:     100MB+
 Python equivalent:      200MB+
 ```
@@ -131,7 +131,7 @@ Python equivalent:      200MB+
                │ HTTP
                ↓
 ┌─────────────────────────────────────────┐
-│    Pinchtab HTTP Server (Go)            │
+│    PinchTab HTTP Server (Go)            │
 │  ┌─────────────────────────────────┐    │
 │  │  Tab Manager (multi-tab)         │    │
 │  │  ┌────────────┐ ┌────────────┐  │    │
@@ -211,7 +211,7 @@ pinchtab snap -i -c                        # Get interactive elements
 ### 1. AI Agent Automation
 Any AI agent (Claude, ChatGPT, Anthropic models) can control browsers:
 ```bash
-# Agent uses Pinchtab to fill forms, navigate, extract data
+# Agent uses PinchTab to fill forms, navigate, extract data
 pinchtab nav https://example.com
 pinchtab snap -i -c  # Get interactive elements
 pinchtab click e5    # Agent decides based on snapshot
@@ -336,7 +336,7 @@ pinchtab fill e3 user@example.com
 pinchtab fill e5 password
 pinchtab click e7
 
-# Restart Pinchtab, tab is still there + still logged in
+# Restart PinchTab, tab is still there + still logged in
 pkill pinchtab
 ./pinchtab
 # Tab is restored, cookies intact
