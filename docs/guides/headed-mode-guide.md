@@ -143,7 +143,7 @@ The key insight: you don't have to choose one mode forever. Start headed when yo
 
 ## Dashboard: The Control Plane
 
-Running `pinchtab dashboard` gives you a web UI at `http://localhost:9867/dashboard` for managing everything:
+Running `pinchtab dashboard` gives you a web UI at `http://localhost:9867` for managing everything:
 
 - Create and import Chrome profiles
 - Launch instances (headed or headless) on any port
@@ -221,7 +221,7 @@ The dashboard has three views:
   <img src="../assets/live-view.png" width="400" alt="Pinchtab live view" style="padding: 8px;" />
 </div>
 
-**Agents** — every agent that's made an API call, across all running profiles. You see their ID, which profile they're using, their last action, and when they were last active. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type. 
+**Agents** — every agent that's made an API call, across all running profiles. You see their ID, which profile they're using, their last action, and when they were last active. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type.
 
 <div align="center" style="padding: 12px 0;">
   <img src="../assets/agents-feed.png" width="400" alt="Pinchtab agents feed" style="padding: 8px;" />
@@ -235,7 +235,7 @@ The Activity Feed is the heartbeat of your agent fleet. Every action from every 
 
 ```
 mario → POST /navigate (Work) — 23ms
-mario → GET /snapshot (Work) — 145ms  
+mario → GET /snapshot (Work) — 145ms
 scraper → POST /navigate (Research) — 31ms
 scraper → GET /text (Research) — 89ms
 ```

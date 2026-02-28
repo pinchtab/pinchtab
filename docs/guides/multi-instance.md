@@ -113,11 +113,11 @@ for i in {1..5}; do
   INST=$(curl -s -X POST http://localhost:9867/instances/launch \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"scraper-$i\",\"headless\":true}")
-  
+
   ID=$(echo "$INST" | jq -r '.id')
   PORT=$(echo "$INST" | jq -r '.port')
   INSTANCES+=("$ID:$PORT")
-  
+
   echo "Created instance $i: $ID on port $PORT"
 done
 
@@ -127,7 +127,7 @@ sleep 2  # Wait for Chrome initialization
 for i in "${!INSTANCES[@]}"; do
   IFS=: read ID PORT <<< "${INSTANCES[$i]}"
   URL="${URLS[$i]}"
-  
+
   curl -s -X POST "http://localhost:$PORT/navigate" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$URL\"}" &
@@ -140,7 +140,7 @@ echo "All pages loaded. Getting snapshots..."
 # Get snapshots
 for i in "${!INSTANCES[@]}"; do
   IFS=: read ID PORT <<< "${INSTANCES[$i]}"
-  
+
   curl -s "http://localhost:$PORT/snapshot" > "snapshot-$i.json"
 done
 
@@ -205,7 +205,7 @@ for i in $(seq 1 $FLEET_SIZE); do
   INST=$(curl -s -X POST http://localhost:9867/instances/launch \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"fleet-$i\",\"headless\":true}")
-  
+
   ID=$(echo "$INST" | jq -r '.id')
   PORT=$(echo "$INST" | jq -r '.port')
   INSTANCES+=("$ID:$PORT")
@@ -220,12 +220,12 @@ INSTANCE_INDEX=0
 for TASK in "${WORK_ITEMS[@]}"; do
   # Round-robin distribution
   IFS=: read ID PORT <<< "${INSTANCES[$INSTANCE_INDEX % $FLEET_SIZE]}"
-  
+
   # Process task on this instance
   curl -s -X POST "http://localhost:$PORT/navigate" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"https://api.example.com?task=$TASK\"}" &
-  
+
   ((INSTANCE_INDEX++))
 done
 
@@ -391,7 +391,7 @@ curl http://localhost:9868/health
 
 ### Dashboard Web UI
 
-Open http://localhost:9867/dashboard in a browser to see:
+Open http://localhost:9867 in a browser to see:
 - Live instance list
 - Instance status and uptime
 - Profile information

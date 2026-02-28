@@ -2,7 +2,9 @@
 
 PinchTab includes a built-in web dashboard for monitoring and managing instances, profiles, and agent activity.
 
-Access the dashboard at **`http://localhost:9867/dashboard`** (adjust port if needed).
+Access the dashboard at **`http://localhost:9867`** (adjust port if needed).
+
+Alternatively, use **`http://localhost:9867/dashboard`** (also works for backward compatibility).
 
 ---
 
