@@ -14,7 +14,7 @@
     "architecture":[
       "architecture/pinchtab-architecture.md",
       "architecture/chrome-lifecycle-and-orchestration.md",
-      "building.md"
+      "architecture/building.md"
     ],
     "guides": [
       "guides/cdp-url-shared-chrome.md",
