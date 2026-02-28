@@ -1,9 +1,9 @@
 {
   "name": "PinchTab",
   "navigation": {
-    "home": "overview.md", "nonexistent.md",
+    "home": "overview.md",
     "main": [
-      "overview.md", "nonexistent.md",
+      "overview.md",
       "get-started.md",
       "showcase.md"
     ],
@@ -11,7 +11,7 @@
       "references/cli-commands.md",
       "references/curl-commands.md"
     ],
-    "architecture":[
+    "architecture": [
       "architecture/pinchtab-architecture.md",
       "architecture/chrome-lifecycle-and-orchestration.md",
       "architecture/building.md"
