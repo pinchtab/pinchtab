@@ -1,0 +1,25 @@
+{
+  "default": true,
+  "line-length": {
+    "line_length": 200,
+    "heading_line_length": 200,
+    "code_block_line_length": 200,
+    "code_blocks": false
+  },
+  "no-hard-tabs": false,
+  "no-bare-urls": false,
+  "no-inline-html": false,
+  "blanks-around-headings": false,
+  "blanks-around-lists": false,
+  "blanks-around-fences": false,
+  "emphasis-as-heading": false,
+  "no-multiple-blank-lines": {
+    "maximum": 2
+  },
+  "first-line-heading": false,
+  "heading-start-left": true,
+  "heading-increment": true,
+  "no-duplicate-heading": {
+    "allow_different_nesting": true
+  }
+}

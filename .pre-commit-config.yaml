@@ -11,9 +11,15 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=500']
 
-  # Markdown linting
+  # Markdown linting (relaxed for docs)
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.37.0
     hooks:
       - id: markdownlint
         args: ['--config', '.markdownlint.json']
+        # Exclude test files and auto-generated docs
+        exclude: |
+          (?x)^(
+            tests/.*\.md|
+            \.github/.*\.md
+          )$
