@@ -1,5 +1,5 @@
 #!/bin/bash
-# Validate docs.json - check that all referenced files exist
+# Validate docs.json - check JSON syntax and verify all referenced files exist
 
 set -e
 
@@ -15,6 +15,23 @@ DOCS_DIR="docs"
 if [ ! -f "$DOCS_JSON" ]; then
     echo -e "${YELLOW}⚠️  $DOCS_JSON not found - skipping validation${NC}"
     exit 0
+fi
+
+# Validate JSON syntax
+if command -v jq &> /dev/null; then
+    if ! jq empty "$DOCS_JSON" 2>/dev/null; then
+        echo -e "${RED}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
+        jq empty "$DOCS_JSON"  # Show error
+        exit 1
+    fi
+elif command -v python3 &> /dev/null; then
+    if ! python3 -m json.tool "$DOCS_JSON" > /dev/null 2>&1; then
+        echo -e "${RED}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
+        python3 -m json.tool "$DOCS_JSON"  # Show error
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠️  jq or python3 not found - skipping JSON syntax check${NC}"
 fi
 
 # Extract all file paths from docs.json
