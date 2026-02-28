@@ -134,12 +134,11 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	}
 
 	env := mergeEnvWithOverrides(os.Environ(), map[string]string{
-		"BRIDGE_PORT":         port,
-		"BRIDGE_PROFILE":      profilePath,
-		"BRIDGE_STATE_DIR":    instanceStateDir,
-		"BRIDGE_HEADLESS":     headlessStr,
-		"BRIDGE_NO_RESTORE":   "true",
-		"BRIDGE_NO_DASHBOARD": "true",
+		"BRIDGE_PORT":       port,
+		"BRIDGE_PROFILE":    profilePath,
+		"BRIDGE_STATE_DIR":  instanceStateDir,
+		"BRIDGE_HEADLESS":   headlessStr,
+		"BRIDGE_NO_RESTORE": "true",
 	})
 
 	logBuf := newRingBuffer(64 * 1024)

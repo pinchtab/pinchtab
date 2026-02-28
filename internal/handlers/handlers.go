@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -61,7 +60,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	if h.Dashboard != nil {
 		h.Dashboard.RegisterHandlers(mux)
 	}
-	if h.Orchestrator != nil && os.Getenv("BRIDGE_NO_DASHBOARD") == "" {
+	if h.Orchestrator != nil {
 		h.Orchestrator.RegisterHandlers(mux)
 	}
 

@@ -254,7 +254,7 @@ function updateLaunchCommand() {
     + 'BRIDGE_PORT=' + shellQuote(port || '9868') + ' '
     + 'BRIDGE_PROFILE=' + shellQuote(profilePath) + ' '
     + 'BRIDGE_STATE_DIR=' + shellQuote(statePath) + ' '
-    + 'BRIDGE_HEADLESS=' + (headless ? 'true' : 'false') + ' BRIDGE_NO_RESTORE=true BRIDGE_NO_DASHBOARD=true '
+    + 'BRIDGE_HEADLESS=' + (headless ? 'true' : 'false') + ' BRIDGE_NO_RESTORE=true '
     + './bin/pinchtab';
   document.getElementById('launch-command').value = prefix + cmd;
 }
