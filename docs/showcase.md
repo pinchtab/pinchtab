@@ -1,4 +1,4 @@
-# PinchTab API Workflows: Getting Started
+# API Workflows
 
 Learn the correct way to use PinchTab's API through practical, step-by-step examples.
 

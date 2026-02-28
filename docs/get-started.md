@@ -1,4 +1,4 @@
-# Getting Started with PinchTab
+# Getting Started
 
 Get PinchTab running in 5 minutes, from zero to browser automation.
 

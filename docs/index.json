@@ -9,6 +9,7 @@
   ],
   "references": [
     "references/endpoints.md",
+    "references/configuration.md",
     "references/cli-commands.md",
     "references/curl-commands.md"
   ],
@@ -20,7 +21,6 @@
   ],
   "guides": [
     "guides/cdp-url-shared-chrome.md",
-    "guides/docker.md",
     "guides/headed-mode-guide.md",
     "guides/identifying-instances.md"
   ]

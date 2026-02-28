@@ -1,4 +1,4 @@
-# Identifying Pinchtab Chrome Instances
+# Chrome Instances
 
 Running multiple Chrome instances? Here's how to tell Pinchtab's apart from your regular browser.
 

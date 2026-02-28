@@ -1,9 +1,9 @@
-# Pinchtab Architecture
+# Architecture
 
 ## Overview
 
 Pinchtab is an HTTP server (Go binary, ~12MB) that wraps Chrome DevTools Protocol (CDP)
-to give AI agents browser control via a simple REST API. 
+to give AI agents browser control via a simple REST API.
 
 **Self-hosted mode (default):** Pinchtab launches and manages its own Chrome instance.
 
