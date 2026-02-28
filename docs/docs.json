@@ -1,9 +1,9 @@
 {
   "name": "PinchTab",
   "navigation": {
-    "home": "overview.md",
+    "home": "overview.md", "nonexistent.md",
     "main": [
-      "overview.md",
+      "overview.md", "nonexistent.md",
       "get-started.md",
       "showcase.md"
     ],
