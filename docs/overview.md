@@ -4,13 +4,27 @@ Welcome to PinchTab — browser control for AI agents, scripts, and automation w
 
 ## What is PinchTab?
 
-PinchTab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Instead of being locked into a specific agent framework, you can interact with it from anywhere — any AI agent, any programming language, or `curl`.
+PinchTab is a **standalone HTTP server** that gives you direct control over a Chrome browser. Any AI agent can use the CLI or HTTP API.
 
+**CLI example:**
 ```bash
-# It's just HTTP. Use it anywhere.
-curl http://localhost:9867/health
-curl http://localhost:9867/text?tabId=abc123
-curl -X POST http://localhost:9867/action -d '{"kind":"click","ref":"e5"}'
+pinchtab nav https://example.com    # Navigate
+pinchtab snap -i -c                 # Get interactive elements
+pinchtab click e5                   # Click element by ref
+```
+
+**HTTP example (realistic flow):**
+```bash
+# 1. Navigate to URL (returns tabId)
+TAB=$(curl -s -X POST http://localhost:9867/tab \
+  -d '{"action":"new","url":"https://example.com"}' | jq -r '.tabId')
+
+# 2. Get page structure
+curl -s "http://localhost:9867/snapshot?tabId=$TAB&filter=interactive" | jq
+
+# 3. Click element using the tabId
+curl -s -X POST http://localhost:9867/action \
+  -d "{\"kind\":\"click\",\"ref\":\"e5\",\"tabId\":\"$TAB\"}"
 ```
 
 ---
@@ -91,7 +105,7 @@ Create, switch, and close tabs. Work with multiple pages simultaneously.
 
 ### Token Efficiency
 
-```
+```text
 Reading a 1,500-word article:
   PinchTab /text:        800-900 tokens    (5-13x cheaper)
   OpenClaw snapshot:     ~3,600 tokens
@@ -101,7 +115,7 @@ Reading a 1,500-word article:
 
 ### Response Times
 
-```
+```text
 Navigate + snapshot:     1-3 seconds
 Click + verify:          200-500ms
 Text extraction:         100-300ms
@@ -110,7 +124,7 @@ PDF generation:          2-5 seconds
 
 ### Binary Size
 
-```
+```text
 PinchTab:               12MB (includes Chrome)
 Node.js equivalent:     100MB+
 Python equivalent:      200MB+
@@ -122,7 +136,7 @@ Python equivalent:      200MB+
 
 ### High-Level Design
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │         Your Tool/Agent                  │
 │   (curl, Python, Node.js, etc.)         │
@@ -256,7 +270,7 @@ pinchtab nav https://protected-site.com  # Bypasses detection
 
 ## Documentation Structure
 
-```
+```text
 docs/
 ├── overview.md (you are here)
 ├── get-started.md              ← Start here for quick setup
