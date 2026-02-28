@@ -29,4 +29,4 @@ function openInstanceDirect(port) {
 }
 
 connect();
-switchView('profiles');
+switchView('instances');
