@@ -8,9 +8,14 @@ PinchTab is a **standalone HTTP server** that gives you direct control over a Ch
 
 **CLI example:**
 ```bash
-pinchtab nav https://example.com    # Navigate
-pinchtab snap -i -c                 # Get interactive elements
-pinchtab click e5                   # Click element by ref
+# Navigate
+pinchtab nav https://example.com
+
+# Get interactive elements
+pinchtab snap -i -c
+
+# Click element by ref
+pinchtab click e5
 ```
 
 **HTTP example (realistic flow):**
@@ -98,13 +103,22 @@ curl -X POST http://localhost:9867/tab \
 # Returns: "abc123"
 ```
 
-Then use that `tabId` for all subsequent operations:
+Then use that `tabId` for all subsequent operations.
 
+**Get page snapshot:**
 ```bash
-# Snapshot: curl "http://localhost:9867/snapshot?tabId=abc123"
-# Text:     curl "http://localhost:9867/text?tabId=abc123"
-# Action:   curl -X POST http://localhost:9867/action \
-#             -d '{"kind":"click","ref":"e5","tabId":"abc123"}'
+curl "http://localhost:9867/snapshot?tabId=abc123"
+```
+
+**Extract text:**
+```bash
+curl "http://localhost:9867/text?tabId=abc123"
+```
+
+**Perform action (click):**
+```bash
+curl -X POST http://localhost:9867/action \
+  -d '{"kind":"click","ref":"e5","tabId":"abc123"}'
 ```
 
 ### Refs Instead of Coordinates
