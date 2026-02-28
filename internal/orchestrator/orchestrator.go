@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -108,24 +109,40 @@ func installStableBinary(src, dst string) error {
 
 func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instance, error) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
+
+	// Auto-allocate port if not specified
+	if port == "" || port == "0" {
+		o.mu.Unlock()
+		allocatedPort, err := o.portAllocator.AllocatePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate port: %w", err)
+		}
+		port = fmt.Sprintf("%d", allocatedPort)
+		o.mu.Lock()
+	}
 
 	for _, inst := range o.instances {
 		if inst.Port == port && instanceIsActive(inst) {
+			o.mu.Unlock()
 			return nil, fmt.Errorf("port %s already in use by instance %q", port, inst.Name)
 		}
 		if inst.Name == name && instanceIsActive(inst) {
+			o.mu.Unlock()
 			return nil, fmt.Errorf("profile %q already has an active instance (%s)", name, inst.Status)
 		}
 	}
 	if !o.runner.IsPortAvailable(port) {
+		o.mu.Unlock()
 		return nil, fmt.Errorf("port %s is already in use on this machine", port)
 	}
 
 	id := fmt.Sprintf("%s-%s", name, port)
 	if inst, ok := o.instances[id]; ok && inst.Status == "running" {
+		o.mu.Unlock()
 		return nil, fmt.Errorf("instance %q already running", id)
 	}
+
+	o.mu.Unlock()
 
 	profilePath := filepath.Join(o.baseDir, name)
 	if err := os.MkdirAll(filepath.Join(profilePath, "Default"), 0755); err != nil {
@@ -172,7 +189,9 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 		logBuf: logBuf,
 	}
 
+	o.mu.Lock()
 	o.instances[id] = inst
+	o.mu.Unlock()
 
 	go o.monitor(inst)
 
@@ -273,6 +292,12 @@ func (o *Orchestrator) markStopped(id string) {
 	defer o.mu.Unlock()
 	if inst, ok := o.instances[id]; ok {
 		inst.Status = "stopped"
+		// Release the port back to the allocator
+		portStr := inst.Port
+		if portInt, err := strconv.Atoi(portStr); err == nil {
+			o.portAllocator.ReleasePort(portInt)
+			slog.Debug("released port", "id", id, "port", portStr)
+		}
 	}
 }
 

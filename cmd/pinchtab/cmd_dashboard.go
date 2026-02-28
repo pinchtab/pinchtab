@@ -116,9 +116,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	if autoLaunch {
 		defaultProfile := os.Getenv("PINCHTAB_DEFAULT_PROFILE")
 		defaultPort := os.Getenv("PINCHTAB_DEFAULT_PORT")
-		if defaultPort == "" {
-			defaultPort = "9867"
-		}
+		// defaultPort is optional - will auto-allocate if not specified
 		if defaultProfile == "" {
 			defaultProfile = "default"
 		}
@@ -135,7 +133,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 				slog.Warn("auto-launch failed", "err", err)
 				return
 			}
-			slog.Info("auto-launched default instance", "id", inst.ID, "port", defaultPort, "headless", headlessDefault)
+			slog.Info("auto-launched default instance", "id", inst.ID, "port", inst.Port, "headless", headlessDefault)
 		}()
 	} else {
 		slog.Info("dashboard auto-launch disabled", "hint", "set PINCHTAB_AUTO_LAUNCH=1 to enable")

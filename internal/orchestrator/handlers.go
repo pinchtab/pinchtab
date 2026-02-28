@@ -59,13 +59,11 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Port     string `json:"port"`
+		Port     string `json:"port,omitempty"`
 		Headless bool   `json:"headless"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	if req.Port == "" {
-		req.Port = "0"
-	}
+	// Port is optional - if not provided, Launch() will auto-allocate
 
 	inst, err := o.Launch(name, req.Port, req.Headless)
 	if err != nil {
@@ -92,17 +90,18 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name     string `json:"name"`
-		Port     string `json:"port"`
+		Port     string `json:"port,omitempty"`
 		Headless bool   `json:"headless"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("invalid JSON"))
 		return
 	}
-	if req.Name == "" || req.Port == "" {
-		web.Error(w, 400, fmt.Errorf("name and port required"))
+	if req.Name == "" {
+		web.Error(w, 400, fmt.Errorf("name is required"))
 		return
 	}
+	// Port is optional - if not provided, Launch() will auto-allocate
 
 	inst, err := o.Launch(req.Name, req.Port, req.Headless)
 	if err != nil {
