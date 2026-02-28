@@ -28,13 +28,12 @@ PinchTab is a **standalone HTTP server** that gives AI agents direct control ove
 
 ### Key Features
 
-- **HTTP API** — Works with any agent, language, or tool
+- **CLI or Curl** — Control via command-line or HTTP API
 - **Token-efficient** — 800 tokens/page with text extraction (5-13x cheaper than screenshots)
-- **Stateful** — Sessions persist across server restarts
-- **Stealth mode** — Bypass bot detection on major sites
+- **Headless or Headed** — Run without a window or with visible Chrome
 - **Multi-instance** — Run multiple parallel Chrome processes with isolated profiles
 - **Self-contained** — 12MB binary, no external dependencies
-- **Accessibility-first** — Stable element refs (e0, e1...) instead of fragile coordinates
+- **Accessibility-first** — Stable element refs instead of fragile coordinates
 
 ---
 
@@ -102,8 +101,6 @@ curl -X POST "http://localhost:9867/instances/$TAB/action" \
 **Profile** — Browser state (cookies, history, local storage). Log in once, stay logged in across restarts.
 
 **Tab** — A single webpage. Each instance can have multiple tabs.
-
-**Ref** — Stable element reference (e0, e1, e2...) from the accessibility tree. Use refs to click, type, fill inputs.
 
 Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 
