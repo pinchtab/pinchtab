@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,6 +15,15 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	web.JSON(w, 200, map[string]any{"status": "ok", "tabs": len(targets), "cdp": h.Config.CdpURL})
+}
+
+func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized for this instance
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization failed: %w", err))
+		return
+	}
+	web.JSON(w, 200, map[string]string{"status": "chrome_ready"})
 }
 
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {

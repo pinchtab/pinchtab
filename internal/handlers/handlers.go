@@ -34,6 +34,7 @@ func (h *Handlers) ensureChrome() error {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
+	mux.HandleFunc("POST /ensure-chrome", h.HandleEnsureChrome)
 	mux.HandleFunc("GET /tabs", h.HandleTabs)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)

@@ -27,6 +27,33 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogsByID)
 	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
+
+	// Instance proxy routes - forward to specific instance port
+	// Browser operations
+	mux.HandleFunc("POST /instances/{id}/navigate", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/snapshot", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/action", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/actions", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/screenshot", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/pdf", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/text", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/evaluate", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/tabs", o.proxyToInstance)
+
+	// Chrome management
+	mux.HandleFunc("POST /instances/{id}/ensure-chrome", o.proxyToInstance)
+
+	// Tab management
+	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/tab/lock", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/tab/unlock", o.proxyToInstance)
+
+	// Other operations
+	mux.HandleFunc("GET /instances/{id}/cookies", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/cookies", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/download", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/upload", o.proxyToInstance)
+	mux.HandleFunc("GET /instances/{id}/screencast", o.proxyToInstance)
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
@@ -183,4 +210,98 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 
 	targetURL := fmt.Sprintf("ws://localhost:%s/screencast?tabId=%s", inst.Port, tabID)
 	web.JSON(w, 200, map[string]string{"wsUrl": targetURL})
+}
+
+// proxyToInstance forwards requests to a specific instance port
+// This allows clients to call /instances/{id}/navigate instead of knowing the instance port
+func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	o.mu.RUnlock()
+
+	if !ok {
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return
+	}
+
+	if inst.Status != "running" {
+		web.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+		return
+	}
+
+	// Build target URL by replacing /instances/{id} with the instance port path
+	// Request: POST /instances/work-9868/navigate?url=...
+	// Target:  POST http://localhost:9868/navigate?url=...
+	targetPath := r.URL.Path
+	// Remove /instances/{id} prefix (19 + len(id) characters)
+	if len(targetPath) > len("/instances/"+id) {
+		targetPath = targetPath[len("/instances/"+id):]
+	} else {
+		targetPath = ""
+	}
+
+	targetURL := fmt.Sprintf("http://localhost:%s%s", inst.Port, targetPath)
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+
+	// Create proxy request
+	proxyReq, err := http.NewRequest(r.Method, targetURL, r.Body)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("failed to create proxy request: %w", err))
+		return
+	}
+
+	// Copy headers from original request (except Host and hop-by-hop headers)
+	for key, values := range r.Header {
+		switch key {
+		case "Host", "Connection", "Keep-Alive", "Proxy-Authenticate",
+			"Proxy-Authorization", "Te", "Trailers", "Transfer-Encoding", "Upgrade":
+			// Skip hop-by-hop headers
+		default:
+			for _, value := range values {
+				proxyReq.Header.Add(key, value)
+			}
+		}
+	}
+
+	// Use orchestrator's HTTP client
+	resp, err := o.client.Do(proxyReq)
+	if err != nil {
+		web.Error(w, 502, fmt.Errorf("failed to proxy to instance: %w", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response status and body
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(readResponseBody(resp))
+}
+
+// readResponseBody reads the full response body
+func readResponseBody(resp *http.Response) []byte {
+	if resp.Body == nil {
+		return []byte{}
+	}
+	body := make([]byte, 0)
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			body = append(body, buf[:n]...)
+		}
+		if err != nil {
+			break
+		}
+	}
+	return body
 }
