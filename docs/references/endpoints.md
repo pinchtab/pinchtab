@@ -1,46 +1,74 @@
-# Pinchtab API Reference
+# PinchTab API Reference
 
-Complete HTTP API reference for Pinchtab instances, tabs, and browser operations.
+Complete HTTP API reference for PinchTab instances, tabs, and browser operations.
 
 ## Overview
 
-Pinchtab uses an **instance-scoped** REST API where:
-- Each **instance** is an independent browser process on a specific port
+PinchTab uses an **instance-scoped** REST API where:
+- **PinchTab server** listens on port 9867 and manages all instances
+- Each **instance** is an independent browser process (Chrome)
 - Each instance can use a different **profile** (Chrome user data directory)
 - Each instance can be **headed** (visible window) or **headless** (background)
 - Instances manage **tabs** (browser tabs/pages)
-- **Chrome starts lazily** on the first request that needs it
+- **Chrome starts on instance creation** (or first request, depending on configuration)
 
+```text
+HTTP Client
+    │
+    │ All requests: http://localhost:9867
+    │
+    ↓
+┌──────────────────────────────────────────┐
+│   PinchTab Server (HTTP, port 9867)      │
+│   ┌────────────────────────────────────┐ │
+│   │ - Dashboard                         │ │
+│   │ - Instance management               │ │
+│   │ - Profile management                │ │
+│   │ - Request routing via DevTools API  │ │
+│   └────────────────────────────────────┘ │
+└─────┬──────────────────────────────────────┘
+      │
+      │ DevTools Protocol (WebSocket)
+      │
+      ├─────────────────────────────────────┐
+      │                                     │
+      ↓                                     ↓
+┌──────────────────┐        ┌──────────────────┐
+│ Chrome Process 1 │        │ Chrome Process 2 │
+│ (headed)         │        │ (headless)       │
+│ profile: work    │        │ profile: scraping│
+├──────────────────┤        ├──────────────────┤
+│ Tab 1: LinkedIn  │        │ Tab 1: API       │
+│ Tab 2: GitHub    │        │ Tab 2: Data      │
+│ Tab 3: Email     │        └──────────────────┘
+└──────────────────┘
 ```
-┌─────────────────────────────────────────┐
-│   Pinchtab Dashboard (port 9867)        │
-│   Orchestrator - Manages instances      │
-└─────────────────────────────────────────┘
-           │
-           ├─ Instance 1 (port 9868, headed, profile=work)
-           │   └─ Chrome browser (visible window - started on creation)
-           │       ├─ Tab 1: linkedin.com
-           │       ├─ Tab 2: github.com
-           │       └─ Tab 3: gmail.com
-           │
-           ├─ Instance 2 (port 9869, headless, profile=scraping)
-           │   └─ Chrome browser (background - started on creation)
-           │       ├─ Tab 1: api.example.com
-           │       └─ Tab 2: data.example.com
-           │
-           └─ Instance 3 (port 9870, headless, profile=default)
-               └─ Chrome browser (background - started on creation)
-                   └─ Tab 1: search.example.com
-```
+
+## API Summary
+
+| Category | Operations | Purpose |
+|---|---|---|
+| **Instance Management** | `POST /instances` `GET /instances` `GET /instances/{id}` `DELETE /instances/{id}` | Create, list, and manage browser instances |
+| **Navigation** | `POST /instances/{id}/navigate` | Navigate to URL (creates new tab) |
+| **Tab Operations** | `GET /instances/{id}/tabs` `POST /instances/{id}/tabs/{tabId}/navigate` | List tabs, navigate existing tab |
+| **Page Inspection** | `GET /instances/{id}/snapshot` `GET /instances/{id}/text` | Get accessibility tree, extract text |
+| **User Actions** | `POST /instances/{id}/action` | Click, type, fill, press, hover, focus, scroll, select |
+| **JavaScript** | `POST /instances/{id}/evaluate` | Execute JavaScript in the page |
+| **Visual** | `GET /instances/{id}/screenshot` `GET /instances/{id}/pdf` | Take screenshot, export PDF |
+| **Profiles** | `GET /profiles` `POST /profiles` | List and create browser profiles |
+| **Aggregate** | `GET /tabs` | Get all tabs across all instances |
+
+---
 
 ## Base URL
 
 ```
-http://127.0.0.1:9867          # Dashboard (manages instances)
-http://127.0.0.1:9868          # Instance 1
-http://127.0.0.1:9869          # Instance 2
-http://127.0.0.1:9870          # Instance 3
+http://127.0.0.1:9867          # PinchTab Server (all endpoints)
 ```
+
+All requests go to port 9867. Instances are referenced by ID in the path (e.g., `/instances/{id}/navigate`), not by separate ports.
+
+---
 
 ## Instance Management API
 
