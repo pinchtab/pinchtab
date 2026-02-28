@@ -54,8 +54,19 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		web.JSON(w, 200, map[string]string{"status": "ok", "mode": "dashboard"})
 	})
 
+	// Special handler for /tabs - return empty list if no instances
+	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
+		target := orch.FirstRunningURL()
+		if target == "" {
+			// No instances running, return empty tabs list
+			web.JSON(w, 200, map[string]interface{}{"tabs": []interface{}{}})
+			return
+		}
+		proxyRequest(w, r, target+"/tabs")
+	})
+
 	proxyEndpoints := []string{
-		"/tabs", "/snapshot", "/screenshot", "/text",
+		"/snapshot", "/screenshot", "/text",
 		"/navigate", "/action", "/actions", "/evaluate",
 		"/tab", "/tab/lock", "/tab/unlock",
 		"/cookies", "/download", "/upload", "/stealth/status", "/fingerprint/rotate",
