@@ -75,9 +75,17 @@ Moved test logic from standalone `test-e2e.sh` into proper test structure:
    - Ready for production deployment
    - Optional: Run full manual test suite first
 
+## Bug Fixes
+
+### Fixed: Nil pointer panic in Logs() endpoint
+- **Issue**: `GET /instances/{id}/logs` would panic with nil pointer dereference
+- **Root cause**: `logBuf` could be nil if accessed before proper initialization
+- **Fix**: Added defensive nil check in `Orchestrator.Logs()` method
+- **Commit**: `d7e8537`
+
 ## Branch Info
 
 - **Branch**: `feat/make-cli-useful`
-- **Latest**: `ce29149` (session work)
-- **Tests**: All passing
+- **Latest**: `d7e8537` (nil check fix + cleanup)
+- **Tests**: All passing (195+)
 - **Documentation**: Complete and validated

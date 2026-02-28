@@ -67,11 +67,13 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	})
 
 	proxyEndpoints := []string{
-		"/snapshot", "/screenshot", "/text",
-		"/navigate", "/action", "/actions", "/evaluate",
-		"/tab", "/tab/lock", "/tab/unlock",
-		"/cookies", "/download", "/upload", "/stealth/status", "/fingerprint/rotate",
-		"/screencast", "/screencast/tabs",
+		"GET /snapshot", "GET /screenshot", "GET /text",
+		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
+		"GET /cookies", "POST /cookies",
+		"GET /download", "POST /upload",
+		"GET /stealth/status", "POST /fingerprint/rotate",
+		"GET /screencast", "GET /screencast/tabs",
 	}
 	for _, ep := range proxyEndpoints {
 		endpoint := ep
@@ -81,7 +83,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 				web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
 				return
 			}
-			proxyRequest(w, r, target+endpoint)
+			// Extract path from endpoint (remove method prefix)
+			path := r.URL.Path
+			proxyRequest(w, r, target+path)
 		})
 	}
 
