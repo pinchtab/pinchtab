@@ -106,9 +106,24 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		return nil // Already has browser context
 	}
 
-	// This will be implemented via a callback from cmd/pinchtab/browser.go
-	// For now, return an error if not initialized
-	return fmt.Errorf("browser not initialized and EnsureChrome not implemented")
+	// Initialize Chrome if not already done
+	allocCtx, allocCancel, browserCtx, browserCancel, err := InitChrome(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize chrome: %w", err)
+	}
+
+	b.AllocCtx = allocCtx
+	b.AllocCancel = allocCancel
+	b.BrowserCtx = browserCtx
+	b.BrowserCancel = browserCancel
+	b.initialized = true
+
+	// Initialize TabManager now that browser is ready
+	if b.Config != nil && b.TabManager == nil {
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.tabSetup)
+	}
+
+	return nil
 }
 
 func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) {
