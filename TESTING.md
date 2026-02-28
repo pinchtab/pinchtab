@@ -2,6 +2,27 @@
 
 This guide provides manual and automated tests for the complete multi-instance architecture.
 
+## Test Organization
+
+- **Automated Integration Tests**: `tests/integration/orchestrator_test.go` (Go)
+  - Instance creation and lifecycle
+  - Hash-based ID generation
+  - Port allocation and reuse
+  - Instance isolation
+  - Orchestrator proxy routing
+  - Run with: `go test -tags integration ./tests/integration -run Orchestrator -timeout 120s`
+
+- **Manual Tests**: `tests/manual/orchestrator.md`
+  - Visual verification (headed/headless windows)
+  - Real-time monitoring (memory, CPU)
+  - Port management verification
+  - Chrome initialization verification
+  - Dashboard UI testing
+  - Error conditions and edge cases
+  - Integration with existing features
+
+- **Quick Validation**: Follow the step-by-step tests below for immediate feedback
+
 ## Prerequisites
 
 - Pinchtab built: `go build -o pinchtab ./cmd/pinchtab`
