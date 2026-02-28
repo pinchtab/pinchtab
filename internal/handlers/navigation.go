@@ -116,7 +116,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			targetID = newTargetID
 		}
 
-		web.JSON(w, 200, map[string]any{"tabId": targetID, "url": url, "title": title})
+		// Convert CDP target ID to hash-based tab ID
+		hashTabID := h.IdMgr.TabIDFromCDPTarget(targetID)
+
+		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
 	}
 
@@ -215,7 +218,11 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
-		web.JSON(w, 200, map[string]any{"tabId": newTargetID, "url": curURL, "title": title})
+
+		// Convert CDP target ID to hash-based tab ID
+		hashTabID := h.IdMgr.TabIDFromCDPTarget(newTargetID)
+
+		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": curURL, "title": title})
 
 	case tabActionClose:
 		if req.TabID == "" {

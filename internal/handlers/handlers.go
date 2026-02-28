@@ -7,6 +7,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 )
 
 type Handlers struct {
@@ -15,6 +16,7 @@ type Handlers struct {
 	Profiles     bridge.ProfileService
 	Dashboard    *dashboard.Dashboard
 	Orchestrator bridge.OrchestratorService
+	IdMgr        *idutil.Manager
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -24,6 +26,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		Profiles:     p,
 		Dashboard:    d,
 		Orchestrator: o,
+		IdMgr:        idutil.NewManager(),
 	}
 }
 
