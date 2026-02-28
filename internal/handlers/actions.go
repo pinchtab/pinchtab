@@ -13,6 +13,12 @@ import (
 )
 
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req bridge.ActionRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -82,6 +88,12 @@ type actionResult struct {
 }
 
 func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req actionsRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))

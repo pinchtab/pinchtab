@@ -53,6 +53,11 @@ func (m *mockBridge) CloseTab(tabID string) error {
 	return nil
 }
 
+func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	// Mock implementation - just return nil
+	return nil
+}
+
 func (m *mockBridge) DeleteRefCache(tabID string) {}
 
 func (m *mockBridge) TabLockInfo(tabID string) *bridge.LockInfo { return nil }

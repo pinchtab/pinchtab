@@ -27,6 +27,11 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	}
 }
 
+// ensureChrome ensures Chrome is initialized before handling requests that need it
+func (h *Handlers) ensureChrome() error {
+	return h.Bridge.EnsureChrome(h.Config)
+}
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("GET /tabs", h.HandleTabs)

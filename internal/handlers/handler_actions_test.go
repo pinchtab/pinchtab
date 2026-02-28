@@ -25,6 +25,10 @@ func (m *failMockBridge) ListTargets() ([]*target.Info, error) {
 	return nil, fmt.Errorf("list targets failed")
 }
 
+func (m *failMockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	return nil
+}
+
 func TestHandleActions_EmptyArray(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(`{"actions": []}`)))

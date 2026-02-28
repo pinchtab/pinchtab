@@ -16,6 +16,12 @@ import (
 const maxBodySize = 1 << 20
 
 func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req struct {
 		TabID       string  `json:"tabId"`
 		URL         string  `json:"url"`

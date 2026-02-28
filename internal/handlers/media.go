@@ -19,6 +19,12 @@ import (
 )
 
 func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
@@ -99,6 +105,12 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
 
@@ -259,6 +271,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	mode := r.URL.Query().Get("mode")
 

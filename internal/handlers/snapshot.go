@@ -17,6 +17,12 @@ import (
 )
 
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	filter := r.URL.Query().Get("filter")
 	doDiff := r.URL.Query().Get("diff") == "true"

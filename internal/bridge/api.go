@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // BridgeAPI abstracts browser tab operations for handler testing.
@@ -26,6 +27,8 @@ type BridgeAPI interface {
 	TabLockInfo(tabID string) *LockInfo
 	Lock(tabID, owner string, ttl time.Duration) error
 	Unlock(tabID, owner string) error
+
+	EnsureChrome(cfg *config.RuntimeConfig) error
 }
 
 type LockInfo struct {

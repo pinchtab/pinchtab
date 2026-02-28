@@ -37,6 +37,10 @@ func (m *integrationMockBridge) TabLockInfo(tabID string) *bridge.LockInfo {
 	return nil
 }
 
+func (m *integrationMockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	return nil
+}
+
 func TestIntegration_RoutesRegistration(t *testing.T) {
 	b := &integrationMockBridge{tabs: make(map[string]context.Context)}
 	cfg := &config.RuntimeConfig{}
