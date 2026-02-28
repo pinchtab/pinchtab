@@ -15,4 +15,7 @@ go vet ./...
 echo "🦀 pre-commit: go test..."
 go test ./... -count=1 -timeout=30s
 
+echo "🦀 pre-commit: docs.json validation..."
+./scripts/check-docs-json.sh
+
 echo "🦀 PINCH! All checks passed."
