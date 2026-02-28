@@ -12,8 +12,8 @@ async function loadInstances() {
   }
 
   try {
-    const instancesRaw = await fetchJSONOr('/instances', { instances: [] });
-    const instances = Array.isArray(instancesRaw.instances) ? instancesRaw.instances : [];
+    const instancesRaw = await fetchJSONOr('/instances', []);
+    const instances = Array.isArray(instancesRaw) ? instancesRaw : (Array.isArray(instancesRaw.instances) ? instancesRaw.instances : []);
 
     const cards = [];
 
@@ -88,7 +88,7 @@ async function viewInstanceDetails(id, name) {
     ]);
 
     const logsText = logsRes.ok ? await logsRes.text() : 'No logs available';
-    const tabs = Array.isArray(tabsRaw.tabs) ? tabsRaw.tabs : [];
+    const tabs = Array.isArray(tabsRaw) ? tabsRaw : [];
     const instanceTabs = tabs.filter(t => t.instanceId === id || t.instanceName === name);
 
     let html = '';
