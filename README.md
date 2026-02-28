@@ -172,7 +172,7 @@ curl http://localhost:9869/text?tabId=Y  # Bob's instance
 
 ## License
 
-Apache 2.0 — Free and open source.
+MIT — Free and open source.
 
 ---
 

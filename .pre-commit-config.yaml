@@ -17,11 +17,12 @@ repos:
     hooks:
       - id: markdownlint
         args: ['--config', '.markdownlint.json']
-        # Exclude test files, auto-generated docs, and repo root
+        # Exclude test files, auto-generated docs, repo root, and skill docs
         exclude: |
           (?x)^(
             tests/.*\.md|
             \.github/.*\.md|
+            skill/.*\.md|
             README\.md|
             CONTRIBUTING\.md|
             CODE_OF_CONDUCT\.md|
