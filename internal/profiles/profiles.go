@@ -72,7 +72,7 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		return nil, err
 	}
 
-	var profiles []bridge.ProfileInfo
+	profiles := []bridge.ProfileInfo{}
 	skip := map[string]bool{"bin": true, "profiles": true}
 	for _, entry := range entries {
 		if !entry.IsDir() || skip[entry.Name()] {
