@@ -13,23 +13,23 @@ Pinchtab uses an **instance-scoped** REST API where:
 
 ```
 ┌─────────────────────────────────────────┐
-│   Pinchtab Dashboard (port 9870)        │
+│   Pinchtab Dashboard (port 9867)        │
 │   Orchestrator - Manages instances      │
 └─────────────────────────────────────────┘
            │
            ├─ Instance 1 (port 9868, headed, profile=work)
-           │   └─ Chrome browser (visible window)
+           │   └─ Chrome browser (visible window - started on creation)
            │       ├─ Tab 1: linkedin.com
            │       ├─ Tab 2: github.com
            │       └─ Tab 3: gmail.com
            │
            ├─ Instance 2 (port 9869, headless, profile=scraping)
-           │   └─ Chrome browser (no window)
+           │   └─ Chrome browser (background - started on creation)
            │       ├─ Tab 1: api.example.com
            │       └─ Tab 2: data.example.com
            │
            └─ Instance 3 (port 9870, headless, profile=default)
-               └─ Chrome browser (no window)
+               └─ Chrome browser (background - started on creation)
                    └─ Tab 1: search.example.com
 ```
 
@@ -60,8 +60,14 @@ POST /instances
 ```
 
 **Parameters:**
-- `profile` (string) — Chrome profile name (stored in `~/.pinchtab/profiles/{name}`)
-- `headless` (boolean) — `true` for headless mode (no window), `false` for visible window
+- `profile` (string, required) — Chrome profile name (stored in `~/.pinchtab/profiles/{name}`)
+- `headless` (boolean, required) — `true` for headless mode (no window), `false` for visible window
+
+**Behavior:**
+- **Synchronously starts Chrome** with the specified profile and mode
+- If headless=false, a visible Chrome window opens immediately
+- If headless=true, Chrome runs in the background
+- Returns only after Chrome is fully initialized and ready for commands
 
 **Response (201 Created):**
 ```json
@@ -76,11 +82,18 @@ POST /instances
 }
 ```
 
+**Notes:**
+- Instance is **fully ready** immediately after this call (Chrome already running)
+- Subsequent navigation and action calls use this running Chrome
+- No lazy initialization - Chrome starts upfront for predictable behavior
+
 **Example (curl):**
 ```bash
 curl -X POST http://localhost:9867/instances \
   -H "Content-Type: application/json" \
   -d '{"profile":"work","headless":false}'
+
+# Returns immediately with running instance ready for use
 ```
 
 ---
@@ -201,8 +214,8 @@ POST /instances/{id}/navigate?url=<url>
 
 **Notes:**
 - **Creates a NEW tab** every time
-- **Starts Chrome lazily** on first request if not running
-- **Respects instance mode**: Headed instances show window, headless don't
+- **Chrome is already running** (started when instance was created)
+- **Respects instance mode**: Headed instances show window in GUI, headless don't
 - Returns immediately after navigation starts (doesn't wait for full load)
 
 **Example (curl):**
@@ -627,14 +640,16 @@ curl http://localhost:9867/tabs
 BASE="http://localhost:9867"
 
 # 1. Create instance (headed mode to see what's happening)
+# This STARTS Chrome immediately with visible window
 echo "Creating instance..."
 INST=$(curl -s -X POST $BASE/instances \
   -H "Content-Type: application/json" \
   -d '{"profile":"linkedin","headless":false}')
 INST_ID=$(echo $INST | jq -r '.id')
-echo "Instance: $INST_ID"
+echo "Instance: $INST_ID (Chrome now running and visible)"
 
 # 2. Navigate to LinkedIn login (creates first tab)
+# Chrome is already running, navigation is fast
 echo "Navigating to LinkedIn..."
 NAV=$(curl -s -X POST "$BASE/instances/$INST_ID/navigate?url=https://linkedin.com/login")
 TAB_ID=$(echo $NAV | jq -r '.tabId')
