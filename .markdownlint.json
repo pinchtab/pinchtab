@@ -21,5 +21,6 @@
   "heading-increment": true,
   "no-duplicate-heading": {
     "allow_different_nesting": true
-  }
+  },
+  "fenced-code-language": false
 }
