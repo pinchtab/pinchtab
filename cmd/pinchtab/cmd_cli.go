@@ -41,6 +41,7 @@ CLI COMMANDS:
   pinchtab ss [-o file] [-q 80]         Screenshot
   pinchtab eval <expression>            Run JavaScript
   pinchtab pdf [-o file] [options]     Export page as PDF (see PDF FLAGS)
+  pinchtab instances                    List running instances
   pinchtab health                       Check server status
 
 SNAPSHOT FLAGS:
@@ -99,7 +100,7 @@ var cliCommands = map[string]bool{
 	"screenshot": true, "ss": true,
 	"eval": true, "evaluate": true,
 	"pdf": true, "health": true,
-	"help": true, "quick": true,
+	"help": true, "quick": true, "instances": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -148,6 +149,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliPDF(client, base, token, args)
 	case "health":
 		cliHealth(client, base, token)
+	case "instances":
+		cliInstances(client, base, token)
 	case "quick":
 		cliQuick(client, base, token, args)
 	case "help":
@@ -624,6 +627,36 @@ func cliQuick(client *http.Client, base, token string, args []string) {
 
 func cliHealth(client *http.Client, base, token string) {
 	doGet(client, base, token, "/health", nil)
+}
+
+// --- instances ---
+
+func cliInstances(client *http.Client, base, token string) {
+	result := doGet(client, base, token, "/instances", nil)
+
+	// Display instances in a friendly format
+	if instances, ok := result["instances"].([]interface{}); ok && len(instances) > 0 {
+		fmt.Println()
+		for _, inst := range instances {
+			if m, ok := inst.(map[string]any); ok {
+				id, _ := m["id"].(string)
+				name, _ := m["name"].(string)
+				port, _ := m["port"].(string)
+				headless, _ := m["headless"].(bool)
+				status, _ := m["status"].(string)
+
+				mode := "headless"
+				if !headless {
+					mode = "headed"
+				}
+
+				fmt.Printf("📍 %s (ID: %s, Port: %s, Mode: %s, Status: %s)\n", name, id, port, mode, status)
+			}
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("No running instances")
+	}
 }
 
 // --- helpers ---
