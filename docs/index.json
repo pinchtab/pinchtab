@@ -23,5 +23,9 @@
     "guides/cdp-url-shared-chrome.md",
     "guides/headed-mode-guide.md",
     "guides/identifying-instances.md"
+  ],
+  "proposals": [
+    "proposals/performance-optimization.md",
+    "proposals/ui-enhancements.md"
   ]
 }

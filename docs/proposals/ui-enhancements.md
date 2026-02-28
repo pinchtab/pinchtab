@@ -1,8 +1,8 @@
-# Phase 8: Dashboard UI Enhancements
+# UI Enhancements
 
 ## Overview
 
-Phase 8 focuses on improving the dashboard user experience with real-time monitoring, batch operations, and better instance navigation. Current dashboard provides basic instance listing; Phase 8 adds production-grade observability and control.
+Focuses on improving the dashboard user experience with real-time monitoring, batch operations, and better instance navigation. Current dashboard provides basic instance listing; Phase 8 adds production-grade observability and control.
 
 ## Goals
 
