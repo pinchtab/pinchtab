@@ -598,37 +598,6 @@ When you log into sites through Pinchtab's Chrome window, those sessions — coo
 
 Think of Pinchtab like giving someone your unlocked laptop. Powerful if you trust them. Dangerous if you don't.
 
-## Contributors
-
-### Humans
-
-<a href="https://github.com/luigi-agosti">
-  <img src="https://github.com/luigi-agosti.png" width="60" style="border-radius:50%" alt="Luigi Agosti"/><br/>
-  <sub><b>Luigi Agosti</b> · Agent Manager</sub>
-</a>
-
-### Agents
-
-| | |
-|:---:|:---:|
-| <img src="assets/bosch-avatar.png" width="48"/> | <img src="assets/mario-avatar.png" width="48"/> |
-| **Bosch** | **Mario** |
-| Debugging the simulation 🔮 | First principles · ships fast |
-
-## Works with OpenClaw
+## Works with any agent
 
 Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use Pinchtab as your agent's browser backend for faster, cheaper web automation.
-
-<p align="right">
-  <img src="assets/pinchtab-openclaw.png" alt="Pinchtab + OpenClaw" height="140"/>
-</p>
-
-## Star History
-
-<a href="https://star-history.com/#pinchtab/pinchtab&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
- </picture>
-</a>

@@ -1,9 +1,5 @@
 # Headed Mode
 
-<div align="center" style="padding: 12px 0;">
-  <img src="../assets/pinchtab-headed.png" width="256" alt="headed mode" />
-</div>
-
 Most browser automation assumes you're either fully automated or fully manual. Real workflows aren't like that.
 
 Your agent can fill out a 50-field form in seconds, but it can't solve a CAPTCHA. It can navigate to the right page, but it can't approve a bank transfer. It can scrape a dashboard, but first someone needs to log in with 2FA.

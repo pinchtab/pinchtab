@@ -1,0 +1,26 @@
+{
+  "name": "PinchTab",
+  "navigation": {
+    "home": "overview.md",
+    "main": [
+      "overview.md",
+      "get-started.md",
+      "showcase.md"
+    ],
+    "references": [
+      "references/cli-commands.md",
+      "references/curl-commands.md"
+    ],
+    "architecture":[
+      "architecture/pinchtab-architecture.md",
+      "architecture/chrome-lifecycle-and-orchestration.md",
+      "building.md"
+    ],
+    "guides": [
+      "guides/cdp-url-shared-chrome.md",
+      "guides/docker.md",
+      "guides/headed-mode-guide.md",
+      "guides/identifing-instances.md"
+    ]
+  }
+}
