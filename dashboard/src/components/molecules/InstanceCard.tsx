@@ -7,8 +7,8 @@ interface Props {
   onStop: () => void
 }
 
-function formatUptime(startedAt: string): string {
-  const diff = Date.now() - new Date(startedAt).getTime()
+function formatUptime(startTime: string): string {
+  const diff = Date.now() - new Date(startTime).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 60) return `${mins}m`
   const hours = Math.floor(mins / 60)
@@ -39,7 +39,7 @@ export default function InstanceCard({ instance, onOpen, onStop }: Props) {
         </div>
         <div className="rounded bg-bg-elevated px-2 py-1.5">
           <span className="text-text-muted">Uptime:</span>{' '}
-          <span className="text-text-secondary">{formatUptime(instance.startedAt)}</span>
+          <span className="text-text-secondary">{formatUptime(instance.startTime)}</span>
         </div>
       </div>
 

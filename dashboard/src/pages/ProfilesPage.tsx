@@ -58,7 +58,7 @@ export default function ProfilesPage() {
     if (!showLaunch) return
     try {
       await api.launchInstance({
-        profile: showLaunch,
+        profileId: showLaunch,
         port: parseInt(launchPort) || 9868,
         headless: launchHeadless,
       })

@@ -1,4 +1,12 @@
-import type { Profile, Instance, Agent, Settings, ServerInfo } from '../types'
+import type {
+  Profile,
+  Instance,
+  Agent,
+  Settings,
+  ServerInfo,
+  CreateProfileRequest,
+  LaunchInstanceRequest,
+} from '../generated/types'
 
 const BASE = '' // Uses proxy in dev
 
@@ -16,11 +24,7 @@ export async function fetchProfiles(): Promise<Profile[]> {
   return request<Profile[]>('/api/profiles')
 }
 
-export async function createProfile(data: {
-  name: string
-  useWhen?: string
-  source?: string
-}): Promise<Profile> {
+export async function createProfile(data: CreateProfileRequest): Promise<Profile> {
   return request<Profile>('/api/profiles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -28,8 +32,8 @@ export async function createProfile(data: {
   })
 }
 
-export async function deleteProfile(name: string): Promise<void> {
-  await request<void>(`/api/profiles/${encodeURIComponent(name)}`, {
+export async function deleteProfile(id: string): Promise<void> {
+  await request<void>(`/api/profiles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }
@@ -39,11 +43,7 @@ export async function fetchInstances(): Promise<Instance[]> {
   return request<Instance[]>('/api/instances')
 }
 
-export async function launchInstance(data: {
-  profile: string
-  port: number
-  headless?: boolean
-}): Promise<Instance> {
+export async function launchInstance(data: LaunchInstanceRequest): Promise<Instance> {
   return request<Instance>('/api/instances', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

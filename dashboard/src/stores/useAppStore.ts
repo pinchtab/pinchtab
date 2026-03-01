@@ -1,5 +1,13 @@
 import { create } from 'zustand'
-import type { View, Profile, Instance, Agent, ActivityEvent, Settings, ServerInfo } from '../types'
+import type {
+  Profile,
+  Instance,
+  Agent,
+  ActivityEvent,
+  Settings,
+  ServerInfo,
+} from '../generated/types'
+import type { View } from '../types'
 
 interface AppState {
   // Navigation
