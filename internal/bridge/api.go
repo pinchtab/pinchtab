@@ -72,6 +72,7 @@ type ProfileInfo struct {
 	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`
 	Path              string    `json:"path,omitempty"` // File system path to profile directory
+	PathExists        bool      `json:"pathExists,omitempty"` // Whether the path exists on disk
 	Created           time.Time `json:"created"`
 	LastUsed          time.Time `json:"lastUsed"`
 	DiskUsage         int64     `json:"diskUsage"`

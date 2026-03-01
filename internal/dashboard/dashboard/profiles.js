@@ -437,9 +437,19 @@ async function viewProfileDetails(name, instanceID) {
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">PID: <span style="color:var(--text)">' + esc(String(pid)) + '</span></div>';
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Size: <span style="color:var(--text)">' + (profileInfo.sizeMB ? profileInfo.sizeMB.toFixed(0) + ' MB' : '—') + '</span></div>';
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Source: <span style="color:var(--text)">' + esc(profileInfo.source || '—') + '</span></div>';
-  if (profileInfo.path) {
-    tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Path: <span style="color:var(--text);font-size:11px;font-family:var(--font-mono)">' + esc(profileInfo.path) + '</span></div>';
+  
+  // Path section with existence check
+  let pathValue = profileInfo.path || '(not created)';
+  let pathStyle = 'font-size:11px;font-family:var(--font-mono)';
+  if (!profileInfo.pathExists) {
+    pathStyle += ';color:var(--error-light);opacity:0.7';
+    if (!profileInfo.path) {
+      pathValue = '(profile directory not created)';
+    } else {
+      pathValue = profileInfo.path + ' (not found)';
+    }
   }
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Path: <span style="color:var(--text);' + pathStyle + '">' + esc(pathValue) + '</span></div>';
   if (profileInfo.chromeProfileName) {
     tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Chrome: <span style="color:var(--text)">' + esc(profileInfo.chromeProfileName) + '</span></div>';
   }

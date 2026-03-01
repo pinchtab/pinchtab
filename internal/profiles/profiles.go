@@ -109,10 +109,17 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		// Mark as temporary if it's an auto-generated instance profile
 		isTemporary := strings.HasPrefix(entry.Name(), "instance-")
 
+		// Check if path exists
+		pathExists := true
+		if _, err := os.Stat(info.Path); err != nil {
+			pathExists = false
+		}
+
 		profiles = append(profiles, bridge.ProfileInfo{
 			ID:                info.ID,
 			Name:              info.Name,
 			Path:              info.Path,
+			PathExists:        pathExists,
 			Created:           info.CreatedAt,
 			Temporary:         isTemporary,
 			DiskUsage:         int64(info.SizeMB * 1024 * 1024),
