@@ -125,7 +125,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		// Block dangerous/unsupported schemes; allow bare hostnames (e.g. "example.com")
 		// which Chrome handles gracefully by prepending https://.
 		if parsed, err := url.Parse(req.URL); err == nil && parsed.Scheme != "" {
-			blocked := parsed.Scheme == "javascript" || parsed.Scheme == "vbscript"
+			blocked := parsed.Scheme == "javascript" || parsed.Scheme == "vbscript" || parsed.Scheme == "data"
 			if blocked {
 				web.Error(w, 400, fmt.Errorf("invalid URL scheme: %s", parsed.Scheme))
 				return
