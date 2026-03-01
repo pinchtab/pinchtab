@@ -7,7 +7,6 @@ import (
 )
 
 func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
-	// Mock processAlive to always return true for our fake PIDs
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
@@ -15,7 +14,6 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
-	// 1. Initial Launch
 	inst, err := o.Launch("profile1", "9001", true)
 	if err != nil {
 		t.Fatalf("First launch failed: %v", err)
@@ -24,13 +22,11 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 		t.Errorf("expected status starting, got %s", inst.Status)
 	}
 
-	// 2. Duplicate Profile Check
 	_, err = o.Launch("profile1", "9002", true)
 	if err == nil {
 		t.Error("expected error when launching duplicate profile")
 	}
 
-	// 3. Port Conflict Check (Runner reports port unavailable)
 	runner.portAvail = false
 	_, err = o.Launch("profile2", "9001", true)
 	if err == nil {
@@ -39,7 +35,6 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 }
 
 func TestOrchestrator_ListAndStop(t *testing.T) {
-	// Mock processAlive to return true then false to simulate exit
 	alive := true
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return alive }
@@ -50,19 +45,16 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 
 	inst, _ := o.Launch("p1", "9001", true)
 
-	// Verify instance is in list before stop
 	if len(o.List()) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(o.List()))
 	}
 
-	// Simulate stop
 	alive = false
 	err := o.Stop(inst.ID)
 	if err != nil {
 		t.Fatalf("Stop failed: %v", err)
 	}
 
-	// Verify instance is removed from list after stop
 	instances := o.List()
 	if len(instances) != 0 {
 		t.Errorf("expected 0 instances after stop, got %d", len(instances))
@@ -91,7 +83,6 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 	}
 	o.mu.Unlock()
 
-	// Make it "exit" immediately on stop
 	processAliveFunc = func(pid int) bool { return false }
 
 	err := o.StopProfile("p1")
@@ -99,7 +90,6 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 		t.Fatalf("StopProfile failed: %v", err)
 	}
 
-	// Verify instance is removed from list after stop
 	instances := o.List()
 	if len(instances) != 0 {
 		t.Errorf("expected 0 instances after stop, got %d", len(instances))

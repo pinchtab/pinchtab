@@ -5,12 +5,10 @@ import (
 )
 
 func TestBuild_Empty(t *testing.T) {
-	// Empty chromeVersion should return nil
 	if Build("", "") != nil {
 		t.Fatal("expected nil for empty chrome version")
 	}
 
-	// Empty user agent but with chromeVersion should generate default and return non-nil
 	p := Build("", "144.0.0.0")
 	if p == nil {
 		t.Fatal("expected non-nil for empty user agent with chromeVersion")
@@ -29,7 +27,6 @@ func TestBuild_Versions(t *testing.T) {
 	if meta == nil {
 		t.Fatal("expected metadata")
 	}
-	// Check major version extraction
 	for _, b := range meta.Brands {
 		if b.Brand == "Google Chrome" && b.Version != "144" {
 			t.Errorf("expected major version 144, got %s", b.Version)

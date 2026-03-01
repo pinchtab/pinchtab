@@ -361,3 +361,24 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, resp)
 	}
 }
+
+// HandleTabSnapshot returns snapshot for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/snapshot
+func (h *Handlers) HandleTabSnapshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleSnapshot(w, req)
+}

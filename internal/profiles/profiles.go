@@ -17,14 +17,10 @@ import (
 
 var idMgr = idutil.NewManager()
 
-// profileID generates a stable hash-based ID from profile name
-// Returns format: prof_XXXXXXXX
 func profileID(name string) string {
 	return idMgr.ProfileID(name)
 }
 
-// validateProfileName checks for path traversal and other unsafe patterns
-// Prevents directory traversal attacks (../, ..\, /, \)
 func validateProfileName(name string) error {
 	if name == "" {
 		return fmt.Errorf("profile name cannot be empty")
@@ -142,10 +138,8 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 			continue
 		}
 
-		// Mark as temporary if it's an auto-generated instance profile
 		isTemporary := strings.HasPrefix(info.Name, "instance-")
 
-		// Check if path exists
 		pathExists := true
 		if _, err := os.Stat(info.Path); err != nil {
 			pathExists = false
@@ -245,7 +239,6 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		}
 	}
 
-	// Validate source path exists and is a directory
 	srcInfo, err := os.Stat(sourcePath)
 	if err != nil {
 		return fmt.Errorf("source path invalid: %w", err)

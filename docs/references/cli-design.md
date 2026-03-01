@@ -60,8 +60,8 @@ pinchtab --instance inst_abc123 snap
 
 **HTTP mapping:**
 - `pinchtab nav <url>` → `POST /navigate {url}`
-- `pinchtab --instance <id> snap` → `POST /instances/<id>/snapshot`
-- `pinchtab --instance <id> click <ref>` → `POST /instances/<id>/action {kind: "click", ref}`
+- `pinchtab --instance <id> snap` → `GET /snapshot` (with `tabId`)
+- `pinchtab tab click <tabId> <ref>` → `POST /tabs/<tabId>/action {kind: "click", ref}`
 
 ### Pattern 4: Nested Resources (Tabs within Instance)
 ```
@@ -76,19 +76,19 @@ pinchtab --instance inst_abc123 tabs              # GET /instances/<id>/tabs
 
 # Create tab
 pinchtab --instance inst_abc123 tab create https://example.com
-                                                   # POST /instances/<id>/tab {url}
+                                                   # POST /instances/<id>/tabs/open {url}
 
 # Navigate tab
 pinchtab --instance inst_abc123 tab <tabId> navigate https://example.com
-                                                   # POST /instances/<id>/tab/navigate {tabId, url}
+                                                   # POST /tabs/<tabId>/navigate {url}
 
 # Close tab
 pinchtab --instance inst_abc123 tab <tabId> close
-                                                   # POST /instances/<id>/tab/close {tabId}
+                                                   # POST /tab {action:"close", tabId}
 
 # Lock tab
 pinchtab --instance inst_abc123 tab <tabId> lock --owner agent1 --ttl 60
-                                                   # POST /instances/<id>/tab/lock {tabId, owner, ttl}
+                                                   # POST /tabs/<tabId>/lock {owner, ttl}
 ```
 
 ### Pattern 5: Complex Payloads
@@ -100,7 +100,7 @@ pinchtab --instance <id> navigate https://example.com --block-images --block-ads
 
 Maps to:
 ```json
-POST /instances/<id>/navigate
+POST /tabs/<tabId>/navigate
 {
   "url": "https://example.com",
   "blockImages": true,
@@ -156,6 +156,8 @@ EOF
 | `/instances/launch` | POST | `pinchtab instance launch --mode headed --port 9869` |
 | `/instances/{id}/logs` | GET | `pinchtab instance <id> logs` |
 | `/instances/{id}/stop` | POST | `pinchtab instance <id> stop` |
+| `/instances/{id}/tabs/open` | POST | `pinchtab --instance <id> tab create https://example.com` |
+| `/instances/{id}/tabs` | GET | `pinchtab --instance <id> tabs` |
 
 ### Browser Control (Single Instance)
 | Endpoint | HTTP | CLI Command |
@@ -177,14 +179,14 @@ EOF
 ### Orchestrator Proxying (Instance-scoped)
 | Endpoint | HTTP | CLI Command |
 |----------|------|-------------|
-| `/instances/{id}/navigate` | POST | `pinchtab --instance <id> nav https://example.com` |
-| `/instances/{id}/snapshot` | GET | `pinchtab --instance <id> snap -i` |
-| `/instances/{id}/screenshot` | GET | `pinchtab --instance <id> ss` |
-| `/instances/{id}/action` | POST | `pinchtab --instance <id> action -k click -r e5` |
-| `/instances/{id}/tab` | POST | `pinchtab --instance <id> tab create https://example.com` |
-| `/instances/{id}/tabs` | GET | `pinchtab --instance <id> tabs` |
-| `/instances/{id}/evaluate` | POST | `pinchtab --instance <id> eval 'code'` |
-| `/instances/{id}/tabs/{tabId}/pdf` | GET | `pinchtab --instance <id> pdf --tab <tabId> -o out.pdf` |
+| `/tabs/{id}/navigate` | POST | `pinchtab instance navigate <id> https://example.com` |
+| `/tabs/{id}/snapshot` | GET | `pinchtab tab <tabId> snapshot -i` |
+| `/tabs/{id}/screenshot` | GET | `pinchtab tab screenshot <tabId> -o out.jpg` |
+| `/tabs/{id}/action` | POST | `pinchtab tab click <tabId> e5` |
+| `/tabs/{id}/actions` | POST | `curl -X POST /tabs/{id}/actions` |
+| `/tabs/{id}/text` | GET | `pinchtab tab text <tabId>` |
+| `/tabs/{id}/evaluate` | POST | `pinchtab tab eval <tabId> 'code'` |
+| `/tabs/{id}/pdf` | GET | `pinchtab --tab <tabId> pdf -o out.pdf` |
 
 ## Real-World Examples
 

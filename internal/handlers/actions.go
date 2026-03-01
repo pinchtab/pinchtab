@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -133,6 +135,41 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, map[string]any{"success": true, "result": result})
 }
 
+// HandleTabAction performs a single action on a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/action
+func (h *Handlers) HandleTabAction(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	var req bridge.ActionRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+	if req.TabID != "" && req.TabID != tabID {
+		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		return
+	}
+	req.TabID = tabID
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	wrapped := r.Clone(r.Context())
+	wrapped.Body = io.NopCloser(bytes.NewReader(payload))
+	wrapped.ContentLength = int64(len(payload))
+	wrapped.Header = r.Header.Clone()
+	wrapped.Header.Set("Content-Type", "application/json")
+	h.HandleAction(w, wrapped)
+}
+
 type actionsRequest struct {
 	TabID       string                 `json:"tabId"`
 	Actions     []bridge.ActionRequest `json:"actions"`
@@ -165,6 +202,41 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.handleActionsBatch(w, r, req)
+}
+
+// HandleTabActions performs multiple actions on a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/actions
+func (h *Handlers) HandleTabActions(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	var req actionsRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+	if req.TabID != "" && req.TabID != tabID {
+		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		return
+	}
+	req.TabID = tabID
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	wrapped := r.Clone(r.Context())
+	wrapped.Body = io.NopCloser(bytes.NewReader(payload))
+	wrapped.ContentLength = int64(len(payload))
+	wrapped.Header = r.Header.Clone()
+	wrapped.Header.Set("Content-Type", "application/json")
+	h.HandleActions(w, wrapped)
 }
 
 // handleActionsBatch processes a batch of actions (used by both single and batch endpoints)

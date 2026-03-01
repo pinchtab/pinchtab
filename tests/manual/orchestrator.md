@@ -25,7 +25,10 @@
 3. Within 5 seconds, a Chrome window should appear on screen.
 4. Navigate the instance:
    ```bash
-   curl -X POST http://localhost:9867/instances/{id}/navigate \
+   TAB_ID=$(curl -s -X POST http://localhost:9867/instances/{id}/tabs/open \
+     -H "Content-Type: application/json" \
+     -d '{"action":"new","url":"about:blank"}' | jq -r '.tabId')
+   curl -X POST http://localhost:9867/tabs/$TAB_ID/navigate \
      -H "Content-Type: application/json" \
      -d '{"url":"https://example.com"}'
    ```
@@ -453,7 +456,10 @@
 2. Navigate on each via orchestrator proxy:
    ```bash
    for i in 0 1 2; do
-     curl -X POST http://localhost:9867/instances/${IDS[$i]}/navigate \
+     TAB_ID=$(curl -s -X POST http://localhost:9867/instances/${IDS[$i]}/tabs/open \
+       -H "Content-Type: application/json" \
+       -d '{"action":"new","url":"about:blank"}' | jq -r '.tabId')
+     curl -X POST http://localhost:9867/tabs/$TAB_ID/navigate \
        -H "Content-Type: application/json" \
        -d '{"url":"https://example.com"}' | jq '.tabId'
    done
@@ -479,25 +485,28 @@
      -H "Content-Type: application/json" \
      -d '{"name":"snap-test","headless":true}' | jq -r '.id')
 
-   curl -X POST http://localhost:9867/instances/$ID/navigate \
+   TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$ID/tabs/open \
+     -H "Content-Type: application/json" \
+     -d '{"action":"new","url":"about:blank"}' | jq -r '.tabId')
+   curl -X POST http://localhost:9867/tabs/$TAB_ID/navigate \
      -H "Content-Type: application/json" \
      -d '{"url":"https://example.com"}' > /dev/null
    ```
 
 2. Request snapshot via orchestrator:
    ```bash
-   curl http://localhost:9867/instances/$ID/snapshot | jq '.nodes | length'
+   curl http://localhost:9867/tabs/$TAB_ID/snapshot | jq '.nodes | length'
    ```
 
 3. Request screenshot via orchestrator:
    ```bash
-   curl http://localhost:9867/instances/$ID/screenshot > /tmp/test.png
-   file /tmp/test.png
+   curl http://localhost:9867/tabs/$TAB_ID/screenshot > /tmp/test.jpg
+   file /tmp/test.jpg
    ```
 
 4. Verify both succeed and return expected formats.
 
-**Criteria:** ✓ Snapshot JSON valid | ✓ Screenshot is PNG | ✓ Both proxied correctly
+**Criteria:** ✓ Snapshot JSON valid | ✓ Screenshot is JPEG | ✓ Both proxied correctly
 
 ---
 
@@ -583,7 +592,10 @@
 
 2. Navigate via proxy (should work):
    ```bash
-   curl -X POST http://localhost:9867/instances/{id}/navigate \
+   TAB_ID=$(curl -s -X POST http://localhost:9867/instances/{id}/tabs/open \
+     -H "Content-Type: application/json" \
+     -d '{"action":"new","url":"about:blank"}' | jq -r '.tabId')
+   curl -X POST http://localhost:9867/tabs/$TAB_ID/navigate \
      -H "Content-Type: application/json" \
      -d '{"url":"https://example.com"}'
    ```

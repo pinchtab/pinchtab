@@ -20,7 +20,7 @@ import (
 )
 
 type Orchestrator struct {
-	instances      map[string]*InstanceInternal // keyed by instance ID
+	instances      map[string]*InstanceInternal
 	baseDir        string
 	binary         string
 	profiles       *profiles.ProfileManager
@@ -81,7 +81,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		// Why so high?
 		// - First request to an instance triggers lazy Chrome initialization (8-20+ seconds)
 		// - Navigation can take up to 60s (NavigateTimeout in bridge config)
-		// - Proxied requests (e.g., POST /instances/{id}/navigate) must wait for:
+		// - Proxied requests (e.g., POST /tabs/{tabId}/navigate) must wait for:
 		//   1. Instance /health handler to initialize Chrome (via ensureChrome())
 		//   2. Tab operations to complete (navigate, snapshot, actions, etc.)
 		// - Short timeout (<5s) would break first-request scenarios
@@ -98,7 +98,6 @@ func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {
 	o.profiles = pm
 }
 
-// SetPortRange configures the port allocation range
 func (o *Orchestrator) SetPortRange(start, end int) {
 	o.portAllocator = NewPortAllocator(start, end)
 }
@@ -123,7 +122,6 @@ func installStableBinary(src, dst string) error {
 func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instance, error) {
 	o.mu.Lock()
 
-	// Auto-allocate port if not specified
 	if port == "" || port == "0" {
 		o.mu.Unlock()
 		allocatedPort, err := o.portAllocator.AllocatePort()
@@ -149,7 +147,6 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 		return nil, fmt.Errorf("port %s is already in use on this machine", port)
 	}
 
-	// Generate hash-based IDs
 	profileID := o.idMgr.ProfileID(name)
 	instanceID := o.idMgr.InstanceID(profileID, name)
 
@@ -216,9 +213,6 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	o.mu.Unlock()
 
 	go o.monitor(inst)
-
-	// Note: Chrome initialization happens lazily on first handler request
-	// This avoids race conditions during instance startup
 
 	return &inst.Instance, nil
 }
@@ -320,25 +314,19 @@ func (o *Orchestrator) markStopped(id string) {
 		return
 	}
 
-	// Release the port back to the allocator
 	portStr := inst.Port
 	if portInt, err := strconv.Atoi(portStr); err == nil {
 		o.portAllocator.ReleasePort(portInt)
 		slog.Debug("released port", "id", id, "port", portStr)
 	}
 
-	// Delete instance from map (remove it entirely, not just mark stopped)
 	profileName := inst.ProfileName
 	delete(o.instances, id)
 	o.mu.Unlock()
 
-	// Log the removal
 	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
 
-	// Delete temporary/ephemeral profiles (auto-generated for instances)
-	// These are created with names like "instance-1709275909123456789"
 	if strings.HasPrefix(profileName, "instance-") {
-		// Delete profile directory
 		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
 			slog.Warn("failed to delete temporary profile directory", "name", profileName, "err", err)
@@ -346,7 +334,6 @@ func (o *Orchestrator) markStopped(id string) {
 			slog.Info("deleted temporary profile", "name", profileName)
 		}
 
-		// Also delete profile metadata via profile manager
 		if o.profiles != nil {
 			if err := o.profiles.Delete(profileName); err != nil {
 				slog.Warn("failed to delete profile metadata", "name", profileName, "err", err)

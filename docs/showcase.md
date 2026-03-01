@@ -386,18 +386,18 @@ sleep 2
 
 **Step 2: Create first tab (get tabId)**
 ```bash
-TAB1=$(curl -s -X POST http://localhost:9867/tabs/open \
+TAB1=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://github.com"}' | jq -r '.id')
+  -d '{"url":"https://github.com"}' | jq -r '.tabId')
 
 echo "Tab 1: $TAB1"
 ```
 
 **Step 3: Create second tab (get tabId)**
 ```bash
-TAB2=$(curl -s -X POST http://localhost:9867/tabs/open \
+TAB2=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}' | jq -r '.id')
+  -d '{"url":"https://stackoverflow.com"}' | jq -r '.tabId')
 
 echo "Tab 2: $TAB2"
 ```
@@ -429,7 +429,7 @@ curl -s -X POST http://localhost:9867/instances/$INST/action \
   -d '{"kind":"click","ref":"e3","tabId":"'$TAB2'"}'
 
 # Take screenshot of Tab 1
-curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB1" -o screenshot1.png
+curl "http://localhost:9867/tabs/$TAB1/screenshot" -o screenshot1.png
 ```
 
 **Complete script:**
@@ -448,13 +448,13 @@ sleep 2
 
 # Step 3: Create tabs and capture tabIds
 echo "Creating tabs..."
-TAB1=$(curl -s -X POST http://localhost:9867/tabs/open \
+TAB1=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://github.com"}' | jq -r '.id')
+  -d '{"url":"https://github.com"}' | jq -r '.tabId')
 
-TAB2=$(curl -s -X POST http://localhost:9867/tabs/open \
+TAB2=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}' | jq -r '.id')
+  -d '{"url":"https://stackoverflow.com"}' | jq -r '.tabId')
 
 echo "Tab 1: $TAB1"
 echo "Tab 2: $TAB2"
@@ -485,8 +485,8 @@ curl -s -X POST http://localhost:9867/instances/$INST/action \
 
 # Step 8: Take screenshots of each tab
 echo "Taking screenshots..."
-curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB1" -o /tmp/tab1.png
-curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB2" -o /tmp/tab2.png
+curl "http://localhost:9867/tabs/$TAB1/screenshot" -o /tmp/tab1.png
+curl "http://localhost:9867/tabs/$TAB2/screenshot" -o /tmp/tab2.png
 
 # Step 9: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -518,7 +518,7 @@ echo "Instance: $INST, Tab: $TAB"
 
 **Step 2: Generate PDF (use tabId)**
 ```bash
-curl "http://localhost:9867/instances/$INST/tabs/$TAB/pdf?landscape=true" \
+curl "http://localhost:9867/tabs/$TAB/pdf?landscape=true" \
   -o report.pdf
 ```
 
@@ -546,14 +546,14 @@ echo "Tab: $TAB"
 
 # Step 4: Generate PDF with options using tabId
 echo "Generating PDF..."
-curl -s "http://localhost:9867/instances/$INST/tabs/$TAB/pdf?landscape=true&displayHeaderFooter=true" \
+curl -s "http://localhost:9867/tabs/$TAB/pdf?landscape=true&displayHeaderFooter=true" \
   -o report.pdf
 
 echo "PDF saved: report.pdf"
 
 # Step 5: Take screenshot for preview using tabId
 echo "Taking preview screenshot..."
-curl -s "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB" -o /tmp/report_preview.png
+curl -s "http://localhost:9867/tabs/$TAB/screenshot" -o /tmp/report_preview.png
 
 # Step 6: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -644,7 +644,7 @@ curl -X POST http://localhost:9867/instances/$INST2/stop
 1. **Create instance first** — Every workflow starts with creating an instance
 2. **Wait for Chrome** — Sleep 2 seconds to allow lazy initialization
 3. **Extract instance ID** — Use jq: `jq -r '.id'`
-4. **Use instance-scoped paths** — All operations use `/instances/{id}/...`
+4. **Use tab-scoped paths for tab work** — Prefer `/tabs/{id}/...` for navigate/snapshot/screenshot/pdf
 5. **Get fresh snapshots** — Refs change when page updates; get new snapshot
 6. **Stop instances** — Clean up when done to free resources
 7. **Chain operations** — Create instance → Navigate → Snapshot → Click → Snapshot → Stop
@@ -656,15 +656,15 @@ curl -X POST http://localhost:9867/instances/$INST2/stop
 | Goal | Endpoint | Notes |
 |------|----------|-------|
 | Create instance | `POST /instances/launch` | Returns instance ID |
-| Navigate | `POST /instances/{id}/navigate` | Creates/uses first tab |
-| See page structure | `GET /instances/{id}/snapshot` | Returns DOM nodes + refs |
-| Click/type/press | `POST /instances/{id}/action` | Use ref from snapshot |
-| Extract text | `GET /instances/{id}/text` | Returns readable text |
-| Run JavaScript | `POST /instances/{id}/evaluate` | Returns JSON result |
-| Screenshot | `GET /instances/{id}/screenshot` | Returns PNG image |
-| PDF export | `GET /instances/{id}/tabs/{tabId}/pdf` | Returns PDF file |
+| Navigate | `POST /tabs/{id}/navigate` | Navigates a specific tab |
+| See page structure | `GET /tabs/{id}/snapshot` | Returns DOM nodes + refs |
+| Click/type/press | `POST /tabs/{id}/action` | Use ref from snapshot |
+| Extract text | `GET /tabs/{id}/text` | Returns readable text |
+| Run JavaScript | `POST /tabs/{id}/evaluate` | Returns JSON result |
+| Screenshot | `GET /tabs/{id}/screenshot` | Returns JPEG image |
+| PDF export | `GET /tabs/{id}/pdf` | Returns PDF file |
 | List tabs | `GET /instances/{id}/tabs` | All tabs in instance |
-| New tab | `POST /tabs/open` | Open URL in new tab |
+| New tab | `POST /instances/{id}/tabs/open` | Open URL in new tab |
 | Stop instance | `POST /instances/{id}/stop` | Cleanup, free resources |
 
 ---

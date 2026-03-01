@@ -159,3 +159,28 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		"url":         dlURL,
 	})
 }
+
+// HandleTabDownload fetches a URL using the browser session for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/download
+func (h *Handlers) HandleTabDownload(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+	if _, _, err := h.Bridge.TabContext(tabID); err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleDownload(w, req)
+}

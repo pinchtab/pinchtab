@@ -28,8 +28,6 @@ func CancelOnClientDone(reqCtx context.Context, cancel context.CancelFunc) {
 	cancel()
 }
 
-// StatusWriter wraps ResponseWriter to capture the status code.
-// It preserves Hijacker and Flusher interfaces for WebSocket/SSE support.
 type StatusWriter struct {
 	http.ResponseWriter
 	Code int

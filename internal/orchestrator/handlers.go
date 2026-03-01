@@ -1,8 +1,10 @@
 package orchestrator
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,61 +14,39 @@ import (
 )
 
 func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
-	// Core routes
-	mux.HandleFunc("GET /instances", o.handleList)
-	mux.HandleFunc("GET /instances/{id}", o.handleGetInstance)
-	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
-
-	// Phase 3: Tab Management (new API)
-	// Note: GET /tabs and POST /tab handlers are in dashboard.go
-	// These orchestrator handlers are used when no instances are running or for aggregation
-	mux.HandleFunc("POST /tabs/open", o.handleTabOpen)
-
-	// Profile lifecycle by ID (canonical)
 	mux.HandleFunc("POST /profiles/{id}/start", o.handleStartByID)
 	mux.HandleFunc("POST /profiles/{id}/stop", o.handleStopByID)
 	mux.HandleFunc("GET /profiles/{id}/instance", o.handleProfileInstance)
 
-	// Short aliases for agents
-	mux.HandleFunc("POST /start/{id}", o.handleStartByID)
-	mux.HandleFunc("POST /stop/{id}", o.handleStopByID)
-
-	// Phase 2: Instance Management (new API)
+	mux.HandleFunc("GET /instances", o.handleList)
+	mux.HandleFunc("GET /instances/{id}", o.handleGetInstance)
+	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
 	mux.HandleFunc("POST /instances/start", o.handleStartInstance)
-
-	// Dashboard / backward compat
 	mux.HandleFunc("POST /instances/launch", o.handleLaunchByName)
+	mux.HandleFunc("POST /instances/{id}/start", o.handleStartByInstanceID)
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogsByID)
-	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
-
-	// Instance proxy routes - forward to specific instance port
-	// Browser operations
-	mux.HandleFunc("POST /instances/{id}/navigate", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/snapshot", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/action", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/actions", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/screenshot", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/tabs/{tabId}/pdf", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/tabs/{tabId}/pdf", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/text", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/evaluate", o.proxyToInstance)
 	mux.HandleFunc("GET /instances/{id}/tabs", o.proxyToInstance)
-
-	// Chrome management
-	mux.HandleFunc("POST /instances/{id}/ensure-chrome", o.proxyToInstance)
-
-	// Tab management
+	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
+	mux.HandleFunc("POST /instances/{id}/tabs/open", o.handleInstanceTabOpen)
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/tab/lock", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/tab/unlock", o.proxyToInstance)
-
-	// Other operations
-	mux.HandleFunc("GET /instances/{id}/cookies", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/cookies", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/download", o.proxyToInstance)
-	mux.HandleFunc("POST /instances/{id}/upload", o.proxyToInstance)
 	mux.HandleFunc("GET /instances/{id}/screencast", o.proxyToInstance)
+
+	mux.HandleFunc("POST /tabs/{id}/navigate", o.handleTabNavigate)
+	mux.HandleFunc("GET /tabs/{id}/snapshot", o.handleTabSnapshot)
+	mux.HandleFunc("GET /tabs/{id}/screenshot", o.handleTabScreenshot)
+	mux.HandleFunc("POST /tabs/{id}/action", o.handleTabAction)
+	mux.HandleFunc("POST /tabs/{id}/actions", o.handleTabActions)
+	mux.HandleFunc("GET /tabs/{id}/text", o.handleTabText)
+	mux.HandleFunc("POST /tabs/{id}/evaluate", o.handleTabEvaluate)
+	mux.HandleFunc("GET /tabs/{id}/pdf", o.handleTabPDF)
+	mux.HandleFunc("POST /tabs/{id}/pdf", o.handleTabPDF)
+	mux.HandleFunc("GET /tabs/{id}/download", o.handleTabDownload)
+	mux.HandleFunc("POST /tabs/{id}/upload", o.handleTabUpload)
+	mux.HandleFunc("POST /tabs/{id}/lock", o.handleTabLock)
+	mux.HandleFunc("POST /tabs/{id}/unlock", o.handleTabUnlock)
+	mux.HandleFunc("GET /tabs/{id}/cookies", o.handleTabGetCookies)
+	mux.HandleFunc("POST /tabs/{id}/cookies", o.handleTabSetCookies)
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
@@ -77,27 +57,34 @@ func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	o.mu.RLock()
 	inst, ok := o.instances[id]
-	o.mu.RUnlock()
-
 	if !ok {
+		o.mu.RUnlock()
 		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
 
-	web.JSON(w, 200, inst.Instance)
+	copyInst := inst.Instance
+	active := instanceIsActive(inst)
+	o.mu.RUnlock()
+
+	if active && copyInst.Status == "stopped" {
+		copyInst.Status = "running"
+	}
+	if !active &&
+		(copyInst.Status == "starting" || copyInst.Status == "running" || copyInst.Status == "stopping") {
+		copyInst.Status = "stopped"
+	}
+
+	web.JSON(w, 200, copyInst)
 }
 
-// resolveProfileID resolves a path value to a profile name.
-// Accepts both a 12-char hex profile ID or a profile name directly.
 func (o *Orchestrator) resolveProfileName(idOrName string) (string, error) {
 	if o.profiles == nil {
 		return "", fmt.Errorf("profile manager not configured")
 	}
-	// Try as ID first
 	if name, err := o.profiles.FindByID(idOrName); err == nil {
 		return name, nil
 	}
-	// Try as name (for backward compat routes like /profiles/{name}/stop)
 	if o.profiles.Exists(idOrName) {
 		return idOrName, nil
 	}
@@ -117,7 +104,6 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		Headless bool   `json:"headless"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	// Port is optional - if not provided, Launch() will auto-allocate
 
 	inst, err := o.Launch(name, req.Port, req.Headless)
 	if err != nil {
@@ -143,13 +129,12 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProfileId string `json:"profileId,omitempty"` // Optional: Profile ID
-		Name      string `json:"name,omitempty"`      // Optional: Profile name (fallback if profileId is empty)
-		Mode      string `json:"mode"`                // "headed" or "headless" (default: headless)
+		ProfileId string `json:"profileId,omitempty"`
+		Name      string `json:"name,omitempty"`
+		Mode      string `json:"mode"`
 		Port      string `json:"port,omitempty"`
 	}
 
-	// Decode body if present (empty body is allowed)
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			web.Error(w, 400, fmt.Errorf("invalid JSON"))
@@ -157,13 +142,10 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Default: headless=true unless mode="headed"
 	headless := req.Mode != "headed"
 
-	// Determine profile name: use provided profileId, name, or generate temporary name
 	var name string
 	if req.ProfileId != "" {
-		// Look up profile by ID to get its name
 		profs, err := o.profiles.List()
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("failed to list profiles: %w", err))
@@ -182,14 +164,11 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 			return
 		}
 	} else if req.Name != "" {
-		// Use provided profile name directly (for cases where dashboard sends name as fallback)
 		name = req.Name
 	} else {
-		// Generate unique temporary instance name (internal use only)
 		name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
 	}
 
-	// Port is optional - if not provided, Launch() will auto-allocate
 	inst, err := o.Launch(name, req.Port, headless)
 	if err != nil {
 		web.Error(w, 409, err)
@@ -207,6 +186,40 @@ func (o *Orchestrator) handleStopByInstanceID(w http.ResponseWriter, r *http.Req
 	web.JSON(w, 200, map[string]string{"status": "stopped", "id": id})
 }
 
+func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	if !ok {
+		o.mu.RUnlock()
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return
+	}
+	active := instanceIsActive(inst)
+	port := inst.Port
+	profileName := inst.ProfileName
+	headless := inst.Headless
+	o.mu.RUnlock()
+
+	if active {
+		targetURL := &url.URL{
+			Scheme: "http",
+			Host:   net.JoinHostPort("localhost", port),
+			Path:   "/ensure-chrome",
+		}
+		o.proxyToURL(w, r, targetURL)
+		return
+	}
+
+	started, err := o.Launch(profileName, port, headless)
+	if err != nil {
+		web.Error(w, 409, err)
+		return
+	}
+	web.JSON(w, 201, started)
+}
+
 func (o *Orchestrator) handleLogsByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	logs, err := o.Logs(id)
@@ -218,17 +231,13 @@ func (o *Orchestrator) handleLogsByID(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(logs))
 }
 
-// handleStartInstance: Phase 2 API endpoint for starting instances
-// POST /instances/start {profileId?, mode?, port?}
-// All parameters are optional
 func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProfileID string `json:"profileId,omitempty"` // Optional: Profile ID or name
-		Mode      string `json:"mode,omitempty"`      // Optional: "headed" or "headless"
-		Port      string `json:"port,omitempty"`      // Optional: port number
+		ProfileID string `json:"profileId,omitempty"`
+		Mode      string `json:"mode,omitempty"`
+		Port      string `json:"port,omitempty"`
 	}
 
-	// Decode body if present (empty body is allowed)
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			web.Error(w, 400, fmt.Errorf("invalid JSON"))
@@ -236,27 +245,21 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// Resolve profileId to profile name
-	// If profileId not provided, auto-generate instance with default profile or first available
 	var profileName string
 	var err error
 
 	if req.ProfileID != "" {
-		// User provided profileId (or name) - resolve it
 		profileName, err = o.resolveProfileName(req.ProfileID)
 		if err != nil {
 			web.Error(w, 404, fmt.Errorf("profile %q not found", req.ProfileID))
 			return
 		}
 	} else {
-		// No profileId provided - use auto-generated name (creates temporary profile)
 		profileName = fmt.Sprintf("instance-%d", time.Now().UnixNano())
 	}
 
-	// Parse mode: "headed" or "headless" (default: headless)
 	headless := req.Mode != "headed"
 
-	// Port is optional - Launch() will auto-allocate if not provided
 	inst, err := o.Launch(profileName, req.Port, headless)
 	if err != nil {
 		web.Error(w, 409, err)
@@ -320,8 +323,6 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 	web.JSON(w, 200, map[string]string{"wsUrl": targetURL})
 }
 
-// proxyToInstance forwards requests to a specific instance port
-// This allows clients to call /instances/{id}/navigate instead of knowing the instance port
 func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -339,45 +340,38 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build target URL by replacing /instances/{id} with the instance port path
-	// Request: POST /instances/work-9868/navigate?url=...
-	// Target:  POST http://localhost:9868/navigate?url=...
 	targetPath := r.URL.Path
-	// Remove /instances/{id} prefix (19 + len(id) characters)
 	if len(targetPath) > len("/instances/"+id) {
 		targetPath = targetPath[len("/instances/"+id):]
 	} else {
 		targetPath = ""
 	}
 
-	// Build target URL using url.URL struct for explicit component control
-	// This prevents SSRF by ensuring we only proxy to localhost
 	targetURL := &url.URL{
 		Scheme:   "http",
 		Host:     net.JoinHostPort("localhost", inst.Port),
 		Path:     targetPath,
 		RawQuery: r.URL.RawQuery,
 	}
+	o.proxyToURL(w, r, targetURL)
+}
 
-	// Verify the constructed URL is valid
+func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, targetURL *url.URL) {
 	if targetURL.Hostname() != "localhost" {
 		web.Error(w, 400, fmt.Errorf("invalid proxy target: only localhost allowed"))
 		return
 	}
 
-	// Create proxy request with safe, validated URL
 	proxyReq, err := http.NewRequest(r.Method, targetURL.String(), r.Body)
 	if err != nil {
 		web.Error(w, 500, fmt.Errorf("failed to create proxy request: %w", err))
 		return
 	}
 
-	// Copy headers from original request (except Host and hop-by-hop headers)
 	for key, values := range r.Header {
 		switch key {
 		case "Host", "Connection", "Keep-Alive", "Proxy-Authenticate",
 			"Proxy-Authorization", "Te", "Trailers", "Transfer-Encoding", "Upgrade":
-			// Skip hop-by-hop headers
 		default:
 			for _, value := range values {
 				proxyReq.Header.Add(key, value)
@@ -385,7 +379,6 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Use orchestrator's HTTP client
 	resp, err := o.client.Do(proxyReq)
 	if err != nil {
 		web.Error(w, 502, fmt.Errorf("failed to proxy to instance: %w", err))
@@ -393,19 +386,40 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Copy response headers
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
 	}
 
-	// Copy response status and body
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(readResponseBody(resp))
 }
 
-// readResponseBody reads the full response body
+func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceInternal, error) {
+	o.mu.RLock()
+	instances := make([]*InstanceInternal, 0, len(o.instances))
+	for _, inst := range o.instances {
+		if inst.Status == "running" && instanceIsActive(inst) {
+			instances = append(instances, inst)
+		}
+	}
+	o.mu.RUnlock()
+
+	for _, inst := range instances {
+		tabs, err := o.fetchTabs(inst.URL)
+		if err != nil {
+			continue
+		}
+		for _, tab := range tabs {
+			if tab.ID == tabID || o.idMgr.TabIDFromCDPTarget(tab.ID) == tabID {
+				return inst, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("tab %q not found", tabID)
+}
+
 func readResponseBody(resp *http.Response) []byte {
 	if resp.Body == nil {
 		return []byte{}
@@ -424,49 +438,359 @@ func readResponseBody(resp *http.Response) []byte {
 	return body
 }
 
-// Phase 3: Tab Management Handlers
-
-// handleTabOpen: POST /tabs/open {instanceId, url?}
-func (o *Orchestrator) handleTabOpen(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		InstanceID string `json:"instanceId"`    // Required: instance ID
-		URL        string `json:"url,omitempty"` // Optional: URL to open
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid JSON"))
+func (o *Orchestrator) handleTabNavigate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
-	if req.InstanceID == "" {
-		web.Error(w, 400, fmt.Errorf("instanceId is required"))
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
 		return
 	}
 
-	// Check if instance exists
-	o.mu.RLock()
-	_, ok := o.instances[req.InstanceID]
-	o.mu.RUnlock()
-
-	if !ok {
-		web.Error(w, 404, fmt.Errorf("instance %q not found", req.InstanceID))
-		return
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/navigate",
+		RawQuery: r.URL.RawQuery,
 	}
-
-	// Generate tab ID
-	tabID := fmt.Sprintf("tab_%d", time.Now().UnixNano()%1000000)
-
-	// Build response
-	tab := map[string]any{
-		"id":         tabID,
-		"instanceId": req.InstanceID,
-		"url":        req.URL,
-		"title":      "",
-		"status":     "ready",
-		"createdAt":  time.Now().UTC(),
-	}
-
-	web.JSON(w, 201, tab)
+	o.proxyToURL(w, r, targetURL)
 }
 
-// handleTabList: GET /tabs?instanceId=...
+func (o *Orchestrator) handleTabSnapshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/snapshot",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabScreenshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/screenshot",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabAction(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/action",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabActions(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/actions",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabText(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/text",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabEvaluate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/evaluate",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabPDF(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/pdf",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabDownload(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/download",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabUpload(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/upload",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabLock(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/lock",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabUnlock(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/unlock",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabGetCookies(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/cookies",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleTabSetCookies(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tabs/" + tabID + "/cookies",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
+func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	o.mu.RUnlock()
+	if !ok {
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return
+	}
+	if inst.Status != "running" {
+		web.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+		return
+	}
+
+	var req struct {
+		URL string `json:"url,omitempty"`
+	}
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("invalid JSON"))
+			return
+		}
+	}
+
+	payload, err := json.Marshal(map[string]any{
+		"action": "new",
+		"url":    req.URL,
+	})
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("failed to build tab open request: %w", err))
+		return
+	}
+
+	proxyReq := r.Clone(r.Context())
+	proxyReq.Body = io.NopCloser(bytes.NewReader(payload))
+	proxyReq.ContentLength = int64(len(payload))
+	proxyReq.Header = r.Header.Clone()
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     "/tab",
+		RawQuery: r.URL.RawQuery,
+	}
+	o.proxyToURL(w, proxyReq, targetURL)
+}

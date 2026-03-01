@@ -30,16 +30,15 @@ curl http://localhost:9867/tabs | jq .
 pinchtab tab open inst_xyz https://example.com
 
 # Curl
-curl -X POST http://localhost:9867/tabs/open \
+curl -X POST http://localhost:9867/instances/{id}/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId": "inst_xyz", "url": "https://example.com"}'
+  -d '{"url": "https://example.com"}'
 
 # Response
 {
-  "id": "tab_abc123",
-  "instanceId": "inst_xyz",
+  "tabId": "tab_abc123",
   "url": "https://example.com",
-  "status": "ready"
+  "title": "Example Domain"
 }
 ```
 
@@ -82,7 +81,7 @@ curl -X POST http://localhost:9867/tabs/tab_abc123/close
 
 ### 1. Open Tab
 
-**Endpoint:** `POST /tabs/open`
+**Endpoint:** `POST /instances/{id}/tabs/open`
 
 **CLI:**
 ```bash
@@ -96,37 +95,32 @@ pinchtab tab open inst_xyz
 **Curl:**
 ```bash
 # Minimal (instanceId only, no URL)
-curl -X POST http://localhost:9867/tabs/open \
+curl -X POST http://localhost:9867/instances/{id}/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId": "inst_xyz"}'
+  -d '{}'
 
 # With URL
-curl -X POST http://localhost:9867/tabs/open \
+curl -X POST http://localhost:9867/instances/{id}/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId": "inst_xyz", "url": "https://example.com"}'
+  -d '{"url": "https://example.com"}'
 ```
 
 **Request Body:**
 ```json
 {
-  "instanceId": "inst_xyz",
   "url": "https://example.com"
 }
 ```
 
 **Parameters:**
-- `instanceId` (string, required) — Instance ID where tab will be created
 - `url` (string, optional) — URL to navigate to after opening tab
 
 **Response:** Tab object
 ```json
 {
-  "id": "tab_abc123",
-  "instanceId": "inst_xyz",
+  "tabId": "tab_abc123",
   "url": "https://example.com",
-  "title": "Example Domain",
-  "status": "ready",
-  "createdAt": "2026-03-01T05:25:30Z"
+  "title": "Example Domain"
 }
 ```
 
@@ -303,8 +297,8 @@ echo "Opening $((${#URLS[@]})) tabs in instance $INST..."
 
 TABS=()
 for url in "${URLS[@]}"; do
-  TAB=$(curl -s -X POST http://localhost:9867/tabs/open \
-    -d "{\"instanceId\":\"$INST\",\"url\":\"$url\"}" | jq -r .id)
+  TAB=$(curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
+    -d "{\"url\":\"$url\"}" | jq -r .tabId)
   TABS+=($TAB)
   echo "Opened: $TAB"
 done
@@ -396,11 +390,11 @@ done
 # Get instance, create tabs, list them
 INST=$(pinchtab instance start --mode headed | jq -r .id)
 
-TAB1=$(curl -s -X POST http://localhost:9867/tabs/open \
-  -d "{\"instanceId\":\"$INST\",\"url\":\"https://example.com\"}" | jq -r .id)
+TAB1=$(curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
+  -d "{\"url\":\"https://example.com\"}" | jq -r .tabId)
 
-TAB2=$(curl -s -X POST http://localhost:9867/tabs/open \
-  -d "{\"instanceId\":\"$INST\",\"url\":\"https://google.com\"}" | jq -r .id)
+TAB2=$(curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
+  -d "{\"url\":\"https://google.com\"}" | jq -r .tabId)
 
 # List tabs
 curl -s http://localhost:9867/tabs | jq '.[] | {id, url}'
@@ -421,10 +415,10 @@ print(f"Instance: {inst_id}")
 
 # Open tabs
 for url in ["https://example.com", "https://google.com"]:
-  resp = requests.post(f"{BASE}/tabs/open",
-    json={"instanceId": inst_id, "url": url})
+  resp = requests.post(f"{BASE}/instances/{inst_id}/tabs/open",
+    json={"url": url})
   tab = resp.json()
-  print(f"Tab: {tab['id']} → {url}")
+  print(f"Tab: {tab['tabId']} → {url}")
 
 # List tabs
 tabs = requests.get(f"{BASE}/tabs").json()
@@ -458,14 +452,14 @@ async function tabWorkflow() {
   const tabs = [];
 
   for (const url of urls) {
-    const resp = await fetch(`${BASE}/tabs/open`, {
+    const resp = await fetch(`${BASE}/instances/${inst.id}/tabs/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instanceId: inst.id, url })
+      body: JSON.stringify({ url })
     });
     const tab = await resp.json();
     tabs.push(tab);
-    console.log(`Tab: ${tab.id} → ${url}`);
+    console.log(`Tab: ${tab.tabId} → ${url}`);
   }
 
   // List all tabs
@@ -490,8 +484,8 @@ tabWorkflow().catch(console.error);
 ### Instance Not Found (404)
 
 ```bash
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"nonexistent"}'
+curl -X POST http://localhost:9867/instances/{id}/tabs/open \
+  -d '{"url":"https://example.com"}'
 
 # Response (404)
 {
@@ -515,7 +509,7 @@ curl http://localhost:9867/tabs/nonexistent
 ### Invalid JSON (400)
 
 ```bash
-curl -X POST http://localhost:9867/tabs/open -d 'invalid'
+curl -X POST http://localhost:9867/instances/{id}/tabs/open -d 'invalid'
 
 # Response (400)
 {
@@ -590,7 +584,7 @@ fi
 ## Tab Lifecycle Diagram
 
 ```
-OPEN (POST /tabs/open)
+OPEN (POST /instances/{id}/tabs/open)
   ↓
 [status: "ready"] → Ready for commands
   ↓
@@ -607,7 +601,7 @@ CLOSE (POST /tabs/{id}/close)
 
 | Operation | Method | Endpoint | CLI |
 |-----------|--------|----------|-----|
-| Open | POST | `/tabs/open` | `pinchtab tab open <inst> [url]` |
+| Open | POST | `/instances/{id}/tabs/open` | `pinchtab tab open <inst> [url]` |
 | List All | GET | `/tabs` | `pinchtab tabs` |
 | Get Info | GET | `/tabs/{id}` | `pinchtab tab info <id>` |
 | Close | POST | `/tabs/{id}/close` | `pinchtab tab close <id>` |

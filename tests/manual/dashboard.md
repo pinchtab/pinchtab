@@ -58,8 +58,8 @@ All tests use `__test_profile__` — cleaned up at end.
 | DO11 | Profile instance after stop | `GET /profiles/__test_profile__/instance` | 200, running=false | ✅ |
 | DO12 | Launch duplicate port | Launch two profiles on same port | 409, conflict | ✅ |
 | DO13 | Stop by profile name | `POST /profiles/__test_profile__/stop` (when running) | 200, stopped | ✅ |
-| DO14 | Start by profile ID | `POST /start/{profileId}` | 201, auto-allocated port | ✅ |
-| DO15 | Stop by profile ID | `POST /stop/{profileId}` | 200, stopped | ✅ |
+| DO14 | Start by profile ID | `POST /profiles/{profileId}/start` | 201, auto-allocated port | ✅ |
+| DO15 | Stop by profile ID | `POST /profiles/{profileId}/stop` | 200, stopped | ✅ |
 
 ---
 
@@ -172,13 +172,6 @@ Verify every registered route returns a non-404 status (may return 400/503 for m
 | RE24 | `/profiles/{id}/stop` | POST | 200 (stops instance) | ✅ |
 | RE25a | `/profiles/{id}/instance` | GET | 200 (instance status) | ✅ |
 | RE25b | `/profiles/{unknownId}/start` | POST | 404 | ✅ |
-
-### Short aliases (agent convenience)
-
-| # | Route | Method | Expected | Auto |
-|---|-------|--------|----------|------|
-| RE25c | `/start/{id}` | POST | 201 (same as /profiles/{id}/start) | ✅ |
-| RE25d | `/stop/{id}` | POST | 200 (same as /profiles/{id}/stop) | ✅ |
 
 ### Proxy endpoints (503 when no instance running)
 

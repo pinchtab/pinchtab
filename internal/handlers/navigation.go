@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -198,7 +201,54 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
 	title := bridge.WaitForTitle(tCtx, titleWait)
 
-	web.JSON(w, 200, map[string]any{"url": url, "title": title})
+	web.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
+}
+
+// HandleTabNavigate navigates an existing tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/navigate
+func (h *Handlers) HandleTabNavigate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	body := map[string]any{}
+	if r.Body != nil {
+		err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&body)
+		if err != nil && !errors.Is(err, io.EOF) {
+			web.Error(w, 400, fmt.Errorf("decode: %w", err))
+			return
+		}
+	}
+
+	if rawTabID, ok := body["tabId"]; ok {
+		if provided, ok := rawTabID.(string); !ok || provided == "" {
+			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			return
+		} else if provided != tabID {
+			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			return
+		}
+	}
+
+	// Path tab ID is canonical for this endpoint and always navigates existing tab.
+	body["tabId"] = tabID
+	body["newTab"] = false
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(bytes.NewReader(payload))
+	req.ContentLength = int64(len(payload))
+	req.Header = r.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	h.HandleNavigate(w, req)
 }
 
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +282,49 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.JSON(w, 200, map[string]any{"result": result})
+}
+
+// HandleTabEvaluate runs JavaScript in a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/evaluate
+func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	body := map[string]any{}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
+	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+
+	if rawTabID, ok := body["tabId"]; ok {
+		if provided, ok := rawTabID.(string); !ok || provided == "" {
+			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			return
+		} else if provided != tabID {
+			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			return
+		}
+	}
+
+	body["tabId"] = tabID
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(bytes.NewReader(payload))
+	req.ContentLength = int64(len(payload))
+	req.Header = r.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	h.HandleEvaluate(w, req)
 }
 
 const (

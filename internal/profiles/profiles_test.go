@@ -22,13 +22,11 @@ func TestProfileManagerCreateAndList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Verify profile directory exists on disk
 	profileDir := filepath.Join(dir, profileID("test-profile"))
 	if _, err := os.Stat(profileDir); err != nil {
 		t.Fatalf("profile directory not created: %s", profileDir)
 	}
 
-	// Verify Default subdirectory exists (required for Chrome)
 	defaultDir := filepath.Join(profileDir, "Default")
 	if _, err := os.Stat(defaultDir); err != nil {
 		t.Fatalf("Default directory not created: %s", defaultDir)
@@ -329,7 +327,6 @@ func TestProfileMetaReadWrite(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
 
-	// Create profile with metadata
 	meta := ProfileMeta{
 		UseWhen:     "I need to access work email",
 		Description: "Work profile for corporate tasks",
@@ -338,7 +335,6 @@ func TestProfileMetaReadWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read back the metadata
 	readMeta := readProfileMeta(filepath.Join(dir, profileID("work-profile")))
 	if readMeta.UseWhen != "I need to access work email" {
 		t.Errorf("expected useWhen 'I need to access work email', got %q", readMeta.UseWhen)
@@ -353,10 +349,8 @@ func TestProfileUpdateMeta(t *testing.T) {
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 
-	// Create profile
 	_ = pm.Create("updatable")
 
-	// Update metadata via PATCH
 	body := `{"name":"updatable","useWhen":"Updated use case","description":"Updated description"}`
 	req := httptest.NewRequest("PATCH", "/profiles/meta", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -373,7 +367,6 @@ func TestProfileCreateWithUseWhen(t *testing.T) {
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 
-	// Create profile with useWhen
 	body := `{"name":"test-usewhen","useWhen":"For testing purposes"}`
 	req := httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -384,7 +377,6 @@ func TestProfileCreateWithUseWhen(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify profile list includes useWhen
 	profiles, err := pm.List()
 	if err != nil {
 		t.Fatal(err)
@@ -400,11 +392,9 @@ func TestProfileCreateWithUseWhen(t *testing.T) {
 func TestProfileListIncludesUseWhen(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
 
-	// Create profile with metadata
 	meta := ProfileMeta{UseWhen: "Personal browsing"}
 	_ = pm.CreateWithMeta("personal", meta)
 
-	// List profiles and check useWhen is included
 	profiles, err := pm.List()
 	if err != nil {
 		t.Fatal(err)

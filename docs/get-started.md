@@ -126,18 +126,15 @@ curl http://localhost:9867/instances/$INST/snapshot | jq '.nodes | map({ref, rol
 ### Take a Screenshot
 
 ```bash
-# Save screenshot
-curl http://localhost:9867/instances/$INST/screenshot -o page.png
-
-# For curl, specify tab if multiple tabs exist
-curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB_ID" -o page.png
+# Save screenshot for a specific tab
+curl "http://localhost:9867/tabs/$TAB_ID/screenshot" -o page.png
 ```
 
 ### Export as PDF
 
 ```bash
 # Save PDF
-curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf?landscape=true" -o output.pdf
+curl "http://localhost:9867/tabs/$TAB_ID/pdf?landscape=true" -o output.pdf
 ```
 
 ### Interact with the Page
@@ -164,9 +161,9 @@ curl -X POST http://localhost:9867/instances/$INST/action \
 
 ```bash
 # Create new tab in instance
-curl -X POST http://localhost:9867/tabs/open \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://github.com"}'
+  -d '{"url":"https://github.com"}'
 
 # List all tabs
 curl http://localhost:9867/tabs
@@ -222,8 +219,8 @@ curl -X POST http://localhost:9867/instances/$INST/action \
 curl http://localhost:9867/instances/$INST/snapshot
 
 # 6. Capture result
-curl http://localhost:9867/instances/$INST/screenshot -o page.png
-curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf" -o report.pdf
+curl "http://localhost:9867/tabs/$TAB_ID/screenshot" -o page.png
+curl "http://localhost:9867/tabs/$TAB_ID/pdf" -o report.pdf
 
 # 7. Stop instance (clean up)
 curl -X POST http://localhost:9867/instances/$INST/stop
@@ -528,7 +525,7 @@ sleep 2
 TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -d '{"url":"https://reports.example.com/monthly"}' | jq -r '.tabId')
 # Export PDF
-curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf?landscape=true" -o report.pdf
+curl "http://localhost:9867/tabs/$TAB_ID/pdf?landscape=true" -o report.pdf
 ```
 
 ### Scenario 5: Multi-Tab Workflow
@@ -539,12 +536,12 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # Open first tab (source)
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST'","url":"https://source.example.com"}'
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://source.example.com"}'
 
 # Open second tab (destination)
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST'","url":"https://destination.example.com"}'
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://destination.example.com"}'
 
 # List tabs
 TABS=$(curl http://localhost:9867/instances/$INST/tabs)
@@ -768,7 +765,7 @@ curl http://localhost:9867/instances/$INST/text      # Lower tokens
 curl http://localhost:9867/instances/$INST/snapshot  # Lower tokens
 
 # Screenshots are expensive (JPG encoding)
-curl http://localhost:9867/instances/$INST/screenshot # Higher tokens
+curl "http://localhost:9867/tabs/$TAB_ID/screenshot" # Higher tokens
 ```
 
 ---
@@ -785,11 +782,11 @@ curl http://localhost:9867/instances/$INST/screenshot # Higher tokens
 | Get text | `curl http://localhost:9867/instances/$INST/text` |
 | Click element | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"click","ref":"e5"}'` |
 | Type text | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"type","ref":"e3","text":"hello"}'` |
-| Screenshot | `curl http://localhost:9867/instances/$INST/screenshot -o page.png` |
-| PDF export | `curl http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf -o out.pdf` |
+| Screenshot | `curl "http://localhost:9867/tabs/$TAB_ID/screenshot" -o page.png` |
+| PDF export | `curl http://localhost:9867/tabs/$TAB_ID/pdf -o out.pdf` |
 | List instances | `curl http://localhost:9867/instances` |
 | List tabs | `curl http://localhost:9867/instances/$INST/tabs` |
-| New tab | `curl -X POST http://localhost:9867/tabs/open -d '{"instanceId":"$INST","url":"..."}'` |
+| New tab | `curl -X POST http://localhost:9867/instances/$INST/tabs/open -d '{"url":"..."}'` |
 | Stop instance | `curl -X POST http://localhost:9867/instances/$INST/stop` |
 
 ---

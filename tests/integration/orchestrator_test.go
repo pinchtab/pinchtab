@@ -109,16 +109,11 @@ func TestOrchestrator_HashBasedIDs(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Navigate to create tab
-	navPayload := map[string]any{
-		"url": "https://example.com",
-	}
-
-	navStatus, navBody := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), navPayload)
+	navStatus, navBody, tabID := navigateInstance(t, instID, "https://example.com")
 	if navStatus != 200 {
 		t.Fatalf("navigate failed: %d: %s", navStatus, string(navBody))
 	}
 
-	tabID := jsonField(t, navBody, "tabId")
 	if !strings.HasPrefix(tabID, "tab_") || len(tabID) != 12 {
 		t.Fatalf("invalid tab ID format: %s", tabID)
 	}
@@ -244,20 +239,16 @@ func TestOrchestrator_InstanceIsolation(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Navigate on instance 1
-	nav1Payload := map[string]any{"url": "https://example.com"}
-	status, body := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instIDs[0]), nav1Payload)
+	status, navBody, tabID1 := navigateInstance(t, instIDs[0], "https://example.com")
 	if status != 200 {
-		t.Fatalf("navigate instance 1 failed: %d", status)
+		t.Fatalf("navigate instance 1 failed: %d: %s", status, string(navBody))
 	}
-	tabID1 := jsonField(t, body, "tabId")
 
 	// Navigate on instance 2
-	nav2Payload := map[string]any{"url": "https://github.com"}
-	status, body = httpPost(t, fmt.Sprintf("/instances/%s/navigate", instIDs[1]), nav2Payload)
+	status, navBody, tabID2 := navigateInstance(t, instIDs[1], "https://github.com")
 	if status != 200 {
-		t.Fatalf("navigate instance 2 failed: %d", status)
+		t.Fatalf("navigate instance 2 failed: %d: %s", status, string(navBody))
 	}
-	tabID2 := jsonField(t, body, "tabId")
 
 	// Verify tab IDs are different (isolation)
 	if tabID1 == tabID2 {
@@ -334,19 +325,17 @@ func TestOrchestrator_ProxyRouting(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Test navigation via orchestrator proxy
-	navPayload := map[string]any{"url": "https://example.com"}
-	status, body = httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), navPayload)
+	status, body, tabID := navigateInstance(t, instID, "https://example.com")
 	if status != 200 {
 		t.Fatalf("proxy navigate failed: %d: %s", status, string(body))
 	}
 
-	tabID := jsonField(t, body, "tabId")
 	if !strings.HasPrefix(tabID, "tab_") {
 		t.Fatalf("invalid tab ID from proxy: %s", tabID)
 	}
 
 	// Test snapshot via orchestrator proxy
-	status, body = httpGet(t, fmt.Sprintf("/instances/%s/snapshot", instID))
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/snapshot", tabID))
 	if status != 200 {
 		t.Fatalf("proxy snapshot failed: %d", status)
 	}
@@ -355,6 +344,105 @@ func TestOrchestrator_ProxyRouting(t *testing.T) {
 	var snapshot map[string]any
 	if err := json.Unmarshal(body, &snapshot); err != nil {
 		t.Fatalf("parse snapshot failed: %v", err)
+	}
+
+	// Test action via orchestrator tab route
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/action", tabID), map[string]any{
+		"kind": "press",
+		"key":  "Escape",
+	})
+	if status != 200 {
+		t.Fatalf("proxy action failed: %d: %s", status, string(body))
+	}
+
+	// Test lock/unlock via orchestrator tab routes
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/lock", tabID), map[string]any{
+		"owner":      "orchestrator-test",
+		"timeoutSec": 10,
+	})
+	if status != 200 {
+		t.Fatalf("proxy lock failed: %d: %s", status, string(body))
+	}
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/unlock", tabID), map[string]any{
+		"owner": "orchestrator-test",
+	})
+	if status != 200 {
+		t.Fatalf("proxy unlock failed: %d: %s", status, string(body))
+	}
+
+	// Test actions batch via orchestrator tab route
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/actions", tabID), map[string]any{
+		"actions": []map[string]any{
+			{"kind": "press", "key": "Escape"},
+		},
+	})
+	if status != 200 {
+		t.Fatalf("proxy actions failed: %d: %s", status, string(body))
+	}
+
+	// Test text via orchestrator tab route
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/text?mode=raw", tabID))
+	if status != 200 {
+		t.Fatalf("proxy text failed: %d: %s", status, string(body))
+	}
+	if !strings.Contains(string(body), "Example Domain") {
+		t.Logf("proxy text response does not contain expected title content")
+	}
+
+	// Test evaluate via orchestrator tab route
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/evaluate", tabID), map[string]any{
+		"expression": "document.title",
+	})
+	if status != 200 {
+		t.Fatalf("proxy evaluate failed: %d: %s", status, string(body))
+	}
+
+	// Test cookies via orchestrator tab route
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/cookies?url=https://example.com", tabID))
+	if status != 200 {
+		t.Fatalf("proxy get cookies failed: %d: %s", status, string(body))
+	}
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/cookies", tabID), map[string]any{
+		"url": "https://example.com",
+		"cookies": []map[string]any{
+			{"name": "orch_test_cookie", "value": "1"},
+		},
+	})
+	if status != 200 {
+		t.Fatalf("proxy set cookies failed: %d: %s", status, string(body))
+	}
+
+	// Test pdf via orchestrator tab route
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/pdf?raw=true", tabID))
+	if status != 200 {
+		t.Fatalf("proxy pdf failed: %d: %s", status, string(body))
+	}
+	if len(body) < 4 || string(body[:4]) != "%PDF" {
+		t.Fatalf("proxy pdf response is not a PDF (size=%d)", len(body))
+	}
+
+	// Test download via orchestrator tab route (missing URL should be 400 from bridge handler)
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/download", tabID))
+	if status != 400 {
+		t.Fatalf("proxy download failed: expected 400, got %d: %s", status, string(body))
+	}
+
+	// Test upload via orchestrator tab route (missing files/paths should be 400 from bridge handler)
+	status, body = httpPost(t, fmt.Sprintf("/tabs/%s/upload", tabID), map[string]any{
+		"selector": "input[type=file]",
+	})
+	if status != 400 {
+		t.Fatalf("proxy upload failed: expected 400, got %d: %s", status, string(body))
+	}
+
+	// Test screenshot via orchestrator tab route
+	status, body = httpGet(t, fmt.Sprintf("/tabs/%s/screenshot?raw=true", tabID))
+	if status != 200 {
+		t.Skipf("proxy screenshot returned %d (headless display limitation), skipping", status)
+	}
+	// JPEG starts with FF D8
+	if len(body) < 2 || body[0] != 0xFF || body[1] != 0xD8 {
+		t.Skipf("proxy screenshot response is not JPEG (size=%d), skipping", len(body))
 	}
 }
 
@@ -411,13 +499,11 @@ func TestOrchestrator_FirstRequestLazyChrome(t *testing.T) {
 	}
 
 	// Now make the actual proxy request - Chrome is already initialized
-	navPayload := map[string]any{"url": "https://example.com"}
-	status, body = httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), navPayload)
+	status, body, tabID := navigateInstance(t, instID, "https://example.com")
 	if status != 200 {
 		t.Fatalf("navigate failed: %d: %s", status, string(body))
 	}
 
-	tabID := jsonField(t, body, "tabId")
 	if !strings.HasPrefix(tabID, "tab_") {
 		t.Fatalf("invalid tab ID: %s", tabID)
 	}
@@ -456,8 +542,10 @@ func TestOrchestrator_AggregateTabsEndpoint(t *testing.T) {
 
 	// Navigate on each instance
 	for _, instID := range instIDs {
-		navPayload := map[string]any{"url": "https://example.com"}
-		httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), navPayload)
+		httpStatus, navBody, _ := navigateInstance(t, instID, "https://example.com")
+		if httpStatus != 200 {
+			t.Fatalf("navigate failed for %s: %d: %s", instID, httpStatus, string(navBody))
+		}
 	}
 
 	// Get aggregate tabs

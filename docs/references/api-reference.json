@@ -234,14 +234,6 @@
     },
     {
       "method": "POST",
-      "path": "/ensure-chrome",
-      "handler": "HandleEnsureChrome",
-      "description": "Ensure Chrome initialized",
-      "curl": true,
-      "examples": {}
-    },
-    {
-      "method": "POST",
       "path": "/evaluate",
       "handler": "HandleEvaluate",
       "description": "Execute JavaScript",
@@ -259,14 +251,14 @@
     },
     {
       "method": "POST",
-      "path": "/instances/{id}/ensure-chrome",
-      "handler": "proxyToInstance",
-      "description": "Chrome check in instance",
+      "path": "/instances/{id}/start",
+      "handler": "handleStartByInstanceID",
+      "description": "Start instance browser if not running",
       "curl": true,
       "examples": {},
-      "tldr": "Ensure Chrome is initialized in instance",
+      "tldr": "Start or re-start browser for an existing instance",
       "cli": false,
-      "curlExample": "curl -X POST http://localhost:9867/instances/inst_abc123/ensure-chrome",
+      "curlExample": "curl -X POST http://localhost:9867/instances/inst_abc123/start",
       "parameters": "id (string, path, required): Instance ID",
       "payload": "N/A"
     },
@@ -289,22 +281,6 @@
       "handler": "HandleNavigate",
       "description": "Navigate to URL",
       "cli": true,
-      "curl": true,
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/start/{id}",
-      "handler": "handleStartByID",
-      "description": "Start instance",
-      "curl": true,
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/stop/{id}",
-      "handler": "handleStopByID",
-      "description": "Stop instance",
       "curl": true,
       "examples": {}
     },

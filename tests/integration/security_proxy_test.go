@@ -34,9 +34,7 @@ func TestProxy_LocalhostOnly(t *testing.T) {
 	// (actual SSRF prevention is done at handler level through url.URL struct)
 
 	// Verify instance can be accessed via proxy
-	code, _ := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
-		"url": "https://example.com",
-	})
+	code, _, _ := navigateInstance(t, instID, "https://example.com")
 
 	if code != 200 {
 		t.Errorf("expected 200 for valid localhost proxy, got %d", code)
@@ -64,9 +62,7 @@ func TestProxy_URLValidation(t *testing.T) {
 	waitForInstanceReady(t, instID)
 
 	// Test with valid URL in path
-	code, respBody := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
-		"url": "https://example.com/path?query=value",
-	})
+	code, respBody, _ := navigateInstance(t, instID, "https://example.com/path?query=value")
 
 	if code != 200 {
 		t.Logf("navigate with query params got %d: %s", code, string(respBody))
@@ -114,18 +110,14 @@ func TestProxy_InstanceIsolation(t *testing.T) {
 	waitForInstanceReady(t, instIDs[1])
 
 	// Navigate in first instance
-	code1, body1 := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instIDs[0]), map[string]any{
-		"url": "https://example.com/page1",
-	})
+	code1, body1, _ := navigateInstance(t, instIDs[0], "https://example.com/page1")
 
 	if code1 != 200 {
 		t.Errorf("navigate in inst1 failed: %d: %s", code1, string(body1))
 	}
 
 	// Navigate in second instance
-	code2, body2 := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instIDs[1]), map[string]any{
-		"url": "https://example.com/page2",
-	})
+	code2, body2, _ := navigateInstance(t, instIDs[1], "https://example.com/page2")
 
 	if code2 != 200 {
 		t.Errorf("navigate in inst2 failed: %d: %s", code2, string(body2))
@@ -170,9 +162,7 @@ func TestProxy_SchemeValidation(t *testing.T) {
 	waitForInstanceReady(t, instID)
 
 	// Navigate should work (verifies internal http scheme is used)
-	code, respBody := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
-		"url": "https://example.com",
-	})
+	code, respBody, _ := navigateInstance(t, instID, "https://example.com")
 
 	if code != 200 {
 		t.Errorf("navigate failed (scheme validation): %d: %s", code, string(respBody))

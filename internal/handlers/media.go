@@ -126,6 +126,27 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleTabScreenshot returns screenshot bytes for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/screenshot
+func (h *Handlers) HandleTabScreenshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleScreenshot(w, req)
+}
+
 func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
@@ -383,4 +404,25 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		"title": title,
 		"text":  text,
 	})
+}
+
+// HandleTabText extracts text for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/text
+func (h *Handlers) HandleTabText(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleText(w, req)
 }

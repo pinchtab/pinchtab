@@ -281,15 +281,34 @@ func closeCurrentTab(t *testing.T) {
 	currentTabID = ""
 }
 
+// navigateInstance creates a fresh tab on the given instance and navigates it.
+func navigateInstance(t *testing.T, instID, url string) (int, []byte, string) {
+	t.Helper()
+
+	openCode, openBody := httpPostWithRetry(t, fmt.Sprintf("/instances/%s/tabs/open", instID), map[string]any{
+		"url": "about:blank",
+	}, 2)
+	if openCode != 200 {
+		return openCode, openBody, ""
+	}
+
+	tabID := jsonField(t, openBody, "tabId")
+	if tabID == "" {
+		return 500, []byte(`{"error":"missing tabId from open tab response"}`), ""
+	}
+
+	path := fmt.Sprintf("/tabs/%s/navigate", tabID)
+	code, body := httpPostWithRetry(t, path, map[string]any{"url": url}, 2)
+	return code, body, tabID
+}
+
 // waitForInstanceReady waits for an instance to be ready for navigation
 // Uses a simple navigate to about:blank to check readiness
 func waitForInstanceReady(t *testing.T, instID string) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		code, _ := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
-			"url": "about:blank",
-		})
+		code, _, _ := navigateInstance(t, instID, "about:blank")
 		if code == 200 {
 			t.Logf("instance %s is ready", instID)
 			return
@@ -335,21 +354,41 @@ func launchTestInstance(base string) error {
 	// Wait for instance to be ready (can take 2-5 seconds for Chrome to start)
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		// Try a simple navigate to check if instance is ready
-		navResp, err := http.Post(
-			base+"/instances/"+id+"/navigate",
+		// Open a tab first, then navigate it to check if instance is ready.
+		openResp, err := http.Post(
+			base+"/instances/"+id+"/tabs/open",
 			"application/json",
 			strings.NewReader(`{"url":"about:blank"}`),
 		)
 		if err == nil {
-			if navResp.StatusCode == 200 {
-				_ = navResp.Body.Close()
-				fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
-				return nil
+			var tabID string
+			if openResp.StatusCode == 200 {
+				openBody, _ := io.ReadAll(openResp.Body)
+				var open map[string]any
+				if err := json.Unmarshal(openBody, &open); err == nil {
+					if idValue, ok := open["tabId"].(string); ok {
+						tabID = idValue
+					}
+				}
 			}
-			navBody, _ := io.ReadAll(navResp.Body)
-			_ = navResp.Body.Close()
-			fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+			_ = openResp.Body.Close()
+			if tabID != "" {
+				navResp, err := http.Post(
+					base+"/tabs/"+tabID+"/navigate",
+					"application/json",
+					strings.NewReader(`{"url":"about:blank"}`),
+				)
+				if err == nil {
+					if navResp.StatusCode == 200 {
+						_ = navResp.Body.Close()
+						fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
+						return nil
+					}
+					navBody, _ := io.ReadAll(navResp.Body)
+					_ = navResp.Body.Close()
+					fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+				}
+			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

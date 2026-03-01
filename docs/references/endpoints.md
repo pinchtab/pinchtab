@@ -49,12 +49,12 @@ HTTP Client
 | Category | Operations | Purpose |
 |---|---|---|
 | **Instance Management** | `POST /instances` `GET /instances` `GET /instances/{id}` `DELETE /instances/{id}` | Create, list, and manage browser instances |
-| **Navigation** | `POST /instances/{id}/navigate` | Navigate to URL (creates new tab) |
-| **Tab Operations** | `GET /instances/{id}/tabs` `POST /instances/{id}/tabs/{tabId}/navigate` | List tabs, navigate existing tab |
-| **Page Inspection** | `GET /instances/{id}/snapshot` `GET /instances/{id}/text` | Get accessibility tree, extract text |
-| **User Actions** | `POST /instances/{id}/action` | Click, type, fill, press, hover, focus, scroll, select |
-| **JavaScript** | `POST /instances/{id}/evaluate` | Execute JavaScript in the page |
-| **Visual** | `GET /instances/{id}/screenshot` `GET /instances/{id}/tabs/{tabId}/pdf` | Take screenshot, export PDF |
+| **Navigation** | `POST /tabs/{id}/navigate` | Navigate an existing tab by tab ID |
+| **Tab Operations** | `POST /instances/{id}/tabs/open` `GET /instances/{id}/tabs` `POST /tabs/{tabId}/navigate` | Open/list tabs and navigate existing tab |
+| **Page Inspection** | `GET /tabs/{id}/snapshot` `GET /tabs/{id}/text` | Get accessibility tree, extract text |
+| **User Actions** | `POST /tabs/{id}/action` `POST /tabs/{id}/actions` | Click, type, fill, press, hover, focus, scroll, select |
+| **JavaScript** | `POST /tabs/{id}/evaluate` | Execute JavaScript in the page |
+| **Visual** | `GET /tabs/{id}/screenshot` `GET /tabs/{id}/pdf` | Take screenshot, export PDF |
 | **Profiles** | `GET /profiles` `POST /profiles` | List and create browser profiles |
 | **Aggregate** | `GET /tabs` | Get all tabs across all instances |
 
@@ -66,7 +66,7 @@ HTTP Client
 http://127.0.0.1:9867          # PinchTab Server (all endpoints)
 ```
 
-All requests go to port 9867. Instances are referenced by ID in the path (e.g., `/instances/{id}/navigate`), not by separate ports.
+All requests go to port 9867. Instance-scoped proxy operations use `/instances/{id}/...`, while tab-first operations use `/tabs/{tabId}/...` (for example `POST /tabs/{tabId}/navigate` and `GET /tabs/{tabId}/screenshot`).
 
 ---
 
@@ -219,17 +219,15 @@ curl -X DELETE http://localhost:9867/instances/work-9868
 
 All operations target a specific instance via its ID or port.
 
-### Navigate (Create Tab + Navigate)
+### Open Tab (Create Tab)
 
 **Endpoint:**
 ```
-POST /instances/{id}/navigate?url=<url>
+POST /instances/{id}/tabs/open
 ```
 
-**Query Parameters:**
-- `url` (required) — URL to navigate to
-- `blockImages` (optional) — `true` to block image loading
-- `blockAds` (optional) — `true` to block ad domains
+**Request Body:**
+- `url` (optional) — URL to open immediately in the new tab
 
 **Response:**
 ```json
@@ -242,21 +240,23 @@ POST /instances/{id}/navigate?url=<url>
 
 **Notes:**
 - **Creates a NEW tab** every time
-- **Chrome is already running** (started when instance was created)
-- **Respects instance mode**: Headed instances show window in GUI, headless don't
-- Returns immediately after navigation starts (doesn't wait for full load)
+- If `url` is provided, the new tab opens that URL
+- Use `POST /tabs/{tabId}/navigate` to navigate an existing tab later
 
 **Example (curl):**
 ```bash
-curl -X POST http://localhost:9867/instances/work-9868/navigate?url=https://linkedin.com
+curl -X POST http://localhost:9867/instances/work-9868/tabs/open \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://linkedin.com"}'
 ```
 
 **Example (bash):**
 ```bash
-TAB_JSON=$(curl -s -X POST http://localhost:9867/instances/work-9868/navigate \
+TAB_JSON=$(curl -s -X POST http://localhost:9867/instances/work-9868/tabs/open \
+  -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}')
 TAB_ID=$(echo $TAB_JSON | jq -r '.tabId')
-echo "Navigated to tab: $TAB_ID"
+echo "Opened tab: $TAB_ID"
 ```
 
 ---
@@ -287,7 +287,7 @@ curl http://localhost:9867/instances/work-9868/tabs
 
 **Endpoint:**
 ```
-POST /instances/{id}/tabs/{tabId}/navigate?url=<url>
+POST /tabs/{tabId}/navigate?url=<url>
 ```
 
 **Query Parameters:**
@@ -308,7 +308,7 @@ POST /instances/{id}/tabs/{tabId}/navigate?url=<url>
 
 **Example (curl):**
 ```bash
-curl -X POST "http://localhost:9867/instances/work-9868/tabs/tab-1/navigate?url=https://linkedin.com/login"
+curl -X POST "http://localhost:9867/tabs/tab-1/navigate?url=https://linkedin.com/login"
 ```
 
 ---
@@ -317,11 +317,10 @@ curl -X POST "http://localhost:9867/instances/work-9868/tabs/tab-1/navigate?url=
 
 **Endpoint:**
 ```
-GET /instances/{id}/snapshot
+GET /tabs/{tabId}/snapshot
 ```
 
 **Query Parameters:**
-- `tabId` (optional) — Specific tab to snapshot (defaults to last active)
 - `filter` (optional) — `interactive` for buttons/links/inputs only
 - `format` (optional) — `compact` or `text`
 - `maxTokens` (optional) — Truncate to ~N tokens
@@ -341,7 +340,7 @@ GET /instances/{id}/snapshot
 
 **Example (curl):**
 ```bash
-curl "http://localhost:9867/instances/work-9868/snapshot?filter=interactive&format=compact"
+curl "http://localhost:9867/tabs/tab-1/snapshot?filter=interactive&format=compact"
 ```
 
 ---
@@ -350,13 +349,16 @@ curl "http://localhost:9867/instances/work-9868/snapshot?filter=interactive&form
 
 **Endpoint:**
 ```
-POST /instances/{id}/action?kind=click&ref=<ref>&tabId=<tabId>
+POST /tabs/{id}/action
 ```
 
-**Query Parameters:**
-- `kind` (required) — `click`
-- `ref` (required) — Element ref from snapshot
-- `tabId` (optional) — Target tab
+**Request Body:**
+```json
+{
+  "kind": "click",
+  "ref": "e3"
+}
+```
 
 **Response:**
 ```json
@@ -365,7 +367,9 @@ POST /instances/{id}/action?kind=click&ref=<ref>&tabId=<tabId>
 
 **Example (curl):**
 ```bash
-curl -X POST "http://localhost:9867/instances/work-9868/action?kind=click&ref=e3&tabId=tab-1"
+curl -X POST http://localhost:9867/tabs/tab-1/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","ref":"e3"}'
 ```
 
 ---
@@ -374,7 +378,7 @@ curl -X POST "http://localhost:9867/instances/work-9868/action?kind=click&ref=e3
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
@@ -382,16 +386,15 @@ POST /instances/{id}/action
 {
   "kind": "type",
   "ref": "e1",
-  "text": "user@example.com",
-  "tabId": "tab-1"
+  "text": "user@example.com"
 }
 ```
 
 **Example (curl):**
 ```bash
-curl -X POST http://localhost:9867/instances/work-9868/action \
+curl -X POST http://localhost:9867/tabs/tab-1/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"type","ref":"e1","text":"user@example.com","tabId":"tab-1"}'
+  -d '{"kind":"type","ref":"e1","text":"user@example.com"}'
 ```
 
 ---
@@ -400,7 +403,7 @@ curl -X POST http://localhost:9867/instances/work-9868/action \
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
@@ -408,8 +411,7 @@ POST /instances/{id}/action
 {
   "kind": "fill",
   "ref": "e1",
-  "text": "value",
-  "tabId": "tab-1"
+  "text": "value"
 }
 ```
 
@@ -421,15 +423,14 @@ Sets input value directly without triggering key events.
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
 ```json
 {
   "kind": "press",
-  "key": "Enter",
-  "tabId": "tab-1"
+  "key": "Enter"
 }
 ```
 
@@ -441,15 +442,14 @@ POST /instances/{id}/action
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
 ```json
 {
   "kind": "hover",
-  "ref": "e5",
-  "tabId": "tab-1"
+  "ref": "e5"
 }
 ```
 
@@ -459,15 +459,14 @@ POST /instances/{id}/action
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
 ```json
 {
   "kind": "focus",
-  "ref": "e5",
-  "tabId": "tab-1"
+  "ref": "e5"
 }
 ```
 
@@ -477,15 +476,14 @@ POST /instances/{id}/action
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body (scroll to element):**
 ```json
 {
   "kind": "scroll",
-  "ref": "e5",
-  "tabId": "tab-1"
+  "ref": "e5"
 }
 ```
 
@@ -493,8 +491,7 @@ POST /instances/{id}/action
 ```json
 {
   "kind": "scroll",
-  "pixels": 500,
-  "tabId": "tab-1"
+  "pixels": 500
 }
 ```
 
@@ -504,7 +501,7 @@ POST /instances/{id}/action
 
 **Endpoint:**
 ```
-POST /instances/{id}/action
+POST /tabs/{id}/action
 ```
 
 **Request Body:**
@@ -512,8 +509,7 @@ POST /instances/{id}/action
 {
   "kind": "select",
   "ref": "e7",
-  "value": "Option 2",
-  "tabId": "tab-1"
+  "value": "Option 2"
 }
 ```
 
@@ -523,11 +519,10 @@ POST /instances/{id}/action
 
 **Endpoint:**
 ```
-GET /instances/{id}/text
+GET /tabs/{id}/text
 ```
 
 **Query Parameters:**
-- `tabId` (optional) — Target tab
 - `mode` (optional) — `raw` for raw innerText, default for readability extraction
 
 **Response:**
@@ -540,7 +535,7 @@ GET /instances/{id}/text
 
 **Example (curl):**
 ```bash
-curl "http://localhost:9867/instances/work-9868/text?tabId=tab-1&mode=raw"
+curl "http://localhost:9867/tabs/tab-1/text?mode=raw"
 ```
 
 ---
@@ -549,14 +544,13 @@ curl "http://localhost:9867/instances/work-9868/text?tabId=tab-1&mode=raw"
 
 **Endpoint:**
 ```
-POST /instances/{id}/execute
+POST /tabs/{id}/evaluate
 ```
 
 **Request Body:**
 ```json
 {
-  "expression": "document.title",
-  "tabId": "tab-1"
+  "expression": "document.title"
 }
 ```
 
@@ -569,9 +563,9 @@ POST /instances/{id}/execute
 
 **Example (curl):**
 ```bash
-curl -X POST http://localhost:9867/instances/work-9868/execute \
+curl -X POST http://localhost:9867/tabs/tab-1/evaluate \
   -H "Content-Type: application/json" \
-  -d '{"expression":"document.title","tabId":"tab-1"}'
+  -d '{"expression":"document.title"}'
 ```
 
 ---
@@ -580,11 +574,10 @@ curl -X POST http://localhost:9867/instances/work-9868/execute \
 
 **Endpoint:**
 ```
-GET /instances/{id}/screenshot
+GET /tabs/{id}/screenshot
 ```
 
 **Query Parameters:**
-- `tabId` (optional) — Target tab
 - `quality` (optional) — JPEG quality 0-100 (default: 90)
 
 **Response (image/jpeg):**
@@ -594,7 +587,7 @@ GET /instances/{id}/screenshot
 
 **Example (curl):**
 ```bash
-curl "http://localhost:9867/instances/work-9868/screenshot?tabId=tab-1&quality=85" \
+curl "http://localhost:9867/tabs/tab-1/screenshot?quality=85" \
   -o screenshot.jpg
 ```
 
@@ -604,7 +597,7 @@ curl "http://localhost:9867/instances/work-9868/screenshot?tabId=tab-1&quality=8
 
 **Endpoint:**
 ```
-GET /instances/{id}/tabs/{tabId}/pdf
+GET /tabs/{id}/pdf
 ```
 
 **Query Parameters:**
@@ -626,7 +619,7 @@ GET /instances/{id}/tabs/{tabId}/pdf
 
 **Example (curl):**
 ```bash
-curl "http://localhost:9867/instances/work-9868/tabs/tab-1/pdf?landscape=true" \
+curl "http://localhost:9867/tabs/tab-1/pdf?landscape=true" \
   -o output.pdf
 ```
 
@@ -678,7 +671,9 @@ echo "Instance: $INST_ID (Chrome now running and visible)"
 # 2. Navigate to LinkedIn login (creates first tab)
 # Chrome is already running, navigation is fast
 echo "Navigating to LinkedIn..."
-NAV=$(curl -s -X POST "$BASE/instances/$INST_ID/navigate?url=https://linkedin.com/login")
+NAV=$(curl -s -X POST "$BASE/instances/$INST_ID/tabs/open" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"new","url":"https://linkedin.com/login"}')
 TAB_ID=$(echo $NAV | jq -r '.tabId')
 echo "Tab: $TAB_ID"
 
@@ -710,13 +705,15 @@ sleep 3
 
 # 8. Navigate to profile (creates new tab)
 echo "Navigating to profile..."
-NAV2=$(curl -s -X POST "$BASE/instances/$INST_ID/navigate?url=https://linkedin.com/in/myprofile")
+NAV2=$(curl -s -X POST "$BASE/instances/$INST_ID/tabs/open" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"new","url":"https://linkedin.com/in/myprofile"}')
 TAB_ID2=$(echo $NAV2 | jq -r '.tabId')
 echo "New tab: $TAB_ID2"
 
 # 9. Take screenshot
 echo "Taking screenshot..."
-curl -s "$BASE/instances/$INST_ID/screenshot?tabId=$TAB_ID2&quality=90" \
+curl -s "$BASE/tabs/$TAB_ID2/screenshot?quality=90" \
   -o profile.jpg
 echo "Saved: profile.jpg"
 

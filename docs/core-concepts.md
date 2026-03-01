@@ -211,9 +211,9 @@ A **browser tab** (webpage) within an instance and its profile.
 
 ```bash
 # Create tab in instance (returns tabId)
-curl -X POST http://localhost:9867/tabs/open \
+curl -X POST http://localhost:9867/instances/inst_0a89a5bb/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId": "inst_0a89a5bb", "url": "https://example.com"}' | jq '.id'
+  -d '{"url": "https://example.com"}' | jq '.tabId'
 # Returns: "tab_abc123"
 
 # Or via CLI
@@ -290,11 +290,11 @@ INST=$(pinchtab instance launch --mode headless)
 # Returns: inst_0a89a5bb
 
 # Create multiple tabs in the same instance
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST'","url":"https://example.com"}'
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://example.com"}'
 
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST'","url":"https://google.com"}'
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://google.com"}'
 
 # List all tabs across all instances
 curl http://localhost:9867/tabs | jq .
@@ -323,11 +323,11 @@ INST_BOB=$(curl -X POST http://localhost:9867/instances/start \
   -d '{"profileId":"'$BOB_ID'"}' | jq -r '.id')
 
 # Create tabs in both instances with isolated cookies
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST_ALICE'","url":"https://app.example.com"}'
+curl -X POST http://localhost:9867/instances/$INST_ALICE/tabs/open \
+  -d '{"url":"https://app.example.com"}'
 
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST_BOB'","url":"https://app.example.com"}'
+curl -X POST http://localhost:9867/instances/$INST_BOB/tabs/open \
+  -d '{"url":"https://app.example.com"}'
 
 # Login in each instance separately — profiles keep sessions isolated
 ```
@@ -339,8 +339,8 @@ curl -X POST http://localhost:9867/tabs/open \
 INST=$(pinchtab instance launch)
 
 # Create tab, use it
-curl -X POST http://localhost:9867/tabs/open \
-  -d '{"instanceId":"'$INST'","url":"https://example.com"}'
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://example.com"}'
 # ... work ...
 
 # Stop instance

@@ -23,7 +23,8 @@
   "guides": [
     "guides/cdp-url-shared-chrome.md",
     "guides/headed-mode-guide.md",
-    "guides/identifying-instances.md"
+    "guides/identifying-instances.md",
+    "guides/agent-optimization.md"
   ],
   "proposals": [
     "proposals/performance-optimization.md",

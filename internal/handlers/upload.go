@@ -118,6 +118,27 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleTabUpload uploads files for a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/upload
+func (h *Handlers) HandleTabUpload(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleUpload(w, req)
+}
+
 // resolveSelector finds a DOM node by CSS selector and returns its NodeID.
 func resolveSelector(ctx context.Context, selector string) (cdp.NodeID, error) {
 	// Use Runtime.evaluate to get the remote object, then request the node.

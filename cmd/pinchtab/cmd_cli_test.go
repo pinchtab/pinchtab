@@ -116,6 +116,28 @@ func TestCLINavigateWithBlockAds(t *testing.T) {
 	}
 }
 
+func TestCLIInstanceNavigateUsesTabRoute(t *testing.T) {
+	m := newMockServer()
+	m.response = `{"tabId":"tab-abc"}`
+	defer m.close()
+	client := m.server.Client()
+
+	cliInstanceNavigate(client, m.base(), "", []string{"inst-123", "https://example.com"})
+
+	if m.lastMethod != "POST" {
+		t.Errorf("expected POST, got %s", m.lastMethod)
+	}
+	if m.lastPath != "/tabs/tab-abc/navigate" {
+		t.Errorf("expected tab-scoped navigate path, got %s", m.lastPath)
+	}
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["url"] != "https://example.com" {
+		t.Errorf("expected navigate URL in body, got %v", body["url"])
+	}
+}
+
 // --- snapshot tests ---
 
 func TestCLISnapshot(t *testing.T) {

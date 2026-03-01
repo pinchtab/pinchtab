@@ -38,7 +38,9 @@ Tab (primary resource - where all work happens)
 | Method | Path | Payload | Response | Purpose |
 |--------|------|---------|----------|---------|
 | GET | `/instances` | - | `[{id, profileId, port, mode, status, startTime}]` | List instances |
-| POST | `/instances/start` | `{profile, mode?, port?}` | `{id, profileId, port, mode, status}` | Start instance |
+| GET | `/instances/{id}` | - | `{id, profileId, port, mode, status, startTime}` | Get instance status (read-only) |
+| POST | `/instances/start` | `{profileId?, mode?, port?}` | `{id, profileId, port, mode, status}` | Start instance |
+| POST | `/instances/{id}/start` | - | `{status: "chrome_ready"}` or `{id, profileId, port, mode, status}` | Start browser for existing instance |
 | POST | `/instances/{id}/stop` | - | `{id, stopped: true}` | Stop instance |
 | GET | `/instances/{id}/logs` | - | `text` | Get instance logs |
 
@@ -123,7 +125,7 @@ curl -X POST http://localhost:9867/tabs/tab_xyz789/navigate \
 
 **OLD:**
 ```bash
-curl -X POST http://localhost:9867/instances/inst_abc123/tab \
+curl -X POST http://localhost:9867/instances/inst_abc123/tabs/open \
   -d '{}'
 # Response: {id: "tab_xyz", ...}
 ```

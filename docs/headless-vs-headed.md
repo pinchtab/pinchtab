@@ -410,7 +410,8 @@ curl http://localhost:9867/instances/$INST/snapshot | jq .
 curl http://localhost:9867/instances/$INST/text
 
 # Take screenshot
-curl http://localhost:9867/instances/$INST/screenshot > page.png
+TAB_ID=$(curl -s http://localhost:9867/instances/$INST/tabs | jq -r '.[0].id')
+curl "http://localhost:9867/tabs/$TAB_ID/screenshot" > page.png
 
 # Get page title and URL
 curl http://localhost:9867/instances/$INST/tabs | jq '.[] | {title, url}'

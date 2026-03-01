@@ -48,3 +48,24 @@ func TestHandleSnapshot_PathTraversal(t *testing.T) {
 		t.Error("expected error for path traversal")
 	}
 }
+
+func TestHandleTabSnapshot_MissingTabID(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/tabs//snapshot", nil)
+	w := httptest.NewRecorder()
+	h.HandleTabSnapshot(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabSnapshot_NoTab(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/tabs/tab_123/snapshot", nil)
+	req.SetPathValue("id", "tab_123")
+	w := httptest.NewRecorder()
+	h.HandleTabSnapshot(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}

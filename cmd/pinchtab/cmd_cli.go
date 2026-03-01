@@ -949,11 +949,22 @@ func cliInstanceNavigate(client *http.Client, base, token string, args []string)
 	}
 
 	instID := args[0]
-	url := args[1]
+	targetURL := args[1]
 
-	body := map[string]any{"url": url}
-	// doPost auto-prints JSON response
-	doPost(client, base, token, fmt.Sprintf("/instances/%s/navigate", instID), body)
+	// Instance navigate now works via tab-scoped navigation:
+	// open a tab on the instance, then navigate that tab.
+	openResp := doPost(client, base, token, fmt.Sprintf("/instances/%s/tabs/open", instID), map[string]any{
+		"url": "about:blank",
+	})
+	tabID, _ := openResp["tabId"].(string)
+	if tabID == "" {
+		fatal("failed to open tab for instance %s", instID)
+	}
+
+	// doPost auto-prints JSON response.
+	doPost(client, base, token, fmt.Sprintf("/tabs/%s/navigate", tabID), map[string]any{
+		"url": targetURL,
+	})
 }
 
 func cliInstanceLogs(client *http.Client, base, token string, args []string) {

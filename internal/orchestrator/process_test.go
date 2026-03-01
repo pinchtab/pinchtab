@@ -44,7 +44,6 @@ func TestLaunch_Mocked(t *testing.T) {
 	if !runner.runCalled {
 		t.Error("expected runner.Run to be called")
 	}
-	// Check that ID has the correct hash-based format (inst_XXXXXXXX)
 	if !idutil.IsValidID(inst.ID, "inst") {
 		t.Errorf("expected ID format inst_XXXXXXXX, got %s", inst.ID)
 	}

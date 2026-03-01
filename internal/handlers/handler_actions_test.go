@@ -29,6 +29,10 @@ func (m *failMockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
+func (m *failMockBridge) AvailableActions() []string {
+	return []string{bridge.ActionClick, bridge.ActionType}
+}
+
 func TestHandleActions_EmptyArray(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(`{"actions": []}`)))
@@ -50,6 +54,41 @@ func TestHandleActions_EmptyArray(t *testing.T) {
 	}
 }
 
+func TestHandleTabAction_MissingTabID(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs//action", bytes.NewReader([]byte(`{"kind":"click"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabAction(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabAction_TabIDMismatch(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs/tab_abc/action", bytes.NewReader([]byte(`{"tabId":"tab_other","kind":"click"}`)))
+	req.SetPathValue("id", "tab_abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabAction(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabAction_NoTab(t *testing.T) {
+	h := New(&failMockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs/tab_abc/action", bytes.NewReader([]byte(`{"kind":"click"}`)))
+	req.SetPathValue("id", "tab_abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabAction(w, req)
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
 func TestHandleActions_NoTabError(t *testing.T) {
 	h := New(&failMockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 
@@ -67,6 +106,41 @@ func TestHandleActions_NoTabError(t *testing.T) {
 
 	if w.Code != 404 {
 		t.Errorf("expected 404 for no tab, got %d", w.Code)
+	}
+}
+
+func TestHandleTabActions_MissingTabID(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs//actions", bytes.NewReader([]byte(`{"actions":[{"kind":"click"}]}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabActions(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabActions_TabIDMismatch(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs/tab_abc/actions", bytes.NewReader([]byte(`{"tabId":"tab_other","actions":[{"kind":"click"}]}`)))
+	req.SetPathValue("id", "tab_abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabActions(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabActions_NoTab(t *testing.T) {
+	h := New(&failMockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs/tab_abc/actions", bytes.NewReader([]byte(`{"actions":[{"kind":"click"}]}`)))
+	req.SetPathValue("id", "tab_abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleTabActions(w, req)
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d", w.Code)
 	}
 }
 
