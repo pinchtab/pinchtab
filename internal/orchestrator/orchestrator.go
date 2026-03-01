@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -395,12 +396,25 @@ func (o *Orchestrator) Logs(id string) (string, error) {
 func (o *Orchestrator) FirstRunningURL() string {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
+	// Collect running instances and sort by port (ascending) for determinism.
+	// The lowest port is the earliest-launched instance, which is the most stable.
+	type candidate struct {
+		port int
+		url  string
+	}
+	var candidates []candidate
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
-			return inst.URL
+			p := 0
+			fmt.Sscanf(inst.Port, "%d", &p)
+			candidates = append(candidates, candidate{port: p, url: inst.URL})
 		}
 	}
-	return ""
+	if len(candidates) == 0 {
+		return ""
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].port < candidates[j].port })
+	return candidates[0].url
 }
 
 func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
