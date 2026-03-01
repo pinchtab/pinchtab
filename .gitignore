@@ -26,3 +26,4 @@ MEMORY.md
 .openclaw/
 AGENTS.md
 *.test
+memory/
