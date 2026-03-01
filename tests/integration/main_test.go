@@ -271,7 +271,7 @@ func closeCurrentTab(t *testing.T) {
 		return
 	}
 	// Close the tab
-	_ = httpPost(t, "/tab", map[string]any{
+	_, _ = httpPost(t, "/tab", map[string]any{
 		"tabId":  currentTabID,
 		"action": "close",
 	})
