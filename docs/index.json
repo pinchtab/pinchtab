@@ -10,8 +10,6 @@
   "references": [
     "references/endpoints.md",
     "references/configuration.md",
-    "references/cli-commands.md",
-    "references/curl-commands.md",
     "references/api-reference.json"
   ],
   "architecture": [
