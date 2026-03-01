@@ -70,27 +70,20 @@ async function loadProfiles() {
     }
 
     const instanceByName = {};
-    instances.forEach(inst => { instanceByName[inst.name] = inst; });
+    instances.forEach(inst => {
+      const key = inst.profileName || inst.name;
+      if (!key) return;
+      instanceByName[key] = inst;
+    });
 
     Object.keys(profileByName).forEach(k => { delete profileByName[k]; });
     profiles.forEach(p => { profileByName[p.name] = p; });
-
-    const profileNames = new Set(profiles.map(p => p.name));
-    const extraInstances = instances.filter(i => !profileNames.has(i.name) && i.status !== 'stopped');
 
     const grid = document.getElementById('profiles-grid');
     const cards = [];
 
     profiles.forEach(p => {
       cards.push(renderProfileCard(p, instanceByName[p.name] || null));
-    });
-
-    extraInstances.forEach(inst => {
-      cards.push(renderProfileCard({
-        name: inst.name,
-        sizeMB: 0,
-        source: 'instance'
-      }, inst));
     });
 
     if (cards.length === 0) {

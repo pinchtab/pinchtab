@@ -119,25 +119,36 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "yes")
 	if autoLaunch {
 		defaultProfile := os.Getenv("PINCHTAB_DEFAULT_PROFILE")
+		defaultProfileExplicit := defaultProfile != ""
 		defaultPort := os.Getenv("PINCHTAB_DEFAULT_PORT")
-		// defaultPort is optional - will auto-allocate if not specified
-		if defaultProfile == "" {
-			defaultProfile = "default"
-		}
-
-		if err := os.MkdirAll(filepath.Join(profilesDir, defaultProfile, "Default"), 0755); err != nil {
-			slog.Warn("failed to create default profile dir", "err", err)
-		}
 
 		go func() {
 			time.Sleep(500 * time.Millisecond)
+			profileToLaunch := defaultProfile
+			// If profile is not explicitly configured, prefer an existing profile.
+			// Only synthesize "default" when nothing exists yet.
+			if !defaultProfileExplicit {
+				list, err := profMgr.List()
+				if err != nil {
+					slog.Warn("auto-launch profile list failed", "err", err)
+				}
+				if len(list) > 0 {
+					profileToLaunch = list[0].Name
+				} else {
+					profileToLaunch = "default"
+					if err := os.MkdirAll(filepath.Join(profilesDir, profileToLaunch, "Default"), 0755); err != nil {
+						slog.Warn("failed to create auto-launch profile dir", "profile", profileToLaunch, "err", err)
+					}
+				}
+			}
+
 			headlessDefault := os.Getenv("PINCHTAB_HEADED") == ""
-			inst, err := orch.Launch(defaultProfile, defaultPort, headlessDefault)
+			inst, err := orch.Launch(profileToLaunch, defaultPort, headlessDefault)
 			if err != nil {
-				slog.Warn("auto-launch failed", "err", err)
+				slog.Warn("auto-launch failed", "profile", profileToLaunch, "err", err)
 				return
 			}
-			slog.Info("auto-launched default instance", "id", inst.ID, "port", inst.Port, "headless", headlessDefault)
+			slog.Info("auto-launched instance", "profile", profileToLaunch, "id", inst.ID, "port", inst.Port, "headless", headlessDefault)
 		}()
 	} else {
 		slog.Info("dashboard auto-launch disabled", "hint", "set PINCHTAB_AUTO_LAUNCH=1 to enable")
