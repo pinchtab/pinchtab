@@ -94,10 +94,10 @@ sleep 3
 pinchtab instance navigate $INST https://example.com
 
 # Get page structure
-curl http://localhost:9867/instances/$INST/snapshot | jq '.nodes | map({role, name}) | .[0:5]'
+curl http://localhost:9867/tabs/$TAB_ID/snapshot | jq '.nodes | map({role, name}) | .[0:5]'
 
 # Extract text
-curl http://localhost:9867/instances/$INST/text | jq '.text'
+curl http://localhost:9867/tabs/$TAB_ID/text | jq '.text'
 ```
 
 ✅ **You're running PinchTab!**
@@ -113,14 +113,14 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # Navigate
-TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://example.com"}' | jq -r '.tabId')
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://example.com"}' | jq -r '.id')
 
 # Read the page as text
-curl http://localhost:9867/instances/$INST/text
+curl http://localhost:9867/tabs/$TAB_ID/text
 
 # Get interactive elements (snapshot)
-curl http://localhost:9867/instances/$INST/snapshot | jq '.nodes | map({ref, role, name})'
+curl http://localhost:9867/tabs/$TAB_ID/snapshot | jq '.nodes | map({ref, role, name})'
 ```
 
 ### Take a Screenshot
@@ -141,18 +141,18 @@ curl "http://localhost:9867/tabs/$TAB_ID/pdf?landscape=true" -o output.pdf
 
 ```bash
 # Get page structure (snapshot)
-SNAPSHOT=$(curl http://localhost:9867/instances/$INST/snapshot)
+SNAPSHOT=$(curl http://localhost:9867/tabs/$TAB_ID/snapshot)
 
 # Extract a reference (e.g., first button)
 BUTTON_REF=$(echo "$SNAPSHOT" | jq -r '.nodes[] | select(.role=="button") | .ref' | head -1)
 
 # Click the button
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"'$BUTTON_REF'"}'
 
 # Or fill a form input
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"fill","ref":"e3","text":"user@example.com"}'
 ```
@@ -171,7 +171,7 @@ curl http://localhost:9867/tabs
 # Operate on specific tab
 TAB_ID=$(curl http://localhost:9867/instances/$INST/tabs | jq -r '.[0].id')
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"e5","tabId":"'$TAB_ID'"}'
 ```
 
@@ -205,18 +205,18 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # 2. Navigate to a page
-TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://example.com"}' | jq -r '.tabId')
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://example.com"}' | jq -r '.id')
 
 # 3. Get page structure (see buttons, links, inputs)
-curl http://localhost:9867/instances/$INST/snapshot
+curl http://localhost:9867/tabs/$TAB_ID/snapshot
 
 # 4. Interact with page (click, type, etc.)
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"e5"}'
 
 # 5. Verify changes
-curl http://localhost:9867/instances/$INST/snapshot
+curl http://localhost:9867/tabs/$TAB_ID/snapshot
 
 # 6. Capture result
 curl "http://localhost:9867/tabs/$TAB_ID/screenshot" -o page.png
@@ -241,15 +241,15 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch | jq -r '.id')
 sleep 2
 
 # Navigate
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 
 # Get snapshot
-curl http://localhost:9867/instances/$INST/snapshot
+curl http://localhost:9867/tabs/$TAB_ID/snapshot
 
 # Extract text
-curl http://localhost:9867/instances/$INST/text
+curl http://localhost:9867/tabs/$TAB_ID/text
 
 # Stop instance
 curl -X POST http://localhost:9867/instances/$INST/stop
@@ -277,14 +277,15 @@ print(f"Created instance: {inst_id}")
 # Wait for Chrome to initialize
 time.sleep(2)
 
-# 2. Navigate
-resp = requests.post(f"{BASE}/instances/{inst_id}/navigate", json={
+# 2. Create tab by navigating
+resp = requests.post(f"{BASE}/instances/{inst_id}/tabs/open", json={
     "url": "https://example.com"
 })
+tab_id = resp.json()["id"]
 print(f"Navigated: {resp.json()}")
 
 # 3. Get snapshot
-snapshot = requests.get(f"{BASE}/instances/{inst_id}/snapshot").json()
+snapshot = requests.get(f"{BASE}/tabs/{tab_id}/snapshot").json()
 
 # Print interactive elements
 for elem in snapshot.get("nodes", []):
@@ -292,13 +293,13 @@ for elem in snapshot.get("nodes", []):
         print(f"{elem['ref']}: {elem['role']} - {elem['name']}")
 
 # 4. Click an element
-requests.post(f"{BASE}/instances/{inst_id}/action", json={
-    "kind": "click",
+requests.post(f"{BASE}/tabs/{tab_id}/action", json={
+    "action": "click",
     "ref": "e5"
 })
 
 # 5. Get text
-text = requests.get(f"{BASE}/instances/{inst_id}/text").json()
+text = requests.get(f"{BASE}/tabs/{tab_id}/text").json()
 print(f"Page text: {text['text'][:200]}...")
 
 # 6. Stop instance
@@ -330,17 +331,19 @@ async function main() {
     // Wait for Chrome to initialize
     await new Promise(r => setTimeout(r, 2000));
 
-    // 2. Navigate
-    await fetch(`${BASE}/instances/${instId}/navigate`, {
+    // 2. Create tab by navigating
+    const navResp = await fetch(`${BASE}/instances/${instId}/tabs/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: "https://example.com"
       })
     });
+    const navData = await navResp.json();
+    const tabId = navData.id;
 
     // 3. Get snapshot
-    const snapResp = await fetch(`${BASE}/instances/${instId}/snapshot`);
+    const snapResp = await fetch(`${BASE}/tabs/${tabId}/snapshot`);
     const snap = await snapResp.json();
 
     // Print interactive elements
@@ -349,17 +352,17 @@ async function main() {
       .forEach(n => console.log(`${n.ref}: ${n.role} - ${n.name}`));
 
     // 4. Click element
-    await fetch(`${BASE}/instances/${instId}/action`, {
+    await fetch(`${BASE}/tabs/${tabId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        kind: "click",
+        action: "click",
         ref: "e5"
       })
     });
 
     // 5. Get text
-    const textResp = await fetch(`${BASE}/instances/${instId}/text`);
+    const textResp = await fetch(`${BASE}/tabs/${tabId}/text`);
     const text = await textResp.json();
     console.log(`Page text: ${text.text.substring(0, 200)}...`);
 
@@ -432,14 +435,14 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # Navigate
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com/article"}'
 
 # Extract text
-curl http://localhost:9867/instances/$INST/text | jq '.text'
+curl http://localhost:9867/tabs/$TAB_ID/text | jq '.text'
 
 # Save to file
-curl http://localhost:9867/instances/$INST/text | jq -r '.text' > article.txt
+curl http://localhost:9867/tabs/$TAB_ID/text | jq -r '.text' > article.txt
 
 # Stop instance
 curl -X POST http://localhost:9867/instances/$INST/stop
@@ -453,28 +456,28 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # Navigate to form
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com/contact"}'
 
 # Get form structure
-SNAP=$(curl http://localhost:9867/instances/$INST/snapshot)
+SNAP=$(curl http://localhost:9867/tabs/$TAB_ID/snapshot)
 
 # Fill fields (get refs from snapshot)
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e3","text":"John Doe"}'
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e5","text":"john@example.com"}'
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e7","text":"My message here"}'
 
 # Click submit
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"e10"}'
 
 # Verify success
-curl http://localhost:9867/instances/$INST/snapshot | jq '.nodes | length'
+curl http://localhost:9867/tabs/$TAB_ID/snapshot | jq '.nodes | length'
 ```
 
 ### Scenario 3: Login + Stay Logged In
@@ -490,16 +493,16 @@ INST=$(curl -s -X POST http://localhost:9867/instances/start \
 sleep 2
 
 # Login
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com/login"}'
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e3","text":"user@example.com"}'
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e5","text":"password"}'
 
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"e7"}'
 
 # Stop instance (profile saved)
@@ -511,7 +514,7 @@ INST=$(curl -s -X POST http://localhost:9867/instances/start \
 sleep 2
 
 # Navigate to dashboard (cookies preserved)
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com/dashboard"}'
 ```
 
@@ -522,8 +525,8 @@ curl -X POST http://localhost:9867/instances/$INST/navigate \
 INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
-TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://reports.example.com/monthly"}' | jq -r '.tabId')
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -d '{"url":"https://reports.example.com/monthly"}' | jq -r '.id')
 # Export PDF
 curl "http://localhost:9867/tabs/$TAB_ID/pdf?landscape=true" -o report.pdf
 ```
@@ -549,10 +552,10 @@ SOURCE_TAB=$(echo "$TABS" | jq -r '.[0].id')
 DEST_TAB=$(echo "$TABS" | jq -r '.[1].id')
 
 # Extract from source tab
-DATA=$(curl "http://localhost:9867/instances/$INST/text" | jq -r '.text')
+DATA=$(curl "http://localhost:9867/tabs/$TAB_ID/text" | jq -r '.text')
 
 # Fill destination tab
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"fill","ref":"e3","text":"'$DATA'","tabId":"'$DEST_TAB'"}'
 ```
@@ -589,7 +592,7 @@ while [ "$(curl -s http://localhost:9867/instances/$INST | jq -r '.status')" != 
 done
 
 # Now safe to use
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com"}'
 ```
 
@@ -648,13 +651,13 @@ curl http://localhost:9867/instances/$INST
 **Solution:**
 ```bash
 # Get fresh snapshot
-SNAP=$(curl http://localhost:9867/instances/$INST/snapshot)
+SNAP=$(curl http://localhost:9867/tabs/$TAB_ID/snapshot)
 
 # Extract new ref from snapshot
 NEW_REF=$(echo "$SNAP" | jq -r '.nodes[] | select(.role=="button") | .ref' | head -1)
 
 # Use new ref
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"'$NEW_REF'"}'
 ```
 
@@ -666,13 +669,13 @@ curl -X POST http://localhost:9867/instances/$INST/action \
 
 ```bash
 # Get text content
-curl http://localhost:9867/instances/$INST/text
+curl http://localhost:9867/tabs/$TAB_ID/text
 
 # Get snapshot (DOM structure)
-curl http://localhost:9867/instances/$INST/snapshot
+curl http://localhost:9867/tabs/$TAB_ID/snapshot
 
 # Filter snapshot to interactive elements
-curl http://localhost:9867/instances/$INST/snapshot | \
+curl http://localhost:9867/tabs/$TAB_ID/snapshot | \
   jq '.nodes[] | select(.role | IN("button", "link", "textbox"))'
 ```
 
@@ -680,31 +683,31 @@ curl http://localhost:9867/instances/$INST/snapshot | \
 
 ```bash
 # Click element
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"click","ref":"e5"}'
 
 # Type text
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"type","ref":"e3","text":"hello"}'
 
 # Fill input
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"fill","ref":"e3","text":"value"}'
 
 # Press key
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"press","key":"Enter"}'
 
 # Focus element
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"focus","ref":"e5"}'
 
 # Hover element
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"hover","ref":"e5"}'
 
 # Select dropdown
-curl -X POST http://localhost:9867/instances/$INST/action \
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
   -d '{"kind":"select","ref":"e8","text":"Option 2"}'
 ```
 
@@ -748,7 +751,7 @@ done
 # Distribute work across instances (round-robin)
 for URL in "${URLS[@]}"; do
   INST="${INSTANCES[$((INDEX % 5))]}"
-  curl -X POST "http://localhost:9867/instances/$INST/navigate" \
+  curl -X POST "http://localhost:9867/instances/$INST/tabs/open" \
     -d '{"url":"'$URL'"}' &
   ((INDEX++))
 done
@@ -759,10 +762,10 @@ wait
 
 ```bash
 # Use text extraction (cheaper than screenshots)
-curl http://localhost:9867/instances/$INST/text      # Lower tokens
+curl http://localhost:9867/tabs/$TAB_ID/text      # Lower tokens
 
 # Use snapshot (cheaper than screenshot)
-curl http://localhost:9867/instances/$INST/snapshot  # Lower tokens
+curl http://localhost:9867/tabs/$TAB_ID/snapshot  # Lower tokens
 
 # Screenshots are expensive (JPG encoding)
 curl "http://localhost:9867/tabs/$TAB_ID/screenshot" # Higher tokens
@@ -777,11 +780,11 @@ curl "http://localhost:9867/tabs/$TAB_ID/screenshot" # Higher tokens
 | Start orchestrator | `pinchtab` |
 | Health check | `curl http://localhost:9867/health` |
 | Create instance | `INST=$(pinchtab instance launch \| jq -r '.id')` |
-| Navigate | `curl -X POST http://localhost:9867/instances/$INST/navigate -d '{"url":"..."}' ` |
-| See structure | `curl http://localhost:9867/instances/$INST/snapshot` |
-| Get text | `curl http://localhost:9867/instances/$INST/text` |
-| Click element | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"click","ref":"e5"}'` |
-| Type text | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"type","ref":"e3","text":"hello"}'` |
+| Navigate | `curl -X POST http://localhost:9867/instances/$INST/tabs/open -d '{"url":"..."}' ` |
+| See structure | `curl http://localhost:9867/tabs/$TAB_ID/snapshot` |
+| Get text | `curl http://localhost:9867/tabs/$TAB_ID/text` |
+| Click element | `curl -X POST http://localhost:9867/tabs/$TAB_ID/action -d '{"kind":"click","ref":"e5"}'` |
+| Type text | `curl -X POST http://localhost:9867/tabs/$TAB_ID/action -d '{"kind":"type","ref":"e3","text":"hello"}'` |
 | Screenshot | `curl "http://localhost:9867/tabs/$TAB_ID/screenshot" -o page.png` |
 | PDF export | `curl http://localhost:9867/tabs/$TAB_ID/pdf -o out.pdf` |
 | List instances | `curl http://localhost:9867/instances` |

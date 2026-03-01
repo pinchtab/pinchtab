@@ -47,7 +47,7 @@ echo "Chrome window is open - interact manually or use API calls"
 sleep 2
 
 # Optionally navigate to starting URL (via orchestrator proxy)
-curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://app.example.com"}'
 
@@ -115,12 +115,12 @@ for i in "${!INSTANCES[@]}"; do
   
   # Run test in parallel (via orchestrator proxy)
   (
-    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+    curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
       -H "Content-Type: application/json" \
       -d "{\"url\":\"$URL\"}" > /dev/null
     
     # Verify page loaded
-    TITLE=$(curl -s "http://localhost:9867/instances/$INST/snapshot" | jq -r '.title')
+    TITLE=$(curl -s "http://localhost:9867/tabs/$TAB_ID/snapshot" | jq -r '.title')
     echo "Test $i: $TITLE"
   ) &
 done
@@ -195,7 +195,7 @@ for i in "${!URLS[@]}"; do
   URL="${URLS[$i]}"
   INST="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
   
-  curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+  curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$URL\"}" &
 done
@@ -243,7 +243,7 @@ for i in "${!URLS[@]}"; do
   URL="${URLS[$i]}"
   INST="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
   
-  curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+  curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$URL\"}" &
 done
@@ -291,7 +291,7 @@ for i in $(seq 0 $((MAX_JOBS - 1))); do
   INST="${INSTANCES[$((CURRENT_JOB % MAX_JOBS))]}"
   
   (
-    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+    curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
       -H "Content-Type: application/json" \
       -d "{\"url\":\"$URL\"}" > /dev/null
     echo "Processed: $URL"
@@ -306,7 +306,7 @@ while [ $CURRENT_JOB -lt ${#QUEUE[@]} ]; do
   INST="${INSTANCES[$((CURRENT_JOB % MAX_JOBS))]}"
   
   (
-    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+    curl -s -X POST "http://localhost:9867/instances/$INST/tabs/open" \
       -H "Content-Type: application/json" \
       -d "{\"url\":\"$URL\"}" > /dev/null
     echo "Processed: $URL"
@@ -366,7 +366,7 @@ U3=$(curl -s -X POST http://localhost:9867/instances/start \
 # - No interference between users
 
 # User 1 navigates (via orchestrator proxy)
-curl -s -X POST "http://localhost:9867/instances/$U1/navigate" \
+curl -s -X POST "http://localhost:9867/instances/$U1/tabs/open" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://app.example.com/login?user=1"}'
 

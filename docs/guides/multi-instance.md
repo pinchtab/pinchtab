@@ -47,7 +47,7 @@ The instance gets:
 Navigate the instance via the orchestrator (recommended):
 
 ```bash
-curl -X POST http://localhost:9867/instances/inst_a365262a/navigate \
+curl -X POST http://localhost:9867/instances/inst_a365262a/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 ```
@@ -55,28 +55,31 @@ curl -X POST http://localhost:9867/instances/inst_a365262a/navigate \
 **Response:**
 ```json
 {
-  "tabId": "tab_19949f62",
+  "id": "tab_19949f62",
   "url": "https://example.com",
   "title": "Example Domain"
 }
 ```
 
-Each navigation automatically creates a new tab. Use the `tabId` for subsequent operations on that specific tab.
+Each navigation automatically creates a new tab. Use the `id` (tabId) for subsequent operations on that specific tab.
 
-**Note:** You can also access the instance directly on its port (9868), but using the orchestrator proxy (`9867/instances/{id}/*`) is recommended for consistency.
+**Note:** You can also access the instance directly on its port (9868), but using the orchestrator proxy is recommended for consistency.
 
 ### 4. Get Page Content
 
-Retrieve page snapshot (DOM, text, structured data) via orchestrator:
+Retrieve page snapshot using the tab ID:
 
 ```bash
-curl http://localhost:9867/instances/inst_a365262a/snapshot
+TAB=$(curl -s -X POST http://localhost:9867/instances/inst_a365262a/tabs/open \
+  -d '{"url":"https://example.com"}' | jq -r '.id')
+
+curl http://localhost:9867/tabs/$TAB/snapshot
 ```
 
 Or get just the text:
 
 ```bash
-curl http://localhost:9867/instances/inst_a365262a/text
+curl http://localhost:9867/tabs/$TAB/text
 ```
 
 ### 5. Stop Instance
@@ -132,24 +135,26 @@ sleep 2
 
 echo "Navigating all instances concurrently..."
 
-# Navigate all instances via orchestrator proxy (concurrent)
+# Navigate all instances and capture tab IDs
+TABS=()
 for i in "${!INSTANCES[@]}"; do
   ID="${INSTANCES[$i]}"
   URL="${URLS[$i]}"
 
-  curl -s -X POST "http://localhost:9867/instances/$ID/navigate" \
+  RESPONSE=$(curl -s -X POST "http://localhost:9867/instances/$ID/tabs/open" \
     -H "Content-Type: application/json" \
-    -d "{\"url\":\"$URL\"}" &
+    -d "{\"url\":\"$URL\"}")
+  TAB_ID=$(echo "$RESPONSE" | jq -r '.id')
+  TABS+=("$TAB_ID")
 done
-wait
 
 echo "All pages loaded. Getting snapshots..."
 
-# Get snapshots
-for i in "${!INSTANCES[@]}"; do
-  ID="${INSTANCES[$i]}"
+# Get snapshots using tab IDs
+for i in "${!TABS[@]}"; do
+  TAB="${TABS[$i]}"
 
-  curl -s "http://localhost:9867/instances/$ID/snapshot" > "snapshot-$i.json" &
+  curl -s "http://localhost:9867/tabs/$TAB/snapshot" > "snapshot-$i.json" &
 done
 wait
 
@@ -248,7 +253,7 @@ for TASK in "${TASKS[@]}"; do
   ID="${INSTANCES[$((INSTANCE_INDEX % $FLEET_SIZE))]}"
 
   # Send task to instance via orchestrator proxy
-  curl -s -X POST "http://localhost:9867/instances/$ID/navigate" \
+  curl -s -X POST "http://localhost:9867/instances/$ID/tabs/open" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"https://api.example.com?task=$TASK\"}" > /dev/null &
 
@@ -402,7 +407,7 @@ while [ "$(curl -s http://localhost:9867/instances/$INST | jq -r '.status')" != 
 done
 
 # Now safe to use
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com"}'
 ```
 
@@ -550,7 +555,7 @@ while [ "$(curl -s http://localhost:9867/instances/$INST | jq -r '.status')" != 
 done
 
 # Now safe to navigate
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com"}'
 ```
 
@@ -593,11 +598,11 @@ Frees ports and RAM for new instances.
 
 ```bash
 # DO: Use orchestrator proxy (recommended)
-curl -X POST http://localhost:9867/instances/$INST/navigate \
+curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com"}'
 
 # AVOID: Direct port access (less consistent)
-curl -X POST http://localhost:$PORT/navigate \
+curl -X POST http://localhost:$PORT/tabs/open \
   -d '{"url":"https://example.com"}'
 ```
 
@@ -758,7 +763,7 @@ curl -X POST http://localhost:9867/instances/$OLD_INST/stop
 ```bash
 # Instance IDs are stable, but ports change on restart
 # Always use orchestrator proxy:
-curl http://localhost:9867/instances/$INST/navigate \
+curl http://localhost:9867/instances/$INST/tabs/open \
   -d '{"url":"https://example.com"}'
 
 # Don't rely on cached port numbers
