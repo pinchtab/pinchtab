@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -81,6 +82,15 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
+	if err != nil && req.Ref != "" && shouldRetryStaleRef(err) {
+		h.refreshRefCache(tCtx, resolvedTabID)
+		if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+			if nid, ok := cache.Refs[req.Ref]; ok {
+				req.NodeID = nid
+				result, err = h.Bridge.ExecuteAction(tCtx, req.Kind, req)
+			}
+		}
+	}
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "unknown action") {
 			kinds := h.Bridge.AvailableActions()
@@ -89,7 +99,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		web.Error(w, 500, fmt.Errorf("action %s: %w", req.Kind, err))
+		web.ErrorCode(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, err), true, nil)
 		return
 	}
 
@@ -180,6 +190,15 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		actionRes, err := h.Bridge.ExecuteAction(tCtx, action.Kind, action)
+		if err != nil && action.Ref != "" && shouldRetryStaleRef(err) {
+			h.refreshRefCache(tCtx, resolvedTabID)
+			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+				if nid, ok := cache.Refs[action.Ref]; ok {
+					action.NodeID = nid
+					actionRes, err = h.Bridge.ExecuteAction(tCtx, action.Kind, action)
+				}
+			}
+		}
 		tCancel()
 
 		if err != nil {
@@ -217,4 +236,31 @@ func countSuccessful(results []actionResult) int {
 		}
 	}
 	return count
+}
+
+func shouldRetryStaleRef(err error) bool {
+	if err == nil {
+		return false
+	}
+	e := strings.ToLower(err.Error())
+	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")
+}
+
+func (h *Handlers) refreshRefCache(ctx context.Context, tabID string) {
+	var rawResult json.RawMessage
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(c context.Context) error {
+			return chromedp.FromContext(c).Target.Execute(c, "Accessibility.getFullAXTree", nil, &rawResult)
+		}),
+	); err != nil {
+		return
+	}
+	var treeResp struct {
+		Nodes []bridge.RawAXNode `json:"nodes"`
+	}
+	if err := json.Unmarshal(rawResult, &treeResp); err != nil {
+		return
+	}
+	flat, refs := bridge.BuildSnapshot(treeResp.Nodes, bridge.FilterInteractive, -1)
+	h.Bridge.SetRefCache(tabID, &bridge.RefCache{Refs: refs, Nodes: flat})
 }
