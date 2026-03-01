@@ -107,11 +107,15 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	}
 
 	if tm.config.MaxTabs > 0 {
-		targets, err := tm.ListTargets()
+		// Use a short timeout for tab count check to avoid hanging under load
+		checkCtx, checkCancel := context.WithTimeout(tm.browserCtx, 3*time.Second)
+		targets, err := tm.ListTargetsWithContext(checkCtx)
+		checkCancel()
+
 		if err != nil {
-			return "", nil, nil, fmt.Errorf("check tab count: %w", err)
-		}
-		if len(targets) >= tm.config.MaxTabs {
+			// If check fails due to timeout, log warning but allow creation to proceed
+			slog.Warn("tab count check timed out, proceeding with creation", "error", err)
+		} else if len(targets) >= tm.config.MaxTabs {
 			return "", nil, nil, fmt.Errorf("tab limit reached (%d/%d) — close a tab first", len(targets), tm.config.MaxTabs)
 		}
 	}
@@ -210,6 +214,35 @@ func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			targets, err = target.GetTargets().Do(ctx)
+			return err
+		}),
+	); err != nil {
+		return nil, fmt.Errorf("get targets: %w", err)
+	}
+
+	pages := make([]*target.Info, 0)
+	for _, t := range targets {
+		if t.Type == TargetTypePage {
+			pages = append(pages, t)
+		}
+	}
+	return pages, nil
+}
+
+// ListTargetsWithContext is like ListTargets but uses a custom context
+// Useful for short-timeout checks during tab creation
+func (tm *TabManager) ListTargetsWithContext(ctx context.Context) ([]*target.Info, error) {
+	if tm == nil {
+		return nil, fmt.Errorf("tab manager not initialized")
+	}
+	if tm.browserCtx == nil {
+		return nil, fmt.Errorf("no browser connection")
+	}
+	var targets []*target.Info
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(chromeCtx context.Context) error {
+			var err error
+			targets, err = target.GetTargets().Do(chromeCtx)
 			return err
 		}),
 	); err != nil {

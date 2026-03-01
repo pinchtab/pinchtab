@@ -245,16 +245,6 @@ func jsonField(t *testing.T, data []byte, key string) string {
 
 func navigate(t *testing.T, url string) {
 	t.Helper()
-
-	// Close previous tab if it exists to prevent tab accumulation
-	// This keeps us from hitting the 20-tab limit
-	if currentTabID != "" {
-		httpPost(t, "/tab", map[string]any{
-			"tabId":  currentTabID,
-			"action": "close",
-		})
-	}
-
 	// Use retry logic for better stability
 	code, body := httpPostWithRetry(t, "/navigate", map[string]any{"url": url}, 2)
 	if code != 200 {
