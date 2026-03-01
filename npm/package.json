@@ -15,7 +15,7 @@
     "format": "prettier --write src tests scripts",
     "format:check": "prettier --check src tests scripts",
     "build": "npm run lint && npm run format:check && tsc",
-    "test": "node --test dist/tests/integration.test.js",
+    "test": "node --test 'dist/tests/**/*.test.js'",
     "postinstall": "node scripts/postinstall.js",
     "prepare": "npm run build"
   },
