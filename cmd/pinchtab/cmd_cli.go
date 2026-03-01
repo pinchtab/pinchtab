@@ -101,7 +101,9 @@ var cliCommands = map[string]bool{
 	"screenshot": true, "ss": true,
 	"eval": true, "evaluate": true,
 	"pdf": true, "health": true,
-	"help": true, "quick": true, "instances": true, "profiles": true,
+	"help": true, "quick": true,
+	"instance": true, "instances": true,
+	"profiles": true,
 }
 
 func isCLICommand(cmd string) bool {
