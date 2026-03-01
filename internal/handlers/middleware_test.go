@@ -172,6 +172,31 @@ func TestLoggingMiddleware(t *testing.T) {
 	}
 }
 
+func TestRequestIDMiddleware_SetsHeader(t *testing.T) {
+	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Header().Get("X-Request-Id") == "" {
+		t.Fatal("expected X-Request-Id")
+	}
+}
+
+func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
 func TestStatusWriter(t *testing.T) {
 	w := httptest.NewRecorder()
 	sw := &web.StatusWriter{ResponseWriter: w, Code: 200}
