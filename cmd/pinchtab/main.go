@@ -184,7 +184,13 @@ func main() {
 
 	handler := dash.TrackingMiddleware(
 		[]dashboard.EventObserver{profileObserver},
-		handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
+		handlers.LoggingMiddleware(
+			handlers.RequestIDMiddleware(
+				handlers.RateLimitMiddleware(
+					handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)),
+				),
+			),
+		),
 	)
 
 	srv := &http.Server{
