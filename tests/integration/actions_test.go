@@ -34,6 +34,8 @@ func TestAction_Click(t *testing.T) {
 // A4: Press key
 func TestAction_Press(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
+
 	code, _ := httpPost(t, "/action", map[string]any{
 		"tabId": currentTabID,
 		"kind":  "press",
@@ -77,6 +79,8 @@ func TestAction_RefNotFound(t *testing.T) {
 // A12: CSS selector click
 func TestAction_CSSSelector(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
+
 	code, _ := httpPost(t, "/action", map[string]any{
 		"tabId":    currentTabID,
 		"kind":     "click",
@@ -182,6 +186,8 @@ func TestAction_Focus(t *testing.T) {
 // A8: Scroll
 func TestAction_Scroll(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
+
 	code, _ := httpPost(t, "/action", map[string]any{
 		"tabId":     currentTabID,
 		"kind":      "scroll",
@@ -239,6 +245,8 @@ func TestAction_Hover(t *testing.T) {
 	if code != 200 {
 		t.Errorf("hover failed with %d", code)
 	}
+
+	closeCurrentTab(t)
 }
 
 // A7: Select

@@ -264,6 +264,20 @@ func navigate(t *testing.T, url string) {
 	}
 }
 
+// closeCurrentTab closes the current tab to clean up resources
+func closeCurrentTab(t *testing.T) {
+	t.Helper()
+	if currentTabID == "" {
+		return
+	}
+	// Close the tab
+	_ = httpPost(t, "/tab", map[string]any{
+		"tabId":  currentTabID,
+		"action": "close",
+	})
+	currentTabID = ""
+}
+
 // waitForInstanceReady waits for an instance to be ready for navigation
 // Uses a simple navigate to about:blank to check readiness
 func waitForInstanceReady(t *testing.T, instID string) {
