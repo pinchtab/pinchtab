@@ -635,31 +635,37 @@ func cliHealth(client *http.Client, base, token string) {
 // --- instances ---
 
 func cliInstances(client *http.Client, base, token string) {
-	result := doGet(client, base, token, "/instances", nil)
+	body := doGetRaw(client, base, token, "/instances", nil)
 
-	// Display instances in a friendly format
-	if instances, ok := result["instances"].([]interface{}); ok && len(instances) > 0 {
-		fmt.Println()
-		for _, inst := range instances {
-			if m, ok := inst.(map[string]any); ok {
-				id, _ := m["id"].(string)
-				name, _ := m["name"].(string)
-				port, _ := m["port"].(string)
-				headless, _ := m["headless"].(bool)
-				status, _ := m["status"].(string)
-
-				mode := "headless"
-				if !headless {
-					mode = "headed"
-				}
-
-				fmt.Printf("📍 %s (ID: %s, Port: %s, Mode: %s, Status: %s)\n", name, id, port, mode, status)
-			}
-		}
-		fmt.Println()
-	} else {
-		fmt.Println("No running instances")
+	// Parse array of instances
+	var instances []map[string]any
+	if err := json.Unmarshal(body, &instances); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse instances: %v\n", err)
+		os.Exit(1)
 	}
+
+	// Display instances in a friendly format, or empty if none
+	if len(instances) == 0 {
+		fmt.Println("[]")
+		return
+	}
+
+	fmt.Println()
+	for _, inst := range instances {
+		id, _ := inst["id"].(string)
+		name, _ := inst["profileName"].(string)
+		port, _ := inst["port"].(string)
+		headless, _ := inst["headless"].(bool)
+		status, _ := inst["status"].(string)
+
+		mode := "headless"
+		if !headless {
+			mode = "headed"
+		}
+
+		fmt.Printf("📍 %s (ID: %s, Port: %s, Mode: %s, Status: %s)\n", name, id, port, mode, status)
+	}
+	fmt.Println()
 }
 
 // --- profiles ---
