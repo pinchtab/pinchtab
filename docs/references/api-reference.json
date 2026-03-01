@@ -9,7 +9,12 @@
       "handler": "handleDeleteByPath",
       "description": "Manage profile",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Delete a profile",
+      "cli": false,
+      "curlExample": "curl -X DELETE http://localhost:9867/profiles/work",
+      "parameters": "name (string, path, required): Profile name",
+      "payload": "N/A"
     },
     {
       "method": "GET",
@@ -249,7 +254,12 @@
       "description": "List profiles",
       "cli": true,
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "List all browser profiles",
+      "cliExample": "pinchtab profiles",
+      "curlExample": "curl http://localhost:9867/profiles",
+      "parameters": "None",
+      "payload": "N/A (GET request)"
     },
     {
       "method": "GET",
@@ -257,7 +267,12 @@
       "handler": "handleProfileInstance",
       "description": "Get profile instance",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Get the current running instance for a profile",
+      "cli": false,
+      "curlExample": "curl \"http://localhost:9867/profiles/abc123/instance\"",
+      "parameters": "id (string, path, required): Profile ID",
+      "payload": "N/A (GET request)"
     },
     {
       "method": "GET",
@@ -265,7 +280,12 @@
       "handler": "handleAnalyticsByPath",
       "description": "Profile analytics",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Get analytics/usage stats for a profile",
+      "cli": false,
+      "curlExample": "curl \"http://localhost:9867/profiles/work/analytics?period=7d\"",
+      "parameters": "name (string, path, required): Profile name; period (string, query, optional: \"1d\",\"7d\",\"30d\", default: \"7d\")",
+      "payload": "N/A (GET request)"
     },
     {
       "method": "GET",
@@ -273,7 +293,12 @@
       "handler": "handleLogsByPath",
       "description": "Profile logs",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Get logs for a profile",
+      "cli": false,
+      "curlExample": "curl \"http://localhost:9867/profiles/work/logs?limit=100&level=info\"",
+      "parameters": "name (string, path, required): Profile name; limit (int, query, optional, default: 100); level (string, query, optional: \"debug\",\"info\",\"warn\",\"error\")",
+      "payload": "N/A (GET request)"
     },
     {
       "method": "GET",
@@ -349,7 +374,12 @@
       "handler": "handleUpdateMeta",
       "description": "Update profile metadata",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Update profile metadata globally",
+      "cli": false,
+      "curlExample": "curl -X PATCH http://localhost:9867/profiles/meta -H \"Content-Type: application/json\" -d '{\"version\":\"2.0\"}'",
+      "parameters": "None",
+      "payload": "{\"version\":\"2.0\",\"tags\":[\"important\"]}"
     },
     {
       "method": "PATCH",
@@ -357,7 +387,12 @@
       "handler": "handleUpdateByPath",
       "description": "Manage profile",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Update a profile",
+      "cli": false,
+      "curlExample": "curl -X PATCH http://localhost:9867/profiles/work -H \"Content-Type: application/json\" -d '{\"description\":\"Updated\"}'",
+      "parameters": "name (string, path, required): Profile name",
+      "payload": "{\"description\":\"new description\",\"tags\":[\"tag1\"]}"
     },
     {
       "method": "POST",
@@ -580,7 +615,12 @@
       "handler": "handleCreate",
       "description": "Create profile",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Create a new browser profile",
+      "cli": false,
+      "curlExample": "curl -X POST http://localhost:9867/profiles/create -H \"Content-Type: application/json\" -d '{\"name\":\"work\"}'",
+      "parameters": "None",
+      "payload": "{\"name\":\"work\",\"description\":\"Work account\"}"
     },
     {
       "method": "POST",
@@ -588,7 +628,12 @@
       "handler": "handleImport",
       "description": "Import profile",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Import a profile from backup/archive",
+      "cli": false,
+      "curlExample": "curl -X POST http://localhost:9867/profiles/import -F \"file=@profile-backup.zip\" -F \"name=imported-profile\"",
+      "parameters": "None",
+      "payload": "FormData with file and name"
     },
     {
       "method": "POST",
@@ -596,7 +641,12 @@
       "handler": "handleStartByID",
       "description": "Start profile instance",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Start/launch a profile (create instance)",
+      "cli": false,
+      "curlExample": "curl -X POST http://localhost:9867/profiles/abc123/start -H \"Content-Type: application/json\" -d '{\"headless\":true}'",
+      "parameters": "id (string, path, required): Profile ID",
+      "payload": "{\"headless\":true,\"port\":9868}"
     },
     {
       "method": "POST",
@@ -604,7 +654,12 @@
       "handler": "handleStopByID",
       "description": "Stop profile instance",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Stop/shutdown a profile instance",
+      "cli": false,
+      "curlExample": "curl -X POST http://localhost:9867/profiles/abc123/stop",
+      "parameters": "id (string, path, required): Profile ID",
+      "payload": "N/A or {\"force\":false}"
     },
     {
       "method": "POST",
@@ -612,7 +667,12 @@
       "handler": "handleResetByPath",
       "description": "Reset profile",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "tldr": "Reset a profile (clear cookies, cache, history)",
+      "cli": false,
+      "curlExample": "curl -X POST http://localhost:9867/profiles/work/reset",
+      "parameters": "name (string, path, required): Profile name",
+      "payload": "N/A or {\"keepCookies\":false,\"keepHistory\":false}"
     },
     {
       "method": "POST",
