@@ -114,7 +114,7 @@ func Load() *RuntimeConfig {
 		BlockMedia:        os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",
 		BlockAds:          envBoolOr("BRIDGE_BLOCK_ADS", false),
 		MaxTabs:           envIntOr("BRIDGE_MAX_TABS", 20),
-		ChromeBinary:      os.Getenv("CHROME_BINARY"),
+		ChromeBinary:      envOr("CHROME_BIN", os.Getenv("CHROME_BINARY")),
 		ChromeExtraFlags:  os.Getenv("CHROME_FLAGS"),
 		UserAgent:         os.Getenv("BRIDGE_USER_AGENT"),
 		NoAnimations:      os.Getenv("BRIDGE_NO_ANIMATIONS") == "true",
