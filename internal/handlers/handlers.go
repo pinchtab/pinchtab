@@ -36,6 +36,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /pdf", h.HandlePDF)
 	mux.HandleFunc("GET /text", h.HandleText)
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
+	mux.HandleFunc("GET /navigate", h.HandleNavigate)
+	mux.HandleFunc("GET /nav", h.HandleNavigate)
 	mux.HandleFunc("POST /action", h.HandleAction)
 	mux.HandleFunc("POST /actions", h.HandleActions)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
