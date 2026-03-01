@@ -193,8 +193,8 @@ func TestOrchestrator_PortReuse(t *testing.T) {
 
 	// Create instance 2 — register cleanup BEFORE any potential t.Fatal
 	status, body = httpPost(t, "/instances/launch", map[string]any{
-		"name":     fmt.Sprintf("reuse-test-2-%d", time.Now().Unix()),
-		"mode":     "headless",
+		"name": fmt.Sprintf("reuse-test-2-%d", time.Now().Unix()),
+		"mode": "headless",
 	})
 	if status != 201 {
 		t.Fatalf("instance 2 creation failed: %d", status)
