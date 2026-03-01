@@ -112,7 +112,13 @@ func startChrome(allocCtx context.Context, cfg *config.RuntimeConfig, opts []chr
 
 	// Start browser (connect to Chrome)
 	slog.Debug("connecting to chrome browser")
-	if err := chromedp.Run(browserCtx); err != nil {
+
+	// The browserCtx should now connect to the Chrome process started by the allocator
+	// Run a simple action to verify the connection
+	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		slog.Debug("chrome connection established, running initial action")
+		return nil
+	})); err != nil {
 		cancel()
 		allocCancel()
 		slog.Error("failed to connect to chrome browser", "error", err.Error())
