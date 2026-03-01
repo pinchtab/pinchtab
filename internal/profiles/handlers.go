@@ -90,7 +90,14 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "created", "name": req.Name})
+
+	// Generate and return the profile ID
+	generatedID := profileID(req.Name)
+	web.JSON(w, 200, map[string]any{
+		"status": "created",
+		"id":     generatedID,
+		"name":   req.Name,
+	})
 }
 
 func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
