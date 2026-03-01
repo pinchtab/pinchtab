@@ -16,6 +16,10 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, map[string]any{"status": "ok", "tabs": len(targets), "cdp": h.Config.CdpURL})
 }
 
+func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	web.JSON(w, 200, map[string]any{"metrics": snapshotMetrics()})
+}
+
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {

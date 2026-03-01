@@ -171,6 +171,16 @@ func TestHandleAction_GetMissingKind(t *testing.T) {
 	}
 }
 
+func TestHandleMacro_EmptySteps(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/macro", bytes.NewReader([]byte(`{"tabId":"tab1","steps":[]}`)))
+	w := httptest.NewRecorder()
+	h.HandleMacro(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400 for empty macro steps, got %d", w.Code)
+	}
+}
+
 func TestCountSuccessful(t *testing.T) {
 	results := []actionResult{
 		{Success: true},

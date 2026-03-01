@@ -8,10 +8,19 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/web"
+)
+
+var (
+	metricRequestsTotal   uint64
+	metricRequestsFailed  uint64
+	metricRequestLatencyN uint64
+	metricRateLimited     uint64
+	metricStaleRefRetries uint64
 )
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -19,12 +28,18 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &web.StatusWriter{ResponseWriter: w, Code: 200}
 		next.ServeHTTP(sw, r)
+		ms := uint64(time.Since(start).Milliseconds())
+		atomic.AddUint64(&metricRequestsTotal, 1)
+		atomic.AddUint64(&metricRequestLatencyN, ms)
+		if sw.Code >= 400 {
+			atomic.AddUint64(&metricRequestsFailed, 1)
+		}
 		slog.Info("request",
 			"requestId", w.Header().Get("X-Request-Id"),
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.Code,
-			"ms", time.Since(start).Milliseconds(),
+			"ms", ms,
 		)
 	})
 }
@@ -103,6 +118,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		if len(filtered) >= maxReq {
 			rateBuckets[host] = filtered
 			rateMu.Unlock()
+			atomic.AddUint64(&metricRateLimited, 1)
 			web.ErrorCode(w, 429, "rate_limited", "too many requests", true, map[string]any{"windowSec": int(window.Seconds()), "max": maxReq})
 			return
 		}
