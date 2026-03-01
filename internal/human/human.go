@@ -143,7 +143,7 @@ func ClickElement(ctx context.Context, nodeID cdp.NodeID) error {
 		return err
 	}
 
-	if len(box.Content) < 4 {
+	if len(box.Content) < 8 {
 		return fmt.Errorf("invalid box model")
 	}
 
