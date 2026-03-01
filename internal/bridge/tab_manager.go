@@ -184,14 +184,20 @@ func (tm *TabManager) CloseTab(tabID string) error {
 		entry.Cancel()
 	}
 
+	// Resolve hash alias → raw CDP target ID for the actual CDP close call
+	cdpTargetID := tabID
+	if tracked && entry.CDPID != "" {
+		cdpTargetID = entry.CDPID
+	}
+
 	closeCtx, closeCancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
 	defer closeCancel()
 
-	if err := target.CloseTarget(target.ID(tabID)).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
+	if err := target.CloseTarget(target.ID(cdpTargetID)).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
 		if !tracked {
 			return fmt.Errorf("tab %s not found", tabID)
 		}
-		slog.Debug("close target CDP", "tabId", tabID, "err", err)
+		slog.Debug("close target CDP", "tabId", tabID, "cdpId", cdpTargetID, "err", err)
 	}
 
 	tm.mu.Lock()
@@ -280,6 +286,15 @@ func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx}
+}
+
+// RegisterHashTab registers a hash-based tab ID (e.g. "tab_XXXXXXXX") as an alias
+// for the given raw CDP target ID. This allows callers to use the hash ID for all
+// subsequent operations (action, snapshot, close) without knowing the raw CDP ID.
+func (tm *TabManager) RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.tabs[hashID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID}
 }
 
 func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration) {

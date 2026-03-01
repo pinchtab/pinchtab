@@ -306,6 +306,9 @@ func (m *MockBridge) SetRefCache(tabID string, cache *bridge.RefCache) {
 func (m *MockBridge) DeleteRefCache(tabID string) {
 }
 
+func (m *MockBridge) RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc) {
+}
+
 func (m *MockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
 	return nil, nil
 }

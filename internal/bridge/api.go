@@ -17,6 +17,8 @@ type BridgeAPI interface {
 	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
 
+	RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc)
+
 	GetRefCache(tabID string) *RefCache
 	SetRefCache(tabID string, cache *RefCache)
 	DeleteRefCache(tabID string)

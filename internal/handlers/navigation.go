@@ -121,7 +121,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
-		newTargetID, newCtx, _, err := h.Bridge.CreateTab(req.URL)
+		newTargetID, newCtx, newCtxCancel, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("new tab: %w", err))
 			return
@@ -146,8 +146,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			targetID = newTargetID
 		}
 
-		// Convert CDP target ID to hash-based tab ID
+		// Convert CDP target ID to hash-based tab ID and register the alias so
+		// subsequent operations (action, snapshot, close) can resolve it.
 		hashTabID := h.IdMgr.TabIDFromCDPTarget(targetID)
+		h.Bridge.RegisterHashTab(hashTabID, targetID, newCtx, newCtxCancel)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
@@ -240,7 +242,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case tabActionNew:
-		newTargetID, ctx, _, err := h.Bridge.CreateTab(req.URL)
+		newTargetID, ctx, cancel, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, err)
 			return
@@ -249,8 +251,9 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
 
-		// Convert CDP target ID to hash-based tab ID
+		// Convert CDP target ID to hash-based tab ID and register the alias.
 		hashTabID := h.IdMgr.TabIDFromCDPTarget(newTargetID)
+		h.Bridge.RegisterHashTab(hashTabID, newTargetID, ctx, cancel)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": curURL, "title": title})
 

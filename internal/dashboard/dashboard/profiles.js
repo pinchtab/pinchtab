@@ -245,18 +245,15 @@ function shellQuote(value) {
 function updateLaunchCommand() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
-  const profilePathRaw = document.getElementById('launch-profile-path').value.trim();
   const headless = !!(document.getElementById('launch-headless') && document.getElementById('launch-headless').checked);
-  const profilePath = profilePathRaw || '<PROFILE_PATH>';
-  const statePath = profilePath + '/.pinchtab-state';
-  const prefix = profilePathRaw ? '' : '# replace <PROFILE_PATH> first\n';
-  const cmd = '(test -x ./bin/pinchtab || go build -o ./bin/pinchtab ./cmd/pinchtab) && '
-    + 'BRIDGE_PORT=' + shellQuote(port || '9868') + ' '
-    + 'BRIDGE_PROFILE=' + shellQuote(profilePath) + ' '
-    + 'BRIDGE_STATE_DIR=' + shellQuote(statePath) + ' '
-    + 'BRIDGE_HEADLESS=' + (headless ? 'true' : 'false') + ' BRIDGE_NO_RESTORE=true '
-    + './bin/pinchtab';
-  document.getElementById('launch-command').value = prefix + cmd;
+  
+  // Modern API: POST /instances/launch with mode + port
+  const mode = headless ? 'headless' : 'headed';
+  const curlCmd = 'curl -X POST http://localhost:9867/instances/launch '
+    + '-H "Content-Type: application/json" '
+    + '-d \'{\"mode\":\"' + mode + '\",\"port\":\"' + (port || 'auto') + '"}\'';
+  
+  document.getElementById('launch-command').value = curlCmd;
 }
 
 async function copyLaunchCommand() {
@@ -294,7 +291,10 @@ async function doLaunch() {
     const res = await fetch('/instances/launch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, port, headless })
+      body: JSON.stringify({
+        mode: headless ? 'headless' : 'headed',
+        port: port
+      })
     });
     const data = await res.json();
     if (!res.ok) {

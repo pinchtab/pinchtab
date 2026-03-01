@@ -66,23 +66,71 @@ import (
 //
 //	pinchtab fill e3 "John Doe"
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
-	// Convert single action to batch for consistency and reliability
-	// This ensures we use the proven batch handler logic
-	var singleReq bridge.ActionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&singleReq); err != nil {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
+	var req bridge.ActionRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
-	// Convert to batch request
-	batchReq := actionsRequest{
-		TabID:   singleReq.TabID,
-		Actions: []bridge.ActionRequest{singleReq},
+	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
+	if req.Kind == "" {
+		web.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
+		return
+	}
+	if available := h.Bridge.AvailableActions(); len(available) > 0 {
+		known := false
+		for _, k := range available {
+			if k == req.Kind {
+				known = true
+				break
+			}
+		}
+		if !known {
+			web.Error(w, 400, fmt.Errorf("unknown action kind: %s", req.Kind))
+			return
+		}
 	}
 
-	// Call the batch handler with the converted request
-	// This reuses the proven batch implementation
-	h.handleActionsBatch(w, r, batchReq)
+	// Resolve tab
+	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+	if req.TabID == "" {
+		req.TabID = resolvedTabID
+	}
+
+	// Resolve ref → nodeID
+	if req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
+		cache := h.Bridge.GetRefCache(resolvedTabID)
+		if cache != nil {
+			if nid, ok := cache.Refs[req.Ref]; ok {
+				req.NodeID = nid
+			}
+		}
+		if req.NodeID == 0 {
+			web.Error(w, 404, fmt.Errorf("ref %s not found - take a /snapshot first", req.Ref))
+			return
+		}
+	}
+
+	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	defer tCancel()
+
+	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
+	if err != nil {
+		web.Error(w, 500, err)
+		return
+	}
+
+	web.JSON(w, 200, map[string]any{"success": true, "result": result})
 }
 
 type actionsRequest struct {

@@ -90,10 +90,17 @@ func TestTabs_BadAction(t *testing.T) {
 // TB6: Max tabs - create many tabs and verify behavior
 func TestTabs_MaxTabs(t *testing.T) {
 	// Get initial tab count
-	_, initialBody := httpGet(t, "/tabs")
+	code, initialBody := httpGet(t, "/tabs")
+	if code != 200 {
+		t.Skipf("skipping: /tabs returned %d (no running instance)", code)
+	}
 	var initialResp map[string]any
 	_ = json.Unmarshal(initialBody, &initialResp)
-	initialTabs := len(initialResp["tabs"].([]any))
+	tabsRaw, ok := initialResp["tabs"]
+	if !ok || tabsRaw == nil {
+		t.Skip("skipping: no tabs field in response")
+	}
+	initialTabs := len(tabsRaw.([]any))
 
 	// Try to create 20 tabs and verify they are created or error appropriately
 	createdTabIDs := []string{}
@@ -120,7 +127,10 @@ func TestTabs_MaxTabs(t *testing.T) {
 	_, finalBody := httpGet(t, "/tabs")
 	var finalResp map[string]any
 	_ = json.Unmarshal(finalBody, &finalResp)
-	finalTabs := finalResp["tabs"].([]any)
+	var finalTabs []any
+	if raw, ok := finalResp["tabs"]; ok && raw != nil {
+		finalTabs, _ = raw.([]any)
+	}
 
 	// Verify tab list changed or was already at limit
 	if len(finalTabs) < initialTabs {

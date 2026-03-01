@@ -17,6 +17,7 @@ type TabEntry struct {
 	Ctx      context.Context
 	Cancel   context.CancelFunc
 	Accessed bool
+	CDPID    string // raw CDP target ID; set when this entry is a hash-alias
 }
 
 type RefCache struct {
@@ -51,6 +52,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		b.TabManager = NewTabManager(browserCtx, cfg, b.tabSetup)
 	}
 	b.Locks = NewLockManager()
+	b.InitActionRegistry()
 	return b
 }
 
@@ -121,6 +123,11 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	// Initialize TabManager now that browser is ready
 	if b.Config != nil && b.TabManager == nil {
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.tabSetup)
+	}
+
+	// Ensure action registry is populated (idempotent)
+	if b.Actions == nil {
+		b.InitActionRegistry()
 	}
 
 	return nil

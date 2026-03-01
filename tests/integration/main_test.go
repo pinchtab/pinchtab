@@ -261,6 +261,9 @@ func navigate(t *testing.T, url string) {
 	if id, ok := result["tabId"].(string); ok {
 		currentTabID = id
 		t.Logf("current tab: %s", currentTabID)
+		// Auto-close tab on test completion to prevent Chrome hitting tab limit.
+		// Safe to call even if the test also defers closeCurrentTab (idempotent).
+		t.Cleanup(func() { closeCurrentTab(t) })
 	}
 }
 
