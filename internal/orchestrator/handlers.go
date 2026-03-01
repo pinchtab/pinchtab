@@ -145,10 +145,7 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	}
 
 	// Default: headless=true unless mode="headed"
-	headless := true
-	if req.Mode == "headed" {
-		headless = false
-	}
+	headless := req.Mode != "headed"
 
 	// Generate unique instance name (internal use only)
 	name := fmt.Sprintf("instance-%d", time.Now().UnixNano())
@@ -218,10 +215,7 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Parse mode: "headed" or "headless" (default: headless)
-	headless := true
-	if req.Mode == "headed" {
-		headless = false
-	}
+	headless := req.Mode != "headed"
 
 	// Port is optional - Launch() will auto-allocate if not provided
 	inst, err := o.Launch(profileName, req.Port, headless)
@@ -365,7 +359,7 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 502, fmt.Errorf("failed to proxy to instance: %w", err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Copy response headers
 	for key, values := range resp.Header {
@@ -469,7 +463,7 @@ func (o *Orchestrator) handleTabList(w http.ResponseWriter, r *http.Request) {
 			web.Error(w, 500, fmt.Errorf("failed to get tabs from instance: %w", err))
 			return
 		}
-		defer tabResp.Body.Close()
+		defer func() { _ = tabResp.Body.Close() }()
 
 		if tabResp.StatusCode == 200 {
 			var instanceTabs []map[string]any
@@ -500,7 +494,7 @@ func (o *Orchestrator) handleTabList(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			defer tabResp.Body.Close()
+			defer func() { _ = tabResp.Body.Close() }()
 
 			if tabResp.StatusCode == 200 {
 				var instanceTabs []map[string]any
@@ -540,7 +534,7 @@ func (o *Orchestrator) handleTabGet(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		defer tabResp.Body.Close()
+		defer func() { _ = tabResp.Body.Close() }()
 
 		if tabResp.StatusCode == 200 {
 			var tab map[string]any
@@ -581,7 +575,7 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		defer closeResp.Body.Close()
+		defer func() { _ = closeResp.Body.Close() }()
 
 		if closeResp.StatusCode == 200 || closeResp.StatusCode == 204 {
 			web.JSON(w, 200, map[string]string{"id": tabID, "status": "closed"})

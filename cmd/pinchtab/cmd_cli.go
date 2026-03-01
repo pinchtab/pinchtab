@@ -657,7 +657,9 @@ func getInstances(client *http.Client, base, token string) []map[string]any {
 	defer func() { _ = result.Body.Close() }()
 
 	var data map[string]any
-	json.NewDecoder(result.Body).Decode(&data)
+	if err := json.NewDecoder(result.Body).Decode(&data); err != nil {
+		log.Printf("warning: error decoding instances response: %v", err)
+	}
 
 	if instances, ok := data["instances"].([]interface{}); ok {
 		converted := make([]map[string]any, len(instances))

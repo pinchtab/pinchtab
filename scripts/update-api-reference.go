@@ -7,7 +7,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
@@ -91,7 +90,7 @@ func main() {
 			log.Fatalf("Error marshaling JSON: %v", err)
 		}
 
-		err = ioutil.WriteFile(outputPath, append(data, '\n'), 0644)
+		err = os.WriteFile(outputPath, append(data, '\n'), 0644)
 		if err != nil {
 			log.Fatalf("Error writing file: %v", err)
 		}
@@ -137,7 +136,7 @@ func generateEndpoints() []Endpoint {
 
 func readExistingReference() APIReference {
 	path := "docs/references/api-reference.json"
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Printf("Could not read existing file (%v), starting fresh\n", err)
 		return APIReference{

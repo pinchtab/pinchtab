@@ -108,6 +108,6 @@ func isPortAvailableInt(port int) bool {
 	if err != nil {
 		return false
 	}
-	listener.Close()
+	_ = listener.Close()
 	return true
 }
