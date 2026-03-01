@@ -159,6 +159,18 @@ func TestHandleFingerprintRotate_NoTab(t *testing.T) {
 	}
 }
 
+func TestHandleAction_GetMissingKind(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/action?tabId=tab1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 400 {
+		t.Errorf("expected 400 for missing kind, got %d", w.Code)
+	}
+}
+
 func TestCountSuccessful(t *testing.T) {
 	results := []actionResult{
 		{Success: true},
