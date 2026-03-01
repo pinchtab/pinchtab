@@ -27,6 +27,7 @@
     "guides/agent-optimization.md"
   ],
   "proposals": [
+    "proposals/default-instance.md",
     "proposals/performance-optimization.md",
     "proposals/ui-enhancements.md"
   ]
