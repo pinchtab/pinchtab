@@ -117,7 +117,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 		}
 
-		_ = h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector)
+		if err := h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector); err != nil {
+			web.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
+			return
+		}
 
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
@@ -163,7 +166,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	h.Bridge.DeleteRefCache(resolvedTabID)
 
-	_ = h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector)
+	if err := h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector); err != nil {
+		web.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
+		return
+	}
 
 	var url string
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
@@ -185,8 +191,32 @@ func (h *Handlers) waitForNavigationState(ctx context.Context, waitFor, waitSele
 			return fmt.Errorf("waitSelector required when waitFor=selector")
 		}
 		return chromedp.Run(ctx, chromedp.WaitVisible(waitSelector, chromedp.ByQuery))
+	case "networkidle":
+		// Approximation for "network idle": require fully loaded readyState and no URL changes
+		var lastURL string
+		idleChecks := 0
+		for i := 0; i < 12; i++ { // up to ~3s
+			var ready, curURL string
+			if err := chromedp.Run(ctx,
+				chromedp.Evaluate(`document.readyState`, &ready),
+				chromedp.Location(&curURL),
+			); err != nil {
+				return err
+			}
+			if ready == "complete" && curURL == lastURL {
+				idleChecks++
+				if idleChecks >= 2 {
+					return nil
+				}
+			} else {
+				idleChecks = 0
+			}
+			lastURL = curURL
+			time.Sleep(250 * time.Millisecond)
+		}
+		return fmt.Errorf("networkidle wait timed out")
 	default:
-		return fmt.Errorf("unsupported waitFor %q (use: none|dom|selector)", waitMode)
+		return fmt.Errorf("unsupported waitFor %q (use: none|dom|selector|networkidle)", waitMode)
 	}
 }
 
