@@ -305,7 +305,6 @@ func (o *Orchestrator) markStopped(id string) {
 		return
 	}
 
-	inst.Status = "stopped"
 	// Release the port back to the allocator
 	portStr := inst.Port
 	if portInt, err := strconv.Atoi(portStr); err == nil {
@@ -313,11 +312,16 @@ func (o *Orchestrator) markStopped(id string) {
 		slog.Debug("released port", "id", id, "port", portStr)
 	}
 
-	// Delete temporary/ephemeral profiles (auto-generated for instances)
-	// These are created with names like "instance-1709275909123456789"
+	// Delete instance from map (remove it entirely, not just mark stopped)
 	profileName := inst.ProfileName
+	delete(o.instances, id)
 	o.mu.Unlock()
 
+	// Log the removal
+	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
+
+	// Delete temporary/ephemeral profiles (auto-generated for instances)
+	// These are created with names like "instance-1709275909123456789"
 	if strings.HasPrefix(profileName, "instance-") {
 		// Delete profile directory
 		profilePath := filepath.Join(o.baseDir, profileName)

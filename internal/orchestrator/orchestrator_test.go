@@ -50,6 +50,11 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 
 	inst, _ := o.Launch("p1", "9001", true)
 
+	// Verify instance is in list before stop
+	if len(o.List()) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(o.List()))
+	}
+
 	// Simulate stop
 	alive = false
 	err := o.Stop(inst.ID)
@@ -57,9 +62,10 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 		t.Fatalf("Stop failed: %v", err)
 	}
 
-	instStatus := o.List()[0]
-	if instStatus.Status != "stopped" {
-		t.Errorf("expected status stopped, got %s", instStatus.Status)
+	// Verify instance is removed from list after stop
+	instances := o.List()
+	if len(instances) != 0 {
+		t.Errorf("expected 0 instances after stop, got %d", len(instances))
 	}
 }
 
@@ -93,8 +99,9 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 		t.Fatalf("StopProfile failed: %v", err)
 	}
 
-	inst := o.List()[0]
-	if inst.Status != "stopped" {
-		t.Errorf("expected stopped, got %s", inst.Status)
+	// Verify instance is removed from list after stop
+	instances := o.List()
+	if len(instances) != 0 {
+		t.Errorf("expected 0 instances after stop, got %d", len(instances))
 	}
 }
