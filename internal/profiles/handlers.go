@@ -14,18 +14,18 @@ import (
 func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
 	// Standard CRUD endpoints
 	mux.HandleFunc("GET /profiles", pm.handleList)
-	mux.HandleFunc("POST /profiles", pm.handleCreate) // RESTful: POST /profiles instead of /profiles/create
+	mux.HandleFunc("POST /profiles", pm.handleCreate)        // RESTful: POST /profiles instead of /profiles/create
 	mux.HandleFunc("POST /profiles/create", pm.handleCreate) // Backward compat
-	mux.HandleFunc("GET /profiles/{id}", pm.handleGetByID) // Get single profile by ID or name
+	mux.HandleFunc("GET /profiles/{id}", pm.handleGetByID)   // Get single profile by ID or name
 
 	// Advanced endpoints (specific paths, no conflict with {id})
 	mux.HandleFunc("POST /profiles/import", pm.handleImport)
 	mux.HandleFunc("PATCH /profiles/meta", pm.handleUpdateMeta)
-	mux.HandleFunc("POST /profiles/{id}/reset", pm.handleResetByIDOrName)   // Reset profile
-	mux.HandleFunc("GET /profiles/{id}/logs", pm.handleLogsByIDOrName)      // Get logs
+	mux.HandleFunc("POST /profiles/{id}/reset", pm.handleResetByIDOrName)        // Reset profile
+	mux.HandleFunc("GET /profiles/{id}/logs", pm.handleLogsByIDOrName)           // Get logs
 	mux.HandleFunc("GET /profiles/{id}/analytics", pm.handleAnalyticsByIDOrName) // Get analytics
-	mux.HandleFunc("DELETE /profiles/{id}", pm.handleDeleteByID)            // Delete profile
-	mux.HandleFunc("PATCH /profiles/{id}", pm.handleUpdateByIDOrName)       // Update profile metadata
+	mux.HandleFunc("DELETE /profiles/{id}", pm.handleDeleteByID)                 // Delete profile
+	mux.HandleFunc("PATCH /profiles/{id}", pm.handleUpdateByIDOrName)            // Update profile metadata
 }
 
 func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
@@ -326,69 +326,6 @@ func (pm *ProfileManager) handleAnalyticsByIDOrName(w http.ResponseWriter, r *ht
 		return
 	}
 
-	report := pm.Analytics(name)
-	web.JSON(w, 200, report)
-}
-
-// OLD: Path-param compat handlers for dashboard JS (deprecated - kept for legacy support if needed)
-// These are now handled above with {id} pattern that accepts both IDs and names
-
-func (pm *ProfileManager) handleDeleteByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if err := pm.Delete(name); err != nil {
-		web.Error(w, 404, err)
-		return
-	}
-	web.JSON(w, 200, map[string]string{"status": "deleted", "name": name})
-}
-
-func (pm *ProfileManager) handleUpdateByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	var req struct {
-		Name        string `json:"name"`
-		UseWhen     string `json:"useWhen"`
-		Description string `json:"description"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid JSON"))
-		return
-	}
-
-	updates := make(map[string]string)
-	if req.Description != "" {
-		updates["description"] = req.Description
-	}
-	if req.UseWhen != "" {
-		updates["useWhen"] = req.UseWhen
-	}
-	if len(updates) > 0 {
-		if err := pm.UpdateMeta(name, updates); err != nil {
-			web.Error(w, 404, err)
-			return
-		}
-	}
-
-	web.JSON(w, 200, map[string]string{"status": "updated", "name": name})
-}
-
-func (pm *ProfileManager) handleResetByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if err := pm.Reset(name); err != nil {
-		web.Error(w, 404, err)
-		return
-	}
-	web.JSON(w, 200, map[string]string{"status": "reset", "name": name})
-}
-
-func (pm *ProfileManager) handleLogsByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	logs := pm.Logs(name, limit)
-	web.JSON(w, 200, logs)
-}
-
-func (pm *ProfileManager) handleAnalyticsByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
 	report := pm.Analytics(name)
 	web.JSON(w, 200, report)
 }

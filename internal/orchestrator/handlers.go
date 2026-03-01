@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,10 +20,6 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	// Note: GET /tabs and POST /tab handlers are in dashboard.go
 	// These orchestrator handlers are used when no instances are running or for aggregation
 	mux.HandleFunc("POST /tabs/open", o.handleTabOpen)
-	// Commented out to avoid conflict with dashboard's GET /tabs
-	// mux.HandleFunc("GET /tabs", o.handleTabList)
-	mux.HandleFunc("GET /tabs/{id}", o.handleTabGet)
-	// mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)  // Handled by dashboard's POST /tab
 
 	// Profile lifecycle by ID (canonical)
 	mux.HandleFunc("POST /profiles/{id}/start", o.handleStartByID)
@@ -390,8 +385,8 @@ func readResponseBody(resp *http.Response) []byte {
 // handleTabOpen: POST /tabs/open {instanceId, url?}
 func (o *Orchestrator) handleTabOpen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		InstanceID string `json:"instanceId"` // Required: instance ID
-		URL        string `json:"url,omitempty"`     // Optional: URL to open
+		InstanceID string `json:"instanceId"`    // Required: instance ID
+		URL        string `json:"url,omitempty"` // Optional: URL to open
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -431,150 +426,3 @@ func (o *Orchestrator) handleTabOpen(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTabList: GET /tabs?instanceId=...
-func (o *Orchestrator) handleTabList(w http.ResponseWriter, r *http.Request) {
-	instanceID := r.URL.Query().Get("instanceId")
-
-	// Get all instances and their tabs via proxying
-	// For now, return a simple response indicating tabs can be queried
-	tabs := []map[string]any{}
-
-	if instanceID != "" {
-		// Filter tabs for specific instance
-		o.mu.RLock()
-		instInternal, ok := o.instances[instanceID]
-		o.mu.RUnlock()
-
-		if !ok {
-			web.Error(w, 404, fmt.Errorf("instance %q not found", instanceID))
-			return
-		}
-
-		// Query instance for its tabs
-		// This would proxy to the instance's /tabs endpoint
-		tabResp, err := o.client.Get(fmt.Sprintf("http://localhost:%s/tabs", instInternal.Port))
-		if err != nil {
-			web.Error(w, 500, fmt.Errorf("failed to get tabs from instance: %w", err))
-			return
-		}
-		defer func() { _ = tabResp.Body.Close() }()
-
-		if tabResp.StatusCode == 200 {
-			var instanceTabs []map[string]any
-			if err := json.NewDecoder(tabResp.Body).Decode(&instanceTabs); err != nil {
-				log.Printf("error decoding tabs from instance: %v", err)
-			}
-			// Add instanceId to each tab
-			for _, tab := range instanceTabs {
-				tab["instanceId"] = instanceID
-				tabs = append(tabs, tab)
-			}
-		}
-	} else {
-		// List all tabs across all instances
-		o.mu.RLock()
-		instances := make([]*InstanceInternal, 0, len(o.instances))
-		for _, inst := range o.instances {
-			instances = append(instances, inst)
-		}
-		o.mu.RUnlock()
-
-		for _, inst := range instances {
-			if inst.Status != "running" {
-				continue
-			}
-			// Query instance for its tabs
-			tabResp, err := o.client.Get(fmt.Sprintf("http://localhost:%s/tabs", inst.Port))
-			if err != nil {
-				continue
-			}
-			defer func() { _ = tabResp.Body.Close() }()
-
-			if tabResp.StatusCode == 200 {
-				var instanceTabs []map[string]any
-				if err := json.NewDecoder(tabResp.Body).Decode(&instanceTabs); err != nil {
-					log.Printf("error decoding tabs from instance: %v", err)
-				}
-				// Add instanceId to each tab
-				for _, tab := range instanceTabs {
-					tab["instanceId"] = inst.ID
-					tabs = append(tabs, tab)
-				}
-			}
-		}
-	}
-
-	web.JSON(w, 200, tabs)
-}
-
-// handleTabGet: GET /tabs/{id}
-func (o *Orchestrator) handleTabGet(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-
-	// Find which instance has this tab
-	o.mu.RLock()
-	instances := make([]*InstanceInternal, 0, len(o.instances))
-	for _, inst := range o.instances {
-		instances = append(instances, inst)
-	}
-	o.mu.RUnlock()
-
-	for _, inst := range instances {
-		if inst.Status != "running" {
-			continue
-		}
-		// Query instance for this specific tab
-		tabResp, err := o.client.Get(fmt.Sprintf("http://localhost:%s/tabs/%s", inst.Port, tabID))
-		if err != nil {
-			continue
-		}
-		defer func() { _ = tabResp.Body.Close() }()
-
-		if tabResp.StatusCode == 200 {
-			var tab map[string]any
-			if err := json.NewDecoder(tabResp.Body).Decode(&tab); err != nil {
-				log.Printf("error decoding tab from instance: %v", err)
-			}
-			tab["instanceId"] = inst.ID
-			web.JSON(w, 200, tab)
-			return
-		}
-	}
-
-	web.Error(w, 404, fmt.Errorf("tab %q not found", tabID))
-}
-
-// handleTabClose: POST /tabs/{id}/close
-func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-
-	// Find which instance has this tab and close it
-	o.mu.RLock()
-	instances := make([]*InstanceInternal, 0, len(o.instances))
-	for _, inst := range o.instances {
-		instances = append(instances, inst)
-	}
-	o.mu.RUnlock()
-
-	for _, inst := range instances {
-		if inst.Status != "running" {
-			continue
-		}
-		// Try to close tab in this instance
-		closeResp, err := o.client.Post(
-			fmt.Sprintf("http://localhost:%s/tabs/%s/close", inst.Port, tabID),
-			"application/json",
-			nil,
-		)
-		if err != nil {
-			continue
-		}
-		defer func() { _ = closeResp.Body.Close() }()
-
-		if closeResp.StatusCode == 200 || closeResp.StatusCode == 204 {
-			web.JSON(w, 200, map[string]string{"id": tabID, "status": "closed"})
-			return
-		}
-	}
-
-	web.Error(w, 404, fmt.Errorf("tab %q not found", tabID))
-}
