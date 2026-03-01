@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -67,65 +66,23 @@ import (
 //
 //	pinchtab fill e3 "John Doe"
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
-		return
-	}
-
-	var req bridge.ActionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+	// Convert single action to batch for consistency and reliability
+	// This ensures we use the proven batch handler logic
+	var singleReq bridge.ActionRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&singleReq); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
-	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
-	if err != nil {
-		web.Error(w, 404, err)
-		return
+	// Convert to batch request
+	batchReq := actionsRequest{
+		TabID:   singleReq.TabID,
+		Actions: []bridge.ActionRequest{singleReq},
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
-
-	if req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
-		cache := h.Bridge.GetRefCache(resolvedTabID)
-		if cache != nil {
-			if nid, ok := cache.Refs[req.Ref]; ok {
-				req.NodeID = nid
-			}
-		}
-		if req.NodeID == 0 {
-			web.JSON(w, 400, map[string]string{
-				"error": fmt.Sprintf("ref %s not found - take a /snapshot first", req.Ref),
-			})
-			return
-		}
-	}
-
-	if req.Kind == "" {
-		kinds := h.Bridge.AvailableActions()
-		web.JSON(w, 400, map[string]string{
-			"error": fmt.Sprintf("missing required field 'kind' - valid values: %s", strings.Join(kinds, ", ")),
-		})
-		return
-	}
-
-	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
-	if err != nil {
-		if strings.HasPrefix(err.Error(), "unknown action") {
-			kinds := h.Bridge.AvailableActions()
-			web.JSON(w, 400, map[string]string{
-				"error": fmt.Sprintf("%s - valid values: %s", err.Error(), strings.Join(kinds, ", ")),
-			})
-			return
-		}
-		web.Error(w, 500, fmt.Errorf("action %s: %w", req.Kind, err))
-		return
-	}
-
-	web.JSON(w, 200, result)
+	// Call the batch handler with the converted request
+	// This reuses the proven batch implementation
+	h.handleActionsBatch(w, r, batchReq)
 }
 
 type actionsRequest struct {
@@ -158,6 +115,12 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 400, fmt.Errorf("actions array is empty"))
 		return
 	}
+
+	h.handleActionsBatch(w, r, req)
+}
+
+// handleActionsBatch processes a batch of actions (used by both single and batch endpoints)
+func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, req actionsRequest) {
 
 	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
 	if err != nil {
