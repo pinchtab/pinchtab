@@ -8,11 +8,11 @@
     "showcase.md"
   ],
   "references": [
-    "references/api-reference.md",
     "references/endpoints.md",
     "references/configuration.md",
     "references/cli-commands.md",
-    "references/curl-commands.md"
+    "references/curl-commands.md",
+    "references/api-reference.json"
   ],
   "architecture": [
     "architecture/architecture-overview.md",
