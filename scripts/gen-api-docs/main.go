@@ -31,25 +31,38 @@ type Param struct {
 }
 
 func main() {
-	// Parse all relevant files for routes
+	// Parse all relevant files for routes and handler comments
 	var endpoints []Endpoint
+	handlerComments := make(map[string]string)
 
-	// Main handlers
+	// Main handlers - first get all handler comments from individual files
+	handlerComments = mergeComments(handlerComments, extractAllHandlerComments("internal/handlers/"))
+
 	endpoints = append(endpoints, extractEndpoints("internal/handlers/handlers.go")...)
 
 	// Dashboard handlers
+	handlerComments = mergeComments(handlerComments, extractAllHandlerComments("internal/dashboard/"))
 	endpoints = append(endpoints, extractEndpoints("internal/dashboard/dashboard.go")...)
 
 	// Profiles service
 	profiles, err := findProfilesFile()
 	if err == nil {
+		handlerComments = mergeComments(handlerComments, extractAllHandlerComments("internal/profiles/"))
 		endpoints = append(endpoints, extractEndpoints(profiles)...)
 	}
 
 	// Orchestrator service
 	orchestrator, err := findOrchestratorFile()
 	if err == nil {
+		handlerComments = mergeComments(handlerComments, extractAllHandlerComments("internal/orchestrator/"))
 		endpoints = append(endpoints, extractEndpoints(orchestrator)...)
+	}
+
+	// Merge handler comments into endpoints
+	for i := range endpoints {
+		if handlerComments[endpoints[i].Handler] != "" {
+			endpoints[i].Doc = handlerComments[endpoints[i].Handler]
+		}
 	}
 
 	// Remove duplicates
@@ -90,9 +103,18 @@ func main() {
 	for _, ep := range endpoints {
 		notes := ""
 		if ep.Doc != "" {
-			notes = strings.TrimSpace(ep.Doc)
-			if len(notes) > 50 {
-				notes = notes[:50] + "..."
+			// Extract first line of doc comment
+			lines := strings.Split(strings.TrimSpace(ep.Doc), "\n")
+			notes = strings.TrimSpace(lines[0])
+			// Remove the function name prefix if it exists
+			if strings.HasPrefix(notes, "Handle") {
+				parts := strings.SplitN(notes, " ", 2)
+				if len(parts) > 1 {
+					notes = parts[1]
+				}
+			}
+			if len(notes) > 60 {
+				notes = notes[:60] + "..."
 			}
 		}
 		fmt.Printf("| %s | `%s` | %s | %s |\n", ep.Method, ep.Path, ep.Handler, notes)
@@ -109,12 +131,18 @@ func main() {
 		fmt.Println("")
 
 		if ep.Doc != "" {
-			fmt.Printf("%s\n", ep.Doc)
+			// Clean up the doc text
+			docLines := strings.Split(strings.TrimSpace(ep.Doc), "\n")
+			for _, line := range docLines {
+				fmt.Println(line)
+			}
 			fmt.Println("")
 		}
 
-		fmt.Printf("**Handler:** `%s`\n", ep.Handler)
-		fmt.Println("")
+		if ep.Handler != "" {
+			fmt.Printf("**Handler:** `%s`\n", ep.Handler)
+			fmt.Println("")
+		}
 	}
 
 	fmt.Println("---")
@@ -125,6 +153,41 @@ func main() {
 	fmt.Println("- For full implementation details, see `internal/handlers/*.go`")
 	fmt.Println("- Query parameters and request bodies are defined in each handler")
 	fmt.Println("")
+}
+
+func mergeComments(maps ...map[string]string) map[string]string {
+	result := make(map[string]string)
+	for _, m := range maps {
+		for k, v := range m {
+			if _, exists := result[k]; !exists {
+				result[k] = v
+			}
+		}
+	}
+	return result
+}
+
+func extractAllHandlerComments(dirPath string) map[string]string {
+	comments := make(map[string]string)
+
+	// Read directory
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return comments
+	}
+
+	// Parse all .go files in the directory
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
+			filePath := dirPath + entry.Name()
+			fileComments := extractHandlerComments(filePath)
+			for k, v := range fileComments {
+				comments[k] = v
+			}
+		}
+	}
+
+	return comments
 }
 
 func findProfilesFile() (string, error) {
@@ -182,6 +245,41 @@ func extractEndpoints(filePath string) []Endpoint {
 	}
 
 	return endpoints
+}
+
+func extractHandlerComments(filePath string) map[string]string {
+	comments := make(map[string]string)
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return comments
+	}
+
+	// Iterate through all declarations
+	for _, decl := range file.Decls {
+		funcDecl, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+
+		// Look for handler functions (they have "Handle" or "handle" in the name)
+		if !strings.Contains(funcDecl.Name.Name, "handle") && !strings.Contains(funcDecl.Name.Name, "Handle") {
+			continue
+		}
+
+		// Extract doc comment
+		if funcDecl.Doc != nil && len(funcDecl.Doc.List) > 0 {
+			var docText strings.Builder
+			for _, comment := range funcDecl.Doc.List {
+				docText.WriteString(strings.TrimPrefix(comment.Text, "// "))
+				docText.WriteString("\n")
+			}
+			comments[funcDecl.Name.Name] = docText.String()
+		}
+	}
+
+	return comments
 }
 
 func extractHandleFuncCalls(body *ast.BlockStmt) []Endpoint {
