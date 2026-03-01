@@ -42,7 +42,7 @@ CLI COMMANDS:
   pinchtab tabs [new <url>|close <id>]  Manage tabs
   pinchtab ss [-o file] [-q 80]         Screenshot
   pinchtab eval <expression>            Run JavaScript
-  pinchtab pdf [-o file] [options]     Export page as PDF (see PDF FLAGS)
+  pinchtab pdf --tab <id> [-o file] [options]  Export tab as PDF (see PDF FLAGS)
   pinchtab instances                    List running instances
   pinchtab profiles                     List available profiles
   pinchtab health                       Check server status
@@ -737,6 +737,7 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 	params := url.Values{}
 	params.Set("raw", "true")
 	outFile := ""
+	tabID := ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-o", "--output":
@@ -754,7 +755,7 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 		case "--tab":
 			if i+1 < len(args) {
 				i++
-				params.Set("tabId", args[i])
+				tabID = args[i]
 			}
 		// Paper dimensions
 		case "--paper-width":
@@ -831,8 +832,11 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 	if outFile == "" {
 		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
 	}
+	if tabID == "" {
+		fatal("tab id required for pdf export: use --tab <tabId> or 'pinchtab tab pdf <tabId>'")
+	}
 
-	data := doGetRaw(client, base, token, "/pdf", params)
+	data := doGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/pdf", tabID), params)
 	if data == nil {
 		return
 	}
@@ -878,7 +882,7 @@ func cliQuick(client *http.Client, base, token string, args []string) {
 	fmt.Println("  pinchtab click <ref>        # Click an element (use refs from above)")
 	fmt.Println("  pinchtab type <ref> <text>  # Type into input field")
 	fmt.Println("  pinchtab screenshot         # Take a screenshot")
-	fmt.Println("  pinchtab pdf -o output.pdf  # Save as PDF")
+	fmt.Println("  pinchtab pdf --tab <id> -o output.pdf  # Save tab as PDF")
 }
 
 // --- health ---
@@ -1205,7 +1209,7 @@ func suggestNextAction(cmd string, result map[string]any) {
 		fmt.Fprintf(os.Stderr, "  pinchtab snap              # See page structure\n")
 		fmt.Fprintf(os.Stderr, "  pinchtab screenshot         # Capture visual\n")
 		fmt.Fprintf(os.Stderr, "  pinchtab click <ref>        # Click an element\n")
-		fmt.Fprintf(os.Stderr, "  pinchtab pdf -o output.pdf  # Save as PDF\n")
+		fmt.Fprintf(os.Stderr, "  pinchtab pdf --tab <id> -o output.pdf  # Save tab as PDF\n")
 
 	case "snap", "snapshot":
 		refs := extractRefs(result)

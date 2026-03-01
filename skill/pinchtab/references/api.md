@@ -138,33 +138,33 @@ Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
 ## PDF export
 
 ```bash
-# CLI: pinchtab pdf [-o file.pdf] [--landscape] [--scale 0.8]
+# CLI: pinchtab pdf --tab TAB_ID [-o file.pdf] [--landscape] [--scale 0.8]
 # Returns base64 JSON
-curl /pdf
+curl "/tabs/TAB_ID/pdf"
 
 # Raw PDF bytes
-curl "/pdf?raw=true" -o page.pdf
+curl "/tabs/TAB_ID/pdf?raw=true" -o page.pdf
 
 # Save to disk
-curl "/pdf?output=file&path=/tmp/page.pdf"
+curl "/tabs/TAB_ID/pdf?output=file&path=/tmp/page.pdf"
 
 # Landscape with custom scale
-curl "/pdf?landscape=true&scale=0.8&raw=true" -o page.pdf
+curl "/tabs/TAB_ID/pdf?landscape=true&scale=0.8&raw=true" -o page.pdf
 
 # Custom paper size (Letter: 8.5x11, A4: 8.27x11.69)
-curl "/pdf?paperWidth=8.5&paperHeight=11&marginTop=0.5&marginLeft=0.5&raw=true" -o custom.pdf
+curl "/tabs/TAB_ID/pdf?paperWidth=8.5&paperHeight=11&marginTop=0.5&marginLeft=0.5&raw=true" -o custom.pdf
 
 # Export specific pages
-curl "/pdf?pageRanges=1-5&raw=true" -o pages.pdf
+curl "/tabs/TAB_ID/pdf?pageRanges=1-5&raw=true" -o pages.pdf
 
 # With header/footer
-curl "/pdf?displayHeaderFooter=true&headerTemplate=%3Cspan%20class=title%3E%3C/span%3E&raw=true" -o header.pdf
+curl "/tabs/TAB_ID/pdf?displayHeaderFooter=true&headerTemplate=%3Cspan%20class=title%3E%3C/span%3E&raw=true" -o header.pdf
 
 # Accessible PDF with document outline
-curl "/pdf?generateTaggedPDF=true&generateDocumentOutline=true&raw=true" -o accessible.pdf
+curl "/tabs/TAB_ID/pdf?generateTaggedPDF=true&generateDocumentOutline=true&raw=true" -o accessible.pdf
 
 # Honor CSS page size
-curl "/pdf?preferCSSPageSize=true&raw=true" -o css-sized.pdf
+curl "/tabs/TAB_ID/pdf?preferCSSPageSize=true&raw=true" -o css-sized.pdf
 ```
 
 **Query Parameters:**

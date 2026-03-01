@@ -161,6 +161,11 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*bridge.Instanc
 	o.mu.Unlock()
 
 	profilePath := filepath.Join(o.baseDir, name)
+	if o.profiles != nil {
+		if resolvedPath, err := o.profiles.ProfilePath(name); err == nil {
+			profilePath = resolvedPath
+		}
+	}
 	if err := os.MkdirAll(filepath.Join(profilePath, "Default"), 0755); err != nil {
 		return nil, fmt.Errorf("create profile dir: %w", err)
 	}

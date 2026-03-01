@@ -158,22 +158,22 @@ Example:
 
 ## Chrome Profile Directory Structure
 
-Profiles are stored in `~/.pinchtab/profiles/{name}/`:
+Profiles are stored in `~/.pinchtab/profiles/{id}/`:
 
 ```text
 ~/.pinchtab/profiles/
-├── work/
+├── prof_9f86d081/
 │   ├── Default/
 │   │   ├── Preferences
 │   │   ├── Cookies
 │   │   ├── History
 │   │   └── ... (other Chrome data)
 │   └── ...
-├── personal/
+├── prof_dc34vewr/
 │   ├── Default/
 │   │   └── ... (Chrome data)
 │   └── ...
-└── default/
+└── prof_34ff6ks9/
     └── ... (default profile)
 ```
 

@@ -8,21 +8,22 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-func TestHandlePDF_NoTab(t *testing.T) {
+func TestHandleTabPDF_MissingTabID(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
-	req := httptest.NewRequest("GET", "/pdf", nil)
+	req := httptest.NewRequest("GET", "/tabs//pdf", nil)
 	w := httptest.NewRecorder()
-	h.HandlePDF(w, req)
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
+	h.HandleTabPDF(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
 
-func TestHandlePDF_NoTab_WithTabId(t *testing.T) {
+func TestHandleTabPDF_NoTab_WithTabID(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
-	req := httptest.NewRequest("GET", "/pdf?tabId=nonexistent", nil)
+	req := httptest.NewRequest("GET", "/tabs/nonexistent/pdf", nil)
+	req.SetPathValue("id", "nonexistent")
 	w := httptest.NewRecorder()
-	h.HandlePDF(w, req)
+	h.HandleTabPDF(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
 	}

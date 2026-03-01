@@ -68,6 +68,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 
 	proxyEndpoints := []string{
 		"GET /snapshot", "GET /screenshot", "GET /text",
+		"GET /tabs/{tabId}/pdf", "POST /tabs/{tabId}/pdf",
 		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",

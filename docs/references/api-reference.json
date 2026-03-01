@@ -140,15 +140,6 @@
     },
     {
       "method": "GET",
-      "path": "/pdf",
-      "handler": "HandlePDF",
-      "description": "Export as PDF",
-      "cli": true,
-      "curl": true,
-      "examples": {}
-    },
-    {
-      "method": "GET",
       "path": "/screencast",
       "handler": "HandleScreencast",
       "description": "Stream screen",
@@ -599,6 +590,19 @@
       "parameters": "landscape (bool, query, optional); scale (float, query, optional); margins (object, query, optional); pageRanges (string, query, optional)",
       "payload": "N/A (GET)",
       "defaults": "returns binary PDF data"
+    },
+    {
+      "method": "POST",
+      "path": "/tabs/{id}/pdf",
+      "handler": "proxyToTab",
+      "description": "Export tab as PDF (JSON body options)",
+      "tldr": "Export as PDF",
+      "cli": false,
+      "curl": true,
+      "curlExample": "curl -X POST 'http://localhost:9867/tabs/tab_abc/pdf?raw=true' -H 'Content-Type: application/json' -d '{\"landscape\":true,\"scale\":1.0}' > output.pdf",
+      "parameters": "same options as GET, but provided in JSON body",
+      "payload": "{\"landscape\":true,\"scale\":1.0,\"displayHeaderFooter\":true}",
+      "defaults": "returns binary PDF data (or JSON when output=file)"
     },
     {
       "method": "GET",

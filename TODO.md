@@ -92,7 +92,7 @@ POST   /tabs/{id}/fingerprint/rotate  Rotate fingerprint
 ❌ POST   /instances/{id}/actions         → POST /tabs/{id}/actions
 ❌ GET    /instances/{id}/text            → GET /tabs/{id}/text
 ❌ POST   /instances/{id}/evaluate        → POST /tabs/{id}/evaluate
-❌ GET    /instances/{id}/pdf             → GET /tabs/{id}/pdf
+✅ PDF endpoint migrated to `GET/POST /tabs/{id}/pdf`
 ❌ POST   /instances/{id}/tab             → POST /tabs/new {instanceId}
 ❌ GET    /instances/{id}/tabs            → GET /tabs?instanceId={id}
 ❌ POST   /instances/{id}/tab/lock        → POST /tabs/{id}/lock
@@ -139,7 +139,7 @@ POST   /tabs/{id}/fingerprint/rotate  Rotate fingerprint
   - `/tabs/{id}/actions` → Extract from `/instances/{id}/actions`
   - `/tabs/{id}/text` → Extract from `/instances/{id}/text`
   - `/tabs/{id}/evaluate` → Extract from `/instances/{id}/evaluate`
-  - `/tabs/{id}/pdf` → Extract from `/instances/{id}/pdf`
+  - `/tabs/{id}/pdf` (implemented)
   - `/tabs/{id}/cookies` (GET/POST) → Extract from `/instances/{id}/cookies`
   - `/tabs/{id}/lock` → Extract from `/instances/{id}/tab/lock`
   - `/tabs/{id}/unlock` → Extract from `/instances/{id}/tab/unlock`

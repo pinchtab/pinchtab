@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -42,12 +40,16 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 		for _, p := range profiles {
 			if !p.Temporary {
 				// Convert to map for JSON response
+				sizeMB := float64(p.DiskUsage) / (1024 * 1024)
 				filtered = append(filtered, map[string]any{
 					"id":                p.ID,
 					"name":              p.Name,
+					"path":              p.Path,
+					"pathExists":        p.PathExists,
 					"created":           p.Created,
 					"lastUsed":          p.LastUsed,
 					"diskUsage":         p.DiskUsage,
+					"sizeMB":            sizeMB,
 					"running":           p.Running,
 					"source":            p.Source,
 					"chromeProfileName": p.ChromeProfileName,
@@ -163,11 +165,7 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	// Try to find profile by ID first
-	pm.mu.RLock()
-	entries, err := os.ReadDir(pm.baseDir)
-	pm.mu.RUnlock()
-
+	profiles, err := pm.List()
 	if err != nil {
 		web.Error(w, 500, err)
 		return
@@ -175,38 +173,28 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 
 	var foundProfile map[string]any
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	for _, p := range profiles {
+		// Match by ID or name (backward-compatible)
+		if p.ID != id && p.Name != id {
 			continue
 		}
-
-		meta := readProfileMeta(filepath.Join(pm.baseDir, entry.Name()))
-		if meta.ID == "" {
-			meta.ID = profileID(entry.Name())
+		foundProfile = map[string]any{
+			"id":                p.ID,
+			"name":              p.Name,
+			"path":              p.Path,
+			"pathExists":        p.PathExists,
+			"created":           p.Created,
+			"diskUsage":         p.DiskUsage,
+			"sizeMB":            float64(p.DiskUsage) / (1024 * 1024),
+			"source":            p.Source,
+			"chromeProfileName": p.ChromeProfileName,
+			"accountEmail":      p.AccountEmail,
+			"accountName":       p.AccountName,
+			"hasAccount":        p.HasAccount,
+			"useWhen":           p.UseWhen,
+			"description":       p.Description,
 		}
-
-		// If ID matches, or if id looks like a name (for backward compat)
-		if meta.ID == id || entry.Name() == id {
-			info, err := pm.profileInfo(entry.Name())
-			if err != nil {
-				continue
-			}
-
-			foundProfile = map[string]any{
-				"id":                info.ID,
-				"name":              info.Name,
-				"created":           info.CreatedAt,
-				"diskUsage":         info.SizeMB * 1024 * 1024,
-				"source":            info.Source,
-				"chromeProfileName": info.ChromeProfileName,
-				"accountEmail":      info.AccountEmail,
-				"accountName":       info.AccountName,
-				"hasAccount":        info.HasAccount,
-				"useWhen":           info.UseWhen,
-				"description":       info.Description,
-			}
-			break
-		}
+		break
 	}
 
 	if foundProfile == nil {

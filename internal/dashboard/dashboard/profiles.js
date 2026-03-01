@@ -175,19 +175,24 @@ async function doCreateProfile() {
 
   try {
     const body = { name, useWhen };
+    let res;
     if (source) {
-      body.source = source;
-      await fetch('/profiles/import', {
+      body.sourcePath = source;
+      res = await fetch('/profiles/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
     } else {
-      await fetch('/profiles/create', {
+      res = await fetch('/profiles/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText || 'create failed');
     }
     loadProfiles();
   } catch (e) { await appAlert('Failed: ' + e.message, 'Error'); }

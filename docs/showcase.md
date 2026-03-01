@@ -518,7 +518,7 @@ echo "Instance: $INST, Tab: $TAB"
 
 **Step 2: Generate PDF (use tabId)**
 ```bash
-curl "http://localhost:9867/instances/$INST/pdf?tabId=$TAB&landscape=true" \
+curl "http://localhost:9867/instances/$INST/tabs/$TAB/pdf?landscape=true" \
   -o report.pdf
 ```
 
@@ -546,7 +546,7 @@ echo "Tab: $TAB"
 
 # Step 4: Generate PDF with options using tabId
 echo "Generating PDF..."
-curl -s "http://localhost:9867/instances/$INST/pdf?tabId=$TAB&landscape=true&displayHeaderFooter=true" \
+curl -s "http://localhost:9867/instances/$INST/tabs/$TAB/pdf?landscape=true&displayHeaderFooter=true" \
   -o report.pdf
 
 echo "PDF saved: report.pdf"
@@ -662,7 +662,7 @@ curl -X POST http://localhost:9867/instances/$INST2/stop
 | Extract text | `GET /instances/{id}/text` | Returns readable text |
 | Run JavaScript | `POST /instances/{id}/evaluate` | Returns JSON result |
 | Screenshot | `GET /instances/{id}/screenshot` | Returns PNG image |
-| PDF export | `GET /instances/{id}/pdf` | Returns PDF file |
+| PDF export | `GET /instances/{id}/tabs/{tabId}/pdf` | Returns PDF file |
 | List tabs | `GET /instances/{id}/tabs` | All tabs in instance |
 | New tab | `POST /tabs/open` | Open URL in new tab |
 | Stop instance | `POST /instances/{id}/stop` | Cleanup, free resources |

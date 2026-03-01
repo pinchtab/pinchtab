@@ -54,7 +54,7 @@ HTTP Client
 | **Page Inspection** | `GET /instances/{id}/snapshot` `GET /instances/{id}/text` | Get accessibility tree, extract text |
 | **User Actions** | `POST /instances/{id}/action` | Click, type, fill, press, hover, focus, scroll, select |
 | **JavaScript** | `POST /instances/{id}/evaluate` | Execute JavaScript in the page |
-| **Visual** | `GET /instances/{id}/screenshot` `GET /instances/{id}/pdf` | Take screenshot, export PDF |
+| **Visual** | `GET /instances/{id}/screenshot` `GET /instances/{id}/tabs/{tabId}/pdf` | Take screenshot, export PDF |
 | **Profiles** | `GET /profiles` `POST /profiles` | List and create browser profiles |
 | **Aggregate** | `GET /tabs` | Get all tabs across all instances |
 
@@ -604,11 +604,10 @@ curl "http://localhost:9867/instances/work-9868/screenshot?tabId=tab-1&quality=8
 
 **Endpoint:**
 ```
-GET /instances/{id}/pdf
+GET /instances/{id}/tabs/{tabId}/pdf
 ```
 
 **Query Parameters:**
-- `tabId` (optional) — Target tab
 - `landscape` (optional) — `true` for landscape
 - `paperWidth`, `paperHeight` (optional) — Paper dimensions in inches
 - `marginTop`, `marginBottom`, `marginLeft`, `marginRight` (optional) — Margins in inches
@@ -627,7 +626,7 @@ GET /instances/{id}/pdf
 
 **Example (curl):**
 ```bash
-curl "http://localhost:9867/instances/work-9868/pdf?tabId=tab-1&landscape=true" \
+curl "http://localhost:9867/instances/work-9868/tabs/tab-1/pdf?landscape=true" \
   -o output.pdf
 ```
 

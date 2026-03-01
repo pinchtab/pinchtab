@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
-	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
@@ -126,7 +125,9 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 		opts = append(opts, chromedp.Flag("TZ", cfg.Timezone))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Allocator/browser context must be long-lived for the entire bridge instance.
+	// A short timeout here causes all later tab creation to fail once the deadline expires.
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return ctx, cancel, opts
 }

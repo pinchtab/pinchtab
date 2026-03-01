@@ -23,7 +23,7 @@ func TestProfileManagerCreateAndList(t *testing.T) {
 	}
 
 	// Verify profile directory exists on disk
-	profileDir := filepath.Join(dir, "test-profile")
+	profileDir := filepath.Join(dir, profileID("test-profile"))
 	if _, err := os.Stat(profileDir); err != nil {
 		t.Fatalf("profile directory not created: %s", profileDir)
 	}
@@ -104,7 +104,7 @@ func TestProfileManagerListReadsAccountFromPreferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	prefsPath := filepath.Join(dir, "acc-pref", "Default", "Preferences")
+	prefsPath := filepath.Join(dir, profileID("acc-pref"), "Default", "Preferences")
 	prefs := `{"account_info":[{"email":"alice@example.com","full_name":"Alice"}]}`
 	if err := os.WriteFile(prefsPath, []byte(prefs), 0644); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestProfileManagerListReadsLocalStateIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	localStatePath := filepath.Join(dir, "acc-local", "Local State")
+	localStatePath := filepath.Join(dir, profileID("acc-local"), "Local State")
 	localState := `{"profile":{"info_cache":{"Default":{"name":"Work","user_name":"bob@example.com","gaia_name":"Bob","gaia_id":"123"}}}}`
 	if err := os.WriteFile(localStatePath, []byte(localState), 0644); err != nil {
 		t.Fatal(err)
@@ -167,11 +167,11 @@ func TestProfileManagerReset(t *testing.T) {
 	pm := NewProfileManager(dir)
 	_ = pm.Create("reset-me")
 
-	sessDir := filepath.Join(dir, "reset-me", "Default", "Sessions")
+	sessDir := filepath.Join(dir, profileID("reset-me"), "Default", "Sessions")
 	_ = os.MkdirAll(sessDir, 0755)
 	_ = os.WriteFile(filepath.Join(sessDir, "session1"), []byte("data"), 0644)
 
-	cacheDir := filepath.Join(dir, "reset-me", "Default", "Cache")
+	cacheDir := filepath.Join(dir, profileID("reset-me"), "Default", "Cache")
 	_ = os.MkdirAll(cacheDir, 0755)
 
 	if err := pm.Reset("reset-me"); err != nil {
@@ -185,7 +185,7 @@ func TestProfileManagerReset(t *testing.T) {
 		t.Error("Cache dir should be removed after reset")
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "reset-me")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, profileID("reset-me"))); err != nil {
 		t.Error("Profile dir should still exist after reset")
 	}
 }
@@ -260,10 +260,19 @@ func TestProfileHandlerList(t *testing.T) {
 	if len(profiles) != 2 {
 		t.Errorf("expected 2 profiles, got %d", len(profiles))
 	}
+	for _, p := range profiles {
+		if p.Path == "" {
+			t.Fatalf("expected path to be present for profile %q", p.Name)
+		}
+		if !p.PathExists {
+			t.Fatalf("expected pathExists=true for profile %q", p.Name)
+		}
+	}
 }
 
 func TestProfileHandlerCreate(t *testing.T) {
-	pm := NewProfileManager(t.TempDir())
+	baseDir := t.TempDir()
+	pm := NewProfileManager(baseDir)
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 
@@ -274,6 +283,15 @@ func TestProfileHandlerCreate(t *testing.T) {
 
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	idDir := filepath.Join(baseDir, profileID("new-profile"))
+	if _, err := os.Stat(idDir); err != nil {
+		t.Fatalf("expected id-based directory to exist: %s", idDir)
+	}
+	nameDir := filepath.Join(baseDir, "new-profile")
+	if _, err := os.Stat(nameDir); !os.IsNotExist(err) {
+		t.Fatalf("expected name-based directory not to exist: %s", nameDir)
 	}
 }
 
@@ -321,7 +339,7 @@ func TestProfileMetaReadWrite(t *testing.T) {
 	}
 
 	// Read back the metadata
-	readMeta := readProfileMeta(filepath.Join(dir, "work-profile"))
+	readMeta := readProfileMeta(filepath.Join(dir, profileID("work-profile")))
 	if readMeta.UseWhen != "I need to access work email" {
 		t.Errorf("expected useWhen 'I need to access work email', got %q", readMeta.UseWhen)
 	}

@@ -432,9 +432,9 @@ func TestCLIPDF(t *testing.T) {
 	client := m.server.Client()
 
 	outFile := t.TempDir() + "/test.pdf"
-	cliPDF(client, m.base(), "", []string{"-o", outFile, "--landscape", "--scale", "0.8"})
-	if m.lastPath != "/pdf" {
-		t.Errorf("expected /pdf, got %s", m.lastPath)
+	cliPDF(client, m.base(), "", []string{"-o", outFile, "--tab", "tab-abc", "--landscape", "--scale", "0.8"})
+	if m.lastPath != "/tabs/tab-abc/pdf" {
+		t.Errorf("expected /tabs/tab-abc/pdf, got %s", m.lastPath)
 	}
 	if !strings.Contains(m.lastQuery, "landscape=true") {
 		t.Errorf("expected landscape=true, got %s", m.lastQuery)
@@ -479,6 +479,9 @@ func TestCLIPDFAllOptions(t *testing.T) {
 	}
 
 	cliPDF(client, m.base(), "", args)
+	if m.lastPath != "/tabs/tab-123/pdf" {
+		t.Errorf("expected /tabs/tab-123/pdf, got %s", m.lastPath)
+	}
 
 	// Check all parameters were set correctly
 	expectedParams := []string{
@@ -495,7 +498,6 @@ func TestCLIPDFAllOptions(t *testing.T) {
 		"displayHeaderFooter=true",
 		"generateTaggedPDF=true",
 		"generateDocumentOutline=true",
-		"tabId=tab-123",
 		"raw=true",
 	}
 

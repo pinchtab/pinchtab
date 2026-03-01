@@ -113,8 +113,8 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # Navigate
-curl -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://example.com"}'
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+  -d '{"url":"https://example.com"}' | jq -r '.tabId')
 
 # Read the page as text
 curl http://localhost:9867/instances/$INST/text
@@ -137,7 +137,7 @@ curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB_ID" -o page.pn
 
 ```bash
 # Save PDF
-curl "http://localhost:9867/instances/$INST/pdf?landscape=true" -o output.pdf
+curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf?landscape=true" -o output.pdf
 ```
 
 ### Interact with the Page
@@ -208,8 +208,8 @@ INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
 # 2. Navigate to a page
-curl -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://example.com"}'
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+  -d '{"url":"https://example.com"}' | jq -r '.tabId')
 
 # 3. Get page structure (see buttons, links, inputs)
 curl http://localhost:9867/instances/$INST/snapshot
@@ -223,7 +223,7 @@ curl http://localhost:9867/instances/$INST/snapshot
 
 # 6. Capture result
 curl http://localhost:9867/instances/$INST/screenshot -o page.png
-curl http://localhost:9867/instances/$INST/pdf -o report.pdf
+curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf" -o report.pdf
 
 # 7. Stop instance (clean up)
 curl -X POST http://localhost:9867/instances/$INST/stop
@@ -525,12 +525,10 @@ curl -X POST http://localhost:9867/instances/$INST/navigate \
 INST=$(pinchtab instance launch | jq -r '.id')
 sleep 2
 
-# Navigate to report
-curl -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://reports.example.com/monthly"}'
-
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+  -d '{"url":"https://reports.example.com/monthly"}' | jq -r '.tabId')
 # Export PDF
-curl "http://localhost:9867/instances/$INST/pdf?landscape=true" -o report.pdf
+curl "http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf?landscape=true" -o report.pdf
 ```
 
 ### Scenario 5: Multi-Tab Workflow
@@ -788,7 +786,7 @@ curl http://localhost:9867/instances/$INST/screenshot # Higher tokens
 | Click element | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"click","ref":"e5"}'` |
 | Type text | `curl -X POST http://localhost:9867/instances/$INST/action -d '{"kind":"type","ref":"e3","text":"hello"}'` |
 | Screenshot | `curl http://localhost:9867/instances/$INST/screenshot -o page.png` |
-| PDF export | `curl http://localhost:9867/instances/$INST/pdf -o out.pdf` |
+| PDF export | `curl http://localhost:9867/instances/$INST/tabs/$TAB_ID/pdf -o out.pdf` |
 | List instances | `curl http://localhost:9867/instances` |
 | List tabs | `curl http://localhost:9867/instances/$INST/tabs` |
 | New tab | `curl -X POST http://localhost:9867/tabs/open -d '{"instanceId":"$INST","url":"..."}'` |

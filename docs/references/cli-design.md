@@ -168,7 +168,7 @@ EOF
 | `/tab` | POST | `pinchtab tab create https://example.com` |
 | `/tabs` | GET | `pinchtab tabs` |
 | `/evaluate` | POST | `pinchtab eval "document.title"` |
-| `/pdf` | GET | `pinchtab pdf -o out.pdf --landscape` |
+| `/tabs/{id}/pdf` | GET | `pinchtab pdf --tab <tabId> -o out.pdf --landscape` |
 | `/text` | GET | `pinchtab text` |
 | `/text` | GET | `pinchtab text --raw` |
 | `/cookies` | GET | `pinchtab cookies` |
@@ -184,7 +184,7 @@ EOF
 | `/instances/{id}/tab` | POST | `pinchtab --instance <id> tab create https://example.com` |
 | `/instances/{id}/tabs` | GET | `pinchtab --instance <id> tabs` |
 | `/instances/{id}/evaluate` | POST | `pinchtab --instance <id> eval 'code'` |
-| `/instances/{id}/pdf` | GET | `pinchtab --instance <id> pdf -o out.pdf` |
+| `/instances/{id}/tabs/{tabId}/pdf` | GET | `pinchtab --instance <id> pdf --tab <tabId> -o out.pdf` |
 
 ## Real-World Examples
 
