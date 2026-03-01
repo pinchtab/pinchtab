@@ -161,7 +161,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
-		title := bridge.WaitForTitle(tCtx, titleWait)
+		title, _ := bridge.WaitForTitle(tCtx, titleWait)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
@@ -198,7 +198,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	var url string
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
-	title := bridge.WaitForTitle(tCtx, titleWait)
+	title, _ := bridge.WaitForTitle(tCtx, titleWait)
 
 	web.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
 }

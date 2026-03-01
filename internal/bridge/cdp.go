@@ -2,7 +2,7 @@ package bridge
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
@@ -24,14 +24,11 @@ func NavigatePage(ctx context.Context, url string) error {
 		return err
 	}
 
-	timeout := time.After(30 * time.Second)
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timeout:
-			return fmt.Errorf("navigation timeout")
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
@@ -116,7 +113,26 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			return nil
+			var result json.RawMessage
+			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+				"backendNodeId": nodeID,
+			}, &result); err != nil {
+				return err
+			}
+			var resolved struct {
+				Object struct {
+					ObjectID string `json:"objectId"`
+				} `json:"object"`
+			}
+			if err := json.Unmarshal(result, &resolved); err != nil {
+				return err
+			}
+			js := `function(v) { this.value = v; this.dispatchEvent(new Event('input', {bubbles: true})); this.dispatchEvent(new Event('change', {bubbles: true})); }`
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+				"functionDeclaration": js,
+				"objectId":            resolved.Object.ObjectID,
+				"arguments":           []map[string]any{{"value": value}},
+			}, nil)
 		}),
 	)
 }
@@ -129,23 +145,37 @@ func ScrollByNodeID(ctx context.Context, nodeID int64) error {
 	)
 }
 
-func WaitForTitle(ctx context.Context, timeout time.Duration) string {
+func WaitForTitle(ctx context.Context, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		var title string
-		_ = chromedp.Run(ctx, chromedp.Title(&title))
-		return title
+		if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+			return "", err
+		}
+		return title, nil
 	}
 
-	start := time.Now()
-	for time.Since(start) < timeout {
-		var title string
-		_ = chromedp.Run(ctx, chromedp.Title(&title))
-		if title != "" && title != "about:blank" {
-			return title
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-deadline:
+			var title string
+			if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+				return "", err
+			}
+			return title, nil
+		case <-ticker.C:
+			var title string
+			if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+				continue
+			}
+			if title != "" && title != "about:blank" {
+				return title, nil
+			}
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
-	var title string
-	_ = chromedp.Run(ctx, chromedp.Title(&title))
-	return title
 }
