@@ -13,6 +13,7 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 			"GET /health": "health status",
 			"GET /tabs": "list tabs",
 			"GET /help": "this help payload",
+			"GET /openapi.json": "lightweight machine-readable API schema",
 			"GET /text": "extract page text (supports mode=raw,maxChars=<int>,format=text)",
 			"POST|GET /navigate": "navigate tab (JSON body or query params)",
 			"GET /nav": "alias for GET /navigate",

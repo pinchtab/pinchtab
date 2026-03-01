@@ -53,7 +53,7 @@ func TestError(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
 	}
-	expectedBody := `{"error":"bad request"}` + "\n"
+	expectedBody := `{"code":"error","error":"bad request"}` + "\n"
 	if w.Body.String() != expectedBody {
 		t.Errorf("expected body %q, got %q", expectedBody, w.Body.String())
 	}

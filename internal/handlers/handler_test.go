@@ -72,6 +72,16 @@ func TestHandlers(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "endpoints") {
 		t.Fatalf("expected /help response to include endpoints")
 	}
+
+	req = httptest.NewRequest("GET", "/openapi.json", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("expected 200 from /openapi.json, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "openapi") {
+		t.Fatalf("expected /openapi.json response to include openapi")
+	}
 }
 
 func TestHandleNavigate(t *testing.T) {

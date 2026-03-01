@@ -19,7 +19,21 @@ func JSON(w http.ResponseWriter, code int, data any) {
 }
 
 func Error(w http.ResponseWriter, code int, err error) {
-	JSON(w, code, map[string]string{"error": err.Error()})
+	ErrorCode(w, code, "error", err.Error(), false, nil)
+}
+
+func ErrorCode(w http.ResponseWriter, status int, code, message string, retryable bool, details map[string]any) {
+	payload := map[string]any{
+		"error": message,
+		"code":  code,
+	}
+	if retryable {
+		payload["retryable"] = true
+	}
+	if details != nil && len(details) > 0 {
+		payload["details"] = details
+	}
+	JSON(w, status, payload)
 }
 
 // CancelOnClientDone cancels the given cancel func when the HTTP client disconnects.
