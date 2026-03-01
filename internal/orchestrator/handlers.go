@@ -117,9 +117,8 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name     string `json:"name"`
-		Port     string `json:"port,omitempty"`
-		Headless *bool  `json:"headless"` // pointer to distinguish unset from false
+		Mode string `json:"mode"` // "headed" or "headless" (default: headless)
+		Port string `json:"port,omitempty"`
 	}
 
 	// Decode body if present (empty body is allowed)
@@ -130,19 +129,17 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Default: generate name if not provided
-	if req.Name == "" {
-		req.Name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	// Default: headless=true unless mode="headed"
+	headless := true
+	if req.Mode == "headed" {
+		headless = false
 	}
 
-	// Default: headless=true if not specified
-	headless := true
-	if req.Headless != nil {
-		headless = *req.Headless
-	}
+	// Generate unique instance name (internal use only)
+	name := fmt.Sprintf("instance-%d", time.Now().UnixNano())
 
 	// Port is optional - if not provided, Launch() will auto-allocate
-	inst, err := o.Launch(req.Name, req.Port, headless)
+	inst, err := o.Launch(name, req.Port, headless)
 	if err != nil {
 		web.Error(w, 409, err)
 		return

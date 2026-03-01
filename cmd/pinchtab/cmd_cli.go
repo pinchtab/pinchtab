@@ -150,8 +150,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliPDF(client, base, token, args)
 	case "health":
 		cliHealth(client, base, token)
-	case "launch":
-		cliLaunch(client, base, token, args)
+	case "instance":
+		cliInstance(client, base, token, args)
 	case "instances":
 		cliInstances(client, base, token)
 	case "profiles":
@@ -182,7 +182,7 @@ Commands:
   quick <url>             Navigate and analyze page (beginner-friendly)
   
   INSTANCE MANAGEMENT:
-  launch                  Create new instance (--name test, --headed for visible window)
+  instance launch         Create new instance (--mode headed, --port 9999)
   instances               List all running instances
   
   BROWSER CONTROL:
@@ -642,22 +642,39 @@ func cliHealth(client *http.Client, base, token string) {
 	doGet(client, base, token, "/health", nil)
 }
 
-// --- launch ---
+// --- instance ---
 
-func cliLaunch(client *http.Client, base, token string, args []string) {
+func cliInstance(client *http.Client, base, token string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch")
+	}
+
+	subCmd := args[0]
+	subArgs := args[1:]
+
+	switch subCmd {
+	case "launch":
+		cliInstanceLaunch(client, base, token, subArgs)
+	default:
+		fatal("Unknown subcommand: %s", subCmd)
+	}
+}
+
+func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 	body := map[string]any{}
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--name":
+		case "--mode":
 			if i+1 < len(args) {
-				body["name"] = args[i+1]
+				body["mode"] = args[i+1]
 				i++
 			}
-		case "--headed":
-			body["headless"] = false
-		case "--headless":
-			body["headless"] = true
+		case "--port":
+			if i+1 < len(args) {
+				body["port"] = args[i+1]
+				i++
+			}
 		}
 	}
 
@@ -666,26 +683,9 @@ func cliLaunch(client *http.Client, base, token string, args []string) {
 		return
 	}
 
-	// Display instance info
+	// Display only ID as primary output
 	if id, ok := result["id"].(string); ok {
-		if name, ok := result["profileName"].(string); ok {
-			if port, ok := result["port"].(string); ok {
-				if headless, ok := result["headless"].(bool); ok {
-					mode := "headless"
-					if !headless {
-						mode = "headed"
-					}
-					fmt.Printf("✅ Instance created\n")
-					fmt.Printf("   ID:        %s\n", id)
-					fmt.Printf("   Name:      %s\n", name)
-					fmt.Printf("   Port:      %s\n", port)
-					fmt.Printf("   Mode:      %s\n", mode)
-					if status, ok := result["status"].(string); ok {
-						fmt.Printf("   Status:    %s\n", status)
-					}
-				}
-			}
-		}
+		fmt.Println(id)
 	}
 }
 
