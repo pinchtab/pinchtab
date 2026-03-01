@@ -122,9 +122,14 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
-		if parsed, err := url.Parse(req.URL); err != nil || parsed.Scheme == "" || (!strings.HasPrefix(parsed.Scheme, "http") && !strings.HasPrefix(parsed.Scheme, "chrome") && parsed.Scheme != "file" && parsed.Scheme != "data") {
-			web.Error(w, 400, fmt.Errorf("invalid URL: must start with http://, https://, or other valid scheme"))
-			return
+		// Block dangerous/unsupported schemes; allow bare hostnames (e.g. "example.com")
+		// which Chrome handles gracefully by prepending https://.
+		if parsed, err := url.Parse(req.URL); err == nil && parsed.Scheme != "" {
+			blocked := parsed.Scheme == "javascript" || parsed.Scheme == "vbscript"
+			if blocked {
+				web.Error(w, 400, fmt.Errorf("invalid URL scheme: %s", parsed.Scheme))
+				return
+			}
 		}
 		newTargetID, newCtx, newCtxCancel, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {

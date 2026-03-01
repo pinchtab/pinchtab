@@ -19,11 +19,11 @@ func TestNavigate_Basic(t *testing.T) {
 	}
 }
 
-// N5: Navigate invalid URL
+// N5: Navigate invalid URL (dangerous schemes must be rejected)
 func TestNavigate_InvalidURL(t *testing.T) {
-	code, _ := httpPost(t, "/navigate", map[string]string{"url": "not-a-url"})
+	code, _ := httpPost(t, "/navigate", map[string]string{"url": "javascript:alert(1)"})
 	if code == 200 {
-		t.Error("expected error for invalid URL")
+		t.Error("expected error for javascript: scheme")
 	}
 }
 
