@@ -33,6 +33,7 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
 	mux.HandleFunc("GET /instances/{id}/screencast", o.proxyToInstance)
 
+	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
 	mux.HandleFunc("POST /tabs/{id}/navigate", o.handleTabNavigate)
 	mux.HandleFunc("GET /tabs/{id}/snapshot", o.handleTabSnapshot)
 	mux.HandleFunc("GET /tabs/{id}/screenshot", o.handleTabScreenshot)
@@ -453,6 +454,47 @@ func readResponseBody(resp *http.Response) []byte {
 		}
 	}
 	return body
+}
+
+func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	inst, err := o.findRunningInstanceByTabID(tabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
+	// Construct request body for the bridge's /tab endpoint
+	reqBody, _ := json.Marshal(map[string]string{
+		"action": "close",
+		"tabId":  tabID,
+	})
+
+	targetURL := fmt.Sprintf("http://localhost:%s/tab", inst.Port)
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL, bytes.NewReader(reqBody))
+	if err != nil {
+		web.Error(w, 500, err)
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
 }
 
 func (o *Orchestrator) handleTabNavigate(w http.ResponseWriter, r *http.Request) {
