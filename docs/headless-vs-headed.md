@@ -91,6 +91,20 @@ curl -X POST http://localhost:9867/instances/launch \
 - **Interactive debugging** — Watch and modify behavior in real-time
 - **Manual collaboration** — A human watches and guides the automation
 
+### Viewing Headed Instances in the Dashboard
+
+The Pinchtab dashboard lets you monitor both headless and headed instances:
+
+![Dashboard showing instances tab with a headed mode instance running](../media/dashboard-instances-headed.png)
+
+When you launch a headed instance:
+- **Mode field** shows "headed" (vs "headless")
+- **Port** indicates which port the instance is listening on
+- **Status** shows "Running" with green badge
+- **STOP button** allows graceful shutdown
+
+The dashboard automatically detects the mode and displays the appropriate controls. You can see the real Chrome window alongside the dashboard for visual verification.
+
 ---
 
 ## Side-by-Side Comparison
@@ -340,6 +354,20 @@ DEV_INST=$(curl -X POST http://localhost:9867/instances/start \
 # Each instance is isolated with its own profile/cookies
 ```
 
+### Dashboard View of Mixed Instances
+
+In the Profiles tab, you'll see all your instances with their live Chrome windows:
+
+![Dashboard Profiles tab showing headed instance with real Chrome browser window displaying search results](../media/dashboard-profiles-headed-chrome.png)
+
+The dashboard displays:
+- **Left panel** — Profile metadata (name, size, account, status)
+- **Right panel** — Live Chrome window when in headed mode
+- **Status badge** — Running instance on specific port
+- **Port number** — Where this instance is accessible via API
+
+Each instance is completely isolated — different profiles, different cookies, different Chrome processes, different ports.
+
 ---
 
 ## Performance Tips
@@ -361,6 +389,30 @@ DEV_INST=$(curl -X POST http://localhost:9867/instances/start \
 - Create multiple instances (one per worker/agent)
 - Load-balance via `/instances` list and round-robin routing
 - Monitor instance health via `GET /instances/{id}`
+
+---
+
+## Monitoring Instance Activity
+
+The Pinchtab dashboard includes an Agents tab that shows all activity happening across your instances in real-time:
+
+![Dashboard Agents tab showing real-time activity feed of instance operations](../media/dashboard-agents-activity.png)
+
+The activity feed displays:
+- **Timestamp** — When the operation occurred
+- **Agent/User** — Which client made the request
+- **Method** — GET, POST, etc.
+- **Endpoint** — Which API endpoint was called
+- **Timing** — How long the operation took
+- **Status** — HTTP response code (200, 404, 500, etc.)
+
+Use the activity feed to:
+- Monitor what your agents are doing in real-time
+- Debug failed operations (check status codes)
+- Understand performance (see timing metrics)
+- Track all API calls across all instances
+
+Filter by operation type (Navigate, Snapshot, Actions, All) to focus on specific actions.
 
 ---
 

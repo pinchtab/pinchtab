@@ -175,6 +175,17 @@ Running `pinchtab` gives you a web UI at `http://localhost:9867` for managing ev
 
 The dashboard doesn't run Chrome itself. It's a lightweight orchestrator that manages profile instances as separate processes.
 
+### Instances Tab — Monitor Your Running Browsers
+
+![Dashboard Instances Tab showing headed mode instance running on port 9868](../media/dashboard-instances-headed.png)
+
+The Instances tab shows all running browser instances:
+- **Instance ID & Status** — Unique ID and current state (running/stopped)
+- **Port** — Which port this instance is listening on
+- **Mode** — headed or headless
+- **Start Time** — When the instance launched
+- **Controls** — DETAILS button for more info, STOP button to shut down
+
 **Web UI:**
 ```bash
 # Start orchestrator and dashboard
@@ -224,7 +235,19 @@ RESEARCH_INST=$(curl -s -X POST http://localhost:9867/instances/launch \
   -d '{"mode":"headless"}' | jq -r '.id')
 ```
 
-Each gets its own port (auto-allocated), its own Chrome process, its own isolated session. Agents can work across all of them simultaneously:
+Each gets its own port (auto-allocated), its own Chrome process, its own isolated session. The Profiles tab shows them running with their Chrome windows visible:
+
+![Dashboard Profiles Tab showing a headed mode instance with live Chrome browser window](../media/dashboard-profiles-headed-chrome.png)
+
+When you start a profile in headed mode:
+- **Left panel** — Profile details (name, size, account info, status)
+- **Right panel** — Live Chrome browser window
+- **Status badge** — Shows it's running on port 9868
+- **STOP button** — Gracefully shut down the instance
+
+The Chrome window is a real browser — you or your agent can interact with it via the API while watching live. Perfect for debugging agent behavior or letting a human take over when needed.
+
+Agents can work across multiple instances simultaneously:
 
 ```bash
 # Agent A works on Work profile
@@ -299,11 +322,22 @@ The dashboard has several views:
 
 ### The Activity Feed
 
-The Activity Feed is the heartbeat of your agent fleet. Every action from every agent across every instance streams in real-time:
+The Activity Feed is the heartbeat of your agent fleet. Every action from every agent across every instance streams in real-time.
+
+![Dashboard Agents Tab showing real-time activity feed with agent actions](../media/dashboard-agents-activity.png)
+
+The Agents view shows:
+- **Left panel** — List of connected agents with their status
+- **Right panel** — Real-time activity feed filtered by action type
+- **Filters** — Toggle between All, Navigate, Snapshot, and Actions
+- **Status codes** — HTTP response codes (200, 404, etc.)
+- **Timing** — How long each operation took
+
+Example activity stream:
 
 ```
-mario → POST /navigate (inst_abc123) — 23ms
-mario → GET /snapshot (inst_abc123) — 145ms
+16:17:18  anonymous  GET  /tabs — 0ms — 200
+16:17:18  anonymous  GET  /stealth/status — 2ms — 200
 scraper → POST /navigate (inst_def456) — 31ms
 scraper → GET /text (inst_def456) — 89ms
 ```
