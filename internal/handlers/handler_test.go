@@ -73,7 +73,7 @@ func TestHandleNavigate(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, cfg, nil, nil, nil)
 
-	// 1. Valid request
+	// 1. Valid POST request
 	body := `{"url": "https://example.com"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -84,7 +84,15 @@ func TestHandleNavigate(t *testing.T) {
 		t.Errorf("unexpected status %d: %s", w.Code, w.Body.String())
 	}
 
-	// 2. Missing URL
+	// 2. Valid GET request (ergonomic alias path style)
+	req = httptest.NewRequest("GET", "/nav?url=https%3A%2F%2Fexample.com", nil)
+	w = httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+	if w.Code != 200 && w.Code != 500 {
+		t.Errorf("unexpected status for GET navigate %d: %s", w.Code, w.Body.String())
+	}
+
+	// 3. Missing URL
 	req = httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{}`)))
 	w = httptest.NewRecorder()
 	h.HandleNavigate(w, req)
