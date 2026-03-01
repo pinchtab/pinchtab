@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -164,5 +165,23 @@ func TestTabContext_AcceptsRegisteredHashID(t *testing.T) {
 	// resolvedID should be the raw CDP ID for internal consistency
 	if resolvedID != rawCDPID {
 		t.Errorf("resolvedID should be raw CDP ID, got %s", resolvedID)
+	}
+}
+
+func TestCloseTab_PreventsLastTabClose(t *testing.T) {
+	// CloseTab should fail when attempting to close the last remaining tab
+	// This prevents Chrome from exiting and crashing the server
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+
+	// Without a valid browser context, ListTargets will fail
+	// which triggers the guard at the start of CloseTab
+	err := tm.CloseTab("tab_fake1234")
+	if err == nil {
+		t.Error("CloseTab should fail when ListTargets fails")
+	}
+
+	// The error should mention listing targets
+	if err != nil && !strings.Contains(err.Error(), "list targets") {
+		t.Errorf("expected error about list targets, got: %s", err.Error())
 	}
 }

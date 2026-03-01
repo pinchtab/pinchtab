@@ -176,6 +176,15 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 }
 
 func (tm *TabManager) CloseTab(tabID string) error {
+	// Guard against closing the last tab to prevent Chrome from exiting
+	targets, err := tm.ListTargets()
+	if err != nil {
+		return fmt.Errorf("list targets: %w", err)
+	}
+	if len(targets) <= 1 {
+		return fmt.Errorf("cannot close the last tab — at least one tab must remain")
+	}
+
 	tm.mu.Lock()
 	entry, tracked := tm.tabs[tabID]
 	tm.mu.Unlock()
