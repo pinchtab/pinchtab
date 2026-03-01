@@ -169,6 +169,19 @@
     font-size: 13px;
     margin-bottom: 12px;
   }
+  .modal textarea {
+    width: 100%;
+    max-width: 100%;
+    display: block;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
   .modal .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
   .modal button {
     background: var(--primary);

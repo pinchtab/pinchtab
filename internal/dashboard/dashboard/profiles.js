@@ -274,6 +274,25 @@ async function copyLaunchCommand() {
   }
 }
 
+async function copyProfileId() {
+  const el = document.getElementById('profile-id');
+  const text = el ? el.value.trim() : '';
+  if (!text || text === '—') {
+    await appAlert('Profile ID not available.', 'Profile');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    await appAlert('Profile ID copied to clipboard.', 'Profile');
+  } catch (e) {
+    if (!el) return;
+    el.focus();
+    el.select();
+    document.execCommand('copy');
+    await appAlert('Profile ID copied (fallback).', 'Profile');
+  }
+}
+
 async function doLaunch() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
@@ -398,8 +417,14 @@ async function viewProfileDetails(name, instanceID) {
 
   // Build tab content: Profile & Live/Logs
   let tabProfile = '';
+  const profileID = profileInfo && profileInfo.id ? String(profileInfo.id) : '';
   
   // Metadata
+  tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Profile ID</label>';
+  tabProfile += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">';
+  tabProfile += '<input id="profile-id" value="' + esc(profileID || '—') + '" readonly style="flex:1;margin-bottom:0;font-family:var(--font-mono);font-size:12px" />';
+  tabProfile += '<button class="secondary" onclick="copyProfileId()" ' + (profileID ? '' : 'disabled') + ' style="padding:8px 12px;white-space:nowrap">Copy ID</button>';
+  tabProfile += '</div>';
   tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Name</label>';
   tabProfile += '<input id="profile-name" value="' + esc(name) + '" style="width:100%;margin-bottom:12px" />';
   tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Use this profile when</label>';
