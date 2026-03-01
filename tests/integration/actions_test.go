@@ -34,9 +34,10 @@ func TestAction_Click(t *testing.T) {
 // A4: Press key
 func TestAction_Press(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "press",
-		"key":  "Escape",
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "press",
+		"key":   "Escape",
 	})
 	if code != 200 {
 		t.Errorf("press failed with %d", code)
@@ -62,9 +63,10 @@ func TestAction_MissingKind(t *testing.T) {
 // A11: Ref not found
 func TestAction_RefNotFound(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "click",
-		"ref":  "e9999",
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "click",
+		"ref":   "e9999",
 	})
 	// Should be an error (400 or 500)
 	if code == 200 {
@@ -75,7 +77,8 @@ func TestAction_RefNotFound(t *testing.T) {
 // A12: CSS selector click
 func TestAction_CSSSelector(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId":    currentTabID,
 		"kind":     "click",
 		"selector": "a",
 	})
@@ -179,7 +182,8 @@ func TestAction_Focus(t *testing.T) {
 // A8: Scroll
 func TestAction_Scroll(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId":     currentTabID,
 		"kind":      "scroll",
 		"direction": "down",
 	})
@@ -227,9 +231,10 @@ func TestAction_Hover(t *testing.T) {
 		t.Skip("no link ref found in snapshot")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "hover",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "hover",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("hover failed with %d", code)

@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-var serverURL string
+var (
+	serverURL     string
+	currentTabID  string // Track current tab for action operations
+)
 
 // removeEnvPrefix removes all environment variables starting with the given prefix
 func removeEnvPrefix(env []string, prefix string) []string {
@@ -246,6 +249,18 @@ func navigate(t *testing.T, url string) {
 	code, body := httpPostWithRetry(t, "/navigate", map[string]any{"url": url}, 2)
 	if code != 200 {
 		t.Fatalf("navigate to %s failed with %d: %s", url, code, string(body))
+	}
+
+	// Extract tabId from response for subsequent action calls
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Logf("warning: failed to parse navigate response: %v", err)
+		return
+	}
+
+	if id, ok := result["tabId"].(string); ok {
+		currentTabID = id
+		t.Logf("current tab: %s", currentTabID)
 	}
 }
 
