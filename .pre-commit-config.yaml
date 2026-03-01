@@ -11,6 +11,13 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=500']
 
+  # Go formatting
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint-full
+        args: ['--timeout=5m']
+
   # Markdown linting (relaxed for docs)
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.37.0
