@@ -8,6 +8,7 @@
     "showcase.md"
   ],
   "references": [
+    "references/api-reference.md",
     "references/endpoints.md",
     "references/configuration.md",
     "references/cli-commands.md",
