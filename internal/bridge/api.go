@@ -71,6 +71,7 @@ type OrchestratorService interface {
 type ProfileInfo struct {
 	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`
+	Path              string    `json:"path,omitempty"` // File system path to profile directory
 	Created           time.Time `json:"created"`
 	LastUsed          time.Time `json:"lastUsed"`
 	DiskUsage         int64     `json:"diskUsage"`

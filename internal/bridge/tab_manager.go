@@ -69,7 +69,14 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 	if entry, ok := tm.tabs[tabID]; ok && entry.Ctx != nil {
 		tm.mu.RUnlock()
 		tm.markAccessed(tabID)
-		return entry.Ctx, tabID, nil
+		// When this entry is a hash alias, return the canonical raw CDP ID so that
+		// operations like ref-cache lookups are consistent regardless of which ID
+		// form was used to call TabContext.
+		resolvedID := tabID
+		if entry.CDPID != "" {
+			resolvedID = entry.CDPID
+		}
+		return entry.Ctx, resolvedID, nil
 	}
 	tm.mu.RUnlock()
 

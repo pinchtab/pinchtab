@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -121,6 +122,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
+		if parsed, err := url.Parse(req.URL); err != nil || parsed.Scheme == "" || (!strings.HasPrefix(parsed.Scheme, "http") && !strings.HasPrefix(parsed.Scheme, "chrome") && parsed.Scheme != "file" && parsed.Scheme != "data") {
+			web.Error(w, 400, fmt.Errorf("invalid URL: must start with http://, https://, or other valid scheme"))
+			return
+		}
 		newTargetID, newCtx, newCtxCancel, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("new tab: %w", err))

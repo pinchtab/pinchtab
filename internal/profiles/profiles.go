@@ -112,6 +112,7 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		profiles = append(profiles, bridge.ProfileInfo{
 			ID:                info.ID,
 			Name:              info.Name,
+			Path:              info.Path,
 			Created:           info.CreatedAt,
 			Temporary:         isTemporary,
 			DiskUsage:         int64(info.SizeMB * 1024 * 1024),
