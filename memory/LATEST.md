@@ -83,9 +83,26 @@ Moved test logic from standalone `test-e2e.sh` into proper test structure:
 - **Fix**: Added defensive nil check in `Orchestrator.Logs()` method
 - **Commit**: `d7e8537`
 
+## Recent Bug Fixes (Evening Session)
+
+### Fixed: Pattern conflict in proxy endpoints (Go 1.26 compatibility)
+- **Commit**: `7063fdd` - Added explicit HTTP method prefixes to patterns (GET /snapshot, POST /navigate, etc.)
+
+### Fixed: Nil pointer dereference in Logs()
+- **Commit**: `d7e8537` - Added defensive nil check for logBuf
+
+### Fixed: GET /profiles returns null instead of []
+- **Commit**: `fab7eba` - Initialize profiles as empty slice not nil
+
+### Fixed: POST /instances/launch requires name
+- **Commit**: `512c013` - Now supports empty body with auto-generated name and headless=true default
+
+### Fixed: CLI instances command output
+- **Commit**: `8449f1c` - Returns `[]` when no instances, displays formatted list otherwise
+
 ## Branch Info
 
 - **Branch**: `feat/make-cli-useful`
-- **Latest**: `d7e8537` (nil check fix + cleanup)
+- **Latest**: `8449f1c` (CLI instances command fix)
 - **Tests**: All passing (195+)
 - **Documentation**: Complete and validated
