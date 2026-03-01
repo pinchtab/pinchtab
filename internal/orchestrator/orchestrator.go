@@ -299,14 +299,31 @@ func (o *Orchestrator) StopProfile(name string) error {
 
 func (o *Orchestrator) markStopped(id string) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
-	if inst, ok := o.instances[id]; ok {
-		inst.Status = "stopped"
-		// Release the port back to the allocator
-		portStr := inst.Port
-		if portInt, err := strconv.Atoi(portStr); err == nil {
-			o.portAllocator.ReleasePort(portInt)
-			slog.Debug("released port", "id", id, "port", portStr)
+	inst, ok := o.instances[id]
+	if !ok {
+		o.mu.Unlock()
+		return
+	}
+
+	inst.Status = "stopped"
+	// Release the port back to the allocator
+	portStr := inst.Port
+	if portInt, err := strconv.Atoi(portStr); err == nil {
+		o.portAllocator.ReleasePort(portInt)
+		slog.Debug("released port", "id", id, "port", portStr)
+	}
+
+	// Delete temporary/ephemeral profiles (auto-generated for instances)
+	// These are created with names like "instance-1709275909123456789"
+	profileName := inst.ProfileName
+	o.mu.Unlock()
+
+	if strings.HasPrefix(profileName, "instance-") {
+		profilePath := filepath.Join(o.baseDir, profileName)
+		if err := os.RemoveAll(profilePath); err != nil {
+			slog.Warn("failed to delete temporary profile", "name", profileName, "err", err)
+		} else {
+			slog.Info("deleted temporary profile", "name", profileName)
 		}
 	}
 }
