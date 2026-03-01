@@ -172,10 +172,105 @@ func TestHandleTabs_Success(t *testing.T) {
 	}
 }
 
+// TestHandleHealth_EnsureChromeFailure verifies /health returns 503 when Chrome initialization fails
+func TestHandleHealth_EnsureChromeFailure(t *testing.T) {
+	mockBridge := &MockBridge{
+		targets:              []*target.Info{},
+		ensureChromeErr:      "failed to start Chrome: connection refused",
+		ensureChromeCalled:   false,
+	}
+
+	h := &Handlers{
+		Bridge: mockBridge,
+		Config: &config.RuntimeConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleHealth(w, req)
+
+	// Should fail before calling ListTargets because ensureChrome fails first
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if status, ok := resp["status"]; !ok || status != "error" {
+		t.Errorf("expected status=error, got %v", status)
+	}
+
+	// Verify ensureChrome was actually called
+	if !mockBridge.ensureChromeCalled {
+		t.Error("expected ensureChrome to be called before ListTargets")
+	}
+
+	// Verify error message mentions chrome initialization
+	reason, ok := resp["reason"].(string)
+	if !ok || !contains(reason, "chrome") {
+		t.Errorf("expected error reason mentioning chrome, got %v", reason)
+	}
+}
+
+// TestHandleHealth_EnsureChromeSuccess verifies /health calls ensureChrome and then checks ListTargets
+func TestHandleHealth_EnsureChromeSuccess(t *testing.T) {
+	mockBridge := &MockBridge{
+		targets: []*target.Info{
+			{TargetID: "target1", URL: "https://example.com", Title: "Example"},
+		},
+		ensureChromeCalled: false,
+		ensureChromeErr:    "", // No error
+	}
+
+	h := &Handlers{
+		Bridge: mockBridge,
+		Config: &config.RuntimeConfig{CdpURL: "ws://localhost:9222"},
+	}
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleHealth(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	// Verify ensureChrome was called
+	if !mockBridge.ensureChromeCalled {
+		t.Error("expected ensureChrome to be called before ListTargets")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if status, ok := resp["status"]; !ok || status != "ok" {
+		t.Errorf("expected status=ok, got %v", status)
+	}
+}
+
+// contains is a simple helper to check if a string contains a substring
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 // MockBridge is a test implementation of the BridgeAPI interface
 type MockBridge struct {
-	targets        []*target.Info
-	listTargetsErr string
+	targets              []*target.Info
+	listTargetsErr       string
+	ensureChromeCalled   bool
+	ensureChromeErr      string
 }
 
 func (m *MockBridge) ListTargets() ([]*target.Info, error) {
@@ -232,5 +327,9 @@ func (m *MockBridge) Unlock(tabID, owner string) error {
 }
 
 func (m *MockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	m.ensureChromeCalled = true
+	if m.ensureChromeErr != "" {
+		return fmt.Errorf("%s", m.ensureChromeErr)
+	}
 	return nil
 }
