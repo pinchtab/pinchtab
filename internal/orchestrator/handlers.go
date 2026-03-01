@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -107,10 +108,23 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 
 	inst, err := o.Launch(name, req.Port, req.Headless)
 	if err != nil {
-		web.Error(w, 409, err)
+		statusCode := classifyLaunchError(err)
+		web.Error(w, statusCode, err)
 		return
 	}
 	web.JSON(w, 201, inst)
+}
+
+// classifyLaunchError returns appropriate HTTP status code for launch errors.
+func classifyLaunchError(err error) int {
+	msg := err.Error()
+	if strings.Contains(msg, "cannot contain") || strings.Contains(msg, "cannot be empty") {
+		return 400 // Bad Request - validation error
+	}
+	if strings.Contains(msg, "already") || strings.Contains(msg, "in use") {
+		return 409 // Conflict - resource already exists
+	}
+	return 500 // Internal Server Error
 }
 
 func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +185,8 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 
 	inst, err := o.Launch(name, req.Port, headless)
 	if err != nil {
-		web.Error(w, 409, err)
+		statusCode := classifyLaunchError(err)
+		web.Error(w, statusCode, err)
 		return
 	}
 	web.JSON(w, 201, inst)
@@ -214,7 +229,8 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 
 	started, err := o.Launch(profileName, port, headless)
 	if err != nil {
-		web.Error(w, 409, err)
+		statusCode := classifyLaunchError(err)
+		web.Error(w, statusCode, err)
 		return
 	}
 	web.JSON(w, 201, started)
@@ -262,7 +278,8 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 
 	inst, err := o.Launch(profileName, req.Port, headless)
 	if err != nil {
-		web.Error(w, 409, err)
+		statusCode := classifyLaunchError(err)
+		web.Error(w, statusCode, err)
 		return
 	}
 

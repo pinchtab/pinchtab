@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -85,7 +86,14 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := pm.CreateWithMeta(req.Name, meta); err != nil {
-		web.Error(w, 500, err)
+		// Validation errors → 400, already exists → 409, others → 500
+		if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
+			web.Error(w, 400, err)
+		} else if strings.Contains(err.Error(), "already exists") {
+			web.Error(w, 409, err)
+		} else {
+			web.Error(w, 500, err)
+		}
 		return
 	}
 
