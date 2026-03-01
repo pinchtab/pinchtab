@@ -14,12 +14,40 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+func resolveOwner(r *http.Request, fallback string) string {
+	if o := strings.TrimSpace(r.Header.Get("X-Owner")); o != "" {
+		return o
+	}
+	if o := strings.TrimSpace(r.URL.Query().Get("owner")); o != "" {
+		return o
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func (h *Handlers) enforceTabLease(tabID, owner string) error {
+	if tabID == "" {
+		return nil
+	}
+	lock := h.Bridge.TabLockInfo(tabID)
+	if lock == nil {
+		return nil
+	}
+	if owner == "" {
+		return fmt.Errorf("tab %s is locked by %s; owner required", tabID, lock.Owner)
+	}
+	if owner != lock.Owner {
+		return fmt.Errorf("tab %s is locked by %s", tabID, lock.Owner)
+	}
+	return nil
+}
+
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	var req bridge.ActionRequest
 	if r.Method == http.MethodGet {
 		q := r.URL.Query()
 		req.Kind = q.Get("kind")
 		req.TabID = q.Get("tabId")
+		req.Owner = q.Get("owner")
 		req.Ref = q.Get("ref")
 		req.Selector = q.Get("selector")
 		req.Text = q.Get("text")
@@ -40,6 +68,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	owner := resolveOwner(r, req.Owner)
+	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+		web.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
 		return
 	}
 
@@ -83,6 +116,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
 	if err != nil && req.Ref != "" && shouldRetryStaleRef(err) {
+		recordStaleRefRetry()
 		h.refreshRefCache(tCtx, resolvedTabID)
 		if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
 			if nid, ok := cache.Refs[req.Ref]; ok {
@@ -108,6 +142,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 type actionsRequest struct {
 	TabID       string                 `json:"tabId"`
+	Owner       string                 `json:"owner"`
 	Actions     []bridge.ActionRequest `json:"actions"`
 	StopOnError bool                   `json:"stopOnError"`
 }
@@ -136,6 +171,11 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 404, err)
 		return
 	}
+	owner := resolveOwner(r, req.Owner)
+	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+		web.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
+		return
+	}
 
 	results := make([]actionResult, 0, len(req.Actions))
 
@@ -149,6 +189,13 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 					Index: i, Success: false,
 					Error: fmt.Sprintf("tab not found: %v", err),
 				})
+				if req.StopOnError {
+					break
+				}
+				continue
+			}
+			if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+				results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
 				if req.StopOnError {
 					break
 				}
@@ -191,6 +238,7 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 
 		actionRes, err := h.Bridge.ExecuteAction(tCtx, action.Kind, action)
 		if err != nil && action.Ref != "" && shouldRetryStaleRef(err) {
+			recordStaleRefRetry()
 			h.refreshRefCache(tCtx, resolvedTabID)
 			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
 				if nid, ok := cache.Refs[action.Ref]; ok {
@@ -225,6 +273,75 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 		"total":      len(req.Actions),
 		"successful": countSuccessful(results),
 		"failed":     len(req.Actions) - countSuccessful(results),
+	})
+}
+
+func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TabID       string                 `json:"tabId"`
+		Owner       string                 `json:"owner"`
+		Steps       []bridge.ActionRequest `json:"steps"`
+		StopOnError bool                   `json:"stopOnError"`
+		StepTimeout float64                `json:"stepTimeout"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		web.ErrorCode(w, 400, "bad_request", fmt.Sprintf("decode: %v", err), false, nil)
+		return
+	}
+	if len(req.Steps) == 0 {
+		web.ErrorCode(w, 400, "bad_request", "steps array is empty", false, nil)
+		return
+	}
+	owner := resolveOwner(r, req.Owner)
+	stepTimeout := h.Config.ActionTimeout
+	if req.StepTimeout > 0 && req.StepTimeout <= 60 {
+		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
+	}
+
+	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+		web.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
+		return
+	}
+
+	results := make([]actionResult, 0, len(req.Steps))
+	for i, step := range req.Steps {
+		if step.TabID == "" {
+			step.TabID = resolvedTabID
+		}
+		tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
+		res, err := h.Bridge.ExecuteAction(tCtx, step.Kind, step)
+		if err != nil && step.Ref != "" && shouldRetryStaleRef(err) {
+			recordStaleRefRetry()
+			h.refreshRefCache(tCtx, resolvedTabID)
+			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+				if nid, ok := cache.Refs[step.Ref]; ok {
+					step.NodeID = nid
+					res, err = h.Bridge.ExecuteAction(tCtx, step.Kind, step)
+				}
+			}
+		}
+		cancel()
+		if err != nil {
+			results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
+			if req.StopOnError {
+				break
+			}
+			continue
+		}
+		results = append(results, actionResult{Index: i, Success: true, Result: res})
+	}
+
+	web.JSON(w, 200, map[string]any{
+		"kind":       "macro",
+		"results":    results,
+		"total":      len(req.Steps),
+		"successful": countSuccessful(results),
+		"failed":     len(req.Steps) - countSuccessful(results),
 	})
 }
 

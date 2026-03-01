@@ -31,6 +31,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("GET /tabs", h.HandleTabs)
+	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)
 	mux.HandleFunc("GET /pdf", h.HandlePDF)
@@ -43,6 +44,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /action", h.HandleAction)
 	mux.HandleFunc("GET /action", h.HandleAction)
 	mux.HandleFunc("POST /actions", h.HandleActions)
+	mux.HandleFunc("POST /macro", h.HandleMacro)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("POST /tab", h.HandleTab)
 	mux.HandleFunc("POST /tab/lock", h.HandleTabLock)
