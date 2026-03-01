@@ -26,6 +26,9 @@ func TestProxy_LocalhostOnly(t *testing.T) {
 	instID := jsonField(t, body, "id")
 	defer httpPost(t, fmt.Sprintf("/instances/%s/stop", instID), nil)
 
+	// Wait for instance to be ready
+	waitForInstanceReady(t, instID)
+
 	// The proxy handler validates that Host is localhost
 	// This test verifies the construct happens correctly
 	// (actual SSRF prevention is done at handler level through url.URL struct)
@@ -56,6 +59,9 @@ func TestProxy_URLValidation(t *testing.T) {
 
 	instID := jsonField(t, body, "id")
 	defer httpPost(t, fmt.Sprintf("/instances/%s/stop", instID), nil)
+
+	// Wait for instance to be ready
+	waitForInstanceReady(t, instID)
 
 	// Test with valid URL in path
 	code, respBody := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
@@ -102,6 +108,10 @@ func TestProxy_InstanceIsolation(t *testing.T) {
 	if ports[0] == ports[1] {
 		t.Fatalf("instances have same port: %s == %s", ports[0], ports[1])
 	}
+
+	// Wait for instances to be ready
+	waitForInstanceReady(t, instIDs[0])
+	waitForInstanceReady(t, instIDs[1])
 
 	// Navigate in first instance
 	code1, body1 := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instIDs[0]), map[string]any{
@@ -155,6 +165,9 @@ func TestProxy_SchemeValidation(t *testing.T) {
 
 	instID := jsonField(t, body, "id")
 	defer httpPost(t, fmt.Sprintf("/instances/%s/stop", instID), nil)
+
+	// Wait for instance to be ready
+	waitForInstanceReady(t, instID)
 
 	// Navigate should work (verifies internal http scheme is used)
 	code, respBody := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{

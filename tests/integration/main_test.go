@@ -245,6 +245,16 @@ func jsonField(t *testing.T, data []byte, key string) string {
 
 func navigate(t *testing.T, url string) {
 	t.Helper()
+
+	// Close previous tab if it exists to prevent tab accumulation
+	// This keeps us from hitting the 20-tab limit
+	if currentTabID != "" {
+		httpPost(t, "/tab", map[string]any{
+			"tabId":  currentTabID,
+			"action": "close",
+		})
+	}
+
 	// Use retry logic for better stability
 	code, body := httpPostWithRetry(t, "/navigate", map[string]any{"url": url}, 2)
 	if code != 200 {
@@ -264,8 +274,27 @@ func navigate(t *testing.T, url string) {
 	}
 }
 
+// waitForInstanceReady waits for an instance to be ready for navigation
+// Uses a simple navigate to about:blank to check readiness
+func waitForInstanceReady(t *testing.T, instID string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		code, _ := httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), map[string]any{
+			"url": "about:blank",
+		})
+		if code == 200 {
+			t.Logf("instance %s is ready", instID)
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Logf("warning: instance %s did not become ready within 15 seconds", instID)
+}
+
 // launchTestInstance launches a default test instance for orchestrator-mode tests
 // This is called once during TestMain setup so that /navigate and proxy endpoints work
+// It waits for the instance to be fully ready before returning
 func launchTestInstance(base string) error {
 	resp, err := http.Post(
 		base+"/instances/launch",
@@ -295,5 +324,28 @@ func launchTestInstance(base string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "TestMain: launched test instance %s\n", id)
-	return nil
+
+	// Wait for instance to be ready (can take 2-5 seconds for Chrome to start)
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		// Try a simple navigate to check if instance is ready
+		navResp, err := http.Post(
+			base+"/instances/"+id+"/navigate",
+			"application/json",
+			strings.NewReader(`{"url":"about:blank"}`),
+		)
+		if err == nil {
+			if navResp.StatusCode == 200 {
+				_ = navResp.Body.Close()
+				fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
+				return nil
+			}
+			navBody, _ := io.ReadAll(navResp.Body)
+			_ = navResp.Body.Close()
+			fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("instance %s did not become ready within 30 seconds", id)
 }
