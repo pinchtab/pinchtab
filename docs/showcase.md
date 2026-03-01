@@ -76,14 +76,16 @@ curl -X POST http://localhost:9867/instances/launch \
 sleep 2
 ```
 
-**Step 3: Navigate to URL**
+**Step 3: Navigate to URL (returns tabId)**
 ```bash
-curl -X POST http://localhost:9867/instances/inst_abc123/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/inst_abc123/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
+  -d '{"url":"https://example.com"}' | jq -r '.tabId')
+
+echo "Tab created: $TAB"
 ```
 
-**Response:**
+**Response contains:**
 ```json
 {
   "tabId": "tab_def456",
@@ -92,9 +94,9 @@ curl -X POST http://localhost:9867/instances/inst_abc123/navigate \
 }
 ```
 
-**Step 4: Extract text**
+**Step 4: Extract text (use tabId)**
 ```bash
-curl "http://localhost:9867/instances/inst_abc123/text"
+curl "http://localhost:9867/instances/inst_abc123/text?tabId=$TAB"
 ```
 
 **Response:**
@@ -120,14 +122,16 @@ echo "Created instance: $INST"
 # Step 2: Wait for Chrome initialization
 sleep 2
 
-# Step 3: Navigate
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+# Step 3: Navigate and capture tabId
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"$URL\"}" > /dev/null
+  -d "{\"url\":\"$URL\"}" | jq -r '.tabId')
 
-# Step 4: Get text
+echo "Created tab: $TAB"
+
+# Step 4: Get text using tabId
 echo "Extracting text from $URL..."
-curl -s "http://localhost:9867/instances/$INST/text" | jq '.text'
+curl -s "http://localhost:9867/instances/$INST/text?tabId=$TAB" | jq '.text'
 
 # Step 5: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -142,7 +146,7 @@ echo "Stopped instance: $INST"
 
 ### Step-by-Step
 
-**Step 1: Create instance and navigate**
+**Step 1: Create instance and navigate (get tabId)**
 ```bash
 INST=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
@@ -150,14 +154,16 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 
 sleep 2
 
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/interactive"}' > /dev/null
+  -d '{"url":"https://example.com/interactive"}' | jq -r '.tabId')
+
+echo "Instance: $INST, Tab: $TAB"
 ```
 
-**Step 2: Get snapshot (see interactive elements)**
+**Step 2: Get snapshot (see interactive elements, use tabId)**
 ```bash
-curl "http://localhost:9867/instances/$INST/snapshot"
+curl "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB"
 ```
 
 **Response:**
@@ -183,16 +189,16 @@ curl "http://localhost:9867/instances/$INST/snapshot"
 }
 ```
 
-**Step 3: Click element (e5)**
+**Step 3: Click element (e5, use tabId)**
 ```bash
 curl -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e5"}'
+  -d '{"kind":"click","ref":"e5","tabId":"'$TAB'"}'
 ```
 
-**Step 4: Verify result (snapshot again)**
+**Step 4: Verify result (snapshot again, use tabId)**
 ```bash
-curl "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes'
+curl "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB" | jq '.nodes'
 ```
 
 **Complete script:**
@@ -207,27 +213,29 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 
 echo "Instance: $INST"
 
-# Step 2: Wait and navigate
+# Step 2: Wait and navigate (capture tabId)
 sleep 2
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"$URL\"}" > /dev/null
+  -d "{\"url\":\"$URL\"}" | jq -r '.tabId')
 
-# Step 3: Get interactive elements
+echo "Tab: $TAB"
+
+# Step 3: Get interactive elements using tabId
 echo "Getting interactive elements..."
-SNAPSHOT=$(curl -s "http://localhost:9867/instances/$INST/snapshot")
+SNAPSHOT=$(curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB")
 echo "$SNAPSHOT" | jq '.nodes[] | select(.role | IN("button", "link")) | {ref, name}'
 
-# Step 4: Click button (ref=e5)
+# Step 4: Click button using tabId
 echo "Clicking button e5..."
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e5"}'
+  -d '{"kind":"click","ref":"e5","tabId":"'$TAB'"}'
 
-# Step 5: Wait for action and verify
+# Step 5: Wait for action and verify using tabId
 sleep 1
 echo "Verifying result..."
-curl -s "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes[] | {ref, role, name}' | head -10
+curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB" | jq '.nodes[] | {ref, role, name}' | head -10
 
 # Step 6: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -242,7 +250,7 @@ echo "Stopped instance: $INST"
 
 ### Step-by-Step
 
-**Step 1: Create instance and navigate to form**
+**Step 1: Create instance and navigate to form (capture tabId)**
 ```bash
 INST=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
@@ -250,14 +258,16 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 
 sleep 2
 
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/login"}' > /dev/null
+  -d '{"url":"https://example.com/login"}' | jq -r '.tabId')
+
+echo "Instance: $INST, Tab: $TAB"
 ```
 
-**Step 2: Get form fields (snapshot)**
+**Step 2: Get form fields (snapshot with tabId)**
 ```bash
-curl -s "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes[] | select(.role | IN("textbox", "button"))'
+curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB" | jq '.nodes[] | select(.role | IN("textbox", "button"))'
 ```
 
 **Output:**
@@ -279,30 +289,30 @@ curl -s "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes[] | select
 }
 ```
 
-**Step 3: Fill email field (e3)**
+**Step 3: Fill email field (e3, use tabId)**
 ```bash
 curl -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e3","text":"user@example.com"}'
+  -d '{"kind":"fill","ref":"e3","text":"user@example.com","tabId":"'$TAB'"}'
 ```
 
-**Step 4: Fill password field (e5)**
+**Step 4: Fill password field (e5, use tabId)**
 ```bash
 curl -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e5","text":"mypassword"}'
+  -d '{"kind":"fill","ref":"e5","text":"mypassword","tabId":"'$TAB'"}'
 ```
 
-**Step 5: Click submit (e7)**
+**Step 5: Click submit (e7, use tabId)**
 ```bash
 curl -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e7"}'
+  -d '{"kind":"click","ref":"e7","tabId":"'$TAB'"}'
 ```
 
-**Step 6: Verify success (check page)**
+**Step 6: Verify success (check page, use tabId)**
 ```bash
-curl -s "http://localhost:9867/instances/$INST/text" | jq '.text'
+curl -s "http://localhost:9867/instances/$INST/text?tabId=$TAB" | jq '.text'
 ```
 
 **Complete script:**
@@ -316,39 +326,41 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 
 echo "Instance: $INST"
 
-# Step 2: Wait and navigate
+# Step 2: Wait and navigate (capture tabId)
 sleep 2
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/login"}' > /dev/null
+  -d '{"url":"https://example.com/login"}' | jq -r '.tabId')
+
+echo "Tab: $TAB"
 
 # Step 3: Get form fields
 echo "Getting form fields..."
-curl -s "http://localhost:9867/instances/$INST/snapshot" | \
+curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB" | \
   jq '.nodes[] | select(.role | IN("textbox", "button")) | {ref, name}'
 
-# Step 4: Fill email
+# Step 4: Fill email using tabId
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e3","text":"user@example.com"}'
+  -d '{"kind":"fill","ref":"e3","text":"user@example.com","tabId":"'$TAB'"}'
 
-# Step 5: Fill password
+# Step 5: Fill password using tabId
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e5","text":"mypassword"}'
+  -d '{"kind":"fill","ref":"e5","text":"mypassword","tabId":"'$TAB'"}'
 
-# Step 6: Click submit
+# Step 6: Click submit using tabId
 echo "Submitting form..."
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e7"}'
+  -d '{"kind":"click","ref":"e7","tabId":"'$TAB'"}'
 
 # Step 7: Wait for page load
 sleep 2
 
-# Step 8: Check result
+# Step 8: Check result using tabId
 echo "Login result:"
-curl -s "http://localhost:9867/instances/$INST/text" | jq '.text' | head -5
+curl -s "http://localhost:9867/instances/$INST/text?tabId=$TAB" | jq '.text' | head -5
 
 # Step 9: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -372,18 +384,22 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 sleep 2
 ```
 
-**Step 2: Create first tab**
+**Step 2: Create first tab (get tabId)**
 ```bash
-curl -s -X POST http://localhost:9867/tabs/open \
+TAB1=$(curl -s -X POST http://localhost:9867/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://github.com"}'
+  -d '{"instanceId":"'$INST'","url":"https://github.com"}' | jq -r '.id')
+
+echo "Tab 1: $TAB1"
 ```
 
-**Step 3: Create second tab**
+**Step 3: Create second tab (get tabId)**
 ```bash
-curl -s -X POST http://localhost:9867/tabs/open \
+TAB2=$(curl -s -X POST http://localhost:9867/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}'
+  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}' | jq -r '.id')
+
+echo "Tab 2: $TAB2"
 ```
 
 **Step 4: List all tabs in instance**
@@ -391,26 +407,29 @@ curl -s -X POST http://localhost:9867/tabs/open \
 curl -s "http://localhost:9867/instances/$INST/tabs" | jq '.[] | {id, title, url}'
 ```
 
-**Step 5: Get snapshot from each tab**
+**Step 5: Get snapshot from each tab (use tabIds)**
 ```bash
-TAB1=$(curl -s "http://localhost:9867/instances/$INST/tabs" | jq -r '.[0].id')
-TAB2=$(curl -s "http://localhost:9867/instances/$INST/tabs" | jq -r '.[1].id')
-
 # Get content from Tab 1
-curl -s "http://localhost:9867/instances/$INST/text" | jq '.text' | head -3
+curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB1" | jq '.nodes | length'
 
-# For Tab 2, we'd need explicit tab routing (advanced)
+# Get content from Tab 2
+curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB2" | jq '.nodes | length'
 ```
 
-**Step 6: Interact with tabs**
+**Step 6: Interact with tabs (use tabIds)**
 ```bash
 # Click on element in Tab 1
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e5"}'
+  -d '{"kind":"click","ref":"e5","tabId":"'$TAB1'"}'
 
-# Take screenshot
-curl "http://localhost:9867/instances/$INST/screenshot" -o screenshot.png
+# Click on element in Tab 2
+curl -s -X POST http://localhost:9867/instances/$INST/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","ref":"e3","tabId":"'$TAB2'"}'
+
+# Take screenshot of Tab 1
+curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB1" -o screenshot1.png
 ```
 
 **Complete script:**
@@ -427,37 +446,47 @@ echo "Instance: $INST"
 # Step 2: Wait for initialization
 sleep 2
 
-# Step 3: Create tabs
+# Step 3: Create tabs and capture tabIds
 echo "Creating tabs..."
-curl -s -X POST http://localhost:9867/tabs/open \
+TAB1=$(curl -s -X POST http://localhost:9867/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://github.com"}' > /dev/null
+  -d '{"instanceId":"'$INST'","url":"https://github.com"}' | jq -r '.id')
 
-curl -s -X POST http://localhost:9867/tabs/open \
+TAB2=$(curl -s -X POST http://localhost:9867/tabs/open \
   -H "Content-Type: application/json" \
-  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}' > /dev/null
+  -d '{"instanceId":"'$INST'","url":"https://stackoverflow.com"}' | jq -r '.id')
+
+echo "Tab 1: $TAB1"
+echo "Tab 2: $TAB2"
 
 # Step 4: List tabs
 echo "Tabs in instance:"
 curl -s "http://localhost:9867/instances/$INST/tabs" | jq '.[] | {id, title, url}'
 
-# Step 5: Get content from Tab 1
+# Step 5: Get content from Tab 1 using tabId
 echo "Content from Tab 1:"
-curl -s "http://localhost:9867/instances/$INST/text" | jq '.text' | head -3
+curl -s "http://localhost:9867/instances/$INST/text?tabId=$TAB1" | jq '.text' | head -3
 
-# Step 6: Get snapshots
+# Step 6: Get snapshots from both tabs
 echo "Getting snapshots..."
-curl -s "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes | length'
+echo "Tab 1 nodes: $(curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB1" | jq '.nodes | length')"
+echo "Tab 2 nodes: $(curl -s "http://localhost:9867/instances/$INST/snapshot?tabId=$TAB2" | jq '.nodes | length')"
 
-# Step 7: Interact with element
-echo "Clicking element..."
+# Step 7: Interact with elements in each tab
+echo "Clicking element in Tab 1..."
 curl -s -X POST http://localhost:9867/instances/$INST/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e5"}'
+  -d '{"kind":"click","ref":"e5","tabId":"'$TAB1'"}'
 
-# Step 8: Take screenshot
-echo "Taking screenshot..."
-curl "http://localhost:9867/instances/$INST/screenshot" -o /tmp/page.png
+echo "Clicking element in Tab 2..."
+curl -s -X POST http://localhost:9867/instances/$INST/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","ref":"e3","tabId":"'$TAB2'"}'
+
+# Step 8: Take screenshots of each tab
+echo "Taking screenshots..."
+curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB1" -o /tmp/tab1.png
+curl "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB2" -o /tmp/tab2.png
 
 # Step 9: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
@@ -472,7 +501,7 @@ echo "Stopped instance: $INST"
 
 ### Step-by-Step
 
-**Step 1: Create instance and navigate**
+**Step 1: Create instance and navigate (capture tabId)**
 ```bash
 INST=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
@@ -480,14 +509,16 @@ INST=$(curl -s -X POST http://localhost:9867/instances/launch \
 
 sleep 2
 
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/report"}' > /dev/null
+  -d '{"url":"https://example.com/report"}' | jq -r '.tabId')
+
+echo "Instance: $INST, Tab: $TAB"
 ```
 
-**Step 2: Generate PDF**
+**Step 2: Generate PDF (use tabId)**
 ```bash
-curl "http://localhost:9867/instances/$INST/pdf?landscape=true" \
+curl "http://localhost:9867/instances/$INST/pdf?tabId=$TAB&landscape=true" \
   -o report.pdf
 ```
 
@@ -505,22 +536,24 @@ echo "Instance: $INST"
 # Step 2: Wait for initialization
 sleep 2
 
-# Step 3: Navigate to report page
+# Step 3: Navigate to report page (capture tabId)
 echo "Navigating to report page..."
-curl -s -X POST http://localhost:9867/instances/$INST/navigate \
+TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/report"}' > /dev/null
+  -d '{"url":"https://example.com/report"}' | jq -r '.tabId')
 
-# Step 4: Generate PDF with options
+echo "Tab: $TAB"
+
+# Step 4: Generate PDF with options using tabId
 echo "Generating PDF..."
-curl -s "http://localhost:9867/instances/$INST/pdf?landscape=true&displayHeaderFooter=true" \
+curl -s "http://localhost:9867/instances/$INST/pdf?tabId=$TAB&landscape=true&displayHeaderFooter=true" \
   -o report.pdf
 
 echo "PDF saved: report.pdf"
 
-# Step 5: Take screenshot for preview
+# Step 5: Take screenshot for preview using tabId
 echo "Taking preview screenshot..."
-curl -s "http://localhost:9867/instances/$INST/screenshot" -o /tmp/report_preview.png
+curl -s "http://localhost:9867/instances/$INST/screenshot?tabId=$TAB" -o /tmp/report_preview.png
 
 # Step 6: Cleanup
 curl -s -X POST "http://localhost:9867/instances/$INST/stop"
