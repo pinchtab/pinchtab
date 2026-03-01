@@ -139,3 +139,38 @@ BRIDGE_TOKEN=secret ./pinchtab
 docker build -t pinchtab .
 docker run -d -p 9867:9867 -e BRIDGE_TOKEN=secret pinchtab
 ```
+
+---
+
+## CDP Architecture
+
+PinchTab sits between your tools/agents and Chrome:
+
+```text
+┌─────────────────────────────────────────┐
+│         Your Tool/Agent                 │
+│   (CLI, curl, Python, Node.js, etc.)    │
+└──────────────┬──────────────────────────┘
+               │
+               │ HTTP
+               ↓
+┌─────────────────────────────────────────┐
+│    PinchTab HTTP Server (Go)            │
+│  ┌─────────────────────────────────┐    │
+│  │  Tab Manager                    │    │
+│  │  (tracks tabs + sessions)       │    │
+│  └─────────────────────────────────┘    │
+│  ┌─────────────────────────────────┐    │
+│  │  Chrome DevTools Protocol (CDP) │    │
+│  └─────────────────────────────────┘    │
+└──────────────┬──────────────────────────┘
+               │
+               │ CDP WebSocket
+               ↓
+┌─────────────────────────────────────────┐
+│        Chrome Browser                   │
+│  (Headless, headed, or external)        │
+└─────────────────────────────────────────┘
+```
+
+PinchTab wraps Chrome's DevTools Protocol (CDP) to translate HTTP requests into CDP commands, manage browser state, and deliver structured responses (accessibility trees, screenshots, PDFs) back to your agents.

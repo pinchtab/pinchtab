@@ -1,4 +1,4 @@
-# PinchTab CLI Design Guide
+# CLI Design Guide
 
 ## Principles
 

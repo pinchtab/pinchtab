@@ -1,4 +1,4 @@
-# PinchTab CLI Quick Reference
+# CLI Quick Reference
 
 **Legend:**
 - `inst_abc123` — Instance ID

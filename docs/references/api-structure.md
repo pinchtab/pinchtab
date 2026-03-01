@@ -1,6 +1,6 @@
-# PinchTab API Structure: New (Tab-centric)
+# API Structure
 
-## Simplified, Flat API Focused on Tabs as Primary Resource
+## Overview
 
 ### Resource Hierarchy
 
