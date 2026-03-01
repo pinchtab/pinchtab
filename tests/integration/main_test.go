@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	serverURL     string
-	currentTabID  string // Track current tab for action operations
+	serverURL    string
+	currentTabID string // Track current tab for action operations
 )
 
 // removeEnvPrefix removes all environment variables starting with the given prefix
