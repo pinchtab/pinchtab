@@ -11,6 +11,7 @@ import (
 // A1: Click by ref — navigate to example.com, find the "More information..." link, click it
 func TestAction_Click(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
 
 	// Get snapshot to find a clickable ref
 	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
@@ -22,9 +23,10 @@ func TestAction_Click(t *testing.T) {
 		t.Skip("no clickable link ref found in snapshot")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "click",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "click",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("click failed with %d", code)
@@ -65,6 +67,8 @@ func TestAction_MissingKind(t *testing.T) {
 // A11: Ref not found
 func TestAction_RefNotFound(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
+
 	code, _ := httpPost(t, "/action", map[string]any{
 		"tabId": currentTabID,
 		"kind":  "click",
@@ -121,6 +125,7 @@ func findRef(snapshot string, role string) string {
 func TestAction_Type(t *testing.T) {
 	// Navigate to httpbin form
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
 	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
 	ref := findRef(string(snapBody), "textbox")
@@ -132,9 +137,10 @@ func TestAction_Type(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"kind": "type",
-		"ref":  ref,
-		"text": "test input",
+		"tabId": currentTabID,
+		"kind":  "type",
+		"ref":   ref,
+		"text":  "test input",
 	})
 	if code != 200 {
 		t.Errorf("type failed with %d", code)
@@ -144,6 +150,7 @@ func TestAction_Type(t *testing.T) {
 // A3: Fill by ref
 func TestAction_Fill(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
 	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
 	ref := findRef(string(snapBody), "textbox")
@@ -155,9 +162,10 @@ func TestAction_Fill(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"kind": "fill",
-		"ref":  ref,
-		"text": "filled value",
+		"tabId": currentTabID,
+		"kind":  "fill",
+		"ref":   ref,
+		"text":  "filled value",
 	})
 	if code != 200 {
 		t.Errorf("fill failed with %d", code)
@@ -167,6 +175,7 @@ func TestAction_Fill(t *testing.T) {
 // A5: Focus
 func TestAction_Focus(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
 	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
 	ref := findRef(string(snapBody), "textbox")
@@ -174,9 +183,10 @@ func TestAction_Focus(t *testing.T) {
 		t.Skip("no focusable ref found")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "focus",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "focus",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("focus failed with %d", code)
@@ -252,6 +262,7 @@ func TestAction_Hover(t *testing.T) {
 // A7: Select
 func TestAction_Select(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
 	// Get snapshot to find a select element
 	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
@@ -264,9 +275,10 @@ func TestAction_Select(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"kind":  "select",
-		"ref":   ref,
-		"value": "opt1",
+		"tabId":  currentTabID,
+		"kind":   "select",
+		"ref":    ref,
+		"value":  "opt1",
 	})
 	if code != 200 {
 		t.Errorf("select failed with %d", code)
