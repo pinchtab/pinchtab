@@ -30,6 +30,15 @@ Requires **Go 1.25+** and **Google Chrome**.
 5. Commit — pre-commit hook runs checks automatically
 6. Push: `git pull --rebase && git push`
 
+### Creating a Pull Request
+
+**Important:** When creating a PR, please keep the **"Allow edits from maintainers"** checkbox **enabled** (it's on by default). This lets us:
+- Apply small fixes directly
+- Resolve merge conflicts automatically
+- Rebase and update your branch without asking
+
+This significantly speeds up the merge process. Thank you! 🙏
+
 ## Running Tests
 
 ```bash
