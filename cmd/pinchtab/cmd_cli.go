@@ -650,7 +650,7 @@ func cliHealth(client *http.Client, base, token string) {
 
 func cliInstance(client *http.Client, base, token string, args []string) {
 	if len(args) < 1 {
-		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch, logs, stop")
+		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch, navigate, logs, stop")
 	}
 
 	subCmd := args[0]
@@ -659,6 +659,8 @@ func cliInstance(client *http.Client, base, token string, args []string) {
 	switch subCmd {
 	case "launch":
 		cliInstanceLaunch(client, base, token, subArgs)
+	case "navigate":
+		cliInstanceNavigate(client, base, token, subArgs)
 	case "logs":
 		cliInstanceLogs(client, base, token, subArgs)
 	case "stop":
@@ -688,6 +690,19 @@ func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 
 	// doPost auto-prints JSON response
 	doPost(client, base, token, "/instances/launch", body)
+}
+
+func cliInstanceNavigate(client *http.Client, base, token string, args []string) {
+	if len(args) < 2 {
+		fatal("Usage: pinchtab instance navigate <instance-id> <url>")
+	}
+
+	instID := args[0]
+	url := args[1]
+
+	body := map[string]any{"url": url}
+	// doPost auto-prints JSON response
+	doPost(client, base, token, fmt.Sprintf("/instances/%s/navigate", instID), body)
 }
 
 func cliInstanceLogs(client *http.Client, base, token string, args []string) {
