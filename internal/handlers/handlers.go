@@ -1,3 +1,4 @@
+// Package handlers provides HTTP request handlers for the bridge server.
 package handlers
 
 import (
