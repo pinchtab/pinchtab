@@ -696,23 +696,17 @@ func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 func cliInstances(client *http.Client, base, token string) {
 	body := doGetRaw(client, base, token, "/instances", nil)
 
-	// Parse array of instances
+	// Parse and format as JSON
 	var instances []map[string]any
 	if err := json.Unmarshal(body, &instances); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse instances: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Display instances in a friendly format, or empty if none
-	if len(instances) == 0 {
-		fmt.Println("[]")
-		return
-	}
-
-	fmt.Println()
-	for _, inst := range instances {
+	// Transform to cleaner output format
+	output := make([]map[string]any, len(instances))
+	for i, inst := range instances {
 		id, _ := inst["id"].(string)
-		name, _ := inst["profileName"].(string)
 		port, _ := inst["port"].(string)
 		headless, _ := inst["headless"].(bool)
 		status, _ := inst["status"].(string)
@@ -722,9 +716,17 @@ func cliInstances(client *http.Client, base, token string) {
 			mode = "headed"
 		}
 
-		fmt.Printf("📍 %s (ID: %s, Port: %s, Mode: %s, Status: %s)\n", name, id, port, mode, status)
+		output[i] = map[string]any{
+			"id":     id,
+			"port":   port,
+			"mode":   mode,
+			"status": status,
+		}
 	}
-	fmt.Println()
+
+	// Output as JSON
+	data, _ := json.MarshalIndent(output, "", "  ")
+	fmt.Println(string(data))
 }
 
 // --- profiles ---
