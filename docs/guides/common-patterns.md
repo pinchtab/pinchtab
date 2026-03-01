@@ -13,7 +13,7 @@ Use when you need to **see what's happening**:
 ```bash
 curl -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"debug","headless":false}'
+  -d '{"mode":"headed"}'
 ```
 
 **Use cases:**
@@ -38,21 +38,23 @@ curl -X POST http://localhost:9867/instances/launch \
 # Create a headed instance for manual testing
 INST=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"manual-qa","headless":false}' | jq -r '.id')
+  -d '{"mode":"headed"}' | jq -r '.id')
 
-PORT=$(curl -s http://localhost:9867/instances/$INST | jq -r '.port')
-
-echo "Manual testing instance running on port $PORT"
+echo "Manual testing instance: $INST"
 echo "Chrome window is open - interact manually or use API calls"
 
-# Optionally navigate to starting URL
-curl -s -X POST "http://localhost:$PORT/navigate" \
+# Wait for Chrome to initialize
+sleep 2
+
+# Optionally navigate to starting URL (via orchestrator proxy)
+curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://app.example.com"}'
 
 echo "Navigate the app manually, then run automated tests..."
-sleep 300  # Keep instance running for 5 minutes
+sleep 300
 
+# Keep instance running for 5 minutes
 curl -X POST "http://localhost:9867/instances/$INST/stop"
 ```
 
@@ -63,7 +65,7 @@ Use when you need **speed and efficiency**:
 ```bash
 curl -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"worker","headless":true}'
+  -d '{"mode":"headless"}'
 ```
 
 **Use cases:**
@@ -91,10 +93,9 @@ INSTANCES=()
 for i in {1..5}; do
   INST=$(curl -s -X POST http://localhost:9867/instances/launch \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"test-worker-$i\",\"headless\":true}" | jq -r '.id')
+    -d '{"mode":"headless"}' | jq -r '.id')
   
-  PORT=$(curl -s http://localhost:9867/instances/$INST | jq -r '.port')
-  INSTANCES+=("$INST:$PORT")
+  INSTANCES+=("$INST")
 done
 
 echo "Created 5 parallel test workers"
@@ -109,17 +110,17 @@ TEST_URLS=(
 )
 
 for i in "${!INSTANCES[@]}"; do
-  IFS=: read INST PORT <<< "${INSTANCES[$i]}"
+  INST="${INSTANCES[$i]}"
   URL="${TEST_URLS[$i]}"
   
-  # Run test in parallel
+  # Run test in parallel (via orchestrator proxy)
   (
-    curl -s -X POST "http://localhost:$PORT/navigate" \
+    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
       -H "Content-Type: application/json" \
       -d "{\"url\":\"$URL\"}" > /dev/null
     
     # Verify page loaded
-    TITLE=$(curl -s "http://localhost:$PORT/snapshot" | jq -r '.title')
+    TITLE=$(curl -s "http://localhost:9867/instances/$INST/snapshot" | jq -r '.title')
     echo "Test $i: $TITLE"
   ) &
 done
@@ -127,8 +128,7 @@ done
 wait
 
 # Cleanup
-for INST_PORT in "${INSTANCES[@]}"; do
-  IFS=: read INST PORT <<< "$INST_PORT"
+for INST in "${INSTANCES[@]}"; do
   curl -s -X POST "http://localhost:9867/instances/$INST/stop" > /dev/null
 done
 
@@ -143,14 +143,15 @@ Typical production setup:
 # 1 headed for interactive debugging
 HEADED=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"qa-debug","headless":false}' | jq -r '.id')
+  -d '{"mode":"headed"}' | jq -r '.id')
 
 # 10 headless for bulk operations
 for i in {1..10}; do
   curl -s -X POST http://localhost:9867/instances/launch \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"worker-$i\",\"headless\":true}" > /dev/null
+    -d '{"mode":"headless"}' > /dev/null &
 done
+wait
 
 echo "Setup: 1 headed (debug) + 10 headless (workers)"
 ```
@@ -161,18 +162,22 @@ echo "Setup: 1 headed (debug) + 10 headless (workers)"
 
 ### Round-Robin Distribution
 
-Distribute requests evenly across instances:
+Distribute requests evenly across instances via orchestrator:
 
 ```bash
 #!/bin/bash
 
-INSTANCES=(
-  "http://localhost:9868"
-  "http://localhost:9869"
-  "http://localhost:9870"
-  "http://localhost:9871"
-  "http://localhost:9872"
-)
+# Create 5 instances
+INSTANCES=()
+for i in {1..5}; do
+  INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+    -H "Content-Type: application/json" \
+    -d '{"mode":"headless"}' | jq -r '.id')
+  INSTANCES+=("$INST")
+done
+
+# Wait for Chrome initialization
+sleep 3
 
 URLS=(
   "https://example.com/page1"
@@ -185,12 +190,12 @@ URLS=(
   "https://example.com/page8"
 )
 
-# Distribute evenly
+# Distribute evenly via orchestrator proxy
 for i in "${!URLS[@]}"; do
   URL="${URLS[$i]}"
-  INSTANCE="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
+  INST="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
   
-  curl -s -X POST "$INSTANCE/navigate" \
+  curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$URL\"}" &
 done
@@ -199,43 +204,46 @@ wait
 ```
 
 **Result:**
-- URLs 1,6 → Instance 1 (9868)
-- URLs 2,7 → Instance 2 (9869)
-- URLs 3,8 → Instance 3 (9870)
-- URLs 4 → Instance 4 (9871)
-- URLs 5 → Instance 5 (9872)
-
-Each instance handles roughly equal work.
+Each instance handles roughly equal work (round-robin).
 
 ### Weighted Distribution
 
-Send more work to faster instances:
+Send more work to better instances (e.g., faster systems get more requests):
 
 ```bash
 #!/bin/bash
 
-# Instances with weights
-declare -A WEIGHTS=(
-  ["http://localhost:9868"]=3  # Fast SSD
-  ["http://localhost:9869"]=2  # Standard
-  ["http://localhost:9870"]=1  # Slower
-)
-
-# Create weighted list
+# Create weighted instance pool
 INSTANCES=()
-for INST in "${!WEIGHTS[@]}"; do
-  WEIGHT=${WEIGHTS[$INST]}
-  for ((j=0; j<WEIGHT; j++)); do
-    INSTANCES+=("$INST")
-  done
+
+# Add 3 copies of fast instance (handles 3/6 = 50% of work)
+for i in {1..3}; do
+  INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+    -H "Content-Type: application/json" \
+    -d '{"mode":"headless"}' | jq -r '.id')
+  INSTANCES+=("$INST")
 done
+
+# Add 2 copies of standard instance (handles 2/6 = 33% of work)
+for i in {1..2}; do
+  INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+    -H "Content-Type: application/json" \
+    -d '{"mode":"headless"}' | jq -r '.id')
+  INSTANCES+=("$INST")
+done
+
+# Add 1 copy of slow instance (handles 1/6 = 17% of work)
+INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"headless"}' | jq -r '.id')
+INSTANCES+=("$INST")
 
 # Distribute using weighted list
 for i in "${!URLS[@]}"; do
   URL="${URLS[$i]}"
-  INSTANCE="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
+  INST="${INSTANCES[$((i % ${#INSTANCES[@]}))]}"
   
-  curl -s -X POST "$INSTANCE/navigate" \
+  curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$URL\"}" &
 done
@@ -244,59 +252,74 @@ wait
 ```
 
 **Result:**
-- Fast instance handles 50% of work (3/6 slots)
-- Standard instance handles 33% of work (2/6 slots)
-- Slow instance handles 17% of work (1/6 slots)
+Fast instances handle more load, slower instances handle less.
 
 ### Queue-Based Distribution
 
-Process a work queue, distributing dynamically:
+Process a work queue dynamically, keeping a fixed number of concurrent jobs:
 
 ```bash
 #!/bin/bash
 
-# Instance pool
-INSTANCE_POOL=(
-  "http://localhost:9868"
-  "http://localhost:9869"
-  "http://localhost:9870"
-)
+# Create instance pool (3 workers)
+INSTANCES=()
+for i in {1..3}; do
+  INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+    -H "Content-Type: application/json" \
+    -d '{"mode":"headless"}' | jq -r '.id')
+  INSTANCES+=("$INST")
+done
 
-# Work queue
+# Work queue (100 URLs)
 QUEUE=(
   "https://example.com/1"
   "https://example.com/2"
   "https://example.com/3"
-  ...
+  # ... up to ...
   "https://example.com/100"
 )
 
-# Process queue with max concurrent jobs
-MAX_JOBS=${#INSTANCE_POOL[@]}
+# Process queue with max concurrent jobs (use 'wait -n' for job-level control)
+MAX_JOBS=3
 CURRENT_JOB=0
-RUNNING=0
 
-while [ $CURRENT_JOB -lt ${#QUEUE[@]} ] || [ $RUNNING -gt 0 ]; do
-  # Start new jobs while under limit and queue has items
-  while [ $RUNNING -lt $MAX_JOBS ] && [ $CURRENT_JOB -lt ${#QUEUE[@]} ]; do
-    URL="${QUEUE[$CURRENT_JOB]}"
-    INSTANCE="${INSTANCE_POOL[$((CURRENT_JOB % MAX_JOBS))]}"
-    
-    (
-      curl -s -X POST "$INSTANCE/navigate" \
-        -H "Content-Type: application/json" \
-        -d "{\"url\":\"$URL\"}"
-      echo "Processed: $URL"
-    ) &
-    
-    ((CURRENT_JOB++))
-    ((RUNNING++))
-  done
+# Start initial batch
+for i in $(seq 0 $((MAX_JOBS - 1))); do
+  [ $CURRENT_JOB -lt ${#QUEUE[@]} ] || break
   
-  # Wait for a job to complete
-  wait -n
-  ((RUNNING--))
+  URL="${QUEUE[$CURRENT_JOB]}"
+  INST="${INSTANCES[$((CURRENT_JOB % MAX_JOBS))]}"
+  
+  (
+    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+      -H "Content-Type: application/json" \
+      -d "{\"url\":\"$URL\"}" > /dev/null
+    echo "Processed: $URL"
+  ) &
+  
+  ((CURRENT_JOB++))
 done
+
+# Process remaining queue
+while [ $CURRENT_JOB -lt ${#QUEUE[@]} ]; do
+  URL="${QUEUE[$CURRENT_JOB]}"
+  INST="${INSTANCES[$((CURRENT_JOB % MAX_JOBS))]}"
+  
+  (
+    curl -s -X POST "http://localhost:9867/instances/$INST/navigate" \
+      -H "Content-Type: application/json" \
+      -d "{\"url\":\"$URL\"}" > /dev/null
+    echo "Processed: $URL"
+  ) &
+  
+  # Wait for a background job to complete
+  wait -n
+  
+  ((CURRENT_JOB++))
+done
+
+# Wait for remaining jobs
+wait
 
 echo "Queue processing complete"
 ```
@@ -312,34 +335,38 @@ Each user gets their own instance with persistent state:
 ```bash
 #!/bin/bash
 
-# Create instance per user
-function create_user_instance() {
-  local USER_ID=$1
-  
-  curl -s -X POST http://localhost:9867/instances/launch \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"user-$USER_ID\",\"headless\":true}"
-}
+# Create persistent profiles for each user
+pinchtab profile create user-1
+pinchtab profile create user-2
+pinchtab profile create user-3
 
-# User 1: Gets instance with profile 'user-1'
-U1=$(create_user_instance 1 | jq -r '.id')
+# Get profile IDs
+U1_PROF=$(pinchtab profiles | jq -r '.[] | select(.name=="user-1") | .id')
+U2_PROF=$(pinchtab profiles | jq -r '.[] | select(.name=="user-2") | .id')
+U3_PROF=$(pinchtab profiles | jq -r '.[] | select(.name=="user-3") | .id')
 
-# User 2: Gets instance with profile 'user-2'
-U2=$(create_user_instance 2 | jq -r '.id')
+# Create instances with profiles
+U1=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$U1_PROF'","mode":"headless"}' | jq -r '.id')
 
-# User 3: Gets instance with profile 'user-3'
-U3=$(create_user_instance 3 | jq -r '.id')
+U2=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$U2_PROF'","mode":"headless"}' | jq -r '.id')
+
+U3=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$U3_PROF'","mode":"headless"}' | jq -r '.id')
 
 # Each user has:
 # - Separate Chrome process
-# - Separate cookies (login sessions)
-# - Separate history
-# - Separate local storage
+# - Persistent profile (survives restarts)
+# - Separate cookies (login sessions preserved)
+# - Separate history, local storage
 # - No interference between users
 
-# User 1 navigates
-PORT_U1=$(curl -s http://localhost:9867/instances/$U1 | jq -r '.port')
-curl -s -X POST "http://localhost:$PORT_U1/navigate" \
+# User 1 navigates (via orchestrator proxy)
+curl -s -X POST "http://localhost:9867/instances/$U1/navigate" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://app.example.com/login?user=1"}'
 
