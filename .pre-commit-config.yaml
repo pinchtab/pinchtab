@@ -23,7 +23,7 @@ repos:
             tests/.*\.md|
             \.github/.*\.md|
             skill/.*\.md|
-            docs/references/api-reference\.md|
+            docs/references/.*\.json|
             README\.md|
             CONTRIBUTING\.md|
             CODE_OF_CONDUCT\.md|

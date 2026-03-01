@@ -1,0 +1,337 @@
+{
+  "version": "1.0",
+  "generated": "auto-generated from Go code",
+  "count": 66,
+  "endpoints": [
+    {
+      "method": "DELETE",
+      "path": "/profiles/{name}",
+      "handler": "handleDeleteByPath"
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "handler": ""
+    },
+    {
+      "method": "GET",
+      "path": "/cookies",
+      "handler": "HandleGetCookies"
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard",
+      "handler": ""
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard/",
+      "handler": ""
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard/agents",
+      "handler": "handleAgents"
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard/events",
+      "handler": "handleSSE"
+    },
+    {
+      "method": "GET",
+      "path": "/download",
+      "handler": "HandleDownload"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "handler": "HandleHealth"
+    },
+    {
+      "method": "GET",
+      "path": "/instances",
+      "handler": "handleList"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/tabs",
+      "handler": "handleAllTabs"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/cookies",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/download",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/logs",
+      "handler": "handleLogsByID"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/pdf",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/proxy/screencast",
+      "handler": "handleProxyScreencast"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/screencast",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/screenshot",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/snapshot",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/tabs",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/instances/{id}/text",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/pdf",
+      "handler": "HandlePDF"
+    },
+    {
+      "method": "GET",
+      "path": "/profiles",
+      "handler": "handleList"
+    },
+    {
+      "method": "GET",
+      "path": "/profiles/{id}/instance",
+      "handler": "handleProfileInstance"
+    },
+    {
+      "method": "GET",
+      "path": "/profiles/{name}/analytics",
+      "handler": "handleAnalyticsByPath"
+    },
+    {
+      "method": "GET",
+      "path": "/profiles/{name}/logs",
+      "handler": "handleLogsByPath"
+    },
+    {
+      "method": "GET",
+      "path": "/screencast",
+      "handler": "HandleScreencast"
+    },
+    {
+      "method": "GET",
+      "path": "/screencast/tabs",
+      "handler": "HandleScreencastAll"
+    },
+    {
+      "method": "GET",
+      "path": "/screenshot",
+      "handler": "HandleScreenshot"
+    },
+    {
+      "method": "GET",
+      "path": "/snapshot",
+      "handler": "HandleSnapshot"
+    },
+    {
+      "method": "GET",
+      "path": "/stealth/status",
+      "handler": "HandleStealthStatus"
+    },
+    {
+      "method": "GET",
+      "path": "/tabs",
+      "handler": "HandleTabs"
+    },
+    {
+      "method": "GET",
+      "path": "/text",
+      "handler": "HandleText"
+    },
+    {
+      "method": "GET",
+      "path": "/welcome",
+      "handler": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/profiles/meta",
+      "handler": "handleUpdateMeta"
+    },
+    {
+      "method": "PATCH",
+      "path": "/profiles/{name}",
+      "handler": "handleUpdateByPath"
+    },
+    {
+      "method": "POST",
+      "path": "/action",
+      "handler": "HandleAction"
+    },
+    {
+      "method": "POST",
+      "path": "/actions",
+      "handler": "HandleActions"
+    },
+    {
+      "method": "POST",
+      "path": "/cookies",
+      "handler": "HandleSetCookies"
+    },
+    {
+      "method": "POST",
+      "path": "/ensure-chrome",
+      "handler": "HandleEnsureChrome"
+    },
+    {
+      "method": "POST",
+      "path": "/evaluate",
+      "handler": "HandleEvaluate"
+    },
+    {
+      "method": "POST",
+      "path": "/fingerprint/rotate",
+      "handler": "HandleFingerprintRotate"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/launch",
+      "handler": "handleLaunchByName"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/action",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/actions",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/cookies",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/ensure-chrome",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/evaluate",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/navigate",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/stop",
+      "handler": "handleStopByInstanceID"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/tab",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/tab/lock",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/tab/unlock",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/instances/{id}/upload",
+      "handler": "proxyToInstance"
+    },
+    {
+      "method": "POST",
+      "path": "/navigate",
+      "handler": "HandleNavigate"
+    },
+    {
+      "method": "POST",
+      "path": "/profiles/create",
+      "handler": "handleCreate"
+    },
+    {
+      "method": "POST",
+      "path": "/profiles/import",
+      "handler": "handleImport"
+    },
+    {
+      "method": "POST",
+      "path": "/profiles/{id}/start",
+      "handler": "handleStartByID"
+    },
+    {
+      "method": "POST",
+      "path": "/profiles/{id}/stop",
+      "handler": "handleStopByID"
+    },
+    {
+      "method": "POST",
+      "path": "/profiles/{name}/reset",
+      "handler": "handleResetByPath"
+    },
+    {
+      "method": "POST",
+      "path": "/start/{id}",
+      "handler": "handleStartByID"
+    },
+    {
+      "method": "POST",
+      "path": "/stop/{id}",
+      "handler": "handleStopByID"
+    },
+    {
+      "method": "POST",
+      "path": "/tab",
+      "handler": "HandleTab"
+    },
+    {
+      "method": "POST",
+      "path": "/tab/lock",
+      "handler": "HandleTabLock"
+    },
+    {
+      "method": "POST",
+      "path": "/tab/unlock",
+      "handler": "HandleTabUnlock"
+    },
+    {
+      "method": "POST",
+      "path": "/upload",
+      "handler": "HandleUpload"
+    }
+  ]
+}

@@ -6,145 +6,101 @@ Utility scripts for PinchTab development, testing, and documentation.
 
 ### Overview
 
-Generate API reference documentation automatically from Go code.
-
-Two approaches:
-
-1. **Auto-extraction from code routes** — Fast, no comments needed
-2. **Structured comments** — Rich documentation with examples
+Automatically generate a complete JSON API reference from Go code.
 
 ### Quick Start
 
 ```bash
-# Generate endpoint list (basic)
-go run scripts/gen-api-docs/main.go > docs/references/api-reference.md
+# Generate endpoint list as JSON
+go run scripts/gen-api-docs/main.go > docs/references/api-reference.json
 
-# Or with bash
-./scripts/generate-api-docs.sh > docs/references/api-reference-bash.md
-```
-
-### Tools
-
-#### `gen-api-docs/main.go` (Recommended)
-
-Go-based tool using AST parsing.
-
-**Features:**
-- ✅ Parses `internal/handlers/handlers.go`
-- ✅ Parses `internal/profiles/handlers.go`
-- ✅ Parses `internal/orchestrator/handlers.go`
-- ✅ Parses `internal/dashboard/dashboard.go`
-- ✅ Generates sorted endpoint table
-- ✅ Extracts handler names
-- ✅ (Ready for) Structured comment parsing
-
-**Usage:**
-```bash
-# Generate and print to stdout
-go run scripts/gen-api-docs/main.go
-
-# Generate to file
-go run scripts/gen-api-docs/main.go > docs/references/api-reference.md
+# Pretty-print
+go run scripts/gen-api-docs/main.go | jq .
 
 # Count endpoints
-go run scripts/gen-api-docs/main.go | grep "^\| (GET\|POST\|DELETE\|PATCH\|PUT)" | wc -l
+go run scripts/gen-api-docs/main.go | jq '.count'
+
+# Filter by method
+go run scripts/gen-api-docs/main.go | jq '.endpoints[] | select(.method == "POST")'
+
+# Count by method
+go run scripts/gen-api-docs/main.go | jq '.endpoints | group_by(.method) | map({method: .[0].method, count: length})'
 ```
 
-#### `generate-api-docs.sh`
+### Tool: `gen-api-docs/main.go`
 
-Bash-based tool using regex patterns.
+Go-based tool using AST parsing. **Outputs structured JSON.**
 
 **Features:**
-- ✅ Simple pattern matching
-- ✅ No dependencies (pure bash)
-- ✅ Quick for CI/CD
+- ✅ Parses all handler files (handlers, profiles, orchestrator, dashboard)
+- ✅ Extracts HTTP method, path, and handler name
+- ✅ Removes duplicate endpoints
+- ✅ Sorts by method then path
+- ✅ Outputs clean JSON for programmatic use
 
-**Usage:**
-```bash
-./scripts/generate-api-docs.sh > docs/references/api-reference-bash.md
-```
-
-### Adding Documentation to Handlers
-
-#### Step 1: Review the Format
-
-See `scripts/API_COMMENT_FORMAT.md` for the structured comment format.
-
-#### Step 2: Add Comments to Handlers
-
-Example: Adding documentation to `HandleSnapshot`
-
-```go
-// HandleSnapshot returns the accessibility tree of the current tab.
-//
-// @Endpoint GET /snapshot
-// @Description Returns the page structure with clickable elements
-//
-// @Param tabId string query The tab ID (required)
-// @Param filter string query Filter: "interactive" or "all" (optional, default: "all")
-// @Param interactive bool query Show only interactive elements (optional)
-//
-// @Response 200 application/json Returns accessibility tree
-//
-// @Example curl:
-//   curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive"
-//
-// @Example cli:
-//   pinchtab snap -i -c
-func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
-  // implementation...
+**Output Format:**
+```json
+{
+  "version": "1.0",
+  "generated": "auto-generated from Go code",
+  "count": 66,
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/snapshot",
+      "handler": "HandleSnapshot"
+    },
+    {
+      "method": "POST",
+      "path": "/navigate",
+      "handler": "HandleNavigate"
+    }
+  ]
 }
 ```
 
-#### Step 3: Regenerate Docs
+### JSON File Structure
 
+**Location:** `docs/references/api-reference.json`
+
+**Fields:**
+- `version` (string) — API reference version (e.g., "1.0")
+- `generated` (string) — Generation info
+- `count` (number) — Total number of endpoints
+- `endpoints` (array) — List of endpoint objects
+  - `method` — HTTP method (GET, POST, PUT, DELETE, PATCH)
+  - `path` — URL path pattern (e.g., `/snapshot`, `/instances/{id}/action`)
+  - `handler` — Go handler function name
+
+### Use Cases
+
+**Programmatic Access:**
 ```bash
-go run scripts/gen-api-docs/main.go > docs/references/api-reference.md
+# Find all POST endpoints
+jq '.endpoints[] | select(.method == "POST") | .path'
+
+# Find endpoints by path
+jq '.endpoints[] | select(.path | contains("instances"))'
+
+# Find endpoints by handler
+jq '.endpoints[] | select(.handler | contains("Handle"))'
 ```
 
-The tool will automatically extract your comments (once parsing is implemented).
+**Validation:**
+```bash
+# Verify total count
+TOTAL=$(jq '.count' < docs/references/api-reference.json)
+ACTUAL=$(jq '.endpoints | length' < docs/references/api-reference.json)
+[ "$TOTAL" = "$ACTUAL" ] && echo "Count matches" || echo "Mismatch"
+```
 
-### Priority Endpoints to Document
-
-Add comments in this order:
-
-**Phase 1 (Core Operations):**
-- `HandleNavigate` (POST /navigate)
-- `HandleSnapshot` (GET /snapshot)
-- `HandleAction` (POST /action)
-- `HandleText` (GET /text)
-
-**Phase 2 (Instance/Profile Management):**
-- `handleList` in orchestrator (GET /instances, GET /profiles)
-- `handleLaunchByName` in orchestrator (POST /instances/launch)
-- `handleCreate` in profiles (POST /profiles/create)
-
-**Phase 3 (Complete Coverage):**
-- All remaining endpoints
-
-### Documentation Files
-
-| File | Purpose |
-|------|---------|
-| `API_COMMENT_FORMAT.md` | Guide for structured comments |
-| `API_DOCS_GENERATION.md` | How the generator works |
-| `gen-api-docs/main.go` | Go AST parser |
-| `generate-api-docs.sh` | Bash fallback |
-
-### Next Steps
-
-1. **Add comments** to high-value handlers using the format in `API_COMMENT_FORMAT.md`
-2. **Run generator:** `go run scripts/gen-api-docs/main.go > docs/references/api-reference.md`
-3. **Commit:** Both code changes and generated docs
-4. **Iterate:** Add more comments to remaining endpoints
-
-### Example Output
-
-Current generated docs in `docs/references/api-reference.md`:
-
-- **72 endpoints** extracted from code
-- **Sorted by method then path**
-- **Ready for enrichment** with structured comments
+**CI/CD:**
+```bash
+# Generate in CI pipeline
+go run scripts/gen-api-docs/main.go > /tmp/api-ref.json
+# Commit if changed
+git diff docs/references/api-reference.json && git add . && git commit -m "docs: update api reference"
+```
 
 ### Technical Details
 
@@ -154,17 +110,28 @@ The Go tool:
 - Finds all functions named `RegisterHandlers` or `RegisterRoutes`
 - Extracts `mux.HandleFunc()` and `mux.Handle()` calls
 - Parses route patterns with regex: `"METHOD /path"`
+- Removes duplicates (same method + path)
 - Sorts results for consistency
+- Outputs JSON with proper formatting
 
-Future enhancements:
-- Parse `@Param` tags from comments
-- Extract parameter types and defaults
-- Generate complete examples (curl, CLI, Python, JS)
-- Validate against actual handler signatures
+### Why JSON?
+
+- ✅ **Structured data** — Easy to parse programmatically
+- ✅ **No styling** — Plain facts, no markdown formatting to maintain
+- ✅ **Tooling** — Use `jq` or any JSON tool to query/filter
+- ✅ **Automation** — CI/CD can validate endpoint counts, check for breaking changes
+- ✅ **Flexibility** — Can generate docs in any format from JSON
+
+### For Complete Documentation
+
+For full endpoint documentation with parameters, examples, response types, see:
+- `docs/examples/API_DOCUMENTATION_EXAMPLES.md` — Complete workflow examples
+- `docs/references/endpoints.md` — Full manual API reference
+- `docs/references/curl-commands.md` — cURL examples
 
 ---
 
-For questions, see:
-- `scripts/API_COMMENT_FORMAT.md` — How to document handlers
-- `scripts/API_DOCS_GENERATION.md` — Technical details
-- `docs/references/api-reference.md` — Current generated output
+## Other Scripts
+
+Bash-based tools:
+- `generate-api-docs.sh` — Regex-based endpoint extraction (fallback)
