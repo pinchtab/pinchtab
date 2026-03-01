@@ -2,27 +2,12 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 var version = "dev"
-
-// Keep these for backwards compatibility / existing code
-const chromeStartTimeout = 15 * time.Second
-
-var commonWindowSizes = [][2]int{
-	{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900},
-	{1280, 720}, {1600, 900}, {2560, 1440}, {1280, 800},
-}
-
-func randomWindowSize() (int, int) {
-	s := commonWindowSizes[rand.Intn(len(commonWindowSizes))]
-	return s[0], s[1]
-}
 
 func main() {
 	cfg := config.Load()
