@@ -142,8 +142,9 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Mode string `json:"mode"` // "headed" or "headless" (default: headless)
-		Port string `json:"port,omitempty"`
+		ProfileId string `json:"profileId,omitempty"` // Optional: use existing profile
+		Mode      string `json:"mode"`                // "headed" or "headless" (default: headless)
+		Port      string `json:"port,omitempty"`
 	}
 
 	// Decode body if present (empty body is allowed)
@@ -157,8 +158,27 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	// Default: headless=true unless mode="headed"
 	headless := req.Mode != "headed"
 
-	// Generate unique instance name (internal use only)
-	name := fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	// Determine profile name: use provided profileId or generate temporary name
+	var name string
+	if req.ProfileId != "" {
+		// Look up profile by ID to get its name
+		profs := o.pm.List()
+		found := false
+		for _, p := range profs {
+			if p.Id == req.ProfileId {
+				name = p.Name
+				found = true
+				break
+			}
+		}
+		if !found {
+			web.Error(w, 400, fmt.Errorf("profile %q not found", req.ProfileId))
+			return
+		}
+	} else {
+		// Generate unique temporary instance name (internal use only)
+		name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	}
 
 	// Port is optional - if not provided, Launch() will auto-allocate
 	inst, err := o.Launch(name, req.Port, headless)

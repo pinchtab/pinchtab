@@ -247,11 +247,14 @@ function updateLaunchCommand() {
   const port = document.getElementById('launch-port').value.trim();
   const headless = !!(document.getElementById('launch-headless') && document.getElementById('launch-headless').checked);
   
-  // Modern API: POST /instances/launch with mode + port
+  // Get profile ID
+  const profileId = profileByName[name] ? profileByName[name].id : '';
+  
+  // Modern API: POST /instances/launch with profileId + mode + port
   const mode = headless ? 'headless' : 'headed';
   const curlCmd = 'curl -X POST http://localhost:9867/instances/launch '
     + '-H "Content-Type: application/json" '
-    + '-d \'{\"mode\":\"' + mode + '\",\"port\":\"' + (port || 'auto') + '"}\'';
+    + '-d \'{\"profileId\":\"' + profileId + '\",\"mode\":\"' + mode + '\",\"port\":\"' + (port || 'auto') + '"}\'';
   
   document.getElementById('launch-command').value = curlCmd;
 }
@@ -283,6 +286,9 @@ async function doLaunch() {
     return;
   }
 
+  // Get profile ID from profileByName map
+  const profileId = profileByName[name] ? profileByName[name].id : '';
+
   saveProfilePort(name, port);
   setLaunchHeadlessPref(headless);
   closeLaunchModal();
@@ -292,6 +298,7 @@ async function doLaunch() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        profileId: profileId,
         mode: headless ? 'headless' : 'headed',
         port: port
       })
