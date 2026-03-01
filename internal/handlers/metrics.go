@@ -15,10 +15,10 @@ func snapshotMetrics() map[string]any {
 		avgMs = float64(latencySum) / float64(total)
 	}
 	return map[string]any{
-		"requestsTotal":    total,
-		"requestsFailed":   failed,
-		"avgLatencyMs":     avgMs,
-		"rateLimited":      atomic.LoadUint64(&metricRateLimited),
-		"staleRefRetries":  atomic.LoadUint64(&metricStaleRefRetries),
+		"requestsTotal":   total,
+		"requestsFailed":  failed,
+		"avgLatencyMs":    avgMs,
+		"rateLimited":     atomic.LoadUint64(&metricRateLimited),
+		"staleRefRetries": atomic.LoadUint64(&metricStaleRefRetries),
 	}
 }

@@ -58,16 +58,16 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TabID       string  `json:"tabId"`
-		URL         string  `json:"url"`
-		NewTab      bool    `json:"newTab"`
-		WaitTitle   float64 `json:"waitTitle"`
-		Timeout     float64 `json:"timeout"`
-		BlockImages *bool   `json:"blockImages"`
-		BlockMedia  *bool   `json:"blockMedia"`
-		BlockAds    *bool   `json:"blockAds"`
-		WaitFor     string  `json:"waitFor"`
-		WaitSelector string `json:"waitSelector"`
+		TabID        string  `json:"tabId"`
+		URL          string  `json:"url"`
+		NewTab       bool    `json:"newTab"`
+		WaitTitle    float64 `json:"waitTitle"`
+		Timeout      float64 `json:"timeout"`
+		BlockImages  *bool   `json:"blockImages"`
+		BlockMedia   *bool   `json:"blockMedia"`
+		BlockAds     *bool   `json:"blockAds"`
+		WaitFor      string  `json:"waitFor"`
+		WaitSelector string  `json:"waitSelector"`
 	}
 
 	if r.Method == http.MethodGet {

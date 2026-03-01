@@ -30,7 +30,7 @@ func ErrorCode(w http.ResponseWriter, status int, code, message string, retryabl
 	if retryable {
 		payload["retryable"] = true
 	}
-	if details != nil && len(details) > 0 {
+	if len(details) > 0 {
 		payload["details"] = details
 	}
 	JSON(w, status, payload)
