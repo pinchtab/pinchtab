@@ -6,39 +6,63 @@ Utility scripts for PinchTab development, testing, and documentation.
 
 ### Overview
 
-Automatically generate a complete JSON API reference from Go code.
+Keep the API reference in sync with code changes **without losing user metadata**.
 
 ### Quick Start
 
 ```bash
-# Generate endpoint list as JSON
-go run scripts/gen-api-docs/main.go > docs/references/api-reference.json
+# Check what changed (dry-run)
+go run scripts/update-api-reference.go --dry-run
 
-# Pretty-print
-go run scripts/gen-api-docs/main.go | jq .
+# Apply changes (adds new endpoints, removes old ones, keeps metadata)
+go run scripts/update-api-reference.go
 
-# Count endpoints
-go run scripts/gen-api-docs/main.go | jq '.count'
-
-# Filter by method
-go run scripts/gen-api-docs/main.go | jq '.endpoints[] | select(.method == "POST")'
-
-# Count by method
-go run scripts/gen-api-docs/main.go | jq '.endpoints | group_by(.method) | map({method: .[0].method, count: length})'
+# Query the result
+jq '.endpoints | map(select(.cli == true)) | length' docs/references/api-reference.json
+jq '.endpoints[] | select(.method == "POST") | .path' docs/references/api-reference.json
 ```
 
-### Tool: `gen-api-docs/main.go`
+### Tools
 
-Go-based tool using AST parsing. **Outputs structured JSON.**
+#### `update-api-reference.go` (Main Tool - USE THIS)
+
+**Smart merge tool** that updates the API reference without overwriting user-added metadata.
 
 **Features:**
-- ✅ Parses all handler files (handlers, profiles, orchestrator, dashboard)
-- ✅ Extracts HTTP method, path, and handler name
-- ✅ Removes duplicate endpoints
-- ✅ Sorts by method then path
-- ✅ Outputs clean JSON for programmatic use
+- ✅ Scans code for current endpoints
+- ✅ Reads existing `api-reference.json`
+- ✅ **Merges intelligently:**
+  - Keeps all user-added fields (description, examples, params, implementation status)
+  - Adds new endpoints found in code
+  - Removes endpoints no longer in code
+  - Updates only method/path/handler
+- ✅ Shows what changed (added/removed)
+- ✅ Preserves all manual metadata
 
-**Output Format:**
+**Usage:**
+```bash
+# Dry-run first (show changes, no write)
+go run scripts/update-api-reference.go --dry-run
+
+# Apply changes
+go run scripts/update-api-reference.go
+```
+
+**Example Output:**
+```
+Found 66 endpoints in code
+Found 66 endpoints in existing file
+Merged to 66 endpoints
+✓ No changes needed
+
+Wrote docs/references/api-reference.json
+```
+
+#### `gen-api-docs/main.go` (Reference)
+
+Go-based tool using AST parsing. Use this **only** if you want to regenerate from scratch.
+
+**Output:**
 ```json
 {
   "version": "1.0",
@@ -49,89 +73,102 @@ Go-based tool using AST parsing. **Outputs structured JSON.**
       "method": "GET",
       "path": "/snapshot",
       "handler": "HandleSnapshot"
-    },
-    {
-      "method": "POST",
-      "path": "/navigate",
-      "handler": "HandleNavigate"
     }
   ]
 }
+```
+
+### Workflow: Keep API Reference in Sync
+
+**Scenario 1: New endpoint added to code**
+```bash
+go run scripts/update-api-reference.go --dry-run
+# Output:
+# ✨ New endpoints:
+#   + POST /new-endpoint
+
+go run scripts/update-api-reference.go
+# Adds /new-endpoint with basic fields, preserves all existing metadata
+```
+
+**Scenario 2: Endpoint removed from code**
+```bash
+go run scripts/update-api-reference.go --dry-run
+# Output:
+# ❌ Removed endpoints:
+#   - DELETE /old-endpoint
+
+go run scripts/update-api-reference.go
+# Removes /old-endpoint, preserves all other data
+```
+
+**Scenario 3: User adds metadata manually**
+Edit `docs/references/api-reference.json` to add:
+```json
+{
+  "method": "GET",
+  "path": "/snapshot",
+  "handler": "HandleSnapshot",
+  "description": "Get accessibility tree",
+  "cli": true,
+  "curl": true,
+  "examples": {
+    "curl": "curl http://localhost:9867/snapshot?tabId=abc"
+  }
+}
+```
+
+Then run:
+```bash
+go run scripts/update-api-reference.go
+# Preserves all your edits, updates code-derived fields only
 ```
 
 ### JSON File Structure
 
 **Location:** `docs/references/api-reference.json`
 
-**Fields:**
-- `version` (string) — API reference version (e.g., "1.0")
-- `generated` (string) — Generation info
-- `count` (number) — Total number of endpoints
-- `endpoints` (array) — List of endpoint objects
-  - `method` — HTTP method (GET, POST, PUT, DELETE, PATCH)
-  - `path` — URL path pattern (e.g., `/snapshot`, `/instances/{id}/action`)
-  - `handler` — Go handler function name
+**Fields per endpoint:**
+- `method` — HTTP method (GET, POST, PUT, DELETE, PATCH)
+- `path` — URL path pattern (e.g., `/snapshot`, `/instances/{id}/action`)
+- `handler` — Go handler function name
+- `description` (optional) — What this endpoint does
+- `cli` (optional) — CLI support flag
+- `curl` (optional) — Curl support flag
+- `params` (optional) — Parameter list with types/descriptions
+- `examples` (optional) — curl/cli/payload examples
+- `implemented` (optional) — Implementation status
 
-### Use Cases
+### Query Examples
 
-**Programmatic Access:**
 ```bash
-# Find all POST endpoints
-jq '.endpoints[] | select(.method == "POST") | .path'
+# List all endpoints with CLI support
+jq '.endpoints[] | select(.cli == true) | {method, path}' docs/references/api-reference.json
 
-# Find endpoints by path
-jq '.endpoints[] | select(.path | contains("instances"))'
+# Count endpoints by method
+jq '.endpoints | group_by(.method) | map({method: .[0].method, count: length})' docs/references/api-reference.json
 
-# Find endpoints by handler
-jq '.endpoints[] | select(.handler | contains("Handle"))'
+# Find endpoints with documented examples
+jq '.endpoints[] | select(.examples.curl != null) | .path' docs/references/api-reference.json
+
+# Validate total count
+TOTAL=$(jq '.count' docs/references/api-reference.json)
+ACTUAL=$(jq '.endpoints | length' docs/references/api-reference.json)
+[ "$TOTAL" = "$ACTUAL" ] && echo "✓ Count matches" || echo "✗ Mismatch"
 ```
 
-**Validation:**
-```bash
-# Verify total count
-TOTAL=$(jq '.count' < docs/references/api-reference.json)
-ACTUAL=$(jq '.endpoints | length' < docs/references/api-reference.json)
-[ "$TOTAL" = "$ACTUAL" ] && echo "Count matches" || echo "Mismatch"
-```
+### Why This Approach?
 
-**CI/CD:**
-```bash
-# Generate in CI pipeline
-go run scripts/gen-api-docs/main.go > /tmp/api-ref.json
-# Commit if changed
-git diff docs/references/api-reference.json && git add . && git commit -m "docs: update api reference"
-```
-
-### Technical Details
-
-The Go tool:
-- Uses `go/parser` to parse Go source files
-- Uses `go/ast` to traverse the syntax tree
-- Finds all functions named `RegisterHandlers` or `RegisterRoutes`
-- Extracts `mux.HandleFunc()` and `mux.Handle()` calls
-- Parses route patterns with regex: `"METHOD /path"`
-- Removes duplicates (same method + path)
-- Sorts results for consistency
-- Outputs JSON with proper formatting
-
-### Why JSON?
-
-- ✅ **Structured data** — Easy to parse programmatically
-- ✅ **No styling** — Plain facts, no markdown formatting to maintain
-- ✅ **Tooling** — Use `jq` or any JSON tool to query/filter
-- ✅ **Automation** — CI/CD can validate endpoint counts, check for breaking changes
-- ✅ **Flexibility** — Can generate docs in any format from JSON
-
-### For Complete Documentation
-
-For full endpoint documentation with parameters, examples, response types, see:
-- `docs/examples/API_DOCUMENTATION_EXAMPLES.md` — Complete workflow examples
-- `docs/references/endpoints.md` — Full manual API reference
-- `docs/references/curl-commands.md` — cURL examples
+- ✅ **Automatic sync** — Code changes reflected without manual updates
+- ✅ **User data preserved** — Descriptions, examples, status stay intact
+- ✅ **Conflict-free** — Smart merge avoids overwriting metadata
+- ✅ **Auditable** — Shows what changed with dry-run
+- ✅ **Git-friendly** — Only changed endpoints in commits
 
 ---
 
 ## Other Scripts
 
-Bash-based tools:
-- `generate-api-docs.sh` — Regex-based endpoint extraction (fallback)
+- `gen-api-docs/main.go` — Generate endpoints from scratch
+- `generate-api-docs.sh` — Bash alternative (legacy)
+- `ENDPOINT_METADATA.md` — Guide for adding structured endpoint docs
