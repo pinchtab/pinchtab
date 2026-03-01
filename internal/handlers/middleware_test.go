@@ -65,6 +65,28 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	if w.Code != 401 {
 		t.Errorf("expected 401, got %d", w.Code)
 	}
+	if w.Header().Get("WWW-Authenticate") == "" {
+		t.Error("expected WWW-Authenticate header")
+	}
+}
+
+func TestAuthMiddleware_MissingTokenHeader(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "secret123"}
+
+	handler := AuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != 401 {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+	if w.Header().Get("WWW-Authenticate") == "" {
+		t.Error("expected WWW-Authenticate header")
+	}
 }
 
 func TestAuthMiddleware_TableDriven(t *testing.T) {

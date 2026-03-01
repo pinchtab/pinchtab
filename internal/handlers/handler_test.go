@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chromedp/cdproto/target"
@@ -63,9 +64,19 @@ func (m *mockBridge) DeleteRefCache(tabID string) {}
 func (m *mockBridge) TabLockInfo(tabID string) *bridge.LockInfo { return nil }
 
 func TestHandlers(t *testing.T) {
-	h := New(&mockBridge{}, nil, nil, nil, nil)
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest("GET", "/help", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("expected 200 from /help, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "endpoints") {
+		t.Fatalf("expected /help response to include endpoints")
+	}
 }
 
 func TestHandleNavigate(t *testing.T) {

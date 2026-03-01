@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -75,9 +76,25 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req bridge.ActionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
+	if r.Method == http.MethodGet {
+		q := r.URL.Query()
+		req.Kind = q.Get("kind")
+		req.TabID = q.Get("tabId")
+		req.Ref = q.Get("ref")
+		req.Selector = q.Get("selector")
+		req.Text = q.Get("text")
+		req.Value = q.Get("value")
+		req.Key = q.Get("key")
+		if v := q.Get("nodeId"); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				req.NodeID = n
+			}
+		}
+	} else {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("decode: %w", err))
+			return
+		}
 	}
 
 	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
@@ -109,6 +126,22 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		req.TabID = resolvedTabID
 	}
 
+	// Allow custom timeout via query param (1-60 seconds)
+	actionTimeout := h.Config.ActionTimeout
+	if r.Method == http.MethodGet {
+		if v := r.URL.Query().Get("timeout"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				if n > 0 && n <= 60 {
+					actionTimeout = time.Duration(n * float64(time.Second))
+				}
+			}
+		}
+	}
+
+	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
+	defer tCancel()
+	go web.CancelOnClientDone(r.Context(), tCancel)
+
 	// Resolve ref → nodeID
 	if req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
 		cache := h.Bridge.GetRefCache(resolvedTabID)
@@ -122,9 +155,6 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
 
 	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
 	if err != nil {

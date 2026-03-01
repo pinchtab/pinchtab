@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,6 +66,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		BlockImages *bool   `json:"blockImages"`
 		BlockMedia  *bool   `json:"blockMedia"`
 		BlockAds    *bool   `json:"blockAds"`
+		WaitFor     string  `json:"waitFor"`
+		WaitSelector string `json:"waitSelector"`
 	}
 
 	if r.Method == http.MethodGet {
@@ -72,6 +75,18 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		req.URL = q.Get("url")
 		req.TabID = q.Get("tabId")
 		req.NewTab = strings.EqualFold(q.Get("newTab"), "true") || q.Get("newTab") == "1"
+		req.WaitFor = q.Get("waitFor")
+		req.WaitSelector = q.Get("waitSelector")
+		if v := q.Get("waitTitle"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				req.WaitTitle = n
+			}
+		}
+		if v := q.Get("timeout"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				req.Timeout = n
+			}
+		}
 	} else {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			web.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -168,6 +183,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		_ = h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector)
+
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title, _ := bridge.WaitForTitle(tCtx, titleWait)
@@ -204,6 +221,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Bridge.DeleteRefCache(resolvedTabID)
+
+	_ = h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector)
 
 	var url string
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
@@ -257,6 +276,24 @@ func (h *Handlers) HandleTabNavigate(w http.ResponseWriter, r *http.Request) {
 	req.Header = r.Header.Clone()
 	req.Header.Set("Content-Type", "application/json")
 	h.HandleNavigate(w, req)
+}
+
+func (h *Handlers) waitForNavigationState(ctx context.Context, waitFor, waitSelector string) error {
+	waitMode := strings.ToLower(strings.TrimSpace(waitFor))
+	switch waitMode {
+	case "", "none":
+		return nil
+	case "dom":
+		var ready string
+		return chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &ready))
+	case "selector":
+		if waitSelector == "" {
+			return fmt.Errorf("waitSelector required when waitFor=selector")
+		}
+		return chromedp.Run(ctx, chromedp.WaitVisible(waitSelector, chromedp.ByQuery))
+	default:
+		return fmt.Errorf("unsupported waitFor %q (use: none|dom|selector)", waitMode)
+	}
 }
 
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
