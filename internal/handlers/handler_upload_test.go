@@ -66,3 +66,16 @@ func TestHandleTabUpload_NoTab(t *testing.T) {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
 }
+
+func TestHandleUpload_BodyTooLarge(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	// Create a body larger than 10MB
+	bigBody := make([]byte, 11<<20) // 11MB
+	req := httptest.NewRequest("POST", "/upload", bytes.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for oversized body, got %d", w.Code)
+	}
+}

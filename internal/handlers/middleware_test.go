@@ -67,6 +67,49 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_TableDriven(t *testing.T) {
+	tests := []struct {
+		name       string
+		token      string
+		authHeader string
+		wantCode   int
+		wantCalled bool
+	}{
+		{"correct token", "secret", "Bearer secret", 200, true},
+		{"wrong token", "secret", "Bearer wrong", 401, false},
+		{"partial match", "secret", "Bearer secre", 401, false},
+		{"empty bearer", "secret", "Bearer ", 401, false},
+		{"missing header", "secret", "", 401, false},
+		{"no token configured", "", "", 200, true},
+		{"no token configured with header", "", "Bearer anything", 200, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.RuntimeConfig{Token: tt.token}
+			called := false
+			handler := AuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.WriteHeader(200)
+			}))
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if called != tt.wantCalled {
+				t.Errorf("handler called = %v, want %v", called, tt.wantCalled)
+			}
+			if w.Code != tt.wantCode {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantCode)
+			}
+		})
+	}
+}
+
 func TestCorsMiddleware(t *testing.T) {
 	handler := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
