@@ -636,6 +636,250 @@ A: No, create a new tab instead.
 
 ---
 
+---
+
+## Tab Operations (Phase 4)
+
+Once you have a tab ID, you can perform full browser control operations on it.
+
+### Navigate Tab
+
+**Endpoint:** `POST /tabs/{id}/navigate`
+
+**CLI:**
+```bash
+pinchtab tab navigate <tab-id> https://example.com
+pinchtab tab navigate <tab-id> https://example.com --timeout 30
+```
+
+**Curl:**
+```bash
+curl -X POST http://localhost:9867/tabs/tab_abc/navigate \
+  -d '{"url":"https://example.com","timeout":30,"blockImages":true}'
+```
+
+### Get Snapshot
+
+**Endpoint:** `GET /tabs/{id}/snapshot`
+
+**CLI:**
+```bash
+pinchtab tab snapshot <tab-id>
+pinchtab tab snapshot <tab-id> --interactive --compact
+pinchtab tab snapshot <tab-id> -i -c
+```
+
+**Curl:**
+```bash
+curl 'http://localhost:9867/tabs/tab_abc/snapshot?interactive=true&compact=true'
+```
+
+### Take Screenshot
+
+**Endpoint:** `GET /tabs/{id}/screenshot`
+
+**CLI:**
+```bash
+pinchtab tab screenshot <tab-id> -o screenshot.png
+pinchtab tab screenshot <tab-id> -o out.jpg -q 85
+```
+
+**Curl:**
+```bash
+curl http://localhost:9867/tabs/tab_abc/screenshot > screenshot.png
+```
+
+### Execute Action
+
+**Endpoint:** `POST /tabs/{id}/action`
+
+**CLI:**
+```bash
+# Click element
+pinchtab tab click <tab-id> e5
+
+# Type text
+pinchtab tab type <tab-id> e12 "hello world"
+
+# Press key
+pinchtab tab press <tab-id> Enter
+
+# Fill input
+pinchtab tab fill <tab-id> e12 "value"
+
+# Hover element
+pinchtab tab hover <tab-id> e5
+
+# Scroll
+pinchtab tab scroll <tab-id> down
+
+# Select dropdown
+pinchtab tab select <tab-id> e3 "option2"
+
+# Focus element
+pinchtab tab focus <tab-id> e5
+```
+
+**Curl:**
+```bash
+curl -X POST http://localhost:9867/tabs/tab_abc/action \
+  -d '{"kind":"click","ref":"e5"}'
+```
+
+### Execute Multiple Actions
+
+**Endpoint:** `POST /tabs/{id}/actions`
+
+**CLI:**
+```bash
+# Piped JSON
+cat actions.json | pinchtab tab actions <tab-id>
+
+# Inline JSON
+pinchtab tab actions <tab-id> --json '[{"kind":"click","ref":"e5"},...]'
+```
+
+**Curl:**
+```bash
+curl -X POST http://localhost:9867/tabs/tab_abc/actions \
+  -d '{
+    "actions": [
+      {"kind":"click","ref":"e5"},
+      {"kind":"type","ref":"e12","text":"search"},
+      {"kind":"press","key":"Enter"}
+    ]
+  }'
+```
+
+### Get Page Text
+
+**Endpoint:** `GET /tabs/{id}/text`
+
+**CLI:**
+```bash
+pinchtab tab text <tab-id>
+pinchtab tab text <tab-id> --raw
+```
+
+**Curl:**
+```bash
+curl http://localhost:9867/tabs/tab_abc/text
+```
+
+### Evaluate JavaScript
+
+**Endpoint:** `POST /tabs/{id}/evaluate`
+
+**CLI:**
+```bash
+pinchtab tab eval <tab-id> "document.title"
+pinchtab tab eval <tab-id> "document.querySelectorAll('a').length"
+```
+
+**Curl:**
+```bash
+curl -X POST http://localhost:9867/tabs/tab_abc/evaluate \
+  -d '{"expression":"document.title"}'
+```
+
+### Export to PDF
+
+**Endpoint:** `GET /tabs/{id}/pdf`
+
+**CLI:**
+```bash
+pinchtab tab pdf <tab-id> -o output.pdf
+pinchtab tab pdf <tab-id> -o out.pdf --landscape
+```
+
+**Curl:**
+```bash
+curl 'http://localhost:9867/tabs/tab_abc/pdf?landscape=true' > output.pdf
+```
+
+### Manage Cookies
+
+**Endpoint:** `GET /tabs/{id}/cookies` and `POST /tabs/{id}/cookies`
+
+**CLI:**
+```bash
+pinchtab tab cookies <tab-id>  # Get cookies
+```
+
+**Curl:**
+```bash
+curl http://localhost:9867/tabs/tab_abc/cookies
+```
+
+### Lock Tab
+
+**Endpoint:** `POST /tabs/{id}/lock`
+
+**CLI:**
+```bash
+pinchtab tab lock <tab-id> --owner my-agent --ttl 60
+```
+
+**Curl:**
+```bash
+curl -X POST http://localhost:9867/tabs/tab_abc/lock \
+  -d '{"owner":"my-agent","ttl":60}'
+```
+
+### Unlock Tab
+
+**Endpoint:** `POST /tabs/{id}/unlock`
+
+**CLI:**
+```bash
+pinchtab tab unlock <tab-id> --owner my-agent
+```
+
+---
+
+## Complete Tab Operation Example
+
+```bash
+#!/bin/bash
+
+# Start instance
+INST=$(pinchtab instance start --mode headed)
+echo "Instance: $INST"
+
+# Create tab
+TAB=$(pinchtab tab new $INST | jq -r .id)
+echo "Tab: $TAB"
+
+# Navigate
+pinchtab tab navigate $TAB https://example.com
+sleep 2
+
+# Get snapshot
+pinchtab tab snapshot $TAB -i -c | jq .
+
+# Click element
+pinchtab tab click $TAB e5
+sleep 1
+
+# Get result
+pinchtab tab snapshot $TAB -d
+
+# Extract text
+pinchtab tab text $TAB | jq .text
+
+# Take screenshot
+pinchtab tab screenshot $TAB -o result.png
+
+# Export PDF
+pinchtab tab pdf $TAB -o result.pdf
+
+# Cleanup
+pinchtab tab close $TAB
+pinchtab instance stop $INST
+```
+
+---
+
 ## Related Documentation
 
 - **Instance API** (docs/references/instance-api.md) — Manage instances

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -362,26 +363,37 @@ func cliText(client *http.Client, base, token string, args []string) {
 
 func cliTabs(client *http.Client, base, token string, args []string) {
 	if len(args) == 0 {
+		// List all tabs
 		doGet(client, base, token, "/tabs", nil)
 		return
 	}
-	switch args[0] {
+
+	cmd := args[0]
+	subArgs := args[1:]
+
+	// Check if this is a tab operation (navigate, snapshot, click, etc.)
+	// Pattern: pinchtab tab <operation> <tabId> [args...]
+	if isTabOperation(cmd) {
+		cliTabOperation(client, base, token, cmd, subArgs)
+		return
+	}
+
+	// Legacy: pinchtab tab new/close
+	switch cmd {
 	case "new":
 		url := ""
-		if len(args) > 1 {
-			url = args[1]
+		if len(subArgs) > 0 {
+			url = subArgs[0]
 		}
 
 		// Check if any instances are running
 		instances := getInstances(client, base, token)
 		if len(instances) == 0 {
-			// No instances, auto-launch default
 			fmt.Fprintf(os.Stderr, "📍 No instances running, launching default...\n")
 			launchInstance(client, base, token, "default")
 			fmt.Fprintf(os.Stderr, "✅ Instance launched\n")
 		}
 
-		// Create tab
 		body := map[string]any{"action": "new"}
 		if url != "" {
 			body["url"] = url
@@ -389,15 +401,241 @@ func cliTabs(client *http.Client, base, token string, args []string) {
 		doPost(client, base, token, "/tab", body)
 
 	case "close":
-		if len(args) < 2 {
+		if len(subArgs) < 1 {
 			fatal("Usage: pinchtab tab close <tabId>")
 		}
 		doPost(client, base, token, "/tab", map[string]any{
 			"action": "close",
-			"tabId":  args[1],
+			"tabId":  subArgs[0],
 		})
+
 	default:
-		fatal("Usage: pinchtab tabs [new <url>|close <tabId>]")
+		cliTabOperation(client, base, token, cmd, subArgs)
+	}
+}
+
+func isTabOperation(op string) bool {
+	ops := map[string]bool{
+		"navigate": true, "snapshot": true, "screenshot": true,
+		"click": true, "type": true, "press": true, "fill": true,
+		"hover": true, "scroll": true, "select": true, "focus": true,
+		"text": true, "eval": true, "evaluate": true, "pdf": true,
+		"cookies": true, "lock": true, "unlock": true, "locks": true,
+		"fingerprint": true, "info": true,
+	}
+	return ops[op]
+}
+
+func cliTabOperation(client *http.Client, base, token string, op string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab tab %s <tabId> [args...]", op)
+	}
+
+	tabID := args[0]
+	restArgs := args[1:]
+
+	switch op {
+	case "navigate":
+		if len(restArgs) < 1 {
+			fatal("Usage: pinchtab tab navigate <tabId> <url> [--timeout N] [--block-images]")
+		}
+		body := map[string]any{"url": restArgs[0]}
+		for i := 1; i < len(restArgs); i++ {
+			switch restArgs[i] {
+			case "--timeout":
+				if i+1 < len(restArgs) {
+					body["timeout"] = restArgs[i+1]
+					i++
+				}
+			case "--block-images":
+				body["blockImages"] = true
+			case "--block-ads":
+				body["blockAds"] = true
+			}
+		}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/navigate", tabID), body)
+
+	case "snapshot":
+		params := url.Values{}
+		for _, arg := range restArgs {
+			switch arg {
+			case "-i", "--interactive":
+				params.Set("interactive", "true")
+			case "-c", "--compact":
+				params.Set("compact", "true")
+			case "-d", "--diff":
+				params.Set("diff", "true")
+			}
+		}
+		doGet(client, base, token, fmt.Sprintf("/tabs/%s/snapshot", tabID), params)
+
+	case "screenshot", "ss":
+		params := url.Values{}
+		outFile := ""
+		for i := 0; i < len(restArgs); i++ {
+			switch restArgs[i] {
+			case "-o", "--output":
+				if i+1 < len(restArgs) {
+					outFile = restArgs[i+1]
+					i++
+				}
+			case "-q", "--quality":
+				if i+1 < len(restArgs) {
+					params.Set("quality", restArgs[i+1])
+					i++
+				}
+			}
+		}
+		params.Set("raw", "true")
+		data := doGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/screenshot", tabID), params)
+		if outFile == "" {
+			outFile = fmt.Sprintf("screenshot-%s.png", time.Now().Format("20060102-150405"))
+		}
+		if data != nil {
+			if err := os.WriteFile(outFile, data, 0600); err == nil {
+				fmt.Printf("Saved %s (%d bytes)\n", outFile, len(data))
+			}
+		}
+
+	case "click", "hover", "focus":
+		if len(restArgs) < 1 {
+			fatal("Usage: pinchtab tab %s <tabId> <ref>", op)
+		}
+		body := map[string]any{"kind": op, "ref": restArgs[0]}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "type":
+		if len(restArgs) < 2 {
+			fatal("Usage: pinchtab tab type <tabId> <ref> <text>")
+		}
+		body := map[string]any{"kind": "type", "ref": restArgs[0], "text": strings.Join(restArgs[1:], " ")}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "fill":
+		if len(restArgs) < 2 {
+			fatal("Usage: pinchtab tab fill <tabId> <ref> <text>")
+		}
+		body := map[string]any{"kind": "fill", "ref": restArgs[0], "text": strings.Join(restArgs[1:], " ")}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "press":
+		if len(restArgs) < 1 {
+			fatal("Usage: pinchtab tab press <tabId> <key>")
+		}
+		body := map[string]any{"kind": "press", "key": restArgs[0]}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "scroll":
+		if len(restArgs) < 1 {
+			fatal("Usage: pinchtab tab scroll <tabId> <direction|pixels>")
+		}
+		body := map[string]any{}
+		if v, err := strconv.Atoi(restArgs[0]); err == nil {
+			body["kind"] = "scroll"
+			body["scrollY"] = v
+		} else {
+			body["kind"] = "scroll"
+			body["direction"] = restArgs[0]
+		}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "select":
+		if len(restArgs) < 2 {
+			fatal("Usage: pinchtab tab select <tabId> <ref> <value>")
+		}
+		body := map[string]any{"kind": "select", "ref": restArgs[0], "value": restArgs[1]}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/action", tabID), body)
+
+	case "text":
+		params := url.Values{}
+		for _, arg := range restArgs {
+			if arg == "--raw" {
+				params.Set("raw", "true")
+			}
+		}
+		doGet(client, base, token, fmt.Sprintf("/tabs/%s/text", tabID), params)
+
+	case "eval", "evaluate":
+		if len(restArgs) < 1 {
+			fatal("Usage: pinchtab tab eval <tabId> <expression>")
+		}
+		body := map[string]any{"expression": strings.Join(restArgs, " ")}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/evaluate", tabID), body)
+
+	case "pdf":
+		params := url.Values{}
+		outFile := ""
+		for i := 0; i < len(restArgs); i++ {
+			switch restArgs[i] {
+			case "-o", "--output":
+				if i+1 < len(restArgs) {
+					outFile = restArgs[i+1]
+					i++
+				}
+			case "--landscape":
+				params.Set("landscape", "true")
+			case "--scale":
+				if i+1 < len(restArgs) {
+					params.Set("scale", restArgs[i+1])
+					i++
+				}
+			}
+		}
+		params.Set("raw", "true")
+		data := doGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/pdf", tabID), params)
+		if outFile == "" {
+			outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
+		}
+		if data != nil {
+			if err := os.WriteFile(outFile, data, 0600); err == nil {
+				fmt.Printf("Saved %s (%d bytes)\n", outFile, len(data))
+			}
+		}
+
+	case "cookies":
+		doGet(client, base, token, fmt.Sprintf("/tabs/%s/cookies", tabID), nil)
+
+	case "lock":
+		body := map[string]any{}
+		for i := 0; i < len(restArgs); i++ {
+			switch restArgs[i] {
+			case "--owner":
+				if i+1 < len(restArgs) {
+					body["owner"] = restArgs[i+1]
+					i++
+				}
+			case "--ttl":
+				if i+1 < len(restArgs) {
+					if ttl, err := strconv.Atoi(restArgs[i+1]); err == nil {
+						body["ttl"] = ttl
+					}
+					i++
+				}
+			}
+		}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/lock", tabID), body)
+
+	case "unlock":
+		body := map[string]any{}
+		for i := 0; i < len(restArgs); i++ {
+			switch restArgs[i] {
+			case "--owner":
+				if i+1 < len(restArgs) {
+					body["owner"] = restArgs[i+1]
+					i++
+				}
+			}
+		}
+		doPost(client, base, token, fmt.Sprintf("/tabs/%s/unlock", tabID), body)
+
+	case "locks":
+		doGet(client, base, token, fmt.Sprintf("/tabs/%s/locks", tabID), nil)
+
+	case "info":
+		doGet(client, base, token, fmt.Sprintf("/tabs/%s", tabID), nil)
+
+	default:
+		fatal("Unknown tab operation: %s", op)
 	}
 }
 
