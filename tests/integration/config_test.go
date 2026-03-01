@@ -27,6 +27,7 @@ func TestConfig_ChromeVersionDefault(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code != 200 {
@@ -58,6 +59,7 @@ func TestConfig_ChromeVersionInFingerprint(t *testing.T) {
 
 	// Get initial user agent
 	code1, body1 := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code1 != 200 {
@@ -75,7 +77,8 @@ func TestConfig_ChromeVersionInFingerprint(t *testing.T) {
 	// Rotate fingerprint with "mac" OS to ensure consistent test results
 	// (don't use random because we want to verify the Chrome version is preserved)
 	code2, body2 := httpPost(t, "/fingerprint/rotate", map[string]string{
-		"os": "mac",
+		"os":    "mac",
+		"tabId": currentTabID,
 	})
 	if code2 != 200 {
 		t.Fatalf("expected 200 for fingerprint rotate, got %d (body: %s)", code2, body2)
@@ -83,6 +86,7 @@ func TestConfig_ChromeVersionInFingerprint(t *testing.T) {
 
 	// Get user agent after rotation
 	code3, body3 := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code3 != 200 {
@@ -119,6 +123,7 @@ func TestConfig_ChromeVersionOverride(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code != 200 {
@@ -158,6 +163,7 @@ func TestConfig_CustomProfileDir(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "window.location.href",
 	})
 	if code != 200 {
@@ -188,6 +194,7 @@ func TestConfig_NoRestore(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "window.location.href",
 	})
 	if code != 200 {
@@ -211,6 +218,7 @@ func TestConfig_ConfigFilePreference(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "document.title",
 	})
 	if code != 200 {
@@ -234,6 +242,7 @@ func TestConfig_EnvOverridesConfig(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "window.location.href",
 	})
 	if code != 200 {
@@ -264,6 +273,7 @@ func TestConfig_CDPURLExternalChrome(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code != 200 {

@@ -10,7 +10,7 @@ import (
 // C1: Get cookies
 func TestCookies_Get(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/cookies")
+	code, body := httpGet(t, "/cookies?tabId="+currentTabID)
 	if code != 200 {
 		t.Fatalf("expected 200, got %d (body: %s)", code, body)
 	}
@@ -57,7 +57,8 @@ func TestCookies_Set(t *testing.T) {
 
 	// Set a cookie
 	code, body := httpPost(t, "/cookies", map[string]any{
-		"url": "https://example.com",
+		"tabId": currentTabID,
+		"url":   "https://example.com",
 		"cookies": []map[string]any{
 			{
 				"name":  "test_cookie",
@@ -83,7 +84,7 @@ func TestCookies_Set(t *testing.T) {
 	}
 
 	// Verify the cookie was set by getting cookies again
-	code2, body2 := httpGet(t, "/cookies?url=https://example.com")
+	code2, body2 := httpGet(t, "/cookies?url=https://example.com&tabId="+currentTabID)
 	if code2 != 200 {
 		t.Fatalf("GET /cookies failed: %d", code2)
 	}
@@ -142,6 +143,7 @@ func TestCookies_SetEmpty(t *testing.T) {
 
 	// Post with empty cookies array
 	code, body := httpPost(t, "/cookies", map[string]any{
+		"tabId":   currentTabID,
 		"url":     "https://example.com",
 		"cookies": []map[string]any{},
 	})

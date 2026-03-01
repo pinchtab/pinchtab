@@ -14,7 +14,7 @@ func TestAction_Click(t *testing.T) {
 	defer closeCurrentTab(t)
 
 	// Get snapshot to find a clickable ref
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	s := string(snapBody)
 
 	// Find a ref like [e0] or [e1] for the link
@@ -127,7 +127,7 @@ func TestAction_Type(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
 	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "input")
@@ -152,7 +152,7 @@ func TestAction_Fill(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
 	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "input")
@@ -177,7 +177,7 @@ func TestAction_Focus(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
 	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		t.Skip("no focusable ref found")
@@ -212,6 +212,7 @@ func TestAction_Scroll(t *testing.T) {
 func TestAction_Batch(t *testing.T) {
 	navigate(t, "https://example.com")
 	payload := map[string]any{
+		"tabId": currentTabID,
 		"actions": []map[string]any{
 			{"kind": "press", "key": "Escape"},
 			{"kind": "scroll", "direction": "down"},
@@ -238,7 +239,7 @@ func TestAction_Hover(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// Get snapshot to find a link ref
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	s := string(snapBody)
 
 	// Find a link ref
@@ -265,7 +266,7 @@ func TestAction_Select(t *testing.T) {
 	defer closeCurrentTab(t)
 
 	// Get snapshot to find a select element
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "combobox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "select")
