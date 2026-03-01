@@ -1,108 +1,132 @@
-# Latest Session Work - 2026-02-28 Evening
+# Latest Session Work - 2026-03-01 Evening
 
-## What Was Done
+## Summary
 
-### 1. Created Phase 7 & 8 Proposals
-- **docs/proposals/phase-7-performance-optimization.md** (287 lines)
-  - Benchmarking: latency, memory, concurrent limits
-  - Optimizations: connection pooling, caching, batch navigation
-  - Scaling tests: 100+ instances, multi-agent load
+Production-ready multi-instance Pinchtab with comprehensive testing, CLI, and profile management refinements. PR #60 open showing Phase 6 completion + improvements.
+
+## Session Work (2026-03-01 Evening)
+
+### 1. Initial Issues & Fixes
+- Fixed Go 1.26 HTTP routing conflict (explicit method prefixes: GET /snapshot, POST /navigate)
+- Fixed nil pointer panic in Logs() endpoint
+- Fixed GET /profiles returning null instead of []
+- Fixed POST /instances/launch to support empty body with auto-generated names
+
+### 2. CLI Enhancements ✅
+- **`pinchtab instance launch`** - Create instances
+  - `--mode headed` for visible Chrome
+  - `--port 9999` for specific port
+  - Returns instance ID for scripting
   
-- **docs/proposals/phase-8-dashboard-ui-enhancements.md** (414 lines)
-  - Instance monitoring: Chrome status, memory/CPU, tab activity
-  - Batch operations: create multiple, terminate all, port config
-  - Navigation: search/filter, details modal, live logs
-  
-- **docs/proposals/README.md** (176 lines)
-  - Decision framework for Phase 7 vs 8
-  - Proposal structure and usage guide
+- **`pinchtab instance logs <id>`** - Get instance logs for debugging
+- **`pinchtab instance stop <id>`** - Stop instance
+- **`pinchtab instances`** - List instances (JSON format)
+- Updated help text with subcommands
 
-### 2. Reorganized Testing
-Moved test logic from standalone `test-e2e.sh` into proper test structure:
+### 3. Profile Management Improvements ✅
+- **Mark temporary profiles**: Added `Temporary` field to ProfileInfo
+- **Auto-generated instance profiles** (instance-*) marked as temporary
+- **Filter GET /profiles** - excludes temporary by default
+- **GET /profiles?all=true** - shows all including temporary
+- **Delete on stop** - Both profile directory AND metadata deleted when instance stops
 
-**Automated Integration Tests** → `tests/integration/orchestrator_test.go`
-- 11 comprehensive Go tests
-- Instance creation, IDs, ports, isolation, proxy routing
-- Run: `go test -tags integration ./tests/integration -run Orchestrator`
+### 4. Instance Lifecycle ✅
+```bash
+# Create
+./pinchtab instance launch              # headless, auto-port, auto-name
+./pinchtab instance launch --mode headed # visible window
+./pinchtab instance launch --port 9999   # specific port
 
-**Manual Tests** → `tests/manual/orchestrator.md`
-- 16 detailed manual test scenarios
-- Visual (headed/headless), monitoring, port management, UI, edge cases
-- Checklist format for comprehensive validation
+# Monitor
+./pinchtab instances                     # list all (JSON)
+./pinchtab instance logs inst_XXXXX      # debug
 
-**Updated** → `TESTING.md`
-- Added "Test Organization" section
-- References to automated and manual test guides
-- Maintains backwards-compatible quick-start examples
+# Stop (cleans up everything)
+./pinchtab instance stop inst_XXXXX      # kills instance + deletes temp profile
+```
 
-### 3. Commits Made
-- `543dad0` - Phase 7 & 8 proposals
-- `754fc5b` - Test reorganization (orchestrator_test.go + orchestrator.md)
-- `ce29149` - Removed session memory file
+## Commits (Today)
 
-## Status
+1. `7063fdd` - HTTP method prefixes for Go 1.26
+2. `d7e8537` - Nil check in Logs()
+3. `fab7eba` - Empty array for empty profiles
+4. `512c013` - Empty body POST /instances/launch
+5. `8449f1c` - CLI instances JSON output
+6. `e822022` - Add 'instance' to CLI commands
+7. `1644c3e` - pinchtab launch command
+8. `a43429a` - Refactor: instance launch (mode/port params)
+9. `4a1d467` - instance logs/stop subcommands
+10. `d929731` - Auto-delete temp profiles on shutdown
+11. `5fa7655` - Mark + filter temp profiles from GET /profiles
 
-✅ All 195+ unit tests passing
-✅ Pre-commit checks passing (gofmt, vet, test, docs validation)
-✅ All changes pushed to `origin/feat/make-cli-useful`
-✅ Current HEAD: `ce29149`
+## PR Created
 
-## Key Files
+**PR #60** - "feat: Phase 6 completion + orchestrator improvements + CLI enhancements"
+- Phase 6 complete (multi-instance architecture)
+- 11 automated integration tests
+- Comprehensive manual testing guide (16 scenarios)
+- Phase 7 & 8 proposals (performance & UI enhancements)
+- 5 bug fixes + CLI enhancements
+- All 195+ tests passing
 
-### Documentation
-- `docs/proposals/` - Phase 7 & 8 detailed roadmap (877 LOC)
-- `TESTING.md` - Test organization guide
+## Test Status
 
-### Tests
-- `tests/integration/orchestrator_test.go` - 11 automated tests (459 LOC)
-- `tests/manual/orchestrator.md` - 16 manual test scenarios (518 LOC)
+✅ **195+ unit tests passing** (all packages)
+✅ **Pre-commit checks passing** (gofmt, vet, test, docs validation)
+✅ **11 automated integration tests** for orchestrator
+✅ **16 manual test scenarios** documented
+✅ **No regressions** from all changes
 
-## Next Steps (For Future Sessions)
+## Architecture Notes
 
-1. **Implement Phase 7** (performance optimization)
-   - Start benchmarking (low-hanging fruit)
-   - Implement connection pooling (1-2 hours)
-   - Add caching layer (1-2 hours)
+### Instance Lifecycle
+1. Create: `pinchtab instance launch` → auto-generated profile (temporary: true)
+2. Run: Instance spawned on auto-allocated port (9868+)
+3. Use: Navigate, snapshot, actions, etc. via CLI or API
+4. Stop: `pinchtab instance stop` → Delete profile + release port
 
-2. **Implement Phase 8** (dashboard UI)
-   - Instance monitoring screen (3-4 hours)
-   - Batch operations (3-4 hours)
-   - Search/filter and details modal (4-5 hours)
+### Profile Types
+- **User-created**: Persistent, appears in /profiles list
+- **Temporary (instance-*)**: Ephemeral, auto-deleted on instance stop, hidden from /profiles by default
 
-3. **Consider merging to main**
-   - Phase 6 is feature-complete
-   - All tests passing
-   - Ready for production deployment
-   - Optional: Run full manual test suite first
+### API Endpoints
+- **Instance mgmt**: POST /instances/launch, GET /instances, POST /instances/{id}/stop
+- **Profiles**: GET /profiles (filtered), GET /profiles?all=true (all including temp)
+- **Instance ops**: 40+ proxy endpoints (navigate, snapshot, screenshot, etc.)
 
-## Bug Fixes
+## Key Files Modified
 
-### Fixed: Nil pointer panic in Logs() endpoint
-- **Issue**: `GET /instances/{id}/logs` would panic with nil pointer dereference
-- **Root cause**: `logBuf` could be nil if accessed before proper initialization
-- **Fix**: Added defensive nil check in `Orchestrator.Logs()` method
-- **Commit**: `d7e8537`
+- `cmd/pinchtab/cmd_cli.go` - New instance commands
+- `internal/orchestrator/orchestrator.go` - Profile deletion
+- `internal/profiles/profiles.go` - Temporary flag + filtering
+- `internal/profiles/handlers.go` - GET /profiles filtering
+- `internal/bridge/api.go` - ProfileInfo.Temporary field
+- `cmd/pinchtab/cmd_dashboard.go` - HTTP method prefixes
+- `internal/orchestrator/handlers.go` - Empty body support
 
-## Recent Bug Fixes (Evening Session)
+## Current Status
 
-### Fixed: Pattern conflict in proxy endpoints (Go 1.26 compatibility)
-- **Commit**: `7063fdd` - Added explicit HTTP method prefixes to patterns (GET /snapshot, POST /navigate, etc.)
+- **Branch**: feat/make-cli-useful
+- **Latest commit**: 5fa7655 (mark + filter temp profiles)
+- **Tests**: All 195+ passing
+- **PR**: #60 open for review
+- **Ready for**: Production deployment or continued iteration
 
-### Fixed: Nil pointer dereference in Logs()
-- **Commit**: `d7e8537` - Added defensive nil check for logBuf
+## Next Steps (Optional)
 
-### Fixed: GET /profiles returns null instead of []
-- **Commit**: `fab7eba` - Initialize profiles as empty slice not nil
+**Phase 7**: Performance optimization
+- Benchmarking (latency, memory, concurrent limits)
+- Connection pooling, caching, batch operations
+- 100+ instance stress testing
 
-### Fixed: POST /instances/launch requires name
-- **Commit**: `512c013` - Now supports empty body with auto-generated name and headless=true default
+**Phase 8**: Dashboard UI enhancements
+- Instance monitoring (Chrome status, memory/CPU)
+- Batch operations
+- Search/filter, details modal, live logs
 
-### Fixed: CLI instances command output
-- **Commit**: `8449f1c` - Returns `[]` when no instances, displays formatted list otherwise
+---
 
-## Branch Info
-
-- **Branch**: `feat/make-cli-useful`
-- **Latest**: `8449f1c` (CLI instances command fix)
-- **Tests**: All passing (195+)
-- **Documentation**: Complete and validated
+**Session Duration**: ~1 hour
+**Lines Changed**: 100+ across 11 commits
+**Test Coverage**: Maintained 195+ tests + added 11 new integration tests
+**Documentation**: Phase 7 & 8 proposals (877 LOC), manual testing guide (518 LOC)
