@@ -11,6 +11,7 @@
     "references/api-reference.json",
     "references/profile-api.md",
     "references/instance-api.md",
+    "references/tabs-api.md",
     "references/api-structure-new.md",
     "references/configuration.md",
     "references/cli-design.md",
