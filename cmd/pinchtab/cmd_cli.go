@@ -185,6 +185,8 @@ Commands:
   
   INSTANCE MANAGEMENT:
   instance launch         Create new instance (--mode headed, --port 9999)
+  instance logs <id>      Get instance logs (for debugging)
+  instance stop <id>      Stop instance
   instances               List all running instances
   
   BROWSER CONTROL:
@@ -648,7 +650,7 @@ func cliHealth(client *http.Client, base, token string) {
 
 func cliInstance(client *http.Client, base, token string, args []string) {
 	if len(args) < 1 {
-		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch")
+		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch, logs, stop")
 	}
 
 	subCmd := args[0]
@@ -657,6 +659,10 @@ func cliInstance(client *http.Client, base, token string, args []string) {
 	switch subCmd {
 	case "launch":
 		cliInstanceLaunch(client, base, token, subArgs)
+	case "logs":
+		cliInstanceLogs(client, base, token, subArgs)
+	case "stop":
+		cliInstanceStop(client, base, token, subArgs)
 	default:
 		fatal("Unknown subcommand: %s", subCmd)
 	}
@@ -688,6 +694,33 @@ func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 	// Display only ID as primary output
 	if id, ok := result["id"].(string); ok {
 		fmt.Println(id)
+	}
+}
+
+func cliInstanceLogs(client *http.Client, base, token string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab instance logs <instance-id>")
+	}
+
+	instID := args[0]
+	logs := doGetRaw(client, base, token, fmt.Sprintf("/instances/%s/logs", instID), nil)
+	fmt.Println(string(logs))
+}
+
+func cliInstanceStop(client *http.Client, base, token string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab instance stop <instance-id>")
+	}
+
+	instID := args[0]
+	result := doPost(client, base, token, fmt.Sprintf("/instances/%s/stop", instID), nil)
+	if result == nil {
+		return
+	}
+
+	// Display result
+	if status, ok := result["status"].(string); ok {
+		fmt.Println(status)
 	}
 }
 
