@@ -406,7 +406,9 @@ func (o *Orchestrator) FirstRunningURL() string {
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
 			p := 0
-			fmt.Sscanf(inst.Port, "%d", &p)
+			if _, err := fmt.Sscanf(inst.Port, "%d", &p); err != nil {
+				continue
+			}
 			candidates = append(candidates, candidate{port: p, url: inst.URL})
 		}
 	}
