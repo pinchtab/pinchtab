@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +15,25 @@ import (
 
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	var req bridge.ActionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
+	if r.Method == http.MethodGet {
+		q := r.URL.Query()
+		req.Kind = q.Get("kind")
+		req.TabID = q.Get("tabId")
+		req.Ref = q.Get("ref")
+		req.Selector = q.Get("selector")
+		req.Text = q.Get("text")
+		req.Value = q.Get("value")
+		req.Key = q.Get("key")
+		if v := q.Get("nodeId"); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				req.NodeID = n
+			}
+		}
+	} else {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("decode: %w", err))
+			return
+		}
 	}
 
 	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
@@ -25,7 +42,18 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	actionTimeout := h.Config.ActionTimeout
+	if r.Method == http.MethodGet {
+		if v := r.URL.Query().Get("timeout"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				if n > 0 && n <= 60 {
+					actionTimeout = time.Duration(n * float64(time.Second))
+				}
+			}
+		}
+	}
+
+	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
 

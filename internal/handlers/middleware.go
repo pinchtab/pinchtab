@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,8 +27,14 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cfg.Token != "" {
 			auth := r.Header.Get("Authorization")
+			if auth == "" {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="missing_token"`)
+				web.JSON(w, 401, map[string]string{"error": "unauthorized", "code": "missing_token"})
+				return
+			}
 			if auth != "Bearer "+cfg.Token {
-				web.Error(w, 401, fmt.Errorf("unauthorized"))
+				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
+				web.JSON(w, 401, map[string]string{"error": "unauthorized", "code": "bad_token"})
 				return
 			}
 		}
