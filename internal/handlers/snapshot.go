@@ -36,21 +36,26 @@ import (
 // @Response 404 application/json Tab not found
 //
 // @Example curl all elements:
-//   curl "http://localhost:9867/snapshot?tabId=abc123"
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123"
 //
 // @Example curl interactive only:
-//   curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive"
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive"
 //
 // @Example curl compact:
-//   curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive&compact=true"
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive&compact=true"
 //
 // @Example cli:
-//   pinchtab snap -i -c
+//
+//	pinchtab snap -i -c
 //
 // @Example python:
-//   import requests
-//   r = requests.get("http://localhost:9867/snapshot", params={"tabId": "abc123", "filter": "interactive"})
-//   tree = r.json()
+//
+//	import requests
+//	r = requests.get("http://localhost:9867/snapshot", params={"tabId": "abc123", "filter": "interactive"})
+//	tree = r.json()
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {

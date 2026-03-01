@@ -31,17 +31,20 @@ const maxBodySize = 1 << 20
 // @Response 500 application/json Chrome error
 //
 // @Example curl navigate new:
-//   curl -X POST http://localhost:9867/navigate \
-//     -H "Content-Type: application/json" \
-//     -d '{"url":"https://example.com"}'
+//
+//	curl -X POST http://localhost:9867/navigate \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"url":"https://example.com"}'
 //
 // @Example curl navigate existing:
-//   curl -X POST http://localhost:9867/navigate \
-//     -H "Content-Type: application/json" \
-//     -d '{"tabId":"abc123","url":"https://google.com"}'
+//
+//	curl -X POST http://localhost:9867/navigate \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","url":"https://google.com"}'
 //
 // @Example cli:
-//   pinchtab nav https://example.com
+//
+//	pinchtab nav https://example.com
 func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {

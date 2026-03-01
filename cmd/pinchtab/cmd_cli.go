@@ -150,6 +150,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliPDF(client, base, token, args)
 	case "health":
 		cliHealth(client, base, token)
+	case "launch":
+		cliLaunch(client, base, token, args)
 	case "instances":
 		cliInstances(client, base, token)
 	case "profiles":
@@ -178,6 +180,12 @@ WORKFLOW:
 
 Commands:
   quick <url>             Navigate and analyze page (beginner-friendly)
+  
+  INSTANCE MANAGEMENT:
+  launch                  Create new instance (--name test, --headed for visible window)
+  instances               List all running instances
+  
+  BROWSER CONTROL:
   nav, navigate <url>     Navigate to URL (--new-tab, --block-images, --block-ads)
   snap, snapshot          Accessibility tree snapshot (-i, -c, -d, --max-tokens N)
   click <ref>             Click element by ref
@@ -195,6 +203,8 @@ Commands:
   ss, screenshot          Take screenshot (-o file, -q quality)
   eval <expression>       Evaluate JavaScript
   pdf                     Export page as PDF (-o file, --landscape, --scale N)
+  
+  OTHER:
   health                  Server health check
   help                    Show this help
 
@@ -630,6 +640,53 @@ func cliQuick(client *http.Client, base, token string, args []string) {
 
 func cliHealth(client *http.Client, base, token string) {
 	doGet(client, base, token, "/health", nil)
+}
+
+// --- launch ---
+
+func cliLaunch(client *http.Client, base, token string, args []string) {
+	body := map[string]any{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--name":
+			if i+1 < len(args) {
+				body["name"] = args[i+1]
+				i++
+			}
+		case "--headed":
+			body["headless"] = false
+		case "--headless":
+			body["headless"] = true
+		}
+	}
+
+	result := doPost(client, base, token, "/instances/launch", body)
+	if result == nil {
+		return
+	}
+
+	// Display instance info
+	if id, ok := result["id"].(string); ok {
+		if name, ok := result["profileName"].(string); ok {
+			if port, ok := result["port"].(string); ok {
+				if headless, ok := result["headless"].(bool); ok {
+					mode := "headless"
+					if !headless {
+						mode = "headed"
+					}
+					fmt.Printf("✅ Instance created\n")
+					fmt.Printf("   ID:        %s\n", id)
+					fmt.Printf("   Name:      %s\n", name)
+					fmt.Printf("   Port:      %s\n", port)
+					fmt.Printf("   Mode:      %s\n", mode)
+					if status, ok := result["status"].(string); ok {
+						fmt.Printf("   Status:    %s\n", status)
+					}
+				}
+			}
+		}
+	}
 }
 
 // --- instances ---

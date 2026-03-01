@@ -32,33 +32,40 @@ import (
 // @Response 500 application/json Chrome error
 //
 // @Example curl click:
-//   curl -X POST http://localhost:9867/action \
-//     -H "Content-Type: application/json" \
-//     -d '{"tabId":"abc123","kind":"click","ref":"e5"}'
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"click","ref":"e5"}'
 //
 // @Example curl type:
-//   curl -X POST http://localhost:9867/action \
-//     -H "Content-Type: application/json" \
-//     -d '{"tabId":"abc123","kind":"type","ref":"e3","text":"user@example.com"}'
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"type","ref":"e3","text":"user@example.com"}'
 //
 // @Example curl fill form:
-//   curl -X POST http://localhost:9867/action \
-//     -H "Content-Type: application/json" \
-//     -d '{"tabId":"abc123","kind":"fill","ref":"e3","text":"John Doe"}'
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"fill","ref":"e3","text":"John Doe"}'
 //
 // @Example curl press key:
-//   curl -X POST http://localhost:9867/action \
-//     -H "Content-Type: application/json" \
-//     -d '{"tabId":"abc123","kind":"press","ref":"e7","key":"Enter"}'
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"press","ref":"e7","key":"Enter"}'
 //
 // @Example cli click:
-//   pinchtab click e5
+//
+//	pinchtab click e5
 //
 // @Example cli type:
-//   pinchtab type e3 "user@example.com"
+//
+//	pinchtab type e3 "user@example.com"
 //
 // @Example cli fill:
-//   pinchtab fill e3 "John Doe"
+//
+//	pinchtab fill e3 "John Doe"
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {

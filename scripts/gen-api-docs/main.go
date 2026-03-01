@@ -32,8 +32,8 @@ type Parameter struct {
 }
 
 type ExampleGroup struct {
-	Curl string `json:"curl,omitempty"`
-	CLI  string `json:"cli,omitempty"`
+	Curl    string `json:"curl,omitempty"`
+	CLI     string `json:"cli,omitempty"`
 	Payload string `json:"payload,omitempty"` // Example JSON payload
 }
 
