@@ -197,6 +197,21 @@ func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
 	}
 }
 
+func TestRateLimitMiddleware_BypassHealthAndMetrics(t *testing.T) {
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	for _, p := range []string{"/health", "/metrics"} {
+		req := httptest.NewRequest("GET", p, nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("expected 200 for %s, got %d", p, w.Code)
+		}
+	}
+}
+
 func TestStatusWriter(t *testing.T) {
 	w := httptest.NewRecorder()
 	sw := &web.StatusWriter{ResponseWriter: w, Code: 200}
