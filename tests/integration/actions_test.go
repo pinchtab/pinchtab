@@ -275,10 +275,10 @@ func TestAction_Select(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"tabId":  currentTabID,
-		"kind":   "select",
-		"ref":    ref,
-		"value":  "opt1",
+		"tabId": currentTabID,
+		"kind":  "select",
+		"ref":   ref,
+		"value": "opt1",
 	})
 	if code != 200 {
 		t.Errorf("select failed with %d", code)
