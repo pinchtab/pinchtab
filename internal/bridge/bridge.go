@@ -196,4 +196,5 @@ type ActionRequest struct {
 	ScrollY  int    `json:"scrollY"`
 	WaitNav  bool   `json:"waitNav"`
 	Fast     bool   `json:"fast"`
+	Owner    string `json:"owner"`
 }

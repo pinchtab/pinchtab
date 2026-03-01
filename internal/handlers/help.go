@@ -12,6 +12,7 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 		"endpoints": map[string]any{
 			"GET /health": "health status",
 			"GET /tabs": "list tabs",
+			"GET /metrics": "runtime metrics",
 			"GET /help": "this help payload",
 			"GET /openapi.json": "lightweight machine-readable API schema",
 			"GET /text": "extract page text (supports mode=raw,maxChars=<int>,format=text)",
@@ -19,6 +20,7 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 			"GET /nav": "alias for GET /navigate",
 			"POST|GET /action": "run a single action (JSON body or query params)",
 			"POST /actions": "run multiple actions",
+			"POST /macro": "run macro steps with single request",
 			"GET /snapshot": "accessibility snapshot",
 		},
 		"notes": []string{

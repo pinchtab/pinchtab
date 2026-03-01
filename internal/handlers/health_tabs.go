@@ -38,6 +38,10 @@ func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, map[string]string{"status": "chrome_ready"})
 }
 
+func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	web.JSON(w, 200, map[string]any{"metrics": snapshotMetrics()})
+}
+
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	// Guard against nil Bridge
 	if h.Bridge == nil {
