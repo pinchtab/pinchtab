@@ -299,6 +299,7 @@ async function doLaunch() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         profileId: profileId,
+        name: name,
         mode: headless ? 'headless' : 'headed',
         port: port
       })

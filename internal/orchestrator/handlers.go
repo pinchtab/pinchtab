@@ -142,7 +142,8 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProfileId string `json:"profileId,omitempty"` // Optional: use existing profile
+		ProfileId string `json:"profileId,omitempty"` // Optional: Profile ID
+		Name      string `json:"name,omitempty"`      // Optional: Profile name (fallback if profileId is empty)
 		Mode      string `json:"mode"`                // "headed" or "headless" (default: headless)
 		Port      string `json:"port,omitempty"`
 	}
@@ -158,7 +159,7 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	// Default: headless=true unless mode="headed"
 	headless := req.Mode != "headed"
 
-	// Determine profile name: use provided profileId or generate temporary name
+	// Determine profile name: use provided profileId, name, or generate temporary name
 	var name string
 	if req.ProfileId != "" {
 		// Look up profile by ID to get its name
@@ -179,6 +180,9 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 			web.Error(w, 400, fmt.Errorf("profile %q not found", req.ProfileId))
 			return
 		}
+	} else if req.Name != "" {
+		// Use provided profile name directly (for cases where dashboard sends name as fallback)
+		name = req.Name
 	} else {
 		// Generate unique temporary instance name (internal use only)
 		name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
