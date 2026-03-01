@@ -4,8 +4,7 @@
     "core-concepts.md",
     "headless-vs-headed.md",
     "dashboard.md",
-    "get-started.md",
-    "showcase.md"
+    "get-started.md"
   ],
   "references": [
     "references/api-structure.md",
