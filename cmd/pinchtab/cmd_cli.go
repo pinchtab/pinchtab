@@ -686,20 +686,8 @@ func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 		}
 	}
 
-	// Use doPostRaw to avoid auto-printing JSON
-	respBody := doPostRaw(client, base, token, "/instances/launch", body)
-
-	// Parse and extract ID
-	var result map[string]any
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Display only ID as primary output
-	if id, ok := result["id"].(string); ok {
-		fmt.Println(id)
-	}
+	// doPost auto-prints JSON response
+	doPost(client, base, token, "/instances/launch", body)
 }
 
 func cliInstanceLogs(client *http.Client, base, token string, args []string) {
@@ -718,19 +706,8 @@ func cliInstanceStop(client *http.Client, base, token string, args []string) {
 	}
 
 	instID := args[0]
-	respBody := doPostRaw(client, base, token, fmt.Sprintf("/instances/%s/stop", instID), nil)
-
-	// Parse and extract status
-	var result map[string]any
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Display result
-	if status, ok := result["status"].(string); ok {
-		fmt.Println(status)
-	}
+	// doPost auto-prints JSON response
+	doPost(client, base, token, fmt.Sprintf("/instances/%s/stop", instID), nil)
 }
 
 // --- instances ---
@@ -882,29 +859,6 @@ func doPost(client *http.Client, base, token, path string, body map[string]any) 
 	var result map[string]any
 	json.Unmarshal(respBody, &result)
 	return result
-}
-
-// doPostRaw sends POST request and returns raw response bytes (without auto-printing)
-func doPostRaw(client *http.Client, base, token, path string, body map[string]any) []byte {
-	data, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(respBody))
-		os.Exit(1)
-	}
-
-	return respBody
 }
 
 // checkServerAndGuide checks if pinchtab server is running and provides guidance
