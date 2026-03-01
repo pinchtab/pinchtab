@@ -22,6 +22,18 @@ func TestProfileManagerCreateAndList(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Verify profile directory exists on disk
+	profileDir := filepath.Join(dir, "test-profile")
+	if _, err := os.Stat(profileDir); err != nil {
+		t.Fatalf("profile directory not created: %s", profileDir)
+	}
+
+	// Verify Default subdirectory exists (required for Chrome)
+	defaultDir := filepath.Join(profileDir, "Default")
+	if _, err := os.Stat(defaultDir); err != nil {
+		t.Fatalf("Default directory not created: %s", defaultDir)
+	}
+
 	profiles, err := pm.List()
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +46,12 @@ func TestProfileManagerCreateAndList(t *testing.T) {
 	}
 	if profiles[0].Source != "created" {
 		t.Errorf("expected source created, got %s", profiles[0].Source)
+	}
+	if !profiles[0].PathExists {
+		t.Errorf("profile path should exist")
+	}
+	if profiles[0].Path != profileDir {
+		t.Errorf("expected path %s, got %s", profileDir, profiles[0].Path)
 	}
 }
 

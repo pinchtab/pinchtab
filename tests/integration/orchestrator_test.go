@@ -176,12 +176,7 @@ func TestOrchestrator_PortAllocation(t *testing.T) {
 // TestOrchestrator_PortReuse verifies ports are released and can be reused
 func TestOrchestrator_PortReuse(t *testing.T) {
 	// Create instance 1
-	payload1 := map[string]any{
-		"name":     fmt.Sprintf("reuse-test-1-%d", time.Now().Unix()),
-		"headless": true,
-	}
-
-	status, body := httpPost(t, "/instances/launch", payload1)
+	status, body := httpPost(t, "/instances/launch", map[string]any{"mode": "headless"})
 	if status != 201 {
 		t.Fatalf("instance 1 creation failed: %d", status)
 	}
@@ -189,21 +184,18 @@ func TestOrchestrator_PortReuse(t *testing.T) {
 	instID1 := jsonField(t, body, "id")
 	port1 := jsonField(t, body, "port")
 
-	// Stop instance 1
+	// Stop instance 1 and wait for port release
 	status, _ = httpPost(t, fmt.Sprintf("/instances/%s/stop", instID1), nil)
 	if status != 200 {
 		t.Fatalf("stop instance 1 failed: %d", status)
 	}
+	time.Sleep(1 * time.Second) // give OS time to release the port
 
-	time.Sleep(500 * time.Millisecond)
-
-	// Create instance 2
-	payload2 := map[string]any{
+	// Create instance 2 — register cleanup BEFORE any potential t.Fatal
+	status, body = httpPost(t, "/instances/launch", map[string]any{
 		"name":     fmt.Sprintf("reuse-test-2-%d", time.Now().Unix()),
-		"headless": true,
-	}
-
-	status, body = httpPost(t, "/instances/launch", payload2)
+		"mode":     "headless",
+	})
 	if status != 201 {
 		t.Fatalf("instance 2 creation failed: %d", status)
 	}
@@ -211,13 +203,15 @@ func TestOrchestrator_PortReuse(t *testing.T) {
 	instID2 := jsonField(t, body, "id")
 	port2 := jsonField(t, body, "port")
 
+	// Always stop instance 2, even if the assertion below fails
+	t.Cleanup(func() {
+		httpPost(t, fmt.Sprintf("/instances/%s/stop", instID2), nil)
+	})
+
 	// Verify port2 == port1 (reused)
 	if port1 != port2 {
 		t.Fatalf("port not reused: old=%s, new=%s", port1, port2)
 	}
-
-	// Cleanup
-	httpPost(t, fmt.Sprintf("/instances/%s/stop", instID2), nil)
 }
 
 // TestOrchestrator_InstanceIsolation verifies instances have separate tabs
