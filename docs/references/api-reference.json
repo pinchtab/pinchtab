@@ -6,332 +6,398 @@
     {
       "method": "DELETE",
       "path": "/profiles/{name}",
-      "handler": "handleDeleteByPath"
+      "handler": "handleDeleteByPath",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/",
-      "handler": ""
+      "handler": "",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/cookies",
-      "handler": "HandleGetCookies"
+      "handler": "HandleGetCookies",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/dashboard",
-      "handler": ""
+      "handler": "",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/dashboard/",
-      "handler": ""
+      "handler": "",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/dashboard/agents",
-      "handler": "handleAgents"
+      "handler": "handleAgents",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/dashboard/events",
-      "handler": "handleSSE"
+      "handler": "handleSSE",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/download",
-      "handler": "HandleDownload"
+      "handler": "HandleDownload",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/health",
-      "handler": "HandleHealth"
+      "handler": "HandleHealth",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances",
-      "handler": "handleList"
+      "handler": "handleList",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/tabs",
-      "handler": "handleAllTabs"
+      "handler": "handleAllTabs",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/cookies",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/download",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/logs",
-      "handler": "handleLogsByID"
+      "handler": "handleLogsByID",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/pdf",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/proxy/screencast",
-      "handler": "handleProxyScreencast"
+      "handler": "handleProxyScreencast",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/screencast",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/screenshot",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/snapshot",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/tabs",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/instances/{id}/text",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/pdf",
-      "handler": "HandlePDF"
+      "handler": "HandlePDF",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/profiles",
-      "handler": "handleList"
+      "handler": "handleList",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/profiles/{id}/instance",
-      "handler": "handleProfileInstance"
+      "handler": "handleProfileInstance",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/profiles/{name}/analytics",
-      "handler": "handleAnalyticsByPath"
+      "handler": "handleAnalyticsByPath",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/profiles/{name}/logs",
-      "handler": "handleLogsByPath"
+      "handler": "handleLogsByPath",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/screencast",
-      "handler": "HandleScreencast"
+      "handler": "HandleScreencast",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/screencast/tabs",
-      "handler": "HandleScreencastAll"
+      "handler": "HandleScreencastAll",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/screenshot",
-      "handler": "HandleScreenshot"
+      "handler": "HandleScreenshot",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/snapshot",
-      "handler": "HandleSnapshot"
+      "handler": "HandleSnapshot",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/stealth/status",
-      "handler": "HandleStealthStatus"
+      "handler": "HandleStealthStatus",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/tabs",
-      "handler": "HandleTabs"
+      "handler": "HandleTabs",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/text",
-      "handler": "HandleText"
+      "handler": "HandleText",
+      "examples": {}
     },
     {
       "method": "GET",
       "path": "/welcome",
-      "handler": ""
+      "handler": "",
+      "examples": {}
     },
     {
       "method": "PATCH",
       "path": "/profiles/meta",
-      "handler": "handleUpdateMeta"
+      "handler": "handleUpdateMeta",
+      "examples": {}
     },
     {
       "method": "PATCH",
       "path": "/profiles/{name}",
-      "handler": "handleUpdateByPath"
+      "handler": "handleUpdateByPath",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/action",
-      "handler": "HandleAction"
+      "handler": "HandleAction",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/actions",
-      "handler": "HandleActions"
+      "handler": "HandleActions",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/cookies",
-      "handler": "HandleSetCookies"
+      "handler": "HandleSetCookies",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/ensure-chrome",
-      "handler": "HandleEnsureChrome"
+      "handler": "HandleEnsureChrome",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/evaluate",
-      "handler": "HandleEvaluate"
+      "handler": "HandleEvaluate",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/fingerprint/rotate",
-      "handler": "HandleFingerprintRotate"
+      "handler": "HandleFingerprintRotate",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/launch",
-      "handler": "handleLaunchByName"
+      "handler": "handleLaunchByName",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/action",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/actions",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/cookies",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/ensure-chrome",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/evaluate",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/navigate",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/stop",
-      "handler": "handleStopByInstanceID"
+      "handler": "handleStopByInstanceID",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/tab",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/tab/lock",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/tab/unlock",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/instances/{id}/upload",
-      "handler": "proxyToInstance"
+      "handler": "proxyToInstance",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/navigate",
-      "handler": "HandleNavigate"
+      "handler": "HandleNavigate",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/profiles/create",
-      "handler": "handleCreate"
+      "handler": "handleCreate",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/profiles/import",
-      "handler": "handleImport"
+      "handler": "handleImport",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/profiles/{id}/start",
-      "handler": "handleStartByID"
+      "handler": "handleStartByID",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/profiles/{id}/stop",
-      "handler": "handleStopByID"
+      "handler": "handleStopByID",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/profiles/{name}/reset",
-      "handler": "handleResetByPath"
+      "handler": "handleResetByPath",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/start/{id}",
-      "handler": "handleStartByID"
+      "handler": "handleStartByID",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/stop/{id}",
-      "handler": "handleStopByID"
+      "handler": "handleStopByID",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/tab",
-      "handler": "HandleTab"
+      "handler": "HandleTab",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/tab/lock",
-      "handler": "HandleTabLock"
+      "handler": "HandleTabLock",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/tab/unlock",
-      "handler": "HandleTabUnlock"
+      "handler": "HandleTabUnlock",
+      "examples": {}
     },
     {
       "method": "POST",
       "path": "/upload",
-      "handler": "HandleUpload"
+      "handler": "HandleUpload",
+      "examples": {}
     }
   ]
 }
