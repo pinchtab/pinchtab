@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -1087,7 +1088,9 @@ func doGet(client *http.Client, base, token, path string, params url.Values) map
 
 	// Parse and return result
 	var result map[string]any
-	json.Unmarshal(body, &result)
+	if err := json.Unmarshal(body, &result); err != nil {
+		log.Printf("warning: error unmarshaling response: %v", err)
+	}
 	return result
 }
 
@@ -1142,7 +1145,9 @@ func doPost(client *http.Client, base, token, path string, body map[string]any) 
 
 	// Parse and return result for suggestions
 	var result map[string]any
-	json.Unmarshal(respBody, &result)
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		log.Printf("warning: error unmarshaling response: %v", err)
+	}
 	return result
 }
 
@@ -1174,7 +1179,7 @@ Learn more: https://github.com/pinchtab/pinchtab#quick-start
 		fmt.Fprintf(os.Stderr, "❌ Cannot connect to Pinchtab server: %v\n", err)
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 401 {
 		fmt.Fprintf(os.Stderr, "❌ Authentication required. Set BRIDGE_TOKEN or PINCHTAB_TOKEN environment variable.\n")

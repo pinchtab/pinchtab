@@ -3,7 +3,10 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -319,6 +322,23 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
+	// Validate proxy URL to prevent SSRF attacks
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		web.Error(w, 400, fmt.Errorf("invalid proxy URL: %w", err))
+		return
+	}
+
+	// Ensure target is localhost only
+	host, _, err := net.SplitHostPort(parsedURL.Host)
+	if err != nil {
+		host = parsedURL.Hostname()
+	}
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		web.Error(w, 400, fmt.Errorf("invalid proxy target: only localhost allowed"))
+		return
+	}
+
 	// Create proxy request
 	proxyReq, err := http.NewRequest(r.Method, targetURL, r.Body)
 	if err != nil {
@@ -453,7 +473,9 @@ func (o *Orchestrator) handleTabList(w http.ResponseWriter, r *http.Request) {
 
 		if tabResp.StatusCode == 200 {
 			var instanceTabs []map[string]any
-			json.NewDecoder(tabResp.Body).Decode(&instanceTabs)
+			if err := json.NewDecoder(tabResp.Body).Decode(&instanceTabs); err != nil {
+				log.Printf("error decoding tabs from instance: %v", err)
+			}
 			// Add instanceId to each tab
 			for _, tab := range instanceTabs {
 				tab["instanceId"] = instanceID
@@ -482,7 +504,9 @@ func (o *Orchestrator) handleTabList(w http.ResponseWriter, r *http.Request) {
 
 			if tabResp.StatusCode == 200 {
 				var instanceTabs []map[string]any
-				json.NewDecoder(tabResp.Body).Decode(&instanceTabs)
+				if err := json.NewDecoder(tabResp.Body).Decode(&instanceTabs); err != nil {
+					log.Printf("error decoding tabs from instance: %v", err)
+				}
 				// Add instanceId to each tab
 				for _, tab := range instanceTabs {
 					tab["instanceId"] = inst.ID
@@ -520,7 +544,9 @@ func (o *Orchestrator) handleTabGet(w http.ResponseWriter, r *http.Request) {
 
 		if tabResp.StatusCode == 200 {
 			var tab map[string]any
-			json.NewDecoder(tabResp.Body).Decode(&tab)
+			if err := json.NewDecoder(tabResp.Body).Decode(&tab); err != nil {
+				log.Printf("error decoding tab from instance: %v", err)
+			}
 			tab["instanceId"] = inst.ID
 			web.JSON(w, 200, tab)
 			return

@@ -23,6 +23,21 @@ func profileID(name string) string {
 	return idMgr.ProfileID(name)
 }
 
+// validateProfileName checks for path traversal and other unsafe patterns
+// Prevents directory traversal attacks (../, ..\, /, \)
+func validateProfileName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("profile name cannot contain '..'")
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("profile name cannot contain '/' or '\\'")
+	}
+	return nil
+}
+
 type ProfileManager struct {
 	baseDir string
 	tracker *ActionTracker
@@ -59,6 +74,9 @@ func NewProfileManager(baseDir string) *ProfileManager {
 }
 
 func (pm *ProfileManager) Exists(name string) bool {
+	if err := validateProfileName(name); err != nil {
+		return false
+	}
 	dir := filepath.Join(pm.baseDir, name)
 	info, err := os.Stat(dir)
 	return err == nil && info.IsDir()
@@ -111,6 +129,9 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 }
 
 func (pm *ProfileManager) profileInfo(name string) (ProfileDetailedInfo, error) {
+	if err := validateProfileName(name); err != nil {
+		return ProfileDetailedInfo{}, err
+	}
 	dir := filepath.Join(pm.baseDir, name)
 	fi, err := os.Stat(dir)
 	if err != nil {
@@ -148,6 +169,9 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileDetailedInfo, error) 
 }
 
 func (pm *ProfileManager) Import(name, sourcePath string) error {
+	if err := validateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -194,6 +218,9 @@ func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMe
 }
 
 func (pm *ProfileManager) Create(name string) error {
+	if err := validateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -216,6 +243,9 @@ func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {
 }
 
 func (pm *ProfileManager) Reset(name string) error {
+	if err := validateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -259,6 +289,9 @@ func (pm *ProfileManager) Reset(name string) error {
 }
 
 func (pm *ProfileManager) Delete(name string) error {
+	if err := validateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 

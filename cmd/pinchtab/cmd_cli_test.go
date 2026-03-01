@@ -616,7 +616,7 @@ func TestCheckServerAndGuide(t *testing.T) {
 
 	result2 := checkServerAndGuide(client2, m2.base(), "")
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 	output, _ := io.ReadAll(r)
 
