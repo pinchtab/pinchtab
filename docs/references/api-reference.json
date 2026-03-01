@@ -22,7 +22,8 @@
       "handler": "",
       "description": "Dashboard UI (root)",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "html": true
     },
     {
       "method": "GET",
@@ -38,7 +39,8 @@
       "handler": "",
       "description": "Dashboard page",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "html": true
     },
     {
       "method": "GET",
@@ -46,7 +48,8 @@
       "handler": "",
       "description": "Dashboard resources",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "html": true
     },
     {
       "method": "GET",
@@ -366,7 +369,8 @@
       "handler": "",
       "description": "Welcome page",
       "curl": true,
-      "examples": {}
+      "examples": {},
+      "html": true
     },
     {
       "method": "PATCH",
