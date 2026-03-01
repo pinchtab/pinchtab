@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -35,12 +36,49 @@ func InitChrome(cfg *config.RuntimeConfig) (context.Context, context.CancelFunc,
 	return allocCtx, allocCancel, browserCtx, browserCancel, nil
 }
 
+// findChromeBinary searches for Chrome in common installation locations
+func findChromeBinary() string {
+	// Common Chrome/Chromium binary locations by OS
+	candidates := []string{
+		// macOS
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		// Linux
+		"/usr/bin/google-chrome",
+		"/usr/bin/google-chrome-stable",
+		"/usr/bin/chromium",
+		"/usr/bin/chromium-browser",
+		// Windows (via WSL or MSYS)
+		"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+		"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			slog.Debug("found chrome binary", "path", path)
+			return path
+		}
+	}
+
+	return ""
+}
+
 // setupAllocator creates a Chrome allocator with appropriate options
 func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption) {
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 
+	// Determine Chrome binary path
+	chromeBinary := cfg.ChromeBinary
+	if chromeBinary == "" {
+		// Try to auto-detect Chrome
+		chromeBinary = findChromeBinary()
+		if chromeBinary != "" {
+			slog.Info("auto-detected chrome binary", "path", chromeBinary)
+		}
+	}
+
 	// Log configuration
-	slog.Debug("configuring chrome allocator", "headless", cfg.Headless, "binary", cfg.ChromeBinary, "profile_dir", cfg.ProfileDir)
+	slog.Debug("configuring chrome allocator", "headless", cfg.Headless, "binary", chromeBinary, "profile_dir", cfg.ProfileDir)
 
 	// Headless mode
 	if cfg.Headless {
@@ -52,11 +90,11 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	}
 
 	// Chrome binary
-	if cfg.ChromeBinary != "" {
-		opts = append(opts, chromedp.ExecPath(cfg.ChromeBinary))
-		slog.Debug("chrome binary path configured", "path", cfg.ChromeBinary)
+	if chromeBinary != "" {
+		opts = append(opts, chromedp.ExecPath(chromeBinary))
+		slog.Debug("chrome binary path configured", "path", chromeBinary)
 	} else {
-		slog.Debug("chrome binary path not specified, using system PATH")
+		slog.Debug("chrome binary path not found in common locations, letting chromedp search")
 	}
 
 	// Profile
