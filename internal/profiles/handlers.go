@@ -27,6 +27,35 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 500, err)
 		return
 	}
+
+	// Filter out temporary profiles by default (unless requested with ?all=true)
+	showAll := r.URL.Query().Get("all") == "true"
+	if !showAll {
+		filtered := []map[string]any{}
+		for _, p := range profiles {
+			if !p.Temporary {
+				// Convert to map for JSON response
+				filtered = append(filtered, map[string]any{
+					"id":                p.ID,
+					"name":              p.Name,
+					"created":           p.Created,
+					"lastUsed":          p.LastUsed,
+					"diskUsage":         p.DiskUsage,
+					"running":           p.Running,
+					"source":            p.Source,
+					"chromeProfileName": p.ChromeProfileName,
+					"accountEmail":      p.AccountEmail,
+					"accountName":       p.AccountName,
+					"hasAccount":        p.HasAccount,
+					"useWhen":           p.UseWhen,
+					"description":       p.Description,
+				})
+			}
+		}
+		web.JSON(w, 200, filtered)
+		return
+	}
+
 	web.JSON(w, 200, profiles)
 }
 

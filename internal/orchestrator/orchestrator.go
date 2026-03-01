@@ -319,11 +319,19 @@ func (o *Orchestrator) markStopped(id string) {
 	o.mu.Unlock()
 
 	if strings.HasPrefix(profileName, "instance-") {
+		// Delete profile directory
 		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
-			slog.Warn("failed to delete temporary profile", "name", profileName, "err", err)
+			slog.Warn("failed to delete temporary profile directory", "name", profileName, "err", err)
 		} else {
 			slog.Info("deleted temporary profile", "name", profileName)
+		}
+
+		// Also delete profile metadata via profile manager
+		if o.profiles != nil {
+			if err := o.profiles.Delete(profileName); err != nil {
+				slog.Warn("failed to delete profile metadata", "name", profileName, "err", err)
+			}
 		}
 	}
 }

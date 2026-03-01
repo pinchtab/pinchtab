@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -86,10 +87,15 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		if _, err := os.Stat(filepath.Join(pm.baseDir, entry.Name(), "Default")); err != nil {
 			continue
 		}
+
+		// Mark as temporary if it's an auto-generated instance profile
+		isTemporary := strings.HasPrefix(entry.Name(), "instance-")
+
 		profiles = append(profiles, bridge.ProfileInfo{
 			ID:                info.ID,
 			Name:              info.Name,
 			Created:           info.CreatedAt,
+			Temporary:         isTemporary,
 			DiskUsage:         int64(info.SizeMB * 1024 * 1024),
 			Source:            info.Source,
 			ChromeProfileName: info.ChromeProfileName,
