@@ -9,9 +9,15 @@ import (
 )
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	// Guard against nil Bridge
+	if h.Bridge == nil {
+		web.JSON(w, 503, map[string]any{"status": "error", "reason": "bridge not initialized"})
+		return
+	}
+
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
-		web.JSON(w, 200, map[string]any{"status": "disconnected", "error": err.Error(), "cdp": h.Config.CdpURL})
+		web.JSON(w, 503, map[string]any{"status": "error", "reason": err.Error()})
 		return
 	}
 	web.JSON(w, 200, map[string]any{"status": "ok", "tabs": len(targets), "cdp": h.Config.CdpURL})
@@ -27,9 +33,15 @@ func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
+	// Guard against nil Bridge
+	if h.Bridge == nil {
+		web.Error(w, 503, fmt.Errorf("bridge not initialized"))
+		return
+	}
+
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
-		web.Error(w, 500, err)
+		web.Error(w, 503, err)
 		return
 	}
 

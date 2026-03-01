@@ -199,6 +199,9 @@ func (tm *TabManager) CloseTab(tabID string) error {
 }
 
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {
+	if tm == nil {
+		return nil, fmt.Errorf("tab manager not initialized")
+	}
 	if tm.browserCtx == nil {
 		return nil, fmt.Errorf("no browser connection")
 	}
