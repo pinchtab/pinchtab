@@ -406,3 +406,203 @@ func TestProfileListIncludesUseWhen(t *testing.T) {
 		t.Errorf("expected useWhen 'Personal browsing', got %q", profiles[0].UseWhen)
 	}
 }
+
+// === Security Validation Tests ===
+
+func TestValidateProfileName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		// Valid names
+		{"valid simple", "my-profile", false, ""},
+		{"valid with numbers", "profile123", false, ""},
+		{"valid with underscore", "my_profile", false, ""},
+		{"valid with dots", "my.profile", false, ""},
+		{"valid single char", "a", false, ""},
+
+		// Empty name
+		{"empty", "", true, "cannot be empty"},
+
+		// Path traversal attempts
+		{"double dot", "..", true, "cannot contain '..'"},
+		{"double dot prefix", "../test", true, "cannot contain '..'"},
+		{"double dot suffix", "test/..", true, "cannot contain '..'"},
+		{"double dot middle", "test/../other", true, "cannot contain '..'"},
+		{"triple dot", "...", true, "cannot contain '..'"},
+		{"double dot no slash", "..test", true, "cannot contain '..'"},
+
+		// Path separator attempts
+		{"forward slash", "test/profile", true, "cannot contain '/'"},
+		{"forward slash prefix", "/test", true, "cannot contain '/'"},
+		{"forward slash suffix", "test/", true, "cannot contain '/'"},
+		{"backslash", "test\\profile", true, "cannot contain '/'"},
+		{"backslash prefix", "\\test", true, "cannot contain '/'"},
+
+		// Combined attacks
+		{"traversal with slash", "../../../etc/passwd", true, "cannot contain"},
+		{"traversal windows", "..\\..\\system32", true, "cannot contain"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateProfileName(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateProfileName(%q) = nil, want error containing %q", tt.input, tt.errMsg)
+				} else if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateProfileName(%q) = %q, want error containing %q", tt.input, err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateProfileName(%q) = %v, want nil", tt.input, err)
+				}
+			}
+		})
+	}
+}
+
+func TestProfileCreateRejectsPathTraversal(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+
+	badNames := []string{
+		"../test",
+		"..\\test",
+		"test/../other",
+		"../../etc/passwd",
+		"test/subdir",
+		"/absolute",
+	}
+
+	for _, name := range badNames {
+		t.Run(name, func(t *testing.T) {
+			err := pm.Create(name)
+			if err == nil {
+				t.Errorf("Create(%q) should have returned error", name)
+			}
+		})
+	}
+}
+
+func TestProfileHandlerCreateRejectsPathTraversal(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{"path traversal ..", `{"name":"../malicious"}`, 400},
+		{"path traversal /", `{"name":"test/nested"}`, 400},
+		{"path traversal backslash", `{"name":"test\\nested"}`, 400},
+		{"empty name", `{"name":""}`, 400},
+		{"valid name", `{"name":"valid-profile"}`, 200},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/profiles/create", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("POST /profiles/create with %s: got status %d, want %d. Body: %s",
+					tt.body, w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestProfileHandlerCreateReturns409OnDuplicate(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	// Create first profile
+	body := `{"name":"duplicate-test"}`
+	req := httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("first create failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// Try to create duplicate
+	req = httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 409 {
+		t.Errorf("duplicate create: got status %d, want 409. Body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestProfileImportRejectsPathTraversal(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+
+	// Create a valid source directory
+	src := filepath.Join(t.TempDir(), "chrome-src")
+	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
+
+	badNames := []string{
+		"../imported",
+		"test/nested",
+		"..\\windows",
+	}
+
+	for _, name := range badNames {
+		t.Run(name, func(t *testing.T) {
+			err := pm.Import(name, src)
+			if err == nil {
+				t.Errorf("Import(%q, ...) should have returned error", name)
+			}
+		})
+	}
+}
+
+func TestProfileResetRejectsPathTraversal(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	_ = pm.Create("legit")
+
+	badNames := []string{
+		"../legit",
+		"legit/../other",
+	}
+
+	for _, name := range badNames {
+		t.Run(name, func(t *testing.T) {
+			err := pm.Reset(name)
+			if err == nil {
+				t.Errorf("Reset(%q) should have returned error", name)
+			}
+		})
+	}
+}
+
+func TestProfileDeleteRejectsPathTraversal(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	_ = pm.Create("legit")
+
+	badNames := []string{
+		"../legit",
+		"legit/../other",
+	}
+
+	for _, name := range badNames {
+		t.Run(name, func(t *testing.T) {
+			err := pm.Delete(name)
+			if err == nil {
+				t.Errorf("Delete(%q) should have returned error", name)
+			}
+		})
+	}
+}
