@@ -147,14 +147,14 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
-| PD1 | PDF base64 | Navigate to page, `GET /pdf` | JSON with `format: "pdf"` and `base64` field |
-| PD2 | PDF raw bytes | `GET /pdf?raw=true` | Content-Type `application/pdf`, valid PDF bytes |
-| PD3 | PDF save to file | `GET /pdf?output=file` | JSON with `path` and `size` |
-| PD4 | PDF custom path | `GET /pdf?output=file&path=/tmp/test.pdf` | File written to `/tmp/test.pdf` |
-| PD5 | PDF landscape | `GET /pdf?landscape=true&raw=true` | Valid PDF in landscape |
-| PD6 | PDF scale | `GET /pdf?scale=0.5&raw=true` | Valid PDF with scaled content |
-| PD7 | PDF no tab | `GET /pdf` with no tabs | 404 error |
-| PD8 | PDF specific tab | `GET /pdf?tabId=TAB_ID` | PDF of specified tab |
+| PD1 | PDF base64 | Navigate to page, capture `TAB_ID`, `GET /tabs/TAB_ID/pdf` | JSON with `format: "pdf"` and `base64` field |
+| PD2 | PDF raw bytes | `GET /tabs/TAB_ID/pdf?raw=true` | Content-Type `application/pdf`, valid PDF bytes |
+| PD3 | PDF save to file | `GET /tabs/TAB_ID/pdf?output=file` | JSON with `path` and `size` |
+| PD4 | PDF custom path | `GET /tabs/TAB_ID/pdf?output=file&path=/tmp/test.pdf` | File written to `/tmp/test.pdf` |
+| PD5 | PDF landscape | `GET /tabs/TAB_ID/pdf?landscape=true&raw=true` | Valid PDF in landscape |
+| PD6 | PDF scale | `GET /tabs/TAB_ID/pdf?scale=0.5&raw=true` | Valid PDF with scaled content |
+| PD7 | PDF no tab | `GET /tabs/nonexistent/pdf` | 404 error |
+| PD8 | PDF specific tab | `GET /tabs/TAB_ID/pdf` | PDF of specified tab |
 
 ### 1.12 Stealth
 
@@ -179,6 +179,18 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | CF4 | Custom profile dir | `BRIDGE_PROFILE=/tmp/test-profile ./pinchtab` | Uses specified profile |
 | CF5 | No restore | `BRIDGE_NO_RESTORE=true ./pinchtab` | Doesn't restore previous tabs |
 
+### 1.16 Security & Validation
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| SEC1 | Profile name with ".." | `POST /profiles {"name":"../../../etc/passwd"}` | 400, invalid profile name |
+| SEC2 | Profile name with "/" | `POST /profiles {"name":"test/profile"}` | 400, path separators not allowed |
+| SEC3 | Profile name with "\" | `POST /profiles {"name":"test\\profile"}` | 400, path separators not allowed |
+| SEC4 | Profile name empty | `POST /profiles {"name":""}` | 400, name required |
+| SEC5 | Valid profile names | `POST /profiles {"name":"valid-profile"}` | 201, profile created |
+| SEC6 | SSRF prevention | Proxy to non-localhost (e.g., example.com via /tabs/{tabId}/navigate) | 400, localhost required or fails safely |
+| SEC7 | Proxy safe URL | Proxy normal navigate via /tabs/{tabId}/navigate | 200, works as expected |
+
 ### 1.14 CLI Subcommands
 
 | # | Scenario | Steps | Expected |
@@ -193,7 +205,7 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | CL8 | Text raw | `pinchtab text --raw` | Raw innerText |
 | CL9 | Screenshot | `pinchtab ss -o /tmp/test.jpg` | File saved, size reported |
 | CL10 | Evaluate | `pinchtab eval "document.title"` | Returns page title |
-| CL11 | PDF | `pinchtab pdf -o /tmp/test.pdf` | PDF file saved |
+| CL11 | PDF | `pinchtab pdf --tab <TAB_ID> -o /tmp/test.pdf` | PDF file saved |
 | CL12 | Tabs list | `pinchtab tabs` | JSON array of tabs |
 | CL13 | Tab new | `pinchtab tabs new https://example.com` | New tab opened |
 | CL14 | Health | `pinchtab health` | JSON with status ok |

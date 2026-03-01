@@ -1,0 +1,34 @@
+{
+  "main": [
+    "overview.md",
+    "core-concepts.md",
+    "headless-vs-headed.md",
+    "dashboard.md",
+    "get-started.md"
+  ],
+  "references": [
+    "references/api-structure.md",
+    "references/api-reference.json",
+    "references/profile-api.md",
+    "references/instance-api.md",
+    "references/tabs-api.md",
+    "references/cli-quick-reference.md",
+    "references/configuration.md"
+  ],
+  "architecture": [
+    "architecture/pinchtab-architecture.md",
+    "architecture/chrome-lifecycle-and-orchestration.md",
+    "architecture/building.md"
+  ],
+  "guides": [
+    "guides/cdp-url-shared-chrome.md",
+    "guides/headed-mode-guide.md",
+    "guides/identifying-instances.md",
+    "guides/agent-optimization.md"
+  ],
+  "proposals": [
+    "proposals/default-instance.md",
+    "proposals/performance-optimization.md",
+    "proposals/ui-enhancements.md"
+  ]
+}

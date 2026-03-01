@@ -8,6 +8,7 @@ dist/
 *.js
 !scripts/**/*.js
 !npm/bin/pinchtab
+!internal/dashboard/dashboard/*.js
 
 # npm package
 npm/node_modules/
@@ -25,3 +26,4 @@ MEMORY.md
 .openclaw/
 AGENTS.md
 *.test
+memory/

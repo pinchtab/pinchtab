@@ -94,7 +94,7 @@ func (d *Dashboard) relayChildEvents() {
 			if _, ok := tracked[inst.Port]; !ok {
 				ctx, cancel := context.WithCancel(context.Background())
 				tracked[inst.Port] = cancel
-				go d.subscribeChildSSE(ctx, inst.Port, inst.Name)
+				go d.subscribeChildSSE(ctx, inst.Port, inst.ProfileName)
 			}
 		}
 
@@ -273,10 +273,15 @@ func (d *Dashboard) GetAgents() []AgentActivity {
 }
 
 func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
+	// Dashboard UI available at both / and /dashboard
+	mux.Handle("GET /", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
 	mux.Handle("GET /dashboard", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
+
+	// API endpoints
 	mux.HandleFunc("GET /dashboard/agents", d.handleAgents)
 	mux.HandleFunc("GET /dashboard/events", d.handleSSE)
 
+	// Static files served at /dashboard/
 	sub, _ := fs.Sub(dashboardFS, "dashboard")
 	static := http.StripPrefix("/dashboard/", http.FileServer(http.FS(sub)))
 	mux.Handle("GET /dashboard/", d.withNoCache(static))

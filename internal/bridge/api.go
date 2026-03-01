@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // BridgeAPI abstracts browser tab operations for handler testing.
@@ -13,7 +14,9 @@ type BridgeAPI interface {
 	BrowserContext() context.Context
 	TabContext(tabID string) (ctx context.Context, resolvedID string, err error)
 	ListTargets() ([]*target.Info, error)
-	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
+	// CreateTab creates a new browser tab and returns a hash-based tab ID (e.g., "tab_XXXXXXXX").
+	// The raw CDP target ID is stored internally and used for CDP operations.
+	CreateTab(url string) (hashTabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
 
 	GetRefCache(tabID string) *RefCache
@@ -26,6 +29,8 @@ type BridgeAPI interface {
 	TabLockInfo(tabID string) *LockInfo
 	Lock(tabID, owner string, ttl time.Duration) error
 	Unlock(tabID, owner string) error
+
+	EnsureChrome(cfg *config.RuntimeConfig) error
 }
 
 type LockInfo struct {
@@ -66,10 +71,13 @@ type OrchestratorService interface {
 type ProfileInfo struct {
 	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`
+	Path              string    `json:"path,omitempty"`       // File system path to profile directory
+	PathExists        bool      `json:"pathExists,omitempty"` // Whether the path exists on disk
 	Created           time.Time `json:"created"`
 	LastUsed          time.Time `json:"lastUsed"`
 	DiskUsage         int64     `json:"diskUsage"`
 	Running           bool      `json:"running"`
+	Temporary         bool      `json:"temporary,omitempty"` // ephemeral instance profiles (auto-generated)
 	Source            string    `json:"source,omitempty"`
 	ChromeProfileName string    `json:"chromeProfileName,omitempty"`
 	AccountEmail      string    `json:"accountEmail,omitempty"`
@@ -99,18 +107,21 @@ type AnalyticsReport struct {
 }
 
 type Instance struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Profile   string    `json:"profile"`
-	Port      string    `json:"port"`
-	Headless  bool      `json:"headless"`
-	Status    string    `json:"status"`
-	StartTime time.Time `json:"startTime"`
+	ID          string    `json:"id"`              // Hash-based ID: inst_XXXXXXXX
+	ProfileID   string    `json:"profileId"`       // Hash-based profile ID: prof_XXXXXXXX
+	ProfileName string    `json:"profileName"`     // Human-readable profile name (for display only)
+	Port        string    `json:"port"`            // Internal: instance port
+	Headless    bool      `json:"headless"`        // Mode: headless vs headed
+	Status      string    `json:"status"`          // Status: starting/running/stopping/stopped/error
+	StartTime   time.Time `json:"startTime"`       // When instance was created
+	Error       string    `json:"error,omitempty"` // Error message if status=error
 }
 
 type InstanceTab struct {
-	InstanceID string `json:"instanceId"`
-	TabID      string `json:"tabId"`
+	ID         string `json:"id"`         // Hash-based tab ID: tab_XXXXXXXX
+	InstanceID string `json:"instanceId"` // Hash-based instance ID: inst_XXXXXXXX
 	URL        string `json:"url"`
 	Title      string `json:"title"`
 }
+
+// test

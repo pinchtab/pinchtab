@@ -43,13 +43,18 @@ func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.
 
 func (m *mockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
 	ctx, cancel := chromedp.NewContext(context.Background())
-	return "new-tab", ctx, cancel, nil
+	return "tab_abc12345", ctx, cancel, nil
 }
 
 func (m *mockBridge) CloseTab(tabID string) error {
 	if tabID == "fail" {
 		return fmt.Errorf("close failed")
 	}
+	return nil
+}
+
+func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	// Mock implementation - just return nil
 	return nil
 }
 

@@ -16,7 +16,7 @@ func TestError_UnicodeContent(t *testing.T) {
 	navigate(t, "https://www.wikipedia.org")
 
 	// Test snapshot
-	code, snapBody := httpGet(t, "/snapshot")
+	code, snapBody := httpGet(t, "/snapshot?tabId="+currentTabID)
 	if code != 200 {
 		t.Errorf("snapshot failed with %d", code)
 	}
@@ -28,7 +28,7 @@ func TestError_UnicodeContent(t *testing.T) {
 	}
 
 	// Test text
-	code, textBody := httpGet(t, "/text")
+	code, textBody := httpGet(t, "/text?tabId="+currentTabID)
 	if code != 200 {
 		t.Errorf("text failed with %d", code)
 	}
@@ -46,7 +46,7 @@ func TestError_EmptyPage(t *testing.T) {
 	navigate(t, "about:blank")
 
 	// Test snapshot
-	code, snapBody := httpGet(t, "/snapshot")
+	code, snapBody := httpGet(t, "/snapshot?tabId="+currentTabID)
 	if code != 200 {
 		t.Errorf("snapshot on empty page failed with %d", code)
 	}
@@ -58,7 +58,7 @@ func TestError_EmptyPage(t *testing.T) {
 	}
 
 	// Test text
-	code, textBody := httpGet(t, "/text")
+	code, textBody := httpGet(t, "/text?tabId="+currentTabID)
 	if code != 200 {
 		t.Errorf("text on empty page failed with %d", code)
 	}
@@ -82,7 +82,7 @@ func TestError_BinaryPage(t *testing.T) {
 	// Test snapshot on PDF content
 	// PDF may not render as a traditional page, so snapshot might fail or return empty
 	// We just verify it doesn't crash and returns gracefully
-	code, snapBody := httpGet(t, "/snapshot")
+	code, snapBody := httpGet(t, "/snapshot?tabId="+currentTabID)
 	if code == 200 {
 		// Verify response is valid JSON (even if empty/error)
 		var snapData map[string]any
@@ -97,7 +97,7 @@ func TestError_BinaryPage(t *testing.T) {
 	}
 
 	// Test text extraction on PDF
-	code, textBody := httpGet(t, "/text")
+	code, textBody := httpGet(t, "/text?tabId="+currentTabID)
 	if code == 200 {
 		var textData map[string]any
 		if err := json.Unmarshal(textBody, &textData); err != nil {

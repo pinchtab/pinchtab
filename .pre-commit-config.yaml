@@ -1,0 +1,39 @@
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # Go formatting
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint-full
+        args: ['--timeout=5m']
+
+  # Markdown linting (relaxed for docs)
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        args: ['--config', '.markdownlint.json']
+        # Exclude test files, auto-generated docs, repo root, and skill docs
+        exclude: |
+          (?x)^(
+            tests/.*\.md|
+            \.github/.*\.md|
+            skill/.*\.md|
+            docs/references/.*\.json|
+            README\.md|
+            CONTRIBUTING\.md|
+            CODE_OF_CONDUCT\.md|
+            SECURITY\.md|
+            RELEASE\.md
+          )$

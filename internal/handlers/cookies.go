@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -75,6 +78,27 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 		"cookies": result,
 		"count":   len(result),
 	})
+}
+
+// HandleTabGetCookies gets cookies for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/cookies
+func (h *Handlers) HandleTabGetCookies(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleGetCookies(w, req)
 }
 
 type cookieRequest struct {
@@ -167,4 +191,41 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 		"failed": len(req.Cookies) - successCount,
 		"total":  len(req.Cookies),
 	})
+}
+
+// HandleTabSetCookies sets cookies for a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/cookies
+func (h *Handlers) HandleTabSetCookies(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	reqBody := cookieRequest{}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
+	if err := dec.Decode(&reqBody); err != nil && !errors.Is(err, io.EOF) {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+
+	if reqBody.TabID != "" && reqBody.TabID != tabID {
+		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		return
+	}
+	reqBody.TabID = tabID
+
+	payload, err := json.Marshal(reqBody)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(bytes.NewReader(payload))
+	req.ContentLength = int64(len(payload))
+	req.Header = r.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	h.HandleSetCookies(w, req)
 }

@@ -58,8 +58,8 @@ All tests use `__test_profile__` — cleaned up at end.
 | DO11 | Profile instance after stop | `GET /profiles/__test_profile__/instance` | 200, running=false | ✅ |
 | DO12 | Launch duplicate port | Launch two profiles on same port | 409, conflict | ✅ |
 | DO13 | Stop by profile name | `POST /profiles/__test_profile__/stop` (when running) | 200, stopped | ✅ |
-| DO14 | Start by profile ID | `POST /start/{profileId}` | 201, auto-allocated port | ✅ |
-| DO15 | Stop by profile ID | `POST /stop/{profileId}` | 200, stopped | ✅ |
+| DO14 | Start by profile ID | `POST /profiles/{profileId}/start` | 201, auto-allocated port | ✅ |
+| DO15 | Stop by profile ID | `POST /profiles/{profileId}/stop` | 200, stopped | ✅ |
 
 ---
 
@@ -173,13 +173,6 @@ Verify every registered route returns a non-404 status (may return 400/503 for m
 | RE25a | `/profiles/{id}/instance` | GET | 200 (instance status) | ✅ |
 | RE25b | `/profiles/{unknownId}/start` | POST | 404 | ✅ |
 
-### Short aliases (agent convenience)
-
-| # | Route | Method | Expected | Auto |
-|---|-------|--------|----------|------|
-| RE25c | `/start/{id}` | POST | 201 (same as /profiles/{id}/start) | ✅ |
-| RE25d | `/stop/{id}` | POST | 200 (same as /profiles/{id}/stop) | ✅ |
-
 ### Proxy endpoints (503 when no instance running)
 
 | # | Route | Method | Expected (no instance) | Auto |
@@ -201,6 +194,57 @@ Verify every registered route returns a non-404 status (may return 400/503 for m
 | RE39 | `/fingerprint/rotate` | POST | 503 | ✅ |
 | RE40 | `/screencast` | GET | 503 | ✅ |
 | RE41 | `/screencast/tabs` | GET | 503 | ✅ |
+
+---
+
+## 10. Security: Validation Tests
+
+### DSE1: Profile Name Validation
+
+**Goal:** Verify invalid profile names are rejected by the API.
+
+**Steps:**
+1. Start dashboard
+2. Try to create profile with ".." in name:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"../test"}'
+   ```
+   Should get **400 Bad Request** (invalid profile name)
+
+3. Try with "/" separator:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"test/profile"}'
+   ```
+   Should get **400 Bad Request**
+
+4. Try with empty name:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":""}'
+   ```
+   Should get **400 Bad Request**
+
+5. Create valid profile (control):
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"__test_security__"}'
+   ```
+   Should get **201 Created**
+
+6. Clean up:
+   ```bash
+   curl -X DELETE http://localhost:9867/profiles/__test_security__
+   ```
+
+**Expected:** Invalid names rejected with 400, valid names accepted with 201.
+
+**Criteria:** ✓ ".." rejected | ✓ "/" rejected | ✓ "" rejected | ✓ Valid names work
 
 ---
 

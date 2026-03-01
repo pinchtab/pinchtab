@@ -14,7 +14,7 @@ func TestIsCLICommand(t *testing.T) {
 	valid := []string{"nav", "navigate", "snap", "snapshot", "click", "type",
 		"press", "fill", "hover", "scroll", "select", "focus",
 		"text", "tabs", "tab", "screenshot", "ss", "eval", "evaluate",
-		"pdf", "health"}
+		"pdf", "health", "quick"}
 
 	for _, cmd := range valid {
 		if !isCLICommand(cmd) {
@@ -113,6 +113,28 @@ func TestCLINavigateWithBlockAds(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["blockAds"] != true {
 		t.Error("expected blockAds=true")
+	}
+}
+
+func TestCLIInstanceNavigateUsesTabRoute(t *testing.T) {
+	m := newMockServer()
+	m.response = `{"tabId":"tab-abc"}`
+	defer m.close()
+	client := m.server.Client()
+
+	cliInstanceNavigate(client, m.base(), "", []string{"inst-123", "https://example.com"})
+
+	if m.lastMethod != "POST" {
+		t.Errorf("expected POST, got %s", m.lastMethod)
+	}
+	if m.lastPath != "/tabs/tab-abc/navigate" {
+		t.Errorf("expected tab-scoped navigate path, got %s", m.lastPath)
+	}
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["url"] != "https://example.com" {
+		t.Errorf("expected navigate URL in body, got %v", body["url"])
 	}
 }
 
@@ -432,9 +454,9 @@ func TestCLIPDF(t *testing.T) {
 	client := m.server.Client()
 
 	outFile := t.TempDir() + "/test.pdf"
-	cliPDF(client, m.base(), "", []string{"-o", outFile, "--landscape", "--scale", "0.8"})
-	if m.lastPath != "/pdf" {
-		t.Errorf("expected /pdf, got %s", m.lastPath)
+	cliPDF(client, m.base(), "", []string{"-o", outFile, "--tab", "tab-abc", "--landscape", "--scale", "0.8"})
+	if m.lastPath != "/tabs/tab-abc/pdf" {
+		t.Errorf("expected /tabs/tab-abc/pdf, got %s", m.lastPath)
 	}
 	if !strings.Contains(m.lastQuery, "landscape=true") {
 		t.Errorf("expected landscape=true, got %s", m.lastQuery)
@@ -479,6 +501,9 @@ func TestCLIPDFAllOptions(t *testing.T) {
 	}
 
 	cliPDF(client, m.base(), "", args)
+	if m.lastPath != "/tabs/tab-123/pdf" {
+		t.Errorf("expected /tabs/tab-123/pdf, got %s", m.lastPath)
+	}
 
 	// Check all parameters were set correctly
 	expectedParams := []string{
@@ -495,7 +520,6 @@ func TestCLIPDFAllOptions(t *testing.T) {
 		"displayHeaderFooter=true",
 		"generateTaggedPDF=true",
 		"generateDocumentOutline=true",
-		"tabId=tab-123",
 		"raw=true",
 	}
 
@@ -581,9 +605,49 @@ func TestDoPostContentType(t *testing.T) {
 	defer m.close()
 	client := m.server.Client()
 
-	doPost(client, m.base(), "", "/action", map[string]any{"kind": "click"})
+	_ = doPost(client, m.base(), "", "/action", map[string]any{"kind": "click"})
 	ct := m.lastHeaders.Get("Content-Type")
 	if ct != "application/json" {
 		t.Errorf("expected application/json, got %q", ct)
+	}
+}
+
+// --- server guidance tests ---
+
+func TestCheckServerAndGuide(t *testing.T) {
+	// Test successful connection
+	m := newMockServer()
+	m.response = `{"status":"ok"}`
+	defer m.close()
+	client := m.server.Client()
+
+	result := checkServerAndGuide(client, m.base(), "")
+	if !result {
+		t.Error("expected checkServerAndGuide to return true for working server")
+	}
+
+	// Test auth required (401)
+	m2 := newMockServer()
+	m2.statusCode = 401
+	m2.response = `{"error":"unauthorized"}`
+	defer m2.close()
+	client2 := m2.server.Client()
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	result2 := checkServerAndGuide(client2, m2.base(), "")
+
+	_ = w.Close()
+	os.Stderr = oldStderr
+	output, _ := io.ReadAll(r)
+
+	if result2 {
+		t.Error("expected checkServerAndGuide to return false for 401")
+	}
+	if !strings.Contains(string(output), "Authentication required") {
+		t.Error("expected auth error message")
 	}
 }

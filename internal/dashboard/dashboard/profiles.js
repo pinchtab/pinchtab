@@ -70,36 +70,20 @@ async function loadProfiles() {
     }
 
     const instanceByName = {};
-    instances.forEach(inst => { instanceByName[inst.name] = inst; });
+    instances.forEach(inst => {
+      const key = inst.profileName || inst.name;
+      if (!key) return;
+      instanceByName[key] = inst;
+    });
 
     Object.keys(profileByName).forEach(k => { delete profileByName[k]; });
     profiles.forEach(p => { profileByName[p.name] = p; });
 
-    const profileNames = new Set(profiles.map(p => p.name));
-    const extraInstances = instances.filter(i => !profileNames.has(i.name) && i.status !== 'stopped');
-
     const grid = document.getElementById('profiles-grid');
     const cards = [];
 
-    if (!health.mode) {
-      // Not in dashboard mode — show a banner instead of the Main card
-      const banner = document.getElementById('bridge-mode-banner');
-      if (banner) banner.style.display = 'block';
-    } else {
-      const banner = document.getElementById('bridge-mode-banner');
-      if (banner) banner.style.display = 'none';
-    }
-
     profiles.forEach(p => {
       cards.push(renderProfileCard(p, instanceByName[p.name] || null));
-    });
-
-    extraInstances.forEach(inst => {
-      cards.push(renderProfileCard({
-        name: inst.name,
-        sizeMB: 0,
-        source: 'instance'
-      }, inst));
     });
 
     if (cards.length === 0) {
@@ -184,19 +168,24 @@ async function doCreateProfile() {
 
   try {
     const body = { name, useWhen };
+    let res;
     if (source) {
-      body.source = source;
-      await fetch('/profiles/import', {
+      body.sourcePath = source;
+      res = await fetch('/profiles/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
     } else {
-      await fetch('/profiles/create', {
+      res = await fetch('/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText || 'create failed');
     }
     loadProfiles();
   } catch (e) { await appAlert('Failed: ' + e.message, 'Error'); }
@@ -254,18 +243,18 @@ function shellQuote(value) {
 function updateLaunchCommand() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
-  const profilePathRaw = document.getElementById('launch-profile-path').value.trim();
   const headless = !!(document.getElementById('launch-headless') && document.getElementById('launch-headless').checked);
-  const profilePath = profilePathRaw || '<PROFILE_PATH>';
-  const statePath = profilePath + '/.pinchtab-state';
-  const prefix = profilePathRaw ? '' : '# replace <PROFILE_PATH> first\n';
-  const cmd = '(test -x ./bin/pinchtab || go build -o ./bin/pinchtab ./cmd/pinchtab) && '
-    + 'BRIDGE_PORT=' + shellQuote(port || '9868') + ' '
-    + 'BRIDGE_PROFILE=' + shellQuote(profilePath) + ' '
-    + 'BRIDGE_STATE_DIR=' + shellQuote(statePath) + ' '
-    + 'BRIDGE_HEADLESS=' + (headless ? 'true' : 'false') + ' BRIDGE_NO_RESTORE=true BRIDGE_NO_DASHBOARD=true '
-    + './bin/pinchtab';
-  document.getElementById('launch-command').value = prefix + cmd;
+  
+  // Prefer profile ID, fall back to name if ID is unavailable.
+  const profileId = profileByName[name] ? profileByName[name].id : name;
+  
+  // Canonical API: POST /instances/start with profileId + mode + port
+  const mode = headless ? 'headless' : 'headed';
+  const curlCmd = 'curl -X POST http://localhost:9867/instances/start '
+    + '-H "Content-Type: application/json" '
+    + '-d \'{\"profileId\":\"' + profileId + '\",\"mode\":\"' + mode + '\",\"port\":\"' + (port || 'auto') + '"}\'';
+  
+  document.getElementById('launch-command').value = curlCmd;
 }
 
 async function copyLaunchCommand() {
@@ -283,6 +272,25 @@ async function copyLaunchCommand() {
   }
 }
 
+async function copyProfileId() {
+  const el = document.getElementById('profile-id');
+  const text = el ? el.value.trim() : '';
+  if (!text || text === '—') {
+    await appAlert('Profile ID not available.', 'Profile');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    await appAlert('Profile ID copied to clipboard.', 'Profile');
+  } catch (e) {
+    if (!el) return;
+    el.focus();
+    el.select();
+    document.execCommand('copy');
+    await appAlert('Profile ID copied (fallback).', 'Profile');
+  }
+}
+
 async function doLaunch() {
   const name = document.getElementById('launch-name').value.trim();
   const port = document.getElementById('launch-port').value.trim();
@@ -295,15 +303,22 @@ async function doLaunch() {
     return;
   }
 
+  // Prefer profile ID, fall back to name if ID is unavailable.
+  const profileId = profileByName[name] ? profileByName[name].id : name;
+
   saveProfilePort(name, port);
   setLaunchHeadlessPref(headless);
   closeLaunchModal();
 
   try {
-    const res = await fetch('/instances/launch', {
+    const res = await fetch('/instances/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, port, headless })
+      body: JSON.stringify({
+        profileId: profileId,
+        mode: headless ? 'headless' : 'headed',
+        port: port
+      })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -318,7 +333,7 @@ async function doLaunch() {
 
 async function deleteProfile(name) {
   if (!await appConfirm('Delete profile "' + name + '"? This removes all data.', '🗑️ Delete Profile')) return;
-  await fetch('/profiles/' + name, { method: 'DELETE' });
+  await fetch('/profiles/' + encodeURIComponent(name), { method: 'DELETE' });
   loadProfiles();
 }
 
@@ -350,7 +365,7 @@ function pollInstanceStatus(id) {
 
 async function stopInstance(id) {
   if (!await appConfirm('Stop instance ' + id + '?', '⏹ Stop Instance')) return;
-  await fetch('/instances/' + id + '/stop', { method: 'POST' });
+  await fetch('/instances/' + encodeURIComponent(id) + '/stop', { method: 'POST' });
   setTimeout(loadProfiles, 1000);
 }
 
@@ -399,8 +414,14 @@ async function viewProfileDetails(name, instanceID) {
 
   // Build tab content: Profile & Live/Logs
   let tabProfile = '';
+  const profileID = profileInfo && profileInfo.id ? String(profileInfo.id) : '';
   
   // Metadata
+  tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Profile ID</label>';
+  tabProfile += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">';
+  tabProfile += '<input id="profile-id" value="' + esc(profileID || '—') + '" readonly style="flex:1;margin-bottom:0;font-family:var(--font-mono);font-size:12px" />';
+  tabProfile += '<button class="secondary" onclick="copyProfileId()" ' + (profileID ? '' : 'disabled') + ' style="padding:8px 12px;white-space:nowrap">Copy ID</button>';
+  tabProfile += '</div>';
   tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Name</label>';
   tabProfile += '<input id="profile-name" value="' + esc(name) + '" style="width:100%;margin-bottom:12px" />';
   tabProfile += '<label style="color:var(--text-muted);font-size:12px;display:block;margin-bottom:4px">Use this profile when</label>';
@@ -413,9 +434,19 @@ async function viewProfileDetails(name, instanceID) {
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">PID: <span style="color:var(--text)">' + esc(String(pid)) + '</span></div>';
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Size: <span style="color:var(--text)">' + (profileInfo.sizeMB ? profileInfo.sizeMB.toFixed(0) + ' MB' : '—') + '</span></div>';
   tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Source: <span style="color:var(--text)">' + esc(profileInfo.source || '—') + '</span></div>';
-  if (profileInfo.path) {
-    tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Path: <span style="color:var(--text);font-size:11px;font-family:var(--font-mono)">' + esc(profileInfo.path) + '</span></div>';
+  
+  // Path section with existence check
+  let pathValue = profileInfo.path || '(not created)';
+  let pathStyle = 'font-size:11px;font-family:var(--font-mono)';
+  if (!profileInfo.pathExists) {
+    pathStyle += ';color:var(--error-light);opacity:0.7';
+    if (!profileInfo.path) {
+      pathValue = '(profile directory not created)';
+    } else {
+      pathValue = profileInfo.path + ' (not found)';
+    }
   }
+  tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Path: <span style="color:var(--text);' + pathStyle + '">' + esc(pathValue) + '</span></div>';
   if (profileInfo.chromeProfileName) {
     tabProfile += '<div style="font-size:13px;color:var(--text-subtle);margin-bottom:4px">Chrome: <span style="color:var(--text)">' + esc(profileInfo.chromeProfileName) + '</span></div>';
   }

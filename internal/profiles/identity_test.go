@@ -9,13 +9,11 @@ import (
 func TestReadChromeProfileIdentity(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// 1. Test empty profile
 	name, email, accName, hasAcc := readChromeProfileIdentity(tmpDir)
 	if name != "" || email != "" || accName != "" || hasAcc != false {
 		t.Errorf("expected empty results for empty dir, got %q, %q, %q, %v", name, email, accName, hasAcc)
 	}
 
-	// 2. Test with Local State only
 	localStateDir := tmpDir
 	localStatePath := filepath.Join(localStateDir, "Local State")
 	localStateContent := `{
@@ -40,7 +38,6 @@ func TestReadChromeProfileIdentity(t *testing.T) {
 		t.Errorf("Local State parsing failed: got %q, %q, %q, %v", name, email, accName, hasAcc)
 	}
 
-	// 3. Test with Preferences (should override/supplement)
 	prefsDir := filepath.Join(tmpDir, "Default")
 	if err := os.MkdirAll(prefsDir, 0755); err != nil {
 		t.Fatal(err)
@@ -60,7 +57,6 @@ func TestReadChromeProfileIdentity(t *testing.T) {
 	}
 
 	name, email, accName, hasAcc = readChromeProfileIdentity(tmpDir)
-	// email and accName should come from Preferences if available
 	if name != "Work Profile" || email != "pref@example.com" || accName != "Pref User" || !hasAcc {
 		t.Errorf("Preferences parsing/override failed: got %q, %q, %q, %v", name, email, accName, hasAcc)
 	}

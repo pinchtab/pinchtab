@@ -42,6 +42,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	dash := dashboard.NewDashboard(nil)
 	orch := orchestrator.NewOrchestrator(profilesDir)
 	orch.SetProfileManager(profMgr)
+	orch.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
 	dash.SetInstanceLister(orch)
 
 	mux := http.NewServeMux()
@@ -54,12 +55,25 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		web.JSON(w, 200, map[string]string{"status": "ok", "mode": "dashboard"})
 	})
 
+	// Special handler for /tabs - return empty list if no instances
+	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
+		target := orch.FirstRunningURL()
+		if target == "" {
+			// No instances running, return empty tabs list
+			web.JSON(w, 200, map[string]interface{}{"tabs": []interface{}{}})
+			return
+		}
+		proxyRequest(w, r, target+"/tabs")
+	})
+
 	proxyEndpoints := []string{
-		"/tabs", "/snapshot", "/screenshot", "/text",
-		"/navigate", "/action", "/actions", "/evaluate",
-		"/tab", "/tab/lock", "/tab/unlock",
-		"/cookies", "/download", "/upload", "/stealth/status", "/fingerprint/rotate",
-		"/screencast", "/screencast/tabs",
+		"GET /snapshot", "GET /screenshot", "GET /text",
+		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
+		"GET /cookies", "POST /cookies",
+		"GET /download", "POST /upload",
+		"GET /stealth/status", "POST /fingerprint/rotate",
+		"GET /screencast", "GET /screencast/tabs",
 	}
 	for _, ep := range proxyEndpoints {
 		endpoint := ep
@@ -69,7 +83,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 				web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
 				return
 			}
-			proxyRequest(w, r, target+endpoint)
+			// Extract path from endpoint (remove method prefix)
+			path := r.URL.Path
+			proxyRequest(w, r, target+path)
 		})
 	}
 
@@ -103,27 +119,36 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "yes")
 	if autoLaunch {
 		defaultProfile := os.Getenv("PINCHTAB_DEFAULT_PROFILE")
+		defaultProfileExplicit := defaultProfile != ""
 		defaultPort := os.Getenv("PINCHTAB_DEFAULT_PORT")
-		if defaultPort == "" {
-			defaultPort = "9867"
-		}
-		if defaultProfile == "" {
-			defaultProfile = "default"
-		}
-
-		if err := os.MkdirAll(filepath.Join(profilesDir, defaultProfile, "Default"), 0755); err != nil {
-			slog.Warn("failed to create default profile dir", "err", err)
-		}
 
 		go func() {
 			time.Sleep(500 * time.Millisecond)
+			profileToLaunch := defaultProfile
+			// If profile is not explicitly configured, prefer an existing profile.
+			// Only synthesize "default" when nothing exists yet.
+			if !defaultProfileExplicit {
+				list, err := profMgr.List()
+				if err != nil {
+					slog.Warn("auto-launch profile list failed", "err", err)
+				}
+				if len(list) > 0 {
+					profileToLaunch = list[0].Name
+				} else {
+					profileToLaunch = "default"
+					if err := os.MkdirAll(filepath.Join(profilesDir, profileToLaunch, "Default"), 0755); err != nil {
+						slog.Warn("failed to create auto-launch profile dir", "profile", profileToLaunch, "err", err)
+					}
+				}
+			}
+
 			headlessDefault := os.Getenv("PINCHTAB_HEADED") == ""
-			inst, err := orch.Launch(defaultProfile, defaultPort, headlessDefault)
+			inst, err := orch.Launch(profileToLaunch, defaultPort, headlessDefault)
 			if err != nil {
-				slog.Warn("auto-launch failed", "err", err)
+				slog.Warn("auto-launch failed", "profile", profileToLaunch, "err", err)
 				return
 			}
-			slog.Info("auto-launched default instance", "id", inst.ID, "port", defaultPort, "headless", headlessDefault)
+			slog.Info("auto-launched instance", "profile", profileToLaunch, "id", inst.ID, "port", inst.Port, "headless", headlessDefault)
 		}()
 	} else {
 		slog.Info("dashboard auto-launch disabled", "hint", "set PINCHTAB_AUTO_LAUNCH=1 to enable")
@@ -158,6 +183,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		orch.ForceShutdown()
 		os.Exit(130)
 	}()
+
+	// Periodic health check: log tabs and Chrome process info every 30 seconds
+	go periodicHealthCheck(orch)
 
 	slog.Info("dashboard ready", "url", fmt.Sprintf("http://localhost:%s/dashboard", dashPort))
 
@@ -228,4 +256,40 @@ func isWebSocketUpgrade(r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// periodicHealthCheck logs instance and Chrome process status every 30 seconds
+func periodicHealthCheck(orch *orchestrator.Orchestrator) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Get instance information
+		instances := orch.List()
+		if len(instances) == 0 {
+			continue // No instances running, skip logging
+		}
+
+		// Count instances by headedness
+		headedCount := 0
+		headlessCount := 0
+
+		for _, inst := range instances {
+			if inst.Headless {
+				headlessCount++
+			} else {
+				headedCount++
+			}
+		}
+
+		// Get tabs across all instances
+		allTabs := orch.AllTabs()
+
+		slog.Info("health check",
+			"instances", len(instances),
+			"headed", headedCount,
+			"headless", headlessCount,
+			"total_tabs", len(allTabs),
+		)
+	}
 }

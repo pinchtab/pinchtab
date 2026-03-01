@@ -16,7 +16,53 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// HandleSnapshot returns the accessibility tree of a tab.
+//
+// @Endpoint GET /snapshot
+// @Description Returns the page structure with clickable elements, form fields, and text content
+//
+// @Param tabId string query Tab ID (required)
+// @Param filter string query Filter type: "interactive" for clickable/inputs only, "all" for everything (optional, default: "all")
+// @Param interactive bool query Alias for filter=interactive (optional)
+// @Param compact bool query Compact output (shorter ref names) (optional, default: false)
+// @Param depth int query Max nesting depth (optional, default: -1 for full tree)
+// @Param text bool query Include text content (optional, default: true)
+// @Param format string query Output format: "json" or "yaml" (optional, default: "json")
+// @Param diff bool query Include diff with previous snapshot (optional, default: false)
+// @Param output string query Write to file instead of response (optional)
+//
+// @Response 200 application/json Returns accessibility tree with refs
+// @Response 400 application/json Invalid tabId or parameters
+// @Response 404 application/json Tab not found
+//
+// @Example curl all elements:
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123"
+//
+// @Example curl interactive only:
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive"
+//
+// @Example curl compact:
+//
+//	curl "http://localhost:9867/snapshot?tabId=abc123&filter=interactive&compact=true"
+//
+// @Example cli:
+//
+//	pinchtab snap -i -c
+//
+// @Example python:
+//
+//	import requests
+//	r = requests.get("http://localhost:9867/snapshot", params={"tabId": "abc123", "filter": "interactive"})
+//	tree = r.json()
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	filter := r.URL.Query().Get("filter")
 	doDiff := r.URL.Query().Get("diff") == "true"
@@ -314,4 +360,25 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 		web.JSON(w, 200, resp)
 	}
+}
+
+// HandleTabSnapshot returns snapshot for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/snapshot
+func (h *Handlers) HandleTabSnapshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleSnapshot(w, req)
 }

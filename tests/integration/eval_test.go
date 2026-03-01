@@ -9,7 +9,10 @@ import (
 // E1: Simple eval
 func TestEval_Simple(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpPost(t, "/evaluate", map[string]string{"expression": "1+1"})
+	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
+		"expression": "1+1",
+	})
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -22,7 +25,10 @@ func TestEval_Simple(t *testing.T) {
 // E2: DOM eval
 func TestEval_DOM(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpPost(t, "/evaluate", map[string]string{"expression": "document.title"})
+	code, body := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
+		"expression": "document.title",
+	})
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}

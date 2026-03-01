@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,7 +19,43 @@ import (
 
 const maxBodySize = 1 << 20
 
+// HandleNavigate navigates a tab to a URL or creates a new tab.
+//
+// @Endpoint POST /navigate
+// @Description Navigate to a URL in an existing tab or create a new tab and navigate
+//
+// @Param tabId string body Tab ID to navigate in (optional - creates new if omitted)
+// @Param url string body URL to navigate to (required)
+// @Param newTab bool body Force create new tab (optional, default: false)
+// @Param waitTitle float64 body Wait for title change (ms) (optional, default: 0)
+// @Param timeout float64 body Timeout for navigation (ms) (optional, default: 30000)
+//
+// @Response 200 application/json Returns {tabId, url, title}
+// @Response 400 application/json Invalid URL or parameters
+// @Response 500 application/json Chrome error
+//
+// @Example curl navigate new:
+//
+//	curl -X POST http://localhost:9867/navigate \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"url":"https://example.com"}'
+//
+// @Example curl navigate existing:
+//
+//	curl -X POST http://localhost:9867/navigate \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","url":"https://google.com"}'
+//
+// @Example cli:
+//
+//	pinchtab nav https://example.com
 func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req struct {
 		TabID       string  `json:"tabId"`
 		URL         string  `json:"url"`
@@ -33,6 +73,12 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	if req.URL == "" {
 		web.Error(w, 400, fmt.Errorf("url required"))
 		return
+	}
+
+	// Default to creating new tab (API design: /navigate always creates new tab)
+	// Unless explicitly reusing an existing tab by specifying TabID
+	if req.TabID == "" {
+		req.NewTab = true
 	}
 
 	titleWait := time.Duration(0)
@@ -79,7 +125,17 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
-		newTargetID, newCtx, _, err := h.Bridge.CreateTab(req.URL)
+		// Block dangerous/unsupported schemes; allow bare hostnames (e.g. "example.com")
+		// which Chrome handles gracefully by prepending https://.
+		if parsed, err := url.Parse(req.URL); err == nil && parsed.Scheme != "" {
+			blocked := parsed.Scheme == "javascript" || parsed.Scheme == "vbscript" || parsed.Scheme == "data"
+			if blocked {
+				web.Error(w, 400, fmt.Errorf("invalid URL scheme: %s", parsed.Scheme))
+				return
+			}
+		}
+		// CreateTab returns hash-based tab ID directly (e.g., "tab_XXXXXXXX")
+		hashTabID, newCtx, _, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("new tab: %w", err))
 			return
@@ -93,18 +149,21 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 		}
 
+		if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
+			code := 500
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
+				code = 400
+			}
+			web.Error(w, code, fmt.Errorf("navigate: %w", err))
+			return
+		}
+
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title := bridge.WaitForTitle(tCtx, titleWait)
 
-		targetID := ""
-		if c := chromedp.FromContext(newCtx); c != nil && c.Target != nil {
-			targetID = string(c.Target.TargetID)
-		} else {
-			targetID = newTargetID
-		}
-
-		web.JSON(w, 200, map[string]any{"tabId": targetID, "url": url, "title": title})
+		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
 	}
 
@@ -141,7 +200,54 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
 	title := bridge.WaitForTitle(tCtx, titleWait)
 
-	web.JSON(w, 200, map[string]any{"url": url, "title": title})
+	web.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
+}
+
+// HandleTabNavigate navigates an existing tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/navigate
+func (h *Handlers) HandleTabNavigate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	body := map[string]any{}
+	if r.Body != nil {
+		err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&body)
+		if err != nil && !errors.Is(err, io.EOF) {
+			web.Error(w, 400, fmt.Errorf("decode: %w", err))
+			return
+		}
+	}
+
+	if rawTabID, ok := body["tabId"]; ok {
+		if provided, ok := rawTabID.(string); !ok || provided == "" {
+			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			return
+		} else if provided != tabID {
+			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			return
+		}
+	}
+
+	// Path tab ID is canonical for this endpoint and always navigates existing tab.
+	body["tabId"] = tabID
+	body["newTab"] = false
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(bytes.NewReader(payload))
+	req.ContentLength = int64(len(payload))
+	req.Header = r.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	h.HandleNavigate(w, req)
 }
 
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +283,49 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, map[string]any{"result": result})
 }
 
+// HandleTabEvaluate runs JavaScript in a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/evaluate
+func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	body := map[string]any{}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
+	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+
+	if rawTabID, ok := body["tabId"]; ok {
+		if provided, ok := rawTabID.(string); !ok || provided == "" {
+			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			return
+		} else if provided != tabID {
+			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			return
+		}
+	}
+
+	body["tabId"] = tabID
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(bytes.NewReader(payload))
+	req.ContentLength = int64(len(payload))
+	req.Header = r.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	h.HandleEvaluate(w, req)
+}
+
 const (
 	tabActionNew   = "new"
 	tabActionClose = "close"
@@ -195,15 +344,27 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case tabActionNew:
-		newTargetID, ctx, _, err := h.Bridge.CreateTab(req.URL)
+		// CreateTab returns hash-based tab ID directly (e.g., "tab_XXXXXXXX")
+		hashTabID, ctx, _, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, err)
 			return
 		}
 
+		if req.URL != "" && req.URL != "about:blank" {
+			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
+			defer tCancel()
+			if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
+				_ = h.Bridge.CloseTab(hashTabID)
+				web.Error(w, 500, fmt.Errorf("navigate: %w", err))
+				return
+			}
+		}
+
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
-		web.JSON(w, 200, map[string]any{"tabId": newTargetID, "url": curURL, "title": title})
+
+		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": curURL, "title": title})
 
 	case tabActionClose:
 		if req.TabID == "" {

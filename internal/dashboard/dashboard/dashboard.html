@@ -20,19 +20,26 @@
   <div class="status"><span class="dot"></span>Live</div>
   <div class="view-toggle">
     <button class="view-btn active" data-view="profiles" onclick="switchView('profiles')">Profiles</button>
+    <button class="view-btn" data-view="instances" onclick="switchView('instances')">Instances</button>
     <button class="view-btn" data-view="feed" onclick="switchView('feed')">Agents</button>
     <button class="view-btn" data-view="settings" onclick="switchView('settings')">Settings</button>
   </div>
 </header>
 
 
+<div id="instances-view" class="instances-view" style="display:none">
+  <div class="inst-toolbar">
+    <button onclick="loadInstances()" class="refresh-btn">Refresh</button>
+  </div>
+  <div id="instances-grid" class="instances-grid">
+    <div class="empty-state"><div class="crab">🦀</div>No running instances.<br>Launch a profile to start one.</div>
+  </div>
+</div>
+
 <div id="profiles-view" class="instances-view" style="display:flex">
   <div class="inst-toolbar">
     <button onclick="showCreateProfileModal()" class="launch-btn">New Profile</button>
     <button onclick="loadProfiles()" class="refresh-btn">Refresh</button>
-  </div>
-  <div id="bridge-mode-banner" class="bridge-mode-banner" style="display:none">
-    ⚠️ Running in <strong>bridge mode</strong> — profile management requires <code>BRIDGE_MODE=dashboard</code>
   </div>
   <div id="profiles-grid" class="instances-grid">
     <div class="empty-state"><div class="crab">🦀</div>No profiles yet.<br>Click <b>+ New Profile</b> to create one.</div>
@@ -46,7 +53,7 @@
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Name</label>
     <input id="create-name" placeholder="e.g. personal, work, scraping" />
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Use this profile when (helps agents pick the right profile)</label>
-    <textarea id="create-usewhen" placeholder="e.g. I need to access Gmail for the team account" style="min-height:60px"></textarea>
+    <textarea id="create-usewhen" placeholder="e.g. I need to access Gmail for the team account" style="width:100%;max-width:100%;display:block;min-height:60px;resize:vertical"></textarea>
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Import from (optional — Chrome user data path)</label>
     <input id="create-source" placeholder="e.g. /Users/you/Library/Application Support/Google/Chrome" />
     <div class="btn-row" style="margin-top:16px">
@@ -220,6 +227,7 @@
 <script src="/dashboard/settings.js"></script>
 <script src="/dashboard/screencast.js"></script>
 <script src="/dashboard/profiles.js"></script>
+<script src="/dashboard/instances.js"></script>
 <script src="/dashboard/app.js"></script>
 
 </body>

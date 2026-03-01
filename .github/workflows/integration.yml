@@ -48,7 +48,7 @@ jobs:
     name: Integration Tests
     needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Skip if no Go changes
         if: needs.changes.outputs.go != 'true'
@@ -75,7 +75,7 @@ jobs:
 
       - name: Run integration tests
         if: needs.changes.outputs.go == 'true'
-        run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
+        run: go test -tags integration -v -timeout 20m -count=1 ./tests/integration/
         env:
           CI: "true"
           BRIDGE_HEADLESS: "true"

@@ -1,0 +1,29 @@
+name: Documentation Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  docs-validate:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check docs.json references
+        run: |
+          echo "🔍 Validating docs.json..."
+          ./scripts/check-docs-json.sh
+        shell: bash

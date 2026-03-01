@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 )
 
-// copyDir recursively copies src to dst, preserving permissions.
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

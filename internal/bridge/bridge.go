@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/uameta"
 )
 
@@ -16,6 +18,7 @@ type TabEntry struct {
 	Ctx      context.Context
 	Cancel   context.CancelFunc
 	Accessed bool
+	CDPID    string // raw CDP target ID; set when this entry is a hash-alias
 }
 
 type RefCache struct {
@@ -24,25 +27,36 @@ type RefCache struct {
 }
 
 type Bridge struct {
-	AllocCtx   context.Context
-	BrowserCtx context.Context
-	Config     *config.RuntimeConfig
+	AllocCtx      context.Context
+	AllocCancel   context.CancelFunc
+	BrowserCtx    context.Context
+	BrowserCancel context.CancelFunc
+	Config        *config.RuntimeConfig
+	IdMgr         *idutil.Manager
 	*TabManager
 	StealthScript string
 	Actions       map[string]ActionFunc
 	Locks         *LockManager
+
+	// Lazy initialization
+	initMu      sync.Mutex
+	initialized bool
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
+	idMgr := idutil.NewManager()
 	b := &Bridge{
 		AllocCtx:   allocCtx,
 		BrowserCtx: browserCtx,
 		Config:     cfg,
+		IdMgr:      idMgr,
 	}
-	if cfg != nil {
-		b.TabManager = NewTabManager(browserCtx, cfg, b.tabSetup)
+	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
+	if cfg != nil && browserCtx != nil {
+		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
 	}
 	b.Locks = NewLockManager()
+	b.InitActionRegistry()
 	return b
 }
 
@@ -84,6 +98,65 @@ func (b *Bridge) Unlock(tabID, owner string) error {
 
 func (b *Bridge) TabLockInfo(tabID string) *LockInfo {
 	return b.Locks.Get(tabID)
+}
+
+func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	b.initMu.Lock()
+	defer b.initMu.Unlock()
+
+	if b.initialized && b.BrowserCtx != nil {
+		return nil // Already initialized
+	}
+
+	if b.BrowserCtx != nil {
+		return nil // Already has browser context
+	}
+
+	// Initialize Chrome if not already done
+	allocCtx, allocCancel, browserCtx, browserCancel, err := InitChrome(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize chrome: %w", err)
+	}
+
+	b.AllocCtx = allocCtx
+	b.AllocCancel = allocCancel
+	b.BrowserCtx = browserCtx
+	b.BrowserCancel = browserCancel
+	b.initialized = true
+
+	// Initialize TabManager now that browser is ready
+	if b.Config != nil && b.TabManager == nil {
+		if b.IdMgr == nil {
+			b.IdMgr = idutil.NewManager()
+		}
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+	}
+
+	// Ensure action registry is populated (idempotent)
+	if b.Actions == nil {
+		b.InitActionRegistry()
+	}
+
+	return nil
+}
+
+func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) {
+	b.initMu.Lock()
+	defer b.initMu.Unlock()
+
+	b.AllocCtx = allocCtx
+	b.AllocCancel = allocCancel
+	b.BrowserCtx = browserCtx
+	b.BrowserCancel = browserCancel
+	b.initialized = true
+
+	// Now initialize TabManager with the browser context
+	if b.Config != nil && b.TabManager == nil {
+		if b.IdMgr == nil {
+			b.IdMgr = idutil.NewManager()
+		}
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+	}
 }
 
 func (b *Bridge) BrowserContext() context.Context {

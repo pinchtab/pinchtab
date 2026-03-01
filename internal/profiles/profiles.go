@@ -1,23 +1,39 @@
 package profiles
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 )
 
+var idMgr = idutil.NewManager()
+
 func profileID(name string) string {
-	h := sha256.Sum256([]byte(name))
-	return hex.EncodeToString(h[:6])
+	return idMgr.ProfileID(name)
+}
+
+// ValidateProfileName checks that a profile name is safe and doesn't contain
+// path traversal characters like "..", "/", or "\".
+func ValidateProfileName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("profile name cannot contain '..'")
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("profile name cannot contain '/' or '\\'")
+	}
+	return nil
 }
 
 type ProfileManager struct {
@@ -28,6 +44,7 @@ type ProfileManager struct {
 
 type ProfileMeta struct {
 	ID          string `json:"id,omitempty"`
+	Name        string `json:"name,omitempty"`
 	UseWhen     string `json:"useWhen,omitempty"`
 	Description string `json:"description,omitempty"`
 }
@@ -55,10 +72,48 @@ func NewProfileManager(baseDir string) *ProfileManager {
 	}
 }
 
+func (pm *ProfileManager) findProfileDirByName(name string) (string, error) {
+	direct := filepath.Join(pm.baseDir, name)
+	if info, err := os.Stat(direct); err == nil && info.IsDir() {
+		return direct, nil
+	}
+
+	entries, err := os.ReadDir(pm.baseDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := filepath.Join(pm.baseDir, entry.Name())
+		if entry.Name() == profileID(name) {
+			return dir, nil
+		}
+		meta := readProfileMeta(dir)
+		if meta.Name == name {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("profile %q not found", name)
+}
+
+func (pm *ProfileManager) profileDir(name string) (string, error) {
+	if err := ValidateProfileName(name); err != nil {
+		return "", err
+	}
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.findProfileDirByName(name)
+}
+
 func (pm *ProfileManager) Exists(name string) bool {
-	dir := filepath.Join(pm.baseDir, name)
-	info, err := os.Stat(dir)
-	return err == nil && info.IsDir()
+	_, err := pm.profileDir(name)
+	return err == nil
+}
+
+func (pm *ProfileManager) ProfilePath(name string) (string, error) {
+	return pm.profileDir(name)
 }
 
 func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
@@ -70,7 +125,7 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		return nil, err
 	}
 
-	var profiles []bridge.ProfileInfo
+	profiles := []bridge.ProfileInfo{}
 	skip := map[string]bool{"bin": true, "profiles": true}
 	for _, entry := range entries {
 		if !entry.IsDir() || skip[entry.Name()] {
@@ -84,10 +139,21 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 		if _, err := os.Stat(filepath.Join(pm.baseDir, entry.Name(), "Default")); err != nil {
 			continue
 		}
+
+		isTemporary := strings.HasPrefix(info.Name, "instance-")
+
+		pathExists := true
+		if _, err := os.Stat(info.Path); err != nil {
+			pathExists = false
+		}
+
 		profiles = append(profiles, bridge.ProfileInfo{
 			ID:                info.ID,
 			Name:              info.Name,
+			Path:              info.Path,
+			PathExists:        pathExists,
 			Created:           info.CreatedAt,
+			Temporary:         isTemporary,
 			DiskUsage:         int64(info.SizeMB * 1024 * 1024),
 			Source:            info.Source,
 			ChromeProfileName: info.ChromeProfileName,
@@ -102,8 +168,11 @@ func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 	return profiles, nil
 }
 
-func (pm *ProfileManager) profileInfo(name string) (ProfileDetailedInfo, error) {
-	dir := filepath.Join(pm.baseDir, name)
+func (pm *ProfileManager) profileInfo(dirName string) (ProfileDetailedInfo, error) {
+	if err := ValidateProfileName(dirName); err != nil {
+		return ProfileDetailedInfo{}, err
+	}
+	dir := filepath.Join(pm.baseDir, dirName)
 	fi, err := os.Stat(dir)
 	if err != nil {
 		return ProfileDetailedInfo{}, err
@@ -117,15 +186,27 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileDetailedInfo, error) 
 
 	chromeProfileName, accountEmail, accountName, hasAccount := readChromeProfileIdentity(dir)
 	meta := readProfileMeta(dir)
+	profileName := meta.Name
+	if profileName == "" {
+		profileName = dirName
+	}
 
+	changed := false
 	if meta.ID == "" {
-		meta.ID = profileID(name)
+		meta.ID = profileID(profileName)
+		changed = true
+	}
+	if meta.Name == "" {
+		meta.Name = profileName
+		changed = true
+	}
+	if changed {
 		_ = writeProfileMeta(dir, meta)
 	}
 
 	return ProfileDetailedInfo{
 		ID:                meta.ID,
-		Name:              name,
+		Name:              profileName,
 		Path:              dir,
 		CreatedAt:         fi.ModTime(),
 		SizeMB:            size,
@@ -140,10 +221,16 @@ func (pm *ProfileManager) profileInfo(name string) (ProfileDetailedInfo, error) 
 }
 
 func (pm *ProfileManager) Import(name, sourcePath string) error {
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	dest := filepath.Join(pm.baseDir, name)
+	if _, err := pm.findProfileDirByName(name); err == nil {
+		return fmt.Errorf("profile %q already exists", name)
+	}
+	dest := filepath.Join(pm.baseDir, profileID(name))
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("profile %q already exists", name)
 	}
@@ -154,7 +241,6 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		}
 	}
 
-	// Validate source path exists and is a directory
 	srcInfo, err := os.Stat(sourcePath)
 	if err != nil {
 		return fmt.Errorf("source path invalid: %w", err)
@@ -171,7 +257,10 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0600); err != nil {
 		slog.Warn("failed to write import marker", "err", err)
 	}
-	return nil
+	return writeProfileMeta(dest, ProfileMeta{
+		ID:   profileID(name),
+		Name: name,
+	})
 }
 
 func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMeta) error {
@@ -181,19 +270,34 @@ func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMe
 	if meta.ID == "" {
 		meta.ID = profileID(name)
 	}
-	dest := filepath.Join(pm.baseDir, name)
+	if meta.Name == "" {
+		meta.Name = name
+	}
+	dest := filepath.Join(pm.baseDir, profileID(name))
 	return writeProfileMeta(dest, meta)
 }
 
 func (pm *ProfileManager) Create(name string) error {
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	dest := filepath.Join(pm.baseDir, name)
+	if _, err := pm.findProfileDirByName(name); err == nil {
+		return fmt.Errorf("profile %q already exists", name)
+	}
+	dest := filepath.Join(pm.baseDir, profileID(name))
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("profile %q already exists", name)
 	}
-	return os.MkdirAll(filepath.Join(dest, "Default"), 0755)
+	if err := os.MkdirAll(filepath.Join(dest, "Default"), 0755); err != nil {
+		return err
+	}
+	return writeProfileMeta(dest, ProfileMeta{
+		ID:   profileID(name),
+		Name: name,
+	})
 }
 
 func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {
@@ -203,17 +307,23 @@ func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {
 	if meta.ID == "" {
 		meta.ID = profileID(name)
 	}
-	dest := filepath.Join(pm.baseDir, name)
+	if meta.Name == "" {
+		meta.Name = name
+	}
+	dest := filepath.Join(pm.baseDir, profileID(name))
 	return writeProfileMeta(dest, meta)
 }
 
 func (pm *ProfileManager) Reset(name string) error {
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	dir := filepath.Join(pm.baseDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("profile %q not found", name)
+	dir, err := pm.findProfileDirByName(name)
+	if err != nil {
+		return err
 	}
 
 	nukeDirs := []string{
@@ -251,12 +361,15 @@ func (pm *ProfileManager) Reset(name string) error {
 }
 
 func (pm *ProfileManager) Delete(name string) error {
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	dir := filepath.Join(pm.baseDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("profile %q not found", name)
+	dir, err := pm.findProfileDirByName(name)
+	if err != nil {
+		return err
 	}
 	return os.RemoveAll(dir)
 }
@@ -292,12 +405,19 @@ func (pm *ProfileManager) UpdateMeta(name string, meta map[string]string) error 
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	dir := filepath.Join(pm.baseDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("profile %q not found", name)
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
+
+	dir, err := pm.findProfileDirByName(name)
+	if err != nil {
+		return err
 	}
 
 	existing := readProfileMeta(dir)
+	if existing.Name == "" {
+		existing.Name = name
+	}
 
 	if useWhen, ok := meta["useWhen"]; ok {
 		existing.UseWhen = useWhen
@@ -321,8 +441,18 @@ func (pm *ProfileManager) FindByID(id string) (string, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		meta := readProfileMeta(filepath.Join(pm.baseDir, entry.Name()))
+		dir := filepath.Join(pm.baseDir, entry.Name())
+		meta := readProfileMeta(dir)
 		if meta.ID == id {
+			if meta.Name != "" {
+				return meta.Name, nil
+			}
+			return entry.Name(), nil
+		}
+		if entry.Name() == id && meta.Name != "" {
+			return meta.Name, nil
+		}
+		if meta.ID == "" && profileID(entry.Name()) == id {
 			return entry.Name(), nil
 		}
 	}

@@ -79,3 +79,60 @@ func TestHandleTabLockValidation(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleTabLockByID(t *testing.T) {
+	b := bridge.New(context.Background(), context.Background(), nil)
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	body, _ := json.Marshal(map[string]any{"owner": "agent-a", "timeoutSec": 10})
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/tabs/t1/lock", bytes.NewReader(body))
+	r.SetPathValue("id", "t1")
+	h.HandleTabLockByID(w, r)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleTabLockByID_Mismatch(t *testing.T) {
+	b := bridge.New(context.Background(), context.Background(), nil)
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	body, _ := json.Marshal(map[string]any{"tabId": "other", "owner": "agent-a"})
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/tabs/t1/lock", bytes.NewReader(body))
+	r.SetPathValue("id", "t1")
+	h.HandleTabLockByID(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTabUnlockByID(t *testing.T) {
+	b := bridge.New(context.Background(), context.Background(), nil)
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+	_ = b.Lock("t1", "agent-a", 10*time.Minute)
+
+	body, _ := json.Marshal(map[string]any{"owner": "agent-a"})
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/tabs/t1/unlock", bytes.NewReader(body))
+	r.SetPathValue("id", "t1")
+	h.HandleTabUnlockByID(w, r)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandleTabUnlockByID_Mismatch(t *testing.T) {
+	b := bridge.New(context.Background(), context.Background(), nil)
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	body, _ := json.Marshal(map[string]any{"tabId": "other", "owner": "agent-a"})
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/tabs/t1/unlock", bytes.NewReader(body))
+	r.SetPathValue("id", "t1")
+	h.HandleTabUnlockByID(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}

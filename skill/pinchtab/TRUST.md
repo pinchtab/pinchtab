@@ -32,7 +32,7 @@ Binaries are built automatically from tagged commits via GitHub Actions (publicl
 
 ## Open Source
 
-- **Source**: https://github.com/pinchtab/pinchtab (Apache 2.0)
+- **Source**: https://github.com/pinchtab/pinchtab (MIT)
 - **Releases**: https://github.com/pinchtab/pinchtab/releases
 - **Latest**: v0.7.0 (Feb 2026)
 

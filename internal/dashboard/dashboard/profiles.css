@@ -70,6 +70,18 @@
     overflow-y: auto;
     align-content: start;
   }
+  .instances-grid .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+  }
+  .instances-grid .empty-state .crab {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
   .inst-card {
     background: var(--bg-card);
     border: 1px solid var(--border);

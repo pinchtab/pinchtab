@@ -5,20 +5,24 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /profiles", pm.handleList)
+	mux.HandleFunc("POST /profiles", pm.handleCreate)
 	mux.HandleFunc("POST /profiles/create", pm.handleCreate)
+	mux.HandleFunc("GET /profiles/{id}", pm.handleGetByID)
+
 	mux.HandleFunc("POST /profiles/import", pm.handleImport)
 	mux.HandleFunc("PATCH /profiles/meta", pm.handleUpdateMeta)
-	mux.HandleFunc("DELETE /profiles/{name}", pm.handleDeleteByPath)
-	mux.HandleFunc("PATCH /profiles/{name}", pm.handleUpdateByPath)
-	mux.HandleFunc("POST /profiles/{name}/reset", pm.handleResetByPath)
-	mux.HandleFunc("GET /profiles/{name}/logs", pm.handleLogsByPath)
-	mux.HandleFunc("GET /profiles/{name}/analytics", pm.handleAnalyticsByPath)
+	mux.HandleFunc("POST /profiles/{id}/reset", pm.handleResetByIDOrName)
+	mux.HandleFunc("GET /profiles/{id}/logs", pm.handleLogsByIDOrName)
+	mux.HandleFunc("GET /profiles/{id}/analytics", pm.handleAnalyticsByIDOrName)
+	mux.HandleFunc("DELETE /profiles/{id}", pm.handleDeleteByID)
+	mux.HandleFunc("PATCH /profiles/{id}", pm.handleUpdateByIDOrName)
 }
 
 func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +31,37 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 500, err)
 		return
 	}
+
+	showAll := r.URL.Query().Get("all") == "true"
+	if !showAll {
+		filtered := []map[string]any{}
+		for _, p := range profiles {
+			if !p.Temporary {
+				sizeMB := float64(p.DiskUsage) / (1024 * 1024)
+				filtered = append(filtered, map[string]any{
+					"id":                p.ID,
+					"name":              p.Name,
+					"path":              p.Path,
+					"pathExists":        p.PathExists,
+					"created":           p.Created,
+					"lastUsed":          p.LastUsed,
+					"diskUsage":         p.DiskUsage,
+					"sizeMB":            sizeMB,
+					"running":           p.Running,
+					"source":            p.Source,
+					"chromeProfileName": p.ChromeProfileName,
+					"accountEmail":      p.AccountEmail,
+					"accountName":       p.AccountName,
+					"hasAccount":        p.HasAccount,
+					"useWhen":           p.UseWhen,
+					"description":       p.Description,
+				})
+			}
+		}
+		web.JSON(w, 200, filtered)
+		return
+	}
+
 	web.JSON(w, 200, profiles)
 }
 
@@ -51,10 +86,23 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := pm.CreateWithMeta(req.Name, meta); err != nil {
-		web.Error(w, 500, err)
+		// Validation errors → 400, already exists → 409, others → 500
+		if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
+			web.Error(w, 400, err)
+		} else if strings.Contains(err.Error(), "already exists") {
+			web.Error(w, 409, err)
+		} else {
+			web.Error(w, 500, err)
+		}
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "created", "name": req.Name})
+
+	generatedID := profileID(req.Name)
+	web.JSON(w, 200, map[string]any{
+		"status": "created",
+		"id":     generatedID,
+		"name":   req.Name,
+	})
 }
 
 func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
@@ -115,19 +163,87 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 	web.JSON(w, 200, map[string]string{"status": "updated", "name": req.Name})
 }
 
-// Path-param compat handlers for dashboard JS
+func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
 
-func (pm *ProfileManager) handleDeleteByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+	profiles, err := pm.List()
+	if err != nil {
+		web.Error(w, 500, err)
+		return
+	}
+
+	var foundProfile map[string]any
+
+	for _, p := range profiles {
+		if p.ID != id && p.Name != id {
+			continue
+		}
+		foundProfile = map[string]any{
+			"id":                p.ID,
+			"name":              p.Name,
+			"path":              p.Path,
+			"pathExists":        p.PathExists,
+			"created":           p.Created,
+			"diskUsage":         p.DiskUsage,
+			"sizeMB":            float64(p.DiskUsage) / (1024 * 1024),
+			"source":            p.Source,
+			"chromeProfileName": p.ChromeProfileName,
+			"accountEmail":      p.AccountEmail,
+			"accountName":       p.AccountName,
+			"hasAccount":        p.HasAccount,
+			"useWhen":           p.UseWhen,
+			"description":       p.Description,
+		}
+		break
+	}
+
+	if foundProfile == nil {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
+		return
+	}
+
+	web.JSON(w, 200, foundProfile)
+}
+
+func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	name, err := pm.FindByID(id)
+	if err != nil {
+		name = id
+		if !pm.Exists(name) {
+			web.Error(w, 404, fmt.Errorf("profile %q not found", id))
+			return
+		}
+	}
+
 	if err := pm.Delete(name); err != nil {
 		web.Error(w, 404, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "deleted", "name": name})
+
+	web.JSON(w, 200, map[string]any{"status": "deleted", "id": id, "name": name})
 }
 
-func (pm *ProfileManager) handleUpdateByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+func (pm *ProfileManager) resolveIDOrName(idOrName string) (string, error) {
+	name, err := pm.FindByID(idOrName)
+	if err == nil {
+		return name, nil
+	}
+	if pm.Exists(idOrName) {
+		return idOrName, nil
+	}
+	return "", fmt.Errorf("profile %q not found (not a valid ID or name)", idOrName)
+}
+
+func (pm *ProfileManager) handleUpdateByIDOrName(w http.ResponseWriter, r *http.Request) {
+	idOrName := r.PathValue("id")
+	name, err := pm.resolveIDOrName(idOrName)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
 	var req struct {
 		Name        string `json:"name"`
 		UseWhen     string `json:"useWhen"`
@@ -152,27 +268,45 @@ func (pm *ProfileManager) handleUpdateByPath(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	web.JSON(w, 200, map[string]string{"status": "updated", "name": name})
+	web.JSON(w, 200, map[string]any{"status": "updated", "id": idOrName, "name": name})
 }
 
-func (pm *ProfileManager) handleResetByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+func (pm *ProfileManager) handleResetByIDOrName(w http.ResponseWriter, r *http.Request) {
+	idOrName := r.PathValue("id")
+	name, err := pm.resolveIDOrName(idOrName)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
 	if err := pm.Reset(name); err != nil {
 		web.Error(w, 404, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "reset", "name": name})
+	web.JSON(w, 200, map[string]any{"status": "reset", "id": idOrName, "name": name})
 }
 
-func (pm *ProfileManager) handleLogsByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+func (pm *ProfileManager) handleLogsByIDOrName(w http.ResponseWriter, r *http.Request) {
+	idOrName := r.PathValue("id")
+	name, err := pm.resolveIDOrName(idOrName)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	logs := pm.Logs(name, limit)
 	web.JSON(w, 200, logs)
 }
 
-func (pm *ProfileManager) handleAnalyticsByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+func (pm *ProfileManager) handleAnalyticsByIDOrName(w http.ResponseWriter, r *http.Request) {
+	idOrName := r.PathValue("id")
+	name, err := pm.resolveIDOrName(idOrName)
+	if err != nil {
+		web.Error(w, 404, err)
+		return
+	}
+
 	report := pm.Analytics(name)
 	web.JSON(w, 200, report)
 }

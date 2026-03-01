@@ -1,34 +1,115 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+// HandleAction performs a single action on a tab (click, type, fill, etc).
+//
+// @Endpoint POST /action
+// @Description Interact with page elements: click, type text, fill inputs, press keys, hover, focus, scroll, select
+//
+// @Param tabId string body Tab ID (required)
+// @Param kind string body Action type: "click", "type", "fill", "press", "hover", "focus", "scroll", "select" (required)
+// @Param ref string body Element reference from snapshot (e.g., "e5") (required)
+// @Param text string body Text to type or fill (for "type"/"fill" actions)
+// @Param value string body Value for "select" action (e.g., option index)
+// @Param key string body Key to press (for "press" action, e.g., "Enter", "Tab")
+// @Param x int body X coordinate for "scroll" action (optional)
+// @Param y int body Y coordinate for "scroll" action (optional)
+//
+// @Response 200 application/json Returns {success: true}
+// @Response 400 application/json Invalid action or parameters
+// @Response 404 application/json Tab or element not found
+// @Response 500 application/json Chrome error
+//
+// @Example curl click:
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"click","ref":"e5"}'
+//
+// @Example curl type:
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"type","ref":"e3","text":"user@example.com"}'
+//
+// @Example curl fill form:
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"fill","ref":"e3","text":"John Doe"}'
+//
+// @Example curl press key:
+//
+//	curl -X POST http://localhost:9867/action \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"tabId":"abc123","kind":"press","ref":"e7","key":"Enter"}'
+//
+// @Example cli click:
+//
+//	pinchtab click e5
+//
+// @Example cli type:
+//
+//	pinchtab type e3 "user@example.com"
+//
+// @Example cli fill:
+//
+//	pinchtab fill e3 "John Doe"
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req bridge.ActionRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
+	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
+	if req.Kind == "" {
+		web.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
+		return
+	}
+	if available := h.Bridge.AvailableActions(); len(available) > 0 {
+		known := false
+		for _, k := range available {
+			if k == req.Kind {
+				known = true
+				break
+			}
+		}
+		if !known {
+			web.Error(w, 400, fmt.Errorf("unknown action kind: %s", req.Kind))
+			return
+		}
+	}
+
+	// Resolve tab
 	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
 	}
+	if req.TabID == "" {
+		req.TabID = resolvedTabID
+	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
-
+	// Resolve ref → nodeID
 	if req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
 		cache := h.Bridge.GetRefCache(resolvedTabID)
 		if cache != nil {
@@ -37,35 +118,56 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if req.NodeID == 0 {
-			web.JSON(w, 400, map[string]string{
-				"error": fmt.Sprintf("ref %s not found - take a /snapshot first", req.Ref),
-			})
+			web.Error(w, 404, fmt.Errorf("ref %s not found - take a /snapshot first", req.Ref))
 			return
 		}
 	}
 
-	if req.Kind == "" {
-		kinds := h.Bridge.AvailableActions()
-		web.JSON(w, 400, map[string]string{
-			"error": fmt.Sprintf("missing required field 'kind' - valid values: %s", strings.Join(kinds, ", ")),
-		})
-		return
-	}
+	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	defer tCancel()
 
 	result, err := h.Bridge.ExecuteAction(tCtx, req.Kind, req)
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "unknown action") {
-			kinds := h.Bridge.AvailableActions()
-			web.JSON(w, 400, map[string]string{
-				"error": fmt.Sprintf("%s - valid values: %s", err.Error(), strings.Join(kinds, ", ")),
-			})
-			return
-		}
-		web.Error(w, 500, fmt.Errorf("action %s: %w", req.Kind, err))
+		web.Error(w, 500, err)
 		return
 	}
 
-	web.JSON(w, 200, result)
+	web.JSON(w, 200, map[string]any{"success": true, "result": result})
+}
+
+// HandleTabAction performs a single action on a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/action
+func (h *Handlers) HandleTabAction(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	var req bridge.ActionRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+	if req.TabID != "" && req.TabID != tabID {
+		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		return
+	}
+	req.TabID = tabID
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	wrapped := r.Clone(r.Context())
+	wrapped.Body = io.NopCloser(bytes.NewReader(payload))
+	wrapped.ContentLength = int64(len(payload))
+	wrapped.Header = r.Header.Clone()
+	wrapped.Header.Set("Content-Type", "application/json")
+	h.HandleAction(w, wrapped)
 }
 
 type actionsRequest struct {
@@ -82,6 +184,12 @@ type actionResult struct {
 }
 
 func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	var req actionsRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -92,6 +200,47 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 400, fmt.Errorf("actions array is empty"))
 		return
 	}
+
+	h.handleActionsBatch(w, r, req)
+}
+
+// HandleTabActions performs multiple actions on a tab identified by path ID.
+//
+// @Endpoint POST /tabs/{id}/actions
+func (h *Handlers) HandleTabActions(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	var req actionsRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		return
+	}
+	if req.TabID != "" && req.TabID != tabID {
+		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		return
+	}
+	req.TabID = tabID
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		return
+	}
+
+	wrapped := r.Clone(r.Context())
+	wrapped.Body = io.NopCloser(bytes.NewReader(payload))
+	wrapped.ContentLength = int64(len(payload))
+	wrapped.Header = r.Header.Clone()
+	wrapped.Header.Set("Content-Type", "application/json")
+	h.HandleActions(w, wrapped)
+}
+
+// handleActionsBatch processes a batch of actions (used by both single and batch endpoints)
+func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, req actionsRequest) {
 
 	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
 	if err != nil {

@@ -11,29 +11,31 @@ import (
 )
 
 type RuntimeConfig struct {
-	Bind             string
-	Port             string
-	CdpURL           string
-	Token            string
-	StateDir         string
-	Headless         bool
-	NoRestore        bool
-	ProfileDir       string
-	ChromeVersion    string
-	Timezone         string
-	BlockImages      bool
-	BlockMedia       bool
-	BlockAds         bool
-	MaxTabs          int
-	ChromeBinary     string
-	ChromeExtraFlags string
-	UserAgent        string
-	NoAnimations     bool
-	StealthLevel     string
-	ActionTimeout    time.Duration
-	NavigateTimeout  time.Duration
-	ShutdownTimeout  time.Duration
-	WaitNavDelay     time.Duration
+	Bind              string
+	Port              string
+	InstancePortStart int // Starting port for instances (default 9868)
+	InstancePortEnd   int // Ending port for instances (default 9968)
+	CdpURL            string
+	Token             string
+	StateDir          string
+	Headless          bool
+	NoRestore         bool
+	ProfileDir        string
+	ChromeVersion     string
+	Timezone          string
+	BlockImages       bool
+	BlockMedia        bool
+	BlockAds          bool
+	MaxTabs           int
+	ChromeBinary      string
+	ChromeExtraFlags  string
+	UserAgent         string
+	NoAnimations      bool
+	StealthLevel      string
+	ActionTimeout     time.Duration
+	NavigateTimeout   time.Duration
+	ShutdownTimeout   time.Duration
+	WaitNavDelay      time.Duration
 }
 
 func envOr(key, fallback string) string {
@@ -80,43 +82,47 @@ func (c *RuntimeConfig) ListenAddr() string {
 }
 
 type FileConfig struct {
-	Port        string `json:"port"`
-	CdpURL      string `json:"cdpUrl,omitempty"`
-	Token       string `json:"token,omitempty"`
-	StateDir    string `json:"stateDir"`
-	ProfileDir  string `json:"profileDir"`
-	Headless    *bool  `json:"headless,omitempty"`
-	NoRestore   bool   `json:"noRestore"`
-	MaxTabs     *int   `json:"maxTabs,omitempty"`
-	TimeoutSec  int    `json:"timeoutSec,omitempty"`
-	NavigateSec int    `json:"navigateSec,omitempty"`
+	Port              string `json:"port"`
+	InstancePortStart *int   `json:"instancePortStart,omitempty"`
+	InstancePortEnd   *int   `json:"instancePortEnd,omitempty"`
+	CdpURL            string `json:"cdpUrl,omitempty"`
+	Token             string `json:"token,omitempty"`
+	StateDir          string `json:"stateDir"`
+	ProfileDir        string `json:"profileDir"`
+	Headless          *bool  `json:"headless,omitempty"`
+	NoRestore         bool   `json:"noRestore"`
+	MaxTabs           *int   `json:"maxTabs,omitempty"`
+	TimeoutSec        int    `json:"timeoutSec,omitempty"`
+	NavigateSec       int    `json:"navigateSec,omitempty"`
 }
 
 func Load() *RuntimeConfig {
 	cfg := &RuntimeConfig{
-		Bind:             envOr("BRIDGE_BIND", "127.0.0.1"),
-		Port:             envOr("BRIDGE_PORT", "9867"),
-		CdpURL:           os.Getenv("CDP_URL"),
-		Token:            os.Getenv("BRIDGE_TOKEN"),
-		StateDir:         envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".pinchtab")),
-		Headless:         envBoolOr("BRIDGE_HEADLESS", true),
-		NoRestore:        os.Getenv("BRIDGE_NO_RESTORE") == "true",
-		ProfileDir:       envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile")),
-		ChromeVersion:    envOr("BRIDGE_CHROME_VERSION", "144.0.7559.133"),
-		Timezone:         os.Getenv("BRIDGE_TIMEZONE"),
-		BlockImages:      os.Getenv("BRIDGE_BLOCK_IMAGES") == "true",
-		BlockMedia:       os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",
-		BlockAds:         envBoolOr("BRIDGE_BLOCK_ADS", false),
-		MaxTabs:          envIntOr("BRIDGE_MAX_TABS", 20),
-		ChromeBinary:     os.Getenv("CHROME_BINARY"),
-		ChromeExtraFlags: os.Getenv("CHROME_FLAGS"),
-		UserAgent:        os.Getenv("BRIDGE_USER_AGENT"),
-		NoAnimations:     os.Getenv("BRIDGE_NO_ANIMATIONS") == "true",
-		StealthLevel:     envOr("BRIDGE_STEALTH", "light"),
-		ActionTimeout:    15 * time.Second,
-		NavigateTimeout:  30 * time.Second,
-		ShutdownTimeout:  10 * time.Second,
-		WaitNavDelay:     1 * time.Second,
+		Bind:              envOr("BRIDGE_BIND", "127.0.0.1"),
+		Port:              envOr("BRIDGE_PORT", "9867"),
+		InstancePortStart: envIntOr("INSTANCE_PORT_START", 9868),
+		InstancePortEnd:   envIntOr("INSTANCE_PORT_END", 9968),
+		CdpURL:            os.Getenv("CDP_URL"),
+		Token:             os.Getenv("BRIDGE_TOKEN"),
+		StateDir:          envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".pinchtab")),
+		Headless:          envBoolOr("BRIDGE_HEADLESS", true),
+		NoRestore:         os.Getenv("BRIDGE_NO_RESTORE") == "true",
+		ProfileDir:        envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile")),
+		ChromeVersion:     envOr("BRIDGE_CHROME_VERSION", "144.0.7559.133"),
+		Timezone:          os.Getenv("BRIDGE_TIMEZONE"),
+		BlockImages:       os.Getenv("BRIDGE_BLOCK_IMAGES") == "true",
+		BlockMedia:        os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",
+		BlockAds:          envBoolOr("BRIDGE_BLOCK_ADS", false),
+		MaxTabs:           envIntOr("BRIDGE_MAX_TABS", 20),
+		ChromeBinary:      envOr("CHROME_BIN", os.Getenv("CHROME_BINARY")),
+		ChromeExtraFlags:  os.Getenv("CHROME_FLAGS"),
+		UserAgent:         os.Getenv("BRIDGE_USER_AGENT"),
+		NoAnimations:      os.Getenv("BRIDGE_NO_ANIMATIONS") == "true",
+		StealthLevel:      envOr("BRIDGE_STEALTH", "light"),
+		ActionTimeout:     30 * time.Second,
+		NavigateTimeout:   60 * time.Second,
+		ShutdownTimeout:   10 * time.Second,
+		WaitNavDelay:      1 * time.Second,
 	}
 
 	configPath := envOr("BRIDGE_CONFIG", filepath.Join(homeDir(), ".pinchtab", "config.json"))
@@ -133,6 +139,12 @@ func Load() *RuntimeConfig {
 
 	if fc.Port != "" && os.Getenv("BRIDGE_PORT") == "" {
 		cfg.Port = fc.Port
+	}
+	if fc.InstancePortStart != nil && os.Getenv("INSTANCE_PORT_START") == "" {
+		cfg.InstancePortStart = *fc.InstancePortStart
+	}
+	if fc.InstancePortEnd != nil && os.Getenv("INSTANCE_PORT_END") == "" {
+		cfg.InstancePortEnd = *fc.InstancePortEnd
 	}
 	if fc.CdpURL != "" && os.Getenv("CDP_URL") == "" {
 		cfg.CdpURL = fc.CdpURL
@@ -167,14 +179,18 @@ func Load() *RuntimeConfig {
 
 func DefaultFileConfig() FileConfig {
 	h := true
+	start := 9868
+	end := 9968
 	return FileConfig{
-		Port:        "9867",
-		StateDir:    filepath.Join(homeDir(), ".pinchtab"),
-		ProfileDir:  filepath.Join(homeDir(), ".pinchtab", "chrome-profile"),
-		Headless:    &h,
-		NoRestore:   false,
-		TimeoutSec:  15,
-		NavigateSec: 30,
+		Port:              "9867",
+		InstancePortStart: &start,
+		InstancePortEnd:   &end,
+		StateDir:          filepath.Join(homeDir(), ".pinchtab"),
+		ProfileDir:        filepath.Join(homeDir(), ".pinchtab", "chrome-profile"),
+		Headless:          &h,
+		NoRestore:         false,
+		TimeoutSec:        15,
+		NavigateSec:       30,
 	}
 }
 

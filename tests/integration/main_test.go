@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-var serverURL string
+var (
+	serverURL    string
+	currentTabID string // Track current tab for action operations
+)
 
 // removeEnvPrefix removes all environment variables starting with the given prefix
 func removeEnvPrefix(env []string, prefix string) []string {
@@ -110,6 +113,14 @@ func TestMain(m *testing.M) {
 	}
 	if !waitForHealth(serverURL, healthTimeout) {
 		fmt.Fprintf(os.Stderr, "pinchtab did not become healthy within timeout (%v)\n", healthTimeout)
+		_ = cmd.Process.Kill()
+		os.Exit(1)
+	}
+
+	// Launch a test instance for orchestrator-mode tests
+	// This ensures /navigate and other proxy endpoints work in CI
+	if err := launchTestInstance(serverURL); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to launch test instance: %v\n", err)
 		_ = cmd.Process.Kill()
 		os.Exit(1)
 	}
@@ -239,4 +250,148 @@ func navigate(t *testing.T, url string) {
 	if code != 200 {
 		t.Fatalf("navigate to %s failed with %d: %s", url, code, string(body))
 	}
+
+	// Extract tabId from response for subsequent action calls
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Logf("warning: failed to parse navigate response: %v", err)
+		return
+	}
+
+	if id, ok := result["tabId"].(string); ok {
+		currentTabID = id
+		t.Logf("current tab: %s", currentTabID)
+		// Auto-close tab on test completion to prevent Chrome hitting tab limit.
+		// Safe to call even if the test also defers closeCurrentTab (idempotent).
+		t.Cleanup(func() { closeCurrentTab(t) })
+	}
+}
+
+// closeCurrentTab closes the current tab to clean up resources
+func closeCurrentTab(t *testing.T) {
+	t.Helper()
+	if currentTabID == "" {
+		return
+	}
+	// Close the tab
+	_, _ = httpPost(t, "/tab", map[string]any{
+		"tabId":  currentTabID,
+		"action": "close",
+	})
+	currentTabID = ""
+}
+
+// navigateInstance creates a fresh tab on the given instance and navigates it.
+func navigateInstance(t *testing.T, instID, url string) (int, []byte, string) {
+	t.Helper()
+
+	openCode, openBody := httpPostWithRetry(t, fmt.Sprintf("/instances/%s/tabs/open", instID), map[string]any{
+		"url": "about:blank",
+	}, 2)
+	if openCode != 200 {
+		return openCode, openBody, ""
+	}
+
+	tabID := jsonField(t, openBody, "tabId")
+	if tabID == "" {
+		return 500, []byte(`{"error":"missing tabId from open tab response"}`), ""
+	}
+
+	path := fmt.Sprintf("/tabs/%s/navigate", tabID)
+	code, body := httpPostWithRetry(t, path, map[string]any{"url": url}, 2)
+	return code, body, tabID
+}
+
+// waitForInstanceReady waits for an instance to be ready for navigation
+// Uses a simple navigate to about:blank to check readiness
+func waitForInstanceReady(t *testing.T, instID string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		code, _, _ := navigateInstance(t, instID, "about:blank")
+		if code == 200 {
+			t.Logf("instance %s is ready", instID)
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Logf("warning: instance %s did not become ready within 15 seconds", instID)
+}
+
+// launchTestInstance launches a default test instance for orchestrator-mode tests
+// This is called once during TestMain setup so that /navigate and proxy endpoints work
+// It waits for the instance to be fully ready before returning
+func launchTestInstance(base string) error {
+	resp, err := http.Post(
+		base+"/instances/launch",
+		"application/json",
+		strings.NewReader(`{"mode":"headless"}`),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("launch failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response to get instance ID
+	var result map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("failed to parse launch response: %v", err)
+	}
+
+	id, ok := result["id"].(string)
+	if !ok {
+		return fmt.Errorf("no instance id in launch response: %v", result)
+	}
+
+	fmt.Fprintf(os.Stderr, "TestMain: launched test instance %s\n", id)
+
+	// Wait for instance to be ready (can take 2-5 seconds for Chrome to start)
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		// Open a tab first, then navigate it to check if instance is ready.
+		openResp, err := http.Post(
+			base+"/instances/"+id+"/tabs/open",
+			"application/json",
+			strings.NewReader(`{"url":"about:blank"}`),
+		)
+		if err == nil {
+			var tabID string
+			if openResp.StatusCode == 200 {
+				openBody, _ := io.ReadAll(openResp.Body)
+				var open map[string]any
+				if err := json.Unmarshal(openBody, &open); err == nil {
+					if idValue, ok := open["tabId"].(string); ok {
+						tabID = idValue
+					}
+				}
+			}
+			_ = openResp.Body.Close()
+			if tabID != "" {
+				navResp, err := http.Post(
+					base+"/tabs/"+tabID+"/navigate",
+					"application/json",
+					strings.NewReader(`{"url":"about:blank"}`),
+				)
+				if err == nil {
+					if navResp.StatusCode == 200 {
+						_ = navResp.Body.Close()
+						fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
+						return nil
+					}
+					navBody, _ := io.ReadAll(navResp.Body)
+					_ = navResp.Body.Close()
+					fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("instance %s did not become ready within 30 seconds", id)
 }

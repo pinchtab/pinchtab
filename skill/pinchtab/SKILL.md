@@ -121,7 +121,7 @@ pinchtab text                          # readable text (~1K tokens)
 pinchtab text | jq .text               # pipe to jq
 pinchtab ss -o page.jpg                # screenshot
 pinchtab eval "document.title"         # run JavaScript
-pinchtab pdf -o page.pdf               # export PDF
+pinchtab pdf --tab TAB_ID -o page.pdf  # export PDF
 ```
 
 For the full HTTP API (curl examples, download, upload, cookies, stealth, batch actions, PDF export with full parameter control), see [references/api.md](references/api.md).
@@ -136,7 +136,7 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 | `/snapshot?format=compact` | ~56-64% less | One-line-per-node, best efficiency |
 | `/snapshot` | ~10,500 | Full page understanding |
 | `/screenshot` | ~2K (vision) | Visual verification |
-| `/pdf` | 0 (binary) | Export page as PDF (no token cost) |
+| `/tabs/{id}/pdf` | 0 (binary) | Export page as PDF (no token cost) |
 
 **Strategy**: Start with `?filter=interactive&format=compact`. Use `?diff=true` on subsequent snapshots. Use `/text` when you only need readable content. Full `/snapshot` only when needed.
 

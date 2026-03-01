@@ -11,9 +11,10 @@ import (
 // A1: Click by ref — navigate to example.com, find the "More information..." link, click it
 func TestAction_Click(t *testing.T) {
 	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
 
 	// Get snapshot to find a clickable ref
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	s := string(snapBody)
 
 	// Find a ref like [e0] or [e1] for the link
@@ -22,9 +23,10 @@ func TestAction_Click(t *testing.T) {
 		t.Skip("no clickable link ref found in snapshot")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "click",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "click",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("click failed with %d", code)
@@ -34,9 +36,12 @@ func TestAction_Click(t *testing.T) {
 // A4: Press key
 func TestAction_Press(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "press",
-		"key":  "Escape",
+	defer closeCurrentTab(t)
+
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "press",
+		"key":   "Escape",
 	})
 	if code != 200 {
 		t.Errorf("press failed with %d", code)
@@ -62,9 +67,12 @@ func TestAction_MissingKind(t *testing.T) {
 // A11: Ref not found
 func TestAction_RefNotFound(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "click",
-		"ref":  "e9999",
+	defer closeCurrentTab(t)
+
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "click",
+		"ref":   "e9999",
 	})
 	// Should be an error (400 or 500)
 	if code == 200 {
@@ -75,7 +83,10 @@ func TestAction_RefNotFound(t *testing.T) {
 // A12: CSS selector click
 func TestAction_CSSSelector(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
+	defer closeCurrentTab(t)
+
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId":    currentTabID,
 		"kind":     "click",
 		"selector": "a",
 	})
@@ -114,8 +125,9 @@ func findRef(snapshot string, role string) string {
 func TestAction_Type(t *testing.T) {
 	// Navigate to httpbin form
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "input")
@@ -125,9 +137,10 @@ func TestAction_Type(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"kind": "type",
-		"ref":  ref,
-		"text": "test input",
+		"tabId": currentTabID,
+		"kind":  "type",
+		"ref":   ref,
+		"text":  "test input",
 	})
 	if code != 200 {
 		t.Errorf("type failed with %d", code)
@@ -137,8 +150,9 @@ func TestAction_Type(t *testing.T) {
 // A3: Fill by ref
 func TestAction_Fill(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "input")
@@ -148,9 +162,10 @@ func TestAction_Fill(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
-		"kind": "fill",
-		"ref":  ref,
-		"text": "filled value",
+		"tabId": currentTabID,
+		"kind":  "fill",
+		"ref":   ref,
+		"text":  "filled value",
 	})
 	if code != 200 {
 		t.Errorf("fill failed with %d", code)
@@ -160,16 +175,18 @@ func TestAction_Fill(t *testing.T) {
 // A5: Focus
 func TestAction_Focus(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "textbox")
 	if ref == "" {
 		t.Skip("no focusable ref found")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "focus",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "focus",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("focus failed with %d", code)
@@ -179,7 +196,10 @@ func TestAction_Focus(t *testing.T) {
 // A8: Scroll
 func TestAction_Scroll(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpPost(t, "/action", map[string]string{
+	defer closeCurrentTab(t)
+
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId":     currentTabID,
 		"kind":      "scroll",
 		"direction": "down",
 	})
@@ -192,6 +212,7 @@ func TestAction_Scroll(t *testing.T) {
 func TestAction_Batch(t *testing.T) {
 	navigate(t, "https://example.com")
 	payload := map[string]any{
+		"tabId": currentTabID,
 		"actions": []map[string]any{
 			{"kind": "press", "key": "Escape"},
 			{"kind": "scroll", "direction": "down"},
@@ -218,7 +239,7 @@ func TestAction_Hover(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// Get snapshot to find a link ref
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	s := string(snapBody)
 
 	// Find a link ref
@@ -227,21 +248,25 @@ func TestAction_Hover(t *testing.T) {
 		t.Skip("no link ref found in snapshot")
 	}
 
-	code, _ := httpPost(t, "/action", map[string]string{
-		"kind": "hover",
-		"ref":  ref,
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "hover",
+		"ref":   ref,
 	})
 	if code != 200 {
 		t.Errorf("hover failed with %d", code)
 	}
+
+	closeCurrentTab(t)
 }
 
 // A7: Select
 func TestAction_Select(t *testing.T) {
 	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
 
 	// Get snapshot to find a select element
-	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
 	ref := findRef(string(snapBody), "combobox")
 	if ref == "" {
 		ref = findRef(string(snapBody), "select")
@@ -251,6 +276,7 @@ func TestAction_Select(t *testing.T) {
 	}
 
 	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
 		"kind":  "select",
 		"ref":   ref,
 		"value": "opt1",

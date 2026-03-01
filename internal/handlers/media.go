@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,7 +19,34 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+var pdfQueryParams = map[string]struct{}{
+	"landscape":               {},
+	"preferCSSPageSize":       {},
+	"displayHeaderFooter":     {},
+	"generateTaggedPDF":       {},
+	"generateDocumentOutline": {},
+	"scale":                   {},
+	"paperWidth":              {},
+	"paperHeight":             {},
+	"marginTop":               {},
+	"marginBottom":            {},
+	"marginLeft":              {},
+	"marginRight":             {},
+	"pageRanges":              {},
+	"headerTemplate":          {},
+	"footerTemplate":          {},
+	"output":                  {},
+	"path":                    {},
+	"raw":                     {},
+}
+
 func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
@@ -98,7 +126,34 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleTabScreenshot returns screenshot bytes for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/screenshot
+func (h *Handlers) HandleTabScreenshot(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleScreenshot(w, req)
+}
+
 func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
 
@@ -258,7 +313,56 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handlers) HandleTabPDF(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	if r.Method == http.MethodPost {
+		var body map[string]any
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&body); err != nil {
+				web.Error(w, 400, fmt.Errorf("decode: %w", err))
+				return
+			}
+			for key, value := range body {
+				if _, ok := pdfQueryParams[key]; !ok {
+					continue
+				}
+				switch v := value.(type) {
+				case string:
+					q.Set(key, v)
+				case bool:
+					q.Set(key, strconv.FormatBool(v))
+				case float64:
+					q.Set(key, strconv.FormatFloat(v, 'f', -1, 64))
+				default:
+					web.Error(w, 400, fmt.Errorf("invalid %s type", key))
+					return
+				}
+			}
+		}
+	}
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandlePDF(w, req)
+}
+
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
+	// Ensure Chrome is initialized
+	if err := h.ensureChrome(); err != nil {
+		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return
+	}
+
 	tabID := r.URL.Query().Get("tabId")
 	mode := r.URL.Query().Get("mode")
 
@@ -300,4 +404,25 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		"title": title,
 		"text":  text,
 	})
+}
+
+// HandleTabText extracts text for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/text
+func (h *Handlers) HandleTabText(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("tabId", tabID)
+
+	req := r.Clone(r.Context())
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	req.URL = &u
+
+	h.HandleText(w, req)
 }

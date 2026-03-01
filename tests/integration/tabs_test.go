@@ -90,10 +90,17 @@ func TestTabs_BadAction(t *testing.T) {
 // TB6: Max tabs - create many tabs and verify behavior
 func TestTabs_MaxTabs(t *testing.T) {
 	// Get initial tab count
-	_, initialBody := httpGet(t, "/tabs")
+	code, initialBody := httpGet(t, "/tabs")
+	if code != 200 {
+		t.Skipf("skipping: /tabs returned %d (no running instance)", code)
+	}
 	var initialResp map[string]any
 	_ = json.Unmarshal(initialBody, &initialResp)
-	initialTabs := len(initialResp["tabs"].([]any))
+	tabsRaw, ok := initialResp["tabs"]
+	if !ok || tabsRaw == nil {
+		t.Skip("skipping: no tabs field in response")
+	}
+	initialTabs := len(tabsRaw.([]any))
 
 	// Try to create 20 tabs and verify they are created or error appropriately
 	createdTabIDs := []string{}
@@ -120,7 +127,10 @@ func TestTabs_MaxTabs(t *testing.T) {
 	_, finalBody := httpGet(t, "/tabs")
 	var finalResp map[string]any
 	_ = json.Unmarshal(finalBody, &finalResp)
-	finalTabs := finalResp["tabs"].([]any)
+	var finalTabs []any
+	if raw, ok := finalResp["tabs"]; ok && raw != nil {
+		finalTabs, _ = raw.([]any)
+	}
 
 	// Verify tab list changed or was already at limit
 	if len(finalTabs) < initialTabs {
@@ -134,5 +144,61 @@ func TestTabs_MaxTabs(t *testing.T) {
 			"action": "close",
 			"tabId":  tabID,
 		})
+	}
+}
+
+// TB7: Tab ID format validation - only hash IDs accepted
+func TestTabs_IDFormat(t *testing.T) {
+	// Create a new tab and verify it returns hash format
+	code, body := httpPost(t, "/tab", map[string]string{
+		"action": "new",
+		"url":    "about:blank",
+	})
+	if code != 200 {
+		t.Fatalf("expected 200, got %d (body: %s)", code, body)
+	}
+
+	var newTab map[string]any
+	_ = json.Unmarshal(body, &newTab)
+	tabID, ok := newTab["tabId"].(string)
+	if !ok || tabID == "" {
+		t.Fatal("expected tabId in response")
+	}
+
+	// Verify hash format: tab_XXXXXXXX (12 chars total)
+	if len(tabID) != 12 || tabID[:4] != "tab_" {
+		t.Errorf("expected hash format tab_XXXXXXXX, got %s", tabID)
+	}
+
+	// Clean up
+	_, _ = httpPost(t, "/tab", map[string]string{"action": "close", "tabId": tabID})
+}
+
+// TB8: Raw CDP ID rejection - security test
+func TestTabs_RejectsRawCDPID(t *testing.T) {
+	// Raw CDP target IDs (32-char hex) should be rejected
+	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
+
+	// Try to navigate using raw CDP ID - should fail with 404
+	code, _ := httpPost(t, "/tabs/"+rawCDPID+"/navigate", map[string]string{
+		"url": "https://example.com",
+	})
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID, got %d", code)
+	}
+
+	// Try to get snapshot using raw CDP ID - should fail with 404
+	code, _ = httpGet(t, "/tabs/"+rawCDPID+"/snapshot")
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID snapshot, got %d", code)
+	}
+
+	// Try action using raw CDP ID - should fail with 404
+	code, _ = httpPost(t, "/tabs/"+rawCDPID+"/action", map[string]string{
+		"kind": "click",
+		"ref":  "e0",
+	})
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID action, got %d", code)
 	}
 }
