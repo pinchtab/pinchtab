@@ -9,8 +9,8 @@ import (
 // TestBuildChromeOpts_HeadlessMode verifies that headless mode adds chromedp.Headless
 func TestBuildChromeOpts_HeadlessMode(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		Headless:    true,
-		ProfileDir:  "/tmp/test-profile",
+		Headless:     true,
+		ProfileDir:   "/tmp/test-profile",
 		ChromeBinary: "",
 	}
 
@@ -37,8 +37,8 @@ func TestBuildChromeOpts_HeadlessMode(t *testing.T) {
 // TestBuildChromeOpts_HeadedMode verifies that headed mode does NOT add any headless flag
 func TestBuildChromeOpts_HeadedMode(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		Headless:    false,
-		ProfileDir:  "/tmp/test-profile",
+		Headless:     false,
+		ProfileDir:   "/tmp/test-profile",
 		ChromeBinary: "",
 	}
 
@@ -60,14 +60,14 @@ func TestBuildChromeOpts_HeadedMode(t *testing.T) {
 // TestBuildChromeOpts_ComparesOptions verifies that headless and headed modes differ
 func TestBuildChromeOpts_ComparesOptions(t *testing.T) {
 	cfgHeadless := &config.RuntimeConfig{
-		Headless:    true,
-		ProfileDir:  "/tmp/test-profile",
+		Headless:     true,
+		ProfileDir:   "/tmp/test-profile",
 		ChromeBinary: "",
 	}
 
 	cfgHeaded := &config.RuntimeConfig{
-		Headless:    false,
-		ProfileDir:  "/tmp/test-profile",
+		Headless:     false,
+		ProfileDir:   "/tmp/test-profile",
 		ChromeBinary: "",
 	}
 
@@ -88,8 +88,8 @@ func TestBuildChromeOpts_ComparesOptions(t *testing.T) {
 func TestBuildChromeOpts_WithCustomBinary(t *testing.T) {
 	customBinary := "/custom/path/to/chrome"
 	cfg := &config.RuntimeConfig{
-		Headless:    true,
-		ProfileDir:  "/tmp/test-profile",
+		Headless:     true,
+		ProfileDir:   "/tmp/test-profile",
 		ChromeBinary: customBinary,
 	}
 

@@ -175,9 +175,9 @@ func TestHandleTabs_Success(t *testing.T) {
 // TestHandleHealth_EnsureChromeFailure verifies /health returns 503 when Chrome initialization fails
 func TestHandleHealth_EnsureChromeFailure(t *testing.T) {
 	mockBridge := &MockBridge{
-		targets:              []*target.Info{},
-		ensureChromeErr:      "failed to start Chrome: connection refused",
-		ensureChromeCalled:   false,
+		targets:            []*target.Info{},
+		ensureChromeErr:    "failed to start Chrome: connection refused",
+		ensureChromeCalled: false,
 	}
 
 	h := &Handlers{
@@ -267,10 +267,10 @@ func contains(s, substr string) bool {
 
 // MockBridge is a test implementation of the BridgeAPI interface
 type MockBridge struct {
-	targets              []*target.Info
-	listTargetsErr       string
-	ensureChromeCalled   bool
-	ensureChromeErr      string
+	targets            []*target.Info
+	listTargetsErr     string
+	ensureChromeCalled bool
+	ensureChromeErr    string
 }
 
 func (m *MockBridge) ListTargets() ([]*target.Info, error) {

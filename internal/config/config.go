@@ -119,8 +119,8 @@ func Load() *RuntimeConfig {
 		UserAgent:         os.Getenv("BRIDGE_USER_AGENT"),
 		NoAnimations:      os.Getenv("BRIDGE_NO_ANIMATIONS") == "true",
 		StealthLevel:      envOr("BRIDGE_STEALTH", "light"),
-		ActionTimeout:     15 * time.Second,
-		NavigateTimeout:   30 * time.Second,
+		ActionTimeout:     30 * time.Second,
+		NavigateTimeout:   60 * time.Second,
 		ShutdownTimeout:   10 * time.Second,
 		WaitNavDelay:      1 * time.Second,
 	}
