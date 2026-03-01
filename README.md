@@ -125,7 +125,7 @@ Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 
 Full docs at **[pinchtab.com/docs](https://pinchtab.com/docs)**
 
-- **[Getting Started](https://pinchtab.com/docs/getting-started)** — Install and run
+- **[Getting Started](https://pinchtab.com/docs/get-started)** — Install and run
 - **[Core Concepts](https://pinchtab.com/docs/core-concepts)** — Instances, profiles, tabs
 - **[Headless vs Headed](https://pinchtab.com/docs/headless-vs-headed)** — Choose the right mode
 - **[API Reference](https://pinchtab.com/docs/api-reference)** — HTTP endpoints
