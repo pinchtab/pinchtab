@@ -162,10 +162,14 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	var name string
 	if req.ProfileId != "" {
 		// Look up profile by ID to get its name
-		profs := o.pm.List()
+		profs, err := o.profiles.List()
+		if err != nil {
+			web.Error(w, 500, fmt.Errorf("failed to list profiles: %w", err))
+			return
+		}
 		found := false
 		for _, p := range profs {
-			if p.Id == req.ProfileId {
+			if p.ID == req.ProfileId {
 				name = p.Name
 				found = true
 				break
