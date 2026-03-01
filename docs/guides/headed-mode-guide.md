@@ -56,45 +56,58 @@ Every profile gets a stable 12-character hex ID derived from its name. Use IDs i
 
 ## Start and Stop with One Call
 
-The dashboard exposes two endpoints that make profile management trivial for agents:
+The orchestrator API makes profile management trivial for agents:
 
 ```bash
-# Start a profile (port auto-allocated)
-curl -X POST http://localhost:9867/start/a1b2c3d4e5f6
+# List profiles (get profile ID)
+curl http://localhost:9867/profiles | jq '.[] | {id, name}'
+
+# Start a profile instance
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"a1b2c3d4e5f6"}'
 ```
 
+**Response:**
 ```json
 {
-  "id": "Work-56490",
-  "name": "Work",
-  "port": "56490",
+  "id": "inst_work123",
+  "profileId": "a1b2c3d4e5f6",
+  "profileName": "Work",
+  "port": "9868",
   "status": "starting",
-  "url": "http://localhost:56490"
+  "headless": false
 }
 ```
 
-The response tells you which port the instance landed on. All your API calls go to that port:
+The response tells you the instance ID. All your API calls go through the orchestrator proxy:
 
 ```bash
-PORT=56490
+INST="inst_work123"
 
-# Navigate
-curl -X POST http://localhost:$PORT/navigate \
+# Navigate (via orchestrator)
+curl -X POST http://localhost:9867/instances/$INST/navigate \
   -d '{"url": "https://mail.google.com"}'
 
 # Read the inbox
-curl "http://localhost:$PORT/snapshot?maxTokens=4000"
+curl "http://localhost:9867/instances/$INST/snapshot"
 
 # Done — shut it down
-curl -X POST http://localhost:9867/stop/a1b2c3d4e5f6
+curl -X POST http://localhost:9867/instances/$INST/stop
 ```
 
-You can also pass a specific port or run headless if you want:
+You can also specify mode (headed/headless):
 
 ```bash
-curl -X POST http://localhost:9867/start/a1b2c3d4e5f6 \
-  -H 'Content-Type: application/json' \
-  -d '{"port": "9868", "headless": true}'
+# Start profile in headless mode (faster, no display)
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"a1b2c3d4e5f6","mode":"headless"}'
+
+# Start profile in headed mode (visible window, debug)
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"a1b2c3d4e5f6","mode":"headed"}'
 ```
 
 ## A Real Example: Reading Email
@@ -102,19 +115,27 @@ curl -X POST http://localhost:9867/start/a1b2c3d4e5f6 \
 Here's what a full agent workflow looks like. The human already logged into Gmail through the profile once. Now the agent can check email any time:
 
 ```bash
-# 1. Start the profile
-INSTANCE=$(curl -s -X POST http://localhost:9867/start/a1b2c3d4e5f6)
-PORT=$(echo $INSTANCE | jq -r .port)
+# 1. Get profile ID
+PROFILE_ID=$(curl -s http://localhost:9867/profiles \
+  | jq -r '.[] | select(.name=="Work") | .id')
 
-# 2. Navigate to Gmail
-curl -s -X POST http://localhost:$PORT/navigate \
+# 2. Start the profile instance
+INST=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$PROFILE_ID'"}' | jq -r '.id')
+
+# 3. Wait for instance to initialize
+sleep 2
+
+# 4. Navigate to Gmail (uses orchestrator proxy)
+curl -s -X POST http://localhost:9867/instances/$INST/navigate \
   -d '{"url": "https://mail.google.com"}'
 
-# 3. Read the inbox (accessibility tree, not screenshots)
-curl -s "http://localhost:$PORT/snapshot?maxTokens=4000" | jq '.nodes[] | select(.role == "row") | .name' | head -5
+# 5. Read the inbox (accessibility tree, not screenshots)
+curl -s "http://localhost:9867/instances/$INST/snapshot" | jq '.nodes[] | select(.role == "row") | .name' | head -5
 ```
 
-Output:
+**Output:**
 ```
 "unread, GitHub, [org/repo] New pull request #42, 11:44 AM, ..."
 "unread, Stripe, Your January invoice is ready, 11:26 AM, ..."
@@ -124,8 +145,8 @@ Output:
 No screenshots. No vision models. No token-heavy page dumps. Just structured data from the accessibility tree — the same way a screen reader would see it.
 
 ```bash
-# 4. Clean up
-curl -s -X POST http://localhost:9867/stop/a1b2c3d4e5f6
+# 6. Clean up
+curl -X POST http://localhost:9867/instances/$INST/stop
 ```
 
 ## When to Use Headed vs Headless
@@ -141,24 +162,41 @@ curl -s -X POST http://localhost:9867/stop/a1b2c3d4e5f6
 
 The key insight: you don't have to choose one mode forever. Start headed when you need human involvement, then switch to headless for routine automation. The profile carries the session either way.
 
-## Dashboard: The Control Plane
+## Dashboard & Control Plane
 
-Running `pinchtab dashboard` gives you a web UI at `http://localhost:9867` for managing everything:
+Running `pinchtab` gives you a web UI at `http://localhost:9867` for managing everything:
 
-- Create and import Chrome profiles
-- Launch instances (headed or headless) on any port
-- Monitor running instances — status, tabs, logs
-- Live view of what the agent is doing
+- Create and import Chrome profiles (persistent)
+- Launch instances (headed or headless) with any profile
+- Monitor running instances — status, tabs, logs, Chrome initialization
+- View all agents connected to each instance
 - Stop instances gracefully
+- Real-time activity feed of all operations
 
-The dashboard itself doesn't run Chrome. It's a lightweight control plane that spawns and manages profile instances as separate processes.
+The dashboard doesn't run Chrome itself. It's a lightweight orchestrator that manages profile instances as separate processes.
 
-For agents that prefer CLI over UI:
-
+**Web UI:**
 ```bash
-# Resolve a running profile to its URL
-pinchtab connect "Work"
-# → http://localhost:56490
+# Start orchestrator and dashboard
+pinchtab
+
+# Open in browser
+open http://localhost:9867/dashboard
+```
+
+**CLI for agents:**
+```bash
+# List profiles
+pinchtab profiles
+
+# List running instances
+pinchtab instances
+
+# Start instance with profile
+pinchtab instance launch  # Temporary profile
+PROFILE_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="Work") | .id')
+curl -X POST http://localhost:9867/instances/start \
+  -d '{"profileId":"'$PROFILE_ID'"}'
 ```
 
 ## Multiple Profiles, Multiple Agents
@@ -166,17 +204,43 @@ pinchtab connect "Work"
 Nothing stops you from running several profiles at once. Different accounts, different purposes:
 
 ```bash
-# Work email
-curl -X POST http://localhost:9867/start/a1b2c3d4e5f6
+# Get profile IDs
+WORK_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="Work") | .id')
+PERSONAL_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="Personal") | .id')
 
-# Personal Twitter
-curl -X POST http://localhost:9867/start/a1b2c3d4e5f6
+# Start Work profile instance (headed for debugging)
+WORK_INST=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$WORK_ID'","mode":"headed"}' | jq -r '.id')
 
-# Research browser (no login, disposable)
-curl -X POST http://localhost:9867/start/f6e5d4c3b2a1
+# Start Personal profile instance (headless for automation)
+PERSONAL_INST=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$PERSONAL_ID'","mode":"headless"}' | jq -r '.id')
+
+# Start temporary instance (no persistent profile)
+RESEARCH_INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"headless"}' | jq -r '.id')
 ```
 
-Each gets its own port, its own Chrome process, its own isolated session. Agents can work across all of them simultaneously.
+Each gets its own port (auto-allocated), its own Chrome process, its own isolated session. Agents can work across all of them simultaneously:
+
+```bash
+# Agent A works on Work profile
+curl -X POST http://localhost:9867/instances/$WORK_INST/navigate \
+  -d '{"url":"https://work.slack.com"}'
+
+# Agent B works on Personal profile at the same time
+curl -X POST http://localhost:9867/instances/$PERSONAL_INST/navigate \
+  -d '{"url":"https://twitter.com"}'
+
+# Agent C uses temporary research instance
+curl -X POST http://localhost:9867/instances/$RESEARCH_INST/navigate \
+  -d '{"url":"https://google.com/search?q=..."}'
+
+# All three isolated, no interference
+```
 
 ---
 
@@ -190,65 +254,76 @@ The dashboard gives you that. Open it in your browser and you get a real-time vi
 
 ### Setting Up Remote Access
 
-By default, Pinchtab only listens on `127.0.0.1` — locked to the machine. To access the dashboard from another device on your network, you need two things: open the bind address and set an auth token.
+By default, PinchTab only listens on `127.0.0.1` — locked to the machine. To access the orchestrator and dashboard from another device on your network, you can set environment variables or bind to a different address.
 
+**Simple setup (local network only):**
 ```bash
-BRIDGE_BIND=0.0.0.0 BRIDGE_TOKEN=your-secret-token pinchtab dashboard
+# Bind to all interfaces (only safe on private network!)
+BRIDGE_BIND=0.0.0.0 pinchtab
 ```
 
-That's it. Now open `http://<server-ip>:9867/dashboard` from your laptop and you'll see the full dashboard.
+**Secure setup (production):**
+```bash
+# Bind to all interfaces + require auth token
+BRIDGE_BIND=0.0.0.0 BRIDGE_TOKEN=your-secret-token pinchtab
+```
 
-Every API call needs the token too:
+Now open `http://<server-ip>:9867/dashboard` from your laptop and you'll see the full dashboard.
+
+With a token, every API call requires it:
 
 ```bash
 curl http://192.168.1.100:9867/profiles \
   -H "Authorization: Bearer your-secret-token"
 ```
 
-Without the token, every request gets a `401`. No exceptions — health check, profiles, everything.
+Without the token, requests get a `401` error. No exceptions.
+
+**For production:** Consider running behind a reverse proxy (nginx) with HTTPS instead of exposing the orchestrator directly.
 
 ### What You See
 
-The dashboard has three views:
+The dashboard has several views:
 
-**Profiles** — your Chrome profiles, their status (running/stopped), account info. Click Details on any profile to get three tabs:
+**Instances** (default) — all running instances, their status, port, profile, Chrome mode (headed/headless). Click any instance to see:
+- Instance metadata (ID, port, profile, status)
+- Open tabs in that instance
+- Instance logs (Chrome output, errors)
+- Quick actions (navigate, take snapshot, stop)
 
-- **Profile** — metadata, status, path, account info
-- **Live** — real-time screencast of what the browser is showing right now. You're literally watching your agent browse. <!-- screenshot: live-tab.png -->
-- **Logs** — open tabs, connected agents, activity stats, instance logs
+**Profiles** — all profiles (persistent and temporary), their status, account info. Create new profiles, delete old ones, see which instances are using each profile.
 
-<div align="center" style="padding: 12px 0;">
-  <img src="../assets/live-view.png" width="400" alt="Pinchtab live view" style="padding: 8px;" />
-</div>
+**Agents** — every agent (identified by X-Agent-Id header) and which instance they're connected to. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type.
 
-**Agents** — every agent that's made an API call, across all running profiles. You see their ID, which profile they're using, their last action, and when they were last active. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type.
-
-<div align="center" style="padding: 12px 0;">
-  <img src="../assets/agents-feed.png" width="400" alt="Pinchtab agents feed" style="padding: 8px;" />
-</div>
-
-**Settings** — screencast quality, stealth level, browser options.
+**Settings** — Configure orchestrator behavior, instance defaults, port ranges.
 
 ### The Activity Feed
 
-The Activity Feed is the heartbeat of your agent fleet. Every action from every agent across every profile streams in real-time:
+The Activity Feed is the heartbeat of your agent fleet. Every action from every agent across every instance streams in real-time:
 
 ```
-mario → POST /navigate (Work) — 23ms
-mario → GET /snapshot (Work) — 145ms
-scraper → POST /navigate (Research) — 31ms
-scraper → GET /text (Research) — 89ms
+mario → POST /navigate (inst_abc123) — 23ms
+mario → GET /snapshot (inst_abc123) — 145ms
+scraper → POST /navigate (inst_def456) — 31ms
+scraper → GET /text (inst_def456) — 89ms
 ```
 
 Filter by type — just navigations, just snapshots, just actions — to focus on what matters.
 
-This works because the dashboard subscribes to each running child instance's event stream and relays everything through a single SSE connection to your browser. You get one unified view even when agents are spread across multiple profiles on different ports.
+This works because the orchestrator collects events from all running instances and streams them to the dashboard via Server-Sent Events (SSE). You get one unified view even when agents are spread across multiple instances on different ports.
 
 ### Agent Identification
 
-For agents to show up with a name instead of "anonymous", they just need to pass a header:
+For agents to show up with a name in the dashboard instead of "anonymous", they just need to pass a header:
 
 ```bash
+# Via orchestrator proxy
+curl -X POST http://localhost:9867/instances/$INST/navigate \
+  -H "X-Agent-Id: mario" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+
+# Or directly to instance
 curl -X POST http://localhost:9868/navigate \
   -H "X-Agent-Id: mario" \
   -H "Content-Type: application/json" \
@@ -259,7 +334,7 @@ That's all it takes. The `X-Agent-Id` header tags every request, and the dashboa
 
 ### Watching Live
 
-The Live tab in the profile details is a real-time screencast. The dashboard streams JPEG frames from Chrome's DevTools protocol directly to your browser. You see exactly what the agent sees — every page load, every click, every form fill.
+Click on any running instance in the Instances tab to see a real-time screencast. The dashboard streams JPEG frames from Chrome's DevTools protocol directly to your browser. You see exactly what the agent sees — every page load, every click, every form fill.
 
 This is useful for:
 
@@ -267,30 +342,49 @@ This is useful for:
 - **Trust** — your agent is buying something? Watch it fill in the details before it submits.
 - **Fun** — there's something oddly satisfying about watching an AI browse the web.
 
-The screencast is lightweight — configurable FPS (1-15), quality (10-80%), and max width. Default settings use minimal bandwidth.
+**Note:** Screencast only works for headed instances (with visible Chrome window). Headless instances don't have a visual display to capture.
+
+The screencast is lightweight — you can configure:
+- Frames per second (1-15 FPS)
+- Quality (10-80% JPEG compression)
+- Max width (scale down for bandwidth)
+
+Default settings use minimal bandwidth for remote monitoring.
 
 ### A Typical Remote Monitoring Setup
 
-On your server:
-
+**On your server:**
 ```bash
-# Start the dashboard, open to network, locked with token
+# Start orchestrator, open to network, locked with token
 BRIDGE_BIND=0.0.0.0 \
 BRIDGE_TOKEN=my-secret-token \
-pinchtab dashboard &
+pinchtab &
 
-# Your agents start profiles and work as usual
+# Your agents start instances and work as usual
 # They just pass X-Agent-Id headers so you can identify them
+AGENT_ID=mario ./my-agent.sh
 ```
 
-On your laptop, phone, or tablet:
+**On your laptop, phone, or tablet:**
 
-1. Open `http://<server-ip>:9867/dashboard`
-2. See all profiles, their status, running agents
-3. Click into any profile → Live tab to watch the screencast
-4. Switch to Agents view to see the real-time activity feed
+1. Open `http://<server-ip>:9867/dashboard` in browser
+2. Enter token when prompted
+3. See all instances, profiles, agents in real-time
+4. Click into any **headed** instance → see live screencast
+5. Switch to Agents view → see real-time activity feed of all operations
 
-No SSH tunnels. No VPN. Just a browser and a token.
+No SSH tunnels. No VPN. No complex setup. Just a browser and a token.
+
+**API calls from agents:**
+```bash
+# Agents identify themselves with X-Agent-Id header
+curl -X POST http://orchestrator:9867/instances/$INST/navigate \
+  -H "X-Agent-Id: mario" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+The dashboard automatically tracks which agent is doing what, where, and when.
 
 ## Security
 
