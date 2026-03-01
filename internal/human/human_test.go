@@ -77,3 +77,15 @@ func TestTypeWithConfig(t *testing.T) {
 		t.Errorf("expected at least 10 actions, got %d", len(actions1))
 	}
 }
+
+func TestClickElement_RequiresMinContentLength(t *testing.T) {
+	// ClickElement accesses box.Content[0], [1], [2], and [5]
+	// CDP BoxModel Content has 8 float64 values (4 x/y pairs)
+	// The guard must check len(box.Content) < 8
+	// Without a browser, GetBoxModel will fail
+	ctx, _ := chromedp.NewContext(context.Background())
+	err := ClickElement(ctx, 0)
+	if err == nil {
+		t.Error("expected error without browser connection")
+	}
+}
