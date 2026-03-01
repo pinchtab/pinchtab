@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -20,8 +21,40 @@ type Endpoint struct {
 }
 
 func main() {
-	// Parse handlers.go to extract routes
-	endpoints := extractEndpoints("internal/handlers/handlers.go")
+	// Parse all relevant files for routes
+	var endpoints []Endpoint
+
+	// Main handlers
+	endpoints = append(endpoints, extractEndpoints("internal/handlers/handlers.go")...)
+
+	// Dashboard handlers
+	endpoints = append(endpoints, extractEndpoints("internal/dashboard/dashboard.go")...)
+
+	// Profiles service
+	profiles, err := findProfilesFile()
+	if err == nil {
+		endpoints = append(endpoints, extractEndpoints(profiles)...)
+	}
+
+	// Orchestrator service
+	orchestrator, err := findOrchestratorFile()
+	if err == nil {
+		endpoints = append(endpoints, extractEndpoints(orchestrator)...)
+	}
+
+	// Remove duplicates
+	endpointMap := make(map[string]Endpoint)
+	for _, ep := range endpoints {
+		key := ep.Method + " " + ep.Path
+		if _, exists := endpointMap[key]; !exists {
+			endpointMap[key] = ep
+		}
+	}
+
+	endpoints = make([]Endpoint, 0, len(endpointMap))
+	for _, ep := range endpointMap {
+		endpoints = append(endpoints, ep)
+	}
 
 	// Sort by method then path
 	sort.Slice(endpoints, func(i, j int) bool {
@@ -84,6 +117,37 @@ func main() {
 	fmt.Println("")
 }
 
+func findProfilesFile() (string, error) {
+	// Look for profiles service implementation
+	matches := []string{
+		"internal/profiles/handlers.go",
+		"internal/profiles/profiles.go",
+		"internal/handler/profiles.go",
+		"internal/bridge/profiles.go",
+	}
+	for _, path := range matches {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("profiles file not found")
+}
+
+func findOrchestratorFile() (string, error) {
+	// Look for orchestrator service implementation
+	matches := []string{
+		"internal/orchestrator/handlers.go",
+		"internal/orchestrator/orchestrator.go",
+		"internal/bridge/orchestrator.go",
+	}
+	for _, path := range matches {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("orchestrator file not found")
+}
+
 func extractEndpoints(filePath string) []Endpoint {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
@@ -93,15 +157,18 @@ func extractEndpoints(filePath string) []Endpoint {
 
 	var endpoints []Endpoint
 
-	// Find RegisterRoutes function
+	// Find any RegisterHandlers or RegisterRoutes function
 	for _, decl := range file.Decls {
 		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "RegisterRoutes" {
+		if !ok {
 			continue
 		}
 
-		// Extract HandleFunc calls
-		endpoints = extractHandleFuncCalls(funcDecl.Body)
+		// Look for RegisterHandlers or RegisterRoutes
+		if funcDecl.Name.Name == "RegisterHandlers" || funcDecl.Name.Name == "RegisterRoutes" {
+			// Extract HandleFunc calls
+			endpoints = append(endpoints, extractHandleFuncCalls(funcDecl.Body)...)
+		}
 	}
 
 	return endpoints
