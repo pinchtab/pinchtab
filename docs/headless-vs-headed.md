@@ -1,6 +1,8 @@
 # Headless vs Headed
 
-PinchTab can run Chrome in two modes: **Headless** (no visible UI) and **Headed** (visible window). Understanding the tradeoffs helps you choose the right mode for your workflow.
+PinchTab instances can run Chrome in two modes: **Headless** (no visible UI) and **Headed** (visible window). Understanding the tradeoffs helps you choose the right mode for your workflow.
+
+**Note:** You run a single orchestrator (`pinchtab`), then create instances with different modes via the API.
 
 ---
 
@@ -9,10 +11,24 @@ PinchTab can run Chrome in two modes: **Headless** (no visible UI) and **Headed*
 Chrome runs **without a visible window**. All interactions happen via the API.
 
 ```bash
-# Start headless (default)
+# Start orchestrator (once)
 pinchtab
-# or explicitly
-pinchtab --headless
+
+# Terminal 2: Create headless instance (default)
+pinchtab instance launch
+
+# Or via curl
+curl -X POST http://localhost:9867/instances/launch \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "headless"}'
+
+# Response
+{
+  "id": "inst_0a89a5bb",
+  "port": "9868",
+  "headless": true,
+  "status": "starting"
+}
 ```
 
 ### Characteristics
@@ -37,8 +53,24 @@ pinchtab --headless
 Chrome runs **with a visible window** that you can see and interact with.
 
 ```bash
-# Start headed
-pinchtab --headed
+# Start orchestrator (once)
+pinchtab
+
+# Terminal 2: Create headed instance
+pinchtab instance launch --mode headed
+
+# Or via curl
+curl -X POST http://localhost:9867/instances/launch \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "headed"}'
+
+# Response
+{
+  "id": "inst_1b9a5dcc",
+  "port": "9869",
+  "headless": false,
+  "status": "starting"
+}
 ```
 
 ### Characteristics
@@ -87,8 +119,16 @@ pinchtab --headed
 - Long-running processes (24/7 automation)
 
 ```bash
-# Production setup: headless instance
-pinchtab --port 9867
+# Production: Create headless instance
+pinchtab instance launch
+
+# Or multiple headless instances for scale
+for i in 1 2 3; do
+  pinchtab instance launch --mode headless
+done
+
+# List all instances
+curl http://localhost:9867/instances | jq .
 ```
 
 ---
@@ -104,82 +144,150 @@ pinchtab --port 9867
 - Manual verification before production
 
 ```bash
-# Development setup: headed instance with profile
-BRIDGE_PROFILE=dev pinchtab --headed --port 9867
+# Development: Create headed instance with profile
+pinchtab profile create dev
+
+# Get profile ID
+DEV_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="dev") | .id')
+
+# Start headed instance with profile
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$DEV_ID'","mode":"headed"}'
+
+# Or simpler: start without persistent profile
+pinchtab instance launch --mode headed
 ```
 
 ---
 
 ## Switching Modes
 
-You can switch between modes by restarting:
+To switch from headless to headed (or vice versa), stop the current instance and start a new one. If using a persistent profile, state is preserved.
+
+### Switching Without Profile (Ephemeral)
 
 ```bash
-# Running headless
-pinchtab --port 9867
-# Ctrl+C to stop
+# Terminal 1: Start orchestrator
+pinchtab
 
-# Switch to headed
-pinchtab --headed --port 9867
+# Terminal 2: Create headless instance
+INST=$(pinchtab instance launch --mode headless | jq -r '.id')
+
+# ... do work in headless mode ...
+
+# Stop headless instance
+pinchtab instance stop $INST
+
+# Create headed instance (new, no state preserved)
+NEW_INST=$(pinchtab instance launch --mode headed)
 ```
 
-**No state is lost** if using a profile:
+### Switching With Profile (State Preserved)
 
 ```bash
-# Headless session
-BRIDGE_PROFILE=work pinchtab --port 9867
-# ... login, do work ...
-# Ctrl+C
+# Terminal 1: Start orchestrator
+pinchtab
 
-# Switch to headed with same profile
-BRIDGE_PROFILE=work pinchtab --headed --port 9867
-# ... profile, cookies, tabs are restored ...
+# Create persistent profile
+pinchtab profile create work
+
+# Get profile ID
+WORK_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="work") | .id')
+
+# Terminal 2: Create headless instance with profile
+INST=$(curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$WORK_ID'","mode":"headless"}' | jq -r '.id')
+
+# ... login and do work in headless mode ...
+# Cookies, history, bookmarks saved to profile
+
+# Stop headless instance
+pinchtab instance stop $INST
+
+# Create headed instance with SAME profile
+# Cookies, history, login state all restored!
+NEW_INST=$(curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"'$WORK_ID'","mode":"headed"}' | jq -r '.id')
+
+# ... visible window, fully logged in ...
 ```
+
+**Key insight:** Profiles persist across mode switches. Temporary profiles (auto-generated when not specified) do not.
+
 
 ---
 
 ## Display Requirements
 
+Display requirements apply to **headed instances**, not the orchestrator. The orchestrator can run anywhere and create instances in any mode.
+
 ### On macOS
-- Native window system — headed works out of the box
+- Native window system — headed instances work out of the box
 - ```bash
-  pinchtab --headed
+  pinchtab  # Orchestrator
+  # Terminal 2:
+  pinchtab instance launch --mode headed
   ```
 
 ### On Linux
-- Requires X11 or Wayland display server
-- In a Docker container: pass `DISPLAY` environment variable
-- In a headless server: headless mode only
+- Headless instances: Work anywhere (no display needed)
+- Headed instances: Require X11 or Wayland display server
+- In a Docker container: Forward `DISPLAY` environment variable
+- In a headless server: Use headless mode only
 - ```bash
-  # X11 forwarding over SSH
-  ssh -X user@server
-  pinchtab --headed
+  # Orchestrator on remote server (SSH)
+  ssh user@server 'pinchtab &'
+  
+  # Create headed instance via X11 forwarding
+  ssh -X user@server 'pinchtab instance launch --mode headed'
   ```
 
 ### On Windows
-- Native window system — headed works out of the box
+- Native window system — headed instances work out of the box
 - ```bash
-  pinchtab --headed
+  pinchtab  # Orchestrator
+  # Terminal 2:
+  pinchtab instance launch --mode headed
   ```
 
-### In Docker (Headless)
+### In Docker (Headless - Recommended)
 ```dockerfile
-# Headless works everywhere
+# Headless works everywhere, no display needed
 FROM pinchtab/pinchtab:latest
-CMD pinchtab
+CMD ["pinchtab"]
 ```
 
-### In Docker (Headed)
+Run with:
+```bash
+docker run -d -p 9867:9867 pinchtab/pinchtab
+
+# Create headless instances in the container
+curl -X POST http://localhost:9867/instances/launch \
+  -d '{"mode":"headless"}'
+```
+
+### In Docker (Headed - Advanced)
 ```dockerfile
 # Headed requires display forwarding
 FROM pinchtab/pinchtab:latest
 ENV DISPLAY=:0
-CMD pinchtab --headed
+CMD ["pinchtab"]
 ```
 
-Then run with:
+Run with X11 forwarding:
 ```bash
-docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw pinchtab/pinchtab
+docker run \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  -p 9867:9867 \
+  pinchtab/pinchtab
+
+# Create headed instances (display forwarded to host)
+curl -X POST http://localhost:9867/instances/launch \
+  -d '{"mode":"headed"}'
 ```
 
 ---
@@ -189,19 +297,28 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw pinchtab/pinc
 ### Development Workflow
 
 ```bash
-# 1. Start headed for debugging
-BRIDGE_PROFILE=dev pinchtab --headed
+# Terminal 1: Start orchestrator (once)
+pinchtab
 
-# 2. Build and test your automation
-# (in another terminal)
-curl ... # test API calls
+# Terminal 2: Create headed instance for debugging
+DEV=$(pinchtab instance launch --mode headed | jq -r '.id')
 
-# 3. Verify behavior in the visible window
-# 4. Once stable, switch to headless
+# Terminal 3: Build and test your automation
+curl -X POST http://localhost:9867/instances/$DEV/navigate \
+  -d '{"url":"https://example.com"}'
 
-# Terminal 1: Ctrl+C to stop headed
-# Terminal 1: Start headless (production)
-pinchtab --port 9867
+# Verify behavior in the visible window while you develop
+# ... iterate on your script ...
+
+# When stable, test in headless for production
+PROD=$(pinchtab instance launch --mode headless)
+
+# Run full test suite against headless instance
+# ... verify all tests pass ...
+
+# Clean up
+pinchtab instance stop $DEV
+pinchtab instance stop $PROD
 ```
 
 ### CI/CD Pipeline
@@ -210,68 +327,225 @@ pinchtab --port 9867
 # Always headless in CI
 test:
   script:
-    - pinchtab --port 9867 &
-    - npm test  # Runs against headless instance
+    # Start orchestrator
+    - pinchtab &
+    - sleep 1  # Wait for orchestrator to be ready
+    
+    # Create headless instance
+    - INST=$(curl -X POST http://localhost:9867/instances/launch | jq -r '.id')
+    - sleep 2  # Wait for instance to initialize
+    
+    # Run tests against headless instance
+    - npm test
+    
+    # Cleanup
+    - curl -X POST http://localhost:9867/instances/$INST/stop
     - pkill pinchtab
 ```
 
-### Multi-Instance Setup
+### Multi-Instance Setup (Scale)
 
 ```bash
-# Production: Multiple headless instances for scale
-pinchtab --port 9867 &  # Instance 1
-pinchtab --port 9868 &  # Instance 2
-pinchtab --port 9869 &  # Instance 3
+# Terminal 1: Start orchestrator (once)
+pinchtab
+
+# Terminal 2: Create multiple headless instances for scale
+for i in 1 2 3; do
+  INST=$(pinchtab instance launch --mode headless | jq -r '.id')
+  echo "Created headless instance: $INST"
+done
+
+# List all instances
+curl http://localhost:9867/instances | jq .
+
+# Response: 3 independent headless instances
+# [
+#   {"id": "inst_xxx", "port": "9868", "headless": true, "status": "running"},
+#   {"id": "inst_yyy", "port": "9869", "headless": true, "status": "running"},
+#   {"id": "inst_zzz", "port": "9870", "headless": true, "status": "running"}
+# ]
+
+# Terminal 3: Route requests to instances via orchestrator
+# All operations go through: http://localhost:9867/instances/{id}/...
+```
+
+### Multi-Instance with Mixed Modes
+
+```bash
+# Terminal 1: Start orchestrator
+pinchtab
+
+# Create persistent profiles
+pinchtab profile create alice
+pinchtab profile create bob
+pinchtab profile create dev
+
+# Get profile IDs
+ALICE_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="alice") | .id')
+BOB_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="bob") | .id')
+DEV_ID=$(pinchtab profiles | jq -r '.[] | select(.name=="dev") | .id')
+
+# Production: Multiple headless instances
+ALICE_INST=$(curl -X POST http://localhost:9867/instances/start \
+  -d '{"profileId":"'$ALICE_ID'","mode":"headless"}' | jq -r '.id')
+
+BOB_INST=$(curl -X POST http://localhost:9867/instances/start \
+  -d '{"profileId":"'$BOB_ID'","mode":"headless"}' | jq -r '.id')
 
 # Development: One headed instance for debugging
-BRIDGE_PROFILE=dev pinchtab --headed --port 9870
+DEV_INST=$(curl -X POST http://localhost:9867/instances/start \
+  -d '{"profileId":"'$DEV_ID'","mode":"headed"}' | jq -r '.id')
+
+# Each instance is isolated with its own profile/cookies
 ```
 
 ---
 
 ## Performance Tips
 
-### For Headless (Already Optimized)
-- Default is fast
-- Use `--headless` explicitly if needed
+### For Headless Instances (Already Optimized)
+- Headless is the default and already optimized
+- Most operations are fast
+- For high-throughput: Create multiple headless instances and load-balance
 
-### For Headed (Optimize for Dev)
+### For Headed Instances (Optimize for Dev)
 - Close unused tabs to reduce rendering load
-- Use `?filter=interactive` for smaller snapshots
-- Take screenshots sparingly (they're rendered + encoded)
+- Use snapshots instead of screenshots when possible (faster)
+- Take screenshots sparingly (they're rendered + encoded, slower)
 - Minimize window size (less to render)
+- For faster debugging: Use headless for bulk work, headed only for visual debugging
+
+### For Scale
+- Use headless instances (no display overhead)
+- Create multiple instances (one per worker/agent)
+- Load-balance via `/instances` list and round-robin routing
+- Monitor instance health via `GET /instances/{id}`
 
 ---
 
 ## Troubleshooting
 
-### Headed Mode Not Opening a Window
+### Headed Instance Not Opening a Window
+
+**Root cause:** Display server not available
 
 **On Linux:**
-- Check if `DISPLAY` is set: `echo $DISPLAY`
-- If empty, you need X11 or Wayland
-- Fallback to headless: `pinchtab --headless`
+```bash
+# Check if DISPLAY is set
+echo $DISPLAY
+
+# If empty or :0 unavailable, you need X11 or Wayland
+# Fallback to headless: Use --mode headless instead
+pinchtab instance launch --mode headless
+```
 
 **On macOS/Windows:**
-- Check if Chrome/Chromium is installed
-- Ensure no display is required on your system
+- Verify Chrome/Chromium is installed
+- Verify OS has native display server
 
-### Headed Too Slow for Automation
+### Headed Instance Too Slow
 
-- Switch to headless for production
-- Use headed only for development/debugging
+**Solution:** Use headless for production, headed only for development
 
-### Headless But Want to Debug
+```bash
+# Switch from headed to headless
+INST=$(pinchtab instance launch --mode headed)
+# ... do some debugging ...
+pinchtab instance stop $INST
 
-- Take screenshots: `curl http://localhost:9867/screenshot?tabId=abc123 > page.jpg`
-- Extract text: `curl http://localhost:9867/text?tabId=abc123`
-- Use CLI tools: `pinchtab snap -i` to see structure
+# Create headless for production testing
+INST=$(pinchtab instance launch --mode headless)
+```
+
+### Headless Instance But Need to Debug
+
+**Solution:** Use API operations to see what's happening
+
+```bash
+# Get page structure (DOM)
+curl http://localhost:9867/instances/$INST/snapshot | jq .
+
+# Extract all text
+curl http://localhost:9867/instances/$INST/text
+
+# Take screenshot
+curl http://localhost:9867/instances/$INST/screenshot > page.png
+
+# Get page title and URL
+curl http://localhost:9867/instances/$INST/tabs | jq '.[] | {title, url}'
+```
+
+### Instance Initialization Slow
+
+**Symptom:** Instance stuck in "starting" state
+
+**Solution:** Wait for instance to reach "running" state before making requests
+
+```bash
+# Check instance status
+curl http://localhost:9867/instances/$INST | jq '.status'
+
+# Poll until running (first request initializes Chrome: 5-20 seconds)
+while [ "$(curl -s http://localhost:9867/instances/$INST | jq -r '.status')" != "running" ]; do
+  sleep 0.5
+done
+
+# Now safe to use
+curl -X POST http://localhost:9867/instances/$INST/navigate \
+  -d '{"url":"https://example.com"}'
+```
+
+### Can't Connect to Instance
+
+**Symptom:** 503 error when trying to navigate/snapshot
+
+**Causes:**
+1. Instance still initializing (check status)
+2. Chrome crashed (check logs)
+3. Port already in use (specify different port)
+
+**Debug:**
+```bash
+# Get instance status and error details
+curl http://localhost:9867/instances/$INST | jq .
+
+# Get instance logs
+curl http://localhost:9867/instances/$INST/logs
+
+# Check if port is available
+lsof -i :9868  # Shows what's using the port
+```
 
 ---
 
 ## Summary
 
-- **Headless** = Fast, scriptable, production-ready
-- **Headed** = Visible, debuggable, development-friendly
+- **Headless instances** = Fast, scriptable, production-ready (no display overhead)
+- **Headed instances** = Visible, debuggable, development-friendly (requires display)
 
-Choose headless for automation, headed for debugging. You can switch modes anytime without losing session state (if using profiles).
+### Key Points
+- Start orchestrator once: `pinchtab`
+- Create instances with mode via API: `instance launch --mode headless|headed`
+- Profiles are optional but preserve state across mode switches
+- You can have both headless and headed instances running simultaneously
+- Switch modes by stopping one instance and creating another
+- If using profiles, login state and cookies persist across mode switches
+
+### Quick Reference
+```bash
+# Orchestrator (runs once)
+pinchtab
+
+# Create headless instance (production)
+pinchtab instance launch --mode headless
+
+# Create headed instance (development)
+pinchtab instance launch --mode headed
+
+# Create with persistent profile (state preserved on mode switch)
+pinchtab profile create work
+curl -X POST http://localhost:9867/instances/start \
+  -d '{"profileId":"work-id","mode":"headed"}'
+```
+
+**Next:** See [Instance API Reference](references/instance-api.md) for complete instance management details.
