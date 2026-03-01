@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -118,19 +119,30 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	var req struct {
 		Name     string `json:"name"`
 		Port     string `json:"port,omitempty"`
-		Headless bool   `json:"headless"`
+		Headless *bool  `json:"headless"` // pointer to distinguish unset from false
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid JSON"))
-		return
-	}
-	if req.Name == "" {
-		web.Error(w, 400, fmt.Errorf("name is required"))
-		return
-	}
-	// Port is optional - if not provided, Launch() will auto-allocate
 
-	inst, err := o.Launch(req.Name, req.Port, req.Headless)
+	// Decode body if present (empty body is allowed)
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("invalid JSON"))
+			return
+		}
+	}
+
+	// Default: generate name if not provided
+	if req.Name == "" {
+		req.Name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	}
+
+	// Default: headless=true if not specified
+	headless := true
+	if req.Headless != nil {
+		headless = *req.Headless
+	}
+
+	// Port is optional - if not provided, Launch() will auto-allocate
+	inst, err := o.Launch(req.Name, req.Port, headless)
 	if err != nil {
 		web.Error(w, 409, err)
 		return
