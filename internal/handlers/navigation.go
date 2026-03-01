@@ -148,6 +148,16 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 		}
 
+		if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
+			code := 500
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
+				code = 400
+			}
+			web.Error(w, code, fmt.Errorf("navigate: %w", err))
+			return
+		}
+
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title := bridge.WaitForTitle(tCtx, titleWait)
@@ -349,6 +359,16 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			web.Error(w, 500, err)
 			return
+		}
+
+		if req.URL != "" && req.URL != "about:blank" {
+			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
+			defer tCancel()
+			if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
+				_ = h.Bridge.CloseTab(newTargetID)
+				web.Error(w, 500, fmt.Errorf("navigate: %w", err))
+				return
+			}
 		}
 
 		var curURL, title string

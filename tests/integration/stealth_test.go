@@ -15,6 +15,7 @@ func TestStealth_WebdriverUndefined(t *testing.T) {
 	// This is more reliable than a fixed wait across different CI runners
 	for retry := 0; retry < 10; retry++ {
 		code, body := httpPost(t, "/evaluate", map[string]string{
+			"tabId":      currentTabID,
 			"expression": "navigator.webdriver === undefined",
 		})
 		if code != 200 {
@@ -43,6 +44,7 @@ func TestStealth_PluginsPresent(t *testing.T) {
 	// Poll for stealth injection instead of fixed sleep
 	for retry := 0; retry < 10; retry++ {
 		code, body := httpPost(t, "/evaluate", map[string]string{
+			"tabId":      currentTabID,
 			"expression": "navigator.plugins.length > 0",
 		})
 		if code != 200 {
@@ -66,6 +68,7 @@ func TestStealth_ChromeRuntimePresent(t *testing.T) {
 	// Poll for stealth injection instead of fixed sleep
 	for retry := 0; retry < 10; retry++ {
 		code, body := httpPost(t, "/evaluate", map[string]string{
+			"tabId":      currentTabID,
 			"expression": "!!window.chrome.runtime",
 		})
 		if code != 200 {
@@ -89,6 +92,7 @@ func TestStealth_FingerprintRotate(t *testing.T) {
 
 	// Get initial user agent
 	code1, body1 := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code1 != 200 {
@@ -98,7 +102,8 @@ func TestStealth_FingerprintRotate(t *testing.T) {
 
 	// Rotate fingerprint with OS specified
 	code2, body2 := httpPost(t, "/fingerprint/rotate", map[string]string{
-		"os": "windows",
+		"os":    "windows",
+		"tabId": currentTabID,
 	})
 	if code2 != 200 {
 		t.Fatalf("expected 200 for fingerprint rotate, got %d (body: %s)", code2, body2)
@@ -106,6 +111,7 @@ func TestStealth_FingerprintRotate(t *testing.T) {
 
 	// Get new user agent after rotation
 	code3, body3 := httpPost(t, "/evaluate", map[string]string{
+		"tabId":      currentTabID,
 		"expression": "navigator.userAgent",
 	})
 	if code3 != 200 {
@@ -131,7 +137,7 @@ func TestStealth_FingerprintRotateRandom(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// Rotate fingerprint with empty body (random OS)
-	code, body := httpPost(t, "/fingerprint/rotate", map[string]string{})
+	code, body := httpPost(t, "/fingerprint/rotate", map[string]string{"tabId": currentTabID})
 	if code != 200 {
 		t.Fatalf("expected 200 for fingerprint rotate (random), got %d (body: %s)", code, body)
 	}

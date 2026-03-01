@@ -4,15 +4,27 @@ package integration
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 )
 
+func snapshotPath(path string) string {
+	if currentTabID == "" {
+		return path
+	}
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "tabId=" + url.QueryEscape(currentTabID)
+}
+
 // S1: Basic snapshot
 func TestSnapshot_Basic(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/snapshot")
+	code, body := httpGet(t, snapshotPath("/snapshot"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -29,7 +41,7 @@ func TestSnapshot_Basic(t *testing.T) {
 // S2: Interactive filter
 func TestSnapshot_Interactive(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/snapshot?filter=interactive")
+	code, body := httpGet(t, snapshotPath("/snapshot?filter=interactive"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -43,7 +55,7 @@ func TestSnapshot_Interactive(t *testing.T) {
 // S4: Text format
 func TestSnapshot_TextFormat(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/snapshot?format=text")
+	code, body := httpGet(t, snapshotPath("/snapshot?format=text"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -60,7 +72,7 @@ func TestSnapshot_TextFormat(t *testing.T) {
 // S5: YAML format
 func TestSnapshot_YAMLFormat(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/snapshot?format=yaml")
+	code, body := httpGet(t, snapshotPath("/snapshot?format=yaml"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -73,7 +85,7 @@ func TestSnapshot_YAMLFormat(t *testing.T) {
 // S3: Depth filter
 func TestSnapshot_Depth(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpGet(t, "/snapshot?depth=2")
+	code, _ := httpGet(t, snapshotPath("/snapshot?depth=2"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -82,7 +94,7 @@ func TestSnapshot_Depth(t *testing.T) {
 // S5 (compact): maxTokens
 func TestSnapshot_MaxTokens(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, _ := httpGet(t, "/snapshot?maxTokens=500")
+	code, _ := httpGet(t, snapshotPath("/snapshot?maxTokens=500"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -148,7 +160,7 @@ func TestSnapshot_NoTab(t *testing.T) {
 // S8: Snapshot file output
 func TestSnapshot_FileOutput(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/snapshot?output=file")
+	code, body := httpGet(t, snapshotPath("/snapshot?output=file"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d (body: %s)", code, body)
 	}
@@ -173,7 +185,7 @@ func TestSnapshot_RefStability(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// Get initial snapshot with interactive filter
-	code, body := httpGet(t, "/snapshot?filter=interactive")
+	code, body := httpGet(t, snapshotPath("/snapshot?filter=interactive"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -181,13 +193,14 @@ func TestSnapshot_RefStability(t *testing.T) {
 
 	// Perform an action (press a key) to trigger potential ref changes
 	_, _ = httpPost(t, "/action", map[string]string{
-		"kind": "press",
-		"key":  "Escape",
+		"tabId": currentTabID,
+		"kind":  "press",
+		"key":   "Escape",
 	})
 	// Ignore result - just testing snapshot stability
 
 	// Get snapshot again after action
-	code, body = httpGet(t, "/snapshot?filter=interactive")
+	code, body = httpGet(t, snapshotPath("/snapshot?filter=interactive"))
 	if code != 200 {
 		t.Fatalf("expected 200 after action, got %d", code)
 	}
@@ -211,7 +224,7 @@ func TestSnapshot_DiffMode(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// First snapshot call - stores state
-	code, body1 := httpGet(t, "/snapshot")
+	code, body1 := httpGet(t, snapshotPath("/snapshot"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -223,7 +236,7 @@ func TestSnapshot_DiffMode(t *testing.T) {
 	}
 
 	// Second snapshot call with diff=true
-	code, body2 := httpGet(t, "/snapshot?diff=true")
+	code, body2 := httpGet(t, snapshotPath("/snapshot?diff=true"))
 	if code != 200 {
 		t.Fatalf("expected 200 for diff snapshot, got %d", code)
 	}
@@ -251,7 +264,7 @@ func TestSnapshot_DiffFirstCall(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	// Call /snapshot?diff=true immediately (first call with diff=true)
-	code, body := httpGet(t, "/snapshot?diff=true")
+	code, body := httpGet(t, snapshotPath("/snapshot?diff=true"))
 	if code != 200 {
 		t.Fatalf("expected 200 for first diff call, got %d", code)
 	}
@@ -276,7 +289,7 @@ func TestSnapshot_LargePage(t *testing.T) {
 	navigate(t, url)
 
 	// Call /snapshot on the large page
-	code, body := httpGet(t, "/snapshot")
+	code, body := httpGet(t, snapshotPath("/snapshot"))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}

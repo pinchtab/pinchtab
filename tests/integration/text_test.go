@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -11,7 +12,7 @@ import (
 // T1: Readability mode
 func TestText_Readability(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/text")
+	code, body := httpGet(t, "/text?tabId="+url.QueryEscape(currentTabID))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -24,7 +25,7 @@ func TestText_Readability(t *testing.T) {
 // T2: Raw mode
 func TestText_Raw(t *testing.T) {
 	navigate(t, "https://example.com")
-	code, body := httpGet(t, "/text?mode=raw")
+	code, body := httpGet(t, "/text?mode=raw&tabId="+url.QueryEscape(currentTabID))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -103,7 +104,7 @@ func TestText_NoTab(t *testing.T) {
 // T5: Token efficiency (real-world content)
 func TestText_TokenEfficiency(t *testing.T) {
 	navigate(t, "https://google.com")
-	code, body := httpGet(t, "/text")
+	code, body := httpGet(t, "/text?tabId="+url.QueryEscape(currentTabID))
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}

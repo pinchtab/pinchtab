@@ -55,6 +55,12 @@ echo -e "\n${YELLOW}📊 Coverage Summary:${NC}"
 go tool cover -func=coverage.out | tail -1
 success_step "Tests with Coverage"
 
+check_step "Integration Tests"
+if ! go test -tags integration -v -timeout 10m ./tests/integration/; then
+    error_step "Integration Tests"
+fi
+success_step "Integration Tests"
+
 check_step "Lint Check"
 LINT_CMD=""
 if command -v golangci-lint >/dev/null 2>&1; then

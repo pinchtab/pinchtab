@@ -69,6 +69,9 @@ func (pa *PortAllocator) ReleasePort(port int) {
 	defer pa.mu.Unlock()
 
 	delete(pa.allocated, port)
+	if port >= pa.start && port <= pa.end {
+		pa.nextCandidate = port
+	}
 	slog.Debug("released port", "port", port)
 }
 

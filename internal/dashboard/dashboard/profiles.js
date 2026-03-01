@@ -184,7 +184,7 @@ async function doCreateProfile() {
         body: JSON.stringify(body)
       });
     } else {
-      res = await fetch('/profiles/create', {
+      res = await fetch('/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -252,12 +252,12 @@ function updateLaunchCommand() {
   const port = document.getElementById('launch-port').value.trim();
   const headless = !!(document.getElementById('launch-headless') && document.getElementById('launch-headless').checked);
   
-  // Get profile ID
-  const profileId = profileByName[name] ? profileByName[name].id : '';
+  // Prefer profile ID, fall back to name if ID is unavailable.
+  const profileId = profileByName[name] ? profileByName[name].id : name;
   
-  // Modern API: POST /instances/launch with profileId + mode + port
+  // Canonical API: POST /instances/start with profileId + mode + port
   const mode = headless ? 'headless' : 'headed';
-  const curlCmd = 'curl -X POST http://localhost:9867/instances/launch '
+  const curlCmd = 'curl -X POST http://localhost:9867/instances/start '
     + '-H "Content-Type: application/json" '
     + '-d \'{\"profileId\":\"' + profileId + '\",\"mode\":\"' + mode + '\",\"port\":\"' + (port || 'auto') + '"}\'';
   
@@ -310,20 +310,19 @@ async function doLaunch() {
     return;
   }
 
-  // Get profile ID from profileByName map
-  const profileId = profileByName[name] ? profileByName[name].id : '';
+  // Prefer profile ID, fall back to name if ID is unavailable.
+  const profileId = profileByName[name] ? profileByName[name].id : name;
 
   saveProfilePort(name, port);
   setLaunchHeadlessPref(headless);
   closeLaunchModal();
 
   try {
-    const res = await fetch('/instances/launch', {
+    const res = await fetch('/instances/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         profileId: profileId,
-        name: name,
         mode: headless ? 'headless' : 'headed',
         port: port
       })
@@ -341,7 +340,7 @@ async function doLaunch() {
 
 async function deleteProfile(name) {
   if (!await appConfirm('Delete profile "' + name + '"? This removes all data.', '🗑️ Delete Profile')) return;
-  await fetch('/profiles/' + name, { method: 'DELETE' });
+  await fetch('/profiles/' + encodeURIComponent(name), { method: 'DELETE' });
   loadProfiles();
 }
 
@@ -373,7 +372,7 @@ function pollInstanceStatus(id) {
 
 async function stopInstance(id) {
   if (!await appConfirm('Stop instance ' + id + '?', '⏹ Stop Instance')) return;
-  await fetch('/instances/' + id + '/stop', { method: 'POST' });
+  await fetch('/instances/' + encodeURIComponent(id) + '/stop', { method: 'POST' });
   setTimeout(loadProfiles, 1000);
 }
 

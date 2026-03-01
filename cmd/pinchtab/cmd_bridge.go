@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
@@ -24,6 +25,7 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 	// Create a bridge instance with lazy initialization
 	// Chrome will be initialized on first request via ensureChrome()
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
+	bridgeInstance.StealthScript = assets.StealthScript
 
 	mux := http.NewServeMux()
 
