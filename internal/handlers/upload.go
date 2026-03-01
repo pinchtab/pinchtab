@@ -37,6 +37,8 @@ type uploadRequest struct {
 func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+
 	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("invalid JSON body: %w", err))
