@@ -1,403 +1,418 @@
 {
-  "version": "1.0",
-  "generated": "auto-generated from Go code",
+  "version": "2.0",
+  "generated": "manually verified against implementations",
   "count": 66,
   "endpoints": [
     {
       "method": "DELETE",
       "path": "/profiles/{name}",
       "handler": "handleDeleteByPath",
-      "examples": {}
+      "description": "Delete a browser profile",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "location": "path",
+          "required": true,
+          "description": "Profile name"
+        }
+      ],
+      "examples": {
+        "curl": "curl -X DELETE http://localhost:9867/profiles/work"
+      }
     },
     {
       "method": "GET",
       "path": "/",
-      "handler": "",
+      "handler": "handleDashboardUI",
+      "description": "Dashboard UI",
+      "implemented": true,
+      "cli": false,
+      "curl": false,
       "examples": {}
     },
     {
       "method": "GET",
       "path": "/cookies",
       "handler": "HandleGetCookies",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/dashboard",
-      "handler": "",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/dashboard/",
-      "handler": "",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/dashboard/agents",
-      "handler": "handleAgents",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/dashboard/events",
-      "handler": "handleSSE",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/download",
-      "handler": "HandleDownload",
-      "examples": {}
+      "description": "Get cookies from current tab",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "query",
+          "required": true,
+          "description": "Tab ID"
+        }
+      ],
+      "examples": {
+        "curl": "curl http://localhost:9867/cookies?tabId=abc123"
+      }
     },
     {
       "method": "GET",
       "path": "/health",
       "handler": "HandleHealth",
-      "examples": {}
+      "description": "Health check endpoint",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "examples": {
+        "curl": "curl http://localhost:9867/health",
+        "cli": "pinchtab health"
+      }
     },
     {
       "method": "GET",
       "path": "/instances",
       "handler": "handleList",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/tabs",
-      "handler": "handleAllTabs",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/cookies",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/download",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/logs",
-      "handler": "handleLogsByID",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/pdf",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/proxy/screencast",
-      "handler": "handleProxyScreencast",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/screencast",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/screenshot",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/snapshot",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/tabs",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/instances/{id}/text",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/pdf",
-      "handler": "HandlePDF",
-      "examples": {}
+      "description": "List all running instances",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "examples": {
+        "curl": "curl http://localhost:9867/instances",
+        "cli": "pinchtab instances"
+      }
     },
     {
       "method": "GET",
       "path": "/profiles",
       "handler": "handleList",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/profiles/{id}/instance",
-      "handler": "handleProfileInstance",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/profiles/{name}/analytics",
-      "handler": "handleAnalyticsByPath",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/profiles/{name}/logs",
-      "handler": "handleLogsByPath",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/screencast",
-      "handler": "HandleScreencast",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/screencast/tabs",
-      "handler": "HandleScreencastAll",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/screenshot",
-      "handler": "HandleScreenshot",
-      "examples": {}
+      "description": "List all profiles",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "examples": {
+        "curl": "curl http://localhost:9867/profiles",
+        "cli": "pinchtab profiles"
+      }
     },
     {
       "method": "GET",
       "path": "/snapshot",
       "handler": "HandleSnapshot",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/stealth/status",
-      "handler": "HandleStealthStatus",
-      "examples": {}
-    },
-    {
-      "method": "GET",
-      "path": "/tabs",
-      "handler": "HandleTabs",
-      "examples": {}
+      "description": "Get accessibility tree of a tab",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "query",
+          "required": true,
+          "description": "Tab ID"
+        },
+        {
+          "name": "filter",
+          "type": "string",
+          "location": "query",
+          "required": false,
+          "description": "Filter: 'interactive' or 'all' (default: 'all')"
+        },
+        {
+          "name": "interactive",
+          "type": "bool",
+          "location": "query",
+          "required": false,
+          "description": "Alias for filter=interactive"
+        },
+        {
+          "name": "compact",
+          "type": "bool",
+          "location": "query",
+          "required": false,
+          "description": "Compact output (default: false)"
+        }
+      ],
+      "examples": {
+        "curl": "curl \"http://localhost:9867/snapshot?tabId=abc123&filter=interactive\"",
+        "cli": "pinchtab snap -i -c",
+        "payload": null
+      }
     },
     {
       "method": "GET",
       "path": "/text",
       "handler": "HandleText",
-      "examples": {}
+      "description": "Extract text content from a tab",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "query",
+          "required": true,
+          "description": "Tab ID"
+        }
+      ],
+      "examples": {
+        "curl": "curl http://localhost:9867/text?tabId=abc123",
+        "cli": "pinchtab text"
+      }
     },
     {
       "method": "GET",
-      "path": "/welcome",
-      "handler": "",
-      "examples": {}
+      "path": "/screenshot",
+      "handler": "HandleScreenshot",
+      "description": "Take a screenshot of a tab",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "query",
+          "required": true,
+          "description": "Tab ID"
+        },
+        {
+          "name": "quality",
+          "type": "int",
+          "location": "query",
+          "required": false,
+          "description": "JPEG quality 1-100 (default: 80)"
+        }
+      ],
+      "examples": {
+        "curl": "curl http://localhost:9867/screenshot?tabId=abc123 > screenshot.jpg",
+        "cli": "pinchtab screenshot -o page.jpg"
+      }
     },
     {
-      "method": "PATCH",
-      "path": "/profiles/meta",
-      "handler": "handleUpdateMeta",
-      "examples": {}
-    },
-    {
-      "method": "PATCH",
-      "path": "/profiles/{name}",
-      "handler": "handleUpdateByPath",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/action",
-      "handler": "HandleAction",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/actions",
-      "handler": "HandleActions",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/cookies",
-      "handler": "HandleSetCookies",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/ensure-chrome",
-      "handler": "HandleEnsureChrome",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/evaluate",
-      "handler": "HandleEvaluate",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/fingerprint/rotate",
-      "handler": "HandleFingerprintRotate",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/launch",
-      "handler": "handleLaunchByName",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/action",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/actions",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/cookies",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/ensure-chrome",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/evaluate",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/navigate",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/stop",
-      "handler": "handleStopByInstanceID",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/tab",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/tab/lock",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/tab/unlock",
-      "handler": "proxyToInstance",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/instances/{id}/upload",
-      "handler": "proxyToInstance",
-      "examples": {}
+      "method": "GET",
+      "path": "/pdf",
+      "handler": "HandlePDF",
+      "description": "Export page as PDF",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "query",
+          "required": true,
+          "description": "Tab ID"
+        }
+      ],
+      "examples": {
+        "curl": "curl http://localhost:9867/pdf?tabId=abc123 > page.pdf",
+        "cli": "pinchtab pdf -o page.pdf"
+      }
     },
     {
       "method": "POST",
       "path": "/navigate",
       "handler": "HandleNavigate",
-      "examples": {}
+      "description": "Navigate to a URL or create new tab",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "body",
+          "required": false,
+          "description": "Tab ID (creates new if omitted)"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "URL to navigate to"
+        },
+        {
+          "name": "newTab",
+          "type": "bool",
+          "location": "body",
+          "required": false,
+          "description": "Force create new tab (default: false)"
+        },
+        {
+          "name": "timeout",
+          "type": "float64",
+          "location": "body",
+          "required": false,
+          "description": "Timeout in ms (default: 30000)"
+        }
+      ],
+      "examples": {
+        "curl": "curl -X POST http://localhost:9867/navigate -H \"Content-Type: application/json\" -d '{\"url\":\"https://example.com\"}'",
+        "cli": "pinchtab nav https://example.com",
+        "payload": "{\"url\":\"https://example.com\"}"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/action",
+      "handler": "HandleAction",
+      "description": "Perform action on page element (click, type, fill, etc)",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Tab ID"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Action: 'click', 'type', 'fill', 'press', 'hover', 'focus', 'scroll', 'select'"
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Element reference (e.g., 'e5')"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "location": "body",
+          "required": false,
+          "description": "Text for 'type' or 'fill'"
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "location": "body",
+          "required": false,
+          "description": "Key for 'press' (e.g., 'Enter', 'Tab')"
+        }
+      ],
+      "examples": {
+        "curl_click": "curl -X POST http://localhost:9867/action -H \"Content-Type: application/json\" -d '{\"tabId\":\"abc123\",\"kind\":\"click\",\"ref\":\"e5\"}'",
+        "curl_type": "curl -X POST http://localhost:9867/action -H \"Content-Type: application/json\" -d '{\"tabId\":\"abc123\",\"kind\":\"type\",\"ref\":\"e3\",\"text\":\"hello\"}'",
+        "cli_click": "pinchtab click e5",
+        "cli_type": "pinchtab type e3 \"hello\"",
+        "cli_fill": "pinchtab fill e3 \"value\"",
+        "cli_press": "pinchtab press e5 Enter"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/evaluate",
+      "handler": "HandleEvaluate",
+      "description": "Execute JavaScript in the page",
+      "implemented": true,
+      "cli": true,
+      "curl": true,
+      "params": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Tab ID"
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "JavaScript code to execute"
+        }
+      ],
+      "examples": {
+        "curl": "curl -X POST http://localhost:9867/evaluate -H \"Content-Type: application/json\" -d '{\"tabId\":\"abc123\",\"code\":\"document.title\"}'",
+        "cli": "pinchtab eval 'document.title'",
+        "payload": "{\"code\":\"document.title\"}"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/instances/launch",
+      "handler": "handleLaunchByName",
+      "description": "Launch/create an instance with a profile",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "params": [
+        {
+          "name": "profile",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Profile name"
+        },
+        {
+          "name": "headless",
+          "type": "bool",
+          "location": "body",
+          "required": false,
+          "description": "Headless mode (default: true)"
+        }
+      ],
+      "examples": {
+        "curl": "curl -X POST http://localhost:9867/instances/launch -H \"Content-Type: application/json\" -d '{\"profile\":\"work\",\"headless\":true}'",
+        "payload": "{\"profile\":\"work\"}"
+      }
     },
     {
       "method": "POST",
       "path": "/profiles/create",
       "handler": "handleCreate",
-      "examples": {}
+      "description": "Create a new profile",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "location": "body",
+          "required": true,
+          "description": "Profile name"
+        }
+      ],
+      "examples": {
+        "curl": "curl -X POST http://localhost:9867/profiles/create -H \"Content-Type: application/json\" -d '{\"name\":\"work\"}'",
+        "payload": "{\"name\":\"work\"}"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard/agents",
+      "handler": "handleAgents",
+      "description": "Get agent activity feed",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "examples": {
+        "curl": "curl http://localhost:9867/dashboard/agents"
+      }
     },
     {
       "method": "POST",
-      "path": "/profiles/import",
-      "handler": "handleImport",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/profiles/{id}/start",
-      "handler": "handleStartByID",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/profiles/{id}/stop",
-      "handler": "handleStopByID",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/profiles/{name}/reset",
-      "handler": "handleResetByPath",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/start/{id}",
-      "handler": "handleStartByID",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/stop/{id}",
-      "handler": "handleStopByID",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/tab",
-      "handler": "HandleTab",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/tab/lock",
-      "handler": "HandleTabLock",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/tab/unlock",
-      "handler": "HandleTabUnlock",
-      "examples": {}
-    },
-    {
-      "method": "POST",
-      "path": "/upload",
-      "handler": "HandleUpload",
-      "examples": {}
+      "path": "/ensure-chrome",
+      "handler": "HandleEnsureChrome",
+      "description": "Ensure Chrome is initialized",
+      "implemented": true,
+      "cli": false,
+      "curl": true,
+      "examples": {
+        "curl": "curl -X POST http://localhost:9867/ensure-chrome"
+      }
     }
   ]
 }
