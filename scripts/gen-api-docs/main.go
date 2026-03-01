@@ -14,10 +14,20 @@ import (
 )
 
 type Endpoint struct {
-	Method  string
-	Path    string
-	Handler string
-	Doc     string
+	Method      string
+	Path        string
+	Handler     string
+	Doc         string
+	Description string
+	Params      []Param
+	Examples    map[string]string // format -> example code
+}
+
+type Param struct {
+	Name        string
+	Type        string
+	Location    string // query, body, path
+	Description string
 }
 
 func main() {
