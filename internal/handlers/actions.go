@@ -12,6 +12,53 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+// HandleAction performs a single action on a tab (click, type, fill, etc).
+//
+// @Endpoint POST /action
+// @Description Interact with page elements: click, type text, fill inputs, press keys, hover, focus, scroll, select
+//
+// @Param tabId string body Tab ID (required)
+// @Param kind string body Action type: "click", "type", "fill", "press", "hover", "focus", "scroll", "select" (required)
+// @Param ref string body Element reference from snapshot (e.g., "e5") (required)
+// @Param text string body Text to type or fill (for "type"/"fill" actions)
+// @Param value string body Value for "select" action (e.g., option index)
+// @Param key string body Key to press (for "press" action, e.g., "Enter", "Tab")
+// @Param x int body X coordinate for "scroll" action (optional)
+// @Param y int body Y coordinate for "scroll" action (optional)
+//
+// @Response 200 application/json Returns {success: true}
+// @Response 400 application/json Invalid action or parameters
+// @Response 404 application/json Tab or element not found
+// @Response 500 application/json Chrome error
+//
+// @Example curl click:
+//   curl -X POST http://localhost:9867/action \
+//     -H "Content-Type: application/json" \
+//     -d '{"tabId":"abc123","kind":"click","ref":"e5"}'
+//
+// @Example curl type:
+//   curl -X POST http://localhost:9867/action \
+//     -H "Content-Type: application/json" \
+//     -d '{"tabId":"abc123","kind":"type","ref":"e3","text":"user@example.com"}'
+//
+// @Example curl fill form:
+//   curl -X POST http://localhost:9867/action \
+//     -H "Content-Type: application/json" \
+//     -d '{"tabId":"abc123","kind":"fill","ref":"e3","text":"John Doe"}'
+//
+// @Example curl press key:
+//   curl -X POST http://localhost:9867/action \
+//     -H "Content-Type: application/json" \
+//     -d '{"tabId":"abc123","kind":"press","ref":"e7","key":"Enter"}'
+//
+// @Example cli click:
+//   pinchtab click e5
+//
+// @Example cli type:
+//   pinchtab type e3 "user@example.com"
+//
+// @Example cli fill:
+//   pinchtab fill e3 "John Doe"
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {

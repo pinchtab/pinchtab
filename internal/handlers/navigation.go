@@ -15,6 +15,33 @@ import (
 
 const maxBodySize = 1 << 20
 
+// HandleNavigate navigates a tab to a URL or creates a new tab.
+//
+// @Endpoint POST /navigate
+// @Description Navigate to a URL in an existing tab or create a new tab and navigate
+//
+// @Param tabId string body Tab ID to navigate in (optional - creates new if omitted)
+// @Param url string body URL to navigate to (required)
+// @Param newTab bool body Force create new tab (optional, default: false)
+// @Param waitTitle float64 body Wait for title change (ms) (optional, default: 0)
+// @Param timeout float64 body Timeout for navigation (ms) (optional, default: 30000)
+//
+// @Response 200 application/json Returns {tabId, url, title}
+// @Response 400 application/json Invalid URL or parameters
+// @Response 500 application/json Chrome error
+//
+// @Example curl navigate new:
+//   curl -X POST http://localhost:9867/navigate \
+//     -H "Content-Type: application/json" \
+//     -d '{"url":"https://example.com"}'
+//
+// @Example curl navigate existing:
+//   curl -X POST http://localhost:9867/navigate \
+//     -H "Content-Type: application/json" \
+//     -d '{"tabId":"abc123","url":"https://google.com"}'
+//
+// @Example cli:
+//   pinchtab nav https://example.com
 func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
