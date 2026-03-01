@@ -39,8 +39,9 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 
 	// HTTP server
 	server := &http.Server{
-		Addr:    listenAddr,
-		Handler: loggingMiddleware(mux),
+		Addr:              listenAddr,
+		Handler:           loggingMiddleware(mux),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
