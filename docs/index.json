@@ -9,6 +9,8 @@
   ],
   "references": [
     "references/api-reference.json",
+    "references/profile-api.md",
+    "references/api-structure-new.md",
     "references/configuration.md",
     "references/cli-design.md",
     "references/cli-implementation.md",
