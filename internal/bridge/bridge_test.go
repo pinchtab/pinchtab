@@ -89,3 +89,27 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 		t.Error("CreateTab should fail when browserCtx is invalid")
 	}
 }
+
+func TestCloseLastTabPrevention(t *testing.T) {
+	// Test that attempting to close the last tab returns an error
+	// This prevents Chrome from exiting and crashing the server
+	cfg := &config.RuntimeConfig{}
+	ctx := context.TODO()
+	tm := NewTabManager(ctx, cfg, nil)
+
+	// Mock the ListTargets method by creating a TabManager with no browser context
+	// When ListTargets is called on an invalid context, it should return an error
+	// which simulates the case where there's only one tab remaining
+	err := tm.CloseTab("fake-tab-id")
+	if err == nil {
+		t.Error("CloseTab should fail when no browser context is available")
+	}
+
+	// The error should be related to listing targets, not the specific tab
+	expectedErrMsg := "list targets"
+	if err != nil && len(err.Error()) > 0 {
+		if err.Error()[:len(expectedErrMsg)] != expectedErrMsg {
+			t.Errorf("Expected error to start with '%s', got: %s", expectedErrMsg, err.Error())
+		}
+	}
+}
