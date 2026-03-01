@@ -23,6 +23,9 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /start/{id}", o.handleStartByID)
 	mux.HandleFunc("POST /stop/{id}", o.handleStopByID)
 
+	// Phase 2: Instance Management (new API)
+	mux.HandleFunc("POST /instances/start", o.handleStartInstance)
+
 	// Dashboard / backward compat
 	mux.HandleFunc("POST /instances/launch", o.handleLaunchByName)
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
@@ -165,6 +168,57 @@ func (o *Orchestrator) handleLogsByID(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	_, _ = w.Write([]byte(logs))
+}
+
+// handleStartInstance: Phase 2 API endpoint for starting instances
+// POST /instances/start {profileId?, mode?, port?}
+// All parameters are optional
+func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProfileID string `json:"profileId,omitempty"` // Optional: Profile ID or name
+		Mode      string `json:"mode,omitempty"`      // Optional: "headed" or "headless"
+		Port      string `json:"port,omitempty"`      // Optional: port number
+	}
+
+	// Decode body if present (empty body is allowed)
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("invalid JSON"))
+			return
+		}
+	}
+
+	// Resolve profileId to profile name
+	// If profileId not provided, auto-generate instance with default profile or first available
+	var profileName string
+	var err error
+
+	if req.ProfileID != "" {
+		// User provided profileId (or name) - resolve it
+		profileName, err = o.resolveProfileName(req.ProfileID)
+		if err != nil {
+			web.Error(w, 404, fmt.Errorf("profile %q not found", req.ProfileID))
+			return
+		}
+	} else {
+		// No profileId provided - use auto-generated name (creates temporary profile)
+		profileName = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	}
+
+	// Parse mode: "headed" or "headless" (default: headless)
+	headless := true
+	if req.Mode == "headed" {
+		headless = false
+	}
+
+	// Port is optional - Launch() will auto-allocate if not provided
+	inst, err := o.Launch(profileName, req.Port, headless)
+	if err != nil {
+		web.Error(w, 409, err)
+		return
+	}
+
+	web.JSON(w, 201, inst)
 }
 
 func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {

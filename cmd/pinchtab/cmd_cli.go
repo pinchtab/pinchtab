@@ -182,13 +182,13 @@ WORKFLOW:
 
 Commands:
   quick <url>             Navigate and analyze page (beginner-friendly)
-  
+
   INSTANCE MANAGEMENT:
   instance launch         Create new instance (--mode headed, --port 9999)
   instance logs <id>      Get instance logs (for debugging)
   instance stop <id>      Stop instance
   instances               List all running instances
-  
+
   BROWSER CONTROL:
   nav, navigate <url>     Navigate to URL (--new-tab, --block-images, --block-ads)
   snap, snapshot          Accessibility tree snapshot (-i, -c, -d, --max-tokens N)
@@ -207,7 +207,7 @@ Commands:
   ss, screenshot          Take screenshot (-o file, -q quality)
   eval <expression>       Evaluate JavaScript
   pdf                     Export page as PDF (-o file, --landscape, --scale N)
-  
+
   OTHER:
   health                  Server health check
   help                    Show this help
@@ -650,15 +650,15 @@ func cliHealth(client *http.Client, base, token string) {
 
 func cliInstance(client *http.Client, base, token string, args []string) {
 	if len(args) < 1 {
-		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: launch, navigate, logs, stop")
+		fatal("Usage: pinchtab instance <subcommand> [options]\nSubcommands: start, launch (alias), navigate, logs, stop")
 	}
 
 	subCmd := args[0]
 	subArgs := args[1:]
 
 	switch subCmd {
-	case "launch":
-		cliInstanceLaunch(client, base, token, subArgs)
+	case "start", "launch": // "start" is new Phase 2 API, "launch" is legacy
+		cliInstanceStart(client, base, token, subArgs)
 	case "navigate":
 		cliInstanceNavigate(client, base, token, subArgs)
 	case "logs":
@@ -670,11 +670,16 @@ func cliInstance(client *http.Client, base, token string, args []string) {
 	}
 }
 
-func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
+func cliInstanceStart(client *http.Client, base, token string, args []string) {
 	body := map[string]any{}
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "--profileId":
+			if i+1 < len(args) {
+				body["profileId"] = args[i+1]
+				i++
+			}
 		case "--mode":
 			if i+1 < len(args) {
 				body["mode"] = args[i+1]
@@ -688,8 +693,9 @@ func cliInstanceLaunch(client *http.Client, base, token string, args []string) {
 		}
 	}
 
-	// doPost auto-prints JSON response
-	doPost(client, base, token, "/instances/launch", body)
+	// Use new /instances/start endpoint if available, fall back to /instances/launch for backward compat
+	endpoint := "/instances/start"
+	doPost(client, base, token, endpoint, body)
 }
 
 func cliInstanceNavigate(client *http.Client, base, token string, args []string) {
@@ -706,21 +712,47 @@ func cliInstanceNavigate(client *http.Client, base, token string, args []string)
 }
 
 func cliInstanceLogs(client *http.Client, base, token string, args []string) {
-	if len(args) < 1 {
-		fatal("Usage: pinchtab instance logs <instance-id>")
+	var instID string
+
+	// Support both positional argument and --id flag
+	if len(args) == 0 {
+		fatal("Usage: pinchtab instance logs <instance-id> OR pinchtab instance logs --id <instance-id>")
 	}
 
-	instID := args[0]
+	// Check if first arg is --id flag
+	if args[0] == "--id" {
+		if len(args) < 2 {
+			fatal("Usage: --id requires instance ID")
+		}
+		instID = args[1]
+	} else {
+		// Positional argument (backward compat)
+		instID = args[0]
+	}
+
 	logs := doGetRaw(client, base, token, fmt.Sprintf("/instances/%s/logs", instID), nil)
 	fmt.Println(string(logs))
 }
 
 func cliInstanceStop(client *http.Client, base, token string, args []string) {
-	if len(args) < 1 {
-		fatal("Usage: pinchtab instance stop <instance-id>")
+	var instID string
+
+	// Support both positional argument and --id flag
+	if len(args) == 0 {
+		fatal("Usage: pinchtab instance stop <instance-id> OR pinchtab instance stop --id <instance-id>")
 	}
 
-	instID := args[0]
+	// Check if first arg is --id flag
+	if args[0] == "--id" {
+		if len(args) < 2 {
+			fatal("Usage: --id requires instance ID")
+		}
+		instID = args[1]
+	} else {
+		// Positional argument (backward compat)
+		instID = args[0]
+	}
+
 	// doPost auto-prints JSON response
 	doPost(client, base, token, fmt.Sprintf("/instances/%s/stop", instID), nil)
 }
