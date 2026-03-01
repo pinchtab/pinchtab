@@ -364,6 +364,73 @@ func TestOrchestrator_ProxyRouting(t *testing.T) {
 	}
 }
 
+// TestOrchestrator_FirstRequestLazyChrome tests proxy request with lazy Chrome initialization
+// This test verifies the orchestrator's 60-second client timeout is sufficient for lazy Chrome initialization.
+// Scenario:
+// 1. Create instance (starts monitor polling /health)
+// 2. Monitor's first /health call triggers ensureChrome() (8-20+ seconds)
+// 3. Once /health succeeds, instance status becomes "running"
+// 4. Proxy request to /navigate completes successfully
+// If the orchestrator's client timeout is too short (<30s), the /health check would timeout
+// and the instance would never reach "running" state.
+func TestOrchestrator_FirstRequestLazyChrome(t *testing.T) {
+	// Create instance
+	payload := map[string]any{
+		"name":     fmt.Sprintf("first-request-%d", time.Now().Unix()),
+		"headless": true,
+	}
+
+	status, body := httpPost(t, "/instances/launch", payload)
+	if status != 201 {
+		t.Fatalf("instance creation failed: %d", status)
+	}
+
+	instID := jsonField(t, body, "id")
+
+	defer func() {
+		httpPost(t, fmt.Sprintf("/instances/%s/stop", instID), nil)
+	}()
+
+	// Wait for instance to reach "running" state via monitor
+	// The monitor polls /health every 500ms
+	// First /health call triggers Chrome initialization (8-20+ seconds)
+	// Once /health succeeds, status changes to "running"
+	// If orchestrator timeout is <30s, this loop will timeout
+	const maxWait = 45 * time.Second
+	const pollInterval = 500 * time.Millisecond
+	startTime := time.Now()
+
+	var instStatus string
+	for time.Since(startTime) < maxWait {
+		status, body := httpGet(t, fmt.Sprintf("/instances/%s", instID))
+		if status == 200 {
+			instStatus = jsonField(t, body, "status")
+			if instStatus == "running" {
+				break
+			}
+		}
+		time.Sleep(pollInterval)
+	}
+
+	if instStatus != "running" {
+		t.Fatalf("instance never reached running state (timeout: %s), last status: %s", maxWait, instStatus)
+	}
+
+	// Now make the actual proxy request - Chrome is already initialized
+	navPayload := map[string]any{"url": "https://example.com"}
+	status, body = httpPost(t, fmt.Sprintf("/instances/%s/navigate", instID), navPayload)
+	if status != 200 {
+		t.Fatalf("navigate failed: %d: %s", status, string(body))
+	}
+
+	tabID := jsonField(t, body, "tabId")
+	if !strings.HasPrefix(tabID, "tab_") {
+		t.Fatalf("invalid tab ID: %s", tabID)
+	}
+
+	t.Logf("✓ Instance reached running state with lazy Chrome init; navigate succeeded: tabId=%s", tabID)
+}
+
 // TestOrchestrator_AggregateTabsEndpoint verifies GET /instances/tabs returns all tabs
 func TestOrchestrator_AggregateTabsEndpoint(t *testing.T) {
 	var instIDs []string

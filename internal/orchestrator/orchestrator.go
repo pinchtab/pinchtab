@@ -72,11 +72,20 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 	}
 
 	orch := &Orchestrator{
-		instances:      make(map[string]*InstanceInternal),
-		baseDir:        baseDir,
-		binary:         binary,
-		runner:         runner,
-		client:         &http.Client{Timeout: 3 * time.Second},
+		instances: make(map[string]*InstanceInternal),
+		baseDir:   baseDir,
+		binary:    binary,
+		runner:    runner,
+		// Client timeout for proxying to instances: 60 seconds
+		// Why so high?
+		// - First request to an instance triggers lazy Chrome initialization (8-20+ seconds)
+		// - Navigation can take up to 60s (NavigateTimeout in bridge config)
+		// - Proxied requests (e.g., POST /instances/{id}/navigate) must wait for:
+		//   1. Instance /health handler to initialize Chrome (via ensureChrome())
+		//   2. Tab operations to complete (navigate, snapshot, actions, etc.)
+		// - Short timeout (<5s) would break first-request scenarios
+		// See: internal/orchestrator/health.go (monitor), internal/bridge/init.go (InitChrome)
+		client:         &http.Client{Timeout: 60 * time.Second},
 		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          idutil.NewManager(),

@@ -14,6 +14,7 @@ import (
 func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	// Core routes
 	mux.HandleFunc("GET /instances", o.handleList)
+	mux.HandleFunc("GET /instances/{id}", o.handleGetInstance)
 	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
 
 	// Phase 3: Tab Management (new API)
@@ -69,6 +70,20 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, o.List())
+}
+
+func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	o.mu.RUnlock()
+
+	if !ok {
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return
+	}
+
+	web.JSON(w, 200, inst.Instance)
 }
 
 // resolveProfileID resolves a path value to a profile name.
