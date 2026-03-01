@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: gofmt + golangci-lint on staged Go files
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+# 1. gofmt check
+unformatted=$(gofmt -l $staged 2>/dev/null || true)
+if [ -n "$unformatted" ]; then
+  echo "❌ gofmt: files not formatted:"
+  echo "$unformatted"
+  echo "Run: gofmt -w $unformatted"
+  exit 1
+fi
+
+# 2. golangci-lint (if available)
+if command -v golangci-lint &>/dev/null; then
+  # Get unique directories of staged files
+  dirs=$(echo "$staged" | xargs -n1 dirname | sort -u | sed 's|$|/...|')
+  golangci-lint run --timeout=5m $dirs
+  if [ $? -ne 0 ]; then
+    echo "❌ golangci-lint: issues found"
+    exit 1
+  fi
+else
+  echo "⚠️  golangci-lint not found, skipping lint check"
+fi
+
+echo "✅ pre-commit checks passed"
