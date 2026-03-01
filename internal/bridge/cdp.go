@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
@@ -24,14 +23,11 @@ func NavigatePage(ctx context.Context, url string) error {
 		return err
 	}
 
-	timeout := time.After(30 * time.Second)
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timeout:
-			return fmt.Errorf("navigation timeout")
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
@@ -129,23 +125,37 @@ func ScrollByNodeID(ctx context.Context, nodeID int64) error {
 	)
 }
 
-func WaitForTitle(ctx context.Context, timeout time.Duration) string {
+func WaitForTitle(ctx context.Context, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		var title string
-		_ = chromedp.Run(ctx, chromedp.Title(&title))
-		return title
+		if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+			return "", err
+		}
+		return title, nil
 	}
 
-	start := time.Now()
-	for time.Since(start) < timeout {
-		var title string
-		_ = chromedp.Run(ctx, chromedp.Title(&title))
-		if title != "" && title != "about:blank" {
-			return title
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-deadline:
+			var title string
+			if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+				return "", err
+			}
+			return title, nil
+		case <-ticker.C:
+			var title string
+			if err := chromedp.Run(ctx, chromedp.Title(&title)); err != nil {
+				continue
+			}
+			if title != "" && title != "about:blank" {
+				return title, nil
+			}
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
-	var title string
-	_ = chromedp.Run(ctx, chromedp.Title(&title))
-	return title
 }
