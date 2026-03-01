@@ -8,9 +8,11 @@
     "showcase.md"
   ],
   "references": [
-    "references/endpoints.md",
+    "references/api-reference.json",
     "references/configuration.md",
-    "references/api-reference.json"
+    "references/cli-design.md",
+    "references/cli-implementation.md",
+    "references/cli-quick-reference.md"
   ],
   "architecture": [
     "architecture/architecture-overview.md",
