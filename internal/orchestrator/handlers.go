@@ -311,30 +311,23 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		targetPath = ""
 	}
 
-	targetURL := fmt.Sprintf("http://localhost:%s%s", inst.Port, targetPath)
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
+	// Build target URL using url.URL struct for explicit component control
+	// This prevents SSRF by ensuring we only proxy to localhost
+	targetURL := &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort("localhost", inst.Port),
+		Path:     targetPath,
+		RawQuery: r.URL.RawQuery,
 	}
 
-	// Validate proxy URL to prevent SSRF attacks
-	parsedURL, err := url.Parse(targetURL)
-	if err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid proxy URL: %w", err))
-		return
-	}
-
-	// Ensure target is localhost only
-	host, _, err := net.SplitHostPort(parsedURL.Host)
-	if err != nil {
-		host = parsedURL.Hostname()
-	}
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+	// Verify the constructed URL is valid
+	if targetURL.Hostname() != "localhost" {
 		web.Error(w, 400, fmt.Errorf("invalid proxy target: only localhost allowed"))
 		return
 	}
 
-	// Create proxy request
-	proxyReq, err := http.NewRequest(r.Method, targetURL, r.Body)
+	// Create proxy request with safe, validated URL
+	proxyReq, err := http.NewRequest(r.Method, targetURL.String(), r.Body)
 	if err != nil {
 		web.Error(w, 500, fmt.Errorf("failed to create proxy request: %w", err))
 		return
