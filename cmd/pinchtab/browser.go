@@ -146,9 +146,8 @@ func buildChromeOpts(cfg *config.RuntimeConfig) []chromedp.ExecAllocatorOption {
 
 	if cfg.Headless {
 		opts = append(opts, chromedp.Headless)
-	} else {
-		opts = append(opts, chromedp.Flag("headless", false))
 	}
+	// Note: In headed mode, don't add any headless flag - Chrome defaults to headed when no headless flag is present
 
 	return opts
 }
