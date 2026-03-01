@@ -26,10 +26,19 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		BlockMedia  *bool   `json:"blockMedia"`
 		BlockAds    *bool   `json:"blockAds"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
+
+	if r.Method == http.MethodGet {
+		q := r.URL.Query()
+		req.URL = q.Get("url")
+		req.TabID = q.Get("tabId")
+		req.NewTab = strings.EqualFold(q.Get("newTab"), "true") || q.Get("newTab") == "1"
+	} else {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+			web.Error(w, 400, fmt.Errorf("decode: %w", err))
+			return
+		}
 	}
+
 	if req.URL == "" {
 		web.Error(w, 400, fmt.Errorf("url required"))
 		return
