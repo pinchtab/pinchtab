@@ -64,7 +64,7 @@ go build -o pinchtab ./cmd/pinchtab
 
 **Terminal 1:**
 ```bash
-pinchtab
+pinchtab dashboard
 ```
 
 **Expected output:**
