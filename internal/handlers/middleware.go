@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -28,7 +29,8 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cfg.Token != "" {
 			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+cfg.Token {
+			expected := "Bearer " + cfg.Token
+			if subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) != 1 {
 				web.Error(w, 401, fmt.Errorf("unauthorized"))
 				return
 			}
