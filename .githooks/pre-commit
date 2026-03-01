@@ -4,8 +4,12 @@ set -e
 echo "🦀 pre-commit: gofmt..."
 unformatted=$(gofmt -l .)
 if [ -n "$unformatted" ]; then
-  echo "Files not formatted (run 'gofmt -w .'):"
+  echo "❌ Files not formatted:"
   echo "$unformatted"
+  echo ""
+  echo "Fix with: ./scripts/format.sh"
+  echo "Or run:   gofmt -w ."
+  echo ""
   exit 1
 fi
 
