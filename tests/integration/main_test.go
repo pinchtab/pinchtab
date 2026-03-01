@@ -114,6 +114,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// Launch a test instance for orchestrator-mode tests
+	// This ensures /navigate and other proxy endpoints work in CI
+	if err := launchTestInstance(serverURL); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to launch test instance: %v\n", err)
+		_ = cmd.Process.Kill()
+		os.Exit(1)
+	}
+
 	code := m.Run()
 
 	// Shutdown
@@ -239,4 +247,38 @@ func navigate(t *testing.T, url string) {
 	if code != 200 {
 		t.Fatalf("navigate to %s failed with %d: %s", url, code, string(body))
 	}
+}
+
+// launchTestInstance launches a default test instance for orchestrator-mode tests
+// This is called once during TestMain setup so that /navigate and proxy endpoints work
+func launchTestInstance(base string) error {
+	resp, err := http.Post(
+		base+"/instances/launch",
+		"application/json",
+		strings.NewReader(`{"mode":"headless"}`),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("launch failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response to get instance ID
+	var result map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("failed to parse launch response: %v", err)
+	}
+
+	id, ok := result["id"].(string)
+	if !ok {
+		return fmt.Errorf("no instance id in launch response: %v", result)
+	}
+
+	fmt.Fprintf(os.Stderr, "TestMain: launched test instance %s\n", id)
+	return nil
 }
