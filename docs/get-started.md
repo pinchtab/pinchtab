@@ -665,28 +665,6 @@ curl -X POST http://localhost:9867/instances/$INST/action \
 
 ---
 
-## Next Steps
-
-### 1. Try Some Workflows
-→ [Practical examples & workflows](showcase.md)
-
-### 2. Learn the CLI
-→ [CLI commands reference](references/cli-commands.md)
-
-### 3. Use the HTTP API
-→ [API reference with curl examples](references/curl-commands.md)
-
-### 4. Advanced Usage
-→ [API workflows & patterns](showcase.md)
-
-### 5. Production Deployment
-→ [Docker deployment guide](guides/docker.md)
-
-### 6. Understand the Architecture
-→ [How PinchTab works](architecture/pinchtab-architecture.md)
-
----
-
 ## Common Features
 
 ### Extract Text Efficiently
@@ -823,16 +801,5 @@ curl http://localhost:9867/instances/$INST/screenshot # Higher tokens
 - **Issues** → [GitHub Issues](https://github.com/pinchtab/pinchtab/issues)
 - **Q&A** → [GitHub Discussions](https://github.com/pinchtab/pinchtab/discussions)
 - **Docs** → [Full documentation](overview.md)
-
----
-
-## What's Next?
-
-1. ✅ You've installed and run PinchTab
-2. 📚 Learn core concepts → [Core Concepts](core-concepts.md)
-3. 🎯 Try workflows → [Practical examples](showcase.md)
-4. 🔧 Learn instances → [Instance API Reference](references/instance-api.md)
-5. 📖 Full API guide → [curl-commands.md](references/curl-commands.md)
-6. 🏗️ Deep dive → [Architecture docs](architecture/pinchtab-architecture.md)
 
 **Happy automating!** 🦀
