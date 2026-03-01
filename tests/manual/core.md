@@ -179,6 +179,18 @@ Navigate to the test page first: `POST /navigate {"url":"file://<repo>/tests/ass
 | CF4 | Custom profile dir | `BRIDGE_PROFILE=/tmp/test-profile ./pinchtab` | Uses specified profile |
 | CF5 | No restore | `BRIDGE_NO_RESTORE=true ./pinchtab` | Doesn't restore previous tabs |
 
+### 1.16 Security & Validation
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| SEC1 | Profile name with ".." | `POST /profiles {"name":"../../../etc/passwd"}` | 400, invalid profile name |
+| SEC2 | Profile name with "/" | `POST /profiles {"name":"test/profile"}` | 400, path separators not allowed |
+| SEC3 | Profile name with "\" | `POST /profiles {"name":"test\\profile"}` | 400, path separators not allowed |
+| SEC4 | Profile name empty | `POST /profiles {"name":""}` | 400, name required |
+| SEC5 | Valid profile names | `POST /profiles {"name":"valid-profile"}` | 201, profile created |
+| SEC6 | SSRF prevention | Proxy to non-localhost (e.g., example.com via /instances/{id}/navigate) | 400, localhost required or fails safely |
+| SEC7 | Proxy safe URL | Proxy normal navigate via /instances/{id}/navigate | 200, works as expected |
+
 ### 1.14 CLI Subcommands
 
 | # | Scenario | Steps | Expected |

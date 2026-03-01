@@ -204,6 +204,57 @@ Verify every registered route returns a non-404 status (may return 400/503 for m
 
 ---
 
+## 10. Security: Validation Tests
+
+### DSE1: Profile Name Validation
+
+**Goal:** Verify invalid profile names are rejected by the API.
+
+**Steps:**
+1. Start dashboard
+2. Try to create profile with ".." in name:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"../test"}'
+   ```
+   Should get **400 Bad Request** (invalid profile name)
+
+3. Try with "/" separator:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"test/profile"}'
+   ```
+   Should get **400 Bad Request**
+
+4. Try with empty name:
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":""}'
+   ```
+   Should get **400 Bad Request**
+
+5. Create valid profile (control):
+   ```bash
+   curl -X POST http://localhost:9867/profiles \
+     -H "Content-Type: application/json" \
+     -d '{"name":"__test_security__"}'
+   ```
+   Should get **201 Created**
+
+6. Clean up:
+   ```bash
+   curl -X DELETE http://localhost:9867/profiles/__test_security__
+   ```
+
+**Expected:** Invalid names rejected with 400, valid names accepted with 201.
+
+**Criteria:** ✓ ".." rejected | ✓ "/" rejected | ✓ "" rejected | ✓ Valid names work
+
+---
+
 ## Release Criteria
 
 ### Must Pass

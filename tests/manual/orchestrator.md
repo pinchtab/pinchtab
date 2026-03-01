@@ -93,7 +93,7 @@
    ```bash
    # Get instance PID (starts pinchtab as subprocess on port 9868, etc.)
    PID=$(lsof -i :9868 | grep pinchtab | awk '{print $2}')
-   
+
    # Monitor RSS (resident set size) every 2 seconds
    while true; do
      ps -p $PID -o pid,rss,vsz,comm
@@ -242,20 +242,20 @@
 1. Create instance and time how long until Chrome is ready:
    ```bash
    START=$(date +%s%N)
-   
+
    INST=$(curl -s -X POST http://localhost:9867/instances/launch \
      -H "Content-Type: application/json" \
      -d '{"name":"lazy-test","headless":true}')
-   
+
    ID=$(echo $INST | jq -r '.id')
-   
+
    # Poll health until OK
    while true; do
      STATUS=$(curl -s http://localhost:9867/instances/$ID/health 2>/dev/null | jq -r '.status')
      if [ "$STATUS" = "ok" ]; then break; fi
      sleep 0.1
    done
-   
+
    END=$(date +%s%N)
    ELAPSED=$(( (END - START) / 1000000 ))
    echo "Chrome ready in ${ELAPSED}ms"
@@ -478,7 +478,7 @@
    ID=$(curl -s -X POST http://localhost:9867/instances/launch \
      -H "Content-Type: application/json" \
      -d '{"name":"snap-test","headless":true}' | jq -r '.id')
-   
+
    curl -X POST http://localhost:9867/instances/$ID/navigate \
      -H "Content-Type: application/json" \
      -d '{"url":"https://example.com"}' > /dev/null
@@ -519,6 +519,84 @@
 - [ ] **ME3:** Concurrent creation thread-safe
 - [ ] **MI1:** Proxy routing works for navigation
 - [ ] **MI2:** Proxy routing works for snapshot/screenshot
+
+---
+
+## 10. Security: Path Traversal & SSRF Prevention
+
+### MSE1: Profile Name Path Traversal Blocked
+
+**Goal:** Verify that profile names with "..", "/", or "\" are rejected.
+
+**Steps:**
+1. Start dashboard
+2. Try to create a profile with traversal pattern:
+   ```bash
+   curl -X POST http://localhost:9867/instances/launch \
+     -H "Content-Type: application/json" \
+     -d '{"name":"../../../etc/passwd","headless":true}'
+   ```
+   Should get **400 Bad Request** (invalid profile name)
+
+3. Try with "/" separator:
+   ```bash
+   curl -X POST http://localhost:9867/instances/launch \
+     -H "Content-Type: application/json" \
+     -d '{"name":"test/malicious","headless":true}'
+   ```
+   Should get **400 Bad Request**
+
+4. Try with empty name:
+   ```bash
+   curl -X POST http://localhost:9867/instances/launch \
+     -H "Content-Type: application/json" \
+     -d '{"name":"","headless":true}'
+   ```
+   Should get **400 Bad Request**
+
+5. Create valid profile (control):
+   ```bash
+   curl -X POST http://localhost:9867/instances/launch \
+     -H "Content-Type: application/json" \
+     -d '{"name":"valid-profile","headless":true}'
+   ```
+   Should get **201 Created**
+
+**Expected:** Malicious names rejected with 400, valid names accepted with 201.
+
+**Criteria:** ✓ ".." rejected | ✓ "/" rejected | ✓ "\" rejected | ✓ "" rejected | ✓ valid names accepted
+
+---
+
+### MSE2: SSRF Prevention — Proxy Localhost Only
+
+**Goal:** Verify that proxy endpoints only target localhost.
+
+**Steps:**
+1. Create an instance:
+   ```bash
+   curl -X POST http://localhost:9867/instances/launch \
+     -H "Content-Type: application/json" \
+     -d '{"name":"ssrf-test","headless":true}'
+   ```
+   Note the `id` and `port`.
+
+2. Navigate via proxy (should work):
+   ```bash
+   curl -X POST http://localhost:9867/instances/{id}/navigate \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com"}'
+   ```
+   Should get **200 OK** (proxy routes to localhost instance)
+
+3. Stop instance:
+   ```bash
+   curl -X POST http://localhost:9867/instances/{id}/stop
+   ```
+
+**Expected:** Proxy routes to localhost instance without error.
+
+**Criteria:** ✓ Proxy navigates successfully | ✓ URL constructed safely
 
 ---
 
