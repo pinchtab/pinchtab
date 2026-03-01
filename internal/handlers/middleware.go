@@ -98,6 +98,11 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 	const window = 10 * time.Second
 	const maxReq = 120
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := strings.TrimSpace(r.URL.Path)
+		if p == "/health" || p == "/metrics" || strings.HasPrefix(p, "/health/") || strings.HasPrefix(p, "/metrics/") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if host == "" {
 			host = r.RemoteAddr
