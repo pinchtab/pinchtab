@@ -14,10 +14,10 @@ type BridgeAPI interface {
 	BrowserContext() context.Context
 	TabContext(tabID string) (ctx context.Context, resolvedID string, err error)
 	ListTargets() ([]*target.Info, error)
-	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
+	// CreateTab creates a new browser tab and returns a hash-based tab ID (e.g., "tab_XXXXXXXX").
+	// The raw CDP target ID is stored internally and used for CDP operations.
+	CreateTab(url string) (hashTabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
-
-	RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc)
 
 	GetRefCache(tabID string) *RefCache
 	SetRefCache(tabID string, cache *RefCache)

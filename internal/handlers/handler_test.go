@@ -41,12 +41,9 @@ func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.
 	return map[string]any{"success": true}, nil
 }
 
-func (m *mockBridge) RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc) {
-}
-
 func (m *mockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
 	ctx, cancel := chromedp.NewContext(context.Background())
-	return "new-tab", ctx, cancel, nil
+	return "tab_abc12345", ctx, cancel, nil
 }
 
 func (m *mockBridge) CloseTab(tabID string) error {

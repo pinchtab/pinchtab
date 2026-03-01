@@ -78,7 +78,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 	// Use context.TODO() instead of nil to avoid lint warnings
 	ctx := context.TODO()
-	tm := NewTabManager(ctx, cfg, nil)
+	tm := NewTabManager(ctx, cfg, nil, nil)
 	if tm == nil {
 		t.Error("TabManager should be created")
 	}
@@ -87,5 +87,82 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 	_, _, _, err := tm.CreateTab("about:blank")
 	if err == nil {
 		t.Error("CreateTab should fail when browserCtx is invalid")
+	}
+}
+
+func TestTabContext_RejectsUnknownTabID(t *testing.T) {
+	// TabContext should reject tab IDs that aren't tracked
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+
+	// Try to get context for a non-existent tab
+	_, _, err := tm.TabContext("tab_nonexistent")
+	if err == nil {
+		t.Error("TabContext should reject unknown tab IDs")
+	}
+	if err.Error() != "tab tab_nonexistent not found" {
+		t.Errorf("unexpected error message: %s", err.Error())
+	}
+}
+
+func TestTabContext_RejectsRawCDPID(t *testing.T) {
+	// TabContext should reject raw CDP target IDs (32-char hex)
+	// These should never be accepted - only hash-format IDs work
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+
+	// Simulate a raw CDP target ID format
+	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
+
+	_, _, err := tm.TabContext(rawCDPID)
+	if err == nil {
+		t.Error("TabContext should reject raw CDP target IDs")
+	}
+}
+
+func TestCreateTab_ReturnsHashFormat(t *testing.T) {
+	// Verify CreateTab returns hash-format IDs (tab_XXXXXXXX)
+	// Note: This test can't actually create tabs without Chrome,
+	// but we can test the ID format logic directly
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+
+	// CreateTab will fail (no browser), but we can test the idMgr
+	if tm.idMgr == nil {
+		t.Error("TabManager should have idMgr initialized")
+	}
+
+	// Test the ID generation format
+	hashID := tm.idMgr.TabIDFromCDPTarget("A25658CE1BA82659EBE9C93C46CEE63A")
+	if len(hashID) < 4 || hashID[:4] != "tab_" {
+		t.Errorf("expected hash ID to start with 'tab_', got %s", hashID)
+	}
+	if len(hashID) != 12 { // tab_ + 8 hex chars
+		t.Errorf("expected hash ID length 12, got %d (%s)", len(hashID), hashID)
+	}
+}
+
+func TestTabContext_AcceptsRegisteredHashID(t *testing.T) {
+	// TabContext should accept hash IDs that are properly registered
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+
+	// Manually register a tab entry (simulating what CreateTab does internally)
+	hashID := "tab_abc12345"
+	rawCDPID := "RAWCDPID123456789012345678901234"
+	ctx := context.Background()
+
+	tm.tabs[hashID] = &TabEntry{
+		Ctx:   ctx,
+		CDPID: rawCDPID,
+	}
+
+	// TabContext should find and return it
+	returnedCtx, resolvedID, err := tm.TabContext(hashID)
+	if err != nil {
+		t.Errorf("TabContext should accept registered hash ID: %v", err)
+	}
+	if returnedCtx != ctx {
+		t.Error("TabContext should return the registered context")
+	}
+	// resolvedID should be the raw CDP ID for internal consistency
+	if resolvedID != rawCDPID {
+		t.Errorf("resolvedID should be raw CDP ID, got %s", resolvedID)
 	}
 }

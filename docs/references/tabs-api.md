@@ -77,6 +77,39 @@ curl -X POST http://localhost:9867/tabs/tab_abc123/close
 
 ---
 
+## Tab ID Format
+
+Tab IDs use a hash-based format: `tab_XXXXXXXX` (12 characters total).
+
+```
+tab_abc12345
+└─┬─┘└──┬───┘
+  │     └── 8-character hash (derived from internal Chrome target ID)
+  └──────── Prefix identifying resource type
+```
+
+### Why Hash IDs?
+
+1. **Security**: Raw Chrome DevTools Protocol (CDP) target IDs are never exposed. This prevents:
+   - Guessing/brute-forcing tab identifiers
+   - Cross-instance tab access in multi-instance setups
+   - Information leakage about Chrome internals
+
+2. **Consistency**: All PinchTab resources use the same format:
+   - Profiles: `prof_XXXXXXXX`
+   - Instances: `inst_XXXXXXXX`
+   - Tabs: `tab_XXXXXXXX`
+
+3. **Stability**: Hash IDs remain stable for the tab's lifetime
+
+### Important
+
+- Only hash-format IDs are accepted by the API
+- Raw CDP target IDs (32-character hex strings) are **rejected with 404**
+- Tab IDs are scoped to the instance that created them
+
+---
+
 ## Complete API Reference
 
 ### 1. Open Tab

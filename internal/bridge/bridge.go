@@ -10,6 +10,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/uameta"
 )
 
@@ -31,6 +32,7 @@ type Bridge struct {
 	BrowserCtx    context.Context
 	BrowserCancel context.CancelFunc
 	Config        *config.RuntimeConfig
+	IdMgr         *idutil.Manager
 	*TabManager
 	StealthScript string
 	Actions       map[string]ActionFunc
@@ -42,14 +44,16 @@ type Bridge struct {
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
+	idMgr := idutil.NewManager()
 	b := &Bridge{
 		AllocCtx:   allocCtx,
 		BrowserCtx: browserCtx,
 		Config:     cfg,
+		IdMgr:      idMgr,
 	}
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
-		b.TabManager = NewTabManager(browserCtx, cfg, b.tabSetup)
+		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
 	}
 	b.Locks = NewLockManager()
 	b.InitActionRegistry()
@@ -122,7 +126,10 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 
 	// Initialize TabManager now that browser is ready
 	if b.Config != nil && b.TabManager == nil {
-		b.TabManager = NewTabManager(browserCtx, b.Config, b.tabSetup)
+		if b.IdMgr == nil {
+			b.IdMgr = idutil.NewManager()
+		}
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -145,7 +152,10 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 
 	// Now initialize TabManager with the browser context
 	if b.Config != nil && b.TabManager == nil {
-		b.TabManager = NewTabManager(browserCtx, b.Config, b.tabSetup)
+		if b.IdMgr == nil {
+			b.IdMgr = idutil.NewManager()
+		}
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
 	}
 }
 

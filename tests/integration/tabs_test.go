@@ -146,3 +146,59 @@ func TestTabs_MaxTabs(t *testing.T) {
 		})
 	}
 }
+
+// TB7: Tab ID format validation - only hash IDs accepted
+func TestTabs_IDFormat(t *testing.T) {
+	// Create a new tab and verify it returns hash format
+	code, body := httpPost(t, "/tab", map[string]string{
+		"action": "new",
+		"url":    "about:blank",
+	})
+	if code != 200 {
+		t.Fatalf("expected 200, got %d (body: %s)", code, body)
+	}
+
+	var newTab map[string]any
+	_ = json.Unmarshal(body, &newTab)
+	tabID, ok := newTab["tabId"].(string)
+	if !ok || tabID == "" {
+		t.Fatal("expected tabId in response")
+	}
+
+	// Verify hash format: tab_XXXXXXXX (12 chars total)
+	if len(tabID) != 12 || tabID[:4] != "tab_" {
+		t.Errorf("expected hash format tab_XXXXXXXX, got %s", tabID)
+	}
+
+	// Clean up
+	_, _ = httpPost(t, "/tab", map[string]string{"action": "close", "tabId": tabID})
+}
+
+// TB8: Raw CDP ID rejection - security test
+func TestTabs_RejectsRawCDPID(t *testing.T) {
+	// Raw CDP target IDs (32-char hex) should be rejected
+	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
+
+	// Try to navigate using raw CDP ID - should fail with 404
+	code, _ := httpPost(t, "/tabs/"+rawCDPID+"/navigate", map[string]string{
+		"url": "https://example.com",
+	})
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID, got %d", code)
+	}
+
+	// Try to get snapshot using raw CDP ID - should fail with 404
+	code, _ = httpGet(t, "/tabs/"+rawCDPID+"/snapshot")
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID snapshot, got %d", code)
+	}
+
+	// Try action using raw CDP ID - should fail with 404
+	code, _ = httpPost(t, "/tabs/"+rawCDPID+"/action", map[string]string{
+		"kind": "click",
+		"ref":  "e0",
+	})
+	if code != 404 {
+		t.Errorf("expected 404 for raw CDP ID action, got %d", code)
+	}
+}

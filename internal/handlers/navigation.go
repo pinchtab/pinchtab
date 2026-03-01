@@ -134,7 +134,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		newTargetID, newCtx, newCtxCancel, err := h.Bridge.CreateTab(req.URL)
+		// CreateTab returns hash-based tab ID directly (e.g., "tab_XXXXXXXX")
+		hashTabID, newCtx, _, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("new tab: %w", err))
 			return
@@ -161,18 +162,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title := bridge.WaitForTitle(tCtx, titleWait)
-
-		targetID := ""
-		if c := chromedp.FromContext(newCtx); c != nil && c.Target != nil {
-			targetID = string(c.Target.TargetID)
-		} else {
-			targetID = newTargetID
-		}
-
-		// Convert CDP target ID to hash-based tab ID and register the alias so
-		// subsequent operations (action, snapshot, close) can resolve it.
-		hashTabID := h.IdMgr.TabIDFromCDPTarget(targetID)
-		h.Bridge.RegisterHashTab(hashTabID, targetID, newCtx, newCtxCancel)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
@@ -355,7 +344,8 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case tabActionNew:
-		newTargetID, ctx, cancel, err := h.Bridge.CreateTab(req.URL)
+		// CreateTab returns hash-based tab ID directly (e.g., "tab_XXXXXXXX")
+		hashTabID, ctx, _, err := h.Bridge.CreateTab(req.URL)
 		if err != nil {
 			web.Error(w, 500, err)
 			return
@@ -365,7 +355,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
 			defer tCancel()
 			if err := bridge.NavigatePage(tCtx, req.URL); err != nil {
-				_ = h.Bridge.CloseTab(newTargetID)
+				_ = h.Bridge.CloseTab(hashTabID)
 				web.Error(w, 500, fmt.Errorf("navigate: %w", err))
 				return
 			}
@@ -373,10 +363,6 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
-
-		// Convert CDP target ID to hash-based tab ID and register the alias.
-		hashTabID := h.IdMgr.TabIDFromCDPTarget(newTargetID)
-		h.Bridge.RegisterHashTab(hashTabID, newTargetID, ctx, cancel)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": curURL, "title": title})
 

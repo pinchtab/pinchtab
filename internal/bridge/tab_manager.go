@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/idutil"
 )
 
 type TabSetupFunc func(ctx context.Context)
@@ -18,6 +19,7 @@ type TabSetupFunc func(ctx context.Context)
 type TabManager struct {
 	browserCtx context.Context
 	config     *config.RuntimeConfig
+	idMgr      *idutil.Manager
 	tabs       map[string]*TabEntry
 	accessed   map[string]bool
 	snapshots  map[string]*RefCache
@@ -25,10 +27,14 @@ type TabManager struct {
 	mu         sync.RWMutex
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, onTabSetup TabSetupFunc) *TabManager {
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *idutil.Manager, onTabSetup TabSetupFunc) *TabManager {
+	if idMgr == nil {
+		idMgr = idutil.NewManager()
+	}
 	return &TabManager{
 		browserCtx: browserCtx,
 		config:     cfg,
+		idMgr:      idMgr,
 		tabs:       make(map[string]*TabEntry),
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
@@ -55,6 +61,7 @@ func (tm *TabManager) AccessedTabIDs() map[string]bool {
 
 func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) {
 	if tabID == "" {
+		// Auto-select first tab when no ID provided
 		targets, err := tm.ListTargets()
 		if err != nil {
 			return nil, "", fmt.Errorf("list targets: %w", err)
@@ -62,50 +69,32 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 		if len(targets) == 0 {
 			return nil, "", fmt.Errorf("no tabs open")
 		}
-		tabID = string(targets[0].TargetID)
+		// Convert raw CDP ID to hash and look it up
+		rawID := string(targets[0].TargetID)
+		tabID = tm.idMgr.TabIDFromCDPTarget(rawID)
 	}
 
 	tm.mu.RLock()
-	if entry, ok := tm.tabs[tabID]; ok && entry.Ctx != nil {
-		tm.mu.RUnlock()
-		tm.markAccessed(tabID)
-		// When this entry is a hash alias, return the canonical raw CDP ID so that
-		// operations like ref-cache lookups are consistent regardless of which ID
-		// form was used to call TabContext.
-		resolvedID := tabID
-		if entry.CDPID != "" {
-			resolvedID = entry.CDPID
-		}
-		return entry.Ctx, resolvedID, nil
-	}
+	entry, ok := tm.tabs[tabID]
 	tm.mu.RUnlock()
 
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-
-	if entry, ok := tm.tabs[tabID]; ok && entry.Ctx != nil {
-		tm.accessed[tabID] = true
-		return entry.Ctx, tabID, nil
+	if !ok {
+		return nil, "", fmt.Errorf("tab %s not found", tabID)
 	}
 
-	if tm.browserCtx == nil {
-		return nil, "", fmt.Errorf("no browser connection")
+	if entry.Ctx == nil {
+		return nil, "", fmt.Errorf("tab %s has no active context", tabID)
 	}
 
-	ctx, cancel := chromedp.NewContext(tm.browserCtx,
-		chromedp.WithTargetID(target.ID(tabID)),
-	)
-	if err := chromedp.Run(ctx); err != nil {
-		cancel()
-		return nil, "", fmt.Errorf("tab %s not found: %w", tabID, err)
-	}
+	tm.markAccessed(tabID)
 
-	if tm.onTabSetup != nil {
-		tm.onTabSetup(ctx)
+	// Return the canonical raw CDP ID so that operations like ref-cache
+	// lookups are consistent regardless of which ID form was used.
+	resolvedID := tabID
+	if entry.CDPID != "" {
+		resolvedID = entry.CDPID
 	}
-
-	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel}
-	return ctx, tabID, nil
+	return entry.Ctx, resolvedID, nil
 }
 
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
@@ -173,13 +162,17 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
 
-	newTargetID := string(targetID)
+	// Compute hash-based tab ID and store only that entry.
+	// Raw CDP ID is kept internal in the CDPID field.
+	rawCDPID := string(targetID)
+	hashTabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
+
 	tm.mu.Lock()
-	tm.tabs[newTargetID] = &TabEntry{Ctx: ctx, Cancel: cancel}
-	tm.accessed[newTargetID] = true
+	tm.tabs[hashTabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID}
+	tm.accessed[hashTabID] = true
 	tm.mu.Unlock()
 
-	return newTargetID, ctx, cancel, nil
+	return hashTabID, ctx, cancel, nil
 }
 
 func (tm *TabManager) CloseTab(tabID string) error {
