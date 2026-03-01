@@ -96,7 +96,8 @@
       "cliExample": "pinchtab instances",
       "curlExample": "curl http://localhost:9867/instances",
       "parameters": "None",
-      "payload": "N/A (GET request)"
+      "payload": "N/A (GET request)",
+      "defaults": "Returns array of instances with id, profileName, port, headless, status"
     },
     {
       "method": "GET",
@@ -456,10 +457,12 @@
       "curl": true,
       "examples": {},
       "tldr": "Launch/create a new Chrome instance with a profile",
-      "cli": false,
-      "curlExample": "curl -X POST http://localhost:9867/instances/launch -H \"Content-Type: application/json\" -d '{\"profile\":\"work\"}'",
-      "parameters": "profile (string, required): Profile name",
-      "payload": "{\"profile\":\"work\",\"headless\":true}"
+      "cli": true,
+      "curlExample": "curl -X POST http://localhost:9867/instances/launch -H \"Content-Type: application/json\" -d '{\"mode\":\"headless\",\"port\":9868}'",
+      "parameters": "mode (string, body, optional: \"headed\" or \"headless\", default: \"headless\"), port (int, body, optional, auto-assigned if omitted)",
+      "payload": "{\"mode\":\"headless\"} or {\"mode\":\"headed\",\"port\":9868}",
+      "cliExample": "pinchtab instance launch --mode headed --port 9868",
+      "defaults": "headless=true, port=auto-assigned; returns {id, profileName, port, headless, status}"
     },
     {
       "method": "POST",
