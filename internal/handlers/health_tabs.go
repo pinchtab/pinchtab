@@ -15,6 +15,12 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure Chrome is initialized before checking health
+	if err := h.ensureChrome(); err != nil {
+		web.JSON(w, 503, map[string]any{"status": "error", "reason": fmt.Sprintf("chrome initialization failed: %v", err)})
+		return
+	}
+
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
 		web.JSON(w, 503, map[string]any{"status": "error", "reason": err.Error()})
