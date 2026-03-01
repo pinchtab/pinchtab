@@ -7,7 +7,7 @@ const fs = require('fs');
 
 function getBinaryName() {
   const platform = process.platform;
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const arch = (process.arch === 'arm64' || process.arch === 'aarch64') ? 'arm64' : 'amd64';
 
   if (platform === 'darwin') {
     return `pinchtab-darwin-${arch}`;
