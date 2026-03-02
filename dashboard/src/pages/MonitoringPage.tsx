@@ -40,9 +40,11 @@ export default function MonitoringPage() {
       runningInstances.map(async (inst) => {
         try {
           const tabs = await api.fetchInstanceTabs(inst.id)
-          dataPoint[inst.id] = tabs.length
-          tabsByInstance[inst.id] = tabs
-        } catch {
+          const tabsArray = Array.isArray(tabs) ? tabs : []
+          dataPoint[inst.id] = tabsArray.length
+          tabsByInstance[inst.id] = tabsArray
+        } catch (e) {
+          console.error(`Failed to fetch tabs for ${inst.id}:`, e)
           dataPoint[inst.id] = 0
           tabsByInstance[inst.id] = []
         }
