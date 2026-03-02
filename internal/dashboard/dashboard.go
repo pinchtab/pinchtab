@@ -273,18 +273,20 @@ func (d *Dashboard) GetAgents() []AgentActivity {
 }
 
 func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
-	// Dashboard UI available at both / and /dashboard
-	mux.Handle("GET /", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
-	mux.Handle("GET /dashboard", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
-
 	// API endpoints
-	mux.HandleFunc("GET /dashboard/agents", d.handleAgents)
-	mux.HandleFunc("GET /dashboard/events", d.handleSSE)
+	mux.HandleFunc("GET /api/agents", d.handleAgents)
+	mux.HandleFunc("GET /api/events", d.handleSSE)
 
-	// Static files served at /dashboard/
+	// Static files served at /
 	sub, _ := fs.Sub(dashboardFS, "dashboard")
-	static := http.StripPrefix("/dashboard/", http.FileServer(http.FS(sub)))
-	mux.Handle("GET /dashboard/", d.withNoCache(static))
+	fileServer := http.FileServer(http.FS(sub))
+
+	// Serve static assets
+	mux.Handle("GET /assets/", d.withNoCache(fileServer))
+	mux.Handle("GET /pinchtab-headed-192.png", d.withNoCache(fileServer))
+
+	// SPA: serve dashboard.html for all other routes
+	mux.Handle("GET /", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
 }
 
 func (d *Dashboard) handleAgents(w http.ResponseWriter, r *http.Request) {

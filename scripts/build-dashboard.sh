@@ -4,15 +4,15 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-echo "Building React dashboard..."
+echo "📦 Building React dashboard..."
 cd dashboard
 npm run build
 
-echo "Copying build to internal/dashboard/dashboard/..."
+echo "📋 Copying build to internal/dashboard/dashboard/..."
 cd ..
 
 # Backup assets we want to keep
-cp internal/dashboard/dashboard/pinchtab-headed-192.png /tmp/pinchtab-headed-192.png
+cp internal/dashboard/dashboard/pinchtab-headed-192.png /tmp/pinchtab-headed-192.png 2>/dev/null || true
 
 # Clear old dashboard (keep directory)
 rm -rf internal/dashboard/dashboard/*
@@ -21,9 +21,9 @@ rm -rf internal/dashboard/dashboard/*
 cp -r dashboard/dist/* internal/dashboard/dashboard/
 
 # Restore assets
-cp /tmp/pinchtab-headed-192.png internal/dashboard/dashboard/
+cp /tmp/pinchtab-headed-192.png internal/dashboard/dashboard/ 2>/dev/null || true
 
 # Rename index.html to dashboard.html (Go expects this)
 mv internal/dashboard/dashboard/index.html internal/dashboard/dashboard/dashboard.html
 
-echo "✓ Dashboard built and copied to internal/dashboard/dashboard/"
+echo "✅ Dashboard built: internal/dashboard/dashboard/"

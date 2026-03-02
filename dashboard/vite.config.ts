@@ -4,14 +4,12 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/dashboard/', // Served at /dashboard/ by Go
+  base: '/', // Served at / by Go
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:18801',
-      '/health': 'http://localhost:18801',
-      '/dashboard/agents': 'http://localhost:18801',
-      '/dashboard/events': 'http://localhost:18801',
+      '/api': 'http://localhost:9867',
+      '/health': 'http://localhost:9867',
     },
   },
   build: {

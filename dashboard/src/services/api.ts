@@ -57,9 +57,22 @@ export async function stopInstance(id: string): Promise<void> {
   })
 }
 
-// Agents
+// Agents (from dashboard API)
 export async function fetchAgents(): Promise<Agent[]> {
   return request<Agent[]>('/api/agents')
+}
+
+// Activity events SSE
+export function subscribeToEvents(onEvent: (event: unknown) => void): () => void {
+  const es = new EventSource('/api/events')
+  es.addEventListener('action', (e) => {
+    try {
+      onEvent(JSON.parse(e.data))
+    } catch {
+      // ignore parse errors
+    }
+  })
+  return () => es.close()
 }
 
 // Settings
