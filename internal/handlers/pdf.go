@@ -10,13 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/assets"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -41,113 +38,9 @@ var pdfQueryParams = map[string]struct{}{
 	"raw":                     {},
 }
 
-func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
-		return
-	}
-
-	tabID := r.URL.Query().Get("tabId")
-	output := r.URL.Query().Get("output")
-	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
-
-	ctx, _, err := h.Bridge.TabContext(tabID)
-	if err != nil {
-		web.Error(w, 404, err)
-		return
-	}
-
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
-
-	if reqNoAnim && !h.Config.NoAnimations {
-		bridge.DisableAnimationsOnce(tCtx)
-	}
-
-	var buf []byte
-	quality := 80
-	if q := r.URL.Query().Get("quality"); q != "" {
-		if qn, err := strconv.Atoi(q); err == nil {
-			quality = qn
-		}
-	}
-
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			buf, err = page.CaptureScreenshot().
-				WithFormat(page.CaptureScreenshotFormatJpeg).
-				WithQuality(int64(quality)).
-				Do(ctx)
-			return err
-		}),
-	); err != nil {
-		web.Error(w, 500, fmt.Errorf("screenshot: %w", err))
-		return
-	}
-
-	if output == "file" {
-		screenshotDir := filepath.Join(h.Config.StateDir, "screenshots")
-		if err := os.MkdirAll(screenshotDir, 0750); err != nil {
-			web.Error(w, 500, fmt.Errorf("create screenshot dir: %w", err))
-			return
-		}
-
-		timestamp := time.Now().Format("20060102-150405")
-		filename := fmt.Sprintf("screenshot-%s.jpg", timestamp)
-		filePath := filepath.Join(screenshotDir, filename)
-
-		if err := os.WriteFile(filePath, buf, 0600); err != nil {
-			web.Error(w, 500, fmt.Errorf("write screenshot: %w", err))
-			return
-		}
-
-		web.JSON(w, 200, map[string]any{
-			"path":      filePath,
-			"size":      len(buf),
-			"format":    "jpeg",
-			"timestamp": timestamp,
-		})
-		return
-	}
-
-	if r.URL.Query().Get("raw") == "true" {
-		w.Header().Set("Content-Type", "image/jpeg")
-		if _, err := w.Write(buf); err != nil {
-			slog.Error("screenshot write", "err", err)
-		}
-		return
-	}
-
-	web.JSON(w, 200, map[string]any{
-		"format": "jpeg",
-		"base64": base64.StdEncoding.EncodeToString(buf),
-	})
-}
-
-// HandleTabScreenshot returns screenshot bytes for a tab identified by path ID.
+// HandlePDF generates a PDF of the current tab.
 //
-// @Endpoint GET /tabs/{id}/screenshot
-func (h *Handlers) HandleTabScreenshot(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-
-	h.HandleScreenshot(w, req)
-}
-
+// @Endpoint GET /pdf
 func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
@@ -314,6 +207,10 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleTabPDF generates a PDF for a tab identified by path ID.
+//
+// @Endpoint GET /tabs/{id}/pdf
+// @Endpoint POST /tabs/{id}/pdf
 func (h *Handlers) HandleTabPDF(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
@@ -355,96 +252,4 @@ func (h *Handlers) HandleTabPDF(w http.ResponseWriter, r *http.Request) {
 	req.URL = &u
 
 	h.HandlePDF(w, req)
-}
-
-func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
-		return
-	}
-
-	tabID := r.URL.Query().Get("tabId")
-	mode := r.URL.Query().Get("mode")
-	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
-	maxChars := -1
-	if v := r.URL.Query().Get("maxChars"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxChars = n
-		}
-	}
-
-	ctx, _, err := h.Bridge.TabContext(tabID)
-	if err != nil {
-		web.Error(w, 404, err)
-		return
-	}
-
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
-
-	var text string
-	if mode == "raw" {
-		if err := chromedp.Run(tCtx,
-			chromedp.Evaluate(`document.body.innerText`, &text),
-		); err != nil {
-			web.Error(w, 500, fmt.Errorf("text extract: %w", err))
-			return
-		}
-	} else {
-		if err := chromedp.Run(tCtx,
-			chromedp.Evaluate(assets.ReadabilityJS, &text),
-		); err != nil {
-			web.Error(w, 500, fmt.Errorf("text extract: %w", err))
-			return
-		}
-	}
-
-	truncated := false
-	if maxChars > -1 && len(text) > maxChars {
-		text = text[:maxChars]
-		truncated = true
-	}
-
-	var url, title string
-	_ = chromedp.Run(tCtx,
-		chromedp.Location(&url),
-		chromedp.Title(&title),
-	)
-
-	if format == "text" || format == "plain" {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(200)
-		_, _ = w.Write([]byte(text))
-		return
-	}
-
-	web.JSON(w, 200, map[string]any{
-		"url":       url,
-		"title":     title,
-		"text":      text,
-		"truncated": truncated,
-	})
-}
-
-// HandleTabText extracts text for a tab identified by path ID.
-//
-// @Endpoint GET /tabs/{id}/text
-func (h *Handlers) HandleTabText(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-
-	h.HandleText(w, req)
 }

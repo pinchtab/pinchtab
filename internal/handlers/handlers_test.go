@@ -162,3 +162,32 @@ func searchString(s, substr string) bool {
 	}
 	return false
 }
+
+func TestRoutesRegistration(t *testing.T) {
+	b := &mockBridge{}
+	cfg := &config.RuntimeConfig{}
+	h := New(b, cfg, nil, nil, nil)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, func() {})
+
+	tests := []struct {
+		method string
+		path   string
+		code   int
+	}{
+		{"GET", "/health", 200},
+		{"GET", "/tabs", 200},
+		{"GET", "/welcome", 200},
+		{"POST", "/navigate", 400}, // missing body
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(tt.method, tt.path, nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != tt.code {
+			t.Errorf("%s %s expected %d, got %d", tt.method, tt.path, tt.code, w.Code)
+		}
+	}
+}

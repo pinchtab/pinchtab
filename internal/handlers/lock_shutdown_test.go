@@ -136,3 +136,21 @@ func TestHandleTabUnlockByID_Mismatch(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleShutdown_CallsFunc(t *testing.T) {
+	called := make(chan bool, 1)
+	doShutdown := func() { called <- true }
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	handler := h.HandleShutdown(doShutdown)
+	req := httptest.NewRequest("POST", "/shutdown", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	select {
+	case <-called:
+	case <-time.After(500 * time.Millisecond):
+		t.Error("expected doShutdown to be called within 500ms")
+	}
+}
