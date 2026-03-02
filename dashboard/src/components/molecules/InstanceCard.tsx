@@ -32,15 +32,9 @@ export default function InstanceCard({ instance, onOpen, onStop }: Props) {
         </Badge>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded bg-bg-elevated px-2 py-1.5">
-          <span className="text-text-muted">Tabs:</span>{' '}
-          <span className="text-text-secondary">{instance.tabs ?? 0}</span>
-        </div>
-        <div className="rounded bg-bg-elevated px-2 py-1.5">
-          <span className="text-text-muted">Uptime:</span>{' '}
-          <span className="text-text-secondary">{formatUptime(instance.startTime)}</span>
-        </div>
+      <div className="mb-3 rounded bg-bg-elevated px-2 py-1.5 text-xs">
+        <span className="text-text-muted">Uptime:</span>{' '}
+        <span className="text-text-secondary">{formatUptime(instance.startTime)}</span>
       </div>
 
       <div className="mt-auto flex gap-2">

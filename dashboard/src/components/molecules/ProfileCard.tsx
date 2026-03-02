@@ -34,7 +34,7 @@ export default function ProfileCard({ profile, instance, onLaunch, onManage }: P
 
       {isRunning && instance && (
         <div className="mb-3 rounded bg-bg-elevated px-2 py-1.5 text-xs text-text-muted">
-          Port {instance.port} · {instance.tabs ?? 0} tabs
+          Port {instance.port}
         </div>
       )}
 

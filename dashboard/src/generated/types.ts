@@ -9,30 +9,39 @@ These types are exported to TypeScript via tygo.
 
 /**
  * Profile represents a browser profile stored on disk.
+ * Matches internal/bridge/api.go ProfileInfo
  */
 export interface Profile {
-  id: string;
+  id?: string;
   name: string;
   path?: string;
-  useWhen?: string;
+  pathExists?: boolean;
   created: string;
   lastUsed: string;
   diskUsage: number /* int64 */;
+  sizeMB?: number /* float64 */;
   running: boolean;
+  temporary?: boolean;
   source?: string;
+  chromeProfileName?: string;
+  accountEmail?: string;
+  accountName?: string;
+  hasAccount?: boolean;
+  useWhen?: string;
+  description?: string;
 }
 /**
  * Instance represents a running browser instance.
+ * Matches internal/bridge/api.go Instance
  */
 export interface Instance {
   id: string;
   profileId: string;
   profileName: string;
-  port: number /* int */;
+  port: string; // Note: string not int
   headless: boolean;
   status: string; // starting/running/stopping/stopped/error
   startTime: string;
-  tabs: number /* int */;
   error?: string;
 }
 /**
@@ -111,7 +120,8 @@ export interface CreateProfileResponse {
  * LaunchInstanceRequest is the request body for launching an instance.
  */
 export interface LaunchInstanceRequest {
-  profileId: string;
-  port?: number /* int */;
-  headless?: boolean;
+  profileId?: string; // profile ID (prof_XXXXXXXX)
+  name?: string; // profile name
+  mode?: string; // "headed" or empty for headless
+  port?: string; // port number as string
 }

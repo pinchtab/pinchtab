@@ -5,28 +5,37 @@ package types
 import "time"
 
 // Profile represents a browser profile stored on disk.
+// Matches internal/bridge/api.go ProfileInfo
 type Profile struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Path      string    `json:"path,omitempty"`
-	UseWhen   string    `json:"useWhen,omitempty"`
-	Created   time.Time `json:"created"`
-	LastUsed  time.Time `json:"lastUsed"`
-	DiskUsage int64     `json:"diskUsage"`
-	Running   bool      `json:"running"`
-	Source    string    `json:"source,omitempty"`
+	ID                string    `json:"id,omitempty"`
+	Name              string    `json:"name"`
+	Path              string    `json:"path,omitempty"`
+	PathExists        bool      `json:"pathExists,omitempty"`
+	Created           time.Time `json:"created"`
+	LastUsed          time.Time `json:"lastUsed"`
+	DiskUsage         int64     `json:"diskUsage"`
+	SizeMB            float64   `json:"sizeMB,omitempty"`
+	Running           bool      `json:"running"`
+	Temporary         bool      `json:"temporary,omitempty"`
+	Source            string    `json:"source,omitempty"`
+	ChromeProfileName string    `json:"chromeProfileName,omitempty"`
+	AccountEmail      string    `json:"accountEmail,omitempty"`
+	AccountName       string    `json:"accountName,omitempty"`
+	HasAccount        bool      `json:"hasAccount,omitempty"`
+	UseWhen           string    `json:"useWhen,omitempty"`
+	Description       string    `json:"description,omitempty"`
 }
 
 // Instance represents a running browser instance.
+// Matches internal/bridge/api.go Instance
 type Instance struct {
 	ID          string    `json:"id"`
 	ProfileID   string    `json:"profileId"`
 	ProfileName string    `json:"profileName"`
-	Port        int       `json:"port"`
+	Port        string    `json:"port"` // Note: string not int
 	Headless    bool      `json:"headless"`
 	Status      string    `json:"status"` // starting/running/stopping/stopped/error
 	StartTime   time.Time `json:"startTime"`
-	Tabs        int       `json:"tabs"`
 	Error       string    `json:"error,omitempty"`
 }
 
@@ -96,7 +105,8 @@ type CreateProfileResponse struct {
 
 // LaunchInstanceRequest is the request body for launching an instance.
 type LaunchInstanceRequest struct {
-	ProfileID string `json:"profileId"`
-	Port      int    `json:"port,omitempty"`
-	Headless  bool   `json:"headless,omitempty"`
+	ProfileID string `json:"profileId,omitempty"` // profile ID (prof_XXXXXXXX)
+	Name      string `json:"name,omitempty"`      // profile name
+	Mode      string `json:"mode,omitempty"`      // "headed" or empty for headless
+	Port      string `json:"port,omitempty"`      // port number as string
 }
