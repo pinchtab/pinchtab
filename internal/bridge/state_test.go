@@ -169,3 +169,16 @@ func TestClearChromeSessions(t *testing.T) {
 		t.Error("expected Sessions dir to be removed")
 	}
 }
+
+func TestClearChromeSessions_MissingDir(t *testing.T) {
+	tmp := t.TempDir()
+	sessionsDir := filepath.Join(tmp, "Default", "Sessions")
+	// Don't create the directory
+
+	ClearChromeSessions(tmp)
+
+	// Should not panic, and Sessions dir should still not exist
+	if _, err := os.Stat(sessionsDir); !os.IsNotExist(err) {
+		t.Error("expected Sessions dir to not exist")
+	}
+}
