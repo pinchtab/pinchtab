@@ -11,6 +11,3 @@ export type {
   CreateProfileRequest,
   LaunchInstanceRequest,
 } from '../generated/types'
-
-// View type (frontend only)
-export type View = 'profiles' | 'instances' | 'agents' | 'settings'

@@ -7,13 +7,8 @@ import type {
   Settings,
   ServerInfo,
 } from '../generated/types'
-import type { View } from '../types'
 
 interface AppState {
-  // Navigation
-  view: View
-  setView: (view: View) => void
-
   // Profiles
   profiles: Profile[]
   profilesLoading: boolean
@@ -55,10 +50,6 @@ const defaultSettings: Settings = {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  // Navigation
-  view: 'profiles',
-  setView: (view) => set({ view }),
-
   // Profiles
   profiles: [],
   profilesLoading: false,

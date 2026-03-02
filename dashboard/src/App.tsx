@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './stores/useAppStore'
 import { Header } from './components/molecules'
 import { ProfilesPage, InstancesPage, AgentsPage, SettingsPage } from './pages'
 import * as api from './services/api'
 
-export default function App() {
-  const { view, setView, setInstances } = useAppStore()
+function AppContent() {
+  const { setInstances } = useAppStore()
 
   // Load instances globally (needed for profile cards)
   useEffect(() => {
@@ -24,13 +25,24 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-bg-app">
-      <Header currentView={view} onViewChange={setView} />
+      <Header />
       <main className="flex flex-1 overflow-hidden">
-        {view === 'profiles' && <ProfilesPage />}
-        {view === 'instances' && <InstancesPage />}
-        {view === 'agents' && <AgentsPage />}
-        {view === 'settings' && <SettingsPage />}
+        <Routes>
+          <Route path="/" element={<Navigate to="/profiles" replace />} />
+          <Route path="/profiles" element={<ProfilesPage />} />
+          <Route path="/instances" element={<InstancesPage />} />
+          <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <AppContent />
+    </HashRouter>
   )
 }
