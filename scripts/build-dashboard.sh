@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 echo "📦 Building React dashboard..."
 cd dashboard
-npm run build
+bun run build
 
 echo "📋 Copying build to internal/dashboard/dashboard/..."
 cd ..
