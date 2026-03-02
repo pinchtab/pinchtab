@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './stores/useAppStore'
-import { Header } from './components/molecules'
-import { ProfilesPage, InstancesPage, AgentsPage, SettingsPage } from './pages'
+import { NavBar } from './components/molecules'
+import { MonitoringPage, ProfilesPage, AgentsPage, SettingsPage } from './pages'
 import * as api from './services/api'
 
 function AppContent() {
@@ -33,12 +33,10 @@ function AppContent() {
       },
       onSystem: async (event) => {
         console.log('System event:', event)
-        // Refresh instances on any instance event
         if (event.type.startsWith('instance.')) {
           try {
             const instances = await api.fetchInstances()
             setInstances(instances)
-            // Also refresh profiles to update running status
             const profiles = await api.fetchProfiles()
             setProfiles(profiles)
           } catch (e) {
@@ -48,7 +46,6 @@ function AppContent() {
       },
       onAgent: (event) => {
         console.log('Agent event:', event)
-        // Could update agent activity here
       },
     })
 
@@ -57,12 +54,12 @@ function AppContent() {
 
   return (
     <div className="flex h-screen flex-col bg-bg-app">
-      <Header />
+      <NavBar />
       <main className="flex flex-1 overflow-hidden">
         <Routes>
-          <Route path="/" element={<Navigate to="/profiles" replace />} />
+          <Route path="/" element={<Navigate to="/monitoring" replace />} />
+          <Route path="/monitoring" element={<MonitoringPage />} />
           <Route path="/profiles" element={<ProfilesPage />} />
-          <Route path="/instances" element={<InstancesPage />} />
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

@@ -8,7 +8,7 @@ import * as api from '../services/api'
 const POLL_INTERVAL = 30000 // 30 seconds
 const MAX_DATA_POINTS = 60 // 30 minutes of data
 
-export default function InstancesPage() {
+export default function MonitoringPage() {
   const { instances, setInstances, setInstancesLoading } = useAppStore()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tabsData, setTabsData] = useState<TabDataPoint[]>([])

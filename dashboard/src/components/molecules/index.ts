@@ -1,4 +1,4 @@
-export { default as Header } from './Header'
+export { default as NavBar } from './NavBar'
 export { default as ProfileCard } from './ProfileCard'
 export { default as InstanceCard } from './InstanceCard'
 export { default as AgentItem } from './AgentItem'
