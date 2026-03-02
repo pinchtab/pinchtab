@@ -26,6 +26,7 @@ export default function ProfilesPage() {
   // Launch form
   const [launchPort, setLaunchPort] = useState("9868");
   const [launchHeadless, setLaunchHeadless] = useState(false);
+  const [launchError, setLaunchError] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
 
   const loadProfiles = async () => {
@@ -67,6 +68,7 @@ export default function ProfilesPage() {
 
   const handleLaunch = async () => {
     if (!showLaunch) return;
+    setLaunchError("");
     try {
       await api.launchInstance({
         name: showLaunch,
@@ -77,7 +79,8 @@ export default function ProfilesPage() {
       setLaunchPort("9868");
       setLaunchHeadless(false);
     } catch (e) {
-      console.error("Failed to launch instance", e);
+      const msg = e instanceof Error ? e.message : "Failed to launch instance";
+      setLaunchError(msg);
     }
   };
 
@@ -218,11 +221,20 @@ export default function ProfilesPage() {
       {/* Launch Modal */}
       <Modal
         open={!!showLaunch}
-        onClose={() => setShowLaunch(null)}
+        onClose={() => {
+          setShowLaunch(null);
+          setLaunchError("");
+        }}
         title="🖥️ Start Profile"
         actions={
           <>
-            <Button variant="secondary" onClick={() => setShowLaunch(null)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowLaunch(null);
+                setLaunchError("");
+              }}
+            >
               Cancel
             </Button>
             <Button variant="primary" onClick={handleLaunch}>
@@ -232,6 +244,11 @@ export default function ProfilesPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          {launchError && (
+            <div className="rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {launchError}
+            </div>
+          )}
           <Input
             label="Port"
             placeholder="e.g. 9868"
