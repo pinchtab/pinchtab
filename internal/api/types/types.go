@@ -82,9 +82,16 @@ type ServerInfo struct {
 
 // CreateProfileRequest is the request body for creating a profile.
 type CreateProfileRequest struct {
-	Name    string `json:"name"`
-	UseWhen string `json:"useWhen,omitempty"`
-	Source  string `json:"source,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	UseWhen     string `json:"useWhen,omitempty"`
+}
+
+// CreateProfileResponse is returned after creating a profile.
+type CreateProfileResponse struct {
+	Status string `json:"status"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
 }
 
 // LaunchInstanceRequest is the request body for launching an instance.

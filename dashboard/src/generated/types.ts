@@ -96,8 +96,16 @@ export interface ServerInfo {
  */
 export interface CreateProfileRequest {
   name: string;
+  description?: string;
   useWhen?: string;
-  source?: string;
+}
+/**
+ * CreateProfileResponse is returned after creating a profile.
+ */
+export interface CreateProfileResponse {
+  status: string;
+  id: string;
+  name: string;
 }
 /**
  * LaunchInstanceRequest is the request body for launching an instance.

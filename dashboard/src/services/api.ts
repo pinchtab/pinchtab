@@ -5,6 +5,7 @@ import type {
   Settings,
   ServerInfo,
   CreateProfileRequest,
+  CreateProfileResponse,
   LaunchInstanceRequest,
 } from '../generated/types'
 
@@ -19,13 +20,13 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-// Profiles
+// Profiles — endpoint is /profiles (no /api prefix)
 export async function fetchProfiles(): Promise<Profile[]> {
-  return request<Profile[]>('/api/profiles')
+  return request<Profile[]>('/profiles')
 }
 
-export async function createProfile(data: CreateProfileRequest): Promise<Profile> {
-  return request<Profile>('/api/profiles', {
+export async function createProfile(data: CreateProfileRequest): Promise<CreateProfileResponse> {
+  return request<CreateProfileResponse>('/profiles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -33,18 +34,18 @@ export async function createProfile(data: CreateProfileRequest): Promise<Profile
 }
 
 export async function deleteProfile(id: string): Promise<void> {
-  await request<void>(`/api/profiles/${encodeURIComponent(id)}`, {
+  await request<void>(`/profiles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }
 
-// Instances
+// Instances — endpoint is /instances (no /api prefix)
 export async function fetchInstances(): Promise<Instance[]> {
-  return request<Instance[]>('/api/instances')
+  return request<Instance[]>('/instances')
 }
 
 export async function launchInstance(data: LaunchInstanceRequest): Promise<Instance> {
-  return request<Instance>('/api/instances', {
+  return request<Instance>('/instances/launch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -52,17 +53,17 @@ export async function launchInstance(data: LaunchInstanceRequest): Promise<Insta
 }
 
 export async function stopInstance(id: string): Promise<void> {
-  await request<void>(`/api/instances/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
+  await request<void>(`/instances/${encodeURIComponent(id)}/stop`, {
+    method: 'POST',
   })
 }
 
-// Agents (from dashboard API)
+// Agents — endpoint is /api/agents (dashboard API)
 export async function fetchAgents(): Promise<Agent[]> {
   return request<Agent[]>('/api/agents')
 }
 
-// Settings
+// Settings — TODO: check if endpoint exists
 export async function fetchSettings(): Promise<Settings> {
   return request<Settings>('/api/settings')
 }
@@ -80,7 +81,7 @@ export async function fetchHealth(): Promise<ServerInfo> {
   return request<ServerInfo>('/health')
 }
 
-// SSE Events
+// SSE Events — endpoint is /api/events
 export interface SystemEvent {
   type: 'instance.started' | 'instance.stopped' | 'instance.error'
   instance?: Instance

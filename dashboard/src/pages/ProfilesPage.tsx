@@ -43,7 +43,6 @@ export default function ProfilesPage() {
       await api.createProfile({
         name: createName.trim(),
         useWhen: createUseWhen.trim() || undefined,
-        source: createSource.trim() || undefined,
       })
       setShowCreate(false)
       setCreateName('')
