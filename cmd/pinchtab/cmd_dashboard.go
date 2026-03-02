@@ -45,6 +45,14 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	orch.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
 	dash.SetInstanceLister(orch)
 
+	// Wire up instance events to SSE broadcast
+	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
+		dash.BroadcastSystemEvent(dashboard.SystemEvent{
+			Type:     evt.Type,
+			Instance: evt.Instance,
+		})
+	})
+
 	mux := http.NewServeMux()
 
 	dash.RegisterHandlers(mux)
@@ -190,7 +198,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	// Periodic health check: log tabs and Chrome process info every 30 seconds
 	go periodicHealthCheck(orch)
 
-	slog.Info("dashboard ready", "url", fmt.Sprintf("http://localhost:%s/dashboard", dashPort))
+	slog.Info("dashboard ready", "url", fmt.Sprintf("http://localhost:%s", dashPort))
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)

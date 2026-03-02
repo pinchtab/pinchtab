@@ -1,0 +1,28 @@
+/* NavBar: spin animation + active tab underline */
+
+@keyframes navbar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.navbar-icon-btn.spinning {
+  animation: navbar-spin 0.6s ease-in-out;
+}
+
+.navbar-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 38%, transparent),
+    0 0 12px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}

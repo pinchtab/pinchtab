@@ -1,0 +1,6 @@
+packages:
+  - path: "github.com/pinchtab/pinchtab/internal/api/types"
+    output_path: "dashboard/src/generated/types.ts"
+    type_mappings:
+      time.Time: "string"
+      "map[string]interface{}": "Record<string, unknown>"

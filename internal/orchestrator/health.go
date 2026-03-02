@@ -67,6 +67,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	}
 
 	o.mu.Lock()
+	var eventType string
 	switch inst.Status {
 	case "stopping", "stopped":
 	default:
@@ -75,6 +76,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			if resolvedURL != "" {
 				inst.URL = resolvedURL
 			}
+			eventType = "instance.started"
 			slog.Info("instance ready", "id", inst.ID, "port", inst.Port)
 		} else if exitedEarly {
 			inst.Status = "error"
@@ -86,6 +88,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			eventType = "instance.error"
 			slog.Error("instance exited before ready", "id", inst.ID)
 		} else {
 			inst.Status = "error"
@@ -93,19 +96,30 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			eventType = "instance.error"
 			slog.Error("instance failed to start", "id", inst.ID)
 		}
 	}
+	instCopy := inst.Instance
 	o.mu.Unlock()
+	if eventType != "" {
+		o.emitEvent(eventType, &instCopy)
+	}
 
 	if !exitedEarly {
 		<-waitCh
 	}
 	o.mu.Lock()
+	wasStopped := false
 	if inst.Status == "running" || inst.Status == "stopping" {
 		inst.Status = "stopped"
+		wasStopped = true
 	}
+	instCopy = inst.Instance
 	o.mu.Unlock()
+	if wasStopped {
+		o.emitEvent("instance.stopped", &instCopy)
+	}
 	slog.Info("instance exited", "id", inst.ID)
 }
 

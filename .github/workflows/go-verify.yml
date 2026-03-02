@@ -122,6 +122,17 @@ jobs:
         if: steps.check.outputs.has_go_changes == 'true'
         with:
           go-version: '1.26'
+          
+      - uses: oven-sh/setup-bun@v2
+        if: needs.changes.outputs.go == 'true'
+        with:
+          bun-version: latest
+
+      - name: Build dashboard
+        if: needs.changes.outputs.go == 'true'
+        run: |
+          cd dashboard && bun install --frozen-lockfile && cd ..
+          ./scripts/build-dashboard.sh
 
       - name: golangci-lint
         if: steps.check.outputs.has_go_changes == 'true'
