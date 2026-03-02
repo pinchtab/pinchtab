@@ -333,3 +333,45 @@ func (m *MockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	}
 	return nil
 }
+
+type mockBridgeDisconnected struct {
+	mockBridge
+}
+
+func (m *mockBridgeDisconnected) ListTargets() ([]*target.Info, error) {
+	return nil, fmt.Errorf("disconnected")
+}
+
+func TestHandleHealth_Disconnected_Returns503(t *testing.T) {
+	mb := &mockBridgeDisconnected{}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	h.HandleHealth(w, req)
+	if w.Code != 503 {
+		t.Errorf("expected 503 for disconnected browser, got %d", w.Code)
+	}
+}
+
+func TestHandleHealth_Connected_Returns200(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	h.HandleHealth(w, req)
+	if w.Code != 200 {
+		t.Errorf("expected 200 for connected browser, got %d", w.Code)
+	}
+}
+
+func TestHandleHealth_Response(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	h.HandleHealth(w, req)
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected application/json, got %s", ct)
+	}
+}

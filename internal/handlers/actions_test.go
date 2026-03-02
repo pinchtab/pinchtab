@@ -272,3 +272,13 @@ func TestCountSuccessful(t *testing.T) {
 		t.Errorf("expected 3 successful, got %d", count)
 	}
 }
+
+func TestHandleAction_InvalidJSON(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`not json`)))
+	w := httptest.NewRecorder()
+	h.HandleAction(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
