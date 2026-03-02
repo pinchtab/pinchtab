@@ -45,10 +45,23 @@ var (
 
 // Register adds a strategy factory to the registry.
 // Typically called from init() in each strategy package.
-func Register(name string, factory Factory) {
+// Returns an error if a strategy with the same name is already registered.
+func Register(name string, factory Factory) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if _, exists := registry[name]; exists {
+		return fmt.Errorf("strategy %q already registered", name)
+	}
 	registry[name] = factory
+	return nil
+}
+
+// MustRegister is like Register but panics on duplicate name.
+// Use this in init() functions where registration failure is fatal.
+func MustRegister(name string, factory Factory) {
+	if err := Register(name, factory); err != nil {
+		panic(err)
+	}
 }
 
 // New creates a strategy by name from the registry.

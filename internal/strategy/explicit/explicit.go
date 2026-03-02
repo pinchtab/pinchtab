@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	strategy.Register("explicit", func() strategy.Strategy {
+	strategy.MustRegister("explicit", func() strategy.Strategy {
 		return &Strategy{}
 	})
 }

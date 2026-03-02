@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	strategy.Register("session", func() strategy.Strategy {
+	strategy.MustRegister("session", func() strategy.Strategy {
 		return &Strategy{
 			sessions: make(map[string]*Session),
 		}
