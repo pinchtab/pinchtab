@@ -1,5 +1,30 @@
 # Allocation Strategies
 
+## Quick Start
+
+**Default strategy:** `simple` — single instance, no explicit management needed.
+
+To switch to session-based allocation, add one line to your config:
+
+```yaml
+# pinchtab.yaml
+strategy: session
+```
+
+Or via environment variable:
+```bash
+PINCHTAB_STRATEGY=session pinchtab
+```
+
+### Migration Note
+
+If you're upgrading from a version without strategies:
+- **No action needed** — the `simple` strategy behaves like the previous default
+- Existing `/instances/*` and `/tabs/*` endpoints continue to work
+- Add `strategy: session` only if you want automatic session management
+
+---
+
 ## Overview
 
 Pinchtab supports two usage modes:
