@@ -6,13 +6,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts'
-
-export interface TabDataPoint {
-  timestamp: number
-  [instanceId: string]: number // tab count per instance
-}
+import type { TabDataPoint } from '../../stores/useAppStore'
 
 interface Props {
   data: TabDataPoint[]
@@ -54,29 +49,36 @@ export default function TabsChart({
     return colors
   }, [instances])
 
-  if (data.length === 0) {
+  if (data.length === 0 || instances.length === 0) {
     return (
       <div className="flex h-[200px] items-center justify-center rounded-lg border border-border-subtle bg-bg-surface text-sm text-text-muted">
-        No data yet — waiting for instances...
+        {instances.length === 0
+          ? 'No running instances'
+          : 'Collecting data...'}
       </div>
     )
   }
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-bg-surface p-4">
+    <div className="rounded-lg border border-border-subtle bg-bg-surface">
       <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data}>
+        <LineChart data={data} margin={{ top: 16, right: 16, bottom: 8, left: 8 }}>
           <XAxis
             dataKey="timestamp"
             tickFormatter={formatTime}
             stroke="#666"
             fontSize={11}
+            tickLine={false}
+            axisLine={false}
           />
           <YAxis
             stroke="#666"
             fontSize={11}
             allowDecimals={false}
             domain={[0, 'auto']}
+            tickLine={false}
+            axisLine={false}
+            width={30}
           />
           <Tooltip
             contentStyle={{
@@ -86,27 +88,28 @@ export default function TabsChart({
               fontSize: '12px',
             }}
             labelFormatter={(label) => formatTime(label as number)}
-          />
-          <Legend
-            onClick={(e) => {
-              const id = e.dataKey as string
-              onSelectInstance(id)
+            formatter={(value, name) => {
+              const inst = instances.find((i) => i.id === name)
+              return [value ?? 0, inst?.profileName || name]
             }}
-            wrapperStyle={{ cursor: 'pointer', fontSize: '12px' }}
           />
           {instances.map((inst) => (
             <Line
               key={inst.id}
               type="monotone"
               dataKey={inst.id}
-              name={inst.profileName}
+              name={inst.id}
               stroke={instanceColors[inst.id]}
               strokeWidth={selectedInstanceId === inst.id ? 3 : 1.5}
               strokeOpacity={
                 selectedInstanceId && selectedInstanceId !== inst.id ? 0.3 : 1
               }
               dot={false}
-              activeDot={{ r: 4 }}
+              activeDot={{
+                r: 4,
+                onClick: () => onSelectInstance(inst.id),
+                style: { cursor: 'pointer' },
+              }}
             />
           ))}
         </LineChart>

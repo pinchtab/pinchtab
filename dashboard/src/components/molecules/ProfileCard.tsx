@@ -5,57 +5,90 @@ interface Props {
   profile: Profile
   instance?: Instance
   onLaunch: () => void
-  onManage: () => void
+  onStop?: () => void
+  onDetails?: () => void
 }
 
-export default function ProfileCard({ profile, instance, onLaunch, onManage }: Props) {
-  const isRunning = !!instance
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-xs">
+      <span className="text-text-muted">{label}</span>
+      <span className="text-text-secondary">{value}</span>
+    </div>
+  )
+}
+
+export default function ProfileCard({
+  profile,
+  instance,
+  onLaunch,
+  onStop,
+  onDetails,
+}: Props) {
+  const isRunning = instance?.status === 'running'
+  const isError = instance?.status === 'error'
+  const accountText = profile.accountEmail || profile.accountName || '—'
+  const sizeText = profile.sizeMB ? `${profile.sizeMB.toFixed(0)} MB` : '—'
 
   return (
-    <Card hover className="flex flex-col p-4">
-      <div className="mb-3 flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">📁</span>
-          <div>
-            <div className="font-medium text-text-primary">{profile.name}</div>
-            {profile.useWhen && (
-              <div className="mt-0.5 text-xs text-text-muted line-clamp-1">
-                {profile.useWhen}
-              </div>
-            )}
-          </div>
-        </div>
+    <Card hover className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border-subtle p-3">
+        <span className="truncate font-medium text-text-primary">
+          {profile.name}
+        </span>
         {isRunning ? (
-          <Badge variant="success">Running</Badge>
+          <Badge variant="success">:{instance.port}</Badge>
+        ) : isError ? (
+          <Badge variant="danger">error</Badge>
         ) : (
-          <Badge>Stopped</Badge>
+          <Badge>stopped</Badge>
         )}
       </div>
 
-      {isRunning && instance && (
-        <div className="mb-3 rounded bg-bg-elevated px-2 py-1.5 text-xs text-text-muted">
-          Port {instance.port}
-        </div>
-      )}
+      {/* Body */}
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <InfoRow label="Size" value={sizeText} />
+        <InfoRow label="Account" value={accountText} />
+        {profile.useWhen && (
+          <div className="mt-1">
+            <div className="text-xs text-text-muted">Use when</div>
+            <div className="mt-0.5 line-clamp-2 text-xs text-text-secondary">
+              {profile.useWhen}
+            </div>
+          </div>
+        )}
+        {isError && instance?.error && (
+          <div className="mt-1 text-xs text-destructive">{instance.error}</div>
+        )}
+      </div>
 
-      <div className="mt-auto flex gap-2">
+      {/* Actions */}
+      <div className="flex gap-2 border-t border-border-subtle p-3">
+        {onDetails && (
+          <Button size="sm" variant="ghost" onClick={onDetails}>
+            Details
+          </Button>
+        )}
         {isRunning ? (
+          <Button
+            size="sm"
+            variant="danger"
+            className="flex-1"
+            onClick={onStop}
+          >
+            Stop
+          </Button>
+        ) : (
           <Button
             size="sm"
             variant="primary"
             className="flex-1"
-            onClick={() => window.open(`http://localhost:${instance.port}/dashboard`, '_blank')}
+            onClick={onLaunch}
           >
-            Open
-          </Button>
-        ) : (
-          <Button size="sm" variant="primary" className="flex-1" onClick={onLaunch}>
             Launch
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={onManage}>
-          ⋯
-        </Button>
       </div>
     </Card>
   )

@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAppStore } from '../stores/useAppStore'
 import { Toolbar, EmptyState, Button, Modal, Input } from '../components/atoms'
 import { ProfileCard } from '../components/molecules'
 import * as api from '../services/api'
 
 export default function ProfilesPage() {
-  const { profiles, instances, profilesLoading, setProfiles, setProfilesLoading } = useAppStore()
+  const {
+    profiles,
+    instances,
+    profilesLoading,
+    setProfiles,
+    setProfilesLoading,
+    setInstances,
+  } = useAppStore()
   const [showCreate, setShowCreate] = useState(false)
   const [showLaunch, setShowLaunch] = useState<string | null>(null)
 
@@ -17,6 +24,7 @@ export default function ProfilesPage() {
   // Launch form
   const [launchPort, setLaunchPort] = useState('9868')
   const [launchHeadless, setLaunchHeadless] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState('')
 
   const loadProfiles = async () => {
     setProfilesLoading(true)
@@ -65,21 +73,57 @@ export default function ProfilesPage() {
       setShowLaunch(null)
       setLaunchPort('9868')
       setLaunchHeadless(false)
-      // Instances will refresh automatically
     } catch (e) {
       console.error('Failed to launch instance', e)
     }
   }
 
-  const instanceByProfile = new Map(
-    instances.map((i) => [i.profileName, i])
-  )
+  const handleStop = async (profileName: string) => {
+    const inst = instanceByProfile.get(profileName)
+    if (!inst) return
+    try {
+      await api.stopInstance(inst.id)
+      // Refresh instances
+      const updated = await api.fetchInstances()
+      setInstances(updated)
+    } catch (e) {
+      console.error('Failed to stop instance', e)
+    }
+  }
+
+  // Generate launch command
+  const launchCommand = useMemo(() => {
+    if (!showLaunch) return ''
+    const profile = profiles.find((p) => p.name === showLaunch)
+    const profileId = profile?.id || showLaunch
+    const mode = launchHeadless ? 'headless' : 'headed'
+    const port = launchPort || 'auto'
+    return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -d '{"profileId":"${profileId}","mode":"${mode}","port":"${port}"}'`
+  }, [showLaunch, launchHeadless, launchPort, profiles])
+
+  const handleCopyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(launchCommand)
+      setCopyFeedback('Copied!')
+      setTimeout(() => setCopyFeedback(''), 2000)
+    } catch {
+      setCopyFeedback('Failed to copy')
+      setTimeout(() => setCopyFeedback(''), 2000)
+    }
+  }
+
+  const instanceByProfile = new Map(instances.map((i) => [i.profileName, i]))
 
   return (
     <div className="flex flex-1 flex-col">
       <Toolbar
         actions={[
-          { key: 'new', label: '+ New Profile', onClick: () => setShowCreate(true), variant: 'primary' },
+          {
+            key: 'new',
+            label: '+ New Profile',
+            onClick: () => setShowCreate(true),
+            variant: 'primary',
+          },
           { key: 'refresh', label: 'Refresh', onClick: loadProfiles },
         ]}
       />
@@ -107,9 +151,7 @@ export default function ProfilesPage() {
                 profile={p}
                 instance={instanceByProfile.get(p.name)}
                 onLaunch={() => setShowLaunch(p.name)}
-                onManage={() => {
-                  // TODO: manage modal
-                }}
+                onStop={() => handleStop(p.name)}
               />
             ))}
           </div>
@@ -127,7 +169,11 @@ export default function ProfilesPage() {
             <Button variant="secondary" onClick={() => setShowCreate(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleCreate} disabled={!createName.trim()}>
+            <Button
+              variant="primary"
+              onClick={handleCreate}
+              disabled={!createName.trim()}
+            >
               Create
             </Button>
           </>
@@ -187,6 +233,26 @@ export default function ProfilesPage() {
             />
             Headless (best for Docker/VPS)
           </label>
+
+          {/* Command */}
+          <div>
+            <label className="mb-1 block text-xs text-text-muted">
+              Direct launch command (backup)
+            </label>
+            <textarea
+              readOnly
+              value={launchCommand}
+              className="h-20 w-full resize-none rounded border border-border-subtle bg-bg-elevated px-3 py-2 font-mono text-xs text-text-secondary"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={handleCopyCommand}>
+                Copy Command
+              </Button>
+              {copyFeedback && (
+                <span className="text-xs text-success">{copyFeedback}</span>
+              )}
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

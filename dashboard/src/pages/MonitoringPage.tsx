@@ -1,18 +1,23 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore } from '../stores/useAppStore'
 import { Card, EmptyState, Badge, Button } from '../components/atoms'
-import TabsChart, { type TabDataPoint } from '../components/molecules/TabsChart'
+import TabsChart from '../components/molecules/TabsChart'
 import type { InstanceTab } from '../generated/types'
 import * as api from '../services/api'
 
 const POLL_INTERVAL = 30000 // 30 seconds
-const MAX_DATA_POINTS = 60 // 30 minutes of data
 
 export default function MonitoringPage() {
-  const { instances, setInstances, setInstancesLoading } = useAppStore()
+  const {
+    instances,
+    setInstances,
+    setInstancesLoading,
+    tabsChartData,
+    currentTabs,
+    addChartDataPoint,
+    setCurrentTabs,
+  } = useAppStore()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [tabsData, setTabsData] = useState<TabDataPoint[]>([])
-  const [currentTabs, setCurrentTabs] = useState<Record<string, InstanceTab[]>>({})
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadInstances = async () => {
@@ -33,7 +38,7 @@ export default function MonitoringPage() {
     if (runningInstances.length === 0) return
 
     const timestamp = Date.now()
-    const dataPoint: TabDataPoint = { timestamp }
+    const dataPoint: Record<string, number> = { timestamp }
     const tabsByInstance: Record<string, InstanceTab[]> = {}
 
     await Promise.all(
@@ -51,9 +56,9 @@ export default function MonitoringPage() {
       })
     )
 
-    setTabsData((prev) => [...prev.slice(-MAX_DATA_POINTS + 1), dataPoint])
+    addChartDataPoint(dataPoint as any)
     setCurrentTabs(tabsByInstance)
-  }, [instances])
+  }, [instances, addChartDataPoint, setCurrentTabs])
 
   // Initial load
   useEffect(() => {
@@ -106,7 +111,7 @@ export default function MonitoringPage() {
     <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
       {/* Chart */}
       <TabsChart
-        data={tabsData}
+        data={tabsChartData}
         instances={runningInstances.map((i) => ({
           id: i.id,
           profileName: i.profileName,
