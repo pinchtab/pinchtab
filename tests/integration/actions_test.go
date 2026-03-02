@@ -33,6 +33,63 @@ func TestAction_Click(t *testing.T) {
 	}
 }
 
+// A1b: Click actually triggers navigation (verifies fix for issue #80)
+// This test ensures clicks dispatch at the correct element position, not (0,0)
+func TestAction_Click_TriggersNavigation(t *testing.T) {
+	navigate(t, "https://example.com")
+	defer closeCurrentTab(t)
+	t.Logf("current tab: %s", currentTabID)
+
+	// Get snapshot to find the "More information..." link
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&tabId="+currentTabID)
+
+	var snapResp struct {
+		Nodes []struct {
+			Ref  string `json:"ref"`
+			Role string `json:"role"`
+			Name string `json:"name"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(snapBody, &snapResp); err != nil {
+		t.Fatalf("failed to parse snapshot: %v", err)
+	}
+
+	// Find any link (example.com has "More information..." link)
+	var linkRef string
+	for _, n := range snapResp.Nodes {
+		if n.Role == "link" {
+			linkRef = n.Ref
+			t.Logf("found link: ref=%s name=%q", n.Ref, n.Name)
+			break
+		}
+	}
+	if linkRef == "" {
+		t.Skip("no link found in snapshot")
+	}
+
+	// Click the link with waitNav to wait for navigation
+	code, body := httpPost(t, "/action", map[string]any{
+		"tabId":   currentTabID,
+		"kind":    "click",
+		"ref":     linkRef,
+		"waitNav": true,
+	})
+	if code != 200 {
+		t.Fatalf("click failed with %d: %s", code, string(body))
+	}
+
+	// Verify navigation happened by checking the page content changed
+	// The "More information" link on example.com goes to iana.org
+	_, textBody := httpGet(t, "/text?tabId="+currentTabID)
+	text := string(textBody)
+
+	// After clicking, we should NOT be on example.com anymore
+	if strings.Contains(text, "Example Domain") && !strings.Contains(text, "IANA") {
+		t.Errorf("click did not trigger navigation - still on example.com (bug #80: click at wrong position)")
+	}
+	t.Logf("navigation verified: page content changed after click")
+}
+
 // A4: Press key
 func TestAction_Press(t *testing.T) {
 	navigate(t, "https://example.com")

@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
@@ -64,27 +65,75 @@ func SetResourceBlocking(ctx context.Context, patterns []string) error {
 }
 
 func ClickByNodeID(ctx context.Context, nodeID int64) error {
+	// Get element position via box model
+	x, y, err := getElementCenter(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+
 	return chromedp.Run(ctx,
+		// Scroll element into view first
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
+		}),
+		// Focus the element
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
+		// Mouse down at element center
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
 				"type":       "mousePressed",
 				"button":     "left",
 				"clickCount": 1,
-				"x":          0, "y": 0,
+				"x":          x, "y": y,
 			}, nil)
 		}),
+		// Mouse up at element center
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
 				"type":       "mouseReleased",
 				"button":     "left",
 				"clickCount": 1,
-				"x":          0, "y": 0,
+				"x":          x, "y": y,
 			}, nil)
 		}),
 	)
+}
+
+// getElementCenter returns the center coordinates of an element using DOM.getBoxModel.
+func getElementCenter(ctx context.Context, backendNodeID int64) (x, y float64, err error) {
+	var result json.RawMessage
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getBoxModel", map[string]any{
+			"backendNodeId": backendNodeID,
+		}, &result)
+	}))
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Parse the box model response
+	// The "content" quad is [x1,y1, x2,y2, x3,y3, x4,y4] - four corners
+	var box struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err = json.Unmarshal(result, &box); err != nil {
+		return 0, 0, err
+	}
+
+	if len(box.Model.Content) < 4 {
+		return 0, 0, fmt.Errorf("invalid box model: expected at least 4 coordinates")
+	}
+
+	// Content quad: [x1,y1, x2,y2, x3,y3, x4,y4]
+	// Calculate center as average of all four corners
+	x = (box.Model.Content[0] + box.Model.Content[2] + box.Model.Content[4] + box.Model.Content[6]) / 4
+	y = (box.Model.Content[1] + box.Model.Content[3] + box.Model.Content[5] + box.Model.Content[7]) / 4
+
+	return x, y, nil
 }
 
 func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
@@ -97,11 +146,22 @@ func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
+	// Get element position via box model
+	x, y, err := getElementCenter(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+
 	return chromedp.Run(ctx,
+		// Scroll element into view first
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
+		}),
+		// Move mouse to element center
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
 				"type": "mouseMoved",
-				"x":    0, "y": 0,
+				"x":    x, "y": y,
 			}, nil)
 		}),
 	)
