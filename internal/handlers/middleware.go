@@ -92,13 +92,15 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 }
 
 var (
-	rateMu      sync.Mutex
-	rateBuckets = map[string][]time.Time{}
+	rateMu              sync.Mutex
+	rateBuckets         = map[string][]time.Time{}
+	rateLimiterStartJan sync.Once
 )
 
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	const window = 10 * time.Second
 	const maxReq = 120
+	startRateLimiterJanitor(window, 5*time.Minute)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimSpace(r.URL.Path)
 		if p == "/health" || p == "/metrics" || strings.HasPrefix(p, "/health/") || strings.HasPrefix(p, "/metrics/") {
@@ -134,4 +136,37 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func startRateLimiterJanitor(window time.Duration, interval time.Duration) {
+	rateLimiterStartJan.Do(func() {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for now := range ticker.C {
+				evictStaleRateBuckets(now, window)
+			}
+		}()
+	})
+}
+
+func evictStaleRateBuckets(now time.Time, window time.Duration) {
+	cutoff := now.Add(-window)
+
+	rateMu.Lock()
+	defer rateMu.Unlock()
+
+	for host, hits := range rateBuckets {
+		filtered := hits[:0]
+		for _, t := range hits {
+			if t.After(cutoff) {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(rateBuckets, host)
+			continue
+		}
+		rateBuckets[host] = filtered
+	}
 }

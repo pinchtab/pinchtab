@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -209,6 +210,34 @@ func TestRateLimitMiddleware_BypassHealthAndMetrics(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("expected 200 for %s, got %d", p, w.Code)
 		}
+	}
+}
+
+func TestEvictStaleRateBuckets_DeletesEmptyHosts(t *testing.T) {
+	now := time.Now()
+	window := 10 * time.Second
+
+	rateMu.Lock()
+	rateBuckets = map[string][]time.Time{
+		"stale-only": {now.Add(-2 * window)},
+		"mixed":      {now.Add(-2 * window), now.Add(-window / 2)},
+		"fresh":      {now.Add(-window / 3)},
+	}
+	rateMu.Unlock()
+
+	evictStaleRateBuckets(now, window)
+
+	rateMu.Lock()
+	defer rateMu.Unlock()
+
+	if _, ok := rateBuckets["stale-only"]; ok {
+		t.Fatalf("expected stale-only bucket to be deleted")
+	}
+	if got := len(rateBuckets["mixed"]); got != 1 {
+		t.Fatalf("expected mixed bucket to keep 1 hit, got %d", got)
+	}
+	if got := len(rateBuckets["fresh"]); got != 1 {
+		t.Fatalf("expected fresh bucket to keep 1 hit, got %d", got)
 	}
 }
 
