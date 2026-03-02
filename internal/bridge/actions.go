@@ -126,7 +126,8 @@ func (b *Bridge) InitActionRegistry() {
 		},
 		ActionHumanClick: func(ctx context.Context, req ActionRequest) (map[string]any, error) {
 			if req.NodeID > 0 {
-				if err := human.ClickElement(ctx, cdp.NodeID(req.NodeID)); err != nil {
+				// req.NodeID is a backendDOMNodeId from the accessibility tree
+				if err := human.ClickElement(ctx, cdp.BackendNodeID(req.NodeID)); err != nil {
 					return nil, err
 				}
 				return map[string]any{"clicked": true, "human": true}, nil
@@ -141,7 +142,8 @@ func (b *Bridge) InitActionRegistry() {
 				if len(nodes) == 0 {
 					return nil, fmt.Errorf("element not found: %s", req.Selector)
 				}
-				if err := human.ClickElement(ctx, nodes[0].NodeID); err != nil {
+				// Use BackendNodeID from the DOM node
+				if err := human.ClickElement(ctx, nodes[0].BackendNodeID); err != nil {
 					return nil, err
 				}
 				return map[string]any{"clicked": true, "human": true}, nil
