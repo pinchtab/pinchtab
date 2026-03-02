@@ -45,6 +45,14 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	orch.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
 	dash.SetInstanceLister(orch)
 
+	// Wire up instance events to SSE broadcast
+	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
+		dash.BroadcastSystemEvent(dashboard.SystemEvent{
+			Type:     evt.Type,
+			Instance: evt.Instance,
+		})
+	})
+
 	mux := http.NewServeMux()
 
 	dash.RegisterHandlers(mux)

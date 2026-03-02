@@ -19,6 +19,15 @@ import (
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
+// InstanceEvent is emitted when instance state changes.
+type InstanceEvent struct {
+	Type     string          `json:"type"` // "instance.started", "instance.stopped", "instance.error"
+	Instance *bridge.Instance `json:"instance"`
+}
+
+// EventHandler receives instance lifecycle events.
+type EventHandler func(InstanceEvent)
+
 type Orchestrator struct {
 	instances      map[string]*InstanceInternal
 	baseDir        string
@@ -30,6 +39,23 @@ type Orchestrator struct {
 	childAuthToken string
 	portAllocator  *PortAllocator
 	idMgr          *idutil.Manager
+	onEvent        EventHandler
+}
+
+// OnEvent sets the event handler for instance lifecycle events.
+func (o *Orchestrator) OnEvent(handler EventHandler) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.onEvent = handler
+}
+
+func (o *Orchestrator) emitEvent(eventType string, inst *bridge.Instance) {
+	o.mu.RLock()
+	handler := o.onEvent
+	o.mu.RUnlock()
+	if handler != nil {
+		handler(InstanceEvent{Type: eventType, Instance: inst})
+	}
 }
 
 type InstanceInternal struct {

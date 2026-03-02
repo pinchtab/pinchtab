@@ -62,19 +62,6 @@ export async function fetchAgents(): Promise<Agent[]> {
   return request<Agent[]>('/api/agents')
 }
 
-// Activity events SSE
-export function subscribeToEvents(onEvent: (event: unknown) => void): () => void {
-  const es = new EventSource('/api/events')
-  es.addEventListener('action', (e) => {
-    try {
-      onEvent(JSON.parse(e.data))
-    } catch {
-      // ignore parse errors
-    }
-  })
-  return () => es.close()
-}
-
 // Settings
 export async function fetchSettings(): Promise<Settings> {
   return request<Settings>('/api/settings')
@@ -91,4 +78,56 @@ export async function updateSettings(settings: Settings): Promise<Settings> {
 // Health
 export async function fetchHealth(): Promise<ServerInfo> {
   return request<ServerInfo>('/health')
+}
+
+// SSE Events
+export interface SystemEvent {
+  type: 'instance.started' | 'instance.stopped' | 'instance.error'
+  instance?: Instance
+}
+
+export interface AgentEvent {
+  agentId: string
+  action: string
+  url?: string
+  timestamp: string
+}
+
+export type EventHandler = {
+  onSystem?: (event: SystemEvent) => void
+  onAgent?: (event: AgentEvent) => void
+  onInit?: (agents: Agent[]) => void
+}
+
+export function subscribeToEvents(handlers: EventHandler): () => void {
+  const es = new EventSource('/api/events')
+
+  es.addEventListener('init', (e) => {
+    try {
+      const agents = JSON.parse(e.data) as Agent[]
+      handlers.onInit?.(agents)
+    } catch {
+      // ignore
+    }
+  })
+
+  es.addEventListener('system', (e) => {
+    try {
+      const event = JSON.parse(e.data) as SystemEvent
+      handlers.onSystem?.(event)
+    } catch {
+      // ignore
+    }
+  })
+
+  es.addEventListener('action', (e) => {
+    try {
+      const event = JSON.parse(e.data) as AgentEvent
+      handlers.onAgent?.(event)
+    } catch {
+      // ignore
+    }
+  })
+
+  return () => es.close()
 }

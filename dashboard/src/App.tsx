@@ -6,22 +6,54 @@ import { ProfilesPage, InstancesPage, AgentsPage, SettingsPage } from './pages'
 import * as api from './services/api'
 
 function AppContent() {
-  const { setInstances } = useAppStore()
+  const { setInstances, setProfiles, setAgents } = useAppStore()
 
-  // Load instances globally (needed for profile cards)
+  // Initial load
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.fetchInstances()
-        setInstances(data)
+        const [instances, profiles] = await Promise.all([
+          api.fetchInstances(),
+          api.fetchProfiles(),
+        ])
+        setInstances(instances)
+        setProfiles(profiles)
       } catch (e) {
-        console.error('Failed to load instances', e)
+        console.error('Failed to load initial data', e)
       }
     }
     load()
-    const interval = setInterval(load, 5000)
-    return () => clearInterval(interval)
-  }, [setInstances])
+  }, [setInstances, setProfiles])
+
+  // Subscribe to SSE events
+  useEffect(() => {
+    const unsubscribe = api.subscribeToEvents({
+      onInit: (agents) => {
+        setAgents(agents)
+      },
+      onSystem: async (event) => {
+        console.log('System event:', event)
+        // Refresh instances on any instance event
+        if (event.type.startsWith('instance.')) {
+          try {
+            const instances = await api.fetchInstances()
+            setInstances(instances)
+            // Also refresh profiles to update running status
+            const profiles = await api.fetchProfiles()
+            setProfiles(profiles)
+          } catch (e) {
+            console.error('Failed to refresh after event', e)
+          }
+        }
+      },
+      onAgent: (event) => {
+        console.log('Agent event:', event)
+        // Could update agent activity here
+      },
+    })
+
+    return unsubscribe
+  }, [setInstances, setProfiles, setAgents])
 
   return (
     <div className="flex h-screen flex-col bg-bg-app">

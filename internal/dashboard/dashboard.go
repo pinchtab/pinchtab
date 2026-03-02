@@ -50,6 +50,12 @@ type AgentEvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 }
 
+// SystemEvent is sent for instance lifecycle changes.
+type SystemEvent struct {
+	Type     string      `json:"type"` // "instance.started", "instance.stopped", "instance.error"
+	Instance interface{} `json:"instance,omitempty"`
+}
+
 // InstanceLister returns running instances (provided by Orchestrator).
 type InstanceLister interface {
 	List() []bridge.Instance
@@ -59,10 +65,28 @@ type Dashboard struct {
 	cfg            DashboardConfig
 	agents         map[string]*AgentActivity
 	sseConns       map[chan AgentEvent]struct{}
+	sysConns       map[chan SystemEvent]struct{}
 	cancel         context.CancelFunc
 	instances      InstanceLister
 	childAuthToken string
 	mu             sync.RWMutex
+}
+
+// BroadcastSystemEvent sends a system event to all SSE clients.
+func (d *Dashboard) BroadcastSystemEvent(evt SystemEvent) {
+	d.mu.RLock()
+	chans := make([]chan SystemEvent, 0, len(d.sysConns))
+	for ch := range d.sysConns {
+		chans = append(chans, ch)
+	}
+	d.mu.RUnlock()
+
+	for _, ch := range chans {
+		select {
+		case ch <- evt:
+		default:
+		}
+	}
 }
 
 // SetInstanceLister sets the orchestrator for aggregating agents from child instances.
@@ -192,6 +216,7 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 		cfg:            c,
 		agents:         make(map[string]*AgentActivity),
 		sseConns:       make(map[chan AgentEvent]struct{}),
+		sysConns:       make(map[chan SystemEvent]struct{}),
 		cancel:         cancel,
 		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 	}
@@ -304,14 +329,17 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := make(chan AgentEvent, d.cfg.SSEBufferSize)
+	agentCh := make(chan AgentEvent, d.cfg.SSEBufferSize)
+	sysCh := make(chan SystemEvent, d.cfg.SSEBufferSize)
 	d.mu.Lock()
-	d.sseConns[ch] = struct{}{}
+	d.sseConns[agentCh] = struct{}{}
+	d.sysConns[sysCh] = struct{}{}
 	d.mu.Unlock()
 
 	defer func() {
 		d.mu.Lock()
-		delete(d.sseConns, ch)
+		delete(d.sseConns, agentCh)
+		delete(d.sysConns, sysCh)
 		d.mu.Unlock()
 	}()
 
@@ -325,9 +353,13 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case evt := <-ch:
+		case evt := <-agentCh:
 			data, _ := json.Marshal(evt)
 			_, _ = fmt.Fprintf(w, "event: action\ndata: %s\n\n", data)
+			flusher.Flush()
+		case evt := <-sysCh:
+			data, _ := json.Marshal(evt)
+			_, _ = fmt.Fprintf(w, "event: system\ndata: %s\n\n", data)
 			flusher.Flush()
 		case <-keepalive.C:
 			_, _ = fmt.Fprintf(w, ": keepalive\n\n")
