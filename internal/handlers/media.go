@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -365,6 +366,13 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 
 	tabID := r.URL.Query().Get("tabId")
 	mode := r.URL.Query().Get("mode")
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	maxChars := -1
+	if v := r.URL.Query().Get("maxChars"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxChars = n
+		}
+	}
 
 	ctx, _, err := h.Bridge.TabContext(tabID)
 	if err != nil {
@@ -393,16 +401,30 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	truncated := false
+	if maxChars > -1 && len(text) > maxChars {
+		text = text[:maxChars]
+		truncated = true
+	}
+
 	var url, title string
 	_ = chromedp.Run(tCtx,
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
 
+	if format == "text" || format == "plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(text))
+		return
+	}
+
 	web.JSON(w, 200, map[string]any{
-		"url":   url,
-		"title": title,
-		"text":  text,
+		"url":       url,
+		"title":     title,
+		"text":      text,
+		"truncated": truncated,
 	})
 }
 
