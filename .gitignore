@@ -9,6 +9,7 @@ dist/
 !scripts/**/*.js
 !npm/bin/pinchtab
 !internal/dashboard/dashboard/*.js
+!internal/dashboard/dashboard/assets/*.js
 
 # npm package
 npm/node_modules/

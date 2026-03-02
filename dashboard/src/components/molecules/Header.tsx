@@ -23,7 +23,7 @@ export default function Header({ currentView, onViewChange }: Props) {
     <header className="flex items-center justify-between border-b border-border-subtle bg-bg-surface px-4 py-3">
       <div className="flex items-center gap-3">
         <img
-          src="/dashboard/pinchtab-headed-192.png"
+          src={`${import.meta.env.BASE_URL}pinchtab-headed-192.png`}
           alt="Pinchtab"
           className="h-8 w-8"
         />
