@@ -1,6 +1,7 @@
 import type {
   Profile,
   Instance,
+  InstanceTab,
   Agent,
   Settings,
   ServerInfo,
@@ -56,6 +57,14 @@ export async function stopInstance(id: string): Promise<void> {
   await request<void>(`/instances/${encodeURIComponent(id)}/stop`, {
     method: 'POST',
   })
+}
+
+export async function fetchInstanceTabs(id: string): Promise<InstanceTab[]> {
+  return request<InstanceTab[]>(`/instances/${encodeURIComponent(id)}/tabs`)
+}
+
+export async function fetchAllTabs(): Promise<InstanceTab[]> {
+  return request<InstanceTab[]>('/instances/tabs')
 }
 
 // Agents — endpoint is /api/agents (dashboard API)

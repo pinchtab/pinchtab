@@ -117,6 +117,15 @@ export interface CreateProfileResponse {
   name: string;
 }
 /**
+ * InstanceTab represents a browser tab in an instance.
+ */
+export interface InstanceTab {
+  id: string;
+  instanceId: string;
+  url: string;
+  title: string;
+}
+/**
  * LaunchInstanceRequest is the request body for launching an instance.
  */
 export interface LaunchInstanceRequest {

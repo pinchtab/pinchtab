@@ -103,6 +103,14 @@ type CreateProfileResponse struct {
 	Name   string `json:"name"`
 }
 
+// InstanceTab represents a browser tab in an instance.
+type InstanceTab struct {
+	ID         string `json:"id"`
+	InstanceID string `json:"instanceId"`
+	URL        string `json:"url"`
+	Title      string `json:"title"`
+}
+
 // LaunchInstanceRequest is the request body for launching an instance.
 type LaunchInstanceRequest struct {
 	ProfileID string `json:"profileId,omitempty"` // profile ID (prof_XXXXXXXX)
