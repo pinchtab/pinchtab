@@ -65,6 +65,28 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	if w.Code != 401 {
 		t.Errorf("expected 401, got %d", w.Code)
 	}
+	if w.Header().Get("WWW-Authenticate") == "" {
+		t.Error("expected WWW-Authenticate header")
+	}
+}
+
+func TestAuthMiddleware_MissingTokenHeader(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "secret123"}
+
+	handler := AuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != 401 {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+	if w.Header().Get("WWW-Authenticate") == "" {
+		t.Error("expected WWW-Authenticate header")
+	}
 }
 
 func TestAuthMiddleware_TableDriven(t *testing.T) {
@@ -147,6 +169,46 @@ func TestLoggingMiddleware(t *testing.T) {
 
 	if w.Code != 201 {
 		t.Errorf("expected 201, got %d", w.Code)
+	}
+}
+
+func TestRequestIDMiddleware_SetsHeader(t *testing.T) {
+	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Header().Get("X-Request-Id") == "" {
+		t.Fatal("expected X-Request-Id")
+	}
+}
+
+func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestRateLimitMiddleware_BypassHealthAndMetrics(t *testing.T) {
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	for _, p := range []string{"/health", "/metrics"} {
+		req := httptest.NewRequest("GET", p, nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("expected 200 for %s, got %d", p, w.Code)
+		}
 	}
 }
 
