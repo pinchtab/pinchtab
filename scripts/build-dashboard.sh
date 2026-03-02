@@ -6,6 +6,13 @@ cd "$(dirname "$0")/.."
 
 echo "📦 Building React dashboard..."
 cd dashboard
+
+# Install deps if needed
+if [ ! -d "node_modules" ]; then
+  echo "📥 Installing dependencies..."
+  bun install --frozen-lockfile
+fi
+
 bun run build
 
 echo "📋 Copying build to internal/dashboard/dashboard/..."
