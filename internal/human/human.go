@@ -131,12 +131,14 @@ func Click(ctx context.Context, x, y float64) error {
 	)
 }
 
-func ClickElement(ctx context.Context, nodeID cdp.NodeID) error {
+// ClickElement clicks on an element identified by its backend DOM node ID.
+// This uses the backendDOMNodeId from the accessibility tree, NOT a regular DOM nodeId.
+func ClickElement(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
 	var box *dom.BoxModel
 	if err := chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
-			box, err = dom.GetBoxModel().WithNodeID(nodeID).Do(ctx)
+			box, err = dom.GetBoxModel().WithBackendNodeID(backendNodeID).Do(ctx)
 			return err
 		}),
 	); err != nil {
