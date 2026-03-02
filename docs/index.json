@@ -18,6 +18,7 @@
   "architecture": [
     "architecture/pinchtab-architecture.md",
     "architecture/chrome-lifecycle-and-orchestration.md",
+    "architecture/allocation-strategies.md",
     "architecture/building.md"
   ],
   "guides": [
