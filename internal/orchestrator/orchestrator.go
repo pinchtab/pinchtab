@@ -21,7 +21,7 @@ import (
 
 // InstanceEvent is emitted when instance state changes.
 type InstanceEvent struct {
-	Type     string          `json:"type"` // "instance.started", "instance.stopped", "instance.error"
+	Type     string           `json:"type"` // "instance.started", "instance.stopped", "instance.error"
 	Instance *bridge.Instance `json:"instance"`
 }
 
