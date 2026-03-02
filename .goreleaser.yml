@@ -1,5 +1,9 @@
 version: 2
 
+before:
+  hooks:
+    - ./scripts/build-dashboard.sh
+
 builds:
   - main: ./cmd/pinchtab
     ldflags:
