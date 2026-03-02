@@ -19,16 +19,17 @@ export default function InstancesPage() {
     }
   }
 
+  // Only load on mount if empty — SSE handles updates
   useEffect(() => {
-    loadInstances()
-    const interval = setInterval(loadInstances, 5000)
-    return () => clearInterval(interval)
+    if (instances.length === 0) {
+      loadInstances()
+    }
   }, [])
 
   const handleStop = async (id: string) => {
     try {
       await api.stopInstance(id)
-      loadInstances()
+      // SSE will trigger refresh
     } catch (e) {
       console.error('Failed to stop instance', e)
     }

@@ -31,10 +31,11 @@ export default function AgentsPage() {
     }
   }
 
+  // Agents are loaded via SSE init event — only load if empty
   useEffect(() => {
-    loadAgents()
-    const interval = setInterval(loadAgents, 5000)
-    return () => clearInterval(interval)
+    if (agents.length === 0) {
+      loadAgents()
+    }
   }, [])
 
   const filteredEvents = events.filter((e) => {

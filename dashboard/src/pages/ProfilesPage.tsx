@@ -30,10 +30,11 @@ export default function ProfilesPage() {
     }
   }
 
+  // Only load on mount if empty — SSE handles updates
   useEffect(() => {
-    loadProfiles()
-    const interval = setInterval(loadProfiles, 10000)
-    return () => clearInterval(interval)
+    if (profiles.length === 0) {
+      loadProfiles()
+    }
   }, [])
 
   const handleCreate = async () => {
