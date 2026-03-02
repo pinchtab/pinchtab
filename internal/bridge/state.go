@@ -68,11 +68,31 @@ func WasUncleanExit(profileDir string) bool {
 
 func ClearChromeSessions(profileDir string) {
 	sessionsDir := filepath.Join(profileDir, "Default", "Sessions")
-	if err := os.RemoveAll(sessionsDir); err != nil {
-		slog.Warn("failed to clear Chrome sessions dir", "err", err)
-	} else {
-		slog.Info("cleared Chrome sessions dir (prevent tab restore hang)")
+
+	// Retry with backoff on Windows where file locks may persist after Chrome exit
+	const maxRetries = 3
+	const retryDelayMs = 100
+
+	var err error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Small delay before retry to allow file handles to be released
+			time.Sleep(time.Duration(retryDelayMs) * time.Millisecond)
+		}
+
+		err = os.RemoveAll(sessionsDir)
+		if err == nil {
+			slog.Info("cleared Chrome sessions dir (prevent tab restore hang)")
+			return
+		}
+
+		if attempt < maxRetries-1 {
+			slog.Debug("failed to clear Chrome sessions dir, retrying", "attempt", attempt+1, "err", err)
+		}
 	}
+
+	// Log final error if all retries failed
+	slog.Warn("failed to clear Chrome sessions dir after retries", "err", err)
 }
 
 func (b *Bridge) SaveState() {
