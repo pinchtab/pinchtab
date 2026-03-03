@@ -77,6 +77,18 @@ func homeDir() string {
 	return h
 }
 
+// userConfigDir returns the OS-appropriate app config directory:
+// - macOS: ~/Library/Application Support/pinchtab
+// - Linux: ~/.config/pinchtab (or $XDG_CONFIG_HOME/pinchtab)
+// Falls back to ~/.pinchtab if os.UserConfigDir() fails.
+func userConfigDir() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join(homeDir(), ".pinchtab")
+	}
+	return filepath.Join(configDir, "pinchtab")
+}
+
 func (c *RuntimeConfig) ListenAddr() string {
 	return c.Bind + ":" + c.Port
 }
@@ -104,10 +116,10 @@ func Load() *RuntimeConfig {
 		InstancePortEnd:   envIntOr("INSTANCE_PORT_END", 9968),
 		CdpURL:            os.Getenv("CDP_URL"),
 		Token:             os.Getenv("BRIDGE_TOKEN"),
-		StateDir:          envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".pinchtab")),
+		StateDir:          envOr("BRIDGE_STATE_DIR", userConfigDir()),
 		Headless:          envBoolOr("BRIDGE_HEADLESS", true),
 		NoRestore:         os.Getenv("BRIDGE_NO_RESTORE") == "true",
-		ProfileDir:        envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile")),
+		ProfileDir:        envOr("BRIDGE_PROFILE", filepath.Join(userConfigDir(), "chrome-profile")),
 		ChromeVersion:     envOr("BRIDGE_CHROME_VERSION", "144.0.7559.133"),
 		Timezone:          os.Getenv("BRIDGE_TIMEZONE"),
 		BlockImages:       os.Getenv("BRIDGE_BLOCK_IMAGES") == "true",
@@ -125,7 +137,7 @@ func Load() *RuntimeConfig {
 		WaitNavDelay:      1 * time.Second,
 	}
 
-	configPath := envOr("BRIDGE_CONFIG", filepath.Join(homeDir(), ".pinchtab", "config.json"))
+	configPath := envOr("BRIDGE_CONFIG", filepath.Join(userConfigDir(), "config.json"))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -185,8 +197,8 @@ func DefaultFileConfig() FileConfig {
 		Port:              "9867",
 		InstancePortStart: &start,
 		InstancePortEnd:   &end,
-		StateDir:          filepath.Join(homeDir(), ".pinchtab"),
-		ProfileDir:        filepath.Join(homeDir(), ".pinchtab", "chrome-profile"),
+		StateDir:          userConfigDir(),
+		ProfileDir:        filepath.Join(userConfigDir(), "chrome-profile"),
 		Headless:          &h,
 		NoRestore:         false,
 		TimeoutSec:        15,
