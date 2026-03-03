@@ -197,21 +197,39 @@ func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, opts []ch
 	human.SetHumanRandSeed(int64(stealthSeed))
 	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript
 
-	// Wrap in a startup timeout so we can detect Chrome 145's silent startup.
-	// Chrome 145 no longer prints "DevTools listening on ws://..." to stderr when
-	// launched with --remote-debugging-port, so chromedp's ExecAllocator blocks
-	// indefinitely waiting for that message. We bound the wait to chromeStartupTimeout
-	// and fall back to a direct-launch + RemoteAllocator approach if it fires.
+	// Connect to Chrome with a startup timeout so we can detect Chrome 145's silent
+	// startup behaviour. Chrome 145 no longer prints "DevTools listening on ws://..."
+	// to stderr, so chromedp's ExecAllocator would block forever waiting for that
+	// message.
+	//
+	// IMPORTANT: we intentionally do NOT derive a timeout context from browserCtx.
+	// A derived timeout context, when cancelled, propagates through chromedp's internal
+	// allocator goroutines and kills the Chrome process — defeating the purpose of having
+	// the fallback. Instead we run chromedp.Run in a goroutine and race it against a
+	// time.After channel; the browserCtx lifetime remains independent.
 	const chromeStartupTimeout = 20 * time.Second
-	startupCtx, startupCancel := context.WithTimeout(browserCtx, chromeStartupTimeout)
-	defer startupCancel()
+
+	type runResult struct{ err error }
+	runCh := make(chan runResult, 1)
+	go func() {
+		runCh <- runResult{chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			slog.Debug("chrome connection established, running initial action")
+			return nil
+		}))}
+	}()
 
 	slog.Debug("connecting to chrome browser")
 
-	err := chromedp.Run(startupCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		slog.Debug("chrome connection established, running initial action")
-		return nil
-	}))
+	var err error
+	select {
+	case res := <-runCh:
+		err = res.err
+	case <-time.After(chromeStartupTimeout):
+		// Chrome started (ExecAllocator launched the process) but never announced
+		// its DevTools URL via stderr.  Wrap as DeadlineExceeded so isStartupTimeout
+		// recognises it, then fall through to the cleanup + fallback logic below.
+		err = fmt.Errorf("chrome startup timeout after %v: %w", chromeStartupTimeout, context.DeadlineExceeded)
+	}
 
 	if err != nil {
 		// Clean up the ExecAllocator and its Chrome process before evaluating error.
