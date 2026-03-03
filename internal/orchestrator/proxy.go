@@ -22,28 +22,34 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the decomposed Locator (O(1) cache, O(n) fallback).
+	// Try the decomposed Locator first (O(1) cache, O(n) bridge query fallback).
 	if o.instanceMgr != nil {
 		inst, err := o.instanceMgr.FindInstanceByTabID(tabID)
-		if err != nil {
-			web.Error(w, 404, err)
+		if err == nil {
+			targetURL := &url.URL{
+				Scheme:   "http",
+				Host:     net.JoinHostPort("localhost", inst.Port),
+				Path:     r.URL.Path,
+				RawQuery: r.URL.RawQuery,
+			}
+			o.proxyToURL(w, r, targetURL)
 			return
 		}
-		targetURL := &url.URL{
-			Scheme:   "http",
-			Host:     net.JoinHostPort("localhost", inst.Port),
-			Path:     r.URL.Path,
-			RawQuery: r.URL.RawQuery,
-		}
-		o.proxyToURL(w, r, targetURL)
-		return
+		// Locator miss — fall through to legacy lookup which handles
+		// CDP target ID → hash-based tab ID translation via idMgr.
 	}
 
-	// Fallback: legacy O(n×m) search (will be removed in a future release).
+	// Legacy lookup: queries /screencast/tabs and translates CDP target IDs
+	// to hash-based tab IDs via idMgr.TabIDFromCDPTarget().
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
+	}
+
+	// Cache the discovered mapping for future O(1) lookups.
+	if o.instanceMgr != nil {
+		o.instanceMgr.Locator.Register(tabID, inst.ID)
 	}
 
 	targetURL := &url.URL{

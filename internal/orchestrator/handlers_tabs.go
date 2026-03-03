@@ -22,22 +22,26 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use instance Manager for O(1) tab lookup, fallback to legacy.
+	// Try Manager cache first (O(1)), fall back to legacy lookup
+	// which handles CDP target ID → hash-based tab ID translation.
 	var instPort string
 	if o.instanceMgr != nil {
 		inst, err := o.instanceMgr.FindInstanceByTabID(tabID)
-		if err != nil {
-			web.Error(w, 404, err)
-			return
+		if err == nil {
+			instPort = inst.Port
 		}
-		instPort = inst.Port
-	} else {
+	}
+	if instPort == "" {
 		inst, err := o.findRunningInstanceByTabID(tabID)
 		if err != nil {
 			web.Error(w, 404, err)
 			return
 		}
 		instPort = inst.Port
+		// Cache for future lookups.
+		if o.instanceMgr != nil {
+			o.instanceMgr.Locator.Register(tabID, inst.ID)
+		}
 	}
 
 	// Construct request body for the bridge's /tab endpoint
