@@ -22,40 +22,56 @@ Currently PR #91 has the Strategy framework but is missing:
 
 ---
 
-## Architecture Overview
+## Architecture Overview (DECOMPOSED - Facade Pattern)
 
 ```
 Agent Request
   ↓
 Orchestrator (coordinator)
+  ├─ Picks AllocationStrategy based on config
+  └─ Routes to strategy
   ↓
-InstanceManager (NEW - adapter layer)
-  ├─ Manages instance lifecycle
-  ├─ Applies AllocationPolicy for instance selection
-  ├─ Discovers tab ownership via Bridge.TabRegistry
-  ├─ Caches tab → instance mappings
-  └─ Provides primitives interface
-      ↓
-      Instance (profile + bridge pair)
-      ├─ ID: "inst_xyz"
-      ├─ ProfileID: "prof_default"
-      ├─ Bridge
-      │   └─ TabRegistry (local, exposes via GET /tab-registry)
-      │       └─ {tabId → {url, createdAt}}
-      │
-      └─ Bridge wraps CDP operations
-          └─ chromedp.Run(ctx, ...)
+AllocationStrategy (Simple/Session/Explicit)
+  ├─ Handles API endpoints
+  └─ Uses InstanceManager facade methods
+  ↓
+InstanceManager (thin facade - ZERO business logic, just orchestrates)
+  │
+  ├─ TabService (all tab operations)
+  │   ├─ CreateTab(url) → calls allocator → repository → bridge
+  │   ├─ CloseTab(tabID)
+  │   └─ ListTabs()
+  │
+  ├─ InstanceAllocator (applies AllocationPolicy)
+  │   ├─ AllocateInstance() → policy.SelectInstance(instances)
+  │   └─ SelectForNewTab()
+  │
+  ├─ TabLocator (discovery + cache)
+  │   ├─ FindInstanceByTabID(tabID) → cache OR query bridges
+  │   ├─ Invalidate(tabID)
+  │   └─ RefreshAll()
+  │
+  ├─ InstanceRepository (instance lifecycle)
+  │   ├─ Launch(profileID, port) → new Instance + Bridge
+  │   ├─ Stop(instanceID)
+  │   ├─ List() → []*Instance
+  │   └─ Get(instanceID) → *Instance
+  │
+  └─ RequestRouter (HTTP proxying only)
+      └─ ProxyTabRequest(w, r, tabID) → locator → proxy
+  ↓
+Bridge (thin wrapper - one per instance)
+  ├─ TabRegistry (local ownership)
+  │   └─ GET /tab-registry endpoint
+  │   └─ {tabId → {url, createdAt}}
+  ├─ TabManager (wraps CDP)
+  └─ chromedp.Run(ctx, ...) → CDP operations
 
-AllocationPolicy (SWAPPABLE)
+AllocationPolicy (INJECTED - SWAPPABLE)
   ├─ FCFS: first available
   ├─ RoundRobin: rotate through instances
-  ├─ LoadBased: least loaded
-  └─ Custom: user-defined
-
-Strategies (use InstanceManager)
-  ├─ Simple: shorthand API (/snapshot, /navigate)
-  ├─ Session: session-based + sticky routing
-  └─ Explicit: full control (already in PR #91)
+  ├─ LoadBased: least loaded (tabs + memory weighted)
+  └─ Random: random selection
 ```
 
 ---
@@ -80,39 +96,120 @@ func (o *Orchestrator) proxyTabRequest(w, r) {
 }
 ```
 
-### InstanceManager (NEW - CRITICAL)
-**Owns:** 
-- All instances + their bridges
-- AllocationPolicy application
-- Tab → Instance mapping discovery (via Bridge.TabRegistry)
-- Tab creation/deletion
-- Instance lifecycle
-
-**Implements:** Primitives interface  
+### InstanceManager (Facade Pattern)
+**Owns:** NOTHING - pure orchestration only  
+**Delegates to:** 5 focused components (see below)  
 **Used by:** Strategies, Orchestrator
 
+**Public interface (what Orchestrator + Strategies see):**
 ```go
 type InstanceManager interface {
-  // Lifecycle
+  // Lifecycle (delegates to Repository)
   Launch(profileId string, port int) (*Instance, error)
   Stop(instanceId string) error
   List() []*Instance
   Get(instanceId string) (*Instance, error)
   
-  // Tab discovery
-  FindInstanceByTabID(tabID string) (*Instance, error)  // Queries Bridge.TabRegistry
-  GetTabRegistry(instanceId string) *TabRegistry
+  // Tab discovery (delegates to Locator)
+  FindInstanceByTabID(tabID string) (*Instance, error)
   
-  // Allocation (applies policy)
+  // Allocation (delegates to Allocator)
   AllocateInstance() (*Instance, error)
   
-  // Operations
-  CreateTab(url string) (string, error)  // Uses policy to pick instance
+  // Operations (delegates to TabService)
+  CreateTab(url string) (string, error)
   CloseTab(tabID string) error
   ProxyTabRequest(w, r, tabID string) error
   
-  // Caching
+  // Caching (delegates to Locator)
   InvalidateTabCache(tabID string)
+}
+```
+
+**Implementation is pure delegation:**
+```go
+type InstanceManager struct {
+  repo      InstanceRepository
+  allocator InstanceAllocator
+  locator   TabLocator
+  tabs      TabService
+  router    RequestRouter
+}
+
+func (m *InstanceManager) CreateTab(url string) (string, error) {
+  return m.tabs.CreateTab(url)  // delegates
+}
+
+func (m *InstanceManager) FindInstanceByTabID(tabID string) (*Instance, error) {
+  return m.locator.FindInstanceByTabID(tabID)  // delegates
+}
+
+func (m *InstanceManager) ProxyTabRequest(w, r, tabID) error {
+  return m.router.ProxyTabRequest(w, r, tabID)  // delegates
+}
+
+// ... all methods just forward to appropriate component
+```
+
+### InstanceManager Components (Decomposed)
+
+#### InstanceRepository
+**Owns:** Instance lifecycle, in-memory store  
+**Responsible for:** Launch, Stop, List, Get, Add, Remove  
+**Dependencies:** None
+```go
+type InstanceRepository interface {
+  Launch(profileID string, port int) (*Instance, error)
+  Stop(instanceID string) error
+  List() []*Instance
+  Get(instanceID string) (*Instance, error)
+  Add(instance *Instance) error
+  Remove(instanceID string) error
+}
+```
+
+#### InstanceAllocator
+**Owns:** Applying AllocationPolicy to select an instance  
+**Responsible for:** AllocateInstance, SelectForNewTab  
+**Dependencies:** InstanceRepository, AllocationPolicy (injected)
+```go
+type InstanceAllocator interface {
+  AllocateInstance() (*Instance, error)
+  SelectForNewTab() (*Instance, error)
+}
+```
+
+#### TabLocator
+**Owns:** Discovering which instance owns a tab + caching + invalidation  
+**Responsible for:** FindInstanceByTabID (O(1) cache, O(n) fallback), Invalidate, RefreshAll  
+**Dependencies:** InstanceRepository
+```go
+type TabLocator interface {
+  FindInstanceByTabID(tabID string) (*Instance, error)  // Cache OR query bridges
+  Invalidate(tabID string)
+  RefreshAll()
+}
+```
+
+#### TabService
+**Owns:** All tab-level operations  
+**Responsible for:** CreateTab, CloseTab, ListTabs  
+**Dependencies:** Allocator, Locator, Repository (indirectly via allocator)
+```go
+type TabService interface {
+  CreateTab(url string) (string, error)
+  CloseTab(tabID string) error
+  ListTabs(instanceID string) ([]*Tab, error)
+}
+```
+
+#### RequestRouter
+**Owns:** HTTP proxying logic only  
+**Responsible for:** ProxyTabRequest  
+**Dependencies:** TabLocator
+```go
+type RequestRouter interface {
+  ProxyTabRequest(w http.ResponseWriter, r *http.Request, tabID string) error
 }
 ```
 
@@ -291,44 +388,70 @@ git push origin feat/allocation-strategies --force-with-lease
 
 **Status:** CI passes, no conflicts
 
-### Phase 2: InstanceManager (4-6 hours)
+### Phase 2: InstanceManager (Decomposed) (5-7 hours)
 
-**2.1 Create InstanceManager interface**
-- File: `internal/instance/manager.go`
-- Define interface (Lifecycle, TabDiscovery, Allocation, Operations)
-- No implementation yet, just signatures
-
-**2.2 Implement InstanceManagerImpl**
-- File: `internal/instance/manager_impl.go`
-- Concrete implementation
-- Manages instances map
-- Holds AllocationPolicy
-- Tab cache (map[string]string)
-
-**2.3 Add TabRegistry exposure to Bridge**
+**2.1 Create Bridge.TabRegistry exposure**
 - File: `internal/bridge/tab_registry.go` (new)
-- Define TabRegistry struct + methods
+- Define `TabRegistry` struct: `map[string]*TabEntry{tabID → {url, createdAt}}`
 - Add to Bridge: `func (b *Bridge) GetTabRegistry() *TabRegistry`
 - Add HTTP endpoint: `GET /tab-registry` in handlers
 
-**2.4 InstanceManager discovers tabs**
-- Implement: `FindInstanceByTabID(tabID)` 
-- Check cache first
-- If miss: query each Bridge's `/tab-registry`
-- Update cache
-- Return instance
+**2.2 Create InstanceRepository (lifecycle)**
+- File: `internal/instance/repository.go`
+- Manages instances in-memory map
+- Implement: Launch, Stop, List, Get, Add, Remove
+- Thread-safe (sync.RWMutex)
 
-**2.5 Wire InstanceManager into Orchestrator**
+**2.3 Create TabLocator (discovery + cache)**
+- File: `internal/instance/locator.go`
+- Owns `map[string]string` cache: tabID → instanceID
+- Implement: FindInstanceByTabID (cache OR query bridges)
+- Implement: Invalidate, RefreshAll
+- Thread-safe caching
+
+**2.4 Create InstanceAllocator (policy application)**
+- File: `internal/instance/allocator.go`
+- Holds AllocationPolicy (injected)
+- Implement: AllocateInstance(), SelectForNewTab()
+- Delegates to policy.SelectInstance(instances)
+
+**2.5 Create TabService (tab operations)**
+- File: `internal/instance/tabservice.go`
+- Implement: CreateTab(url), CloseTab(tabID), ListTabs(instanceID)
+- CreateTab: allocate → repository.Get → bridge.CreateTab
+- CloseTab: locator.Invalidate + bridge.CloseTab
+
+**2.6 Create RequestRouter (proxying)**
+- File: `internal/instance/router.go`
+- Implement: ProxyTabRequest(w, r, tabID)
+- Uses TabLocator.FindInstanceByTabID → proxy HTTP
+
+**2.7 Create InstanceManager facade**
+- File: `internal/instance/manager.go`
+- Struct holds: repo, allocator, locator, tabs, router
+- All public methods just delegate to components
+- `func (m *InstanceManager) CreateTab(url) = m.tabs.CreateTab(url)`
+- `func (m *InstanceManager) FindInstanceByTabID(id) = m.locator.FindInstanceByTabID(id)`
+
+**2.8 Create types**
+- File: `internal/instance/types.go`
+- Instance, TabEntry, TabRegistry
+
+**2.9 Wire into Orchestrator**
 - File: `internal/orchestrator/orchestrator.go`
 - Create InstanceManager in `NewOrchestrator()`
 - Update `proxyTabRequest` to use InstanceManager
 - Test: old flow should still work
 
 **Tests:**
-- `TestInstanceManager_Launch` - create instance
-- `TestInstanceManager_CreateTab` - allocate + create
-- `TestInstanceManager_FindInstance` - cache hit/miss
-- `TestTabDiscovery_QueuesRegistries` - queries bridges
+- `internal/instance/instance_test.go` (integration)
+- `TestInstanceRepository_Launch`
+- `TestTabLocator_FindsInstanceByTabID_CacheHit`
+- `TestTabLocator_FindsInstanceByTabID_CacheMiss`
+- `TestInstanceAllocator_AppliesPolicy`
+- `TestTabService_CreateTab_AllocatesViaPolicy`
+- `TestRequestRouter_ProxiesTabRequest`
+- `TestInstanceManager_Facade_DelegatesToComponents`
 
 ### Phase 3: AllocationPolicy (2-3 hours)
 
@@ -490,9 +613,13 @@ strategy := strategy.New(cfg.Strategy, instanceMgr, policy)
 
 ### Create
 ```
-internal/instance/manager.go              # Interface
-internal/instance/manager_impl.go         # Implementation
-internal/instance/types.go                # TabEntry, etc.
+internal/instance/manager.go              # Facade (pure delegation)
+internal/instance/repository.go           # Lifecycle (Launch, Stop, List, Get)
+internal/instance/locator.go              # Discovery + cache (FindInstanceByTabID)
+internal/instance/allocator.go            # Policy application (AllocateInstance)
+internal/instance/tabservice.go           # Tab operations (CreateTab, CloseTab)
+internal/instance/router.go               # HTTP proxying (ProxyTabRequest)
+internal/instance/types.go                # Instance, TabEntry, TabRegistry
 
 internal/allocation/policy.go             # Interface
 internal/allocation/fcfs.go               # FCFS policy
@@ -505,7 +632,6 @@ internal/strategy/simple/simple.go        # Simple strategy impl
 internal/strategy/simple/simple_test.go   # Tests
 
 internal/bridge/tab_registry.go           # TabRegistry + HTTP endpoint
-internal/bridge/tab_registry_test.go      # Tests
 ```
 
 ### Modify
@@ -560,7 +686,7 @@ internal/strategy/session/session.go      # Update to use InstanceManager
 ## Timeline Estimate
 
 - **Phase 1:** 1-2 hours
-- **Phase 2:** 4-6 hours
+- **Phase 2:** 5-7 hours (decomposed components)
 - **Phase 3:** 2-3 hours
 - **Phase 4:** 3-4 hours
 - **Phase 5:** 2-3 hours
@@ -568,7 +694,7 @@ internal/strategy/session/session.go      # Update to use InstanceManager
 - **Phase 7:** 2-3 hours
 - **Phase 8:** 3-4 hours
 
-**Total:** ~22-31 hours (3-4 days with normal breaks)
+**Total:** ~23-32 hours (3-4 days with normal breaks)
 
 ---
 
