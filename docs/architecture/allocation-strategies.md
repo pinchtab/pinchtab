@@ -588,31 +588,62 @@ headless: true
 
 ```
 internal/
-├── primitive/
-│   ├── primitive.go       # Interfaces: InstanceManager, TabManager, ProfileManager
-│   ├── instance.go        # Instance type
-│   ├── tab.go             # Tab type + options
-│   └── profile.go         # Profile type
+├── allocation/
+│   ├── policy.go          # AllocationPolicy interface + factory
+│   ├── fcfs.go            # First Come First Served (default)
+│   ├── round_robin.go     # Cycles through instances (atomic counter)
+│   ├── random.go          # Random selection
+│   └── policy_test.go     # 8 unit tests
+│
+├── instance/              # Decomposed InstanceManager (Facade Pattern)
+│   ├── manager.go         # Facade — pure delegation, zero business logic
+│   ├── repository.go      # Instance lifecycle (Launch, Stop, List, Get)
+│   ├── locator.go         # Tab discovery with O(1) cache + bridge fallback
+│   ├── allocator.go       # Applies AllocationPolicy to select instances
+│   ├── router.go          # HTTP proxying via Locator for tab resolution
+│   ├── bridge_client.go   # HTTP client for bridge operations
+│   ├── types.go           # InstanceLauncher, TabFetcher interfaces
+│   └── instance_test.go   # 16 contract tests
 │
 ├── strategy/
-│   ├── strategy.go        # Strategy interface
-│   ├── registry.go        # Strategy registry + factory
+│   ├── strategy.go        # Strategy interface + registry
 │   │
-│   ├── explicit/
-│   │   └── explicit.go    # Current behavior (power user)
+│   ├── simple/
+│   │   ├── simple.go      # Shorthand API (bridge-like, auto-allocation)
+│   │   └── simple_test.go # 10 tests
 │   │
 │   ├── session/
-│   │   ├── session.go     # Session-based allocation
-│   │   └── cleanup.go     # TTL cleanup loop
+│   │   ├── session.go     # Session-based sticky routing + TTL cleanup
+│   │   └── session_test.go # 13 tests
 │   │
-│   └── pool/
-│       ├── pool.go        # Pre-warmed pool
-│       └── recycler.go    # Lease expiry recycler
+│   └── explicit/
+│       └── explicit.go    # Full control (power user, all primitives)
+│
+├── primitive/
+│   └── primitive.go       # Interfaces: InstanceManager, TabManager, ProfileManager
 │
 ├── orchestrator/
-│   ├── orchestrator.go    # Wires primitives + strategy
+│   ├── orchestrator.go    # Wires instance.Manager + strategy
+│   ├── proxy.go           # O(1) tab routing via Locator
 │   └── ...
 ```
+
+## Decomposed InstanceManager
+
+The InstanceManager uses the **Facade Pattern** — a thin coordinator
+that delegates all work to focused components:
+
+```
+InstanceManager (facade — zero business logic)
+├── Repository   — instance lifecycle (Launch, Stop, List, Get)
+├── Locator      — tab discovery + O(1) cache with bridge fallback
+├── Allocator    — applies AllocationPolicy to select instances
+└── Router       — HTTP proxying via Locator for tab resolution
+```
+
+Each component has a single responsibility, is independently testable,
+and has no circular dependencies. The Orchestrator syncs instance state
+to the Manager when instances start or stop.
 
 ---
 

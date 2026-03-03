@@ -46,56 +46,56 @@ func fakeBridge() *httptest.Server {
 
 		switch req.Action {
 		case "new":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"tabId": "tab_fake_123",
 				"url":   req.URL,
 			})
 		case "close":
-			json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
 		}
 	})
 
 	// GET /tabs — list tabs.
 	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]string{
+		_ = json.NewEncoder(w).Encode([]map[string]string{
 			{"id": "tab_fake_123", "url": "https://example.com", "title": "Example"},
 		})
 	})
 
 	// Tab operations — return canned responses.
 	mux.HandleFunc("GET /tabs/{id}/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"text": "snapshot of " + r.PathValue("id"),
 		})
 	})
 	mux.HandleFunc("GET /tabs/{id}/screenshot", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		w.Write([]byte("fake-png"))
+		_, _ = w.Write([]byte("fake-png"))
 	})
 	mux.HandleFunc("GET /tabs/{id}/text", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"text": "page text"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"text": "page text"})
 	})
 	mux.HandleFunc("POST /tabs/{id}/action", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("POST /tabs/{id}/actions", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]string{{"status": "ok"}})
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"status": "ok"}})
 	})
 	mux.HandleFunc("POST /tabs/{id}/evaluate", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"result": 42})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": 42})
 	})
 	mux.HandleFunc("POST /tabs/{id}/navigate", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /tabs/{id}/cookies", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]string{})
+		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	})
 	mux.HandleFunc("POST /tabs/{id}/cookies", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /tabs/{id}/pdf", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/pdf")
-		w.Write([]byte("fake-pdf"))
+		_, _ = w.Write([]byte("fake-pdf"))
 	})
 
 	return httptest.NewServer(mux)
@@ -159,7 +159,7 @@ func TestSimple_Navigate_CreatesTab(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["tabId"] == "" {
 		t.Error("expected tabId in response")
 	}
@@ -231,7 +231,7 @@ func TestSimple_TabSpecific_Snapshot(t *testing.T) {
 	mux.ServeHTTP(navRec, navReq)
 
 	var navResp map[string]string
-	json.NewDecoder(navRec.Body).Decode(&navResp)
+	_ = json.NewDecoder(navRec.Body).Decode(&navResp)
 	tabID := navResp["tabId"]
 
 	// Snapshot with explicit tab ID.
@@ -281,7 +281,7 @@ func TestSimple_TabClose(t *testing.T) {
 	mux.ServeHTTP(navRec, navReq)
 
 	var navResp map[string]string
-	json.NewDecoder(navRec.Body).Decode(&navResp)
+	_ = json.NewDecoder(navRec.Body).Decode(&navResp)
 	tabID := navResp["tabId"]
 
 	// Close the tab.

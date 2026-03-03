@@ -35,30 +35,30 @@ func fakeBridge() *httptest.Server {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		switch req.Action {
 		case "new":
-			json.NewEncoder(w).Encode(map[string]string{"tabId": "tab_sess_1", "url": req.URL})
+			_ = json.NewEncoder(w).Encode(map[string]string{"tabId": "tab_sess_1", "url": req.URL})
 		case "close":
-			json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
 		}
 	})
 	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]string{
+		_ = json.NewEncoder(w).Encode([]map[string]string{
 			{"id": "tab_sess_1", "url": "https://example.com", "title": "Example"},
 		})
 	})
 	mux.HandleFunc("GET /tabs/{id}/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"text": "snapshot"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"text": "snapshot"})
 	})
 	mux.HandleFunc("POST /tabs/{id}/navigate", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("POST /tabs/{id}/action", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /tabs/{id}/text", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"text": "page text"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"text": "page text"})
 	})
 	mux.HandleFunc("GET /tabs/{id}/screenshot", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("fake-png"))
+		_, _ = w.Write([]byte("fake-png"))
 	})
 	return httptest.NewServer(mux)
 }
@@ -89,7 +89,7 @@ func createSession(t *testing.T, mux *http.ServeMux) string {
 		t.Fatalf("create session: expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var resp map[string]string
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	return resp["sessionId"]
 }
 
@@ -123,7 +123,7 @@ func TestSession_GetSession(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["id"] != sessID {
 		t.Errorf("expected session ID %s, got %v", sessID, resp["id"])
 	}
@@ -175,7 +175,7 @@ func TestSession_ListSessions(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	var sessions []map[string]any
-	json.NewDecoder(rec.Body).Decode(&sessions)
+	_ = json.NewDecoder(rec.Body).Decode(&sessions)
 	if len(sessions) != 2 {
 		t.Errorf("expected 2 sessions, got %d", len(sessions))
 	}
@@ -196,7 +196,7 @@ func TestSession_Navigate_CreatesSession(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["sessionId"] == "" {
 		t.Error("expected sessionId in response")
 	}
@@ -216,7 +216,7 @@ func TestSession_Navigate_StickyRouting(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	var resp1 map[string]string
-	json.NewDecoder(rec.Body).Decode(&resp1)
+	_ = json.NewDecoder(rec.Body).Decode(&resp1)
 	sessID := resp1["sessionId"]
 
 	// Navigate again with session ID — should reuse.
@@ -232,7 +232,7 @@ func TestSession_Navigate_StickyRouting(t *testing.T) {
 	}
 
 	var resp2 map[string]string
-	json.NewDecoder(rec2.Body).Decode(&resp2)
+	_ = json.NewDecoder(rec2.Body).Decode(&resp2)
 	if resp2["sessionId"] != sessID {
 		t.Errorf("expected same session %s, got %s", sessID, resp2["sessionId"])
 	}

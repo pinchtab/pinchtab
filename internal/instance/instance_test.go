@@ -114,7 +114,7 @@ func TestRepository_Running_FiltersNonRunning(t *testing.T) {
 	repo := instance.NewRepository(launcher)
 
 	inst1, _ := repo.Launch("prof1", "9868", true)
-	repo.Launch("prof2", "9869", true)
+	_, _ = repo.Launch("prof2", "9869", true)
 
 	// Manually mark inst1 as stopped via Add.
 	stopped := *inst1
@@ -180,7 +180,7 @@ func TestLocator_TabNotFound(t *testing.T) {
 	repo := instance.NewRepository(launcher)
 	locator := instance.NewLocator(repo, fetcher)
 
-	repo.Launch("default", "9868", true)
+	_, _ = repo.Launch("default", "9868", true)
 	fetcher.AddTab("9868", "tab_abc", "https://example.com")
 
 	_, err := locator.FindInstanceByTabID("nonexistent")
@@ -252,7 +252,7 @@ func TestAllocator_FCFS(t *testing.T) {
 	policy := &allocation.FCFS{}
 	alloc := instance.NewAllocator(repo, policy)
 
-	repo.Launch("prof1", "9868", true)
+	_, _ = repo.Launch("prof1", "9868", true)
 
 	got, err := alloc.Allocate()
 	if err != nil {
@@ -269,8 +269,8 @@ func TestAllocator_RoundRobin(t *testing.T) {
 	policy := allocation.NewRoundRobin()
 	alloc := instance.NewAllocator(repo, policy)
 
-	repo.Launch("prof1", "9868", true)
-	repo.Launch("prof2", "9869", true)
+	_, _ = repo.Launch("prof1", "9868", true)
+	_, _ = repo.Launch("prof2", "9869", true)
 
 	// RoundRobin should cycle. Exact order depends on map iteration,
 	// but each allocation should succeed.
@@ -299,7 +299,7 @@ func TestRouter_ProxyTabRequest(t *testing.T) {
 	// Set up a fake bridge server.
 	fakeBridge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		fmt.Fprintf(w, "proxied:%s", r.URL.Path)
+		_, _ = fmt.Fprintf(w, "proxied:%s", r.URL.Path)
 	}))
 	defer fakeBridge.Close()
 
