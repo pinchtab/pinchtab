@@ -18,7 +18,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	"github.com/pinchtab/pinchtab/internal/strategy"
+	"github.com/pinchtab/pinchtab/internal/strategy/session"
+	"github.com/pinchtab/pinchtab/internal/strategy/simple"
 	"github.com/pinchtab/pinchtab/internal/web"
+
+	_ "github.com/pinchtab/pinchtab/internal/strategy/explicit" // register explicit strategy
 )
 
 // runDashboard starts a lightweight dashboard server — no Chrome, no bridge.
@@ -52,6 +57,13 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		})
 	})
 
+	// Set allocation policy if configured.
+	if cfg.AllocationPolicy != "" && cfg.AllocationPolicy != "fcfs" {
+		if err := orch.SetAllocationPolicy(cfg.AllocationPolicy); err != nil {
+			slog.Warn("invalid allocation policy, using fcfs", "policy", cfg.AllocationPolicy, "err", err)
+		}
+	}
+
 	mux := http.NewServeMux()
 
 	dash.RegisterHandlers(mux)
@@ -63,6 +75,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		web.JSON(w, 200, map[string]any{
 			"status":    "ok",
 			"mode":      "dashboard",
+			"strategy":  cfg.Strategy,
 			"dashboard": "/dashboard",
 			"docs":      "/api/docs",
 		})
@@ -76,39 +89,80 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		web.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})
 	})
 
-	// Special handler for /tabs - return empty list if no instances
-	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
-		target := orch.FirstRunningURL()
-		if target == "" {
-			// No instances running, return empty tabs list
-			web.JSON(w, 200, map[string]interface{}{"tabs": []interface{}{}})
-			return
-		}
-		proxyRequest(w, r, target+"/tabs")
-	})
+	// Initialize allocation strategy if configured.
+	// When a strategy is active, it registers shorthand endpoints (/navigate, /snapshot, etc.)
+	// instead of the legacy proxy-to-first-instance behavior.
+	strategyActive := false
+	if cfg.Strategy != "" {
+		var activeStrategy strategy.Strategy
+		mgr := orch.InstanceManager()
 
-	proxyEndpoints := []string{
-		"GET /snapshot", "GET /screenshot", "GET /text",
-		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
-		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
-		"GET /cookies", "POST /cookies",
-		"GET /download", "POST /upload",
-		"GET /stealth/status", "POST /fingerprint/rotate",
-		"GET /screencast", "GET /screencast/tabs",
-		"POST /find", "POST /macro",
+		switch cfg.Strategy {
+		case "simple":
+			activeStrategy = simple.New(mgr)
+		case "session":
+			activeStrategy = session.New(mgr)
+		case "explicit":
+			s, err := strategy.New("explicit")
+			if err != nil {
+				slog.Error("failed to create explicit strategy", "err", err)
+				os.Exit(1)
+			}
+			activeStrategy = s
+		default:
+			slog.Error("unknown strategy", "strategy", cfg.Strategy,
+				"available", "simple, session, explicit")
+			os.Exit(1)
+		}
+
+		if err := activeStrategy.Init(nil); err != nil {
+			slog.Error("strategy init failed", "err", err)
+			os.Exit(1)
+		}
+
+		activeStrategy.RegisterRoutes(mux)
+		strategyActive = true
+
+		slog.Info("strategy active",
+			"strategy", activeStrategy.Name(),
+			"policy", cfg.AllocationPolicy,
+		)
 	}
-	for _, ep := range proxyEndpoints {
-		endpoint := ep
-		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+
+	// Legacy shorthand proxy endpoints — only registered when no strategy is active.
+	// These proxy to the first running instance (simple forwarding, no allocation policy).
+	if !strategyActive {
+		// Special handler for /tabs - return empty list if no instances
+		mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
 			target := orch.FirstRunningURL()
 			if target == "" {
-				web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
+				web.JSON(w, 200, map[string]interface{}{"tabs": []interface{}{}})
 				return
 			}
-			// Extract path from endpoint (remove method prefix)
-			path := r.URL.Path
-			proxyRequest(w, r, target+path)
+			proxyRequest(w, r, target+"/tabs")
 		})
+
+		proxyEndpoints := []string{
+			"GET /snapshot", "GET /screenshot", "GET /text",
+			"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+			"POST /tab", "POST /tab/lock", "POST /tab/unlock",
+			"GET /cookies", "POST /cookies",
+			"GET /download", "POST /upload",
+			"GET /stealth/status", "POST /fingerprint/rotate",
+			"GET /screencast", "GET /screencast/tabs",
+		}
+		for _, ep := range proxyEndpoints {
+			endpoint := ep
+			mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+				target := orch.FirstRunningURL()
+				if target == "" {
+					web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
+					return
+				}
+				path := r.URL.Path
+				proxyRequest(w, r, target+path)
+			})
+		}
 	}
 
 	handler := handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)))

@@ -162,3 +162,80 @@ func TestListenAddr(t *testing.T) {
 		t.Errorf("expected 0.0.0.0:8080, got %s", got)
 	}
 }
+
+func TestStrategyConfigEnv(t *testing.T) {
+	_ = os.Setenv("PINCHTAB_STRATEGY", "simple")
+	_ = os.Setenv("PINCHTAB_ALLOCATION_POLICY", "round_robin")
+	defer func() {
+		_ = os.Unsetenv("PINCHTAB_STRATEGY")
+		_ = os.Unsetenv("PINCHTAB_ALLOCATION_POLICY")
+	}()
+
+	cfg := Load()
+	if cfg.Strategy != "simple" {
+		t.Errorf("Strategy = %q, want simple", cfg.Strategy)
+	}
+	if cfg.AllocationPolicy != "round_robin" {
+		t.Errorf("AllocationPolicy = %q, want round_robin", cfg.AllocationPolicy)
+	}
+}
+
+func TestStrategyConfigDefaults(t *testing.T) {
+	// Ensure env vars are cleared.
+	_ = os.Unsetenv("PINCHTAB_STRATEGY")
+	_ = os.Unsetenv("PINCHTAB_ALLOCATION_POLICY")
+
+	cfg := Load()
+	if cfg.Strategy != "" {
+		t.Errorf("default Strategy = %q, want empty", cfg.Strategy)
+	}
+	if cfg.AllocationPolicy != "fcfs" {
+		t.Errorf("default AllocationPolicy = %q, want fcfs", cfg.AllocationPolicy)
+	}
+}
+
+func TestStrategyConfigFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	_ = os.Setenv("BRIDGE_CONFIG", configPath)
+	_ = os.Unsetenv("PINCHTAB_STRATEGY")
+	_ = os.Unsetenv("PINCHTAB_ALLOCATION_POLICY")
+	defer func() { _ = os.Unsetenv("BRIDGE_CONFIG") }()
+
+	configData := `{
+		"strategy": "session",
+		"allocationPolicy": "random"
+	}`
+	if err := os.WriteFile(configPath, []byte(configData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Load()
+	if cfg.Strategy != "session" {
+		t.Errorf("file Strategy = %q, want session", cfg.Strategy)
+	}
+	if cfg.AllocationPolicy != "random" {
+		t.Errorf("file AllocationPolicy = %q, want random", cfg.AllocationPolicy)
+	}
+}
+
+func TestStrategyEnvOverridesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	_ = os.Setenv("BRIDGE_CONFIG", configPath)
+	_ = os.Setenv("PINCHTAB_STRATEGY", "explicit")
+	defer func() {
+		_ = os.Unsetenv("BRIDGE_CONFIG")
+		_ = os.Unsetenv("PINCHTAB_STRATEGY")
+	}()
+
+	configData := `{"strategy": "session"}`
+	if err := os.WriteFile(configPath, []byte(configData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Load()
+	if cfg.Strategy != "explicit" {
+		t.Errorf("env should override file: Strategy = %q, want explicit", cfg.Strategy)
+	}
+}

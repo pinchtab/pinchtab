@@ -36,6 +36,10 @@ type RuntimeConfig struct {
 	NavigateTimeout   time.Duration
 	ShutdownTimeout   time.Duration
 	WaitNavDelay      time.Duration
+
+	// Orchestrator strategy settings (dashboard/orchestrator mode only).
+	Strategy         string // Allocation strategy: simple, session, explicit (default: "")
+	AllocationPolicy string // Instance selection policy: fcfs, round_robin, random (default: "fcfs")
 }
 
 func envOr(key, fallback string) string {
@@ -138,6 +142,10 @@ type FileConfig struct {
 	MaxTabs           *int   `json:"maxTabs,omitempty"`
 	TimeoutSec        int    `json:"timeoutSec,omitempty"`
 	NavigateSec       int    `json:"navigateSec,omitempty"`
+
+	// Orchestrator strategy settings.
+	Strategy         string `json:"strategy,omitempty"`         // simple, session, explicit
+	AllocationPolicy string `json:"allocationPolicy,omitempty"` // fcfs, round_robin, random
 }
 
 func Load() *RuntimeConfig {
@@ -167,6 +175,8 @@ func Load() *RuntimeConfig {
 		NavigateTimeout:   60 * time.Second,
 		ShutdownTimeout:   10 * time.Second,
 		WaitNavDelay:      1 * time.Second,
+		Strategy:          os.Getenv("PINCHTAB_STRATEGY"),
+		AllocationPolicy:  envOr("PINCHTAB_ALLOCATION_POLICY", "fcfs"),
 	}
 
 	configPath := envOr("BRIDGE_CONFIG", filepath.Join(userConfigDir(), "config.json"))
@@ -216,6 +226,12 @@ func Load() *RuntimeConfig {
 	}
 	if fc.NavigateSec > 0 && os.Getenv("BRIDGE_NAV_TIMEOUT") == "" {
 		cfg.NavigateTimeout = time.Duration(fc.NavigateSec) * time.Second
+	}
+	if fc.Strategy != "" && os.Getenv("PINCHTAB_STRATEGY") == "" {
+		cfg.Strategy = fc.Strategy
+	}
+	if fc.AllocationPolicy != "" && os.Getenv("PINCHTAB_ALLOCATION_POLICY") == "" {
+		cfg.AllocationPolicy = fc.AllocationPolicy
 	}
 
 	return cfg
