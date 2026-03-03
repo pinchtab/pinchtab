@@ -12,7 +12,11 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 - [ ] **Error handling explicit** — All errors wrapped with `%w`, no silent failures
 - [ ] **No regressions** — Verify stealth, token efficiency, session persistence work (test locally if unsure)
 - [ ] **SOLID principles** — Functions do one thing, testable, no unnecessary deps
-- [ ] **No redundant comments** — Don't restate what the code already says; comments should explain *why*, not *what*
+- [ ] **No redundant comments** — Comments explain *why* or *context*, not *what* the code does
+  - ❌ Bad: `// Loop through items` above `for _, item := range items`
+  - ❌ Bad: `// Return error` above `return err`
+  - ✅ Good: `// Prioritize chromium-browser on ARM64 (Raspberry Pi default)`
+  - ✅ Good: `// Chrome may not be installed in CI, so empty result is valid`
 
 ## Manual — Testing (Required)
 - [ ] **New/changed functionality has tests** — Same-package unit tests preferred; use mockBridge for integration
@@ -24,7 +28,6 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 
 ## Manual — Documentation (Required)
 - [ ] **README.md updated** — If user-facing changes (CLI, API, env vars, install)
-- [ ] **CHANGELOG.md entry added** — Under `## Unreleased` with PR link
 - [ ] **/docs/ updated** — If API/architecture/perf changed (optional for small fixes)
 
 ## Manual — Review (Required)
@@ -34,7 +37,7 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 
 ## Conditional (Only if applicable)
 - [ ] Headed-mode tested (if dashboard/UI changes)
-- [ ] CHANGELOG mentions breaking changes (if any)
+- [ ] Breaking changes documented in PR description (if any)
 
 ---
 
@@ -44,6 +47,7 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 - [ ] Unit/integration tests added & passing
 - [ ] Error handling explicit (wrapped with %w)
 - [ ] No regressions in stealth/perf/persistence
-- [ ] README/CHANGELOG updated (if user-facing)
+- [ ] No redundant comments (explain why, not what)
+- [ ] README/docs updated (if user-facing)
 - [ ] npm install works (if npm changes)
 ```
