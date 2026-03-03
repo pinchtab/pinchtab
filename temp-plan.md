@@ -343,6 +343,76 @@ export PINCHTAB_ALLOCATION_POLICY=load_based
 
 ---
 
+## Risk Mitigation & Testing Strategy
+
+### Key Risks
+
+**Risk 1: proxyTabRequest regression**
+- Cache miss → wrong instance → 404 or wrong data
+- Cache invalidation bugs → stale routes
+
+**Risk 2: Bridge integration changes**
+- Bridge crashes on registry endpoint
+- Registry not syncing on tab create/close
+- Race conditions on concurrent tab ops
+
+**Risk 3: Strategy doesn't use InstanceManager correctly**
+- Strategy bypasses allocation policy
+- Strategy hardcodes instance IDs
+- Strategy doesn't handle allocation errors
+
+**Risk 4: Cache correctness**
+- Cache key collisions (same tabId in 2 instances??)
+- Stale cache after instance restart
+- Cache grows unbounded
+
+**Risk 5: AllocationPolicy not applied**
+- Policy selector breaks
+- Old hardcoded instance selection still running
+
+### Testing Strategy (Non-Limiting)
+
+Use **Contract Tests** - test external behavior, NOT implementation:
+
+```go
+// tests/integration/core_behavior_test.go
+
+// These tests prevent regressions without blocking refactoring
+✅ ProxyTabRequest routes to correct instance
+✅ ProxyTabRequest returns 404 for unknown tab
+✅ ProxyTabRequest still works after instance restart
+✅ Bridge.TabRegistry endpoint returns registered tabs
+✅ Bridge.TabRegistry auto-syncs on create/close
+✅ AllocationPolicy selects instances correctly
+✅ Strategy respects allocation policy
+✅ Simple strategy remembers current tab
+✅ Session strategy has sticky routing
+✅ Complete E2E workflows work
+```
+
+**Why contract tests don't limit refactoring:**
+- Test external behavior (what agents see)
+- Don't test implementation details
+- Don't constrain internal component structure
+- Can change InstanceManager internals freely
+- Only constrain the CONTRACT (API + behavior)
+
+### Risk Mitigation Checklist
+
+- [ ] Add contract tests for proxyTabRequest routing
+- [ ] Add Bridge.TabRegistry sync tests
+- [ ] Add AllocationPolicy unit tests
+- [ ] Add Strategy behavior tests
+- [ ] Add E2E smoke tests
+- [ ] Document tabId collision risks
+- [ ] Add cache invalidation tests
+- [ ] Add concurrent tab operation tests
+- [ ] Run old tests during refactoring (revert if any fail)
+- [ ] Keep old code paths available for one release cycle
+- [ ] Roll out in phases: Repository → Locator → Service → Router
+
+---
+
 ## Current State vs Target State
 
 ### Current (PR #91 + main)
