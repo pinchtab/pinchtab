@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/handlers"
@@ -111,24 +110,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		})
 	}
 
-	profileObserver := func(evt dashboard.AgentEvent) {
-		if evt.Profile != "" {
-			profMgr.RecordAction(evt.Profile, bridge.ActionRecord{
-				Timestamp:  evt.Timestamp,
-				Method:     strings.SplitN(evt.Action, " ", 2)[0],
-				Endpoint:   strings.SplitN(evt.Action, " ", 2)[1],
-				URL:        evt.URL,
-				TabID:      evt.TabID,
-				DurationMs: evt.DurationMs,
-				Status:     evt.Status,
-			})
-		}
-	}
-
-	handler := dash.TrackingMiddleware(
-		[]dashboard.EventObserver{profileObserver},
-		handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
-	)
+	handler := handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)))
 
 	srv := &http.Server{
 		Addr:              cfg.Bind + ":" + dashPort,

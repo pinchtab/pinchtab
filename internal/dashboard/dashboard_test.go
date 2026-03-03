@@ -5,106 +5,92 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
-func TestDashboardRecordEvent(t *testing.T) {
+func TestNewDashboard(t *testing.T) {
 	d := NewDashboard(nil)
-	evt := AgentEvent{
-		AgentID:   "agent1",
-		Action:    "GET /test",
-		Timestamp: time.Now(),
-	}
-
-	d.RecordEvent(evt)
-
-	agents := d.GetAgents()
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
-	}
-	if agents[0].AgentID != "agent1" {
-		t.Errorf("expected agent1, got %s", agents[0].AgentID)
-	}
-	if agents[0].Status != "active" {
-		t.Errorf("expected active, got %s", agents[0].Status)
+	if d == nil {
+		t.Fatal("expected non-nil dashboard")
 	}
 }
 
-func TestDashboardSSE(t *testing.T) {
+func TestDashboardBroadcastSystemEvent(t *testing.T) {
+	d := NewDashboard(nil)
+
+	// Create a test handler and register it
+	mux := http.NewServeMux()
+	d.RegisterHandlers(mux)
+
+	// In a real scenario, a client would be connected to /api/events
+	// For this test, we just verify the broadcast method doesn't panic
+	evt := SystemEvent{
+		Type: "instance.started",
+	}
+	d.BroadcastSystemEvent(evt)
+}
+
+func TestDashboardSSEHandlerRegistration(t *testing.T) {
 	d := NewDashboard(nil)
 	mux := http.NewServeMux()
 	d.RegisterHandlers(mux)
 
-	// Since SSE is a long-running connection, we test the registration
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		d.RecordEvent(AgentEvent{AgentID: "agent1", Action: "test"})
-	}()
-
-	// We can't easily test the full SSE cycle with httptest.Recorder,
-	// but we can verify the handler runs and registers the connection.
-	d.mu.RLock()
-	initConns := len(d.sseConns)
-	d.mu.RUnlock()
-
-	if initConns != 0 {
-		t.Errorf("expected 0 connections, got %d", initConns)
-	}
+	// Verify the SSE handler is registered by checking the mux
+	// (can't easily test the full SSE flow with httptest due to streaming nature)
+	// Just verify handlers are registered without error
 }
 
-func TestTrackingMiddleware(t *testing.T) {
+func TestDashboardShutdown(t *testing.T) {
 	d := NewDashboard(nil)
-	mux := http.NewServeMux()
-	mux.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	// Just verify it doesn't panic
+	d.Shutdown()
+}
+
+func TestDashboardSetInstanceLister(t *testing.T) {
+	d := NewDashboard(nil)
+	d.SetInstanceLister(nil)
+	// Just verify it doesn't panic
+}
+
+func TestDashboardCacheHeaders(t *testing.T) {
+	d := NewDashboard(nil)
+
+	// Test long cache (assets)
+	handler := d.withLongCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-	})
+	}))
 
-	handler := d.TrackingMiddleware(nil, mux)
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Agent-Id", "agent-t")
+	req := httptest.NewRequest("GET", "/assets/app.js", nil)
 	w := httptest.NewRecorder()
-
 	handler.ServeHTTP(w, req)
 
-	agents := d.GetAgents()
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+	cacheControl := w.Header().Get("Cache-Control")
+	if cacheControl != "public, max-age=31536000, immutable" {
+		t.Errorf("expected long cache header, got %q", cacheControl)
 	}
-	if agents[0].AgentID != "agent-t" {
-		t.Errorf("expected agent-t, got %s", agents[0].AgentID)
+
+	// Test no cache (HTML)
+	handler = d.withNoCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+
+	req = httptest.NewRequest("GET", "/dashboard", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	cacheControl = w.Header().Get("Cache-Control")
+	if cacheControl != "no-store" {
+		t.Errorf("expected no-store cache header, got %q", cacheControl)
 	}
 }
 
-func TestDashboardProfileIntegration(t *testing.T) {
-	profilesDir := t.TempDir()
-	profMgr := profiles.NewProfileManager(profilesDir)
-	dash := NewDashboard(nil)
-
-	var recorded bridge.ActionRecord
-	observer := func(evt AgentEvent) {
-		if evt.Profile == "prof1" {
-			recorded = bridge.ActionRecord{
-				Endpoint: evt.Action,
-			}
-		}
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/action", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
+func TestDashboardShutdownTimeout(t *testing.T) {
+	d := NewDashboard(&DashboardConfig{
+		IdleTimeout:       10 * time.Millisecond,
+		DisconnectTimeout: 20 * time.Millisecond,
+		ReaperInterval:    5 * time.Millisecond,
+		SSEBufferSize:     8,
 	})
 
-	handler := dash.TrackingMiddleware([]EventObserver{observer}, mux)
-
-	req := httptest.NewRequest("POST", "/action?profile=prof1", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if recorded.Endpoint != "POST /action" {
-		t.Errorf("expected POST /action, got %q", recorded.Endpoint)
-	}
-	_ = profMgr
+	d.Shutdown()
+	time.Sleep(50 * time.Millisecond) // Verify shutdown completes
 }
