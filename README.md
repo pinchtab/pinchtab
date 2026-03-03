@@ -37,6 +37,7 @@ PinchTab is a **standalone HTTP server** that gives AI agents direct control ove
 - **Multi-instance** — Run multiple parallel Chrome processes with isolated profiles
 - **Self-contained** — 12MB binary, no external dependencies
 - **Accessibility-first** — Stable element refs instead of fragile coordinates
+- **ARM64-optimized** — First-class Raspberry Pi support with automatic Chromium detection
 
 ---
 

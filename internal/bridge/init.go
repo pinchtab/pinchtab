@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/chromedp/chromedp"
@@ -37,29 +38,45 @@ func InitChrome(cfg *config.RuntimeConfig) (context.Context, context.CancelFunc,
 }
 
 // findChromeBinary searches for Chrome in common installation locations
+// On ARM64 (Raspberry Pi, etc.), prioritizes chromium-browser for optimal compatibility
 func findChromeBinary() string {
-	// Common Chrome/Chromium binary locations by OS
-	candidates := []string{
-		// macOS
-		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-		"/Applications/Chromium.app/Contents/MacOS/Chromium",
-		// Linux
-		"/usr/bin/google-chrome",
-		"/usr/bin/google-chrome-stable",
-		"/usr/bin/chromium",
-		"/usr/bin/chromium-browser",
-		// Windows (via WSL or MSYS)
-		"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-		"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+	var candidates []string
+
+	// ARM64-specific optimization: Chromium is the standard on Raspberry Pi
+	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
+		candidates = []string{
+			// ARM64/Raspberry Pi - prioritize chromium-browser
+			"/usr/bin/chromium-browser",
+			"/usr/bin/chromium",
+			"/usr/bin/google-chrome",
+			"/usr/bin/google-chrome-stable",
+		}
+		slog.Debug("detected ARM architecture, prioritizing chromium-browser", "arch", runtime.GOARCH)
+	} else {
+		// x86/x64 - standard order
+		candidates = []string{
+			// macOS
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			// Linux
+			"/usr/bin/google-chrome",
+			"/usr/bin/google-chrome-stable",
+			"/usr/bin/chromium",
+			"/usr/bin/chromium-browser",
+			// Windows (via WSL or MSYS)
+			"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+			"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+		}
 	}
 
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
-			slog.Debug("found chrome binary", "path", path)
+			slog.Debug("found chrome binary", "path", path, "arch", runtime.GOARCH)
 			return path
 		}
 	}
 
+	slog.Debug("no chrome binary found in common locations", "arch", runtime.GOARCH)
 	return ""
 }
 

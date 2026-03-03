@@ -27,6 +27,8 @@ which chromium-browser
 # Should output: /usr/bin/chromium-browser
 ```
 
+> **ARM64 Optimization**: Pinchtab automatically detects ARM64/ARM architecture and prioritizes `chromium-browser` for optimal Raspberry Pi compatibility. No manual configuration needed!
+
 ### Step 2: Install Node.js
 
 **Option A: Via nvm (recommended)**
