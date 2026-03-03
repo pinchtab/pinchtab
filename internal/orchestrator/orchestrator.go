@@ -14,9 +14,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/allocation"
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/idutil"
+	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
@@ -41,6 +43,7 @@ type Orchestrator struct {
 	portAllocator  *PortAllocator
 	idMgr          *idutil.Manager
 	onEvent        EventHandler
+	instanceMgr    *instance.Manager // decomposed instance management
 }
 
 // OnEvent sets the event handler for instance lifecycle events.
@@ -118,7 +121,56 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          idutil.NewManager(),
 	}
+
+	// Initialize decomposed instance manager.
+	bridgeClient := instance.NewBridgeClient()
+	defaultPolicy, _ := allocation.New("fcfs")
+	orch.instanceMgr = instance.NewManager(
+		&orchestratorLauncher{orch: orch},
+		bridgeClient,
+		defaultPolicy,
+	)
+
 	return orch
+}
+
+// InstanceManager returns the decomposed instance manager.
+// Used by strategies and external consumers that need allocation/routing.
+func (o *Orchestrator) InstanceManager() *instance.Manager {
+	return o.instanceMgr
+}
+
+// SetAllocationPolicy changes the allocation policy at runtime.
+func (o *Orchestrator) SetAllocationPolicy(name string) error {
+	p, err := allocation.New(name)
+	if err != nil {
+		return err
+	}
+	o.instanceMgr.Allocator.SetPolicy(p)
+	slog.Info("allocation policy changed", "policy", name)
+	return nil
+}
+
+// orchestratorLauncher adapts the Orchestrator to the instance.InstanceLauncher interface.
+type orchestratorLauncher struct {
+	orch *Orchestrator
+}
+
+func (l *orchestratorLauncher) Launch(name, port string, headless bool) (*bridge.Instance, error) {
+	return l.orch.Launch(name, port, headless)
+}
+
+func (l *orchestratorLauncher) Stop(id string) error {
+	return l.orch.Stop(id)
+}
+
+// syncInstanceToManager registers an instance in the decomposed Manager's Repository.
+// Called when an instance transitions to "running".
+func (o *Orchestrator) syncInstanceToManager(inst *bridge.Instance) {
+	if o.instanceMgr == nil {
+		return
+	}
+	o.instanceMgr.Repo.Add(inst)
 }
 
 func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {
@@ -354,6 +406,12 @@ func (o *Orchestrator) markStopped(id string) {
 	profileName := inst.ProfileName
 	delete(o.instances, id)
 	o.mu.Unlock()
+
+	// Sync to instance manager: remove stopped instance and invalidate tab cache.
+	if o.instanceMgr != nil {
+		o.instanceMgr.Locator.InvalidateInstance(id)
+		o.instanceMgr.Repo.Remove(id)
+	}
 
 	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
 

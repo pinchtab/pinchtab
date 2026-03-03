@@ -78,6 +78,8 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			}
 			eventType = "instance.started"
 			slog.Info("instance ready", "id", inst.ID, "port", inst.Port)
+			// Sync to instance manager: register running instance for allocation/routing.
+			o.syncInstanceToManager(&inst.Instance)
 		} else if exitedEarly {
 			inst.Status = "error"
 			if waitErr != nil {

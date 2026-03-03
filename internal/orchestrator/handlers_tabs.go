@@ -22,10 +22,22 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, err := o.findRunningInstanceByTabID(tabID)
-	if err != nil {
-		web.Error(w, 404, err)
-		return
+	// Use instance Manager for O(1) tab lookup, fallback to legacy.
+	var instPort string
+	if o.instanceMgr != nil {
+		inst, err := o.instanceMgr.FindInstanceByTabID(tabID)
+		if err != nil {
+			web.Error(w, 404, err)
+			return
+		}
+		instPort = inst.Port
+	} else {
+		inst, err := o.findRunningInstanceByTabID(tabID)
+		if err != nil {
+			web.Error(w, 404, err)
+			return
+		}
+		instPort = inst.Port
 	}
 
 	// Construct request body for the bridge's /tab endpoint
@@ -34,7 +46,12 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		"tabId":  tabID,
 	})
 
-	targetURL := fmt.Sprintf("http://localhost:%s/tab", inst.Port)
+	targetURL := fmt.Sprintf("http://localhost:%s/tab", instPort)
+
+	// Invalidate tab cache after close.
+	if o.instanceMgr != nil {
+		o.instanceMgr.InvalidateTab(tabID)
+	}
 	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL, bytes.NewReader(reqBody))
 	if err != nil {
 		web.Error(w, 500, err)

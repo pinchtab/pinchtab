@@ -12,6 +12,9 @@ import (
 
 // proxyTabRequest is a generic handler that proxies requests to the instance
 // that owns the tab specified in the path. Works for any /tabs/{id}/* route.
+//
+// Uses the instance Manager's Locator for O(1) cached lookups instead of
+// the old O(n×m) search across all instances.
 func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
@@ -19,6 +22,24 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use the decomposed Locator (O(1) cache, O(n) fallback).
+	if o.instanceMgr != nil {
+		inst, err := o.instanceMgr.FindInstanceByTabID(tabID)
+		if err != nil {
+			web.Error(w, 404, err)
+			return
+		}
+		targetURL := &url.URL{
+			Scheme:   "http",
+			Host:     net.JoinHostPort("localhost", inst.Port),
+			Path:     r.URL.Path,
+			RawQuery: r.URL.RawQuery,
+		}
+		o.proxyToURL(w, r, targetURL)
+		return
+	}
+
+	// Fallback: legacy O(n×m) search (will be removed in a future release).
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err != nil {
 		web.Error(w, 404, err)
