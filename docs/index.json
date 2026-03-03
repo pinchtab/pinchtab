@@ -26,7 +26,8 @@
     "guides/identifying-instances.md",
     "guides/agent-optimization.md",
     "guides/memory-monitoring.md",
-    "guides/data-storage.md"
+    "guides/data-storage.md",
+    "guides/raspberry-pi.md"
   ],
   "proposals": [
     "proposals/default-instance.md",

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"strings"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
@@ -160,7 +161,31 @@ func startChrome(allocCtx context.Context, cfg *config.RuntimeConfig, opts []chr
 	})); err != nil {
 		cancel()
 		allocCancel()
-		slog.Error("failed to connect to chrome browser", "error", err.Error())
+
+		// Provide helpful error message if Chrome binary is not found
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "executable file not found") ||
+			strings.Contains(errMsg, "no such file or directory") {
+			slog.Error("chrome binary not found", "error", errMsg)
+
+			// Suggest installation instructions
+			if cfg.ChromeBinary != "" {
+				slog.Error("chrome not found at specified path", "path", cfg.ChromeBinary)
+			} else {
+				slog.Error("chrome not found in common locations")
+			}
+
+			slog.Info("install chrome or chromium:")
+			slog.Info("  debian/ubuntu/raspberry pi: sudo apt install -y chromium-browser")
+			slog.Info("  fedora/rhel: sudo dnf install -y chromium")
+			slog.Info("  arch: sudo pacman -S chromium")
+			slog.Info("  macos: brew install chromium")
+			slog.Info("  or set CHROME_BIN environment variable to chrome binary path")
+
+			return nil, nil, fmt.Errorf("chrome/chromium not found: please install chrome or chromium, or set CHROME_BIN environment variable")
+		}
+
+		slog.Error("failed to connect to chrome browser", "error", errMsg)
 		return nil, nil, fmt.Errorf("failed to connect to chrome: %w", err)
 	}
 	slog.Debug("chrome browser connected successfully")
