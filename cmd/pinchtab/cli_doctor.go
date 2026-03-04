@@ -12,7 +12,8 @@ func cliDoctor(client *http.Client, base string, token string, args []string) {
 	fmt.Println("")
 
 	passed := 0
-	failed := 0
+	warnings := 0
+	failures := 0
 
 	// 1. Check git hooks
 	fmt.Print("Checking git hooks configuration... ")
@@ -20,19 +21,18 @@ func cliDoctor(client *http.Client, base string, token string, args []string) {
 		fmt.Println("✅")
 		passed++
 	} else {
-		fmt.Println("⚠️")
-		failed++
+		fmt.Println("⚠️ (run from repo root to configure)")
+		warnings++
 	}
 
 	// 2. Check server connection
 	fmt.Print("Checking server connection... ")
-	result := doGet(client, base, token, "/health", nil)
-	if result == nil {
+	if checkServerHealth(client, base, token) {
 		fmt.Println("✅")
 		passed++
 	} else {
-		fmt.Println("❌")
-		failed++
+		fmt.Println("⚠️ (server not running, optional for setup)")
+		warnings++
 	}
 
 	// 3. Check Go installation
@@ -41,8 +41,8 @@ func cliDoctor(client *http.Client, base string, token string, args []string) {
 		fmt.Println("✅")
 		passed++
 	} else {
-		fmt.Println("❌")
-		failed++
+		fmt.Println("❌ (required for building)")
+		failures++
 	}
 
 	// 4. Check Chrome/Chromium
@@ -51,16 +51,20 @@ func cliDoctor(client *http.Client, base string, token string, args []string) {
 		fmt.Println("✅")
 		passed++
 	} else {
-		fmt.Println("⚠️ (optional, but required for full functionality)")
-		failed++
+		fmt.Println("⚠️ (optional, but required for runtime)")
+		warnings++
 	}
 
 	fmt.Println("")
-	fmt.Printf("Results: %d passed, %d issues\n", passed, failed)
+	fmt.Printf("Results: %d passed, %d warnings, %d failures\n", passed, warnings, failures)
 
-	if failed == 0 {
+	if failures == 0 {
 		fmt.Println("")
-		fmt.Println("✅ All checks passed! Pinchtab is ready to use.")
+		fmt.Println("✅ Setup complete! Pinchtab is ready to use.")
+	} else {
+		fmt.Println("")
+		fmt.Println("❌ Some checks failed. See above for details.")
+		os.Exit(1)
 	}
 }
 
@@ -114,4 +118,18 @@ func checkChrome() bool {
 	}
 
 	return false
+}
+
+// checkServerHealth checks if the server is running without exiting
+func checkServerHealth(client *http.Client, base string, token string) bool {
+	req, _ := http.NewRequest("GET", base+"/health", nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode == 200
 }
