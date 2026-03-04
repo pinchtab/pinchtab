@@ -78,17 +78,23 @@ func runDashboard(cfg *config.RuntimeConfig) {
 
 	// Root returns health check (API-first design)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]any{
+		resp := map[string]any{
 			"status":    "ok",
-			"mode":      "dashboard",
-			"strategy":  cfg.Strategy,
 			"dashboard": "/dashboard",
 			"docs":      "/api/docs",
-		})
+		}
+		if cfg.Strategy != "" {
+			resp["strategy"] = cfg.Strategy
+		}
+		web.JSON(w, 200, resp)
 	})
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]string{"status": "ok", "mode": "dashboard"})
+		resp := map[string]string{"status": "ok"}
+		if cfg.Strategy != "" {
+			resp["strategy"] = cfg.Strategy
+		}
+		web.JSON(w, 200, resp)
 	})
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +134,18 @@ func runDashboard(cfg *config.RuntimeConfig) {
 
 		activeStrategy.RegisterRoutes(mux)
 		strategyActive = true
+
+		// Simple strategy: auto-launch one instance so it's ready immediately.
+		if cfg.Strategy == "simple" {
+			go func() {
+				inst, err := orch.Launch(fmt.Sprintf("instance-%d", time.Now().UnixNano()), "", true)
+				if err != nil {
+					slog.Error("simple strategy: failed to auto-launch instance", "err", err)
+					return
+				}
+				slog.Info("simple strategy: instance ready", "id", inst.ID, "port", inst.Port)
+			}()
+		}
 
 		slog.Info("strategy active",
 			"strategy", activeStrategy.Name(),

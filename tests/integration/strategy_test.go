@@ -121,36 +121,19 @@ func TestStrategy_SimpleMode(t *testing.T) {
 		t.Errorf("strategy = %v, want 'simple'", health["strategy"])
 	}
 
-	// Launch an instance first.
-	code, body = srv.post(t, "/instances/launch", map[string]any{"mode": "headless"})
-	if code != 201 && code != 200 {
-		t.Fatalf("launch failed: %d: %s", code, string(body))
-	}
-
-	var launch map[string]any
-	_ = json.Unmarshal(body, &launch)
-	instID, _ := launch["id"].(string)
-	t.Logf("launched instance %s", instID)
-
-	// Wait for instance to be ready.
+	// Simple strategy auto-launches an instance. Wait for it to be ready.
 	deadline := time.Now().Add(30 * time.Second)
 	ready := false
 	for time.Now().Before(deadline) {
-		c, _ := srv.get(t, "/instances")
+		c, _ := srv.post(t, "/navigate", map[string]any{"url": "about:blank"})
 		if c == 200 {
-			var resp map[string]any
-			_ = json.Unmarshal(body, &resp)
-			// Check if we have a running instance.
-			c2, _ := srv.post(t, "/navigate", map[string]any{"url": "about:blank"})
-			if c2 == 200 {
-				ready = true
-				break
-			}
+			ready = true
+			break
 		}
 		time.Sleep(1 * time.Second)
 	}
 	if !ready {
-		t.Skip("instance did not become ready in time")
+		t.Skip("auto-launched instance did not become ready in time")
 	}
 
 	// Navigate via shorthand (strategy-provided endpoint).
