@@ -168,37 +168,18 @@ curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
 
 For detailed findings, system prompt templates, and site-specific notes, see [docs/agent-optimization.md](../../docs/agent-optimization.md).
 
-## Management Commands
+## Configuration (Optional)
 
-For server operations (checking status, listing profiles/instances):
-
-```bash
-# Check server health
-pinchtab health
-
-# List profiles
-pinchtab profiles
-
-# List running instances
-pinchtab instances
-
-# List open tabs
-pinchtab tabs
-
-# Get instance URL (for direct API use)
-pinchtab connect myprofile
-```
-
-For configuration:
+For setup and advanced options:
 
 ```bash
-# Initialize config file
+# Initialize config file (optional)
 pinchtab config init
 
-# Show configuration
+# Show current configuration
 pinchtab config show
 
-# Set a value
+# Set a value (e.g., custom port)
 pinchtab config set server.port 9999
 
 # Validate configuration
