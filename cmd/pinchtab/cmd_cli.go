@@ -18,49 +18,30 @@ func printHelp() {
 	fmt.Printf(`pinchtab %s - Browser control orchestrator
 
 MODES:
-  pinchtab                  Start dashboard server (default port 9867)
-  pinchtab connect <name>   Get URL for a running profile instance
+  pinchtab                 Start server (default port 9867)
+  pinchtab connect <name>  Get URL for a running profile instance
 
 MANAGEMENT COMMANDS:
-  pinchtab health                       Server health check
-  pinchtab profiles                     List available profiles
-  pinchtab instances                    List running instances
-  pinchtab tabs                         List open tabs (all instances)
-  pinchtab config init                  Initialize config file
-  pinchtab config show                  Display current configuration
-  pinchtab help                         Show this help
+  pinchtab health                    Server health check
+  pinchtab profiles                  List available profiles
+  pinchtab instances                 List running instances
+  pinchtab tabs                      List open tabs (all instances)
+  pinchtab config init               Initialize config file
+  pinchtab config show               Display current configuration
+  pinchtab help                      Show this help
 
-ENVIRONMENT:
-  PINCHTAB_URL         Server URL (default: http://127.0.0.1:9867)
-  PINCHTAB_TOKEN       Auth token (Bearer)
-  BRIDGE_PORT          Override listen port (default: 9867)
+ENVIRONMENT (CLIENT):
+  PINCHTAB_URL    Server URL (default: http://127.0.0.1:9867)
+  PINCHTAB_TOKEN  Auth token for API requests
 
-BROWSER CONTROL:
-  For browser automation, use the HTTP API directly:
-  - POST /navigate          Navigate to URL
-  - GET /snapshot           Accessibility tree snapshot
-  - POST /action            Click, type, scroll, etc.
-  - GET /screenshot         Take screenshot
-  - POST /evaluate          Run JavaScript
-  - POST /pdf               Export as PDF
+BROWSER AUTOMATION:
+  Use HTTP API directly or client libraries (Playwright, Puppeteer, Cypress)
 
-  Or use a client library:
-  - curl, Python requests, Node.js axios, etc.
-  - Playwright, Puppeteer, Cypress
-
-Example:
-  # Start dashboard
-  pinchtab
-
-  # In another terminal, check status
-  pinchtab health
-
-  # Get a running profile URL
-  pinchtab connect myprofile
-
-  # Use the instance URL directly
-  curl http://localhost:9868/health
-  curl -X POST http://localhost:9868/navigate -d '{"url":"https://example.com"}'
+Examples:
+  pinchtab                              # Start server
+  pinchtab health                       # Check status
+  pinchtab connect work                 # Get instance URL
+  curl http://localhost:9867/snapshot   # HTTP API
 `, version)
 }
 
