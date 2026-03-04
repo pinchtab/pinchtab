@@ -351,47 +351,74 @@ func launchTestInstance(base string) error {
 
 	fmt.Fprintf(os.Stderr, "TestMain: launched test instance %s\n", id)
 
-	// Wait for instance to be ready (can take 2-5 seconds for Chrome to start)
+	// Wait for instance to be ready (can take 2-5 seconds for Chrome to start).
+	// Each probe opens a tab and tries to navigate it. On failure, the tab is
+	// closed to prevent leaking tabs and hitting Chrome's tab limit.
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		// Open a tab first, then navigate it to check if instance is ready.
 		openResp, err := http.Post(
 			base+"/instances/"+id+"/tabs/open",
 			"application/json",
 			strings.NewReader(`{"url":"about:blank"}`),
 		)
-		if err == nil {
-			var tabID string
-			if openResp.StatusCode == 200 {
-				openBody, _ := io.ReadAll(openResp.Body)
-				var open map[string]any
-				if err := json.Unmarshal(openBody, &open); err == nil {
-					if idValue, ok := open["tabId"].(string); ok {
-						tabID = idValue
-					}
-				}
-			}
-			_ = openResp.Body.Close()
-			if tabID != "" {
-				navResp, err := http.Post(
-					base+"/tabs/"+tabID+"/navigate",
-					"application/json",
-					strings.NewReader(`{"url":"about:blank"}`),
-				)
-				if err == nil {
-					if navResp.StatusCode == 200 {
-						_ = navResp.Body.Close()
-						fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
-						return nil
-					}
-					navBody, _ := io.ReadAll(navResp.Body)
-					_ = navResp.Body.Close()
-					fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		var tabID string
+		if openResp.StatusCode == 200 {
+			openBody, _ := io.ReadAll(openResp.Body)
+			var open map[string]any
+			if err := json.Unmarshal(openBody, &open); err == nil {
+				if idValue, ok := open["tabId"].(string); ok {
+					tabID = idValue
 				}
 			}
 		}
+		_ = openResp.Body.Close()
+
+		if tabID == "" {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		navResp, err := http.Post(
+			base+"/tabs/"+tabID+"/navigate",
+			"application/json",
+			strings.NewReader(`{"url":"about:blank"}`),
+		)
+		if err != nil {
+			closeTab(base, tabID)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		if navResp.StatusCode == 200 {
+			_ = navResp.Body.Close()
+			// Close the probe tab — tests will create their own.
+			closeTab(base, tabID)
+			fmt.Fprintf(os.Stderr, "TestMain: instance %s is ready\n", id)
+			return nil
+		}
+
+		navBody, _ := io.ReadAll(navResp.Body)
+		_ = navResp.Body.Close()
+		fmt.Fprintf(os.Stderr, "TestMain: instance not ready yet (%d): %s\n", navResp.StatusCode, string(navBody))
+
+		// Close the leaked tab before retrying.
+		closeTab(base, tabID)
 		time.Sleep(500 * time.Millisecond)
 	}
 
 	return fmt.Errorf("instance %s did not become ready within 30 seconds", id)
+}
+
+// closeTab closes a tab by ID. Best-effort — ignores errors.
+func closeTab(base, tabID string) {
+	body := fmt.Sprintf(`{"action":"close","tabId":%q}`, tabID)
+	resp, err := http.Post(base+"/tab", "application/json", strings.NewReader(body))
+	if err == nil {
+		_ = resp.Body.Close()
+	}
 }
