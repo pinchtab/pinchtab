@@ -126,30 +126,20 @@ curl -X POST http://localhost:9867/evaluate \
 
 For the full HTTP API (batch actions, downloads, uploads, cookies, stealth, PDF export), see the [API Reference](docs/references/endpoints.md).
 
-## Token Cost Guide
+## Token Optimization
 
-| Method | Typical tokens | When to use |
-|---|---|---|
-| `/find` | ~800 | Search for element by text/role/label |
-| `/text` | ~800 | Reading page content |
-| `/snapshot?filter=interactive` | ~3,600 | Finding buttons/links to click |
-| `/snapshot?diff=true` | varies | Multi-step workflows (only changes) |
-| `/snapshot?format=compact` | ~56-64% less | One-line-per-node, best efficiency |
-| `/snapshot` | ~10,500 | Full page understanding |
-| `/screenshot` | ~2K (vision) | Visual verification |
-| `/tabs/{id}/pdf` | 0 (binary) | Export page as PDF (no token cost) |
+Most efficient endpoints:
 
-**Strategy**: Start with `?filter=interactive&format=compact`. Use `?diff=true` on subsequent snapshots. Use `/text` when you only need readable content. Full `/snapshot` only when needed.
+- **`/find`** — ~800 tokens, search for elements by text/role/label
+- **`/text`** — ~800 tokens, extract readable page content
 
-## Agent Optimization
+Use `/find` to locate elements precisely. Use `/text` to read page content. Both are minimal token cost compared to `/snapshot`.
 
-**Validated Feb 2026**: Testing with AI agents revealed a critical pattern for reliable, token-efficient scraping.
+---
 
-**See the full guide:** [docs/agent-optimization.md](../../docs/agent-optimization.md)
+## 3-Second Wait Pattern
 
-### Quick Summary
-
-**The 3-second pattern** — wait after navigate before snapshot:
+After navigation, wait for Chrome to render the accessibility tree:
 
 ```bash
 # Navigate
@@ -157,16 +147,15 @@ curl -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 
-# Wait for page to render
+# Wait 3+ seconds for page render
 sleep 3
 
-# Snapshot with filter for efficiency
+# Then snapshot or find elements
 curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
+curl -X POST http://localhost:9867/find -d '{"text":"Sign In"}'
 ```
 
-**Token savings:** 93% reduction when using prescriptive instructions vs. exploratory agent approach.
-
-For detailed findings, system prompt templates, and site-specific notes, see [docs/agent-optimization.md](../../docs/agent-optimization.md).
+This ensures the accessibility tree is complete before you snapshot or search.
 
 ## Configuration (Optional)
 
