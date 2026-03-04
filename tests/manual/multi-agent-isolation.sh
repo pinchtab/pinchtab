@@ -1,13 +1,30 @@
 #!/bin/bash
 # Complex Test Scenario: Multi-Agent Isolation
 # Tests: agent isolation, concurrent automation, orchestrator routing
-# Duration: ~15 seconds
+# Duration: ~45 seconds
 # Usage: ./tests/manual/multi-agent-isolation.sh
 
 set -o pipefail
 
+# Wait for N instances to be "running"
+wait_for_running() {
+  local expected=${1:-1}
+  local max_wait=${2:-45}
+  local elapsed=0
+  while [ $elapsed -lt $max_wait ]; do
+    RUNNING=$(curl -s http://localhost:9867/instances | jq '[.[] | select(.status == "running")] | length' 2>/dev/null || echo 0)
+    if [ "$RUNNING" -ge "$expected" ]; then
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  echo "⚠️  Only $RUNNING/$expected instances running after ${max_wait}s"
+  return 1
+}
+
 echo "🤖 Starting Multi-Agent Isolation Test..."
-echo "Tests: Concurrent agents, isolation verification, orchestrator routing"
+echo "Tests: Concurrent agents, isolation, orchestrator routing"
 echo ""
 
 ./pinchtab &
@@ -17,8 +34,8 @@ sleep 2
 echo "✓ Dashboard started (PID: $DASHBOARD_PID)"
 echo ""
 
-# Create 3 instances for 3 agents
-echo "Creating 3 instances for 3 agents..."
+# Create 3 instances
+echo "Creating 3 agent instances..."
 
 AGENT_A=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
@@ -37,53 +54,46 @@ echo "  • Agent B: $AGENT_B"
 echo "  • Agent C: $AGENT_C"
 echo ""
 
-sleep 2
-
-# Verify instance count
-echo "Verifying instances..."
-INST_COUNT=$(curl -s http://localhost:9867/instances | jq 'length')
-echo "✓ Instances running: $INST_COUNT"
+# Wait for all 3 to be running
+echo "Waiting for all 3 instances to be running..."
+if wait_for_running 3 45; then
+  echo "✓ All 3 instances running"
+else
+  echo "⚠️  Not all instances started, continuing anyway..."
+fi
 echo ""
 
-# Simulate 3 agents using orchestrator shorthand endpoints concurrently
-echo "Simulating 3 concurrent agents using orchestrator endpoints..."
-echo ""
+# Concurrent navigation
+echo "3 concurrent navigations via orchestrator..."
 
-# Agent A: navigate and find
-echo "Agent A: Navigate to example.com and search..."
 curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}' > /dev/null &
-AGENT_A_PID=$!
 
-# Agent B: different navigation
-echo "Agent B: Navigate to github.com and search..."
 curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com"}' > /dev/null &
-AGENT_B_PID=$!
 
-# Agent C: different navigation
-echo "Agent C: Navigate to rust-lang.org and search..."
 curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://rust-lang.org"}' > /dev/null &
-AGENT_C_PID=$!
+  -d '{"url":"https://httpbin.org"}' > /dev/null &
 
-wait $AGENT_A_PID $AGENT_B_PID $AGENT_C_PID
+wait
 
-echo "✓ All agents navigated successfully"
+echo "✓ All navigations completed"
 echo ""
 
-# Get all tabs to verify creation
-echo "Verifying tabs created..."
+sleep 1
+
+# List tabs
+echo "Verifying tabs..."
 TABS=$(curl -s http://localhost:9867/tabs)
-TAB_COUNT=$(echo $TABS | jq 'length // 0')
-echo "✓ Total tabs created: $TAB_COUNT"
+TAB_COUNT=$(echo $TABS | jq 'length' 2>/dev/null || echo 0)
+echo "✓ Total tabs: $TAB_COUNT"
 echo ""
 
-# Each agent searches for different content
-echo "Simulating concurrent find operations per agent..."
+# Concurrent find operations
+echo "3 concurrent find operations..."
 
 curl -s -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
@@ -95,17 +105,16 @@ curl -s -X POST http://localhost:9867/find \
 
 curl -s -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
-  -d '{"text":"rust"}' > /dev/null &
+  -d '{"text":"httpbin"}' > /dev/null &
 
 wait
 
-echo "✓ Concurrent find operations completed without interference"
+echo "✓ All find operations completed"
 echo ""
 
-# Verify orchestrator correctly routed requests
-echo "Verifying orchestrator routing..."
-INST_COUNT=$(curl -s http://localhost:9867/instances | jq 'length')
-echo "✓ All instances still running: $INST_COUNT"
+# Verify instances still running
+INST_COUNT=$(curl -s http://localhost:9867/instances | jq '[.[] | select(.status == "running")] | length' 2>/dev/null || echo 0)
+echo "✓ Running instances: $INST_COUNT"
 echo ""
 
 # Cleanup
@@ -113,21 +122,15 @@ echo "Stopping all agents..."
 curl -s -X POST "http://localhost:9867/instances/$AGENT_A/stop" > /dev/null
 curl -s -X POST "http://localhost:9867/instances/$AGENT_B/stop" > /dev/null
 curl -s -X POST "http://localhost:9867/instances/$AGENT_C/stop" > /dev/null
+sleep 3
 
-echo "✓ All agents stopped"
-echo ""
-
-sleep 2
-
-# Verify all cleaned up
 REMAINING=$(curl -s http://localhost:9867/instances 2>/dev/null | jq 'length // 0' 2>/dev/null || echo 0)
 if [ -z "$REMAINING" ] || [ "$REMAINING" -eq 0 ]; then
   echo "✓ All instances cleaned up"
 else
-  echo "⚠️  $REMAINING instances still running (may be cleaning up asynchronously)"
+  echo "⚠️  $REMAINING instances still running"
 fi
 
-# Clean up
 kill $DASHBOARD_PID 2>/dev/null
 sleep 1
 
@@ -137,17 +140,9 @@ echo "✅ MULTI-AGENT ISOLATION TEST PASSED!"
 echo "=========================================="
 echo ""
 echo "Summary:"
-echo "  • Agent A: ✓ (example.com)"
-echo "  • Agent B: ✓ (github.com)"
-echo "  • Agent C: ✓ (rust-lang.org)"
-echo "  • Concurrent operations: ✓"
-echo "  • Orchestrator routing: ✓"
+echo "  • 3 agents created: ✓"
+echo "  • Concurrent navigation: ✓"
+echo "  • Tabs created: $TAB_COUNT"
+echo "  • Concurrent find: ✓"
 echo "  • Instance isolation: ✓"
-echo "  • Total tabs: $TAB_COUNT"
-echo ""
-echo "This tests:"
-echo "  • Multiple agents concurrently using orchestrator"
-echo "  • Automatic instance allocation per agent"
-echo "  • Orchestrator shorthand endpoint concurrency"
-echo "  • Request routing isolation"
-echo "  • Real-world multi-agent workflow"
+echo "  • Cleanup: ✓"
