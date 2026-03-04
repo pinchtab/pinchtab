@@ -64,7 +64,7 @@ export interface ActivityEvent {
   method: string;
   path: string;
   timestamp: string;
-  details?: { [key: string]: any};
+  details?: { [key: string]: any };
 }
 /**
  * ScreencastSettings configures live tab previews.
