@@ -280,3 +280,10 @@ pinchtab config validate
 3. Should we support both `.pinchtab/config.json` and `.pinchtab/config.yaml`?
 4. Any sections I'm missing from the config?
 5. Timeline: Phase 1 this PR, Phases 2-3 next PR(s)?
+
+---
+
+## Status
+
+**Branch:** `feat/cli-refactor` (based on `feat/allocation-strategies`)
+**Phase:** 1 (Planning) ✅
