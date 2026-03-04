@@ -137,8 +137,14 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		b.InitActionRegistry()
 	}
 
-	// Start crash monitoring
-	b.MonitorCrashes(nil)
+	// Start crash monitoring — recovery is handled at the orchestrator level
+	// when the bridge process exits; this handler adds diagnostic logging.
+	b.MonitorCrashes(func(ev CrashEvent) {
+		slog.Warn("crash detected, bridge process will exit for orchestrator recovery",
+			"reason", ev.Reason,
+			"targetId", ev.TargetID,
+		)
+	})
 
 	return nil
 }

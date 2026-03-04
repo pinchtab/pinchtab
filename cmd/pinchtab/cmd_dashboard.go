@@ -42,6 +42,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	orch := orchestrator.NewOrchestrator(profilesDir)
 	orch.SetProfileManager(profMgr)
 	orch.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
+	orch.ConfigureRestart(cfg.AutoRestart, cfg.MaxRestarts, cfg.RestartBackoff, cfg.RestartStableAfter)
 	dash.SetInstanceLister(orch)
 
 	// Wire up instance events to SSE broadcast

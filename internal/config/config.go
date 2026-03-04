@@ -36,6 +36,12 @@ type RuntimeConfig struct {
 	NavigateTimeout   time.Duration
 	ShutdownTimeout   time.Duration
 	WaitNavDelay      time.Duration
+
+	// Auto-restart configuration for crash recovery
+	AutoRestart      bool
+	MaxRestarts      int
+	RestartBackoff   time.Duration
+	RestartStableAfter time.Duration
 }
 
 func envOr(key, fallback string) string {
@@ -70,6 +76,18 @@ func envBoolOr(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func envDurationOr(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < 0 {
+		return fallback
+	}
+	return d
 }
 
 // homeDir returns the user's home directory, checking $HOME first for container compatibility
@@ -167,6 +185,11 @@ func Load() *RuntimeConfig {
 		NavigateTimeout:   60 * time.Second,
 		ShutdownTimeout:   10 * time.Second,
 		WaitNavDelay:      1 * time.Second,
+
+		AutoRestart:        envBoolOr("PINCHTAB_AUTO_RESTART", true),
+		MaxRestarts:        envIntOr("PINCHTAB_MAX_RESTARTS", 3),
+		RestartBackoff:     envDurationOr("PINCHTAB_RESTART_BACKOFF", 2*time.Second),
+		RestartStableAfter: envDurationOr("PINCHTAB_RESTART_STABLE_AFTER", 5*time.Minute),
 	}
 
 	configPath := envOr("BRIDGE_CONFIG", filepath.Join(userConfigDir(), "config.json"))

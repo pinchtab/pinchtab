@@ -41,6 +41,12 @@ type Orchestrator struct {
 	portAllocator  *PortAllocator
 	idMgr          *idutil.Manager
 	onEvent        EventHandler
+
+	// Auto-restart configuration
+	autoRestart    bool
+	maxRestarts    int
+	restartBackoff time.Duration
+	stableAfter    time.Duration
 }
 
 // OnEvent sets the event handler for instance lifecycle events.
@@ -64,8 +70,10 @@ type InstanceInternal struct {
 	URL   string
 	Error string
 
-	cmd    Cmd
-	logBuf *ringBuffer
+	cmd          Cmd
+	logBuf       *ringBuffer
+	restartCount int
+	lastCrash    time.Time
 }
 
 func NewOrchestrator(baseDir string) *Orchestrator {
@@ -117,6 +125,11 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		childAuthToken: os.Getenv("BRIDGE_TOKEN"),
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          idutil.NewManager(),
+
+		autoRestart:    true,
+		maxRestarts:    3,
+		restartBackoff: 2 * time.Second,
+		stableAfter:    5 * time.Minute,
 	}
 	return orch
 }
@@ -127,6 +140,14 @@ func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {
 
 func (o *Orchestrator) SetPortRange(start, end int) {
 	o.portAllocator = NewPortAllocator(start, end)
+}
+
+// ConfigureRestart sets auto-restart parameters from the runtime configuration.
+func (o *Orchestrator) ConfigureRestart(autoRestart bool, maxRestarts int, backoff, stableAfter time.Duration) {
+	o.autoRestart = autoRestart
+	o.maxRestarts = maxRestarts
+	o.restartBackoff = backoff
+	o.stableAfter = stableAfter
 }
 
 func installStableBinary(src, dst string) error {
@@ -380,6 +401,70 @@ func (o *Orchestrator) setStopError(id, msg string) {
 		inst.Status = "error"
 		inst.Error = msg
 	}
+}
+
+// restartInstance relaunches a crashed instance with the same profile and port.
+// It reuses the profile directory so session state (cookies, logins) is preserved.
+func (o *Orchestrator) restartInstance(old *InstanceInternal) {
+	profilePath := filepath.Join(o.baseDir, old.ProfileName)
+	if o.profiles != nil {
+		if resolvedPath, err := o.profiles.ProfilePath(old.ProfileName); err == nil {
+			profilePath = resolvedPath
+		}
+	}
+
+	instanceStateDir := filepath.Join(profilePath, ".pinchtab-state")
+	if err := os.MkdirAll(instanceStateDir, 0755); err != nil {
+		slog.Error("auto-restart: failed to create state dir", "id", old.ID, "err", err)
+		o.markStopped(old.ID)
+		return
+	}
+
+	headlessStr := "true"
+	if !old.Headless {
+		headlessStr = "false"
+	}
+
+	env := mergeEnvWithOverrides(os.Environ(), map[string]string{
+		"BRIDGE_PORT":       old.Port,
+		"BRIDGE_PROFILE":    profilePath,
+		"BRIDGE_STATE_DIR":  instanceStateDir,
+		"BRIDGE_HEADLESS":   headlessStr,
+		"BRIDGE_NO_RESTORE": "true",
+		"BRIDGE_ONLY":       "1",
+	})
+
+	logBuf := newRingBuffer(64 * 1024)
+	cmd, err := o.runner.Run(context.Background(), o.binary, env, logBuf, logBuf)
+	if err != nil {
+		slog.Error("auto-restart: failed to relaunch",
+			"id", old.ID,
+			"profile", old.ProfileName,
+			"err", err,
+		)
+		o.markStopped(old.ID)
+		o.emitEvent("instance.crashed", &old.Instance)
+		return
+	}
+
+	o.mu.Lock()
+	old.cmd = cmd
+	old.logBuf = logBuf
+	old.Status = "starting"
+	old.StartTime = time.Now()
+	old.Error = ""
+	instCopy := old.Instance
+	o.mu.Unlock()
+
+	slog.Info("auto-restart: instance relaunched",
+		"id", old.ID,
+		"profile", old.ProfileName,
+		"attempt", old.restartCount,
+	)
+	o.emitEvent("instance.restarted", &instCopy)
+
+	// Re-enter the monitor loop for the restarted process.
+	o.monitor(old)
 }
 
 func (o *Orchestrator) List() []bridge.Instance {

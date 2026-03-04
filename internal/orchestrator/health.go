@@ -109,9 +109,47 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	if !exitedEarly {
 		<-waitCh
 	}
+
 	o.mu.Lock()
+	wasRunning := inst.Status == "running"
+	wasStopping := inst.Status == "stopping"
+
+	// Reset restart counter if the instance ran long enough to be considered stable.
+	if inst.restartCount > 0 && !inst.lastCrash.IsZero() && time.Since(inst.lastCrash) > o.stableAfter {
+		slog.Info("instance was stable, resetting restart counter",
+			"id", inst.ID,
+			"uptime", time.Since(inst.lastCrash).Round(time.Second),
+		)
+		inst.restartCount = 0
+	}
+
+	// Auto-restart: if instance crashed while running (not a deliberate stop)
+	// and we haven't exceeded the restart limit.
+	shouldRestart := o.autoRestart && wasRunning && !wasStopping && inst.restartCount < o.maxRestarts
+
+	if shouldRestart {
+		inst.restartCount++
+		inst.lastCrash = time.Now()
+		inst.Status = "restarting"
+		instCopy = inst.Instance
+		backoff := o.restartBackoff * time.Duration(1<<uint(inst.restartCount-1))
+		o.mu.Unlock()
+
+		slog.Warn("instance crashed, scheduling auto-restart",
+			"id", inst.ID,
+			"attempt", inst.restartCount,
+			"maxRestarts", o.maxRestarts,
+			"backoff", backoff,
+		)
+		o.emitEvent("instance.restarting", &instCopy)
+		time.Sleep(backoff)
+		o.restartInstance(inst)
+		return
+	}
+
+	// No restart — mark stopped as before.
 	wasStopped := false
-	if inst.Status == "running" || inst.Status == "stopping" {
+	if wasRunning || wasStopping {
 		inst.Status = "stopped"
 		wasStopped = true
 	}
