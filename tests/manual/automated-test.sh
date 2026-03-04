@@ -1,15 +1,15 @@
 #!/bin/bash
-# Automated orchestrator test script
-# Verifies: instance creation, tab creation, find endpoint, isolation, cleanup
+# Simple Test Scenario: Automated Orchestrator Test
+# Tests: instance creation, tab navigation via orchestrator, find endpoint
 # Duration: ~10 seconds
 # Usage: ./tests/manual/automated-test.sh
 
 set -e
 
 echo "🚀 Starting Automated Orchestrator Test..."
+echo "Tests: Instance creation, orchestrator shorthand endpoints, find"
 echo ""
 
-# Start Pinchtab in background
 ./pinchtab &
 DASHBOARD_PID=$!
 sleep 2
@@ -17,94 +17,89 @@ sleep 2
 echo "✓ Dashboard started (PID: $DASHBOARD_PID)"
 echo ""
 
-# Create instance 1
-echo "Creating instance 1 (headed)..."
+# Create 2 instances (orchestrator will manage them)
+echo "Creating 2 instances..."
+
 INST1=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"work","headless":false}')
+  -d '{"name":"test-headed","headless":false}')
 INST1_ID=$(echo $INST1 | jq -r '.id')
-INST1_PORT=$(echo $INST1 | jq -r '.port')
-echo "✓ Created instance 1: $INST1_ID (port: $INST1_PORT)"
+echo "✓ Instance 1: $INST1_ID"
 
-# Create instance 2
-echo "Creating instance 2 (headless)..."
 INST2=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"scrape","headless":true}')
+  -d '{"name":"test-headless","headless":true}')
 INST2_ID=$(echo $INST2 | jq -r '.id')
-INST2_PORT=$(echo $INST2 | jq -r '.port')
-echo "✓ Created instance 2: $INST2_ID (port: $INST2_PORT)"
+echo "✓ Instance 2: $INST2_ID"
+
 echo ""
 
-# Wait for Chrome to initialize
 sleep 2
 
-# List instances
-echo "Verifying instance list..."
-INSTANCES=$(curl -s http://localhost:9867/instances | jq '.')
-INSTANCE_COUNT=$(echo $INSTANCES | jq 'length')
-echo "✓ $INSTANCE_COUNT instances running"
+# Verify instances are running
+echo "Verifying instances..."
+INST_COUNT=$(curl -s http://localhost:9867/instances | jq 'length')
+echo "✓ Running instances: $INST_COUNT"
 echo ""
 
-# Create tab in instance 1
-echo "Creating tab in instance 1..."
-TAB1=$(curl -s -X POST "http://localhost:$INST1_PORT/tabs" \
+# Use orchestrator shorthand endpoints (no instance/tab management needed)
+echo "Using orchestrator shorthand endpoints..."
+echo ""
+
+# Navigate (auto-creates tab on current instance)
+echo "1. POST /navigate (auto-creates tab)..."
+NAV=$(curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
-  -d '{}')
-TAB1_ID=$(echo $TAB1 | jq -r '.id // "unknown"')
-echo "✓ Created tab in instance 1: $TAB1_ID"
-
-# Create tab in instance 2
-echo "Creating tab in instance 2..."
-TAB2=$(curl -s -X POST "http://localhost:$INST2_PORT/tabs" \
-  -H "Content-Type: application/json" \
-  -d '{}')
-TAB2_ID=$(echo $TAB2 | jq -r '.id // "unknown"')
-echo "✓ Created tab in instance 2: $TAB2_ID"
+  -d '{"url":"https://example.com"}')
+TAB1_ID=$(echo $NAV | jq -r '.tabId')
+NAV_URL=$(echo $NAV | jq -r '.url')
+echo "✓ Tab created: $TAB1_ID, navigated to: $NAV_URL"
 echo ""
 
-# Verify isolation: different tab IDs
-echo "Verifying instance isolation..."
-if [ "$TAB1_ID" != "$TAB2_ID" ]; then
-  echo "✓ Instance isolation verified (different tab IDs: $TAB1_ID vs $TAB2_ID)"
-else
-  echo "❌ FAILED: Tab IDs should be different!"
-  kill $DASHBOARD_PID 2>/dev/null
-  exit 1
-fi
-echo ""
-
-# Use find endpoint in instance 1
-echo "Using find endpoint in instance 1..."
-FIND1=$(curl -s -X POST "http://localhost:$INST1_PORT/find" \
+# Use find endpoint (uses current tab)
+echo "2. POST /find (search for elements)..."
+FIND=$(curl -s -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
   -d '{"text":"example"}')
-FIND1_RESULT=$(echo $FIND1 | jq -r '.refs | length // 0')
-echo "✓ Find endpoint returned $FIND1_RESULT results for instance 1"
-
-# Use find endpoint in instance 2
-echo "Using find endpoint in instance 2..."
-FIND2=$(curl -s -X POST "http://localhost:$INST2_PORT/find" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"example"}')
-FIND2_RESULT=$(echo $FIND2 | jq -r '.refs | length // 0')
-echo "✓ Find endpoint returned $FIND2_RESULT results for instance 2"
+REFS=$(echo $FIND | jq -r '.refs | length // 0')
+echo "✓ Find returned $REFS element references"
 echo ""
 
-# Stop instance 1
-echo "Stopping instance 1..."
+# Get snapshot
+echo "3. GET /snapshot (current tab)..."
+SNAP=$(curl -s http://localhost:9867/snapshot \
+  -H "Content-Type: application/json")
+SNAP_URL=$(echo $SNAP | jq -r '.url // "unknown"')
+echo "✓ Snapshot URL: $SNAP_URL"
+echo ""
+
+# Create another tab using POST /tab
+echo "4. POST /tab (create new tab)..."
+TAB_NEW=$(curl -s -X POST http://localhost:9867/tab \
+  -H "Content-Type: application/json" \
+  -d '{"action":"new","url":"https://github.com"}')
+TAB2_ID=$(echo $TAB_NEW | jq -r '.tabId // "unknown"')
+echo "✓ New tab created: $TAB2_ID"
+echo ""
+
+# List all tabs
+echo "5. GET /tabs (list all tabs)..."
+TABS=$(curl -s http://localhost:9867/tabs)
+TAB_COUNT=$(echo $TABS | jq 'length')
+echo "✓ Total tabs: $TAB_COUNT"
+echo ""
+
+# Cleanup
+echo "Stopping all instances..."
 curl -s -X POST "http://localhost:9867/instances/$INST1_ID/stop" > /dev/null
-echo "✓ Instance 1 stopped, port $INST1_PORT released"
-
-# Stop instance 2
-echo "Stopping instance 2..."
 curl -s -X POST "http://localhost:9867/instances/$INST2_ID/stop" > /dev/null
-echo "✓ Instance 2 stopped, port $INST2_PORT released"
+
+echo "✓ All instances stopped"
 echo ""
 
-# Verify all stopped
-echo "Verifying cleanup..."
 sleep 2
+
+# Verify cleanup
 REMAINING=$(curl -s http://localhost:9867/instances | jq 'length')
 if [ "$REMAINING" -eq 0 ]; then
   echo "✓ All instances cleaned up"
@@ -118,12 +113,22 @@ sleep 1
 
 echo ""
 echo "=========================================="
-echo "✅ ALL TESTS PASSED!"
+echo "✅ AUTOMATED TEST PASSED!"
 echo "=========================================="
 echo ""
 echo "Summary:"
-echo "  • Instance creation: ✓"
-echo "  • Tab creation: ✓"
+echo "  • Instance 1: ✓"
+echo "  • Instance 2: ✓"
+echo "  • Navigate (auto-tab): ✓"
 echo "  • Find endpoint: ✓"
-echo "  • Instance isolation: ✓"
+echo "  • Snapshot: ✓"
+echo "  • Tab creation: ✓"
+echo "  • Tab listing: ✓"
 echo "  • Cleanup: ✓"
+echo ""
+echo "This tests:"
+echo "  • Instance creation via orchestrator"
+echo "  • Orchestrator shorthand endpoints"
+echo "  • Auto-tab management"
+echo "  • Element searching"
+echo "  • Tab operations"

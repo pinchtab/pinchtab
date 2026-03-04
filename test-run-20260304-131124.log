@@ -1,0 +1,101 @@
+=== Running Fixed Test Scripts ===
+Timestamp: Wed Mar  4 13:11:24 CET 2026
+Git commit: 250faca fix(tests): use dynamic ports from instance responses instead of hardcoded
+
+🚀 Starting Automated Orchestrator Test...
+
+2026/03/04 13:11:24 INFO 🦀 PinchTab port=9867
+2026/03/04 13:11:24 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:11:24 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:11:24 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:11:24 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 24746)
+
+Creating instance 1 (headed)...
+✓ Created instance 1: null (port: null)
+Creating instance 2 (headless)...
+✓ Created instance 2: null (port: null)
+
+Verifying instance list...
+✓ 15 instances running
+
+Creating tab in instance 1...
+🔥 Starting Stress Test (10 Instances)...
+
+2026/03/04 13:11:34 INFO 🦀 PinchTab port=9867
+2026/03/04 13:11:34 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:11:34 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:11:34 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:11:34 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 24805)
+
+Creating 10 headless instances...
+   1. null                 (port: null)
+   2. null                 (port: null)
+   3. null                 (port: null)
+   4. null                 (port: null)
+   5. null                 (port: null)
+   6. null                 (port: null)
+   7. null                 (port: null)
+   8. null                 (port: null)
+   9. null                 (port: null)
+  10. null                 (port: null)
+✓ Created 10 instances
+
+Creating tabs in all 10 instances concurrently...
+  Instance 1: tab unknown
+  Instance 2: tab unknown
+  Instance 3: tab unknown
+  Instance 4: tab unknown
+  Instance 5: tab unknown
+  Instance 6: tab unknown
+  Instance 7: tab unknown
+  Instance 8: tab unknown
+  Instance 9: tab unknown
+  Instance 10: tab unknown
+✓ Created tabs in all 10 instances
+
+Using find endpoint in all 10 instances concurrently...
+✓ Find endpoint successful on 0/10 instances
+
+Verifying all instances still running...
+⚠️  Only 15 instances still running (expected 10)
+
+Stopping all 10 instances concurrently...
+✓ All instances stopped
+
+Verifying cleanup...
+⚠️  15 instances still running (may be cleaning up asynchronously)
+🤖 Starting Multi-Agent Isolation Test...
+Tests: Tab isolation, find endpoint independence, concurrent automation
+
+2026/03/04 13:11:47 INFO 🦀 PinchTab port=9867
+2026/03/04 13:11:47 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:11:47 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:11:47 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:11:47 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 25042)
+
+Creating instances for 3 agents...
+  • Agent A: unknown (port: unknown)
+  • Agent B: unknown (port: unknown)
+  • Agent C: unknown (port: unknown)
+
+Agents creating tabs...
+  • Agent A tab: 
+  • Agent B tab: 
+  • Agent C tab: 
+
+Verifying tab isolation...
+⚠️  Some agents share tab IDs
+
+Agents using find endpoint concurrently...
+✓ Concurrent find operations completed without interference
+
+Simulating concurrent agent actions...
+✓ Concurrent actions completed without interference
+
+Stopping all agents...
+✓ All agents stopped
+
+⚠️  15 instances still running (may be cleaning up asynchronously)

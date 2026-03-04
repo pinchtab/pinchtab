@@ -409,3 +409,87 @@ End: Wed Mar  4 12:01:14 CET 2026
 2026/03/04 13:10:58 INFO health check instances=15 headed=0 headless=15 total_tabs=11
 2026/03/04 13:11:09 INFO instance ready id=inst_c94d4645 port=9884
 2026/03/04 13:11:09 INFO instance ready id=inst_deb264a1 port=9878
+2026/03/04 13:11:26 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:26 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:28 INFO request requestId="" method=GET path=/instances status=200 ms=0
+2026/03/04 13:11:28 INFO health check instances=15 headed=0 headless=15 total_tabs=13
+2026/03/04 13:11:28 ERROR instance failed to start id=inst_32539cfb
+2026/03/04 13:11:28 ERROR instance failed to start id=inst_1af7f0aa
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:36 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=GET path=/instances status=200 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:39 INFO request requestId="" method=POST path=/instances/null/stop status=404 ms=0
+2026/03/04 13:11:41 INFO request requestId="" method=GET path=/instances status=200 ms=0
+2026/03/04 13:11:49 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:49 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:49 INFO request requestId="" method=POST path=/instances/launch status=409 ms=0
+2026/03/04 13:11:51 INFO request requestId="" method=POST path=/instances/unknown/stop status=404 ms=0
+2026/03/04 13:11:51 INFO request requestId="" method=POST path=/instances/unknown/stop status=404 ms=0
+2026/03/04 13:11:51 INFO request requestId="" method=POST path=/instances/unknown/stop status=404 ms=0
+2026/03/04 13:11:53 INFO request requestId="" method=GET path=/instances status=200 ms=0
+2026/03/04 13:11:58 INFO health check instances=15 headed=0 headless=15 total_tabs=13
+2026/03/04 13:12:02 INFO shutting down dashboard...
+2026/03/04 13:12:02 INFO stopping instance id=inst_3d054f1c
+2026/03/04 13:12:02 INFO stopping instance id=inst_23f98348
+2026/03/04 13:12:02 INFO stopping instance id=inst_1af7f0aa
+2026/03/04 13:12:02 INFO stopping instance id=inst_0deb89c9
+2026/03/04 13:12:02 INFO stopping instance id=inst_88624d24
+2026/03/04 13:12:02 INFO stopping instance id=inst_315450dc
+2026/03/04 13:12:02 INFO stopping instance id=inst_689a8a70
+2026/03/04 13:12:02 INFO stopping instance id=inst_aa336b27
+2026/03/04 13:12:02 INFO stopping instance id=inst_deb264a1
+2026/03/04 13:12:02 INFO stopping instance id=inst_32539cfb
+2026/03/04 13:12:02 INFO stopping instance id=inst_c94d4645
+2026/03/04 13:12:02 INFO stopping instance id=inst_06c63e71
+2026/03/04 13:12:02 INFO stopping instance id=inst_d6c6f6d5
+2026/03/04 13:12:02 INFO stopping instance id=inst_fb8b8643
+2026/03/04 13:12:02 INFO stopping instance id=inst_fab88657
+2026/03/04 13:12:07 INFO starting instance process id=inst_f6c6161c profile=test port=9905
+2026/03/04 13:12:07 INFO request requestId="" method=POST path=/instances/launch status=201 ms=2
+2026/03/04 13:12:07 INFO instance exited id=inst_deb264a1
+2026/03/04 13:12:07 INFO instance exited id=inst_1af7f0aa
+2026/03/04 13:12:07 INFO instance exited id=inst_3d054f1c
+2026/03/04 13:12:07 INFO instance exited id=inst_88624d24
+2026/03/04 13:12:07 INFO instance exited id=inst_689a8a70
+2026/03/04 13:12:07 INFO instance exited id=inst_06c63e71
+2026/03/04 13:12:07 INFO instance exited id=inst_fb8b8643
+2026/03/04 13:12:07 INFO instance exited id=inst_fab88657
+2026/03/04 13:12:07 INFO instance exited id=inst_aa336b27
+2026/03/04 13:12:07 INFO instance exited id=inst_0deb89c9
+2026/03/04 13:12:07 INFO instance exited id=inst_d6c6f6d5
+2026/03/04 13:12:07 INFO instance exited id=inst_32539cfb
+2026/03/04 13:12:07 INFO instance exited id=inst_c94d4645
+2026/03/04 13:12:07 INFO instance exited id=inst_23f98348
+2026/03/04 13:12:07 INFO instance exited id=inst_315450dc
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_1af7f0aa profile=stress-7
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_fab88657 profile=stress-2
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_06c63e71 profile=agent-a
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_689a8a70 profile=agent-c
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_3d054f1c profile=stress-8
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_deb264a1 profile=stress-3
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_0deb89c9 profile=stress-1
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_88624d24 profile=stress-10
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_aa336b27 profile=scrape
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_c94d4645 profile=stress-9
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_32539cfb profile=stress-6
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_315450dc profile=stress-4
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_23f98348 profile=agent-b
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_d6c6f6d5 profile=stress-5
+2026/03/04 13:12:08 INFO instance stopped and removed id=inst_fb8b8643 profile=work
