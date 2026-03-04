@@ -92,18 +92,18 @@ TAB_COUNT=$(echo $TABS | jq 'length' 2>/dev/null || echo 0)
 echo "✓ Total tabs: $TAB_COUNT"
 echo ""
 
-# Concurrent find operations
+# Concurrent find operations (--max-time 15 guards against slow snapshot)
 echo "3 concurrent find operations..."
 
-curl -s -X POST http://localhost:9867/find \
+curl -s --max-time 15 -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
   -d '{"text":"example"}' > /dev/null &
 
-curl -s -X POST http://localhost:9867/find \
+curl -s --max-time 15 -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
   -d '{"text":"github"}' > /dev/null &
 
-curl -s -X POST http://localhost:9867/find \
+curl -s --max-time 15 -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
   -d '{"text":"httpbin"}' > /dev/null &
 

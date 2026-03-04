@@ -73,10 +73,10 @@ echo ""
 
 sleep 1
 
-# Concurrent find
+# Concurrent find (--max-time 15 guards against slow snapshot)
 echo "Concurrent find operations..."
 for i in {1..5}; do
-  curl -s -X POST http://localhost:9867/find \
+  curl -s --max-time 15 -X POST http://localhost:9867/find \
     -H "Content-Type: application/json" \
     -d "{\"text\":\"element-$i\"}" > /dev/null &
 done
