@@ -16,10 +16,10 @@ Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 The 30-second pattern for browser tasks:
 
 ```bash
-# 1. Start Pinchtab (runs forever, local on :9867)
-pinchtab &
+# 1. Start Pinchtab server (runs forever, local on :9867)
+pinchtab
 
-# 2. In your agent, follow this loop:
+# 2. In your agent, use HTTP API via curl:
 #    a) Navigate to a URL
 #    b) Snapshot the page (get refs like e0, e5, e12)
 #    c) Act on a ref (click e5, type e12 "search text")
@@ -44,22 +44,18 @@ pinchtab &
 ## Setup
 
 ```bash
-# Headless (default) — no visible window
-pinchtab &
+# Start server (headless by default)
+pinchtab
 
-# Headed — visible Chrome window for human debugging
-BRIDGE_HEADLESS=false pinchtab &
-
-# With auth token
-BRIDGE_TOKEN="your-secret-token" pinchtab &
-
-# Custom port
-BRIDGE_PORT=8080 pinchtab &
+# Or with environment variables:
+BRIDGE_HEADLESS=false pinchtab          # Headed mode (visible window)
+BRIDGE_TOKEN="secret-key" pinchtab      # With auth token
+BRIDGE_PORT=8080 pinchtab               # Custom port
 ```
 
 Default: **port 9867**, no auth required (local). Set `BRIDGE_TOKEN` for remote access.
 
-For advanced setup, see [references/profiles.md](references/profiles.md) and [references/env.md](references/env.md).
+For advanced setup (profiles, env vars, config), see [docs/references/configuration.md](docs/references/configuration.md).
 
 ## What a Snapshot Looks Like
 
@@ -81,31 +77,49 @@ Then you act on refs: `click e0`, `type e1 "user@example.com"`, `press e2 Enter`
 
 ## Core Workflow
 
-The typical agent loop:
+The typical agent loop (via HTTP API):
 
-1. **Navigate** to a URL
-2. **Snapshot** the accessibility tree (get refs)
-3. **Act** on refs (click, type, press)
-4. **Snapshot** again to see results
+1. **Navigate** — POST /navigate with URL
+2. **Snapshot** — GET /snapshot to get accessibility tree with refs
+3. **Act** — POST /action on refs (click, type, press)
+4. **Snapshot** — GET /snapshot again to see results
 
 Refs (e.g. `e0`, `e5`, `e12`) are cached per tab after each snapshot — no need to re-snapshot before every action unless the page changed significantly.
 
-### Quick examples
+### Quick examples (curl)
 
 ```bash
-pinchtab nav https://example.com
-pinchtab snap -i -c                    # interactive + compact
-pinchtab click e5
-pinchtab type e12 hello world
-pinchtab press Enter
-pinchtab text                          # readable text (~1K tokens)
-pinchtab text | jq .text               # pipe to jq
-pinchtab ss -o page.jpg                # screenshot
-pinchtab eval "document.title"         # run JavaScript
-pinchtab pdf --tab TAB_ID -o page.pdf  # export PDF
+# Navigate to a URL
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
+
+# Get page snapshot (interactive + compact for efficiency)
+curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
+
+# Click an element by ref
+curl -X POST http://localhost:9867/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","ref":"e5"}'
+
+# Type text
+curl -X POST http://localhost:9867/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"type","ref":"e12","text":"hello world"}'
+
+# Extract readable text (~800 tokens)
+curl http://localhost:9867/text | jq .text
+
+# Take screenshot
+curl http://localhost:9867/screenshot > page.png
+
+# Run JavaScript
+curl -X POST http://localhost:9867/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"document.title"}'
 ```
 
-For the full HTTP API (curl examples, download, upload, cookies, stealth, batch actions, PDF export with full parameter control), see [references/api.md](references/api.md).
+For the full HTTP API (batch actions, downloads, uploads, cookies, stealth, PDF export), see the [API Reference](docs/references/endpoints.md).
 
 ## Token Cost Guide
 
@@ -132,16 +146,60 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 **The 3-second pattern** — wait after navigate before snapshot:
 
 ```bash
+# Navigate
 curl -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}' && \
-sleep 3 && \
-curl http://localhost:9867/snapshot | jq '.nodes[] | select(.name | length > 15) | .name'
+  -d '{"url":"https://example.com"}'
+
+# Wait for page to render
+sleep 3
+
+# Snapshot with filter for efficiency
+curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
 ```
 
-**Token savings:** 93% reduction (3,842 → 272 tokens) when using prescriptive instructions vs. exploratory agent approach.
+**Token savings:** 93% reduction when using prescriptive instructions vs. exploratory agent approach.
 
 For detailed findings, system prompt templates, and site-specific notes, see [docs/agent-optimization.md](../../docs/agent-optimization.md).
+
+## Management Commands
+
+For server operations (checking status, listing profiles/instances):
+
+```bash
+# Check server health
+pinchtab health
+
+# List profiles
+pinchtab profiles
+
+# List running instances
+pinchtab instances
+
+# List open tabs
+pinchtab tabs
+
+# Get instance URL (for direct API use)
+pinchtab connect myprofile
+```
+
+For configuration:
+
+```bash
+# Initialize config file
+pinchtab config init
+
+# Show configuration
+pinchtab config show
+
+# Set a value
+pinchtab config set server.port 9999
+
+# Validate configuration
+pinchtab config validate
+```
+
+See [docs/references/cli-quick-reference.md](docs/references/cli-quick-reference.md) for full CLI reference.
 
 ## Tips
 
@@ -150,5 +208,5 @@ For detailed findings, system prompt templates, and site-specific notes, see [do
 - After navigation or major page changes, take a new snapshot for fresh refs
 - Pinchtab persists sessions — tabs survive restarts (disable with `BRIDGE_NO_RESTORE=true`)
 - Chrome profile is persistent — cookies/logins carry over between runs
-- Use `BRIDGE_BLOCK_IMAGES=true` or `"blockImages": true` on navigate for read-heavy tasks
-- **Wait 3+ seconds after navigate before snapshot** — Chrome needs time to render 2000+ accessibility tree nodes
+- Use `"blockImages": true` on navigate for read-heavy tasks
+- **Wait 3+ seconds after navigate before snapshot** — Chrome needs time to render accessibility tree
