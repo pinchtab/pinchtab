@@ -49,6 +49,7 @@ func (o *Orchestrator) registerCoreHandlers(mux *http.ServeMux) {
 func (o *Orchestrator) RegisterTabProxyHandlers(mux *http.ServeMux) {
 	// Tab operations - custom handlers
 	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
+	mux.HandleFunc("DELETE /tabs/{id}", o.handleTabClose)
 
 	// Tab operations - generic proxy (all route to the appropriate instance)
 	tabProxyRoutes := []string{

@@ -70,3 +70,24 @@ func TestHandleTab_CloseMissingID(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleTabDelete_MissingID(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("DELETE", "/tabs/", nil)
+	w := httptest.NewRecorder()
+	h.HandleTabDelete(w, req)
+	if w.Code != 400 {
+		t.Errorf("expected 400 for missing tab id, got %d", w.Code)
+	}
+}
+
+func TestHandleTabDelete_Success(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("DELETE", "/tabs/tab_abc123", nil)
+	req.SetPathValue("id", "tab_abc123")
+	w := httptest.NewRecorder()
+	h.HandleTabDelete(w, req)
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}

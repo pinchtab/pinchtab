@@ -382,3 +382,18 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 400, fmt.Errorf("action must be 'new' or 'close'"))
 	}
 }
+
+// HandleTabDelete closes a tab by ID via DELETE /tabs/{id}.
+func (h *Handlers) HandleTabDelete(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	if err := h.Bridge.CloseTab(tabID); err != nil {
+		web.Error(w, 500, err)
+		return
+	}
+	web.JSON(w, 200, map[string]any{"closed": true})
+}

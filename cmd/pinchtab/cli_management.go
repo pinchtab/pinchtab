@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func cliHealth(client *http.Client, base, token string) {
@@ -44,9 +45,8 @@ func cliInstances(client *http.Client, base, token string) {
 		if len(instances) == 0 {
 			fmt.Println("No instances running")
 			fmt.Println("\nTo launch an instance:")
-			fmt.Println("  1. Start dashboard: pinchtab")
-			fmt.Println("  2. Open browser: http://localhost:9867/dashboard")
-			fmt.Println("  3. Click 'Profiles' → select profile → 'Launch'")
+			fmt.Println("  pinchtab launch            # headless, auto-named")
+			fmt.Println("  pinchtab launch myprofile   # named profile")
 			return
 		}
 
@@ -83,12 +83,46 @@ func cliInstances(client *http.Client, base, token string) {
 	}
 }
 
+func cliLaunch(client *http.Client, base, token string, args []string) {
+	body := map[string]any{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--headed":
+			body["mode"] = "headed"
+		case "--port":
+			if i+1 < len(args) {
+				i++
+				body["port"] = args[i]
+			}
+		default:
+			// Positional arg = profile name
+			if !strings.HasPrefix(args[i], "-") {
+				body["name"] = args[i]
+			}
+		}
+	}
+
+	result := doPost(client, base, token, "/instances/launch", body)
+	id, _ := result["id"].(string)
+	port, _ := result["port"].(string)
+	fmt.Printf("🚀 Launched %s on port %s\n", id, port)
+}
+
+func cliStop(client *http.Client, base, token string, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: pinchtab stop <instance-id>")
+		os.Exit(1)
+	}
+	doPost(client, base, token, fmt.Sprintf("/instances/%s/stop", args[0]), nil)
+	fmt.Printf("⏹️  Stopped %s\n", args[0])
+}
+
 func cliTabs(client *http.Client, base, token string) {
 	result := doGet(client, base, token, "/tabs", nil)
 
 	if tabs, ok := result["tabs"].([]interface{}); ok {
 		if len(tabs) == 0 {
-			fmt.Println("No tabs open across all instances")
+			fmt.Println("No tabs open")
 			return
 		}
 
@@ -111,4 +145,33 @@ func cliTabs(client *http.Client, base, token string) {
 		}
 		fmt.Println()
 	}
+}
+
+func cliOpen(client *http.Client, base, token string, args []string) {
+	tabURL := ""
+	if len(args) > 0 {
+		tabURL = args[0]
+	}
+
+	body := map[string]any{"action": "new"}
+	if tabURL != "" {
+		body["url"] = tabURL
+	}
+
+	result := doPost(client, base, token, "/tab", body)
+	id, _ := result["tabId"].(string)
+	resultURL, _ := result["url"].(string)
+	if resultURL == "" {
+		resultURL = "about:blank"
+	}
+	fmt.Printf("📑 Opened [%s] → %s\n", id, resultURL)
+}
+
+func cliClose(client *http.Client, base, token string, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: pinchtab close <tab-id>")
+		os.Exit(1)
+	}
+	doDelete(client, base, token, fmt.Sprintf("/tabs/%s", args[0]))
+	fmt.Printf("🗑️  Closed %s\n", args[0])
 }

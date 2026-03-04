@@ -100,6 +100,99 @@ func TestCLI_Nav(t *testing.T) {
 	closeCurrentTab(t)
 }
 
+// TestCLI_Open runs `pinchtab open <url>` then `pinchtab close <id>`.
+func TestCLI_Open(t *testing.T) {
+	bin := pinchtabBinary(t)
+	cmd := exec.Command(bin, "open", "https://example.com")
+	cmd.Env = append(cmd.Environ(),
+		"PINCHTAB_URL="+serverURL,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pinchtab open failed: %v\n%s", err, string(out))
+	}
+
+	output := string(out)
+	if !strings.Contains(output, "tab_") {
+		t.Fatalf("expected tab ID in output, got: %s", output)
+	}
+
+	// Extract tab ID from "📑 Opened [tab_abc123] → ..."
+	tabID := extractTabID(output)
+	if tabID == "" {
+		t.Fatalf("could not extract tab ID from: %s", output)
+	}
+
+	// Close it
+	cmd = exec.Command(bin, "close", tabID)
+	cmd.Env = append(cmd.Environ(),
+		"PINCHTAB_URL="+serverURL,
+	)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pinchtab close failed: %v\n%s", err, string(out))
+	}
+	if !strings.Contains(string(out), "Closed") {
+		t.Errorf("expected 'Closed' in output, got: %s", string(out))
+	}
+}
+
+// TestCLI_Tabs runs `pinchtab tabs` via CLI.
+func TestCLI_Tabs(t *testing.T) {
+	navigate(t, "https://example.com")
+
+	bin := pinchtabBinary(t)
+	cmd := exec.Command(bin, "tabs")
+	cmd.Env = append(cmd.Environ(),
+		"PINCHTAB_URL="+serverURL,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pinchtab tabs failed: %v\n%s", err, string(out))
+	}
+
+	output := string(out)
+	if !strings.Contains(output, "Tabs") && !strings.Contains(output, "tab") {
+		t.Errorf("expected tabs listing, got: %s", output)
+	}
+	// Should show example.com somewhere in the output
+	if !strings.Contains(strings.ToLower(output), "example") {
+		t.Errorf("expected 'example' in tabs output, got: %s", output)
+	}
+
+	closeCurrentTab(t)
+}
+
+// TestDeleteTab verifies DELETE /tabs/{id} closes a tab.
+func TestDeleteTab(t *testing.T) {
+	navigate(t, "https://example.com")
+
+	tabID := currentTabID
+	if tabID == "" {
+		t.Skip("no current tab ID")
+	}
+
+	code, body := httpDelete(t, "/tabs/"+tabID)
+	if code != 200 {
+		t.Fatalf("DELETE /tabs/%s: expected 200, got %d: %s", tabID, code, string(body))
+	}
+
+	currentTabID = ""
+}
+
+func extractTabID(s string) string {
+	// Look for tab_XXXXXXXX pattern
+	idx := strings.Index(s, "tab_")
+	if idx < 0 {
+		return ""
+	}
+	end := idx + 4
+	for end < len(s) && s[end] != ']' && s[end] != ' ' && s[end] != '\n' {
+		end++
+	}
+	return s[idx:end]
+}
+
 // pinchtabBinary returns the path to the test binary built by TestMain.
 func pinchtabBinary(t *testing.T) string {
 	t.Helper()

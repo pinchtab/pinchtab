@@ -136,6 +136,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tabs/{id}/cookies", s.handleTabProxy("/cookies"))
 	mux.HandleFunc("POST /tabs/{id}/find", s.handleTabProxy("/find"))
 	mux.HandleFunc("POST /tabs/{id}/close", s.handleTabClose)
+	mux.HandleFunc("DELETE /tabs/{id}", s.handleTabClose)
 
 	// Tab + instance listing.
 	mux.HandleFunc("POST /tab", s.handleTabManage)

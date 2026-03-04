@@ -80,6 +80,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tabs/{id}/cookies", s.handleTabSetCookies)
 	mux.HandleFunc("POST /tabs/{id}/find", s.handleTabFind)
 	mux.HandleFunc("POST /tabs/{id}/close", s.handleTabClose)
+	mux.HandleFunc("DELETE /tabs/{id}", s.handleTabClose)
 
 	// Tab management.
 	mux.HandleFunc("POST /tab", s.handleTab)

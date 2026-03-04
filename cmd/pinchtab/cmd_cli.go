@@ -33,11 +33,19 @@ BROWSER COMMANDS:
   pinchtab select <ref> <value>   Select dropdown option
   pinchtab eval <expression>      Evaluate JavaScript
 
+INSTANCE COMMANDS:
+  pinchtab launch [profile]  Launch instance (--headed, --port N)
+  pinchtab stop <id>         Stop a running instance
+  pinchtab instances         List running instances
+
+TAB COMMANDS:
+  pinchtab open [url]        Open new tab (optional URL)
+  pinchtab close <id>        Close tab by ID
+  pinchtab tabs              List open tabs
+
 MANAGEMENT COMMANDS:
   pinchtab health        Server health check
   pinchtab profiles      List available profiles
-  pinchtab instances     List running instances
-  pinchtab tabs          List open tabs (all instances)
   pinchtab config init   Initialize config file
   pinchtab config show   Display current configuration
   pinchtab help          Show this help
@@ -49,13 +57,24 @@ ENVIRONMENT:
 }
 
 var cliCommands = map[string]bool{
-	"health":     true,
-	"help":       true,
-	"config":     true,
-	"profiles":   true,
-	"instances":  true,
-	"tabs":       true,
-	"connect":    true,
+	// Management
+	"health":   true,
+	"help":     true,
+	"config":   true,
+	"profiles": true,
+	"connect":  true,
+
+	// Instances
+	"launch":    true,
+	"stop":      true,
+	"instances": true,
+
+	// Tabs
+	"open":  true,
+	"close": true,
+	"tabs":  true,
+
+	// Browser: navigation & read
 	"nav":        true,
 	"navigate":   true,
 	"snap":       true,
@@ -65,15 +84,19 @@ var cliCommands = map[string]bool{
 	"screenshot": true,
 	"ss":         true,
 	"pdf":        true,
-	"click":      true,
-	"type":       true,
-	"fill":       true,
-	"press":      true,
-	"hover":      true,
-	"scroll":     true,
-	"select":     true,
-	"eval":       true,
-	"evaluate":   true,
+
+	// Browser: actions
+	"click":  true,
+	"type":   true,
+	"fill":   true,
+	"press":  true,
+	"hover":  true,
+	"scroll": true,
+	"select": true,
+
+	// Browser: eval
+	"eval":     true,
+	"evaluate": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -103,14 +126,26 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliHealth(client, base, token)
 	case "profiles":
 		cliProfiles(client, base, token)
-	case "instances":
-		cliInstances(client, base, token)
-	case "tabs":
-		cliTabs(client, base, token)
 	case "help":
 		printHelp()
 	case "config":
 		// Handled in main.go
+
+	// Instances
+	case "launch":
+		cliLaunch(client, base, token, args)
+	case "stop":
+		cliStop(client, base, token, args)
+	case "instances":
+		cliInstances(client, base, token)
+
+	// Tabs
+	case "open":
+		cliOpen(client, base, token, args)
+	case "close":
+		cliClose(client, base, token, args)
+	case "tabs":
+		cliTabs(client, base, token)
 
 	// Browser: navigation & read
 	case "nav", "navigate":

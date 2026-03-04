@@ -114,6 +114,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /macro", h.HandleMacro)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("POST /tab", h.HandleTab)
+	mux.HandleFunc("DELETE /tabs/{id}", h.HandleTabDelete)
 	mux.HandleFunc("POST /tab/lock", h.HandleTabLock)
 	mux.HandleFunc("POST /tab/unlock", h.HandleTabUnlock)
 	mux.HandleFunc("POST /tabs/{id}/lock", h.HandleTabLockByID)

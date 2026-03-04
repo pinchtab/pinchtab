@@ -92,6 +92,56 @@ pinchtab click e42                         # click it
 
 ---
 
+## Instance Commands
+
+### Launch an instance
+
+```bash
+pinchtab launch                            # headless, auto-named
+pinchtab launch myprofile                  # named profile
+pinchtab launch --headed                   # with visible browser
+pinchtab launch --port 9880               # specific port
+```
+
+### Stop an instance
+
+```bash
+pinchtab stop inst_abc123
+```
+
+### List running instances
+
+```bash
+pinchtab instances
+```
+
+---
+
+## Tab Commands
+
+### Open a new tab
+
+```bash
+pinchtab open                              # blank tab
+pinchtab open https://example.com          # tab with URL
+```
+
+### Close a tab
+
+```bash
+pinchtab close tab_abc123
+```
+
+Uses `DELETE /tabs/{id}` under the hood.
+
+### List open tabs
+
+```bash
+pinchtab tabs
+```
+
+---
+
 ## Management Commands
 
 ### Server status
@@ -100,12 +150,10 @@ pinchtab click e42                         # click it
 pinchtab health
 ```
 
-### List profiles / instances / tabs
+### List profiles
 
 ```bash
 pinchtab profiles
-pinchtab instances
-pinchtab tabs
 ```
 
 ### Get instance URL

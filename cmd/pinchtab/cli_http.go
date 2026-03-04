@@ -63,6 +63,25 @@ func doGetRaw(client *http.Client, base, token, path string, params url.Values) 
 	return body
 }
 
+func doDelete(client *http.Client, base, token, path string) {
+	req, _ := http.NewRequest("DELETE", base+path, nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Connection error: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(body))
+		os.Exit(1)
+	}
+}
+
 func doGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
 	u := base + path
 	if len(params) > 0 {
