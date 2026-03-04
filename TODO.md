@@ -84,8 +84,8 @@ Thin HTTP wrappers in `cmd/pinchtab/cmd_cli.go`. Each hits `PINCHTAB_URL`.
 ## Implementation Order
 1. Bridge handler `ensureNavigated` + `url` param on all read handlers
 2. Move `/find` snapshot logic into bridge handler
-3. CLI commands
-4. Docs part 1: `cdp-bridge.md` — CDP wait strategies, smart defaults, `url` param pattern
+3. Docs part 1: `cdp-bridge.md` — CDP wait strategies, smart defaults, `url` param pattern
+4. CLI commands
 5. Docs part 2: CLI reference — all commands, flags, examples
 6. Tests
 
