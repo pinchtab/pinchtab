@@ -273,6 +273,45 @@ pinchtab config validate
 
 ---
 
+## Summary
+
+**All 3 Phases Complete** ✅
+
+### Stats
+- **Lines removed:** 1,660 (browser control CLI code)
+- **Lines added:** 970 (config system + tests + docs)
+- **CLI commands removed:** 20+
+- **CLI commands kept:** 7
+- **CLI commands added:** 4
+- **New config sections:** 4
+- **Tests added:** 18 config tests
+- **Total tests passing:** 33
+
+### Commits
+1. `9cae4f5` — Phase 1: Remove browser control CLI
+2. `f5187a1` — Remove plugin folder
+3. `44215d8` — Phase 2: Add config system
+4. `8258298` — Mark Phase 1-2 complete
+5. `c903c17` — Phase 3: Update README
+6. `6f1d53e` — Phase 3: Add BREAKING_CHANGES.md
+
+### Deliverables
+- ✅ cli-plan.md (this file)
+- ✅ Simplified CLI (management only)
+- ✅ Expanded config system (set/patch/validate)
+- ✅ Updated README with examples
+- ✅ BREAKING_CHANGES.md with migration guide
+- ✅ 33 tests (all passing)
+- ✅ Pre-commit checks passing
+
+### PR Status
+- **PR #112** against feat/allocation-strategies
+- **Status:** Ready for review (not draft)
+- **Summary:** Complete CLI refactor with expanded config system
+- **Breaking changes:** Documented in BREAKING_CHANGES.md
+
+---
+
 ## Questions for Luigi
 
 1. Should `configure --interactive` be in Phase 1 or deferred to Phase 2?
@@ -323,7 +362,29 @@ pinchtab config validate
 
 **Commit:** `44215d8`
 
-### What's Left
-Phase 3: (Optional, deferred)
-- Interactive config mode with `configure --interactive` or `configure --section`
-- This can be added later if needed
+### Phase 3: Documentation & PR ✅ Complete
+
+**Design Decision:** Skip interactive mode (`configure --interactive`) for now
+- **Rationale:** `config set` and `config patch` cover all use cases
+- **Future:** Can add TUI in v2 if demand exists
+- **Precedent:** openclaw uses `config set`, not interactive mode
+
+**Tasks:**
+- [x] Verify config editor aligns with Load() logic
+  - Both use same path: BRIDGE_CONFIG env var or userConfigDir()/config.json ✅
+  - File modifications picked up on next Load() call ✅
+- [x] Add configuration docs to README
+  - New Configuration section with examples
+  - Config sections documented (server, chrome, orchestrator, timeouts)
+  - Environment variable overrides documented
+- [x] Create BREAKING_CHANGES.md
+  - Lists all 20+ removed CLI commands with HTTP API replacements
+  - Migration guide with curl and Python examples
+  - Rationale for changes
+- [x] Document kept and new commands
+  - 7 kept management commands
+  - 4 new config commands
+
+**Commits (Phase 3):**
+- `c903c17` — Update README with new CLI model and config guide
+- `6f1d53e` — Add BREAKING_CHANGES.md with migration guide
