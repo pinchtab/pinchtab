@@ -125,7 +125,7 @@ func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 
 	// Serve static assets under /dashboard/ with long cache (hashed filenames)
 	mux.Handle("GET /dashboard/assets/", http.StripPrefix("/dashboard", d.withLongCache(fileServer)))
-	mux.Handle("GET /dashboard/pinchtab-headed-192.png", http.StripPrefix("/dashboard", d.withLongCache(fileServer)))
+	mux.Handle("GET /dashboard/favicon.png", http.StripPrefix("/dashboard", d.withLongCache(fileServer)))
 
 	// SPA: serve dashboard.html for /dashboard
 	mux.Handle("GET /dashboard", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
