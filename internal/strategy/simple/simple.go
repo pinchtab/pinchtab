@@ -59,6 +59,8 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /snapshot", s.handleSnapshot)
 	mux.HandleFunc("GET /screenshot", s.handleScreenshot)
 	mux.HandleFunc("GET /text", s.handleText)
+	mux.HandleFunc("GET /pdf", s.handlePDF)
+	mux.HandleFunc("POST /pdf", s.handlePDF)
 	mux.HandleFunc("POST /action", s.handleAction)
 	mux.HandleFunc("POST /actions", s.handleActions)
 	mux.HandleFunc("POST /evaluate", s.handleEvaluate)
@@ -212,6 +214,34 @@ func (s *Strategy) handleText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.bridge.ProxyToTab(w, r, port, tabID, "/text")
+}
+
+func (s *Strategy) handlePDF(w http.ResponseWriter, r *http.Request) {
+	// Check if URL provided - if so, create new tab
+	urlParam := r.URL.Query().Get("url")
+	if urlParam != "" {
+		port, err := s.ensureInstance()
+		if err != nil {
+			web.Error(w, http.StatusServiceUnavailable, fmt.Errorf("no instance available: %w", err))
+			return
+		}
+		tabID, err := s.bridge.CreateTab(r.Context(), port, urlParam)
+		if err != nil {
+			web.Error(w, http.StatusInternalServerError, fmt.Errorf("create tab: %w", err))
+			return
+		}
+		s.setCurrentTab(tabID)
+		s.bridge.ProxyToTab(w, r, port, tabID, "/pdf")
+		return
+	}
+
+	// No URL - use current/first tab
+	tabID, port, err := s.currentOrFirst(r.Context())
+	if err != nil {
+		web.Error(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	s.bridge.ProxyToTab(w, r, port, tabID, "/pdf")
 }
 
 func (s *Strategy) handleAction(w http.ResponseWriter, r *http.Request) {

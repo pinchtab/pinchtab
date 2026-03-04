@@ -396,3 +396,16 @@ func TestSimple_Snapshot_NoURL_NoTab_Fails(t *testing.T) {
 		t.Error("expected error when no tabs and no URL")
 	}
 }
+
+func TestSimple_PDF_WithURL_CreatesTab(t *testing.T) {
+	s, _ := setupStrategy(t)
+	mux := serveMux(s)
+
+	req := httptest.NewRequest("GET", "/pdf?url=https://example.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
