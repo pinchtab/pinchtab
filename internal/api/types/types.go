@@ -89,11 +89,14 @@ type MonitoringSettings struct {
 
 // ServerInfo contains health/status information.
 type ServerInfo struct {
-	Version   string `json:"version"`
-	Uptime    int64  `json:"uptime"`
-	Profiles  int    `json:"profiles"`
-	Instances int    `json:"instances"`
-	Agents    int    `json:"agents"`
+	Version          string `json:"version"`
+	Uptime           int64  `json:"uptime"`
+	Profiles         int    `json:"profiles"`
+	Instances        int    `json:"instances"`
+	Agents           int    `json:"agents"`
+	Strategy         string `json:"strategy,omitempty"`
+	AllocationPolicy string `json:"allocationPolicy,omitempty"`
+	ConfigPath       string `json:"configPath,omitempty"`
 }
 
 // CreateProfileRequest is the request body for creating a profile.

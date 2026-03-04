@@ -18,7 +18,7 @@ import {
 import * as api from "./services/api";
 
 function AppContent() {
-  const { setInstances, setProfiles, setAgents } = useAppStore();
+  const { setInstances, setProfiles, setAgents, setServerInfo } = useAppStore();
   const location = useLocation();
 
   // Log navigation for debugging
@@ -30,18 +30,20 @@ function AppContent() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [instances, profiles] = await Promise.all([
+        const [instances, profiles, health] = await Promise.all([
           api.fetchInstances(),
           api.fetchProfiles(),
+          api.fetchHealth(),
         ]);
         setInstances(instances);
         setProfiles(profiles);
+        setServerInfo(health);
       } catch (e) {
         console.error("Failed to load initial data", e);
       }
     };
     load();
-  }, [setInstances, setProfiles]);
+  }, [setInstances, setProfiles, setServerInfo]);
 
   // Subscribe to SSE events
   useEffect(() => {
@@ -73,7 +75,7 @@ function AppContent() {
   return (
     <div className="flex h-screen flex-col bg-bg-app">
       <NavBar />
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex-1 overflow-auto">
         <Routes>
           <Route path="/" element={<Navigate to="/monitoring" replace />} />
           <Route path="/monitoring" element={<MonitoringPage />} />

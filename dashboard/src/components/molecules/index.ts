@@ -8,3 +8,4 @@ export { default as TabItem } from "./TabItem";
 export { default as AgentItem } from "./AgentItem";
 export { default as ActivityLine } from "./ActivityLine";
 export { default as TabsChart } from "./TabsChart";
+export { default as ServerSummary } from "./ServerSummary";

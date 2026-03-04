@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAppStore } from "../../stores/useAppStore";
 import "./NavBar.css";
 
 interface Tab {
@@ -20,6 +21,7 @@ interface NavBarProps {
 }
 
 export default function NavBar({ onRefresh }: NavBarProps) {
+  const { serverInfo } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const tabsRef = useRef<HTMLElement>(null);
@@ -81,6 +83,14 @@ export default function NavBar({ onRefresh }: NavBarProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
+          {serverInfo && (
+            <div className="mr-2 flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-[10px] font-bold text-success uppercase tracking-wider">
+                Running
+              </span>
+            </div>
+          )}
           {onRefresh && (
             <button
               className={`navbar-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-base text-text-muted transition-all duration-150 hover:border-border-subtle hover:bg-bg-elevated hover:text-text-secondary focus-visible:shadow-[0_0_0_2px_var(--primary)/25] focus-visible:outline-none ${

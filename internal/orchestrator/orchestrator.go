@@ -568,6 +568,11 @@ func (o *Orchestrator) ScreencastURL(instanceID, tabID string) string {
 	return fmt.Sprintf("ws://localhost:%s/screencast?tabId=%s", inst.Port, tabID)
 }
 
+// AllAgents returns all connected AI agents (placeholder for now).
+func (o *Orchestrator) AllAgents() []types.Agent {
+	return []types.Agent{}
+}
+
 func (o *Orchestrator) Shutdown() {
 	o.mu.RLock()
 	ids := make([]string, 0, len(o.instances))

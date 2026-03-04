@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/handlers"
@@ -29,6 +30,7 @@ import (
 // runDashboard starts a lightweight dashboard server — no Chrome, no bridge.
 // It manages PinchTab instances via the orchestrator and serves the dashboard UI.
 func runDashboard(cfg *config.RuntimeConfig) {
+	startTime := time.Now()
 	dashPort := cfg.Port
 	if dashPort == "" {
 		dashPort = "9870"
@@ -78,23 +80,33 @@ func runDashboard(cfg *config.RuntimeConfig) {
 
 	// Root returns health check (API-first design)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]any{
-			"status":    "ok",
-			"dashboard": "/dashboard",
-			"docs":      "/api/docs",
+		pList, _ := profMgr.List()
+		info := types.ServerInfo{
+			Version:          version,
+			Uptime:           time.Since(startTime).Milliseconds(),
+			Profiles:         len(pList),
+			Instances:        len(orch.List()),
+			Agents:           len(orch.AllAgents()),
+			Strategy:         cfg.Strategy,
+			AllocationPolicy: cfg.AllocationPolicy,
+			ConfigPath:       cfg.ConfigPath,
 		}
-		if cfg.Strategy != "" {
-			resp["strategy"] = cfg.Strategy
-		}
-		web.JSON(w, 200, resp)
+		web.JSON(w, 200, info)
 	})
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]string{"status": "ok"}
-		if cfg.Strategy != "" {
-			resp["strategy"] = cfg.Strategy
+		pList, _ := profMgr.List()
+		info := types.ServerInfo{
+			Version:          version,
+			Uptime:           time.Since(startTime).Milliseconds(),
+			Profiles:         len(pList),
+			Instances:        len(orch.List()),
+			Agents:           len(orch.AllAgents()),
+			Strategy:         cfg.Strategy,
+			AllocationPolicy: cfg.AllocationPolicy,
+			ConfigPath:       cfg.ConfigPath,
 		}
-		web.JSON(w, 200, resp)
+		web.JSON(w, 200, info)
 	})
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {

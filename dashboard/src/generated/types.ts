@@ -107,6 +107,9 @@ export interface ServerInfo {
   profiles: number /* int */;
   instances: number /* int */;
   agents: number /* int */;
+  strategy?: string;
+  allocationPolicy?: string;
+  configPath?: string;
 }
 /**
  * CreateProfileRequest is the request body for creating a profile.

@@ -41,6 +41,7 @@ type RuntimeConfig struct {
 	// Orchestrator strategy settings (dashboard/orchestrator mode only).
 	Strategy         string // Allocation strategy: simple, session, explicit (default: "")
 	AllocationPolicy string // Instance selection policy: fcfs, round_robin, random (default: "fcfs")
+	ConfigPath       string // Path to the configuration file
 }
 
 func envOr(key, fallback string) string {
@@ -183,6 +184,7 @@ func Load() *RuntimeConfig {
 	}
 
 	configPath := envOr("BRIDGE_CONFIG", filepath.Join(userConfigDir(), "config.json"))
+	cfg.ConfigPath = configPath
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
