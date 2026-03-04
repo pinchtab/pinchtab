@@ -118,6 +118,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /action", s.handleAction)
 	mux.HandleFunc("POST /actions", s.handleActions)
 	mux.HandleFunc("POST /evaluate", s.handleEvaluate)
+	mux.HandleFunc("POST /find", s.handleFind)
 	mux.HandleFunc("GET /cookies", s.handleGetCookies)
 	mux.HandleFunc("POST /cookies", s.handleSetCookies)
 
@@ -133,6 +134,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tabs/{id}/pdf", s.handleTabProxy("/pdf"))
 	mux.HandleFunc("GET /tabs/{id}/cookies", s.handleTabProxy("/cookies"))
 	mux.HandleFunc("POST /tabs/{id}/cookies", s.handleTabProxy("/cookies"))
+	mux.HandleFunc("POST /tabs/{id}/find", s.handleTabProxy("/find"))
 	mux.HandleFunc("POST /tabs/{id}/close", s.handleTabClose)
 
 	// Tab + instance listing.
@@ -362,6 +364,16 @@ func (s *Strategy) handleEvaluate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.touchSession(sess)
 	s.bridge.ProxyToTab(w, r, sess.Port, sess.TabID, "/evaluate")
+}
+
+func (s *Strategy) handleFind(w http.ResponseWriter, r *http.Request) {
+	sess, err := s.sessionFromRequest(r)
+	if err != nil {
+		web.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	s.touchSession(sess)
+	s.bridge.ProxyToTab(w, r, sess.Port, sess.TabID, "/find")
 }
 
 func (s *Strategy) handleGetCookies(w http.ResponseWriter, r *http.Request) {

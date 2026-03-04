@@ -62,6 +62,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /action", s.handleAction)
 	mux.HandleFunc("POST /actions", s.handleActions)
 	mux.HandleFunc("POST /evaluate", s.handleEvaluate)
+	mux.HandleFunc("POST /find", s.handleFind)
 	mux.HandleFunc("GET /cookies", s.handleGetCookies)
 	mux.HandleFunc("POST /cookies", s.handleSetCookies)
 
@@ -77,6 +78,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tabs/{id}/pdf", s.handleTabPDF)
 	mux.HandleFunc("GET /tabs/{id}/cookies", s.handleTabGetCookies)
 	mux.HandleFunc("POST /tabs/{id}/cookies", s.handleTabSetCookies)
+	mux.HandleFunc("POST /tabs/{id}/find", s.handleTabFind)
 	mux.HandleFunc("POST /tabs/{id}/close", s.handleTabClose)
 
 	// Tab management.
@@ -182,6 +184,15 @@ func (s *Strategy) handleEvaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.bridge.ProxyToTab(w, r, port, tabID, "/evaluate")
+}
+
+func (s *Strategy) handleFind(w http.ResponseWriter, r *http.Request) {
+	tabID, port, err := s.currentOrFirst(r.Context())
+	if err != nil {
+		web.Error(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	s.bridge.ProxyToTab(w, r, port, tabID, "/find")
 }
 
 func (s *Strategy) handleGetCookies(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +313,16 @@ func (s *Strategy) handleTabSetCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.bridge.ProxyToTab(w, r, port, tabID, "/cookies")
+}
+
+func (s *Strategy) handleTabFind(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	port, err := s.portForTab(tabID)
+	if err != nil {
+		web.Error(w, http.StatusNotFound, err)
+		return
+	}
+	s.bridge.ProxyToTab(w, r, port, tabID, "/find")
 }
 
 func (s *Strategy) handleTabClose(w http.ResponseWriter, r *http.Request) {
