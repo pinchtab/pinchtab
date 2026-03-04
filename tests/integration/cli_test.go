@@ -14,7 +14,7 @@ func TestCLI_Find(t *testing.T) {
 	navigate(t, "https://example.com")
 
 	bin := pinchtabBinary(t)
-	cmd := exec.Command(bin, "find", "More information", "--top", "5")
+	cmd := exec.Command(bin, "find", "Learn more", "--top", "5")
 	cmd.Env = append(cmd.Environ(),
 		"PINCHTAB_URL="+serverURL,
 	)
@@ -27,7 +27,7 @@ func TestCLI_Find(t *testing.T) {
 	if !strings.Contains(output, "e") {
 		t.Errorf("expected ref in output, got: %s", output)
 	}
-	// example.com has "Learn more" or "More information" depending on version.
+	// example.com has "Learn more" link
 	lower := strings.ToLower(output)
 	if !strings.Contains(lower, "more") && !strings.Contains(lower, "learn") {
 		t.Errorf("expected match containing 'more' or 'learn', got: %s", output)

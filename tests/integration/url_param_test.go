@@ -87,7 +87,7 @@ func TestFind_WithURL(t *testing.T) {
 	navigate(t, "about:blank")
 	
 	code, body := httpPost(t, "/find", map[string]any{
-		"query": "More information",
+		"query": "Learn more",
 		"url":   "https://example.com",
 		"topK":  5,
 	})
@@ -102,7 +102,7 @@ func TestFind_WithURL(t *testing.T) {
 
 	matches, _ := result["matches"].([]any)
 	if len(matches) == 0 {
-		t.Error("expected at least one match for 'More information' on example.com")
+		t.Error("expected at least one match for 'Learn more' on example.com")
 	}
 
 	// Clean up using returned tabId

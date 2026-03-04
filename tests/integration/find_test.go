@@ -18,7 +18,7 @@ func TestFind_BasicMatch(t *testing.T) {
 
 	// Don't pass tabId — shorthand /find uses the active tab.
 	code, body := httpPost(t, "/find", map[string]any{
-		"query": "More information",
+		"query": "Learn more",
 	})
 	if code != 200 {
 		t.Fatalf("expected 200, got %d: %s", code, string(body))
@@ -34,7 +34,7 @@ func TestFind_BasicMatch(t *testing.T) {
 		t.Fatalf("expected matches array, got: %v", resp)
 	}
 	if len(matches) == 0 {
-		t.Fatal("expected at least one match for 'More information' on example.com")
+		t.Fatal("expected at least one match for 'Learn more' on example.com")
 	}
 
 	// First match should have ref, score, and element info.
