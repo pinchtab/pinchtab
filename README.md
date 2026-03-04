@@ -67,33 +67,69 @@ docker run -d -p 9867:9867 pinchtab/pinchtab
 pinchtab
 ```
 
-**Terminal 2 — Control the browser:**
+**Terminal 2 — Control via HTTP API:**
 ```bash
-# Navigate
-pinchtab nav https://example.com
+# Navigate to a page
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
 
-# Get page structure
-pinchtab snap -i -c
+# Get accessibility tree snapshot
+curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
 
 # Click an element
-pinchtab click e5
+curl -X POST http://localhost:9867/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","ref":"e5"}'
 
-# Extract text
-pinchtab text
+# Extract page text
+curl http://localhost:9867/text
 ```
 
-Or use the HTTP API directly:
-```bash
-# Navigate (returns tabId)
-TAB=$(curl -s -X POST http://localhost:9867/instances \
-  -d '{"profile":"work"}' | jq -r '.id')
+Or use a client library (Playwright, Puppeteer, Cypress):
+```python
+import requests
+
+BASE = "http://localhost:9867"
+
+# Navigate
+requests.post(f"{BASE}/navigate", json={"url": "https://example.com"})
 
 # Get snapshot
-curl "http://localhost:9867/instances/$TAB/snapshot?filter=interactive"
+resp = requests.get(f"{BASE}/snapshot?filter=interactive&compact=true")
+print(resp.json())
 
 # Click element
-curl -X POST "http://localhost:9867/instances/$TAB/action" \
-  -d '{"kind":"click","ref":"e5"}'
+requests.post(f"{BASE}/action", json={"kind": "click", "ref": "e5"})
+```
+
+**Configuration:**
+```bash
+# Initialize config file
+pinchtab config init
+
+# Set config values
+pinchtab config set server.port 9999
+pinchtab config set chrome.headless false
+pinchtab config set orchestrator.strategy session
+
+# View config
+pinchtab config show --format yaml
+
+# Validate config
+pinchtab config validate
+
+# Patch with JSON
+pinchtab config patch '{"chrome": {"maxTabs": 50}}'
+```
+
+**Management commands:**
+```bash
+pinchtab health              # Server status
+pinchtab profiles            # List available profiles
+pinchtab instances           # List running instances
+pinchtab tabs                # List open tabs
+pinchtab connect myprofile   # Get URL for a profile instance
 ```
 
 ---
@@ -107,6 +143,86 @@ curl -X POST "http://localhost:9867/instances/$TAB/action" \
 **Tab** — A single webpage. Each instance can have multiple tabs.
 
 Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
+
+---
+
+## Configuration
+
+PinchTab uses a JSON config file at `~/.config/pinchtab/config.json` (macOS/Linux) or `%APPDATA%\pinchtab\config.json` (Windows).
+
+### Config Management
+
+```bash
+# Create default config
+pinchtab config init
+
+# Set individual values
+pinchtab config set server.port 9999
+pinchtab config set chrome.headless false
+pinchtab config set chrome.maxTabs 50
+pinchtab config set orchestrator.strategy session
+pinchtab config set orchestrator.allocationPolicy round_robin
+
+# Merge a JSON object
+pinchtab config patch '{"chrome": {"headless": false, "maxTabs": 100}}'
+
+# View config
+pinchtab config show                    # JSON format
+pinchtab config show --format yaml      # YAML format
+
+# Validate config
+pinchtab config validate
+```
+
+### Config Sections
+
+**server** — Server settings
+```json
+{
+  "port": "9867",
+  "stateDir": "~/.config/pinchtab",
+  "profileDir": "~/.config/pinchtab/chrome-profile",
+  "token": "secret-key",
+  "cdpUrl": "ws://localhost:9222"
+}
+```
+
+**chrome** — Browser settings
+```json
+{
+  "headless": true,
+  "maxTabs": 20,
+  "noRestore": false
+}
+```
+
+**orchestrator** — Instance management (dashboard mode)
+```json
+{
+  "strategy": "simple",
+  "allocationPolicy": "fcfs",
+  "instancePortStart": 9868,
+  "instancePortEnd": 9968
+}
+```
+
+**timeouts** — Timing settings (seconds)
+```json
+{
+  "timeoutSec": 15,
+  "navigateSec": 30
+}
+```
+
+### Environment Variable Override
+
+Environment variables take precedence over config file:
+- `BRIDGE_PORT` — Server port
+- `BRIDGE_HEADLESS` — Headless mode
+- `PINCHTAB_STRATEGY` — Allocation strategy
+- `PINCHTAB_ALLOCATION_POLICY` — Instance selection policy
+
+See [Configuration](https://pinchtab.com/docs/configuration) for full list.
 
 ---
 
