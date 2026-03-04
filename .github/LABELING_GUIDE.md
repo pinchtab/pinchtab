@@ -228,7 +228,7 @@ Labels: bug, priority: high, status: fixed-unreleased
 
 ## Related Documents
 
-- [DEFINITION_OF_DONE.md](../DEFINITION_OF_DONE.md) — Checklist for PRs before merge
+- [DEFINITION_OF_DONE.md](./DEFINITION_OF_DONE.md) — Checklist for PRs before merge
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — Contribution guidelines (if present)
 
 ---
