@@ -34,24 +34,43 @@ This directory contains pinchtab's governance and workflow documents referenced 
 
 ---
 
+### [DOCUMENTATION_REVIEW.md](./DOCUMENTATION_REVIEW.md)
+**Purpose:** Guide for auditing documentation to ensure it stays in sync with code (code is source of truth).
+
+**For:** Agents maintaining documentation, quality assurance
+**How to use:** Point agents to this guide when asking them to audit docs for accuracy and consistency.
+
+**Key sections:**
+- Code-to-docs validation (examples, endpoints, commands, config)
+- Structure review (organization, index.json, grouping)
+- Output requirements (PR with fixes or GitHub issue with improvements)
+- Common documentation mistakes to fix
+- Quality gates for completion
+
+---
+
 ## Quick Reference
 
-| Document | Checklist For | Used By |
-|----------|---------------|---------|
+| Document | Audit For | Used By |
+|----------|-----------|---------|
 | DEFINITION_OF_DONE.md | PR quality before merge | Developers, agents, reviewers |
 | LABELING_GUIDE.md | Consistent issue triage | Maintainers, agents |
+| DOCUMENTATION_REVIEW.md | Documentation accuracy vs code | Agents, QA |
 
 ---
 
 ## How Agents Use These
 
-When asking an agent to help with PRs or issues:
+When asking an agent to help with PRs, issues, or documentation:
 
 **For PR review:**
 > "Review this PR against `.github/DEFINITION_OF_DONE.md` and ensure it meets all requirements."
 
 **For issue triage:**
 > "Review open issues and apply labels according to `.github/LABELING_GUIDE.md`. Ensure Type + Status + Priority are consistent."
+
+**For documentation audit:**
+> "Review documentation against current code using `.github/DOCUMENTATION_REVIEW.md`. Verify all examples match code, update or remove outdated content, report changes in a PR or improvements in a GitHub issue."
 
 ---
 
