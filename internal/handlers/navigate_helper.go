@@ -9,8 +9,8 @@ import (
 
 // WaitMode constants for readiness after navigation.
 const (
-	WaitDOM      = "dom"      // document.readyState == interactive (fast, a11y/text ready)
-	WaitComplete = "complete" // document.readyState == complete (visual rendering done)
+	WaitDOM      = "dom"         // document.readyState == interactive (fast, a11y/text ready)
+	WaitComplete = "networkidle" // network idle (visual rendering done, closest to document.readyState complete)
 )
 
 // ensureNavigated navigates to the given URL within the provided chromedp

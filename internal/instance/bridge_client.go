@@ -49,7 +49,8 @@ func (bc *BridgeClient) FetchTabs(instanceURL string) ([]bridge.InstanceTab, err
 
 // CreateTab creates a new tab on a bridge instance. Returns the tab ID.
 func (bc *BridgeClient) CreateTab(ctx context.Context, port, url string) (string, error) {
-	body := fmt.Sprintf(`{"action":"new","url":%q}`, url)
+	// Create blank tab first to avoid waitFor issues
+	body := `{"action":"new","url":"about:blank"}`
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/tab"), strings.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create tab request: %w", err)
@@ -73,7 +74,38 @@ func (bc *BridgeClient) CreateTab(ctx context.Context, port, url string) (string
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode create tab response: %w", err)
 	}
+	
+	// If URL provided and not about:blank, navigate to it
+	if url != "" && url != "about:blank" {
+		if err := bc.NavigateTab(ctx, port, result.TabID, url); err != nil {
+			return "", fmt.Errorf("navigate after create: %w", err)
+		}
+	}
+	
 	return result.TabID, nil
+}
+
+// NavigateTab navigates an existing tab to a URL
+func (bc *BridgeClient) NavigateTab(ctx context.Context, port, tabID, url string) error {
+	body := fmt.Sprintf(`{"url":%q,"waitFor":"dom"}`, url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/tabs/"+tabID+"/navigate"), strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("navigate request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := bc.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("navigate: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("navigate: status %d: %s", resp.StatusCode, respBody)
+	}
+	
+	return nil
 }
 
 // CloseTab closes a tab on a bridge instance.
