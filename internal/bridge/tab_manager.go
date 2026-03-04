@@ -116,8 +116,8 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 			// If check fails due to timeout, log warning but allow creation to proceed
 			slog.Warn("tab count check timed out, proceeding with creation", "error", err)
 		} else if len(targets) >= tm.config.MaxTabs {
-			// Apply tab limit policy
-			switch tm.config.TabLimitPolicy {
+			// Apply tab eviction policy
+			switch tm.config.TabEvictionPolicy {
 			case "close_oldest":
 				// Find and close the oldest tab
 				if err := tm.closeOldestTab(); err != nil {

@@ -133,11 +133,11 @@ Control what happens when Chrome hits the tab limit (default: 20 tabs):
 
 ```bash
 # Via environment variable
-TAB_LIMIT_POLICY=reject pinchtab         # Default
-TAB_LIMIT_POLICY=close_oldest pinchtab   # Auto-close oldest
+TAB_EVICTION_POLICY=reject pinchtab         # Default
+TAB_EVICTION_POLICY=close_oldest pinchtab   # Auto-close oldest
 
 # Via config file
-pinchtab config set tabLimitPolicy close_oldest
+pinchtab config set tabEvictionPolicy close_oldest
 ```
 
 **HTTP Response:**

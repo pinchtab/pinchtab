@@ -68,6 +68,7 @@ func TestMain(m *testing.M) {
 		"BRIDGE_HEADLESS=true",
 		"BRIDGE_NO_RESTORE=true",
 		"BRIDGE_STEALTH=light",
+		"TAB_EVICTION_POLICY=close_oldest", // Auto-close oldest tab when limit reached
 		fmt.Sprintf("BRIDGE_STATE_DIR=%s", mustTempDir()),
 		fmt.Sprintf("BRIDGE_PROFILE=%s", mustTempDir()),
 	)
