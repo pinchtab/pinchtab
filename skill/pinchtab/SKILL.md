@@ -97,6 +97,11 @@ curl -X POST http://localhost:9867/navigate \
 # Get page snapshot (interactive + compact for efficiency)
 curl "http://localhost:9867/snapshot?filter=interactive&compact=true"
 
+# Find elements by text/role/label (before acting)
+curl -X POST http://localhost:9867/find \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Sign In"}'
+
 # Click an element by ref
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
@@ -125,6 +130,7 @@ For the full HTTP API (batch actions, downloads, uploads, cookies, stealth, PDF 
 
 | Method | Typical tokens | When to use |
 |---|---|---|
+| `/find` | ~800 | Search for element by text/role/label |
 | `/text` | ~800 | Reading page content |
 | `/snapshot?filter=interactive` | ~3,600 | Finding buttons/links to click |
 | `/snapshot?diff=true` | varies | Multi-step workflows (only changes) |
