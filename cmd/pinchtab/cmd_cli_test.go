@@ -8,7 +8,13 @@ import (
 )
 
 func TestIsCLICommand(t *testing.T) {
-	valid := []string{"health", "help", "config", "profiles", "instances", "tabs", "connect"}
+	valid := []string{
+		"health", "help", "config", "profiles", "instances", "tabs", "connect",
+		"nav", "navigate", "snap", "snapshot", "find", "text",
+		"screenshot", "ss", "pdf",
+		"click", "type", "fill", "press", "hover", "scroll", "select",
+		"eval", "evaluate",
+	}
 
 	for _, cmd := range valid {
 		if !isCLICommand(cmd) {
@@ -16,12 +22,7 @@ func TestIsCLICommand(t *testing.T) {
 		}
 	}
 
-	// These commands are no longer CLI commands (moved to HTTP API)
-	invalid := []string{
-		"nav", "snap", "click", "type", "press", "fill", "hover", "scroll", "select", "focus",
-		"text", "screenshot", "ss", "eval", "evaluate", "pdf", "quick",
-		"dashboard", "server", "run", "",
-	}
+	invalid := []string{"dashboard", "server", "run", "", "quick", "focus"}
 	for _, cmd := range invalid {
 		if isCLICommand(cmd) {
 			t.Errorf("expected %q to NOT be a CLI command", cmd)
