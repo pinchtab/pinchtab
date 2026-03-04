@@ -27,6 +27,7 @@ type RuntimeConfig struct {
 	BlockMedia        bool
 	BlockAds          bool
 	MaxTabs           int
+	TabLimitPolicy    string // "reject" (default), "close_oldest", "close_lru"
 	ChromeBinary      string
 	ChromeExtraFlags  string
 	UserAgent         string
@@ -140,6 +141,7 @@ type FileConfig struct {
 	Headless          *bool  `json:"headless,omitempty"`
 	NoRestore         bool   `json:"noRestore"`
 	MaxTabs           *int   `json:"maxTabs,omitempty"`
+	TabLimitPolicy    string `json:"tabLimitPolicy,omitempty"` // reject, close_oldest, close_lru
 	TimeoutSec        int    `json:"timeoutSec,omitempty"`
 	NavigateSec       int    `json:"navigateSec,omitempty"`
 
@@ -166,6 +168,7 @@ func Load() *RuntimeConfig {
 		BlockMedia:        os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",
 		BlockAds:          envBoolOr("BRIDGE_BLOCK_ADS", false),
 		MaxTabs:           envIntOr("BRIDGE_MAX_TABS", 20),
+		TabLimitPolicy:    envOr("TAB_LIMIT_POLICY", "reject"),
 		ChromeBinary:      envOr("CHROME_BIN", os.Getenv("CHROME_BINARY")),
 		ChromeExtraFlags:  os.Getenv("CHROME_FLAGS"),
 		UserAgent:         os.Getenv("BRIDGE_USER_AGENT"),
@@ -220,6 +223,9 @@ func Load() *RuntimeConfig {
 	}
 	if fc.MaxTabs != nil && os.Getenv("BRIDGE_MAX_TABS") == "" {
 		cfg.MaxTabs = *fc.MaxTabs
+	}
+	if fc.TabLimitPolicy != "" && os.Getenv("TAB_LIMIT_POLICY") == "" {
+		cfg.TabLimitPolicy = fc.TabLimitPolicy
 	}
 	if fc.TimeoutSec > 0 && os.Getenv("BRIDGE_TIMEOUT") == "" {
 		cfg.ActionTimeout = time.Duration(fc.TimeoutSec) * time.Second

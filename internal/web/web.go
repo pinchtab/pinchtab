@@ -64,3 +64,20 @@ func (w *StatusWriter) Flush() {
 		f.Flush()
 	}
 }
+
+// ErrorAuto detects the error type and returns the appropriate HTTP status code.
+// - TabLimitError → 429 Too Many Requests
+// - Other errors → use provided default code
+func ErrorAuto(w http.ResponseWriter, defaultCode int, err error) {
+	code := defaultCode
+	
+	// Check if error has a StatusCode() method
+	type statusCoder interface {
+		StatusCode() int
+	}
+	if sc, ok := err.(statusCoder); ok {
+		code = sc.StatusCode()
+	}
+	
+	Error(w, code, err)
+}

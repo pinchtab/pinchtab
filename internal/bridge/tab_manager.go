@@ -45,6 +45,10 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 func (tm *TabManager) markAccessed(tabID string) {
 	tm.mu.Lock()
 	tm.accessed[tabID] = true
+	// Update LastUsed timestamp
+	if entry, ok := tm.tabs[tabID]; ok {
+		entry.LastUsed = time.Now()
+	}
 	tm.mu.Unlock()
 }
 
@@ -112,7 +116,23 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 			// If check fails due to timeout, log warning but allow creation to proceed
 			slog.Warn("tab count check timed out, proceeding with creation", "error", err)
 		} else if len(targets) >= tm.config.MaxTabs {
-			return "", nil, nil, fmt.Errorf("tab limit reached (%d/%d) — close a tab first", len(targets), tm.config.MaxTabs)
+			// Apply tab limit policy
+			switch tm.config.TabLimitPolicy {
+			case "close_oldest":
+				// Find and close the oldest tab
+				if err := tm.closeOldestTab(); err != nil {
+					return "", nil, nil, fmt.Errorf("close oldest tab: %w", err)
+				}
+				slog.Info("closed oldest tab due to limit", "policy", "close_oldest", "limit", tm.config.MaxTabs)
+			case "close_lru":
+				// Find and close the least-recently-used tab
+				if err := tm.closeLRUTab(); err != nil {
+					return "", nil, nil, fmt.Errorf("close LRU tab: %w", err)
+				}
+				slog.Info("closed LRU tab due to limit", "policy", "close_lru", "limit", tm.config.MaxTabs)
+			default: // "reject"
+				return "", nil, nil, TabLimitError{Current: len(targets), Max: tm.config.MaxTabs}
+			}
 		}
 	}
 
@@ -167,8 +187,15 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	rawCDPID := string(targetID)
 	hashTabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 
+	now := time.Now()
 	tm.mu.Lock()
-	tm.tabs[hashTabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID}
+	tm.tabs[hashTabID] = &TabEntry{
+		Ctx:       ctx,
+		Cancel:    cancel,
+		CDPID:     rawCDPID,
+		CreatedAt: now,
+		LastUsed:  now,
+	}
 	tm.accessed[hashTabID] = true
 	tm.mu.Unlock()
 
@@ -215,6 +242,48 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	tm.mu.Unlock()
 
 	return nil
+}
+
+// closeOldestTab finds and closes the oldest tab (by CreatedAt).
+// Used by close_oldest policy when tab limit is reached.
+func (tm *TabManager) closeOldestTab() error {
+	tm.mu.RLock()
+	var oldestID string
+	var oldestTime time.Time
+	for id, entry := range tm.tabs {
+		if oldestID == "" || entry.CreatedAt.Before(oldestTime) {
+			oldestID = id
+			oldestTime = entry.CreatedAt
+		}
+	}
+	tm.mu.RUnlock()
+
+	if oldestID == "" {
+		return fmt.Errorf("no tabs to close")
+	}
+
+	return tm.CloseTab(oldestID)
+}
+
+// closeLRUTab finds and closes the least-recently-used tab (by LastUsed).
+// Used by close_lru policy when tab limit is reached.
+func (tm *TabManager) closeLRUTab() error {
+	tm.mu.RLock()
+	var lruID string
+	var lruTime time.Time
+	for id, entry := range tm.tabs {
+		if lruID == "" || entry.LastUsed.Before(lruTime) {
+			lruID = id
+			lruTime = entry.LastUsed
+		}
+	}
+	tm.mu.RUnlock()
+
+	if lruID == "" {
+		return fmt.Errorf("no tabs to close")
+	}
+
+	return tm.CloseTab(lruID)
 }
 
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {
@@ -294,7 +363,12 @@ func (tm *TabManager) DeleteRefCache(tabID string) {
 func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	tm.tabs[tabID] = &TabEntry{Ctx: ctx}
+	now := time.Now()
+	tm.tabs[tabID] = &TabEntry{
+		Ctx:       ctx,
+		CreatedAt: now,
+		LastUsed:  now,
+	}
 }
 
 // RegisterHashTab registers a hash-based tab ID (e.g. "tab_XXXXXXXX") as an alias
@@ -303,7 +377,14 @@ func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 func (tm *TabManager) RegisterHashTab(hashID, rawCDPID string, ctx context.Context, cancel context.CancelFunc) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	tm.tabs[hashID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID}
+	now := time.Now()
+	tm.tabs[hashID] = &TabEntry{
+		Ctx:       ctx,
+		Cancel:    cancel,
+		CDPID:     rawCDPID,
+		CreatedAt: now,
+		LastUsed:  now,
+	}
 }
 
 func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration) {
