@@ -51,6 +51,13 @@ func httpPostWithRetry(t *testing.T, path string, body map[string]any, maxRetrie
 			return code, respBody
 		}
 
+		// Integration suites can leak tabs across scenarios. If Chrome reports
+		// max tabs reached, aggressively clean up and retry.
+		if err == nil && strings.Contains(string(respBody), "tab limit reached") {
+			t.Logf("Detected tab limit on %s, closing all tabs before retry", path)
+			closeAllTabs(t)
+		}
+
 		if err != nil {
 			t.Logf("Request failed with error: %v", err)
 		} else {

@@ -1,0 +1,37 @@
+{
+  "id": "pinchtab",
+  "name": "PinchTab",
+  "description": "Browser control for AI agents via PinchTab. Single tool, all actions: navigate, snapshot, click, type, find, text, screenshot, evaluate, pdf, tabs. Minimal context bloat.",
+  "version": "0.1.1",
+  "skills": ["../skill/pinchtab"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "PinchTab instance base URL",
+        "default": "http://localhost:9867"
+      },
+      "token": {
+        "type": "string",
+        "description": "Bearer auth token (BRIDGE_TOKEN)"
+      },
+      "sessionId": {
+        "type": "string",
+        "description": "Default session ID for sticky routing"
+      },
+      "timeout": {
+        "type": "number",
+        "description": "Default request timeout in milliseconds",
+        "default": 30000
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": { "label": "Base URL", "placeholder": "http://localhost:9867" },
+    "token": { "label": "Auth Token", "sensitive": true },
+    "sessionId": { "label": "Session ID", "placeholder": "sess_..." },
+    "timeout": { "label": "Timeout (ms)", "placeholder": "30000" }
+  }
+}
