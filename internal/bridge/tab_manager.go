@@ -112,7 +112,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 		if len(targets) == 0 {
 			return nil, "", fmt.Errorf("no tabs open")
 		}
-		// Convert raw CDP ID to hash and look it up
+		// Convert raw CDP ID to semantic tab ID (tab_CDP_ID)
 		rawID := string(targets[0].TargetID)
 		tabID = tm.idMgr.TabIDFromCDPTarget(rawID)
 	}
@@ -131,13 +131,10 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 
 	tm.markAccessed(tabID)
 
-	// Return the canonical raw CDP ID so that operations like ref-cache
-	// lookups are consistent regardless of which ID form was used.
-	resolvedID := tabID
-	if entry.CDPID != "" {
-		resolvedID = entry.CDPID
-	}
-	return entry.Ctx, resolvedID, nil
+	// Return the semantic tab ID (tab_CDP_ID) for external use.
+	// With semantic IDs, the CDP ID is embedded in the tab ID itself,
+	// so there's no need to return the raw CDP ID separately.
+	return entry.Ctx, tabID, nil
 }
 
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
@@ -221,25 +218,26 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
 
-	// Compute hash-based tab ID and store only that entry.
-	// Raw CDP ID is kept internal in the CDPID field.
+	// Create semantic tab ID by prefixing CDP ID (e.g., tab_D25F4C74...).
+	// This embeds the CDP ID in the tab ID itself, eliminating the need
+	// for cross-process ID translation.
 	rawCDPID := string(targetID)
-	hashTabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
+	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 
 	now := time.Now()
 	tm.mu.Lock()
-	tm.tabs[hashTabID] = &TabEntry{
+	tm.tabs[tabID] = &TabEntry{
 		Ctx:       ctx,
 		Cancel:    cancel,
 		CDPID:     rawCDPID,
 		CreatedAt: now,
 		LastUsed:  now,
 	}
-	tm.accessed[hashTabID] = true
-	tm.currentTab = hashTabID
+	tm.accessed[tabID] = true
+	tm.currentTab = tabID
 	tm.mu.Unlock()
 
-	return hashTabID, ctx, cancel, nil
+	return tabID, ctx, cancel, nil
 }
 
 func (tm *TabManager) CloseTab(tabID string) error {
@@ -260,11 +258,9 @@ func (tm *TabManager) CloseTab(tabID string) error {
 		entry.Cancel()
 	}
 
-	// Resolve hash alias → raw CDP target ID for the actual CDP close call
-	cdpTargetID := tabID
-	if tracked && entry.CDPID != "" {
-		cdpTargetID = entry.CDPID
-	}
+	// Extract raw CDP target ID from semantic tab ID (strip "tab_" prefix).
+	// With semantic IDs, the CDP ID is embedded in the tab ID itself.
+	cdpTargetID := idutil.StripTabPrefix(tabID)
 
 	closeCtx, closeCancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
 	defer closeCancel()
@@ -432,17 +428,11 @@ func (tm *TabManager) RegisterHashTab(hashID, rawCDPID string, ctx context.Conte
 	tm.currentTab = hashID
 }
 
-// HashIDForCDP returns the hash-based tab ID for a given CDP target ID.
-// Returns empty string if not found.
+// HashIDForCDP returns the semantic tab ID for a given CDP target ID.
+// With semantic IDs, this is simply tab_<CDP_ID>.
 func (tm *TabManager) HashIDForCDP(cdpID string) string {
-	tm.mu.RLock()
-	defer tm.mu.RUnlock()
-	for hashID, entry := range tm.tabs {
-		if entry.CDPID == cdpID {
-			return hashID
-		}
-	}
-	return ""
+	// Semantic IDs embed the CDP ID, so we just prefix it
+	return tm.idMgr.TabIDFromCDPTarget(cdpID)
 }
 
 func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration) {

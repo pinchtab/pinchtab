@@ -37,12 +37,25 @@ func (m *Manager) TabID(instanceID string, tabIndex int) string {
 	return hashID("tab", data)
 }
 
-// TabIDFromCDPTarget converts a CDP target ID to a hash-based tab ID
+// TabIDFromCDPTarget converts a CDP target ID to a semantic tab ID
 // Used when creating tabs dynamically via CDP
-// Format: tab_XXXXXXXX (12 chars total)
+// Format: tab_<CDP_TARGET_ID> (e.g., tab_D25F4C74...)
+// This is a zero-state design: the CDP ID is embedded in the tab ID,
+// so no mapping table is needed across processes.
 func (m *Manager) TabIDFromCDPTarget(cdpTargetID string) string {
-	// Hash the CDP target ID to create a stable, shorter tab ID
-	return hashID("tab", cdpTargetID)
+	// Simply prefix the CDP ID - no hashing needed
+	return fmt.Sprintf("tab_%s", cdpTargetID)
+}
+
+// StripTabPrefix removes the "tab_" prefix from a semantic tab ID
+// Returns the raw CDP target ID
+func StripTabPrefix(tabID string) string {
+	const prefix = "tab_"
+	if len(tabID) > len(prefix) && tabID[:len(prefix)] == prefix {
+		return tabID[len(prefix):]
+	}
+	// Already a CDP ID (no prefix)
+	return tabID
 }
 
 // hashID creates a short hash-based ID with the given prefix
