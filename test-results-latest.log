@@ -1,0 +1,232 @@
+=== Manual Test Run ===
+Timestamp: Wed Mar  4 12:00:27 CET 2026
+Git branch: feat/allocation-strategies
+Latest commit: ff9d7a7 refactor(tests): organize manual tests by type (simple, complex scenarios)
+
+=== Test Results ===
+
+--- Test 1: Automated Test Script ---
+Command: ./tests/manual/automated-test.sh
+Start: Wed Mar  4 12:00:27 CET 2026
+🚀 Starting Automated Orchestrator Test...
+
+2026/03/04 12:00:28 INFO 🦀 PinchTab port=9867
+2026/03/04 12:00:28 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 12:00:28 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 12:00:28 INFO dashboard ready url=http://localhost:9867
+✓ Dashboard started (PID: 19173)
+
+Creating instance 1 (headed)...
+2026/03/04 12:00:30 INFO starting instance process id=inst_fb8b8643 profile=work port=9868
+2026/03/04 12:00:30 INFO request requestId="" method=POST path=/instances/launch status=201 ms=5
+✓ Created instance 1: inst_fb8b8643 (port: 9868)
+Creating instance 2 (headless)...
+2026/03/04 12:00:30 INFO starting instance process id=inst_aa336b27 profile=scrape port=9869
+2026/03/04 12:00:30 INFO request requestId="" method=POST path=/instances/launch status=201 ms=2
+✓ Created instance 2: inst_aa336b27 (port: 9869)
+
+2026/03/04 12:00:31 INFO instance ready id=inst_aa336b27 port=9869
+2026/03/04 12:00:31 INFO instance ready id=inst_fb8b8643 port=9868
+Verifying instance list...
+2026/03/04 12:00:32 INFO request requestId="" method=GET path=/instances status=200 ms=0
+✓ 2 instances running
+
+Navigating instance 1 to example.com...
+2026/03/04 12:00:32 INFO request requestId="" method=POST path=/instances/inst_fb8b8643/navigate status=404 ms=0
+jq: error (at <stdin>:1): Cannot index number with string "tabId"
+jq: parse error: Invalid numeric literal at line 1, column 9
+Status: ❌ FAIL (exit code: 5)
+End: Wed Mar  4 12:00:32 CET 2026
+
+--- Test 2: Stress Test (10 instances) ---
+Command: ./tests/manual/stress-test-10-instances.sh
+Start: Wed Mar  4 12:00:37 CET 2026
+🔥 Starting Stress Test (10 Instances)...
+
+2026/03/04 12:00:38 INFO 🦀 PinchTab port=9867
+2026/03/04 12:00:38 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 12:00:38 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 12:00:38 INFO dashboard ready url=http://localhost:9867
+2026/03/04 12:00:38 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 19259)
+
+Creating 10 headless instances...
+2026/03/04 12:00:40 INFO starting instance process id=inst_9c2e2366 profile=stress-1 port=9871
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=2
+   1. inst_9c2e2366        (port: 9871)
+2026/03/04 12:00:40 INFO starting instance process id=inst_3d594c13 profile=stress-2 port=9872
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   2. inst_3d594c13        (port: 9872)
+2026/03/04 12:00:40 INFO starting instance process id=inst_3ef63d80 profile=stress-3 port=9873
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   3. inst_3ef63d80        (port: 9873)
+2026/03/04 12:00:40 INFO starting instance process id=inst_eb8a4b83 profile=stress-4 port=9874
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   4. inst_eb8a4b83        (port: 9874)
+2026/03/04 12:00:40 INFO starting instance process id=inst_aa9e1b42 profile=stress-5 port=9875
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   5. inst_aa9e1b42        (port: 9875)
+2026/03/04 12:00:40 INFO starting instance process id=inst_b13e7ea2 profile=stress-6 port=9876
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   6. inst_b13e7ea2        (port: 9876)
+2026/03/04 12:00:40 INFO starting instance process id=inst_915b6801 profile=stress-7 port=9877
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   7. inst_915b6801        (port: 9877)
+2026/03/04 12:00:40 INFO starting instance process id=inst_142ca27c profile=stress-8 port=9878
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   8. inst_142ca27c        (port: 9878)
+2026/03/04 12:00:40 INFO starting instance process id=inst_482daf24 profile=stress-9 port=9879
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+   9. inst_482daf24        (port: 9879)
+2026/03/04 12:00:40 INFO starting instance process id=inst_4a3f414d profile=stress-10 port=9880
+2026/03/04 12:00:40 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+  10. inst_4a3f414d        (port: 9880)
+✓ Created 10 instances
+
+2026/03/04 12:00:42 INFO instance ready id=inst_482daf24 port=9879
+2026/03/04 12:00:42 INFO instance ready id=inst_142ca27c port=9878
+Navigating all 10 instances concurrently...
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_3ef63d80/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_9c2e2366/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_3d594c13/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_eb8a4b83/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_aa9e1b42/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_b13e7ea2/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_482daf24/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_142ca27c/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_4a3f414d/navigate status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=POST path=/instances/inst_915b6801/navigate status=404 ms=0
+✓ All 10 navigations completed
+
+Verifying all instances still running...
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances status=200 ms=0
+⚠️  Only 12 instances still running (expected 10)
+
+Verifying instance isolation via snapshots...
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_9c2e2366/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_3d594c13/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_3ef63d80/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_eb8a4b83/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_aa9e1b42/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_b13e7ea2/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_915b6801/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_142ca27c/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_482daf24/snapshot status=404 ms=0
+2026/03/04 12:00:43 INFO request requestId="" method=GET path=/instances/inst_4a3f414d/snapshot status=404 ms=0
+✓ 0/10 snapshots successful (instance isolation verified)
+
+Stopping all 10 instances concurrently...
+2026/03/04 12:00:48 INFO instance exited id=inst_482daf24
+2026/03/04 12:00:48 INFO instance exited id=inst_142ca27c
+2026/03/04 12:00:48 INFO instance stopped and removed id=inst_482daf24 profile=stress-9
+2026/03/04 12:00:48 INFO instance stopped and removed id=inst_142ca27c profile=stress-8
+2026/03/04 12:00:48 INFO request requestId="" method=POST path=/instances/inst_142ca27c/stop status=200 ms=5232
+2026/03/04 12:00:48 INFO request requestId="" method=POST path=/instances/inst_482daf24/stop status=200 ms=5215
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_9c2e2366 profile=stress-1
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_9c2e2366/stop status=200 ms=5371
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_3ef63d80 profile=stress-3
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_915b6801 profile=stress-7
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_3ef63d80/stop status=200 ms=5493
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_915b6801/stop status=200 ms=5488
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_eb8a4b83 profile=stress-4
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_eb8a4b83/stop status=200 ms=5490
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_4a3f414d profile=stress-10
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_4a3f414d/stop status=200 ms=5498
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_aa9e1b42 profile=stress-5
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_aa9e1b42/stop status=200 ms=5500
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_b13e7ea2 profile=stress-6
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_b13e7ea2/stop status=200 ms=5501
+2026/03/04 12:00:49 INFO instance stopped and removed id=inst_3d594c13 profile=stress-2
+2026/03/04 12:00:49 INFO request requestId="" method=POST path=/instances/inst_3d594c13/stop status=200 ms=5517
+✓ All instances stopped
+
+Verifying cleanup...
+2026/03/04 12:00:49 INFO request requestId="" method=GET path=/instances status=200 ms=0
+❌ FAILED: 2 instances still running!
+Status: ❌ FAIL (exit code: 1)
+End: Wed Mar  4 12:00:49 CET 2026
+
+2026/03/04 12:00:49 INFO instance exited id=inst_b13e7ea2
+2026/03/04 12:00:49 INFO instance exited id=inst_aa9e1b42
+2026/03/04 12:00:49 INFO instance exited id=inst_915b6801
+2026/03/04 12:00:49 INFO instance exited id=inst_9c2e2366
+2026/03/04 12:00:49 INFO instance exited id=inst_eb8a4b83
+2026/03/04 12:00:49 INFO instance exited id=inst_3ef63d80
+2026/03/04 12:00:49 INFO instance exited id=inst_4a3f414d
+2026/03/04 12:00:49 INFO instance exited id=inst_3d594c13
+--- Test 3: Multi-Agent Isolation Test ---
+Command: ./tests/manual/multi-agent-isolation.sh
+Start: Wed Mar  4 12:00:54 CET 2026
+🤖 Starting Multi-Agent Isolation Test...
+Tests: Cookie isolation, session isolation, concurrent automation
+
+2026/03/04 12:00:54 INFO 🦀 PinchTab port=9867
+2026/03/04 12:00:54 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 12:00:54 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 12:00:54 INFO dashboard ready url=http://localhost:9867
+2026/03/04 12:00:54 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 19612)
+
+Creating instances for 3 agents...
+2026/03/04 12:00:56 INFO starting instance process id=inst_8e24205c profile=agent-a port=9872
+2026/03/04 12:00:56 INFO request requestId="" method=POST path=/instances/launch status=201 ms=3
+2026/03/04 12:00:56 INFO starting instance process id=inst_bd59c973 profile=agent-b port=9873
+2026/03/04 12:00:56 INFO request requestId="" method=POST path=/instances/launch status=201 ms=2
+2026/03/04 12:00:56 INFO starting instance process id=inst_0da10324 profile=agent-c port=9874
+2026/03/04 12:00:56 INFO request requestId="" method=POST path=/instances/launch status=201 ms=1
+  • Agent A: inst_8e24205c
+  • Agent B: inst_bd59c973
+  • Agent C: inst_0da10324
+
+2026/03/04 12:00:58 INFO instance ready id=inst_8e24205c port=9872
+2026/03/04 12:00:58 INFO instance ready id=inst_bd59c973 port=9873
+2026/03/04 12:00:58 INFO health check instances=5 headed=0 headless=5 total_tabs=4
+Agents navigating to different sites simultaneously...
+  % Total    % Received % Xfe    %% Totr Tad  otal  Avel    % ragRece eive Speed % Xferd  Ave % Red  ceivr Timage Se    ed Tim% Xe     peed  Tiferd Tim  me  e  Cur  TimreAverae ge n  t
+  S  Time  Current
+peed                             Time      Time            Ti            Dloadme      CurreUploadnt
+      Tot      al   Sp   ent          Dlo    ad     Upl   oad         Tot   al      SLef  t  Spent   pe      Left  Dloae Sd  Upd
+pee loa 0 d     d Tot 0  
+   0   0       al  0   S  pent  0  0      Le 0 ft        S0  pee  d
+0  0  0        0           00       -0  0      0-:    --    0  :--  0     0 --: 0   ---  -::-- -  0  -:--:    0--: --:--:-- --:-- --: -- ---    0--:-:--:---:- --     0--:--:--     02026/03/04 12:00:59 INFO request requestId="" method=POST path=/instances/inst_8e24205c/navigate status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=POST path=/instances/inst_0da10324/navigate status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=POST path=/instances/inst_bd59c973/navigate status=404 ms=0
+100  100   4100   48      17  00 100   50      101919   1 1000 0    0    19 2  28   9   10  470 4807 55      31   70  7338 08 --:--481:--:-- 9  --: 78--:64--:-- - --- :--:---- ---:--:--:--:-- :-- -1--:-5:--:- 6----66
+:--:-- 16000
+ 16666
+✓ All agents navigated independently
+
+Verifying session/cookie isolation...
+2026/03/04 12:00:59 INFO request requestId="" method=GET path=/instances/inst_8e24205c/snapshot status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=GET path=/instances/inst_bd59c973/snapshot status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=GET path=/instances/inst_0da10324/snapshot status=404 ms=0
+  • Agent A sees: unknown
+  • Agent B sees: unknown
+  • Agent C sees: unknown
+
+⚠️  Some agents may share content
+
+Simulating concurrent agent actions...
+2026/03/04 12:00:59 INFO request requestId="" method=GET path=/instances/inst_bd59c973/snapshot status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=POST path=/instances/inst_0da10324/navigate status=404 ms=0
+2026/03/04 12:00:59 INFO request requestId="" method=POST path=/instances/inst_8e24205c/navigate status=404 ms=0
+✓ Concurrent actions completed without interference
+
+Stopping all agents...
+2026/03/04 12:01:04 INFO instance exited id=inst_8e24205c
+2026/03/04 12:01:04 INFO instance stopped and removed id=inst_8e24205c profile=agent-a
+2026/03/04 12:01:04 INFO request requestId="" method=POST path=/instances/inst_8e24205c/stop status=200 ms=5211
+2026/03/04 12:01:09 INFO instance exited id=inst_bd59c973
+2026/03/04 12:01:09 INFO instance stopped and removed id=inst_bd59c973 profile=agent-b
+2026/03/04 12:01:09 INFO request requestId="" method=POST path=/instances/inst_bd59c973/stop status=200 ms=5180
+2026/03/04 12:01:14 INFO instance stopped and removed id=inst_0da10324 profile=agent-c
+2026/03/04 12:01:14 INFO request requestId="" method=POST path=/instances/inst_0da10324/stop status=200 ms=5176
+✓ All agents stopped
+
+2026/03/04 12:01:14 INFO request requestId="" method=GET path=/instances status=200 ms=0
+❌ FAILED: 2 instances still running!
+Status: ❌ FAIL (exit code: 1)
+End: Wed Mar  4 12:01:14 CET 2026
+
+2026/03/04 12:01:15 INFO instance exited id=inst_0da10324
+2026/03/04 12:01:28 INFO health check instances=2 headed=0 headless=2 total_tabs=2
