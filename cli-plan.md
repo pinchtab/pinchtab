@@ -286,23 +286,44 @@ pinchtab config validate
 ## Status
 
 **Branch:** `feat/cli-refactor` (based on `feat/allocation-strategies`)
-**Phase:** 1 (Planning) ✅
-**Phase:** 1 (Implementation) ✅
 
-### Phase 1 Complete ✅
+### Phase 1: CLI Simplification ✅ Complete
 - [x] Removed all browser control CLI commands (nav, snap, click, type, fill, press, hover, scroll, select, focus, text, screenshot, eval, pdf, quick, tab operations, instance launch/navigate/logs/stop)
 - [x] Kept monitoring commands: help, health, config, profiles, instances, tabs, connect
 - [x] Updated help text with clear guidance to HTTP API and client libraries
 - [x] Simplified cmd_cli.go to ~250 lines (was ~1700)
 - [x] Updated main.go to handle only monitoring commands
 - [x] Updated cmd_cli_test.go with new test suite (15 tests, all passing)
+- [x] Plugin folder removed
+
+**Commit:** `9cae4f5` + `f5187a1`
+
+### Phase 2: Configuration System Expansion ✅ Complete
+- [x] Created config_editor.go with 300+ lines of functionality
+- [x] Implemented `config set <key> <value>` for scalar and nested values
+- [x] Implemented `config patch '<json>'` for object merging
+- [x] Implemented `config show [--format json|yaml]` with dual format support
+- [x] Implemented `config validate` with validation rules
+- [x] Implemented `config init` with proper path resolution
+- [x] Support for config sections:
+  - `server.*` (port, stateDir, profileDir, token, cdpUrl)
+  - `chrome.*` (headless, maxTabs, noRestore)
+  - `orchestrator.*` (strategy, allocationPolicy, instancePortStart/End)
+  - `timeouts.*` (actionSec, navigateSec)
+- [x] Config validation:
+  - Port required
+  - Port range validation (start < end)
+  - Timeout non-negative
+  - Strategy must be: simple, session, explicit
+  - AllocationPolicy must be: fcfs, round_robin, random
+- [x] Support BRIDGE_CONFIG environment variable
+- [x] Comprehensive test suite (18 config tests + 15 CLI tests = 33 total)
 - [x] All tests passing
 - [x] Pre-commit checks passing
 
-**Commit:** `9cae4f5`
+**Commit:** `44215d8`
 
-### What's Next
-Phase 2: Configuration System Expansion
-- Add `config set` and `config patch` commands
-- Support JSON and YAML formats
-- Implement config validation
+### What's Left
+Phase 3: (Optional, deferred)
+- Interactive config mode with `configure --interactive` or `configure --section`
+- This can be added later if needed
