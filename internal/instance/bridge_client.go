@@ -37,11 +37,14 @@ func (bc *BridgeClient) FetchTabs(instanceURL string) ([]bridge.InstanceTab, err
 		return nil, fmt.Errorf("fetch tabs: status %d", resp.StatusCode)
 	}
 
-	var tabs []bridge.InstanceTab
-	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {
+	// Bridge returns {"tabs": [...]}
+	var wrapper struct {
+		Tabs []bridge.InstanceTab `json:"tabs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, fmt.Errorf("decode tabs: %w", err)
 	}
-	return tabs, nil
+	return wrapper.Tabs, nil
 }
 
 // CreateTab creates a new tab on a bridge instance. Returns the tab ID.
