@@ -93,3 +93,11 @@ Thin HTTP wrappers in `cmd/pinchtab/cmd_cli.go`. Each hits `PINCHTAB_URL`.
 - Wait defaults are per-operation, not global — smarter than one-size-fits-all
 - User can always override with `--wait` / `waitFor` param
 - Actions (click/type/fill) don't accept `url` — you need snap first to get refs
+
+## Future: Action commands without prior snapshot
+Actions require refs from a snapshot. Current approach: explicit snap → act → snap loop.
+Revisit later — options considered:
+- A: Auto-snap before action if no cached snapshot
+- B: Support `--selector` for CSS-based actions (no snapshot needed)
+- C: Natural language actions (`pinchtab click "Sign In"`) — find + act combo
+Decision: accept explicit snap→act for now, revisit when usage patterns are clearer.
