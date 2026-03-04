@@ -1,0 +1,73 @@
+=== Running Updated Test Scripts ===
+Timestamp: Wed Mar  4 13:09:53 CET 2026
+Git commit: 435de4f refactor(tests): update test scripts to use tab creation + find endpoint
+
+--- Test 1: Automated Test ---
+🚀 Starting Automated Orchestrator Test...
+
+2026/03/04 13:09:53 INFO 🦀 PinchTab port=9867
+2026/03/04 13:09:53 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:09:53 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:09:53 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:09:53 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 24015)
+
+Creating instance 1 (headed)...
+✓ Created instance 1: null (port: null)
+Creating instance 2 (headless)...
+✓ Created instance 2: null (port: null)
+
+Verifying instance list...
+✓ 2 instances running
+
+Creating tab in instance 1...
+jq: parse error: Invalid numeric literal at line 1, column 7
+Status: ❌ FAIL (exit 5)
+
+--- Test 2: Stress Test (10 instances) ---
+🔥 Starting Stress Test (10 Instances)...
+
+2026/03/04 13:10:03 INFO 🦀 PinchTab port=9867
+2026/03/04 13:10:03 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:10:03 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:10:03 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:10:03 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 24055)
+
+Creating 10 headless instances...
+   1. inst_0deb89c9        (port: 9876)
+   2. inst_fab88657        (port: 9877)
+   3. inst_deb264a1        (port: 9878)
+   4. inst_315450dc        (port: 9879)
+   5. inst_d6c6f6d5        (port: 9880)
+   6. inst_32539cfb        (port: 9881)
+   7. inst_1af7f0aa        (port: 9882)
+   8. inst_3d054f1c        (port: 9883)
+   9. inst_c94d4645        (port: 9884)
+  10. inst_88624d24        (port: 9885)
+✓ Created 10 instances
+
+Creating tabs in all 10 instances concurrently...
+jq: parse error: Invalid numeric literal at line 1, column 7
+Status: ❌ FAIL (exit 5)
+
+--- Test 3: Multi-Agent Isolation Test ---
+🤖 Starting Multi-Agent Isolation Test...
+Tests: Tab isolation, find endpoint independence, concurrent automation
+
+2026/03/04 13:10:14 INFO 🦀 PinchTab port=9867
+2026/03/04 13:10:14 INFO installed pinchtab binary path=/Users/data/.pinchtab/bin/pinchtab
+2026/03/04 13:10:14 INFO dashboard auto-launch disabled hint="set PINCHTAB_AUTO_LAUNCH=1 to enable"
+2026/03/04 13:10:14 INFO dashboard ready url=http://localhost:9867
+2026/03/04 13:10:14 ERROR server err="listen tcp 127.0.0.1:9867: bind: address already in use"
+✓ Dashboard started (PID: 24265)
+
+Creating instances for 3 agents...
+  • Agent A: inst_06c63e71 (port: 9868)
+  • Agent B: inst_23f98348 (port: 9869)
+  • Agent C: inst_689a8a70 (port: 9870)
+
+Agents creating tabs...
+jq: parse error: Invalid numeric literal at line 1, column 7
+Status: ❌ FAIL (exit 5)
+

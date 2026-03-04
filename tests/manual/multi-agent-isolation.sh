@@ -20,20 +20,23 @@ echo ""
 # Create 3 instances for 3 different agents
 echo "Creating instances for 3 agents..."
 
-AGENT_A=$(curl -s -X POST http://localhost:9867/instances/launch \
+INST_A=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"agent-a","headless":true}' | jq -r '.id')
-PORT_A=9868
+  -d '{"name":"agent-a","headless":true}')
+AGENT_A=$(echo $INST_A | jq -r '.id // "unknown"')
+PORT_A=$(echo $INST_A | jq -r '.port // "unknown"')
 
-AGENT_B=$(curl -s -X POST http://localhost:9867/instances/launch \
+INST_B=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"agent-b","headless":true}' | jq -r '.id')
-PORT_B=9869
+  -d '{"name":"agent-b","headless":true}')
+AGENT_B=$(echo $INST_B | jq -r '.id // "unknown"')
+PORT_B=$(echo $INST_B | jq -r '.port // "unknown"')
 
-AGENT_C=$(curl -s -X POST http://localhost:9867/instances/launch \
+INST_C=$(curl -s -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"agent-c","headless":true}' | jq -r '.id')
-PORT_C=9870
+  -d '{"name":"agent-c","headless":true}')
+AGENT_C=$(echo $INST_C | jq -r '.id // "unknown"')
+PORT_C=$(echo $INST_C | jq -r '.port // "unknown"')
 
 echo "  • Agent A: $AGENT_A (port: $PORT_A)"
 echo "  • Agent B: $AGENT_B (port: $PORT_B)"
@@ -46,17 +49,17 @@ sleep 2
 echo "Agents creating tabs..."
 TAB_A=$(curl -s -X POST "http://localhost:$PORT_A/tabs" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq -r '.id')
+  -d '{}' 2>/dev/null | jq -r '.id // "unknown"' 2>/dev/null || echo "unknown")
 echo "  • Agent A tab: $TAB_A"
 
 TAB_B=$(curl -s -X POST "http://localhost:$PORT_B/tabs" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq -r '.id')
+  -d '{}' 2>/dev/null | jq -r '.id // "unknown"' 2>/dev/null || echo "unknown")
 echo "  • Agent B tab: $TAB_B"
 
 TAB_C=$(curl -s -X POST "http://localhost:$PORT_C/tabs" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq -r '.id')
+  -d '{}' 2>/dev/null | jq -r '.id // "unknown"' 2>/dev/null || echo "unknown")
 echo "  • Agent C tab: $TAB_C"
 echo ""
 

@@ -45,8 +45,8 @@ for i in {0..9}; do
   PORT=${PORTS[$i]}
   TAB=$(curl -s -X POST "http://localhost:$PORT/tabs" \
     -H "Content-Type: application/json" \
-    -d '{}')
-  TAB_ID=$(echo $TAB | jq -r '.id')
+    -d '{}' 2>/dev/null || echo '{}')
+  TAB_ID=$(echo $TAB | jq -r '.id // "unknown"' 2>/dev/null || echo "unknown")
   TAB_IDS+=($TAB_ID)
   printf "  Instance $((i+1)): tab $TAB_ID\n"
 done

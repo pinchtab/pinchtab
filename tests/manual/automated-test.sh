@@ -48,18 +48,18 @@ echo ""
 
 # Create tab in instance 1
 echo "Creating tab in instance 1..."
-TAB1=$(curl -s -X POST "http://localhost:9868/tabs" \
+TAB1=$(curl -s -X POST "http://localhost:$INST1_PORT/tabs" \
   -H "Content-Type: application/json" \
   -d '{}')
-TAB1_ID=$(echo $TAB1 | jq -r '.id')
+TAB1_ID=$(echo $TAB1 | jq -r '.id // "unknown"')
 echo "✓ Created tab in instance 1: $TAB1_ID"
 
 # Create tab in instance 2
 echo "Creating tab in instance 2..."
-TAB2=$(curl -s -X POST "http://localhost:9869/tabs" \
+TAB2=$(curl -s -X POST "http://localhost:$INST2_PORT/tabs" \
   -H "Content-Type: application/json" \
   -d '{}')
-TAB2_ID=$(echo $TAB2 | jq -r '.id')
+TAB2_ID=$(echo $TAB2 | jq -r '.id // "unknown"')
 echo "✓ Created tab in instance 2: $TAB2_ID"
 echo ""
 
@@ -76,18 +76,18 @@ echo ""
 
 # Use find endpoint in instance 1
 echo "Using find endpoint in instance 1..."
-FIND1=$(curl -s -X POST "http://localhost:9868/find" \
+FIND1=$(curl -s -X POST "http://localhost:$INST1_PORT/find" \
   -H "Content-Type: application/json" \
   -d '{"text":"example"}')
-FIND1_RESULT=$(echo $FIND1 | jq -r '.refs | length')
+FIND1_RESULT=$(echo $FIND1 | jq -r '.refs | length // 0')
 echo "✓ Find endpoint returned $FIND1_RESULT results for instance 1"
 
 # Use find endpoint in instance 2
 echo "Using find endpoint in instance 2..."
-FIND2=$(curl -s -X POST "http://localhost:9869/find" \
+FIND2=$(curl -s -X POST "http://localhost:$INST2_PORT/find" \
   -H "Content-Type: application/json" \
   -d '{"text":"example"}')
-FIND2_RESULT=$(echo $FIND2 | jq -r '.refs | length')
+FIND2_RESULT=$(echo $FIND2 | jq -r '.refs | length // 0')
 echo "✓ Find endpoint returned $FIND2_RESULT results for instance 2"
 echo ""
 
