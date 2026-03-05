@@ -39,6 +39,10 @@ type RuntimeConfig struct {
 	NavigateTimeout   time.Duration
 	ShutdownTimeout   time.Duration
 	WaitNavDelay      time.Duration
+
+	// Orchestrator strategy settings (dashboard/orchestrator mode only).
+	Strategy         string // Allocation strategy: simple, session, explicit (default: "default")
+	AllocationPolicy string // Instance selection policy: fcfs, round_robin, random (default: "fcfs")
 }
 
 func envOr(key, fallback string) string {
@@ -222,6 +226,10 @@ type FileConfig struct {
 	MaxTabs           *int   `json:"maxTabs,omitempty"`
 	TimeoutSec        int    `json:"timeoutSec,omitempty"`
 	NavigateSec       int    `json:"navigateSec,omitempty"`
+
+	// Orchestrator strategy settings.
+	Strategy         string `json:"strategy,omitempty"`         // simple, session, explicit
+	AllocationPolicy string `json:"allocationPolicy,omitempty"` // fcfs, round_robin, random
 }
 
 func Load() *RuntimeConfig {
@@ -249,6 +257,8 @@ func Load() *RuntimeConfig {
 		NoAnimations:      envBoolOrMigrate("PINCHTAB_NO_ANIMATIONS", "BRIDGE_NO_ANIMATIONS", false),
 		StealthLevel:      envOrMigrate("PINCHTAB_STEALTH", "BRIDGE_STEALTH", "light"),
 		TabEvictionPolicy: envOr("PINCHTAB_TAB_EVICTION_POLICY", "reject"),
+		Strategy:          envOr("PINCHTAB_STRATEGY", "default"),
+		AllocationPolicy:  envOr("PINCHTAB_ALLOCATION_POLICY", "fcfs"),
 		ActionTimeout:     30 * time.Second,
 		NavigateTimeout:   60 * time.Second,
 		ShutdownTimeout:   10 * time.Second,

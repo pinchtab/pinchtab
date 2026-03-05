@@ -12,6 +12,9 @@ import (
 
 // proxyTabRequest is a generic handler that proxies requests to the instance
 // that owns the tab specified in the path. Works for any /tabs/{id}/* route.
+//
+// Uses the instance Manager's Locator for O(1) cached lookups instead of
+// the old O(n×m) search across all instances.
 func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
@@ -19,10 +22,34 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Try the decomposed Locator first (O(1) cache, O(n) bridge query fallback).
+	if o.instanceMgr != nil {
+		inst, err := o.instanceMgr.FindInstanceByTabID(tabID)
+		if err == nil {
+			targetURL := &url.URL{
+				Scheme:   "http",
+				Host:     net.JoinHostPort("localhost", inst.Port),
+				Path:     r.URL.Path,
+				RawQuery: r.URL.RawQuery,
+			}
+			o.proxyToURL(w, r, targetURL)
+			return
+		}
+		// Locator miss — fall through to legacy lookup which handles
+		// CDP target ID → hash-based tab ID translation via idMgr.
+	}
+
+	// Legacy lookup: queries /screencast/tabs and translates CDP target IDs
+	// to hash-based tab IDs via idMgr.TabIDFromCDPTarget().
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
+	}
+
+	// Cache the discovered mapping for future O(1) lookups.
+	if o.instanceMgr != nil {
+		o.instanceMgr.Locator.Register(tabID, inst.ID)
 	}
 
 	targetURL := &url.URL{
