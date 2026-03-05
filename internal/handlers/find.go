@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -14,12 +15,15 @@ import (
 )
 
 type findRequest struct {
-	Query     string  `json:"query"`
-	TabID     string  `json:"tabId,omitempty"`
-	URL       string  `json:"url,omitempty"`
-	WaitFor   string  `json:"waitFor,omitempty"`
-	Threshold float64 `json:"threshold,omitempty"`
-	TopK      int     `json:"topK,omitempty"`
+	Query           string  `json:"query"`
+	TabID           string  `json:"tabId,omitempty"`
+	URL             string  `json:"url,omitempty"`
+	WaitFor         string  `json:"waitFor,omitempty"`
+	Threshold       float64 `json:"threshold,omitempty"`
+	TopK            int     `json:"topK,omitempty"`
+	LexicalWeight   float64 `json:"lexicalWeight,omitempty"`
+	EmbeddingWeight float64 `json:"embeddingWeight,omitempty"`
+	Explain         bool    `json:"explain,omitempty"`
 }
 
 type findResponse struct {
@@ -62,6 +66,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Query = strings.TrimSpace(req.Query)
 	if req.Query == "" {
 		web.Error(w, 400, fmt.Errorf("missing required field 'query'"))
 		return
@@ -112,8 +117,11 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 	result, err := h.Matcher.Find(r.Context(), req.Query, descs, semantic.FindOptions{
-		Threshold: req.Threshold,
-		TopK:      req.TopK,
+		Threshold:       req.Threshold,
+		TopK:            req.TopK,
+		LexicalWeight:   req.LexicalWeight,
+		EmbeddingWeight: req.EmbeddingWeight,
+		Explain:         req.Explain,
 	})
 	if err != nil {
 		web.Error(w, 500, fmt.Errorf("matcher error: %w", err))
