@@ -4,15 +4,52 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
+
+// validateDownloadURL blocks file://, internal hosts, private IPs, and cloud metadata.
+// Only public http/https URLs are allowed.
+func validateDownloadURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL")
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("only http/https schemes are allowed")
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return fmt.Errorf("internal or blocked host")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return fmt.Errorf("could not resolve host")
+	}
+
+	for _, ip := range ips {
+		if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return fmt.Errorf("private/internal IP blocked")
+		}
+	}
+
+	return nil
+}
 
 // HandleDownload fetches a URL using the browser's session (cookies, stealth)
 // and returns the content. This preserves authentication and fingerprint.
@@ -22,6 +59,11 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	dlURL := r.URL.Query().Get("url")
 	if dlURL == "" {
 		web.Error(w, 400, fmt.Errorf("url parameter required"))
+		return
+	}
+
+	if err := validateDownloadURL(dlURL); err != nil {
+		web.Error(w, 400, fmt.Errorf("unsafe URL: %w", err))
 		return
 	}
 
