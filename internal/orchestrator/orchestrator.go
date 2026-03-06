@@ -29,6 +29,20 @@ func envWithFallback(newKey, oldKey string) string {
 	return os.Getenv(oldKey)
 }
 
+func envBoolWithFallback(newKey, oldKey string, fallback bool) bool {
+	v := strings.TrimSpace(strings.ToLower(envWithFallback(newKey, oldKey)))
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	case "":
+		return fallback
+	default:
+		return fallback
+	}
+}
+
 // InstanceEvent is emitted when instance state changes.
 type InstanceEvent struct {
 	Type     string           `json:"type"` // "instance.started", "instance.stopped", "instance.error"
@@ -47,6 +61,7 @@ type Orchestrator struct {
 	mu             sync.RWMutex
 	client         *http.Client
 	childAuthToken string
+	allowEvaluate  bool
 	portAllocator  *PortAllocator
 	idMgr          *idutil.Manager
 	eventHandlers  []EventHandler
@@ -134,6 +149,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		// See: internal/orchestrator/health.go (monitor), internal/bridge/init.go (InitChrome)
 		client:         &http.Client{Timeout: 60 * time.Second},
 		childAuthToken: envWithFallback("PINCHTAB_TOKEN", "BRIDGE_TOKEN"),
+		allowEvaluate:  envBoolWithFallback("PINCHTAB_ALLOW_EVALUATE", "BRIDGE_ALLOW_EVALUATE", false),
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          idutil.NewManager(),
 	}

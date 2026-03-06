@@ -95,6 +95,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	_ = os.Unsetenv("CDP_URL")
 	_ = os.Unsetenv("PINCHTAB_TOKEN")
 	_ = os.Unsetenv("BRIDGE_TOKEN")
+	_ = os.Unsetenv("PINCHTAB_ALLOW_EVALUATE")
+	_ = os.Unsetenv("BRIDGE_ALLOW_EVALUATE")
 
 	cfg := Load()
 	if cfg.Port != "9867" {
@@ -103,26 +105,44 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.Bind != "127.0.0.1" {
 		t.Errorf("default Bind = %v, want 127.0.0.1", cfg.Bind)
 	}
+	if cfg.AllowEvaluate {
+		t.Errorf("default AllowEvaluate = %v, want false", cfg.AllowEvaluate)
+	}
 }
 
 func TestLoadConfigEnvOverrides(t *testing.T) {
 	_ = os.Setenv("PINCHTAB_PORT", "1234")
-	defer func() { _ = os.Unsetenv("PINCHTAB_PORT") }()
+	_ = os.Setenv("PINCHTAB_ALLOW_EVALUATE", "1")
+	defer func() {
+		_ = os.Unsetenv("PINCHTAB_PORT")
+		_ = os.Unsetenv("PINCHTAB_ALLOW_EVALUATE")
+	}()
 
 	cfg := Load()
 	if cfg.Port != "1234" {
 		t.Errorf("env Port = %v, want 1234", cfg.Port)
 	}
+	if !cfg.AllowEvaluate {
+		t.Errorf("env AllowEvaluate = %v, want true", cfg.AllowEvaluate)
+	}
 }
 
 func TestLegacyBridgeEnvFallback(t *testing.T) {
 	_ = os.Unsetenv("PINCHTAB_PORT")
+	_ = os.Unsetenv("PINCHTAB_ALLOW_EVALUATE")
 	_ = os.Setenv("BRIDGE_PORT", "5555")
-	defer func() { _ = os.Unsetenv("BRIDGE_PORT") }()
+	_ = os.Setenv("BRIDGE_ALLOW_EVALUATE", "true")
+	defer func() {
+		_ = os.Unsetenv("BRIDGE_PORT")
+		_ = os.Unsetenv("BRIDGE_ALLOW_EVALUATE")
+	}()
 
 	cfg := Load()
 	if cfg.Port != "5555" {
 		t.Errorf("legacy fallback Port = %v, want 5555", cfg.Port)
+	}
+	if !cfg.AllowEvaluate {
+		t.Errorf("legacy fallback AllowEvaluate = %v, want true", cfg.AllowEvaluate)
 	}
 }
 
@@ -159,6 +179,7 @@ func TestLoadConfigFile(t *testing.T) {
 	// Create a dummy config file
 	configData := `{
 		"port": "8888",
+		"allowEvaluate": true,
 		"headless": false,
 		"timeoutSec": 60
 	}`
@@ -169,6 +190,9 @@ func TestLoadConfigFile(t *testing.T) {
 	cfg := Load()
 	if cfg.Port != "8888" {
 		t.Errorf("file Port = %v, want 8888", cfg.Port)
+	}
+	if cfg.AllowEvaluate != true {
+		t.Errorf("file AllowEvaluate = %v, want true", cfg.AllowEvaluate)
 	}
 	if cfg.Headless != false {
 		t.Errorf("file Headless = %v, want false", cfg.Headless)

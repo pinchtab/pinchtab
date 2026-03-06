@@ -211,3 +211,29 @@ func TestRoutesRegistration(t *testing.T) {
 		}
 	}
 }
+
+func TestEvaluateRouteNotRegisteredByDefault(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest("POST", "/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("expected 404 when evaluate is disabled, got %d", w.Code)
+	}
+}
+
+func TestEvaluateRouteRegisteredWhenEnabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest("POST", "/evaluate", bytes.NewReader([]byte(`not json`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 400 {
+		t.Fatalf("expected evaluate route to be active, got %d", w.Code)
+	}
+}
