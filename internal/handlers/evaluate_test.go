@@ -9,7 +9,7 @@ import (
 )
 
 func TestHandleEvaluate_InvalidJSON(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/evaluate", bytes.NewReader([]byte(`not json`)))
 	w := httptest.NewRecorder()
 	h.HandleEvaluate(w, req)
@@ -19,7 +19,7 @@ func TestHandleEvaluate_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleTabEvaluate_MissingTabID(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/tabs//evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
 	w := httptest.NewRecorder()
 	h.HandleTabEvaluate(w, req)
@@ -29,7 +29,7 @@ func TestHandleTabEvaluate_MissingTabID(t *testing.T) {
 }
 
 func TestHandleTabEvaluate_TabIDMismatch(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/tabs/tab_abc/evaluate", bytes.NewReader([]byte(`{"tabId":"tab_other","expression":"1+1"}`)))
 	req.SetPathValue("id", "tab_abc")
 	w := httptest.NewRecorder()
@@ -40,12 +40,33 @@ func TestHandleTabEvaluate_TabIDMismatch(t *testing.T) {
 }
 
 func TestHandleTabEvaluate_NoTab(t *testing.T) {
-	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/tabs/tab_abc/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
 	req.SetPathValue("id", "tab_abc")
 	w := httptest.NewRecorder()
 	h.HandleTabEvaluate(w, req)
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleEvaluate_Disabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
+	w := httptest.NewRecorder()
+	h.HandleEvaluate(w, req)
+	if w.Code != 403 {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestHandleTabEvaluate_Disabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tabs/tab_abc/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
+	req.SetPathValue("id", "tab_abc")
+	w := httptest.NewRecorder()
+	h.HandleTabEvaluate(w, req)
+	if w.Code != 403 {
+		t.Errorf("expected 403, got %d", w.Code)
 	}
 }

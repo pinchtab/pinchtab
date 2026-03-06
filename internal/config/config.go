@@ -18,6 +18,7 @@ type RuntimeConfig struct {
 	InstancePortEnd   int // Ending port for instances (default 9968)
 	CdpURL            string
 	Token             string
+	AllowEvaluate     bool
 	StateDir          string
 	Headless          bool
 	NoRestore         bool
@@ -214,6 +215,7 @@ type FileConfig struct {
 	InstancePortEnd   *int   `json:"instancePortEnd,omitempty"`
 	CdpURL            string `json:"cdpUrl,omitempty"`
 	Token             string `json:"token,omitempty"`
+	AllowEvaluate     *bool  `json:"allowEvaluate,omitempty"`
 	StateDir          string `json:"stateDir"`
 	ProfileDir        string `json:"profileDir"`
 	Headless          *bool  `json:"headless,omitempty"`
@@ -231,6 +233,7 @@ func Load() *RuntimeConfig {
 		InstancePortEnd:   envIntOr("INSTANCE_PORT_END", 9968),
 		CdpURL:            os.Getenv("CDP_URL"),
 		Token:             envMigrate("PINCHTAB_TOKEN", "BRIDGE_TOKEN"),
+		AllowEvaluate:     envBoolOrMigrate("PINCHTAB_ALLOW_EVALUATE", "BRIDGE_ALLOW_EVALUATE", false),
 		StateDir:          envOrMigrate("PINCHTAB_STATE_DIR", "BRIDGE_STATE_DIR", userConfigDir()),
 		Headless:          envBoolOrMigrate("PINCHTAB_HEADLESS", "BRIDGE_HEADLESS", true),
 		NoRestore:         envBoolOrMigrate("PINCHTAB_NO_RESTORE", "BRIDGE_NO_RESTORE", false),
@@ -279,6 +282,9 @@ func Load() *RuntimeConfig {
 	}
 	if fc.Token != "" && !envMigrateIsSet("PINCHTAB_TOKEN", "BRIDGE_TOKEN") {
 		cfg.Token = fc.Token
+	}
+	if fc.AllowEvaluate != nil && !envMigrateIsSet("PINCHTAB_ALLOW_EVALUATE", "BRIDGE_ALLOW_EVALUATE") {
+		cfg.AllowEvaluate = *fc.AllowEvaluate
 	}
 	if fc.StateDir != "" && !envMigrateIsSet("PINCHTAB_STATE_DIR", "BRIDGE_STATE_DIR") {
 		cfg.StateDir = fc.StateDir
@@ -372,6 +378,7 @@ func HandleConfigCommand(cfg *RuntimeConfig) {
 		fmt.Printf("  Port:       %s\n", cfg.Port)
 		fmt.Printf("  CDP URL:    %s\n", cfg.CdpURL)
 		fmt.Printf("  Token:      %s\n", MaskToken(cfg.Token))
+		fmt.Printf("  Eval JS:    %v\n", cfg.AllowEvaluate)
 		fmt.Printf("  State Dir:  %s\n", cfg.StateDir)
 		fmt.Printf("  Profile:    %s\n", cfg.ProfileDir)
 		fmt.Printf("  Headless:   %v\n", cfg.Headless)

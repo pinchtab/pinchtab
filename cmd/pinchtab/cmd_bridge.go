@@ -39,6 +39,9 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 		})
 	}
 	h.RegisterRoutes(mux, doShutdown)
+	if cfg.AllowEvaluate && cfg.Token == "" {
+		slog.Warn("evaluate endpoint enabled without API token", "hint", "set PINCHTAB_TOKEN for authenticated access")
+	}
 
 	// HTTP server
 	server := &http.Server{

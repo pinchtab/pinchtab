@@ -95,7 +95,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/action", h.HandleTabAction)
 	mux.HandleFunc("POST /tabs/{id}/actions", h.HandleTabActions)
 	mux.HandleFunc("GET /tabs/{id}/text", h.HandleTabText)
-	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
 	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
@@ -112,7 +111,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /action", h.HandleAction)
 	mux.HandleFunc("POST /actions", h.HandleActions)
 	mux.HandleFunc("POST /macro", h.HandleMacro)
-	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("POST /tab", h.HandleTab)
 	mux.HandleFunc("POST /tab/lock", h.HandleTabLock)
 	mux.HandleFunc("POST /tab/unlock", h.HandleTabUnlock)
@@ -131,6 +129,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /find", h.HandleFind)
 	mux.HandleFunc("GET /screencast", h.HandleScreencast)
 	mux.HandleFunc("GET /screencast/tabs", h.HandleScreencastAll)
+	if h.Config != nil && h.Config.AllowEvaluate {
+		mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
+		mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
+	}
 	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(assets.WelcomeHTML))

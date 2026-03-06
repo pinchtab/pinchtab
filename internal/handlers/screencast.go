@@ -2,12 +2,10 @@ package handlers
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,22 +19,6 @@ import (
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
-	// WebSocket auth: check query param token or Authorization header.
-	// WebSocket clients typically can't set custom headers during the
-	// upgrade handshake, so we accept the token as a query parameter.
-	if h.Config.Token != "" {
-		qToken := r.URL.Query().Get("token")
-		authHeader := r.Header.Get("Authorization")
-		provided := strings.TrimPrefix(authHeader, "Bearer ")
-		if provided == "" {
-			provided = qToken
-		}
-		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(h.Config.Token)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-	}
-
 	tabID := r.URL.Query().Get("tabId")
 	if tabID == "" {
 		targets, err := h.Bridge.ListTargets()

@@ -38,6 +38,7 @@ Complete reference for all PinchTab environment variables and configuration opti
 | Variable | Default | Description |
 |---|---|---|
 | `BRIDGE_TOKEN` | Disabled | API authentication token (if set, all requests must include `Authorization: Bearer {token}`) |
+| `BRIDGE_ALLOW_EVALUATE` | `false` | Enable `POST /evaluate` and `POST /tabs/{id}/evaluate` endpoints (disabled by default) |
 
 ### Debugging & Logging
 
@@ -116,6 +117,16 @@ Then all API requests must include:
 ```bash
 curl -H "Authorization: Bearer my-secret-token" http://localhost:9867/health
 ```
+
+### Enable JavaScript Evaluate Endpoint (Opt-in)
+
+```bash
+BRIDGE_TOKEN=my-secret-token \
+BRIDGE_ALLOW_EVALUATE=true \
+./pinchtab
+```
+
+By default, evaluate endpoints are not registered.
 
 ### Multiple Settings
 

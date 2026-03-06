@@ -89,13 +89,16 @@ func runDashboard(cfg *config.RuntimeConfig) {
 
 	proxyEndpoints := []string{
 		"GET /snapshot", "GET /screenshot", "GET /text",
-		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /navigate", "POST /action", "POST /actions",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",
 		"GET /download", "POST /upload",
 		"GET /stealth/status", "POST /fingerprint/rotate",
 		"GET /screencast", "GET /screencast/tabs",
 		"POST /find", "POST /macro",
+	}
+	if cfg.AllowEvaluate {
+		proxyEndpoints = append(proxyEndpoints, "POST /evaluate")
 	}
 	for _, ep := range proxyEndpoints {
 		endpoint := ep
@@ -112,6 +115,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	}
 
 	handler := handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)))
+	if cfg.AllowEvaluate && cfg.Token == "" {
+		slog.Warn("evaluate endpoint enabled without API token", "hint", "set PINCHTAB_TOKEN for authenticated access")
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Bind + ":" + dashPort,

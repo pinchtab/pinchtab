@@ -49,13 +49,24 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cfg.Token != "" {
 			auth := r.Header.Get("Authorization")
-			if auth == "" {
+			qToken := r.URL.Query().Get("token")
+
+			if auth == "" && qToken == "" {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="missing_token"`)
 				web.ErrorCode(w, 401, "missing_token", "unauthorized", false, nil)
 				return
 			}
-			expected := "Bearer " + cfg.Token
-			if subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) != 1 {
+
+			provided := strings.TrimPrefix(auth, "Bearer ")
+			if provided == auth { // "Bearer " prefix was not present
+				if qToken != "" {
+					provided = qToken
+				} else {
+					provided = auth
+				}
+			}
+
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.Token)) != 1 {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 				web.ErrorCode(w, 401, "bad_token", "unauthorized", false, nil)
 				return
