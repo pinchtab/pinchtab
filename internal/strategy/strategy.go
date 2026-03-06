@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/pinchtab/pinchtab/internal/orchestrator"
 )
 
 // Orchestrator is the interface strategies need from the orchestrator.
@@ -14,6 +16,13 @@ import (
 type Orchestrator interface {
 	RegisterHandlers(mux *http.ServeMux)
 	FirstRunningURL() string
+}
+
+// OrchestratorAware is implemented by strategies that need a reference to
+// the concrete orchestrator. The dashboard checks for this interface after
+// constructing a strategy and injects the orchestrator before Start().
+type OrchestratorAware interface {
+	SetOrchestrator(o *orchestrator.Orchestrator)
 }
 
 // Strategy defines a browser allocation approach.

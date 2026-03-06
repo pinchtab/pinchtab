@@ -18,6 +18,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 	"github.com/pinchtab/pinchtab/internal/web"
 
@@ -73,10 +74,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 			slog.Warn("unknown strategy, falling back to default", "strategy", cfg.Strategy, "err", err)
 		} else {
 			// Inject orchestrator dependency.
-			type orchSetter interface {
-				SetOrchestrator(o *orchestrator.Orchestrator)
-			}
-			if setter, ok := strat.(orchSetter); ok {
+			if setter, ok := strat.(strategy.OrchestratorAware); ok {
 				setter.SetOrchestrator(orch)
 			}
 			strat.RegisterRoutes(mux)
@@ -218,69 +216,6 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	}
 }
 
-// proxyRequest forwards an HTTP request to a target URL.
-// For WebSocket upgrades (screencast), it does a WebSocket proxy.
-func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
-
-	if isWebSocketUpgrade(r) {
-		handlers.ProxyWebSocket(w, r, targetURL)
-		return
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
-		return
-	}
-
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			proxyReq.Header.Add(k, v)
-		}
-	}
-
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			_, _ = w.Write(buf[:n])
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
-		if err != nil {
-			break
-		}
-	}
-}
-
-func isWebSocketUpgrade(r *http.Request) bool {
-	for _, v := range r.Header["Upgrade"] {
-		if strings.EqualFold(v, "websocket") {
-			return true
-		}
-	}
-	return false
-}
-
 // periodicHealthCheck logs instance and Chrome process status every 30 seconds
 func periodicHealthCheck(orch *orchestrator.Orchestrator) {
 	ticker := time.NewTicker(30 * time.Second)
@@ -327,7 +262,7 @@ func registerDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestra
 			web.JSON(w, 200, map[string]any{"tabs": []any{}})
 			return
 		}
-		proxyRequest(w, r, target+"/tabs")
+		proxy.HTTP(w, r, target+"/tabs")
 	})
 
 	proxyEndpoints := []string{
@@ -349,7 +284,7 @@ func registerDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestra
 				return
 			}
 			path := r.URL.Path
-			proxyRequest(w, r, target+path)
+			proxy.HTTP(w, r, target+path)
 		})
 	}
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -25,6 +26,7 @@ import (
 const (
 	defaultMaxRestarts = 3
 	defaultInitBackoff = 2 * time.Second
+	defaultMaxBackoff  = 60 * time.Second
 	defaultStableAfter = 5 * time.Minute
 	defaultProfileName = "default"
 	healthPollInterval = 500 * time.Millisecond
@@ -41,6 +43,7 @@ func init() {
 type AutorestartConfig struct {
 	MaxRestarts int           // Max consecutive restarts before giving up (0 = use default 3)
 	InitBackoff time.Duration // Initial backoff between restarts (0 = use default 2s)
+	MaxBackoff  time.Duration // Maximum backoff cap (0 = use default 60s)
 	StableAfter time.Duration // Reset counter after running this long (0 = use default 5m)
 	ProfileName string        // Profile to launch (empty = "default")
 	Headless    bool          // Chrome headless mode
@@ -80,6 +83,9 @@ func New(cfg AutorestartConfig) *Strategy {
 	}
 	if cfg.InitBackoff <= 0 {
 		cfg.InitBackoff = defaultInitBackoff
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = defaultMaxBackoff
 	}
 	if cfg.StableAfter <= 0 {
 		cfg.StableAfter = defaultStableAfter
@@ -140,17 +146,14 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	s.orch.RegisterHandlers(mux)
 
 	shorthandRoutes := []string{
-		"POST /navigate", "GET /navigate",
 		"GET /snapshot", "GET /screenshot", "GET /text",
-		"GET /pdf", "POST /pdf",
-		"POST /action", "POST /actions", "POST /evaluate",
-		"POST /find",
+		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",
 		"GET /download", "POST /upload",
-		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /stealth/status", "POST /fingerprint/rotate",
 		"GET /screencast", "GET /screencast/tabs",
-		"POST /macro",
+		"POST /find", "POST /macro",
 	}
 	for _, route := range shorthandRoutes {
 		mux.HandleFunc(route, s.proxyToManaged)
@@ -260,6 +263,9 @@ func (s *Strategy) handleCrash(ctx context.Context, crashedID string) {
 	count := s.restartCount
 	maxRestarts := s.config.MaxRestarts
 	backoff := s.config.InitBackoff * time.Duration(1<<uint(count-1))
+	if backoff > s.config.MaxBackoff {
+		backoff = s.config.MaxBackoff
+	}
 	s.mu.Unlock()
 
 	if count > maxRestarts {
@@ -394,7 +400,7 @@ func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 503, err)
 		return
 	}
-	proxyHTTP(w, r, target+r.URL.Path)
+	proxy.HTTP(w, r, target+r.URL.Path)
 }
 
 // ensureRunning returns the URL of the managed instance if running.
@@ -414,56 +420,9 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
-	proxyHTTP(w, r, target+"/tabs")
+	proxy.HTTP(w, r, target+"/tabs")
 }
 
 func (s *Strategy) handleStatus(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, s.State())
-}
-
-// proxyHTTP forwards a request to the target URL.
-func proxyHTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
-		return
-	}
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			proxyReq.Header.Add(k, v)
-		}
-	}
-
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			_, _ = w.Write(buf[:n])
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
-		if readErr != nil {
-			break
-		}
-	}
 }

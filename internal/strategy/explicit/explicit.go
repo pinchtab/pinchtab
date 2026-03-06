@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -64,7 +65,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
 		return
 	}
-	proxyHTTP(w, r, target+r.URL.Path)
+	proxy.HTTP(w, r, target+r.URL.Path)
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
@@ -73,51 +74,5 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
-	proxyHTTP(w, r, target+"/tabs")
-}
-
-func proxyHTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
-
-	client := &http.Client{}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
-		return
-	}
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			proxyReq.Header.Add(k, v)
-		}
-	}
-
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			_, _ = w.Write(buf[:n])
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
-		if readErr != nil {
-			break
-		}
-	}
+	proxy.HTTP(w, r, target+"/tabs")
 }

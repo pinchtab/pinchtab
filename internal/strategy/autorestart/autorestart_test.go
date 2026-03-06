@@ -12,6 +12,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 )
 
 // fakeBridge creates a test server that mimics a bridge instance.
@@ -314,7 +315,7 @@ func TestStrategy_HandleTabs_NoInstances(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/tabs", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/tabs")
+	proxy.HTTP(rec, req, srv.URL+"/tabs")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -327,7 +328,7 @@ func TestProxyHTTP_ForwardsRequest(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/snapshot", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/snapshot")
+	proxy.HTTP(rec, req, srv.URL+"/snapshot")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -346,7 +347,7 @@ func TestProxyHTTP_ForwardsQueryParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/screenshot?raw=true", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/screenshot")
+	proxy.HTTP(rec, req, srv.URL+"/screenshot")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -356,7 +357,7 @@ func TestProxyHTTP_ForwardsQueryParams(t *testing.T) {
 func TestProxyHTTP_UnreachableReturns502(t *testing.T) {
 	req := httptest.NewRequest("GET", "/snapshot", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, "http://localhost:1/snapshot")
+	proxy.HTTP(rec, req, "http://localhost:1/snapshot")
 
 	if rec.Code != 502 {
 		t.Errorf("expected 502, got %d", rec.Code)
@@ -410,25 +411,43 @@ func TestStrategy_State_CrashedStatus(t *testing.T) {
 func TestStrategy_ExponentialBackoff(t *testing.T) {
 	s := New(AutorestartConfig{
 		InitBackoff: 100 * time.Millisecond,
+		MaxBackoff:  500 * time.Millisecond,
 	})
 
-	// Simulate increasing backoff values
+	// Simulate increasing backoff values with cap
 	tests := []struct {
 		restartCount int
 		wantBackoff  time.Duration
 	}{
-		{0, 100 * time.Millisecond},  // 100ms * 2^0
-		{1, 200 * time.Millisecond},  // 100ms * 2^1
-		{2, 400 * time.Millisecond},  // 100ms * 2^2
-		{3, 800 * time.Millisecond},  // 100ms * 2^3
-		{4, 1600 * time.Millisecond}, // 100ms * 2^4
+		{0, 100 * time.Millisecond}, // 100ms * 2^0
+		{1, 200 * time.Millisecond}, // 100ms * 2^1
+		{2, 400 * time.Millisecond}, // 100ms * 2^2
+		{3, 500 * time.Millisecond}, // capped at 500ms (would be 800ms)
+		{4, 500 * time.Millisecond}, // capped at 500ms (would be 1600ms)
 	}
 
 	for _, tt := range tests {
 		backoff := s.config.InitBackoff * time.Duration(1<<uint(tt.restartCount))
+		if backoff > s.config.MaxBackoff {
+			backoff = s.config.MaxBackoff
+		}
 		if backoff != tt.wantBackoff {
 			t.Errorf("restartCount=%d: expected backoff=%s, got %s", tt.restartCount, tt.wantBackoff, backoff)
 		}
+	}
+}
+
+func TestStrategy_BackoffCap_Default(t *testing.T) {
+	s := New(AutorestartConfig{})
+	if s.config.MaxBackoff != defaultMaxBackoff {
+		t.Errorf("expected default MaxBackoff=%s, got %s", defaultMaxBackoff, s.config.MaxBackoff)
+	}
+}
+
+func TestStrategy_BackoffCap_Custom(t *testing.T) {
+	s := New(AutorestartConfig{MaxBackoff: 30 * time.Second})
+	if s.config.MaxBackoff != 30*time.Second {
+		t.Errorf("expected MaxBackoff=30s, got %s", s.config.MaxBackoff)
 	}
 }
 

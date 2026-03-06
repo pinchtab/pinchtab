@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/proxy"
 )
 
 // fakeBridge creates a test server that mimics a bridge instance.
@@ -22,7 +24,7 @@ func TestProxyHTTP_ForwardsRequest(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/snapshot", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/snapshot")
+	proxy.HTTP(rec, req, srv.URL+"/snapshot")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -41,7 +43,7 @@ func TestProxyHTTP_ForwardsQueryParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/screenshot?raw=true", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/screenshot")
+	proxy.HTTP(rec, req, srv.URL+"/screenshot")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -51,7 +53,7 @@ func TestProxyHTTP_ForwardsQueryParams(t *testing.T) {
 func TestProxyHTTP_UnreachableReturns502(t *testing.T) {
 	req := httptest.NewRequest("GET", "/snapshot", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, "http://localhost:1/snapshot")
+	proxy.HTTP(rec, req, "http://localhost:1/snapshot")
 
 	if rec.Code != 502 {
 		t.Errorf("expected 502, got %d", rec.Code)
@@ -84,7 +86,7 @@ func TestStrategy_HandleTabs_NoInstances(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/tabs", nil)
 	rec := httptest.NewRecorder()
-	proxyHTTP(rec, req, srv.URL+"/tabs")
+	proxy.HTTP(rec, req, srv.URL+"/tabs")
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)

@@ -64,3 +64,15 @@ func TestRegistry_Names(t *testing.T) {
 		t.Error("simple-autorestart not in names")
 	}
 }
+
+func TestOrchestratorAware_AllStrategies(t *testing.T) {
+	for _, name := range []string{"explicit", "simple", "simple-autorestart"} {
+		s, err := strategy.New(name)
+		if err != nil {
+			t.Fatalf("strategy %q not registered: %v", name, err)
+		}
+		if _, ok := s.(strategy.OrchestratorAware); !ok {
+			t.Errorf("strategy %q does not implement OrchestratorAware", name)
+		}
+	}
+}

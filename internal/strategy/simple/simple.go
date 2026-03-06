@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -49,17 +50,14 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 
 	// Shorthand endpoints — all proxy to first running instance.
 	shorthandRoutes := []string{
-		"POST /navigate", "GET /navigate",
 		"GET /snapshot", "GET /screenshot", "GET /text",
-		"GET /pdf", "POST /pdf",
-		"POST /action", "POST /actions", "POST /evaluate",
-		"POST /find",
+		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",
 		"GET /download", "POST /upload",
-		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /stealth/status", "POST /fingerprint/rotate",
 		"GET /screencast", "GET /screencast/tabs",
-		"POST /macro",
+		"POST /find", "POST /macro",
 	}
 	for _, route := range shorthandRoutes {
 		mux.HandleFunc(route, s.proxyToFirst)
@@ -75,7 +73,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 503, err)
 		return
 	}
-	proxyHTTP(w, r, target+r.URL.Path)
+	proxy.HTTP(w, r, target+r.URL.Path)
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +82,7 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
-	proxyHTTP(w, r, target+"/tabs")
+	proxy.HTTP(w, r, target+"/tabs")
 }
 
 // ensureRunning returns the URL of a running instance, auto-launching one if needed.
@@ -122,51 +120,4 @@ func (s *Strategy) ensureRunning() (string, error) {
 	}
 
 	return "", fmt.Errorf("instance launched but did not become ready in time")
-}
-
-// proxyHTTP forwards a request to the target URL.
-func proxyHTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
-		return
-	}
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			proxyReq.Header.Add(k, v)
-		}
-	}
-
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			_, _ = w.Write(buf[:n])
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
-		if readErr != nil {
-			break
-		}
-	}
 }
