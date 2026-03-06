@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/chromedp/chromedp"
@@ -48,6 +49,12 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
+
+	slog.Warn("evaluate",
+		"tabId", req.TabID,
+		"expressionLength", len(req.Expression),
+		"remoteAddr", r.RemoteAddr,
+	)
 
 	var result any
 	if err := chromedp.Run(tCtx, chromedp.Evaluate(req.Expression, &result)); err != nil {
