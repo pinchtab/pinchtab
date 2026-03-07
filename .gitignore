@@ -43,3 +43,4 @@ debug.log
 pinchtab.exe
 
 .gocache
+.DS_Store
