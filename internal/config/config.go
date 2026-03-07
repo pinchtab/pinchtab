@@ -67,6 +67,21 @@ type RuntimeConfig struct {
 
 	// IDPI (Indirect Prompt Injection defense) settings
 	IDPI IDPIConfig
+
+	// Scheduler settings (dashboard mode only)
+	Scheduler SchedulerConfig
+}
+
+// SchedulerConfig holds task scheduler settings.
+type SchedulerConfig struct {
+	Enabled           bool   `json:"enabled,omitempty"`
+	Strategy          string `json:"strategy,omitempty"`
+	MaxQueueSize      int    `json:"maxQueueSize,omitempty"`
+	MaxPerAgent       int    `json:"maxPerAgent,omitempty"`
+	MaxInflight       int    `json:"maxInflight,omitempty"`
+	MaxPerAgentFlight int    `json:"maxPerAgentInflight,omitempty"`
+	ResultTTLSec      int    `json:"resultTTLSec,omitempty"`
+	WorkerCount       int    `json:"workerCount,omitempty"`
 }
 
 // --- Nested FileConfig structure (PR #91 model) ---
@@ -82,6 +97,7 @@ type FileConfig struct {
 	MultiInstance    MultiInstanceConfig    `json:"multiInstance,omitempty"`
 	Attach           AttachConfig           `json:"attach,omitempty"`
 	Timeouts         TimeoutsConfig         `json:"timeouts,omitempty"`
+	Scheduler        SchedulerFileConfig    `json:"scheduler,omitempty"`
 }
 
 // ServerConfig holds server/network settings.
@@ -186,6 +202,18 @@ type TimeoutsConfig struct {
 	NavigateSec int `json:"navigateSec,omitempty"`
 	ShutdownSec int `json:"shutdownSec,omitempty"`
 	WaitNavMs   int `json:"waitNavMs,omitempty"`
+}
+
+// SchedulerFileConfig holds scheduler settings in the config file.
+type SchedulerFileConfig struct {
+	Enabled           *bool  `json:"enabled,omitempty"`
+	Strategy          string `json:"strategy,omitempty"`
+	MaxQueueSize      *int   `json:"maxQueueSize,omitempty"`
+	MaxPerAgent       *int   `json:"maxPerAgent,omitempty"`
+	MaxInflight       *int   `json:"maxInflight,omitempty"`
+	MaxPerAgentFlight *int   `json:"maxPerAgentInflight,omitempty"`
+	ResultTTLSec      *int   `json:"resultTTLSec,omitempty"`
+	WorkerCount       *int   `json:"workerCount,omitempty"`
 }
 
 // --- Legacy flat FileConfig for backward compatibility ---
@@ -636,6 +664,32 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Timeouts.WaitNavMs > 0 {
 		cfg.WaitNavDelay = time.Duration(fc.Timeouts.WaitNavMs) * time.Millisecond
+	}
+
+	// Scheduler
+	if fc.Scheduler.Enabled != nil {
+		cfg.Scheduler.Enabled = *fc.Scheduler.Enabled
+	}
+	if fc.Scheduler.Strategy != "" {
+		cfg.Scheduler.Strategy = fc.Scheduler.Strategy
+	}
+	if fc.Scheduler.MaxQueueSize != nil {
+		cfg.Scheduler.MaxQueueSize = *fc.Scheduler.MaxQueueSize
+	}
+	if fc.Scheduler.MaxPerAgent != nil {
+		cfg.Scheduler.MaxPerAgent = *fc.Scheduler.MaxPerAgent
+	}
+	if fc.Scheduler.MaxInflight != nil {
+		cfg.Scheduler.MaxInflight = *fc.Scheduler.MaxInflight
+	}
+	if fc.Scheduler.MaxPerAgentFlight != nil {
+		cfg.Scheduler.MaxPerAgentFlight = *fc.Scheduler.MaxPerAgentFlight
+	}
+	if fc.Scheduler.ResultTTLSec != nil {
+		cfg.Scheduler.ResultTTLSec = *fc.Scheduler.ResultTTLSec
+	}
+	if fc.Scheduler.WorkerCount != nil {
+		cfg.Scheduler.WorkerCount = *fc.Scheduler.WorkerCount
 	}
 }
 

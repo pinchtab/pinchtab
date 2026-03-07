@@ -19,6 +19,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 	"github.com/pinchtab/pinchtab/internal/proxy"
+	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 	"github.com/pinchtab/pinchtab/internal/web"
 
@@ -87,6 +88,40 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	if activeStrategy == nil {
 		orch.RegisterHandlers(mux)
 		registerDefaultProxyRoutes(mux, orch)
+	}
+
+	// Scheduler: opt-in task queue for multi-agent coordination.
+	var sched *scheduler.Scheduler
+	if cfg.Scheduler.Enabled {
+		schedCfg := scheduler.DefaultConfig()
+		schedCfg.Enabled = true
+		if cfg.Scheduler.Strategy != "" {
+			schedCfg.Strategy = cfg.Scheduler.Strategy
+		}
+		if cfg.Scheduler.MaxQueueSize > 0 {
+			schedCfg.MaxQueueSize = cfg.Scheduler.MaxQueueSize
+		}
+		if cfg.Scheduler.MaxPerAgent > 0 {
+			schedCfg.MaxPerAgent = cfg.Scheduler.MaxPerAgent
+		}
+		if cfg.Scheduler.MaxInflight > 0 {
+			schedCfg.MaxInflight = cfg.Scheduler.MaxInflight
+		}
+		if cfg.Scheduler.MaxPerAgentFlight > 0 {
+			schedCfg.MaxPerAgentFlight = cfg.Scheduler.MaxPerAgentFlight
+		}
+		if cfg.Scheduler.ResultTTLSec > 0 {
+			schedCfg.ResultTTL = time.Duration(cfg.Scheduler.ResultTTLSec) * time.Second
+		}
+		if cfg.Scheduler.WorkerCount > 0 {
+			schedCfg.WorkerCount = cfg.Scheduler.WorkerCount
+		}
+
+		resolver := &scheduler.ManagerResolver{Mgr: orch.InstanceManager()}
+		sched = scheduler.New(schedCfg, resolver)
+		sched.RegisterHandlers(mux)
+		sched.Start()
+		slog.Info("scheduler enabled", "strategy", schedCfg.Strategy, "workers", schedCfg.WorkerCount)
 	}
 
 	// Root returns health check (API-first design)
@@ -181,6 +216,9 @@ func runDashboard(cfg *config.RuntimeConfig) {
 				if err := activeStrategy.Stop(); err != nil {
 					slog.Warn("strategy stop failed", "err", err)
 				}
+			}
+			if sched != nil {
+				sched.Stop()
 			}
 			dash.Shutdown()
 			orch.Shutdown()
