@@ -7,13 +7,6 @@
     "dashboard.md",
     "get-started.md"
   ],
-  "alternatives": [
-    "bridge.md",
-    "configuration.md",
-    "cli.md",
-    "api.md",
-    "troubleshooting.md"
-  ],
   "references": [
     "references/api-structure.md",
     "references/endpoints.md",
