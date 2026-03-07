@@ -22,30 +22,31 @@ export default function ServerSummary() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="p-3 flex flex-col gap-3 bg-bg-surface/50">
-        <div className="mb-1 border-b border-border-subtle pb-2">
-          <h2 className="text-[10px] font-bold tracking-widest text-text-muted uppercase">
+      <Card className="flex flex-col gap-4 p-4">
+        <div className="border-b border-border-subtle pb-3">
+          <div className="dashboard-section-label mb-2">Settings</div>
+          <h2 className="text-[0.72rem] font-bold tracking-[0.18em] text-text-muted uppercase">
             Server Information
           </h2>
-          <p className="text-[9px] text-text-muted italic opacity-70">
+          <p className="mt-1 text-[0.7rem] text-text-muted italic opacity-70">
             Technical details for current session
           </p>
         </div>
 
-        <div className="flex flex-col gap-0.5">
-          <label className="text-[10px] font-semibold text-text-muted uppercase tracking-tight">
+        <div className="flex flex-col gap-1">
+          <label className="dashboard-section-title text-[0.68rem]">
             Version
           </label>
-          <div className="text-sm font-mono text-text-secondary">
+          <div className="dashboard-mono text-sm text-text-secondary">
             {serverInfo.version}
           </div>
         </div>
 
-        <div className="flex flex-col gap-0.5">
-          <label className="text-[10px] font-semibold text-text-muted uppercase tracking-tight">
+        <div className="flex flex-col gap-1">
+          <label className="dashboard-section-title text-[0.68rem]">
             Uptime
           </label>
-          <div className="text-sm text-text-secondary">
+          <div className="dashboard-mono text-sm text-text-secondary">
             {uptimeStr(serverInfo.uptime)}
           </div>
         </div>

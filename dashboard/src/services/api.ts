@@ -4,11 +4,19 @@ import type {
   InstanceTab,
   InstanceMetrics,
   Agent,
-  ServerInfo,
   CreateProfileRequest,
   CreateProfileResponse,
   LaunchInstanceRequest,
 } from "../generated/types";
+import type {
+  BackendConfig,
+  BackendConfigState,
+  DashboardServerInfo,
+} from "../types";
+import {
+  normalizeBackendConfigState,
+  normalizeDashboardServerInfo,
+} from "../types";
 
 const BASE = ""; // Uses proxy in dev
 
@@ -109,14 +117,29 @@ export async function fetchServerMetrics(): Promise<ServerMetrics> {
   return res.metrics;
 }
 
-// Agents — endpoint is /api/agents (dashboard API)
-export async function fetchAgents(): Promise<Agent[]> {
-  return request<Agent[]>("/api/agents");
+// Health
+export async function fetchHealth(): Promise<DashboardServerInfo> {
+  return normalizeDashboardServerInfo(
+    await request<DashboardServerInfo>("/health"),
+  );
 }
 
-// Health
-export async function fetchHealth(): Promise<ServerInfo> {
-  return request<ServerInfo>("/health");
+export async function fetchBackendConfig(): Promise<BackendConfigState> {
+  return normalizeBackendConfigState(
+    await request<BackendConfigState>("/api/config"),
+  );
+}
+
+export async function saveBackendConfig(
+  config: BackendConfig,
+): Promise<BackendConfigState> {
+  return normalizeBackendConfigState(
+    await request<BackendConfigState>("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    }),
+  );
 }
 
 // SSE Events — endpoint is /api/events

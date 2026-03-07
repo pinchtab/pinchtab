@@ -612,7 +612,7 @@ func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
 	}
 	o.mu.RUnlock()
 
-	var all []bridge.InstanceTab
+	all := make([]bridge.InstanceTab, 0)
 	for _, inst := range instances {
 		tabs, err := o.fetchTabs(inst.URL)
 		if err != nil {
@@ -640,7 +640,7 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 	}
 	o.mu.RUnlock()
 
-	var all []types.InstanceMetrics
+	all := make([]types.InstanceMetrics, 0)
 	for _, inst := range instances {
 		mem, err := o.fetchMetrics(inst.URL)
 		if err != nil || mem == nil {

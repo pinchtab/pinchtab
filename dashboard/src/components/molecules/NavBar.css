@@ -16,13 +16,13 @@
 .navbar-tab.active::after {
   content: "";
   position: absolute;
-  bottom: 0;
-  left: 8px;
-  right: 8px;
+  bottom: 6px;
+  left: 12px;
+  right: 12px;
   height: 2px;
   background: var(--color-primary);
-  border-radius: 1px;
+  border-radius: 9999px;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 38%, transparent),
-    0 0 12px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent),
+    0 0 18px color-mix(in srgb, var(--color-primary) 24%, transparent);
 }

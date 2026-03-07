@@ -36,6 +36,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	if dashPort == "" {
 		dashPort = "9870"
 	}
+	startedAt := time.Now()
 
 	slog.Info("🦀 PinchTab", "port", dashPort)
 
@@ -51,6 +52,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	orch.ApplyRuntimeConfig(cfg)
 	orch.SetProfileManager(profMgr)
 	dash.SetInstanceLister(orch)
+	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, version, startedAt)
 
 	// Wire up instance events to SSE broadcast
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
@@ -63,6 +65,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	mux := http.NewServeMux()
 
 	dash.RegisterHandlers(mux)
+	configAPI.RegisterHandlers(mux)
 	profMgr.RegisterHandlers(mux)
 
 	// Strategy-based routing: if a known strategy is configured, let it handle
@@ -134,9 +137,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		})
 	})
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]string{"status": "ok", "mode": "dashboard"})
-	})
+	mux.HandleFunc("GET /health", configAPI.HandleHealth)
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})

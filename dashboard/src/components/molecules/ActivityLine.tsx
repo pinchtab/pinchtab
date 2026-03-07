@@ -31,18 +31,20 @@ function formatTime(ts: string): string {
 
 export default function ActivityLine({ event }: Props) {
   return (
-    <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-2 text-sm">
+    <div className="flex items-center gap-3 border-b border-border-subtle/70 px-4 py-3 text-sm transition-colors hover:bg-white/[0.02]">
       <span className="text-lg">{typeIcons[event.type] || "📝"}</span>
-      <span className="w-16 shrink-0 font-mono text-xs text-text-muted">
+      <span className="dashboard-mono w-[4.5rem] shrink-0 text-xs text-text-muted">
         {formatTime(event.timestamp)}
       </span>
       <Badge variant={typeColors[event.type] || "default"}>
         {event.method}
       </Badge>
-      <span className="min-w-0 flex-1 truncate font-mono text-text-secondary">
+      <span className="dashboard-mono min-w-0 flex-1 truncate text-text-secondary">
         {event.path}
       </span>
-      <span className="shrink-0 text-xs text-text-muted">{event.agentId}</span>
+      <span className="dashboard-mono shrink-0 text-xs text-text-muted">
+        {event.agentId}
+      </span>
     </div>
   );
 }

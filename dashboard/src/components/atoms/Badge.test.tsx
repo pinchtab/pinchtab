@@ -11,7 +11,12 @@ describe("Badge", () => {
   it("applies default variant styles", () => {
     render(<Badge>Default</Badge>);
     const badge = screen.getByText("Default");
-    expect(badge).toHaveClass("bg-bg-elevated", "text-text-secondary");
+    expect(badge).toHaveClass(
+      "border",
+      "border-border-subtle",
+      "bg-white/[0.03]",
+      "text-text-secondary",
+    );
   });
 
   it("applies success variant styles", () => {
@@ -44,9 +49,9 @@ describe("Badge", () => {
     expect(badge).toHaveClass(
       "inline-flex",
       "items-center",
-      "rounded",
-      "text-xs",
-      "font-medium",
+      "rounded-sm",
+      "font-semibold",
+      "uppercase",
     );
   });
 });

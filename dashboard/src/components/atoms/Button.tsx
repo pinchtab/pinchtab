@@ -11,23 +11,25 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 rounded font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm font-semibold transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
   default:
-    "border border-border-default bg-bg-elevated text-text-secondary hover:bg-bg-hover hover:text-text-primary",
-  primary: "bg-primary text-white hover:bg-primary-hover",
+    "border border-border-subtle bg-white/5 text-text-primary hover:border-border-default hover:bg-white/[0.08]",
+  primary:
+    "bg-primary text-white shadow-[0_0_24px_rgb(var(--brand-accent-rgb)/0.18)] hover:bg-primary-hover",
   secondary:
-    "border border-border-subtle bg-transparent text-text-muted hover:bg-bg-elevated hover:text-text-secondary",
-  danger: "bg-destructive text-white hover:bg-destructive/80",
+    "border border-border-subtle bg-transparent text-text-secondary hover:border-border-default hover:bg-bg-hover hover:text-text-primary",
+  danger:
+    "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15",
   ghost:
-    "bg-transparent text-text-muted hover:bg-bg-elevated hover:text-text-secondary",
+    "bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "px-2 py-1 text-xs",
-  md: "px-3 py-1.5 text-sm",
-  lg: "px-4 py-2 text-base",
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-3.5 py-2 text-sm",
+  lg: "px-5 py-2.5 text-base",
 };
 
 // Spinner sizes match button text sizes

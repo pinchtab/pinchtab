@@ -1,292 +1,1048 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import { Button, Card } from "../components/atoms";
-import { ServerSummary } from "../components/molecules";
-import type { Settings } from "../types";
+import * as api from "../services/api";
+import type {
+  BackendConfig,
+  BackendConfigState,
+  LocalDashboardSettings,
+} from "../types";
+
+type SectionId =
+  | "dashboard"
+  | "defaults"
+  | "orchestration"
+  | "security"
+  | "profiles"
+  | "network"
+  | "browser"
+  | "timeouts";
+
+const sections: Array<{
+  id: SectionId;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    description: "Local monitoring and screencast preferences.",
+  },
+  {
+    id: "defaults",
+    label: "Instance Defaults",
+    description: "How new managed browser instances launch.",
+  },
+  {
+    id: "orchestration",
+    label: "Orchestration",
+    description: "Routing strategy, port range, and allocation policy.",
+  },
+  {
+    id: "security",
+    label: "Security",
+    description: "Sensitive endpoint gates and access controls.",
+  },
+  {
+    id: "profiles",
+    label: "Profiles",
+    description: "Shared profile storage and default profile behavior.",
+  },
+  {
+    id: "network",
+    label: "Network & Attach",
+    description: "Server binding, auth, and attach policy.",
+  },
+  {
+    id: "browser",
+    label: "Browser Runtime",
+    description: "Chrome binary, version, flags, and extensions.",
+  },
+  {
+    id: "timeouts",
+    label: "Timeouts",
+    description: "Action, navigation, shutdown, and wait timing.",
+  },
+];
+
+const fieldClass =
+  "w-full rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+
+const selectClass =
+  "rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+
+function csvToList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function listToCsv(value: string[]): string {
+  return value.join(", ");
+}
+
+function SectionCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="mb-5 border-b border-border-subtle pb-4">
+        <div className="dashboard-section-label mb-2">Settings</div>
+        <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
+          {description}
+        </p>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </Card>
+  );
+}
+
+function SettingRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-sm border border-border-subtle bg-black/10 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="max-w-xl">
+        <div className="text-sm font-medium text-text-primary">{label}</div>
+        <p className="mt-1 text-xs leading-5 text-text-muted">{description}</p>
+      </div>
+      <div className="w-full max-w-md">{children}</div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
-  const {
-    settings,
-    setSettings,
-    // serverInfo
-  } = useAppStore();
-  const [local, setLocal] = useState<Settings>(settings);
+  const { settings, setSettings, serverInfo, setServerInfo } = useAppStore();
+  const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
+  const [localSettings, setLocalSettings] =
+    useState<LocalDashboardSettings>(settings);
+  const [backendState, setBackendState] = useState<BackendConfigState | null>(
+    null,
+  );
+  const [backendConfig, setBackendConfig] = useState<BackendConfig | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  // Check if settings have changed
-  const hasChanges = useMemo(
-    () => JSON.stringify(local) !== JSON.stringify(settings),
-    [local, settings],
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [configState, health] = await Promise.all([
+          api.fetchBackendConfig(),
+          api.fetchHealth().catch(() => null),
+        ]);
+        setBackendState(configState);
+        setBackendConfig(configState.config);
+        if (health) {
+          setServerInfo(health);
+        }
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : "Failed to load settings";
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [setServerInfo]);
+
+  const hasDashboardChanges = useMemo(
+    () => JSON.stringify(localSettings) !== JSON.stringify(settings),
+    [localSettings, settings],
   );
 
-  const handleSave = () => {
-    // Settings are persisted to localStorage via setSettings
-    setSettings(local);
+  const hasBackendChanges = useMemo(
+    () =>
+      Boolean(
+        backendConfig &&
+        backendState &&
+        JSON.stringify(backendConfig) !== JSON.stringify(backendState.config),
+      ),
+    [backendConfig, backendState],
+  );
+
+  const hasChanges = hasDashboardChanges || hasBackendChanges;
+  const restartRequired =
+    backendState?.restartRequired || serverInfo?.restartRequired || false;
+  const restartReasons =
+    backendState?.restartReasons || serverInfo?.restartReasons || [];
+  const sensitiveEndpointsEnabled = backendConfig
+    ? Object.values(backendConfig.security).some(Boolean)
+    : false;
+  const apiTokenMissing = backendConfig
+    ? backendConfig.server.token.trim() === ""
+    : false;
+
+  const updateBackendSection = <K extends keyof BackendConfig>(
+    section: K,
+    patch: Partial<BackendConfig[K]>,
+  ) => {
+    setBackendConfig((current) =>
+      current
+        ? {
+            ...current,
+            [section]: { ...current[section], ...patch },
+          }
+        : current,
+    );
   };
 
-  const handleReset = () => setLocal(settings);
+  const handleReset = () => {
+    if (backendState) {
+      setBackendConfig(backendState.config);
+    }
+    setLocalSettings(settings);
+    setError("");
+    setNotice("");
+  };
+
+  const handleSave = async () => {
+    if (!hasChanges || !backendConfig) return;
+
+    setSaving(true);
+    setError("");
+    setNotice("");
+
+    try {
+      if (hasDashboardChanges) {
+        setSettings(localSettings);
+      }
+
+      if (hasBackendChanges) {
+        const saved = await api.saveBackendConfig(backendConfig);
+        setBackendState(saved);
+        setBackendConfig(saved.config);
+        setNotice(
+          saved.restartRequired
+            ? "Backend config saved. Dynamic changes were applied where possible. Restart advised for server-level changes."
+            : "Backend config saved. Dynamic changes were applied where possible.",
+        );
+      }
+
+      const health = await api.fetchHealth().catch(() => null);
+      if (health) {
+        setServerInfo(health);
+      }
+
+      if (!hasBackendChanges) {
+        setNotice("Dashboard preferences saved in this browser.");
+      }
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to save settings";
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="sticky top-0 z-10 border-b border-border-subtle bg-bg-surface px-4 py-2">
-        <div className="flex w-full items-center justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={handleReset}
-            disabled={!hasChanges}
-          >
-            Reset
-          </Button>
-          <Button variant="primary" onClick={handleSave} disabled={!hasChanges}>
-            Apply Settings
-          </Button>
+      <div className="sticky top-0 z-10 border-b border-border-subtle bg-bg-surface/95 px-4 py-3 backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="dashboard-mono text-sm text-text-secondary">
+              Server Version: {serverInfo?.version || "Unknown version"}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {restartRequired && (
+              <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-warning">
+                Restart required
+              </div>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handleReset}
+              disabled={!hasChanges || saving}
+            >
+              Reset
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={!hasChanges || saving || !backendConfig}
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </div>
+        {(error || notice || restartReasons.length > 0) && (
+          <div className="mt-3 flex flex-col gap-2">
+            {error && (
+              <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+            {notice && (
+              <div className="rounded-sm border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {notice}
+              </div>
+            )}
+            {restartRequired && restartReasons.length > 0 && (
+              <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning">
+                Restart needed for: {restartReasons.join(", ")}.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex w-full flex-1 overflow-hidden p-6 gap-8">
-        {/* Sidebar Info */}
-        <aside className="w-64 shrink-0 overflow-y-auto">
-          <ServerSummary />
-        </aside>
-
-        {/* Settings Content */}
-        <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-          {/* Policies & Strategy */}
-          {/* {serverInfo && (
-            <Card className="p-4">
-              <h3 className="mb-4 text-sm font-semibold text-text-primary">
-                ⚖️ Policies & Strategy
-              </h3>
-              <div className="grid grid-cols-3 gap-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-text-muted uppercase tracking-tight">
-                    Allocation Strategy
-                  </label>
-                  <div className="flex">
-                    <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary uppercase">
-                      {serverInfo.strategy || "none"}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-text-muted uppercase tracking-tight">
-                    Selection Policy
-                  </label>
-                  <div className="text-sm text-text-secondary italic">
-                    {serverInfo.allocationPolicy || "fcfs"}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-text-muted uppercase tracking-tight">
-                    Tab Eviction
-                  </label>
-                  <div className="text-sm text-text-secondary italic">
-                    {serverInfo.tabEvictionPolicy || "reject"}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )} */}
-
-          {/* Screencast */}
-          <Card className="p-4">
-            <h3 className="mb-4 text-sm font-semibold text-text-primary">
-              📺 Screencast
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-text-secondary">
-                  Frame Rate
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={1}
-                    max={15}
-                    value={local.screencast.fps}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        screencast: {
-                          ...local.screencast,
-                          fps: +e.target.value,
-                        },
-                      })
-                    }
-                    className="w-32"
-                  />
-                  <span className="w-12 text-right text-sm text-text-muted">
-                    {local.screencast.fps} fps
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-text-secondary">Quality</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={10}
-                    max={80}
-                    value={local.screencast.quality}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        screencast: {
-                          ...local.screencast,
-                          quality: +e.target.value,
-                        },
-                      })
-                    }
-                    className="w-32"
-                  />
-                  <span className="w-12 text-right text-sm text-text-muted">
-                    {local.screencast.quality}%
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-text-secondary">Max Width</label>
-                <select
-                  value={local.screencast.maxWidth}
-                  onChange={(e) =>
-                    setLocal({
-                      ...local,
-                      screencast: {
-                        ...local.screencast,
-                        maxWidth: +e.target.value,
-                      },
-                    })
-                  }
-                  className="rounded border border-border-default bg-bg-elevated px-2 py-1 text-sm text-text-primary"
+      <div className="flex flex-1 flex-col gap-6 overflow-hidden p-4 lg:flex-row lg:p-6">
+        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto lg:w-72">
+          <Card className="p-3">
+            <div className="dashboard-section-label mb-3">Sections</div>
+            <div className="flex flex-col gap-1.5">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={`rounded-sm border px-3 py-2.5 text-left transition-all ${
+                    activeSection === section.id
+                      ? "border-primary/30 bg-primary/10 text-text-primary"
+                      : "border-transparent text-text-secondary hover:border-border-subtle hover:bg-bg-elevated hover:text-text-primary"
+                  }`}
+                  onClick={() => setActiveSection(section.id)}
                 >
-                  {[400, 600, 800, 1024, 1280].map((w) => (
-                    <option key={w} value={w}>
-                      {w}px
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </Card>
-
-          {/* Stealth */}
-          <Card className="p-4">
-            <h3 className="mb-4 text-sm font-semibold text-text-primary">
-              🛡️ Stealth
-            </h3>
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-text-secondary">Level</label>
-              <select
-                value={local.stealth}
-                onChange={(e) =>
-                  setLocal({
-                    ...local,
-                    stealth: e.target.value as "light" | "full",
-                  })
-                }
-                className="rounded border border-border-default bg-bg-elevated px-2 py-1 text-sm text-text-primary"
-              >
-                <option value="light">Light (default)</option>
-                <option value="full">Full (canvas noise, WebGL, fonts)</option>
-              </select>
-            </div>
-          </Card>
-
-          {/* Browser */}
-          <Card className="p-4">
-            <h3 className="mb-4 text-sm font-semibold text-text-primary">
-              🌐 Browser
-            </h3>
-            <div className="space-y-3">
-              {[
-                { key: "blockImages", label: "Block Images" },
-                { key: "blockMedia", label: "Block Media" },
-                { key: "noAnimations", label: "No Animations" },
-              ].map(({ key, label }) => (
-                <label key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-text-secondary">{label}</span>
-                  <input
-                    type="checkbox"
-                    checked={local.browser[key as keyof typeof local.browser]}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        browser: { ...local.browser, [key]: e.target.checked },
-                      })
-                    }
-                    className="h-4 w-4"
-                  />
-                </label>
+                  <div className="text-sm font-medium">{section.label}</div>
+                  <div className="mt-1 text-xs leading-5 text-text-muted">
+                    {section.description}
+                  </div>
+                </button>
               ))}
             </div>
           </Card>
+        </aside>
 
-          {/* Monitoring */}
-          <Card className="p-4">
-            <h3 className="mb-4 text-sm font-semibold text-text-primary">
-              📈 Monitoring
-            </h3>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm text-text-secondary">
-                    Tab Memory Metrics{" "}
-                    <span className="rounded bg-yellow-500/20 px-1 py-0.5 text-xs text-yellow-500">
-                      experimental
-                    </span>
-                  </span>
-                  <p className="text-xs text-text-muted">
-                    Track JS heap usage per tab via CDP (may cause instability)
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={local.monitoring?.memoryMetrics ?? false}
-                  onChange={(e) =>
-                    setLocal({
-                      ...local,
-                      monitoring: {
-                        ...local.monitoring,
-                        memoryMetrics: e.target.checked,
-                      },
-                    })
-                  }
-                  className="h-4 w-4"
-                />
-              </label>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm text-text-secondary">
-                    Poll Interval
-                  </span>
-                  <p className="text-xs text-text-muted">
-                    How often to fetch tab/memory data
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={5}
-                    max={120}
-                    step={5}
-                    value={local.monitoring?.pollInterval ?? 30}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        monitoring: {
-                          ...local.monitoring,
-                          pollInterval: +e.target.value,
-                        },
-                      })
-                    }
-                    className="w-24"
-                  />
-                  <span className="w-12 text-right text-sm text-text-muted">
-                    {local.monitoring?.pollInterval ?? 30}s
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Card>
+        <div className="flex-1 overflow-y-auto pr-1">
+          {loading || !backendConfig ? (
+            <Card className="p-6">
+              <div className="text-sm text-text-muted">Loading settings…</div>
+            </Card>
+          ) : (
+            <>
+              {activeSection === "dashboard" && (
+                <SectionCard
+                  title="Dashboard Preferences"
+                  description="These controls affect this dashboard UI only. They are stored locally in your browser and do not require a backend restart."
+                >
+                  <SettingRow
+                    label="Screencast frame rate"
+                    description="Controls how often live previews request new frames."
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={15}
+                        value={localSettings.screencast.fps}
+                        onChange={(e) =>
+                          setLocalSettings({
+                            ...localSettings,
+                            screencast: {
+                              ...localSettings.screencast,
+                              fps: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full"
+                      />
+                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
+                        {localSettings.screencast.fps} fps
+                      </span>
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    label="Screencast quality"
+                    description="JPEG quality for tab preview streams."
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={10}
+                        max={80}
+                        value={localSettings.screencast.quality}
+                        onChange={(e) =>
+                          setLocalSettings({
+                            ...localSettings,
+                            screencast: {
+                              ...localSettings.screencast,
+                              quality: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full"
+                      />
+                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
+                        {localSettings.screencast.quality}%
+                      </span>
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    label="Screencast width"
+                    description="Maximum preview width for live tiles."
+                  >
+                    <select
+                      value={localSettings.screencast.maxWidth}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          screencast: {
+                            ...localSettings.screencast,
+                            maxWidth: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      {[400, 600, 800, 1024, 1280].map((width) => (
+                        <option key={width} value={width}>
+                          {width}px
+                        </option>
+                      ))}
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Memory metrics"
+                    description="Enable per-tab heap collection in the dashboard. Useful for debugging, but heavier."
+                  >
+                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.monitoring.memoryMetrics}
+                        onChange={(e) =>
+                          setLocalSettings({
+                            ...localSettings,
+                            monitoring: {
+                              ...localSettings.monitoring,
+                              memoryMetrics: e.target.checked,
+                            },
+                          })
+                        }
+                        className="h-4 w-4"
+                      />
+                      Enable
+                    </label>
+                  </SettingRow>
+                  <SettingRow
+                    label="Polling interval"
+                    description="How frequently the dashboard asks the backend for fresh metrics."
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={5}
+                        max={120}
+                        step={5}
+                        value={localSettings.monitoring.pollInterval}
+                        onChange={(e) =>
+                          setLocalSettings({
+                            ...localSettings,
+                            monitoring: {
+                              ...localSettings.monitoring,
+                              pollInterval: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full"
+                      />
+                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
+                        {localSettings.monitoring.pollInterval}s
+                      </span>
+                    </div>
+                  </SettingRow>
+                </SectionCard>
+              )}
+
+              {activeSection === "defaults" && (
+                <SectionCard
+                  title="Instance Defaults"
+                  description="These values are written to config and used for new managed instances. Existing running instances keep their current runtime."
+                >
+                  <SettingRow
+                    label="Mode"
+                    description="Default browser mode for new launches."
+                  >
+                    <select
+                      value={backendConfig.instanceDefaults.mode}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          mode: e.target
+                            .value as BackendConfig["instanceDefaults"]["mode"],
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="headless">Headless</option>
+                      <option value="headed">Headed</option>
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Stealth level"
+                    description="Fingerprint hardening profile for new instances."
+                  >
+                    <select
+                      value={backendConfig.instanceDefaults.stealthLevel}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          stealthLevel: e.target
+                            .value as BackendConfig["instanceDefaults"]["stealthLevel"],
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="light">Light</option>
+                      <option value="medium">Medium</option>
+                      <option value="full">Full</option>
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Tab eviction policy"
+                    description="How PinchTab behaves when a managed instance reaches its tab limit."
+                  >
+                    <select
+                      value={backendConfig.instanceDefaults.tabEvictionPolicy}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          tabEvictionPolicy: e.target
+                            .value as BackendConfig["instanceDefaults"]["tabEvictionPolicy"],
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="reject">Reject new tabs</option>
+                      <option value="close_oldest">Close oldest</option>
+                      <option value="close_lru">
+                        Close least recently used
+                      </option>
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Max tabs"
+                    description="Maximum number of tabs per managed instance."
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      value={backendConfig.instanceDefaults.maxTabs}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          maxTabs: Number(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Max parallel tabs"
+                    description="Set to 0 to auto-detect from CPU count."
+                  >
+                    <input
+                      type="number"
+                      min={0}
+                      value={backendConfig.instanceDefaults.maxParallelTabs}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          maxParallelTabs: Number(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Timezone"
+                    description="Optional timezone override for launched instances."
+                  >
+                    <input
+                      value={backendConfig.instanceDefaults.timezone}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          timezone: e.target.value,
+                        })
+                      }
+                      placeholder="Europe/Rome"
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="User agent"
+                    description="Optional override applied to new managed instances."
+                  >
+                    <input
+                      value={backendConfig.instanceDefaults.userAgent}
+                      onChange={(e) =>
+                        updateBackendSection("instanceDefaults", {
+                          userAgent: e.target.value,
+                        })
+                      }
+                      placeholder="Custom user agent"
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  {[
+                    ["blockImages", "Block images"],
+                    ["blockMedia", "Block media"],
+                    ["blockAds", "Block ads"],
+                    ["noAnimations", "Disable CSS animations"],
+                    ["noRestore", "Skip session restore"],
+                  ].map(([key, label]) => (
+                    <SettingRow
+                      key={key}
+                      label={label}
+                      description="Applies to newly launched managed instances."
+                    >
+                      <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+                        <input
+                          type="checkbox"
+                          checked={
+                            backendConfig.instanceDefaults[
+                              key as keyof BackendConfig["instanceDefaults"]
+                            ] as boolean
+                          }
+                          onChange={(e) =>
+                            updateBackendSection("instanceDefaults", {
+                              [key]: e.target.checked,
+                            } as Partial<BackendConfig["instanceDefaults"]>)
+                          }
+                          className="h-4 w-4"
+                        />
+                        Enable
+                      </label>
+                    </SettingRow>
+                  ))}
+                </SectionCard>
+              )}
+
+              {activeSection === "orchestration" && (
+                <SectionCard
+                  title="Orchestration"
+                  description="Port range and allocation policy can be applied immediately for future launches. Strategy changes require a dashboard restart because routes are registered at startup."
+                >
+                  <SettingRow
+                    label="Strategy"
+                    description="Controls how shorthand routes are routed in dashboard mode."
+                  >
+                    <select
+                      value={backendConfig.multiInstance.strategy}
+                      onChange={(e) =>
+                        updateBackendSection("multiInstance", {
+                          strategy: e.target
+                            .value as BackendConfig["multiInstance"]["strategy"],
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="simple">Simple</option>
+                      <option value="explicit">Explicit</option>
+                      <option value="simple-autorestart">
+                        Simple autorestart
+                      </option>
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Allocation policy"
+                    description="Determines how running instances are chosen for shorthand requests."
+                  >
+                    <select
+                      value={backendConfig.multiInstance.allocationPolicy}
+                      onChange={(e) =>
+                        updateBackendSection("multiInstance", {
+                          allocationPolicy: e.target
+                            .value as BackendConfig["multiInstance"]["allocationPolicy"],
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="fcfs">First available</option>
+                      <option value="round_robin">Round robin</option>
+                      <option value="random">Random</option>
+                    </select>
+                  </SettingRow>
+                  <SettingRow
+                    label="Instance port start"
+                    description="Lower bound for auto-allocated instance ports."
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      value={backendConfig.multiInstance.instancePortStart}
+                      onChange={(e) =>
+                        updateBackendSection("multiInstance", {
+                          instancePortStart: Number(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Instance port end"
+                    description="Upper bound for auto-allocated instance ports."
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      value={backendConfig.multiInstance.instancePortEnd}
+                      onChange={(e) =>
+                        updateBackendSection("multiInstance", {
+                          instancePortEnd: Number(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                </SectionCard>
+              )}
+
+              {activeSection === "security" && (
+                <SectionCard
+                  title="Security"
+                  description="These feature gates affect what sensitive capabilities PinchTab exposes. They are applied to future launched instances and live middleware where supported."
+                >
+                  <div
+                    className={`rounded-sm px-4 py-3 text-sm leading-6 ${
+                      sensitiveEndpointsEnabled
+                        ? "border border-destructive/35 bg-destructive/10 text-destructive"
+                        : "border border-warning/25 bg-warning/10 text-warning"
+                    }`}
+                  >
+                    {sensitiveEndpointsEnabled
+                      ? "One or more sensitive endpoint families are enabled. Features like script execution, downloads, uploads, and live capture can expose high-risk capabilities. Only enable them in trusted environments. You are responsible for securing network access, authentication, and downstream use."
+                      : "These endpoint families can expose high-risk capabilities when enabled. Only turn them on in trusted environments, and only when you accept responsibility for network access, authentication, and downstream use."}
+                  </div>
+                  {[
+                    ["allowEvaluate", "Allow evaluate"],
+                    ["allowMacro", "Allow macro"],
+                    ["allowScreencast", "Allow screencast"],
+                    ["allowDownload", "Allow download"],
+                    ["allowUpload", "Allow upload"],
+                  ].map(([key, label]) => (
+                    <SettingRow
+                      key={key}
+                      label={label}
+                      description="Controls whether the corresponding endpoint family is enabled."
+                    >
+                      <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+                        <input
+                          type="checkbox"
+                          checked={
+                            backendConfig.security[
+                              key as keyof BackendConfig["security"]
+                            ]
+                          }
+                          onChange={(e) =>
+                            updateBackendSection("security", {
+                              [key]: e.target.checked,
+                            } as Partial<BackendConfig["security"]>)
+                          }
+                          className="h-4 w-4"
+                        />
+                        Enable
+                      </label>
+                    </SettingRow>
+                  ))}
+                </SectionCard>
+              )}
+
+              {activeSection === "profiles" && (
+                <SectionCard
+                  title="Profiles"
+                  description="Profile storage is host-level. Changing the base directory requires restart because the profile manager and orchestrator are created with it at boot."
+                >
+                  <SettingRow
+                    label="Profiles base directory"
+                    description="Root directory where browser profiles are stored."
+                  >
+                    <input
+                      value={backendConfig.profiles.baseDir}
+                      onChange={(e) =>
+                        updateBackendSection("profiles", {
+                          baseDir: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Default profile"
+                    description="Profile name used when the server needs an implicit default."
+                  >
+                    <input
+                      value={backendConfig.profiles.defaultProfile}
+                      onChange={(e) =>
+                        updateBackendSection("profiles", {
+                          defaultProfile: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                </SectionCard>
+              )}
+
+              {activeSection === "network" && (
+                <SectionCard
+                  title="Network & Attach"
+                  description="Port and bind changes require a restart. Token changes update request auth immediately because middleware reads runtime config live."
+                >
+                  <SettingRow
+                    label="Server port"
+                    description="HTTP port for the dashboard process."
+                  >
+                    <input
+                      value={backendConfig.server.port}
+                      onChange={(e) =>
+                        updateBackendSection("server", { port: e.target.value })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Bind address"
+                    description="Network interface the dashboard process binds to."
+                  >
+                    <input
+                      value={backendConfig.server.bind}
+                      onChange={(e) =>
+                        updateBackendSection("server", { bind: e.target.value })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="API token"
+                    description="Bearer token required by authenticated requests when set. Leaving this empty means reachable clients are unauthenticated."
+                  >
+                    <div className="space-y-2">
+                      <input
+                        value={backendConfig.server.token}
+                        onChange={(e) =>
+                          updateBackendSection("server", {
+                            token: e.target.value,
+                          })
+                        }
+                        className={fieldClass}
+                      />
+                      {apiTokenMissing && (
+                        <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
+                          No API token is set. Anyone who can reach this server
+                          can access exposed endpoints. Keep it on trusted local
+                          networks only, or set a strong token. You are
+                          responsible for protecting access.
+                        </div>
+                      )}
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    label="State directory"
+                    description="Base state path used by managed child instances."
+                  >
+                    <input
+                      value={backendConfig.server.stateDir}
+                      onChange={(e) =>
+                        updateBackendSection("server", {
+                          stateDir: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Allow attach"
+                    description="Permit attaching PinchTab to externally managed Chrome sessions."
+                  >
+                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={backendConfig.attach.enabled}
+                        onChange={(e) =>
+                          updateBackendSection("attach", {
+                            enabled: e.target.checked,
+                          })
+                        }
+                        className="h-4 w-4"
+                      />
+                      Enable
+                    </label>
+                  </SettingRow>
+                  <SettingRow
+                    label="Allowed attach hosts"
+                    description="Comma-separated host allowlist for attach requests. Only include hosts you control and trust."
+                  >
+                    <div className="space-y-2">
+                      <input
+                        value={listToCsv(backendConfig.attach.allowHosts)}
+                        onChange={(e) =>
+                          updateBackendSection("attach", {
+                            allowHosts: csvToList(e.target.value),
+                          })
+                        }
+                        className={fieldClass}
+                      />
+                      <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
+                        Hosts in this allowlist may be used for remote attach
+                        requests. Broad or untrusted entries can expose external
+                        Chrome sessions and browser contents.
+                      </div>
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    label="Allowed attach schemes"
+                    description="Comma-separated scheme allowlist, usually ws and wss."
+                  >
+                    <input
+                      value={listToCsv(backendConfig.attach.allowSchemes)}
+                      onChange={(e) =>
+                        updateBackendSection("attach", {
+                          allowSchemes: csvToList(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                </SectionCard>
+              )}
+
+              {activeSection === "browser" && (
+                <SectionCard
+                  title="Browser Runtime"
+                  description="These settings are written into the generated child config for new managed instances."
+                >
+                  <SettingRow
+                    label="Chrome version"
+                    description="Version string used in generated UA/fingerprint defaults."
+                  >
+                    <input
+                      value={backendConfig.browser.version}
+                      onChange={(e) =>
+                        updateBackendSection("browser", {
+                          version: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Chrome binary"
+                    description="Optional path override for the Chrome executable."
+                  >
+                    <input
+                      value={backendConfig.browser.binary}
+                      onChange={(e) =>
+                        updateBackendSection("browser", {
+                          binary: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Extra flags"
+                    description="Additional Chrome flags appended when launching managed instances."
+                  >
+                    <input
+                      value={backendConfig.browser.extraFlags}
+                      onChange={(e) =>
+                        updateBackendSection("browser", {
+                          extraFlags: e.target.value,
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Extension paths"
+                    description="Comma-separated extension directories to load."
+                  >
+                    <input
+                      value={listToCsv(backendConfig.browser.extensionPaths)}
+                      onChange={(e) =>
+                        updateBackendSection("browser", {
+                          extensionPaths: csvToList(e.target.value),
+                        })
+                      }
+                      className={fieldClass}
+                    />
+                  </SettingRow>
+                </SectionCard>
+              )}
+
+              {activeSection === "timeouts" && (
+                <SectionCard
+                  title="Timeouts"
+                  description="Runtime timing defaults written into new child configs. Existing running instances keep their current timeouts."
+                >
+                  {[
+                    [
+                      "actionSec",
+                      "Action timeout",
+                      "Maximum time for action requests.",
+                    ],
+                    [
+                      "navigateSec",
+                      "Navigate timeout",
+                      "Maximum time for navigation requests.",
+                    ],
+                    [
+                      "shutdownSec",
+                      "Shutdown timeout",
+                      "Grace period before force-closing a child process.",
+                    ],
+                    [
+                      "waitNavMs",
+                      "Wait-after-navigation delay",
+                      "Post-navigation stabilization delay in milliseconds.",
+                    ],
+                  ].map(([key, label, description]) => (
+                    <SettingRow
+                      key={key}
+                      label={label}
+                      description={description}
+                    >
+                      <input
+                        type="number"
+                        min={0}
+                        value={
+                          backendConfig.timeouts[
+                            key as keyof BackendConfig["timeouts"]
+                          ]
+                        }
+                        onChange={(e) =>
+                          updateBackendSection("timeouts", {
+                            [key]: Number(e.target.value),
+                          } as Partial<BackendConfig["timeouts"]>)
+                        }
+                        className={fieldClass}
+                      />
+                    </SettingRow>
+                  ))}
+                </SectionCard>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

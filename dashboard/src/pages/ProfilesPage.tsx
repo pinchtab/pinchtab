@@ -3,7 +3,7 @@ import { useAppStore } from "../stores/useAppStore";
 import { Toolbar, EmptyState, Button, Modal, Input } from "../components/atoms";
 import { ProfileCard, ProfileDetailsModal } from "../components/molecules";
 import * as api from "../services/api";
-import type { Profile } from "../generated/types";
+import type { LaunchInstanceRequest, Profile } from "../generated/types";
 
 export default function ProfilesPage() {
   const {
@@ -24,7 +24,7 @@ export default function ProfilesPage() {
   const [createSource, setCreateSource] = useState("");
 
   // Launch form
-  const [launchPort, setLaunchPort] = useState("9868");
+  const [launchPort, setLaunchPort] = useState("");
   const [launchHeadless, setLaunchHeadless] = useState(false);
   const [launchError, setLaunchError] = useState("");
   const [launchLoading, setLaunchLoading] = useState(false);
@@ -72,16 +72,16 @@ export default function ProfilesPage() {
     setLaunchError("");
     setLaunchLoading(true);
     try {
-      const payload = {
+      const payload: LaunchInstanceRequest = {
         name: showLaunch,
-        port: launchPort || undefined,
-        mode: launchHeadless ? "" : "headed",
+        port: launchPort.trim() || undefined,
+        mode: launchHeadless ? undefined : "headed",
       };
       console.log("Launching instance:", payload);
       const result = await api.launchInstance(payload);
       console.log("Launch result:", result);
       setShowLaunch(null);
-      setLaunchPort("9868");
+      setLaunchPort("");
       setLaunchHeadless(false);
       // Refresh instances list
       const updated = await api.fetchInstances();
@@ -137,9 +137,13 @@ export default function ProfilesPage() {
     if (!showLaunch) return "";
     const profile = profiles.find((p) => p.name === showLaunch);
     const profileId = profile?.id || showLaunch;
-    const mode = launchHeadless ? "headless" : "headed";
-    const port = launchPort || "auto";
-    return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -d '{"profileId":"${profileId}","mode":"${mode}","port":"${port}"}'`;
+    const payload: LaunchInstanceRequest = {
+      profileId,
+      mode: launchHeadless ? undefined : "headed",
+      port: launchPort.trim() || undefined,
+    };
+
+    return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -d '${JSON.stringify(payload)}'`;
   }, [showLaunch, launchHeadless, launchPort, profiles]);
 
   const handleCopyCommand = async () => {
@@ -159,13 +163,13 @@ export default function ProfilesPage() {
     <div className="flex h-full flex-col">
       <Toolbar
         actions={[
+          { key: "refresh", label: "Refresh", onClick: loadProfiles },
           {
             key: "new",
-            label: "+ New Profile",
+            label: "New Profile",
             onClick: () => setShowCreate(true),
             variant: "primary",
           },
-          { key: "refresh", label: "Refresh", onClick: loadProfiles },
         ]}
       />
 
@@ -178,10 +182,10 @@ export default function ProfilesPage() {
           ) : profiles.length === 0 ? (
             <EmptyState
               title="No profiles yet"
-              description="Click + New Profile to create one"
+              description="Click New Profile to create one"
               action={
                 <Button variant="primary" onClick={() => setShowCreate(true)}>
-                  + New Profile
+                  New Profile
                 </Button>
               }
             />
@@ -283,10 +287,14 @@ export default function ProfilesPage() {
           )}
           <Input
             label="Port"
-            placeholder="e.g. 9868"
+            placeholder="Auto-select from configured range"
             value={launchPort}
             onChange={(e) => setLaunchPort(e.target.value)}
           />
+          <p className="-mt-2 text-xs text-text-muted">
+            Leave blank to auto-select a free port from the configured instance
+            port range.
+          </p>
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input
               type="checkbox"

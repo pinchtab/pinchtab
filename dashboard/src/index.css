@@ -1,94 +1,222 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-sans:
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
 
-  /* Colors - matching Poseidon dark theme */
-  --color-bg-app: #0a0a0a;
-  --color-bg-surface: #111111;
-  --color-bg-elevated: #1a1a1a;
-  --color-bg-hover: #222222;
-
-  --color-border-subtle: #222222;
-  --color-border-default: #333333;
-
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1a1;
-  --color-text-muted: #666666;
-
-  --color-primary: #f97316; /* Orange - Pinchtab brand */
-  --color-primary-hover: #fb923c;
+  --color-bg-app: #0f1117;
+  --color-bg-surface: #1a1d27;
+  --color-bg-elevated: #222633;
+  --color-bg-hover: #222633;
+  --color-border-subtle: #ffffff1a;
+  --color-border-default: #3b82f62e;
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-primary: #60a5fa;
+  --color-primary-hover: #93c5fd;
   --color-success: #22c55e;
-  --color-warning: #eab308;
+  --color-warning: #fbbf24;
   --color-destructive: #ef4444;
-  --color-info: #3b82f6;
+  --color-info: #93c5fd;
 
-  /* Spacing */
   --spacing-page: 1rem;
 }
 
-/* Geist font - load via CDN */
-@font-face {
-  font-family: "Geist";
-  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Regular.woff2")
-    format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
+:root,
+html[data-site-mode="agent"] {
+  --brand-bg-rgb: 15 17 23;
+  --brand-surface-rgb: 26 29 39;
+  --brand-surface-hover-rgb: 34 38 51;
+  --brand-surface-code-rgb: 20 23 32;
+  --brand-border-rgb: 59 130 246;
+  --brand-border-subtle-rgb: 255 255 255;
+  --brand-text-rgb: 226 232 240;
+  --brand-text-muted-rgb: 148 163 184;
+  --brand-text-dim-rgb: 100 116 139;
+  --brand-accent-rgb: 96 165 250;
+  --brand-accent-light-rgb: 147 197 253;
+  --brand-accent-dark-rgb: 37 99 235;
+  --brand-accent-contrast-rgb: 255 255 255;
+  --theme-glow-rgb: 96 165 250;
+  --selection-bg-rgb: 59 130 246;
+  --panel-shadow:
+    0 0 0 1px rgb(var(--brand-border-rgb) / 0.03), 0 24px 50px rgb(0 0 0 / 0.26);
+  color-scheme: dark;
 }
 
-@font-face {
-  font-family: "Geist";
-  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Medium.woff2")
-    format("woff2");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist";
-  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-SemiBold.woff2")
-    format("woff2");
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Mono";
-  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/GeistMono-Regular.woff2")
-    format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
+* {
+  box-sizing: border-box;
 }
 
 html {
-  color-scheme: dark;
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background-color: rgb(var(--brand-bg-rgb));
+  background-image: none;
+  color: rgb(var(--brand-text-rgb));
   font-family: var(--font-sans);
-  background: var(--color-bg-app);
-  color: var(--color-text-primary);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: rgb(var(--selection-bg-rgb) / 0.95);
+  color: #000;
+}
+
+::-moz-selection {
+  background-color: rgb(var(--selection-bg-rgb) / 0.95);
+  color: #000;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:not([class]) {
+  color: rgb(var(--brand-accent-rgb));
+}
+
+a:not([class]):hover {
+  color: rgb(var(--brand-accent-light-rgb));
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+code {
+  border-radius: 4px;
+  background-color: rgb(var(--brand-accent-rgb) / 0.1);
+  color: rgb(var(--brand-accent-light-rgb));
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 2px 6px;
+}
+
+pre {
+  overflow-x: auto;
+  border: 1px solid rgb(var(--brand-border-subtle-rgb) / 0.12);
+  border-radius: 16px;
+  background-color: rgb(var(--brand-surface-code-rgb));
+  color: rgb(var(--brand-text-rgb));
+  padding: 1.5rem;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-default);
-  border-radius: 4px;
+  border-radius: 9999px;
+  background: rgb(var(--brand-surface-hover-rgb));
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: rgb(var(--brand-text-dim-rgb) / 0.9);
+}
+
+@layer utilities {
+  .dashboard-shell {
+    background-color: rgb(var(--brand-bg-rgb));
+    color: rgb(var(--brand-text-rgb));
+  }
+
+  .dashboard-panel {
+    border: 1px solid rgb(var(--brand-border-subtle-rgb) / 0.1);
+    border-radius: 16px;
+    background: linear-gradient(
+      180deg,
+      rgb(var(--brand-surface-rgb) / 0.98),
+      rgb(var(--brand-surface-rgb) / 0.9)
+    );
+    box-shadow: var(--panel-shadow);
+  }
+
+  .dashboard-panel-hover {
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  .dashboard-panel-hover:hover {
+    border-color: rgb(var(--brand-border-rgb) / 0.18);
+    background: rgb(var(--brand-surface-hover-rgb));
+    box-shadow:
+      0 0 0 1px rgb(var(--brand-border-rgb) / 0.06),
+      0 24px 50px rgb(0 0 0 / 0.3);
+  }
+
+  .dashboard-panel-selected {
+    border-color: rgb(var(--brand-border-rgb) / 0.32);
+    background: linear-gradient(
+      180deg,
+      rgb(var(--brand-accent-rgb) / 0.12),
+      rgb(var(--brand-surface-hover-rgb) / 0.96)
+    );
+    box-shadow:
+      0 0 0 1px rgb(var(--brand-border-rgb) / 0.08),
+      0 0 36px rgb(var(--brand-accent-rgb) / 0.08);
+  }
+
+  .dashboard-section-label {
+    color: rgb(var(--brand-accent-rgb));
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-section-title {
+    color: rgb(var(--brand-text-dim-rgb));
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-mono {
+    font-family: var(--font-mono);
+  }
+
+  .dashboard-grid {
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+    background-position: center;
+    background-size: 18px 18px;
+  }
 }

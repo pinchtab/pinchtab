@@ -210,8 +210,9 @@ export default function MonitoringPage() {
         {instances.length > 0 && (
           <div className="flex flex-1 gap-4 overflow-hidden">
             {/* Instance list */}
-            <div className="w-64 shrink-0 overflow-auto rounded-lg border border-border-subtle bg-bg-surface">
-              <div className="border-b border-border-subtle p-3">
+            <div className="dashboard-panel w-64 shrink-0 overflow-auto">
+              <div className="border-b border-border-subtle px-4 py-3">
+                <div className="dashboard-section-label mb-1">Monitoring</div>
                 <h3 className="text-sm font-semibold text-text-secondary">
                   Instances ({instances.length})
                 </h3>
@@ -233,15 +234,18 @@ export default function MonitoringPage() {
             </div>
 
             {/* Selected instance details */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-border-subtle bg-bg-surface">
+            <div className="dashboard-panel flex flex-1 flex-col overflow-hidden">
               {selectedInstance ? (
                 <>
-                  <div className="flex items-center justify-between border-b border-border-subtle p-3">
+                  <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
                     <div>
+                      <div className="dashboard-section-title mb-1">
+                        Active instance
+                      </div>
                       <h3 className="text-sm font-semibold text-text-primary">
                         {selectedInstance.profileName}
                       </h3>
-                      <div className="text-xs text-text-muted">
+                      <div className="dashboard-mono text-xs text-text-muted">
                         Port {selectedInstance.port} ·{" "}
                         {selectedInstance.headless ? "Headless" : "Headed"}
                       </div>

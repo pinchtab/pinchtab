@@ -693,6 +693,17 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 }
 
+// ApplyFileConfigToRuntime merges file configuration into an existing runtime
+// config and refreshes derived profile paths for long-running processes.
+func ApplyFileConfigToRuntime(cfg *RuntimeConfig, fc *FileConfig) {
+	if cfg == nil || fc == nil {
+		return
+	}
+
+	applyFileConfig(cfg, fc)
+	finalizeProfileConfig(cfg)
+}
+
 // DefaultFileConfig returns a FileConfig with sensible defaults (nested format).
 func DefaultFileConfig() FileConfig {
 	start := 9868

@@ -33,10 +33,10 @@ export default function InstanceListItem({
   return (
     <button
       onClick={onClick}
-      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-all ${
+      className={`mb-2 flex w-full items-center gap-3 px-3 py-3 text-left ${
         selected
-          ? "bg-primary/10 border border-primary"
-          : "border border-transparent hover:bg-bg-elevated"
+          ? "dashboard-panel dashboard-panel-selected border-primary"
+          : "dashboard-panel dashboard-panel-hover"
       }`}
     >
       <div className={`h-2 w-2 rounded-full ${statusColor}`} />
@@ -44,7 +44,7 @@ export default function InstanceListItem({
         <div className="truncate text-sm font-medium text-text-primary">
           {instance.profileName}
         </div>
-        <div className="text-xs text-text-muted">
+        <div className="dashboard-mono text-xs text-text-muted">
           :{instance.port} · {tabCount} tabs
           {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
         </div>

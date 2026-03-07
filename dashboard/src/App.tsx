@@ -8,18 +8,16 @@ import {
 } from "react-router-dom";
 import { useAppStore } from "./stores/useAppStore";
 import { NavBar } from "./components/molecules";
-import { DebugPanel } from "./components/atoms";
-import {
-  MonitoringPage,
-  ProfilesPage,
-  AgentsPage,
-  SettingsPage,
-} from "./pages";
+import { MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
 
 function AppContent() {
   const { setInstances, setProfiles, setAgents, setServerInfo } = useAppStore();
   const location = useLocation();
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-site-mode", "agent");
+  }, []);
 
   // Log navigation for debugging
   useEffect(() => {
@@ -73,18 +71,20 @@ function AppContent() {
   }, [setInstances, setProfiles, setAgents]);
 
   return (
-    <div className="flex h-screen flex-col bg-bg-app">
+    <div className="dashboard-shell flex h-screen flex-col bg-bg-app">
       <NavBar />
-      <main className="flex-1 overflow-hidden">
+      <main className="dashboard-grid flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Navigate to="/monitoring" replace />} />
           <Route path="/monitoring" element={<MonitoringPage />} />
           <Route path="/profiles" element={<ProfilesPage />} />
-          <Route path="/agents" element={<AgentsPage />} />
+          <Route
+            path="/agents"
+            element={<Navigate to="/monitoring" replace />}
+          />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
-      <DebugPanel />
     </div>
   );
 }

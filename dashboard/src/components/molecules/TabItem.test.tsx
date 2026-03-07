@@ -36,18 +36,18 @@ describe("TabItem", () => {
     render(<TabItem tab={mockTab} compact />);
 
     expect(screen.getByText("Example Page")).toBeInTheDocument();
-    // Compact wraps in a border-b div
+    // Compact renders as a flat bordered row
     const titleEl = screen.getByText("Example Page");
-    const outerDiv = titleEl.closest(".border-b");
+    const outerDiv = titleEl.closest(".rounded-sm");
     expect(outerDiv).toBeInTheDocument();
   });
 
-  it("renders card variant by default", () => {
+  it("renders flat row variant by default", () => {
     render(<TabItem tab={mockTab} />);
 
-    // Default uses Card component which has rounded class
+    // Default renders as a bordered row, not a nested card shell
     const titleEl = screen.getByText("Example Page");
-    const card = titleEl.closest(".rounded-lg");
-    expect(card).toBeInTheDocument();
+    const row = titleEl.closest(".rounded-md");
+    expect(row).toBeInTheDocument();
   });
 });

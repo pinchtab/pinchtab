@@ -34,9 +34,11 @@ export default function InstanceCard({ instance, onOpen, onStop }: Props) {
         </Badge>
       </div>
 
-      <div className="mb-3 rounded bg-bg-elevated px-2 py-1.5 text-xs">
-        <span className="text-text-muted">Uptime:</span>{" "}
-        <span className="text-text-secondary">
+      <div className="mb-3 rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.4)] px-3 py-2 text-xs">
+        <span className="dashboard-section-title mr-2 text-[0.68rem]">
+          Uptime
+        </span>
+        <span className="dashboard-mono text-text-secondary">
           {formatUptime(instance.startTime)}
         </span>
       </div>

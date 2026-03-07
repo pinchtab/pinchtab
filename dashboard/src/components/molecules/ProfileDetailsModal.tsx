@@ -2,12 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Modal, Button, Input } from "../atoms";
 import ScreencastTile from "./ScreencastTile";
 import TabItem from "./TabItem";
-import type {
-  Profile,
-  Instance,
-  InstanceTab,
-  Agent,
-} from "../../generated/types";
+import type { Profile, Instance, InstanceTab } from "../../generated/types";
 import * as api from "../../services/api";
 
 interface Props {
@@ -40,7 +35,6 @@ export default function ProfileDetailsModal({
   const [name, setName] = useState("");
   const [useWhen, setUseWhen] = useState("");
   const [tabs, setTabs] = useState<InstanceTab[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [logs] = useState(""); // TODO: fetch from /instances/{id}/logs
   const [copyFeedback, setCopyFeedback] = useState("");
 
@@ -59,20 +53,16 @@ export default function ProfileDetailsModal({
     if (!instance?.id) return;
 
     try {
-      const [allTabs, agentsData] = await Promise.all([
-        api.fetchAllTabs().catch(() => []),
-        api.fetchAgents().catch(() => []),
-      ]);
+      const allTabs = await api.fetchAllTabs().catch(() => []);
       // Filter tabs for this instance
       const instanceTabs = Array.isArray(allTabs)
         ? allTabs.filter((t) => t.instanceId === instance.id)
         : [];
       setTabs(instanceTabs);
-      setAgents(agentsData.filter((a) => a.name === profile?.name));
     } catch (e) {
       console.error("Failed to load live data", e);
     }
-  }, [instance, profile?.name]);
+  }, [instance]);
 
   useEffect(() => {
     if (activeTab === "live" || activeTab === "logs") {
@@ -294,19 +284,11 @@ export default function ProfileDetailsModal({
             {/* Agents */}
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                Agents ({agents.length})
+                Agents
               </h4>
-              {agents.length === 0 ? (
-                <p className="text-sm text-text-muted">No agents connected.</p>
-              ) : (
-                <div className="space-y-1">
-                  {agents.map((agent) => (
-                    <div key={agent.id} className="text-sm text-text-secondary">
-                      {agent.id}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="text-sm text-text-muted">
+                Agent registry is not exposed by the current backend.
+              </p>
             </div>
 
             {/* Logs placeholder */}

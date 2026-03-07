@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Card } from "../atoms";
 import type { InstanceTab } from "../../generated/types";
 
 interface Props {
@@ -34,10 +33,10 @@ export default function TabItem({ tab, compact }: Props) {
 
   if (compact) {
     return (
-      <div className="border-b border-border-subtle py-2">
+      <div className="rounded-sm border border-border-subtle/70 bg-white/[0.02] px-3 py-2">
         <div className="flex items-center gap-2 overflow-hidden">
           {idBadge}
-          <div className="text-text-muted/30">|</div>
+          <div className="text-text-dim">/</div>
           <div className="truncate text-sm font-medium text-text-primary">
             {tab.title || "Untitled"}
           </div>
@@ -50,10 +49,10 @@ export default function TabItem({ tab, compact }: Props) {
   }
 
   return (
-    <Card className="p-3">
+    <div className="rounded-md border border-border-subtle/80 bg-white/[0.02] px-3 py-2.5 transition-colors hover:border-border-default hover:bg-white/[0.03]">
       <div className="flex items-center gap-2 overflow-hidden">
         {idBadge}
-        <div className="text-text-muted/30">|</div>
+        <div className="text-text-dim">/</div>
         <div className="truncate text-sm font-medium text-text-primary">
           {tab.title || "Untitled"}
         </div>
@@ -61,6 +60,6 @@ export default function TabItem({ tab, compact }: Props) {
       <div className="mt-1 truncate text-xs text-text-muted opacity-80">
         {tab.url}
       </div>
-    </Card>
+    </div>
   );
 }

@@ -36,20 +36,21 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className={`max-h-[90vh] overflow-y-auto rounded-lg border border-border-subtle bg-bg-surface p-5 shadow-xl ${
+        className={`dashboard-panel max-h-[90vh] overflow-y-auto p-5 ${
           wide ? "w-full max-w-lg" : "w-full max-w-sm"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-lg font-semibold text-text-primary">
-          {title}
-        </h3>
+        <div className="mb-4 border-b border-border-subtle pb-4">
+          <div className="dashboard-section-label mb-2">Dashboard</div>
+          <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+        </div>
         <div className="text-sm text-text-secondary">{children}</div>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2 border-t border-border-subtle pt-4">
           {actions ?? (
             <Button variant="secondary" onClick={onClose}>
               Close

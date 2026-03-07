@@ -183,6 +183,42 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 	web.JSON(w, 201, inst)
 }
 
+func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	o.mu.RUnlock()
+
+	if !ok {
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return
+	}
+
+	if inst.Status != "running" || !instanceIsActive(inst) {
+		web.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+		return
+	}
+
+	tabs, err := o.fetchTabs(inst.URL)
+	if err != nil {
+		web.Error(w, 502, fmt.Errorf("failed to fetch tabs for instance %q: %w", id, err))
+		return
+	}
+
+	result := make([]map[string]any, 0, len(tabs))
+	for _, tab := range tabs {
+		result = append(result, map[string]any{
+			"id":         tab.ID,
+			"instanceId": inst.ID,
+			"url":        tab.URL,
+			"title":      tab.Title,
+		})
+	}
+
+	web.JSON(w, 200, result)
+}
+
 func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CdpURL string `json:"cdpUrl"`

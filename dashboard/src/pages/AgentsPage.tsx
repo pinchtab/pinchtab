@@ -1,8 +1,6 @@
-import { useEffect } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import { EmptyState } from "../components/atoms";
 import { AgentItem, ActivityLine } from "../components/molecules";
-import * as api from "../services/api";
 
 const filters = [
   { key: "all", label: "All" },
@@ -17,28 +15,9 @@ export default function AgentsPage() {
     selectedAgentId,
     events,
     eventFilter,
-    setAgents,
     setSelectedAgentId,
     setEventFilter,
   } = useAppStore();
-
-  const loadAgents = async () => {
-    try {
-      const data = await api.fetchAgents();
-      setAgents(data);
-    } catch (e) {
-      console.error("Failed to load agents", e);
-    }
-  };
-
-  // Agents are loaded via SSE init event — only load if empty
-  // Load once on mount if empty — intentionally omitting deps to avoid refetch loops
-  useEffect(() => {
-    if (agents.length === 0) {
-      loadAgents();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const filteredEvents = events.filter((e) => {
     if (selectedAgentId && e.agentId !== selectedAgentId) return false;
@@ -79,27 +58,24 @@ export default function AgentsPage() {
       </div>
 
       {/* Desktop: Agents sidebar */}
-      <div className="hidden w-64 shrink-0 border-r border-border-subtle bg-bg-surface sm:block">
-        <div className="border-b border-border-subtle p-3">
+      <div className="hidden w-72 shrink-0 border-r border-border-subtle bg-bg-surface sm:block">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <div className="dashboard-section-label mb-1">Agents</div>
           <h2 className="text-sm font-semibold text-text-secondary">Agents</h2>
         </div>
         <div className="p-2">
           {agents.length === 0 ? (
             <div className="py-8 text-center text-sm text-text-muted">
               <div className="mb-2 text-2xl">🦀</div>
-              No agents connected yet
-              <div className="mt-1 text-xs">
-                Make an API call with{" "}
-                <code className="text-primary">X-Agent-Id</code> header
-              </div>
+              No agent activity observed yet
             </div>
           ) : (
             <div className="flex flex-col gap-1">
               <button
-                className={`rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                className={`rounded-sm px-3 py-2 text-left text-sm transition-all ${
                   !selectedAgentId
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-muted hover:bg-bg-elevated"
+                    ? "border border-primary/30 bg-primary/10 text-primary"
+                    : "border border-transparent text-text-muted hover:bg-bg-elevated"
                 }`}
                 onClick={() => setSelectedAgentId(null)}
               >
@@ -120,18 +96,21 @@ export default function AgentsPage() {
 
       {/* Activity feed */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border-subtle bg-bg-surface px-4 py-2">
-          <h2 className="text-sm font-semibold text-text-secondary">
-            Activity Feed
-          </h2>
+        <div className="flex items-center justify-between border-b border-border-subtle bg-bg-surface px-4 py-3">
+          <div>
+            <div className="dashboard-section-label mb-1">Feed</div>
+            <h2 className="text-sm font-semibold text-text-secondary">
+              Activity Feed
+            </h2>
+          </div>
           <div className="flex gap-1">
             {filters.map((f) => (
               <button
                 key={f.key}
-                className={`rounded px-2 py-1 text-xs font-medium transition-all ${
+                className={`rounded-sm border px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] transition-all ${
                   eventFilter === f.key
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-muted hover:bg-bg-elevated hover:text-text-secondary"
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-transparent text-text-muted hover:border-border-subtle hover:bg-bg-elevated hover:text-text-secondary"
                 }`}
                 onClick={() => setEventFilter(f.key)}
               >

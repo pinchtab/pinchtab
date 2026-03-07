@@ -11,9 +11,9 @@ interface Props {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between text-xs">
-      <span className="text-text-muted">{label}</span>
-      <span className="text-text-secondary">{value}</span>
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="dashboard-section-title text-[0.68rem]">{label}</span>
+      <span className="dashboard-mono text-text-secondary">{value}</span>
     </div>
   );
 }
@@ -33,7 +33,7 @@ export default function ProfileCard({
   return (
     <Card hover className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border-subtle p-3">
+      <div className="flex items-center justify-between border-b border-border-subtle bg-black/10 px-4 py-3">
         <span className="truncate font-medium text-text-primary">
           {profile.name}
         </span>
@@ -47,13 +47,15 @@ export default function ProfileCard({
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
+      <div className="flex flex-1 flex-col gap-2 px-4 py-4">
         <InfoRow label="Size" value={sizeText} />
         <InfoRow label="Account" value={accountText} />
         {profile.useWhen && (
-          <div className="mt-1">
-            <div className="text-xs text-text-muted">Use when</div>
-            <div className="mt-0.5 line-clamp-2 text-xs text-text-secondary">
+          <div className="mt-2 rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.4)] p-3">
+            <div className="dashboard-section-title text-[0.68rem]">
+              Use when
+            </div>
+            <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
               {profile.useWhen}
             </div>
           </div>
@@ -64,7 +66,7 @@ export default function ProfileCard({
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end gap-2 border-t border-border-subtle p-3">
+      <div className="flex justify-end gap-2 border-t border-border-subtle bg-black/10 px-4 py-3">
         {onDetails && (
           <Button size="sm" variant="ghost" onClick={onDetails}>
             Details

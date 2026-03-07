@@ -146,9 +146,18 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SSE connections are intentionally long-lived. Clear the server-level write
+	// deadline for this response so the stream is not terminated after
+	// http.Server.WriteTimeout elapses.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		http.Error(w, "streaming deadline unsupported", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	agentCh := make(chan AgentEvent, d.cfg.SSEBufferSize)
 	sysCh := make(chan SystemEvent, d.cfg.SSEBufferSize)

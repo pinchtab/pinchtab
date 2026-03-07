@@ -6,8 +6,8 @@ import type {
   Agent,
   ActivityEvent,
   Settings,
-  ServerInfo,
 } from "../generated/types";
+import type { DashboardServerInfo } from "../types";
 
 export interface TabDataPoint {
   timestamp: number;
@@ -69,8 +69,8 @@ interface AppState {
   setSettings: (settings: Settings) => void;
 
   // Server info
-  serverInfo: ServerInfo | null;
-  setServerInfo: (info: ServerInfo | null) => void;
+  serverInfo: DashboardServerInfo | null;
+  setServerInfo: (info: DashboardServerInfo | null) => void;
 }
 
 const defaultSettings: Settings = {

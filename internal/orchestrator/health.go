@@ -144,7 +144,7 @@ type memoryMetrics struct {
 }
 
 func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/screencast/tabs", nil)
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/tabs", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +158,17 @@ func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var tabs []remoteTab
-	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch tabs: status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Tabs []remoteTab `json:"tabs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	return tabs, nil
+	return result.Tabs, nil
 }
 
 func (o *Orchestrator) fetchMetrics(baseURL string) (*memoryMetrics, error) {

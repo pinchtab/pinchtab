@@ -14,13 +14,9 @@ export default function Card({
 }: Props) {
   return (
     <div
-      className={`rounded-lg border bg-bg-surface ${
-        selected ? "border-primary" : "border-border-subtle"
-      } ${
-        hover
-          ? "cursor-pointer transition-all duration-150 hover:border-border-default hover:bg-bg-elevated"
-          : ""
-      } ${className}`}
+      className={`dashboard-panel ${
+        selected ? "dashboard-panel-selected border-primary" : ""
+      } ${hover ? "dashboard-panel-hover cursor-pointer" : ""} ${className}`}
       {...props}
     >
       {children}
