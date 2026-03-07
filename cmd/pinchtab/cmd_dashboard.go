@@ -127,16 +127,6 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		slog.Info("scheduler enabled", "strategy", schedCfg.Strategy, "workers", schedCfg.WorkerCount)
 	}
 
-	// Root returns health check (API-first design)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]any{
-			"status":    "ok",
-			"mode":      "dashboard",
-			"dashboard": "/dashboard",
-			"docs":      "/api/docs",
-		})
-	})
-
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
