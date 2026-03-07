@@ -51,6 +51,7 @@ Complete reference for all PinchTab environment variables and configuration opti
 
 | Variable | Default | Description |
 |---|---|---|
+| `BRIDGE_MODE` | `dashboard` | Server mode: `dashboard` (profile/orchestrator UI) or `bridge` (single-instance API mode). `PINCHTAB_MODE` is the preferred modern alias. |
 | `BRIDGE_DASHBOARD_PORT` | Same as `BRIDGE_PORT` | Dashboard HTTP port (usually same as API server) |
 | `BRIDGE_NO_DASHBOARD` | `false` | Disable dashboard (API-only mode) |
 
