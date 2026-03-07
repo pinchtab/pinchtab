@@ -101,6 +101,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)
 	mux.HandleFunc("GET /tabs/{id}/pdf", h.HandleTabPDF)
 	mux.HandleFunc("POST /tabs/{id}/pdf", h.HandleTabPDF)
+	mux.HandleFunc("GET /pdf", h.HandlePDF)
+	mux.HandleFunc("POST /pdf", h.HandlePDF)
 	mux.HandleFunc("GET /text", h.HandleText)
 	mux.HandleFunc("GET /help", h.HandleHelp)
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)

@@ -35,20 +35,40 @@ The commands below assume `jq` is installed.
 curl -s "$BASE/health" | jq .
 ```
 
-You should get a JSON health response from the bridge runtime.
-
-## 2. Open A Tab
-
 ```bash
-TAB=$(curl -s -X POST "$BASE/tab" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"new","url":"https://www.wikipedia.org"}' \
-  | jq -r '.tabId // .id')
-
-echo "$TAB"
+# CLI alternative
+pinchtab health
 ```
 
-This opens a new tab and stores the tab ID in `TAB`.
+```jsonc
+// Response
+{
+  "status": "ok",
+  "tabs": 1
+}
+```
+
+## 2. Navigate To A Page
+
+```bash
+curl -s -X POST "$BASE/navigate" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://github.com/pinchtab/pinchtab"}' | jq .
+```
+
+```bash
+# CLI alternative
+pinchtab nav https://github.com/pinchtab/pinchtab
+```
+
+```jsonc
+// Response
+{
+  "tabId": "BD78E40ED7400A4B0E73B99415E1B9EA",
+  "title": "GitHub - pinchtab/pinchtab",
+  "url": "https://github.com/pinchtab/pinchtab"
+}
+```
 
 ## 3. List Tabs
 
@@ -56,133 +76,298 @@ This opens a new tab and stores the tab ID in `TAB`.
 curl -s "$BASE/tabs" | jq .
 ```
 
-This confirms the bridge sees the tab you just opened.
+```bash
+# CLI alternative
+pinchtab tabs
+```
+
+```jsonc
+// Response
+{
+  "tabs": [
+    {
+      "id": "BD78E40ED7400A4B0E73B99415E1B9EA",
+      "title": "GitHub - pinchtab/pinchtab",
+      "type": "page",
+      "url": "https://github.com/pinchtab/pinchtab"
+    }
+  ]
+}
+```
 
 ## 4. Capture An Interactive Snapshot
 
 ```bash
-curl -s "$BASE/tabs/$TAB/snapshot?filter=interactive" | jq .
+curl -s "$BASE/snapshot?filter=interactive" | jq .
 ```
 
-This returns the accessibility-style tree used for refs and actions.
+```bash
+# CLI alternative (compact format)
+pinchtab snap -i -c
+```
+
+```jsonc
+// Response (JSON)
+{
+  "nodes": [
+    { "ref": "e0", "role": "link", "name": "Skip to content" },
+    { "ref": "e1", "role": "link", "name": "GitHub Homepage" },
+    { "ref": "e14", "role": "button", "name": "Search or jump to…" }
+  ]
+}
+```
+
+```bash
+# CLI compact output
+# GitHub - pinchtab/pinchtab | https://github.com/pinchtab/pinchtab | 219 nodes
+e0:link "Skip to content"
+e1:link "GitHub Homepage"
+e14:button "Search or jump to…"
+...
+```
 
 ## 5. Extract Page Text
 
 ```bash
-curl -s "$BASE/tabs/$TAB/text" | jq .
+curl -s "$BASE/text" | jq .
 ```
 
-This verifies text extraction works for the current tab.
-
-## 6. Find A Search Input Ref
-
 ```bash
-SEARCH_REF=$(curl -s "$BASE/tabs/$TAB/snapshot?filter=interactive" \
-  | jq -r '.. | objects | select(.role? == "textbox" or .role? == "searchbox" or .name? == "Search Wikipedia") | .ref' \
-  | head -1)
-
-echo "$SEARCH_REF"
+# CLI alternative
+pinchtab text
 ```
 
-This extracts one interactive ref from the snapshot.
+```jsonc
+// Response
+{
+  "text": "High-performance browser automation bridge and multi-instance orchestrator...",
+  "title": "GitHub - pinchtab/pinchtab",
+  "url": "https://github.com/pinchtab/pinchtab"
+}
+```
 
-## 7. Fill And Press Enter
+## 6. Click An Element
+
+First get the snapshot to cache refs:
 
 ```bash
-curl -s -X POST "$BASE/tabs/$TAB/action" \
+curl -s "$BASE/snapshot?filter=interactive" > /dev/null
+```
+
+Then click:
+
+```bash
+curl -s -X POST "$BASE/action" \
   -H "Content-Type: application/json" \
-  -d "{\"kind\":\"fill\",\"ref\":\"$SEARCH_REF\",\"text\":\"Browser automation\"}" | jq .
-
-curl -s -X POST "$BASE/tabs/$TAB/action" \
-  -H "Content-Type: application/json" \
-  -d '{"kind":"press","key":"Enter"}' | jq .
+  -d '{"kind":"click","ref":"e14"}' | jq .
 ```
-
-This verifies action execution and should trigger navigation.
-
-## 8. Snapshot Again After Navigation
 
 ```bash
-curl -s "$BASE/tabs/$TAB/snapshot?filter=interactive" | jq .
+# CLI alternative (run snap first to cache refs)
+pinchtab snap -i > /dev/null
+pinchtab click e14
 ```
 
-This confirms the bridge remains usable after a page transition.
+```jsonc
+// Response
+{
+  "success": true,
+  "result": {
+    "clicked": true
+  }
+}
+```
+
+## 7. Type Into A Search Box
+
+After clicking the search button (e14), a search input appears:
+
+```bash
+curl -s "$BASE/snapshot?filter=interactive" | jq '.. | objects | select(.role == "combobox")' | head -10
+```
+
+```bash
+# CLI alternative
+pinchtab snap -i -c | grep combobox
+# Output: e221:combobox "Search" val="repo:pinchtab/pinchtab"
+```
+
+Type into it:
+
+```bash
+curl -s -X POST "$BASE/action" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"type","ref":"e221","text":"browser automation"}' | jq .
+```
+
+```bash
+# CLI alternative
+pinchtab type e221 "browser automation"
+```
+
+```jsonc
+// Response
+{
+  "success": true,
+  "result": {
+    "typed": "browser automation"
+  }
+}
+```
+
+## 8. Press A Key
+
+```bash
+curl -s -X POST "$BASE/action" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"press","key":"Escape"}' | jq .
+```
+
+```bash
+# CLI alternative
+pinchtab press Escape
+```
+
+```jsonc
+// Response
+{
+  "success": true,
+  "result": {
+    "pressed": "Escape"
+  }
+}
+```
 
 ## 9. Take A Screenshot
 
 ```bash
-curl -s "$BASE/tabs/$TAB/screenshot" > smoke.jpg
+curl -s "$BASE/screenshot" > smoke.jpg
 ls -lh smoke.jpg
 ```
 
-This verifies screenshot generation.
+```bash
+# CLI alternative
+pinchtab ss -o smoke.jpg
+```
+
+```bash
+# Output
+Saved smoke.jpg (55876 bytes)
+-rw-------  1 user  staff  55K Mar  7 18:20 smoke.jpg
+```
 
 ## 10. Export A PDF
 
 ```bash
-curl -s "$BASE/tabs/$TAB/pdf" > smoke.pdf
+curl -s "$BASE/pdf" > smoke.pdf
 ls -lh smoke.pdf
 ```
 
-This verifies PDF export.
+```bash
+# CLI alternative
+pinchtab pdf -o smoke.pdf
+```
+
+```jsonc
+// Output
+Saved smoke.pdf (1494657 bytes)
+-rw-------  1 user  staff  1.4M Mar  7 18:51 smoke.pdf
+```
 
 ## 11. Read Cookies
 
 ```bash
-curl -s "$BASE/tabs/$TAB/cookies" | jq .
+TAB=$(curl -s "$BASE/tabs" | jq -r '.tabs[0].id')
+curl -s "$BASE/tabs/$TAB/cookies" | jq '.cookies[:2]'
 ```
 
-This checks cookie retrieval for the active page.
+```jsonc
+// Response
+[
+  {
+    "domain": ".github.com",
+    "name": "_gh_sess",
+    "path": "/",
+    "secure": true,
+    "httpOnly": true
+  }
+]
+```
+
+> **Note:** No direct CLI alternative for cookies. Use curl or the API.
 
 ## 12. Lock And Unlock The Tab
 
 ```bash
+TAB=$(curl -s "$BASE/tabs" | jq -r '.tabs[0].id')
+
 curl -s -X POST "$BASE/tabs/$TAB/lock" \
   -H "Content-Type: application/json" \
   -d '{"owner":"smoke-test","ttl":60}' | jq .
+```
 
+```jsonc
+// Response
+{
+  "locked": true,
+  "owner": "smoke-test",
+  "expiresAt": "2026-03-07T18:30:43+01:00"
+}
+```
+
+```bash
 curl -s -X POST "$BASE/tabs/$TAB/unlock" \
   -H "Content-Type: application/json" \
   -d '{"owner":"smoke-test"}' | jq .
 ```
 
-This verifies tab ownership locking works.
+```jsonc
+// Response
+{
+  "unlocked": true
+}
+```
+
+> **Note:** No direct CLI alternative for lock/unlock. Use curl or the API.
 
 ## 13. Open A Second Tab
 
 ```bash
-TAB2=$(curl -s -X POST "$BASE/tab" \
+curl -s -X POST "$BASE/tab" \
   -H "Content-Type: application/json" \
-  -d '{"action":"new","url":"https://example.com"}' \
-  | jq -r '.tabId // .id')
-
-echo "$TAB2"
-curl -s "$BASE/tabs" | jq .
+  -d '{"action":"new","url":"https://pinchtab.com"}' | jq .
 ```
-
-This confirms the bridge handles multiple tabs in one runtime.
-
-## Optional: Evaluate JavaScript
-
-This only works if `evaluate` is enabled in config.
 
 ```bash
-curl -s -X POST "$BASE/tabs/$TAB/evaluate" \
-  -H "Content-Type: application/json" \
-  -d '{"expression":"document.title"}' | jq .
+# CLI alternative
+pinchtab nav https://pinchtab.com
 ```
 
-## Optional: Use The Top-Level Shorthand Endpoints
-
-```bash
-curl -s -X POST "$BASE/navigate" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}' | jq .
-
-curl -s "$BASE/snapshot?filter=interactive" | jq .
+```jsonc
+// Response
+{
+  "tabId": "F266512A8B4FF5E537ADECDCD898BA02",
+  "title": "PinchTab — Browser Control for AI Agents",
+  "url": "https://pinchtab.com/"
+}
 ```
 
-These verify the direct bridge shortcuts in addition to the tab-scoped endpoints.
+## CLI Quick Reference
+
+| Action | CLI Command |
+|--------|-------------|
+| Health check | `pinchtab health` |
+| Navigate | `pinchtab nav <url>` |
+| List tabs | `pinchtab tabs` |
+| Snapshot | `pinchtab snap -i -c` |
+| Extract text | `pinchtab text` |
+| Click | `pinchtab click <ref>` |
+| Type | `pinchtab type <ref> <text>` |
+| Press key | `pinchtab press Enter` |
+| Screenshot | `pinchtab ss -o file.jpg` |
+| PDF export | `pinchtab pdf -o file.pdf` |
+
+> **Tip:** Run `pinchtab snap` before `click` or `type` to cache element refs.
 
 ## What This Example Proves
 
@@ -190,11 +375,10 @@ If the full sequence works, your bridge runtime can:
 - start and respond to API requests
 - manage multiple tabs
 - inspect page structure and text
-- execute actions
-- render visual outputs
+- execute actions (click, type, press)
+- render visual outputs (screenshots, PDFs)
 - support locking and basic browser state APIs
 
 If this example fails, check:
 - the bridge is running on `127.0.0.1:9867`
 - Chrome can be started successfully
-- required features such as `evaluate` are enabled before testing them

@@ -43,7 +43,7 @@ CLI COMMANDS:
   pinchtab tabs [new <url>|close <id>]  Manage tabs
   pinchtab ss [-o file] [-q 80]         Screenshot
   pinchtab eval <expression>            Run JavaScript
-  pinchtab pdf --tab <id> [-o file] [options]  Export tab as PDF (see PDF FLAGS)
+  pinchtab pdf [-o file] [--tab <id>] [options]  Export page as PDF (see PDF FLAGS)
   pinchtab instances                    List running instances
   pinchtab profiles                     List available profiles
   pinchtab health                       Check server status
@@ -873,11 +873,13 @@ func cliPDF(client *http.Client, base, token string, args []string) {
 	if outFile == "" {
 		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
 	}
-	if tabID == "" {
-		fatal("tab id required for pdf export: use --tab <tabId> or 'pinchtab tab pdf <tabId>'")
-	}
 
-	data := doGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/pdf", tabID), params)
+	var data []byte
+	if tabID != "" {
+		data = doGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/pdf", tabID), params)
+	} else {
+		data = doGetRaw(client, base, token, "/pdf", params)
+	}
 	if data == nil {
 		return
 	}
