@@ -60,6 +60,8 @@ curl -X POST http://localhost:9867/navigate \
 curl http://localhost:9867/snapshot?filter=interactive
 ```
 
+For a broader end-to-end check, see [Example: Bridge Smoke Test](../examples/bridge-smoke-test.md).
+
 ## Configuration Model
 
 Bridge mode still uses the same `config.json` and operational env surface:

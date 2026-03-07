@@ -31,6 +31,46 @@ The product has two process roles:
 Agents never touch CDP directly. They send HTTP requests, get back JSON.
 The accessibility tree (a11y) is the primary interface — not screenshots, not DOM.
 
+## Security Layer
+
+Pinchtab now has a real security layer for indirect prompt injection defense.
+
+This layer lives in the server path, not inside the agent and not inside Chrome.
+Its job is to inspect untrusted web input before that content is passed back to an LLM-driven caller.
+
+Current security responsibilities:
+
+- **domain policy on navigation** — block or warn before navigating to non-approved domains
+- **content scanning on output** — scan `/text` and `/snapshot` output for common prompt-injection phrases
+- **content wrapping** — wrap extracted text in `<untrusted_web_content>` delimiters with a safety advisory
+
+The important architectural distinction is:
+
+- **security** decides whether content should be admitted, annotated, or blocked
+- **routing** decides which instance/tab path handles the request
+- **execution** performs the actual browser action
+
+In other words:
+
+```text
+request
+  -> security / policy
+  -> routing
+  -> execution
+```
+
+The security layer is configured through `security.idpi` in config and supports:
+
+- `enabled`
+- `allowedDomains`
+- `strictMode`
+- `scanContent`
+- `wrapContent`
+- `customPatterns`
+
+Strict mode blocks.
+Warn mode allows the request but annotates the response with an IDPI warning.
+
 ## Instance Mental Model
 
 The cleanest way to think about instances is with two axes:
@@ -164,6 +204,7 @@ A plausible future expansion is:
 
 For a focused comparison, see [Managed Bridge vs Managed Direct-CDP](managed-bridge-vs-managed-direct-cdp.md).
 For the visual version of the model, see [Instance Model Charts](instance-model-charts.md).
+For the full system picture, see [Overall System Chart](overall-system-chart.md).
 
 ## Design Principles
 
@@ -171,7 +212,8 @@ For the visual version of the model, see [Instance Model Charts](instance-model-
 2. **HTTP over WebSocket** — Stateless requests, no connection management for agents
 3. **Ref stability** — Snapshot refs (e0, e1...) are cached and reused by action endpoints
 4. **Self-contained by default** — Launches and manages Chrome itself unless you explicitly use attach
-5. **Decoupled Architecture** — Interface-driven design for testability and maintainability
+5. **Layered Safety** — Security policy is enforced before untrusted web content reaches downstream agents
+6. **Decoupled Architecture** — Interface-driven design for testability and maintainability
 
 ## Project Layout
 

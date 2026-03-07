@@ -22,6 +22,7 @@ var (
 	metricRequestLatencyN uint64
 	metricRateLimited     uint64
 	metricStaleRefRetries uint64
+	metricPanicsRecovered uint64
 )
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -34,6 +35,14 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		atomic.AddUint64(&metricRequestLatencyN, ms)
 		if sw.Code >= 400 {
 			atomic.AddUint64(&metricRequestsFailed, 1)
+			recordFailureEvent(FailureEvent{
+				Time:      time.Now(),
+				RequestID: w.Header().Get("X-Request-Id"),
+				Method:    r.Method,
+				Path:      r.URL.Path,
+				Status:    sw.Code,
+				Type:      "http_error",
+			})
 		}
 		slog.Info("request",
 			"requestId", w.Header().Get("X-Request-Id"),

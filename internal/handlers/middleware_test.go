@@ -160,6 +160,7 @@ func TestCorsMiddleware(t *testing.T) {
 }
 
 func TestLoggingMiddleware(t *testing.T) {
+	resetObservabilityForTests()
 	handler := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201)
 	}))
@@ -170,6 +171,32 @@ func TestLoggingMiddleware(t *testing.T) {
 
 	if w.Code != 201 {
 		t.Errorf("expected 201, got %d", w.Code)
+	}
+}
+
+func TestLoggingMiddleware_RecordsFailure(t *testing.T) {
+	resetObservabilityForTests()
+	handler := RequestIDMiddleware(LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})))
+
+	req := httptest.NewRequest("GET", "/boom", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	snap := FailureSnapshot()
+	if got := snap["requestsFailed"].(uint64); got != 1 {
+		t.Fatalf("requestsFailed = %d, want 1", got)
+	}
+	recent, ok := snap["recent"].([]FailureEvent)
+	if !ok || len(recent) != 1 {
+		t.Fatalf("recent failures = %#v, want 1 event", snap["recent"])
+	}
+	if recent[0].Path != "/boom" {
+		t.Fatalf("recent path = %q, want /boom", recent[0].Path)
+	}
+	if recent[0].RequestID == "" {
+		t.Fatal("expected request id on failure event")
 	}
 }
 

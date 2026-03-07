@@ -395,3 +395,40 @@ func TestHandleHealth_Response(t *testing.T) {
 		t.Errorf("expected application/json, got %s", ct)
 	}
 }
+
+func TestHandleHealth_IncludesFailureAndCrashDiagnostics(t *testing.T) {
+	resetObservabilityForTests()
+	bridge.ResetCrashMonitoringForTests()
+	recordFailureEvent(FailureEvent{
+		Time:      time.Now(),
+		RequestID: "req_123",
+		Method:    "GET",
+		Path:      "/tabs/bad",
+		Status:    500,
+		Type:      "http_error",
+	})
+	bridge.RecordCrashForTests(bridge.CrashEvent{
+		Time:   time.Now(),
+		Reason: "target crashed",
+	})
+
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	h.HandleHealth(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if _, ok := resp["failures"]; !ok {
+		t.Fatal("expected failures diagnostics in /health response")
+	}
+	if _, ok := resp["crashes"]; !ok {
+		t.Fatal("expected crashes diagnostics in /health response")
+	}
+}

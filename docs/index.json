@@ -17,6 +17,7 @@
   ],
   "architecture": [
     "architecture/pinchtab-architecture.md",
+    "architecture/overall-system-chart.md",
     "architecture/instance-model-charts.md",
     "architecture/managed-bridge-vs-managed-direct-cdp.md",
     "architecture/chrome-lifecycle-and-orchestration.md",
@@ -33,6 +34,9 @@
     "guides/memory-monitoring.md",
     "guides/data-storage.md",
     "guides/raspberry-pi.md"
+  ],
+  "examples": [
+    "examples/bridge-smoke-test.md"
   ],
   "proposals": [
     "proposals/default-instance.md",

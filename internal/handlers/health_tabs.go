@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -33,6 +34,12 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if crashLogs := h.Bridge.GetCrashLogs(); len(crashLogs) > 0 {
 		resp["crashLogs"] = crashLogs
 	}
+	if hasFailureDiagnostics() {
+		resp["failures"] = FailureSnapshot()
+	}
+	if bridge.HasCrashDiagnostics() {
+		resp["crashes"] = bridge.CrashSnapshot()
+	}
 
 	web.JSON(w, 200, resp)
 }
@@ -48,6 +55,12 @@ func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	result := map[string]any{"metrics": SnapshotMetrics()}
+	if hasFailureDiagnostics() {
+		result["failures"] = FailureSnapshot()
+	}
+	if bridge.HasCrashDiagnostics() {
+		result["crashes"] = bridge.CrashSnapshot()
+	}
 
 	// Aggregate memory metrics across all tabs
 	if h.Bridge != nil {
