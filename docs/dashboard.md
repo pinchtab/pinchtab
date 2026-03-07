@@ -2,6 +2,10 @@
 
 PinchTab includes a built-in web dashboard for monitoring and managing instances, profiles, and agent activity.
 
+The dashboard is part of the **full server**:
+- `pinchtab` or `pinchtab server` starts the full server and serves the dashboard
+- `pinchtab bridge` does not serve the dashboard; it only exposes the single-instance bridge API
+
 Access the dashboard at **`http://localhost:9867`** (adjust port if needed).
 
 Alternatively, use **`http://localhost:9867/dashboard`** (also works for backward compatibility).

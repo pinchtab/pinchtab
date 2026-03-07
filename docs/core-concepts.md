@@ -1,6 +1,11 @@
 # Core Concepts
 
-PinchTab is an HTTP server that controls four key entities: **PinchTab itself**, **Instances**, **Profiles**, and **Tabs**.
+PinchTab is built around two process roles and three main runtime entities:
+- **Server**
+- **Bridge**
+- **Instance**
+- **Profile**
+- **Tab**
 
 **See also:**
 - [Instance API Reference](references/instance-api.md) — Complete instance endpoints
@@ -9,25 +14,44 @@ PinchTab is an HTTP server that controls four key entities: **PinchTab itself**,
 
 ---
 
-## PinchTab
+## Server
 
-The **HTTP server controller** (orchestrator) that manages all instances, profiles, and tabs.
+The **full PinchTab server** is the main control-plane process. It manages instances, profiles, routing, and the web dashboard.
 
 - Listens on port `9867` (configurable, dashboard + API)
 - Routes requests to the appropriate instance
 - Manages instance lifecycle (launch, monitor, stop)
 - Provides unified HTTP API for all operations
-- No Chrome process itself — purely orchestrator
+- Does not talk to Chrome directly for normal managed instances; it delegates to bridge runtimes
 
 ```bash
-# Start PinchTab orchestrator (default: port 9867)
+# Start the full server
 pinchtab
 # Listening on http://localhost:9867
 
+# Or explicitly
+pinchtab server
+
 # Or specify port
-BRIDGE_PORT=9870 pinchtab
+PINCHTAB_PORT=9870 pinchtab server
 # Listening on http://localhost:9870
 ```
+
+## Bridge
+
+The **bridge** is the single-instance runtime.
+
+- Wraps one browser instance
+- Exposes the tab/browser HTTP API
+- Used for managed child instances spawned by the server
+- Can also be started explicitly with `pinchtab bridge`
+
+```bash
+# Explicit bridge mode
+pinchtab bridge
+```
+
+Most users do not start `bridge` directly. They run the server, and the server launches bridge children as needed.
 
 ---
 
@@ -47,7 +71,7 @@ A **running Chrome process** with an optional profile, auto-allocated to a uniqu
 
 ### Creating Instances
 
-Instances are managed by the orchestrator via the API (not by running separate processes).
+Instances are managed by the server via the API. Managed instances run as isolated bridge child processes.
 
 ```bash
 # CLI: Create instance (headless by default)
@@ -80,7 +104,7 @@ curl -X POST http://localhost:9867/instances/launch \
 You can run multiple instances simultaneously for isolation and scalability. The orchestrator manages them automatically:
 
 ```bash
-# Terminal 1: Start orchestrator
+# Terminal 1: Start server
 pinchtab
 
 # Terminal 2: Create multiple instances
@@ -186,10 +210,15 @@ curl -X POST http://localhost:9867/instances/start \
 curl -X POST http://localhost:9867/instances/start \
   -d '{"profileId": "work"}'
 
-# Navigate and log in
-curl -X POST http://localhost:9867/instances/inst_xyz/navigate \
-  -d '{"url": "https://pinchtab.com/login"}'
-# ... fill login form, click submit ...
+# Open a login tab and log in
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/inst_xyz/tabs/open \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://pinchtab.com/login"}' | jq -r '.tabId')
+
+curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"fill","ref":"e3","text":"user@pinchtab.com"}'
+# ... continue login flow ...
 
 # Later (even after instance restart): Profile is persistent
 pinchtab instance launch  # Or restart orchestrator
@@ -223,14 +252,16 @@ pinchtab tab open inst_0a89a5bb https://pinchtab.com
 curl http://localhost:9867/tabs/tab_abc123 | jq .
 
 # Navigate tab
-curl -X POST http://localhost:9867/instances/inst_0a89a5bb/navigate \
+curl -X POST http://localhost:9867/tabs/tab_abc123/navigate \
+  -H "Content-Type: application/json" \
   -d '{"url": "https://google.com"}'
 
 # Take snapshot (DOM structure)
-curl http://localhost:9867/instances/inst_0a89a5bb/snapshot | jq .
+curl http://localhost:9867/tabs/tab_abc123/snapshot | jq .
 
 # Interact with tab (click, type, etc.)
-curl -X POST http://localhost:9867/instances/inst_0a89a5bb/action \
+curl -X POST http://localhost:9867/tabs/tab_abc123/action \
+  -H "Content-Type: application/json" \
   -d '{"kind": "click", "ref": "e5"}'
 
 # Close tab
@@ -247,7 +278,7 @@ pinchtab tab close tab_abc123
 ## Hierarchy
 
 ```text
-PinchTab Orchestrator (HTTP server on port 9867)
+PinchTab Server (HTTP server on port 9867)
   │
   ├── Instance 1 (inst_0a89a5bb, port 9868, temp profile)
   │     ├── Tab 1 (tab_xyz123, https://pinchtab.com)
@@ -366,9 +397,12 @@ while true; do
   sleep 0.5
 done
 
-# Now safe to make requests to the instance
-curl -X POST http://localhost:9867/instances/$INST/navigate \
-  -d '{"url":"https://pinchtab.com"}'
+# Now safe to create a tab and work through tab endpoints
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://pinchtab.com"}' | jq -r '.tabId')
+
+curl http://localhost:9867/tabs/$TAB_ID/snapshot
 ```
 
 ---
@@ -378,7 +412,7 @@ curl -X POST http://localhost:9867/instances/$INST/navigate \
 ```
 What you control         │ What it is               │ Identified by
 ─────────────────────────┼──────────────────────────┼─────────────────────
-PinchTab Orchestrator    │ HTTP server controller   │ port (9867 default)
+PinchTab Server          │ HTTP control plane       │ port (9867 default)
 Instance                 │ Chrome process           │ inst_XXXXXXXX (hash ID)
 Profile (optional)       │ Browser state directory  │ prof_XXXXXXXX (hash ID)
 Tab                      │ Single webpage           │ tab_XXXXXXXX (hash ID)
@@ -386,7 +420,7 @@ Tab                      │ Single webpage           │ tab_XXXXXXXX (hash ID)
 
 ## Summary
 
-- **PinchTab Orchestrator** is the HTTP server that manages everything
+- **PinchTab Server** is the HTTP control plane that manages everything
 - **Instance** is a running Chrome process with optional profile and multiple tabs
 - **Profile** is optional persistent browser state (cookies, auth, history)
 - **Tab** is the actual webpage you navigate and interact with

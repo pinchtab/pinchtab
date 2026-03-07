@@ -5,7 +5,11 @@
 Pinchtab is an HTTP server (Go binary, ~12MB) that wraps Chrome DevTools Protocol (CDP)
 to give AI agents browser control via a simple REST API.
 
-**Self-hosted mode (default):** Pinchtab launches and manages its own Chrome instance.
+The product has two process roles:
+- **Server** — the default `pinchtab` process that manages profiles, instances, routing, and the dashboard
+- **Bridge** — the single-instance runtime used for one managed browser
+
+**Managed mode (default):** the Pinchtab server launches and manages bridge-backed Chrome instances.
 
 ```
 ┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌──────────────┐
@@ -14,27 +18,159 @@ to give AI agents browser control via a simple REST API.
 └─────────────┘    JSON/text  └──────────────┘   WebSocket    └──────────────┘
 ```
 
-**Remote Chrome mode (CDP_URL):** Pinchtab connects to an existing Chrome instance via CDP_URL.
+**Attach mode (advanced):** the Pinchtab server can register an externally managed Chrome instance through the instance API when attach is enabled by policy.
 
 ```
 ┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌──────────────┐
-│  Multiple   │ ────────────▶ │  Multiple    │ ─────────────▶ │  Shared      │
-│  Agents     │ ◀──────────── │  Pinchtab    │ ◀───────────── │  Chrome      │
-│             │    JSON/text  │  instances   │   WebSocket    │  instance    │
+│  Multiple   │ ────────────▶ │  Pinchtab    │ ─────────────▶ │  External    │
+│  Agents     │ ◀──────────── │   Server     │ ◀───────────── │   Chrome     │
+│             │    JSON/text  │              │   WebSocket    │   Instance   │
 └─────────────┘               └──────────────┘                └──────────────┘
 ```
 
-See [docs/cdp-url-shared-chrome.md](cdp-url-shared-chrome.md) for multi-agent resource sharing and container deployment patterns.
-
 Agents never touch CDP directly. They send HTTP requests, get back JSON.
 The accessibility tree (a11y) is the primary interface — not screenshots, not DOM.
+
+## Instance Mental Model
+
+The cleanest way to think about instances is with two axes:
+
+- **Source** — who created or registered the instance
+- **Runtime** — how the server reaches the browser
+
+### Chart 1: Process Roles
+
+```text
+pinchtab server
+  ├─ manages profiles
+  ├─ manages instances
+  ├─ routes requests
+  └─ serves dashboard/API
+
+pinchtab bridge
+  ├─ wraps one browser
+  ├─ exposes single-instance HTTP API
+  └─ is usually spawned by the server
+```
+
+### Chart 2: Instance Taxonomy
+
+```text
+Instance
+  ├─ source: managed
+  │    ├─ runtime: bridge
+  │    └─ runtime: direct-cdp   (possible future model)
+  │
+  └─ source: attached
+       └─ runtime: direct-cdp
+```
+
+This separation matters:
+
+- `managed` means Pinchtab owns instance lifecycle
+- `attached` means Pinchtab registers an already running browser
+- `bridge` means the server talks HTTP to a child Pinchtab runtime
+- `direct-cdp` means the server talks to Chrome over CDP directly
+
+### Suggested Instance Schema
+
+If you model this explicitly in the instance object, the clean shape is:
+
+```json
+{
+  "id": "inst_0a89a5bb",
+  "name": "work",
+  "source": "managed",
+  "runtime": "bridge",
+  "ownership": "pinchtab",
+  "status": "starting",
+  "profileId": "prof_278be873",
+  "profileName": "work",
+  "port": "9868",
+  "baseUrl": "http://127.0.0.1:9868",
+  "cdpUrl": "",
+  "attached": false
+}
+```
+
+Recommended fields:
+
+- `id` — stable instance identifier
+- `name` — human-oriented instance/profile label
+- `source` — `managed` or `attached`
+- `runtime` — `bridge` or `direct-cdp`
+- `ownership` — `pinchtab`, `external`, or `adopted`
+- `status` — `starting`, `running`, `stopping`, `stopped`, `error`
+- `profileId` / `profileName` — associated profile, when relevant
+- `port` / `baseUrl` — bridge-facing address when the instance has an HTTP runtime
+- `cdpUrl` — discovered or attached CDP endpoint when relevant
+- `attached` — compatibility field for old clients; derivable from `source == "attached"`
+
+In other words:
+
+```text
+source   = who introduced the instance
+runtime  = how the server reaches it
+ownership = who controls its lifecycle
+```
+
+That gives these combinations:
+
+```text
+managed + bridge + pinchtab
+managed + direct-cdp + pinchtab
+attached + direct-cdp + external
+```
+
+### Chart 3: Routing Paths
+
+```text
+Managed + bridge
+  server -> bridge -> Chrome -> tabs
+
+Managed + direct-cdp
+  server -> Chrome -> tabs
+
+Attached + direct-cdp
+  server -> external Chrome -> tabs
+```
+
+### Chart 4: What Lives In The Pool
+
+```text
+Pinchtab server
+  └─ instance pool
+       ├─ instance A
+       │    └─ tabs
+       ├─ instance B
+       │    └─ tabs
+       └─ instance C
+            └─ tabs
+```
+
+The pool contains **instances**, not tabs.
+Tabs always belong to an instance.
+
+### Current And Future Scope
+
+Today, the intended architecture is:
+
+- `managed + bridge` for Pinchtab-launched instances
+- `attached + direct-cdp` for externally managed browsers
+
+A plausible future expansion is:
+
+- `managed + direct-cdp` to remove the extra HTTP hop when the server can own Chrome directly
+
+For a focused comparison, see [Managed Bridge vs Managed Direct-CDP](managed-bridge-vs-managed-direct-cdp.md).
+For the visual version of the model, see [Instance Model Charts](instance-model-charts.md).
 
 ## Design Principles
 
 1. **A11y tree over screenshots** — 4x cheaper in tokens, works with any LLM
 2. **HTTP over WebSocket** — Stateless requests, no connection management for agents
 3. **Ref stability** — Snapshot refs (e0, e1...) are cached and reused by action endpoints
-4. **Self-contained** — Launches its own Chrome, manages its own state, zero config needed
+4. **Self-contained by default** — Launches and manages Chrome itself unless you explicitly use attach
 5. **Decoupled Architecture** — Interface-driven design for testability and maintainability
 
 ## Project Layout
@@ -131,13 +267,13 @@ Two main simulation engines for anti-detection:
 go build -o pinchtab ./cmd/pinchtab
 
 # Run
-BRIDGE_TOKEN=secret ./pinchtab
+PINCHTAB_TOKEN=secret ./pinchtab
 ```
 
 ### Docker
 ```bash
 docker build -t pinchtab .
-docker run -d -p 9867:9867 -e BRIDGE_TOKEN=secret pinchtab
+docker run -d -p 9867:9867 -e PINCHTAB_TOKEN=secret pinchtab
 ```
 
 ---

@@ -1,368 +1,263 @@
 # CLI Design Guide
 
-## Principles
+This page describes the CLI that exists today in `cmd/pinchtab/cmd_cli.go` and `cmd/pinchtab/main.go`.
 
-1. **Hierarchical path mirroring** — CLI command structure mirrors HTTP endpoints
-2. **Resource-oriented** — `pinchtab <resource> <action>` not `pinchtab <action>`
-3. **Consistent argument order** — `<resource> <id> <sub-resource> <sub-id> <action> [flags] [payload]`
-4. **Smart payload handling** — Flags for simple cases, stdin/JSON for complex payloads
-5. **No breaking changes** — Always maintain backward compatibility
+## Process Modes
 
-## Command Structure
+Pinchtab has three startup modes:
 
-### Pattern 1: List Resources
-```
-pinchtab <resource>              List all resources
-```
-
-**Examples:**
 ```bash
-pinchtab instances               # GET /instances
-pinchtab profiles                # GET /profiles
+pinchtab          # Start full server (default)
+pinchtab server   # Start full server explicitly
+pinchtab bridge   # Start bridge-only runtime
 ```
 
-**Output:** JSON array (auto-formatted)
+The CLI commands below are client commands. They expect a running full server unless noted otherwise.
 
-### Pattern 2: Manage Resource (Orchestrator)
-```
-pinchtab <resource> <action>     Orchestrator-level actions
-pinchtab <resource> <id> <action> Instance-scoped actions
-```
+## Core Rule
 
-**Examples:**
+The current CLI is split into three layers:
+
+1. startup and utility commands
+2. top-level browser control commands
+3. explicit instance and tab management commands
+
+The important constraint is that the CLI does **not** support a global `--instance` flag today.
+
+If you need to target a specific instance:
+- create or inspect it with `pinchtab instance ...`
+- open a tab inside it with `pinchtab instance navigate <instance-id> <url>` or the HTTP API
+- then operate on the returned tab ID with `pinchtab tab ...`
+
+## Startup And Utility Commands
+
+These commands are handled outside the main HTTP CLI dispatcher:
+
 ```bash
-pinchtab instance launch --mode headed --port 9869
-pinchtab instance <id> logs
-pinchtab instance <id> stop
+pinchtab --version
+pinchtab help
+
+pinchtab config init
+pinchtab config show
+pinchtab config path
+pinchtab config validate
+
+pinchtab connect <profile>
+pinchtab connect <profile> --json
+pinchtab connect <profile> --dashboard http://localhost:9867
 ```
 
-**HTTP mapping:**
-- `pinchtab instance launch [flags]` → `POST /instances/launch {mode, port}`
-- `pinchtab instance <id> logs` → `GET /instances/<id>/logs`
-- `pinchtab instance <id> stop` → `POST /instances/<id>/stop`
+Notes:
+- `connect` resolves a running profile to its bridge URL via `/profiles/{id}/instance`
+- there is no CLI command for `attach` yet; attach is API-only for now
 
-### Pattern 3: Browser Control (Instance-scoped)
-```
-pinchtab [--instance <id>] <action> [args] [flags]
-```
+## Top-Level Browser Control
 
-**Examples:**
+These commands talk to the server shorthand endpoints:
+
 ```bash
-# Default instance (auto-detected from PINCHTAB_INSTANCE env or from running instance)
+pinchtab nav <url>
+pinchtab snap
+pinchtab click <ref>
+pinchtab type <ref> <text>
+pinchtab fill <ref|selector> <text>
+pinchtab press <key>
+pinchtab hover <ref>
+pinchtab scroll <ref|pixels>
+pinchtab select <ref> <value>
+pinchtab focus <ref>
+pinchtab text
+pinchtab ss
+pinchtab eval <expression>
+pinchtab pdf --tab <tabId>
+pinchtab health
+pinchtab quick <url>
+```
+
+These commands operate against the default routed tab context on the server.
+
+Supported flags:
+
+```bash
+pinchtab nav <url> [--new-tab] [--block-images] [--block-ads]
+
+pinchtab snap [-i|--interactive] [-c|--compact] [-d|--diff]
+              [-s|--selector <css>] [--max-tokens N] [--depth N] [--tab <tabId>]
+
+pinchtab text [--raw] [--tab <tabId>]
+
+pinchtab ss [-o|--output <file>] [-q|--quality N] [--tab <tabId>]
+
+pinchtab pdf --tab <tabId> [-o|--output <file>] [--landscape] [--scale N]
+             [--paper-width N] [--paper-height N]
+             [--margin-top N] [--margin-bottom N]
+             [--margin-left N] [--margin-right N]
+             [--page-ranges RANGE]
+             [--prefer-css-page-size]
+             [--display-header-footer]
+             [--header-template HTML]
+             [--footer-template HTML]
+             [--generate-tagged-pdf]
+             [--generate-document-outline]
+             [--file-output]
+             [--path PATH]
+```
+
+## Instance Commands
+
+The current instance CLI shape is:
+
+```bash
+pinchtab instances
+
+pinchtab instance start [--profileId <id>] [--mode headed|headless] [--port <port>]
+pinchtab instance launch [--profileId <id>] [--mode headed|headless] [--port <port>]
+
+pinchtab instance navigate <instance-id> <url>
+
+pinchtab instance logs <instance-id>
+pinchtab instance logs --id <instance-id>
+
+pinchtab instance stop <instance-id>
+pinchtab instance stop --id <instance-id>
+```
+
+Important details:
+- `launch` is a CLI alias for `start`
+- both `start` and `launch` call `POST /instances/start` today
+- there is no `pinchtab instance <id> logs` grammar
+- there is no CLI subcommand for `attach`
+
+HTTP mapping:
+
+| CLI | HTTP |
+|---|---|
+| `pinchtab instances` | `GET /instances` |
+| `pinchtab instance start ...` | `POST /instances/start` |
+| `pinchtab instance launch ...` | `POST /instances/start` |
+| `pinchtab instance navigate <id> <url>` | `POST /instances/{id}/tabs/open` then `POST /tabs/{tabId}/navigate` |
+| `pinchtab instance logs <id>` | `GET /instances/{id}/logs` |
+| `pinchtab instance stop <id>` | `POST /instances/{id}/stop` |
+
+## Tab Commands
+
+The current tab CLI has two shapes:
+
+1. list or legacy lifecycle shortcuts
+2. explicit tab operations
+
+### List And Legacy Shortcuts
+
+```bash
+pinchtab tabs
+pinchtab tab
+
+pinchtab tabs new [url]
+pinchtab tab new [url]
+
+pinchtab tabs close <tabId>
+pinchtab tab close <tabId>
+```
+
+Notes:
+- `tabs` and `tab` are both accepted
+- `new` and `close` use the legacy `/tab` endpoint
+- `tab new` will auto-launch a default instance if none is running
+
+### Explicit Tab Operations
+
+The implemented grammar is:
+
+```bash
+pinchtab tab navigate <tabId> <url>
+pinchtab tab snapshot <tabId> [-i] [-c] [-d]
+pinchtab tab screenshot <tabId> [-o file] [-q N]
+pinchtab tab click <tabId> <ref>
+pinchtab tab type <tabId> <ref> <text>
+pinchtab tab fill <tabId> <ref> <text>
+pinchtab tab press <tabId> <key>
+pinchtab tab hover <tabId> <ref>
+pinchtab tab scroll <tabId> <direction|pixels>
+pinchtab tab select <tabId> <ref> <value>
+pinchtab tab focus <tabId> <ref>
+pinchtab tab text <tabId> [--raw]
+pinchtab tab eval <tabId> <expression>
+pinchtab tab pdf <tabId> [-o file] [--landscape] [--scale N]
+pinchtab tab cookies <tabId>
+pinchtab tab lock <tabId> [--owner name] [--ttl seconds]
+pinchtab tab unlock <tabId> [--owner name]
+pinchtab tab locks <tabId>
+pinchtab tab info <tabId>
+```
+
+Important detail:
+- the operation comes before the tab ID
+- the implemented syntax is `pinchtab tab screenshot <tabId>`
+- it is **not** `pinchtab tab <tabId> screenshot`
+
+## Profiles Command
+
+The implemented profile command is:
+
+```bash
+pinchtab profiles
+```
+
+Current behavior:
+- calls `GET /profiles`
+- prints a simple human-friendly list of names
+- does not currently expose create/update/delete operations through the CLI
+
+## Environment
+
+The CLI uses these environment variables:
+
+```bash
+PINCHTAB_URL    # server base URL, default http://127.0.0.1:9867
+PINCHTAB_TOKEN  # bearer token for API requests
+PINCHTAB_PORT   # startup/server port
+CHROME_BIN      # startup Chrome binary path
+```
+
+Use `PINCHTAB_TOKEN`, not `BRIDGE_TOKEN`.
+
+## Recommended Workflows
+
+### Basic Top-Level Flow
+
+```bash
+pinchtab
+
 pinchtab nav https://pinchtab.com
 pinchtab snap -i -c
 pinchtab click e5
-
-# Explicit instance
-pinchtab --instance inst_abc123 nav https://pinchtab.com
-pinchtab --instance inst_abc123 snap
+pinchtab text
 ```
 
-**HTTP mapping:**
-- `pinchtab nav <url>` → `POST /navigate {url}`
-- `pinchtab --instance <id> snap` → `GET /snapshot` (with `tabId`)
-- `pinchtab tab click <tabId> <ref>` → `POST /tabs/<tabId>/action {kind: "click", ref}`
-
-### Pattern 4: Nested Resources (Tabs within Instance)
-```
-pinchtab --instance <id> tab <action> [args]      List/manage tabs
-pinchtab --instance <id> tab <tabId> <action>     Operate on specific tab
-```
-
-**Examples:**
-```bash
-# List tabs
-pinchtab --instance inst_abc123 tabs              # GET /instances/<id>/tabs
-
-# Create tab
-pinchtab --instance inst_abc123 tab create https://pinchtab.com
-                                                   # POST /instances/<id>/tabs/open {url}
-
-# Navigate tab
-pinchtab --instance inst_abc123 tab <tabId> navigate https://pinchtab.com
-                                                   # POST /tabs/<tabId>/navigate {url}
-
-# Close tab
-pinchtab --instance inst_abc123 tab <tabId> close
-                                                   # POST /tab {action:"close", tabId}
-
-# Lock tab
-pinchtab --instance inst_abc123 tab <tabId> lock --owner agent1 --ttl 60
-                                                   # POST /tabs/<tabId>/lock {owner, ttl}
-```
-
-### Pattern 5: Complex Payloads
-
-#### Option A: Flags (simple cases)
-```bash
-pinchtab --instance <id> navigate https://pinchtab.com --block-images --block-ads --timeout 30
-```
-
-Maps to:
-```json
-POST /tabs/<tabId>/navigate
-{
-  "url": "https://pinchtab.com",
-  "blockImages": true,
-  "blockAds": true,
-  "timeout": 30
-}
-```
-
-#### Option B: JSON stdin (complex cases)
-```bash
-cat << 'EOF' | pinchtab --instance <id> action
-{
-  "kind": "select",
-  "ref": "e5",
-  "value": "option2",
-  "waitNav": true
-}
-EOF
-```
-
-Or:
-```bash
-pinchtab --instance <id> action -f payload.json
-pinchtab --instance <id> action --json '{...}'
-```
-
-#### Option C: Shell-friendly formats
-```bash
-# String payload (auto-quoted)
-pinchtab --instance <id> evaluate 'document.title'
-
-# File reference
-pinchtab --instance <id> upload --file screenshot.png --to /form/input
-
-# Multi-line (heredoc)
-pinchtab --instance <id> action << 'EOF'
-{
-  "kind": "actions",
-  "actions": [
-    {"kind": "click", "ref": "e5"},
-    {"kind": "type", "ref": "e12", "text": "hello"}
-  ]
-}
-EOF
-```
-
-## Mapping: Endpoints → CLI Commands
-
-### Instance Management
-| Endpoint | HTTP | CLI Command |
-|----------|------|-------------|
-| `/instances` | GET | `pinchtab instances` |
-| `/instances/launch` | POST | `pinchtab instance launch --mode headed --port 9869` |
-| `/instances/{id}/logs` | GET | `pinchtab instance <id> logs` |
-| `/instances/{id}/stop` | POST | `pinchtab instance <id> stop` |
-| `/instances/{id}/tabs/open` | POST | `pinchtab --instance <id> tab create https://pinchtab.com` |
-| `/instances/{id}/tabs` | GET | `pinchtab --instance <id> tabs` |
-
-### Browser Control (Single Instance)
-| Endpoint | HTTP | CLI Command |
-|----------|------|-------------|
-| `/navigate` | POST | `pinchtab nav https://pinchtab.com` |
-| `/snapshot` | GET | `pinchtab snap -i -c` |
-| `/screenshot` | GET | `pinchtab ss -o out.png` |
-| `/action` | POST | `pinchtab click e5` |
-| `/actions` | POST | `pinchtab action -f actions.json` |
-| `/tab` | POST | `pinchtab tab create https://pinchtab.com` |
-| `/tabs` | GET | `pinchtab tabs` |
-| `/evaluate` | POST | `pinchtab eval "document.title"` |
-| `/tabs/{id}/pdf` | GET | `pinchtab pdf --tab <tabId> -o out.pdf --landscape` |
-| `/text` | GET | `pinchtab text` |
-| `/text` | GET | `pinchtab text --raw` |
-| `/cookies` | GET | `pinchtab cookies` |
-| `/cookies` | POST | `pinchtab cookies --set 'name=value; domain=.pinchtab.com'` |
-
-### Orchestrator Proxying (Instance-scoped)
-| Endpoint | HTTP | CLI Command |
-|----------|------|-------------|
-| `/tabs/{id}/navigate` | POST | `pinchtab instance navigate <id> https://pinchtab.com` |
-| `/tabs/{id}/snapshot` | GET | `pinchtab tab <tabId> snapshot -i` |
-| `/tabs/{id}/screenshot` | GET | `pinchtab tab screenshot <tabId> -o out.jpg` |
-| `/tabs/{id}/action` | POST | `pinchtab tab click <tabId> e5` |
-| `/tabs/{id}/actions` | POST | `curl -X POST /tabs/{id}/actions` |
-| `/tabs/{id}/text` | GET | `pinchtab tab text <tabId>` |
-| `/tabs/{id}/evaluate` | POST | `pinchtab tab eval <tabId> 'code'` |
-| `/tabs/{id}/pdf` | GET | `pinchtab --tab <tabId> pdf -o out.pdf` |
-
-## Real-World Examples
-
-### Example 1: Launch instance and navigate
-```bash
-# Start dashboard (separate terminal)
-pinchtab
-
-# In another terminal:
-INST=$(pinchtab instance launch --mode headed --port 9869 | jq -r .id)
-echo "Started instance: $INST"
-
-# Navigate in that instance
-pinchtab --instance $INST nav https://github.com/pinchtab/pinchtab
-```
-
-### Example 2: Snapshot and click
-```bash
-# See page structure
-pinchtab --instance inst_abc123 snap -i -c | jq .
-
-# Click a button
-pinchtab --instance inst_abc123 click e5
-
-# See what changed
-pinchtab --instance inst_abc123 snap -d
-```
-
-### Example 3: Multi-step workflow
-```bash
-# Get instances
-pinchtab instances
-
-# Check instance status
-pinchtab instance inst_abc123 logs
-
-# Run actions on instance
-cat << 'EOF' | pinchtab --instance inst_abc123 action
-{
-  "kind": "actions",
-  "actions": [
-    {"kind": "click", "ref": "e1"},
-    {"kind": "type", "ref": "e2", "text": "search query"},
-    {"kind": "press", "key": "Enter"},
-    {"kind": "wait", "time": 2000}
-  ]
-}
-EOF
-
-# Capture result
-pinchtab --instance inst_abc123 snap -c > page.json
-```
-
-### Example 4: Tab management
-```bash
-# List tabs
-pinchtab --instance inst_abc123 tabs
-
-# Create new tab
-TAB_ID=$(pinchtab --instance inst_abc123 tab create https://pinchtab.com | jq -r .id)
-
-# Lock tab (prevent other agents from using it)
-pinchtab --instance inst_abc123 tab $TAB_ID lock --owner my-agent --ttl 60
-
-# Navigate in locked tab
-pinchtab --instance inst_abc123 tab $TAB_ID navigate https://google.com
-
-# Unlock
-pinchtab --instance inst_abc123 tab $TAB_ID unlock --owner my-agent
-
-# Close tab
-pinchtab --instance inst_abc123 tab $TAB_ID close
-```
-
-## Environment Variables
+### Explicit Instance Flow
 
 ```bash
-# Default instance for commands without --instance flag
-export PINCHTAB_INSTANCE=inst_abc123
+INST=$(pinchtab instance start --mode headed | jq -r '.id')
 
-# Server URL/port
-export PINCHTAB_URL=http://localhost:9867
-export BRIDGE_PORT=9867
-
-# Authentication
-export PINCHTAB_TOKEN=sk_...
-
-# Default behavior
-export PINCHTAB_FORMAT=json          # json, text, table
-export PINCHTAB_NO_COLOR=1           # Disable colored output
-export PINCHTAB_TIMEOUT=30           # Request timeout in seconds
+pinchtab instance navigate "$INST" https://pinchtab.com
+pinchtab tabs
 ```
 
-## Flag Conventions
+### Tab-Targeted Flow
 
-### Common Flags (all commands)
-```
---instance <id>    Target instance (overrides PINCHTAB_INSTANCE)
---tab <id>         Target tab within instance
---timeout N        Request timeout in seconds (default: 30)
---raw              Raw output (no formatting)
---json             Output as JSON
-```
-
-### Snapshot Flags
-```
--i, --interactive      Interactive elements only
--c, --compact          Compact format (most token-efficient)
--d, --diff             Only changes since last snapshot
--s, --selector CSS     Scope to CSS selector
---max-tokens N         Truncate to ~N tokens
---depth N              Max tree depth
-```
-
-### Screenshot Flags
-```
--o, --output FILE      Output filename
--q, --quality 0-100    JPEG quality (default: 80)
---format png|jpeg      Output format
-```
-
-### PDF Flags
-```
--o, --output FILE           Output filename
---landscape                 Landscape orientation
---paper-width N             Width in inches (default: 8.5)
---paper-height N            Height in inches (default: 11)
---margin-top/bottom/left/right N
---scale N                   Print scale 0.1-2.0
---page-ranges "1-3,5"       Pages to export
-```
-
-### Navigation Flags
-```
---block-images              Skip loading images
---block-ads                 Block ad requests
---block-media               Skip media (video, audio)
---timeout N                 Navigation timeout in seconds
---new-tab                   Open in new tab (for orchestrator)
-```
-
-## Error Handling
-
-All commands follow this pattern:
-```
-exit 0   — Success
-exit 1   — User error (bad args, file not found)
-exit 2   — Server error (500, connection refused)
-exit 3   — Timeout
-exit 4   — Instance/resource not found
-```
-
-Error messages always printed to stderr:
 ```bash
-pinchtab --instance nonexistent snap 2>&1
-# Error: instance not found: nonexistent
-# exit: 4
+TAB=$(pinchtab tabs | jq -r '.[0].id')
+
+pinchtab tab snapshot "$TAB" -i -c
+pinchtab tab click "$TAB" e5
+pinchtab tab text "$TAB" --raw
+pinchtab tab pdf "$TAB" -o page.pdf
 ```
 
-## Future Extensibility
+## Non-Goals For This Doc
 
-This design scales to:
-- **Three-level nesting**: `pinchtab instance <id> tab <tabId> screencast <action>`
-- **Bulk operations**: `pinchtab instances exec 'snap -c' --all`
-- **Piping**: `pinchtab instances | jq '.[] | .id' | xargs -I {} pinchtab instance {} snap`
-- **Streaming**: `pinchtab --instance <id> screencast --stream` (server-sent events)
-- **REPL mode**: `pinchtab repl --instance <id>` (interactive shell)
-
-## Implementation Checklist
-
-- [ ] Implement `pinchtab instance <id> navigate <url>` (proxy to instance)
-- [ ] Implement `pinchtab --instance <id> tab <tabId> navigate <url>`
-- [ ] Add `--instance` flag to all browser control commands
-- [ ] Support stdin JSON for complex payloads
-- [ ] Support `-f` flag for reading payload from file
-- [ ] Add error handling with proper exit codes
-- [ ] Add `PINCHTAB_INSTANCE` environment variable support
-- [ ] Document in help (`pinchtab help`)
-- [ ] Add shell completion (`_bash`, `_zsh`)
+This page intentionally does not document commands that are not implemented yet, including:
+- a global `--instance` flag
+- `pinchtab instance attach`
+- full profile CRUD through the CLI
+- `pinchtab tab <tabId> <action>` grammar

@@ -4,13 +4,12 @@ Complete HTTP API reference for instances, tabs, and browser operations.
 
 ## Overview
 
-PinchTab uses an **instance-scoped** REST API where:
-- **PinchTab server** listens on port 9867 and manages all instances
-- Each **instance** is an independent browser process (Chrome)
-- Each instance can use a different **profile** (Chrome user data directory)
-- Each instance can be **headed** (visible window) or **headless** (background)
-- Instances manage **tabs** (browser tabs/pages)
-- **Chrome starts on instance creation** (or first request, depending on configuration)
+Pinchtab uses a **server-first** API model:
+- the **Pinchtab server** listens on port `9867` and manages profiles and instances
+- each managed **instance** is backed by a single `pinchtab bridge` runtime
+- tab operations are tab-first under `/tabs/{id}/...`
+- instance lifecycle operations live under `/instances/...`
+- attach is the advanced path for registering externally managed Chrome
 
 ```text
 HTTP Client
@@ -24,18 +23,18 @@ HTTP Client
 │   │ - Dashboard                         │ │
 │   │ - Instance management               │ │
 │   │ - Profile management                │ │
-│   │ - Request routing via DevTools API  │ │
+│   │ - Routing to bridge runtimes        │ │
 │   └────────────────────────────────────┘ │
 └─────┬──────────────────────────────────────┘
       │
-      │ DevTools Protocol (WebSocket)
+      │ HTTP proxying to managed instances
       │
       ├─────────────────────────────────────┐
       │                                     │
       ↓                                     ↓
 ┌──────────────────┐        ┌──────────────────┐
-│ Chrome Process 1 │        │ Chrome Process 2 │
-│ (headed)         │        │ (headless)       │
+│ Bridge Runtime 1 │        │ Bridge Runtime 2 │
+│ + Chrome         │        │ + Chrome         │
 │ profile: work    │        │ profile: scraping│
 ├──────────────────┤        ├──────────────────┤
 │ Tab 1: LinkedIn  │        │ Tab 1: API       │
@@ -48,7 +47,7 @@ HTTP Client
 
 | Category | Operations | Purpose |
 |---|---|---|
-| **Instance Management** | `POST /instances` `GET /instances` `GET /instances/{id}` `DELETE /instances/{id}` | Create, list, and manage browser instances |
+| **Instance Management** | `POST /instances/start` `POST /instances/launch` `POST /instances/attach` `GET /instances` `GET /instances/{id}` `POST /instances/{id}/stop` | Create, attach, list, inspect, and stop instances |
 | **Navigation** | `POST /tabs/{id}/navigate` | Navigate an existing tab by tab ID |
 | **Tab Operations** | `POST /instances/{id}/tabs/open` `GET /instances/{id}/tabs` `POST /tabs/{tabId}/navigate` | Open/list tabs and navigate existing tab |
 | **Page Inspection** | `GET /tabs/{id}/snapshot` `GET /tabs/{id}/text` | Get accessibility tree, extract text |
@@ -72,57 +71,70 @@ All requests go to port 9867. Instance-scoped proxy operations use `/instances/{
 
 ## Instance Management API
 
-### Create Instance
+### Launch or Start Instance
 
 **Endpoint:**
 ```
-POST /instances
+POST /instances/start
+POST /instances/launch
 ```
 
 **Request Body:**
 ```json
 {
-  "profile": "work",
-  "headless": false
+  "profileId": "work",
+  "mode": "headed"
 }
 ```
 
 **Parameters:**
-- `profile` (string, required) — Chrome profile name (stored in `~/.pinchtab/profiles/{name}`)
-- `headless` (boolean, required) — `true` for headless mode (no window), `false` for visible window
+- `profileId` (string, optional) - profile ID or name
+- `name` (string, optional on `/instances/launch`) - instance/profile name when launching by name
+- `mode` (string, optional) - `headless` or `headed`
+- `port` (string, optional) - explicit port if you do not want auto-allocation
 
 **Behavior:**
-- **Synchronously starts Chrome** with the specified profile and mode
-- If headless=false, a visible Chrome window opens immediately
-- If headless=true, Chrome runs in the background
-- Returns only after Chrome is fully initialized and ready for commands
+- Creates a managed instance record on the server
+- Spawns a `pinchtab bridge` child process for managed instances
+- Chrome may initialize lazily on the first browser request
+- Returns instance metadata used for later tab operations
 
 **Response (201 Created):**
 ```json
 {
-  "id": "work-9868",
-  "profile": "work",
+  "id": "inst_0a89a5bb",
+  "profileId": "prof_278be873",
+  "profileName": "work",
   "headless": false,
-  "status": "running",
+  "status": "starting",
   "port": "9868",
-  "startTime": "2026-02-28T18:35:18Z",
-  "tabs": []
+  "startTime": "2026-02-28T18:35:18Z"
 }
 ```
 
-**Notes:**
-- Instance is **fully ready** immediately after this call (Chrome already running)
-- Subsequent navigation and action calls use this running Chrome
-- No lazy initialization - Chrome starts upfront for predictable behavior
-
 **Example (curl):**
 ```bash
-curl -X POST http://localhost:9867/instances \
+curl -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"profile":"work","headless":false}'
-
-# Returns immediately with running instance ready for use
+  -d '{"name":"work","mode":"headed"}'
 ```
+
+### Attach Instance
+
+**Endpoint:**
+```
+POST /instances/attach
+```
+
+**Request Body:**
+```json
+{
+  "name": "shared-chrome",
+  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/..."
+}
+```
+
+Attach is only available when enabled in config under `attach.enabled`, and the target must pass `allowHosts` and `allowSchemes` policy checks.
 
 ---
 
@@ -203,14 +215,20 @@ curl http://localhost:9867/instances/work-9868
 
 **Endpoint:**
 ```
-DELETE /instances/{id}
+POST /instances/{id}/stop
 ```
 
-**Response (204 No Content):**
+**Response:**
+```json
+{
+  "id": "inst_0a89a5bb",
+  "status": "stopped"
+}
+```
 
 **Example (curl):**
 ```bash
-curl -X DELETE http://localhost:9867/instances/work-9868
+curl -X POST http://localhost:9867/instances/inst_0a89a5bb/stop
 ```
 
 ---
@@ -768,10 +786,10 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:9867/instances
 ```
 
-Set via `BRIDGE_TOKEN` env var when starting server:
+Set via `PINCHTAB_TOKEN` when starting the server:
 
 ```bash
-BRIDGE_TOKEN=secret_token pinchtab
+PINCHTAB_TOKEN=secret_token pinchtab
 ```
 
 ---

@@ -12,7 +12,7 @@ set -euo pipefail
 #   ./scripts/simulate-memory-load.sh localhost:9867 3 20   # 3 instances, 20 tabs each
 #
 # Prerequisites:
-#   - pinchtab running in dashboard mode: ./pinchtab dashboard
+#   - pinchtab running in server mode: ./pinchtab server
 #   - Chrome installed
 
 HOST="${1:-localhost:9867}"
@@ -61,7 +61,7 @@ echo ""
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${HOST}/health" 2>/dev/null || echo "000")
 if [ "$STATUS" != "200" ]; then
   echo -e "${RED}✗ Server not reachable at ${HOST} (HTTP ${STATUS})${NC}"
-  echo "  Start pinchtab first: ./pinchtab dashboard"
+  echo "  Start pinchtab first: ./pinchtab server"
   exit 1
 fi
 echo -e "${GREEN}✓ Server healthy${NC}"

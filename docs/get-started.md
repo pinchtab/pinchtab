@@ -61,7 +61,16 @@ go build -o pinchtab ./cmd/pinchtab
 
 ## Quick Start (5 Minutes)
 
-### Step 1: Start the Orchestrator
+The primary usage model is simple:
+
+- install Pinchtab
+- run `pinchtab`
+- point your agent or automation client at `http://localhost:9867`
+- treat Pinchtab as the local browser service
+
+That is the default setup for users who want Pinchtab to replace an embedded browser runtime in another tool.
+
+### Step 1: Start the Server
 
 **Terminal 1:**
 ```bash
@@ -70,11 +79,13 @@ pinchtab
 
 **Expected output:**
 ```
-🦀 Pinchtab Dashboard port=9867
+🦀 Pinchtab port=9867
 dashboard ready url=http://localhost:9867/dashboard
 ```
 
-The orchestrator is running on `http://127.0.0.1:9867`. Open the dashboard in your browser to see instances and profiles.
+The full server is running on `http://127.0.0.1:9867`. Open the dashboard in your browser to see instances and profiles.
+
+PinchTab also has a `pinchtab bridge` mode, but that is the single-instance runtime used behind managed instances. For normal use, start the full server.
 
 ### Step 2: Create an Instance
 
@@ -92,7 +103,9 @@ sleep 3
 
 ```bash
 # Navigate to a website
-pinchtab instance navigate $INST https://pinchtab.com
+TAB_ID=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://pinchtab.com"}' | jq -r '.tabId')
 
 # Get page structure
 curl http://localhost:9867/tabs/$TAB_ID/snapshot | jq '.nodes | map({role, name}) | .[0:5]'
@@ -182,16 +195,22 @@ curl -X POST http://localhost:9867/tabs/$TAB_ID/action \
 
 ### Key Concepts
 
-**Orchestrator** (port 9867):
-- Manages instances
-- Routes requests via `/instances/{id}/*`
-- No Chrome process itself
+**Server** (port 9867):
+- Manages instances and profiles
+- Routes requests via `/instances/{id}/*` and `/tabs/{id}/*`
+- Serves the dashboard UI
+- Spawns bridge runtimes for managed instances
 
 **Instance** (ports 9868-9968):
 - Real Chrome browser process
 - Has one or more tabs
 - Isolated cookies, history, storage
 - Each has unique ID: `inst_XXXXXXXX`
+
+**Bridge**:
+- The single-instance runtime backing a managed instance
+- Thin HTTP wrapper over one browser instance
+- Usually spawned by the server automatically
 
 **Tab**:
 - Single webpage within instance
@@ -385,17 +404,17 @@ main();
 
 ## Configuration
 
-### Orchestrator Configuration
+### Server Configuration
 
 ```bash
-# Custom port (orchestrator)
-BRIDGE_PORT=9868 pinchtab
+# Custom port
+PINCHTAB_PORT=9868 pinchtab
 
 # Auth token for remote access
-BRIDGE_TOKEN=my-secret-token pinchtab
+PINCHTAB_TOKEN=my-secret-token pinchtab
 
 # Bind to all interfaces (for remote access)
-BRIDGE_BIND=0.0.0.0 pinchtab
+PINCHTAB_BIND=0.0.0.0 pinchtab
 
 # Custom Chrome binary (used by all instances)
 CHROME_BIN=/usr/bin/google-chrome pinchtab
@@ -603,8 +622,8 @@ curl -X POST http://localhost:9867/instances/$INST/tabs/open \
 
 **Solution:**
 ```bash
-# Use different orchestrator port
-BRIDGE_PORT=9868 pinchtab
+# Use different server port
+PINCHTAB_PORT=9868 pinchtab
 
 # Or kill the process using 9867
 lsof -i :9867

@@ -288,7 +288,6 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 	envOverrides := map[string]string{
 		"PINCHTAB_PORT":   port,
 		"PINCHTAB_CONFIG": childConfigPath,
-		"PINCHTAB_ONLY":   "1",
 	}
 	if o.runtimeCfg != nil && o.runtimeCfg.ChromeBinary != "" {
 		envOverrides["CHROME_BIN"] = o.runtimeCfg.ChromeBinary
@@ -298,7 +297,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 	logBuf := newRingBuffer(64 * 1024)
 	slog.Info("starting instance process", "id", instanceID, "profile", name, "port", port)
 
-	cmd, err := o.runner.Run(context.Background(), o.binary, env, logBuf, logBuf)
+	cmd, err := o.runner.Run(context.Background(), o.binary, []string{"bridge"}, env, logBuf, logBuf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start: %w", err)
 	}

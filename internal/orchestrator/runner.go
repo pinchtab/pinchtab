@@ -7,7 +7,7 @@ import (
 )
 
 type HostRunner interface {
-	Run(ctx context.Context, binary string, env []string, stdout, stderr io.Writer) (Cmd, error)
+	Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error)
 	IsPortAvailable(port string) bool
 }
 
@@ -24,9 +24,9 @@ type localCmd struct {
 	cancel  context.CancelFunc
 }
 
-func (r *LocalRunner) Run(ctx context.Context, binary string, env []string, stdout, stderr io.Writer) (Cmd, error) {
+func (r *LocalRunner) Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error) {
 	runCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(runCtx, binary)
+	cmd := exec.CommandContext(runCtx, binary, args...)
 	cmd.Env = env
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

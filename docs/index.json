@@ -8,7 +8,7 @@
   ],
   "references": [
     "references/api-structure.md",
-    "references/api-reference.json",
+    "references/endpoints.md",
     "references/profile-api.md",
     "references/instance-api.md",
     "references/tabs-api.md",
@@ -17,12 +17,16 @@
   ],
   "architecture": [
     "architecture/pinchtab-architecture.md",
+    "architecture/instance-model-charts.md",
+    "architecture/managed-bridge-vs-managed-direct-cdp.md",
     "architecture/chrome-lifecycle-and-orchestration.md",
     "architecture/dashboard-ui.md",
     "architecture/building.md"
   ],
   "guides": [
-    "guides/cdp-url-shared-chrome.md",
+    "guides/expert-bridge-mode.md",
+    "guides/expert-attach.md",
+    "guides/expert-strategies.md",
     "guides/headed-mode-guide.md",
     "guides/identifying-instances.md",
     "guides/agent-optimization.md",

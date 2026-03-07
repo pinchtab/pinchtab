@@ -9,6 +9,22 @@ import (
 
 var version = "dev"
 
+func startupMode(args []string) (string, bool) {
+	if os.Getenv("PINCHTAB_ONLY") == "1" || os.Getenv("BRIDGE_ONLY") == "1" {
+		return "bridge", true
+	}
+	if len(args) <= 1 {
+		return "server", true
+	}
+	switch args[1] {
+	case "server":
+		return "server", true
+	case "bridge":
+		return "bridge", true
+	}
+	return "", false
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -38,13 +54,19 @@ func main() {
 		return
 	}
 
-	// Check if running as bridge-only instance (spawned by orchestrator)
-	if os.Getenv("PINCHTAB_ONLY") == "1" || os.Getenv("BRIDGE_ONLY") == "1" {
-		runBridgeServer(cfg)
-		return
+	mode, ok := startupMode(os.Args)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
+		printHelp()
+		os.Exit(1)
 	}
 
-	// Default: run dashboard mode
-	// (includes 'pinchtab' with no args and unrecognized args like 'dashboard')
-	runDashboard(cfg)
+	switch mode {
+	case "bridge":
+		runBridgeServer(cfg)
+	case "server":
+		runDashboard(cfg)
+	default:
+		runDashboard(cfg)
+	}
 }

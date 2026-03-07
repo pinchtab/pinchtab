@@ -244,7 +244,7 @@ This is policy only. The actual `cdpUrl` belongs to the attach request, not glob
 ### Custom Ports
 
 ```bash
-PINCHTAB_PORT=8080 pinchtab dashboard
+PINCHTAB_PORT=8080 pinchtab server
 ```
 
 Or in config file:

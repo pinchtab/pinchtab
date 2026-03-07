@@ -12,6 +12,7 @@ import (
 type mockRunner struct {
 	runCalled bool
 	portAvail bool
+	args      []string
 }
 
 type mockCmd struct {
@@ -23,8 +24,9 @@ func (m *mockCmd) Wait() error { return nil }
 func (m *mockCmd) PID() int    { return m.pid }
 func (m *mockCmd) Cancel()     {}
 
-func (m *mockRunner) Run(ctx context.Context, binary string, env []string, stdout, stderr io.Writer) (Cmd, error) {
+func (m *mockRunner) Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error) {
 	m.runCalled = true
+	m.args = append([]string(nil), args...)
 	return &mockCmd{pid: 1234, isAlive: true}, nil
 }
 
@@ -43,6 +45,9 @@ func TestLaunch_Mocked(t *testing.T) {
 
 	if !runner.runCalled {
 		t.Error("expected runner.Run to be called")
+	}
+	if len(runner.args) != 1 || runner.args[0] != "bridge" {
+		t.Fatalf("expected child process args [bridge], got %v", runner.args)
 	}
 	if !idutil.IsValidID(inst.ID, "inst") {
 		t.Errorf("expected ID format inst_XXXXXXXX, got %s", inst.ID)

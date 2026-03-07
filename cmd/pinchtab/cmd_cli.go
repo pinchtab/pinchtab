@@ -20,7 +20,9 @@ func printHelp() {
 	fmt.Printf(`pinchtab %s - Browser control for AI agents
 
 MODES:
-  pinchtab                  Start server (default port 9867)
+  pinchtab                  Start full server (default)
+  pinchtab server           Start full server explicitly
+  pinchtab bridge           Start single-instance bridge-only server
   pinchtab connect <name>   Get URL for a running profile
 
 QUICK START (requires running server):
@@ -78,9 +80,9 @@ PDF FLAGS:
 
 ENVIRONMENT:
   PINCHTAB_URL         Server URL (default: http://127.0.0.1:9867)
-  PINCHTAB_TOKEN       Auth token (or BRIDGE_TOKEN for server)
-  BRIDGE_PORT          Server port (default: 9867)
-  BRIDGE_HEADLESS      Run Chrome headless (default: true)
+  PINCHTAB_TOKEN       Auth token
+  PINCHTAB_PORT        Server port (default: 9867)
+  CHROME_BIN           Chrome binary path
 
 FLAGS (global, place before or after command):
   --instance <id>      Target a specific instance by ID (e.g., pinchtab nav --instance abc123 https://...)
@@ -197,7 +199,7 @@ QUICK START:
   pinchtab quick <url>    Navigate and show page structure (combines nav + snap)
 
 WORKFLOW:
-  1. Start server:        pinchtab                  (runs on :9867)
+  1. Start server:        pinchtab                  (or: pinchtab server)
   2. Navigate:           pinchtab nav https://pinchtab.com
   3. See page:           pinchtab snap             (shows clickable refs)
   4. Interact:           pinchtab click e5         (click element)
@@ -1222,7 +1224,7 @@ func checkServerAndGuide(client *http.Client, base, token string) bool {
 To start the server:
   pinchtab                    # Run in foreground (recommended for beginners)
   pinchtab &                  # Run in background
-  pinchtab --port 9868        # Use different port
+  PINCHTAB_PORT=9868 pinchtab # Use different port
 
 Then try your command again:
   %s
@@ -1238,7 +1240,7 @@ Learn more: https://github.com/pinchtab/pinchtab#quick-start
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 401 {
-		fmt.Fprintf(os.Stderr, "❌ Authentication required. Set BRIDGE_TOKEN or PINCHTAB_TOKEN environment variable.\n")
+		fmt.Fprintf(os.Stderr, "❌ Authentication required. Set PINCHTAB_TOKEN.\n")
 		return false
 	}
 

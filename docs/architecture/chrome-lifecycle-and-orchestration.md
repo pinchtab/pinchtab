@@ -1,13 +1,13 @@
 # Orchestration
 
-Pinchtab is a Go-based bridge and orchestrator for Chrome. It doesn't just "run" a browser; it manages a fleet of "sanitized" Chrome instances, hardened against detection and optimized for automation.
+Pinchtab is a Go-based server and bridge system for Chrome. It doesn't just "run" a browser; it manages a fleet of isolated instances, hardened against detection and optimized for automation.
 
 ## 1. Allocator Strategy
 
-The foundation of every Chrome instance is the chromedp Allocator. Pinchtab supports two modes:
+The foundation of every managed Chrome instance is the chromedp allocator. Pinchtab primarily uses local launch:
 
-- **Remote Connection:** If `CDP_URL` is set, Pinchtab connects to an existing Chrome instance via the DevTools Protocol (CDP).
-- **Local Launch:** By default, it uses `NewExecAllocator` to spawn a new Chrome process on the local machine with a dedicated profile and port.
+- **Managed Launch:** the server spawns a dedicated `pinchtab bridge` child process, which uses `NewExecAllocator` to launch Chrome with a dedicated profile and port.
+- **Attach:** separately, the server can register an externally managed Chrome instance through the attach API when attach policy allows it.
 
 ## 2. Hardening & Launch Flags
 
@@ -19,7 +19,7 @@ When launching locally, Pinchtab applies a comprehensive set of command-line fla
 
 ## 3. Instance Orchestration
 
-The Orchestrator (`orchestrator_runtime.go`) handles the lifecycle of multiple independent Chrome processes:
+The orchestrator handles the lifecycle of multiple independent Chrome processes:
 
 - **Process Isolation:** Each instance runs as a separate OS process with its own PID.
 - **Health Monitoring:** After launching a process, the Orchestrator polls the instance's `/health` endpoint until it is ready to accept commands.
@@ -45,5 +45,5 @@ Once the browser is running, the `TabManager` (`tab_manager.go`) tracks all open
 
 - **Context Lifecycle:** Manages the creation and cancellation of Go `context.Context` objects for each tab.
 - **Setup Hooks:** Automatically reapplies stealth and optimization scripts to every new tab opened by the user or by automation scripts.
-- **Tab Limits:** Enforces `BRIDGE_MAX_TABS` (default 20) to prevent runaway agents from consuming all memory.
+- **Tab Limits:** Enforces the configured max-tab policy to prevent runaway agents from consuming all memory.
 - **Stale Tab Cleanup:** Periodically removes tabs that no longer exist in Chrome.
