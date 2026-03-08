@@ -20,7 +20,9 @@ import (
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
-		web.ErrorCode(w, 403, "screencast_disabled", "screencast endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "screencast_disabled", web.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
+			"setting": "security.allowScreencast",
+		})
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
@@ -148,7 +150,9 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 // HandleScreencastAll returns info for building a multi-tab screencast view.
 func (h *Handlers) HandleScreencastAll(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
-		web.ErrorCode(w, 403, "screencast_disabled", "screencast endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "screencast_disabled", web.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
+			"setting": "security.allowScreencast",
+		})
 		return
 	}
 	type tabInfo struct {

@@ -57,7 +57,9 @@ func validateDownloadURL(rawURL string) error {
 // GET /download?url=<url>[&tabId=<id>][&output=file&path=/tmp/file][&raw=true]
 func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowDownload {
-		web.ErrorCode(w, 403, "download_disabled", "download endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "download_disabled", web.DisabledEndpointMessage("download", "security.allowDownload"), false, map[string]any{
+			"setting": "security.allowDownload",
+		})
 		return
 	}
 	dlURL := r.URL.Query().Get("url")

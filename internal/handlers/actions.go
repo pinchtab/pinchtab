@@ -484,7 +484,9 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 
 func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowMacro {
-		web.ErrorCode(w, 403, "macro_disabled", "macro endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "macro_disabled", web.DisabledEndpointMessage("macro", "security.allowMacro"), false, map[string]any{
+			"setting": "security.allowMacro",
+		})
 		return
 	}
 	var req struct {

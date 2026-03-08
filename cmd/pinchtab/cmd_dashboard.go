@@ -143,9 +143,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 	})
 
 	handler := handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)))
-	if cfg.AllowEvaluate && cfg.Token == "" {
-		slog.Warn("evaluate endpoint enabled without API token", "hint", "set PINCHTAB_TOKEN for authenticated access")
-	}
+	logSecurityWarnings(cfg)
 
 	srv := &http.Server{
 		Addr:              cfg.Bind + ":" + dashPort,

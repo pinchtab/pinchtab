@@ -6,6 +6,14 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
+	if enabled {
+		mux.HandleFunc(route, next)
+		return
+	}
+	mux.HandleFunc(route, web.DisabledEndpointHandler(feature, setting, code))
+}
+
 func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	// Profile management
 	mux.HandleFunc("POST /profiles/{id}/start", o.handleStartByID)
@@ -24,16 +32,16 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogsByID)
 	mux.HandleFunc("GET /instances/{id}/tabs", o.handleInstanceTabs)
-	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
 	mux.HandleFunc("POST /instances/{id}/tabs/open", o.handleInstanceTabOpen)
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
-	mux.HandleFunc("GET /instances/{id}/screencast", o.proxyToInstance)
+	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.handleProxyScreencast)
+	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.proxyToInstance)
 
 	// Tab operations - custom handlers
 	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
 
 	// Tab operations - generic proxy (all route to the appropriate instance)
-	tabProxyRoutes := []string{
+	for _, route := range []string{
 		"POST /tabs/{id}/navigate",
 		"GET /tabs/{id}/snapshot",
 		"GET /tabs/{id}/screenshot",
@@ -42,21 +50,18 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 		"GET /tabs/{id}/text",
 		"GET /tabs/{id}/pdf",
 		"POST /tabs/{id}/pdf",
-		"GET /tabs/{id}/download",
-		"POST /tabs/{id}/upload",
 		"POST /tabs/{id}/lock",
 		"POST /tabs/{id}/unlock",
 		"GET /tabs/{id}/cookies",
 		"POST /tabs/{id}/cookies",
 		"GET /tabs/{id}/metrics",
 		"POST /tabs/{id}/find",
-	}
-	if o.allowEvaluate {
-		tabProxyRoutes = append(tabProxyRoutes, "POST /tabs/{id}/evaluate")
-	}
-	for _, route := range tabProxyRoutes {
+	} {
 		mux.HandleFunc(route, o.proxyTabRequest)
 	}
+	registerCapabilityRoute(mux, "POST /tabs/{id}/evaluate", o.AllowsEvaluate(), "evaluate", "security.allowEvaluate", "evaluate_disabled", o.proxyTabRequest)
+	registerCapabilityRoute(mux, "GET /tabs/{id}/download", o.AllowsDownload(), "download", "security.allowDownload", "download_disabled", o.proxyTabRequest)
+	registerCapabilityRoute(mux, "POST /tabs/{id}/upload", o.AllowsUpload(), "upload", "security.allowUpload", "upload_disabled", o.proxyTabRequest)
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {

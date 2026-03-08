@@ -204,13 +204,6 @@ All fields default to `false`/empty — existing behaviour is completely unchang
 
 Full docs at **[pinchtab.com/docs](https://pinchtab.com/docs)**
 
-- **[Getting Started](https://pinchtab.com/docs/get-started)** — Install and run
-- **[Core Concepts](https://pinchtab.com/docs/core-concepts)** — Instances, profiles, tabs
-- **[Headless vs Headed](https://pinchtab.com/docs/headless-vs-headed)** — Choose the right mode
-- **[API Reference](https://pinchtab.com/docs/api-reference)** — HTTP endpoints
-- **[CLI Reference](https://pinchtab.com/docs/cli-reference)** — Command-line commands
-- **[Configuration](https://pinchtab.com/docs/configuration)** — Config file and runtime settings
-
 ### MCP (SMCP) integration
 
 An **SMCP plugin** in this repo lets AI agents control PinchTab via the [Model Context Protocol](https://github.com/sanctumos/smcp) (SMCP). One plugin exposes 15 tools (e.g. `pinchtab__navigate`, `pinchtab__snapshot`, `pinchtab__action`). No extra runtime deps (stdlib only). See **[plugins/README.md](plugins/README.md)** for setup (env vars and paths).

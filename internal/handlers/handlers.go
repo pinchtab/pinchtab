@@ -132,10 +132,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /find", h.HandleFind)
 	mux.HandleFunc("GET /screencast", h.HandleScreencast)
 	mux.HandleFunc("GET /screencast/tabs", h.HandleScreencastAll)
-	if h.Config != nil && h.Config.AllowEvaluate {
-		mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
-		mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
-	}
+	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
+	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(assets.WelcomeHTML))

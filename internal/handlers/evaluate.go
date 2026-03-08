@@ -23,7 +23,9 @@ func (h *Handlers) evaluateEnabled() bool {
 // @Endpoint POST /evaluate
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	if !h.evaluateEnabled() {
-		web.ErrorCode(w, 403, "evaluate_disabled", "evaluate endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "evaluate_disabled", web.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
+			"setting": "security.allowEvaluate",
+		})
 		return
 	}
 
@@ -70,7 +72,9 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 // @Endpoint POST /tabs/{id}/evaluate
 func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
 	if !h.evaluateEnabled() {
-		web.ErrorCode(w, 403, "evaluate_disabled", "evaluate endpoint is disabled; enable it in config to use this endpoint", false, nil)
+		web.ErrorCode(w, 403, "evaluate_disabled", web.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
+			"setting": "security.allowEvaluate",
+		})
 		return
 	}
 

@@ -1,13 +1,30 @@
 package simple
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/proxy"
 )
+
+type mockRunner struct {
+	portAvail bool
+}
+
+func (m *mockRunner) Run(context.Context, string, []string, []string, io.Writer, io.Writer) (orchestrator.Cmd, error) {
+	return nil, nil
+}
+
+func (m *mockRunner) IsPortAvailable(string) bool {
+	return m.portAvail
+}
 
 // fakeBridge creates a test server that mimics a bridge instance.
 func fakeBridge(t *testing.T) *httptest.Server {
@@ -90,5 +107,25 @@ func TestStrategy_HandleTabs_NoInstances(t *testing.T) {
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestStrategy_RegisterRoutes_LocksSensitiveShorthandRoutes(t *testing.T) {
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	orch.ApplyRuntimeConfig(&config.RuntimeConfig{})
+
+	s := &Strategy{orch: orch}
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/evaluate", strings.NewReader(`{"expression":"1+1"}`))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 403 {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "security.allowEvaluate") {
+		t.Fatalf("expected lock response to mention security.allowEvaluate, got %s", rec.Body.String())
 	}
 }

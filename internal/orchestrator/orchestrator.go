@@ -203,6 +203,26 @@ func (o *Orchestrator) ApplyRuntimeConfig(cfg *config.RuntimeConfig) {
 	}
 }
 
+func (o *Orchestrator) AllowsEvaluate() bool {
+	return o != nil && o.allowEvaluate
+}
+
+func (o *Orchestrator) AllowsMacro() bool {
+	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowMacro
+}
+
+func (o *Orchestrator) AllowsScreencast() bool {
+	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowScreencast
+}
+
+func (o *Orchestrator) AllowsDownload() bool {
+	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowDownload
+}
+
+func (o *Orchestrator) AllowsUpload() bool {
+	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowUpload
+}
+
 func (o *Orchestrator) SetPortRange(start, end int) {
 	o.portAllocator = NewPortAllocator(start, end)
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -119,6 +120,42 @@ func TestHandlers(t *testing.T) {
 	}
 }
 
+func TestHelpIncludesSecurityStatus(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/help", nil)
+	w := httptest.NewRecorder()
+	h.HandleHelp(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200 from /help, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "\"security\"") {
+		t.Fatalf("expected /help response to include security status")
+	}
+	if !strings.Contains(w.Body.String(), "security.allowEvaluate") {
+		t.Fatalf("expected /help response to include locked setting names")
+	}
+}
+
+func TestOpenAPIIncludesSensitiveEndpointStatus(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowDownload: true}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/openapi.json", nil)
+	w := httptest.NewRecorder()
+	h.HandleOpenAPI(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200 from /openapi.json, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "\"x-pinchtab-security\"") {
+		t.Fatalf("expected /openapi.json response to include security metadata")
+	}
+	if !strings.Contains(w.Body.String(), "\"x-pinchtab-enabled\":true") {
+		t.Fatalf("expected /openapi.json response to mark enabled sensitive endpoints")
+	}
+}
+
 func TestHandleNavigate(t *testing.T) {
 	cfg := &config.RuntimeConfig{}
 	m := &mockBridge{}
@@ -212,7 +249,7 @@ func TestRoutesRegistration(t *testing.T) {
 	}
 }
 
-func TestEvaluateRouteNotRegisteredByDefault(t *testing.T) {
+func TestEvaluateRouteLockedByDefault(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, nil)
@@ -220,8 +257,11 @@ func TestEvaluateRouteNotRegisteredByDefault(t *testing.T) {
 	req := httptest.NewRequest("POST", "/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
-	if w.Code != 404 {
-		t.Fatalf("expected 404 when evaluate is disabled, got %d", w.Code)
+	if w.Code != 403 {
+		t.Fatalf("expected 403 when evaluate is disabled, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "security.allowEvaluate") {
+		t.Fatalf("expected evaluate lock response to include the setting name, got %s", w.Body.String())
 	}
 }
 
@@ -235,5 +275,27 @@ func TestEvaluateRouteRegisteredWhenEnabled(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != 400 {
 		t.Fatalf("expected evaluate route to be active, got %d", w.Code)
+	}
+}
+
+func TestSensitiveTabRouteLockedByDefault(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest("POST", "/tabs/tab1/evaluate", bytes.NewReader([]byte(`{"expression":"1+1"}`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 403 {
+		t.Fatalf("expected 403 when tab evaluate is disabled, got %d", w.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if payload["code"] != "evaluate_disabled" {
+		t.Fatalf("expected evaluate_disabled code, got %v", payload["code"])
 	}
 }

@@ -51,17 +51,21 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	// Shorthand endpoints — all proxy to first running instance.
 	shorthandRoutes := []string{
 		"GET /snapshot", "GET /screenshot", "GET /text",
-		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
+		"POST /navigate", "POST /action", "POST /actions",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",
-		"GET /download", "POST /upload",
 		"GET /stealth/status", "POST /fingerprint/rotate",
-		"GET /screencast", "GET /screencast/tabs",
-		"POST /find", "POST /macro",
+		"POST /find",
 	}
 	for _, route := range shorthandRoutes {
 		mux.HandleFunc(route, s.proxyToFirst)
 	}
+	strategy.RegisterCapabilityRoute(mux, "POST /evaluate", s.orch.AllowsEvaluate(), "evaluate", "security.allowEvaluate", "evaluate_disabled", s.proxyToFirst)
+	strategy.RegisterCapabilityRoute(mux, "GET /download", s.orch.AllowsDownload(), "download", "security.allowDownload", "download_disabled", s.proxyToFirst)
+	strategy.RegisterCapabilityRoute(mux, "POST /upload", s.orch.AllowsUpload(), "upload", "security.allowUpload", "upload_disabled", s.proxyToFirst)
+	strategy.RegisterCapabilityRoute(mux, "GET /screencast", s.orch.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", s.proxyToFirst)
+	strategy.RegisterCapabilityRoute(mux, "GET /screencast/tabs", s.orch.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", s.proxyToFirst)
+	strategy.RegisterCapabilityRoute(mux, "POST /macro", s.orch.AllowsMacro(), "macro", "security.allowMacro", "macro_disabled", s.proxyToFirst)
 
 	mux.HandleFunc("GET /tabs", s.handleTabs)
 }

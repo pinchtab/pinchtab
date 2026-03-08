@@ -164,6 +164,21 @@ func TestDefaultFileConfig(t *testing.T) {
 	if len(fc.Attach.AllowSchemes) != 2 || fc.Attach.AllowSchemes[0] != "ws" || fc.Attach.AllowSchemes[1] != "wss" {
 		t.Errorf("DefaultFileConfig.Attach.AllowSchemes = %v, want [ws wss]", fc.Attach.AllowSchemes)
 	}
+	if fc.Security.AllowEvaluate == nil || *fc.Security.AllowEvaluate {
+		t.Errorf("DefaultFileConfig.Security.AllowEvaluate = %v, want explicit false", formatBoolPtr(fc.Security.AllowEvaluate))
+	}
+	if fc.Security.AllowMacro == nil || *fc.Security.AllowMacro {
+		t.Errorf("DefaultFileConfig.Security.AllowMacro = %v, want explicit false", formatBoolPtr(fc.Security.AllowMacro))
+	}
+	if fc.Security.AllowScreencast == nil || *fc.Security.AllowScreencast {
+		t.Errorf("DefaultFileConfig.Security.AllowScreencast = %v, want explicit false", formatBoolPtr(fc.Security.AllowScreencast))
+	}
+	if fc.Security.AllowDownload == nil || *fc.Security.AllowDownload {
+		t.Errorf("DefaultFileConfig.Security.AllowDownload = %v, want explicit false", formatBoolPtr(fc.Security.AllowDownload))
+	}
+	if fc.Security.AllowUpload == nil || *fc.Security.AllowUpload {
+		t.Errorf("DefaultFileConfig.Security.AllowUpload = %v, want explicit false", formatBoolPtr(fc.Security.AllowUpload))
+	}
 }
 
 // TestLoadNestedConfig tests loading the new nested config format.
@@ -468,6 +483,50 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	}
 	if parsed.InstanceDefaults.Mode != "headless" {
 		t.Errorf("round-trip InstanceDefaults.Mode = %v, want headless", parsed.InstanceDefaults.Mode)
+	}
+	if parsed.Security.AllowEvaluate == nil || *parsed.Security.AllowEvaluate {
+		t.Errorf("round-trip Security.AllowEvaluate = %v, want explicit false", formatBoolPtr(parsed.Security.AllowEvaluate))
+	}
+	if parsed.Security.AllowMacro == nil || *parsed.Security.AllowMacro {
+		t.Errorf("round-trip Security.AllowMacro = %v, want explicit false", formatBoolPtr(parsed.Security.AllowMacro))
+	}
+	if parsed.Security.AllowScreencast == nil || *parsed.Security.AllowScreencast {
+		t.Errorf("round-trip Security.AllowScreencast = %v, want explicit false", formatBoolPtr(parsed.Security.AllowScreencast))
+	}
+	if parsed.Security.AllowDownload == nil || *parsed.Security.AllowDownload {
+		t.Errorf("round-trip Security.AllowDownload = %v, want explicit false", formatBoolPtr(parsed.Security.AllowDownload))
+	}
+	if parsed.Security.AllowUpload == nil || *parsed.Security.AllowUpload {
+		t.Errorf("round-trip Security.AllowUpload = %v, want explicit false", formatBoolPtr(parsed.Security.AllowUpload))
+	}
+}
+
+func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T) {
+	cfg := &RuntimeConfig{
+		AllowEvaluate:   true,
+		AllowMacro:      true,
+		AllowScreencast: true,
+		AllowDownload:   true,
+		AllowUpload:     true,
+	}
+
+	fc := DefaultFileConfig()
+	ApplyFileConfigToRuntime(cfg, &fc)
+
+	if cfg.AllowEvaluate {
+		t.Errorf("ApplyFileConfigToRuntime AllowEvaluate = %v, want false", cfg.AllowEvaluate)
+	}
+	if cfg.AllowMacro {
+		t.Errorf("ApplyFileConfigToRuntime AllowMacro = %v, want false", cfg.AllowMacro)
+	}
+	if cfg.AllowScreencast {
+		t.Errorf("ApplyFileConfigToRuntime AllowScreencast = %v, want false", cfg.AllowScreencast)
+	}
+	if cfg.AllowDownload {
+		t.Errorf("ApplyFileConfigToRuntime AllowDownload = %v, want false", cfg.AllowDownload)
+	}
+	if cfg.AllowUpload {
+		t.Errorf("ApplyFileConfigToRuntime AllowUpload = %v, want false", cfg.AllowUpload)
 	}
 }
 
