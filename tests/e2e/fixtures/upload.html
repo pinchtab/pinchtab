@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload Test Page</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 2rem; }
+    .upload-zone { 
+      border: 2px dashed #ccc; 
+      border-radius: 8px; 
+      padding: 2rem; 
+      text-align: center;
+      margin: 1rem 0;
+    }
+    .upload-zone.dragover { border-color: #007bff; background: #f0f7ff; }
+    .file-list { margin: 1rem 0; }
+    .file-item { padding: 0.5rem; background: #f5f5f5; margin: 0.25rem 0; border-radius: 4px; }
+    input[type="file"] { margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>File Upload Test Page</h1>
+  
+  <div class="upload-zone" id="drop-zone">
+    <p>Drag and drop files here or click to select</p>
+    <input type="file" id="single-file" aria-label="Single file upload">
+  </div>
+
+  <div>
+    <h2>Multiple Files</h2>
+    <input type="file" id="multi-file" multiple aria-label="Multiple file upload">
+  </div>
+
+  <div>
+    <h2>Specific Types</h2>
+    <label>
+      Images only:
+      <input type="file" id="image-upload" accept="image/*" aria-label="Image upload">
+    </label>
+    <br><br>
+    <label>
+      Documents:
+      <input type="file" id="doc-upload" accept=".pdf,.doc,.docx,.txt" aria-label="Document upload">
+    </label>
+  </div>
+
+  <div class="file-list" id="file-list">
+    <h2>Uploaded Files</h2>
+    <p id="no-files">No files uploaded yet</p>
+  </div>
+
+  <script>
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    const fileList = document.getElementById('file-list');
+    const noFiles = document.getElementById('no-files');
+
+    fileInputs.forEach(input => {
+      input.addEventListener('change', (e) => {
+        const files = e.target.files;
+        if (files.length > 0) {
+          noFiles.style.display = 'none';
+          Array.from(files).forEach(file => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            item.dataset.filename = file.name;
+            item.dataset.size = file.size;
+            item.dataset.type = file.type;
+            fileList.appendChild(item);
+          });
+        }
+      });
+    });
+
+    // Drag and drop
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      document.getElementById('single-file').files = e.dataTransfer.files;
+      document.getElementById('single-file').dispatchEvent(new Event('change'));
+    });
+  </script>
+</body>
+</html>

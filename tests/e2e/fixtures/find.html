@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Find Test Page</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 2rem; }
+    .section { margin: 2rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    button { padding: 0.5rem 1rem; margin: 0.25rem; cursor: pointer; }
+    input, select { padding: 0.5rem; margin: 0.25rem; }
+    .primary { background: #007bff; color: white; border: none; border-radius: 4px; }
+    .danger { background: #dc3545; color: white; border: none; border-radius: 4px; }
+    .success { background: #28a745; color: white; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Element Finder Test Page</h1>
+  
+  <div class="section">
+    <h2>Authentication</h2>
+    <input type="email" placeholder="Email address" aria-label="Email">
+    <input type="password" placeholder="Password" aria-label="Password">
+    <button class="primary" id="login-btn">Log In</button>
+    <button id="signup-btn">Sign Up</button>
+    <a href="#forgot">Forgot password?</a>
+  </div>
+
+  <div class="section">
+    <h2>Actions</h2>
+    <button class="success" id="save-btn">Save Changes</button>
+    <button class="danger" id="delete-btn">Delete Account</button>
+    <button id="cancel-btn">Cancel</button>
+    <button id="submit-form">Submit Form</button>
+  </div>
+
+  <div class="section">
+    <h2>Navigation</h2>
+    <a href="#home">Home</a>
+    <a href="#about">About Us</a>
+    <a href="#contact">Contact Support</a>
+    <a href="#pricing">View Pricing</a>
+  </div>
+
+  <div class="section">
+    <h2>Form Elements</h2>
+    <label>
+      <input type="checkbox" id="terms"> I agree to the terms and conditions
+    </label>
+    <br>
+    <label>
+      <input type="checkbox" id="newsletter"> Subscribe to newsletter
+    </label>
+    <br>
+    <select aria-label="Country">
+      <option>United States</option>
+      <option>United Kingdom</option>
+      <option>Canada</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <h2>Search</h2>
+    <input type="search" placeholder="Search products..." aria-label="Search">
+    <button id="search-btn">Search</button>
+  </div>
+</body>
+</html>

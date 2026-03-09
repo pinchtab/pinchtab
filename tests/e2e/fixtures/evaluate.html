@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Evaluate Test Page</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 2rem; }
+    .result { padding: 1rem; margin: 1rem 0; background: #f5f5f5; border-radius: 4px; }
+    #counter { font-size: 2rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>JavaScript Evaluate Test Page</h1>
+  
+  <div class="result">
+    <p>Counter: <span id="counter">0</span></p>
+    <button onclick="increment()">Increment</button>
+    <button onclick="decrement()">Decrement</button>
+    <button onclick="reset()">Reset</button>
+  </div>
+
+  <div class="result">
+    <p>Message: <span id="message">Hello, World!</span></p>
+  </div>
+
+  <div class="result">
+    <p>Data: <span id="data"></span></p>
+  </div>
+
+  <script>
+    // Global state for testing
+    window.testData = {
+      name: 'PinchTab',
+      version: '1.0.0',
+      features: ['snapshot', 'screenshot', 'pdf', 'evaluate']
+    };
+
+    let count = 0;
+
+    function increment() {
+      count++;
+      document.getElementById('counter').textContent = count;
+      return count;
+    }
+
+    function decrement() {
+      count--;
+      document.getElementById('counter').textContent = count;
+      return count;
+    }
+
+    function reset() {
+      count = 0;
+      document.getElementById('counter').textContent = count;
+      return count;
+    }
+
+    function setMessage(msg) {
+      document.getElementById('message').textContent = msg;
+      return msg;
+    }
+
+    function getData() {
+      return window.testData;
+    }
+
+    function asyncOperation() {
+      return new Promise(resolve => {
+        setTimeout(() => resolve({ status: 'complete', timestamp: Date.now() }), 100);
+      });
+    }
+
+    // Math utilities for testing
+    window.calculate = {
+      add: (a, b) => a + b,
+      multiply: (a, b) => a * b,
+      factorial: (n) => n <= 1 ? 1 : n * window.calculate.factorial(n - 1)
+    };
+  </script>
+</body>
+</html>

@@ -146,7 +146,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	s.orch.RegisterHandlers(mux)
 
 	shorthandRoutes := []string{
-		"GET /snapshot", "GET /screenshot", "GET /text",
+		"GET /snapshot", "GET /screenshot", "GET /text", "GET /pdf", "POST /pdf",
 		"POST /navigate", "POST /action", "POST /actions",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
 		"GET /cookies", "POST /cookies",

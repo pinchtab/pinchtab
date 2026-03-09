@@ -1,0 +1,4 @@
+This is a sample file for download testing.
+PinchTab E2E Test Suite
+========================
+If you can read this, the download worked!

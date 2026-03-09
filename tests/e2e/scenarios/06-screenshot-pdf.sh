@@ -15,9 +15,10 @@ assert_ok "screenshot"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab pdf (shorthand)"
+start_test "pinchtab pdf (default)"
 
-skip "/pdf shorthand not in server mode"
+pt_get /pdf
+assert_ok "pdf"
 
 end_test
 
@@ -40,5 +41,16 @@ TAB_ID=$(get_first_tab)
 
 pt_get "/tabs/${TAB_ID}/pdf"
 assert_ok "tab pdf"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab pdf --tab <id> (with options)"
+
+pt_get /tabs
+TAB_ID=$(get_first_tab)
+
+pt_post "/tabs/${TAB_ID}/pdf" -d '{"printBackground":true,"scale":0.8}'
+assert_ok "tab pdf with options"
 
 end_test

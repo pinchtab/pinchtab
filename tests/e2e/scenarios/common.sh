@@ -187,6 +187,51 @@ assert_json_length_gte() {
   fi
 }
 
+# Assert JSON field exists (not null)
+assert_json_exists() {
+  local json="$1"
+  local path="$2"
+  local desc="${3:-$path exists}"
+  
+  if echo "$json" | jq -e "$path" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (field missing or null)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Assert string contains substring
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local desc="${3:-contains '$needle'}"
+  
+  if echo "$haystack" | grep -q "$needle"; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (not found)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Assert result JSON field equals value (uses global $RESULT)
+assert_result_eq() {
+  local path="$1"
+  local expected="$2"
+  local desc="${3:-$path = $expected}"
+  assert_json_eq "$RESULT" "$path" "$expected" "$desc"
+}
+
+# Assert result JSON field exists (uses global $RESULT)
+assert_result_exists() {
+  local path="$1"
+  local desc="${2:-$path exists}"
+  assert_json_exists "$RESULT" "$path" "$desc"
+}
+
 # ================================================================
 # Visible curl wrapper — shows exact command when running
 # ================================================================
