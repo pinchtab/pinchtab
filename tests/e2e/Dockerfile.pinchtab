@@ -39,10 +39,11 @@ ENV PINCHTAB_BIND=0.0.0.0 \
     PINCHTAB_STATE_DIR=/data \
     CHROME_BIN=/usr/bin/chromium-browser
 
-# Create config with Chrome flags for Docker and IDPI disabled for tests
+# Create config with Chrome flags for Docker and IDPI allowlist for test fixtures
 # Config goes in XDG_CONFIG_HOME which defaults to ~/.config
+# AllowedDomains replaces defaults, so include localhost + fixtures
 RUN mkdir -p /root/.config/pinchtab && \
-    echo '{"browser":{"extraFlags":"--no-sandbox --disable-dev-shm-usage"},"security":{"idpi":{"enabled":false}}}' > /root/.config/pinchtab/config.json
+    echo '{"browser":{"extraFlags":"--no-sandbox --disable-dev-shm-usage"},"security":{"idpi":{"enabled":true,"allowedDomains":["localhost","127.0.0.1","::1","fixtures"]}}}' > /root/.config/pinchtab/config.json
 
 EXPOSE 9999
 
