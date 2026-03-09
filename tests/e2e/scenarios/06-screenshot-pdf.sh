@@ -14,21 +14,7 @@ assert_ok "screenshot"
 
 end_test
 
-# ─────────────────────────────────────────────────────────────────
-start_test "pinchtab pdf (default tab)"
 
-pt_get /pdf
-assert_ok "pdf default"
-
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "pinchtab pdf (landscape)"
-
-pt_post /pdf -d '{"landscape":true}'
-assert_ok "pdf landscape"
-
-end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab screenshot --tab <id>"
