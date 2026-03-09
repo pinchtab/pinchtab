@@ -23,7 +23,7 @@ pt_get "/download?url=${FIXTURES_URL}/sample.txt"
 assert_http_status 400 "download blocked"
 
 # Verify error message mentions blocking
-if ! echo "$LAST_BODY" | grep -q "blocked\|private"; then
+if ! echo "$RESULT" | grep -q "blocked\|private"; then
   fail "expected SSRF block message"
 fi
 

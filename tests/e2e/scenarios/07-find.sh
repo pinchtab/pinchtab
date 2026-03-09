@@ -14,7 +14,7 @@ pt_post /find -d '{"query":"login button"}'
 assert_ok "find login"
 
 # Verify we got a ref back
-if ! echo "$LAST_BODY" | jq -e '.best_ref' >/dev/null 2>&1; then
+if ! echo "$RESULT" | jq -e '.best_ref' >/dev/null 2>&1; then
   fail "expected best_ref in response"
 fi
 
@@ -43,7 +43,7 @@ pt_post /find -d '{"query":"search input","topK":5}'
 assert_ok "find search"
 
 # Verify candidates array
-if ! echo "$LAST_BODY" | jq -e '.candidates | length > 0' >/dev/null 2>&1; then
+if ! echo "$RESULT" | jq -e '.candidates | length > 0' >/dev/null 2>&1; then
   fail "expected candidates in response"
 fi
 
@@ -55,7 +55,7 @@ start_test "pinchtab find --tab <id>"
 # Open find page in new tab - capture tabId from response
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/find.html\",\"newTab\":true}"
 assert_ok "navigate for find"
-TAB_ID=$(echo "$LAST_BODY" | jq -r '.tabId')
+TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
 sleep 1
 
 pt_post "/tabs/${TAB_ID}/find" -d '{"query":"sign up link"}'

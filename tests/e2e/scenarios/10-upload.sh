@@ -33,7 +33,7 @@ start_test "pinchtab upload --tab <id>"
 # Open upload page in new tab - capture tabId from response
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/upload.html\",\"newTab\":true}"
 assert_ok "navigate for upload"
-TAB_ID=$(echo "$LAST_BODY" | jq -r '.tabId')
+TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
 sleep 1
 
 # 1x1 transparent PNG
