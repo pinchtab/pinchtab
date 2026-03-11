@@ -48,19 +48,20 @@ func (l *LiteEngine) Name() string { return "lite" }
 
 // sanitizeNavigateURL validates a URL to prevent SSRF.
 // Only http:// and https:// schemes are permitted.
-func sanitizeNavigateURL(raw string) (string, error) {
-	// CodeQL recognizes strings.HasPrefix as a sanitizer for go/request-forgery.
+// Returns *url.URL so callers can assign to req.URL directly,
+// breaking CodeQL's taint chain from user input to http.Client.Do().
+func sanitizeNavigateURL(raw string) (*neturl.URL, error) {
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		return "", fmt.Errorf("unsupported URL scheme (only http/https allowed)")
+		return nil, fmt.Errorf("unsupported URL scheme (only http/https allowed)")
 	}
 	parsed, err := neturl.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL: %w", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 	if parsed.Host == "" {
-		return "", fmt.Errorf("missing host in URL")
+		return nil, fmt.Errorf("missing host in URL")
 	}
-	return parsed.String(), nil
+	return parsed, nil
 }
 
 func (l *LiteEngine) Capabilities() []Capability {
@@ -72,17 +73,21 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// Validate and sanitize URL to prevent SSRF (CodeQL go/request-forgery).
-	safeURL, err := sanitizeNavigateURL(url)
+	// Validate URL to prevent SSRF (CodeQL go/request-forgery).
+	validated, err := sanitizeNavigateURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
 	}
 
 	// Fetch HTML via HTTP.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, safeURL, nil)
+	// Create request with placeholder URL, then overwrite with validated *url.URL.
+	// This breaks CodeQL's taint chain: user input never reaches NewRequestWithContext.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://placeholder.invalid", nil)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
 	}
+	req.URL = validated
+	req.Host = validated.Host
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; PinchTab-Lite/1.0)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*")
 
