@@ -18,14 +18,14 @@ import (
 //
 // @Endpoint GET /text
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
-	// --- Lite engine fast path ---
-	if h.useLite(engine.CapText, "") {
-		text, err := h.Router.Lite().Text(r.Context())
+	// --- Alternative engine fast path (lite or lightpanda) ---
+	if eng := h.altEngine(engine.CapText, ""); eng != nil {
+		text, err := eng.Text(r.Context())
 		if err != nil {
-			web.Error(w, 500, fmt.Errorf("lite text: %w", err))
+			web.Error(w, 500, fmt.Errorf("%s text: %w", eng.Name(), err))
 			return
 		}
-		w.Header().Set("X-Engine", "lite")
+		w.Header().Set("X-Engine", eng.Name())
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte(text))
 		return

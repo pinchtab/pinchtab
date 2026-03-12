@@ -92,6 +92,15 @@ func (h *Handlers) useLite(op engine.Capability, url string) bool {
 	return h.Router != nil && h.Router.UseLite(op, url)
 }
 
+// altEngine returns the alternative engine (lite or lightpanda) for the given
+// operation, or nil if the operation should use Chrome.
+func (h *Handlers) altEngine(op engine.Capability, url string) engine.Engine {
+	if h.Router == nil {
+		return nil
+	}
+	return h.Router.Route(op, url)
+}
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("POST /ensure-chrome", h.HandleEnsureChrome)

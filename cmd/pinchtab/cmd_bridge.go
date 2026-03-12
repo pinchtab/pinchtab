@@ -37,12 +37,26 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 	// Register all bridge handlers
 	h := handlers.New(bridgeInstance, cfg, nil, nil, nil)
 
-	// Wire engine router if mode is "lite" or "auto".
+	// Wire engine router for alternative engine modes.
 	mode := engine.Mode(cfg.Engine)
-	if mode == engine.ModeLite || mode == engine.ModeAuto {
+	switch mode {
+	case engine.ModeLite, engine.ModeAuto:
 		lite := engine.NewLiteEngine()
 		h.Router = engine.NewRouter(mode, lite)
 		slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
+	case engine.ModeLightpanda:
+		lpURL := cfg.LightpandaURL
+		if lpURL == "" {
+			lpURL = "ws://127.0.0.1:9222"
+		}
+		lp, err := engine.NewLightpandaEngine(lpURL)
+		if err != nil {
+			slog.Error("failed to create lightpanda engine", "err", err)
+			os.Exit(1)
+		}
+		h.Router = engine.NewRouter(mode, nil)
+		h.Router.RegisterEngine(lp)
+		slog.Info("engine router enabled", "mode", cfg.Engine, "url", lpURL, "rules", h.Router.Rules())
 	}
 
 	shutdownOnce := &sync.Once{}

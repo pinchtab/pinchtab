@@ -62,11 +62,11 @@ import (
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 
-	// --- Lite engine fast path ---
-	if h.useLite(engine.CapSnapshot, "") {
-		nodes, err := h.Router.Lite().Snapshot(r.Context(), filter)
+	// --- Alternative engine fast path (lite or lightpanda) ---
+	if eng := h.altEngine(engine.CapSnapshot, ""); eng != nil {
+		nodes, err := eng.Snapshot(r.Context(), filter)
 		if err != nil {
-			web.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
+			web.Error(w, 500, fmt.Errorf("%s snapshot: %w", eng.Name(), err))
 			return
 		}
 		// Convert to bridge.A11yNode for API compatibility.
@@ -74,7 +74,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		for i, n := range nodes {
 			flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
 		}
-		w.Header().Set("X-Engine", "lite")
+		w.Header().Set("X-Engine", eng.Name())
 		web.JSON(w, 200, map[string]any{"nodes": flat})
 		return
 	}

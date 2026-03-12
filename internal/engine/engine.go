@@ -27,18 +27,20 @@ const (
 type Mode string
 
 const (
-	ModeChrome Mode = "chrome" // always Chrome (default)
-	ModeLite   Mode = "lite"   // always lite (screenshot/pdf return 501)
-	ModeAuto   Mode = "auto"   // per-request routing via rules
+	ModeChrome     Mode = "chrome"     // always Chrome (default)
+	ModeLite       Mode = "lite"       // always lite (screenshot/pdf return 501)
+	ModeLightpanda Mode = "lightpanda" // Lightpanda CDP engine
+	ModeAuto       Mode = "auto"       // per-request routing via rules
 )
 
 // Decision is the routing verdict returned by a RouteRule.
 type Decision int
 
 const (
-	Undecided Decision = iota // rule has no opinion
-	UseLite                   // route to Gost-DOM
-	UseChrome                 // route to Chrome
+	Undecided     Decision = iota // rule has no opinion
+	UseLite                       // route to Gost-DOM
+	UseChrome                     // route to Chrome
+	UseLightpanda                 // route to Lightpanda
 )
 
 // NavigateResult is the response from a navigation.
