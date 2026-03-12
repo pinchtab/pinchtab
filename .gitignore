@@ -48,3 +48,6 @@ pinchtab.exe
 # E2E test results
 tests/e2e/results/*
 !tests/e2e/results/.gitkeep
+
+# Benchmark reports 
+benchmark/reports/

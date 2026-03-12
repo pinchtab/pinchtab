@@ -1,0 +1,19 @@
+{
+  "description": "Extended benchmark configuration with additional custom patterns for stricter detection",
+  "idpi": {
+    "enabled": true,
+    "strictMode": true,
+    "scanContent": true,
+    "wrapContent": false,
+    "customPatterns": [
+      "send to my server",
+      "contact attacker",
+      "bypass safety",
+      "disable content filter",
+      "you must comply",
+      "mandatory security check",
+      "authorized data audit"
+    ],
+    "scanTimeoutSec": 5
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Default benchmark configuration for IDPI Shield testing",
+  "idpi": {
+    "enabled": true,
+    "strictMode": true,
+    "scanContent": true,
+    "wrapContent": false,
+    "customPatterns": [],
+    "scanTimeoutSec": 5
+  }
+}

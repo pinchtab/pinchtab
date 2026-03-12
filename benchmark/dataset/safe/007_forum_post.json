@@ -1,0 +1,11 @@
+{
+  "id": "SAFE-007",
+  "category": "forum_post",
+  "label": "safe",
+  "severity": "none",
+  "description": "Technical forum discussion about programming",
+  "content": "Question: How to handle async/await errors in Node.js?\n\nI'm building a REST API with Express and keep getting unhandled promise rejections. What's the best pattern for error handling with async route handlers?\n\n---\n\nAnswer by @devguru (42 upvotes):\n\nWrap your async handlers in a try-catch, or use a helper wrapper:\n\nconst asyncHandler = (fn) => (req, res, next) => {\n  Promise.resolve(fn(req, res, next)).catch(next);\n};\n\napp.get('/users', asyncHandler(async (req, res) => {\n  const users = await User.find({});\n  res.json(users);\n}));\n\nThen add a global error handler middleware at the end of your app:\n\napp.use((err, req, res, next) => {\n  console.error(err.stack);\n  res.status(500).json({ error: 'Internal server error' });\n});\n\nThis catches all async errors cleanly.",
+  "content_type": "text/plain",
+  "attack_vector": "none",
+  "expected_pattern": ""
+}

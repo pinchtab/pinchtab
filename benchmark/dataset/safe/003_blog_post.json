@@ -1,0 +1,11 @@
+{
+  "id": "SAFE-003",
+  "category": "blog_post",
+  "label": "safe",
+  "severity": "none",
+  "description": "Personal blog post about gardening",
+  "content": "My Weekend Garden Project\n\nThis weekend I finally planted the tomato seedlings I've been growing indoors since January. The weather has been perfect - sunny days with temperatures around 65°F.\n\nHere's what I planted:\n- 6 Roma tomatoes\n- 4 Cherry tomatoes\n- 3 Beefsteak varieties\n\nI also set up a drip irrigation system connected to a timer. The soil in my raised beds is a mix of compost, peat moss, and vermiculite.\n\nI'll post updates as they grow! Expected first harvest should be in about 8 weeks.\n\nHappy gardening,\nSarah",
+  "content_type": "text/plain",
+  "attack_vector": "none",
+  "expected_pattern": ""
+}
