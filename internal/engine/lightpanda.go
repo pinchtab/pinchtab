@@ -5,41 +5,37 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/input"
-	cdppage "github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
 // LightpandaEngine implements Engine using a persistent CDP connection to a
 // Lightpanda browser instance. Unlike the prior prototype that reconnected
-// per-operation (freshContext), this keeps the WebSocket alive across calls,
-// eliminating the re-navigation overhead that made the old approach 1.9x
-// slower than Chrome.
+// per-operation (freshContext), this keeps a single WebSocket and browser
+// context alive across calls, eliminating the re-navigation overhead that
+// made the old approach 1.9x slower than Chrome.
+//
+// Lightpanda supports only one BrowserContext at a time, so we must NOT
+// call chromedp.NewContext per-navigation (that sends Target.createTarget
+// which tears down the previous session). Instead we create one context
+// eagerly and reuse it for all operations.
 type LightpandaEngine struct {
 	wsURL string // e.g. "ws://127.0.0.1:9222"
 
 	mu       sync.Mutex
 	allocCtx context.Context    // remote allocator context
 	allocCan context.CancelFunc // cancel for allocator
-	tabs     map[string]*lpTab
-	current  string
-	seq      int
-}
-
-type lpTab struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	url    string
-	refMap map[string]int64 // ref → backendNodeId
+	browCtx  context.Context    // single browser context (reused)
+	browCan  context.CancelFunc // cancel for browser context
+	url      string             // currently loaded URL
+	refMap   map[string]int64   // ref → backendNodeId
+	ready    bool               // true after first Navigate
 }
 
 // NewLightpandaEngine creates an engine that connects to a running Lightpanda
@@ -50,15 +46,22 @@ func NewLightpandaEngine(wsURL string) (*LightpandaEngine, error) {
 		return nil, errors.New("lightpanda: wsURL required")
 	}
 
-	// Probe the /json/version endpoint to get the actual devtools WS URL.
-	// chromedp.NewRemoteAllocator handles this for us.
-	allocCtx, allocCancel := chromedp.NewRemoteAllocator(context.Background(), wsURL)
+	// Use NoModifyURL so chromedp connects directly to the given WebSocket
+	// URL instead of querying /json/version. Lightpanda in Docker advertises
+	// the container-internal address (ws://0.0.0.0:9222/) which is
+	// unreachable from the host.
+	allocCtx, allocCancel := chromedp.NewRemoteAllocator(context.Background(), wsURL, chromedp.NoModifyURL)
+
+	// Create a single browser context — Lightpanda only supports one.
+	browCtx, browCancel := chromedp.NewContext(allocCtx)
 
 	return &LightpandaEngine{
 		wsURL:    wsURL,
 		allocCtx: allocCtx,
 		allocCan: allocCancel,
-		tabs:     make(map[string]*lpTab),
+		browCtx:  browCtx,
+		browCan:  browCancel,
+		refMap:   make(map[string]int64),
 	}, nil
 }
 
@@ -68,44 +71,23 @@ func (lp *LightpandaEngine) Capabilities() []Capability {
 	return []Capability{CapNavigate, CapSnapshot, CapText, CapClick, CapType, CapEvaluate}
 }
 
-// Navigate opens a URL in a new Lightpanda target and waits for load.
+// Navigate opens a URL in the Lightpanda browser context and waits for load.
 func (lp *LightpandaEngine) Navigate(ctx context.Context, url string) (*NavigateResult, error) {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	// Create a new browser context + target through CDP.
-	tabCtx, tabCancel := chromedp.NewContext(lp.allocCtx)
-
-	// Navigate with a timeout.
-	navCtx, navCancel := context.WithTimeout(tabCtx, 30*time.Second)
-	defer navCancel()
-
-	if err := chromedp.Run(navCtx, chromedp.Navigate(url)); err != nil {
-		tabCancel()
+	if err := chromedp.Run(lp.browCtx, chromedp.Navigate(url)); err != nil {
 		return nil, fmt.Errorf("lightpanda navigate: %w", err)
 	}
 
-	// Wait for page load event.
-	if err := chromedp.Run(navCtx, cdppage.Enable()); err != nil {
-		slog.Debug("lightpanda: page.enable", "err", err)
-	}
-
-	// Get title.
 	var title string
-	_ = chromedp.Run(navCtx, chromedp.Title(&title))
 
-	lp.seq++
-	tabID := fmt.Sprintf("lp-%d", lp.seq)
-	lp.tabs[tabID] = &lpTab{
-		ctx:    tabCtx,
-		cancel: tabCancel,
-		url:    url,
-		refMap: make(map[string]int64),
-	}
-	lp.current = tabID
+	lp.url = url
+	lp.refMap = make(map[string]int64)
+	lp.ready = true
 
 	return &NavigateResult{
-		TabID: tabID,
+		TabID: "lp-0",
 		URL:   url,
 		Title: title,
 	}, nil
@@ -116,35 +98,39 @@ func (lp *LightpandaEngine) Snapshot(ctx context.Context, filter string) ([]Snap
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	tab := lp.tabs[lp.current]
-	if tab == nil {
+	if !lp.ready {
 		return nil, errors.New("no page loaded")
 	}
 
-	tCtx, tCancel := context.WithTimeout(tab.ctx, 10*time.Second)
+	tCtx, tCancel := context.WithTimeout(lp.browCtx, 10*time.Second)
 	defer tCancel()
 
 	// Fetch the full accessibility tree via CDP.
+	// Lightpanda requires explicit depth param (-1 = full tree);
+	// Chrome accepts nil params but also handles depth=-1 fine.
 	var result json.RawMessage
+	axParams := map[string]interface{}{"depth": -1}
 	if err := chromedp.Run(tCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx,
-				"Accessibility.getFullAXTree", nil, &result)
+				"Accessibility.getFullAXTree", axParams, &result)
 		}),
 	); err != nil {
 		return nil, fmt.Errorf("lightpanda a11y tree: %w", err)
 	}
 
+	// Parse with a lenient struct — Lightpanda returns property names
+	// (e.g. "uninteresting") that the strict cdproto types reject.
 	var treeResp struct {
-		Nodes []*accessibility.Node `json:"nodes"`
+		Nodes []lpAXNode `json:"nodes"`
 	}
 	if err := json.Unmarshal(result, &treeResp); err != nil {
 		return nil, fmt.Errorf("lightpanda parse a11y: %w", err)
 	}
 
 	// Build ref map and snapshot nodes.
-	tab.refMap = make(map[string]int64)
-	nodes := buildLPSnapshot(tab, treeResp.Nodes, filter)
+	lp.refMap = make(map[string]int64)
+	nodes := buildLPSnapshot(lp, treeResp.Nodes, filter)
 	return nodes, nil
 }
 
@@ -153,12 +139,11 @@ func (lp *LightpandaEngine) Text(ctx context.Context) (string, error) {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	tab := lp.tabs[lp.current]
-	if tab == nil {
+	if !lp.ready {
 		return "", errors.New("no page loaded")
 	}
 
-	tCtx, tCancel := context.WithTimeout(tab.ctx, 10*time.Second)
+	tCtx, tCancel := context.WithTimeout(lp.browCtx, 10*time.Second)
 	defer tCancel()
 
 	var text string
@@ -175,17 +160,16 @@ func (lp *LightpandaEngine) Click(ctx context.Context, ref string) error {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	tab := lp.tabs[lp.current]
-	if tab == nil {
+	if !lp.ready {
 		return errors.New("no page loaded")
 	}
 
-	backendID, ok := tab.refMap[ref]
+	backendID, ok := lp.refMap[ref]
 	if !ok {
 		return fmt.Errorf("ref %q not found (take a snapshot first)", ref)
 	}
 
-	tCtx, tCancel := context.WithTimeout(tab.ctx, 10*time.Second)
+	tCtx, tCancel := context.WithTimeout(lp.browCtx, 10*time.Second)
 	defer tCancel()
 
 	// Resolve the backendNodeId to get content quads for click coordinates.
@@ -227,17 +211,16 @@ func (lp *LightpandaEngine) Type(ctx context.Context, ref, text string) error {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	tab := lp.tabs[lp.current]
-	if tab == nil {
+	if !lp.ready {
 		return errors.New("no page loaded")
 	}
 
-	backendID, ok := tab.refMap[ref]
+	backendID, ok := lp.refMap[ref]
 	if !ok {
 		return fmt.Errorf("ref %q not found (take a snapshot first)", ref)
 	}
 
-	tCtx, tCancel := context.WithTimeout(tab.ctx, 10*time.Second)
+	tCtx, tCancel := context.WithTimeout(lp.browCtx, 10*time.Second)
 	defer tCancel()
 
 	// Focus the element then insert text.
@@ -259,23 +242,14 @@ func (lp *LightpandaEngine) Type(ctx context.Context, ref, text string) error {
 	)
 }
 
-// Close releases all tabs and the allocator connection.
+// Close releases the browser context and allocator connection.
 func (lp *LightpandaEngine) Close() error {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	for _, tab := range lp.tabs {
-		// Close the target gracefully.
-		_ = chromedp.Run(tab.ctx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				tid := chromedp.FromContext(ctx).Target.TargetID
-				return target.CloseTarget(tid).Do(ctx)
-			}),
-		)
-		tab.cancel()
+	if lp.browCan != nil {
+		lp.browCan()
 	}
-	lp.tabs = make(map[string]*lpTab)
-
 	if lp.allocCan != nil {
 		lp.allocCan()
 	}
@@ -284,7 +258,42 @@ func (lp *LightpandaEngine) Close() error {
 
 // --- accessibility tree helpers ---
 
-func buildLPSnapshot(tab *lpTab, nodes []*accessibility.Node, filter string) []SnapshotNode {
+// lpAXNode is a lenient representation of a CDP accessibility node.
+// We use this instead of cdproto's accessibility.Node because Lightpanda
+// returns property names (e.g. "uninteresting") that the strict cdproto
+// enum types reject during JSON unmarshalling.
+type lpAXNode struct {
+	NodeID           json.RawMessage `json:"nodeId"`
+	BackendDOMNodeID int64           `json:"backendDOMNodeId"`
+	Ignored          bool            `json:"ignored"`
+	Role             *lpAXValue      `json:"role"`
+	Name             *lpAXValue      `json:"name"`
+	Value            *lpAXValue      `json:"value"`
+	Properties       []lpAXProperty  `json:"properties"`
+}
+
+type lpAXValue struct {
+	Type  string          `json:"type"`
+	Value json.RawMessage `json:"value"`
+}
+
+type lpAXProperty struct {
+	Name  string     `json:"name"`
+	Value *lpAXValue `json:"value"`
+}
+
+func lpAXValueStr(v *lpAXValue) string {
+	if v == nil {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(v.Value, &s); err == nil {
+		return s
+	}
+	return string(v.Type)
+}
+
+func buildLPSnapshot(lp *LightpandaEngine, nodes []lpAXNode, filter string) []SnapshotNode {
 	var out []SnapshotNode
 	refSeq := 0
 
@@ -293,8 +302,8 @@ func buildLPSnapshot(tab *lpTab, nodes []*accessibility.Node, filter string) []S
 			continue
 		}
 
-		role := axValueStr(n.Role)
-		name := axValueStr(n.Name)
+		role := lpAXValueStr(n.Role)
+		name := lpAXValueStr(n.Name)
 
 		// Skip the root document node and other non-semantic nodes.
 		if role == "none" || role == "RootWebArea" || role == "GenericContainer" || role == "" {
@@ -310,7 +319,7 @@ func buildLPSnapshot(tab *lpTab, nodes []*accessibility.Node, filter string) []S
 		refSeq++
 
 		if n.BackendDOMNodeID > 0 {
-			tab.refMap[ref] = int64(n.BackendDOMNodeID)
+			lp.refMap[ref] = n.BackendDOMNodeID
 		}
 
 		sn := SnapshotNode{
@@ -322,29 +331,17 @@ func buildLPSnapshot(tab *lpTab, nodes []*accessibility.Node, filter string) []S
 
 		// Extract value from the node's value field or properties.
 		if n.Value != nil {
-			sn.Value = axValueStr(n.Value)
+			sn.Value = lpAXValueStr(n.Value)
 		}
 		for _, p := range n.Properties {
 			if p.Name == "value" || p.Name == "valuetext" {
-				sn.Value = axValueStr(p.Value)
+				sn.Value = lpAXValueStr(p.Value)
 			}
 		}
 
 		out = append(out, sn)
 	}
 	return out
-}
-
-func axValueStr(v *accessibility.Value) string {
-	if v == nil {
-		return ""
-	}
-	// Value.Value is jsontext.Value ([]byte) — try to unmarshal as string.
-	var s string
-	if err := json.Unmarshal(v.Value, &s); err == nil {
-		return s
-	}
-	return string(v.Type)
 }
 
 func isInteractiveRole(role string) bool {

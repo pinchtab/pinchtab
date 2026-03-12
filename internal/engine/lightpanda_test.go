@@ -3,20 +3,17 @@ package engine
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/chromedp/cdproto/accessibility"
-	"github.com/chromedp/cdproto/cdp"
 )
 
 func TestBuildLPSnapshot_FiltersIgnored(t *testing.T) {
-	tab := &lpTab{refMap: make(map[string]int64)}
-	nodes := []*accessibility.Node{
+	lp := &LightpandaEngine{refMap: make(map[string]int64)}
+	nodes := []lpAXNode{
 		makeAXNode("1", "button", "Submit", false, 10),
 		makeAXNode("2", "heading", "Title", true, 0), // ignored
 		makeAXNode("3", "link", "Home", false, 20),
 	}
 
-	result := buildLPSnapshot(tab, nodes, "")
+	result := buildLPSnapshot(lp, nodes, "")
 	if len(result) != 2 {
 		t.Fatalf("expected 2 nodes (1 ignored), got %d", len(result))
 	}
@@ -29,15 +26,15 @@ func TestBuildLPSnapshot_FiltersIgnored(t *testing.T) {
 }
 
 func TestBuildLPSnapshot_SkipsNonSemantic(t *testing.T) {
-	tab := &lpTab{refMap: make(map[string]int64)}
-	nodes := []*accessibility.Node{
+	lp := &LightpandaEngine{refMap: make(map[string]int64)}
+	nodes := []lpAXNode{
 		makeAXNode("1", "RootWebArea", "", false, 0),
 		makeAXNode("2", "GenericContainer", "", false, 0),
 		makeAXNode("3", "none", "", false, 0),
 		makeAXNode("4", "button", "OK", false, 30),
 	}
 
-	result := buildLPSnapshot(tab, nodes, "")
+	result := buildLPSnapshot(lp, nodes, "")
 	if len(result) != 1 {
 		t.Fatalf("expected 1 semantic node, got %d", len(result))
 	}
@@ -47,15 +44,15 @@ func TestBuildLPSnapshot_SkipsNonSemantic(t *testing.T) {
 }
 
 func TestBuildLPSnapshot_InteractiveFilter(t *testing.T) {
-	tab := &lpTab{refMap: make(map[string]int64)}
-	nodes := []*accessibility.Node{
+	lp := &LightpandaEngine{refMap: make(map[string]int64)}
+	nodes := []lpAXNode{
 		makeAXNode("1", "heading", "Title", false, 0),
 		makeAXNode("2", "button", "Submit", false, 10),
 		makeAXNode("3", "textbox", "Email", false, 20),
 		makeAXNode("4", "article", "Content", false, 0),
 	}
 
-	result := buildLPSnapshot(tab, nodes, "interactive")
+	result := buildLPSnapshot(lp, nodes, "interactive")
 	if len(result) != 2 {
 		t.Fatalf("expected 2 interactive nodes, got %d", len(result))
 	}
@@ -67,13 +64,13 @@ func TestBuildLPSnapshot_InteractiveFilter(t *testing.T) {
 }
 
 func TestBuildLPSnapshot_RefMap(t *testing.T) {
-	tab := &lpTab{refMap: make(map[string]int64)}
-	nodes := []*accessibility.Node{
+	lp := &LightpandaEngine{refMap: make(map[string]int64)}
+	nodes := []lpAXNode{
 		makeAXNode("1", "button", "OK", false, 42),
 		makeAXNode("2", "link", "Home", false, 99),
 	}
 
-	result := buildLPSnapshot(tab, nodes, "")
+	result := buildLPSnapshot(lp, nodes, "")
 	if len(result) != 2 {
 		t.Fatalf("expected 2 nodes, got %d", len(result))
 	}
@@ -87,29 +84,29 @@ func TestBuildLPSnapshot_RefMap(t *testing.T) {
 	}
 
 	// Check backend node IDs in refMap.
-	if id, ok := tab.refMap["e0"]; !ok || id != 42 {
+	if id, ok := lp.refMap["e0"]; !ok || id != 42 {
 		t.Errorf("refMap[e0] = %d, want 42", id)
 	}
-	if id, ok := tab.refMap["e1"]; !ok || id != 99 {
+	if id, ok := lp.refMap["e1"]; !ok || id != 99 {
 		t.Errorf("refMap[e1] = %d, want 99", id)
 	}
 }
 
-func TestAxValueStr(t *testing.T) {
+func TestLpAXValueStr(t *testing.T) {
 	tests := []struct {
 		name string
-		v    *accessibility.Value
+		v    *lpAXValue
 		want string
 	}{
 		{"nil", nil, ""},
-		{"string value", makeAXValue("hello"), "hello"},
-		{"empty string", makeAXValue(""), ""},
+		{"string value", makeLPAXValue("hello"), "hello"},
+		{"empty string", makeLPAXValue(""), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := axValueStr(tt.v)
+			got := lpAXValueStr(tt.v)
 			if got != tt.want {
-				t.Errorf("axValueStr() = %q, want %q", got, tt.want)
+				t.Errorf("lpAXValueStr() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -308,26 +305,25 @@ func TestDefaultLightpandaRule(t *testing.T) {
 
 // --- helpers ---
 
-func makeAXNode(id, role, name string, ignored bool, backendID int64) *accessibility.Node {
-	n := &accessibility.Node{
-		NodeID:  accessibility.NodeID(id),
-		Ignored: ignored,
+func makeAXNode(id, role, name string, ignored bool, backendID int64) lpAXNode {
+	rawID, _ := json.Marshal(id)
+	n := lpAXNode{
+		NodeID:           rawID,
+		Ignored:          ignored,
+		BackendDOMNodeID: backendID,
 	}
 	if role != "" {
-		n.Role = makeAXValue(role)
+		n.Role = makeLPAXValue(role)
 	}
 	if name != "" {
-		n.Name = makeAXValue(name)
-	}
-	if backendID > 0 {
-		n.BackendDOMNodeID = cdp.BackendNodeID(backendID)
+		n.Name = makeLPAXValue(name)
 	}
 	return n
 }
 
-func makeAXValue(s string) *accessibility.Value {
+func makeLPAXValue(s string) *lpAXValue {
 	raw, _ := json.Marshal(s)
-	return &accessibility.Value{
+	return &lpAXValue{
 		Type:  "string",
 		Value: raw,
 	}
