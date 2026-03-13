@@ -12,18 +12,23 @@ import (
 // removed at runtime (under a write lock) so that the routing strategy can
 // evolve without modifying handlers or bridge code.
 type Router struct {
-	mode  Mode
-	lite  Engine // may be nil when Mode == ModeChrome
-	rules []RouteRule
-	mu    sync.RWMutex
+	mode    Mode
+	lite    Engine // may be nil when Mode == ModeChrome
+	engines map[string]Engine
+	rules   []RouteRule
+	mu      sync.RWMutex
 }
 
 // NewRouter creates a router for the given mode.
 // Pass nil for lite when running in chrome-only mode.
 func NewRouter(mode Mode, lite Engine) *Router {
 	r := &Router{
-		mode: mode,
-		lite: lite,
+		mode:    mode,
+		lite:    lite,
+		engines: make(map[string]Engine),
+	}
+	if lite != nil {
+		r.engines[lite.Name()] = lite
 	}
 
 	switch mode {
@@ -31,6 +36,11 @@ func NewRouter(mode Mode, lite Engine) *Router {
 		r.rules = []RouteRule{
 			CapabilityRule{},  // screenshot/pdf → chrome always
 			DefaultLiteRule{}, // everything else → lite
+		}
+	case ModeLightpanda:
+		r.rules = []RouteRule{
+			LightpandaCapabilityRule{}, // screenshot/pdf/cookies → chrome
+			DefaultLightpandaRule{},    // everything else → lightpanda
 		}
 	case ModeAuto:
 		r.rules = []RouteRule{
@@ -45,6 +55,15 @@ func NewRouter(mode Mode, lite Engine) *Router {
 	}
 
 	return r
+}
+
+// RegisterEngine adds an alternative engine to the router.
+// This allows the router to resolve engine names from rule decisions.
+func (r *Router) RegisterEngine(eng Engine) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.engines[eng.Name()] = eng
+	slog.Info("engine: registered", "name", eng.Name())
 }
 
 // AddRule appends a rule to the chain.  It is evaluated after all
@@ -89,6 +108,11 @@ func (r *Router) Route(op Capability, url string) Engine {
 				return r.lite
 			}
 			// lite unavailable — fall through
+		case UseLightpanda:
+			if eng, ok := r.engines["lightpanda"]; ok {
+				return eng
+			}
+			// lightpanda unavailable — fall through
 		case UseChrome:
 			return nil // nil signals "use chrome bridge"
 		}

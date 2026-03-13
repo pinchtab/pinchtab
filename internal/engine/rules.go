@@ -68,3 +68,32 @@ func (DefaultChromeRule) Name() string { return "default-chrome" }
 func (DefaultChromeRule) Decide(_ Capability, _ string) Decision {
 	return UseChrome
 }
+
+// LightpandaCapabilityRule routes chrome-only operations (screenshot, pdf,
+// cookies) to Chrome. Lightpanda has no visual rendering and incomplete
+// cookie persistence, so these must always go to Chrome.
+type LightpandaCapabilityRule struct{}
+
+func (LightpandaCapabilityRule) Name() string { return "lightpanda-capability" }
+
+func (LightpandaCapabilityRule) Decide(op Capability, _ string) Decision {
+	switch op {
+	case CapScreenshot, CapPDF, CapCookies:
+		return UseChrome
+	}
+	return Undecided
+}
+
+// DefaultLightpandaRule is a catch-all that routes DOM operations to the
+// Lightpanda engine. Used when Mode == ModeLightpanda.
+type DefaultLightpandaRule struct{}
+
+func (DefaultLightpandaRule) Name() string { return "default-lightpanda" }
+
+func (DefaultLightpandaRule) Decide(op Capability, _ string) Decision {
+	switch op {
+	case CapNavigate, CapSnapshot, CapText, CapClick, CapType, CapEvaluate:
+		return UseLightpanda
+	}
+	return Undecided
+}

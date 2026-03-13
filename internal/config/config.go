@@ -75,8 +75,12 @@ type RuntimeConfig struct {
 	// IDPI (Indirect Prompt Injection defense) settings
 	IDPI IDPIConfig
 
-	// Engine mode: "chrome" (default), "lite", or "auto"
+	// Engine mode: "chrome" (default), "lite", "lightpanda", or "auto"
 	Engine string
+
+	// LightpandaURL is the WebSocket URL for a running Lightpanda CDP server.
+	// Only used when Engine == "lightpanda". Defaults to "ws://127.0.0.1:9222".
+	LightpandaURL string
 
 	// Scheduler settings (dashboard mode only)
 	Scheduler SchedulerConfig
@@ -583,7 +587,8 @@ func Load() *RuntimeConfig {
 		},
 
 		// Engine default
-		Engine: envOr("PINCHTAB_ENGINE", "chrome"),
+		Engine:        envOr("PINCHTAB_ENGINE", "chrome"),
+		LightpandaURL: envOr("PINCHTAB_LIGHTPANDA_URL", ""),
 	}
 	finalizeProfileConfig(cfg)
 

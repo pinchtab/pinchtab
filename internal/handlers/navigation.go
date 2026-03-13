@@ -95,14 +95,14 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- Lite engine fast path ---
-	if h.useLite(engine.CapNavigate, req.URL) {
-		result, err := h.Router.Lite().Navigate(r.Context(), req.URL)
+	// --- Alternative engine fast path (lite or lightpanda) ---
+	if eng := h.altEngine(engine.CapNavigate, req.URL); eng != nil {
+		result, err := eng.Navigate(r.Context(), req.URL)
 		if err != nil {
-			web.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
+			web.Error(w, 502, fmt.Errorf("%s navigate: %w", eng.Name(), err))
 			return
 		}
-		w.Header().Set("X-Engine", "lite")
+		w.Header().Set("X-Engine", eng.Name())
 		web.JSON(w, 200, map[string]any{"tabId": result.TabID, "url": result.URL, "title": result.Title})
 		return
 	}
