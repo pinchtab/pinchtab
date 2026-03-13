@@ -30,10 +30,18 @@ func userConfigDir() string {
 
 	newPath := filepath.Join(configDir, "pinchtab")
 
-	legacyExists := dirExists(legacyPath)
-	newExists := dirExists(newPath)
+	// Priority 1: Check for config FILE (handles case where both dirs exist
+	// but only legacy has config.json — the issue #224 scenario)
+	legacyConfig := filepath.Join(legacyPath, "config.json")
+	newConfig := filepath.Join(newPath, "config.json")
 
-	if legacyExists && !newExists {
+	if fileExists(legacyConfig) && !fileExists(newConfig) {
+		return legacyPath
+	}
+
+	// Priority 2: Check for DIRECTORY (handles init scenario where
+	// legacy dir exists from npm install but no config yet)
+	if dirExists(legacyPath) && !dirExists(newPath) {
 		return legacyPath
 	}
 
@@ -44,6 +52,11 @@ func userConfigDir() string {
 // PINCHTAB_CONFIG is not explicitly set.
 func DefaultConfigPath() string {
 	return filepath.Join(userConfigDir(), "config.json")
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func dirExists(path string) bool {
