@@ -100,26 +100,6 @@ var openCmd = &cobra.Command{
 	},
 }
 
-var closeCmd = &cobra.Command{
-	Use:   "close [tabId]",
-	Short: "Close a tab",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			tabID, _ := cmd.Flags().GetString("tab")
-			if len(args) > 0 {
-				tabID = args[0]
-			}
-			if tabID == "" {
-				fmt.Fprintln(os.Stderr, "error: specify a tab ID as argument or via --tab")
-				os.Exit(1)
-			}
-			browseractions.TabClose(client, base, token, tabID)
-		})
-	},
-}
-
 var tabsCmd = &cobra.Command{
 	Use:   "tabs",
 	Short: "List or manage tabs",
@@ -308,7 +288,6 @@ var selectCmd = &cobra.Command{
 func init() {
 	quickCmd.GroupID = "browser"
 	openCmd.GroupID = "browser"
-	closeCmd.GroupID = "browser"
 	navCmd.GroupID = "browser"
 	snapCmd.GroupID = "browser"
 	clickCmd.GroupID = "browser"
@@ -409,7 +388,6 @@ func init() {
 	openCmd.Flags().Bool("block-ads", false, "Block ads")
 	openCmd.Flags().String("tab", "", "Tab ID")
 
-	closeCmd.Flags().String("tab", "", "Tab ID")
 
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
@@ -427,7 +405,6 @@ func init() {
 
 	rootCmd.AddCommand(quickCmd)
 	rootCmd.AddCommand(openCmd)
-	rootCmd.AddCommand(closeCmd)
 	rootCmd.AddCommand(navCmd)
 	rootCmd.AddCommand(snapCmd)
 	rootCmd.AddCommand(clickCmd)
