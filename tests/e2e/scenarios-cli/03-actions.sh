@@ -7,7 +7,7 @@ source "$(dirname "$0")/common.sh"
 start_test "pinchtab fill <selector> <text>"
 
 pt_ok nav "${FIXTURES_URL}/form.html"
-pt_ok fill "#custname" "hello world"
+pt_ok fill "#username" "hello world"
 assert_output_contains "filled" "confirms fill action"
 
 end_test
