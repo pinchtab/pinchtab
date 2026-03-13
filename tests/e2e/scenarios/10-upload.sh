@@ -39,7 +39,7 @@ sleep 1
 # 1x1 transparent PNG
 PNG_DATA="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
-pt_post "/tabs/${TAB_ID}/upload" -d "{\"selector\":\"#image-upload\",\"files\":[\"${PNG_DATA}\"]}"
+pt_post "/tabs/${TAB_ID}/upload" -d "{\"selector\":\"#single-file\",\"files\":[\"${PNG_DATA}\"]}"
 assert_ok "tab upload"
 
 end_test
