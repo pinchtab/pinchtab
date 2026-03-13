@@ -17,7 +17,7 @@ pinchtab profiles
 # Response
 [
   {
-    "id": "278be873adeb",
+    "id": "prof_278be873",
     "name": "work",
     "created": "2026-02-27T20:37:13.599055326Z",
     "diskUsage": 534952089,
@@ -39,10 +39,10 @@ Notes:
 ## Get One Profile
 
 ```bash
-curl http://localhost:9867/profiles/278be873adeb
+curl http://localhost:9867/profiles/prof_278be873
 # Response
 {
-  "id": "278be873adeb",
+  "id": "prof_278be873",
   "name": "work",
   "path": "/path/to/profiles/work",
   "pathExists": true,
@@ -70,23 +70,26 @@ curl -X POST http://localhost:9867/profiles \
 # Response
 {
   "status": "created",
-  "id": "0f32ae81e4a1",
+  "id": "prof_0f32ae81",
   "name": "scraping-profile"
 }
 ```
 
-There is no `pinchtab profile create` CLI command today.
+Notes:
+
+- there is no `pinchtab profile create` CLI command
+- both `POST /profiles` and `POST /profiles/create` work for creating profiles
 
 ## Update A Profile
 
 ```bash
-curl -X PATCH http://localhost:9867/profiles/278be873adeb \
+curl -X PATCH http://localhost:9867/profiles/prof_278be873 \
   -H "Content-Type: application/json" \
   -d '{"description":"Updated description","useWhen":"Updated usage note"}'
 # Response
 {
   "status": "updated",
-  "id": "278be873adeb",
+  "id": "prof_278be873",
   "name": "work"
 }
 ```
@@ -94,7 +97,7 @@ curl -X PATCH http://localhost:9867/profiles/278be873adeb \
 You can also rename the profile:
 
 ```bash
-curl -X PATCH http://localhost:9867/profiles/278be873adeb \
+curl -X PATCH http://localhost:9867/profiles/prof_278be873 \
   -H "Content-Type: application/json" \
   -d '{"name":"work-renamed"}'
 ```
@@ -108,11 +111,11 @@ Important:
 ## Delete A Profile
 
 ```bash
-curl -X DELETE http://localhost:9867/profiles/278be873adeb
+curl -X DELETE http://localhost:9867/profiles/prof_278be873
 # Response
 {
   "status": "deleted",
-  "id": "278be873adeb",
+  "id": "prof_278be873",
   "name": "work"
 }
 ```
@@ -124,13 +127,13 @@ curl -X DELETE http://localhost:9867/profiles/278be873adeb
 Start the active instance for a profile:
 
 ```bash
-curl -X POST http://localhost:9867/profiles/278be873adeb/start \
+curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
   -d '{"headless":true}'
 # Response
 {
   "id": "inst_ea2e747f",
-  "profileId": "278be873adeb",
+  "profileId": "prof_278be873",
   "profileName": "work",
   "port": "9868",
   "headless": true,
@@ -141,11 +144,11 @@ curl -X POST http://localhost:9867/profiles/278be873adeb/start \
 Stop the active instance for a profile:
 
 ```bash
-curl -X POST http://localhost:9867/profiles/278be873adeb/stop
+curl -X POST http://localhost:9867/profiles/prof_278be873/stop
 # Response
 {
   "status": "stopped",
-  "id": "278be873adeb",
+  "id": "prof_278be873",
   "name": "work"
 }
 ```
@@ -155,7 +158,7 @@ For these orchestrator routes, the path can be a profile ID or profile name.
 ## Check Whether A Profile Has A Running Instance
 
 ```bash
-curl http://localhost:9867/profiles/278be873adeb/instance
+curl http://localhost:9867/profiles/prof_278be873/instance
 # Response
 {
   "name": "work",
@@ -171,7 +174,7 @@ curl http://localhost:9867/profiles/278be873adeb/instance
 ### Reset A Profile
 
 ```bash
-curl -X POST http://localhost:9867/profiles/278be873adeb/reset
+curl -X POST http://localhost:9867/profiles/prof_278be873/reset
 ```
 
 This route requires the profile ID.
@@ -187,7 +190,7 @@ curl -X POST http://localhost:9867/profiles/import \
 ### Get Logs
 
 ```bash
-curl http://localhost:9867/profiles/278be873adeb/logs
+curl http://localhost:9867/profiles/prof_278be873/logs
 curl 'http://localhost:9867/profiles/work/logs?limit=50'
 ```
 
@@ -196,7 +199,7 @@ curl 'http://localhost:9867/profiles/work/logs?limit=50'
 ### Get Analytics
 
 ```bash
-curl http://localhost:9867/profiles/278be873adeb/analytics
+curl http://localhost:9867/profiles/prof_278be873/analytics
 curl http://localhost:9867/profiles/work/analytics
 ```
 

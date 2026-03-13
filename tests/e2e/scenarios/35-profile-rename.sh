@@ -130,3 +130,20 @@ for NAME in "e2e-valid-1" "e2e_valid_2" "e2eVALID3"; do
 done
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "profile reset"
+
+# Create a profile
+pt_post /profiles -d '{"name":"reset-test-profile"}'
+assert_ok "create profile for reset"
+PROFILE_ID=$(echo "$RESULT" | jq -r '.id')
+
+# Reset it
+pt_post "/profiles/${PROFILE_ID}/reset" ""
+assert_ok "reset profile"
+
+# Clean up
+pt_delete "/profiles/${PROFILE_ID}"
+
+end_test

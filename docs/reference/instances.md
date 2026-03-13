@@ -37,9 +37,9 @@ pinchtab instances
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
-  -d '{"profileId":"278be873adeb","mode":"headed","port":"9999"}'
+  -d '{"profileId":"prof_278be873","mode":"headed","port":"9999"}'
 # CLI Alternative
-pinchtab instance start --profileId 278be873adeb --mode headed --port 9999
+pinchtab instance start --profileId prof_278be873 --mode headed --port 9999
 # Response
 {
   "id": "inst_ea2e747f",
@@ -113,7 +113,7 @@ Stopping an instance preserves the profile unless it was a temporary auto-genera
 You can also start an instance from a profile-oriented route:
 
 ```bash
-curl -X POST http://localhost:9867/profiles/278be873adeb/start \
+curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
   -d '{"headless":false,"port":"9999"}'
 # Response
