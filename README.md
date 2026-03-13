@@ -29,35 +29,110 @@
 
 PinchTab is a **standalone HTTP server** that gives AI agents direct control over Chrome.
 
-It has two runtime roles:
-- `pinchtab` or `pinchtab server` — the full control-plane server
-- `pinchtab bridge` — a single-instance bridge runtime
+For day-to-day local use, the server is typically installed as a user-level daemon, allowing agent tools to reuse the same browser control plane running in the background.
 
-Most users only need the full server. It manages profiles, instances, routing, and the web dashboard. The `bridge` mode is the thin per-instance runtime used behind the scenes for managed child instances.
+```bash
+curl -fsSL https://pinchtab.com/install.sh | bash
+# or
+pinchtab daemon install
+```
 
-### Process Model
+This installs the control-plane server and starts a default headless Chrome instance, ready to accept requests from agents or manual API calls.
+
+
+If you prefer not to run a daemon, or if you're on Windows, you can instead run:
+
+`pinchtab server` — runs the control-plane server directly
+`pinchtab bridge` — runs a single browser instance as a lightweight runtime
+
+PinchTab also provides a CLI with an interactive entry point for local setup and common tasks:
+
+`pinchtab`
+
+## Security
+
+PinchTab defaults to a **local-first security posture**:
+
+- `server.bind = 127.0.0.1`
+- sensitive endpoint families are disabled by default
+- `attach` is disabled by default
+- IDPI is enabled with a **local-only website allowlist**
+
+> [!CAUTION]
+> By default, IDPI restricts browsing to **locally hosted websites only**.
+> This prevents agents from navigating the public internet until you explicitly allow it.
+> The restriction exists to make the security implications of browser automation clear before enabling wider access.
+
+See the full guide: [docs/guides/security.md](docs/guides/security.md)
+
+## What can you use it for
+
+### Headless navigation
+
+With the daemon installed and an agent skill configured, an agent can execute tasks like:
+
+```
+"What are the main news about trump on news.com?"
+```
+
+PinchTab exposes browser tools that allow agents to navigate pages, extract structured content, and interact with the DOM without wasting tokens on raw HTML or images.
+
+### Headed navigation
+
+In addition to headless automation, PinchTab supports headed Chrome profiles.
+
+You can create profiles configured with authentication, cookies, extensions, or specific environments. Each profile can have a name and description.
+
+For example, an agent request like:
+
+```
+"Log into my work profile and download the weekly report"
+```
+
+can automatically select the appropriate profile and perform the action.
+
+### Local container isolation
+
+If you prefer stronger isolation, PinchTab can run inside Docker.
+
+This allows agents to control browsers in a sandboxed environment, reducing risk when running automation tasks locally.
+
+### Distributed automation
+
+PinchTab can manage multiple Chrome instances (headless or headed) across containers or remote machines.
+
+Typical use cases include:
+
+- QA automation
+- testing environments
+- distributed browsing tasks
+- development tooling
+
+You can connect to multiple PinchTab servers, or attach to Chrome instances running in remote debug mode.
+
+## Process Model
 
 PinchTab is server-first:
-- start `pinchtab` for the full control plane
-- let the server manage profiles and instances
-- let each managed instance run behind a lightweight `pinchtab bridge` runtime
+1. install the daemon or run `pinchtab server` for the full control plane
+2. let the server manage profiles and instances
+3. let each managed instance run behind a lightweight `pinchtab bridge` runtime
 
 In practice:
-- **Server** is the public product entrypoint
-- **Bridge** is the per-instance runtime for one browser
-- **Attach** is the advanced path for registering an externally managed Chrome
+- Server — the main product entry point and control plane
+- Bridge — the runtime that manages a single browser instance
+- Attach — an advanced mode for registering externally managed Chrome instances
 
 ### Primary Usage
 
 The primary user journey is:
 
 1. install Pinchtab
-2. run `pinchtab`
+2. install and start the daemon with `pinchtab daemon install`
 3. point your agent or tool at `http://localhost:9867`
-4. let Pinchtab act as your local browser service
+4. let PinchTab act as your local browser service
 
 That is the default “replace the browser runtime” scenario.
-Most users should not need to think about `pinchtab bridge` directly.
+Most users should not need to think about `pinchtab bridge` directly, and only need `pinchtab` when they want the local interactive menu.
 
 ### Key Features
 
@@ -65,7 +140,7 @@ Most users should not need to think about `pinchtab bridge` directly.
 - **Token-efficient** — 800 tokens/page with text extraction (5-13x cheaper than screenshots)
 - **Headless or Headed** — Run without a window or with visible Chrome
 - **Multi-instance** — Run multiple parallel Chrome processes with isolated profiles
-- **Self-contained** — 12MB binary, no external dependencies
+- **Self-contained** — ~15MB binary, no external dependencies
 - **Accessibility-first** — Stable element refs instead of fragile coordinates
 - **ARM64-optimized** — First-class Raspberry Pi support with automatic Chromium detection
 
@@ -190,26 +265,6 @@ Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 | **Binary size** | ✅ |
 | **Multi-instance** | ✅ |
 | **External Chrome attach** | ✅ |
-
----
-
-## Security
-
-PinchTab defaults to a local-first posture:
-
-- `server.bind = 127.0.0.1`
-- sensitive endpoint families are off by default
-- attach is off by default
-- IDPI is enabled by default with a local-only website allowlist
-
-Two controls are independent and both matter:
-
-- the API token controls who can use the server
-- the security feature gates control what the server is allowed to do
-
-IDPI adds a browser-content defense layer by restricting allowed domains and protecting extracted content from indirect prompt injection.
-
-See the full guide: [docs/guides/security.md](docs/guides/security.md)
 
 ---
 

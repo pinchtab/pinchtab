@@ -294,19 +294,6 @@ func init() {
 	findCmd.GroupID = "browser"
 	selectCmd.GroupID = "browser"
 
-	// Disable cobra flag parsing for commands that parse flags manually.
-	// FParseErrWhitelist silently swallows unknown flags (dropping them from args),
-	// so we must disable cobra's parser entirely and let the action code handle flags.
-	// snapCmd now uses proper cobra flags (see below)
-	// screenshotCmd now uses proper cobra flags (see below)
-	// pdfCmd now uses proper cobra flags (see below)
-	// findCmd now uses proper cobra flags (see below)
-	// navCmd now uses proper cobra flags (see below)
-	// clickCmd now uses proper cobra flags (see below)
-	// hoverCmd now uses proper cobra flags (see below)
-	// textCmd now uses proper cobra flags (see below)
-	// tabsCmd: proper cobra subcommands for new/close
-	// Other tab operations (navigate, snapshot, etc.) use top-level commands with --tab flag
 	tabsCmd.AddCommand(&cobra.Command{
 		Use:   "new [url]",
 		Short: "Open a new tab",
@@ -419,7 +406,7 @@ func init() {
 	rootCmd.AddCommand(selectCmd)
 
 	instanceCmd.GroupID = "management"
-	
+
 	startInstanceCmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start a browser instance",
@@ -434,7 +421,7 @@ func init() {
 	startInstanceCmd.Flags().String("mode", "", "Instance mode")
 	startInstanceCmd.Flags().String("port", "", "Port number")
 	instanceCmd.AddCommand(startInstanceCmd)
-	
+
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "navigate <id> <url>",
 		Short: "Navigate an instance to a URL",
