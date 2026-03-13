@@ -3,7 +3,7 @@
 ## Automated ✅ (CI/GitHub enforces these)
 These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 - [ ] Go formatting & linting passes (gofmt, vet, golangci-lint)
-- [ ] Unit + integration tests pass (`go test ./...`)
+- [ ] Unit + E2E tests pass (`go test ./...` and `./pdev e2e`)
 - [ ] Build succeeds (`go build`)
 - [ ] CodeQL security scan passes
 - [ ] Branch naming follows convention
@@ -19,8 +19,8 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
   - ✅ Good: `// Chrome may not be installed in CI, so empty result is valid`
 
 ## Manual — Testing (Required)
-- [ ] **New/changed functionality has tests** — Same-package unit tests preferred; use mockBridge for integration
-- [ ] **Integration tests run locally** — If you modified handlers/bridge/tabs, run: `go test -tags integration ./tests/integration`
+- [ ] **New/changed functionality has tests** — Same-package unit tests preferred
+- [ ] **E2E tests run locally** — If you modified handlers/bridge/tabs, run: `./pdev e2e` (curl tests) and/or `./pdev e2e cli` (CLI tests)
 - [ ] **npm commands work** (if npm wrapper touched):
   - `npm pack` in `/npm/` produces valid tarball
   - `npm install -g pinchtab` (or from local tarball) succeeds
@@ -44,7 +44,7 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 ## Quick Checklist (Copy/Paste for PRs)
 ```markdown
 ## Definition of Done
-- [ ] Unit/integration tests added & passing
+- [ ] Unit + E2E tests added & passing
 - [ ] Error handling explicit (wrapped with %w)
 - [ ] No regressions in stealth/perf/persistence
 - [ ] No redundant comments (explain why, not what)

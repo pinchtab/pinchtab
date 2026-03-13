@@ -6,8 +6,9 @@ We currently support the following versions of Pinchtab with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| v0.5.x  | :white_check_mark: |
-| < v0.5  | :x:                |
+| v0.7.x  | :white_check_mark: |
+| v0.6.x  | :white_check_mark: |
+| < v0.6  | :x:                |
 
 ## Reporting a Vulnerability
 

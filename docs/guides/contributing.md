@@ -231,10 +231,11 @@ curl http://localhost:9867/health
 ### Run Tests
 
 ```bash
-go test ./...                              # All tests
+go test ./...                              # Unit tests only
 go test ./... -v                           # Verbose
 go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
+./pdev e2e                                 # Run E2E tests (curl + CLI)
 ```
 
 ### Developer Toolkit (`pdev`)
@@ -260,10 +261,11 @@ All dev scripts are accessible through `./pdev`:
 | `check security` | Gosec security scan |
 | `check docs` | Validate docs JSON |
 | `format dashboard` | Run Prettier on dashboard sources |
-| `test` | All tests (unit + integration + system) |
+| `test` | Unit + E2E tests |
 | `test unit` | Unit tests only |
-| `test integration` | Integration tests only |
-| `test system` | System tests only |
+| `e2e` | E2E tests (curl + CLI) |
+| `e2e curl` | E2E curl tests only |
+| `e2e cli` | E2E CLI tests only |
 | `build` | Build & run (default) |
 | `run` | Run the application |
 | `doctor` | Setup dev environment |
