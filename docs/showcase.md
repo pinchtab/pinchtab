@@ -5,8 +5,12 @@
 Start the server and one instance first:
 
 ```bash
-pinchtab
+pinchtab server
+#or
+pinchtab daemon install
 ```
+
+Starting an instance may be optional, depending on strategy/config.
 
 ```bash
 curl -s -X POST http://127.0.0.1:9867/instances/start \
@@ -24,8 +28,6 @@ pinchtab instance start
   "status": "starting"
 }
 ```
-
-Starting an instance may be optional, depending on strategy/config.
 
 ### Navigate
 

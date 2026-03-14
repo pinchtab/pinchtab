@@ -8,7 +8,7 @@ PinchTab is a standalone HTTP server that gives you direct control over Chrome t
 
 PinchTab has two runtimes:
 
-- `pinchtab` or `pinchtab server`: the full server
+- `pinchtab server`: the server
 - `pinchtab bridge`: the single-instance bridge runtime
 
 The server is the normal entry point. It manages profiles, instances, routing, security policy, and the dashboard.
@@ -22,7 +22,7 @@ The basic model is:
 
 ## Main usage patterns
 
-Start `pinchtab` and leave it running:
+Start `pinchtab server` or even better `pinchtab daemon install` and leave it running:
 
 - use it as a browser for agents
 - use it as a local automation endpoint
@@ -33,10 +33,12 @@ Start `pinchtab` and leave it running:
 ### 1. Start the server
 
 ```bash
-pinchtab
+pinchtab server
 ```
 
 ### 2. Start an instance
+
+By default we use always-on strategy. This is optional now and not necessary.
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \

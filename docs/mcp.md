@@ -6,7 +6,9 @@ PinchTab includes a native [Model Context Protocol (MCP)](https://modelcontextpr
 
 1. **Start PinchTab** in any mode (server or bridge):
    ```bash
-   pinchtab
+   pinchtab server
+   #or
+   pinchtab daemon install
    ```
 
 2. **Start the MCP server** (in a separate terminal or from your MCP client config):

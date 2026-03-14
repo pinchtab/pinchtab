@@ -16,9 +16,9 @@ allocationPolicy  = which running instance gets picked when PinchTab must choose
 
 Valid strategies in the current implementation:
 
+- `always-on` - default
 - `simple`
 - `explicit`
-- `always-on`
 - `simple-autorestart`
 
 ### `simple`
