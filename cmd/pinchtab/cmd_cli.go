@@ -327,8 +327,12 @@ func init() {
 	downloadCmd.Flags().StringP("output", "o", "", "Save downloaded file to path")
 
 	clickCmd.Flags().String("css", "", "CSS selector instead of ref")
+	clickCmd.Flags().Float64("x", 0, "X coordinate for click")
+	clickCmd.Flags().Float64("y", 0, "Y coordinate for click")
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
 	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
+	hoverCmd.Flags().Float64("x", 0, "X coordinate for hover")
+	hoverCmd.Flags().Float64("y", 0, "Y coordinate for hover")
 
 	snapCmd.Flags().BoolP("interactive", "i", false, "Filter interactive elements only")
 	snapCmd.Flags().BoolP("compact", "c", false, "Compact output format")

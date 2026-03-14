@@ -154,6 +154,35 @@ func SetResourceBlocking(ctx context.Context, patterns []string) error {
 	)
 }
 
+func ClickByCoordinate(ctx context.Context, x, y float64) error {
+	if x < 0 || y < 0 {
+		return fmt.Errorf("x/y coordinates must be >= 0")
+	}
+
+	return chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx,
+				"Input.dispatchMouseEvent", map[string]any{
+					"type":       "mousePressed",
+					"button":     "left",
+					"clickCount": 1,
+					"x":          x,
+					"y":          y,
+				}, nil)
+		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx,
+				"Input.dispatchMouseEvent", map[string]any{
+					"type":       "mouseReleased",
+					"button":     "left",
+					"clickCount": 1,
+					"x":          x,
+					"y":          y,
+				}, nil)
+		}),
+	)
+}
+
 func ClickByNodeID(ctx context.Context, nodeID int64) error {
 	// Get element position via box model
 	x, y, err := getElementCenter(ctx, nodeID)
@@ -443,6 +472,22 @@ func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
 		chromedp.KeyEvent(text),
+	)
+}
+
+func HoverByCoordinate(ctx context.Context, x, y float64) error {
+	if x < 0 || y < 0 {
+		return fmt.Errorf("x/y coordinates must be >= 0")
+	}
+
+	return chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type": "mouseMoved",
+				"x":    x,
+				"y":    y,
+			}, nil)
+		}),
 	)
 }
 

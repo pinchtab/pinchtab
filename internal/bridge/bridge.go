@@ -225,19 +225,22 @@ type ActionFunc func(ctx context.Context, req ActionRequest) (map[string]any, er
 
 // ActionRequest defines the parameters for a browser action.
 type ActionRequest struct {
-	TabID    string `json:"tabId"`
-	Kind     string `json:"kind"`
-	Ref      string `json:"ref"`
-	Selector string `json:"selector"`
-	Text     string `json:"text"`
-	Key      string `json:"key"`
-	Value    string `json:"value"`
-	NodeID   int64  `json:"nodeId"`
-	ScrollX  int    `json:"scrollX"`
-	ScrollY  int    `json:"scrollY"`
-	DragX    int    `json:"dragX"`
-	DragY    int    `json:"dragY"`
-	WaitNav  bool   `json:"waitNav"`
-	Fast     bool   `json:"fast"`
-	Owner    string `json:"owner"`
+	TabID    string  `json:"tabId"`
+	Kind     string  `json:"kind"`
+	Ref      string  `json:"ref"`
+	Selector string  `json:"selector"`
+	Text     string  `json:"text"`
+	Key      string  `json:"key"`
+	Value    string  `json:"value"`
+	NodeID   int64   `json:"nodeId"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	HasXY    bool    `json:"hasXY,omitempty"`
+	ScrollX  int     `json:"scrollX"`
+	ScrollY  int     `json:"scrollY"`
+	DragX    int     `json:"dragX"`
+	DragY    int     `json:"dragY"`
+	WaitNav  bool    `json:"waitNav"`
+	Fast     bool    `json:"fast"`
+	Owner    string  `json:"owner"`
 }

@@ -63,6 +63,23 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 				req.NodeID = n
 			}
 		}
+		if v := q.Get("x"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				req.X = n
+				req.HasXY = true
+			}
+		}
+		if v := q.Get("y"); v != "" {
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				req.Y = n
+				req.HasXY = true
+			}
+		}
+		if v := q.Get("hasXY"); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				req.HasXY = b
+			}
+		}
 	} else {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			web.Error(w, 400, fmt.Errorf("decode: %w", err))

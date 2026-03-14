@@ -26,12 +26,23 @@ func Action(client *http.Client, base, token, kind, refArg string, cmd *cobra.Co
 	body := map[string]any{"kind": kind}
 
 	css, _ := cmd.Flags().GetString("css")
+	hasX := cmd.Flags().Changed("x")
+	hasY := cmd.Flags().Changed("y")
+	x, _ := cmd.Flags().GetFloat64("x")
+	y, _ := cmd.Flags().GetFloat64("y")
+	hasXY := hasX || hasY
+	if hasXY {
+		body["x"] = x
+		body["y"] = y
+		body["hasXY"] = true
+	}
+
 	if css != "" {
 		body["selector"] = css
 	} else if refArg != "" {
 		body["ref"] = refArg
-	} else {
-		cli.Fatal("Usage: pinchtab %s <ref> or pinchtab %s --css <selector>", kind, kind)
+	} else if !hasXY {
+		cli.Fatal("Usage: pinchtab %s <ref> or pinchtab %s --css <selector> or pinchtab %s --x <num> --y <num>", kind, kind, kind)
 	}
 
 	if kind == "click" {

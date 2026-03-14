@@ -31,8 +31,10 @@ func (b *Bridge) InitActionRegistry() {
 				err = chromedp.Run(ctx, chromedp.Click(req.Selector, chromedp.ByQuery))
 			} else if req.NodeID > 0 {
 				err = ClickByNodeID(ctx, req.NodeID)
+			} else if req.HasXY {
+				err = ClickByCoordinate(ctx, req.X, req.Y)
 			} else {
-				return nil, fmt.Errorf("need selector, ref, or nodeId")
+				return nil, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
 			}
 			if err != nil {
 				return nil, err
@@ -95,7 +97,10 @@ func (b *Bridge) InitActionRegistry() {
 					chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`, req.Selector), nil),
 				)
 			}
-			return nil, fmt.Errorf("need selector or ref")
+			if req.HasXY {
+				return map[string]any{"hovered": true}, HoverByCoordinate(ctx, req.X, req.Y)
+			}
+			return nil, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
 		},
 		ActionSelect: func(ctx context.Context, req ActionRequest) (map[string]any, error) {
 			val := req.Value
