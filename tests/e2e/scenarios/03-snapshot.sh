@@ -198,3 +198,36 @@ assert_ok "snapshot output=file"
 assert_json_exists "$RESULT" '.path' "has file path"
 
 end_test
+# ─────────────────────────────────────────────────────────────────
+start_test "snapshot: multi-tab content isolation with tabId"
+
+# Navigate to two different pages, capturing tab IDs
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "navigate to index"
+TAB_A=$(echo "$RESULT" | jq -r '.tabId')
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "navigate to form"
+TAB_B=$(echo "$RESULT" | jq -r '.tabId')
+
+# Snapshot tab A — should return index.html content (not form.html)
+pt_get "/snapshot?tabId=${TAB_A}"
+assert_ok "snapshot tab A"
+assert_json_contains "$RESULT" '.url' "index.html" "tab A has index.html URL"
+
+# Snapshot tab B — should return form.html content
+pt_get "/snapshot?tabId=${TAB_B}"
+assert_ok "snapshot tab B"
+assert_json_contains "$RESULT" '.url' "form.html" "tab B has form.html URL"
+
+# Text from tab A
+pt_get "/text?tabId=${TAB_A}&format=text"
+assert_ok "text tab A"
+assert_contains "$RESULT" "E2E Test Suite" "tab A text matches index.html"
+
+# Text from tab B
+pt_get "/text?tabId=${TAB_B}&format=text"
+assert_ok "text tab B"
+assert_contains "$RESULT" "Form Test" "tab B text matches form.html"
+
+end_test
