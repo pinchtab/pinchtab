@@ -9,6 +9,9 @@ on:
         description: 'Skill version (e.g. 0.2.0, without v prefix)'
         required: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -17,9 +20,9 @@ jobs:
     name: Publish to ClawHub
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -38,7 +41,7 @@ jobs:
           else
             VERSION=${GITHUB_REF_NAME#v}
           fi
-          clawhub publish skill/pinchtab \
+          clawhub publish skills/pinchtab \
             --slug pinchtab \
             --name "Pinchtab" \
             --version "$VERSION" \

@@ -100,6 +100,20 @@ If you need to re-release an existing tag:
 2. **Run workflow**
 3. Enter tag (e.g. `v0.7.1`)
 
+For a no-side-effects dry run from `main` or any other ref:
+
+1. Go to **Actions → Release**
+2. **Run workflow**
+3. Leave `tag` empty
+4. Set `ref` to the branch, tag, or commit you want to test
+5. Set `dry_run` to `true`
+
+Dry-run behavior:
+- GoReleaser runs in snapshot mode, so artifacts are built but not published
+- npm runs `npm publish --dry-run`
+- Docker runs a multi-arch `buildx` build with `push=false`
+- ClawHub skill publishing is not part of this workflow and is therefore skipped
+
 ## Pipeline details
 
 ### 1. Goreleaser (Go binary) — CRITICAL for npm
@@ -148,8 +162,8 @@ Depends on: `release` job (waits for goreleaser to finish)
 
 ### 3. Docker
 
-Goreleaser builds the pinned release image from `Dockerfile.goreleaser` and publishes it to GHCR.
-The Docker Hub job then mirrors that exact multi-arch manifest to Docker Hub, so the public release image does not rebuild from the floating development Dockerfile.
+GitHub Actions builds the release image directly from the tagged source with `docker buildx`.
+The workflow pushes the same multi-arch build to both GHCR and Docker Hub, so Docker no longer depends on GoReleaser's temporary build context.
 
 ## Troubleshooting
 
