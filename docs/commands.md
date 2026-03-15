@@ -57,6 +57,8 @@ Numeric arguments are resolved as 1-based tab indices via `/tabs`. Non-numeric a
 pinchtab click <ref>             # Click element by ref
 pinchtab click --css <selector>  # Click element by CSS selector
 pinchtab click --wait-nav <ref>  # Click and wait for navigation
+pinchtab dblclick <ref>          # Double-click element by ref
+pinchtab dblclick --css <selector> # Double-click element by CSS selector
 pinchtab type <ref> <text>       # Type into element
 pinchtab fill <ref|selector> <text> # Fill input directly (no keystroke events)
 pinchtab press <key>             # Press key (Enter, Tab, Escape...)
@@ -144,7 +146,7 @@ pinchtab security down           # Relax security settings
 
 Most browser commands support `--tab <id>` to target a specific tab.
 
-Commands with `--tab`: nav, snap, click, type, fill, press, hover, scroll, select, eval, screenshot, pdf, find, text
+Commands with `--tab`: nav, snap, click, dblclick, type, fill, press, hover, scroll, select, eval, screenshot, pdf, find, text
 
 ```
 pinchtab <command> --tab <id>    # Run command against specific tab

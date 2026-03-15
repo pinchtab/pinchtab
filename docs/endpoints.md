@@ -72,9 +72,9 @@ POST /tabs/{id}/action                   # Action on specific tab
 POST /tabs/{id}/actions                  # Batch actions on specific tab
 ```
 
-Action kinds: `click`, `type`, `fill`, `press`, `hover`, `scroll`, `select`, `focus`, `drag`
+Action kinds: `click`, `dblclick`, `type`, `fill`, `press`, `hover`, `scroll`, `select`, `focus`, `drag`
 
-Body: `{"kind": "click", "ref": "e5"}` / `{"kind": "type", "ref": "e12", "text": "hello"}`
+Body: `{"kind": "click", "ref": "e5"}` / `{"kind": "dblclick", "ref": "e5"}` / `{"kind": "type", "ref": "e12", "text": "hello"}`
 
 ## Page Analysis
 
