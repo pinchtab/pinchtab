@@ -28,7 +28,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 	})
 
 	// Clean up orphaned Chrome processes from previous crashed runs
-	bridge.CleanupOrphanedTempProfiles()
+	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
 
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	bridgeInstance.StealthScript = assets.StealthScript

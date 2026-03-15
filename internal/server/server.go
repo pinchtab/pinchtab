@@ -31,7 +31,7 @@ import (
 
 func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	// Clean up orphaned Chrome processes from previous crashed runs
-	bridge.CleanupOrphanedTempProfiles()
+	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
 
 	dashPort := cfg.Port
 	if dashPort == "" {

@@ -12,10 +12,20 @@ import (
 	"syscall"
 )
 
-// CleanupOrphanedTempProfiles finds and kills Chrome processes using
-// pinchtab-profile-* temp directories, then removes those directories.
-// Call on startup to clean up leftovers from previous crashed runs.
-func CleanupOrphanedTempProfiles() {
+// CleanupOrphanedChromeProcesses kills Chrome processes left behind by
+// previous PinchTab runs and removes temporary profile directories.
+// Call on startup before launching Chrome.
+func CleanupOrphanedChromeProcesses(profileDir string) {
+	// 1. Kill Chrome processes using the configured profile dir
+	// (from a previous crashed run that didn't shut down cleanly)
+	if profileDir != "" {
+		killed := killChromeByProfileDir(profileDir)
+		if killed > 0 {
+			slog.Info("cleanup: killed orphaned chrome processes using profile", "path", profileDir, "count", killed)
+		}
+	}
+
+	// 2. Find and clean up temp profile dirs from previous headless fallbacks
 	tmpDir := os.TempDir()
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
@@ -23,20 +33,11 @@ func CleanupOrphanedTempProfiles() {
 		return
 	}
 
-	var orphanDirs []string
 	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "pinchtab-profile-") {
-			orphanDirs = append(orphanDirs, filepath.Join(tmpDir, e.Name()))
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "pinchtab-profile-") {
+			continue
 		}
-	}
-
-	if len(orphanDirs) == 0 {
-		return
-	}
-
-	slog.Info("cleanup: found orphaned temp profile dirs", "count", len(orphanDirs))
-
-	for _, dir := range orphanDirs {
+		dir := filepath.Join(tmpDir, e.Name())
 		killChromeByProfileDir(dir)
 		if err := os.RemoveAll(dir); err != nil {
 			slog.Warn("cleanup: failed to remove temp profile dir", "path", dir, "err", err)
@@ -47,16 +48,17 @@ func CleanupOrphanedTempProfiles() {
 }
 
 // killChromeByProfileDir finds Chrome processes using the given profile
-// directory and sends them SIGTERM.
-func killChromeByProfileDir(profileDir string) {
+// directory and sends them SIGTERM. Returns the number of processes killed.
+func killChromeByProfileDir(profileDir string) int {
 	cmd := exec.Command("ps", "-axo", "pid=,args=")
 	out, err := cmd.Output()
 	if err != nil {
-		return
+		return 0
 	}
 
 	needle := fmt.Sprintf("--user-data-dir=%s", profileDir)
 	lines := bytes.Split(out, []byte{'\n'})
+	killed := 0
 
 	for _, rawLine := range lines {
 		line := strings.TrimSpace(string(rawLine))
@@ -78,6 +80,8 @@ func killChromeByProfileDir(profileDir string) {
 			slog.Debug("cleanup: failed to kill chrome process", "pid", pid, "err", err)
 		} else {
 			slog.Info("cleanup: killed orphaned chrome process", "pid", pid, "profileDir", profileDir)
+			killed++
 		}
 	}
+	return killed
 }
