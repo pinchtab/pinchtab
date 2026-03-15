@@ -18,7 +18,7 @@ GET  /api/events                         # SSE event stream (dashboard)
 ```
 POST /navigate                           # Navigate current tab to URL
 GET  /navigate?url=<url>                 # Navigate (GET variant)
-GET  /nav?url=<url>                      # Navigate (short alias)
+
 POST /tabs/{id}/navigate                 # Navigate a specific tab
 ```
 

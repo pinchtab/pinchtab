@@ -118,7 +118,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
 	mux.HandleFunc("GET /navigate", h.HandleNavigate)
-	mux.HandleFunc("GET /nav", h.HandleNavigate)
+
 	mux.HandleFunc("POST /back", h.HandleBack)
 	mux.HandleFunc("POST /forward", h.HandleForward)
 	mux.HandleFunc("POST /reload", h.HandleReload)
