@@ -92,7 +92,7 @@ pinchtab eval <expression>       # Evaluate JavaScript
 
 ```
 pinchtab screenshot              # Take a screenshot (JPEG)
-pinchtab screenshot -o <path>    # Save to specific path
+pinchtab screenshot -o <path>    # Save to specific path (format based on extension)
 pinchtab screenshot -q <0-100>   # Set JPEG quality
 pinchtab pdf                     # Export page as PDF
 pinchtab pdf -o <path>           # Save PDF to path

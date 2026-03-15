@@ -97,9 +97,8 @@ describe("ProfilesPage", () => {
     expect(
       within(detailPanel).getAllByText("team@example.com").length,
     ).toBeGreaterThan(0);
-    expect(
-      within(detailPanel).getByText("Running on :9988"),
-    ).toBeInTheDocument();
+    expect(within(detailPanel).getByText("running")).toBeInTheDocument();
+    expect(within(detailPanel).getByText("9988")).toBeInTheDocument();
   });
 
   it("switches the right detail pane when selecting another profile", async () => {

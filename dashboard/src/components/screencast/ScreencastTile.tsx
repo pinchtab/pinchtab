@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { addTokenToUrl } from "../../services/auth";
+import * as api from "../../services/api";
 
 interface Props {
   instanceId: string;
@@ -31,11 +32,15 @@ export default function ScreencastTile({
   const [sizeDisplay, setSizeDisplay] = useState("—");
   const [localFps, setLocalFps] = useState(fps);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
 
   // Reset local FPS when the tab changes to match the new tab's initial request
   useEffect(() => {
     setLocalFps(fps);
     setStatus("connecting");
+    if (fallbackUrl) URL.revokeObjectURL(fallbackUrl);
+    setFallbackUrl(null);
   }, [tabId, fps]);
 
   const takeScreenshot = async () => {
@@ -43,42 +48,50 @@ export default function ScreencastTile({
     setIsCapturing(true);
 
     try {
-      const params = new URLSearchParams({
-        tabId,
-        quality: "100",
-        maxWidth: "0", // 0 means original size in backend
-        fps: "1",
-      });
-      const path = addTokenToUrl(
-        `/instances/${encodeURIComponent(instanceId)}/proxy/screencast?${params.toString()}`,
-      );
-      const wsUrl = new URL(path, window.location.origin);
-      wsUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-
-      const socket = new WebSocket(wsUrl.toString());
-      socket.binaryType = "arraybuffer";
-
-      socket.onmessage = (evt) => {
-        const blob = new Blob([evt.data], { type: "image/jpeg" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `screenshot-${tabId}-${Date.now()}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        socket.close();
-        setIsCapturing(false);
-      };
-
-      socket.onerror = () => {
-        console.error("Screenshot capture failed");
-        setIsCapturing(false);
-      };
+      const blob = await api.fetchTabScreenshot(tabId, "png");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `screenshot-${tabId}-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (e) {
-      console.error("Screenshot error", e);
+      console.error("Screenshot capture failed", e);
+    } finally {
       setIsCapturing(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (isPdfGenerating) return;
+    setIsPdfGenerating(true);
+
+    try {
+      const blob = await api.fetchTabPdf(tabId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `page-${tabId}-${Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("PDF generation failed", e);
+    } finally {
+      setIsPdfGenerating(false);
+    }
+  };
+
+  const captureFallback = async () => {
+    try {
+      const blob = await api.fetchTabScreenshot(tabId, "png");
+      if (fallbackUrl) URL.revokeObjectURL(fallbackUrl);
+      setFallbackUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      console.error("Fallback capture failed", e);
     }
   };
 
@@ -168,18 +181,45 @@ export default function ScreencastTile({
       )}
       {/* Canvas */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
-        <canvas
-          ref={canvasRef}
-          className="max-h-full max-w-full object-contain"
-          width={800}
-          height={600}
-        />
+        {status === "error" && fallbackUrl ? (
+          <img
+            src={fallbackUrl}
+            alt="Tab preview"
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : (
+          <canvas
+            ref={canvasRef}
+            className="max-h-full max-w-full object-contain"
+            width={800}
+            height={600}
+          />
+        )}
+
         {status === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-sm text-text-muted">
-            Connection lost
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 text-sm text-text-primary backdrop-blur-[2px]">
+            <div className="font-semibold text-white drop-shadow-md">
+              Connection lost
+            </div>
+            <div className="flex gap-2">
+              {!fallbackUrl && (
+                <button
+                  onClick={captureFallback}
+                  className="rounded bg-white/10 px-3 py-1.5 font-medium shadow-lg backdrop-blur-md transition-colors hover:bg-white/20"
+                >
+                  Show static preview
+                </button>
+              )}
+              <button
+                onClick={() => setStatus("connecting")}
+                className="rounded bg-primary/30 px-3 py-1.5 font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-primary/40"
+              >
+                Retry connection
+              </button>
+            </div>
           </div>
         )}
-      </div>
+      </div>{" "}
       {/* Footer */}
       <div className="flex shrink-0 items-center justify-between border-t border-border-subtle px-3 py-1 text-xs text-text-muted">
         <div className="flex items-center gap-3">
@@ -191,7 +231,7 @@ export default function ScreencastTile({
             >
               -
             </button>
-            <div className="min-w-[4rem] px-1.5 text-center font-mono text-[10px] text-text-secondary">
+            <div className="min-w-16 px-1.5 text-center font-mono text-[10px] text-text-secondary">
               {localFps} FPS ({fpsDisplay})
             </div>
             <button
@@ -209,12 +249,27 @@ export default function ScreencastTile({
             className={`flex h-6 w-6 items-center justify-center rounded-md border border-border-subtle transition-colors hover:bg-white/5 disabled:opacity-50 ${
               isCapturing ? "bg-primary/20" : "bg-black/20"
             }`}
-            title="Take full quality screenshot"
+            title="Take full quality screenshot (PNG)"
           >
             {isCapturing ? (
               <span className="animate-pulse">⌛</span>
             ) : (
               <span>📸</span>
+            )}
+          </button>
+
+          <button
+            onClick={downloadPdf}
+            disabled={isPdfGenerating || status !== "streaming"}
+            className={`flex h-6 w-6 items-center justify-center rounded-md border border-border-subtle transition-colors hover:bg-white/5 disabled:opacity-50 ${
+              isPdfGenerating ? "bg-primary/20" : "bg-black/20"
+            }`}
+            title="Download as PDF"
+          >
+            {isPdfGenerating ? (
+              <span className="animate-pulse">⌛</span>
+            ) : (
+              <span>📄</span>
             )}
           </button>
         </div>

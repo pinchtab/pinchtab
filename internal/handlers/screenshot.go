@@ -56,13 +56,24 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	format := page.CaptureScreenshotFormatJpeg
+	contentType := "image/jpeg"
+	ext := ".jpg"
+
+	if r.URL.Query().Get("format") == "png" {
+		format = page.CaptureScreenshotFormatPng
+		contentType = "image/png"
+		ext = ".png"
+	}
+
 	if err := chromedp.Run(tCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
-			buf, err = page.CaptureScreenshot().
-				WithFormat(page.CaptureScreenshotFormatJpeg).
-				WithQuality(int64(quality)).
-				Do(ctx)
+			shot := page.CaptureScreenshot().WithFormat(format)
+			if format == page.CaptureScreenshotFormatJpeg {
+				shot = shot.WithQuality(int64(quality))
+			}
+			buf, err = shot.Do(ctx)
 			return err
 		}),
 	); err != nil {
@@ -78,7 +89,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timestamp := time.Now().Format("20060102-150405")
-		filename := fmt.Sprintf("screenshot-%s.jpg", timestamp)
+		filename := fmt.Sprintf("screenshot-%s%s", timestamp, ext)
 		filePath := filepath.Join(screenshotDir, filename)
 
 		if err := os.WriteFile(filePath, buf, 0600); err != nil {
@@ -89,14 +100,14 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		web.JSON(w, 200, map[string]any{
 			"path":      filePath,
 			"size":      len(buf),
-			"format":    "jpeg",
+			"format":    string(format),
 			"timestamp": timestamp,
 		})
 		return
 	}
 
 	if r.URL.Query().Get("raw") == "true" {
-		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Type", contentType)
 		if _, err := w.Write(buf); err != nil {
 			slog.Error("screenshot write", "err", err)
 		}
@@ -104,7 +115,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.JSON(w, 200, map[string]any{
-		"format": "jpeg",
+		"format": string(format),
 		"base64": base64.StdEncoding.EncodeToString(buf),
 	})
 }

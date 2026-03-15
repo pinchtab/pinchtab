@@ -230,8 +230,12 @@ Sets files on `<input type=file>` elements via CDP. Fires `change` events. Selec
 
 ```bash
 # CLI: pinchtab ss [-o file.jpg] [-q 80]
+# Returns raw JPEG (default)
 curl "/screenshot?raw=true" -o screenshot.jpg
 curl "/screenshot?raw=true&quality=50" -o screenshot.jpg
+
+# Returns raw PNG
+curl "/screenshot?raw=true&format=png" -o screenshot.png
 ```
 
 ## Evaluate JavaScript

@@ -84,7 +84,7 @@ Add to your Cursor MCP settings:
 |------|-------------|
 | `pinchtab_navigate` | Navigate to a URL |
 | `pinchtab_snapshot` | Get accessibility tree snapshot |
-| `pinchtab_screenshot` | Take a screenshot (base64 PNG) |
+| `pinchtab_screenshot` | Take a screenshot (base64 JPEG or PNG) |
 | `pinchtab_get_text` | Extract readable text content |
 
 ### Interaction (8 tools)
@@ -149,11 +149,12 @@ Get an accessibility tree snapshot of the page. This is the primary way agents u
 
 ### pinchtab_screenshot
 
-Capture a screenshot of the page.
+Capture a screenshot of the page. Defaults to JPEG.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `tabId` | string | No | Target tab |
+| `format` | string | No | `jpeg` (default) or `png` |
 | `quality` | number | No | JPEG quality 0-100 |
 
 ### pinchtab_get_text

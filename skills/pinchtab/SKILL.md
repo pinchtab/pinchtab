@@ -215,7 +215,7 @@ Rules:
 
 ```bash
 pinchtab screenshot
-pinchtab screenshot -o /tmp/pinchtab-page.jpg
+pinchtab screenshot -o /tmp/pinchtab-page.png  # Format driven by extension
 pinchtab screenshot -q 60
 pinchtab pdf
 pinchtab pdf -o /tmp/pinchtab-report.pdf

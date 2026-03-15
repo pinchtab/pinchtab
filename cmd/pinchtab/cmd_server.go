@@ -8,7 +8,7 @@ import (
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "Start full server",
+	Short: "Start server",
 	Run: func(cmd *cobra.Command, args []string) {
 		maybeRunWizard()
 		cfg := config.Load()

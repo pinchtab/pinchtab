@@ -148,6 +148,9 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if tabID := optString(r, "tabId"); tabID != "" {
 			q.Set("tabId", tabID)
 		}
+		if format := optString(r, "format"); format != "" {
+			q.Set("format", format)
+		}
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
 		}

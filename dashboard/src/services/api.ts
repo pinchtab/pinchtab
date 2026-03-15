@@ -93,6 +93,36 @@ async function requestText(
   return res.text();
 }
 
+async function requestBlob(
+  url: string,
+  options?: RequestInit,
+  meta?: RequestMeta,
+): Promise<Blob> {
+  const headers = new Headers(options?.headers ?? {});
+  const token = meta?.authToken?.trim() || getStoredAuthToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(BASE + url, {
+    ...options,
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    if (
+      res.status === 401 &&
+      !meta?.suppressAuthRedirect &&
+      typeof window !== "undefined"
+    ) {
+      window.localStorage.removeItem("pinchtab.auth.token");
+      dispatchAuthRequired(err.code || "unauthorized");
+    }
+    throw new Error(err.error || "Request failed");
+  }
+  return res.blob();
+}
+
 // Profiles — endpoint is /profiles (no /api prefix)
 export async function fetchProfiles(): Promise<Profile[]> {
   return request<Profile[]>("/profiles");
@@ -164,6 +194,19 @@ export async function fetchInstanceTabs(id: string): Promise<InstanceTab[]> {
 
 export async function fetchInstanceLogs(id: string): Promise<string> {
   return requestText(`/instances/${encodeURIComponent(id)}/logs`);
+}
+
+export async function fetchTabScreenshot(
+  tabId: string,
+  format: "jpeg" | "png" = "jpeg",
+): Promise<Blob> {
+  return requestBlob(
+    `/tabs/${encodeURIComponent(tabId)}/screenshot?raw=true&format=${format}`,
+  );
+}
+
+export async function fetchTabPdf(tabId: string): Promise<Blob> {
+  return requestBlob(`/tabs/${encodeURIComponent(tabId)}/pdf?raw=true`);
 }
 
 export function subscribeToInstanceLogs(
