@@ -163,6 +163,13 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-check scheme before navigation (validateDownloadURL already enforces this,
+	// but inline check satisfies CodeQL SSRF analysis).
+	if parsed, err := url.Parse(dlURL); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		web.Error(w, 400, fmt.Errorf("invalid download URL scheme"))
+		return
+	}
+
 	// Navigate the temp tab to the URL — uses browser's cookie jar and stealth.
 	if err := chromedp.Run(tCtx, chromedp.Navigate(dlURL)); err != nil {
 		if redirectBlocked.Load() {
