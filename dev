@@ -21,7 +21,8 @@ COMMANDS=(
   "dev:🚀:Build & run"
   "run:🏃:Run the application"
   "check:🧪:All checks"
-  "test:🔬:Unit tests"
+  "test unit:🔬:Go unit tests"
+  "test dashboard:🔬:Dashboard unit tests"
   "e2e:🐳:E2E tests"
   "  recent:🐳:E2E Recent tests"
   "  curl:🐳:E2E Curl tests"
@@ -112,12 +113,22 @@ run_command() {
       echo ""
       exec bash scripts/test.sh all
       ;;
-    "test unit"|"unit")
+    "test unit")
+      echo "  ${ACCENT}${BOLD}🔬 Go unit tests${NC}"
+      echo ""
+      exec bash scripts/test.sh unit
+      ;;
+    "test dashboard")
+      echo "  ${ACCENT}${BOLD}🔬 Dashboard tests${NC}"
+      echo ""
+      exec bash scripts/test.sh dashboard
+      ;;
+    "unit")
       echo "  ${ACCENT}${BOLD}🔬 Unit tests${NC}"
       echo ""
       exec bash scripts/test.sh unit
       ;;
-    "test system"|"system")
+    "system")
       echo "  ${ACCENT}${BOLD}🔬 System tests${NC}"
       echo ""
       exec bash scripts/test.sh system

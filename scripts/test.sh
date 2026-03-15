@@ -252,17 +252,24 @@ trap 'rm -rf "$TMPDIR_TEST"' EXIT
 # ── Unit tests ───────────────────────────────────────────────────────
 
 if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "unit" ]; then
-  section "Unit Tests"
+  section "test:🔬:go unit"
 
   UNIT_JSON="$TMPDIR_TEST/unit.json"
 
   if ! run_go_test_json "$UNIT_JSON" "unit" -p 1 -count=1 ./...; then
-    fail "Unit tests"
+    fail "test:🔬:go unit"
     test_summary "$UNIT_JSON" "Unit Test Results"
     exit 1
   fi
-  ok "Unit tests"
+  ok "test:🔬:go unit"
   test_summary "$UNIT_JSON" "Unit Test Results"
+fi
+
+# ── Dashboard ────────────────────────────────────────────────────────
+
+if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "dashboard" ]; then
+  section "test:🔬:dashboard"
+  ./scripts/test-dashboard.sh
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────
