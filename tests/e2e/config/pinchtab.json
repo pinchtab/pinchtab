@@ -10,7 +10,8 @@
     ]
   },
   "instanceDefaults": {
-    "maxTabs": 10
+    "maxTabs": 10,
+    "stealthLevel": "light"
   },
   "multiInstance": {
     "strategy": "always-on",

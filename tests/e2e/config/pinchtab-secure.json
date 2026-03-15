@@ -7,7 +7,8 @@
     "extraFlags": "--no-sandbox --disable-dev-shm-usage"
   },
   "instanceDefaults": {
-    "maxTabs": 2
+    "maxTabs": 2,
+    "stealthLevel": "full"
   },
   "multiInstance": {
     "strategy": "always-on",

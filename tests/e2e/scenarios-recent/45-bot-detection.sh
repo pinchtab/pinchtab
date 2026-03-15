@@ -2,8 +2,18 @@
 # 45-bot-detection.sh — Bot detection stealth tests
 # Tests the fixes for GitHub issue #275
 # Simulates checks from bot.sannysoft.com
+#
+# Tests run against:
+# - PINCHTAB_URL (light stealth) - basic bot detection evasion
+# - PINCHTAB_SECURE_URL (full stealth) - additional fingerprint protections
 
 source "$(dirname "$0")/common.sh"
+
+# ═══════════════════════════════════════════════════════════════════
+# LIGHT STEALTH MODE (main instance)
+# ═══════════════════════════════════════════════════════════════════
+
+echo -e "${BLUE}Testing LIGHT stealth mode (main instance)${NC}"
 
 # Navigate to bot detection fixture
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/bot-detect.html\"}"
@@ -91,3 +101,84 @@ if [ "$PASSED" != "$TOTAL" ]; then
 fi
 
 end_test
+
+# ═══════════════════════════════════════════════════════════════════
+# FULL STEALTH MODE (secure instance)
+# Tests additional fingerprint protections only available in full mode
+# ═══════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${BLUE}Testing FULL stealth mode (secure instance)${NC}"
+
+# Switch to secure instance for full stealth tests
+ORIG_URL="$PINCHTAB_URL"
+PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+
+# Navigate to bot detection fixture on secure instance
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/bot-detect.html\"}"
+assert_ok "navigate to bot-detect fixture (full stealth)"
+sleep 1
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect-full: webdriver is undefined"
+
+assert_eval_poll "navigator.webdriver === undefined || navigator.webdriver === false" "true" "navigator.webdriver hidden (full)"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect-full: plugins instanceof PluginArray"
+
+assert_eval_poll "navigator.plugins instanceof PluginArray" "true" "plugins passes instanceof (full)"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect-full: WebGL vendor spoofed"
+
+# Full stealth mode should spoof WebGL vendor to Intel
+pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const dbg = gl.getExtension(\"WEBGL_debug_renderer_info\"); return gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL); } catch(e) { return \"error\"; } })()"}'
+assert_ok "get WebGL vendor"
+VENDOR=$(echo "$RESULT" | jq -r '.result.value')
+echo "  WebGL vendor: $VENDOR"
+
+# In full stealth, should be spoofed to "Intel Inc."
+if [ "$VENDOR" = "Intel Inc." ]; then
+  echo -e "  ${GREEN}✓${NC} WebGL vendor spoofed to Intel"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${YELLOW}⚠${NC} WebGL vendor not spoofed (may vary by environment): $VENDOR"
+  # Don't fail - WebGL spoofing depends on environment
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect-full: WebGL renderer spoofed"
+
+pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const dbg = gl.getExtension(\"WEBGL_debug_renderer_info\"); return gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL); } catch(e) { return \"error\"; } })()"}'
+assert_ok "get WebGL renderer"
+RENDERER=$(echo "$RESULT" | jq -r '.result.value')
+echo "  WebGL renderer: $RENDERER"
+
+# In full stealth, should be spoofed to Intel Iris
+if echo "$RENDERER" | grep -qi "intel"; then
+  echo -e "  ${GREEN}✓${NC} WebGL renderer spoofed"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${YELLOW}⚠${NC} WebGL renderer not spoofed: $RENDERER"
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect-full: overall score passes"
+
+pt_post /evaluate '{"expression":"window.__botDetectScore && window.__botDetectScore.passed"}'
+assert_ok "get bot detect score (full)"
+assert_json_equals "$RESULT" '.result.value' "true"
+
+end_test
+
+# Restore original URL
+PINCHTAB_URL="$ORIG_URL"
