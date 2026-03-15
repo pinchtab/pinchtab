@@ -21,7 +21,7 @@
     }
   },
   "security": {
-    "allowEvaluate": false,
+    "allowEvaluate": true,
     "allowDownload": false,
     "allowUpload": false,
     "idpi": {
