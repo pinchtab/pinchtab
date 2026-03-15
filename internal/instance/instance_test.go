@@ -27,6 +27,7 @@ func (m *mockLauncher) Launch(name, port string, headless bool) (*bridgepkg.Inst
 		ID:          fmt.Sprintf("inst_%d", m.nextID),
 		ProfileName: name,
 		Port:        port,
+		URL:         "http://localhost:" + port,
 		Headless:    headless,
 		Status:      "running",
 	}
@@ -61,6 +62,11 @@ func (f *mockFetcher) FetchTabs(instanceURL string) ([]bridgepkg.InstanceTab, er
 
 func (f *mockFetcher) AddTab(instancePort, tabID, url string) {
 	key := "http://localhost:" + instancePort
+	f.AddTabForURL(key, tabID, url)
+}
+
+func (f *mockFetcher) AddTabForURL(instanceURL, tabID, url string) {
+	key := instanceURL
 	f.tabsByURL[key] = append(f.tabsByURL[key], bridgepkg.InstanceTab{
 		ID:  tabID,
 		URL: url,
@@ -183,6 +189,26 @@ func TestLocator_TabNotFound(t *testing.T) {
 	_, err := locator.FindInstanceByTabID("nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent tab")
+	}
+}
+
+func TestLocator_UsesInstanceURLWhenPresent(t *testing.T) {
+	launcher := newMockLauncher()
+	fetcher := newMockFetcher()
+	repo := instance.NewRepository(launcher)
+	locator := instance.NewLocator(repo, fetcher)
+
+	inst, _ := repo.Launch("remote", "9868", true)
+	inst.URL = "https://bridge.example.com:9868"
+	repo.Add(inst)
+	fetcher.AddTabForURL("https://bridge.example.com:9868", "tab_remote", "https://pinchtab.com")
+
+	found, err := locator.FindInstanceByTabID("tab_remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found.ID != inst.ID {
+		t.Fatalf("expected %s, got %s", inst.ID, found.ID)
 	}
 }
 

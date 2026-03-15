@@ -7,6 +7,7 @@ package proxy
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,42 +20,67 @@ import (
 // and tab navigation (up to 60s for NavigateTimeout in bridge config).
 var DefaultClient = &http.Client{Timeout: 60 * time.Second}
 
-// HTTP forwards an HTTP request to targetURL, streaming the response
-// back to w. If the request is a WebSocket upgrade, it delegates to
-// handlers.ProxyWebSocket instead.
-func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
+type Options struct {
+	Client         *http.Client
+	AllowedURL     func(*url.URL) bool
+	RewriteRequest func(*http.Request)
+}
 
-	if isWebSocketUpgrade(r) {
-		handlers.ProxyWebSocket(w, r, targetURL)
+var hopByHopHeaders = map[string]struct{}{
+	"connection":          {},
+	"keep-alive":          {},
+	"proxy-authenticate":  {},
+	"proxy-authorization": {},
+	"te":                  {},
+	"trailers":            {},
+	"transfer-encoding":   {},
+	"upgrade":             {},
+	"host":                {},
+}
+
+func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Options) {
+	if targetURL == nil {
+		web.Error(w, 502, fmt.Errorf("proxy error: missing target URL"))
+		return
+	}
+	if opts.AllowedURL != nil && !opts.AllowedURL(targetURL) {
+		web.Error(w, 400, fmt.Errorf("invalid proxy target"))
 		return
 	}
 
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	proxyReq := r.Clone(r.Context())
+	proxyReq.URL = targetURL
+	proxyReq.Host = targetURL.Host
+	proxyReq.Header = r.Header.Clone()
+	if opts.RewriteRequest != nil {
+		opts.RewriteRequest(proxyReq)
+	}
+
+	if isWebSocketUpgrade(proxyReq) {
+		handlers.ProxyWebSocket(w, proxyReq, targetURL.String())
+		return
+	}
+
+	client := opts.Client
+	if client == nil {
+		client = DefaultClient
+	}
+
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
 	if err != nil {
 		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
 	}
-	for k, vv := range r.Header {
-		for _, v := range vv {
-			proxyReq.Header.Add(k, v)
-		}
-	}
+	copyHeaders(outReq.Header, proxyReq.Header)
 
-	resp, err := DefaultClient.Do(proxyReq)
+	resp, err := client.Do(outReq)
 	if err != nil {
 		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
+	copyHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
 	buf := make([]byte, 32*1024)
@@ -72,6 +98,21 @@ func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
 	}
 }
 
+// HTTP forwards an HTTP request to targetURL, streaming the response
+// back to w. If the request is a WebSocket upgrade, it delegates to
+// handlers.ProxyWebSocket instead.
+func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
+	parsed, err := url.Parse(targetURL)
+	if err != nil {
+		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
+		return
+	}
+	if parsed.RawQuery == "" {
+		parsed.RawQuery = r.URL.RawQuery
+	}
+	Forward(w, r, parsed, Options{})
+}
+
 func isWebSocketUpgrade(r *http.Request) bool {
 	for _, v := range r.Header["Upgrade"] {
 		if strings.EqualFold(v, "websocket") {
@@ -79,4 +120,15 @@ func isWebSocketUpgrade(r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+func copyHeaders(dst, src http.Header) {
+	for k, vv := range src {
+		if _, skip := hopByHopHeaders[strings.ToLower(k)]; skip {
+			continue
+		}
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
 }

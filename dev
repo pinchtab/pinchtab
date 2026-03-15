@@ -25,6 +25,7 @@ COMMANDS=(
   "test dashboard:🔬:Dashboard unit tests"
   "e2e:🐳:E2E tests"
   "  recent:🐳:E2E Recent tests"
+  "  orchestrator:🐳:E2E Orchestrator tests"
   "  curl:🐳:E2E Curl tests"
   "  cli:🐳:E2E CLI tests"
   "doctor:🩺:Setup dev environment"
@@ -163,6 +164,17 @@ run_command() {
           docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
 
           echo ""
+          echo "  ${ACCENT}${BOLD}🐳 E2E Orchestrator tests (Docker)${NC}"
+          echo ""
+          docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
+          local orch_exit=$?
+          if [ $orch_exit -ne 0 ]; then
+            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab | tail -n 50 || true
+            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab-bridge | tail -n 50 || true
+          fi
+          docker compose -f tests/e2e/docker-compose-orchestrator.yml down -v 2>/dev/null
+
+          echo ""
           echo "  ${ACCENT}${BOLD}🐳 E2E CLI tests (Docker)${NC}"
           echo ""
           build_e2e_cli_binary
@@ -174,7 +186,7 @@ run_command() {
           docker compose -f tests/e2e/docker-compose-cli.yml down -v 2>/dev/null
 
           echo ""
-          if [ $curl_exit -ne 0 ] || [ $cli_exit -ne 0 ]; then
+          if [ $curl_exit -ne 0 ] || [ $orch_exit -ne 0 ] || [ $cli_exit -ne 0 ]; then
             echo "  ${ERROR}Some E2E tests failed${NC}"
             exit 1
           fi
@@ -203,6 +215,18 @@ run_command() {
           fi
           docker compose -f tests/e2e/docker-compose-cli.yml down -v 2>/dev/null
           exit $cli_exit
+          ;;
+        "e2e orchestrator")
+          echo "  ${ACCENT}${BOLD}🐳 E2E Orchestrator tests (Docker)${NC}"
+          echo ""
+          docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
+          local orch_exit=$?
+          if [ $orch_exit -ne 0 ]; then
+            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab | tail -n 50 || true
+            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab-bridge | tail -n 50 || true
+          fi
+          docker compose -f tests/e2e/docker-compose-orchestrator.yml down -v 2>/dev/null
+          exit $orch_exit
           ;;
         "e2e recent")
           echo "  ${ACCENT}${BOLD}🐳 E2E Recent tests (Docker)${NC}"

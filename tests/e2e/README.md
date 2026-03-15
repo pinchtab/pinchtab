@@ -9,6 +9,7 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ```bash
 ./dev e2e          # Run all E2E tests
 ./dev e2e recent   # Run only recently added/changed scenarios (fast feedback)
+./dev e2e orchestrator  # Run orchestrator-heavy scenarios only
 ./dev e2e curl     # Run only Curl-based scenarios
 ./dev e2e cli      # Run only CLI-based scenarios
 ```
@@ -16,16 +17,19 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 Or directly:
 ```bash
 docker compose -f tests/e2e/docker-compose.yml up --build
+docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
 ```
 
 ## Architecture
 
 ```
 tests/e2e/
-├── docker-compose.yml      # Orchestrates all services
+├── docker-compose.yml      # Generic curl scenarios
+├── docker-compose-orchestrator.yml # Orchestrator-specific services
 ├── config/                 # E2E-specific PinchTab configs
 │   ├── pinchtab.json
-│   └── pinchtab-secure.json
+│   ├── pinchtab-secure.json
+│   └── pinchtab-bridge.json
 ├── fixtures/               # Static HTML test pages
 │   ├── index.html
 │   ├── form.html
@@ -33,13 +37,17 @@ tests/e2e/
 │   └── buttons.html
 ├── scenarios/              # Test scripts
 │   ├── common.sh           # Shared utilities
-│   ├── run-all.sh          # Orchestrator
+│   ├── run-all.sh          # Generic curl scenarios
 │   ├── 01-health.sh
 │   ├── 02-navigate.sh
 │   ├── 03-snapshot.sh
 │   ├── 04-tabs-api.sh      # Regression test for #207
 │   ├── 05-actions.sh
 │   └── 06-screenshot-pdf.sh
+├── scenarios-orchestrator/ # Multi-instance and attach flows
+│   ├── run-all.sh
+│   ├── 01-attach-bridge.sh
+│   └── 31-multi-instance.sh
 ├── runner/                 # Test runner container
 │   └── Dockerfile
 └── results/                # Test output (gitignored)
@@ -57,6 +65,8 @@ The Docker stack reuses the repository root `Dockerfile` and mounts explicit con
 | 04-tabs-api | Tab-scoped APIs (regression #207) |
 | 05-actions | Click, type, press actions |
 | 06-screenshot-pdf | Screenshot and PDF export |
+| scenarios-orchestrator/01-attach-bridge | Orchestrator attaches to the dedicated `pinchtab-bridge` container and proxies tab traffic |
+| scenarios-orchestrator/31-multi-instance | Launch/list/stop and aggregate orchestration behavior |
 
 ## Adding Tests
 
@@ -118,4 +128,14 @@ docker compose -f tests/e2e/docker-compose.yml run runner bash
 ### Run specific scenario
 ```bash
 docker compose -f tests/e2e/docker-compose.yml run runner /scenarios/04-tabs-api.sh
+```
+
+### Run orchestrator scenarios
+```bash
+docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
+```
+
+### Run remote bridge attach scenario
+```bash
+docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner /scenarios-orchestrator/01-attach-bridge.sh
 ```

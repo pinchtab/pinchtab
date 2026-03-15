@@ -120,16 +120,18 @@ type AnalyticsReport struct {
 }
 
 type Instance struct {
-	ID          string    `json:"id"`               // Hash-based ID: inst_XXXXXXXX
-	ProfileID   string    `json:"profileId"`        // Hash-based profile ID: prof_XXXXXXXX
-	ProfileName string    `json:"profileName"`      // Human-readable profile name (for display only)
-	Port        string    `json:"port"`             // Internal: instance port
-	Headless    bool      `json:"headless"`         // Mode: headless vs headed
-	Status      string    `json:"status"`           // Status: starting/running/stopping/stopped/error
-	StartTime   time.Time `json:"startTime"`        // When instance was created
-	Error       string    `json:"error,omitempty"`  // Error message if status=error
-	Attached    bool      `json:"attached"`         // True if attached to external Chrome (not launched)
-	CdpURL      string    `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for attached instances)
+	ID          string    `json:"id"`                   // Hash-based ID: inst_XXXXXXXX
+	ProfileID   string    `json:"profileId"`            // Hash-based profile ID: prof_XXXXXXXX
+	ProfileName string    `json:"profileName"`          // Human-readable profile name (for display only)
+	Port        string    `json:"port"`                 // Internal: instance port
+	URL         string    `json:"url,omitempty"`        // Canonical base URL for bridge-backed instances
+	Headless    bool      `json:"headless"`             // Mode: headless vs headed
+	Status      string    `json:"status"`               // Status: starting/running/stopping/stopped/error
+	StartTime   time.Time `json:"startTime"`            // When instance was created
+	Error       string    `json:"error,omitempty"`      // Error message if status=error
+	Attached    bool      `json:"attached"`             // True if attached rather than locally launched
+	AttachType  string    `json:"attachType,omitempty"` // "cdp" or "bridge" for attached instances
+	CdpURL      string    `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 }
 
 type InstanceTab struct {

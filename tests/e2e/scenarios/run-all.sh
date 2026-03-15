@@ -17,6 +17,9 @@ echo ""
 echo "Waiting for instances to become ready..."
 wait_for_instance_ready "${PINCHTAB_URL}"
 wait_for_instance_ready "${PINCHTAB_SECURE_URL}"
+if [ -n "${PINCHTAB_LITE_URL:-}" ]; then
+  wait_for_instance_ready "${PINCHTAB_LITE_URL}"
+fi
 echo ""
 
 # Find and run all test scripts in order

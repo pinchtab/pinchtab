@@ -13,6 +13,9 @@ This is the canonical contributor and development guide for PinchTab.
 | Chrome/Chromium | Latest | Browser automation |
 | macOS, Linux, or WSL2 | Current | OS support |
 
+For dashboard work, use Bun 1.2+.
+Older Bun releases fail on the checked-in `dashboard/bun.lock` during clean installs with `--frozen-lockfile`.
+
 ### Recommended Setup
 
 - **macOS**: Homebrew for package management

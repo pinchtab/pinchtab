@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -80,8 +81,9 @@ type InstanceInternal struct {
 	URL   string
 	Error string
 
-	cmd    Cmd
-	logBuf *ringBuffer
+	authToken string
+	cmd       Cmd
+	logBuf    *ringBuffer
 }
 
 func NewOrchestrator(baseDir string) *Orchestrator {
@@ -330,6 +332,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 			ProfileID:   profileID,
 			ProfileName: name,
 			Port:        port,
+			URL:         fmt.Sprintf("http://localhost:%s", port),
 			Headless:    headless,
 			Status:      "starting",
 			StartTime:   time.Now(),
@@ -391,13 +394,8 @@ func (o *Orchestrator) writeChildConfig(port, profilePath, instanceStateDir stri
 	return configPath, nil
 }
 
-// Attach connects to an externally managed Chrome instance via CDP URL.
-// Unlike Launch, this does not start a Chrome process - it only registers
-// the external instance for tracking and proxying.
-func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
+func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance, authToken string) (*bridge.Instance, error) {
 	o.mu.Lock()
-
-	// Check for duplicate name
 	for _, inst := range o.instances {
 		if inst.ProfileName == name && instanceIsActive(inst) {
 			o.mu.Unlock()
@@ -406,36 +404,62 @@ func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
 	}
 	o.mu.Unlock()
 
-	// Generate IDs (use name as pseudo-profile)
 	profileID := o.idMgr.ProfileID(name)
 	instanceID := o.idMgr.InstanceID(profileID, name)
-
-	inst := &InstanceInternal{
-		Instance: bridge.Instance{
-			ID:          instanceID,
-			ProfileID:   profileID,
-			ProfileName: name,
-			Status:      "running",
-			StartTime:   time.Now(),
-			Attached:    true,
-			CdpURL:      cdpURL,
-		},
-		URL: cdpURL,
+	inst.ID = instanceID
+	inst.ProfileID = profileID
+	inst.ProfileName = name
+	inst.Status = "running"
+	inst.StartTime = time.Now()
+	internal := &InstanceInternal{
+		Instance:  inst,
+		URL:       inst.URL,
+		authToken: authToken,
 	}
 
 	o.mu.Lock()
-	o.instances[instanceID] = inst
+	o.instances[instanceID] = internal
 	o.mu.Unlock()
 
-	slog.Info("attached to external Chrome", "id", instanceID, "name", name, "cdpUrl", cdpURL)
+	o.syncInstanceToManager(&internal.Instance)
+	return &internal.Instance, nil
+}
+
+// Attach connects to an externally managed Chrome instance via CDP URL.
+// Unlike Launch, this does not start a Chrome process - it only registers
+// the external instance for tracking and proxying.
+func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
+	inst, err := o.attachExternalInstance(name, bridge.Instance{
+		Attached:   true,
+		AttachType: "cdp",
+		CdpURL:     cdpURL,
+		URL:        cdpURL,
+	}, "")
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("attached to external Chrome", "id", inst.ID, "name", name, "cdpUrl", cdpURL)
 
 	// Emit event
-	o.emitEvent("instance.attached", &inst.Instance)
+	o.emitEvent("instance.attached", inst)
+	return inst, nil
+}
 
-	// Sync to instance manager if available
-	o.syncInstanceToManager(&inst.Instance)
+// AttachBridge registers an already-running bridge server as an attached instance.
+func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instance, error) {
+	inst, err := o.attachExternalInstance(name, bridge.Instance{
+		Attached:   true,
+		AttachType: "bridge",
+		URL:        strings.TrimRight(baseURL, "/"),
+	}, token)
+	if err != nil {
+		return nil, err
+	}
 
-	return &inst.Instance, nil
+	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", inst.URL)
+	o.emitEvent("instance.attached", inst)
+	return inst, nil
 }
 
 func (o *Orchestrator) Stop(id string) error {
@@ -454,6 +478,18 @@ func (o *Orchestrator) Stop(id string) error {
 	o.mu.Unlock()
 
 	if inst.cmd == nil {
+		if inst.AttachType == "bridge" {
+			reqCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			defer cancel()
+			targetURL, targetErr := o.instancePathURL(inst, "/shutdown", "")
+			if targetErr == nil {
+				req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
+				o.applyInstanceAuth(req, inst)
+				if resp, err := o.client.Do(req); err == nil {
+					_ = resp.Body.Close()
+				}
+			}
+		}
 		o.markStopped(id)
 		return nil
 	}
@@ -462,10 +498,13 @@ func (o *Orchestrator) Stop(id string) error {
 
 	reqCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, inst.URL+"/shutdown", nil)
-	resp, err := o.client.Do(req)
-	if err == nil {
-		_ = resp.Body.Close()
+	if targetURL, targetErr := o.instancePathURL(inst, "/shutdown", ""); targetErr == nil {
+		req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
+		o.applyInstanceAuth(req, inst)
+		resp, err := o.client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
 	}
 
 	if pid > 0 {
@@ -621,26 +660,30 @@ func (o *Orchestrator) Logs(id string) (string, error) {
 func (o *Orchestrator) FirstRunningURL() string {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	// Collect running instances and sort by port (ascending) for determinism.
-	// The lowest port is the earliest-launched instance, which is the most stable.
+	// Collect running instances and sort by start time for determinism.
+	// This works for both local launched instances and attached remote bridges.
 	type candidate struct {
-		port int
-		url  string
+		start time.Time
+		url   string
 	}
 	var candidates []candidate
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
-			p := 0
-			if _, err := fmt.Sscanf(inst.Port, "%d", &p); err != nil {
+			if inst.URL == "" {
 				continue
 			}
-			candidates = append(candidates, candidate{port: p, url: inst.URL})
+			candidates = append(candidates, candidate{start: inst.StartTime, url: inst.URL})
 		}
 	}
 	if len(candidates) == 0 {
 		return ""
 	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].port < candidates[j].port })
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].start.Equal(candidates[j].start) {
+			return candidates[i].url < candidates[j].url
+		}
+		return candidates[i].start.Before(candidates[j].start)
+	})
 	return candidates[0].url
 }
 
@@ -656,7 +699,7 @@ func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
 
 	all := make([]bridge.InstanceTab, 0)
 	for _, inst := range instances {
-		tabs, err := o.fetchTabs(inst.URL)
+		tabs, err := o.fetchTabs(inst)
 		if err != nil {
 			continue
 		}
@@ -684,7 +727,7 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 
 	all := make([]types.InstanceMetrics, 0)
 	for _, inst := range instances {
-		mem, err := o.fetchMetrics(inst.URL)
+		mem, err := o.fetchMetrics(inst)
 		if err != nil || mem == nil {
 			continue
 		}
@@ -709,7 +752,17 @@ func (o *Orchestrator) ScreencastURL(instanceID, tabID string) string {
 	if !ok {
 		return ""
 	}
-	return fmt.Sprintf("ws://localhost:%s/screencast?tabId=%s", inst.Port, tabID)
+	target, err := o.instancePathURL(inst, "/screencast", "tabId="+url.QueryEscape(tabID))
+	if err != nil {
+		return ""
+	}
+	switch target.Scheme {
+	case "https":
+		target.Scheme = "wss"
+	default:
+		target.Scheme = "ws"
+	}
+	return target.String()
 }
 
 func (o *Orchestrator) Shutdown() {

@@ -17,6 +17,8 @@ NC='\033[0m'
 # Defaults from environment
 PINCHTAB_URL="${PINCHTAB_URL:-http://localhost:9999}"
 PINCHTAB_SECURE_URL="${PINCHTAB_SECURE_URL:-http://localhost:9998}"
+PINCHTAB_BRIDGE_URL="${PINCHTAB_BRIDGE_URL:-}"
+PINCHTAB_BRIDGE_TOKEN="${PINCHTAB_BRIDGE_TOKEN:-}"
 FIXTURES_URL="${FIXTURES_URL:-http://localhost:8080}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
 
@@ -55,6 +57,7 @@ get_time_ms() {
 wait_for_instance_ready() {
   local base_url="$1"
   local timeout_sec="${2:-60}"
+  local token="${3:-}"
   local started_at
   started_at=$(date +%s)
 
@@ -67,13 +70,52 @@ wait_for_instance_ready() {
     fi
 
     local health_json
-    health_json=$(curl -sf "${base_url}/health" 2>/dev/null || true)
+    if [ -n "$token" ]; then
+      health_json=$(curl -sf -H "Authorization: Bearer ${token}" "${base_url}/health" 2>/dev/null || true)
+    else
+      health_json=$(curl -sf "${base_url}/health" 2>/dev/null || true)
+    fi
     if [ -n "$health_json" ]; then
       local inst_status
       inst_status=$(echo "$health_json" | jq -r '.defaultInstance.status // .status // empty' 2>/dev/null || true)
       if [ "$inst_status" = "running" ] || [ "$inst_status" = "ok" ]; then
         echo -e "  ${GREEN}✓${NC} instance ready at ${base_url}"
         return 0
+      fi
+    fi
+
+    sleep 1
+  done
+}
+
+wait_for_orchestrator_instance_status() {
+  local base_url="$1"
+  local instance_id="$2"
+  local wanted_status="${3:-running}"
+  local timeout_sec="${4:-60}"
+  local started_at
+  started_at=$(date +%s)
+
+  while true; do
+    local now
+    now=$(date +%s)
+    if [ $((now - started_at)) -ge "$timeout_sec" ]; then
+      echo -e "  ${RED}✗${NC} instance ${instance_id} at ${base_url} did not reach ${wanted_status} within ${timeout_sec}s"
+      return 1
+    fi
+
+    local inst_json
+    inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+    if [ -n "$inst_json" ]; then
+      local inst_status
+      inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
+      if [ "$inst_status" = "$wanted_status" ]; then
+        echo -e "  ${GREEN}✓${NC} instance ${instance_id} is ${wanted_status}"
+        return 0
+      fi
+      if [ "$inst_status" = "stopped" ] || [ "$inst_status" = "error" ]; then
+        echo -e "  ${RED}✗${NC} instance ${instance_id} reached terminal status ${inst_status} before ${wanted_status}"
+        return 1
       fi
     fi
 

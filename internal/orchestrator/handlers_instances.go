@@ -3,9 +3,9 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -113,13 +113,23 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 	headless := inst.Headless
 	o.mu.RUnlock()
 
+	if inst.Attached && inst.AttachType != "bridge" {
+		web.Error(w, 409, fmt.Errorf("attached instance %q cannot be started by the orchestrator", id))
+		return
+	}
+
 	if active {
-		targetURL := &url.URL{
-			Scheme: "http",
-			Host:   net.JoinHostPort("localhost", port),
-			Path:   "/ensure-chrome",
+		targetURL, targetErr := o.instancePathURL(inst, "/ensure-chrome", "")
+		if targetErr != nil {
+			web.Error(w, 502, targetErr)
+			return
 		}
 		o.proxyToURL(w, r, targetURL)
+		return
+	}
+
+	if inst.Attached {
+		web.Error(w, 409, fmt.Errorf("attached instance %q cannot be started by the orchestrator", id))
 		return
 	}
 
@@ -268,7 +278,7 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tabs, err := o.fetchTabs(inst.URL)
+	tabs, err := o.fetchTabs(inst)
 	if err != nil {
 		web.Error(w, 502, fmt.Errorf("failed to fetch tabs for instance %q: %w", id, err))
 		return
@@ -317,15 +327,79 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 
 	inst, err := o.Attach(name, req.CdpURL)
 	if err != nil {
-		web.Error(w, 500, err)
+		web.Error(w, classifyLaunchError(err), err)
 		return
 	}
 
 	web.JSON(w, 201, inst)
 }
 
-// validateAttachURL checks if attach is enabled and the CDP URL is allowed.
-func (o *Orchestrator) validateAttachURL(cdpURL string) error {
+func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BaseURL string `json:"baseUrl"`
+		Name    string `json:"name,omitempty"`
+		Token   string `json:"token,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.Error(w, 400, fmt.Errorf("invalid JSON"))
+		return
+	}
+	if req.BaseURL == "" {
+		web.Error(w, 400, fmt.Errorf("baseUrl is required"))
+		return
+	}
+	if err := o.validateAttachURL(req.BaseURL); err != nil {
+		web.Error(w, 403, err)
+		return
+	}
+	if err := o.probeAttachBridge(req.BaseURL, req.Token); err != nil {
+		web.Error(w, 502, err)
+		return
+	}
+
+	name := req.Name
+	if name == "" {
+		name = fmt.Sprintf("bridge-%d", time.Now().UnixNano())
+	}
+
+	inst, err := o.AttachBridge(name, req.BaseURL, req.Token)
+	if err != nil {
+		web.Error(w, classifyLaunchError(err), err)
+		return
+	}
+	web.JSON(w, 201, inst)
+}
+
+func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
+	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
+	if err != nil {
+		return fmt.Errorf("invalid bridge baseUrl: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, (&url.URL{
+		Scheme: parsed.Scheme,
+		Host:   parsed.Host,
+		Path:   "/health",
+	}).String(), nil)
+	if err != nil {
+		return fmt.Errorf("build bridge health request: %w", err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("bridge health check failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bridge health check returned HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// validateAttachURL checks if attach is enabled and the external URL is allowed.
+func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	if o.runtimeCfg == nil {
 		return fmt.Errorf("attach not configured")
 	}
@@ -334,9 +408,9 @@ func (o *Orchestrator) validateAttachURL(cdpURL string) error {
 		return fmt.Errorf("attach is disabled")
 	}
 
-	parsed, err := url.Parse(cdpURL)
+	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return fmt.Errorf("invalid cdpUrl: %w", err)
+		return fmt.Errorf("invalid attach URL: %w", err)
 	}
 
 	// Validate scheme
@@ -349,6 +423,10 @@ func (o *Orchestrator) validateAttachURL(cdpURL string) error {
 	}
 	if !schemeAllowed {
 		return fmt.Errorf("scheme %q not allowed (allowed: %v)", parsed.Scheme, o.runtimeCfg.AttachAllowSchemes)
+	}
+
+	if (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Path != "" && parsed.Path != "/" {
+		return fmt.Errorf("bridge baseUrl must not include a path")
 	}
 
 	// Validate host

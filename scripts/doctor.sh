@@ -14,6 +14,7 @@ NC='\033[0m'
 
 CRITICAL=0
 WARNINGS=0
+BUN_MIN_VERSION="1.2.0"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -31,6 +32,33 @@ confirm() {
 section() {
   echo ""
   echo -e "${ACCENT}${BOLD}$1${NC}"
+}
+
+version_ge() {
+  local current="${1#v}"
+  local minimum="${2#v}"
+  local current_major current_minor current_patch
+  local minimum_major minimum_minor minimum_patch
+
+  IFS='.' read -r current_major current_minor current_patch <<< "${current}"
+  IFS='.' read -r minimum_major minimum_minor minimum_patch <<< "${minimum}"
+
+  current_minor=${current_minor:-0}
+  current_patch=${current_patch:-0}
+  minimum_minor=${minimum_minor:-0}
+  minimum_patch=${minimum_patch:-0}
+
+  if [ "$current_major" -ne "$minimum_major" ]; then
+    [ "$current_major" -gt "$minimum_major" ]
+    return
+  fi
+
+  if [ "$current_minor" -ne "$minimum_minor" ]; then
+    [ "$current_minor" -gt "$minimum_minor" ]
+    return
+  fi
+
+  [ "$current_patch" -ge "$minimum_patch" ]
 }
 
 # ── Detect package manager ───────────────────────────────────────────
@@ -154,14 +182,40 @@ if [ -d "dashboard" ]; then
 
   # ── Bun ────────────────────────────────────────────────────────
 
+  HAS_SUPPORTED_BUN=false
   if command -v bun &>/dev/null; then
-    ok "Bun $(bun -v)"
+    BUN_VERSION=$(bun -v)
+    if version_ge "$BUN_VERSION" "$BUN_MIN_VERSION"; then
+      ok "Bun $BUN_VERSION"
+      HAS_SUPPORTED_BUN=true
+    else
+      warn "Bun $BUN_VERSION — requires $BUN_MIN_VERSION+ for dashboard installs" "Older Bun versions try to rewrite dashboard/bun.lock and fail with --frozen-lockfile on clean clones."
+      if confirm "Upgrade Bun now?"; then
+        curl -fsSL https://bun.sh/install | bash && ok "Bun updated (restart shell to use)" && WARNINGS=$((WARNINGS - 1)) && HAS_SUPPORTED_BUN=true
+      else
+        hint "curl -fsSL https://bun.sh/install | bash"
+      fi
+    fi
   else
     warn "Bun not found" "Optional — used for fast dashboard builds."
     if confirm "Install Bun?"; then
-      curl -fsSL https://bun.sh/install | bash && ok "Bun installed (restart shell to use)" && WARNINGS=$((WARNINGS - 1))
+      curl -fsSL https://bun.sh/install | bash && ok "Bun installed (restart shell to use)" && WARNINGS=$((WARNINGS - 1)) && HAS_SUPPORTED_BUN=true
     else
       hint "curl -fsSL https://bun.sh/install | bash"
+    fi
+  fi
+
+  # ── tygo ───────────────────────────────────────────────────────
+
+  TYGO="${GOPATH:-$HOME/go}/bin/tygo"
+  if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
+    ok "tygo"
+  else
+    warn "tygo not found" "Types in the dashboard might fall out of sync with Go structs."
+    if command -v go &>/dev/null && confirm "Install tygo via go install?"; then
+      go install github.com/gzuidhof/tygo@latest && ok "tygo installed" && WARNINGS=$((WARNINGS - 1))
+    else
+      hint "go install github.com/gzuidhof/tygo@latest"
     fi
   fi
 
@@ -171,10 +225,12 @@ if [ -d "dashboard" ]; then
     ok "Dashboard dependencies"
   else
     warn "Dashboard dependencies not installed"
-    if command -v bun &>/dev/null; then
+    if $HAS_SUPPORTED_BUN; then
       if confirm "Install dashboard dependencies via bun?"; then
         (cd dashboard && bun install) && ok "Dashboard dependencies installed" && WARNINGS=$((WARNINGS - 1))
       fi
+    elif command -v bun &>/dev/null; then
+      hint "Upgrade Bun to $BUN_MIN_VERSION+ before installing dashboard dependencies"
     elif command -v npm &>/dev/null; then
       if confirm "Install dashboard dependencies via npm?"; then
         (cd dashboard && npm install) && ok "Dashboard dependencies installed" && WARNINGS=$((WARNINGS - 1))

@@ -229,3 +229,33 @@ Notes:
 
 - there is no CLI attach command
 - attach is allowed only when enabled in config under `security.attach`
+
+## Attach An Existing Bridge
+
+```bash
+curl -X POST http://localhost:9867/instances/attach-bridge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"shared-bridge",
+    "baseUrl":"http://10.0.12.24:9868",
+    "token":"bridge-secret-token"
+  }'
+# Response
+{
+  "id": "inst_0a89a5bb",
+  "profileId": "prof_278be873",
+  "profileName": "shared-bridge",
+  "port": "",
+  "url": "http://10.0.12.24:9868",
+  "status": "running",
+  "attached": true,
+  "attachType": "bridge"
+}
+```
+
+Notes:
+
+- `baseUrl` must point at a running PinchTab bridge
+- the orchestrator performs a health check before registering it
+- `security.attach.allowHosts` must allow the bridge host
+- `security.attach.allowSchemes` must include `http` or `https` for bridge attachment

@@ -234,6 +234,58 @@ func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_AttachBridge(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	inst, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token")
+	if err != nil {
+		t.Fatalf("AttachBridge failed: %v", err)
+	}
+	if !inst.Attached {
+		t.Fatal("expected attached instance")
+	}
+	if inst.AttachType != "bridge" {
+		t.Fatalf("AttachType = %q, want %q", inst.AttachType, "bridge")
+	}
+	if inst.URL != "http://10.0.0.8:9868" {
+		t.Fatalf("URL = %q, want %q", inst.URL, "http://10.0.0.8:9868")
+	}
+	if inst.CdpURL != "" {
+		t.Fatalf("CdpURL = %q, want empty", inst.CdpURL)
+	}
+}
+
+func TestValidateAttachURL_AllowsBridgeHTTP(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"10.0.0.8"},
+		AttachAllowSchemes: []string{"http", "ws"},
+	})
+
+	if err := o.validateAttachURL("http://10.0.0.8:9868"); err != nil {
+		t.Fatalf("validateAttachURL returned error: %v", err)
+	}
+}
+
+func TestValidateAttachURL_RejectsBridgeBaseURLWithPath(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"10.0.0.8"},
+		AttachAllowSchemes: []string{"http"},
+	})
+
+	err := o.validateAttachURL("http://10.0.0.8:9868/api")
+	if err == nil {
+		t.Fatal("expected error for attach bridge URL with path")
+	}
+	if !strings.Contains(err.Error(), "must not include a path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{})

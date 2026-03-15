@@ -122,8 +122,10 @@ Attach is an advanced feature for registering an externally managed Chrome insta
 If you enable attach:
 
 - keep `allowHosts` narrowly scoped
-- prefer local-only hosts unless external Chrome targets are intentional
+- prefer local-only hosts unless external Chrome targets or remote bridges are intentional
 - only attach to browsers and CDP endpoints you trust
+
+If you use `POST /instances/attach-bridge`, `security.attach.allowSchemes` must also include `http` or `https`.
 
 ## IDPI
 

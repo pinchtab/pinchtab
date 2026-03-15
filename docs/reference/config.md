@@ -356,7 +356,7 @@ Valid enum values:
 | `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` (default) |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on` (default) |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
-| `security.attach.allowSchemes` | `ws`, `wss` |
+| `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |
 
 ## Notes
 

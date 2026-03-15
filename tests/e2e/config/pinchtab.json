@@ -37,6 +37,21 @@
     "allowEvaluate": true,
     "allowDownload": true,
     "allowUpload": true,
+    "attach": {
+      "enabled": true,
+      "allowHosts": [
+        "127.0.0.1",
+        "localhost",
+        "::1",
+        "pinchtab-bridge"
+      ],
+      "allowSchemes": [
+        "ws",
+        "wss",
+        "http",
+        "https"
+      ]
+    },
     "idpi": {
       "enabled": true,
       "scanContent": true,

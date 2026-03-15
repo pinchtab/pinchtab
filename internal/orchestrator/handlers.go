@@ -28,6 +28,7 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /instances/start", o.handleStartInstance)
 	mux.HandleFunc("POST /instances/launch", o.handleLaunchByName)
 	mux.HandleFunc("POST /instances/attach", o.handleAttachInstance)
+	mux.HandleFunc("POST /instances/attach-bridge", o.handleAttachBridge)
 	mux.HandleFunc("POST /instances/{id}/start", o.handleStartByInstanceID)
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogsByID)

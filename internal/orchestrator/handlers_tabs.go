@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/web"
@@ -34,13 +32,18 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		"tabId":  tabID,
 	})
 
-	targetURL := fmt.Sprintf("http://localhost:%s/tab", inst.Port)
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL, bytes.NewReader(reqBody))
+	targetURL, err := o.instancePathURL(inst, "/tab", "")
+	if err != nil {
+		web.Error(w, 502, err)
+		return
+	}
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL.String(), bytes.NewReader(reqBody))
 	if err != nil {
 		web.Error(w, 500, err)
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
+	o.applyInstanceAuth(proxyReq, inst)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(proxyReq)
@@ -98,11 +101,10 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 	proxyReq.Header = r.Header.Clone()
 	proxyReq.Header.Set("Content-Type", "application/json")
 
-	targetURL := &url.URL{
-		Scheme:   "http",
-		Host:     net.JoinHostPort("localhost", inst.Port),
-		Path:     "/tab",
-		RawQuery: r.URL.RawQuery,
+	targetURL, err := o.instancePathURL(inst, "/tab", r.URL.RawQuery)
+	if err != nil {
+		web.Error(w, 502, err)
+		return
 	}
 	o.proxyToURL(w, proxyReq, targetURL)
 }

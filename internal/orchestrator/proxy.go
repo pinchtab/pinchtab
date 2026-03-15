@@ -2,14 +2,13 @@ package orchestrator
 
 import (
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/handlers"
+	iproxy "github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -26,11 +25,10 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxyToInstance := func(inst *bridge.Instance) {
-		targetURL := &url.URL{
-			Scheme:   "http",
-			Host:     net.JoinHostPort("localhost", inst.Port),
-			Path:     r.URL.Path,
-			RawQuery: r.URL.RawQuery,
+		targetURL, buildErr := o.instancePathURLFromBridge(inst, r.URL.Path, r.URL.RawQuery)
+		if buildErr != nil {
+			web.Error(w, 502, buildErr)
+			return
 		}
 		o.proxyToURL(w, r, targetURL)
 	}
@@ -91,54 +89,27 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		targetPath = ""
 	}
 
-	targetURL := &url.URL{
-		Scheme:   "http",
-		Host:     net.JoinHostPort("localhost", inst.Port),
-		Path:     targetPath,
-		RawQuery: r.URL.RawQuery,
+	targetURL, err := o.instancePathURL(inst, targetPath, r.URL.RawQuery)
+	if err != nil {
+		web.Error(w, 502, err)
+		return
 	}
 	o.proxyToURL(w, r, targetURL)
 }
 
 // proxyToURL proxies an HTTP request to the given target URL.
 func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, targetURL *url.URL) {
-	if targetURL.Hostname() != "localhost" {
-		web.Error(w, 400, fmt.Errorf("invalid proxy target: only localhost allowed"))
-		return
-	}
-
-	proxyReq, err := http.NewRequest(r.Method, targetURL.String(), r.Body)
-	if err != nil {
-		web.Error(w, 500, fmt.Errorf("failed to create proxy request: %w", err))
-		return
-	}
-
-	for key, values := range r.Header {
-		switch key {
-		case "Host", "Connection", "Keep-Alive", "Proxy-Authenticate",
-			"Proxy-Authorization", "Te", "Trailers", "Transfer-Encoding", "Upgrade":
-		default:
-			for _, value := range values {
-				proxyReq.Header.Add(key, value)
+	iproxy.Forward(w, r, targetURL, iproxy.Options{
+		Client: o.client,
+		AllowedURL: func(u *url.URL) bool {
+			return o.proxyTargetInstance(u) != nil
+		},
+		RewriteRequest: func(req *http.Request) {
+			if inst := o.proxyTargetInstance(targetURL); inst != nil {
+				o.applyInstanceAuth(req, inst)
 			}
-		}
-	}
-
-	resp, err := o.client.Do(proxyReq)
-	if err != nil {
-		web.Error(w, 502, fmt.Errorf("failed to proxy to instance: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
-
-	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+		},
+	})
 }
 
 // findRunningInstanceByTabID finds the instance that owns the given tab.
@@ -153,7 +124,7 @@ func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceIntern
 	o.mu.RUnlock()
 
 	for _, inst := range instances {
-		tabs, err := o.fetchTabs(inst.URL)
+		tabs, err := o.fetchTabs(inst)
 		if err != nil {
 			continue
 		}
@@ -177,16 +148,110 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Build target URL preserving all query params (tabId, quality, maxWidth, fps)
-	targetURL := fmt.Sprintf("http://localhost:%s/screencast?%s", inst.Port, r.URL.RawQuery)
-
-	// Inject child auth token if configured
-	if o.childAuthToken != "" {
-		r.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+	targetURL, err := o.instancePathURL(inst, "/screencast", r.URL.RawQuery)
+	if err != nil {
+		web.Error(w, 502, err)
+		return
 	}
 
+	req := r.Clone(r.Context())
+	req.Header = r.Header.Clone()
+	o.applyInstanceAuth(req, inst)
+
 	// Use WebSocket proxy for proper upgrade
-	handlers.ProxyWebSocket(w, r, targetURL)
+	handlers.ProxyWebSocket(w, req, targetURL.String())
+}
+
+func (o *Orchestrator) instancePathURL(inst *InstanceInternal, path, rawQuery string) (*url.URL, error) {
+	if inst == nil {
+		return nil, fmt.Errorf("instance not found")
+	}
+	baseURL, err := o.parseHTTPInstanceURL(inst.URL, inst.Port)
+	if err != nil {
+		return nil, err
+	}
+	target := &url.URL{
+		Scheme:   baseURL.Scheme,
+		Host:     baseURL.Host,
+		Path:     path,
+		RawQuery: rawQuery,
+	}
+	return target, nil
+}
+
+func (o *Orchestrator) instancePathURLFromBridge(inst *bridge.Instance, path, rawQuery string) (*url.URL, error) {
+	if inst == nil {
+		return nil, fmt.Errorf("instance not found")
+	}
+	baseURL, err := o.parseHTTPInstanceURL(inst.URL, inst.Port)
+	if err != nil {
+		return nil, err
+	}
+	target := &url.URL{
+		Scheme:   baseURL.Scheme,
+		Host:     baseURL.Host,
+		Path:     path,
+		RawQuery: rawQuery,
+	}
+	return target, nil
+}
+
+func (o *Orchestrator) parseHTTPInstanceURL(rawURL, port string) (*url.URL, error) {
+	if rawURL == "" && port != "" {
+		rawURL = "http://localhost:" + port
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid instance URL %q: %w", rawURL, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("instance %q is not an HTTP bridge", rawURL)
+	}
+	if parsed.Host == "" {
+		return nil, fmt.Errorf("invalid instance URL %q", rawURL)
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return nil, fmt.Errorf("instance URL %q must not include a path", rawURL)
+	}
+	return parsed, nil
+}
+
+func (o *Orchestrator) proxyTargetInstance(targetURL *url.URL) *InstanceInternal {
+	if targetURL == nil {
+		return nil
+	}
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	for _, inst := range o.instances {
+		baseURL, err := o.parseHTTPInstanceURL(inst.URL, inst.Port)
+		if err != nil {
+			continue
+		}
+		if sameOrigin(baseURL, targetURL) {
+			return inst
+		}
+	}
+	return nil
+}
+
+func sameOrigin(a, b *url.URL) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+}
+
+func (o *Orchestrator) applyInstanceAuth(req *http.Request, inst *InstanceInternal) {
+	if req == nil || inst == nil {
+		return
+	}
+	token := inst.authToken
+	if token == "" {
+		token = o.childAuthToken
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 }
 
 // classifyLaunchError returns appropriate HTTP status code for launch errors.

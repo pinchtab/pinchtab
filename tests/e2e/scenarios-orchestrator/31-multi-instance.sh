@@ -2,7 +2,8 @@
 # 31-multi-instance.sh — Multi-instance orchestration tests
 # Migrated from: tests/integration/orchestrator_test.go
 
-source "$(dirname "$0")/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../scenarios/common.sh"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "orchestrator: health shows dashboard mode"
@@ -33,7 +34,7 @@ assert_json_exists "$RESULT" '.id' "has instance id"
 assert_json_exists "$RESULT" '.port' "has port"
 
 # Wait for instance to be ready
-sleep 3
+wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${INST_ID}" "running" 30
 
 # Verify it appears in list
 pt_get /instances
@@ -85,11 +86,13 @@ start_test "orchestrator: aggregate tabs (multi-instance)"
 pt_post /instances/launch '{"name":"e2e-agg-tabs","headless":true}'
 assert_ok "launch for aggregate"
 AGG_INST=$(echo "$RESULT" | jq -r '.id')
-sleep 3
+wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${AGG_INST}" "running" 30
 
 # Navigate on both instances to ensure tabs exist
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "navigate on default instance"
 pt_post "/instances/${AGG_INST}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "open tab on aggregate instance"
 
 pt_get /instances/tabs
 assert_ok "aggregate tabs"
@@ -228,20 +231,23 @@ pt_post /instances/launch '{"name":"e2e-iso-2","headless":true}'
 assert_ok "launch iso-2"
 ISO_INST2=$(echo "$RESULT" | jq -r '.id')
 
-sleep 3
+wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${ISO_INST1}" "running" 30
+wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${ISO_INST2}" "running" 30
 
 # Open tabs on each instance
 pt_post "/instances/${ISO_INST1}/tabs/open" "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "open tab on iso-1"
 TAB1=$(echo "$RESULT" | jq -r '.tabId // .id // empty')
 
 pt_post "/instances/${ISO_INST2}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "open tab on iso-2"
 TAB2=$(echo "$RESULT" | jq -r '.tabId // .id // empty')
 
-if [ "$TAB1" != "$TAB2" ] || [ -z "$TAB1" ]; then
+if [ -n "$TAB1" ] && [ -n "$TAB2" ] && [ "$TAB1" != "$TAB2" ]; then
   echo -e "  ${GREEN}✓${NC} instances have separate tabs"
   ((ASSERTIONS_PASSED++)) || true
 else
-  echo -e "  ${RED}✗${NC} instances share tab IDs: $TAB1"
+  echo -e "  ${RED}✗${NC} instances did not produce distinct tab IDs: ${TAB1} vs ${TAB2}"
   ((ASSERTIONS_FAILED++)) || true
 fi
 

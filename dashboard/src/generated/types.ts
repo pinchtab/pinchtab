@@ -39,12 +39,14 @@ export interface Instance {
   profileId: string;
   profileName: string;
   port: string; // Note: string not int
+  url?: string;
   headless: boolean;
   status: string; // starting/running/stopping/stopped/error
   startTime: string;
   error?: string;
-  attached: boolean; // True if attached to external Chrome
-  cdpUrl?: string; // CDP WebSocket URL (for attached instances)
+  attached: boolean; // True if attached rather than locally launched
+  attachType?: string;
+  cdpUrl?: string; // CDP WebSocket URL (for CDP-attached instances)
 }
 /**
  * Agent represents a connected AI agent.

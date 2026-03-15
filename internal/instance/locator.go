@@ -48,7 +48,10 @@ func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 	// Slow path: query all running bridges.
 	running := l.repo.Running()
 	for _, inst := range running {
-		url := fmt.Sprintf("http://localhost:%s", inst.Port)
+		url := inst.URL
+		if url == "" {
+			url = fmt.Sprintf("http://localhost:%s", inst.Port)
+		}
 		tabs, err := l.fetcher.FetchTabs(url)
 		if err != nil {
 			slog.Debug("locator: failed to fetch tabs", "instance", inst.ID, "err", err)
@@ -103,7 +106,10 @@ func (l *Locator) RefreshAll() {
 
 	running := l.repo.Running()
 	for _, inst := range running {
-		url := fmt.Sprintf("http://localhost:%s", inst.Port)
+		url := inst.URL
+		if url == "" {
+			url = fmt.Sprintf("http://localhost:%s", inst.Port)
+		}
 		tabs, err := l.fetcher.FetchTabs(url)
 		if err != nil {
 			slog.Debug("locator: refresh failed", "instance", inst.ID, "err", err)

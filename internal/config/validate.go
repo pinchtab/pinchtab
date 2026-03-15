@@ -132,7 +132,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		if !isValidAttachScheme(scheme) {
 			errs = append(errs, ValidationError{
 				Field:   "security.attach.allowSchemes",
-				Message: fmt.Sprintf("invalid value %q (must be ws or wss)", scheme),
+				Message: fmt.Sprintf("invalid value %q (must be ws, wss, http, or https)", scheme),
 			})
 		}
 	}
@@ -243,7 +243,7 @@ func isValidAllocationPolicy(policy string) bool {
 
 func isValidAttachScheme(scheme string) bool {
 	switch scheme {
-	case "ws", "wss":
+	case "ws", "wss", "http", "https":
 		return true
 	default:
 		return false
@@ -320,5 +320,5 @@ func ValidAllocationPolicies() []string {
 
 // ValidAttachSchemes returns all valid attach URL schemes.
 func ValidAttachSchemes() []string {
-	return []string{"ws", "wss"}
+	return []string{"ws", "wss", "http", "https"}
 }

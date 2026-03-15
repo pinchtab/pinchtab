@@ -9,6 +9,7 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev test               # All tests (unit + E2E)
 ./dev test unit          # Unit tests only
 ./dev e2e                # E2E tests (both curl and CLI)
+./dev e2e orchestrator   # Orchestrator-heavy E2E tests only
 ./dev e2e curl           # E2E curl tests only
 ./dev e2e cli            # E2E CLI tests only
 ./dev check              # All checks (format, vet, build, lint)
@@ -56,6 +57,14 @@ Runs CLI e2e tests. Tests the command-line interface directly.
 
 Runs all E2E tests (curl + CLI, 224 tests total).
 
+### Orchestrator E2E Suite
+
+```bash
+./dev e2e orchestrator
+```
+
+Runs the orchestration-focused curl scenarios, including multi-instance flows and remote bridge attachment against the dedicated `pinchtab-bridge` Compose service.
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -89,6 +98,10 @@ E2E tests are organized in two directories:
 - **`tests/e2e/scenarios/*.sh`** — HTTP curl-based tests (183 tests)
   - Test the REST API directly
   - Use Docker Compose: `tests/e2e/docker-compose.yml`
+
+- **`tests/e2e/scenarios-orchestrator/*.sh`** — orchestration-heavy curl tests
+  - Test multi-instance flows and remote bridge attachment
+  - Use Docker Compose: `tests/e2e/docker-compose-orchestrator.yml`
 
 - **`tests/e2e/scenarios-cli/*.sh`** — CLI e2e tests (41 tests)
   - Test the command-line interface

@@ -33,12 +33,14 @@ type Instance struct {
 	ProfileID   string    `json:"profileId"`
 	ProfileName string    `json:"profileName"`
 	Port        string    `json:"port"` // Note: string not int
+	URL         string    `json:"url,omitempty"`
 	Headless    bool      `json:"headless"`
 	Status      string    `json:"status"` // starting/running/stopping/stopped/error
 	StartTime   time.Time `json:"startTime"`
 	Error       string    `json:"error,omitempty"`
-	Attached    bool      `json:"attached"`         // True if attached to external Chrome
-	CdpURL      string    `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for attached instances)
+	Attached    bool      `json:"attached"` // True if attached rather than locally launched
+	AttachType  string    `json:"attachType,omitempty"`
+	CdpURL      string    `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
 }
 
 // Agent represents a connected AI agent.

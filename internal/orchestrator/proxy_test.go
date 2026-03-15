@@ -82,3 +82,37 @@ func TestSingleRunningInstance_IgnoresStopped(t *testing.T) {
 		t.Fatalf("got %#v, want inst_1", got)
 	}
 }
+
+func TestProxyToURL_UsesAttachedBridgeOriginAndAuth(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer bridge-token" {
+			t.Fatalf("authorization = %q, want %q", got, "Bearer bridge-token")
+		}
+		if r.URL.Path != "/tabs/tab-1/snapshot" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `ok`)
+	}))
+	defer backend.Close()
+
+	o := NewOrchestrator(t.TempDir())
+	o.client = backend.Client()
+	attached, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
+	if err != nil {
+		t.Fatalf("AttachBridge failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/tabs/tab-1/snapshot", nil)
+	req.SetPathValue("id", "tab-1")
+	w := httptest.NewRecorder()
+
+	targetURL, err := o.instancePathURLFromBridge(attached, "/tabs/tab-1/snapshot", "")
+	if err != nil {
+		t.Fatalf("instancePathURLFromBridge failed: %v", err)
+	}
+	o.proxyToURL(w, req, targetURL)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}

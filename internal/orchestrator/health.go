@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -35,19 +37,19 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		}
 		time.Sleep(instanceHealthPollInterval)
 
-		for _, baseURL := range instanceBaseURLs(inst.Port) {
-			// Suppress CodeQL alert: baseURL comes from trusted orchestrator configuration
-			// (port-based child instance list), not user input. This is intentional design:
-			// agents request the orchestrator to probe known child instances.
-			// lgtm[go/request-forgery]
-			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
+		for _, baseURL := range instanceBaseURLs(inst.URL, inst.Port) {
+			baseParsed, parseErr := url.Parse(baseURL)
+			if parseErr != nil {
+				lastProbe = fmt.Sprintf("%s -> %s", baseURL, parseErr.Error())
+				continue
+			}
+			target := &url.URL{Scheme: baseParsed.Scheme, Host: baseParsed.Host, Path: "/health"}
+			req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
 			if reqErr != nil {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
 				continue
 			}
-			if o.childAuthToken != "" {
-				req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
-			}
+			o.applyInstanceAuth(req, inst)
 			resp, err := o.client.Do(req)
 			if err == nil {
 				_ = resp.Body.Close()
@@ -75,6 +77,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			inst.Status = "running"
 			if resolvedURL != "" {
 				inst.URL = resolvedURL
+				inst.Instance.URL = resolvedURL
 			}
 			o.syncInstanceToManager(&inst.Instance)
 			eventType = "instance.started"
@@ -143,14 +146,16 @@ type memoryMetrics struct {
 	Listeners     int64   `json:"listeners"`
 }
 
-func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/tabs", nil)
+func (o *Orchestrator) fetchTabs(inst *InstanceInternal) ([]remoteTab, error) {
+	target, err := o.instancePathURL(inst, "/tabs", "")
 	if err != nil {
 		return nil, err
 	}
-	if o.childAuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, err
 	}
+	o.applyInstanceAuth(req, inst)
 
 	resp, err := o.client.Do(req)
 	if err != nil {
@@ -171,14 +176,16 @@ func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
 	return result.Tabs, nil
 }
 
-func (o *Orchestrator) fetchMetrics(baseURL string) (*memoryMetrics, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/metrics", nil)
+func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, error) {
+	target, err := o.instancePathURL(inst, "/metrics", "")
 	if err != nil {
 		return nil, err
 	}
-	if o.childAuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, err
 	}
+	o.applyInstanceAuth(req, inst)
 
 	resp, err := o.client.Do(req)
 	if err != nil {
@@ -201,7 +208,10 @@ func isInstanceHealthyStatus(code int) bool {
 	return code > 0 && code < http.StatusInternalServerError
 }
 
-func instanceBaseURLs(port string) []string {
+func instanceBaseURLs(rawURL, port string) []string {
+	if rawURL != "" {
+		return []string{strings.TrimRight(rawURL, "/")}
+	}
 	return []string{
 		fmt.Sprintf("http://127.0.0.1:%s", port),
 		fmt.Sprintf("http://[::1]:%s", port),
