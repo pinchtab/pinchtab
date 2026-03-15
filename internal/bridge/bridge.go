@@ -49,8 +49,7 @@ type Bridge struct {
 	// These are removed on Cleanup() to prevent Chrome process/disk leaks.
 	tempProfileDir string
 
-	// Chrome process group ID for killing all child processes on shutdown.
-	chromePgid int
+
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
@@ -161,14 +160,6 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	b.BrowserCancel = browserCancel
 	b.initialized = true
 
-	// Capture Chrome's PID as process group ID (Setpgid=true makes PID == PGID)
-	if bc := chromedp.FromContext(browserCtx); bc != nil && bc.Browser != nil {
-		if proc := bc.Browser.Process(); proc != nil {
-			b.chromePgid = proc.Pid
-			slog.Info("chrome started", "pid", proc.Pid, "pgid", proc.Pid)
-		}
-	}
-
 	// Initialize TabManager now that browser is ready
 	if b.Config != nil && b.TabManager == nil {
 		if b.IdMgr == nil {
@@ -191,16 +182,6 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 // Cleanup releases browser resources and removes temporary profile directories.
 // Must be called on shutdown to prevent Chrome process and disk leaks.
 func (b *Bridge) Cleanup() {
-	// Kill Chrome process group (main + all helpers) before cancelling contexts.
-	// configureChromeProcess() in init.go ensures Chrome runs in its own process group.
-	if b.chromePgid > 0 {
-		if err := killProcessGroup(b.chromePgid); err != nil {
-			slog.Debug("cleanup: pgid kill failed (may already be dead)", "pgid", b.chromePgid, "err", err)
-		} else {
-			slog.Info("cleanup: killed chrome process group", "pgid", b.chromePgid)
-		}
-	}
-
 	if b.BrowserCancel != nil {
 		b.BrowserCancel()
 		slog.Debug("chrome browser context cancelled")

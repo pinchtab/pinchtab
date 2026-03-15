@@ -160,9 +160,9 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	}
 	opts = append(opts, chromedp.CombinedOutput(newPrefixedLogWriter(os.Stdout, "chrome")))
 
-	// Set up process group and platform-specific options so all Chrome child
-	// processes (GPU, renderer, helpers) can be killed together on shutdown.
-	// Note: ModifyCmdFunc replaces chromedp's default allocateCmdOptions.
+	// Replace chromedp's default allocateCmdOptions to set Pdeathsig on Linux.
+	// Do NOT set Setpgid — Chrome should inherit the parent's process group
+	// so the orchestrator can kill the entire bridge group at once.
 	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
 		configureChromeProcess(cmd)
 	}))
