@@ -37,6 +37,30 @@ assert_eval_poll "navigator.webdriver === undefined || navigator.webdriver === f
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "bot-detect: webdriver property does not exist"
+
+# Key detection vector: 'webdriver' in navigator should be false
+assert_eval_poll "!('webdriver' in navigator)" "true" "webdriver property not in navigator"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect: no CDP traces"
+
+# Check for Chrome DevTools Protocol traces left by automation
+assert_eval_poll "!(window.cdc_adoQpoasnfa76pfcZLmcfl_Array || window.cdc_adoQpoasnfa76pfcZLmcfl_Promise)" "true" "no CDP automation traces"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "bot-detect: UA not headless"
+
+# User agent should not contain HeadlessChrome
+assert_eval_poll "!navigator.userAgent.includes('HeadlessChrome')" "true" "UA not headless"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "bot-detect: plugins instanceof PluginArray"
 
 # Issue #275: navigator.plugins must pass instanceof PluginArray
