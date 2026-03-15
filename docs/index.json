@@ -14,6 +14,7 @@
     "guides/mcp-agents.md",
     "guides/attach-chrome.md",
     "guides/remote-bridge-orchestrator.md",
+    "guides/tailscale-bridge-orchestrator.md",
     "guides/multi-instance.md",
     "guides/identifying-instances.md",
     "guides/memory-monitoring.md",
