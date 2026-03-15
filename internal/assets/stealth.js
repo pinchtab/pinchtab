@@ -13,41 +13,29 @@ const seededRandom = (function() {
   };
 })();
 
-// Aggressive webdriver removal - Chrome sets this after page context creation
-// We need to intercept at multiple levels
+// Webdriver evasion - hide the property completely
 (function() {
-  // Method 1: Delete from prototype
   const proto = Object.getPrototypeOf(navigator);
+  
+  // Delete from both instance and prototype
+  try { delete navigator.webdriver; } catch(e) {}
   try { delete proto.webdriver; } catch(e) {}
   
-  // Method 2: Non-configurable property on instance (prevents Chrome from overwriting)
-  try {
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => undefined,
-      set: () => {},  // Ignore any attempts to set it
-      configurable: false  // Prevent Chrome from reconfiguring
-    });
-  } catch(e) {}
-  
-  // Method 3: Also lock down the prototype
-  try {
-    Object.defineProperty(proto, 'webdriver', {
-      get: () => undefined,
-      set: () => {},
-      configurable: false
-    });
-  } catch(e) {}
-  
-  // Method 4: Continuously clean up (for late injections)
-  const cleanup = () => {
-    if (navigator.webdriver === true) {
-      try { delete navigator.webdriver; } catch(e) {}
-    }
+  // If we can't delete, make it return undefined and be non-enumerable
+  // so 'webdriver' in navigator returns false
+  const desc = { 
+    get: () => undefined, 
+    configurable: false, 
+    enumerable: false  // Hide from 'in' operator and Object.keys
   };
-  cleanup();
-  setTimeout(cleanup, 0);
-  setTimeout(cleanup, 10);
-  setTimeout(cleanup, 100);
+  
+  // Only define if it still exists after deletion
+  if ('webdriver' in navigator) {
+    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
+  }
+  if ('webdriver' in proto) {
+    try { Object.defineProperty(proto, 'webdriver', desc); } catch(e) {}
+  }
 })();
 
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;

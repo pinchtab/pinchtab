@@ -125,8 +125,10 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 			opts = append(opts, chromedp.Flag("enable-automation", false))
 			slog.Info("loading extensions", "paths", joined)
 		}
+		opts = append(opts, chromedp.Flag("enable-automation", false))
 	} else {
 		opts = append(opts, chromedp.Flag("disable-extensions", true))
+		opts = append(opts, chromedp.Flag("enable-automation", false))
 	}
 
 	// User Data Dir
