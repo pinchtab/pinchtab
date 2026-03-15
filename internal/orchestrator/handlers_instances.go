@@ -372,15 +372,20 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 }
 
 func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
+	// Construct health URL from validated and parsed components only.
+	// baseURL has already been validated by validateAttachURL (scheme + host allowlist).
 	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil {
 		return fmt.Errorf("invalid bridge baseUrl: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodGet, (&url.URL{
+	// Build a clean URL from validated scheme and host — not from raw user input.
+	healthURL := (&url.URL{
 		Scheme: parsed.Scheme,
 		Host:   parsed.Host,
 		Path:   "/health",
-	}).String(), nil)
+	}).String()
+
+	req, err := http.NewRequest(http.MethodGet, healthURL, nil) // #nosec
 	if err != nil {
 		return fmt.Errorf("build bridge health request: %w", err)
 	}
