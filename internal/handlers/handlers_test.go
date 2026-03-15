@@ -55,6 +55,13 @@ func (m *mockBridge) CloseTab(tabID string) error {
 	return nil
 }
 
+func (m *mockBridge) FocusTab(tabID string) error {
+	if tabID == "fail" {
+		return fmt.Errorf("tab not found")
+	}
+	return nil
+}
+
 func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	// Mock implementation - just return nil
 	return nil
@@ -209,6 +216,60 @@ func TestHandleTab(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
+}
+
+func TestHandleTabFocus(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+
+	t.Run("focus success", func(t *testing.T) {
+		body := `{"action": "focus", "tabId": "tab1"}`
+		req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		h.HandleTab(w, req)
+		if w.Code != 200 {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if resp["focused"] != true {
+			t.Error("expected focused=true")
+		}
+		if resp["tabId"] != "tab1" {
+			t.Errorf("expected tabId=tab1, got %v", resp["tabId"])
+		}
+	})
+
+	t.Run("focus missing tabId", func(t *testing.T) {
+		body := `{"action": "focus"}`
+		req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		h.HandleTab(w, req)
+		if w.Code != 400 {
+			t.Errorf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("focus not found", func(t *testing.T) {
+		body := `{"action": "focus", "tabId": "fail"}`
+		req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		h.HandleTab(w, req)
+		if w.Code != 404 {
+			t.Errorf("expected 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("invalid action", func(t *testing.T) {
+		body := `{"action": "invalid"}`
+		req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		h.HandleTab(w, req)
+		if w.Code != 400 {
+			t.Errorf("expected 400, got %d", w.Code)
+		}
+	})
 }
 
 func searchString(s, substr string) bool {

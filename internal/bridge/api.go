@@ -18,6 +18,7 @@ type BridgeAPI interface {
 	// The raw CDP target ID is stored internally and used for CDP operations.
 	CreateTab(url string) (hashTabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
+	FocusTab(tabID string) error
 
 	GetRefCache(tabID string) *RefCache
 	SetRefCache(tabID string, cache *RefCache)

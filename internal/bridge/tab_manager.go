@@ -8,6 +8,7 @@ import (
 	"time"
 
 	cdp "github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -340,6 +341,46 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	}
 
 	return nil
+}
+
+// FocusTab activates a tab by ID, bringing it to the foreground and setting it
+// as the current tab for subsequent operations.
+func (tm *TabManager) FocusTab(tabID string) error {
+	ctx, resolvedID, err := tm.TabContext(tabID)
+	if err != nil {
+		return err
+	}
+
+	// Bring the tab to front via CDP
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return page.BringToFront().Do(ctx)
+	})); err != nil {
+		return fmt.Errorf("bring to front: %w", err)
+	}
+
+	tm.mu.Lock()
+	tm.currentTab = resolvedID
+	if entry, ok := tm.tabs[resolvedID]; ok {
+		entry.LastUsed = time.Now()
+	}
+	tm.mu.Unlock()
+
+	return nil
+}
+
+// ResolveTabByIndex resolves a 1-based tab index to a tab ID.
+// Returns the tab ID and its URL/title for display.
+func (tm *TabManager) ResolveTabByIndex(index int) (string, string, string, error) {
+	targets, err := tm.ListTargets()
+	if err != nil {
+		return "", "", "", err
+	}
+	if index < 1 || index > len(targets) {
+		return "", "", "", fmt.Errorf("tab index %d out of range (1-%d)", index, len(targets))
+	}
+	t := targets[index-1]
+	tabID := tm.idMgr.TabIDFromCDPTarget(string(t.TargetID))
+	return tabID, t.URL, t.Title, nil
 }
 
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {

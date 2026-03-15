@@ -411,7 +411,18 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		}
 		web.JSON(w, 200, map[string]any{"closed": true})
 
+	case "focus":
+		if req.TabID == "" {
+			web.Error(w, 400, fmt.Errorf("tabId required"))
+			return
+		}
+		if err := h.Bridge.FocusTab(req.TabID); err != nil {
+			web.Error(w, 404, err)
+			return
+		}
+		web.JSON(w, 200, map[string]any{"focused": true, "tabId": req.TabID})
+
 	default:
-		web.Error(w, 400, fmt.Errorf("action must be 'new' or 'close'"))
+		web.Error(w, 400, fmt.Errorf("action must be 'new', 'close', or 'focus'"))
 	}
 }

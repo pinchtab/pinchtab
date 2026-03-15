@@ -88,13 +88,18 @@ var screenshotCmd = &cobra.Command{
 }
 
 var tabsCmd = &cobra.Command{
-	Use:     "tab",
+	Use:     "tab [n|id]",
 	Aliases: []string{"tabs"},
-	Short:   "List or manage tabs",
+	Short:   "List tabs, or focus a tab by index or ID",
+	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.TabList(client, base, token)
+			if len(args) == 0 {
+				browseractions.TabList(client, base, token)
+			} else {
+				browseractions.TabFocus(client, base, token, args[0])
+			}
 		})
 	},
 }
@@ -312,8 +317,8 @@ func init() {
 		},
 	})
 	tabsCmd.AddCommand(&cobra.Command{
-		Use:   "close <tabId>",
-		Short: "Close a tab",
+		Use:   "close <n|id>",
+		Short: "Close a tab by index or ID",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := config.Load()

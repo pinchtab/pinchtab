@@ -296,6 +296,10 @@ func (m *MockBridge) CloseTab(tabID string) error {
 	return nil
 }
 
+func (m *MockBridge) FocusTab(tabID string) error {
+	return nil
+}
+
 func (m *MockBridge) GetRefCache(tabID string) *bridge.RefCache {
 	return nil
 }
