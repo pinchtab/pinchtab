@@ -13,10 +13,28 @@ const seededRandom = (function() {
   };
 })();
 
-Object.defineProperty(navigator, 'webdriver', {
-  get: () => undefined,
-  configurable: true
-});
+// Delete webdriver from Navigator prototype to prevent Chrome from setting it
+// This is more robust than Object.defineProperty because Chrome sets webdriver
+// at the prototype level after page context creation
+(function() {
+  // First, try to delete from prototype (most reliable)
+  const proto = Object.getPrototypeOf(navigator);
+  if ('webdriver' in proto) {
+    delete proto.webdriver;
+  }
+  
+  // Also define on navigator instance as fallback
+  Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined,
+    configurable: true
+  });
+  
+  // Override the getter on the prototype chain
+  Object.defineProperty(Object.getPrototypeOf(navigator), 'webdriver', {
+    get: () => undefined,
+    configurable: true
+  });
+})();
 
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
