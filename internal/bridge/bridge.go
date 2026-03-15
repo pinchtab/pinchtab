@@ -180,6 +180,20 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 // Cleanup releases browser resources and removes temporary profile directories.
 // Must be called on shutdown to prevent Chrome process and disk leaks.
 func (b *Bridge) Cleanup() {
+	// Kill any Chrome processes using our profile dir BEFORE cancelling contexts,
+	// because context cancellation only kills the main Chrome process — helpers
+	// (GPU, renderer) spawned as child processes may survive.
+	profileDir := ""
+	if b.Config != nil {
+		profileDir = b.Config.ProfileDir
+	}
+	if profileDir == "" && b.tempProfileDir != "" {
+		profileDir = b.tempProfileDir
+	}
+	if profileDir != "" {
+		killChromeByProfileDir(profileDir)
+	}
+
 	if b.BrowserCancel != nil {
 		b.BrowserCancel()
 		slog.Debug("chrome browser context cancelled")
