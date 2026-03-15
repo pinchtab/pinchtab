@@ -11,6 +11,14 @@ action_click() {
   assert_ok "click ref=$ref"
 }
 
+# Double-click an element by ref.
+# Usage: action_dblclick "$ref"
+action_dblclick() {
+  local ref="$1"
+  pt_post /action -d "{\"kind\":\"dblclick\",\"ref\":\"$ref\"}" > /dev/null
+  assert_ok "dblclick ref=$ref"
+}
+
 # Type text into an element by ref (standard CDP type).
 # Usage: action_type "$ref" "hello"
 action_type() {
