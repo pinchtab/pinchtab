@@ -39,14 +39,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 		shutdownOnce.Do(func() {
 			slog.Info("shutting down bridge...")
 			if bridgeInstance != nil {
-				if bridgeInstance.BrowserCancel != nil {
-					bridgeInstance.BrowserCancel()
-					slog.Debug("chrome browser context cancelled")
-				}
-				if bridgeInstance.AllocCancel != nil {
-					bridgeInstance.AllocCancel()
-					slog.Debug("chrome allocator context cancelled")
-				}
+				bridgeInstance.Cleanup()
 			}
 		})
 	}
