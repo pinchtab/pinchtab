@@ -368,7 +368,6 @@ func (tm *TabManager) FocusTab(tabID string) error {
 	return nil
 }
 
-
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	if tm == nil {
 		return nil, fmt.Errorf("tab manager not initialized")
