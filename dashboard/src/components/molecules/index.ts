@@ -1,11 +1,14 @@
 export { default as NavBar } from "./NavBar";
+export { default as CreateProfileModal } from "./CreateProfileModal";
 export { default as ProfileCard } from "./ProfileCard";
 export { default as ProfileDetailsModal } from "./ProfileDetailsModal";
 export { default as ProfileDetailsPanel } from "./ProfileDetailsPanel";
+export { default as StartInstanceModal } from "./StartInstanceModal";
 export { default as ScreencastTile } from "./ScreencastTile";
 export { default as InstanceCard } from "./InstanceCard";
 export { default as InstanceListItem } from "./InstanceListItem";
-export { default as TabItem } from "./TabItem";
+export { default as InstanceLogsPanel } from "./InstanceLogsPanel";
+export { InstanceTabsPanel, TabItem } from "../tabs";
 export { default as AgentItem } from "./AgentItem";
 export { default as ActivityLine } from "./ActivityLine";
 export { default as TabsChart } from "./TabsChart";

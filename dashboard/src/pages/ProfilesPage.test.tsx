@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import ProfilesPage from "./ProfilesPage";
 import { useAppStore } from "../stores/useAppStore";
 import type { Instance, Profile } from "../generated/types";
@@ -53,6 +54,14 @@ const instances: Instance[] = [
   },
 ];
 
+function renderProfilesPage() {
+  return render(
+    <MemoryRouter>
+      <ProfilesPage />
+    </MemoryRouter>,
+  );
+}
+
 describe("ProfilesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,21 +72,50 @@ describe("ProfilesPage", () => {
     });
   });
 
-  it("auto-selects the first profile and renders its details", async () => {
-    render(<ProfilesPage />);
+  it("moves the running profile to the top and auto-selects it", async () => {
+    renderProfilesPage();
 
     let detailPanel: HTMLElement;
     await waitFor(() => {
       detailPanel = screen
-        .getByRole("heading", { name: "alpha" })
+        .getByRole("heading", { name: "beta" })
         .closest(".dashboard-panel") as HTMLElement;
       expect(detailPanel).toBeInTheDocument();
     });
 
+    const [firstProfileButton, secondProfileButton] = screen.getAllByRole(
+      "button",
+      { name: /alpha|beta/i },
+    );
+    expect(firstProfileButton).toHaveTextContent("beta");
+    expect(secondProfileButton).toHaveTextContent("alpha");
+
     detailPanel = screen
+      .getByRole("heading", { name: "beta" })
+      .closest(".dashboard-panel") as HTMLElement;
+
+    expect(
+      within(detailPanel).getAllByText("team@example.com").length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(detailPanel).getByText("Running on :9988"),
+    ).toBeInTheDocument();
+  });
+
+  it("switches the right detail pane when selecting another profile", async () => {
+    renderProfilesPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /alpha/i }));
+
+    const detailPanel = screen
       .getByRole("heading", { name: "alpha" })
       .closest(".dashboard-panel") as HTMLElement;
 
+    expect(detailPanel).toBeInTheDocument();
     expect(
       within(detailPanel).getAllByText("Use for personal logins").length,
     ).toBeGreaterThan(0);
@@ -86,41 +124,14 @@ describe("ProfilesPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("switches the right detail pane when selecting another profile", async () => {
-    render(<ProfilesPage />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "alpha" }),
-      ).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByRole("button", { name: /beta/i }));
-
-    const detailPanel = screen
-      .getByRole("heading", { name: "beta" })
-      .closest(".dashboard-panel") as HTMLElement;
-
-    expect(detailPanel).toBeInTheDocument();
-    expect(
-      within(detailPanel).getAllByText("team@example.com").length,
-    ).toBeGreaterThan(0);
-    expect(
-      within(detailPanel).getByText("Running on :9988"),
-    ).toBeInTheDocument();
-    expect(
-      within(detailPanel).getByRole("button", { name: "Stop" }),
-    ).toBeInTheDocument();
-  });
-
   it("enables save only after profile fields change", async () => {
-    render(<ProfilesPage />);
+    renderProfilesPage();
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "alpha" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
     });
+
+    await userEvent.click(screen.getByRole("button", { name: /alpha/i }));
 
     const detailPanel = screen
       .getByRole("heading", { name: "alpha" })

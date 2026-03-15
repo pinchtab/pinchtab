@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Modal, Button, Input } from "../atoms";
 import ScreencastTile from "./ScreencastTile";
-import TabItem from "./TabItem";
+import { TabItem } from "../tabs";
 import type { Profile, Instance, InstanceTab } from "../../generated/types";
 import * as api from "../../services/api";
 

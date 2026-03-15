@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button, Input, Badge } from "../atoms";
 import ScreencastTile from "./ScreencastTile";
-import TabItem from "./TabItem";
+import InstanceLogsPanel from "./InstanceLogsPanel";
+import { InstanceTabsPanel } from "../tabs";
 import type { Profile, Instance, InstanceTab } from "../../generated/types";
 import * as api from "../../services/api";
 
@@ -43,7 +44,6 @@ export default function ProfileDetailsPanel({
   const [name, setName] = useState("");
   const [useWhen, setUseWhen] = useState("");
   const [tabs, setTabs] = useState<InstanceTab[]>([]);
-  const [logs, setLogs] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
 
   const isRunning = instance?.status === "running";
@@ -57,44 +57,30 @@ export default function ProfileDetailsPanel({
       setName("");
       setUseWhen("");
       setTabs([]);
-      setLogs("");
     }
   }, [profile]);
 
-  const loadLiveData = useCallback(async () => {
+  const loadTabs = useCallback(async () => {
     if (!instance?.id) {
       setTabs([]);
-      setLogs("");
       return;
     }
 
     try {
-      const [instanceTabs, instanceLogs] = await Promise.all([
-        api.fetchInstanceTabs(instance.id).catch(() => []),
-        api.fetchInstanceLogs(instance.id).catch(() => ""),
-      ]);
+      const instanceTabs = await api
+        .fetchInstanceTabs(instance.id)
+        .catch(() => []);
       setTabs(instanceTabs);
-      setLogs(instanceLogs);
     } catch (e) {
-      console.error("Failed to load live data", e);
+      console.error("Failed to load tabs", e);
     }
   }, [instance]);
 
   useEffect(() => {
     if (activeTab === "live" || activeTab === "tabs" || activeTab === "logs") {
-      loadLiveData();
+      loadTabs();
     }
-  }, [activeTab, loadLiveData]);
-
-  useEffect(() => {
-    if (activeTab !== "logs" || !instance?.id) {
-      return;
-    }
-
-    return api.subscribeToInstanceLogs(instance.id, {
-      onLogs: (nextLogs) => setLogs(nextLogs),
-    });
-  }, [activeTab, instance?.id]);
+  }, [activeTab, loadTabs]);
 
   const handleCopyId = async () => {
     if (!profile?.id) return;
@@ -382,34 +368,17 @@ export default function ProfileDetailsPanel({
 
         {activeTab === "tabs" && (
           <div className="flex h-full min-h-0 flex-col">
-            {tabs.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-xl border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
-                {isRunning ? "No tabs open." : "Instance not running."}
-              </div>
-            ) : (
-              <div className="h-full overflow-auto">
-                <div className="space-y-1">
-                  {tabs.map((tab) => (
-                    <TabItem key={tab.id} tab={tab} compact />
-                  ))}
-                </div>
-              </div>
-            )}
+            <InstanceTabsPanel
+              tabs={tabs}
+              emptyMessage={
+                isRunning ? "No tabs open." : "Instance not running."
+              }
+            />
           </div>
         )}
 
         {activeTab === "logs" && (
-          <div className="flex h-full min-h-0 flex-col">
-            {logs ? (
-              <pre className="h-full overflow-auto rounded-xl border border-border-subtle bg-black/10 p-3 font-mono text-[10px] leading-4 text-text-secondary">
-                {logs}
-              </pre>
-            ) : (
-              <div className="flex h-full items-center justify-center rounded-xl border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
-                No instance logs available.
-              </div>
-            )}
-          </div>
+          <InstanceLogsPanel instanceId={instance?.id} />
         )}
       </div>
     </div>

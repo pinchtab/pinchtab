@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import { EmptyState, Button, ErrorBoundary } from "../components/atoms";
-import { TabsChart, InstanceListItem, TabItem } from "../components/molecules";
+import {
+  TabsChart,
+  InstanceListItem,
+  InstanceTabsPanel,
+} from "../components/molecules";
 import * as api from "../services/api";
 
 export default function MonitoringPage() {
@@ -14,6 +19,7 @@ export default function MonitoringPage() {
     currentMemory,
     settings,
   } = useAppStore();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const memoryEnabled = settings.monitoring?.memoryMetrics ?? false;
 
@@ -116,34 +122,34 @@ export default function MonitoringPage() {
                         {selectedInstance.headless ? "Headless" : "Headed"}
                       </div>
                     </div>
-                    {selectedInstance.status === "running" && (
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        variant="danger"
-                        onClick={() => handleStop(selectedInstance.id)}
+                        variant="secondary"
+                        onClick={() =>
+                          navigate("/dashboard/profiles", {
+                            state: {
+                              selectedProfileKey:
+                                selectedInstance.profileId ||
+                                selectedInstance.profileName,
+                            },
+                          })
+                        }
                       >
-                        Stop
+                        Open Profile
                       </Button>
-                    )}
+                      {selectedInstance.status === "running" && (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleStop(selectedInstance.id)}
+                        >
+                          Stop
+                        </Button>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Tabs list */}
-                  <div className="flex-1 overflow-auto p-3">
-                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                      Open Tabs ({selectedTabs.length})
-                    </h4>
-                    {selectedTabs.length === 0 ? (
-                      <div className="py-8 text-center text-sm text-text-muted">
-                        No tabs open
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {selectedTabs.map((tab) => (
-                          <TabItem key={tab.id} tab={tab} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <InstanceTabsPanel tabs={selectedTabs} />
                 </>
               ) : (
                 <div className="flex flex-1 items-center justify-center text-sm text-text-muted">

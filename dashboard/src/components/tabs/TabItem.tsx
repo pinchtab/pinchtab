@@ -4,9 +4,10 @@ import type { InstanceTab } from "../../generated/types";
 interface Props {
   tab: InstanceTab;
   compact?: boolean;
+  copyable?: boolean;
 }
 
-export default function TabItem({ tab, compact }: Props) {
+export default function TabItem({ tab, compact, copyable = true }: Props) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -18,7 +19,7 @@ export default function TabItem({ tab, compact }: Props) {
 
   const shortId = tab.id.split("_").pop()?.substring(0, 8) || tab.id;
 
-  const idBadge = (
+  const idBadge = copyable ? (
     <button
       onClick={handleCopy}
       title={`Click to copy full ID: ${tab.id}`}
@@ -29,6 +30,10 @@ export default function TabItem({ tab, compact }: Props) {
         {copied ? "✅" : "📋"}
       </span>
     </button>
+  ) : (
+    <div className="flex shrink-0 items-center gap-1.5 rounded bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono text-text-muted">
+      <span>{shortId}</span>
+    </div>
   );
 
   if (compact) {
