@@ -11,7 +11,7 @@ echo "🔍 Running pre-commit checks..."
 staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
 if [ -n "$staged_go" ]; then
   echo "📦 Checking Go files..."
-
+  
   # gofmt check
   unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
   if [ -n "$unformatted" ]; then
@@ -22,16 +22,26 @@ if [ -n "$staged_go" ]; then
   fi
 
   # golangci-lint (if available)
+  GOLANGCI_LINT=""
   if command -v golangci-lint &>/dev/null; then
+    GOLANGCI_LINT="golangci-lint"
+  elif [ -x "${GOPATH:-$HOME/go}/bin/golangci-lint" ]; then
+    GOLANGCI_LINT="${GOPATH:-$HOME/go}/bin/golangci-lint"
+  elif [ -x "$HOME/go/bin/golangci-lint" ]; then
+    GOLANGCI_LINT="$HOME/go/bin/golangci-lint"
+  fi
+
+  if [ -n "$GOLANGCI_LINT" ]; then
     dirs=$(echo "$staged_go" | xargs -n1 dirname | sort -u | sed 's|$|/...|')
-    if ! golangci-lint run --timeout=5m $dirs; then
+    if ! $GOLANGCI_LINT run --timeout=5m $dirs; then
       echo "❌ golangci-lint: issues found"
       exit 1
     fi
   else
     echo "⚠️  golangci-lint not found, skipping Go lint"
+    echo "   Install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
   fi
-
+  
   echo "✅ Go checks passed"
 fi
 
@@ -41,9 +51,9 @@ fi
 staged_web=$(git diff --cached --name-only --diff-filter=ACM | grep '^dashboard/.*\.\(ts\|tsx\|js\|jsx\|css\)$' || true)
 if [ -n "$staged_web" ]; then
   echo "🌐 Checking dashboard files..."
-
+  
   cd dashboard
-
+  
   # Check if bun is available
   if ! command -v bun &>/dev/null; then
     echo "⚠️  bun not found, skipping dashboard checks"
@@ -56,7 +66,7 @@ if [ -n "$staged_web" ]; then
       cd ..
       exit 1
     fi
-
+    
     # ESLint check
     echo "  → ESLint..."
     if ! bun run lint 2>/dev/null; then
@@ -64,7 +74,7 @@ if [ -n "$staged_web" ]; then
       cd ..
       exit 1
     fi
-
+    
     # Prettier check (on staged files only)
     echo "  → Prettier..."
     staged_rel=$(echo "$staged_web" | sed 's|^dashboard/||')
@@ -74,7 +84,7 @@ if [ -n "$staged_web" ]; then
       cd ..
       exit 1
     fi
-
+    
     cd ..
     echo "✅ Dashboard checks passed"
   fi
