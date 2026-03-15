@@ -39,9 +39,17 @@ export default function ScreencastTile({
   useEffect(() => {
     setLocalFps(fps);
     setStatus("connecting");
-    if (fallbackUrl) URL.revokeObjectURL(fallbackUrl);
     setFallbackUrl(null);
   }, [tabId, fps]);
+
+  // Clean up static preview URL on unmount or tab change
+  useEffect(() => {
+    return () => {
+      if (fallbackUrl) {
+        URL.revokeObjectURL(fallbackUrl);
+      }
+    };
+  }, [fallbackUrl]);
 
   const takeScreenshot = async () => {
     if (isCapturing) return;
