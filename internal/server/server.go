@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
@@ -29,6 +30,9 @@ import (
 )
 
 func RunDashboard(cfg *config.RuntimeConfig, version string) {
+	// Clean up orphaned Chrome processes from previous crashed runs
+	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
+
 	dashPort := cfg.Port
 	if dashPort == "" {
 		dashPort = "9870"

@@ -27,6 +27,9 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 		ProfileDir:   cfg.ProfileDir,
 	})
 
+	// Clean up orphaned Chrome processes from previous crashed runs
+	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
+
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	bridgeInstance.StealthScript = assets.StealthScript
 
@@ -39,14 +42,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 		shutdownOnce.Do(func() {
 			slog.Info("shutting down bridge...")
 			if bridgeInstance != nil {
-				if bridgeInstance.BrowserCancel != nil {
-					bridgeInstance.BrowserCancel()
-					slog.Debug("chrome browser context cancelled")
-				}
-				if bridgeInstance.AllocCancel != nil {
-					bridgeInstance.AllocCancel()
-					slog.Debug("chrome allocator context cancelled")
-				}
+				bridgeInstance.Cleanup()
 			}
 		})
 	}

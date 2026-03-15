@@ -44,6 +44,12 @@ type Bridge struct {
 	// Lazy initialization
 	initMu      sync.Mutex
 	initialized bool
+
+	// Temp profile cleanup: directories created as fallback when profile lock fails.
+	// These are removed on Cleanup() to prevent Chrome process/disk leaks.
+	tempProfileDir string
+
+
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
@@ -129,6 +135,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 				slog.Warn("profile in use; using unique temporary profile for headless instance",
 					"requested", cfg.ProfileDir, "using", uniqueDir, "reason", err.Error())
 				cfg.ProfileDir = uniqueDir
+				b.tempProfileDir = uniqueDir
 				// Re-acquire lock for the new temp dir (should always succeed)
 				_ = AcquireProfileLock(cfg.ProfileDir)
 			} else {
@@ -170,6 +177,47 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	b.MonitorCrashes(nil)
 
 	return nil
+}
+
+// Cleanup releases browser resources and removes temporary profile directories.
+// Must be called on shutdown to prevent Chrome process and disk leaks.
+func (b *Bridge) Cleanup() {
+	// Cancel chromedp contexts (kills main Chrome process)
+	if b.BrowserCancel != nil {
+		b.BrowserCancel()
+		slog.Debug("chrome browser context cancelled")
+	}
+	if b.AllocCancel != nil {
+		b.AllocCancel()
+		slog.Debug("chrome allocator context cancelled")
+	}
+
+	// Chrome spawns helpers (GPU, renderer) in their own process groups.
+	// Context cancellation only kills the main process. Kill survivors
+	// by scanning for processes using our profile directory.
+	profileDir := ""
+	if b.tempProfileDir != "" {
+		profileDir = b.tempProfileDir
+	} else if b.Config != nil {
+		profileDir = b.Config.ProfileDir
+	}
+	if profileDir != "" {
+		// Brief wait for context cancel to propagate
+		time.Sleep(200 * time.Millisecond)
+		killed := killChromeByProfileDir(profileDir)
+		if killed > 0 {
+			slog.Info("cleanup: killed surviving chrome processes", "count", killed, "profileDir", profileDir)
+		}
+	}
+
+	if b.tempProfileDir != "" {
+		if err := os.RemoveAll(b.tempProfileDir); err != nil {
+			slog.Warn("failed to remove temp profile dir", "path", b.tempProfileDir, "err", err)
+		} else {
+			slog.Info("removed temp profile dir", "path", b.tempProfileDir)
+		}
+		b.tempProfileDir = ""
+	}
 }
 
 func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) {
