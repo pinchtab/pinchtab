@@ -461,26 +461,26 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use CDP directly instead of chromedp.NavigateBack() which waits for
-	// Page.loadEventFired — that can hang indefinitely on back navigation.
-	cur, entries, err := page.GetNavigationHistory().Do(ctx)
-	if err != nil {
-		web.Error(w, 500, fmt.Errorf("back: get history: %w", err))
-		return
-	}
-	if cur <= 0 || cur > int64(len(entries)-1) {
-		// No history to go back to — return current state as no-op
-		var curURL string
-		_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-		web.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
-		return
-	}
-	if err := page.NavigateToHistoryEntry(entries[cur-1].ID).Do(ctx); err != nil {
+	// Use CDP directly instead of chromedp.NavigateBack() which wraps in
+	// responseAction() and waits for Page.loadEventFired — hangs indefinitely.
+	var noHistory bool
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		cur, entries, err := page.GetNavigationHistory().Do(ctx)
+		if err != nil {
+			return fmt.Errorf("get history: %w", err)
+		}
+		if cur <= 0 || cur > int64(len(entries)-1) {
+			noHistory = true
+			return nil
+		}
+		return page.NavigateToHistoryEntry(entries[cur-1].ID).Do(ctx)
+	})); err != nil {
 		web.Error(w, 500, fmt.Errorf("back: %w", err))
 		return
 	}
-	// Brief wait for navigation to settle
-	time.Sleep(200 * time.Millisecond)
+	if !noHistory {
+		time.Sleep(200 * time.Millisecond)
+	}
 
 	var curURL string
 	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
@@ -496,26 +496,26 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use CDP directly instead of chromedp.NavigateForward() which waits for
-	// Page.loadEventFired — that can hang indefinitely on forward navigation.
-	cur, entries, err := page.GetNavigationHistory().Do(ctx)
-	if err != nil {
-		web.Error(w, 500, fmt.Errorf("forward: get history: %w", err))
-		return
-	}
-	if cur < 0 || cur >= int64(len(entries)-1) {
-		// No forward history — return current state as no-op
-		var curURL string
-		_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-		web.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
-		return
-	}
-	if err := page.NavigateToHistoryEntry(entries[cur+1].ID).Do(ctx); err != nil {
+	// Use CDP directly instead of chromedp.NavigateForward() which wraps in
+	// responseAction() and waits for Page.loadEventFired — hangs indefinitely.
+	var noHistory bool
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		cur, entries, err := page.GetNavigationHistory().Do(ctx)
+		if err != nil {
+			return fmt.Errorf("get history: %w", err)
+		}
+		if cur < 0 || cur >= int64(len(entries)-1) {
+			noHistory = true
+			return nil
+		}
+		return page.NavigateToHistoryEntry(entries[cur+1].ID).Do(ctx)
+	})); err != nil {
 		web.Error(w, 500, fmt.Errorf("forward: %w", err))
 		return
 	}
-	// Brief wait for navigation to settle
-	time.Sleep(200 * time.Millisecond)
+	if !noHistory {
+		time.Sleep(200 * time.Millisecond)
+	}
 
 	var curURL string
 	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
