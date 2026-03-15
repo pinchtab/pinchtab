@@ -3,5 +3,7 @@
 package bridge
 
 // CleanupOrphanedChromeProcesses is a no-op on Windows.
-// Windows process management requires different tooling (taskkill, Job Objects).
 func CleanupOrphanedChromeProcesses(_ string) {}
+
+// killChromeByProfileDir is a no-op on Windows.
+func killChromeByProfileDir(_ string) int { return 0 }

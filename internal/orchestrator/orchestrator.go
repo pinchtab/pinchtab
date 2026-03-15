@@ -553,6 +553,12 @@ func (o *Orchestrator) markStopped(id string) {
 
 	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
 
+	// Kill any orphaned Chrome processes using this profile's directory.
+	// Chrome spawns helpers (GPU, renderer) in their own process groups,
+	// so killing the bridge process group doesn't reach them.
+	profilePath := filepath.Join(o.baseDir, profileName)
+	bridge.CleanupOrphanedChromeProcesses(profilePath)
+
 	if strings.HasPrefix(profileName, "instance-") {
 		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
