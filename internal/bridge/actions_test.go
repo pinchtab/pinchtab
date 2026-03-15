@@ -23,6 +23,21 @@ func TestClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
 	}
 }
 
+func TestDoubleClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := b.Actions[ActionDoubleClick](ctx, ActionRequest{HasXY: true, X: 0, Y: 0})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if strings.Contains(err.Error(), "need selector") {
+		t.Fatalf("expected coordinate path, got selector/ref validation error: %v", err)
+	}
+}
+
 func TestHoverAction_UsesCoordinatePath(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 
