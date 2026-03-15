@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -193,9 +192,9 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 // Must be called on shutdown to prevent Chrome process and disk leaks.
 func (b *Bridge) Cleanup() {
 	// Kill Chrome process group (main + all helpers) before cancelling contexts.
-	// Setpgid=true in init.go ensures Chrome runs in its own process group.
+	// configureChromeProcess() in init.go ensures Chrome runs in its own process group.
 	if b.chromePgid > 0 {
-		if err := syscall.Kill(-b.chromePgid, syscall.SIGKILL); err != nil {
+		if err := killProcessGroup(b.chromePgid); err != nil {
 			slog.Debug("cleanup: pgid kill failed (may already be dead)", "pgid", b.chromePgid, "err", err)
 		} else {
 			slog.Info("cleanup: killed chrome process group", "pgid", b.chromePgid)

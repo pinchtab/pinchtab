@@ -1,9 +1,19 @@
-//go:build !linux
+//go:build darwin
 
 package bridge
 
-import "os/exec"
+import (
+	"os/exec"
+	"syscall"
+)
 
-// setPdeathsig is a no-op on non-Linux platforms (macOS, Windows).
+// configureChromeProcess sets up process group on macOS.
 // macOS doesn't support Pdeathsig; process groups handle cleanup instead.
-func setPdeathsig(_ *exec.Cmd) {}
+func configureChromeProcess(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+}
+
+// killProcessGroup kills the entire Chrome process group.
+func killProcessGroup(pgid int) error {
+	return syscall.Kill(-pgid, syscall.SIGKILL)
+}

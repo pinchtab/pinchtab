@@ -7,11 +7,15 @@ import (
 	"syscall"
 )
 
-// setPdeathsig sets the parent death signal on Linux so Chrome dies
-// when the Go process exits unexpectedly.
-func setPdeathsig(cmd *exec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
+// configureChromeProcess sets up process group and parent death signal on Linux.
+func configureChromeProcess(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid:  true,
+		Pdeathsig: syscall.SIGKILL,
 	}
-	cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
+}
+
+// killProcessGroup kills the entire Chrome process group.
+func killProcessGroup(pgid int) error {
+	return syscall.Kill(-pgid, syscall.SIGKILL)
 }

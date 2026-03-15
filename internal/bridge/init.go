@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -161,13 +160,11 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	}
 	opts = append(opts, chromedp.CombinedOutput(newPrefixedLogWriter(os.Stdout, "chrome")))
 
-	// Set up process group so all Chrome child processes (GPU, renderer, helpers)
-	// can be killed together on shutdown via kill(-pgid, SIGKILL).
-	// Note: ModifyCmdFunc replaces chromedp's default allocateCmdOptions,
-	// so we also set Pdeathsig on Linux to preserve that behavior.
+	// Set up process group and platform-specific options so all Chrome child
+	// processes (GPU, renderer, helpers) can be killed together on shutdown.
+	// Note: ModifyCmdFunc replaces chromedp's default allocateCmdOptions.
 	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		setPdeathsig(cmd)
+		configureChromeProcess(cmd)
 	}))
 
 	ctx, cancel := context.WithCancel(context.Background())
