@@ -385,13 +385,13 @@ func injectedScript(ctx context.Context, script string) error {
 	// Use Page.addScriptToEvaluateOnNewDocument to inject the stealth script
 	// BEFORE any page JavaScript runs. This is critical for hiding automation
 	// signals like navigator.webdriver.
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx,
-			"Page.addScriptToEvaluateOnNewDocument",
-			map[string]interface{}{
-				"source": script,
-			}, nil)
-	}))
+	// Note: This is called from within chromedp.Run/ActionFunc, so we use
+	// direct CDP execution instead of nested chromedp.Run to avoid deadlocks.
+	return chromedp.FromContext(ctx).Target.Execute(ctx,
+		"Page.addScriptToEvaluateOnNewDocument",
+		map[string]interface{}{
+			"source": script,
+		}, nil)
 }
 
 func randomWindowSize() (int, int) {
