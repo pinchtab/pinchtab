@@ -243,8 +243,11 @@ func TestValidateFileConfig_InvalidAttachScheme(t *testing.T) {
 		{[]string{"ws"}, false},
 		{[]string{"wss"}, false},
 		{[]string{"ws", "wss"}, false},
-		{[]string{"http"}, true},
-		{[]string{"ws", "https"}, true},
+		{[]string{"http"}, false},
+		{[]string{"https"}, false},
+		{[]string{"ws", "https"}, false},
+		{[]string{"ftp"}, true},
+		{[]string{"ws", "tcp"}, true},
 	}
 
 	for _, tt := range tests {
