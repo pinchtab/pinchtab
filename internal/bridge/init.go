@@ -380,7 +380,16 @@ func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 }
 
 func injectedScript(ctx context.Context, script string) error {
-	return nil // Placeholder
+	// Use Page.addScriptToEvaluateOnNewDocument to inject the stealth script
+	// BEFORE any page JavaScript runs. This is critical for hiding automation
+	// signals like navigator.webdriver.
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx,
+			"Page.addScriptToEvaluateOnNewDocument",
+			map[string]interface{}{
+				"source": script,
+			}, nil)
+	}))
 }
 
 func randomWindowSize() (int, int) {

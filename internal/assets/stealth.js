@@ -37,30 +37,72 @@ window.navigator.permissions.query = (parameters) => (
     originalQuery(parameters)
 );
 
-Object.defineProperty(navigator, 'plugins', {
-  get: () => [{
-    name: 'Chrome PDF Plugin',
-    filename: 'internal-pdf-viewer',
-    description: 'Portable Document Format'
-  }, {
-    name: 'Chrome PDF Viewer',
-    filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
-    description: ''
-  }, {
-    name: 'Native Client',
-    filename: 'internal-nacl-plugin',
-    description: ''
-  }],
-});
+// Create a proper PluginArray-like object that passes instanceof checks
+(function() {
+  const fakePlugins = [
+    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 },
+    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1 },
+    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 1 }
+  ];
+  
+  // Get the real PluginArray prototype from navigator.plugins
+  const realPluginsProto = Object.getPrototypeOf(navigator.plugins);
+  
+  // Create array-like object with PluginArray prototype
+  const pluginArray = Object.create(realPluginsProto, {
+    length: { value: fakePlugins.length, writable: false, enumerable: true },
+    item: { value: function(i) { return this[i] || null; }, writable: false },
+    namedItem: { value: function(name) { 
+      for (let i = 0; i < this.length; i++) {
+        if (this[i] && this[i].name === name) return this[i];
+      }
+      return null;
+    }, writable: false },
+    refresh: { value: function() {}, writable: false }
+  });
+  
+  // Add indexed access
+  fakePlugins.forEach((p, i) => {
+    // Create Plugin-like object
+    const plugin = Object.create(Plugin.prototype, {
+      name: { value: p.name, writable: false, enumerable: true },
+      filename: { value: p.filename, writable: false, enumerable: true },
+      description: { value: p.description, writable: false, enumerable: true },
+      length: { value: p.length, writable: false, enumerable: true },
+      item: { value: function(i) { return null; }, writable: false },
+      namedItem: { value: function(n) { return null; }, writable: false }
+    });
+    Object.defineProperty(pluginArray, i, { value: plugin, writable: false, enumerable: true });
+    Object.defineProperty(pluginArray, p.name, { value: plugin, writable: false, enumerable: false });
+  });
+  
+  Object.defineProperty(navigator, 'plugins', {
+    get: () => pluginArray,
+    configurable: true
+  });
+})();
 
 Object.defineProperty(navigator, 'languages', {
   get: () => ['en-US', 'en'],
 });
 
 
-Object.defineProperty(navigator, 'platform', {
-  get: () => 'MacIntel',
-});
+// Derive platform from user agent to avoid mismatch detection
+(function() {
+  const ua = navigator.userAgent || '';
+  let platform = 'Win32'; // default
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
+    platform = 'MacIntel';
+  } else if (ua.includes('Linux')) {
+    platform = ua.includes('x86_64') || ua.includes('amd64') ? 'Linux x86_64' : 'Linux';
+  } else if (ua.includes('Windows')) {
+    platform = ua.includes('Win64') || ua.includes('WOW64') ? 'Win32' : 'Win32';
+  }
+  Object.defineProperty(navigator, 'platform', {
+    get: () => platform,
+    configurable: true
+  });
+})();
 
 Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 100,

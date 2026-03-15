@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bot Detection Tests</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    .pass { color: green; }
+    .fail { color: red; }
+    .warn { color: orange; }
+    table { border-collapse: collapse; margin: 20px 0; }
+    td, th { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>Bot Detection Tests</h1>
+  <p>Simulates checks from bot.sannysoft.com</p>
+  
+  <table id="results">
+    <tr><th>Test</th><th>Result</th><th>Value</th></tr>
+  </table>
+  
+  <script>
+    const results = {};
+    const table = document.getElementById('results');
+    
+    function addResult(name, passed, value, severity = 'critical') {
+      results[name] = { passed, value, severity };
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${name}</td>
+        <td class="${passed ? 'pass' : (severity === 'warn' ? 'warn' : 'fail')}">${passed ? 'PASS' : (severity === 'warn' ? 'WARN' : 'FAIL')}</td>
+        <td>${String(value)}</td>
+      `;
+    }
+    
+    // Test 1: navigator.webdriver (Critical - Issue #275)
+    // Should be undefined or false, NOT true
+    const webdriver = navigator.webdriver;
+    addResult('webdriver', webdriver === undefined || webdriver === false, webdriver);
+    
+    // Test 2: Plugins instanceof PluginArray (Critical - Issue #275)
+    const pluginsValid = navigator.plugins instanceof PluginArray;
+    addResult('plugins_instanceof', pluginsValid, `instanceof PluginArray: ${pluginsValid}`);
+    
+    // Test 3: Plugins length > 0
+    const hasPlugins = navigator.plugins && navigator.plugins.length > 0;
+    addResult('plugins_present', hasPlugins, `length: ${navigator.plugins?.length || 0}`);
+    
+    // Test 4: chrome.runtime exists
+    const chromeRuntime = !!(window.chrome && window.chrome.runtime);
+    addResult('chrome_runtime', chromeRuntime, chromeRuntime);
+    
+    // Test 5: Platform matches UA (Warning - mismatch is suspicious)
+    const ua = navigator.userAgent;
+    const platform = navigator.platform;
+    let platformMatch = true;
+    if (ua.includes('Linux') && !platform.includes('Linux')) platformMatch = false;
+    if (ua.includes('Macintosh') && platform !== 'MacIntel') platformMatch = false;
+    if (ua.includes('Windows') && !platform.includes('Win')) platformMatch = false;
+    addResult('platform_match', platformMatch, `UA hints: ${ua.includes('Linux') ? 'Linux' : ua.includes('Mac') ? 'Mac' : 'Win'}, platform: ${platform}`, 'warn');
+    
+    // Test 6: Languages defined
+    const hasLanguages = navigator.languages && navigator.languages.length > 0;
+    addResult('languages', hasLanguages, navigator.languages?.join(', ') || 'none');
+    
+    // Test 7: Permissions API not broken
+    let permissionsOk = false;
+    try {
+      // Just check it doesn't throw
+      if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+        permissionsOk = true;
+      }
+    } catch (e) {
+      permissionsOk = false;
+    }
+    addResult('permissions_api', permissionsOk, permissionsOk ? 'available' : 'broken');
+    
+    // Test 8: DevTools detection via window.outerWidth
+    // In headless, outer dimensions may match inner or be 0
+    const hasOuterDimensions = window.outerWidth > 0 && window.outerHeight > 0;
+    addResult('outer_dimensions', hasOuterDimensions, `${window.outerWidth}x${window.outerHeight}`, 'warn');
+    
+    // Test 9: WebGL vendor/renderer (Warning - SwiftShader is headless fingerprint)
+    let webglVendor = 'unknown';
+    let webglRenderer = 'unknown';
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+          webglVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+          webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        }
+      }
+    } catch (e) {}
+    const isSwiftShader = webglRenderer.toLowerCase().includes('swiftshader');
+    addResult('webgl_renderer', !isSwiftShader, webglRenderer, 'warn');
+    
+    // Test 10: Hardware concurrency reasonable
+    const cores = navigator.hardwareConcurrency || 0;
+    const coresOk = cores >= 2 && cores <= 32;
+    addResult('hardware_concurrency', coresOk, cores);
+    
+    // Expose results for test runner
+    window.__botDetectResults = results;
+    
+    // Calculate overall score
+    const criticalTests = Object.values(results).filter(r => r.severity !== 'warn');
+    const criticalPassed = criticalTests.filter(r => r.passed).length;
+    const allPassed = Object.values(results).filter(r => r.passed).length;
+    const total = Object.keys(results).length;
+    
+    window.__botDetectScore = {
+      critical: criticalPassed,
+      criticalTotal: criticalTests.length,
+      total: allPassed,
+      totalTests: total,
+      passed: criticalPassed === criticalTests.length
+    };
+    
+    // Add summary row
+    const summaryRow = table.insertRow();
+    summaryRow.innerHTML = `
+      <td><strong>SUMMARY</strong></td>
+      <td class="${window.__botDetectScore.passed ? 'pass' : 'fail'}">
+        ${window.__botDetectScore.passed ? 'PASS' : 'FAIL'}
+      </td>
+      <td>Critical: ${criticalPassed}/${criticalTests.length}, Total: ${allPassed}/${total}</td>
+    `;
+  </script>
+</body>
+</html>
