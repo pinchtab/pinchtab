@@ -461,9 +461,13 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NavigateBack returns "invalid navigation entry" when there's no history.
+	// Treat this as a no-op rather than an error.
 	if err := chromedp.Run(ctx, chromedp.NavigateBack()); err != nil {
-		web.Error(w, 500, fmt.Errorf("back: %w", err))
-		return
+		if !strings.Contains(err.Error(), "invalid navigation entry") {
+			web.Error(w, 500, fmt.Errorf("back: %w", err))
+			return
+		}
 	}
 
 	var curURL string
@@ -480,9 +484,13 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NavigateForward returns "invalid navigation entry" when there's no forward history.
+	// Treat this as a no-op rather than an error.
 	if err := chromedp.Run(ctx, chromedp.NavigateForward()); err != nil {
-		web.Error(w, 500, fmt.Errorf("forward: %w", err))
-		return
+		if !strings.Contains(err.Error(), "invalid navigation entry") {
+			web.Error(w, 500, fmt.Errorf("forward: %w", err))
+			return
+		}
 	}
 
 	var curURL string

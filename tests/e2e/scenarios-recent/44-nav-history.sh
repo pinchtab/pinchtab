@@ -15,14 +15,14 @@ show_tab "TAB_ID" "$TAB_ID"
 URL_A=$(echo "$RESULT" | jq -r '.url // empty')
 echo -e "  ${MUTED}URL_A: $URL_A${NC}"
 
-# Navigate to page B (form.html)
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+# Navigate same tab to page B (form.html) — must pass tabId to reuse tab
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\",\"tabId\":\"${TAB_ID}\"}"
 assert_ok "navigate to form.html"
 URL_B=$(echo "$RESULT" | jq -r '.url // empty')
 echo -e "  ${MUTED}URL_B: $URL_B${NC}"
 
 # Go back — should return to page A
-pt_post /back ''
+pt_post "/back?tabId=${TAB_ID}" ''
 assert_ok "POST /back"
 RESULT_URL=$(echo "$RESULT" | jq -r '.url // empty')
 assert_json_contains "$RESULT" ".url" "index.html" "back returned to index.html"
@@ -33,8 +33,8 @@ end_test
 # --- T2: Navigate forward after back ---
 start_test "Navigate forward after back"
 
-# Assuming we're still on page A from T1, go forward to page B
-pt_post /forward ''
+# Go forward on same tab to page B
+pt_post "/forward?tabId=${TAB_ID}" ''
 assert_ok "POST /forward"
 RESULT_URL=$(echo "$RESULT" | jq -r '.url // empty')
 assert_json_contains "$RESULT" ".url" "form.html" "forward returned to form.html"
@@ -45,8 +45,8 @@ end_test
 # --- T3: Reload page stays on same URL ---
 start_test "Reload page stays on same URL"
 
-# We should be on form.html from T2
-pt_post /reload ''
+# Reload the same tab (should still be on form.html from T2)
+pt_post "/reload?tabId=${TAB_ID}" ''
 assert_ok "POST /reload"
 RESULT_URL=$(echo "$RESULT" | jq -r '.url // empty')
 assert_json_contains "$RESULT" ".url" "form.html" "reload stayed on form.html"
