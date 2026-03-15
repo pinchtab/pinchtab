@@ -10,4 +10,9 @@ if [ ! -x ./pinchtab ]; then
   exit 1
 fi
 
+# Default to 'server' if no arguments are provided
+if [ $# -eq 0 ]; then
+  set -- server
+fi
+
 exec ./pinchtab "$@"

@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ScreencastTile from "./ScreencastTile";
+import ScreencastTile from "../screencast/ScreencastTile";
 
 const webSocketMock = vi.fn(function MockWebSocket(
   this: Record<string, unknown>,

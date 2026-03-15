@@ -6,11 +6,13 @@ import SelectedTabPanel from "./SelectedTabPanel";
 interface Props {
   tabs: InstanceTab[];
   emptyMessage?: string;
+  instanceId?: string;
 }
 
 export default function InstanceTabsPanel({
   tabs,
   emptyMessage = "No tabs open",
+  instanceId,
 }: Props) {
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
 
@@ -62,17 +64,17 @@ export default function InstanceTabsPanel({
                     className={`w-full rounded-xl border text-left transition ${
                       isSelected
                         ? "border-primary bg-primary/10"
-                        : "border-border-subtle bg-white/[0.02] hover:border-border-default hover:bg-white/[0.03]"
+                        : "border-border-subtle bg-white/2 hover:border-border-default hover:bg-white/3"
                     }`}
                   >
-                    <TabItem tab={tab} compact copyable={false} />
+                    <TabItem tab={tab} />
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <SelectedTabPanel selectedTab={selectedTab} />
+          <SelectedTabPanel selectedTab={selectedTab} instanceId={instanceId} />
         </div>
       )}
     </div>

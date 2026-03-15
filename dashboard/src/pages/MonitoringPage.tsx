@@ -2,11 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import { EmptyState, Button, ErrorBoundary } from "../components/atoms";
-import {
-  TabsChart,
-  InstanceListItem,
-  InstanceTabsPanel,
-} from "../components/molecules";
+import { TabsChart } from "../components/molecules";
+import InstanceListItem from "../components/instances/InstanceListItem";
+import InstanceTabsPanel from "../components/tabs/InstanceTabsPanel";
 import * as api from "../services/api";
 
 export default function MonitoringPage() {
@@ -149,7 +147,10 @@ export default function MonitoringPage() {
                       )}
                     </div>
                   </div>
-                  <InstanceTabsPanel tabs={selectedTabs} />
+                  <InstanceTabsPanel
+                    tabs={selectedTabs}
+                    instanceId={selectedId || undefined}
+                  />
                 </>
               ) : (
                 <div className="flex flex-1 items-center justify-center text-sm text-text-muted">

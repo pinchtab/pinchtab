@@ -23,37 +23,38 @@ describe("InstanceTabsPanel", () => {
   it("auto-selects the first tab and shows its details", () => {
     render(<InstanceTabsPanel tabs={tabs} />);
 
-    const detailPanel = screen
-      .getByText("Selected Tab")
-      .closest(".rounded-xl") as HTMLElement;
-
     expect(screen.getByText("Open Tabs (2)")).toBeInTheDocument();
-    expect(screen.getByText("Selected Tab")).toBeInTheDocument();
-    expect(
-      within(detailPanel).getByRole("heading", { name: "Alpha Tab" }),
-    ).toBeInTheDocument();
+
+    // Find heading for first tab title
+    const titleHeading = screen.getByRole("heading", { name: "Alpha Tab" });
+    const detailPanel = titleHeading.closest(".rounded-xl") as HTMLElement;
+
     expect(
       within(detailPanel).getByText("https://example.com/alpha"),
     ).toBeInTheDocument();
-    expect(within(detailPanel).getByText("tab_alpha")).toBeInTheDocument();
+
+    // IdBadge will show "alpha" instead of "tab_alpha"
+    expect(within(detailPanel).getByText("alpha")).toBeInTheDocument();
   });
 
   it("updates the selected tab details when a tab is clicked", async () => {
+    const user = userEvent.setup();
     render(<InstanceTabsPanel tabs={tabs} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /beta tab/i }));
+    // Select Beta tab from list
+    const betaTabItem = screen
+      .getByText("Beta Tab")
+      .closest('[role="button"]')!;
+    await user.click(betaTabItem);
 
-    const detailPanel = screen
-      .getByText("Selected Tab")
-      .closest(".rounded-xl") as HTMLElement;
+    // Find heading for beta tab title
+    const titleHeading = screen.getByRole("heading", { name: "Beta Tab" });
+    const detailPanel = titleHeading.closest(".rounded-xl") as HTMLElement;
 
-    expect(
-      within(detailPanel).getByRole("heading", { name: "Beta Tab" }),
-    ).toBeInTheDocument();
     expect(
       within(detailPanel).getByText("https://example.com/beta"),
     ).toBeInTheDocument();
-    expect(within(detailPanel).getByText("tab_beta")).toBeInTheDocument();
+    expect(within(detailPanel).getByText("beta")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no tabs", () => {
