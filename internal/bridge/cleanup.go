@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // CleanupOrphanedChromeProcesses kills Chrome processes left behind by
@@ -47,18 +48,17 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 	}
 }
 
-// killChromeByProfileDir finds Chrome processes using the given profile
-// directory and sends them SIGTERM. Returns the number of processes killed.
-func killChromeByProfileDir(profileDir string) int {
+// findChromePIDsByProfileDir returns PIDs of Chrome processes using the given profile directory.
+func findChromePIDsByProfileDir(profileDir string) []int {
 	cmd := exec.Command("ps", "-axo", "pid=,args=")
 	out, err := cmd.Output()
 	if err != nil {
-		return 0
+		return nil
 	}
 
 	needle := fmt.Sprintf("--user-data-dir=%s", profileDir)
 	lines := bytes.Split(out, []byte{'\n'})
-	killed := 0
+	var pids []int
 
 	for _, rawLine := range lines {
 		line := strings.TrimSpace(string(rawLine))
@@ -75,13 +75,41 @@ func killChromeByProfileDir(profileDir string) int {
 		if err != nil || pid <= 0 {
 			continue
 		}
-
-		if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-			slog.Debug("cleanup: failed to kill chrome process", "pid", pid, "err", err)
-		} else {
-			slog.Info("cleanup: killed orphaned chrome process", "pid", pid, "profileDir", profileDir)
-			killed++
-		}
+		pids = append(pids, pid)
 	}
+	return pids
+}
+
+// killChromeByProfileDir finds Chrome processes using the given profile
+// directory, sends SIGTERM, waits briefly, then SIGKILL any survivors.
+// Returns the number of processes killed.
+func killChromeByProfileDir(profileDir string) int {
+	pids := findChromePIDsByProfileDir(profileDir)
+	if len(pids) == 0 {
+		return 0
+	}
+
+	// SIGTERM first
+	for _, pid := range pids {
+		_ = syscall.Kill(pid, syscall.SIGTERM)
+	}
+
+	// Give Chrome 500ms to shut down gracefully
+	time.Sleep(500 * time.Millisecond)
+
+	// SIGKILL any survivors
+	killed := 0
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, 0); err != nil {
+			// Process already dead
+			killed++
+			continue
+		}
+		if err := syscall.Kill(pid, syscall.SIGKILL); err == nil {
+			slog.Info("cleanup: force-killed chrome process", "pid", pid)
+		}
+		killed++
+	}
+
 	return killed
 }
