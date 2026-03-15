@@ -371,21 +371,27 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 	web.JSON(w, 201, inst)
 }
 
+// probeAttachBridge checks that a remote bridge is reachable.
+// The baseURL MUST have been validated by validateAttachURL before calling this.
 func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
-	// Construct health URL from validated and parsed components only.
-	// baseURL has already been validated by validateAttachURL (scheme + host allowlist).
 	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil {
 		return fmt.Errorf("invalid bridge baseUrl: %w", err)
 	}
-	// Build a clean URL from validated scheme and host — not from raw user input.
-	healthURL := (&url.URL{
-		Scheme: parsed.Scheme,
-		Host:   parsed.Host,
-		Path:   "/health",
-	}).String()
 
-	req, err := http.NewRequest(http.MethodGet, healthURL, nil) // #nosec
+	// Re-validate scheme inside this function so the safety check is visible
+	// to static analysis (CodeQL SSRF). validateAttachURL already enforces
+	// the allowlist, but CodeQL can't trace across function boundaries.
+	switch parsed.Scheme {
+	case "http", "https":
+		// allowed
+	default:
+		return fmt.Errorf("unsupported bridge scheme %q", parsed.Scheme)
+	}
+
+	healthURL := parsed.Scheme + "://" + parsed.Host + "/health"
+
+	req, err := http.NewRequest(http.MethodGet, healthURL, nil)
 	if err != nil {
 		return fmt.Errorf("build bridge health request: %w", err)
 	}
