@@ -26,6 +26,15 @@ pinchtab nav <url> --block-ads   # Navigate with ad blocking
 pinchtab quick <url>             # Navigate + snapshot accessibility tree
 ```
 
+```
+pinchtab back                    # Go back in browser history
+pinchtab back --tab <id>         # Go back in specific tab
+pinchtab forward                 # Go forward in browser history
+pinchtab forward --tab <id>      # Go forward in specific tab
+pinchtab reload                  # Reload current page
+pinchtab reload --tab <id>       # Reload specific tab
+```
+
 Hidden aliases: `goto`, `navigate`, `open`
 
 ## Tab Management

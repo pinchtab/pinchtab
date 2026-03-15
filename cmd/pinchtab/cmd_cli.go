@@ -37,6 +37,39 @@ var navCmd = &cobra.Command{
 	},
 }
 
+var backCmd = &cobra.Command{
+	Use:   "back",
+	Short: "Go back in browser history",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Back(client, base, token, cmd)
+		})
+	},
+}
+
+var forwardCmd = &cobra.Command{
+	Use:   "forward",
+	Short: "Go forward in browser history",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Forward(client, base, token, cmd)
+		})
+	},
+}
+
+var reloadCmd = &cobra.Command{
+	Use:   "reload",
+	Short: "Reload current page",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Reload(client, base, token, cmd)
+		})
+	},
+}
+
 var snapCmd = &cobra.Command{
 	Use:   "snap",
 	Short: "Snapshot accessibility tree",
@@ -281,6 +314,9 @@ var selectCmd = &cobra.Command{
 func init() {
 	quickCmd.GroupID = "browser"
 	navCmd.GroupID = "browser"
+	backCmd.GroupID = "browser"
+	forwardCmd.GroupID = "browser"
+	reloadCmd.GroupID = "browser"
 	snapCmd.GroupID = "browser"
 	clickCmd.GroupID = "browser"
 	typeCmd.GroupID = "browser"
@@ -384,6 +420,9 @@ func init() {
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
 	navCmd.Flags().Bool("block-ads", false, "Block ads")
 	navCmd.Flags().String("tab", "", "Tab ID")
+	backCmd.Flags().String("tab", "", "Tab ID")
+	forwardCmd.Flags().String("tab", "", "Tab ID")
+	reloadCmd.Flags().String("tab", "", "Tab ID")
 
 	clickCmd.Flags().String("tab", "", "Tab ID")
 	hoverCmd.Flags().String("tab", "", "Tab ID")
@@ -396,6 +435,9 @@ func init() {
 
 	rootCmd.AddCommand(quickCmd)
 	rootCmd.AddCommand(navCmd)
+	rootCmd.AddCommand(backCmd)
+	rootCmd.AddCommand(forwardCmd)
+	rootCmd.AddCommand(reloadCmd)
 	rootCmd.AddCommand(snapCmd)
 	rootCmd.AddCommand(clickCmd)
 	rootCmd.AddCommand(typeCmd)
