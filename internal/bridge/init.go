@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -159,6 +160,13 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 		opts = append(opts, chromedp.Flag("remote-debugging-port", strconv.Itoa(port)))
 	}
 	opts = append(opts, chromedp.CombinedOutput(newPrefixedLogWriter(os.Stdout, "chrome")))
+
+	// Set up process group so all Chrome child processes (GPU, renderer, helpers)
+	// can be killed together. macOS doesn't support Pdeathsig, so we use Setpgid
+	// and kill the process group on shutdown.
+	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return ctx, cancel, opts, debugPort
