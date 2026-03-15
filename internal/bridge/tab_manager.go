@@ -368,20 +368,6 @@ func (tm *TabManager) FocusTab(tabID string) error {
 	return nil
 }
 
-// ResolveTabByIndex resolves a 1-based tab index to a tab ID.
-// Returns the tab ID and its URL/title for display.
-func (tm *TabManager) ResolveTabByIndex(index int) (string, string, string, error) {
-	targets, err := tm.ListTargets()
-	if err != nil {
-		return "", "", "", err
-	}
-	if index < 1 || index > len(targets) {
-		return "", "", "", fmt.Errorf("tab index %d out of range (1-%d)", index, len(targets))
-	}
-	t := targets[index-1]
-	tabID := tm.idMgr.TabIDFromCDPTarget(string(t.TargetID))
-	return tabID, t.URL, t.Title, nil
-}
 
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	if tm == nil {

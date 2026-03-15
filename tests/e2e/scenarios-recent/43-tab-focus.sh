@@ -1,6 +1,6 @@
 #!/bin/bash
-# Test: Tab focus and index-based tab resolution
-# Tests for `POST /tab {"action":"focus","tabId":"..."}` and tab index resolution
+# Test: Tab focus
+# Tests for `POST /tab {"action":"focus","tabId":"..."}`
 source "$(dirname "$0")/common.sh"
 
 # --- T1: Focus tab by ID ---

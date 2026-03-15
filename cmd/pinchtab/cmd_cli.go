@@ -121,9 +121,9 @@ var screenshotCmd = &cobra.Command{
 }
 
 var tabsCmd = &cobra.Command{
-	Use:     "tab [n|id]",
+	Use:     "tab [id]",
 	Aliases: []string{"tabs"},
-	Short:   "List tabs, or focus a tab by index or ID",
+	Short:   "List tabs, or focus a tab by ID",
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
@@ -353,8 +353,8 @@ func init() {
 		},
 	})
 	tabsCmd.AddCommand(&cobra.Command{
-		Use:   "close <n|id>",
-		Short: "Close a tab by index or ID",
+		Use:   "close <id>",
+		Short: "Close a tab by ID",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := config.Load()
