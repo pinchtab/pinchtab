@@ -10,17 +10,18 @@ import (
 )
 
 const (
-	ActionClick      = "click"
-	ActionType       = "type"
-	ActionFill       = "fill"
-	ActionPress      = "press"
-	ActionFocus      = "focus"
-	ActionHover      = "hover"
-	ActionSelect     = "select"
-	ActionScroll     = "scroll"
-	ActionDrag       = "drag"
-	ActionHumanClick = "humanClick"
-	ActionHumanType  = "humanType"
+	ActionClick       = "click"
+	ActionDoubleClick = "dblclick"
+	ActionType        = "type"
+	ActionFill        = "fill"
+	ActionPress       = "press"
+	ActionFocus       = "focus"
+	ActionHover       = "hover"
+	ActionSelect      = "select"
+	ActionScroll      = "scroll"
+	ActionDrag        = "drag"
+	ActionHumanClick  = "humanClick"
+	ActionHumanType   = "humanType"
 )
 
 func (b *Bridge) InitActionRegistry() {
@@ -43,6 +44,22 @@ func (b *Bridge) InitActionRegistry() {
 				_ = chromedp.Run(ctx, chromedp.Sleep(b.Config.WaitNavDelay))
 			}
 			return map[string]any{"clicked": true}, nil
+		},
+		ActionDoubleClick: func(ctx context.Context, req ActionRequest) (map[string]any, error) {
+			var err error
+			if req.Selector != "" {
+				err = chromedp.Run(ctx, chromedp.DoubleClick(req.Selector, chromedp.ByQuery))
+			} else if req.NodeID > 0 {
+				err = DoubleClickByNodeID(ctx, req.NodeID)
+			} else if req.HasXY {
+				err = DoubleClickByCoordinate(ctx, req.X, req.Y)
+			} else {
+				return nil, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
+			}
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"doubleclicked": true}, nil
 		},
 		ActionType: func(ctx context.Context, req ActionRequest) (map[string]any, error) {
 			if req.Text == "" {

@@ -97,6 +97,22 @@ var clickCmd = &cobra.Command{
 	},
 }
 
+var dblclickCmd = &cobra.Command{
+	Use:   "dblclick <ref>",
+	Short: "Double-click element",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ref := ""
+		if len(args) > 0 {
+			ref = args[0]
+		}
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Action(client, base, token, "dblclick", ref, cmd)
+		})
+	},
+}
+
 var typeCmd = &cobra.Command{
 	Use:   "type <ref> <text>",
 	Short: "Type into element",
@@ -371,6 +387,9 @@ func init() {
 	clickCmd.Flags().Float64("x", 0, "X coordinate for click")
 	clickCmd.Flags().Float64("y", 0, "Y coordinate for click")
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
+	dblclickCmd.Flags().String("css", "", "CSS selector instead of ref")
+	dblclickCmd.Flags().Float64("x", 0, "X coordinate for dblclick")
+	dblclickCmd.Flags().Float64("y", 0, "Y coordinate for dblclick")
 	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
 	hoverCmd.Flags().Float64("x", 0, "X coordinate for hover")
 	hoverCmd.Flags().Float64("y", 0, "Y coordinate for hover")
@@ -425,6 +444,7 @@ func init() {
 	reloadCmd.Flags().String("tab", "", "Tab ID")
 
 	clickCmd.Flags().String("tab", "", "Tab ID")
+	dblclickCmd.Flags().String("tab", "", "Tab ID")
 	hoverCmd.Flags().String("tab", "", "Tab ID")
 	typeCmd.Flags().String("tab", "", "Tab ID")
 	pressCmd.Flags().String("tab", "", "Tab ID")
@@ -440,6 +460,7 @@ func init() {
 	rootCmd.AddCommand(reloadCmd)
 	rootCmd.AddCommand(snapCmd)
 	rootCmd.AddCommand(clickCmd)
+	rootCmd.AddCommand(dblclickCmd)
 	rootCmd.AddCommand(typeCmd)
 	rootCmd.AddCommand(screenshotCmd)
 	rootCmd.AddCommand(tabsCmd)
