@@ -170,7 +170,11 @@ export default function ScreencastTile({
   }, [instanceId, tabId, quality, maxWidth, localFps]);
 
   const statusColor =
-    status === "streaming" ? "bg-success" : status === "connecting";
+    status === "streaming"
+      ? "bg-success"
+      : status === "connecting"
+        ? "bg-warning"
+        : "bg-destructive";
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border-subtle bg-bg-elevated">
       {/* Header */}
@@ -227,8 +231,7 @@ export default function ScreencastTile({
             </div>
           </div>
         )}
-      </div>{" "}
-      {/* Footer */}
+      </div>
       <div className="flex shrink-0 items-center justify-between border-t border-border-subtle px-3 py-1 text-xs text-text-muted">
         <div className="flex items-center gap-3">
           <div className="flex items-center overflow-hidden rounded border border-border-subtle bg-black/20">
@@ -282,7 +285,7 @@ export default function ScreencastTile({
           </button>
         </div>
         <span>{sizeDisplay}</span>
-      </div>{" "}
+      </div>
     </div>
   );
 }
