@@ -592,7 +592,6 @@ export default function SettingsPage() {
                       className={selectClass}
                     >
                       <option value="light">Light</option>
-                      <option value="medium">Medium</option>
                       <option value="full">Full</option>
                     </select>
                   </SettingRow>

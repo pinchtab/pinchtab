@@ -84,7 +84,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		if !isValidStealthLevel(fc.InstanceDefaults.StealthLevel) {
 			errs = append(errs, ValidationError{
 				Field:   "instanceDefaults.stealthLevel",
-				Message: fmt.Sprintf("invalid value %q (must be light, medium, or full)", fc.InstanceDefaults.StealthLevel),
+				Message: fmt.Sprintf("invalid value %q (must be light or full)", fc.InstanceDefaults.StealthLevel),
 			})
 		}
 	}
