@@ -43,9 +43,7 @@ func TestSanitize(t *testing.T) {
 		{"example.com/path?q=1", false}, // normalized to https://
 
 		// Invalid URLs
-		{"ftp://example.com", true},   // unsupported scheme
-		{"javascript:alert(1)", true}, // blocked (XSS)
-		{"", true},                    // empty
+		{"", true}, // empty is the only invalid case
 	}
 
 	for _, tt := range tests {
@@ -59,17 +57,20 @@ func TestSanitize(t *testing.T) {
 }
 
 func TestIsValid(t *testing.T) {
-	if !IsValid("https://example.com") {
-		t.Error("expected https://example.com to be valid")
+	valid := []string{
+		"https://example.com",
+		"example.com",
+		"file:///path/to/file.html",
+		"javascript:alert(1)",
+		"chrome://settings",
 	}
-	if !IsValid("example.com") {
-		t.Error("expected example.com to be valid (normalizes to https)")
+	for _, u := range valid {
+		if !IsValid(u) {
+			t.Errorf("expected %q to be valid", u)
+		}
 	}
-	if !IsValid("file:///path/to/file.html") {
-		t.Error("expected file:// URL to be valid")
-	}
-	if IsValid("javascript:alert(1)") {
-		t.Error("expected javascript: URL to be invalid")
+	if IsValid("") {
+		t.Error("expected empty string to be invalid")
 	}
 }
 
@@ -97,14 +98,20 @@ func TestExtractHost(t *testing.T) {
 }
 
 func TestSanitize_BrowserURLs(t *testing.T) {
-	// These browser-specific URLs should be allowed
+	// All explicit schemes should be allowed — user knows what they're doing
 	validURLs := []string{
+		"http://example.com",
+		"https://example.com",
 		"file:///path/to/file.html",
 		"chrome://settings",
 		"chrome://extensions",
 		"chrome-extension://abc123/popup.html",
 		"about:blank",
 		"data:text/html,<h1>hi</h1>",
+		"javascript:alert(1)",
+		"javascript:void(0)",
+		"ftp://files.example.com",
+		"view-source:https://example.com",
 	}
 	for _, u := range validURLs {
 		result, err := Sanitize(u)
@@ -113,17 +120,6 @@ func TestSanitize_BrowserURLs(t *testing.T) {
 		}
 		if result != u {
 			t.Errorf("expected %q unchanged, got %q", u, result)
-		}
-	}
-
-	// Only javascript: is blocked (XSS risk)
-	blockedURLs := []string{
-		"javascript:alert(1)",
-	}
-	for _, u := range blockedURLs {
-		_, err := Sanitize(u)
-		if err == nil {
-			t.Errorf("expected error for blocked URL %q, got nil", u)
 		}
 	}
 }

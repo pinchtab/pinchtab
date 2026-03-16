@@ -106,18 +106,25 @@ func TestHandleNavigateMissingURL(t *testing.T) {
 	}
 }
 
-func TestHandleNavigateInvalidURL(t *testing.T) {
+func TestHandleNavigateEmptyURL(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
 
-	// Test that javascript: scheme is blocked (XSS risk)
-	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "javascript:alert(1)"}, srv)
+	// Empty URL should fail
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": ""}, srv)
 	if !r.IsError {
-		t.Error("expected error for javascript: URL scheme")
+		t.Error("expected error for empty URL")
 	}
-	text := resultText(t, r)
-	if !strings.Contains(text, "invalid URL") {
-		t.Errorf("expected 'invalid URL' in error, got %s", text)
+}
+
+func TestHandleNavigateJavaScript(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	// javascript: URLs should be allowed (user knows what they're doing)
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "javascript:void(0)"}, srv)
+	if r.IsError {
+		t.Errorf("expected javascript: URL to succeed, got error: %s", resultText(t, r))
 	}
 }
 
@@ -132,13 +139,21 @@ func TestHandleNavigateBareHostname(t *testing.T) {
 	}
 }
 
-func TestHandleNavigateFTPScheme(t *testing.T) {
+func TestHandleNavigateAnyScheme(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
 
-	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "ftp://files.example.com/readme"}, srv)
-	if !r.IsError {
-		t.Error("expected error for ftp:// URL")
+	// All explicit schemes should be allowed
+	urls := []string{
+		"ftp://files.example.com/readme",
+		"chrome://settings",
+		"file:///path/to/file.html",
+	}
+	for _, u := range urls {
+		r := callTool(t, "pinchtab_navigate", map[string]any{"url": u}, srv)
+		if r.IsError {
+			t.Errorf("expected %q to succeed, got error: %s", u, resultText(t, r))
+		}
 	}
 }
 

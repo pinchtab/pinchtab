@@ -15,57 +15,20 @@ func Normalize(rawURL string) string {
 	return "https://" + rawURL
 }
 
-// Sanitize validates and normalizes a URL.
-// Allows http/https (web), chrome/chrome-extension (browser internals), about/data (special pages).
-// Blocks dangerous schemes like file:// and javascript:.
+// Sanitize normalizes a URL. Bare hostnames get https:// added.
+// All explicit schemes are passed through (user knows what they're doing).
 func Sanitize(rawURL string) (string, error) {
 	if rawURL == "" {
 		return "", fmt.Errorf("empty URL")
 	}
 
-	// Allow browser-specific schemes that users might explicitly want
-	allowedPrefixes := []string{
-		"http://", "https://",
-		"file://",
-		"chrome://", "chrome-extension://",
-		"about:", "data:",
-	}
-
-	// Block dangerous schemes (XSS)
-	blockedPrefixes := []string{
-		"javascript:",
-	}
-
-	if strings.Contains(rawURL, "://") || strings.Contains(rawURL, ":") {
-		for _, blocked := range blockedPrefixes {
-			if strings.HasPrefix(rawURL, blocked) {
-				return "", fmt.Errorf("blocked URL scheme: %s", blocked)
-			}
-		}
-
-		isAllowed := false
-		for _, allowed := range allowedPrefixes {
-			if strings.HasPrefix(rawURL, allowed) {
-				isAllowed = true
-				break
-			}
-		}
-
-		// If has scheme but not in allowed list, check if it looks like a scheme
-		if !isAllowed && strings.Contains(rawURL, "://") {
-			return "", fmt.Errorf("unsupported URL scheme")
-		}
-	}
-
-	// For non-http schemes, return as-is (no normalization needed)
-	if strings.HasPrefix(rawURL, "file://") ||
-		strings.HasPrefix(rawURL, "chrome://") ||
-		strings.HasPrefix(rawURL, "chrome-extension://") ||
-		strings.HasPrefix(rawURL, "about:") ||
-		strings.HasPrefix(rawURL, "data:") {
+	// If URL has an explicit scheme, pass it through unchanged
+	if strings.Contains(rawURL, "://") || strings.HasPrefix(rawURL, "javascript:") ||
+		strings.HasPrefix(rawURL, "about:") || strings.HasPrefix(rawURL, "data:") {
 		return rawURL, nil
 	}
 
+	// Bare hostname — normalize to https://
 	normalized := Normalize(rawURL)
 
 	parsed, err := url.Parse(normalized)
