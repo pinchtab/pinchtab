@@ -13,12 +13,35 @@ ERROR=$'\033[38;2;230;57;70m'
 MUTED=$'\033[38;2;90;100;128m'
 NC=$'\033[0m'
 
-ok()   { echo -e "  ${SUCCESS}✓${NC} $1"; }
-fail() { echo -e "  ${ERROR}✗${NC} $1"; [ -n "${2:-}" ] && echo -e "    ${MUTED}$2${NC}"; }
+ok()   { echo -e "  ${SUCCESS}✓${NC} $1"; return 0; }
+fail() {
+  echo -e "  ${ERROR}✗${NC} $1"
+  if [ -n "${2:-}" ]; then
+    echo -e "    ${MUTED}$2${NC}"
+  fi
+  return 0
+}
 
 section() {
   echo ""
   echo -e "  ${ACCENT}${BOLD}$1${NC}"
+}
+
+confirm() {
+  if [ -r /dev/tty ]; then
+    echo -n "$1 [y/N] " > /dev/tty
+    read -r answer < /dev/tty
+    [[ "$answer" =~ ^[Yy]$ ]]
+    return
+  fi
+
+  if [ ! -t 0 ]; then
+    return 1
+  fi
+
+  echo -n "$1 [y/N] "
+  read -r answer
+  [[ "$answer" =~ ^[Yy]$ ]]
 }
 
 if [ ! -d "dashboard" ]; then
@@ -58,7 +81,18 @@ if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
     ok "Types in sync"
   else
     fail "Types out of sync" "Run: cd dashboard && tygo generate && npx prettier --write src/generated/types.ts"
-    exit 1
+    if confirm "Fix generated types now?"; then
+      $TYGO_CMD generate
+      npx prettier --write src/generated/types.ts
+      if git diff --quiet -- src/generated/types.ts 2>/dev/null; then
+        ok "Types fixed"
+      else
+        fail "Types still out of sync" "Review tygo output and rerun the check."
+        exit 1
+      fi
+    else
+      exit 1
+    fi
   fi
 fi
 
@@ -84,7 +118,21 @@ if $RUN run format:check 2>&1; then
 else
   fail "Files not formatted"
   echo -e "    ${MUTED}Run: cd dashboard && $RUN run format${NC}"
-  exit 1
+  if confirm "Fix formatting now?"; then
+    if $RUN run format 2>&1; then
+      if $RUN run format:check 2>&1; then
+        ok "Formatting fixed"
+      else
+        fail "Formatting still not clean"
+        exit 1
+      fi
+    else
+      fail "Formatting fix failed"
+      exit 1
+    fi
+  else
+    exit 1
+  fi
 fi
 
 section "Summary"

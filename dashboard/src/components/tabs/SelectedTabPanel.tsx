@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ActivityExplorer } from "../../activities";
 import type { InstanceTab } from "../../generated/types";
 import IdBadge from "./IdBadge";
 import { TabsLayout, EmptyView } from "../molecules";
@@ -51,7 +52,21 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
           onChange={(id) => setActiveSubTab(id)}
         >
           {activeSubTab === "actions" && (
-            <EmptyView message="No actions available for this tab yet." />
+            <div className="h-full p-3">
+              <ActivityExplorer
+                embedded
+                showFilterMenu={false}
+                title="Tab activity"
+                summaryLabel="Actions"
+                initialFilters={{
+                  instanceId: instanceId || "",
+                  tabId: selectedTab.id,
+                }}
+                lockedFilters={{
+                  tabId: selectedTab.id,
+                }}
+              />
+            </div>
           )}
           {activeSubTab === "live" && (
             <div className="h-full">

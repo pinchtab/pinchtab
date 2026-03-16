@@ -8,6 +8,6 @@ export { default as StartInstanceModal } from "./StartInstanceModal";
 export { default as ScreencastTile } from "../screencast/ScreencastTile";
 export { InstanceTabsPanel, TabItem } from "../tabs";
 export { default as AgentItem } from "./AgentItem";
-export { default as ActivityLine } from "./ActivityLine";
+export { default as ActivityLine } from "../../activities/ActivityLine";
 export { default as TabsChart } from "./TabsChart";
 export { default as ServerSummary } from "./ServerSummary";

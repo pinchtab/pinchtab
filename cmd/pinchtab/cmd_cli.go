@@ -302,6 +302,17 @@ var profilesCmd = &cobra.Command{
 	},
 }
 
+var activityCmd = &cobra.Command{
+	Use:   "activity",
+	Short: "List recorded activity events",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Activity(client, base, token, cmd)
+		})
+	},
+}
+
 var instanceCmd = &cobra.Command{
 	Use:   "instance",
 	Short: "Manage browser instances",
@@ -376,6 +387,7 @@ func init() {
 	pdfCmd.GroupID = "browser"
 	textCmd.GroupID = "browser"
 	profilesCmd.GroupID = "management"
+	activityCmd.GroupID = "management"
 	downloadCmd.GroupID = "browser"
 	uploadCmd.GroupID = "browser"
 	findCmd.GroupID = "browser"
@@ -506,6 +518,7 @@ func init() {
 	rootCmd.AddCommand(pdfCmd)
 	rootCmd.AddCommand(textCmd)
 	rootCmd.AddCommand(profilesCmd)
+	rootCmd.AddCommand(activityCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(uploadCmd)
 	rootCmd.AddCommand(findCmd)
@@ -566,6 +579,21 @@ func init() {
 		},
 	})
 	rootCmd.AddCommand(instanceCmd)
+
+	activityCmd.AddCommand(&cobra.Command{
+		Use:   "tab <id>",
+		Short: "List recorded activity events for a tab",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg := config.Load()
+			runCLIWith(cfg, func(client *http.Client, base, token string) {
+				browseractions.ActivityTab(client, base, token, args[0], cmd)
+			})
+		},
+	})
+
+	activityCmd.PersistentFlags().Int("limit", 200, "Maximum number of events to return")
+	activityCmd.PersistentFlags().Int("age-sec", 0, "Only include events from the last N seconds")
 }
 
 func runCLIWith(cfg *config.RuntimeConfig, fn func(client *http.Client, base, token string)) {

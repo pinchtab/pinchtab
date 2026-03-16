@@ -12,6 +12,7 @@ interface Tab {
 
 const tabs: Tab[] = [
   { id: "monitoring", path: "/dashboard/monitoring", label: "Monitoring" },
+  { id: "activity", path: "/dashboard/activity", label: "Activity" },
   { id: "profiles", path: "/dashboard/profiles", label: "Profiles" },
   { id: "settings", path: "/dashboard/settings", label: "Settings" },
 ];

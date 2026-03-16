@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -27,10 +28,35 @@ func RegisterHandlers(mux *http.ServeMux, rec Recorder) {
 			return
 		}
 
-		web.JSON(w, http.StatusOK, map[string]any{
-			"events": events,
-			"count":  len(events),
-		})
+		resp := apiTypes.ActivityLogResponse{
+			Events: make([]apiTypes.ActivityLogEvent, 0, len(events)),
+			Count:  len(events),
+		}
+		for _, event := range events {
+			resp.Events = append(resp.Events, apiTypes.ActivityLogEvent{
+				Timestamp:   event.Timestamp,
+				Source:      event.Source,
+				RequestID:   event.RequestID,
+				SessionID:   event.SessionID,
+				ActorID:     event.ActorID,
+				AgentID:     event.AgentID,
+				Method:      event.Method,
+				Path:        event.Path,
+				Status:      event.Status,
+				DurationMs:  event.DurationMs,
+				RemoteAddr:  event.RemoteAddr,
+				InstanceID:  event.InstanceID,
+				ProfileID:   event.ProfileID,
+				ProfileName: event.ProfileName,
+				TabID:       event.TabID,
+				URL:         event.URL,
+				Action:      event.Action,
+				Engine:      event.Engine,
+				Ref:         event.Ref,
+			})
+		}
+
+		web.JSON(w, http.StatusOK, resp)
 	})
 }
 

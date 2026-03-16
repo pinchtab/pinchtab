@@ -45,7 +45,6 @@ export default function MonitoringPage() {
   return (
     <ErrorBoundary>
       <div className="flex h-full flex-col gap-4 overflow-hidden p-4">
-        {/* Chart - always show, even with no instances (displays server metrics) */}
         <ErrorBoundary
           fallback={
             <div className="flex h-50 items-center justify-center rounded-lg border border-destructive/50 bg-bg-surface text-sm text-destructive">
@@ -76,17 +75,9 @@ export default function MonitoringPage() {
           </div>
         )}
 
-        {/* Bottom section - only show when instances exist */}
         {instances.length > 0 && (
           <div className="flex flex-1 gap-4 overflow-hidden">
-            {/* Instance list */}
             <div className="dashboard-panel w-64 shrink-0 overflow-auto">
-              <div className="border-b border-border-subtle px-4 py-3">
-                <div className="dashboard-section-label mb-1">Monitoring</div>
-                <h3 className="text-sm font-semibold text-text-secondary">
-                  Instances ({instances.length})
-                </h3>
-              </div>
               <div className="p-2">
                 {instances.map((inst) => (
                   <InstanceListItem

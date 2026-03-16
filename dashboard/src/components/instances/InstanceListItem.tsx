@@ -1,4 +1,3 @@
-import { Badge } from "../atoms";
 import type { Instance } from "../../generated/types";
 
 interface Props {
@@ -23,13 +22,6 @@ export default function InstanceListItem({
         ? "bg-destructive"
         : "bg-text-muted";
 
-  const badgeVariant =
-    instance.status === "running"
-      ? "success"
-      : instance.status === "error"
-        ? "danger"
-        : "default";
-
   return (
     <button
       onClick={onClick}
@@ -49,7 +41,6 @@ export default function InstanceListItem({
           {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
         </div>
       </div>
-      <Badge variant={badgeVariant}>{instance.status}</Badge>
     </button>
   );
 }

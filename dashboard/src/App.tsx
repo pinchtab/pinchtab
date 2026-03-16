@@ -7,6 +7,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import { ActivityPage } from "./activities";
 import { useAppStore } from "./stores/useAppStore";
 import { NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
@@ -274,10 +275,11 @@ function AppContent() {
             element={<Navigate to="/dashboard/monitoring" replace />}
           />
           <Route path="/dashboard/monitoring" element={<MonitoringPage />} />
+          <Route path="/dashboard/activity" element={<ActivityPage />} />
           <Route path="/dashboard/profiles" element={<ProfilesPage />} />
           <Route
             path="/dashboard/agents"
-            element={<Navigate to="/dashboard/monitoring" replace />}
+            element={<Navigate to="/dashboard/activity" replace />}
           />
           <Route path="/dashboard/settings" element={<SettingsPage />} />
           <Route

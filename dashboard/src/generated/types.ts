@@ -71,6 +71,37 @@ export interface ActivityEvent {
   details?: { [key: string]: any };
 }
 /**
+ * ActivityLogEvent represents a queryable backend activity record.
+ */
+export interface ActivityLogEvent {
+  timestamp: string;
+  source: string;
+  requestId?: string;
+  sessionId?: string;
+  actorId?: string;
+  agentId?: string;
+  method: string;
+  path: string;
+  status: number /* int */;
+  durationMs: number /* int64 */;
+  remoteAddr?: string;
+  instanceId?: string;
+  profileId?: string;
+  profileName?: string;
+  tabId?: string;
+  url?: string;
+  action?: string;
+  engine?: string;
+  ref?: string;
+}
+/**
+ * ActivityLogResponse is returned by the /api/activity endpoint.
+ */
+export interface ActivityLogResponse {
+  events: ActivityLogEvent[];
+  count: number /* int */;
+}
+/**
  * ScreencastSettings configures live tab previews.
  */
 export interface ScreencastSettings {

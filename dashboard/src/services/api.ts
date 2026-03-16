@@ -15,6 +15,10 @@ import type {
   MonitoringServerMetrics,
   MonitoringSnapshot,
 } from "../types";
+import type {
+  ActivityQuery,
+  DashboardActivityResponse,
+} from "../activities/types";
 import {
   normalizeBackendConfigState,
   normalizeDashboardServerInfo,
@@ -258,6 +262,22 @@ export async function fetchHealth(): Promise<DashboardServerInfo> {
   return normalizeDashboardServerInfo(
     await request<DashboardServerInfo>("/health"),
   );
+}
+
+export async function fetchActivity(
+  query?: ActivityQuery,
+): Promise<DashboardActivityResponse> {
+  const params = new URLSearchParams();
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === "") {
+        continue;
+      }
+      params.set(key, String(value));
+    }
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return request<DashboardActivityResponse>(`/api/activity${suffix}`);
 }
 
 export async function probeBackendAuth(): Promise<{

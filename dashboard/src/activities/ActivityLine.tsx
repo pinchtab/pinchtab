@@ -1,5 +1,5 @@
-import { Badge } from "../atoms";
-import type { ActivityEvent } from "../../types";
+import { Badge } from "../components/atoms";
+import type { ActivityEvent } from "../types";
 
 interface Props {
   event: ActivityEvent;
@@ -31,9 +31,9 @@ function formatTime(ts: string): string {
 
 export default function ActivityLine({ event }: Props) {
   return (
-    <div className="flex items-center gap-3 border-b border-border-subtle/70 px-4 py-3 text-sm transition-colors hover:bg-white/[0.02]">
+    <div className="flex items-center gap-3 border-b border-border-subtle/70 px-4 py-3 text-sm transition-colors hover:bg-white/2">
       <span className="text-lg">{typeIcons[event.type] || "📝"}</span>
-      <span className="dashboard-mono w-[4.5rem] shrink-0 text-xs text-text-muted">
+      <span className="dashboard-mono w-18 shrink-0 text-xs text-text-muted">
         {formatTime(event.timestamp)}
       </span>
       <Badge variant={typeColors[event.type] || "default"}>

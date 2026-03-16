@@ -63,6 +63,35 @@ type ActivityEvent struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
+// ActivityLogEvent represents a queryable backend activity record.
+type ActivityLogEvent struct {
+	Timestamp   time.Time `json:"timestamp"`
+	Source      string    `json:"source"`
+	RequestID   string    `json:"requestId,omitempty"`
+	SessionID   string    `json:"sessionId,omitempty"`
+	ActorID     string    `json:"actorId,omitempty"`
+	AgentID     string    `json:"agentId,omitempty"`
+	Method      string    `json:"method"`
+	Path        string    `json:"path"`
+	Status      int       `json:"status"`
+	DurationMs  int64     `json:"durationMs"`
+	RemoteAddr  string    `json:"remoteAddr,omitempty"`
+	InstanceID  string    `json:"instanceId,omitempty"`
+	ProfileID   string    `json:"profileId,omitempty"`
+	ProfileName string    `json:"profileName,omitempty"`
+	TabID       string    `json:"tabId,omitempty"`
+	URL         string    `json:"url,omitempty"`
+	Action      string    `json:"action,omitempty"`
+	Engine      string    `json:"engine,omitempty"`
+	Ref         string    `json:"ref,omitempty"`
+}
+
+// ActivityLogResponse is returned by the /api/activity endpoint.
+type ActivityLogResponse struct {
+	Events []ActivityLogEvent `json:"events"`
+	Count  int                `json:"count"`
+}
+
 // ScreencastSettings configures live tab previews.
 type ScreencastSettings struct {
 	FPS      int `json:"fps"`
