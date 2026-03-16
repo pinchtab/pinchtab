@@ -189,24 +189,35 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 			payload["tabId"] = tabID
 		}
 
+		// Unified selector: prefer "selector" param, fall back to legacy "ref".
+		resolveSelector := func(required bool) error {
+			sel := optString(r, "selector")
+			ref := optString(r, "ref")
+			if sel != "" {
+				payload["selector"] = sel
+			} else if ref != "" {
+				// Legacy: promote ref to selector
+				payload["selector"] = ref
+			} else if required {
+				return fmt.Errorf("required parameter 'selector' is missing")
+			}
+			return nil
+		}
+
 		switch kind {
 		case "click", "hover", "focus":
-			ref, err := r.RequireString("ref")
-			if err != nil {
+			if err := resolveSelector(true); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			payload["ref"] = ref
 
 		case "type":
-			ref, err := r.RequireString("ref")
-			if err != nil {
+			if err := resolveSelector(true); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			text, err := r.RequireString("text")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			payload["ref"] = ref
 			payload["text"] = text
 
 		case "press":
@@ -217,35 +228,29 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 			payload["key"] = key
 
 		case "select":
-			ref, err := r.RequireString("ref")
-			if err != nil {
+			if err := resolveSelector(true); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			value, err := r.RequireString("value")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			payload["ref"] = ref
 			payload["value"] = value
 
 		case "scroll":
-			if ref := optString(r, "ref"); ref != "" {
-				payload["ref"] = ref
-			}
+			_ = resolveSelector(false)
 			if px, ok := optFloat(r, "pixels"); ok {
 				payload["scrollY"] = int(px)
 			}
 
 		case "fill":
-			ref, err := r.RequireString("ref")
-			if err != nil {
+			if err := resolveSelector(true); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			value, err := r.RequireString("value")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			payload["ref"] = ref
 			payload["value"] = value
 		}
 
@@ -438,7 +443,7 @@ func handleWait() func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResul
 
 func handleWaitForSelector(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		selector, err := r.RequireString("selector")
+		sel, err := r.RequireString("selector")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -453,8 +458,24 @@ func handleWaitForSelector(c *Client) func(context.Context, mcp.CallToolRequest)
 			timeoutMS = 100
 		}
 
-		// JavaScript that checks for the selector
-		js := fmt.Sprintf(`document.querySelector(%s) !== null`, jsonString(selector))
+		// Build the appropriate JavaScript check based on selector type.
+		var js string
+		switch {
+		case strings.HasPrefix(sel, "xpath:"):
+			xpath := sel[len("xpath:"):]
+			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonString(xpath))
+		case strings.HasPrefix(sel, "//") || strings.HasPrefix(sel, "(//"):
+			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonString(sel))
+		case strings.HasPrefix(sel, "text:"):
+			text := sel[len("text:"):]
+			js = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%s))return true}return false})()`, jsonString(text))
+		case strings.HasPrefix(sel, "css:"):
+			css := sel[len("css:"):]
+			js = fmt.Sprintf(`document.querySelector(%s) !== null`, jsonString(css))
+		default:
+			// Bare selector — treat as CSS (backward compatible)
+			js = fmt.Sprintf(`document.querySelector(%s) !== null`, jsonString(sel))
+		}
 
 		payload := map[string]any{"expression": js}
 		if tabID := optString(r, "tabId"); tabID != "" {
@@ -471,12 +492,12 @@ func handleWaitForSelector(c *Client) func(context.Context, mcp.CallToolRequest)
 					Result any `json:"result"`
 				}
 				if json.Unmarshal(body, &resp) == nil && resp.Result == true {
-					return mcp.NewToolResultText(fmt.Sprintf(`{"found":true,"selector":%s}`, jsonString(selector))), nil
+					return mcp.NewToolResultText(fmt.Sprintf(`{"found":true,"selector":%s}`, jsonString(sel))), nil
 				}
 			}
 
 			if time.Now().After(deadline) {
-				return mcp.NewToolResultError(fmt.Sprintf("timeout: selector %q not found within %dms", selector, int(timeoutMS))), nil
+				return mcp.NewToolResultError(fmt.Sprintf("timeout: selector %q not found within %dms", sel, int(timeoutMS))), nil
 			}
 
 			select {

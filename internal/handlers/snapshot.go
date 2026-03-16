@@ -135,53 +135,27 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	}{Nodes: nodes}
 
 	if selector != "" {
+		// Unified selector: resolve to a backend node ID for subtree scoping.
+		// Supports CSS (default), XPath, and text selectors.
 		var scopeNodeID int64
-		if err := chromedp.Run(tCtx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				p := map[string]any{"nodeId": 0, "selector": selector}
-				var docResult json.RawMessage
-				if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getDocument", map[string]any{"depth": 0}, &docResult); err != nil {
-					return fmt.Errorf("get document: %w", err)
-				}
-				var doc struct {
-					Root struct {
-						NodeID int64 `json:"nodeId"`
-					} `json:"root"`
-				}
-				if err := json.Unmarshal(docResult, &doc); err != nil {
-					return err
-				}
-				p["nodeId"] = doc.Root.NodeID
-				var qResult json.RawMessage
-				if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.querySelector", p, &qResult); err != nil {
-					return fmt.Errorf("querySelector: %w", err)
-				}
-				var qr struct {
-					NodeID int64 `json:"nodeId"`
-				}
-				if err := json.Unmarshal(qResult, &qr); err != nil {
-					return err
-				}
-				if qr.NodeID == 0 {
-					return fmt.Errorf("selector %q not found", selector)
-				}
-				var descResult json.RawMessage
-				if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{"nodeId": qr.NodeID}, &descResult); err != nil {
-					return fmt.Errorf("describe node: %w", err)
-				}
-				var desc struct {
-					Node struct {
-						BackendNodeID int64 `json:"backendNodeId"`
-					} `json:"node"`
-				}
-				if err := json.Unmarshal(descResult, &desc); err != nil {
-					return err
-				}
-				scopeNodeID = desc.Node.BackendNodeID
-				return nil
-			}),
-		); err != nil {
-			web.Error(w, 400, fmt.Errorf("selector: %w", err))
+		var scopeErr error
+
+		switch {
+		case strings.HasPrefix(selector, "xpath:"):
+			scopeNodeID, scopeErr = bridge.ResolveXPathToNodeID(tCtx, selector[len("xpath:"):])
+		case strings.HasPrefix(selector, "//") || strings.HasPrefix(selector, "(//"):
+			scopeNodeID, scopeErr = bridge.ResolveXPathToNodeID(tCtx, selector)
+		case strings.HasPrefix(selector, "text:"):
+			scopeNodeID, scopeErr = bridge.ResolveTextToNodeID(tCtx, selector[len("text:"):])
+		case strings.HasPrefix(selector, "css:"):
+			scopeNodeID, scopeErr = bridge.ResolveCSSToNodeID(tCtx, selector[len("css:"):])
+		default:
+			// Bare selector — treat as CSS (backward compatible)
+			scopeNodeID, scopeErr = bridge.ResolveCSSToNodeID(tCtx, selector)
+		}
+
+		if scopeErr != nil {
+			web.Error(w, 400, fmt.Errorf("selector: %w", scopeErr))
 			return
 		}
 

@@ -28,7 +28,7 @@ type uploadRequest struct {
 // POST /upload?tabId=<id>
 //
 //	{
-//	  "selector": "input[type=file]",
+//	  "selector": "input[type=file]",   // unified selector: CSS, XPath, text, ref, or semantic
 //	  "files": ["data:image/png;base64,...", "base64:..."],
 //	  "paths": ["/tmp/photo.jpg"]
 //	}
@@ -161,10 +161,28 @@ func (h *Handlers) HandleTabUpload(w http.ResponseWriter, r *http.Request) {
 	h.HandleUpload(w, req)
 }
 
-// resolveSelector finds a DOM node by CSS selector and returns its NodeID.
-func resolveSelector(ctx context.Context, selector string) (cdp.NodeID, error) {
-	// Use Runtime.evaluate to get the remote object, then request the node.
-	expr := fmt.Sprintf(`document.querySelector(%q)`, selector)
+// resolveSelector finds a DOM node by a unified selector string and returns its NodeID.
+// Supports CSS (default), XPath (xpath: prefix or // auto-detect), and text (text: prefix).
+func resolveSelector(ctx context.Context, sel string) (cdp.NodeID, error) {
+	// Determine the JavaScript expression based on selector type.
+	var expr string
+	switch {
+	case strings.HasPrefix(sel, "xpath:"):
+		xpath := sel[len("xpath:"):]
+		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, xpath)
+	case strings.HasPrefix(sel, "//") || strings.HasPrefix(sel, "(//"):
+		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, sel)
+	case strings.HasPrefix(sel, "text:"):
+		text := sel[len("text:"):]
+		expr = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%q))return w.currentNode.parentElement}return null})()`, text)
+	case strings.HasPrefix(sel, "css:"):
+		css := sel[len("css:"):]
+		expr = fmt.Sprintf(`document.querySelector(%q)`, css)
+	default:
+		// Bare selector — treat as CSS (backward compatible)
+		expr = fmt.Sprintf(`document.querySelector(%q)`, sel)
+	}
+
 	val, _, err := runtime.Evaluate(expr).Do(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("evaluate: %w", err)

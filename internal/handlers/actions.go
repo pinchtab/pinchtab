@@ -14,6 +14,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/pinchtab/internal/semantic"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -148,17 +149,94 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
 
-	// Resolve ref → nodeID
+	// Unified selector resolution: normalize legacy ref/selector fields
+	// into the unified Selector, then resolve to a nodeID when possible.
+	req.NormalizeSelector()
 	refMissing := false
-	if !useLiteAction && req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
-		cache := h.Bridge.GetRefCache(resolvedTabID)
-		if cache != nil {
-			if nid, ok := cache.Refs[req.Ref]; ok {
-				req.NodeID = nid
+	if !useLiteAction && req.NodeID == 0 && req.Selector != "" {
+		sel := selector.Parse(req.Selector)
+		switch sel.Kind {
+		case selector.KindRef:
+			// Ensure Ref is set for downstream recovery/intent caching.
+			req.Ref = sel.Value
+			cache := h.Bridge.GetRefCache(resolvedTabID)
+			if cache != nil {
+				if nid, ok := cache.Refs[sel.Value]; ok {
+					req.NodeID = nid
+				}
 			}
-		}
-		if req.NodeID == 0 {
-			refMissing = true
+			if req.NodeID == 0 {
+				refMissing = true
+			}
+		case selector.KindCSS:
+			// CSS selectors are resolved by the bridge action handlers directly
+			// via chromedp, so we keep req.Selector as-is (the bridge checks
+			// req.Selector before req.NodeID). Clear Ref so the bridge doesn't
+			// confuse it with a snapshot ref.
+			req.Ref = ""
+			req.Selector = sel.Value
+		case selector.KindXPath:
+			nid, err := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+			if err != nil {
+				web.Error(w, 400, fmt.Errorf("xpath selector: %w", err))
+				return
+			}
+			req.NodeID = nid
+			req.Selector = ""
+			req.Ref = ""
+		case selector.KindText:
+			nid, err := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+			if err != nil {
+				web.Error(w, 400, fmt.Errorf("text selector: %w", err))
+				return
+			}
+			req.NodeID = nid
+			req.Selector = ""
+			req.Ref = ""
+		case selector.KindSemantic:
+			// Semantic selectors require the matcher — resolve via find logic.
+			if h.Matcher != nil {
+				nodes := h.resolveSnapshotNodes(resolvedTabID)
+				if len(nodes) == 0 {
+					h.refreshRefCache(tCtx, resolvedTabID)
+					nodes = h.resolveSnapshotNodes(resolvedTabID)
+				}
+				if len(nodes) > 0 {
+					descs := make([]semantic.ElementDescriptor, len(nodes))
+					for i, n := range nodes {
+						descs[i] = semantic.ElementDescriptor{
+							Ref: n.Ref, Role: n.Role, Name: n.Name, Value: n.Value,
+						}
+					}
+					result, err := h.Matcher.Find(tCtx, sel.Value, descs, semantic.FindOptions{
+						Threshold: 0.3, TopK: 1,
+					})
+					if err != nil {
+						web.Error(w, 500, fmt.Errorf("semantic selector: %w", err))
+						return
+					}
+					if result.BestRef != "" {
+						req.Ref = result.BestRef
+						cache := h.Bridge.GetRefCache(resolvedTabID)
+						if cache != nil {
+							if nid, ok := cache.Refs[result.BestRef]; ok {
+								req.NodeID = nid
+							}
+						}
+					}
+					if req.NodeID == 0 {
+						web.Error(w, 404, fmt.Errorf("semantic selector %q: no matching element found", sel.Value))
+						return
+					}
+				} else {
+					web.Error(w, 500, fmt.Errorf("semantic selector: no snapshot available — navigate first"))
+					return
+				}
+			} else {
+				web.Error(w, 501, fmt.Errorf("semantic selectors require a matcher (not configured)"))
+				return
+			}
+			req.Selector = ""
 		}
 	}
 
@@ -404,16 +482,114 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 		useLiteAction := h.shouldUseLiteAction(action.Kind)
 
-		if !useLiteAction && action.Ref != "" && action.NodeID == 0 && action.Selector == "" {
-			cache := h.Bridge.GetRefCache(resolvedTabID)
-			if cache != nil {
-				if nid, ok := cache.Refs[action.Ref]; ok {
-					action.NodeID = nid
+		// Unified selector resolution for batch actions.
+		action.NormalizeSelector()
+		refMissing := false
+		if !useLiteAction && action.NodeID == 0 && action.Selector != "" {
+			sel := selector.Parse(action.Selector)
+			switch sel.Kind {
+			case selector.KindRef:
+				action.Ref = sel.Value
+				cache := h.Bridge.GetRefCache(resolvedTabID)
+				if cache != nil {
+					if nid, ok := cache.Refs[sel.Value]; ok {
+						action.NodeID = nid
+					}
 				}
+				if action.NodeID == 0 {
+					refMissing = true
+				}
+			case selector.KindCSS:
+				action.Ref = ""
+				action.Selector = sel.Value
+			case selector.KindXPath:
+				nid, resolveErr := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+				if resolveErr != nil {
+					tCancel()
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: fmt.Sprintf("xpath selector: %v", resolveErr),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				action.NodeID = nid
+				action.Selector = ""
+				action.Ref = ""
+			case selector.KindText:
+				nid, resolveErr := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+				if resolveErr != nil {
+					tCancel()
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: fmt.Sprintf("text selector: %v", resolveErr),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				action.NodeID = nid
+				action.Selector = ""
+				action.Ref = ""
+			case selector.KindSemantic:
+				if h.Matcher != nil {
+					nodes := h.resolveSnapshotNodes(resolvedTabID)
+					if len(nodes) == 0 {
+						h.refreshRefCache(tCtx, resolvedTabID)
+						nodes = h.resolveSnapshotNodes(resolvedTabID)
+					}
+					if len(nodes) > 0 {
+						descs := make([]semantic.ElementDescriptor, len(nodes))
+						for j, n := range nodes {
+							descs[j] = semantic.ElementDescriptor{
+								Ref: n.Ref, Role: n.Role, Name: n.Name, Value: n.Value,
+							}
+						}
+						findResult, findErr := h.Matcher.Find(tCtx, sel.Value, descs, semantic.FindOptions{
+							Threshold: 0.3, TopK: 1,
+						})
+						if findErr == nil && findResult.BestRef != "" {
+							action.Ref = findResult.BestRef
+							cache := h.Bridge.GetRefCache(resolvedTabID)
+							if cache != nil {
+								if nid, ok := cache.Refs[findResult.BestRef]; ok {
+									action.NodeID = nid
+								}
+							}
+						}
+					}
+					if action.NodeID == 0 {
+						tCancel()
+						results = append(results, actionResult{
+							Index: i, Success: false,
+							Error: fmt.Sprintf("semantic selector %q: no matching element found", sel.Value),
+						})
+						if req.StopOnError {
+							break
+						}
+						continue
+					}
+				} else {
+					tCancel()
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: "semantic selectors require a matcher (not configured)",
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				action.Selector = ""
 			}
+		} else if !useLiteAction && action.Ref != "" && action.NodeID == 0 {
+			// Legacy path: Ref set but NormalizeSelector didn't promote it
+			// (shouldn't happen, but defensive).
+			refMissing = true
 		}
-
-		refMissing := !useLiteAction && action.Ref != "" && action.NodeID == 0 && action.Selector == ""
 
 		if action.Kind == "" {
 			tCancel()
@@ -575,17 +751,110 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			step.TabID = resolvedTabID
 		}
 		useLiteAction := h.shouldUseLiteAction(step.Kind)
-		// Resolve ref → nodeID from snapshot cache (mirrors HandleAction).
+		// Unified selector resolution for macro steps (mirrors HandleAction).
+		step.NormalizeSelector()
 		stepRefMissing := false
-		if !useLiteAction && step.Ref != "" && step.NodeID == 0 && step.Selector == "" {
-			cache := h.Bridge.GetRefCache(resolvedTabID)
-			if cache != nil {
-				if nid, ok := cache.Refs[step.Ref]; ok {
-					step.NodeID = nid
+		if !useLiteAction && step.NodeID == 0 && step.Selector != "" {
+			sel := selector.Parse(step.Selector)
+			switch sel.Kind {
+			case selector.KindRef:
+				step.Ref = sel.Value
+				cache := h.Bridge.GetRefCache(resolvedTabID)
+				if cache != nil {
+					if nid, ok := cache.Refs[sel.Value]; ok {
+						step.NodeID = nid
+					}
 				}
-			}
-			if step.NodeID == 0 {
-				stepRefMissing = true
+				if step.NodeID == 0 {
+					stepRefMissing = true
+				}
+			case selector.KindCSS:
+				step.Ref = ""
+				step.Selector = sel.Value
+			case selector.KindXPath:
+				tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
+				nid, resolveErr := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+				cancel()
+				if resolveErr != nil {
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: fmt.Sprintf("xpath selector: %v", resolveErr),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				step.NodeID = nid
+				step.Selector = ""
+				step.Ref = ""
+			case selector.KindText:
+				tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
+				nid, resolveErr := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+				cancel()
+				if resolveErr != nil {
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: fmt.Sprintf("text selector: %v", resolveErr),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				step.NodeID = nid
+				step.Selector = ""
+				step.Ref = ""
+			case selector.KindSemantic:
+				if h.Matcher != nil {
+					tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
+					nodes := h.resolveSnapshotNodes(resolvedTabID)
+					if len(nodes) == 0 {
+						h.refreshRefCache(tCtx, resolvedTabID)
+						nodes = h.resolveSnapshotNodes(resolvedTabID)
+					}
+					if len(nodes) > 0 {
+						descs := make([]semantic.ElementDescriptor, len(nodes))
+						for j, n := range nodes {
+							descs[j] = semantic.ElementDescriptor{
+								Ref: n.Ref, Role: n.Role, Name: n.Name, Value: n.Value,
+							}
+						}
+						findResult, findErr := h.Matcher.Find(tCtx, sel.Value, descs, semantic.FindOptions{
+							Threshold: 0.3, TopK: 1,
+						})
+						if findErr == nil && findResult.BestRef != "" {
+							step.Ref = findResult.BestRef
+							cache := h.Bridge.GetRefCache(resolvedTabID)
+							if cache != nil {
+								if nid, ok := cache.Refs[findResult.BestRef]; ok {
+									step.NodeID = nid
+								}
+							}
+						}
+					}
+					cancel()
+					if step.NodeID == 0 {
+						results = append(results, actionResult{
+							Index: i, Success: false,
+							Error: fmt.Sprintf("semantic selector %q: no matching element found", sel.Value),
+						})
+						if req.StopOnError {
+							break
+						}
+						continue
+					}
+				} else {
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: "semantic selectors require a matcher (not configured)",
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				step.Selector = ""
 			}
 		}
 

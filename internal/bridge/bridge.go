@@ -270,23 +270,54 @@ func (b *Bridge) AvailableActions() []string {
 type ActionFunc func(ctx context.Context, req ActionRequest) (map[string]any, error)
 
 // ActionRequest defines the parameters for a browser action.
+//
+// Element targeting uses a unified selector string that supports multiple
+// strategies via prefix detection (see the selector package):
+//
+//	"e5"              → ref from snapshot
+//	"css:#login"      → CSS selector (explicit)
+//	"#login"          → CSS selector (auto-detected)
+//	"xpath://div"     → XPath expression
+//	"text:Submit"     → text content match
+//	"find:login btn"  → semantic / natural-language query
+//
+// For backward compatibility, the legacy Ref and Selector (CSS) fields
+// are still accepted. Call NormalizeSelector() to merge them into the
+// unified Selector field.
 type ActionRequest struct {
-	TabID    string  `json:"tabId"`
-	Kind     string  `json:"kind"`
-	Ref      string  `json:"ref"`
-	Selector string  `json:"selector"`
-	Text     string  `json:"text"`
-	Key      string  `json:"key"`
-	Value    string  `json:"value"`
-	NodeID   int64   `json:"nodeId"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	HasXY    bool    `json:"hasXY,omitempty"`
-	ScrollX  int     `json:"scrollX"`
-	ScrollY  int     `json:"scrollY"`
-	DragX    int     `json:"dragX"`
-	DragY    int     `json:"dragY"`
-	WaitNav  bool    `json:"waitNav"`
-	Fast     bool    `json:"fast"`
-	Owner    string  `json:"owner"`
+	TabID    string `json:"tabId"`
+	Kind     string `json:"kind"`
+	Ref      string `json:"ref,omitempty"`
+	Selector string `json:"selector,omitempty"`
+	Text     string `json:"text"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+	NodeID   int64  `json:"nodeId"`
+
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	HasXY bool    `json:"hasXY,omitempty"`
+
+	ScrollX int `json:"scrollX"`
+	ScrollY int `json:"scrollY"`
+	DragX   int `json:"dragX"`
+	DragY   int `json:"dragY"`
+
+	WaitNav bool   `json:"waitNav"`
+	Fast    bool   `json:"fast"`
+	Owner   string `json:"owner"`
+}
+
+// NormalizeSelector merges legacy Ref and Selector (CSS) fields into the
+// unified Selector field. After calling this, only Selector needs to be
+// inspected for element targeting. The method is idempotent.
+//
+// Priority: Ref > Selector (if both are set, Ref wins).
+func (r *ActionRequest) NormalizeSelector() {
+	if r.Ref != "" && r.Selector == "" {
+		// Legacy ref field → unified selector
+		r.Selector = r.Ref
+	}
+	// If Selector is already set (either from JSON or from Ref promotion),
+	// leave it as-is — Parse() will auto-detect the kind.
 }

@@ -2,11 +2,14 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/human"
+	"github.com/pinchtab/pinchtab/internal/selector"
 )
 
 const (
@@ -237,4 +240,198 @@ func (b *Bridge) InitActionRegistry() {
 			return map[string]any{"typed": req.Text, "human": true}, nil
 		},
 	}
+}
+
+// ResolveXPathToNodeID resolves an XPath expression to a backend node ID
+// using CDP's DOM.performSearch + DOM.getSearchResults.
+func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
+	var backendNodeID int64
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		// Use DOM.getDocument first to ensure the DOM is available.
+		var docResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getDocument", map[string]any{"depth": 0}, &docResult); err != nil {
+			return fmt.Errorf("get document: %w", err)
+		}
+
+		// Perform XPath search.
+		var searchResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.performSearch", map[string]any{
+			"query": xpath,
+		}, &searchResult); err != nil {
+			return fmt.Errorf("xpath search: %w", err)
+		}
+
+		var sr struct {
+			SearchID    string `json:"searchId"`
+			ResultCount int    `json:"resultCount"`
+		}
+		if err := json.Unmarshal(searchResult, &sr); err != nil {
+			return err
+		}
+		if sr.ResultCount == 0 {
+			return fmt.Errorf("xpath %q: no elements found", xpath)
+		}
+
+		// Get the first result.
+		var getResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getSearchResults", map[string]any{
+			"searchId":  sr.SearchID,
+			"fromIndex": 0,
+			"toIndex":   1,
+		}, &getResult); err != nil {
+			return fmt.Errorf("get search results: %w", err)
+		}
+
+		var gr struct {
+			NodeIDs []int64 `json:"nodeIds"`
+		}
+		if err := json.Unmarshal(getResult, &gr); err != nil {
+			return err
+		}
+		if len(gr.NodeIDs) == 0 {
+			return fmt.Errorf("xpath %q: no node IDs returned", xpath)
+		}
+
+		// Convert DOM NodeID → BackendNodeID.
+		var descResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
+			"nodeId": gr.NodeIDs[0],
+		}, &descResult); err != nil {
+			return fmt.Errorf("describe node: %w", err)
+		}
+
+		var desc struct {
+			Node struct {
+				BackendNodeID int64 `json:"backendNodeId"`
+			} `json:"node"`
+		}
+		if err := json.Unmarshal(descResult, &desc); err != nil {
+			return err
+		}
+		backendNodeID = desc.Node.BackendNodeID
+
+		// Clean up the search.
+		_ = chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.discardSearchResults", map[string]any{
+			"searchId": sr.SearchID,
+		}, nil)
+
+		return nil
+	}))
+	return backendNodeID, err
+}
+
+// ResolveTextToNodeID finds the first element whose visible text content
+// contains the given string and returns its backend node ID.
+func ResolveTextToNodeID(ctx context.Context, text string) (int64, error) {
+	// Use XPath with contains(text(), ...) for text matching.
+	xpath := fmt.Sprintf(`//*[contains(text(), %s)]`, xpathString(text))
+	return ResolveXPathToNodeID(ctx, xpath)
+}
+
+// ResolveCSSToNodeID resolves a CSS selector to a backend node ID.
+func ResolveCSSToNodeID(ctx context.Context, css string) (int64, error) {
+	var backendNodeID int64
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var docResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getDocument", map[string]any{"depth": 0}, &docResult); err != nil {
+			return fmt.Errorf("get document: %w", err)
+		}
+		var doc struct {
+			Root struct {
+				NodeID int64 `json:"nodeId"`
+			} `json:"root"`
+		}
+		if err := json.Unmarshal(docResult, &doc); err != nil {
+			return err
+		}
+
+		var qResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.querySelector", map[string]any{
+			"nodeId":   doc.Root.NodeID,
+			"selector": css,
+		}, &qResult); err != nil {
+			return fmt.Errorf("querySelector: %w", err)
+		}
+		var qr struct {
+			NodeID int64 `json:"nodeId"`
+		}
+		if err := json.Unmarshal(qResult, &qr); err != nil {
+			return err
+		}
+		if qr.NodeID == 0 {
+			return fmt.Errorf("css %q: no element found", css)
+		}
+
+		var descResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
+			"nodeId": qr.NodeID,
+		}, &descResult); err != nil {
+			return fmt.Errorf("describe node: %w", err)
+		}
+		var desc struct {
+			Node struct {
+				BackendNodeID int64 `json:"backendNodeId"`
+			} `json:"node"`
+		}
+		if err := json.Unmarshal(descResult, &desc); err != nil {
+			return err
+		}
+		backendNodeID = desc.Node.BackendNodeID
+		return nil
+	}))
+	return backendNodeID, err
+}
+
+// ResolveUnifiedSelector resolves a parsed selector to a backend node ID.
+// For ref selectors, the refCache is consulted. For CSS, XPath, and text
+// selectors, CDP is used directly. Semantic selectors are not resolved here
+// (they require the semantic matcher at a higher layer).
+func ResolveUnifiedSelector(ctx context.Context, sel selector.Selector, refCache *RefCache) (int64, error) {
+	switch sel.Kind {
+	case selector.KindRef:
+		if refCache != nil {
+			if nid, ok := refCache.Refs[sel.Value]; ok {
+				return nid, nil
+			}
+		}
+		return 0, fmt.Errorf("ref %s not found in snapshot cache", sel.Value)
+
+	case selector.KindCSS:
+		return ResolveCSSToNodeID(ctx, sel.Value)
+
+	case selector.KindXPath:
+		return ResolveXPathToNodeID(ctx, sel.Value)
+
+	case selector.KindText:
+		return ResolveTextToNodeID(ctx, sel.Value)
+
+	case selector.KindSemantic:
+		return 0, fmt.Errorf("semantic selectors must be resolved at the handler layer via /find")
+
+	default:
+		return 0, fmt.Errorf("unknown selector kind: %q", sel.Kind)
+	}
+}
+
+// xpathString returns an XPath-safe string literal.
+func xpathString(s string) string {
+	// If the string contains no single quotes, wrap in single quotes.
+	if !containsRune(s, '\'') {
+		return "'" + s + "'"
+	}
+	// If it contains no double quotes, wrap in double quotes.
+	if !containsRune(s, '"') {
+		return `"` + s + `"`
+	}
+	// Contains both — use concat().
+	return "concat('" + strings.ReplaceAll(s, "'", `', "'", '`) + "')"
+}
+
+func containsRune(s string, r rune) bool {
+	for _, c := range s {
+		if c == r {
+			return true
+		}
+	}
+	return false
 }

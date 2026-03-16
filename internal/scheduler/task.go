@@ -38,7 +38,8 @@ type Task struct {
 	AgentID  string         `json:"agentId"`
 	Action   string         `json:"action"`
 	TabID    string         `json:"tabId,omitempty"`
-	Ref      string         `json:"ref,omitempty"`
+	Selector string         `json:"selector,omitempty"`
+	Ref      string         `json:"ref,omitempty"` // deprecated: use Selector
 	Params   map[string]any `json:"params,omitempty"`
 	Priority int            `json:"priority"`
 	State    TaskState      `json:"state"`
@@ -112,6 +113,7 @@ func (t *Task) Snapshot() *Task {
 		AgentID:     t.AgentID,
 		Action:      t.Action,
 		TabID:       t.TabID,
+		Selector:    t.Selector,
 		Ref:         t.Ref,
 		Params:      t.Params,
 		Priority:    t.Priority,
@@ -133,7 +135,8 @@ type SubmitRequest struct {
 	AgentID     string         `json:"agentId"`
 	Action      string         `json:"action"`
 	TabID       string         `json:"tabId,omitempty"`
-	Ref         string         `json:"ref,omitempty"`
+	Selector    string         `json:"selector,omitempty"`
+	Ref         string         `json:"ref,omitempty"` // deprecated: use Selector
 	Params      map[string]any `json:"params,omitempty"`
 	Priority    int            `json:"priority,omitempty"`
 	Deadline    string         `json:"deadline,omitempty"`

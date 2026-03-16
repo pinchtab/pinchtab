@@ -4,25 +4,14 @@ import (
 	"fmt"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/spf13/cobra"
 	"net/http"
 	"strconv"
 	"strings"
 )
 
-func isElementRef(value string) bool {
-	if len(value) < 2 || value[0] != 'e' {
-		return false
-	}
-	for i := 1; i < len(value); i++ {
-		if value[i] < '0' || value[i] > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func Action(client *http.Client, base, token, kind, refArg string, cmd *cobra.Command) {
+func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cobra.Command) {
 	body := map[string]any{"kind": kind}
 
 	css, _ := cmd.Flags().GetString("css")
@@ -38,11 +27,13 @@ func Action(client *http.Client, base, token, kind, refArg string, cmd *cobra.Co
 	}
 
 	if css != "" {
+		// Explicit --css flag: send as plain CSS selector
 		body["selector"] = css
-	} else if refArg != "" {
-		body["ref"] = refArg
+	} else if selectorArg != "" {
+		// Unified selector: parse and split into ref vs selector for the API
+		setSelectorBody(body, selectorArg)
 	} else if !hasXY {
-		cli.Fatal("Usage: pinchtab %s <ref> or pinchtab %s --css <selector> or pinchtab %s --x <num> --y <num>", kind, kind, kind)
+		cli.Fatal("Usage: pinchtab %s <selector> or pinchtab %s --css <selector> or pinchtab %s --x <num> --y <num>", kind, kind, kind)
 	}
 
 	if kind == "click" {
@@ -59,25 +50,37 @@ func Action(client *http.Client, base, token, kind, refArg string, cmd *cobra.Co
 	apiclient.DoPost(client, base, token, path, body)
 }
 
+// setSelectorBody parses a unified selector string and sets the appropriate
+// body fields. Ref selectors use the "ref" field; all others use "selector"
+// with the raw value (no kind prefix — the server handles re-parsing).
+func setSelectorBody(body map[string]any, s string) {
+	sel := selector.Parse(s)
+	switch sel.Kind {
+	case selector.KindRef:
+		body["ref"] = sel.Value
+	default:
+		body["selector"] = sel.Value
+	}
+}
+
 func ActionSimple(client *http.Client, base, token, kind string, args []string, cmd *cobra.Command) {
 	body := map[string]any{"kind": kind}
 
 	switch kind {
 	case "type":
-		body["ref"] = args[0]
+		// First arg is a unified selector
+		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "fill":
-		if isElementRef(args[0]) {
-			body["ref"] = args[0]
-		} else {
-			body["selector"] = args[0]
-		}
+		// First arg is a unified selector
+		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "press":
 		body["key"] = args[0]
 	case "scroll":
-		if strings.HasPrefix(args[0], "e") {
-			body["ref"] = args[0]
+		sel := selector.Parse(args[0])
+		if sel.Kind == selector.KindRef {
+			body["ref"] = sel.Value
 		} else if px, err := strconv.Atoi(args[0]); err == nil {
 			body["scrollY"] = px
 		} else {
@@ -91,11 +94,11 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 			case "left":
 				body["scrollX"] = -800
 			default:
-				cli.Fatal("Usage: pinchtab scroll <ref|pixels|direction>  (e.g. e5, 800, or down)")
+				cli.Fatal("Usage: pinchtab scroll <selector|pixels|direction>  (e.g. e5, 800, or down)")
 			}
 		}
 	case "select":
-		body["ref"] = args[0]
+		setSelectorBody(body, args[0])
 		body["value"] = args[1]
 	}
 
