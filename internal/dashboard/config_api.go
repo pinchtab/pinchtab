@@ -68,8 +68,10 @@ func NewConfigAPI(
 	startedAt time.Time,
 ) *ConfigAPI {
 	boot := config.DefaultFileConfig()
-	if runtime != nil {
-		boot = config.FileConfigFromRuntime(runtime)
+	// Snapshot the on-disk file config at boot so restart detection compares
+	// file-at-boot against the current file, not a lossy runtime reconstruction.
+	if fc, _, err := config.LoadFileConfig(); err == nil && fc != nil {
+		boot = *fc
 	}
 	return &ConfigAPI{
 		runtime:   runtime,
