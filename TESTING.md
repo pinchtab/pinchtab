@@ -69,8 +69,6 @@ Runs the orchestration-focused curl scenarios, including multi-instance flows an
 
 | Variable | Default | Description |
 |---|---|---|
-| `PINCHTAB_TEST_PORT` | `19867` | Port for the test server |
-| `PINCHTAB_TEST_KEEP_DIR` | _(unset)_ | Set to any value to preserve the test dir after tests finish |
 | `CI` | _(unset)_ | Set to `true` for longer health check timeouts (60s vs 30s) |
 
 ### Temp Directory Layout
@@ -84,11 +82,7 @@ Each E2E test run creates a single temp directory under `/tmp/pinchtab-test-*/`:
 └── profiles/         # Chrome user-data directories
 ```
 
-Everything is cleaned up automatically when tests finish. To inspect after a failure:
-
-```bash
-PINCHTAB_TEST_KEEP_DIR=1 ./dev e2e
-```
+Everything is cleaned up automatically when tests finish.
 
 ## Test File Structure
 
@@ -129,8 +123,7 @@ set -e  # Exit on error
 . "$(dirname "$0")/../helpers.sh"
 
 # Test setup
-TEST_PORT="${PINCHTAB_TEST_PORT:-19867}"
-SERVER_URL="http://localhost:$TEST_PORT"
+SERVER_URL="http://localhost:9867"
 
 # Start server if needed
 start_test_server

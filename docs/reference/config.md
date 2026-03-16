@@ -125,7 +125,7 @@ For the common local workflow, prefer the interactive `pinchtab config` screen f
 Default location by OS:
 
 - macOS: `~/Library/Application Support/pinchtab/config.json`
-- Linux: `~/.config/pinchtab/config.json` or `$XDG_CONFIG_HOME/pinchtab/config.json`
+- Linux: `~/.config/pinchtab/config.json` (respects `$XDG_CONFIG_HOME` if set)
 - Windows: `%APPDATA%\pinchtab\config.json`
 
 Legacy fallback:
