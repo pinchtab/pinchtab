@@ -77,8 +77,8 @@ Use a temporary instance for public pages, scraping, or tasks that do not need l
 pinchtab instance start
 pinchtab instances
 # Point CLI commands at the instance port you want to use.
-PINCHTAB_URL=http://localhost:9868 pinchtab nav https://example.com
-PINCHTAB_URL=http://localhost:9868 pinchtab text
+pinchtab --server http://localhost:9868 nav https://example.com
+pinchtab --server http://localhost:9868 text
 ```
 
 ### 2. Reuse an existing named profile
@@ -88,7 +88,7 @@ Use this for recurring tasks against the same authenticated site.
 ```bash
 pinchtab profiles
 pinchtab instance start --profile work --mode headed
-PINCHTAB_URL=http://localhost:9868 pinchtab nav https://mail.google.com
+pinchtab --server http://localhost:9868 nav https://mail.google.com
 ```
 
 If the login is already stored in that profile, you can switch to headless later:
@@ -112,7 +112,7 @@ curl -X POST http://localhost:9867/profiles/billing/start \
   -d '{"headless":false}'
 ```
 
-Then target the returned port with `PINCHTAB_URL`.
+Then target the returned port with `--server`.
 
 ### 4. Human-assisted headed login, then agent reuse
 
@@ -121,8 +121,8 @@ Use this for CAPTCHA, MFA, or first-time setup.
 ```bash
 pinchtab instance start --profile work --mode headed
 # Human completes login in the visible Chrome window.
-PINCHTAB_URL=http://localhost:9868 pinchtab nav https://app.example.com/dashboard
-PINCHTAB_URL=http://localhost:9868 pinchtab snap -i -c
+pinchtab --server http://localhost:9868 nav https://app.example.com/dashboard
+pinchtab --server http://localhost:9868 snap -i -c
 ```
 
 Once the session is stored, reuse the same profile for later tasks.
@@ -153,7 +153,7 @@ pinchtab daemon
 pinchtab health
 pinchtab instances
 pinchtab profiles
-PINCHTAB_URL=http://localhost:9868 pinchtab snap -i -c
+pinchtab --server http://localhost:9868 snap -i -c
 ```
 
 ### Navigation and tabs
@@ -307,7 +307,7 @@ pinchtab snap -d -i -c
 pinchtab profiles
 pinchtab instance start --profile work --mode headed
 # Human signs in once.
-PINCHTAB_URL=http://localhost:9868 pinchtab text
+pinchtab --server http://localhost:9868 text
 ```
 
 ### Run separate instances for separate sites
@@ -318,7 +318,7 @@ pinchtab instance start --profile staging --mode headless
 pinchtab instances
 ```
 
-Then point each command stream at its own `PINCHTAB_URL`.
+Then point each command stream at its own port using `--server`.
 
 ## Security and Token Economy
 

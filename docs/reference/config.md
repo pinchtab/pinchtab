@@ -248,7 +248,9 @@ Current nested config shape:
 ### Network Bind With Token
 
 ```bash
-PINCHTAB_BIND=0.0.0.0 PINCHTAB_TOKEN=secret pinchtab
+pinchtab config set server.bind 0.0.0.0
+pinchtab config set server.token secret
+pinchtab
 ```
 
 ### Custom Instance Port Range

@@ -161,7 +161,8 @@ pinchtab
 ### Port already in use
 
 ```bash
-PINCHTAB_PORT=9868 pinchtab
+pinchtab config set server.port 9868
+pinchtab
 ```
 
 ### Chrome not found

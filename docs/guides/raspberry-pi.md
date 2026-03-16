@@ -185,8 +185,9 @@ Reduce workload in config:
 
 ### Port Already In Use
 
-Override the server port:
+Change the port in config:
 
 ```bash
-PINCHTAB_PORT=9868 ./pinchtab
+pinchtab config set server.port 9868
+./pinchtab
 ```

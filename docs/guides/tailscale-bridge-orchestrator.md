@@ -132,16 +132,19 @@ No normal WAN port forwarding is required.
 
 ## Step 1: Start The Bridge On Machine B
 
-On machine B, start the bridge so it listens on a Tailscale-reachable address:
+On machine B, configure and start the bridge so it listens on a Tailscale-reachable address:
 
 ```bash
-PINCHTAB_BIND=0.0.0.0 \
-PINCHTAB_PORT=9867 \
-PINCHTAB_TOKEN=bridge-secret-token \
+# Configure for network access
+pinchtab config set server.bind 0.0.0.0
+pinchtab config set server.port 9867
+pinchtab config set server.token bridge-secret-token
+
+# Start the bridge
 pinchtab bridge
 ```
 
-If you are using a daemon or service manager, the same rule applies: the service environment must include `PINCHTAB_BIND=0.0.0.0`.
+If you are using a daemon or service manager, ensure the config file has `bind: "0.0.0.0"`.
 
 The first common mistake is to leave the bridge on the default localhost bind. When that happens:
 
@@ -281,10 +284,10 @@ This is the part that causes the most confusion.
 
 ### Direct Bridge Port: Usually HTTP
 
-If you start the bridge like this:
+If you start the bridge with `bind: 0.0.0.0` and `port: 9867` in your config:
 
 ```bash
-PINCHTAB_BIND=0.0.0.0 PINCHTAB_PORT=9867 pinchtab bridge
+pinchtab bridge
 ```
 
 the bridge itself is usually speaking plain HTTP on that port.

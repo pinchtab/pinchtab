@@ -16,7 +16,7 @@ flowchart LR
 Key design decisions:
 
 - **No direct Chrome dependency** — the MCP process has no CDP connection. All browser work is delegated to the PinchTab instance.
-- **Any deployment works** — point `PINCHTAB_URL` at a local server, a Docker container, or a remote host.
+- **Any deployment works** — use `--server` flag to point at a local server, Docker container, or remote host.
 - **Stateless protocol layer** — the MCP server holds no browser state itself; it is purely a translation adapter.
 
 ## Transport
@@ -30,8 +30,9 @@ This transport is universally supported by MCP clients (Claude Desktop, VS Code,
 ```
 pinchtab mcp
   │
-  ├── reads PINCHTAB_URL  (env or config, default http://127.0.0.1:9867)
-  ├── reads PINCHTAB_TOKEN (env or config)
+  ├── reads config port     (default http://127.0.0.1:9867)
+  ├── --server flag         (override for remote servers)
+  ├── reads PINCHTAB_TOKEN  (env or config)
   │
   ├── creates internal/mcp.Client  (HTTP client with 120 s timeout)
   ├── registers 21 MCP tools via mcp-go SDK

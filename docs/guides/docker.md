@@ -23,7 +23,7 @@ docker run -d \
   pinchtab
 ```
 
-On first boot, the image creates `/data/.config/pinchtab/config.json` and generates a token if needed. When you use the managed-config path, the container binds to `0.0.0.0` at runtime via `PINCHTAB_BIND`, but the persisted config remains on the normal loopback default unless you override it yourself.
+On first boot, the image creates `/data/.config/pinchtab/config.json` with `bind: 0.0.0.0` (required for Docker port publishing) and generates a token if needed.
 
 If you inspect the startup security summary from inside Docker, the loopback bind check will still report the effective runtime bind as non-loopback. That is expected: the process is listening on `0.0.0.0` inside the container so Docker port publishing can forward traffic to it.
 
@@ -171,24 +171,16 @@ Without a mounted volume, profiles and saved session state are ephemeral.
 
 ## Runtime Configuration
 
-For current runtime overrides, rely on:
+Supported environment variables:
 
 - `PINCHTAB_CONFIG` — path to custom config file (if not using managed config)
-- `PINCHTAB_BIND` — bind address (default: 127.0.0.1, overridden to 0.0.0.0 in managed-config containers)
-- `PINCHTAB_PORT` — server port (default: 9867)
 - `PINCHTAB_TOKEN` — auth token (prefer Docker secrets; see below)
 
-Everything else, including Chrome binary path, should go in `config.json`.
+Everything else, including bind address and port, should go in `config.json`.
 
-In the bundled image, you usually do not need to set `PINCHTAB_BIND` or `PINCHTAB_PORT` manually. The managed-config entrypoint supplies `PINCHTAB_BIND=0.0.0.0` at runtime so Docker port publishing works without broadening the persisted config. To customize the Chrome binary path, use `config.json`.
+### About `bind: 0.0.0.0` in Containers
 
-### About `PINCHTAB_BIND=0.0.0.0` in Containers
-
-The entrypoint automatically sets `PINCHTAB_BIND=0.0.0.0` at runtime when using managed config. This is necessary because:
-
-1. **Docker port publishing** requires the process to listen on `0.0.0.0` inside the container
-2. **Persisted config** stays secure with `bind: "127.0.0.1"` so it doesn't accidentally expose the service if the container is restarted outside Docker
-3. **Separation of concerns** — runtime behavior (where to bind) is separate from persisted configuration
+The entrypoint sets `bind: 0.0.0.0` in the config on first boot. This is necessary because Docker port publishing requires the process to listen on `0.0.0.0` inside the container.
 
 Example: `docker run -p 127.0.0.1:9867:9867` keeps PinchTab reachable only from your host machine, even though the process internally listens on `0.0.0.0`.
 

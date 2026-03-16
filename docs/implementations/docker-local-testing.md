@@ -29,15 +29,13 @@ Expected results:
 - `server.bind` in the persisted config remains `127.0.0.1`
 - a token is present if one was generated on first boot or passed in
 
-Verify the effective runtime bind separately:
+Verify the config bind address:
 
 ```bash
-docker exec pinchtab sh -lc 'echo "$PINCHTAB_BIND"'
+docker exec pinchtab pinchtab config get server.bind
 ```
 
-Expected result:
-
-- `PINCHTAB_BIND` is `0.0.0.0` unless you overrode it explicitly
+Expected result: `0.0.0.0` (set by entrypoint on first boot)
 
 Verify persistence across restart:
 
