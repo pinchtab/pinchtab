@@ -1,6 +1,9 @@
 ---
 name: pinchtab
 description: "Use this skill when a task needs browser automation through PinchTab: open a website, inspect interactive elements, click through flows, fill out forms, scrape page text, log into sites with a persistent profile, export screenshots or PDFs, manage multiple browser instances, or fall back to the HTTP API when the CLI is unavailable. Prefer this skill for token-efficient browser work driven by stable accessibility refs such as `e5` and `e12`."
+requires: "PinchTab binary (~16 MB, Go), Google Chrome or Chromium installed locally. Optional: curl and jq for HTTP API usage."
+source: "https://github.com/pinchtab/pinchtab"
+license: "MIT"
 ---
 
 # Browser Automation with PinchTab
@@ -331,6 +334,17 @@ Then point each command stream at its own `PINCHTAB_URL`.
 - Use `pinchtab text` to confirm success messages, table updates, or navigation outcomes.
 - Use `pinchtab screenshot` only when visual regressions, CAPTCHA, or layout-specific confirmation matters.
 - If a ref disappears after a change, treat that as expected and fetch fresh refs instead of retrying the stale one.
+
+## Privacy and Security
+
+PinchTab is a fully open-source, local-only browser automation tool:
+
+- **Runs on localhost only.** The server binds to `127.0.0.1` by default. No external network calls are made by PinchTab itself.
+- **No telemetry or analytics.** The binary makes zero outbound connections.
+- **Single Go binary (~16 MB).** Fully verifiable — anyone can build from source at [github.com/pinchtab/pinchtab](https://github.com/pinchtab/pinchtab).
+- **Local Chrome profiles.** Persistent profiles store cookies and sessions on your machine only. This enables agents to reuse authenticated sessions without re-entering credentials, similar to how a human reuses their browser profile.
+- **Token-efficient by design.** Uses the accessibility tree (structured text) instead of screenshots, keeping agent context windows small. Comparable to Playwright but purpose-built for AI agents.
+- **Multi-instance isolation.** Each browser instance runs in its own profile directory with tab-level locking for safe multi-agent use.
 
 ## References
 

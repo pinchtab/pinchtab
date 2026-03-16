@@ -280,11 +280,17 @@ Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 | **Tokens performance** | ✅ |
 | **Headless and Headed** | ✅ |
 | **Profile** | ✅ |
-| **Stealth mode** | ✅ |
+| **Advanced CDP control** | ✅ |
 | **Persistent sessions** | ✅ |
 | **Binary size** | ✅ |
 | **Multi-instance** | ✅ |
 | **External Chrome attach** | ✅ |
+
+---
+
+## Privacy
+
+PinchTab is a fully open-source, local-only tool. No telemetry, no analytics, no outbound connections. The binary binds to `127.0.0.1` by default. Persistent profiles store browser sessions locally on your machine — similar to how a human reuses their browser. The single Go binary (~16 MB) is fully verifiable: build from source at [github.com/pinchtab/pinchtab](https://github.com/pinchtab/pinchtab).
 
 ---
 
