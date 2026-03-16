@@ -26,13 +26,13 @@ func Sanitize(rawURL string) (string, error) {
 	// Allow browser-specific schemes that users might explicitly want
 	allowedPrefixes := []string{
 		"http://", "https://",
+		"file://",
 		"chrome://", "chrome-extension://",
 		"about:", "data:",
 	}
 
-	// Block dangerous schemes (SSRF, XSS)
+	// Block dangerous schemes (XSS)
 	blockedPrefixes := []string{
-		"file://",
 		"javascript:",
 	}
 
@@ -58,7 +58,8 @@ func Sanitize(rawURL string) (string, error) {
 	}
 
 	// For non-http schemes, return as-is (no normalization needed)
-	if strings.HasPrefix(rawURL, "chrome://") ||
+	if strings.HasPrefix(rawURL, "file://") ||
+		strings.HasPrefix(rawURL, "chrome://") ||
 		strings.HasPrefix(rawURL, "chrome-extension://") ||
 		strings.HasPrefix(rawURL, "about:") ||
 		strings.HasPrefix(rawURL, "data:") {

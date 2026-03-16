@@ -110,10 +110,10 @@ func TestHandleNavigateInvalidURL(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
 
-	// Test that disallowed schemes are rejected
-	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "file:///etc/passwd"}, srv)
+	// Test that javascript: scheme is blocked (XSS risk)
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "javascript:alert(1)"}, srv)
 	if !r.IsError {
-		t.Error("expected error for file:// URL scheme")
+		t.Error("expected error for javascript: URL scheme")
 	}
 	text := resultText(t, r)
 	if !strings.Contains(text, "invalid URL") {

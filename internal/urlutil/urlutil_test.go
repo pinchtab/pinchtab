@@ -43,9 +43,8 @@ func TestSanitize(t *testing.T) {
 		{"example.com/path?q=1", false}, // normalized to https://
 
 		// Invalid URLs
-		{"file:///etc/passwd", true},  // wrong scheme
-		{"ftp://example.com", true},   // wrong scheme
-		{"javascript:alert(1)", true}, // wrong scheme
+		{"ftp://example.com", true},   // unsupported scheme
+		{"javascript:alert(1)", true}, // blocked (XSS)
 		{"", true},                    // empty
 	}
 
@@ -66,8 +65,11 @@ func TestIsValid(t *testing.T) {
 	if !IsValid("example.com") {
 		t.Error("expected example.com to be valid (normalizes to https)")
 	}
-	if IsValid("file:///etc/passwd") {
-		t.Error("expected file:// URL to be invalid")
+	if !IsValid("file:///path/to/file.html") {
+		t.Error("expected file:// URL to be valid")
+	}
+	if IsValid("javascript:alert(1)") {
+		t.Error("expected javascript: URL to be invalid")
 	}
 }
 
@@ -97,6 +99,7 @@ func TestExtractHost(t *testing.T) {
 func TestSanitize_BrowserURLs(t *testing.T) {
 	// These browser-specific URLs should be allowed
 	validURLs := []string{
+		"file:///path/to/file.html",
 		"chrome://settings",
 		"chrome://extensions",
 		"chrome-extension://abc123/popup.html",
@@ -113,9 +116,8 @@ func TestSanitize_BrowserURLs(t *testing.T) {
 		}
 	}
 
-	// These dangerous schemes should still be blocked
+	// Only javascript: is blocked (XSS risk)
 	blockedURLs := []string{
-		"file:///etc/passwd",
 		"javascript:alert(1)",
 	}
 	for _, u := range blockedURLs {
