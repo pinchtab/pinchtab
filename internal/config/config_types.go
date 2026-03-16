@@ -105,6 +105,7 @@ type ObservabilityConfig struct {
 type ActivityConfig struct {
 	Enabled        bool `json:"enabled,omitempty"`
 	SessionIdleSec int  `json:"sessionIdleSec,omitempty"`
+	RetentionDays  int  `json:"retentionDays,omitempty"`
 }
 
 // FileConfig is the persistent configuration written to disk.
@@ -214,4 +215,5 @@ type ObservabilityFileConfig struct {
 type ActivityFileConfig struct {
 	Enabled        *bool `json:"enabled,omitempty"`
 	SessionIdleSec *int  `json:"sessionIdleSec,omitempty"`
+	RetentionDays  *int  `json:"retentionDays,omitempty"`
 }

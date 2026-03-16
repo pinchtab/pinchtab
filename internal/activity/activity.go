@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,11 +18,13 @@ import (
 const (
 	defaultSessionIdleTimeout = 30 * time.Minute
 	defaultQueryLimit         = 200
+	defaultRetentionDays      = 1
 )
 
 type Config struct {
-	Enabled     bool
-	SessionIdle time.Duration
+	Enabled       bool
+	SessionIdle   time.Duration
+	RetentionDays int
 }
 
 type Event struct {
@@ -76,8 +79,9 @@ type Recorder interface {
 }
 
 type Store struct {
-	path             string
+	dir              string
 	sessionIdleLimit time.Duration
+	retentionDays    int
 
 	mu       sync.Mutex
 	sessions map[string]sessionState
@@ -92,10 +96,10 @@ func NewRecorder(cfg Config, stateDir string) (Recorder, error) {
 	if cfg.SessionIdle <= 0 {
 		cfg.SessionIdle = defaultSessionIdleTimeout
 	}
-	return NewStore(stateDir, cfg.SessionIdle)
+	return NewStore(stateDir, cfg.SessionIdle, cfg.RetentionDays)
 }
 
-func NewStore(stateDir string, sessionIdle time.Duration) (*Store, error) {
+func NewStore(stateDir string, sessionIdle time.Duration, retentionDays int) (*Store, error) {
 	activityDir := filepath.Join(stateDir, "activity")
 	if err := os.MkdirAll(activityDir, 0750); err != nil {
 		return nil, fmt.Errorf("create activity dir: %w", err)
@@ -103,10 +107,17 @@ func NewStore(stateDir string, sessionIdle time.Duration) (*Store, error) {
 	if sessionIdle <= 0 {
 		sessionIdle = defaultSessionIdleTimeout
 	}
+	if retentionDays < 0 {
+		retentionDays = 0
+	}
+	if retentionDays == 0 {
+		retentionDays = defaultRetentionDays
+	}
 
 	return &Store{
-		path:             filepath.Join(activityDir, "events.jsonl"),
+		dir:              activityDir,
 		sessionIdleLimit: sessionIdle,
+		retentionDays:    retentionDays,
 		sessions:         make(map[string]sessionState),
 	}, nil
 }
@@ -132,7 +143,11 @@ func (s *Store) Record(evt Event) error {
 		evt.SessionID = s.sessionIDLocked(evt)
 	}
 
-	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err := s.pruneExpiredFilesLocked(evt.Timestamp); err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(s.filePathFor(evt.Timestamp), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("open activity log: %w", err)
 	}
@@ -158,35 +173,40 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		limit = defaultQueryLimit
 	}
 
-	f, err := os.Open(s.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Event{}, nil
-		}
-		return nil, fmt.Errorf("open activity log: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
 	var events []Event
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		var evt Event
-		if err := json.Unmarshal(scanner.Bytes(), &evt); err != nil {
-			continue
+	for _, path := range s.queryFiles() {
+		f, err := os.Open(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("open activity log: %w", err)
 		}
-		if !filter.matches(evt) {
-			continue
+
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			var evt Event
+			if err := json.Unmarshal(scanner.Bytes(), &evt); err != nil {
+				continue
+			}
+			if !filter.matches(evt) {
+				continue
+			}
+			if len(events) < limit {
+				events = append(events, evt)
+				continue
+			}
+			copy(events, events[1:])
+			events[len(events)-1] = evt
 		}
-		if len(events) < limit {
-			events = append(events, evt)
-			continue
+		closeErr := f.Close()
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("scan activity log: %w", err)
 		}
-		copy(events, events[1:])
-		events[len(events)-1] = evt
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan activity log: %w", err)
+		if closeErr != nil {
+			return nil, fmt.Errorf("close activity log: %w", closeErr)
+		}
 	}
 	return events, nil
 }
@@ -281,6 +301,85 @@ func FingerprintToken(token string) string {
 	}
 	sum := sha256.Sum256([]byte(token))
 	return "tok_" + hex.EncodeToString(sum[:6])
+}
+
+func (s *Store) filePathFor(ts time.Time) string {
+	return filepath.Join(s.dir, fmt.Sprintf("events-%s.jsonl", ts.UTC().Format(time.DateOnly)))
+}
+
+func (s *Store) queryFiles() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC()
+	_ = s.pruneExpiredFilesLocked(now)
+
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil
+	}
+
+	files := make([]string, 0, len(entries)+1)
+	legacyPath := filepath.Join(s.dir, "events.jsonl")
+	if _, err := os.Stat(legacyPath); err == nil {
+		files = append(files, legacyPath)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, "events-") || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		files = append(files, filepath.Join(s.dir, name))
+	}
+
+	sort.Strings(files)
+	return files
+}
+
+func (s *Store) pruneExpiredFilesLocked(now time.Time) error {
+	if s.retentionDays <= 0 {
+		return nil
+	}
+
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("read activity dir: %w", err)
+	}
+
+	keepFrom := now.UTC().AddDate(0, 0, -(s.retentionDays - 1)).Format(time.DateOnly)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name == "events.jsonl" {
+			info, err := entry.Info()
+			if err == nil && info.ModTime().UTC().Format(time.DateOnly) < keepFrom {
+				if err := os.Remove(filepath.Join(s.dir, name)); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("remove expired legacy activity log: %w", err)
+				}
+			}
+			continue
+		}
+		if !strings.HasPrefix(name, "events-") || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		day := strings.TrimSuffix(strings.TrimPrefix(name, "events-"), ".jsonl")
+		if len(day) != len(time.DateOnly) {
+			continue
+		}
+		if day < keepFrom {
+			if err := os.Remove(filepath.Join(s.dir, name)); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove expired activity log: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func randomID(prefix string) string {

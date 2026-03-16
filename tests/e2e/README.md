@@ -65,6 +65,7 @@ The Docker stack reuses the repository root `Dockerfile` and mounts explicit con
 | 04-tabs-api | Tab-scoped APIs (regression #207) |
 | 05-actions | Click, type, press actions |
 | 06-screenshot-pdf | Screenshot and PDF export |
+| 40-activity | Activity API capture and filtering |
 | scenarios-orchestrator/01-attach-bridge | Orchestrator attaches to the dedicated `pinchtab-bridge` container and proxies tab traffic |
 | scenarios-orchestrator/31-multi-instance | Launch/list/stop and aggregate orchestration behavior |
 

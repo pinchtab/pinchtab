@@ -28,6 +28,7 @@ func DefaultFileConfig() FileConfig {
 	attachEnabled := true
 	activityEnabled := true
 	activitySessionIdleSec := 1800
+	activityRetentionDays := 1
 	return FileConfig{
 		ConfigVersion: CurrentConfigVersion,
 		Server: ServerConfig{
@@ -91,6 +92,7 @@ func DefaultFileConfig() FileConfig {
 			Activity: ActivityFileConfig{
 				Enabled:        &activityEnabled,
 				SessionIdleSec: &activitySessionIdleSec,
+				RetentionDays:  &activityRetentionDays,
 			},
 		},
 	}
@@ -211,6 +213,7 @@ type observabilityFileConfigJSON struct {
 type activityConfigJSON struct {
 	Enabled        *bool `json:"enabled"`
 	SessionIdleSec *int  `json:"sessionIdleSec"`
+	RetentionDays  *int  `json:"retentionDays"`
 }
 
 func copyStringSlice(items []string) []string {
@@ -311,6 +314,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			Activity: activityConfigJSON{
 				Enabled:        fc.Observability.Activity.Enabled,
 				SessionIdleSec: fc.Observability.Activity.SessionIdleSec,
+				RetentionDays:  fc.Observability.Activity.RetentionDays,
 			},
 		},
 	})
@@ -345,6 +349,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	restartStableAfterSec := int(cfg.RestartStableAfter / time.Second)
 	activityEnabled := cfg.Observability.Activity.Enabled
 	activitySessionIdleSec := cfg.Observability.Activity.SessionIdleSec
+	activityRetentionDays := cfg.Observability.Activity.RetentionDays
 
 	mode := "headless"
 	if !cfg.Headless {
@@ -419,6 +424,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			Activity: ActivityFileConfig{
 				Enabled:        &activityEnabled,
 				SessionIdleSec: &activitySessionIdleSec,
+				RetentionDays:  &activityRetentionDays,
 			},
 		},
 	}

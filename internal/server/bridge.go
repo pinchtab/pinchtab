@@ -34,8 +34,9 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	bridgeInstance.StealthScript = assets.StealthScript
 	actStore, err := activity.NewRecorder(activity.Config{
-		Enabled:     cfg.Observability.Activity.Enabled,
-		SessionIdle: time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
+		Enabled:       cfg.Observability.Activity.Enabled,
+		SessionIdle:   time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
+		RetentionDays: cfg.Observability.Activity.RetentionDays,
 	}, cfg.StateDir)
 	if err != nil {
 		slog.Error("activity store", "err", err)

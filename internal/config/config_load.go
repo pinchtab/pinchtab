@@ -86,6 +86,7 @@ func Load() *RuntimeConfig {
 			Activity: ActivityConfig{
 				Enabled:        true,
 				SessionIdleSec: 1800,
+				RetentionDays:  1,
 			},
 		},
 	}
@@ -210,6 +211,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Observability.Activity.SessionIdleSec != nil {
 		cfg.Observability.Activity.SessionIdleSec = *fc.Observability.Activity.SessionIdleSec
+	}
+	if fc.Observability.Activity.RetentionDays != nil {
+		cfg.Observability.Activity.RetentionDays = *fc.Observability.Activity.RetentionDays
 	}
 
 	// Browser

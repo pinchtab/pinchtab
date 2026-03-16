@@ -39,7 +39,7 @@ End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tes
 ./dev e2e curl
 ```
 
-Runs 183 HTTP-level tests using curl against the server. Tests the REST API, navigation, snapshots, and other HTTP endpoints.
+Runs 184 HTTP-level tests using curl against the server. Tests the REST API, navigation, snapshots, activity logging, and other HTTP endpoints.
 
 ### CLI Tests
 
@@ -47,7 +47,7 @@ Runs 183 HTTP-level tests using curl against the server. Tests the REST API, nav
 ./dev e2e cli
 ```
 
-Runs CLI e2e tests. Tests the command-line interface directly.
+Runs CLI e2e tests. Tests the command-line interface directly, including activity queries.
 
 ### Both E2E Test Suites
 
@@ -55,7 +55,7 @@ Runs CLI e2e tests. Tests the command-line interface directly.
 ./dev e2e
 ```
 
-Runs all E2E tests (curl + CLI, 224 tests total).
+Runs all E2E tests (curl + CLI, 226 tests total).
 
 ### Orchestrator E2E Suite
 
@@ -88,7 +88,7 @@ Everything is cleaned up automatically when tests finish.
 
 E2E tests are organized in two directories:
 
-- **`tests/e2e/scenarios/*.sh`** — HTTP curl-based tests (183 tests)
+- **`tests/e2e/scenarios/*.sh`** — HTTP curl-based tests (184 tests)
   - Test the REST API directly
   - Use Docker Compose: `tests/e2e/docker-compose.yml`
 
@@ -96,7 +96,7 @@ E2E tests are organized in two directories:
   - Test multi-instance flows and remote bridge attachment
   - Use Docker Compose: `tests/e2e/docker-compose-orchestrator.yml`
 
-- **`tests/e2e/scenarios-cli/*.sh`** — CLI e2e tests (41 tests)
+- **`tests/e2e/scenarios-cli/*.sh`** — CLI e2e tests (42 tests)
   - Test the command-line interface
   - Use Docker Compose: `tests/e2e/docker-compose.cli.yml`
 

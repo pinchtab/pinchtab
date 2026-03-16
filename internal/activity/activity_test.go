@@ -8,7 +8,7 @@ import (
 )
 
 func TestStoreRecordAndQuery(t *testing.T) {
-	store, err := NewStore(t.TempDir(), 30*time.Minute)
+	store, err := NewStore(t.TempDir(), 30*time.Minute, 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
@@ -38,12 +38,13 @@ func TestStoreRecordAndQuery(t *testing.T) {
 
 func TestStoreWritesJSONLFile(t *testing.T) {
 	root := t.TempDir()
-	store, err := NewStore(root, 30*time.Minute)
+	store, err := NewStore(root, 30*time.Minute, 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
+	now := time.Now().UTC()
 	if err := store.Record(Event{
-		Timestamp: time.Now().UTC(),
+		Timestamp: now,
 		Source:    "server",
 		Method:    "GET",
 		Path:      "/health",
@@ -52,9 +53,42 @@ func TestStoreWritesJSONLFile(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	path := filepath.Join(root, "activity", "events.jsonl")
+	path := filepath.Join(root, "activity", "events-"+now.Format(time.DateOnly)+".jsonl")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("activity log missing: %v", err)
+	}
+}
+
+func TestStorePrunesExpiredDailyFiles(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(root, 30*time.Minute, 1)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	oldDay := time.Now().UTC().AddDate(0, 0, -1)
+	if err := store.Record(Event{
+		Timestamp: oldDay,
+		Source:    "server",
+		Method:    "GET",
+		Path:      "/old",
+		Status:    200,
+	}); err != nil {
+		t.Fatalf("Record old: %v", err)
+	}
+	if err := store.Record(Event{
+		Timestamp: time.Now().UTC(),
+		Source:    "server",
+		Method:    "GET",
+		Path:      "/new",
+		Status:    200,
+	}); err != nil {
+		t.Fatalf("Record new: %v", err)
+	}
+
+	oldPath := filepath.Join(root, "activity", "events-"+oldDay.Format(time.DateOnly)+".jsonl")
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected old activity file to be pruned, stat err = %v", err)
 	}
 }
 
