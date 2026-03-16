@@ -1,9 +1,27 @@
 ---
 name: pinchtab
 description: "Use this skill when a task needs browser automation through PinchTab: open a website, inspect interactive elements, click through flows, fill out forms, scrape page text, log into sites with a persistent profile, export screenshots or PDFs, manage multiple browser instances, or fall back to the HTTP API when the CLI is unavailable. Prefer this skill for token-efficient browser work driven by stable accessibility refs such as `e5` and `e12`."
-requires: "PinchTab binary (~16 MB, Go), Google Chrome or Chromium installed locally. Optional: curl and jq for HTTP API usage."
-source: "https://github.com/pinchtab/pinchtab"
-license: "MIT"
+metadata:
+  openclaw:
+    requires:
+      bins:
+        - pinchtab
+      anyBins:
+        - google-chrome
+        - google-chrome-stable
+        - chromium
+        - chromium-browser
+      env:
+        - PINCHTAB_TOKEN
+        - PINCHTAB_CONFIG
+    homepage: https://github.com/pinchtab/pinchtab
+    install:
+      - kind: brew
+        formula: pinchtab/tap/pinchtab
+        bins: [pinchtab]
+      - kind: go
+        package: github.com/pinchtab/pinchtab/cmd/pinchtab@latest
+        bins: [pinchtab]
 ---
 
 # Browser Automation with PinchTab
@@ -42,6 +60,39 @@ Rules:
 - Default to `pinchtab snap -i -c` when you need actionable elements.
 - Use screenshots only for visual verification, UI diffs, or debugging.
 - Start multi-site or parallel work by choosing the right instance or profile first.
+
+## Selectors
+
+PinchTab uses a unified selector system. Any command that targets an element accepts these formats:
+
+| Selector | Example | Resolves via |
+|---|---|---|
+| Ref | `e5` | Snapshot cache (fastest) |
+| CSS | `#login`, `.btn`, `[data-testid="x"]` | `document.querySelector` |
+| XPath | `xpath://button[@id="submit"]` | CDP search |
+| Text | `text:Sign In` | Visible text match |
+| Semantic | `find:login button` | Natural language query via `/find` |
+
+Auto-detection: bare `e5` → ref, `#id` / `.class` / `[attr]` → CSS, `//path` → XPath. Use explicit prefixes (`css:`, `xpath:`, `text:`, `find:`) when auto-detection is ambiguous.
+
+```bash
+pinchtab click e5                        # ref
+pinchtab click "#submit"                 # CSS (auto-detected)
+pinchtab click "text:Sign In"            # text match
+pinchtab click "xpath://button[@type]"   # XPath
+pinchtab fill "#email" "user@test.com"   # CSS
+pinchtab fill e3 "user@test.com"         # ref
+```
+
+The same syntax works in the HTTP API via the `selector` field:
+
+```json
+{"kind": "click", "selector": "text:Sign In"}
+{"kind": "fill", "selector": "#email", "text": "user@test.com"}
+{"kind": "click", "selector": "e5"}
+```
+
+Legacy `ref` field is still accepted for backward compatibility.
 
 ## Command Chaining
 
@@ -138,7 +189,7 @@ curl -X POST http://localhost:9867/instances/launch \
   -d '{"name":"work","headless":true}'
 curl -X POST http://localhost:9868/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","ref":"e5"}'
+  -d '{"kind":"click","selector":"e5"}'
 ```
 
 If the server is exposed beyond localhost, require a token and use a dedicated automation profile. See [TRUST.md](./TRUST.md) and [config.md](../../docs/reference/config.md).
@@ -148,12 +199,12 @@ If the server is exposed beyond localhost, require a token and use a dedicated a
 ### Server and targeting
 
 ```bash
-pinchtab server
-pinchtab daemon
-pinchtab health
-pinchtab instances
-pinchtab profiles
-pinchtab --server http://localhost:9868 snap -i -c
+pinchtab server                                     # Start server foreground
+pinchtab daemon install                             # Install as system service
+pinchtab health                                     # Check server status
+pinchtab instances                                  # List running instances
+pinchtab profiles                                   # List available profiles
+pinchtab --server http://localhost:9868 snap -i -c  # Target specific instance
 ```
 
 ### Navigation and tabs
@@ -164,7 +215,10 @@ pinchtab nav <url> --new-tab
 pinchtab nav <url> --tab <tab-id>
 pinchtab nav <url> --block-images
 pinchtab nav <url> --block-ads
-pinchtab tab
+pinchtab back                                       # Navigate back in history
+pinchtab forward                                    # Navigate forward
+pinchtab reload                                     # Reload current page
+pinchtab tab                                        # List tabs or focus by ID
 pinchtab tab new <url>
 pinchtab tab close <tab-id>
 pinchtab instance navigate <instance-id> <url>
@@ -174,16 +228,16 @@ pinchtab instance navigate <instance-id> <url>
 
 ```bash
 pinchtab snap
-pinchtab snap -i
-pinchtab snap -i -c
-pinchtab snap -d
-pinchtab snap --selector <css>
-pinchtab snap --max-tokens <n>
-pinchtab snap --text
-pinchtab text
-pinchtab text --raw
-pinchtab find <query>
-pinchtab find --ref-only <query>
+pinchtab snap -i                                    # Interactive elements only
+pinchtab snap -i -c                                 # Interactive + compact
+pinchtab snap -d                                    # Diff from previous snapshot
+pinchtab snap --selector <css>                      # Scope to CSS selector
+pinchtab snap --max-tokens <n>                      # Token budget limit
+pinchtab snap --text                                # Text output format
+pinchtab text                                       # Page text content
+pinchtab text --raw                                 # Raw text extraction
+pinchtab find <query>                               # Semantic element search
+pinchtab find --ref-only <query>                    # Return refs only
 ```
 
 Guidance:
@@ -195,16 +249,19 @@ Guidance:
 
 ### Interaction
 
+All interaction commands accept unified selectors (refs, CSS, XPath, text, semantic). See the Selectors section above.
+
 ```bash
-pinchtab click <ref>
-pinchtab click --wait-nav <ref>
-pinchtab click --css <selector>
-pinchtab type <ref> <text>
-pinchtab fill <ref|selector> <text>
-pinchtab press <key>
-pinchtab hover <ref>
-pinchtab select <ref> <value>
-pinchtab scroll <ref|pixels>
+pinchtab click <selector>                           # Click element
+pinchtab click --wait-nav <selector>                # Click and wait for navigation
+pinchtab click --x 100 --y 200                      # Click by coordinates
+pinchtab dblclick <selector>                        # Double-click element
+pinchtab type <selector> <text>                     # Type with keystrokes
+pinchtab fill <selector> <text>                     # Set value directly
+pinchtab press <key>                                # Press key (Enter, Tab, Escape...)
+pinchtab hover <selector>                           # Hover element
+pinchtab select <selector> <value>                  # Select dropdown option
+pinchtab scroll <selector|pixels>                   # Scroll element or page
 ```
 
 Rules:
@@ -218,8 +275,8 @@ Rules:
 
 ```bash
 pinchtab screenshot
-pinchtab screenshot -o /tmp/pinchtab-page.png  # Format driven by extension
-pinchtab screenshot -q 60
+pinchtab screenshot -o /tmp/pinchtab-page.png       # Format driven by extension
+pinchtab screenshot -q 60                            # JPEG quality
 pinchtab pdf
 pinchtab pdf -o /tmp/pinchtab-report.pdf
 pinchtab pdf --landscape
@@ -252,7 +309,7 @@ curl "http://localhost:9868/snapshot?filter=interactive&format=compact"
 
 curl -X POST http://localhost:9868/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e3","text":"ada@example.com"}'
+  -d '{"kind":"fill","selector":"e3","text":"ada@example.com"}'
 
 curl http://localhost:9868/text
 ```
@@ -299,6 +356,16 @@ pinchtab nav https://example.com/checkout
 pinchtab snap -i -c
 pinchtab click e8
 pinchtab snap -d -i -c
+```
+
+### Target elements without a snapshot
+
+When you know the page structure, skip the snapshot and use CSS or text selectors directly:
+
+```bash
+pinchtab click "text:Accept Cookies"
+pinchtab fill "#search" "quarterly report"
+pinchtab click "xpath://button[@type='submit']"
 ```
 
 ### Bootstrap an authenticated profile
