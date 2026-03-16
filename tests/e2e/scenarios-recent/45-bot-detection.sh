@@ -4,8 +4,8 @@
 # Simulates checks from bot.sannysoft.com
 #
 # Tests run against:
-# - PINCHTAB_URL (light stealth) - basic bot detection evasion
-# - PINCHTAB_SECURE_URL (full stealth) - additional fingerprint protections
+# - E2E_SERVER (light stealth) - basic bot detection evasion
+# - E2E_SECURE_SERVER (full stealth) - additional fingerprint protections
 
 source "$(dirname "$0")/common.sh"
 
@@ -138,8 +138,8 @@ echo -e "${BLUE}Testing FULL stealth mode (secure instance - limited tests)${NC}
 echo -e "${YELLOW}Note: evaluate disabled on secure instance, testing navigation only${NC}"
 
 # Switch to secure instance for full stealth tests
-ORIG_URL="$PINCHTAB_URL"
-PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+ORIG_URL="$E2E_SERVER"
+E2E_SERVER="$E2E_SECURE_SERVER"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "bot-detect-full: can navigate with full stealth"
@@ -173,7 +173,7 @@ fi
 end_test
 
 # Restore original URL
-PINCHTAB_URL="$ORIG_URL"
+E2E_SERVER="$ORIG_URL"
 
 # ═══════════════════════════════════════════════════════════════════
 # Note: Full stealth JavaScript tests (WebGL spoofing, etc.) would

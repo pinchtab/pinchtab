@@ -92,7 +92,7 @@ pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
 
 # format=text should return plain text content type
-RESPONSE=$(curl -s -w "\n%{http_code}\n%{content_type}" "${PINCHTAB_URL}/text?format=text")
+RESPONSE=$(curl -s -w "\n%{http_code}\n%{content_type}" "${E2E_SERVER}/text?format=text")
 BODY=$(echo "$RESPONSE" | head -n -2)
 STATUS=$(echo "$RESPONSE" | tail -n 2 | head -1)
 CTYPE=$(echo "$RESPONSE" | tail -n 1)

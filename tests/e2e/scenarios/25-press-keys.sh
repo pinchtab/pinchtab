@@ -7,7 +7,7 @@
 source "$(dirname "$0")/common.sh"
 
 # Use permissive instance (needs evaluate enabled)
-PINCHTAB_URL="http://pinchtab:9999"
+E2E_SERVER="http://pinchtab:9999"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "press Enter: does not type 'Enter' as text"

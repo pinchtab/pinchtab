@@ -3,8 +3,8 @@
 # Verifies that extension paths reach Chrome startup reliably in CI.
 source "$(dirname "$0")/common.sh"
 
-ORCH_URL=$PINCHTAB_URL
-ORIG_URL=$PINCHTAB_URL
+ORCH_URL=$E2E_SERVER
+ORIG_URL=$E2E_SERVER
 
 assert_instance_logs_poll() {
   local inst_id="$1"
@@ -15,7 +15,7 @@ assert_instance_logs_poll() {
 
   local i
   for i in $(seq 1 "$attempts"); do
-    PINCHTAB_URL=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
+    E2E_SERVER=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
     if [[ "$HTTP_STATUS" =~ ^2 ]] && echo "$RESULT" | grep -Fq "$needle"; then
       echo -e "  ${GREEN}✓${NC} $desc"
       ((ASSERTIONS_PASSED++)) || true
@@ -36,7 +36,7 @@ print_extension_hints() {
   echo "  - Check if /extensions/test-extension exists and is readable in the pinchtab container."
   echo "  - Check Manifest V3 host_permissions matches: [\"*://*/*\"]"
   if [ -n "$inst_id" ]; then
-    PINCHTAB_URL=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
+    E2E_SERVER=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
     echo "  - Recent instance log tail:"
     printf '%s\n' "$RESULT" | tail -n 12 | sed 's/^/    /'
   fi
@@ -78,7 +78,7 @@ if [ $DEFAULT_LOG_PASS -ne 0 ]; then
   print_extension_hints "$DEFAULT_INST_ID"
   # Debug: dump full instance logs for analysis
   echo "  ${YELLOW}📋 Full instance logs:${NC}"
-  PINCHTAB_URL=$ORCH_URL pt_get "/instances/${DEFAULT_INST_ID}/logs" >/dev/null
+  E2E_SERVER=$ORCH_URL pt_get "/instances/${DEFAULT_INST_ID}/logs" >/dev/null
   printf '%s\n' "$RESULT" | head -30 | sed 's/^/    /'
 fi
 
@@ -91,9 +91,9 @@ pt_post /instances/start '{"extensionPaths":["/extensions/test-extension"]}'
 assert_ok "instance start with extension"
 INST_ID=$(echo "$RESULT" | jq -r '.id')
 INST_PORT=$(echo "$RESULT" | jq -r '.port')
-PINCHTAB_URL="http://pinchtab:${INST_PORT}"
-wait_for_instance_ready "${PINCHTAB_URL}"
-PINCHTAB_URL=$ORIG_URL
+E2E_SERVER="http://pinchtab:${INST_PORT}"
+wait_for_instance_ready "${E2E_SERVER}"
+E2E_SERVER=$ORIG_URL
 
 assert_instance_logs_poll \
   "$INST_ID" \
@@ -111,11 +111,11 @@ assert_ok "instance start"
 INST_ID=$(echo "$RESULT" | jq -r '.id')
 INST_PORT=$(echo "$RESULT" | jq -r '.port')
 
-# Switch PINCHTAB_URL to the new instance's port for direct testing
-PINCHTAB_URL="http://pinchtab:${INST_PORT}"
+# Switch E2E_SERVER to the new instance's port for direct testing
+E2E_SERVER="http://pinchtab:${INST_PORT}"
 
 # Wait for this child instance to be ready
-wait_for_instance_ready "${PINCHTAB_URL}"
+wait_for_instance_ready "${E2E_SERVER}"
 
 # Navigate
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
@@ -136,6 +136,6 @@ if [ $MERGE_PASS -ne 0 ]; then
 fi
 
 # Restore original URL
-PINCHTAB_URL=$ORIG_URL
+E2E_SERVER=$ORIG_URL
 
 end_test

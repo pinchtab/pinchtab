@@ -42,7 +42,7 @@ start_test "pinchtab text (table.html)"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 sleep 1
 
-TEXT_RESULT=$(curl -s "${PINCHTAB_URL}/text" | jq -r '.text')
+TEXT_RESULT=$(curl -s "${E2E_SERVER}/text" | jq -r '.text')
 assert_table_page "$TEXT_RESULT"
 
 end_test

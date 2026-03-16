@@ -10,7 +10,7 @@
 source "$(dirname "$0")/common.sh"
 
 # Use the secure instance (maxTabs=2)
-PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+E2E_SERVER="$E2E_SECURE_SERVER"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "LRU eviction: open 2 tabs (at limit)"

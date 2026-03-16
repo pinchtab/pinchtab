@@ -34,7 +34,7 @@ assert_json_exists "$RESULT" '.id' "has instance id"
 assert_json_exists "$RESULT" '.port' "has port"
 
 # Wait for instance to be ready
-wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${INST_ID}" "running" 30
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${INST_ID}" "running" 30
 
 # Verify it appears in list
 pt_get /instances
@@ -86,7 +86,7 @@ start_test "orchestrator: aggregate tabs (multi-instance)"
 pt_post /instances/launch '{"name":"e2e-agg-tabs","headless":true}'
 assert_ok "launch for aggregate"
 AGG_INST=$(echo "$RESULT" | jq -r '.id')
-wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${AGG_INST}" "running" 30
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${AGG_INST}" "running" 30
 
 # Navigate on both instances to ensure tabs exist
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
@@ -108,7 +108,7 @@ start_test "orchestrator: instance tabs"
 
 # Wait for instance to be running (may still be starting)
 for i in $(seq 1 10); do
-  INST_STATUS=$(curl -sf "${PINCHTAB_URL}/instances/${INST_ID}" 2>/dev/null | jq -r '.status // empty' || true)
+  INST_STATUS=$(curl -sf "${E2E_SERVER}/instances/${INST_ID}" 2>/dev/null | jq -r '.status // empty' || true)
   if [ "$INST_STATUS" = "running" ]; then
     break
   fi
@@ -231,8 +231,8 @@ pt_post /instances/launch '{"name":"e2e-iso-2","headless":true}'
 assert_ok "launch iso-2"
 ISO_INST2=$(echo "$RESULT" | jq -r '.id')
 
-wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${ISO_INST1}" "running" 30
-wait_for_orchestrator_instance_status "${PINCHTAB_URL}" "${ISO_INST2}" "running" 30
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${ISO_INST1}" "running" 30
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${ISO_INST2}" "running" 30
 
 # Open tabs on each instance
 pt_post "/instances/${ISO_INST1}/tabs/open" "{\"url\":\"${FIXTURES_URL}/index.html\"}"

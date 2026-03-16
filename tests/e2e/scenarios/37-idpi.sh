@@ -2,8 +2,8 @@
 # 37-idpi.sh — IDPI (Indirect Prompt Injection Detection) on /find and /pdf
 #
 # Tests content-based IDPI scanning:
-#   - PINCHTAB_URL (main): IDPI enabled, scanContent=true (default), warn mode
-#   - PINCHTAB_SECURE_URL (secure): IDPI enabled, strictMode=true
+#   - E2E_SERVER (main): IDPI enabled, scanContent=true (default), warn mode
+#   - E2E_SECURE_SERVER (secure): IDPI enabled, strictMode=true
 
 source "$(dirname "$0")/common.sh"
 
@@ -15,10 +15,10 @@ source "$(dirname "$0")/common.sh"
 # Usage: TAB_ID=$(idpi_setup <base_url> <page_url>)
 idpi_setup() {
   local base_url="$1" page_url="$2"
-  local old_url="$PINCHTAB_URL"
-  PINCHTAB_URL="$base_url"
+  local old_url="$E2E_SERVER"
+  E2E_SERVER="$base_url"
   pt_post /navigate "{\"url\":\"$page_url\"}" >/dev/null
-  PINCHTAB_URL="$old_url"
+  E2E_SERVER="$old_url"
   sleep 1
   echo "$RESULT" | jq -r '.tabId'
 }
@@ -80,30 +80,30 @@ FIND_CLEAN='{"query":"safe action button","threshold":0.1,"topK":5}'
 # ═══════════════════════════════════════════════════════════════════
 
 start_test "idpi: /find clean page — no warning (warn mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-clean.html")
-idpi_request POST "$PINCHTAB_URL" "/tabs/${TAB_ID}/find" "$FIND_CLEAN" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-clean.html")
+idpi_request POST "$E2E_SERVER" "/tabs/${TAB_ID}/find" "$FIND_CLEAN" "X-IDPI-Warning"
 assert_ok "/find clean page"
 assert_header_absent "no X-IDPI-Warning on clean page"
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: /find injection page — warns (warn mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request POST "$PINCHTAB_URL" "/tabs/${TAB_ID}/find" "$FIND_BODY" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request POST "$E2E_SERVER" "/tabs/${TAB_ID}/find" "$FIND_BODY" "X-IDPI-Warning"
 assert_ok "/find injection (warn mode returns 200)"
 assert_header_present "X-IDPI-Warning header present"
 assert_json_exists "$RESULT" ".idpiWarning" "idpiWarning field in body"
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: POST /find injection — warns (warn mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request POST "$PINCHTAB_URL" "/find" "{\"query\":\"malicious paragraph\",\"tabId\":\"$TAB_ID\",\"threshold\":0.1}" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request POST "$E2E_SERVER" "/find" "{\"query\":\"malicious paragraph\",\"tabId\":\"$TAB_ID\",\"threshold\":0.1}" "X-IDPI-Warning"
 assert_ok "POST /find (warn mode)"
 assert_header_present "X-IDPI-Warning on POST /find"
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
@@ -111,19 +111,19 @@ end_test
 # ═══════════════════════════════════════════════════════════════════
 
 start_test "idpi: /find clean page — allowed (strict mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_SECURE_URL" "${FIXTURES_URL}/idpi-clean.html")
-idpi_request POST "$PINCHTAB_SECURE_URL" "/tabs/${TAB_ID}/find" "$FIND_CLEAN" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-clean.html")
+idpi_request POST "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/find" "$FIND_CLEAN" "X-IDPI-Warning"
 assert_ok "/find clean page (strict mode)"
-idpi_cleanup "$PINCHTAB_SECURE_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: /find injection page — blocked (strict mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_SECURE_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request POST "$PINCHTAB_SECURE_URL" "/tabs/${TAB_ID}/find" "$FIND_BODY" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request POST "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/find" "$FIND_BODY" "X-IDPI-Warning"
 assert_http_status 403 "/find blocked in strict mode"
 assert_contains "$RESULT" "idpi" "403 body mentions IDPI"
-idpi_cleanup "$PINCHTAB_SECURE_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
@@ -131,20 +131,20 @@ end_test
 # ═══════════════════════════════════════════════════════════════════
 
 start_test "idpi: /pdf clean page — no warning (warn mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-clean.html")
-idpi_request GET "$PINCHTAB_URL" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-clean.html")
+idpi_request GET "$E2E_SERVER" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
 assert_ok "/pdf clean page"
 assert_header_absent "no X-IDPI-Warning on clean PDF"
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: /pdf injection page — warns (warn mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request GET "$PINCHTAB_URL" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request GET "$E2E_SERVER" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
 assert_ok "/pdf injection (warn mode returns 200)"
 assert_header_present "X-IDPI-Warning on injection PDF"
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
@@ -152,19 +152,19 @@ end_test
 # ═══════════════════════════════════════════════════════════════════
 
 start_test "idpi: /pdf clean page — allowed (strict mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_SECURE_URL" "${FIXTURES_URL}/idpi-clean.html")
-idpi_request GET "$PINCHTAB_SECURE_URL" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-clean.html")
+idpi_request GET "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
 assert_ok "/pdf clean page (strict mode)"
-idpi_cleanup "$PINCHTAB_SECURE_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: /pdf injection page — blocked (strict mode)"
-TAB_ID=$(idpi_setup "$PINCHTAB_SECURE_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request GET "$PINCHTAB_SECURE_URL" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request GET "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/pdf" "" "X-IDPI-Warning"
 assert_http_status 403 "/pdf blocked in strict mode"
 assert_contains "$RESULT" "idpi" "403 body mentions IDPI"
-idpi_cleanup "$PINCHTAB_SECURE_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
@@ -172,9 +172,9 @@ end_test
 # ═══════════════════════════════════════════════════════════════════
 
 start_test "idpi: multiple injection phrases — single warning header"
-TAB_ID=$(idpi_setup "$PINCHTAB_URL" "${FIXTURES_URL}/idpi-inject.html")
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-inject.html")
 tmpheaders=$(mktemp)
-curl -s -X POST "${PINCHTAB_URL}/tabs/${TAB_ID}/find" \
+curl -s -X POST "${E2E_SERVER}/tabs/${TAB_ID}/find" \
   -H "Content-Type: application/json" \
   -D "$tmpheaders" \
   -d "$FIND_BODY" >/dev/null
@@ -187,13 +187,13 @@ else
   echo -e "  ${RED}✗${NC} expected 1 X-IDPI-Warning, got $HDR_COUNT"
   ((ASSERTIONS_FAILED++)) || true
 fi
-idpi_cleanup "$PINCHTAB_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "idpi: /pdf?raw=true blocked in strict mode"
-TAB_ID=$(idpi_setup "$PINCHTAB_SECURE_URL" "${FIXTURES_URL}/idpi-inject.html")
-idpi_request GET "$PINCHTAB_SECURE_URL" "/tabs/${TAB_ID}/pdf?raw=true" "" "X-IDPI-Warning"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-inject.html")
+idpi_request GET "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/pdf?raw=true" "" "X-IDPI-Warning"
 assert_http_status 403 "raw PDF blocked in strict mode"
-idpi_cleanup "$PINCHTAB_SECURE_URL" "$TAB_ID"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test

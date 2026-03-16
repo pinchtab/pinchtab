@@ -3,8 +3,8 @@
 #
 # Tests that security features properly block/allow requests based on config.
 # Uses two pinchtab instances:
-#   - PINCHTAB_URL: permissive (evaluate/download/upload enabled)
-#   - PINCHTAB_SECURE_URL: restrictive (all disabled)
+#   - E2E_SERVER: permissive (evaluate/download/upload enabled)
+#   - E2E_SECURE_SERVER: restrictive (all disabled)
 
 source "$(dirname "$0")/common.sh"
 
@@ -12,19 +12,19 @@ source "$(dirname "$0")/common.sh"
 secure_get() {
   local path="$1"
   shift
-  local old_url="$PINCHTAB_URL"
-  PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+  local old_url="$E2E_SERVER"
+  E2E_SERVER="$E2E_SECURE_SERVER"
   pt_get "$path" "$@"
-  PINCHTAB_URL="$old_url"
+  E2E_SERVER="$old_url"
 }
 
 secure_post() {
   local path="$1"
   shift
-  local old_url="$PINCHTAB_URL"
-  PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+  local old_url="$E2E_SERVER"
+  E2E_SERVER="$E2E_SECURE_SERVER"
   pt_post "$path" "$@"
-  PINCHTAB_URL="$old_url"
+  E2E_SERVER="$old_url"
 }
 
 # ═══════════════════════════════════════════════════════════════════
