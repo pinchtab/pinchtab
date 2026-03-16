@@ -78,8 +78,8 @@ func Load() *RuntimeConfig {
 			ScanTimeoutSec: 5,
 		},
 
-		// Engine default
-		Engine: envOr("PINCHTAB_ENGINE", "chrome"),
+		// Engine default (set via config.json only)
+		Engine: "chrome",
 	}
 	finalizeProfileConfig(cfg)
 
@@ -173,7 +173,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Server.StateDir != "" {
 		cfg.StateDir = fc.Server.StateDir
 	}
-	if fc.Server.Engine != "" && os.Getenv("PINCHTAB_ENGINE") == "" {
+	if fc.Server.Engine != "" {
 		cfg.Engine = fc.Server.Engine
 	}
 	// Security

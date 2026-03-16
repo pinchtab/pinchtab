@@ -86,7 +86,7 @@ No handler, bridge, or config change is needed when adding new routing logic —
 ## Request Flow (Lite Mode)
 
 ```
-POST /navigate   (PINCHTAB_ENGINE=lite)
+POST /navigate   (server.engine=lite)
     │
     ▼
 handlers/navigation.go — HandleNavigate()
@@ -145,13 +145,7 @@ even in `lite` mode.
 
 ## Configuration
 
-### Environment Variable
-
-```bash
-PINCHTAB_ENGINE=lite    # or "chrome" (default) or "auto"
-```
-
-### Config File (`pinchtab.json`)
+Set the engine in your config file:
 
 ```json
 {

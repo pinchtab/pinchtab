@@ -13,7 +13,6 @@ For agent workflows, most runtime behavior should be configured through `config.
 | `PINCHTAB_CONFIG` | Override the config file path | Prefer this over ad hoc env overrides when automating |
 | `PINCHTAB_BIND` | Override bind address for the main server | Operator-level knob; avoid exposing beyond localhost without a token |
 | `PINCHTAB_PORT` | Override the main server port | Main server only, not per-instance targeting |
-| `PINCHTAB_ENGINE` | Select runtime engine when explicitly needed | Defaults to `chrome` |
 
 ## What is intentionally not listed
 

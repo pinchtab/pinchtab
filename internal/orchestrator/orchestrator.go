@@ -310,9 +310,6 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 		"PINCHTAB_PORT":   port,
 		"PINCHTAB_CONFIG": childConfigPath,
 	}
-	if v := os.Getenv("PINCHTAB_ENGINE"); v != "" {
-		envOverrides["PINCHTAB_ENGINE"] = v
-	}
 	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
 
 	logBuf := newRingBuffer(256 * 1024)

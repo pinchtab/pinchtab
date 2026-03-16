@@ -192,28 +192,6 @@ func TestLoadConfigEngineFromFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigEngineEnvOverridesFile(t *testing.T) {
-	clearConfigEnvVars(t)
-
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.json")
-	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
-	_ = os.Setenv("PINCHTAB_ENGINE", "auto")
-	defer func() {
-		_ = os.Unsetenv("PINCHTAB_CONFIG")
-		_ = os.Unsetenv("PINCHTAB_ENGINE")
-	}()
-
-	if err := os.WriteFile(configPath, []byte(`{"server":{"engine":"lite"}}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := Load()
-	if cfg.Engine != "auto" {
-		t.Fatalf("engine = %q, want auto", cfg.Engine)
-	}
-}
-
 func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T) {
 	cfg := &RuntimeConfig{
 		AllowEvaluate:   true,
@@ -259,7 +237,7 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 func clearConfigEnvVars(t *testing.T) {
 	t.Helper()
 	envVars := []string{
-		"PINCHTAB_PORT", "PINCHTAB_BIND", "PINCHTAB_TOKEN", "PINCHTAB_CONFIG", "PINCHTAB_ENGINE",
+		"PINCHTAB_PORT", "PINCHTAB_BIND", "PINCHTAB_TOKEN", "PINCHTAB_CONFIG",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)

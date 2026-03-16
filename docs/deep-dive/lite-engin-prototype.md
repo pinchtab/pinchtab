@@ -82,7 +82,7 @@ No handler, config, or CMD changes needed.
 ### Modified Files (8)
 | File | Change |
 |------|--------|
-| `internal/config/config.go` | Added `Engine` field to RuntimeConfig + ServerConfig, `PINCHTAB_ENGINE` env var |
+| `internal/config/config.go` | Added `Engine` field to RuntimeConfig + ServerConfig |
 | `internal/handlers/handlers.go` | Added `Router *engine.Router` field, `useLite()` helper |
 | `internal/handlers/navigation.go` | Lite fast path before ensureChrome |
 | `internal/handlers/snapshot.go` | Lite fast path with SnapshotNode → A11yNode conversion |
@@ -103,7 +103,7 @@ No handler, config, or CMD changes needed.
 | Role mapping | Basic (a, button, input, etc.) | Extended: section→region, details→group, summary→button, dialog, article |
 | Interactive detection | Basic tags | Adds summary, ARIA roles (tab, menuitem, switch) |
 | Routing | None (always lite) | Strategy-pattern Router with pluggable rules |
-| Configuration | None | `PINCHTAB_ENGINE` env var, config file support |
+| Configuration | None | Config file support (`server.engine`) |
 
 ## Test Results
 
@@ -199,12 +199,7 @@ ok   internal/web           1.5s
 
 ## Configuration
 
-### Environment Variable
-```bash
-PINCHTAB_ENGINE=lite    # or "chrome" (default) or "auto"
-```
-
-### Config File
+Set the engine in your config file:
 ```json
 {
   "server": {
