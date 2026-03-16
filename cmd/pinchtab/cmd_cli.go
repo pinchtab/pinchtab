@@ -218,6 +218,22 @@ var hoverCmd = &cobra.Command{
 	},
 }
 
+var focusCmd = &cobra.Command{
+	Use:   "focus <ref>",
+	Short: "Focus element",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ref := ""
+		if len(args) > 0 {
+			ref = args[0]
+		}
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Action(client, base, token, "focus", ref, cmd)
+		})
+	},
+}
+
 var scrollCmd = &cobra.Command{
 	Use:   "scroll <ref|pixels>",
 	Short: "Scroll to element or by pixels",
@@ -394,6 +410,7 @@ func init() {
 	pressCmd.GroupID = "browser"
 	fillCmd.GroupID = "browser"
 	hoverCmd.GroupID = "browser"
+	focusCmd.GroupID = "browser"
 	scrollCmd.GroupID = "browser"
 	evalCmd.GroupID = "browser"
 	pdfCmd.GroupID = "browser"
@@ -448,6 +465,7 @@ func init() {
 	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
 	hoverCmd.Flags().Float64("x", 0, "X coordinate for hover")
 	hoverCmd.Flags().Float64("y", 0, "Y coordinate for hover")
+	focusCmd.Flags().String("css", "", "CSS selector instead of ref")
 
 	snapCmd.Flags().BoolP("interactive", "i", false, "Filter interactive elements only")
 	snapCmd.Flags().BoolP("compact", "c", false, "Compact output format")
@@ -501,6 +519,7 @@ func init() {
 	clickCmd.Flags().String("tab", "", "Tab ID")
 	dblclickCmd.Flags().String("tab", "", "Tab ID")
 	hoverCmd.Flags().String("tab", "", "Tab ID")
+	focusCmd.Flags().String("tab", "", "Tab ID")
 	typeCmd.Flags().String("tab", "", "Tab ID")
 	pressCmd.Flags().String("tab", "", "Tab ID")
 	fillCmd.Flags().String("tab", "", "Tab ID")
@@ -526,6 +545,7 @@ func init() {
 	rootCmd.AddCommand(pressCmd)
 	rootCmd.AddCommand(fillCmd)
 	rootCmd.AddCommand(hoverCmd)
+	rootCmd.AddCommand(focusCmd)
 	rootCmd.AddCommand(scrollCmd)
 	rootCmd.AddCommand(evalCmd)
 	rootCmd.AddCommand(pdfCmd)

@@ -142,6 +142,26 @@ func TestHoverWithCSS(t *testing.T) {
 	}
 }
 
+func TestFocus(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	Action(client, m.base(), "", "focus", "e5", cmd)
+	if m.lastPath != "/action" {
+		t.Errorf("expected /action, got %s", m.lastPath)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "focus" {
+		t.Errorf("expected kind=focus, got %v", body["kind"])
+	}
+	if body["ref"] != "e5" {
+		t.Errorf("expected ref=e5, got %v", body["ref"])
+	}
+}
+
 func TestFocusWithCSS(t *testing.T) {
 	m := newMockServer()
 	defer m.close()
