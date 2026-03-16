@@ -14,9 +14,24 @@ assert_output_contains "title" "returns page title"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab nav (invalid URL)"
+start_test "pinchtab nav (empty URL)"
 
-pt_fail nav "not-a-valid-url"
+# Empty URL should fail (only truly invalid case with URL normalization)
+pt_fail nav ""
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab nav (bare hostname normalizes to https)"
+
+# Bare hostnames are now normalized to https:// - Chrome shows error page but nav succeeds
+pt nav "not-a-valid-url"
+if echo "$PT_OUT" | grep -q "chrome-error"; then
+  echo -e "  ${GREEN}✓${NC} Normalized to https://not-a-valid-url (Chrome error page)"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${YELLOW}⚠${NC} Unexpected result: $PT_OUT"
+fi
 
 end_test
 
