@@ -108,14 +108,12 @@ PinchTab loads configuration in this order:
 2. config file
 3. built-in defaults
 
-The currently supported operational env vars are:
+The supported env vars are:
 
 - `PINCHTAB_CONFIG` — path to config file
-- `PINCHTAB_BIND` — listen address
-- `PINCHTAB_PORT` — listen port
-- `PINCHTAB_TOKEN` — auth token
+- `PINCHTAB_TOKEN` — auth token (overrides config file)
 
-Everything else should be configured in `config.json`.
+Everything else is configured in `config.json`. For CLI targeting a remote server, use the `--server` flag.
 
 For the common local workflow, prefer the interactive `pinchtab config` screen for everyday changes and use `get`, `set`, or `patch` when you need an exact scripted edit.
 

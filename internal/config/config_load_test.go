@@ -91,41 +91,37 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadConfigEnvOverrides(t *testing.T) {
+func TestLoadConfigTokenEnvOverride(t *testing.T) {
 	clearConfigEnvVars(t)
 	// Point to non-existent config to isolate env var testing
 	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
-	_ = os.Setenv("PINCHTAB_PORT", "1234")
-	_ = os.Setenv("PINCHTAB_BIND", "0.0.0.0")
 	_ = os.Setenv("PINCHTAB_TOKEN", "secret")
 	defer func() {
 		_ = os.Unsetenv("PINCHTAB_CONFIG")
-		_ = os.Unsetenv("PINCHTAB_PORT")
-		_ = os.Unsetenv("PINCHTAB_BIND")
 		_ = os.Unsetenv("PINCHTAB_TOKEN")
 	}()
 
 	cfg := Load()
-	if cfg.Port != "1234" {
-		t.Errorf("env Port = %v, want 1234", cfg.Port)
+	// Port and Bind use defaults (no env var override anymore)
+	if cfg.Port != "9867" {
+		t.Errorf("default Port = %v, want 9867", cfg.Port)
 	}
-	if cfg.Bind != "0.0.0.0" {
-		t.Errorf("env Bind = %v, want 0.0.0.0", cfg.Bind)
+	if cfg.Bind != "127.0.0.1" {
+		t.Errorf("default Bind = %v, want 127.0.0.1", cfg.Bind)
 	}
+	// Token still supports env var override
 	if cfg.Token != "secret" {
 		t.Errorf("env Token = %v, want secret", cfg.Token)
 	}
 }
 
-func TestPinchtabEnvTakesPrecedence(t *testing.T) {
+func TestConfigFilePortOverridesDefault(t *testing.T) {
 	clearConfigEnvVars(t)
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
-	_ = os.Setenv("PINCHTAB_PORT", "7777")
 	defer func() {
 		_ = os.Unsetenv("PINCHTAB_CONFIG")
-		_ = os.Unsetenv("PINCHTAB_PORT")
 	}()
 
 	if err := os.WriteFile(configPath, []byte(`{"server":{"port":"8888"}}`), 0644); err != nil {
@@ -133,21 +129,19 @@ func TestPinchtabEnvTakesPrecedence(t *testing.T) {
 	}
 
 	cfg := Load()
-	if cfg.Port != "7777" {
-		t.Errorf("precedence Port = %v, want 7777", cfg.Port)
+	if cfg.Port != "8888" {
+		t.Errorf("config file Port = %v, want 8888", cfg.Port)
 	}
 }
 
-func TestEnvOverridesNestedConfig(t *testing.T) {
+func TestConfigFileWithNestedValues(t *testing.T) {
 	clearConfigEnvVars(t)
 
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
-	_ = os.Setenv("PINCHTAB_PORT", "9999")
 	defer func() {
 		_ = os.Unsetenv("PINCHTAB_CONFIG")
-		_ = os.Unsetenv("PINCHTAB_PORT")
 	}()
 
 	// Config file says port 8888 and strategy explicit
@@ -165,12 +159,12 @@ func TestEnvOverridesNestedConfig(t *testing.T) {
 
 	cfg := Load()
 
-	// Env var should win
-	if cfg.Port != "9999" {
-		t.Errorf("env should override file: Port = %v, want 9999", cfg.Port)
+	// Config file values should be used
+	if cfg.Port != "8888" {
+		t.Errorf("config file Port = %v, want 8888", cfg.Port)
 	}
 	if cfg.Strategy != "explicit" {
-		t.Errorf("file should supply Strategy = %v, want explicit", cfg.Strategy)
+		t.Errorf("config file Strategy = %v, want explicit", cfg.Strategy)
 	}
 }
 
@@ -237,7 +231,7 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 func clearConfigEnvVars(t *testing.T) {
 	t.Helper()
 	envVars := []string{
-		"PINCHTAB_PORT", "PINCHTAB_BIND", "PINCHTAB_TOKEN", "PINCHTAB_CONFIG",
+		"PINCHTAB_TOKEN", "PINCHTAB_CONFIG",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)

@@ -12,9 +12,9 @@ import (
 // Load returns the RuntimeConfig with precedence: env vars > config file > defaults.
 func Load() *RuntimeConfig {
 	cfg := &RuntimeConfig{
-		// Server defaults + selected env vars
-		Bind:              envOr("PINCHTAB_BIND", "127.0.0.1"),
-		Port:              envOr("PINCHTAB_PORT", "9867"),
+		// Server defaults
+		Bind:              "127.0.0.1",
+		Port:              "9867",
 		InstancePortStart: 9868,
 		InstancePortEnd:   9968,
 		Token:             os.Getenv("PINCHTAB_TOKEN"),
@@ -161,10 +161,10 @@ func finalizeProfileConfig(cfg *RuntimeConfig) {
 
 func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	// Server
-	if fc.Server.Port != "" && os.Getenv("PINCHTAB_PORT") == "" {
+	if fc.Server.Port != "" {
 		cfg.Port = fc.Server.Port
 	}
-	if fc.Server.Bind != "" && os.Getenv("PINCHTAB_BIND") == "" {
+	if fc.Server.Bind != "" {
 		cfg.Bind = fc.Server.Bind
 	}
 	if fc.Server.Token != "" && os.Getenv("PINCHTAB_TOKEN") == "" {

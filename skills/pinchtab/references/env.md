@@ -8,11 +8,17 @@ For agent workflows, most runtime behavior should be configured through `config.
 
 | Var | Typical use | Notes |
 |---|---|---|
-| `PINCHTAB_URL` | Point CLI commands at a specific server or instance | Example: `PINCHTAB_URL=http://localhost:9868 pinchtab snap -i -c` |
 | `PINCHTAB_TOKEN` | Authenticate CLI or MCP requests to a protected server | Sent as `Authorization: Bearer ...` |
 | `PINCHTAB_CONFIG` | Override the config file path | Prefer this over ad hoc env overrides when automating |
-| `PINCHTAB_BIND` | Override bind address for the main server | Operator-level knob; avoid exposing beyond localhost without a token |
-| `PINCHTAB_PORT` | Override the main server port | Main server only, not per-instance targeting |
+
+## Targeting remote servers
+
+Use the `--server` CLI flag instead of environment variables:
+
+```bash
+pinchtab --server http://192.168.1.50:9867 snap
+pinchtab --server https://pinchtab.example.com snap
+```
 
 ## What is intentionally not listed
 
@@ -21,11 +27,10 @@ For agent workflows, most runtime behavior should be configured through `config.
 
 ## Recommended default
 
-For most agent tasks, the only variables you need are:
+For most agent tasks, the only variable you need is:
 
 ```bash
-PINCHTAB_URL=http://localhost:9867
 PINCHTAB_TOKEN=...
 ```
 
-Everything else should be handled through profiles, instances, and config.
+Everything else should be handled through config, profiles, instances, and the `--server` flag.

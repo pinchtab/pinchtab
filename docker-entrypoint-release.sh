@@ -13,21 +13,11 @@ mkdir -p "$home_dir" "$xdg_config_home" "$(dirname "$default_config_path")"
 #   docker run -e PINCHTAB_TOKEN_FILE=/run/secrets/pinchtab_token
 if [ -z "${PINCHTAB_CONFIG:-}" ] && [ ! -f "$default_config_path" ]; then
   /usr/local/bin/pinchtab config init >/dev/null
+  # Docker containers need to bind to 0.0.0.0 for port publishing to work
+  /usr/local/bin/pinchtab config set server.bind "0.0.0.0" >/dev/null
   if [ -n "${PINCHTAB_TOKEN:-}" ]; then
     /usr/local/bin/pinchtab config set server.token "$PINCHTAB_TOKEN" >/dev/null
   fi
-fi
-
-# RUNTIME BIND OVERRIDE FOR DOCKER PORT PUBLISHING
-#
-# The persisted config stores bind: "127.0.0.1" (secure loopback default).
-# But Docker port publishing requires the process to listen on 0.0.0.0 inside
-# the container, so the host can forward traffic to it.
-#
-# Solution: override PINCHTAB_BIND at runtime only when using managed config.
-# The persisted config remains secure unless the user explicitly changes it.
-if [ -z "${PINCHTAB_CONFIG:-}" ] && [ -z "${PINCHTAB_BIND:-}" ]; then
-  export PINCHTAB_BIND=0.0.0.0
 fi
 
 # CHROME SANDBOX DISABLED IN CONTAINERS
