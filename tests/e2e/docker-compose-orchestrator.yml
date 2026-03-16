@@ -59,9 +59,9 @@ services:
       fixtures:
         condition: service_healthy
     environment:
-      - PINCHTAB_URL=http://pinchtab:9999
-      - PINCHTAB_BRIDGE_URL=http://pinchtab-bridge:9999
-      - PINCHTAB_BRIDGE_TOKEN=e2e-bridge-token
+      - E2E_SERVER=http://pinchtab:9999
+      - E2E_BRIDGE_URL=http://pinchtab-bridge:9999
+      - E2E_BRIDGE_TOKEN=e2e-bridge-token
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios:/scenarios:ro

@@ -38,7 +38,7 @@ services:
       fixtures:
         condition: service_healthy
     environment:
-      - PINCHTAB_URL=http://pinchtab:9999
+      - E2E_SERVER=http://pinchtab:9999
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios-cli:/scenarios:ro

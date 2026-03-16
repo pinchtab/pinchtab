@@ -82,9 +82,9 @@ services:
       fixtures:
         condition: service_healthy
     environment:
-      - PINCHTAB_URL=http://pinchtab:9999
-      - PINCHTAB_SECURE_URL=http://pinchtab-secure:9999
-      - PINCHTAB_LITE_URL=http://pinchtab-lite:9999
+      - E2E_SERVER=http://pinchtab:9999
+      - E2E_SECURE_SERVER=http://pinchtab-secure:9999
+      - E2E_LITE_SERVER=http://pinchtab-lite:9999
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios:/scenarios:ro
