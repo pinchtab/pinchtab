@@ -101,3 +101,15 @@ func TestNewRecorderDisabledReturnsNoop(t *testing.T) {
 		t.Fatal("expected disabled recorder")
 	}
 }
+
+func TestClampQueryLimit(t *testing.T) {
+	if got := clampQueryLimit(0); got != defaultQueryLimit {
+		t.Fatalf("clampQueryLimit(0) = %d, want %d", got, defaultQueryLimit)
+	}
+	if got := clampQueryLimit(maxQueryLimit + 1); got != maxQueryLimit {
+		t.Fatalf("clampQueryLimit(max+1) = %d, want %d", got, maxQueryLimit)
+	}
+	if got := clampQueryLimit(25); got != 25 {
+		t.Fatalf("clampQueryLimit(25) = %d, want 25", got)
+	}
+}

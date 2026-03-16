@@ -18,6 +18,7 @@ import (
 const (
 	defaultSessionIdleTimeout = 30 * time.Minute
 	defaultQueryLimit         = 200
+	maxQueryLimit             = 1000
 	defaultRetentionDays      = 1
 )
 
@@ -168,10 +169,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		return nil, nil
 	}
 
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = defaultQueryLimit
-	}
+	limit := clampQueryLimit(filter.Limit)
 
 	var events []Event
 	for _, path := range s.queryFiles() {
@@ -209,6 +207,16 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		}
 	}
 	return events, nil
+}
+
+func clampQueryLimit(limit int) int {
+	if limit <= 0 {
+		return defaultQueryLimit
+	}
+	if limit > maxQueryLimit {
+		return maxQueryLimit
+	}
+	return limit
 }
 
 func (noopRecorder) Enabled() bool {

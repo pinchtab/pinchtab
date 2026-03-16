@@ -82,7 +82,7 @@ func filterFromRequest(r *http.Request) (Filter, error) {
 		if err != nil || n <= 0 {
 			return Filter{}, errInvalidQuery("limit")
 		}
-		filter.Limit = n
+		filter.Limit = clampQueryLimit(n)
 	}
 	if ageSec := strings.TrimSpace(q.Get("ageSec")); ageSec != "" {
 		n, err := strconv.Atoi(ageSec)
