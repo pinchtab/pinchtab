@@ -330,6 +330,40 @@ var findCmd = &cobra.Command{
 	},
 }
 
+var dialogCmd = &cobra.Command{
+	Use:   "dialog",
+	Short: "Handle JavaScript dialogs (alert, confirm, prompt)",
+}
+
+var dialogAcceptCmd = &cobra.Command{
+	Use:   "accept [text]",
+	Short: "Accept (OK) the current dialog",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		text := ""
+		if len(args) > 0 {
+			text = args[0]
+		}
+		tabID, _ := cmd.Flags().GetString("tab")
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Dialog(client, base, token, "accept", text, tabID)
+		})
+	},
+}
+
+var dialogDismissCmd = &cobra.Command{
+	Use:   "dismiss",
+	Short: "Dismiss (Cancel) the current dialog",
+	Run: func(cmd *cobra.Command, args []string) {
+		tabID, _ := cmd.Flags().GetString("tab")
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Dialog(client, base, token, "dismiss", "", tabID)
+		})
+	},
+}
+
 var selectCmd = &cobra.Command{
 	Use:   "select <ref> <value>",
 	Short: "Select option in dropdown",
@@ -407,6 +441,7 @@ func init() {
 	checkCmd.GroupID = "browser"
 	uncheckCmd.GroupID = "browser"
 	networkCmd.GroupID = "browser"
+	dialogCmd.GroupID = "browser"
 
 	tabsCmd.AddCommand(&cobra.Command{
 		Use:   "new [url]",
@@ -550,6 +585,12 @@ func init() {
 	networkCmd.Flags().Bool("clear", false, "Clear captured network data")
 	networkCmd.Flags().String("buffer-size", "", "Per-tab network buffer size (default 100)")
 	networkCmd.Flags().Bool("stream", false, "Stream network entries in real-time (like tail -f)")
+
+	dialogAcceptCmd.Flags().String("tab", "", "Tab ID")
+	dialogDismissCmd.Flags().String("tab", "", "Tab ID")
+	dialogCmd.AddCommand(dialogAcceptCmd)
+	dialogCmd.AddCommand(dialogDismissCmd)
+	rootCmd.AddCommand(dialogCmd)
 
 	instanceCmd.GroupID = "management"
 

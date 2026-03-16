@@ -270,6 +270,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.InstanceDefaults.TabEvictionPolicy != "" {
 		cfg.TabEvictionPolicy = fc.InstanceDefaults.TabEvictionPolicy
 	}
+	if fc.InstanceDefaults.DialogAutoAccept != nil {
+		cfg.DialogAutoAccept = *fc.InstanceDefaults.DialogAutoAccept
+	}
 
 	// Profiles
 	if fc.Profiles.BaseDir != "" {

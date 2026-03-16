@@ -40,6 +40,7 @@ type Bridge struct {
 	StealthScript string
 	Actions       map[string]ActionFunc
 	Locks         *LockManager
+	Dialogs       *DialogManager
 
 	// Network monitoring
 	netMonitor *NetworkMonitor
@@ -69,8 +70,10 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
+		b.TabManager.SetDialogManager(b.Dialogs)
 	}
 	b.Locks = NewLockManager()
+	b.Dialogs = NewDialogManager()
 	b.InitActionRegistry()
 	return b
 }
@@ -181,6 +184,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 			b.IdMgr = idutil.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+		b.TabManager.SetDialogManager(b.Dialogs)
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -251,6 +255,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 			b.IdMgr = idutil.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+		b.TabManager.SetDialogManager(b.Dialogs)
 	}
 }
 
@@ -286,6 +291,11 @@ func (b *Bridge) AvailableActions() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// GetDialogManager returns the bridge's dialog manager.
+func (b *Bridge) GetDialogManager() *DialogManager {
+	return b.Dialogs
 }
 
 // ActionFunc is the type for action handlers.

@@ -25,6 +25,7 @@ type TabManager struct {
 	accessed   map[string]bool
 	snapshots  map[string]*RefCache
 	onTabSetup TabSetupFunc
+	dialogMgr  *DialogManager
 	currentTab string // ID of the most recently used tab
 	executor   *TabExecutor
 	mu         sync.RWMutex
@@ -48,6 +49,11 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		onTabSetup: onTabSetup,
 		executor:   NewTabExecutor(maxParallel),
 	}
+}
+
+// SetDialogManager sets the dialog manager for dialog event tracking on new tabs.
+func (tm *TabManager) SetDialogManager(dm *DialogManager) {
+	tm.dialogMgr = dm
 }
 
 func (tm *TabManager) markAccessed(tabID string) {
@@ -286,6 +292,12 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	rawCDPID := string(targetID)
 	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 	now := time.Now()
+
+	// Set up dialog event listening for this tab
+	if tm.dialogMgr != nil {
+		autoAccept := tm.config != nil && tm.config.DialogAutoAccept
+		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
+	}
 
 	tm.mu.Lock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID, CreatedAt: now, LastUsed: now}

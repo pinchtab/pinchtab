@@ -156,5 +156,13 @@ func allTools() []mcp.Tool {
 			mcp.WithDescription("Clear captured network data for a tab or all tabs"),
 			mcp.WithString("tabId", mcp.Description("Target tab ID (optional, clears all if empty)")),
 		),
+
+		// ── Dialog ──────────────────────────────────────────────────
+		mcp.NewTool("pinchtab_dialog",
+			mcp.WithDescription("Handle a JavaScript dialog (alert, confirm, prompt). Accept or dismiss the currently open dialog."),
+			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: 'accept' or 'dismiss'")),
+			mcp.WithString("text", mcp.Description("Text to enter for prompt dialogs (only used with accept)")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
 	}
 }

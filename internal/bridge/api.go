@@ -47,6 +47,9 @@ type BridgeAPI interface {
 
 	// Network monitoring
 	NetworkMonitor() *NetworkMonitor
+
+	// Dialog management
+	GetDialogManager() *DialogManager
 }
 
 type LockInfo struct {

@@ -64,6 +64,9 @@ type RuntimeConfig struct {
 	// IDPI (Indirect Prompt Injection defense) settings
 	IDPI IDPIConfig
 
+	// Dialog settings
+	DialogAutoAccept bool
+
 	// Engine mode: "chrome" (default), "lite", or "auto"
 	Engine string
 
@@ -154,6 +157,7 @@ type InstanceDefaultsConfig struct {
 	NoAnimations      *bool  `json:"noAnimations,omitempty"`
 	StealthLevel      string `json:"stealthLevel,omitempty"`
 	TabEvictionPolicy string `json:"tabEvictionPolicy,omitempty"`
+	DialogAutoAccept  *bool  `json:"dialogAutoAccept,omitempty"`
 }
 
 type ProfilesConfig struct {
