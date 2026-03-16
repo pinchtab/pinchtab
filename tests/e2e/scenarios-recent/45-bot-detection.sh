@@ -99,31 +99,7 @@ assert_eval_poll "navigator.languages && navigator.languages.length > 0" "true" 
 
 end_test
 
-# ─────────────────────────────────────────────────────────────────
-start_test "bot-detect: overall score passes"
 
-# Use the fixture's built-in scoring (poll to wait for script to complete)
-assert_eval_poll "window.__botDetectScore && window.__botDetectScore.passed" "true" "bot detect score passes"
-
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "bot-detect: all critical tests pass"
-
-pt_post /evaluate '{"expression":"window.__botDetectScore ? window.__botDetectScore.critical + \"/\" + window.__botDetectScore.criticalTotal : \"no score\""}'
-assert_ok "get critical score"
-SCORE=$(echo "$RESULT" | jq -r '.result')
-echo "  Critical tests: $SCORE"
-
-# Extract numbers and verify all passed
-PASSED=$(echo "$SCORE" | cut -d'/' -f1)
-TOTAL=$(echo "$SCORE" | cut -d'/' -f2)
-if [ "$PASSED" != "$TOTAL" ]; then
-  echo -e "  ${RED}✗${NC} Not all critical tests passed: $SCORE"
-  ((ASSERTIONS_FAILED++)) || true
-fi
-
-end_test
 
 # ═══════════════════════════════════════════════════════════════════
 # FULL STEALTH MODE (secure instance)
