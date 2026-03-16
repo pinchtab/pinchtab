@@ -88,7 +88,7 @@ start_test "bot-detect: platform matches user agent"
 # Platform should match UA to avoid detection
 pt_post /evaluate '{"expression":"(() => { const ua = navigator.userAgent; const p = navigator.platform; if (ua.includes(\"Linux\") && !p.includes(\"Linux\")) return false; if (ua.includes(\"Macintosh\") && p !== \"MacIntel\") return false; if (ua.includes(\"Windows\") && !p.includes(\"Win\")) return false; return true; })()"}'
 assert_ok "platform matches UA"
-assert_json_eq "$RESULT" '.result.value' "true"
+assert_json_eq "$RESULT" '.result' "true"
 
 end_test
 
@@ -102,10 +102,8 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "bot-detect: overall score passes"
 
-# Use the fixture's built-in scoring
-pt_post /evaluate '{"expression":"window.__botDetectScore && window.__botDetectScore.passed"}'
-assert_ok "get bot detect score"
-assert_json_eq "$RESULT" '.result.value' "true"
+# Use the fixture's built-in scoring (poll to wait for script to complete)
+assert_eval_poll "window.__botDetectScore && window.__botDetectScore.passed" "true" "bot detect score passes"
 
 end_test
 
@@ -114,7 +112,7 @@ start_test "bot-detect: all critical tests pass"
 
 pt_post /evaluate '{"expression":"window.__botDetectScore ? window.__botDetectScore.critical + \"/\" + window.__botDetectScore.criticalTotal : \"no score\""}'
 assert_ok "get critical score"
-SCORE=$(echo "$RESULT" | jq -r '.result.value')
+SCORE=$(echo "$RESULT" | jq -r '.result')
 echo "  Critical tests: $SCORE"
 
 # Extract numbers and verify all passed
