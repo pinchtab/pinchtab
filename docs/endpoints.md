@@ -132,10 +132,9 @@ GET  /tabs/{id}/cookies                  # Get cookies (specific tab)
 POST /tabs/{id}/cookies                  # Set cookies (specific tab)
 ```
 
-## Stealth
+## Fingerprint
 
 ```
-GET  /stealth/status                     # Stealth status and detection score
 POST /fingerprint/rotate                 # Rotate browser fingerprint
 ```
 

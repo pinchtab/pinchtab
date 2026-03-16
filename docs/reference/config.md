@@ -351,7 +351,7 @@ Valid enum values:
 | Field | Values |
 | --- | --- |
 | `instanceDefaults.mode` | `headless`, `headed` |
-| `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
+| `instanceDefaults.stealthLevel` | `light`, `full` |
 | `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` (default) |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on` (default) |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |

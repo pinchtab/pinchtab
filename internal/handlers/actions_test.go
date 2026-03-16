@@ -249,33 +249,6 @@ func TestHandleSetCookies_EmptyCookies(t *testing.T) {
 	}
 }
 
-func TestHandleStealthStatus_NoTabs(t *testing.T) {
-	h := New(&failMockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
-
-	req := httptest.NewRequest("GET", "/stealth/status", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleStealthStatus(w, req)
-
-	if w.Code != 200 {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	features, ok := resp["features"].(map[string]interface{})
-	if !ok {
-		t.Error("expected features map")
-	}
-
-	if len(features) == 0 {
-		t.Error("expected non-empty features")
-	}
-}
-
 func TestHandleFingerprintRotate_NoTab(t *testing.T) {
 	h := New(&failMockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 
