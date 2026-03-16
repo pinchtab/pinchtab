@@ -34,6 +34,12 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		"pinchtab_scroll": handleAction(c, "scroll"),
 		"pinchtab_fill":   handleAction(c, "fill"),
 
+		// Keyboard (no selector)
+		"pinchtab_keyboard_type":       handleKeyboardText(c, "keyboard-type"),
+		"pinchtab_keyboard_inserttext": handleKeyboardText(c, "keyboard-inserttext"),
+		"pinchtab_keydown":             handleKeyboardKey(c, "keydown"),
+		"pinchtab_keyup":               handleKeyboardKey(c, "keyup"),
+
 		// Content
 		"pinchtab_eval": handleEval(c),
 		"pinchtab_pdf":  handlePDF(c),
@@ -263,6 +269,44 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 			payload["value"] = value
 		}
 
+		body, code, err := c.Post(ctx, "/action", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
+	}
+}
+
+// ── Keyboard handlers (no selector) ────────────────────────────────────
+
+func handleKeyboardText(c *Client, kind string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		text, err := r.RequireString("text")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"kind": kind, "text": text}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
+		body, code, err := c.Post(ctx, "/action", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
+	}
+}
+
+func handleKeyboardKey(c *Client, kind string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		key, err := r.RequireString("key")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"kind": kind, "key": key}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
 		body, code, err := c.Post(ctx, "/action", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

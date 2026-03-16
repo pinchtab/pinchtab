@@ -100,6 +100,14 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 	case "select":
 		setSelectorBody(body, args[0])
 		body["value"] = args[1]
+	case "keyboard-type":
+		body["text"] = strings.Join(args, " ")
+	case "keyboard-inserttext":
+		body["text"] = strings.Join(args, " ")
+	case "keydown":
+		body["key"] = args[0]
+	case "keyup":
+		body["key"] = args[0]
 	}
 
 	tabID, _ := cmd.Flags().GetString("tab")

@@ -412,6 +412,59 @@ var uncheckCmd = &cobra.Command{
 	},
 }
 
+var keyboardCmd = &cobra.Command{
+	Use:   "keyboard",
+	Short: "Keyboard commands (type, inserttext)",
+}
+
+var keyboardTypeCmd = &cobra.Command{
+	Use:   "type <text>",
+	Short: "Type text at current focus via keystroke events",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.ActionSimple(client, base, token, "keyboard-type", args, cmd)
+		})
+	},
+}
+
+var keyboardInsertTextCmd = &cobra.Command{
+	Use:   "inserttext <text>",
+	Short: "Insert text at current focus (paste-like, no key events)",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.ActionSimple(client, base, token, "keyboard-inserttext", args, cmd)
+		})
+	},
+}
+
+var keydownCmd = &cobra.Command{
+	Use:   "keydown <key>",
+	Short: "Hold a key down",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.ActionSimple(client, base, token, "keydown", args, cmd)
+		})
+	},
+}
+
+var keyupCmd = &cobra.Command{
+	Use:   "keyup <key>",
+	Short: "Release a key",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.ActionSimple(client, base, token, "keyup", args, cmd)
+		})
+	},
+}
+
 func init() {
 	quickCmd.GroupID = "browser"
 	navCmd.GroupID = "browser"
@@ -442,6 +495,9 @@ func init() {
 	uncheckCmd.GroupID = "browser"
 	networkCmd.GroupID = "browser"
 	dialogCmd.GroupID = "browser"
+	keyboardCmd.GroupID = "browser"
+	keydownCmd.GroupID = "browser"
+	keyupCmd.GroupID = "browser"
 
 	tabsCmd.AddCommand(&cobra.Command{
 		Use:   "new [url]",
@@ -544,6 +600,10 @@ func init() {
 	evalCmd.Flags().String("tab", "", "Tab ID")
 	checkCmd.Flags().String("tab", "", "Tab ID")
 	uncheckCmd.Flags().String("tab", "", "Tab ID")
+	keyboardTypeCmd.Flags().String("tab", "", "Tab ID")
+	keyboardInsertTextCmd.Flags().String("tab", "", "Tab ID")
+	keydownCmd.Flags().String("tab", "", "Tab ID")
+	keyupCmd.Flags().String("tab", "", "Tab ID")
 
 	rootCmd.AddCommand(quickCmd)
 	rootCmd.AddCommand(navCmd)
@@ -574,6 +634,12 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(uncheckCmd)
 	rootCmd.AddCommand(networkCmd)
+	rootCmd.AddCommand(keyboardCmd)
+	rootCmd.AddCommand(keydownCmd)
+	rootCmd.AddCommand(keyupCmd)
+
+	keyboardCmd.AddCommand(keyboardTypeCmd)
+	keyboardCmd.AddCommand(keyboardInsertTextCmd)
 
 	networkCmd.Flags().String("tab", "", "Tab ID")
 	networkCmd.Flags().String("filter", "", "URL pattern filter")

@@ -84,6 +84,28 @@ func allTools() []mcp.Tool {
 			mcp.WithString("tabId", mcp.Description("Target tab ID")),
 		),
 
+		// ── Keyboard (no selector — targets focused element) ────────
+		mcp.NewTool("pinchtab_keyboard_type",
+			mcp.WithDescription("Type text at the currently focused element via keystroke events (keyDown + keyUp per character)"),
+			mcp.WithString("text", mcp.Required(), mcp.Description("Text to type")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
+		mcp.NewTool("pinchtab_keyboard_inserttext",
+			mcp.WithDescription("Insert text at the currently focused element without key events (paste-like)"),
+			mcp.WithString("text", mcp.Required(), mcp.Description("Text to insert")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
+		mcp.NewTool("pinchtab_keydown",
+			mcp.WithDescription("Hold a key down (e.g. modifier keys like Control, Shift, Alt)"),
+			mcp.WithString("key", mcp.Required(), mcp.Description("Key to hold down (e.g. 'Control', 'Shift', 'Alt', 'a')")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
+		mcp.NewTool("pinchtab_keyup",
+			mcp.WithDescription("Release a held key"),
+			mcp.WithString("key", mcp.Required(), mcp.Description("Key to release (e.g. 'Control', 'Shift', 'Alt', 'a')")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
+
 		// ── Content ─────────────────────────────────────────────────
 		mcp.NewTool("pinchtab_eval",
 			mcp.WithDescription("Execute JavaScript in the browser and return the result"),

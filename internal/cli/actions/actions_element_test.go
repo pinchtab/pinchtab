@@ -340,3 +340,117 @@ func TestSelect(t *testing.T) {
 		t.Errorf("expected value=option2, got %v", body["value"])
 	}
 }
+
+// ── Keyboard command tests ─────────────────────────────────────────────
+
+func TestKeyboardType(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	ActionSimple(client, m.base(), "", "keyboard-type", []string{"hello", "world"}, cmd)
+	if m.lastPath != "/action" {
+		t.Errorf("expected /action, got %s", m.lastPath)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "keyboard-type" {
+		t.Errorf("expected kind=keyboard-type, got %v", body["kind"])
+	}
+	if body["text"] != "hello world" {
+		t.Errorf("expected text='hello world', got %v", body["text"])
+	}
+	// Should not have selector or ref
+	if _, has := body["selector"]; has {
+		t.Error("keyboard-type should not have selector")
+	}
+	if _, has := body["ref"]; has {
+		t.Error("keyboard-type should not have ref")
+	}
+}
+
+func TestKeyboardInsertText(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	ActionSimple(client, m.base(), "", "keyboard-inserttext", []string{"pasted", "text"}, cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "keyboard-inserttext" {
+		t.Errorf("expected kind=keyboard-inserttext, got %v", body["kind"])
+	}
+	if body["text"] != "pasted text" {
+		t.Errorf("expected text='pasted text', got %v", body["text"])
+	}
+}
+
+func TestKeyDown(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	ActionSimple(client, m.base(), "", "keydown", []string{"Control"}, cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "keydown" {
+		t.Errorf("expected kind=keydown, got %v", body["kind"])
+	}
+	if body["key"] != "Control" {
+		t.Errorf("expected key=Control, got %v", body["key"])
+	}
+}
+
+func TestKeyUp(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	ActionSimple(client, m.base(), "", "keyup", []string{"Shift"}, cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "keyup" {
+		t.Errorf("expected kind=keyup, got %v", body["kind"])
+	}
+	if body["key"] != "Shift" {
+		t.Errorf("expected key=Shift, got %v", body["key"])
+	}
+}
+
+func TestKeyDownWithTab(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("tab", "abc123")
+	ActionSimple(client, m.base(), "", "keydown", []string{"Alt"}, cmd)
+	if m.lastPath != "/tabs/abc123/action" {
+		t.Errorf("expected /tabs/abc123/action, got %s", m.lastPath)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "keydown" {
+		t.Errorf("expected kind=keydown, got %v", body["kind"])
+	}
+	if body["key"] != "Alt" {
+		t.Errorf("expected key=Alt, got %v", body["key"])
+	}
+}
+
+func TestKeyboardTypeWithTab(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("tab", "tab42")
+	ActionSimple(client, m.base(), "", "keyboard-type", []string{"test"}, cmd)
+	if m.lastPath != "/tabs/tab42/action" {
+		t.Errorf("expected /tabs/tab42/action, got %s", m.lastPath)
+	}
+}

@@ -140,3 +140,117 @@ func TestXpathString(t *testing.T) {
 		})
 	}
 }
+
+// ── Keyboard action tests ──────────────────────────────────────────────
+
+func TestKeyboardTypeAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionKeyboardType]; !ok {
+		t.Fatal("ActionKeyboardType not registered in action registry")
+	}
+}
+
+func TestKeyboardInsertAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionKeyboardInsert]; !ok {
+		t.Fatal("ActionKeyboardInsert not registered in action registry")
+	}
+}
+
+func TestKeyDownAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionKeyDown]; !ok {
+		t.Fatal("ActionKeyDown not registered in action registry")
+	}
+}
+
+func TestKeyUpAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionKeyUp]; !ok {
+		t.Fatal("ActionKeyUp not registered in action registry")
+	}
+}
+
+func TestKeyboardTypeAction_RequiresText(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.Actions[ActionKeyboardType](context.Background(), ActionRequest{})
+	if err == nil {
+		t.Fatal("expected error when text is empty")
+	}
+	if !strings.Contains(err.Error(), "text required") {
+		t.Fatalf("expected 'text required' error, got: %v", err)
+	}
+}
+
+func TestKeyboardInsertAction_RequiresText(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.Actions[ActionKeyboardInsert](context.Background(), ActionRequest{})
+	if err == nil {
+		t.Fatal("expected error when text is empty")
+	}
+	if !strings.Contains(err.Error(), "text required") {
+		t.Fatalf("expected 'text required' error, got: %v", err)
+	}
+}
+
+func TestKeyDownAction_RequiresKey(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.Actions[ActionKeyDown](context.Background(), ActionRequest{})
+	if err == nil {
+		t.Fatal("expected error when key is empty")
+	}
+	if !strings.Contains(err.Error(), "key required") {
+		t.Fatalf("expected 'key required' error, got: %v", err)
+	}
+}
+
+func TestKeyUpAction_RequiresKey(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.Actions[ActionKeyUp](context.Background(), ActionRequest{})
+	if err == nil {
+		t.Fatal("expected error when key is empty")
+	}
+	if !strings.Contains(err.Error(), "key required") {
+		t.Fatalf("expected 'key required' error, got: %v", err)
+	}
+}
+
+func TestKeyboardTypeAction_WithCancelledContext(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := b.Actions[ActionKeyboardType](ctx, ActionRequest{Text: "hello"})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestKeyboardInsertAction_WithCancelledContext(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := b.Actions[ActionKeyboardInsert](ctx, ActionRequest{Text: "hello"})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestKeyDownAction_WithCancelledContext(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := b.Actions[ActionKeyDown](ctx, ActionRequest{Key: "Control"})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestKeyUpAction_WithCancelledContext(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := b.Actions[ActionKeyUp](ctx, ActionRequest{Key: "Control"})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
