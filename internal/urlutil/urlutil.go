@@ -23,8 +23,11 @@ func Sanitize(rawURL string) (string, error) {
 	}
 
 	// If URL has an explicit scheme, pass it through unchanged
-	if strings.Contains(rawURL, "://") || strings.HasPrefix(rawURL, "javascript:") ||
-		strings.HasPrefix(rawURL, "about:") || strings.HasPrefix(rawURL, "data:") {
+	if strings.Contains(rawURL, "://") ||
+		strings.HasPrefix(rawURL, "javascript:") ||
+		strings.HasPrefix(rawURL, "vbscript:") ||
+		strings.HasPrefix(rawURL, "about:") ||
+		strings.HasPrefix(rawURL, "data:") {
 		return rawURL, nil
 	}
 

@@ -110,6 +110,7 @@ func TestSanitize_BrowserURLs(t *testing.T) {
 		"data:text/html,<h1>hi</h1>",
 		"javascript:alert(1)",
 		"javascript:void(0)",
+		"vbscript:msgbox(1)",
 		"ftp://files.example.com",
 		"view-source:https://example.com",
 	}
