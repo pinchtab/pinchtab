@@ -94,17 +94,34 @@ func TestExtractHost(t *testing.T) {
 	}
 }
 
-func TestSanitize_ChromeURLs(t *testing.T) {
-	invalidURLs := []string{
+func TestSanitize_BrowserURLs(t *testing.T) {
+	// These browser-specific URLs should be allowed
+	validURLs := []string{
 		"chrome://settings",
+		"chrome://extensions",
 		"chrome-extension://abc123/popup.html",
 		"about:blank",
 		"data:text/html,<h1>hi</h1>",
 	}
-	for _, u := range invalidURLs {
+	for _, u := range validURLs {
+		result, err := Sanitize(u)
+		if err != nil {
+			t.Errorf("expected %q to be valid, got error: %v", u, err)
+		}
+		if result != u {
+			t.Errorf("expected %q unchanged, got %q", u, result)
+		}
+	}
+
+	// These dangerous schemes should still be blocked
+	blockedURLs := []string{
+		"file:///etc/passwd",
+		"javascript:alert(1)",
+	}
+	for _, u := range blockedURLs {
 		_, err := Sanitize(u)
 		if err == nil {
-			t.Errorf("expected error for %q, got nil", u)
+			t.Errorf("expected error for blocked URL %q, got nil", u)
 		}
 	}
 }
