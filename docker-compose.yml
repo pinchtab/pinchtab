@@ -3,7 +3,7 @@ services:
     build: .
     container_name: pinchtab
     ports:
-      - "127.0.0.1:9867:9867"
+      - "9867:9867"
     volumes:
       - pinchtab-data:/data
     environment:

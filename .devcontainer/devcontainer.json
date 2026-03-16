@@ -1,0 +1,15 @@
+{
+  "name": "PinchTab",
+  "image": "mcr.microsoft.com/devcontainers/go:1.23",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "docker compose up -d && go build -o pinchtab ./cmd/pinchtab && echo 'Done! Run: ./pinchtab health'",
+  "forwardPorts": [9867],
+  "portsAttributes": {
+    "9867": {
+      "label": "PinchTab",
+      "onAutoForward": "notify"
+    }
+  }
+}
