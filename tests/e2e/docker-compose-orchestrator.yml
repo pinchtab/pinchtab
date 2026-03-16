@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab.json:/config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
@@ -26,7 +25,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab-bridge.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab-bridge.json:/config/pinchtab-bridge.json:ro
     ports:

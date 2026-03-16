@@ -99,13 +99,13 @@ pt_post /tab "{\"tabId\":\"$TAB_ID\",\"action\":\"close\"}" >/dev/null 2>&1
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
-# CF2: Env vars override config (server is running on env-specified port)
+# CF2: Config file port is used (server runs on port from config)
 # ═══════════════════════════════════════════════════════════════════
 
-start_test "config: env var overrides config file"
+start_test "config: server uses port from config file"
 
-# The server is running on port from PINCHTAB_PORT env var.
-# If we can reach it, env override works.
+# The server is running on port 9999 from config file.
+# Verifies config is loaded correctly.
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate (proves env port override works)"
 

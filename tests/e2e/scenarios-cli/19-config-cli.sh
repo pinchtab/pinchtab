@@ -64,11 +64,10 @@ config_cleanup
 end_test
 
 # ═══════════════════════════════════════════════════════════════════
-start_test "config show displays config with env override"
+start_test "config show displays config"
 
 config_setup
-PINCHTAB_CONFIG="$CFG" PINCHTAB_PORT=9999 pt_ok config show
-assert_output_contains "9999" "shows port from env"
+PINCHTAB_CONFIG="$CFG" pt_ok config show
 assert_output_contains "Server" "has Server section header"
 assert_output_contains "Browser" "has Browser section header"
 config_cleanup

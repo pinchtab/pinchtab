@@ -12,12 +12,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  🦀 PinchTab CLI E2E Tests"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  Server: $PINCHTAB_URL"
+echo "  Server: $PINCHTAB_SERVER"
 echo "  Fixtures: $FIXTURES_URL"
 echo ""
 
 # Wait for instance to be ready (same as curl-based tests)
-wait_for_instance_ready "$PINCHTAB_URL"
+wait_for_instance_ready "$PINCHTAB_SERVER"
 
 # Verify pinchtab CLI is available
 if ! command -v pinchtab &> /dev/null; then
