@@ -96,6 +96,7 @@ func runDashboard(cfg *config.RuntimeConfig) {
 		"GET /stealth/status", "POST /fingerprint/rotate",
 		"GET /screencast", "GET /screencast/tabs",
 		"POST /find", "POST /macro",
+		"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "POST /clipboard/paste",
 	}
 	for _, ep := range proxyEndpoints {
 		endpoint := ep

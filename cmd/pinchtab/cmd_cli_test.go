@@ -14,7 +14,7 @@ func TestIsCLICommand(t *testing.T) {
 	valid := []string{"nav", "navigate", "snap", "snapshot", "click", "type",
 		"press", "fill", "hover", "scroll", "select", "focus",
 		"text", "tabs", "tab", "screenshot", "ss", "eval", "evaluate",
-		"pdf", "health", "quick"}
+		"pdf", "health", "quick", "clipboard"}
 
 	for _, cmd := range valid {
 		if !isCLICommand(cmd) {

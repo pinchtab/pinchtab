@@ -38,6 +38,7 @@ CLI COMMANDS:
   pinchtab select <ref> <value>         Select dropdown option
   pinchtab focus <ref>                  Focus element
   pinchtab text [--raw]                 Extract readable text
+  pinchtab clipboard <op> [args]        Clipboard: read|write|copy|paste
   pinchtab tabs [new <url>|close <id>]  Manage tabs
   pinchtab ss [-o file] [-q 80]         Screenshot
   pinchtab eval <expression>            Run JavaScript
@@ -104,7 +105,8 @@ var cliCommands = map[string]bool{
 	"pdf": true, "health": true,
 	"help": true, "quick": true,
 	"instance": true, "instances": true,
-	"profiles": true,
+	"profiles":  true,
+	"clipboard": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -163,6 +165,8 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliQuick(client, base, token, args)
 	case "help":
 		cliHelp()
+	case "clipboard":
+		cliClipboard(client, base, token, args)
 	}
 }
 
@@ -208,6 +212,7 @@ Commands:
   ss, screenshot          Take screenshot (-o file, -q quality)
   eval <expression>       Evaluate JavaScript
   pdf                     Export page as PDF (-o file, --landscape, --scale N)
+  clipboard               Clipboard ops: read/write/copy/paste (--tab <id>)
 
   OTHER:
   health                  Server health check
@@ -890,6 +895,76 @@ func cliHealth(client *http.Client, base, token string) {
 	doGet(client, base, token, "/health", nil)
 }
 
+// --- clipboard ---
+
+func cliClipboard(client *http.Client, base, token string, args []string) {
+	if len(args) < 1 {
+		fatal("Usage: pinchtab clipboard <read|write|copy|paste> [text] [--tab <id>]")
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	params := url.Values{}
+	var textParts []string
+
+	for i := 0; i < len(subArgs); i++ {
+		switch subArgs[i] {
+		case "--tab":
+			if i+1 < len(subArgs) {
+				i++
+				params.Set("tabId", subArgs[i])
+			}
+		default:
+			textParts = append(textParts, subArgs[i])
+		}
+	}
+
+	text := strings.Join(textParts, " ")
+
+	switch sub {
+	case "read":
+		body := doGetRaw(client, base, token, "/clipboard/read", params)
+		var resp map[string]any
+		if err := json.Unmarshal(body, &resp); err != nil {
+			fatal("Failed to parse response: %v", err)
+		}
+		if v, ok := resp["text"].(string); ok {
+			fmt.Println(v)
+			return
+		}
+		fmt.Println(string(body))
+	case "paste":
+		path := "/clipboard/paste"
+		if len(params) > 0 {
+			path += "?" + params.Encode()
+		}
+		body := doPostRaw(client, base, token, path, map[string]any{})
+		var resp map[string]any
+		if err := json.Unmarshal(body, &resp); err != nil {
+			fatal("Failed to parse response: %v", err)
+		}
+		if v, ok := resp["text"].(string); ok {
+			fmt.Println(v)
+			return
+		}
+		fmt.Println(string(body))
+	case "write", "copy":
+		if strings.TrimSpace(text) == "" {
+			fatal("Usage: pinchtab clipboard %s <text> [--tab <id>]", sub)
+		}
+		path := "/clipboard/" + sub
+		if len(params) > 0 {
+			path += "?" + params.Encode()
+		}
+		doPost(client, base, token, path, map[string]any{
+			"text": text,
+		})
+	default:
+		fatal("Unknown clipboard subcommand: %s", sub)
+	}
+}
+
 // --- instance ---
 
 func cliInstance(client *http.Client, base, token string, args []string) {
@@ -1131,6 +1206,28 @@ func doGetRaw(client *http.Client, base, token, path string, params url.Values) 
 		os.Exit(1)
 	}
 	return body
+}
+
+func doPostRaw(client *http.Client, base, token, path string, body map[string]any) []byte {
+	data, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		fatal("Request failed: %v", err)
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(respBody))
+		os.Exit(1)
+	}
+	return respBody
 }
 
 func doPost(client *http.Client, base, token, path string, body map[string]any) map[string]any {
