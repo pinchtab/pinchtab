@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -55,6 +54,10 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		// Utility
 		"pinchtab_wait":              handleWait(),
 		"pinchtab_wait_for_selector": handleWaitForSelector(c),
+		"pinchtab_wait_for_text":     handleWaitForText(c),
+		"pinchtab_wait_for_url":      handleWaitForURL(c),
+		"pinchtab_wait_for_load":     handleWaitForLoad(c),
+		"pinchtab_wait_for_function": handleWaitForFunction(c),
 
 		// Network monitoring
 		"pinchtab_network":        handleNetwork(c),
@@ -500,65 +503,105 @@ func handleWaitForSelector(c *Client) func(context.Context, mcp.CallToolRequest)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		timeoutMS := 10000.0
+		payload := map[string]any{"selector": sel}
 		if t, ok := optFloat(r, "timeout"); ok {
-			timeoutMS = t
+			payload["timeout"] = int(t)
 		}
-		if timeoutMS > maxWaitMS {
-			timeoutMS = maxWaitMS
+		if state := optString(r, "state"); state != "" {
+			payload["state"] = state
 		}
-		if timeoutMS < 100 {
-			timeoutMS = 100
-		}
-
-		// Build the appropriate JavaScript check based on selector type.
-		var js string
-		switch {
-		case strings.HasPrefix(sel, "xpath:"):
-			xpath := sel[len("xpath:"):]
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonString(xpath))
-		case strings.HasPrefix(sel, "//") || strings.HasPrefix(sel, "(//"):
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonString(sel))
-		case strings.HasPrefix(sel, "text:"):
-			text := sel[len("text:"):]
-			js = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%s))return true}return false})()`, jsonString(text))
-		case strings.HasPrefix(sel, "css:"):
-			css := sel[len("css:"):]
-			js = fmt.Sprintf(`document.querySelector(%s) !== null`, jsonString(css))
-		default:
-			// Bare selector — treat as CSS (backward compatible)
-			js = fmt.Sprintf(`document.querySelector(%s) !== null`, jsonString(sel))
-		}
-
-		payload := map[string]any{"expression": js}
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-
-		deadline := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
-		interval := 250 * time.Millisecond
-
-		for {
-			body, code, err := c.Post(ctx, "/evaluate", payload)
-			if err == nil && code < 400 {
-				var resp struct {
-					Result any `json:"result"`
-				}
-				if json.Unmarshal(body, &resp) == nil && resp.Result == true {
-					return mcp.NewToolResultText(fmt.Sprintf(`{"found":true,"selector":%s}`, jsonString(sel))), nil
-				}
-			}
-
-			if time.Now().After(deadline) {
-				return mcp.NewToolResultError(fmt.Sprintf("timeout: selector %q not found within %dms", sel, int(timeoutMS))), nil
-			}
-
-			select {
-			case <-time.After(interval):
-			case <-ctx.Done():
-				return mcp.NewToolResultError("wait_for_selector cancelled"), nil
-			}
+		body, code, err := c.Post(ctx, "/wait", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
+		return resultFromBytes(body, code)
+	}
+}
+
+func handleWaitForText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		text, err := r.RequireString("text")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"text": text}
+		if t, ok := optFloat(r, "timeout"); ok {
+			payload["timeout"] = int(t)
+		}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
+		body, code, err := c.Post(ctx, "/wait", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
+	}
+}
+
+func handleWaitForURL(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		u, err := r.RequireString("url")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"url": u}
+		if t, ok := optFloat(r, "timeout"); ok {
+			payload["timeout"] = int(t)
+		}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
+		body, code, err := c.Post(ctx, "/wait", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
+	}
+}
+
+func handleWaitForLoad(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		load, err := r.RequireString("load")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"load": load}
+		if t, ok := optFloat(r, "timeout"); ok {
+			payload["timeout"] = int(t)
+		}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
+		body, code, err := c.Post(ctx, "/wait", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
+	}
+}
+
+func handleWaitForFunction(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		fn, err := r.RequireString("fn")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		payload := map[string]any{"fn": fn}
+		if t, ok := optFloat(r, "timeout"); ok {
+			payload["timeout"] = int(t)
+		}
+		if tabID := optString(r, "tabId"); tabID != "" {
+			payload["tabId"] = tabID
+		}
+		body, code, err := c.Post(ctx, "/wait", payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(body, code)
 	}
 }
 

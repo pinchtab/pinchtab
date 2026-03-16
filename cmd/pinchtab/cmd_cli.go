@@ -346,6 +346,18 @@ var findCmd = &cobra.Command{
 	},
 }
 
+var waitCmd = &cobra.Command{
+	Use:   "wait [selector|ms]",
+	Short: "Wait for element, text, URL, network idle, JS expression, or fixed duration",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Wait(client, base, token, args, cmd)
+		})
+	},
+}
+
 var dialogCmd = &cobra.Command{
 	Use:   "dialog",
 	Short: "Handle JavaScript dialogs (alert, confirm, prompt)",
@@ -512,6 +524,7 @@ func init() {
 	uncheckCmd.GroupID = "browser"
 	networkCmd.GroupID = "browser"
 	dialogCmd.GroupID = "browser"
+	waitCmd.GroupID = "browser"
 	keyboardCmd.GroupID = "browser"
 	keydownCmd.GroupID = "browser"
 	keyupCmd.GroupID = "browser"
@@ -654,6 +667,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(uncheckCmd)
 	rootCmd.AddCommand(networkCmd)
+	rootCmd.AddCommand(waitCmd)
 	rootCmd.AddCommand(keyboardCmd)
 	rootCmd.AddCommand(keydownCmd)
 	rootCmd.AddCommand(keyupCmd)
@@ -671,6 +685,14 @@ func init() {
 	networkCmd.Flags().Bool("clear", false, "Clear captured network data")
 	networkCmd.Flags().String("buffer-size", "", "Per-tab network buffer size (default 100)")
 	networkCmd.Flags().Bool("stream", false, "Stream network entries in real-time (like tail -f)")
+
+	waitCmd.Flags().String("text", "", "Wait for text on page")
+	waitCmd.Flags().String("url", "", "Wait for URL glob match")
+	waitCmd.Flags().String("load", "", "Wait for load state (networkidle)")
+	waitCmd.Flags().String("fn", "", "Wait for JS expression to be truthy")
+	waitCmd.Flags().String("state", "", "Element state: visible (default) or hidden")
+	waitCmd.Flags().Int("timeout", 0, "Timeout in milliseconds (default 10000, max 30000)")
+	waitCmd.Flags().String("tab", "", "Tab ID")
 
 	dialogAcceptCmd.Flags().String("tab", "", "Tab ID")
 	dialogDismissCmd.Flags().String("tab", "", "Tab ID")

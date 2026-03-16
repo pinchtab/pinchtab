@@ -18,8 +18,8 @@ func TestNewServerRegistersAllTools(t *testing.T) {
 	// The server should have registered all tools.
 	// We verify by checking that NewServer doesn't panic — the panic
 	// in NewServer fires if any tool lacks a handler.
-	if len(tools) != 30 {
-		t.Errorf("expected 30 tools, got %d", len(tools))
+	if len(tools) != 34 {
+		t.Errorf("expected 34 tools, got %d", len(tools))
 	}
 }
 

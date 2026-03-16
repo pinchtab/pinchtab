@@ -42,6 +42,13 @@ func mockPinchTab() *httptest.Server {
 			resp["result"] = true
 		}
 
+		// Special: /wait returns a successful wait response
+		if r.URL.Path == "/wait" {
+			resp["waited"] = true
+			resp["elapsed"] = 100
+			resp["match"] = "selector"
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		_ = json.NewEncoder(w).Encode(resp)
@@ -522,8 +529,8 @@ func TestHandleWaitForSelector(t *testing.T) {
 	}, srv)
 
 	text := resultText(t, r)
-	if !strings.Contains(text, "found") {
-		t.Errorf("expected found, got %s", text)
+	if !strings.Contains(text, "waited") {
+		t.Errorf("expected waited, got %s", text)
 	}
 }
 
