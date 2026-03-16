@@ -126,7 +126,7 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 		fmt.Fprintf(os.Stderr, "Error connecting to stream: %v\n", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
 
 	if resp.StatusCode != 200 {
 		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)

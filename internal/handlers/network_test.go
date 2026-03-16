@@ -78,7 +78,7 @@ func TestHandleNetwork_FilterByMethod(t *testing.T) {
 		Entries []bridge.NetworkEntry `json:"entries"`
 		Count   int                   `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 1 {
 		t.Errorf("expected 1 POST entry, got %d", resp.Count)
 	}
@@ -103,7 +103,7 @@ func TestHandleNetwork_FilterByURLPattern(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 1 {
 		t.Errorf("expected 1 entry matching cdn.example, got %d", resp.Count)
 	}
@@ -125,7 +125,7 @@ func TestHandleNetwork_FilterByStatus(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 1 {
 		t.Errorf("expected 1 4xx entry, got %d", resp.Count)
 	}
@@ -147,7 +147,7 @@ func TestHandleNetwork_FilterByType(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 2 {
 		t.Errorf("expected 2 XHR entries, got %d", resp.Count)
 	}
@@ -169,7 +169,7 @@ func TestHandleNetwork_Limit(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 1 {
 		t.Errorf("expected 1 entry with limit=1, got %d", resp.Count)
 	}
@@ -190,7 +190,7 @@ func TestHandleNetwork_NilMonitor(t *testing.T) {
 		Entries []any `json:"entries"`
 		Count   int   `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 0 {
 		t.Errorf("expected 0 entries when monitor is nil, got %d", resp.Count)
 	}
@@ -213,7 +213,7 @@ func TestHandleNetworkByID_Found(t *testing.T) {
 	var resp struct {
 		Entry bridge.NetworkEntry `json:"entry"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Entry.RequestID != "r1" {
 		t.Errorf("expected r1, got %s", resp.Entry.RequestID)
 	}
@@ -282,7 +282,7 @@ func TestHandleNetworkClear_All(t *testing.T) {
 		Cleared bool `json:"cleared"`
 		All     bool `json:"all"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if !resp.Cleared || !resp.All {
 		t.Errorf("expected cleared=true, all=true, got cleared=%v, all=%v", resp.Cleared, resp.All)
 	}
@@ -315,7 +315,7 @@ func TestHandleNetworkClear_ByTab(t *testing.T) {
 		Cleared bool   `json:"cleared"`
 		TabID   string `json:"tabId"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if !resp.Cleared {
 		t.Error("expected cleared=true")
 	}
@@ -355,7 +355,7 @@ func TestHandleTabNetwork(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 3 {
 		t.Errorf("expected 3 entries, got %d", resp.Count)
 	}
@@ -390,7 +390,7 @@ func TestHandleNetwork_CombinedFilters(t *testing.T) {
 	var resp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 1 {
 		t.Errorf("expected 1 GET+XHR entry, got %d", resp.Count)
 	}

@@ -19,23 +19,23 @@ const DefaultNetworkBufferSize = 100
 
 // NetworkEntry represents a single captured network request/response pair.
 type NetworkEntry struct {
-	RequestID   string            `json:"requestId"`
-	URL         string            `json:"url"`
-	Method      string            `json:"method"`
-	Status      int               `json:"status,omitempty"`
-	StatusText  string            `json:"statusText,omitempty"`
-	ResourceType string           `json:"resourceType"`
+	RequestID       string            `json:"requestId"`
+	URL             string            `json:"url"`
+	Method          string            `json:"method"`
+	Status          int               `json:"status,omitempty"`
+	StatusText      string            `json:"statusText,omitempty"`
+	ResourceType    string            `json:"resourceType"`
 	RequestHeaders  map[string]string `json:"requestHeaders,omitempty"`
 	ResponseHeaders map[string]string `json:"responseHeaders,omitempty"`
-	PostData    string            `json:"postData,omitempty"`
-	MimeType    string            `json:"mimeType,omitempty"`
-	StartTime   time.Time         `json:"startTime"`
-	EndTime     time.Time         `json:"endTime,omitempty"`
-	Duration    float64           `json:"duration,omitempty"` // milliseconds
-	Size        int64             `json:"size,omitempty"`     // encoded data length
-	Error       string            `json:"error,omitempty"`
-	Finished    bool              `json:"finished"`
-	Failed      bool              `json:"failed"`
+	PostData        string            `json:"postData,omitempty"`
+	MimeType        string            `json:"mimeType,omitempty"`
+	StartTime       time.Time         `json:"startTime"`
+	EndTime         time.Time         `json:"endTime,omitempty"`
+	Duration        float64           `json:"duration,omitempty"` // milliseconds
+	Size            int64             `json:"size,omitempty"`     // encoded data length
+	Error           string            `json:"error,omitempty"`
+	Finished        bool              `json:"finished"`
+	Failed          bool              `json:"failed"`
 }
 
 // NetworkBuffer is a thread-safe ring buffer of network entries for a single tab.
@@ -409,8 +409,8 @@ func (nm *NetworkMonitor) GetResponseBody(tabCtx context.Context, requestID stri
 			return err
 		}
 		var resp struct {
-			Body           string `json:"body"`
-			Base64Encoded  bool   `json:"base64Encoded"`
+			Body          string `json:"body"`
+			Base64Encoded bool   `json:"base64Encoded"`
 		}
 		if err := json.Unmarshal(result, &resp); err != nil {
 			return err

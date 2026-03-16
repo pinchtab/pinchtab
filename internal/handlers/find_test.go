@@ -46,7 +46,7 @@ func (m *findMockBridge) DeleteRefCache(tabID string)                      {}
 func (m *findMockBridge) AvailableActions() []string                       { return nil }
 func (m *findMockBridge) TabLockInfo(tabID string) *bridge.LockInfo        { return nil }
 func (m *findMockBridge) GetCrashLogs() []string                           { return nil }
-func (m *findMockBridge) NetworkMonitor() *bridge.NetworkMonitor            { return nil }
+func (m *findMockBridge) NetworkMonitor() *bridge.NetworkMonitor           { return nil }
 
 func (m *findMockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
 	return nil, nil
