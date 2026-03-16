@@ -605,12 +605,6 @@ func handleWaitForFunction(c *Client) func(context.Context, mcp.CallToolRequest)
 	}
 }
 
-// jsonString returns a JSON-encoded string (with quotes).
-func jsonString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
-
 // ── Network monitoring handlers ────────────────────────────────────────
 
 func handleNetwork(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
