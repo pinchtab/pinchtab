@@ -71,7 +71,6 @@ Runs the orchestration-focused curl scenarios, including multi-instance flows an
 |---|---|---|
 | `PINCHTAB_TEST_PORT` | `19867` | Port for the test server |
 | `PINCHTAB_TEST_KEEP_DIR` | _(unset)_ | Set to any value to preserve the test dir after tests finish |
-| `CHROME_BINARY` | _(auto-detect)_ | Path to Chrome binary (used in CI) |
 | `CI` | _(unset)_ | Set to `true` for longer health check timeouts (60s vs 30s) |
 
 ### Temp Directory Layout

@@ -191,7 +191,7 @@ ls -la pinchtab
 **Expected output:**
 ```
 🦀 PINCH! PINCH! port=9867
-auth disabled (set BRIDGE_TOKEN to enable)
+auth disabled (set PINCHTAB_TOKEN to enable)
 ```
 
 ### Start (Headed Mode)

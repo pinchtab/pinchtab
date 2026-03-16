@@ -15,7 +15,9 @@ If you copy Chrome or Chromium to a custom filename, that filename appears in pr
 cp "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" /usr/local/bin/pinchtab-chrome
 chmod +x /usr/local/bin/pinchtab-chrome
 
-CHROME_BIN=/usr/local/bin/pinchtab-chrome pinchtab
+# Set in config.json
+pinchtab config set browser.chromeBinary /usr/local/bin/pinchtab-chrome
+pinchtab
 ```
 
 Now a process listing such as `ps -axo pid,command | rg pinchtab-chrome` gives you a quick way to spot the browser PinchTab launches.
@@ -71,7 +73,7 @@ curl http://localhost:9867/instances
 
 For most setups, this combination is enough:
 
-1. point PinchTab to a renamed Chrome binary with `CHROME_BIN`
+1. point PinchTab to a renamed Chrome binary via `browser.chromeBinary` in config
 2. add a recognizable `browser.extraFlags` marker in config
 3. verify the profile path or instance ID in the dashboard
 
@@ -79,6 +81,6 @@ For most setups, this combination is enough:
 
 The same approach works in containers:
 
-- use `CHROME_BIN` only if you need to override the bundled browser path
+- set `browser.chromeBinary` in config if you need to override the bundled browser path
 - put identifying flags in `browser.extraFlags`
 - inspect the instance list from the API or dashboard rather than relying only on process names inside the container

@@ -41,7 +41,7 @@ func Load() *RuntimeConfig {
 		BlockAds:          false,
 		MaxTabs:           20,
 		MaxParallelTabs:   0,
-		ChromeBinary:      "", // Set via config.json only; env var CHROME_BIN removed
+		ChromeBinary:      "", // Set via config.json only
 		ChromeExtraFlags:  "",
 		ExtensionPaths:    nil,
 		UserAgent:         "",

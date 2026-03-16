@@ -110,11 +110,11 @@ PinchTab loads configuration in this order:
 
 The currently supported operational env vars are:
 
-- `PINCHTAB_CONFIG`
-- `PINCHTAB_BIND`
-- `PINCHTAB_PORT`
-- `PINCHTAB_TOKEN`
-- `CHROME_BIN`
+- `PINCHTAB_CONFIG` — path to config file
+- `PINCHTAB_BIND` — listen address
+- `PINCHTAB_PORT` — listen port
+- `PINCHTAB_TOKEN` — auth token
+- `PINCHTAB_ENGINE` — engine selection (`chrome`, `lite`, or `auto`)
 
 Everything else should be configured in `config.json`.
 

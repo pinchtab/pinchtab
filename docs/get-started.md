@@ -173,8 +173,8 @@ brew install chromium
 # Linux (Ubuntu/Debian)
 sudo apt install chromium-browser
 
-# Custom Chrome binary
-CHROME_BIN=/path/to/chrome pinchtab
+# Custom Chrome binary (set in config)
+pinchtab config set browser.chromeBinary /path/to/chrome
 ```
 
 ---

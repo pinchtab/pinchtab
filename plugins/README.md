@@ -43,7 +43,7 @@ You should see JSON with `"plugin": {"name": "pinchtab", ...}` and `"commands": 
 ## PinchTab URL and auth
 
 - The plugin defaults to **`--base-url http://localhost:9867`** (orchestrator). Agents pass `base_url`, and optionally `token` and `instance_id`, per tool call; no plugin-specific env vars are required.
-- If PinchTab is protected with **`BRIDGE_TOKEN`**, agents must pass `token` in the tool arguments (or configure it in your MCP server if it supports per-plugin env).
+- If PinchTab is protected with **`PINCHTAB_TOKEN`**, agents must pass `token` in the tool arguments (or configure it in your MCP server if it supports per-plugin env).
 
 ---
 
