@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
@@ -542,9 +541,116 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 // ResolveTextToNodeID finds the first element whose visible text content
 // contains the given string and returns its backend node ID.
 func ResolveTextToNodeID(ctx context.Context, text string) (int64, error) {
-	// Use XPath with contains(text(), ...) for text matching.
-	xpath := fmt.Sprintf(`//*[contains(text(), %s)]`, xpathString(text))
-	return ResolveXPathToNodeID(ctx, xpath)
+	var backendNodeID int64
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var docResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
+			"expression":    "document",
+			"returnByValue": false,
+		}, &docResult); err != nil {
+			return fmt.Errorf("resolve document: %w", err)
+		}
+
+		var doc struct {
+			Result struct {
+				ObjectID string `json:"objectId"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(docResult, &doc); err != nil {
+			return err
+		}
+		if doc.Result.ObjectID == "" {
+			return fmt.Errorf("document object not found")
+		}
+
+		const findTextFn = `function(needle) {
+			const root = this.body || this.documentElement;
+			if (!root) {
+				return null;
+			}
+			const elements = root.querySelectorAll("*");
+			for (const el of elements) {
+				const text = el.innerText || "";
+				if (!text.includes(needle)) {
+					continue;
+				}
+				let childContainsText = false;
+				for (const child of el.children) {
+					if ((child.innerText || "").includes(needle)) {
+						childContainsText = true;
+						break;
+					}
+				}
+				if (!childContainsText) {
+					return el;
+				}
+			}
+			return null;
+		}`
+
+		var callResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": findTextFn,
+			"objectId":            doc.Result.ObjectID,
+			"arguments":           []map[string]any{{"value": text}},
+			"returnByValue":       false,
+		}, &callResult); err != nil {
+			return fmt.Errorf("find text node: %w", err)
+		}
+
+		var call struct {
+			Result struct {
+				ObjectID string `json:"objectId"`
+				Subtype  string `json:"subtype"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(callResult, &call); err != nil {
+			return err
+		}
+		if call.Result.ObjectID == "" || call.Result.Subtype == "null" {
+			return fmt.Errorf("text %q not found", text)
+		}
+
+		var nodeResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.requestNode", map[string]any{
+			"objectId": call.Result.ObjectID,
+		}, &nodeResult); err != nil {
+			return fmt.Errorf("request node: %w", err)
+		}
+
+		var node struct {
+			NodeID int64 `json:"nodeId"`
+		}
+		if err := json.Unmarshal(nodeResult, &node); err != nil {
+			return err
+		}
+		if node.NodeID == 0 {
+			return fmt.Errorf("text %q resolved to an invalid node", text)
+		}
+
+		var descResult json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
+			"nodeId": node.NodeID,
+		}, &descResult); err != nil {
+			return fmt.Errorf("describe node: %w", err)
+		}
+
+		var desc struct {
+			Node struct {
+				BackendNodeID int64 `json:"backendNodeId"`
+			} `json:"node"`
+		}
+		if err := json.Unmarshal(descResult, &desc); err != nil {
+			return err
+		}
+		if desc.Node.BackendNodeID == 0 {
+			return fmt.Errorf("text %q resolved to an invalid backend node", text)
+		}
+
+		backendNodeID = desc.Node.BackendNodeID
+		return nil
+	}))
+	return backendNodeID, err
 }
 
 // ResolveCSSToNodeID resolves a CSS selector to a backend node ID.
@@ -630,29 +736,4 @@ func ResolveUnifiedSelector(ctx context.Context, sel selector.Selector, refCache
 	default:
 		return 0, fmt.Errorf("unknown selector kind: %q", sel.Kind)
 	}
-}
-
-// xpathString returns an XPath-safe string literal using concat().
-// This safely handles all combinations of quotes and special characters.
-func xpathString(s string) string {
-	// Always use concat() for safety — handles any quote combination.
-	// Split on single quotes and rejoin with quoted single quote segments.
-	if !strings.Contains(s, "'") {
-		return "'" + s + "'"
-	}
-	// Use concat to handle strings with single quotes.
-	// e.g., "it's" becomes concat('it', "'", 's')
-	parts := strings.Split(s, "'")
-	var result strings.Builder
-	result.WriteString("concat(")
-	for i, part := range parts {
-		if i > 0 {
-			result.WriteString(`, "'", `)
-		}
-		result.WriteString("'")
-		result.WriteString(part)
-		result.WriteString("'")
-	}
-	result.WriteString(")")
-	return result.String()
 }

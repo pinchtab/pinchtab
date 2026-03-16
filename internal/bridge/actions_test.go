@@ -120,27 +120,6 @@ func TestUncheckAction_WithSelector_UsesCSSPath(t *testing.T) {
 	}
 }
 
-func TestXpathString(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"hello", "'hello'"},
-		{"it's", "concat('it', \"'\", 's')"},
-		{"say \"hi\"", "'say \"hi\"'"},
-		{"it's a \"test\"", "concat('it', \"'\", 's a \"test\"')"},
-		{"", "''"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := xpathString(tt.input)
-			if result != tt.expected {
-				t.Errorf("xpathString(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
 // ── Keyboard action tests ──────────────────────────────────────────────
 
 func TestKeyboardTypeAction_Registered(t *testing.T) {
