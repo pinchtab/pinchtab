@@ -129,7 +129,11 @@ function GlassTooltip({
               {suffix}
             </span>
             <span
-              style={{ color: "#f1f5f9", fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}
+              style={{
+                color: "#f1f5f9",
+                fontWeight: 600,
+                fontFamily: "var(--font-mono, monospace)",
+              }}
             >
               {formattedVal}
             </span>
@@ -296,7 +300,9 @@ export default function TabsChart({
               <span className="relative flex h-2.5 w-2.5">
                 <span
                   className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
-                  style={{ animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite" }}
+                  style={{
+                    animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
+                  }}
                 />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
               </span>
@@ -312,7 +318,10 @@ export default function TabsChart({
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: cv.color, boxShadow: `0 0 4px ${cv.color}60` }}
+                style={{
+                  background: cv.color,
+                  boxShadow: `0 0 4px ${cv.color}60`,
+                }}
               />
               {cv.value}
             </span>
@@ -411,10 +420,7 @@ export default function TabsChart({
               />
             )}
 
-            <Tooltip
-              content={tooltipContent}
-              cursor={<AnimatedCursor />}
-            />
+            <Tooltip content={tooltipContent} cursor={<AnimatedCursor />} />
 
             {/* Tab count areas (solid gradient fill) */}
             {instances.map((inst) => (
@@ -432,7 +438,9 @@ export default function TabsChart({
                 }
                 fill={`url(#grad-${inst.id})`}
                 fillOpacity={
-                  selectedInstanceId && selectedInstanceId !== inst.id ? 0.15 : 1
+                  selectedInstanceId && selectedInstanceId !== inst.id
+                    ? 0.15
+                    : 1
                 }
                 dot={false}
                 activeDot={{
@@ -441,7 +449,10 @@ export default function TabsChart({
                   stroke: instanceColors[inst.id],
                   fill: "#0f1117",
                   onClick: () => onSelectInstance(inst.id),
-                  style: { cursor: "pointer", filter: `drop-shadow(0 0 4px ${instanceColors[inst.id]}80)` },
+                  style: {
+                    cursor: "pointer",
+                    filter: `drop-shadow(0 0 4px ${instanceColors[inst.id]}80)`,
+                  },
                 }}
                 animationDuration={800}
                 animationEasing="ease-in-out"
