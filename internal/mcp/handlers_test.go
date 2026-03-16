@@ -110,13 +110,25 @@ func TestHandleNavigateInvalidURL(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
 
-	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "not-a-url"}, srv)
+	// Test that disallowed schemes are rejected
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "file:///etc/passwd"}, srv)
 	if !r.IsError {
-		t.Error("expected error for invalid URL scheme")
+		t.Error("expected error for file:// URL scheme")
 	}
 	text := resultText(t, r)
 	if !strings.Contains(text, "invalid URL") {
 		t.Errorf("expected 'invalid URL' in error, got %s", text)
+	}
+}
+
+func TestHandleNavigateBareHostname(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	// Bare hostnames should be normalized to https://
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "example.com"}, srv)
+	if r.IsError {
+		t.Errorf("expected bare hostname to succeed, got error: %s", resultText(t, r))
 	}
 }
 

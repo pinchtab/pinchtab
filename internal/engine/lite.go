@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/gost-dom/browser/dom"
 	"github.com/gost-dom/browser/html"
 	gosturl "github.com/gost-dom/browser/url"
+	"github.com/pinchtab/pinchtab/internal/urlutil"
 	nethtml "golang.org/x/net/html"
 )
 
@@ -46,23 +46,6 @@ func NewLiteEngine() *LiteEngine {
 
 func (l *LiteEngine) Name() string { return "lite" }
 
-// sanitizeNavigateURL validates a URL to prevent SSRF.
-// Only http:// and https:// schemes are permitted.
-func sanitizeNavigateURL(raw string) (string, error) {
-	// CodeQL recognizes strings.HasPrefix as a sanitizer for go/request-forgery.
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		return "", fmt.Errorf("unsupported URL scheme (only http/https allowed)")
-	}
-	parsed, err := neturl.Parse(raw)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %w", err)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("missing host in URL")
-	}
-	return parsed.String(), nil
-}
-
 func (l *LiteEngine) Capabilities() []Capability {
 	return []Capability{CapNavigate, CapSnapshot, CapText, CapClick, CapType}
 }
@@ -73,7 +56,7 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 	defer l.mu.Unlock()
 
 	// Validate and sanitize URL to prevent SSRF (CodeQL go/request-forgery).
-	safeURL, err := sanitizeNavigateURL(url)
+	safeURL, err := urlutil.Sanitize(url)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
 	}

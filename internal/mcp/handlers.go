@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/urlutil"
 )
 
 // maxWaitMS caps wait/timeout durations for safety.
@@ -100,11 +101,11 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		parsed, err := url.Parse(u)
-		if err != nil || !strings.HasPrefix(parsed.Scheme, "http") {
-			return mcp.NewToolResultError("invalid URL: must start with http:// or https://"), nil
+		safeURL, err := urlutil.Sanitize(u)
+		if err != nil {
+			return mcp.NewToolResultError("invalid URL: " + err.Error()), nil
 		}
-		payload := map[string]any{"url": u}
+		payload := map[string]any{"url": safeURL}
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
