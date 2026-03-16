@@ -7,9 +7,7 @@ import (
 	"strings"
 )
 
-// Normalize adds https:// prefix if no protocol is specified.
-// This provides CLI convenience so users can type "example.com" instead of "https://example.com".
-// URLs with existing http:// or https:// are returned unchanged.
+// Normalize adds https:// if no protocol specified. Existing http/https preserved.
 func Normalize(rawURL string) string {
 	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
 		return rawURL
@@ -17,16 +15,12 @@ func Normalize(rawURL string) string {
 	return "https://" + rawURL
 }
 
-// Sanitize validates a URL for safe navigation.
-// Only http:// and https:// schemes are permitted (SSRF prevention).
-// URLs without a scheme get https:// added.
-// Returns the sanitized URL or an error if invalid.
+// Sanitize validates and normalizes a URL. Only http/https allowed (SSRF prevention).
 func Sanitize(rawURL string) (string, error) {
 	if rawURL == "" {
 		return "", fmt.Errorf("empty URL")
 	}
 
-	// Check for disallowed schemes before normalizing
 	// CodeQL recognizes strings.HasPrefix as a sanitizer for go/request-forgery.
 	if strings.Contains(rawURL, "://") {
 		if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
@@ -34,7 +28,6 @@ func Sanitize(rawURL string) (string, error) {
 		}
 	}
 
-	// Normalize to add https:// if no scheme
 	normalized := Normalize(rawURL)
 
 	parsed, err := url.Parse(normalized)
@@ -49,16 +42,15 @@ func Sanitize(rawURL string) (string, error) {
 	return parsed.String(), nil
 }
 
-// IsValid checks if a URL is valid for navigation (has http/https scheme and host).
+// IsValid returns true if URL is safe for navigation.
 func IsValid(rawURL string) bool {
 	_, err := Sanitize(rawURL)
 	return err == nil
 }
 
-// ExtractHost parses a URL and returns the lowercase bare hostname (no port).
-// Returns empty string if parsing fails or no host is found.
+// ExtractHost returns the lowercase hostname without port. Empty string on failure.
 func ExtractHost(rawURL string) string {
-	// Handle URLs without scheme (url.Parse puts them in Path)
+	// url.Parse puts bare hostnames into Path when no scheme is present
 	if !strings.Contains(rawURL, "://") {
 		rawURL = "https://" + rawURL
 	}
