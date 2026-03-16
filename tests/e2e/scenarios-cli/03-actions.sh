@@ -43,3 +43,22 @@ else
 fi
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab check/uncheck <selector>"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+
+pt_ok check "#terms"
+assert_json_field ".result.checked" "true" "check marks the checkbox"
+
+pt_ok eval "document.querySelector('#terms').checked"
+assert_json_field ".result" "true" "DOM checkbox state is checked"
+
+pt_ok uncheck "#terms"
+assert_json_field ".result.checked" "false" "uncheck clears the checkbox"
+
+pt_ok eval "document.querySelector('#terms').checked"
+assert_json_field ".result" "false" "DOM checkbox state is unchecked"
+
+end_test

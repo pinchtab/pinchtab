@@ -159,3 +159,27 @@ else
 fi
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab check/uncheck (CSS selector)"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "navigate"
+
+pt_post /action '{"kind":"check","selector":"#terms"}'
+assert_ok "check checkbox"
+assert_json_eq "$RESULT" '.result.checked' 'true' "check response reports checked"
+
+pt_post /evaluate '{"expression":"document.querySelector(\"#terms\").checked"}'
+assert_ok "evaluate checked state"
+assert_json_eq "$RESULT" '.result' 'true' "checkbox is checked in DOM"
+
+pt_post /action '{"kind":"uncheck","selector":"#terms"}'
+assert_ok "uncheck checkbox"
+assert_json_eq "$RESULT" '.result.checked' 'false' "uncheck response reports unchecked"
+
+pt_post /evaluate '{"expression":"document.querySelector(\"#terms\").checked"}'
+assert_ok "evaluate unchecked state"
+assert_json_eq "$RESULT" '.result' 'false' "checkbox is unchecked in DOM"
+
+end_test

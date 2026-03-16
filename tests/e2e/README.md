@@ -63,7 +63,7 @@ The Docker stack reuses the repository root `Dockerfile` and mounts explicit con
 | 02-navigate | Navigation, tab creation, tab listing |
 | 03-snapshot | A11y tree extraction, text content |
 | 04-tabs-api | Tab-scoped APIs (regression #207) |
-| 05-actions | Click, type, press actions |
+| 05-actions | Click, type, press, check, and uncheck actions |
 | 06-screenshot-pdf | Screenshot and PDF export |
 | 40-activity | Activity API capture and filtering |
 | scenarios-orchestrator/01-attach-bridge | Orchestrator attaches to the dedicated `pinchtab-bridge` container and proxies tab traffic |
@@ -96,6 +96,10 @@ assert_json_length "$RESULT" '.items' 5
 
 end_test
 ```
+
+The action scenarios already cover common interaction regressions against the bundled fixtures:
+- `tests/e2e/scenarios/05-actions.sh` covers API actions including `check` and `uncheck`
+- `tests/e2e/scenarios-cli/03-actions.sh` covers the matching CLI commands
 
 ## Adding Fixtures
 

@@ -65,6 +65,8 @@ pinchtab press <key>             # Press key (Enter, Tab, Escape...)
 pinchtab hover <ref>             # Hover over element
 pinchtab hover --css <selector>  # Hover by CSS selector
 pinchtab select <ref> <value>    # Select dropdown option
+pinchtab check <selector>        # Check a checkbox or radio
+pinchtab uncheck <selector>      # Uncheck a checkbox or radio
 pinchtab scroll <ref|pixels>     # Scroll to element or by pixel amount
 ```
 
