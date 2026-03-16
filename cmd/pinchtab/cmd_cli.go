@@ -105,6 +105,7 @@ var cliCommands = map[string]bool{
 	"help": true, "quick": true,
 	"instance": true, "instances": true,
 	"profiles": true,
+	"console": true, "errors": true,
 }
 
 func isCLICommand(cmd string) bool {
@@ -163,6 +164,10 @@ func runCLI(cfg *config.RuntimeConfig) {
 		cliQuick(client, base, token, args)
 	case "help":
 		cliHelp()
+	case "console":
+		cliLogData(client, base, token, "console", args)
+	case "errors":
+		cliLogData(client, base, token, "errors", args)
 	}
 }
 
@@ -205,9 +210,11 @@ Commands:
   tabs                    List open tabs
   tabs new <url>          Open new tab
   tabs close <tabId>      Close tab
-  ss, screenshot          Take screenshot (-o file, -q quality)
+  screenshot, ss          Take screenshot (-o file, -q quality)
   eval <expression>       Evaluate JavaScript
   pdf                     Export page as PDF (-o file, --landscape, --scale N)
+  console                 View browser console logs (--clear, --tab <id>)
+  errors                  View browser uncaught errors (--clear, --tab <id>)
 
   OTHER:
   health                  Server health check
@@ -1288,4 +1295,89 @@ func min(a, b int) int {
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
+}
+
+// --- console / errors ---
+
+func cliLogData(client *http.Client, base, token, kind string, args []string) {
+	params := url.Values{}
+	isClear := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--clear":
+			isClear = true
+		case "--tab":
+			if i+1 < len(args) {
+				i++
+				params.Set("tabId", args[i])
+			}
+		case "--limit":
+			if i+1 < len(args) {
+				i++
+				params.Set("limit", args[i])
+			}
+		}
+	}
+
+	endpoint := "/" + kind
+
+	if isClear {
+		doPost(client, base, token, endpoint+"/clear?"+params.Encode(), nil)
+		fmt.Printf("Cleared %s\n", kind)
+		return
+	}
+
+	result := doGetRaw(client, base, token, endpoint, params)
+	if result == nil {
+		fatal("Failed to get %s", kind)
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(result, &data); err != nil {
+		fatal("Failed to parse response: %v", err)
+	}
+
+	entries, ok := data[kind].([]interface{})
+	if !ok {
+		fmt.Printf("No %s found.\n", kind)
+		return
+	}
+
+	if len(entries) == 0 {
+		fmt.Printf("No %s found.\n", kind)
+		return
+	}
+
+	for _, entry := range entries {
+		e := entry.(map[string]interface{})
+		timeStr := ""
+		if ts, ok := e["timestamp"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, ts); err == nil {
+				timeStr = t.Format("15:04:05") + " "
+			}
+		}
+		if kind == "console" {
+			level := ""
+			if l, ok := e["level"].(string); ok {
+				level = "[" + strings.ToUpper(l) + "] "
+			}
+			msg := ""
+			if m, ok := e["message"].(string); ok {
+				msg = m
+			}
+			fmt.Printf("%s%s%s\n", timeStr, level, msg)
+		} else {
+			msg := ""
+			if m, ok := e["message"].(string); ok {
+				msg = m
+			}
+			fmt.Printf("%s[ERROR] %s\n", timeStr, msg)
+			if urlStr, ok := e["url"].(string); ok && urlStr != "" {
+				line, _ := e["line"].(float64)
+				col, _ := e["column"].(float64)
+				fmt.Printf("  at %s:%d:%d\n", urlStr, int(line), int(col))
+			}
+		}
+	}
 }

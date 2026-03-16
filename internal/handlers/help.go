@@ -22,6 +22,8 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 			"POST /actions":      "run multiple actions",
 			"POST /macro":        "run macro steps with single request",
 			"GET /snapshot":      "accessibility snapshot",
+			"GET /console":       "view browser console logs",
+			"GET /errors":        "view browser uncaught errors",
 		},
 		"notes": []string{
 			"Use Authorization: Bearer <token> when auth is enabled.",

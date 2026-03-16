@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	cdp "github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -24,10 +26,11 @@ type TabManager struct {
 	accessed   map[string]bool
 	snapshots  map[string]*RefCache
 	onTabSetup TabSetupFunc
+	logStore   *ConsoleLogStore
 	mu         sync.RWMutex
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *idutil.Manager, onTabSetup TabSetupFunc) *TabManager {
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *idutil.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
 	if idMgr == nil {
 		idMgr = idutil.NewManager()
 	}
@@ -39,6 +42,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
 		onTabSetup: onTabSetup,
+		logStore:   logStore,
 	}
 }
 
@@ -142,8 +146,79 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		chromedp.WithTargetID(targetID),
 	)
 
+	// Compute hash-based tab ID and store only that entry.
+	// Raw CDP ID is kept internal in the CDPID field.
+	rawCDPID := string(targetID)
+	hashTabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
+
+	// Attach CDP listeners for console logs and exceptions
+	if tm.logStore != nil {
+		chromedp.ListenTarget(ctx, func(ev interface{}) {
+			switch ev := ev.(type) {
+			case *runtime.EventConsoleAPICalled:
+				var msg string
+				for _, arg := range ev.Args {
+					if len(arg.Value) > 0 {
+						msg += string(arg.Value) + " "
+					} else {
+						msg += fmt.Sprintf("%v ", arg.Value) // fallback
+					}
+				}
+				msg = strings.TrimSpace(msg)
+				
+				var ts time.Time
+				if ev.Timestamp != nil {
+					ts = time.Time(*ev.Timestamp)
+				} else {
+					ts = time.Now()
+				}
+				
+				tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
+					Timestamp: ts,
+					Level:     string(ev.Type),
+					Message:   msg,
+				})
+			case *runtime.EventExceptionThrown:
+				msg := ev.ExceptionDetails.Text
+				if ev.ExceptionDetails.Exception != nil && ev.ExceptionDetails.Exception.Description != "" {
+					msg += ": " + ev.ExceptionDetails.Exception.Description
+				}
+
+				var ts time.Time
+				if ev.Timestamp != nil {
+					ts = time.Time(*ev.Timestamp)
+				} else {
+					ts = time.Now()
+				}
+
+				stack := ""
+				if ev.ExceptionDetails.Exception != nil {
+					stack = ev.ExceptionDetails.Exception.Description
+				}
+
+				tm.logStore.AddErrorLog(rawCDPID, ErrorEntry{
+					Timestamp: ts,
+					Message:   msg,
+					URL:       ev.ExceptionDetails.URL,
+					Line:      ev.ExceptionDetails.LineNumber,
+					Column:    ev.ExceptionDetails.ColumnNumber,
+					Stack:     stack,
+				})
+			}
+		})
+	}
+
 	if tm.onTabSetup != nil {
 		tm.onTabSetup(ctx)
+	}
+
+	// Enable runtime domain to ensure we get console/exception events events
+	if tm.logStore != nil {
+		go func() {
+			_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+				return runtime.Enable().Do(c)
+			}))
+		}()
 	}
 
 	var blockPatterns []string
@@ -161,11 +236,6 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	if len(blockPatterns) > 0 {
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
-
-	// Compute hash-based tab ID and store only that entry.
-	// Raw CDP ID is kept internal in the CDPID field.
-	rawCDPID := string(targetID)
-	hashTabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 
 	tm.mu.Lock()
 	tm.tabs[hashTabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID}
@@ -213,6 +283,10 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	delete(tm.tabs, tabID)
 	delete(tm.snapshots, tabID)
 	tm.mu.Unlock()
+
+	if tm.logStore != nil {
+		tm.logStore.RemoveTab(cdpTargetID)
+	}
 
 	return nil
 }

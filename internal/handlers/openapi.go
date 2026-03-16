@@ -25,6 +25,8 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 			"/actions":  map[string]any{"post": map[string]any{"summary": "Batch actions"}},
 			"/macro":    map[string]any{"post": map[string]any{"summary": "Macro action pipeline"}},
 			"/snapshot": map[string]any{"get": map[string]any{"summary": "Accessibility snapshot"}},
+			"/console":  map[string]any{"get": map[string]any{"summary": "Console logs", "parameters": []map[string]any{{"name": "tabId", "in": "query", "schema": map[string]string{"type": "string"}}, {"name": "limit", "in": "query", "schema": map[string]string{"type": "integer"}}}}},
+			"/errors":   map[string]any{"get": map[string]any{"summary": "Uncaught errors", "parameters": []map[string]any{{"name": "tabId", "in": "query", "schema": map[string]string{"type": "string"}}, {"name": "limit", "in": "query", "schema": map[string]string{"type": "integer"}}}}},
 		},
 	})
 }

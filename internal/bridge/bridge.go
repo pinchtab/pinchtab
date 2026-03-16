@@ -37,6 +37,7 @@ type Bridge struct {
 	StealthScript string
 	Actions       map[string]ActionFunc
 	Locks         *LockManager
+	LogStore      *ConsoleLogStore
 
 	// Lazy initialization
 	initMu      sync.Mutex
@@ -50,10 +51,11 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		BrowserCtx: browserCtx,
 		Config:     cfg,
 		IdMgr:      idMgr,
+		LogStore:   NewConsoleLogStore(1000), // 1000 lines limit per tab
 	}
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
-		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
+		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.LogStore, b.tabSetup)
 	}
 	b.Locks = NewLockManager()
 	b.InitActionRegistry()
@@ -100,6 +102,32 @@ func (b *Bridge) TabLockInfo(tabID string) *LockInfo {
 	return b.Locks.Get(tabID)
 }
 
+func (b *Bridge) GetConsoleLogs(tabID string, limit int) []LogEntry {
+	if b.LogStore != nil {
+		return b.LogStore.GetConsoleLogs(tabID, limit)
+	}
+	return nil
+}
+
+func (b *Bridge) ClearConsoleLogs(tabID string) {
+	if b.LogStore != nil {
+		b.LogStore.ClearConsoleLogs(tabID)
+	}
+}
+
+func (b *Bridge) GetErrorLogs(tabID string, limit int) []ErrorEntry {
+	if b.LogStore != nil {
+		return b.LogStore.GetErrorLogs(tabID, limit)
+	}
+	return nil
+}
+
+func (b *Bridge) ClearErrorLogs(tabID string) {
+	if b.LogStore != nil {
+		b.LogStore.ClearErrorLogs(tabID)
+	}
+}
+
 func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	b.initMu.Lock()
 	defer b.initMu.Unlock()
@@ -129,7 +157,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		if b.IdMgr == nil {
 			b.IdMgr = idutil.NewManager()
 		}
-		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -158,7 +186,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 		if b.IdMgr == nil {
 			b.IdMgr = idutil.NewManager()
 		}
-		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
+		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
 	}
 }
 

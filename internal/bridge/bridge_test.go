@@ -79,7 +79,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 	// Use context.TODO() instead of nil to avoid lint warnings
 	ctx := context.TODO()
-	tm := NewTabManager(ctx, cfg, nil, nil)
+	tm := NewTabManager(ctx, cfg, nil, nil, nil)
 	if tm == nil {
 		t.Error("TabManager should be created")
 	}
@@ -93,7 +93,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 	// TabContext should reject tab IDs that aren't tracked
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Try to get context for a non-existent tab
 	_, _, err := tm.TabContext("tab_nonexistent")
@@ -108,7 +108,7 @@ func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 func TestTabContext_RejectsRawCDPID(t *testing.T) {
 	// TabContext should reject raw CDP target IDs (32-char hex)
 	// These should never be accepted - only hash-format IDs work
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Simulate a raw CDP target ID format
 	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
@@ -123,7 +123,7 @@ func TestCreateTab_ReturnsHashFormat(t *testing.T) {
 	// Verify CreateTab returns hash-format IDs (tab_XXXXXXXX)
 	// Note: This test can't actually create tabs without Chrome,
 	// but we can test the ID format logic directly
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// CreateTab will fail (no browser), but we can test the idMgr
 	if tm.idMgr == nil {
@@ -142,7 +142,7 @@ func TestCreateTab_ReturnsHashFormat(t *testing.T) {
 
 func TestTabContext_AcceptsRegisteredHashID(t *testing.T) {
 	// TabContext should accept hash IDs that are properly registered
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Manually register a tab entry (simulating what CreateTab does internally)
 	hashID := "tab_abc12345"
@@ -171,7 +171,7 @@ func TestTabContext_AcceptsRegisteredHashID(t *testing.T) {
 func TestCloseTab_PreventsLastTabClose(t *testing.T) {
 	// CloseTab should fail when attempting to close the last remaining tab
 	// This prevents Chrome from exiting and crashing the server
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Without a valid browser context, ListTargets will fail
 	// which triggers the guard at the start of CloseTab

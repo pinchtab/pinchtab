@@ -79,6 +79,18 @@ func (m *mockBridge) GetCrashLogs() []string {
 	return nil
 }
 
+func (m *mockBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
+	return nil
+}
+
+func (m *mockBridge) ClearConsoleLogs(tabID string) {}
+
+func (m *mockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+	return nil
+}
+
+func (m *mockBridge) ClearErrorLogs(tabID string) {}
+
 func TestHandlers(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	mux := http.NewServeMux()

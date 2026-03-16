@@ -39,6 +39,12 @@ type BridgeAPI interface {
 
 	// Crash monitoring
 	GetCrashLogs() []string
+
+	// Console and Error Logs
+	GetConsoleLogs(tabID string, limit int) []LogEntry
+	ClearConsoleLogs(tabID string)
+	GetErrorLogs(tabID string, limit int) []ErrorEntry
+	ClearErrorLogs(tabID string)
 }
 
 type LockInfo struct {
