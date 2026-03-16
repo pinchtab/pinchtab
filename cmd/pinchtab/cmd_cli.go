@@ -12,11 +12,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// normalizeURL adds https:// prefix if no protocol is specified.
+// This allows users to type "pinchtab goto example.com" instead of
+// "pinchtab goto https://example.com".
+func normalizeURL(url string) string {
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return url
+	}
+	return "https://" + url
+}
+
 var quickCmd = &cobra.Command{
 	Use:   "quick <url>",
 	Short: "Navigate + analyze page",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		args[0] = normalizeURL(args[0])
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Quick(client, base, token, args)
@@ -30,9 +41,10 @@ var navCmd = &cobra.Command{
 	Short:   "Navigate to URL",
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		url := normalizeURL(args[0])
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Navigate(client, base, token, args[0], cmd)
+			browseractions.Navigate(client, base, token, url, cmd)
 		})
 	},
 }
@@ -266,6 +278,7 @@ var downloadCmd = &cobra.Command{
 	Short: "Download a file via browser session",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		args[0] = normalizeURL(args[0])
 		output, _ := cmd.Flags().GetString("output")
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
@@ -362,7 +375,7 @@ func init() {
 			runCLIWith(cfg, func(client *http.Client, base, token string) {
 				body := map[string]any{"action": "new"}
 				if len(args) > 0 {
-					body["url"] = args[0]
+					body["url"] = normalizeURL(args[0])
 				}
 				browseractions.TabNew(client, base, token, body)
 			})
@@ -502,6 +515,7 @@ func init() {
 		Short: "Navigate an instance to a URL",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
+			args[1] = normalizeURL(args[1])
 			cfg := config.Load()
 			runCLIWith(cfg, func(client *http.Client, base, token string) {
 				browseractions.InstanceNavigate(client, base, token, args)
