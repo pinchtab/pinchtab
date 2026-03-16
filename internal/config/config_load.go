@@ -80,6 +80,14 @@ func Load() *RuntimeConfig {
 
 		// Engine default (set via config.json only)
 		Engine: "chrome",
+
+		// Observability defaults
+		Observability: ObservabilityConfig{
+			Activity: ActivityConfig{
+				Enabled:        true,
+				SessionIdleSec: 1800,
+			},
+		},
 	}
 	finalizeProfileConfig(cfg)
 
@@ -197,6 +205,12 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
+	if fc.Observability.Activity.Enabled != nil {
+		cfg.Observability.Activity.Enabled = *fc.Observability.Activity.Enabled
+	}
+	if fc.Observability.Activity.SessionIdleSec != nil {
+		cfg.Observability.Activity.SessionIdleSec = *fc.Observability.Activity.SessionIdleSec
+	}
 
 	// Browser
 	if fc.Browser.ChromeVersion != "" {

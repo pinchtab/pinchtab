@@ -20,7 +20,9 @@ import (
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	// --- Lite engine fast path ---
 	tabID := r.URL.Query().Get("tabId")
+	h.recordReadRequest(r, "text", tabID)
 	if h.useLite(engine.CapText, "") {
+		h.recordEngine(r, "lite")
 		text, err := h.Router.Lite().Text(r.Context(), tabID)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("lite text: %w", err))
@@ -47,7 +49,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, _, err := h.tabContext(r, tabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
@@ -85,6 +87,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
+	h.recordResolvedURL(r, url)
 
 	// IDPI: scan extracted text for injection patterns before it reaches the caller.
 	var idpiResult idpi.CheckResult

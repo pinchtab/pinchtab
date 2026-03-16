@@ -52,8 +52,9 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
+	h.recordReadRequest(r, "pdf", tabID)
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, _, err := h.tabContext(r, tabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return

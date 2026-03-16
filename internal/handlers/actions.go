@@ -93,6 +93,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
 		return
 	}
+	h.recordActionRequest(r, req)
 	if !h.shouldUseLiteAction(req.Kind) {
 		if available := h.Bridge.AvailableActions(); len(available) > 0 {
 			known := false
@@ -118,7 +119,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		resolvedTabID = req.TabID
 	} else {
 		var err error
-		ctx, resolvedTabID, err = h.Bridge.TabContext(req.TabID)
+		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
 			web.Error(w, 404, err)
 			return
@@ -132,6 +133,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	h.recordResolvedTab(r, resolvedTabID)
 
 	// Allow custom timeout via query param (1-60 seconds)
 	actionTimeout := h.Config.ActionTimeout
@@ -325,6 +327,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	if engineName == "lite" {
 		w.Header().Set("X-Engine", "lite")
+		h.recordEngine(r, "lite")
 	}
 	resp := map[string]any{"success": true, "result": result}
 	if recoveryResult != nil {

@@ -69,6 +69,9 @@ type RuntimeConfig struct {
 
 	// Scheduler settings (dashboard mode only)
 	Scheduler SchedulerConfig
+
+	// Observability settings
+	Observability ObservabilityConfig
 }
 
 // IDPIConfig holds the configuration for the Indirect Prompt Injection (IDPI)
@@ -95,17 +98,27 @@ type SchedulerConfig struct {
 	WorkerCount       int    `json:"workerCount,omitempty"`
 }
 
+type ObservabilityConfig struct {
+	Activity ActivityConfig `json:"activity,omitempty"`
+}
+
+type ActivityConfig struct {
+	Enabled        bool `json:"enabled,omitempty"`
+	SessionIdleSec int  `json:"sessionIdleSec,omitempty"`
+}
+
 // FileConfig is the persistent configuration written to disk.
 type FileConfig struct {
-	ConfigVersion    string                 `json:"configVersion,omitempty"`
-	Server           ServerConfig           `json:"server,omitempty"`
-	Browser          BrowserConfig          `json:"browser,omitempty"`
-	InstanceDefaults InstanceDefaultsConfig `json:"instanceDefaults,omitempty"`
-	Security         SecurityConfig         `json:"security,omitempty"`
-	Profiles         ProfilesConfig         `json:"profiles,omitempty"`
-	MultiInstance    MultiInstanceConfig    `json:"multiInstance,omitempty"`
-	Timeouts         TimeoutsConfig         `json:"timeouts,omitempty"`
-	Scheduler        SchedulerFileConfig    `json:"scheduler,omitempty"`
+	ConfigVersion    string                  `json:"configVersion,omitempty"`
+	Server           ServerConfig            `json:"server,omitempty"`
+	Browser          BrowserConfig           `json:"browser,omitempty"`
+	InstanceDefaults InstanceDefaultsConfig  `json:"instanceDefaults,omitempty"`
+	Security         SecurityConfig          `json:"security,omitempty"`
+	Profiles         ProfilesConfig          `json:"profiles,omitempty"`
+	MultiInstance    MultiInstanceConfig     `json:"multiInstance,omitempty"`
+	Timeouts         TimeoutsConfig          `json:"timeouts,omitempty"`
+	Scheduler        SchedulerFileConfig     `json:"scheduler,omitempty"`
+	Observability    ObservabilityFileConfig `json:"observability,omitempty"`
 }
 
 type ServerConfig struct {
@@ -192,4 +205,13 @@ type SchedulerFileConfig struct {
 	MaxPerAgentFlight *int   `json:"maxPerAgentInflight,omitempty"`
 	ResultTTLSec      *int   `json:"resultTTLSec,omitempty"`
 	WorkerCount       *int   `json:"workerCount,omitempty"`
+}
+
+type ObservabilityFileConfig struct {
+	Activity ActivityFileConfig `json:"activity,omitempty"`
+}
+
+type ActivityFileConfig struct {
+	Enabled        *bool `json:"enabled,omitempty"`
+	SessionIdleSec *int  `json:"sessionIdleSec,omitempty"`
 }

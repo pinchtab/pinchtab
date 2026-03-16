@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/activity"
 )
 
 // Client is an HTTP client for PinchTab's REST API.
@@ -47,6 +49,8 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 	if c.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
+	req.Header.Set(activity.HeaderAgentID, "mcp")
+	req.Header.Set(activity.HeaderPTSource, "mcp")
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("request %s %s: %w", req.Method, req.URL.Path, err)

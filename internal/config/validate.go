@@ -166,6 +166,13 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
+	if fc.Observability.Activity.SessionIdleSec != nil && *fc.Observability.Activity.SessionIdleSec < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "observability.activity.sessionIdleSec",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.Observability.Activity.SessionIdleSec),
+		})
+	}
+
 	return errs
 }
 

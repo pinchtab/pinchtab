@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/activity"
 )
 
 func DoGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
@@ -21,6 +23,7 @@ func DoGet(client *http.Client, base, token, path string, params url.Values) map
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
 		fatal("Request failed: %v", err)
@@ -58,6 +61,7 @@ func DoGetRaw(client *http.Client, base, token, path string, params url.Values) 
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
 		fatal("Request failed: %v", err)
@@ -79,6 +83,7 @@ func DoPost(client *http.Client, base, token, path string, body map[string]any) 
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
 		fatal("Request failed: %v", err)

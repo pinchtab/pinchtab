@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/activity"
 )
 
 // InstanceResolver finds the localhost port for a given tab ID.
@@ -401,6 +403,12 @@ func (s *Scheduler) executeTask(ctx context.Context, t *Task) (any, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(activity.HeaderPTSource, "scheduler")
+	req.Header.Set(activity.HeaderPTTabID, t.TabID)
+	if t.AgentID != "" {
+		req.Header.Set(activity.HeaderAgentID, t.AgentID)
+		req.Header.Set(activity.HeaderPTAgentID, t.AgentID)
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {

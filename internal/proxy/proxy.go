@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -52,6 +53,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 	proxyReq.URL = targetURL
 	proxyReq.Host = targetURL.Host
 	proxyReq.Header = r.Header.Clone()
+	activity.PropagateHeaders(r.Context(), proxyReq)
 	if opts.RewriteRequest != nil {
 		opts.RewriteRequest(proxyReq)
 	}

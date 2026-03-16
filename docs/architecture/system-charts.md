@@ -37,13 +37,13 @@ This is the default system shape today:
 
 ```mermaid
 flowchart LR
-    I["Install PinchTab"] --> R["Run: pinchtab"]
+    I["Install PinchTab"] --> R["Run: pinchtab server"]
     R --> L["Local server on localhost:9867"]
     L --> A["Agent / CLI sends HTTP requests"]
     A --> W["Browser work happens through PinchTab"]
 ```
 
-This is the normal mental model for users. Most users should think about `pinchtab`, not `pinchtab bridge`.
+This is the normal mental model for users. Most users should think about `pinchtab server`, not `pinchtab bridge`.
 
 ## Chart 3: Runtime Shapes
 

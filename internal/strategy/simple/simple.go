@@ -78,6 +78,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 503, err)
 		return
 	}
+	strategy.EnrichForTarget(r, s.orch, target)
 	proxy.HTTP(w, r, target+r.URL.Path)
 }
 

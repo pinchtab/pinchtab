@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -69,12 +70,21 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			Instance: evt.Instance,
 		})
 	})
+	actStore, err := activity.NewRecorder(activity.Config{
+		Enabled:     cfg.Observability.Activity.Enabled,
+		SessionIdle: time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
+	}, cfg.StateDir)
+	if err != nil {
+		slog.Error("activity store", "err", err)
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 
 	dash.RegisterHandlers(mux)
 	configAPI.RegisterHandlers(mux)
 	profMgr.RegisterHandlers(mux)
+	activity.RegisterHandlers(mux, actStore)
 
 	strategyName := cfg.Strategy
 	if strategyName == "" {
@@ -164,7 +174,13 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		web.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})
 	})
 
-	handler := handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux)))
+	handler := handlers.RequestIDMiddleware(
+		activity.Middleware(
+			actStore,
+			"server",
+			handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
+		),
+	)
 	cli.LogSecurityWarnings(cfg)
 
 	srv := &http.Server{

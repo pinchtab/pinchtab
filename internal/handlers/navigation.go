@@ -95,9 +95,11 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 400, fmt.Errorf("url required"))
 		return
 	}
+	h.recordNavigateRequest(r, req.TabID, req.URL)
 
 	// --- Lite engine fast path ---
 	if h.useLite(engine.CapNavigate, req.URL) {
+		h.recordEngine(r, "lite")
 		result, err := h.Router.Lite().Navigate(r.Context(), req.URL)
 		if err != nil {
 			web.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
@@ -211,12 +213,14 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title, _ := bridge.WaitForTitle(tCtx, titleWait)
+		h.recordResolvedTab(r, hashTabID)
+		h.recordResolvedURL(r, url)
 
 		web.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
 		return
 	}
 
-	ctx, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
@@ -233,7 +237,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, navTimeout)
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
-
 	if len(blockPatterns) > 0 {
 		_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 	} else {
@@ -263,6 +266,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	var url string
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
 	title, _ := bridge.WaitForTitle(tCtx, titleWait)
+	h.recordResolvedURL(r, url)
 
 	web.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
 }

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	iproxy "github.com/pinchtab/pinchtab/internal/proxy"
@@ -25,6 +26,12 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxyToInstance := func(inst *bridge.Instance) {
+		activity.EnrichRequest(r, activity.Update{
+			InstanceID:  inst.ID,
+			ProfileID:   inst.ProfileID,
+			ProfileName: inst.ProfileName,
+			TabID:       tabID,
+		})
 		targetURL, buildErr := o.instancePathURLFromBridge(inst, r.URL.Path, r.URL.RawQuery)
 		if buildErr != nil {
 			web.Error(w, 502, buildErr)
@@ -81,6 +88,11 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}
+	activity.EnrichRequest(r, activity.Update{
+		InstanceID:  inst.ID,
+		ProfileID:   inst.ProfileID,
+		ProfileName: inst.ProfileName,
+	})
 
 	targetPath := r.URL.Path
 	if len(targetPath) > len("/instances/"+id) {
@@ -105,7 +117,15 @@ func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, target
 			return o.proxyTargetInstance(u) != nil
 		},
 		RewriteRequest: func(req *http.Request) {
+			activity.PropagateHeaders(r.Context(), req)
 			if inst := o.proxyTargetInstance(targetURL); inst != nil {
+				req.Header.Set(activity.HeaderPTInstance, inst.ID)
+				if inst.ProfileID != "" {
+					req.Header.Set(activity.HeaderPTProfileID, inst.ProfileID)
+				}
+				if inst.ProfileName != "" {
+					req.Header.Set(activity.HeaderPTProfile, inst.ProfileName)
+				}
 				o.applyInstanceAuth(req, inst)
 			}
 		},
@@ -147,6 +167,11 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 		web.Error(w, 404, fmt.Errorf("instance not found or not running"))
 		return
 	}
+	activity.EnrichRequest(r, activity.Update{
+		InstanceID:  inst.ID,
+		ProfileID:   inst.ProfileID,
+		ProfileName: inst.ProfileName,
+	})
 
 	targetURL, err := o.instancePathURL(inst, "/screencast", r.URL.RawQuery)
 	if err != nil {
@@ -156,6 +181,7 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 
 	req := r.Clone(r.Context())
 	req.Header = r.Header.Clone()
+	activity.PropagateHeaders(r.Context(), req)
 	o.applyInstanceAuth(req, inst)
 
 	// Use WebSocket proxy for proper upgrade

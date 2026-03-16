@@ -64,7 +64,9 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	// --- Lite engine fast path ---
 	tabID := r.URL.Query().Get("tabId")
+	h.recordReadRequest(r, "snapshot", tabID)
 	if h.useLite(engine.CapSnapshot, "") {
+		h.recordEngine(r, "lite")
 		nodes, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
 		if err != nil {
 			web.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
@@ -108,12 +110,11 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
 	}
-
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
@@ -183,6 +184,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		chromedp.Location(&url),
 		chromedp.Title(&title),
 	)
+	h.recordResolvedURL(r, url)
 
 	// IDPI: scan accessibility-tree node names and values for injection patterns.
 	// The scan runs after the snapshot is built so truncation has already reduced

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -32,6 +33,14 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	bridgeInstance.StealthScript = assets.StealthScript
+	actStore, err := activity.NewRecorder(activity.Config{
+		Enabled:     cfg.Observability.Activity.Enabled,
+		SessionIdle: time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
+	}, cfg.StateDir)
+	if err != nil {
+		slog.Error("activity store", "err", err)
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 	h := handlers.New(bridgeInstance, cfg, nil, nil, nil)
@@ -47,11 +56,18 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 		})
 	}
 	h.RegisterRoutes(mux, doShutdown)
+	activity.RegisterHandlers(mux, actStore)
 	cli.LogSecurityWarnings(cfg)
 
 	server := &http.Server{
-		Addr:              listenAddr,
-		Handler:           handlers.RequestIDMiddleware(handlers.LoggingMiddleware(handlers.AuthMiddleware(cfg, mux))),
+		Addr: listenAddr,
+		Handler: handlers.RequestIDMiddleware(
+			activity.Middleware(
+				actStore,
+				"bridge",
+				handlers.LoggingMiddleware(handlers.AuthMiddleware(cfg, mux)),
+			),
+		),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
