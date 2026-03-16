@@ -12,10 +12,10 @@ import (
 
 // DialogState represents a pending JavaScript dialog.
 type DialogState struct {
-	Type           string `json:"type"`    // "alert", "confirm", "prompt", "beforeunload"
-	Message        string `json:"message"` // dialog message text
-	DefaultPrompt  string `json:"defaultPrompt,omitempty"`
-	HasBrowserHandler bool `json:"-"` // whether auto-accept handled it already
+	Type              string `json:"type"`    // "alert", "confirm", "prompt", "beforeunload"
+	Message           string `json:"message"` // dialog message text
+	DefaultPrompt     string `json:"defaultPrompt,omitempty"`
+	HasBrowserHandler bool   `json:"-"` // whether auto-accept handled it already
 }
 
 // DialogManager tracks pending JavaScript dialogs per tab.

@@ -70,7 +70,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
-		b.TabManager.SetDialogManager(b.Dialogs)
+		b.SetDialogManager(b.Dialogs)
 	}
 	b.Locks = NewLockManager()
 	b.Dialogs = NewDialogManager()
@@ -184,7 +184,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 			b.IdMgr = idutil.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
-		b.TabManager.SetDialogManager(b.Dialogs)
+		b.SetDialogManager(b.Dialogs)
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -255,7 +255,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 			b.IdMgr = idutil.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
-		b.TabManager.SetDialogManager(b.Dialogs)
+		b.SetDialogManager(b.Dialogs)
 	}
 }
 

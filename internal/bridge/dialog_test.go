@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"testing"
 )
 
@@ -137,7 +138,7 @@ func TestDialogState_Fields(t *testing.T) {
 func TestHandlePendingDialog_NoPending(t *testing.T) {
 	dm := NewDialogManager()
 	// No real CDP context needed — should fail before reaching CDP
-	_, err := HandlePendingDialog(nil, "tab1", dm, true, "")
+	_, err := HandlePendingDialog(context.TODO(), "tab1", dm, true, "")
 	if err == nil {
 		t.Fatal("expected error for no pending dialog")
 	}
