@@ -93,3 +93,18 @@ func TestExtractHost(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitize_ChromeURLs(t *testing.T) {
+	invalidURLs := []string{
+		"chrome://settings",
+		"chrome-extension://abc123/popup.html",
+		"about:blank",
+		"data:text/html,<h1>hi</h1>",
+	}
+	for _, u := range invalidURLs {
+		_, err := Sanitize(u)
+		if err == nil {
+			t.Errorf("expected error for %q, got nil", u)
+		}
+	}
+}
