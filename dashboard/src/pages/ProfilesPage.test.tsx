@@ -16,6 +16,8 @@ vi.mock("../services/api", () => ({
   stopInstance: vi.fn(),
   fetchInstanceTabs: vi.fn(),
   fetchInstanceLogs: vi.fn(),
+  fetchActivity: vi.fn(),
+  fetchAllTabs: vi.fn(),
 }));
 
 const profiles: Profile[] = [

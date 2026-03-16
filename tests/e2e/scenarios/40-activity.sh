@@ -15,7 +15,7 @@ assert_ok "tab snapshot succeeded"
 pt_post "/tabs/${TAB_ID}/action" -d '{"kind":"click","selector":"#increment"}'
 assert_http_status "200" "click action succeeded"
 
-pt_get "/api/activity?tabId=${TAB_ID}&limit=20&ageSec=300"
+pt_get "/api/activity?tabId=${TAB_ID}&limit=100&ageSec=300"
 assert_ok "activity query"
 assert_json_exists "$RESULT" '.events' "events array present"
 

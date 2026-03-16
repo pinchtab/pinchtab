@@ -8,6 +8,8 @@ import type { Instance } from "../generated/types";
 
 vi.mock("../services/api", () => ({
   stopInstance: vi.fn(),
+  fetchActivity: vi.fn(),
+  fetchAllTabs: vi.fn(),
 }));
 
 vi.mock("../components/molecules", () => ({

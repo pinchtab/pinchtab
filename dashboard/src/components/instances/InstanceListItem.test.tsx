@@ -31,7 +31,7 @@ describe("InstanceListItem", () => {
   });
 
   it("shows running status badge", () => {
-    render(
+    const { container } = render(
       <InstanceListItem
         instance={mockInstance}
         tabCount={0}
@@ -40,12 +40,12 @@ describe("InstanceListItem", () => {
       />,
     );
 
-    expect(screen.getByText("running")).toBeInTheDocument();
+    expect(container.querySelector(".bg-success")).toBeInTheDocument();
   });
 
   it("shows error status for errored instances", () => {
     const errorInstance = { ...mockInstance, status: "error" };
-    render(
+    const { container } = render(
       <InstanceListItem
         instance={errorInstance}
         tabCount={0}
@@ -54,7 +54,7 @@ describe("InstanceListItem", () => {
       />,
     );
 
-    expect(screen.getByText("error")).toBeInTheDocument();
+    expect(container.querySelector(".bg-destructive")).toBeInTheDocument();
   });
 
   it("applies selected styles when selected", () => {

@@ -15,7 +15,7 @@ assert_output_json "snapshot output is valid JSON"
 pt_ok click --tab "$TAB_ID" "#increment"
 assert_output_contains "clicked" "click command completed"
 
-pt_ok activity
+pt_ok activity --limit 100
 assert_output_json "activity output is valid JSON"
 assert_output_contains "\"events\"" "returns events payload"
 
@@ -32,7 +32,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab activity tab <id>"
 
-pt_ok activity tab "$TAB_ID"
+pt_ok activity --limit 100 tab "$TAB_ID"
 assert_output_json "tab activity output is valid JSON"
 
 if echo "$PT_OUT" | jq -e --arg tab "$TAB_ID" 'all(.events[]?; .tabId == $tab)' > /dev/null; then
