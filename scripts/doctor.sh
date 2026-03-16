@@ -219,6 +219,22 @@ if [ -d "dashboard" ]; then
     fi
   fi
 
+  # ── gum ────────────────────────────────────────────────────────
+
+  if command -v gum &>/dev/null; then
+    ok "gum"
+  else
+    warn "gum not found" "Optional — used by ./dev for the interactive picker UI."
+    if $HAS_BREW && confirm "Install gum via brew?"; then
+      brew install gum && ok "gum installed" && WARNINGS=$((WARNINGS - 1))
+    elif command -v go &>/dev/null && confirm "Install gum via go install?"; then
+      go install github.com/charmbracelet/gum@latest && ok "gum installed" && WARNINGS=$((WARNINGS - 1))
+    else
+      hint "brew install gum"
+      hint "go install github.com/charmbracelet/gum@latest"
+    fi
+  fi
+
   # ── Dashboard deps ─────────────────────────────────────────────
 
   if [ -d "dashboard/node_modules" ]; then
