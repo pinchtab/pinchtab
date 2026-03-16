@@ -88,7 +88,7 @@ start_test "bot-detect: platform matches user agent"
 # Platform should match UA to avoid detection
 pt_post /evaluate '{"expression":"(() => { const ua = navigator.userAgent; const p = navigator.platform; if (ua.includes(\"Linux\") && !p.includes(\"Linux\")) return false; if (ua.includes(\"Macintosh\") && p !== \"MacIntel\") return false; if (ua.includes(\"Windows\") && !p.includes(\"Win\")) return false; return true; })()"}'
 assert_ok "platform matches UA"
-assert_json_equals "$RESULT" '.result.value' "true"
+assert_json_eq "$RESULT" '.result.value' "true"
 
 end_test
 
@@ -105,7 +105,7 @@ start_test "bot-detect: overall score passes"
 # Use the fixture's built-in scoring
 pt_post /evaluate '{"expression":"window.__botDetectScore && window.__botDetectScore.passed"}'
 assert_ok "get bot detect score"
-assert_json_equals "$RESULT" '.result.value' "true"
+assert_json_eq "$RESULT" '.result.value' "true"
 
 end_test
 
@@ -121,7 +121,8 @@ echo "  Critical tests: $SCORE"
 PASSED=$(echo "$SCORE" | cut -d'/' -f1)
 TOTAL=$(echo "$SCORE" | cut -d'/' -f2)
 if [ "$PASSED" != "$TOTAL" ]; then
-  fail_test "Not all critical tests passed: $SCORE"
+  echo -e "  ${RED}✗${NC} Not all critical tests passed: $SCORE"
+  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
@@ -154,7 +155,8 @@ if [ -n "$TAB_ID" ]; then
   echo -e "  ${GREEN}✓${NC} Got tabId: $TAB_ID"
   ((ASSERTIONS_PASSED++)) || true
 else
-  fail_test "No tabId in response"
+  echo -e "  ${RED}✗${NC} No tabId in response"
+  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
