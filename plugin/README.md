@@ -16,7 +16,7 @@ openclaw gateway restart
 pinchtab &
 
 # With auth token (recommended)
-BRIDGE_TOKEN=my-secret pinchtab &
+PINCHTAB_TOKEN=my-secret pinchtab &
 
 # Docker
 docker run -d -p 9867:9867 ghcr.io/pinchtab/pinchtab:latest
@@ -83,7 +83,7 @@ One tool definition, many actions — keeps context lean:
 ## Security Notes
 
 - **`evaluate`** executes arbitrary JavaScript in the page — restrict to trusted agents and domains
-- Use `BRIDGE_TOKEN` to gate API access; rotate regularly
+- Use `PINCHTAB_TOKEN` to gate API access; rotate regularly
 - In production, run behind HTTPS reverse proxy (Caddy/nginx)
 
 ## Requirements

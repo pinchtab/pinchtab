@@ -11,16 +11,16 @@ source "${COMMON_DIR}/common.sh"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${BLUE}PinchTab E2E Recent Tests${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PINCHTAB_URL: ${PINCHTAB_URL}"
+echo "E2E_SERVER: ${E2E_SERVER}"
 echo "FIXTURES_URL: ${FIXTURES_URL}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 echo "Waiting for instances to become ready..."
-wait_for_instance_ready "${PINCHTAB_URL}"
-wait_for_instance_ready "${PINCHTAB_SECURE_URL}"
-if [ -n "${PINCHTAB_LITE_URL:-}" ]; then
-  wait_for_instance_ready "${PINCHTAB_LITE_URL}"
+wait_for_instance_ready "${E2E_SERVER}"
+wait_for_instance_ready "${E2E_SECURE_SERVER}"
+if [ -n "${E2E_LITE_SERVER:-}" ]; then
+  wait_for_instance_ready "${E2E_LITE_SERVER}"
 fi
 echo ""
 

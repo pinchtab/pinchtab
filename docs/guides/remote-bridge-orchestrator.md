@@ -107,12 +107,15 @@ If you leave `allowSchemes` as only `ws,wss`, `attach-bridge` will be rejected.
 
 ## Step 1: Start The Remote Bridge
 
-On the remote machine:
+On the remote machine, configure and start the bridge:
 
 ```bash
-PINCHTAB_BIND=0.0.0.0 \
-PINCHTAB_PORT=9868 \
-PINCHTAB_TOKEN=bridge-secret-token \
+# Set bind address for network access
+pinchtab config set server.bind 0.0.0.0
+pinchtab config set server.port 9868
+pinchtab config set server.token bridge-secret-token
+
+# Start the bridge
 pinchtab bridge
 ```
 

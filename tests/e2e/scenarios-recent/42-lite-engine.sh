@@ -1,11 +1,11 @@
 #!/bin/bash
 # Test: Lite engine (no Chrome, DOM-only)
-# Tests against PINCHTAB_LITE_URL — a pinchtab instance with engine=lite in bridge mode
+# Tests against E2E_LITE_SERVER — a pinchtab instance with engine=lite in bridge mode
 source "$(dirname "$0")/common.sh"
 
-LITE_URL="${PINCHTAB_LITE_URL:-}"
+LITE_URL="${E2E_LITE_SERVER:-}"
 if [ -z "$LITE_URL" ]; then
-  echo "  ⚠️  PINCHTAB_LITE_URL not set, skipping lite engine tests"
+  echo "  ⚠️  E2E_LITE_SERVER not set, skipping lite engine tests"
   return 0 2>/dev/null || exit 0
 fi
 

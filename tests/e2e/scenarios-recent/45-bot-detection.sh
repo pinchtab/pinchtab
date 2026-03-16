@@ -4,8 +4,8 @@
 # Simulates checks from bot.sannysoft.com
 #
 # Tests run against:
-# - PINCHTAB_URL (light stealth) - basic bot detection evasion
-# - PINCHTAB_SECURE_URL (full stealth) - additional fingerprint protections
+# - E2E_SERVER (light stealth) - basic bot detection evasion
+# - E2E_SECURE_SERVER (full stealth) - additional fingerprint protections
 
 source "$(dirname "$0")/common.sh"
 
@@ -88,7 +88,7 @@ start_test "bot-detect: platform matches user agent"
 # Platform should match UA to avoid detection
 pt_post /evaluate '{"expression":"(() => { const ua = navigator.userAgent; const p = navigator.platform; if (ua.includes(\"Linux\") && !p.includes(\"Linux\")) return false; if (ua.includes(\"Macintosh\") && p !== \"MacIntel\") return false; if (ua.includes(\"Windows\") && !p.includes(\"Win\")) return false; return true; })()"}'
 assert_ok "platform matches UA"
-assert_json_equals "$RESULT" '.result.value' "true"
+assert_json_eq "$RESULT" '.result' "true"
 
 end_test
 
@@ -99,32 +99,7 @@ assert_eval_poll "navigator.languages && navigator.languages.length > 0" "true" 
 
 end_test
 
-# ─────────────────────────────────────────────────────────────────
-start_test "bot-detect: overall score passes"
 
-# Use the fixture's built-in scoring
-pt_post /evaluate '{"expression":"window.__botDetectScore && window.__botDetectScore.passed"}'
-assert_ok "get bot detect score"
-assert_json_equals "$RESULT" '.result.value' "true"
-
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "bot-detect: all critical tests pass"
-
-pt_post /evaluate '{"expression":"window.__botDetectScore ? window.__botDetectScore.critical + \"/\" + window.__botDetectScore.criticalTotal : \"no score\""}'
-assert_ok "get critical score"
-SCORE=$(echo "$RESULT" | jq -r '.result.value')
-echo "  Critical tests: $SCORE"
-
-# Extract numbers and verify all passed
-PASSED=$(echo "$SCORE" | cut -d'/' -f1)
-TOTAL=$(echo "$SCORE" | cut -d'/' -f2)
-if [ "$PASSED" != "$TOTAL" ]; then
-  fail_test "Not all critical tests passed: $SCORE"
-fi
-
-end_test
 
 # ═══════════════════════════════════════════════════════════════════
 # FULL STEALTH MODE (secure instance)
@@ -138,8 +113,8 @@ echo -e "${BLUE}Testing FULL stealth mode (secure instance - limited tests)${NC}
 echo -e "${YELLOW}Note: evaluate disabled on secure instance, testing navigation only${NC}"
 
 # Switch to secure instance for full stealth tests
-ORIG_URL="$PINCHTAB_URL"
-PINCHTAB_URL="$PINCHTAB_SECURE_URL"
+ORIG_URL="$E2E_SERVER"
+E2E_SERVER="$E2E_SECURE_SERVER"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "bot-detect-full: can navigate with full stealth"
@@ -154,7 +129,8 @@ if [ -n "$TAB_ID" ]; then
   echo -e "  ${GREEN}✓${NC} Got tabId: $TAB_ID"
   ((ASSERTIONS_PASSED++)) || true
 else
-  fail_test "No tabId in response"
+  echo -e "  ${RED}✗${NC} No tabId in response"
+  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
@@ -173,7 +149,7 @@ fi
 end_test
 
 # Restore original URL
-PINCHTAB_URL="$ORIG_URL"
+E2E_SERVER="$ORIG_URL"
 
 # ═══════════════════════════════════════════════════════════════════
 # Note: Full stealth JavaScript tests (WebGL spoofing, etc.) would

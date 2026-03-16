@@ -139,9 +139,9 @@ func TestValidateFileConfig_InvalidStealthLevel(t *testing.T) {
 		wantErr bool
 	}{
 		{"light", false},
-		{"medium", false},
 		{"full", false},
-		{"", false}, // empty is ok
+		{"", false},      // empty is ok
+		{"medium", true}, // removed, no longer valid
 		{"none", true},
 		{"max", true},
 		{"LIGHT", true}, // case sensitive

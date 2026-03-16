@@ -62,8 +62,8 @@ pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 sleep 1
 
 # Low quality screenshot should be smaller than default
-LOW_Q_SIZE=$(curl -s "${PINCHTAB_URL}/screenshot?quality=10" | wc -c)
-HIGH_Q_SIZE=$(curl -s "${PINCHTAB_URL}/screenshot?quality=95" | wc -c)
+LOW_Q_SIZE=$(curl -s "${E2E_SERVER}/screenshot?quality=10" | wc -c)
+HIGH_Q_SIZE=$(curl -s "${E2E_SERVER}/screenshot?quality=95" | wc -c)
 
 if [ "$LOW_Q_SIZE" -lt "$HIGH_Q_SIZE" ]; then
   echo -e "  ${GREEN}✓${NC} quality=10 ($LOW_Q_SIZE bytes) < quality=95 ($HIGH_Q_SIZE bytes)"

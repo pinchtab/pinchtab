@@ -10,15 +10,15 @@ source "${COMMON_DIR}/common.sh"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${BLUE}PinchTab E2E Orchestrator Tests${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PINCHTAB_URL: ${PINCHTAB_URL}"
-echo "PINCHTAB_BRIDGE_URL: ${PINCHTAB_BRIDGE_URL:-}"
+echo "E2E_SERVER: ${E2E_SERVER}"
+echo "E2E_BRIDGE_URL: ${E2E_BRIDGE_URL:-}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 echo "Waiting for orchestrator services to become ready..."
-wait_for_instance_ready "${PINCHTAB_URL}"
-if [ -n "${PINCHTAB_BRIDGE_URL:-}" ]; then
-  wait_for_instance_ready "${PINCHTAB_BRIDGE_URL}" 60 "${PINCHTAB_BRIDGE_TOKEN:-}"
+wait_for_instance_ready "${E2E_SERVER}"
+if [ -n "${E2E_BRIDGE_URL:-}" ]; then
+  wait_for_instance_ready "${E2E_BRIDGE_URL}" 60 "${E2E_BRIDGE_TOKEN:-}"
 fi
 echo ""
 

@@ -15,7 +15,7 @@
       },
       "token": {
         "type": "string",
-        "description": "Bearer auth token (BRIDGE_TOKEN)"
+        "description": "Bearer auth token (PINCHTAB_TOKEN)"
       },
       "timeout": {
         "type": "number",

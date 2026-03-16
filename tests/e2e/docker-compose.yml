@@ -6,7 +6,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab.json:/config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
@@ -29,7 +28,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab-secure.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab-secure.json:/config/pinchtab-secure.json:ro
     ports:
@@ -49,7 +47,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab-lite.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab-lite.json:/config/pinchtab-lite.json:ro
     ports:
@@ -85,9 +82,9 @@ services:
       fixtures:
         condition: service_healthy
     environment:
-      - PINCHTAB_URL=http://pinchtab:9999
-      - PINCHTAB_SECURE_URL=http://pinchtab-secure:9999
-      - PINCHTAB_LITE_URL=http://pinchtab-lite:9999
+      - E2E_SERVER=http://pinchtab:9999
+      - E2E_SECURE_SERVER=http://pinchtab-secure:9999
+      - E2E_LITE_SERVER=http://pinchtab-lite:9999
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios:/scenarios:ro

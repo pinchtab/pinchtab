@@ -11,7 +11,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Environment
-PINCHTAB_URL="${PINCHTAB_URL:-http://localhost:9999}"
+E2E_SERVER="${E2E_SERVER:-http://localhost:9999}"
 FIXTURES_URL="${FIXTURES_URL:-http://localhost:8080}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
 
@@ -110,10 +110,10 @@ pt() {
   local tmpout=$(mktemp)
   local tmperr=$(mktemp)
 
-  echo -e "  ${BLUE}→ PINCHTAB_URL=$PINCHTAB_URL pinchtab $@${NC}"
+  echo -e "  ${BLUE}→ pinchtab --server $E2E_SERVER $@${NC}"
 
   set +e
-  PINCHTAB_URL="$PINCHTAB_URL" pinchtab "$@" > "$tmpout" 2> "$tmperr"
+  pinchtab --server "$E2E_SERVER" "$@" > "$tmpout" 2> "$tmperr"
   PT_CODE=$?
   set -e
 

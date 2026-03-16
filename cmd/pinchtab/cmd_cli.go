@@ -536,20 +536,19 @@ func init() {
 func runCLIWith(cfg *config.RuntimeConfig, fn func(client *http.Client, base, token string)) {
 	client := &http.Client{Timeout: 60 * time.Second}
 
-	bind := cfg.Bind
-	if bind == "" {
-		bind = "127.0.0.1"
-	}
+	// Default: http://127.0.0.1:{port}
 	port := cfg.Port
 	if port == "" {
 		port = "9867"
 	}
-	base := fmt.Sprintf("http://%s:%s", bind, port)
+	base := fmt.Sprintf("http://127.0.0.1:%s", port)
 
-	if envURL := os.Getenv("PINCHTAB_URL"); envURL != "" {
-		base = strings.TrimRight(envURL, "/")
+	// --server flag overrides
+	if serverURL != "" {
+		base = strings.TrimRight(serverURL, "/")
 	}
 
+	// Token from config, env var overrides
 	token := cfg.Token
 	if envToken := os.Getenv("PINCHTAB_TOKEN"); envToken != "" {
 		token = envToken

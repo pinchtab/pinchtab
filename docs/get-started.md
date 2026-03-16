@@ -161,7 +161,8 @@ pinchtab
 ### Port already in use
 
 ```bash
-PINCHTAB_PORT=9868 pinchtab
+pinchtab config set server.port 9868
+pinchtab
 ```
 
 ### Chrome not found
@@ -173,8 +174,8 @@ brew install chromium
 # Linux (Ubuntu/Debian)
 sudo apt install chromium-browser
 
-# Custom Chrome binary
-CHROME_BIN=/path/to/chrome pinchtab
+# Custom Chrome binary (set in config)
+pinchtab config set browser.chromeBinary /path/to/chrome
 ```
 
 ---

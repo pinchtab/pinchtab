@@ -43,7 +43,6 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "command": "pinchtab",
       "args": ["mcp"],
       "env": {
-        "PINCHTAB_URL": "http://127.0.0.1:9867",
         "PINCHTAB_TOKEN": "your-token-here"
       }
     }
@@ -63,10 +62,7 @@ Create `.vscode/mcp.json` in your workspace root:
     "pinchtab": {
       "type": "stdio",
       "command": "pinchtab",
-      "args": ["mcp"],
-      "env": {
-        "PINCHTAB_URL": "http://127.0.0.1:9867"
-      }
+      "args": ["mcp"]
     }
   }
 }
@@ -97,7 +93,6 @@ proc = subprocess.Popen(
     ["pinchtab", "mcp"],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
-    env={"PINCHTAB_URL": "http://127.0.0.1:9867"},
 )
 # pass proc.stdin / proc.stdout to your MCP client transport
 ```
@@ -106,8 +101,9 @@ proc = subprocess.Popen(
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PINCHTAB_URL` | `http://127.0.0.1:9867` | PinchTab server URL |
 | `PINCHTAB_TOKEN` | *(from config)* | Bearer token for auth-protected servers |
+
+For remote servers, use the `--server` flag: `pinchtab --server http://remote:9867 mcp`
 
 `PINCHTAB_TOKEN` can be found in `~/.config/pinchtab/config.yaml` under `server.token`, or by running `pinchtab config show`.
 
@@ -160,16 +156,15 @@ Restart PinchTab after changing this setting.
 
 ## Connecting to a Remote PinchTab
 
-If PinchTab is running on another machine (e.g. a Docker container):
+If PinchTab is running on another machine (e.g. a Docker container), use the `--server` flag:
 
 ```json
 {
   "mcpServers": {
     "pinchtab": {
       "command": "pinchtab",
-      "args": ["mcp"],
+      "args": ["--server", "http://192.168.1.50:9867", "mcp"],
       "env": {
-        "PINCHTAB_URL": "http://192.168.1.50:9867",
         "PINCHTAB_TOKEN": "your-secure-token"
       }
     }

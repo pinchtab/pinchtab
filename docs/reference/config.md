@@ -108,15 +108,12 @@ PinchTab loads configuration in this order:
 2. config file
 3. built-in defaults
 
-The currently supported operational env vars are:
+The supported env vars are:
 
-- `PINCHTAB_CONFIG`
-- `PINCHTAB_BIND`
-- `PINCHTAB_PORT`
-- `PINCHTAB_TOKEN`
-- `CHROME_BIN`
+- `PINCHTAB_CONFIG` — path to config file
+- `PINCHTAB_TOKEN` — auth token (overrides config file)
 
-Everything else should be configured in `config.json`.
+Everything else is configured in `config.json`. For CLI targeting a remote server, use the `--server` flag.
 
 For the common local workflow, prefer the interactive `pinchtab config` screen for everyday changes and use `get`, `set`, or `patch` when you need an exact scripted edit.
 
@@ -125,7 +122,7 @@ For the common local workflow, prefer the interactive `pinchtab config` screen f
 Default location by OS:
 
 - macOS: `~/Library/Application Support/pinchtab/config.json`
-- Linux: `~/.config/pinchtab/config.json` or `$XDG_CONFIG_HOME/pinchtab/config.json`
+- Linux: `~/.config/pinchtab/config.json` (respects `$XDG_CONFIG_HOME` if set)
 - Windows: `%APPDATA%\pinchtab\config.json`
 
 Legacy fallback:
@@ -251,7 +248,9 @@ Current nested config shape:
 ### Network Bind With Token
 
 ```bash
-PINCHTAB_BIND=0.0.0.0 PINCHTAB_TOKEN=secret pinchtab
+pinchtab config set server.bind 0.0.0.0
+pinchtab config set server.token secret
+pinchtab
 ```
 
 ### Custom Instance Port Range
@@ -352,7 +351,7 @@ Valid enum values:
 | Field | Values |
 | --- | --- |
 | `instanceDefaults.mode` | `headless`, `headed` |
-| `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
+| `instanceDefaults.stealthLevel` | `light`, `full` |
 | `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` (default) |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on` (default) |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |

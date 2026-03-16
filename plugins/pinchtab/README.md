@@ -39,7 +39,7 @@ SMCP plugin for [PinchTab](https://github.com/pinchtab/pinchtab): browser contro
 
 - **Base URL:** `--base-url http://localhost:9867` (default). Use orchestrator URL or a direct instance URL.
 - **Orchestrator + instance:** When talking to the orchestrator, pass **`--instance-id inst_xxxx`** for instance-scoped calls (navigate, snapshot, action, etc.).
-- **Token:** If PinchTab uses **`BRIDGE_TOKEN`**, pass **`--token YOUR_TOKEN`** in the tool args.
+- **Token:** If PinchTab uses **`PINCHTAB_TOKEN`**, pass **`--token YOUR_TOKEN`** in the tool args.
 
 ## Example (SMCP tool call)
 

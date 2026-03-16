@@ -4,10 +4,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../scenarios/common.sh"
 
-BRIDGE_URL="${PINCHTAB_BRIDGE_URL:-}"
-BRIDGE_TOKEN="${PINCHTAB_BRIDGE_TOKEN:-}"
+BRIDGE_URL="${E2E_BRIDGE_URL:-}"
+BRIDGE_TOKEN="${E2E_BRIDGE_TOKEN:-}"
 if [ -z "$BRIDGE_URL" ]; then
-  echo "  PINCHTAB_BRIDGE_URL not set, skipping attach-bridge scenario"
+  echo "  E2E_BRIDGE_URL not set, skipping attach-bridge scenario"
   return 0 2>/dev/null || exit 0
 fi
 

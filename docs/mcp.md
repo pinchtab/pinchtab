@@ -29,10 +29,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "pinchtab": {
       "command": "pinchtab",
-      "args": ["mcp"],
-      "env": {
-        "PINCHTAB_URL": "http://127.0.0.1:9867"
-      }
+      "args": ["mcp"]
     }
   }
 }
@@ -73,8 +70,9 @@ Add to your Cursor MCP settings:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PINCHTAB_URL` | `http://127.0.0.1:9867` | PinchTab server URL |
 | `PINCHTAB_TOKEN` | *(from config)* | Auth token for secured servers |
+
+For remote servers, use the `--server` flag: `pinchtab --server http://remote:9867 mcp`
 
 ## Available Tools
 

@@ -15,10 +15,10 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Defaults from environment
-PINCHTAB_URL="${PINCHTAB_URL:-http://localhost:9999}"
-PINCHTAB_SECURE_URL="${PINCHTAB_SECURE_URL:-http://localhost:9998}"
-PINCHTAB_BRIDGE_URL="${PINCHTAB_BRIDGE_URL:-}"
-PINCHTAB_BRIDGE_TOKEN="${PINCHTAB_BRIDGE_TOKEN:-}"
+E2E_SERVER="${E2E_SERVER:-http://localhost:9999}"
+E2E_SECURE_SERVER="${E2E_SECURE_SERVER:-http://localhost:9998}"
+E2E_BRIDGE_URL="${E2E_BRIDGE_URL:-}"
+E2E_BRIDGE_TOKEN="${E2E_BRIDGE_TOKEN:-}"
 FIXTURES_URL="${FIXTURES_URL:-http://localhost:8080}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
 
@@ -342,13 +342,13 @@ pinchtab() {
 
   # Print the curl command in cyan so you see what's executed
   # Using printf %q to better show quoted arguments
-  echo -e "${BLUE}→ curl -X $method ${PINCHTAB_URL}$path $(printf "%q " "$@")${NC}" >&2
+  echo -e "${BLUE}→ curl -X $method ${E2E_SERVER}$path $(printf "%q " "$@")${NC}" >&2
 
   # Execute and capture response + status
   local response
   response=$(curl -s -w "\n%{http_code}" \
     -X "$method" \
-    "${PINCHTAB_URL}$path" \
+    "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
     "$@")
 
@@ -391,11 +391,11 @@ pt_post() {
 pt_patch() {
   local path="$1"
   local body="$2"
-  echo -e "${BLUE}→ curl -X PATCH ${PINCHTAB_URL}$path${NC}" >&2
+  echo -e "${BLUE}→ curl -X PATCH ${E2E_SERVER}$path${NC}" >&2
   local response
   response=$(curl -s -w "\n%{http_code}" \
     -X PATCH \
-    "${PINCHTAB_URL}$path" \
+    "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
     -d "$body")
   RESULT=$(echo "$response" | head -n -1)
@@ -405,11 +405,11 @@ pt_patch() {
 
 pt_delete() {
   local path="$1"
-  echo -e "${BLUE}→ curl -X DELETE ${PINCHTAB_URL}$path${NC}" >&2
+  echo -e "${BLUE}→ curl -X DELETE ${E2E_SERVER}$path${NC}" >&2
   local response
   response=$(curl -s -w "\n%{http_code}" \
     -X DELETE \
-    "${PINCHTAB_URL}$path")
+    "${E2E_SERVER}$path")
   RESULT=$(echo "$response" | head -n -1)
   HTTP_STATUS=$(echo "$response" | tail -n 1)
   _echo_truncated
@@ -419,11 +419,11 @@ pt_delete() {
 pt_post_raw() {
   local path="$1"
   local body="$2"
-  echo -e "${BLUE}→ curl -X POST ${PINCHTAB_URL}$path -d '$body'${NC}" >&2
+  echo -e "${BLUE}→ curl -X POST ${E2E_SERVER}$path -d '$body'${NC}" >&2
   local response
   response=$(curl -s -w "\n%{http_code}" \
     -X POST \
-    "${PINCHTAB_URL}$path" \
+    "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
     -d "$body")
   RESULT=$(echo "$response" | head -n -1)
@@ -561,7 +561,7 @@ press_key() {
 
 # Get current tab count
 get_tab_count() {
-  curl -s "${PINCHTAB_URL}/tabs" | jq '.tabs | length'
+  curl -s "${E2E_SERVER}/tabs" | jq '.tabs | length'
 }
 
 # Get tab ID from last response (e.g., after /navigate)

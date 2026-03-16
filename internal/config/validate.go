@@ -207,7 +207,7 @@ func validateBind(bind string, field string) error {
 
 func isValidStealthLevel(level string) bool {
 	switch level {
-	case "light", "medium", "full":
+	case "light", "full":
 		return true
 	default:
 		return false
@@ -251,7 +251,7 @@ func isValidAttachScheme(scheme string) bool {
 }
 
 func ValidStealthLevels() []string {
-	return []string{"light", "medium", "full"}
+	return []string{"light", "full"}
 }
 
 func ValidEvictionPolicies() []string {

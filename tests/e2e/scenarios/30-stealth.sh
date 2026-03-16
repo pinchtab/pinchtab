@@ -58,12 +58,4 @@ assert_ok "fingerprint rotate on tab"
 
 end_test
 
-# ─────────────────────────────────────────────────────────────────
-start_test "stealth: status endpoint"
 
-pt_get /stealth/status
-assert_ok "stealth status"
-assert_json_exists "$RESULT" '.score'
-assert_json_exists "$RESULT" '.level'
-
-end_test

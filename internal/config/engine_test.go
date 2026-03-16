@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-func TestLoad_EnginePrecedence(t *testing.T) {
-	t.Setenv("PINCHTAB_ENGINE", "")
+func TestLoad_EngineFromConfig(t *testing.T) {
 	t.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "config.json"))
 	cfg := Load()
 	if cfg.Engine != "chrome" {
@@ -22,11 +21,5 @@ func TestLoad_EnginePrecedence(t *testing.T) {
 	cfg = Load()
 	if cfg.Engine != "lite" {
 		t.Fatalf("file engine = %q, want lite", cfg.Engine)
-	}
-
-	t.Setenv("PINCHTAB_ENGINE", "auto")
-	cfg = Load()
-	if cfg.Engine != "auto" {
-		t.Fatalf("env engine = %q, want auto", cfg.Engine)
 	}
 }

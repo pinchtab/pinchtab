@@ -6,7 +6,6 @@ services:
       dockerfile: Dockerfile
     environment:
       PINCHTAB_CONFIG: /config/pinchtab.json
-      PINCHTAB_PORT: "9999"
     volumes:
       - ./config/pinchtab.json:/config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension:ro
@@ -39,7 +38,7 @@ services:
       fixtures:
         condition: service_healthy
     environment:
-      - PINCHTAB_URL=http://pinchtab:9999
+      - E2E_SERVER=http://pinchtab:9999
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios-cli:/scenarios:ro

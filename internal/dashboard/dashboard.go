@@ -14,13 +14,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
-func envWithFallback(newKey, oldKey string) string {
-	if v := os.Getenv(newKey); v != "" {
-		return v
-	}
-	return os.Getenv(oldKey)
-}
-
 type DashboardConfig struct {
 	IdleTimeout       time.Duration
 	DisconnectTimeout time.Duration
@@ -117,7 +110,7 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 		sseConns:       make(map[chan AgentEvent]struct{}),
 		sysConns:       make(map[chan SystemEvent]struct{}),
 		cancel:         cancel,
-		childAuthToken: envWithFallback("PINCHTAB_TOKEN", "BRIDGE_TOKEN"),
+		childAuthToken: os.Getenv("PINCHTAB_TOKEN"),
 	}
 	return d
 }
