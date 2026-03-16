@@ -43,11 +43,11 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-if echo "$PT_OUT" | jq -e --arg path "/tabs/${TAB_ID}/snapshot" '.events[] | select(.path == $path)' > /dev/null; then
-  echo -e "  ${GREEN}✓${NC} tab activity output includes tab-scoped snapshot event"
+if echo "$PT_OUT" | jq -e --arg tab "$TAB_ID" '.events[] | select(.tabId == $tab and .path == "/snapshot")' > /dev/null; then
+  echo -e "  ${GREEN}✓${NC} tab activity output includes snapshot event"
   ((ASSERTIONS_PASSED++)) || true
 else
-  echo -e "  ${RED}✗${NC} tab activity output missing tab-scoped snapshot event"
+  echo -e "  ${RED}✗${NC} tab activity output missing snapshot event"
   ((ASSERTIONS_FAILED++)) || true
 fi
 
