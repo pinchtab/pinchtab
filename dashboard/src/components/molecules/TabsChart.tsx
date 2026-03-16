@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -8,6 +8,7 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
+import type { TooltipContentProps } from "recharts";
 import type {
   TabDataPoint,
   MemoryDataPoint,
@@ -55,9 +56,9 @@ function GlassTooltip({
   label,
   instances,
 }: {
-  active?: boolean;
-  payload?: readonly { dataKey: string; value: number; color: string }[];
-  label?: string | number;
+  active?: TooltipContentProps<number, string>["active"];
+  payload?: TooltipContentProps<number, string>["payload"];
+  label?: TooltipContentProps<number, string>["label"];
   instances: { id: string; profileName: string }[];
 }) {
   if (!active || !payload?.length) return null;
@@ -267,10 +268,8 @@ export default function TabsChart({
     return vals;
   }, [mergedData, instances, instanceColors]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tooltipContent = useCallback(
-    (props: any) => <GlassTooltip {...props} instances={instances} />,
-    [instances],
+  const tooltipContent = (props: TooltipContentProps<number, string>) => (
+    <GlassTooltip {...props} instances={instances} />
   );
 
   if (mergedData.length < 2) {
