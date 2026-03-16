@@ -413,25 +413,27 @@ func ResolveUnifiedSelector(ctx context.Context, sel selector.Selector, refCache
 	}
 }
 
-// xpathString returns an XPath-safe string literal.
+// xpathString returns an XPath-safe string literal using concat().
+// This safely handles all combinations of quotes and special characters.
 func xpathString(s string) string {
-	// If the string contains no single quotes, wrap in single quotes.
-	if !containsRune(s, '\'') {
+	// Always use concat() for safety — handles any quote combination.
+	// Split on single quotes and rejoin with quoted single quote segments.
+	if !strings.Contains(s, "'") {
 		return "'" + s + "'"
 	}
-	// If it contains no double quotes, wrap in double quotes.
-	if !containsRune(s, '"') {
-		return `"` + s + `"`
-	}
-	// Contains both — use concat().
-	return "concat('" + strings.ReplaceAll(s, "'", `', "'", '`) + "')"
-}
-
-func containsRune(s string, r rune) bool {
-	for _, c := range s {
-		if c == r {
-			return true
+	// Use concat to handle strings with single quotes.
+	// e.g., "it's" becomes concat('it', "'", 's')
+	parts := strings.Split(s, "'")
+	var result strings.Builder
+	result.WriteString("concat(")
+	for i, part := range parts {
+		if i > 0 {
+			result.WriteString(`, "'", `)
 		}
+		result.WriteString("'")
+		result.WriteString(part)
+		result.WriteString("'")
 	}
-	return false
+	result.WriteString(")")
+	return result.String()
 }
