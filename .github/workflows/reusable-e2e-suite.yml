@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
 
@@ -55,12 +55,19 @@ jobs:
         run: |
           set +e
           mkdir -p tests/e2e/results
+          rm -f tests/e2e/results/summary*.txt tests/e2e/results/report*.md e2e-output.log
 
           ./dev e2e "${{ inputs.suite }}" 2>&1 | tee e2e-output.log
           EXIT_CODE=${PIPESTATUS[0]}
 
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          SUMMARY_FILES=$(find tests/e2e/results -maxdepth 1 -type f -name 'summary*.txt' | sort || true)
+          if [ -n "$SUMMARY_FILES" ]; then
+            PASSED=$(awk -F= '/^passed=/{s+=$2} END {print s+0}' $SUMMARY_FILES)
+            FAILED=$(awk -F= '/^failed=/{s+=$2} END {print s+0}' $SUMMARY_FILES)
+          else
+            PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+            FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          fi
           FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
 
           echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
@@ -75,6 +82,17 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-results-${{ inputs.suite }}
+          path: |
+            tests/e2e/results/
+            e2e-output.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Dump pinchtab logs on failure
         if: failure() && inputs.compose_file != ''
@@ -122,3 +140,5 @@ jobs:
             echo "${{ steps.e2e.outputs.failures }}" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifacts: \`e2e-results-${{ inputs.suite }}\`" >> "$GITHUB_STEP_SUMMARY"

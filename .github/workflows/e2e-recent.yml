@@ -4,15 +4,6 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'skill/**'
-      - 'plugin/**'
   pull_request:
     branches: [main]
     paths-ignore:
