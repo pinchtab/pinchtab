@@ -13,23 +13,62 @@ const seededRandom = (function() {
   };
 })();
 
-// Webdriver evasion - hide the property completely
+// ═══════════════════════════════════════════════════════════════════════════
+// CDP MARKER CLEANUP - Remove automation traces from window object
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  // Known CDP/automation markers
+  const markerPatterns = [
+    /^cdc_/,
+    /^\$cdc_/,
+    /^__webdriver/,
+    /^__selenium/,
+    /^__driver/,
+    /^\$chrome_/,
+    /^__puppeteer/,
+    /^__playwright/
+  ];
+  
+  for (const prop of Object.getOwnPropertyNames(window)) {
+    if (markerPatterns.some(p => p.test(prop))) {
+      try { delete window[prop]; } catch(e) {}
+    }
+  }
+  
+  // Legacy specific markers
+  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ERROR.PREPARESTACKTRACE PROTECTION - Prevent CDP detection via stack traces
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  const originalPrepareStackTrace = Error.prepareStackTrace;
+  Object.defineProperty(Error, 'prepareStackTrace', {
+    get() { return originalPrepareStackTrace; },
+    set(fn) { /* block modifications that could detect CDP */ },
+    configurable: true,
+    enumerable: false
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WEBDRIVER EVASION - Hide the property completely
+// ═══════════════════════════════════════════════════════════════════════════
 (function() {
   const proto = Object.getPrototypeOf(navigator);
   
-  // Delete from both instance and prototype
   try { delete navigator.webdriver; } catch(e) {}
   try { delete proto.webdriver; } catch(e) {}
   
-  // If we can't delete, make it return undefined and be non-enumerable
-  // so 'webdriver' in navigator returns false
   const desc = { 
     get: () => undefined, 
     configurable: false, 
-    enumerable: false  // Hide from 'in' operator and Object.keys
+    enumerable: false
   };
   
-  // Only define if it still exists after deletion
   if ('webdriver' in navigator) {
     try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
   }
@@ -38,26 +77,223 @@ const seededRandom = (function() {
   }
 })();
 
-delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+// ═══════════════════════════════════════════════════════════════════════════
+// CHROME OBJECT - Full API spoofing (required by Cloudflare Turnstile)
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  if (!window.chrome) { window.chrome = {}; }
+  
+  // chrome.runtime with connect() - required by Turnstile
+  if (!window.chrome.runtime) {
+    window.chrome.runtime = {};
+  }
+  
+  if (!window.chrome.runtime.connect) {
+    window.chrome.runtime.connect = function(extensionId, connectInfo) {
+      return {
+        name: connectInfo?.name || '',
+        sender: undefined,
+        onDisconnect: { 
+          addListener: function() {}, 
+          removeListener: function() {},
+          hasListener: function() { return false; },
+          hasListeners: function() { return false; }
+        },
+        onMessage: { 
+          addListener: function() {}, 
+          removeListener: function() {},
+          hasListener: function() { return false; },
+          hasListeners: function() { return false; }
+        },
+        postMessage: function() {},
+        disconnect: function() {}
+      };
+    };
+  }
+  
+  if (!window.chrome.runtime.sendMessage) {
+    window.chrome.runtime.sendMessage = function(extensionId, message, options, callback) {
+      if (typeof callback === 'function') {
+        setTimeout(callback, 0);
+      }
+    };
+  }
+  
+  if (!window.chrome.runtime.onConnect) {
+    window.chrome.runtime.onConnect = {
+      addListener: function() {},
+      removeListener: function() {},
+      hasListener: function() { return false; }
+    };
+  }
+  
+  if (!window.chrome.runtime.onMessage) {
+    window.chrome.runtime.onMessage = {
+      addListener: function() {},
+      removeListener: function() {},
+      hasListener: function() { return false; }
+    };
+  }
+  
+  // chrome.csi() - Chrome Speed Index (some sites check this)
+  if (!window.chrome.csi) {
+    window.chrome.csi = function() {
+      const now = Date.now();
+      return { 
+        startE: now - 500, 
+        onloadT: now - 100, 
+        pageT: now, 
+        tran: 15 
+      };
+    };
+  }
+  
+  // chrome.loadTimes() - deprecated but still checked
+  if (!window.chrome.loadTimes) {
+    window.chrome.loadTimes = function() {
+      const now = Date.now() / 1000;
+      return {
+        requestTime: now - 0.5,
+        startLoadTime: now - 0.4,
+        commitLoadTime: now - 0.3,
+        finishDocumentLoadTime: now - 0.1,
+        finishLoadTime: now,
+        firstPaintTime: now - 0.2,
+        firstPaintAfterLoadTime: 0,
+        navigationType: "Other",
+        wasFetchedViaSpdy: false,
+        wasNpnNegotiated: true,
+        npnNegotiatedProtocol: "h2",
+        wasAlternateProtocolAvailable: false,
+        connectionInfo: "h2"
+      };
+    };
+  }
+  
+  // chrome.app object
+  if (!window.chrome.app) {
+    window.chrome.app = {
+      isInstalled: false,
+      InstallState: { 
+        DISABLED: 'disabled', 
+        INSTALLED: 'installed', 
+        NOT_INSTALLED: 'not_installed' 
+      },
+      RunningState: { 
+        CANNOT_RUN: 'cannot_run', 
+        READY_TO_RUN: 'ready_to_run', 
+        RUNNING: 'running' 
+      },
+      getDetails: function() { return null; },
+      getIsInstalled: function() { return false; }
+    };
+  }
+})();
 
-if (!window.chrome) { window.chrome = {}; }
-if (!window.chrome.runtime) {
-  window.chrome.runtime = {
-    onConnect: undefined,
-    onMessage: undefined
+// ═══════════════════════════════════════════════════════════════════════════
+// PERMISSIONS API - Enhanced to handle multiple permission types
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+  
+  navigator.permissions.query = async function(desc) {
+    // Handle known permissions that might be inconsistent in automation
+    const permissionHandlers = {
+      'notifications': () => Notification.permission === 'default' ? 'prompt' : Notification.permission,
+      'geolocation': () => 'prompt',
+      'camera': () => 'prompt',
+      'microphone': () => 'prompt',
+      'background-sync': () => 'granted',
+      'accelerometer': () => 'granted',
+      'gyroscope': () => 'granted',
+      'magnetometer': () => 'granted'
+    };
+    
+    if (desc.name in permissionHandlers) {
+      const state = permissionHandlers[desc.name]();
+      return { state: state, onchange: null };
+    }
+    
+    return originalQuery(desc);
   };
-}
+})();
 
-const originalQuery = window.navigator.permissions.query;
-window.navigator.permissions.query = (parameters) => (
-  parameters.name === 'notifications' ?
-    Promise.resolve({ state: Notification.permission }) :
-    originalQuery(parameters)
-);
+// ═══════════════════════════════════════════════════════════════════════════
+// NAVIGATOR.USERAGENTDATA - Client Hints API (required by Turnstile/CF)
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  const ua = navigator.userAgent || '';
+  
+  // Extract Chrome version from UA
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  const chromeVersion = chromeMatch ? chromeMatch[1] : '129';
+  
+  // Determine platform from UA
+  let platform = 'Windows';
+  let platformVersion = '15.0.0';
+  let architecture = 'x86';
+  let bitness = '64';
+  
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
+    platform = 'macOS';
+    platformVersion = '14.0.0';
+  } else if (ua.includes('Linux')) {
+    platform = 'Linux';
+    platformVersion = '6.5.0';
+  }
+  
+  const brands = [
+    { brand: 'Chromium', version: chromeVersion },
+    { brand: 'Google Chrome', version: chromeVersion },
+    { brand: 'Not=A?Brand', version: '24' }
+  ];
+  
+  const userAgentData = {
+    brands: brands,
+    mobile: false,
+    platform: platform,
+    
+    getHighEntropyValues: async function(hints) {
+      const values = {
+        brands: brands,
+        mobile: false,
+        platform: platform
+      };
+      
+      for (const hint of hints) {
+        switch(hint) {
+          case 'platformVersion': values.platformVersion = platformVersion; break;
+          case 'architecture': values.architecture = architecture; break;
+          case 'model': values.model = ''; break;
+          case 'bitness': values.bitness = bitness; break;
+          case 'uaFullVersion': values.uaFullVersion = chromeVersion + '.0.0.0'; break;
+          case 'fullVersionList': values.fullVersionList = brands.map(b => ({ ...b, version: b.version + '.0.0.0' })); break;
+          case 'wow64': values.wow64 = false; break;
+        }
+      }
+      
+      return values;
+    },
+    
+    toJSON: function() {
+      return {
+        brands: this.brands,
+        mobile: this.mobile,
+        platform: this.platform
+      };
+    }
+  };
+  
+  Object.defineProperty(Navigator.prototype, 'userAgentData', {
+    get: () => userAgentData,
+    configurable: true,
+    enumerable: true
+  });
+})();
 
-// Create a proper PluginArray-like object that passes instanceof checks
+// ═══════════════════════════════════════════════════════════════════════════
+// PLUGINS ARRAY - Proper PluginArray that passes instanceof checks
+// ═══════════════════════════════════════════════════════════════════════════
 (function() {
   const fakePlugins = [
     { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 },
@@ -65,10 +301,8 @@ window.navigator.permissions.query = (parameters) => (
     { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 1 }
   ];
   
-  // Get the real PluginArray prototype from navigator.plugins
   const realPluginsProto = Object.getPrototypeOf(navigator.plugins);
   
-  // Create array-like object with PluginArray prototype
   const pluginArray = Object.create(realPluginsProto, {
     length: { value: fakePlugins.length, writable: false, enumerable: true },
     item: { value: function(i) { return this[i] || null; }, writable: false },
@@ -81,9 +315,7 @@ window.navigator.permissions.query = (parameters) => (
     refresh: { value: function() {}, writable: false }
   });
   
-  // Add indexed access
   fakePlugins.forEach((p, i) => {
-    // Create Plugin-like object
     const plugin = Object.create(Plugin.prototype, {
       name: { value: p.name, writable: false, enumerable: true },
       filename: { value: p.filename, writable: false, enumerable: true },
@@ -102,21 +334,22 @@ window.navigator.permissions.query = (parameters) => (
   });
 })();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NAVIGATOR PROPERTIES - Languages, Platform, Hardware
+// ═══════════════════════════════════════════════════════════════════════════
 Object.defineProperty(navigator, 'languages', {
   get: () => ['en-US', 'en'],
+  configurable: true
 });
 
-
-// Derive platform from user agent to avoid mismatch detection
+// Derive platform from user agent
 (function() {
   const ua = navigator.userAgent || '';
-  let platform = 'Win32'; // default
+  let platform = 'Win32';
   if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
     platform = 'MacIntel';
   } else if (ua.includes('Linux')) {
     platform = ua.includes('x86_64') || ua.includes('amd64') ? 'Linux x86_64' : 'Linux';
-  } else if (ua.includes('Windows')) {
-    platform = ua.includes('Win64') || ua.includes('WOW64') ? 'Win32' : 'Win32';
   }
   Object.defineProperty(navigator, 'platform', {
     get: () => platform,
@@ -124,21 +357,88 @@ Object.defineProperty(navigator, 'languages', {
   });
 })();
 
-Object.defineProperty(navigator.connection || {}, 'rtt', {
-  get: () => 100,
+// Hardware fingerprint (seeded for consistency)
+const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
+const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
+
+Object.defineProperty(navigator, 'hardwareConcurrency', {
+  get: () => hardwareCore,
+  configurable: true
 });
 
+Object.defineProperty(navigator, 'deviceMemory', {
+  get: () => deviceMem,
+  configurable: true
+});
+
+// maxTouchPoints - 0 for desktop (consistent with non-touch device)
+Object.defineProperty(navigator, 'maxTouchPoints', {
+  get: () => 0,
+  configurable: true
+});
+
+// Connection RTT
+Object.defineProperty(navigator.connection || {}, 'rtt', {
+  get: () => 50 + Math.floor(seededRandom(sessionSeed * 3) * 100),
+  configurable: true
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIDEO CODEC SPOOFING - Return consistent codec support
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
+  HTMLMediaElement.prototype.canPlayType = function(type) {
+    // Common codecs that should be supported
+    if (type.includes('avc1') || type.includes('h264')) return 'probably';
+    if (type.includes('mp4a.40') || type.includes('aac')) return 'probably';
+    if (type === 'video/mp4') return 'probably';
+    if (type === 'audio/mp4') return 'probably';
+    if (type.includes('vp8') || type.includes('vp9')) return 'probably';
+    if (type.includes('opus')) return 'probably';
+    if (type === 'video/webm') return 'probably';
+    if (type === 'audio/webm') return 'probably';
+    return originalCanPlayType.apply(this, arguments);
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMEZONE
+// ═══════════════════════════════════════════════════════════════════════════
+const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
+  value: function() {
+    return window.__pinchtab_timezone || __pinchtab_origGetTimezoneOffset.call(this);
+  },
+  configurable: true
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FULL STEALTH MODE - Additional fingerprint protections
+// ═══════════════════════════════════════════════════════════════════════════
 const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
 
 if (stealthLevel === 'full') {
 
-const getParameter = WebGLRenderingContext.prototype.getParameter;
-WebGLRenderingContext.prototype.getParameter = function(parameter) {
-  if (parameter === 37445) return 'Intel Inc.';
-  if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-  return getParameter.apply(this, arguments);
-};
+// WebGL spoofing (both contexts)
+(function() {
+  const spoofWebGL = (proto) => {
+    const getParameter = proto.getParameter;
+    proto.getParameter = function(parameter) {
+      // UNMASKED_VENDOR_WEBGL
+      if (parameter === 37445) return 'Google Inc. (Intel)';
+      // UNMASKED_RENDERER_WEBGL
+      if (parameter === 37446) return 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)';
+      return getParameter.apply(this, arguments);
+    };
+  };
+  spoofWebGL(WebGLRenderingContext.prototype);
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    spoofWebGL(WebGL2RenderingContext.prototype);
+  }
+})();
 
+// Canvas fingerprint noise
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
@@ -181,12 +481,13 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   const pixelCount = imageData.data.length / 4;
   const noisyPixels = Math.min(10, pixelCount * 0.0001);
   for (let i = 0; i < noisyPixels; i++) {
-    const pixelIndex = Math.floor(Math.random() * pixelCount) * 4;
-    imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (Math.random() > 0.5 ? 1 : -1)));
+    const pixelIndex = Math.floor(seededRandom(sessionSeed + 2000 + i) * pixelCount) * 4;
+    imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (seededRandom(sessionSeed + 3000 + i) > 0.5 ? 1 : -1)));
   }
   return imageData;
 };
 
+// Font measurement noise
 const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
 CanvasRenderingContext2D.prototype.measureText = function(text) {
   const metrics = originalMeasureText.apply(this, arguments);
@@ -199,6 +500,7 @@ CanvasRenderingContext2D.prototype.measureText = function(text) {
   });
 };
 
+// WebRTC IP leak prevention
 if (window.RTCPeerConnection) {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function(config, constraints) {
@@ -208,23 +510,25 @@ if (window.RTCPeerConnection) {
   window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
 
+// AudioContext fingerprint protection
+if (window.AudioContext || window.webkitAudioContext) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  const originalCreateOscillator = AudioContextClass.prototype.createOscillator;
+  const originalCreateDynamicsCompressor = AudioContextClass.prototype.createDynamicsCompressor;
+  
+  AudioContextClass.prototype.createOscillator = function() {
+    const oscillator = originalCreateOscillator.apply(this, arguments);
+    const originalConnect = oscillator.connect.bind(oscillator);
+    oscillator.connect = function(dest) {
+      // Add subtle noise to audio fingerprinting attempts
+      if (dest instanceof AnalyserNode) {
+        const noise = seededRandom(sessionSeed + 4000) * 0.0001;
+        oscillator.frequency.value += noise;
+      }
+      return originalConnect(dest);
+    };
+    return oscillator;
+  };
 }
 
-const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
-  value: function() {
-    return window.__pinchtab_timezone || __pinchtab_origGetTimezoneOffset.call(this);
-  }
-});
-
-const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
-const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
-
-Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => hardwareCore,
-  configurable: true
-});
-
-Object.defineProperty(navigator, 'deviceMemory', {
-  get: () => deviceMem
-});
+} // end stealthLevel === 'full'

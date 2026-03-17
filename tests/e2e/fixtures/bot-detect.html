@@ -109,6 +109,41 @@
     addResult('no_cdp_traces', !hasCDPTraces, 
       hasCDPTraces ? 'CDP traces found!' : 'Clean');
     
+    // Test: navigator.userAgentData exists (Client Hints API - required by Turnstile)
+    const hasUserAgentData = !!(navigator.userAgentData && navigator.userAgentData.brands);
+    addResult('useragentdata_exists', hasUserAgentData, 
+      hasUserAgentData ? `${navigator.userAgentData.brands.length} brands` : 'Missing');
+    
+    // Test: userAgentData.getHighEntropyValues exists
+    const hasHighEntropy = !!(navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === 'function');
+    addResult('useragentdata_highentropy', hasHighEntropy, 
+      hasHighEntropy ? 'Available' : 'Missing');
+    
+    // Test: chrome.runtime.connect exists (required by Cloudflare Turnstile)
+    const hasChromeConnect = !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function');
+    addResult('chrome_runtime_connect', hasChromeConnect, 
+      hasChromeConnect ? 'Available' : 'Missing');
+    
+    // Test: chrome.csi exists (Chrome Speed Index - some sites check)
+    const hasChromeCsi = !!(window.chrome && typeof window.chrome.csi === 'function');
+    addResult('chrome_csi', hasChromeCsi, 
+      hasChromeCsi ? 'Available' : 'Missing');
+    
+    // Test: chrome.loadTimes exists (deprecated but still checked)
+    const hasChromeLoadTimes = !!(window.chrome && typeof window.chrome.loadTimes === 'function');
+    addResult('chrome_loadtimes', hasChromeLoadTimes, 
+      hasChromeLoadTimes ? 'Available' : 'Missing');
+    
+    // Test: No CDP markers in window object
+    let cdpMarkerCount = 0;
+    for (const prop of Object.getOwnPropertyNames(window)) {
+      if (/^cdc_|^\$cdc_|^__webdriver|^__selenium|^__driver|^\$chrome_|^__puppeteer|^__playwright/.test(prop)) {
+        cdpMarkerCount++;
+      }
+    }
+    addResult('no_cdp_markers', cdpMarkerCount === 0, 
+      cdpMarkerCount === 0 ? 'Clean' : `${cdpMarkerCount} markers found`);
+    
     // ═══════════════════════════════════════════════════════════════════
     // WARNING TESTS - Nice to pass, but not always critical
     // ═══════════════════════════════════════════════════════════════════
@@ -178,6 +213,37 @@
     addResult('function_tostring', toStringOk, 
       toStringOk ? 'Native' : 'Modified', 'warn');
     
+    // Test: maxTouchPoints is 0 for desktop
+    const touchPoints = navigator.maxTouchPoints;
+    const touchOk = touchPoints === 0 || touchPoints > 0; // Either is fine, just should exist
+    addResult('max_touch_points', touchOk, `${touchPoints}`, 'warn');
+    
+    // Test: Video codec support (H.264/VP9)
+    let codecSupport = 'unknown';
+    try {
+      const video = document.createElement('video');
+      const h264 = video.canPlayType('video/mp4; codecs="avc1.42E01E"');
+      const vp9 = video.canPlayType('video/webm; codecs="vp9"');
+      codecSupport = `H.264: ${h264}, VP9: ${vp9}`;
+    } catch (e) { codecSupport = 'error'; }
+    const codecsOk = codecSupport.includes('probably');
+    addResult('video_codecs', codecsOk, codecSupport, 'warn');
+    
+    // Test: userAgentData platform matches navigator.platform
+    let uaPlatformMatch = true;
+    if (navigator.userAgentData) {
+      const uadPlatform = navigator.userAgentData.platform;
+      const navPlatform = navigator.platform;
+      // Windows: userAgentData.platform = "Windows", navigator.platform = "Win32"
+      // macOS: userAgentData.platform = "macOS", navigator.platform = "MacIntel"
+      // Linux: userAgentData.platform = "Linux", navigator.platform = "Linux x86_64"
+      if (uadPlatform === 'Windows' && !navPlatform.includes('Win')) uaPlatformMatch = false;
+      if (uadPlatform === 'macOS' && navPlatform !== 'MacIntel') uaPlatformMatch = false;
+      if (uadPlatform === 'Linux' && !navPlatform.includes('Linux')) uaPlatformMatch = false;
+    }
+    addResult('useragentdata_platform_match', uaPlatformMatch, 
+      navigator.userAgentData ? `${navigator.userAgentData.platform} / ${navigator.platform}` : 'N/A', 'warn');
+    
     // ═══════════════════════════════════════════════════════════════════
     // INFO - Just for debugging
     // ═══════════════════════════════════════════════════════════════════
@@ -193,6 +259,12 @@
     addInfo('Cookies Enabled', navigator.cookieEnabled);
     addInfo('Do Not Track', navigator.doNotTrack);
     addInfo('WebGL Renderer', webglRenderer);
+    addInfo('Max Touch Points', navigator.maxTouchPoints);
+    addInfo('UserAgentData Platform', navigator.userAgentData?.platform || 'N/A');
+    addInfo('UserAgentData Brands', navigator.userAgentData?.brands?.map(b => `${b.brand}/${b.version}`).join(', ') || 'N/A');
+    addInfo('chrome.csi', typeof window.chrome?.csi === 'function' ? 'Present' : 'Missing');
+    addInfo('chrome.loadTimes', typeof window.chrome?.loadTimes === 'function' ? 'Present' : 'Missing');
+    addInfo('chrome.runtime.connect', typeof window.chrome?.runtime?.connect === 'function' ? 'Present' : 'Missing');
     
     // ═══════════════════════════════════════════════════════════════════
     // SCORING
