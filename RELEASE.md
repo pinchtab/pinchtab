@@ -8,6 +8,7 @@ Pinchtab uses an automated CI/CD pipeline triggered by Git tags. When you push a
 2. **Creates GitHub release** — with checksums.txt for integrity verification
 3. **Publishes to npm** — TypeScript SDK with auto-download postinstall script
 4. **Builds Docker images** — linux/amd64, linux/arm64
+5. **Publishes the ClawHub skill** — after npm succeeds
 
 ## Prerequisites
 
@@ -32,7 +33,7 @@ git checkout main && git pull origin main
 # (all features should be on main before tagging)
 
 # 3. Verify version consistency
-cat package.json | jq .version     # npm package
+cat npm/package.json | jq .version # npm package
 cat go.mod | grep "module"         # Go module
 git describe --tags                # latest tag
 ```
@@ -65,54 +66,34 @@ grep -A 2 "^release:" .goreleaser.yml
 - ✅ `checksum:` generates `checksums.txt` (used by npm postinstall verification)
 - ✅ `release:` points to GitHub (uploads everything automatically)
 
-**Ready to release.** Just tag and push.
+**Ready to release.** The recommended path is now the manual `Prepare Release` workflow, which runs the full verification suite, pauses for approval, and only then creates the tag.
 
 ## Releasing
 
-### For patch/minor versions (recommended)
+## Manual Release Flow
 
-```bash
-# 1. Bump version in all places
-npm version patch   # or minor, major
-git push origin main
+1. Bump release-facing versions on the branch first.
+   The hard gate today is `npm/package.json`, and `Prepare Release` will fail if the input version does not match it.
+2. Open **Actions → Prepare Release**.
+3. Run it with:
+   - `version`: the release version, for example `0.8.0`
+   - `ref`: the branch, tag, or SHA you want to release
+4. The workflow runs:
+   - Go checks
+   - dashboard checks
+   - npm package verification
+   - docs verification
+   - full release E2E
+   - Docker bootstrap smoke test
+   - GoReleaser snapshot
+   - `npm publish --dry-run`
+5. After those pass, GitHub pauses at the `release-approval` environment gate.
+6. Approve the run. The workflow creates and pushes `v0.8.0` from the exact tested commit SHA.
+7. That tag triggers the `Release` workflow automatically.
 
-# 2. Create tag
-git tag v0.7.1
-git push origin v0.7.1
-```
+### Required GitHub setup
 
-### For manual releases
-
-```bash
-# 1. Tag directly
-git tag -a v0.7.1 -m "Release v0.7.1"
-git push origin v0.7.1
-
-# 2. Or via GitHub UI: Releases → Create from tag
-#    (workflow will auto-create if not present)
-```
-
-### Using workflow_dispatch (manual trigger)
-
-If you need to re-release an existing tag:
-
-1. Go to **Actions → Release**
-2. **Run workflow**
-3. Enter tag (e.g. `v0.7.1`)
-
-For a no-side-effects dry run from `main` or any other ref:
-
-1. Go to **Actions → Release**
-2. **Run workflow**
-3. Leave `tag` empty
-4. Set `ref` to the branch, tag, or commit you want to test
-5. Set `dry_run` to `true`
-
-Dry-run behavior:
-- GoReleaser runs in snapshot mode, so artifacts are built but not published
-- npm runs `npm publish --dry-run`
-- Docker runs a multi-arch `buildx` build with `push=false`
-- ClawHub skill publishing is not part of this workflow and is therefore skipped
+Configure a protected environment named `release-approval` with the required reviewers for the manual gate to be effective.
 
 ## Pipeline details
 
@@ -162,13 +143,18 @@ Depends on: `release` job (waits for goreleaser to finish)
 
 ### 3. Docker
 
+Depends on: `release` and `npm`
+
 GitHub Actions builds the release image directly from the tagged source with `docker buildx`.
-The workflow pushes the same multi-arch build to both GHCR and Docker Hub, so Docker no longer depends on GoReleaser's temporary build context.
+The workflow pushes the same multi-arch build to both GHCR and Docker Hub, but only after npm has already published successfully.
 
 ### 4. ClawHub skill
 
-The main `Release` workflow publishes the Pinchtab skill to ClawHub only after both npm and Docker complete successfully.
-The standalone `Publish Skill` workflow is manual-only and is intended for retries or one-off recovery publishes.
+Depends on: `release` and `npm`
+
+The main `Release` workflow publishes the Pinchtab skill to ClawHub automatically after npm succeeds.
+It does not consume npm artifacts or GitHub release binaries directly; the ordering is a policy choice so npm stays the first irreversible publish step.
+The standalone `Publish Skill` workflow remains available for retries or one-off recovery publishes.
 
 ## Troubleshooting
 

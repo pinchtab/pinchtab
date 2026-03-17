@@ -238,7 +238,8 @@ go test ./...                              # Unit tests only
 go test ./... -v                           # Verbose
 go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
-./dev e2e                                 # Run E2E tests (curl + CLI)
+./dev e2e                                 # Run the default E2E release suite
+./dev e2e docker                          # Build the local image and run Docker smoke
 ```
 
 ### Developer Toolkit (`dev`)
@@ -264,13 +265,23 @@ All dev scripts are accessible through `./dev`:
 | `check security` | Gosec security scan |
 | `check docs` | Validate docs JSON |
 | `format dashboard` | Run Prettier on dashboard sources |
-| `test` | Unit + E2E tests |
+| `test` | Run all tests |
 | `test unit` | Unit tests only |
-| `e2e` | E2E tests (curl + CLI) |
-| `e2e curl` | E2E curl tests only |
-| `e2e cli` | E2E CLI tests only |
-| `build` | Build & run (default) |
+| `test dashboard` | Dashboard tests only |
+| `e2e` | Run the default E2E release suite |
+| `e2e docker` | Build the local image and run the Docker smoke test |
+| `e2e pr` | Run the PR E2E suite |
+| `e2e recent` | Run the recent E2E suite |
+| `e2e api-fast` | Run the fast API E2E suite |
+| `e2e cli-fast` | Run the fast CLI E2E suite |
+| `e2e full-api` | Run the full API E2E suite |
+| `e2e full-cli` | Run the full CLI E2E suite |
+| `e2e full-extended` | Run the extended E2E suite |
+| `e2e release` | Run the release E2E meta-suite |
+| `build` | Build the application |
+| `dev` | Build and run the application |
 | `run` | Run the application |
+| `binary` | Build the local release-style binary |
 | `doctor` | Setup dev environment |
 
 For the fancy interactive picker, install [gum](https://github.com/charmbracelet/gum): `brew install gum`

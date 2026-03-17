@@ -24,6 +24,7 @@ COMMANDS=(
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "e2e:🐳:E2E release suites"
+  "  docker:🐳:Build local image and run Docker smoke test"
   "  pr:🐳:E2E PR suite"
   "  recent:🐳:E2E Recent tests"
   "  api-fast:🐳:E2E API fast tests"
@@ -130,6 +131,26 @@ run_command() {
       echo "  ${ACCENT}${BOLD}🔬 System tests${NC}"
       echo ""
       exec bash scripts/test.sh system
+      ;;
+    "e2e docker")
+      local platform="${DOCKER_DEFAULT_PLATFORM:-}"
+      if [ -z "$platform" ]; then
+        platform="$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')"
+      fi
+      echo "  ${ACCENT}${BOLD}🏗️ Build local Docker image${NC}"
+      echo ""
+      echo "  ${MUTED}platform: ${platform}${NC}"
+      docker buildx build --load --platform "$platform" -t pinchtab-local:test .
+      echo ""
+      echo "  ${ACCENT}${BOLD}💨 Docker smoke test${NC}"
+      echo ""
+      exec bash scripts/docker-smoke.sh pinchtab-local:test
+      ;;
+    "e2e docker "*)
+      local image="${target#e2e docker }"
+      echo "  ${ACCENT}${BOLD}💨 Docker smoke test${NC}"
+      echo ""
+      exec bash scripts/docker-smoke.sh "$image"
       ;;
     "e2e"*)
       local suite="release"
@@ -257,7 +278,7 @@ if [ $# -gt 0 ]; then
       ;;
     e2e)
       if [ $# -gt 1 ]; then
-        run_command "e2e $2"
+        run_command "e2e ${*:2}"
       else
         run_command "e2e"
       fi

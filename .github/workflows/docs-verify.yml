@@ -6,11 +6,14 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/docs-verify.yml'
+      - '.github/workflows/reusable-docs-verify.yml'
   pull_request:
     branches: [main]
     paths:
       - 'docs/**'
       - '.github/workflows/docs-verify.yml'
+      - '.github/workflows/reusable-docs-verify.yml'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -19,15 +22,8 @@ permissions:
   contents: read
 
 jobs:
-  docs-validate:
-    name: Validate Documentation
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Check docs.json references
-        run: |
-          echo "🔍 Validating docs.json..."
-          ./scripts/check-docs-json.sh
-        shell: bash
+  docs:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    uses: ./.github/workflows/reusable-docs-verify.yml
+    with:
+      ref: ${{ github.sha }}

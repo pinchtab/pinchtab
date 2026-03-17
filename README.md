@@ -355,6 +355,7 @@ The full setup and workflow guide lives at [docs/guides/contributing.md](docs/gu
 git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
 ./dev doctor                # Verifies environment, offers hooks/deps setup
+./dev --help                # Shows the developer toolkit commands
 go build ./cmd/pinchtab     # Build pinchtab binary
 ```
 

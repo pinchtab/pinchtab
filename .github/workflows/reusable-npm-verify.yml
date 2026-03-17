@@ -1,0 +1,36 @@
+name: Reusable npm Package Verification
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify npm Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Verify npm package
+        run: bash scripts/check-npm.sh
+
+      - name: List package contents
+        working-directory: npm
+        run: |
+          echo "📦 Package will contain:"
+          npm pack --dry-run 2>&1 | grep "notice" | awk '{print "  " $3 " (" $2 ")"}'

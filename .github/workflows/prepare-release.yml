@@ -1,0 +1,217 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (for example 0.8.0, without v prefix)'
+        required: true
+      ref:
+        description: 'Git ref to release. Defaults to main.'
+        required: false
+        default: 'main'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GORELEASER_VERSION: v2.14.3
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Release Input
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+      ref: ${{ steps.meta.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - name: Validate version and tag target
+        id: meta
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must look like 0.8.0" >&2
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          PKG_VERSION="$(jq -r .version npm/package.json)"
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+            echo "npm/package.json version is $PKG_VERSION, expected $VERSION" >&2
+            exit 1
+          fi
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists locally" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists on origin" >&2
+            exit 1
+          fi
+
+          SHA="$(git rev-parse HEAD)"
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "sha=$SHA"
+            echo "ref=${{ inputs.ref }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize candidate
+        run: |
+          echo "## Release Candidate" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.meta.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ steps.meta.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: ${{ steps.meta.outputs.ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ steps.meta.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  go-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-go-verify.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
+  dashboard-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-dashboard.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
+  docs-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-docs-verify.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
+  npm-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-npm-verify.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
+  e2e-release:
+    needs: validate
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+      suite: release
+      summary_title: Release E2E
+      timeout_minutes: 45
+
+  docker-smoke:
+    needs: validate
+    uses: ./.github/workflows/reusable-docker-smoke.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
+  publish-dry-run:
+    name: Release Dry Runs
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install tygo
+        run: go install github.com/gzuidhof/tygo@latest
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: bun install --frozen-lockfile
+
+      - name: Run GoReleaser snapshot
+        run: |
+          curl -sfL https://goreleaser.com/static/run | VERSION="$GORELEASER_VERSION" bash -s -- release --clean --snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Dry-run npm publish
+        working-directory: npm
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          npm publish --dry-run
+
+  approval:
+    name: Manual Approval
+    needs:
+      - validate
+      - go-checks
+      - dashboard-checks
+      - docs-checks
+      - npm-checks
+      - e2e-release
+      - docker-smoke
+      - publish-dry-run
+    runs-on: ubuntu-latest
+    environment:
+      name: release-approval
+    steps:
+      - name: Await approval
+        run: |
+          echo "Approved release candidate ${{ needs.validate.outputs.tag }} at ${{ needs.validate.outputs.sha }}"
+
+  create-tag:
+    name: Create Release Tag
+    needs:
+      - validate
+      - approval
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - name: Create and push tag
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists on origin" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "refs/tags/$TAG"
+
+      - name: Summarize tag creation
+        run: |
+          echo "## Release Tag Created" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ needs.validate.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ needs.validate.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

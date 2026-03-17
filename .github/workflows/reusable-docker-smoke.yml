@@ -1,0 +1,32 @@
+name: Reusable Docker Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Docker Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build local Docker image
+        run: docker build -t pinchtab-release-smoke:${{ github.run_id }} .
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Verify bootstrap path in container
+        run: bash scripts/docker-smoke.sh pinchtab-release-smoke:${{ github.run_id }}

@@ -1,41 +1,8 @@
 name: Release
 
-# Automatic release pipeline triggered on tag push (v0.7.0, etc.)
-#
-# Pipeline:
-#   1. Checkout tag
-#   2. Build Go binary + create GitHub release (goreleaser)
-#   3. Publish npm package (with postinstall binary download support)
-#   4. Build & push Docker images
-# See .github/RELEASING.md for the operational checklist.
-#
-# Secrets required:
-#   - NPM_TOKEN: npm authentication (https://docs.npmjs.com/creating-and-viewing-access-tokens)
-#   - DOCKERHUB_USER / DOCKERHUB_TOKEN: Docker Hub credentials
-#   - GITHUB_TOKEN: Automatic (GitHub Actions)
-#   - HOMEBREW_TAP_GITHUB_TOKEN: PAT with write access to pinchtab/homebrew-tap
-#
-# To create a release:
-#   git tag v0.7.0
-#   git push origin v0.7.0
-
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to release (e.g. v0.2.0). Leave empty for dry-run from ref.'
-        required: false
-      ref:
-        description: 'Git ref for dry-run testing (branch, tag, or SHA). Defaults to main.'
-        required: false
-        default: 'main'
-      dry_run:
-        description: 'Build release artifacts without publishing them.'
-        required: false
-        type: boolean
-        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -44,6 +11,10 @@ env:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release Binaries
@@ -51,18 +22,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Validate workflow inputs
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ github.event.inputs.tag }}" ]; then
-            echo "tag is required unless dry_run=true" >&2
-            exit 1
-          fi
-
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.tag || github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-go@v6
         with:
@@ -78,13 +41,7 @@ jobs:
 
       - name: Run GoReleaser
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="release --clean --snapshot"
-          else
-            ARGS="release --clean"
-          fi
-
-          curl -sfL https://goreleaser.com/static/run | VERSION="$GORELEASER_VERSION" bash -s -- $ARGS
+          curl -sfL https://goreleaser.com/static/run | VERSION="$GORELEASER_VERSION" bash -s -- release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
@@ -98,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.inputs.tag || github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-node@v5
         with:
@@ -108,16 +65,12 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ] && [ -z "${{ github.event.inputs.tag }}" ]; then
-            VERSION=$(jq -r .version npm/package.json)
-          else
-            TAG="${{ github.event.inputs.tag || github.ref_name }}"
-            VERSION=${TAG#v}  # Remove 'v' prefix
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update npm package version
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         working-directory: npm
         run: |
           CURRENT=$(jq -r .version package.json)
@@ -136,15 +89,7 @@ jobs:
         working-directory: npm
         run: npm run build
 
-      - name: Dry-run npm publish
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
-        working-directory: npm
-        run: npm publish --dry-run
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish to npm
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         working-directory: npm
         run: npm publish
         env:
@@ -153,55 +98,34 @@ jobs:
   docker:
     name: Docker Image
     runs-on: ubuntu-latest
-    needs: release
+    needs:
+      - release
+      - npm
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.inputs.tag || github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
 
       - name: Extract Docker metadata
         id: meta
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            if [ -n "${{ github.event.inputs.tag }}" ]; then
-              TAG="${{ github.event.inputs.tag }}"
-              VERSION="${TAG#v}-dryrun-${GITHUB_SHA::7}"
-            else
-              TAG="dry-run-${GITHUB_SHA::7}"
-              VERSION="$(jq -r .version npm/package.json)-dryrun-${GITHUB_SHA::7}"
-            fi
-            PUSH="false"
-          else
-            TAG="${{ github.event.inputs.tag || github.ref_name }}"
-            VERSION="${TAG#v}"
-            PUSH="true"
-          fi
-
-          {
-            echo "tag=$TAG"
-            echo "version=$VERSION"
-            echo "push=$PUSH"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Docker dry-run note
-        if: ${{ steps.meta.outputs.push != 'true' }}
-        run: |
-          echo "Running a multi-arch Docker build without pushing to GHCR or Docker Hub." >> "$GITHUB_STEP_SUMMARY"
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
-        if: ${{ steps.meta.outputs.push == 'true' }}
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - uses: docker/login-action@v3
-        if: ${{ steps.meta.outputs.push == 'true' }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -212,7 +136,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ steps.meta.outputs.push == 'true' }}
+          push: true
           provenance: false
           labels: |
             org.opencontainers.image.source=https://github.com/pinchtab/pinchtab
@@ -228,11 +152,10 @@ jobs:
   skill:
     name: Publish Skill
     needs:
+      - release
       - npm
-      - docker
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
     uses: ./.github/workflows/publish-skill.yml
     with:
-      version: ${{ github.event.inputs.tag || github.ref_name }}
+      version: ${{ github.ref_name }}
     secrets:
       CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}

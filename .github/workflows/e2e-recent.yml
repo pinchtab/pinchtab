@@ -29,406 +29,64 @@ env:
 
 jobs:
   recent:
-    name: E2E Recent Tests
-    runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run recent E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e recent 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Dump pinchtab logs on failure
-        if: failure()
-        run: |
-          echo "==== pinchtab logs ===="
-          docker compose -f tests/e2e/docker-compose.yml logs pinchtab || true
-          echo ""
-          echo "==== filtered Chrome/extension lines ===="
-          docker compose -f tests/e2e/docker-compose.yml logs pinchtab 2>/dev/null | grep -Ei 'chrome|extension|devtools|load-extension|disable-extensions|headless|warning|error' || true
-          echo ""
-          echo "==== instance inventory ===="
-          INSTANCES_JSON=$(curl -sf http://localhost:9999/instances || true)
-          if [ -n "$INSTANCES_JSON" ]; then
-            echo "$INSTANCES_JSON"
-            if command -v jq >/dev/null 2>&1; then
-              echo "$INSTANCES_JSON" | jq -r '.[].id' | while read -r inst_id; do
-                [ -z "$inst_id" ] && continue
-                echo ""
-                echo "==== logs for $inst_id ===="
-                curl -sf "http://localhost:9999/instances/$inst_id/logs" || true
-              done
-            fi
-          else
-            echo "unable to fetch /instances from localhost:9999"
-          fi
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E Recent Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E Recent Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: recent
+      summary_title: E2E Recent Tests
+      timeout_minutes: 10
+      compose_file: tests/e2e/docker-compose.yml
+      dump_instance_inventory: true
 
   api-fast:
-    name: E2E API Fast Tests
     needs: recent
-    runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run API fast E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e api-fast 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E API Fast Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E API Fast Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: api-fast
+      summary_title: E2E API Fast Tests
+      timeout_minutes: 15
+      compose_file: tests/e2e/docker-compose.yml
 
   cli-fast:
-    name: E2E CLI Fast Tests
     needs: recent
-    runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run CLI fast E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e cli-fast 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E CLI Fast Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E CLI Fast Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: cli-fast
+      summary_title: E2E CLI Fast Tests
+      timeout_minutes: 15
+      compose_file: tests/e2e/docker-compose-cli.yml
 
   full-api:
-    name: E2E Full API Tests
-    runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run full API E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e full-api 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E Full API Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E Full API Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: full-api
+      summary_title: E2E Full API Tests
+      timeout_minutes: 20
+      compose_file: tests/e2e/docker-compose.yml
 
   full-cli:
-    name: E2E Full CLI Tests
-    runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run full CLI E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e full-cli 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E Full CLI Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E Full CLI Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: full-cli
+      summary_title: E2E Full CLI Tests
+      timeout_minutes: 20
+      compose_file: tests/e2e/docker-compose-cli.yml
 
   full-extended:
-    name: E2E Full Extended Tests
-    runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run full extended E2E tests
-        id: e2e
-        run: |
-          set +e
-          mkdir -p tests/e2e/results
-
-          ./dev e2e full-extended 2>&1 | tee e2e-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
-          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          {
-            echo 'failures<<EOF'
-            echo "$FAILURES"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
-          exit $EXIT_CODE
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-
-      - name: Post summary
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E Full Extended Tests Passed" >> $GITHUB_STEP_SUMMARY
-            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ E2E Full Extended Tests Failed" >> $GITHUB_STEP_SUMMARY
-            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: full-extended
+      summary_title: E2E Full Extended Tests
+      timeout_minutes: 20
+      compose_file: tests/e2e/docker-compose-orchestrator.yml

@@ -1,0 +1,29 @@
+name: Reusable Documentation Verification
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-validate:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Check docs.json references
+        run: |
+          echo "🔍 Validating docs.json..."
+          ./scripts/check-docs-json.sh
+        shell: bash
