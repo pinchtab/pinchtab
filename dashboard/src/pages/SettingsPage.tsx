@@ -579,21 +579,41 @@ export default function SettingsPage() {
                   </SettingRow>
                   <SettingRow
                     label="Stealth level"
-                    description="Fingerprint hardening profile for new instances."
+                    description="Bot detection evasion profile. Higher levels may affect error monitoring and certain browser features."
                   >
-                    <select
-                      value={backendConfig.instanceDefaults.stealthLevel}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          stealthLevel: e.target
-                            .value as BackendConfig["instanceDefaults"]["stealthLevel"],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="light">Light</option>
-                      <option value="full">Full</option>
-                    </select>
+                    <div className="space-y-2">
+                      <select
+                        value={backendConfig.instanceDefaults.stealthLevel}
+                        onChange={(e) =>
+                          updateBackendSection("instanceDefaults", {
+                            stealthLevel: e.target
+                              .value as BackendConfig["instanceDefaults"]["stealthLevel"],
+                          })
+                        }
+                        className={selectClass}
+                      >
+                        <option value="light">Light</option>
+                        <option value="medium">Medium</option>
+                        <option value="full">Full</option>
+                      </select>
+                      <div className="rounded-sm border border-border-subtle bg-black/10 px-3 py-2 text-xs leading-5 text-text-muted">
+                        {backendConfig.instanceDefaults.stealthLevel === "light" && (
+                          <>
+                            <strong className="text-text-secondary">Light:</strong> Safe, no functional impact. Hides navigator.webdriver, removes CDP markers, spoofs plugins/languages/hardware. No side effects.
+                          </>
+                        )}
+                        {backendConfig.instanceDefaults.stealthLevel === "medium" && (
+                          <>
+                            <strong className="text-warning">Medium:</strong> Adds Client Hints API, chrome.runtime.connect (for Cloudflare), chrome.csi/loadTimes, enhanced permissions. <em>May interfere with error monitoring tools (Sentry, LogRocket).</em>
+                          </>
+                        )}
+                        {backendConfig.instanceDefaults.stealthLevel === "full" && (
+                          <>
+                            <strong className="text-destructive">Full:</strong> Maximum stealth. Adds WebGL/canvas fingerprint noise, WebRTC IP leak prevention, AudioContext protection. <em>May break WebRTC calls, canvas apps, and audio processing.</em>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </SettingRow>
                   <SettingRow
                     label="Tab eviction policy"

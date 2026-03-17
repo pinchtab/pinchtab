@@ -1,4 +1,16 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// PINCHTAB STEALTH - Bot Detection Evasion
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Stealth Levels:
+//   light  - Safe, no functional impact. Basic automation hiding.
+//   medium - Standard stealth. May affect error monitoring and some APIs.
+//   full   - Maximum stealth. May break WebRTC, canvas-dependent features.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+
 const sessionSeed = (typeof __pinchtab_seed !== 'undefined') ? __pinchtab_seed : 42;
+const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
 
 const seededRandom = (function() {
   const cache = {};
@@ -14,61 +26,40 @@ const seededRandom = (function() {
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CDP MARKER CLEANUP - Remove automation traces from window object
+// LIGHT LEVEL - Safe, no functional impact
 // ═══════════════════════════════════════════════════════════════════════════
+// - Hides navigator.webdriver
+// - Removes CDP markers (cdc_*, __webdriver, etc.)
+// - Spoofs plugins array
+// - Sets navigator.languages, platform, hardwareConcurrency, deviceMemory
+// - Basic chrome.runtime object
+// ═══════════════════════════════════════════════════════════════════════════
+
+// CDP MARKER CLEANUP - Remove automation traces
 (function() {
-  // Known CDP/automation markers
-  const markerPatterns = [
-    /^cdc_/,
-    /^\$cdc_/,
-    /^__webdriver/,
-    /^__selenium/,
-    /^__driver/,
-    /^\$chrome_/,
-    /^__puppeteer/,
-    /^__playwright/
+  const markers = [
+    'cdc_adoQpoasnfa76pfcZLmcfl_Array',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Promise',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Symbol'
   ];
+  markers.forEach(m => { try { delete window[m]; } catch(e) {} });
   
+  // Pattern-based cleanup
+  const markerPatterns = [/^cdc_/, /^\$cdc_/, /^__webdriver/, /^__selenium/, /^__driver/];
   for (const prop of Object.getOwnPropertyNames(window)) {
     if (markerPatterns.some(p => p.test(prop))) {
       try { delete window[prop]; } catch(e) {}
     }
   }
-  
-  // Legacy specific markers
-  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-  delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ERROR.PREPARESTACKTRACE PROTECTION - Prevent CDP detection via stack traces
-// ═══════════════════════════════════════════════════════════════════════════
-(function() {
-  const originalPrepareStackTrace = Error.prepareStackTrace;
-  Object.defineProperty(Error, 'prepareStackTrace', {
-    get() { return originalPrepareStackTrace; },
-    set(fn) { /* block modifications that could detect CDP */ },
-    configurable: true,
-    enumerable: false
-  });
-})();
-
-// ═══════════════════════════════════════════════════════════════════════════
-// WEBDRIVER EVASION - Hide the property completely
-// ═══════════════════════════════════════════════════════════════════════════
+// WEBDRIVER EVASION - Hide the property
 (function() {
   const proto = Object.getPrototypeOf(navigator);
-  
   try { delete navigator.webdriver; } catch(e) {}
   try { delete proto.webdriver; } catch(e) {}
   
-  const desc = { 
-    get: () => undefined, 
-    configurable: false, 
-    enumerable: false
-  };
-  
+  const desc = { get: () => undefined, configurable: false, enumerable: false };
   if ('webdriver' in navigator) {
     try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
   }
@@ -77,223 +68,13 @@ const seededRandom = (function() {
   }
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CHROME OBJECT - Full API spoofing (required by Cloudflare Turnstile)
-// ═══════════════════════════════════════════════════════════════════════════
-(function() {
-  if (!window.chrome) { window.chrome = {}; }
-  
-  // chrome.runtime with connect() - required by Turnstile
-  if (!window.chrome.runtime) {
-    window.chrome.runtime = {};
-  }
-  
-  if (!window.chrome.runtime.connect) {
-    window.chrome.runtime.connect = function(extensionId, connectInfo) {
-      return {
-        name: connectInfo?.name || '',
-        sender: undefined,
-        onDisconnect: { 
-          addListener: function() {}, 
-          removeListener: function() {},
-          hasListener: function() { return false; },
-          hasListeners: function() { return false; }
-        },
-        onMessage: { 
-          addListener: function() {}, 
-          removeListener: function() {},
-          hasListener: function() { return false; },
-          hasListeners: function() { return false; }
-        },
-        postMessage: function() {},
-        disconnect: function() {}
-      };
-    };
-  }
-  
-  if (!window.chrome.runtime.sendMessage) {
-    window.chrome.runtime.sendMessage = function(extensionId, message, options, callback) {
-      if (typeof callback === 'function') {
-        setTimeout(callback, 0);
-      }
-    };
-  }
-  
-  if (!window.chrome.runtime.onConnect) {
-    window.chrome.runtime.onConnect = {
-      addListener: function() {},
-      removeListener: function() {},
-      hasListener: function() { return false; }
-    };
-  }
-  
-  if (!window.chrome.runtime.onMessage) {
-    window.chrome.runtime.onMessage = {
-      addListener: function() {},
-      removeListener: function() {},
-      hasListener: function() { return false; }
-    };
-  }
-  
-  // chrome.csi() - Chrome Speed Index (some sites check this)
-  if (!window.chrome.csi) {
-    window.chrome.csi = function() {
-      const now = Date.now();
-      return { 
-        startE: now - 500, 
-        onloadT: now - 100, 
-        pageT: now, 
-        tran: 15 
-      };
-    };
-  }
-  
-  // chrome.loadTimes() - deprecated but still checked
-  if (!window.chrome.loadTimes) {
-    window.chrome.loadTimes = function() {
-      const now = Date.now() / 1000;
-      return {
-        requestTime: now - 0.5,
-        startLoadTime: now - 0.4,
-        commitLoadTime: now - 0.3,
-        finishDocumentLoadTime: now - 0.1,
-        finishLoadTime: now,
-        firstPaintTime: now - 0.2,
-        firstPaintAfterLoadTime: 0,
-        navigationType: "Other",
-        wasFetchedViaSpdy: false,
-        wasNpnNegotiated: true,
-        npnNegotiatedProtocol: "h2",
-        wasAlternateProtocolAvailable: false,
-        connectionInfo: "h2"
-      };
-    };
-  }
-  
-  // chrome.app object
-  if (!window.chrome.app) {
-    window.chrome.app = {
-      isInstalled: false,
-      InstallState: { 
-        DISABLED: 'disabled', 
-        INSTALLED: 'installed', 
-        NOT_INSTALLED: 'not_installed' 
-      },
-      RunningState: { 
-        CANNOT_RUN: 'cannot_run', 
-        READY_TO_RUN: 'ready_to_run', 
-        RUNNING: 'running' 
-      },
-      getDetails: function() { return null; },
-      getIsInstalled: function() { return false; }
-    };
-  }
-})();
+// BASIC CHROME OBJECT
+if (!window.chrome) { window.chrome = {}; }
+if (!window.chrome.runtime) {
+  window.chrome.runtime = { onConnect: undefined, onMessage: undefined };
+}
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PERMISSIONS API - Enhanced to handle multiple permission types
-// ═══════════════════════════════════════════════════════════════════════════
-(function() {
-  const originalQuery = navigator.permissions.query.bind(navigator.permissions);
-  
-  navigator.permissions.query = async function(desc) {
-    // Handle known permissions that might be inconsistent in automation
-    const permissionHandlers = {
-      'notifications': () => Notification.permission === 'default' ? 'prompt' : Notification.permission,
-      'geolocation': () => 'prompt',
-      'camera': () => 'prompt',
-      'microphone': () => 'prompt',
-      'background-sync': () => 'granted',
-      'accelerometer': () => 'granted',
-      'gyroscope': () => 'granted',
-      'magnetometer': () => 'granted'
-    };
-    
-    if (desc.name in permissionHandlers) {
-      const state = permissionHandlers[desc.name]();
-      return { state: state, onchange: null };
-    }
-    
-    return originalQuery(desc);
-  };
-})();
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NAVIGATOR.USERAGENTDATA - Client Hints API (required by Turnstile/CF)
-// ═══════════════════════════════════════════════════════════════════════════
-(function() {
-  const ua = navigator.userAgent || '';
-  
-  // Extract Chrome version from UA
-  const chromeMatch = ua.match(/Chrome\/(\d+)/);
-  const chromeVersion = chromeMatch ? chromeMatch[1] : '129';
-  
-  // Determine platform from UA
-  let platform = 'Windows';
-  let platformVersion = '15.0.0';
-  let architecture = 'x86';
-  let bitness = '64';
-  
-  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
-    platform = 'macOS';
-    platformVersion = '14.0.0';
-  } else if (ua.includes('Linux')) {
-    platform = 'Linux';
-    platformVersion = '6.5.0';
-  }
-  
-  const brands = [
-    { brand: 'Chromium', version: chromeVersion },
-    { brand: 'Google Chrome', version: chromeVersion },
-    { brand: 'Not=A?Brand', version: '24' }
-  ];
-  
-  const userAgentData = {
-    brands: brands,
-    mobile: false,
-    platform: platform,
-    
-    getHighEntropyValues: async function(hints) {
-      const values = {
-        brands: brands,
-        mobile: false,
-        platform: platform
-      };
-      
-      for (const hint of hints) {
-        switch(hint) {
-          case 'platformVersion': values.platformVersion = platformVersion; break;
-          case 'architecture': values.architecture = architecture; break;
-          case 'model': values.model = ''; break;
-          case 'bitness': values.bitness = bitness; break;
-          case 'uaFullVersion': values.uaFullVersion = chromeVersion + '.0.0.0'; break;
-          case 'fullVersionList': values.fullVersionList = brands.map(b => ({ ...b, version: b.version + '.0.0.0' })); break;
-          case 'wow64': values.wow64 = false; break;
-        }
-      }
-      
-      return values;
-    },
-    
-    toJSON: function() {
-      return {
-        brands: this.brands,
-        mobile: this.mobile,
-        platform: this.platform
-      };
-    }
-  };
-  
-  Object.defineProperty(Navigator.prototype, 'userAgentData', {
-    get: () => userAgentData,
-    configurable: true,
-    enumerable: true
-  });
-})();
-
-// ═══════════════════════════════════════════════════════════════════════════
 // PLUGINS ARRAY - Proper PluginArray that passes instanceof checks
-// ═══════════════════════════════════════════════════════════════════════════
 (function() {
   const fakePlugins = [
     { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 },
@@ -302,7 +83,6 @@ const seededRandom = (function() {
   ];
   
   const realPluginsProto = Object.getPrototypeOf(navigator.plugins);
-  
   const pluginArray = Object.create(realPluginsProto, {
     length: { value: fakePlugins.length, writable: false, enumerable: true },
     item: { value: function(i) { return this[i] || null; }, writable: false },
@@ -321,126 +101,261 @@ const seededRandom = (function() {
       filename: { value: p.filename, writable: false, enumerable: true },
       description: { value: p.description, writable: false, enumerable: true },
       length: { value: p.length, writable: false, enumerable: true },
-      item: { value: function(i) { return null; }, writable: false },
-      namedItem: { value: function(n) { return null; }, writable: false }
+      item: { value: function() { return null; }, writable: false },
+      namedItem: { value: function() { return null; }, writable: false }
     });
     Object.defineProperty(pluginArray, i, { value: plugin, writable: false, enumerable: true });
     Object.defineProperty(pluginArray, p.name, { value: plugin, writable: false, enumerable: false });
   });
   
-  Object.defineProperty(navigator, 'plugins', {
-    get: () => pluginArray,
-    configurable: true
-  });
+  Object.defineProperty(navigator, 'plugins', { get: () => pluginArray, configurable: true });
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NAVIGATOR PROPERTIES - Languages, Platform, Hardware
-// ═══════════════════════════════════════════════════════════════════════════
-Object.defineProperty(navigator, 'languages', {
-  get: () => ['en-US', 'en'],
-  configurable: true
-});
+// NAVIGATOR PROPERTIES
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'], configurable: true });
 
-// Derive platform from user agent
 (function() {
   const ua = navigator.userAgent || '';
   let platform = 'Win32';
-  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
-    platform = 'MacIntel';
-  } else if (ua.includes('Linux')) {
-    platform = ua.includes('x86_64') || ua.includes('amd64') ? 'Linux x86_64' : 'Linux';
-  }
-  Object.defineProperty(navigator, 'platform', {
-    get: () => platform,
-    configurable: true
-  });
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) platform = 'MacIntel';
+  else if (ua.includes('Linux')) platform = ua.includes('x86_64') ? 'Linux x86_64' : 'Linux';
+  Object.defineProperty(navigator, 'platform', { get: () => platform, configurable: true });
 })();
 
-// Hardware fingerprint (seeded for consistency)
 const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
 const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
 
-Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => hardwareCore,
-  configurable: true
-});
+Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => hardwareCore, configurable: true });
+Object.defineProperty(navigator, 'deviceMemory', { get: () => deviceMem, configurable: true });
 
-Object.defineProperty(navigator, 'deviceMemory', {
-  get: () => deviceMem,
-  configurable: true
-});
-
-// maxTouchPoints - 0 for desktop (consistent with non-touch device)
-Object.defineProperty(navigator, 'maxTouchPoints', {
-  get: () => 0,
-  configurable: true
-});
-
-// Connection RTT
 Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 50 + Math.floor(seededRandom(sessionSeed * 3) * 100),
   configurable: true
 });
 
+// TIMEZONE OVERRIDE
+const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
+  value: function() { return window.__pinchtab_timezone || __pinchtab_origGetTimezoneOffset.call(this); },
+  configurable: true
+});
+
+// BASIC PERMISSIONS (notifications only)
+const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+navigator.permissions.query = (parameters) => (
+  parameters.name === 'notifications' ?
+    Promise.resolve({ state: Notification.permission === 'default' ? 'prompt' : Notification.permission, onchange: null }) :
+    originalQuery(parameters)
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
-// VIDEO CODEC SPOOFING - Return consistent codec support
+// MEDIUM LEVEL - Standard stealth (may affect error monitoring)
 // ═══════════════════════════════════════════════════════════════════════════
+// Adds:
+// - navigator.userAgentData (Client Hints API)
+// - chrome.runtime.connect/sendMessage (required by Cloudflare Turnstile)
+// - chrome.csi, chrome.loadTimes, chrome.app
+// - Error.prepareStackTrace protection
+// - Enhanced permissions API
+// - Video codec spoofing
+// - maxTouchPoints
+//
+// ⚠️ May interfere with: Error monitoring (Sentry), extension messaging
+// ═══════════════════════════════════════════════════════════════════════════
+
+if (stealthLevel === 'medium' || stealthLevel === 'full') {
+
+// ERROR.PREPARESTACKTRACE PROTECTION
+// ⚠️ May interfere with error monitoring tools (Sentry, LogRocket, etc.)
+(function() {
+  const originalPrepareStackTrace = Error.prepareStackTrace;
+  Object.defineProperty(Error, 'prepareStackTrace', {
+    get() { return originalPrepareStackTrace; },
+    set(fn) { /* block modifications to prevent CDP detection */ },
+    configurable: true,
+    enumerable: false
+  });
+})();
+
+// ENHANCED CDP MARKER CLEANUP (includes puppeteer/playwright)
+(function() {
+  const patterns = [/^__puppeteer/, /^__playwright/, /^\$chrome_/];
+  for (const prop of Object.getOwnPropertyNames(window)) {
+    if (patterns.some(p => p.test(prop))) {
+      try { delete window[prop]; } catch(e) {}
+    }
+  }
+})();
+
+// CHROME EXTENDED APIS
+(function() {
+  // chrome.runtime.connect - required by Cloudflare Turnstile
+  // ⚠️ Returns dummy Port object - real extension messaging won't work
+  if (!window.chrome.runtime.connect) {
+    window.chrome.runtime.connect = function(extensionId, connectInfo) {
+      return {
+        name: connectInfo?.name || '',
+        sender: undefined,
+        onDisconnect: { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } },
+        onMessage: { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } },
+        postMessage: function() {},
+        disconnect: function() {}
+      };
+    };
+  }
+  
+  if (!window.chrome.runtime.sendMessage) {
+    window.chrome.runtime.sendMessage = function(extensionId, message, options, callback) {
+      if (typeof callback === 'function') setTimeout(callback, 0);
+    };
+  }
+  
+  window.chrome.runtime.onConnect = window.chrome.runtime.onConnect || { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } };
+  window.chrome.runtime.onMessage = window.chrome.runtime.onMessage || { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } };
+  
+  // chrome.csi - Chrome Speed Index
+  if (!window.chrome.csi) {
+    window.chrome.csi = function() {
+      const now = Date.now();
+      return { startE: now - 500, onloadT: now - 100, pageT: now, tran: 15 };
+    };
+  }
+  
+  // chrome.loadTimes - deprecated but still checked
+  if (!window.chrome.loadTimes) {
+    window.chrome.loadTimes = function() {
+      const now = Date.now() / 1000;
+      return {
+        requestTime: now - 0.5, startLoadTime: now - 0.4, commitLoadTime: now - 0.3,
+        finishDocumentLoadTime: now - 0.1, finishLoadTime: now, firstPaintTime: now - 0.2,
+        firstPaintAfterLoadTime: 0, navigationType: "Other", wasFetchedViaSpdy: false,
+        wasNpnNegotiated: true, npnNegotiatedProtocol: "h2", wasAlternateProtocolAvailable: false, connectionInfo: "h2"
+      };
+    };
+  }
+  
+  // chrome.app
+  if (!window.chrome.app) {
+    window.chrome.app = {
+      isInstalled: false,
+      InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+      RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+      getDetails: function() { return null; },
+      getIsInstalled: function() { return false; }
+    };
+  }
+})();
+
+// NAVIGATOR.USERAGENTDATA - Client Hints API (required by Turnstile/CF)
+(function() {
+  const ua = navigator.userAgent || '';
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  const chromeVersion = chromeMatch ? chromeMatch[1] : '129';
+  
+  let platform = 'Windows', platformVersion = '15.0.0';
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) { platform = 'macOS'; platformVersion = '14.0.0'; }
+  else if (ua.includes('Linux')) { platform = 'Linux'; platformVersion = '6.5.0'; }
+  
+  const brands = [
+    { brand: 'Chromium', version: chromeVersion },
+    { brand: 'Google Chrome', version: chromeVersion },
+    { brand: 'Not=A?Brand', version: '24' }
+  ];
+  
+  const userAgentData = {
+    brands: brands,
+    mobile: false,
+    platform: platform,
+    getHighEntropyValues: async function(hints) {
+      const values = { brands: brands, mobile: false, platform: platform };
+      for (const hint of hints) {
+        if (hint === 'platformVersion') values.platformVersion = platformVersion;
+        else if (hint === 'architecture') values.architecture = 'x86';
+        else if (hint === 'model') values.model = '';
+        else if (hint === 'bitness') values.bitness = '64';
+        else if (hint === 'uaFullVersion') values.uaFullVersion = chromeVersion + '.0.0.0';
+        else if (hint === 'fullVersionList') values.fullVersionList = brands.map(b => ({ ...b, version: b.version + '.0.0.0' }));
+        else if (hint === 'wow64') values.wow64 = false;
+      }
+      return values;
+    },
+    toJSON: function() { return { brands: this.brands, mobile: this.mobile, platform: this.platform }; }
+  };
+  
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => userAgentData, configurable: true, enumerable: true });
+})();
+
+// ENHANCED PERMISSIONS API
+// ⚠️ Returns fake permission states - may affect permission-dependent logic
+(function() {
+  const origQuery = navigator.permissions.query.bind(navigator.permissions);
+  navigator.permissions.query = async function(desc) {
+    const handlers = {
+      'notifications': () => Notification.permission === 'default' ? 'prompt' : Notification.permission,
+      'geolocation': () => 'prompt',
+      'camera': () => 'prompt',
+      'microphone': () => 'prompt',
+      'background-sync': () => 'granted',
+      'accelerometer': () => 'granted',
+      'gyroscope': () => 'granted'
+    };
+    if (desc.name in handlers) return { state: handlers[desc.name](), onchange: null };
+    return origQuery(desc);
+  };
+})();
+
+// VIDEO CODEC SPOOFING
+// ⚠️ Returns "probably" for common codecs - may affect codec selection logic
 (function() {
   const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
   HTMLMediaElement.prototype.canPlayType = function(type) {
-    // Common codecs that should be supported
     if (type.includes('avc1') || type.includes('h264')) return 'probably';
     if (type.includes('mp4a.40') || type.includes('aac')) return 'probably';
-    if (type === 'video/mp4') return 'probably';
-    if (type === 'audio/mp4') return 'probably';
-    if (type.includes('vp8') || type.includes('vp9')) return 'probably';
-    if (type.includes('opus')) return 'probably';
-    if (type === 'video/webm') return 'probably';
-    if (type === 'audio/webm') return 'probably';
+    if (type === 'video/mp4' || type === 'audio/mp4') return 'probably';
+    if (type.includes('vp8') || type.includes('vp9') || type.includes('opus')) return 'probably';
+    if (type === 'video/webm' || type === 'audio/webm') return 'probably';
     return originalCanPlayType.apply(this, arguments);
   };
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TIMEZONE
-// ═══════════════════════════════════════════════════════════════════════════
-const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
-  value: function() {
-    return window.__pinchtab_timezone || __pinchtab_origGetTimezoneOffset.call(this);
-  },
-  configurable: true
-});
+// maxTouchPoints
+Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0, configurable: true });
+
+} // end medium level
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FULL STEALTH MODE - Additional fingerprint protections
+// FULL LEVEL - Maximum stealth (may break functionality)
 // ═══════════════════════════════════════════════════════════════════════════
-const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
+// Adds:
+// - WebGL vendor/renderer spoofing
+// - Canvas fingerprint noise
+// - WebRTC IP leak prevention
+// - AudioContext fingerprint protection
+// - Font measurement noise
+//
+// ⚠️ May break: WebRTC video calls, canvas-dependent apps, audio processing
+// ═══════════════════════════════════════════════════════════════════════════
 
 if (stealthLevel === 'full') {
 
-// WebGL spoofing (both contexts)
+// WebGL SPOOFING
+// ⚠️ Changes reported GPU - may affect WebGL-dependent applications
 (function() {
   const spoofWebGL = (proto) => {
     const getParameter = proto.getParameter;
     proto.getParameter = function(parameter) {
-      // UNMASKED_VENDOR_WEBGL
-      if (parameter === 37445) return 'Google Inc. (Intel)';
-      // UNMASKED_RENDERER_WEBGL
-      if (parameter === 37446) return 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)';
+      if (parameter === 37445) return 'Google Inc. (Intel)'; // UNMASKED_VENDOR
+      if (parameter === 37446) return 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)'; // UNMASKED_RENDERER
       return getParameter.apply(this, arguments);
     };
   };
   spoofWebGL(WebGLRenderingContext.prototype);
-  if (typeof WebGL2RenderingContext !== 'undefined') {
-    spoofWebGL(WebGL2RenderingContext.prototype);
-  }
+  if (typeof WebGL2RenderingContext !== 'undefined') spoofWebGL(WebGL2RenderingContext.prototype);
 })();
 
-// Canvas fingerprint noise
+// CANVAS FINGERPRINT NOISE
+// ⚠️ Adds subtle pixel noise - may affect pixel-precise canvas operations
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
 HTMLCanvasElement.prototype.toDataURL = function(...args) {
@@ -472,8 +387,7 @@ HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
   while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-  const blob = new Blob([u8arr], {type: mime});
-  setTimeout(() => callback(blob), 5 + seededRandom(sessionSeed + 1000) * 10);
+  setTimeout(() => callback(new Blob([u8arr], {type: mime})), 5 + seededRandom(sessionSeed + 1000) * 10);
 };
 
 CanvasRenderingContext2D.prototype.getImageData = function(...args) {
@@ -487,7 +401,7 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   return imageData;
 };
 
-// Font measurement noise
+// FONT MEASUREMENT NOISE
 const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
 CanvasRenderingContext2D.prototype.measureText = function(text) {
   const metrics = originalMeasureText.apply(this, arguments);
@@ -500,7 +414,8 @@ CanvasRenderingContext2D.prototype.measureText = function(text) {
   });
 };
 
-// WebRTC IP leak prevention
+// WEBRTC IP LEAK PREVENTION
+// ⚠️ Forces relay mode - direct P2P connections won't work
 if (window.RTCPeerConnection) {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function(config, constraints) {
@@ -510,20 +425,18 @@ if (window.RTCPeerConnection) {
   window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
 
-// AudioContext fingerprint protection
+// AUDIOCONTEXT FINGERPRINT PROTECTION
+// ⚠️ Adds subtle frequency noise - may affect audio processing applications
 if (window.AudioContext || window.webkitAudioContext) {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   const originalCreateOscillator = AudioContextClass.prototype.createOscillator;
-  const originalCreateDynamicsCompressor = AudioContextClass.prototype.createDynamicsCompressor;
   
   AudioContextClass.prototype.createOscillator = function() {
     const oscillator = originalCreateOscillator.apply(this, arguments);
     const originalConnect = oscillator.connect.bind(oscillator);
     oscillator.connect = function(dest) {
-      // Add subtle noise to audio fingerprinting attempts
       if (dest instanceof AnalyserNode) {
-        const noise = seededRandom(sessionSeed + 4000) * 0.0001;
-        oscillator.frequency.value += noise;
+        oscillator.frequency.value += seededRandom(sessionSeed + 4000) * 0.0001;
       }
       return originalConnect(dest);
     };
@@ -531,4 +444,4 @@ if (window.AudioContext || window.webkitAudioContext) {
   };
 }
 
-} // end stealthLevel === 'full'
+} // end full level

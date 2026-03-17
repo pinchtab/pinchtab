@@ -77,7 +77,7 @@ export interface BackendInstanceDefaultsConfig {
   maxParallelTabs: number;
   userAgent: string;
   noAnimations: boolean;
-  stealthLevel: "light" | "full";
+  stealthLevel: "light" | "medium" | "full";
   tabEvictionPolicy: "reject" | "close_oldest" | "close_lru";
 }
 
