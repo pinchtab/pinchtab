@@ -40,3 +40,9 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
 done
 
 print_summary
+
+if [ -d "${RESULTS_DIR:-}" ]; then
+  echo "passed=$TESTS_PASSED" > "${RESULTS_DIR}/summary-cli-full.txt"
+  echo "failed=$TESTS_FAILED" >> "${RESULTS_DIR}/summary-cli-full.txt"
+  echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${RESULTS_DIR}/summary-cli-full.txt"
+fi

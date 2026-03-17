@@ -89,5 +89,6 @@ services:
     volumes:
       - ./scenarios:/scenarios:ro
       - ./scenarios-recent:/scenarios-recent:ro
+      - ./suites:/e2e-suites:ro
       - ./results:/results
     command: ["/scenarios/run-all.sh"]

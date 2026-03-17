@@ -25,7 +25,8 @@ fi
 echo ""
 
 # Recent test files — add new scenarios here for fast CI feedback.
-# Move to the full suite (run-all.sh) once stable.
+# Graduate stable coverage into api-fast/cli-fast or full-extended once the
+# feature settles, so "recent" stays intentionally small.
 # All test files in this directory run as the recent suite.
 for script in "${SCRIPT_DIR}"/[0-9][0-9]-*.sh; do
   if [ -f "$script" ]; then

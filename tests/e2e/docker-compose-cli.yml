@@ -42,5 +42,6 @@ services:
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./scenarios-cli:/scenarios:ro
+      - ./suites:/e2e-suites:ro
       - ./results:/results
     command: ["/scenarios/run-all.sh"]

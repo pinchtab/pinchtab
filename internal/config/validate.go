@@ -31,6 +31,14 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			errs = append(errs, err)
 		}
 	}
+	if fc.Server.NetworkBufferSize != nil {
+		if *fc.Server.NetworkBufferSize < 1 || *fc.Server.NetworkBufferSize > MaxNetworkBufferSize {
+			errs = append(errs, ValidationError{
+				Field:   "server.networkBufferSize",
+				Message: fmt.Sprintf("must be between 1 and %d (got %d)", MaxNetworkBufferSize, *fc.Server.NetworkBufferSize),
+			})
+		}
+	}
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
 			errs = append(errs, ValidationError{

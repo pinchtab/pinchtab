@@ -133,6 +133,38 @@ func TestValidateFileConfig_InvalidPort(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_InvalidNetworkBufferSize(t *testing.T) {
+	zero := 0
+	negative := -1
+	tooLarge := MaxNetworkBufferSize + 1
+	valid := MaxNetworkBufferSize
+
+	tests := []struct {
+		name    string
+		size    *int
+		wantErr bool
+	}{
+		{"nil", nil, false},
+		{"valid", &valid, false},
+		{"zero", &zero, true},
+		{"negative", &negative, true},
+		{"too_large", &tooLarge, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				Server: ServerConfig{NetworkBufferSize: tt.size},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Errorf("networkBufferSize=%v: got error=%v, want error=%v (errs: %v)", tt.size, hasErr, tt.wantErr, errs)
+			}
+		})
+	}
+}
+
 func TestValidateFileConfig_InvalidStealthLevel(t *testing.T) {
 	tests := []struct {
 		level   string

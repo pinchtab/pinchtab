@@ -7,11 +7,14 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ### With Docker (recommended)
 
 ```bash
-./dev e2e          # Run all E2E tests
+./dev e2e          # Run the release meta-suite
+./dev e2e pr       # Run the PR meta-suite
 ./dev e2e recent   # Run only recently added/changed scenarios (fast feedback)
-./dev e2e orchestrator  # Run orchestrator-heavy scenarios only
-./dev e2e curl     # Run only Curl-based scenarios
-./dev e2e cli      # Run only CLI-based scenarios
+./dev e2e api-fast # Run the stable PR-fast API suite
+./dev e2e cli-fast # Run the stable PR-fast CLI suite
+./dev e2e full-api # Run the full API suite
+./dev e2e full-cli # Run the full CLI suite
+./dev e2e full-extended # Run the manual/pre-release extended suite
 ```
 
 Or directly:
@@ -38,16 +41,27 @@ tests/e2e/
 ├── scenarios/              # Test scripts
 │   ├── common.sh           # Shared utilities
 │   ├── run-all.sh          # Generic curl scenarios
+│   ├── run-fast.sh         # API fast suite runner
 │   ├── 01-health.sh
 │   ├── 02-navigate.sh
 │   ├── 03-snapshot.sh
 │   ├── 04-tabs-api.sh      # Regression test for #207
 │   ├── 05-actions.sh
 │   └── 06-screenshot-pdf.sh
+├── scenarios-cli/          # CLI scenarios
+│   ├── run-all.sh
+│   ├── run-fast.sh         # CLI fast suite runner
+│   └── ...
+├── scenarios-recent/       # Recent edge-case coverage
+│   ├── run.sh
+│   └── 41-extensions.sh
 ├── scenarios-orchestrator/ # Multi-instance and attach flows
 │   ├── run-all.sh
 │   ├── 01-attach-bridge.sh
 │   └── 31-multi-instance.sh
+├── suites/                 # Curated PR-fast suite manifests
+│   ├── api-fast.txt
+│   └── cli-fast.txt
 ├── runner/                 # Test runner container
 │   └── Dockerfile
 └── results/                # Test output (gitignored)
@@ -114,9 +128,8 @@ Add HTML files to `fixtures/` for testing specific scenarios:
 ## CI Integration
 
 The E2E tests run automatically:
-- On release tags (`v*`)
-- On PRs that modify `tests/e2e/`
-- Manually via workflow dispatch
+- On PRs and pushes to `main`: `recent`, `api-fast`, and `cli-fast`
+- Manually via workflow dispatch: `full-api`, `full-cli`, and `full-extended`
 
 ## Debugging
 

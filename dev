@@ -23,11 +23,15 @@ COMMANDS=(
   "check:🧪:All checks"
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
-  "e2e:🐳:E2E tests"
+  "e2e:🐳:E2E release suites"
+  "  pr:🐳:E2E PR suite"
   "  recent:🐳:E2E Recent tests"
-  "  orchestrator:🐳:E2E Orchestrator tests"
-  "  curl:🐳:E2E Curl tests"
-  "  cli:🐳:E2E CLI tests"
+  "  api-fast:🐳:E2E API fast tests"
+  "  cli-fast:🐳:E2E CLI fast tests"
+  "  full-api:🐳:E2E full API tests"
+  "  full-cli:🐳:E2E full CLI tests"
+  "  full-extended:🐳:E2E full extended tests"
+  "  release:🐳:E2E release meta-suite"
   "doctor:🩺:Setup dev environment"
   "check go:🧪:Go only"
   "check dashboard:🧪:Dashboard only"
@@ -39,13 +43,6 @@ COMMANDS=(
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────
-
-build_e2e_cli_binary() {
-  echo "  ${MUTED}Building static binary for E2E CLI tests...${NC}"
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o tests/e2e/runner-cli/pinchtab ./cmd/pinchtab
-  echo "  ${SUCCESS}✓${NC} Binary built"
-  echo ""
-}
 
 show_help() {
   echo ""
@@ -135,133 +132,11 @@ run_command() {
       exec bash scripts/test.sh system
       ;;
     "e2e"*)
-      # Ensure extension fixtures are readable and traversable by the docker user (UID 1000)
-      # Directories need +x to be searchable.
-      chmod -R 755 tests/e2e/fixtures/test-extension* 2>/dev/null || true
-      
-      case "$target" in
-        "e2e")
-          echo "  ${ACCENT}${BOLD}🐳 E2E Recent tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose.yml run --build --rm runner /scenarios-recent/run.sh
-          local recent_exit=$?
-          if [ $recent_exit -ne 0 ]; then
-            echo -e "${ERROR}  Recent tests failed. Showing pinchtab logs:${NC}"
-            docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50
-            docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
-            exit 1
-          fi
-          docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
-
-          echo ""
-          echo "  ${ACCENT}${BOLD}🐳 E2E Full Curl tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose.yml up --abort-on-container-exit
-          local curl_exit=$?
-          if [ $curl_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50
-          fi
-          docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
-
-          echo ""
-          echo "  ${ACCENT}${BOLD}🐳 E2E Orchestrator tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
-          local orch_exit=$?
-          if [ $orch_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab | tail -n 50 || true
-            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab-bridge | tail -n 50 || true
-          fi
-          docker compose -f tests/e2e/docker-compose-orchestrator.yml down -v 2>/dev/null
-
-          echo ""
-          echo "  ${ACCENT}${BOLD}🐳 E2E CLI tests (Docker)${NC}"
-          echo ""
-          build_e2e_cli_binary
-          docker compose -f tests/e2e/docker-compose-cli.yml up --build --abort-on-container-exit
-          local cli_exit=$?
-          if [ $cli_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose-cli.yml logs pinchtab | tail -n 50
-          fi
-          docker compose -f tests/e2e/docker-compose-cli.yml down -v 2>/dev/null
-
-          echo ""
-          if [ $curl_exit -ne 0 ] || [ $orch_exit -ne 0 ] || [ $cli_exit -ne 0 ]; then
-            echo "  ${ERROR}Some E2E tests failed${NC}"
-            exit 1
-          fi
-          echo "  ${SUCCESS}All E2E tests passed${NC}"
-          exit 0
-          ;;
-        "e2e curl")
-          echo "  ${ACCENT}${BOLD}🐳 E2E Curl tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose.yml up --build --abort-on-container-exit
-          local curl_exit=$?
-          if [ $curl_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50
-          fi
-          docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
-          exit $curl_exit
-          ;;
-        "e2e cli")
-          echo "  ${ACCENT}${BOLD}🐳 E2E CLI tests (Docker)${NC}"
-          echo ""
-          build_e2e_cli_binary
-          docker compose -f tests/e2e/docker-compose-cli.yml up --build --abort-on-container-exit
-          local cli_exit=$?
-          if [ $cli_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose-cli.yml logs pinchtab | tail -n 50
-          fi
-          docker compose -f tests/e2e/docker-compose-cli.yml down -v 2>/dev/null
-          exit $cli_exit
-          ;;
-        "e2e orchestrator")
-          echo "  ${ACCENT}${BOLD}🐳 E2E Orchestrator tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
-          local orch_exit=$?
-          if [ $orch_exit -ne 0 ]; then
-            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab | tail -n 50 || true
-            docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab-bridge | tail -n 50 || true
-          fi
-          docker compose -f tests/e2e/docker-compose-orchestrator.yml down -v 2>/dev/null
-          exit $orch_exit
-          ;;
-        "e2e recent")
-          echo "  ${ACCENT}${BOLD}🐳 E2E Recent tests (Docker)${NC}"
-          echo ""
-          docker compose -f tests/e2e/docker-compose.yml run --build --rm runner /scenarios-recent/run.sh
-          local recent_exit=$?
-          if [ $recent_exit -ne 0 ]; then
-            echo ""
-            echo -e "${ERROR}  Recent tests failed. Dumping pinchtab logs:${NC}"
-            docker compose -f tests/e2e/docker-compose.yml logs pinchtab || true
-            echo ""
-            echo -e "${ERROR}  Filtered Chrome/extension lines:${NC}"
-            docker compose -f tests/e2e/docker-compose.yml logs pinchtab 2>/dev/null | grep -Ei 'chrome|extension|devtools|load-extension|disable-extensions|headless|warning|error' || true
-            echo ""
-            echo -e "${ERROR}  Instance inventory:${NC}"
-            local instances_json
-            instances_json=$(curl -sf http://localhost:9999/instances || true)
-            if [ -n "$instances_json" ]; then
-              echo "$instances_json"
-              if command -v jq >/dev/null 2>&1; then
-                while IFS= read -r inst_id; do
-                  [ -z "$inst_id" ] && continue
-                  echo ""
-                  echo -e "${ERROR}  Instance logs for ${inst_id}:${NC}"
-                  curl -sf "http://localhost:9999/instances/${inst_id}/logs" || true
-                done < <(echo "$instances_json" | jq -r '.[].id')
-              fi
-            else
-              echo "  unable to fetch /instances from localhost:9999"
-            fi
-          fi
-          docker compose -f tests/e2e/docker-compose.yml down -v 2>/dev/null
-          exit $recent_exit
-          ;;
-      esac
+      local suite="release"
+      if [ "$target" != "e2e" ]; then
+        suite="${target#e2e }"
+      fi
+      exec bash scripts/e2e.sh "$suite"
       ;;
     "dev")          exec bash scripts/dev.sh ;;
     "build")        exec bash scripts/build.sh ;;

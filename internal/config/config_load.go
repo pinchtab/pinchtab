@@ -186,7 +186,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.Engine = fc.Server.Engine
 	}
 	if fc.Server.NetworkBufferSize != nil && *fc.Server.NetworkBufferSize > 0 {
-		cfg.NetworkBufferSize = *fc.Server.NetworkBufferSize
+		cfg.NetworkBufferSize = ClampNetworkBufferSize(*fc.Server.NetworkBufferSize)
 	}
 	// Security
 	if fc.Security.AllowEvaluate != nil {

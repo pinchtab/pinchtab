@@ -30,3 +30,11 @@ for script in "${SCRIPT_DIR}"/[0-9][0-9]-*.sh; do
     echo ""
   fi
 done
+
+print_summary
+
+if [ -d "${RESULTS_DIR:-}" ]; then
+  echo "passed=$TESTS_PASSED" > "${RESULTS_DIR}/summary-orchestrator.txt"
+  echo "failed=$TESTS_FAILED" >> "${RESULTS_DIR}/summary-orchestrator.txt"
+  echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${RESULTS_DIR}/summary-orchestrator.txt"
+fi

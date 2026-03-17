@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func TestNetworkBuffer_AddAndGet(t *testing.T) {
@@ -338,5 +340,19 @@ func TestNewNetworkBuffer_ZeroDefaultsTo100(t *testing.T) {
 	buf := NewNetworkBuffer(0)
 	if buf.maxSize != DefaultNetworkBufferSize {
 		t.Errorf("expected maxSize %d, got %d", DefaultNetworkBufferSize, buf.maxSize)
+	}
+}
+
+func TestNewNetworkBuffer_ClampsOversizedBuffer(t *testing.T) {
+	buf := NewNetworkBuffer(config.MaxNetworkBufferSize + 1)
+	if buf.maxSize != config.MaxNetworkBufferSize {
+		t.Errorf("expected maxSize %d, got %d", config.MaxNetworkBufferSize, buf.maxSize)
+	}
+}
+
+func TestNewNetworkMonitor_ClampsOversizedBuffer(t *testing.T) {
+	nm := NewNetworkMonitor(config.MaxNetworkBufferSize + 1)
+	if nm.bufSize != config.MaxNetworkBufferSize {
+		t.Errorf("expected bufSize %d, got %d", config.MaxNetworkBufferSize, nm.bufSize)
 	}
 }

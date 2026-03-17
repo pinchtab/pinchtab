@@ -12,6 +12,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // DefaultNetworkBufferSize is the default number of entries kept per tab.
@@ -52,6 +53,7 @@ type NetworkBuffer struct {
 
 // NewNetworkBuffer creates a ring buffer with the given capacity.
 func NewNetworkBuffer(size int) *NetworkBuffer {
+	size = config.ClampNetworkBufferSize(size)
 	if size <= 0 {
 		size = DefaultNetworkBufferSize
 	}
@@ -229,6 +231,7 @@ type NetworkMonitor struct {
 
 // NewNetworkMonitor creates a new monitor with the given per-tab buffer size.
 func NewNetworkMonitor(bufferSize int) *NetworkMonitor {
+	bufferSize = config.ClampNetworkBufferSize(bufferSize)
 	if bufferSize <= 0 {
 		bufferSize = DefaultNetworkBufferSize
 	}

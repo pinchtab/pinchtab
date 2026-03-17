@@ -1,4 +1,4 @@
-name: E2E Recent Tests
+name: E2E
 
 permissions:
   contents: read
@@ -31,7 +31,7 @@ jobs:
   recent:
     name: E2E Recent Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'workflow_dispatch' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     timeout-minutes: 10
 
     steps:
@@ -56,15 +56,12 @@ jobs:
           ./dev e2e recent 2>&1 | tee e2e-output.log
           EXIT_CODE=${PIPESTATUS[0]}
 
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | tail -1 || true)
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | tail -1 || true)
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
           FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-          PASSED=${PASSED:-0}
-          FAILED=${FAILED:-0}
 
           echo "passed=$PASSED" >> $GITHUB_OUTPUT
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
-
           {
             echo 'failures<<EOF'
             echo "$FAILURES"
@@ -106,16 +103,10 @@ jobs:
         run: |
           PASSED="${{ steps.e2e.outputs.passed }}"
           FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
 
           if [ "${{ steps.e2e.outcome }}" = "success" ]; then
             echo "## ✅ E2E Recent Tests Passed" >> $GITHUB_STEP_SUMMARY
-            if [ "$PASSED" = "0" ]; then
-              echo "All tests passed" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ E2E Recent Tests Failed" >> $GITHUB_STEP_SUMMARY
             echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
@@ -125,28 +116,11 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Report check annotation
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
-
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            if [ "$PASSED" = "0" ]; then
-              echo "::notice title=E2E Recent Tests::✅ All tests passed"
-            else
-              echo "::notice title=E2E Recent Tests::✅ ${PASSED} tests passed"
-            fi
-          else
-            echo "::error title=E2E Recent Tests::❌ ${FAILED} failed, ${PASSED} passed"
-          fi
-
-  e2e-curl:
-    name: E2E Curl Tests
+  api-fast:
+    name: E2E API Fast Tests
     needs: recent
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     timeout-minutes: 15
 
     steps:
@@ -162,19 +136,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Run E2E curl tests
+      - name: Run API fast E2E tests
         id: e2e
         run: |
           set +e
           mkdir -p tests/e2e/results
-          ./dev e2e curl 2>&1 | tee e2e-output.log
+
+          ./dev e2e api-fast 2>&1 | tee e2e-output.log
           EXIT_CODE=${PIPESTATUS[0]}
 
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | tail -1 || true)
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | tail -1 || true)
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
           FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-          PASSED=${PASSED:-0}
-          FAILED=${FAILED:-0}
 
           echo "passed=$PASSED" >> $GITHUB_OUTPUT
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
@@ -194,18 +167,12 @@ jobs:
         run: |
           PASSED="${{ steps.e2e.outputs.passed }}"
           FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
 
           if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E Curl Tests Passed" >> $GITHUB_STEP_SUMMARY
-            if [ "$PASSED" = "0" ]; then
-              echo "All tests passed" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "## ✅ E2E API Fast Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ❌ E2E Curl Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ E2E API Fast Tests Failed" >> $GITHUB_STEP_SUMMARY
             echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
             echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -213,27 +180,11 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Report check annotation
-        if: always()
-        run: |
-          PASSED="${{ steps.e2e.outputs.passed }}"
-          FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
-          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            if [ "$PASSED" = "0" ]; then
-              echo "::notice title=E2E Curl Tests::✅ All tests passed"
-            else
-              echo "::notice title=E2E Curl Tests::✅ ${PASSED} tests passed"
-            fi
-          else
-            echo "::error title=E2E Curl Tests::❌ ${FAILED} failed, ${PASSED} passed"
-          fi
-
-  e2e-cli:
-    name: E2E CLI Tests
+  cli-fast:
+    name: E2E CLI Fast Tests
     needs: recent
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     timeout-minutes: 15
 
     steps:
@@ -249,18 +200,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Run CLI E2E tests
+      - name: Run CLI fast E2E tests
         id: e2e
         run: |
           set +e
-          ./dev e2e cli 2>&1 | tee e2e-output.log
+          mkdir -p tests/e2e/results
+
+          ./dev e2e cli-fast 2>&1 | tee e2e-output.log
           EXIT_CODE=${PIPESTATUS[0]}
 
-          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | tail -1 || true)
-          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | tail -1 || true)
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
           FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
-          PASSED=${PASSED:-0}
-          FAILED=${FAILED:-0}
 
           echo "passed=$PASSED" >> $GITHUB_OUTPUT
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
@@ -280,18 +231,12 @@ jobs:
         run: |
           PASSED="${{ steps.e2e.outputs.passed }}"
           FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
 
           if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            echo "## ✅ E2E CLI Tests Passed" >> $GITHUB_STEP_SUMMARY
-            if [ "$PASSED" = "0" ]; then
-              echo "All tests passed" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "## ✅ E2E CLI Fast Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ❌ E2E CLI Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ E2E CLI Fast Tests Failed" >> $GITHUB_STEP_SUMMARY
             echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
             echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -299,19 +244,191 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Report check annotation
+  full-api:
+    name: E2E Full API Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run full API E2E tests
+        id: e2e
+        run: |
+          set +e
+          mkdir -p tests/e2e/results
+
+          ./dev e2e full-api 2>&1 | tee e2e-output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          {
+            echo 'failures<<EOF'
+            echo "$FAILURES"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          exit $EXIT_CODE
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Post summary
         if: always()
         run: |
           PASSED="${{ steps.e2e.outputs.passed }}"
           FAILED="${{ steps.e2e.outputs.failed }}"
-          PASSED="${PASSED:-0}"
-          FAILED="${FAILED:-0}"
+
           if [ "${{ steps.e2e.outcome }}" = "success" ]; then
-            if [ "$PASSED" = "0" ]; then
-              echo "::notice title=E2E CLI Tests::✅ All tests passed"
-            else
-              echo "::notice title=E2E CLI Tests::✅ ${PASSED} tests passed"
-            fi
+            echo "## ✅ E2E Full API Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "::error title=E2E CLI Tests::❌ ${FAILED} failed, ${PASSED} passed"
+            echo "## ❌ E2E Full API Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  full-cli:
+    name: E2E Full CLI Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run full CLI E2E tests
+        id: e2e
+        run: |
+          set +e
+          mkdir -p tests/e2e/results
+
+          ./dev e2e full-cli 2>&1 | tee e2e-output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          {
+            echo 'failures<<EOF'
+            echo "$FAILURES"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          exit $EXIT_CODE
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Post summary
+        if: always()
+        run: |
+          PASSED="${{ steps.e2e.outputs.passed }}"
+          FAILED="${{ steps.e2e.outputs.failed }}"
+
+          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
+            echo "## ✅ E2E Full CLI Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ E2E Full CLI Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  full-extended:
+    name: E2E Full Extended Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run full extended E2E tests
+        id: e2e
+        run: |
+          set +e
+          mkdir -p tests/e2e/results
+
+          ./dev e2e full-extended 2>&1 | tee e2e-output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          PASSED=$(grep -oP 'Passed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILED=$(grep -oP 'Failed:\s*\K\d+' e2e-output.log | awk '{s+=$1} END {print s+0}')
+          FAILURES=$(grep -E '✗.*failed' e2e-output.log | sed 's/.*✗ /- /' | head -10 || true)
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          {
+            echo 'failures<<EOF'
+            echo "$FAILURES"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          exit $EXIT_CODE
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Post summary
+        if: always()
+        run: |
+          PASSED="${{ steps.e2e.outputs.passed }}"
+          FAILED="${{ steps.e2e.outputs.failed }}"
+
+          if [ "${{ steps.e2e.outcome }}" = "success" ]; then
+            echo "## ✅ E2E Full Extended Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "**$PASSED** tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ E2E Full Extended Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Passed:** $PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "**Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.e2e.outputs.failures }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
           fi

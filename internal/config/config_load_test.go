@@ -227,6 +227,20 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	}
 }
 
+func TestApplyFileConfigToRuntime_ClampsNetworkBufferSize(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	oversized := MaxNetworkBufferSize + 1
+	fc := &FileConfig{
+		Server: ServerConfig{NetworkBufferSize: &oversized},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.NetworkBufferSize != MaxNetworkBufferSize {
+		t.Errorf("ApplyFileConfigToRuntime NetworkBufferSize = %d, want %d", cfg.NetworkBufferSize, MaxNetworkBufferSize)
+	}
+}
+
 // clearConfigEnvVars unsets all config-related env vars for clean tests.
 func clearConfigEnvVars(t *testing.T) {
 	t.Helper()

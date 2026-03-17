@@ -8,10 +8,14 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev                    # Interactive picker
 ./dev test               # All tests (unit + E2E)
 ./dev test unit          # Unit tests only
-./dev e2e                # E2E tests (both curl and CLI)
-./dev e2e orchestrator   # Orchestrator-heavy E2E tests only
-./dev e2e curl           # E2E curl tests only
-./dev e2e cli            # E2E CLI tests only
+./dev e2e                # Release meta-suite (full API + full CLI + full extended)
+./dev e2e pr             # PR meta-suite (recent + api-fast + cli-fast)
+./dev e2e recent         # Recent E2E coverage for fail-fast feedback
+./dev e2e api-fast       # PR-fast API suite
+./dev e2e cli-fast       # PR-fast CLI suite
+./dev e2e full-api       # Full API suite
+./dev e2e full-cli       # Full CLI suite
+./dev e2e full-extended  # Extended suite (recent + orchestrator)
 ./dev check              # All checks (format, vet, build, lint)
 ./dev check go           # Go checks only
 ./dev check security     # Gosec security scan
@@ -33,37 +37,53 @@ Unit tests are standard Go tests that validate individual packages and functions
 
 End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tests against it.
 
-### Curl Tests (HTTP API)
+### PR Suites
 
 ```bash
-./dev e2e curl
+./dev e2e pr
+./dev e2e recent
+./dev e2e api-fast
+./dev e2e cli-fast
+```
+
+Use these on pull requests and during normal development:
+
+- `pr` runs the same E2E suite composition as the PR workflow
+- `recent` is the fail-fast bucket for newly added coverage
+- `api-fast` is the stable API smoke/regression set
+- `cli-fast` is the stable CLI smoke/regression set
+
+### Full API Suite
+
+```bash
+./dev e2e full-api
 ```
 
 Runs 184 HTTP-level tests using curl against the server. Tests the REST API, navigation, snapshots, activity logging, and other HTTP endpoints.
 
-### CLI Tests
+### Full CLI Suite
 
 ```bash
-./dev e2e cli
+./dev e2e full-cli
 ```
 
 Runs CLI e2e tests. Tests the command-line interface directly, including activity queries.
 
-### Both E2E Test Suites
+### Full Extended Suite
+
+```bash
+./dev e2e full-extended
+```
+
+Runs the extended/manual coverage bucket: recent edge-case scenarios plus the orchestration-focused suite, including remote bridge attachment and multi-instance flows.
+
+### Release Meta-Suite
 
 ```bash
 ./dev e2e
 ```
 
-Runs all E2E tests (curl + CLI, 226 tests total).
-
-### Orchestrator E2E Suite
-
-```bash
-./dev e2e orchestrator
-```
-
-Runs the orchestration-focused curl scenarios, including multi-instance flows and remote bridge attachment against the dedicated `pinchtab-bridge` Compose service.
+Runs `full-api`, `full-cli`, and `full-extended` in sequence.
 
 ## Environment Variables
 
@@ -86,7 +106,7 @@ Everything is cleaned up automatically when tests finish.
 
 ## Test File Structure
 
-E2E tests are organized in two directories:
+E2E tests are organized by surface plus suite manifests:
 
 - **`tests/e2e/scenarios/*.sh`** — HTTP curl-based tests (184 tests)
   - Test the REST API directly
@@ -98,7 +118,13 @@ E2E tests are organized in two directories:
 
 - **`tests/e2e/scenarios-cli/*.sh`** — CLI e2e tests (42 tests)
   - Test the command-line interface
-  - Use Docker Compose: `tests/e2e/docker-compose.cli.yml`
+  - Use Docker Compose: `tests/e2e/docker-compose-cli.yml`
+
+- **`tests/e2e/scenarios-recent/*.sh`** — recent edge-case coverage for fail-fast CI
+
+- **`tests/e2e/suites/*.txt`** — curated suite manifests
+  - `api-fast.txt`
+  - `cli-fast.txt`
 
 Each test is a standalone bash script that:
 1. Starts the test server (or uses existing)
@@ -108,7 +134,7 @@ Each test is a standalone bash script that:
 
 ## Writing New E2E Tests
 
-Create a new bash script in `tests/e2e/scenarios/` (for curl tests) or `tests/e2e/scenarios-cli/` (for CLI tests):
+Create a new bash script in `tests/e2e/scenarios/` (for API tests), `tests/e2e/scenarios-cli/` (for CLI tests), or `tests/e2e/scenarios-recent/` (for fresh fail-fast coverage):
 
 ### Example: Simple Curl Test
 
