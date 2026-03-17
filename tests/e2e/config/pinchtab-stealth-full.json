@@ -1,0 +1,66 @@
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9999"
+  },
+  "browser": {
+    "extraFlags": "--no-sandbox --disable-dev-shm-usage",
+    "extensionPaths": [
+      "/extensions/test-extension"
+    ]
+  },
+  "instanceDefaults": {
+    "maxTabs": 10,
+    "stealthLevel": "full"
+  },
+  "multiInstance": {
+    "strategy": "always-on",
+    "allocationPolicy": "fcfs",
+    "restart": {
+      "maxRestarts": 20,
+      "initBackoffSec": 2,
+      "maxBackoffSec": 60,
+      "stableAfterSec": 300
+    }
+  },
+  "scheduler": {
+    "enabled": true,
+    "strategy": "fair-fifo",
+    "maxQueueSize": 5,
+    "maxPerAgent": 3,
+    "maxInflight": 2,
+    "workerCount": 2,
+    "maxBatchSize": 5,
+    "resultTTLSec": 120
+  },
+  "security": {
+    "allowEvaluate": true,
+    "allowDownload": true,
+    "allowUpload": true,
+    "attach": {
+      "enabled": true,
+      "allowHosts": [
+        "127.0.0.1",
+        "localhost",
+        "::1",
+        "pinchtab-bridge"
+      ],
+      "allowSchemes": [
+        "ws",
+        "wss",
+        "http",
+        "https"
+      ]
+    },
+    "idpi": {
+      "enabled": true,
+      "scanContent": true,
+      "allowedDomains": [
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "fixtures"
+      ]
+    }
+  }
+}

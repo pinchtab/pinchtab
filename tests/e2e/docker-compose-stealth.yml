@@ -1,0 +1,82 @@
+# docker-compose-stealth.yml — Stealth level e2e tests
+#
+# Runs three pinchtab instances with different stealth levels to verify
+# that each level provides the expected bot detection evasion features.
+#
+# Usage:
+#   docker compose -f docker-compose-stealth.yml up -d
+#   STEALTH_LEVEL=light E2E_SERVER=http://localhost:9901 ./scenarios/51-stealth-levels.sh
+#   STEALTH_LEVEL=medium E2E_SERVER=http://localhost:9902 ./scenarios/51-stealth-levels.sh
+#   STEALTH_LEVEL=full E2E_SERVER=http://localhost:9903 ./scenarios/51-stealth-levels.sh
+
+services:
+  # Fixtures server (shared)
+  fixtures:
+    image: nginx:alpine
+    volumes:
+      - ./fixtures:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+
+  # Light stealth level
+  pinchtab-stealth-light:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab.json
+    volumes:
+      - ./config/pinchtab.json:/config/pinchtab.json:ro
+    ports:
+      - "9901:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+    depends_on:
+      - fixtures
+
+  # Medium stealth level
+  pinchtab-stealth-medium:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-stealth-medium.json
+    volumes:
+      - ./config/pinchtab-stealth-medium.json:/config/pinchtab-stealth-medium.json:ro
+    ports:
+      - "9902:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+    depends_on:
+      - fixtures
+
+  # Full stealth level
+  pinchtab-stealth-full:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-stealth-full.json
+    volumes:
+      - ./config/pinchtab-stealth-full.json:/config/pinchtab-stealth-full.json:ro
+    ports:
+      - "9903:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+    depends_on:
+      - fixtures
