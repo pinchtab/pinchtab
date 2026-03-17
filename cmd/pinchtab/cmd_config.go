@@ -64,14 +64,17 @@ func init() {
 			handleConfigGet(args[0])
 		},
 	})
-	configCmd.AddCommand(&cobra.Command{
+	configSetCmd := &cobra.Command{
 		Use:   "set <path> <val>",
 		Short: "Set a config value (e.g., server.port 8080)",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			handleConfigSet(args[0], args[1])
 		},
-	})
+	}
+	// Allow values like "--no-sandbox --disable-gpu" after the config path.
+	configSetCmd.Flags().SetInterspersed(false)
+	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(&cobra.Command{
 		Use:   "patch <json>",
 		Short: "Merge JSON into config",

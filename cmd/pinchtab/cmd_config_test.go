@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,5 +47,38 @@ func TestClipboardCommands(t *testing.T) {
 		if command.name == "" {
 			t.Fatalf("clipboard command missing name: %+v", command)
 		}
+	}
+}
+
+func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	fc := config.DefaultFileConfig()
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "set", "browser.extraFlags", "--no-sandbox --disable-gpu"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "Set browser.extraFlags = --no-sandbox --disable-gpu") {
+		t.Fatalf("expected success output, got %q", output)
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Browser.ChromeExtraFlags != "--no-sandbox --disable-gpu" {
+		t.Fatalf("ChromeExtraFlags = %q, want %q", saved.Browser.ChromeExtraFlags, "--no-sandbox --disable-gpu")
 	}
 }
