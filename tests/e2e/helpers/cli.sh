@@ -118,6 +118,49 @@ assert_file_exists() {
   fi
 }
 
+config_version_of() {
+  local path="$1"
+  jq -r '.configVersion // "none"' "$path"
+}
+
+assert_config_version() {
+  local path="$1"
+  local expected="$2"
+  local success_desc="${3:-configVersion is $expected}"
+  local actual
+  actual=$(config_version_of "$path")
+
+  if [ "$actual" = "$expected" ]; then
+    echo -e "  ${GREEN}✓${NC} $success_desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} expected configVersion $expected, got $actual"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+assert_config_version_one_of() {
+  local path="$1"
+  shift
+  local actual
+  actual=$(config_version_of "$path")
+
+  while [ "$#" -gt 1 ]; do
+    local expected="$1"
+    local success_desc="$2"
+    shift 2
+    if [ "$actual" = "$expected" ]; then
+      echo -e "  ${GREEN}✓${NC} $success_desc"
+      ((ASSERTIONS_PASSED++)) || true
+      return 0
+    fi
+  done
+
+  echo -e "  ${RED}✗${NC} unexpected configVersion: $actual"
+  ((ASSERTIONS_FAILED++)) || true
+  return 1
+}
+
 assert_output_not_contains() {
   local forbidden="$1"
   local desc="${2:-output does not contain '$forbidden'}"

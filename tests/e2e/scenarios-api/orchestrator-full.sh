@@ -90,14 +90,7 @@ wait_for_orchestrator_instance_status "${E2E_SERVER}" "${INST_ID}" "running" 30
 
 pt_get /instances
 assert_ok "list after launch"
-FOUND=$(echo "$RESULT" | jq -r ".[] | select(.id == \"$INST_ID\") | .id")
-if [ "$FOUND" = "$INST_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} instance $INST_ID in list"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} instance $INST_ID not in list"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_instance_list_contains "$INST_ID" "instance $INST_ID in list" "instance $INST_ID not in list"
 
 end_test
 
@@ -133,34 +126,26 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "orchestrator: aggregate tabs (multi-instance)"
 
-pt_post /instances/launch '{"name":"e2e-agg-tabs","headless":true}'
-assert_ok "launch for aggregate"
-AGG_INST=$(echo "$RESULT" | jq -r '.id')
-wait_for_orchestrator_instance_status "${E2E_SERVER}" "${AGG_INST}" "running" 30
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${INST_ID}" "running" 10
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate on default instance"
-pt_post "/instances/${AGG_INST}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "open tab on aggregate instance"
+pt_post "/instances/${INST_ID}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "open tab on launched instance"
 
 pt_get /instances/tabs
 assert_ok "aggregate tabs"
 assert_json_length_gte "$RESULT" '.' '2' "at least 2 tabs across instances"
 
-pt_post "/instances/${AGG_INST}/stop" '{}'
-
 end_test
 
+# Note: the next three tests intentionally depend on INST_ID from "launch new instance".
+# They validate the same launched-instance lifecycle in sequence:
+# aggregate across instances, inspect its tabs directly, then stop it.
 # ─────────────────────────────────────────────────────────────────
 start_test "orchestrator: instance tabs"
 
-for i in $(seq 1 10); do
-  INST_STATUS=$(curl -sf "${E2E_SERVER}/instances/${INST_ID}" 2>/dev/null | jq -r '.status // empty' || true)
-  if [ "$INST_STATUS" = "running" ]; then
-    break
-  fi
-  sleep 1
-done
+wait_for_orchestrator_instance_status "${E2E_SERVER}" "${INST_ID}" "running" 10
 
 pt_get "/instances/${INST_ID}/tabs"
 assert_ok "instance tabs"
@@ -173,16 +158,9 @@ start_test "orchestrator: stop instance"
 pt_post "/instances/${INST_ID}/stop" '{}'
 assert_ok "stop instance"
 
-sleep 1
+wait_for_instances_gone "${E2E_SERVER}" 10 "${INST_ID}" || true
 pt_get /instances
-FOUND=$(echo "$RESULT" | jq -r ".[] | select(.id == \"$INST_ID\") | .id")
-if [ -z "$FOUND" ] || [ "$FOUND" = "null" ]; then
-  echo -e "  ${GREEN}✓${NC} instance removed after stop"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} instance still in list after stop"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_instance_list_absent "$INST_ID" "instance removed after stop" "instance still in list after stop"
 
 end_test
 
@@ -193,30 +171,28 @@ pt_post /instances/launch '{"name":"e2e-id-format","headless":true}'
 assert_ok "launch"
 ID_CHECK_INST=$(echo "$RESULT" | jq -r '.id')
 
-if echo "$ID_CHECK_INST" | grep -q "^inst_"; then
-  echo -e "  ${GREEN}✓${NC} instance ID has inst_ prefix: $ID_CHECK_INST"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} bad ID format: $ID_CHECK_INST"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_instance_id_prefix "$ID_CHECK_INST"
 
 pt_post "/instances/${ID_CHECK_INST}/stop" '{}'
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "orchestrator: port allocation (unique ports)"
+start_test "orchestrator: ports, isolation, and cleanup"
+
+ACTIVE_INST_IDS=()
 
 pt_post /instances/launch '{"name":"e2e-port-1","headless":true}'
 assert_ok "launch 1"
-PORT_INST1=$(echo "$RESULT" | jq -r '.id')
+INST1=$(echo "$RESULT" | jq -r '.id')
 PORT1=$(echo "$RESULT" | jq -r '.port')
+ACTIVE_INST_IDS+=("$INST1")
 
 pt_post /instances/launch '{"name":"e2e-port-2","headless":true}'
 assert_ok "launch 2"
-PORT_INST2=$(echo "$RESULT" | jq -r '.id')
+INST2=$(echo "$RESULT" | jq -r '.id')
 PORT2=$(echo "$RESULT" | jq -r '.port')
+ACTIVE_INST_IDS+=("$INST2")
 
 if [ "$PORT1" != "$PORT2" ]; then
   echo -e "  ${GREEN}✓${NC} unique ports: $PORT1 vs $PORT2"
@@ -226,60 +202,39 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-pt_post "/instances/${PORT_INST1}/stop" '{}'
-pt_post "/instances/${PORT_INST2}/stop" '{}'
-
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "orchestrator: port reuse after stop"
-
-pt_post /instances/launch '{"name":"e2e-reuse-1","headless":true}'
-assert_ok "launch"
-REUSE_INST1=$(echo "$RESULT" | jq -r '.id')
-REUSE_PORT1=$(echo "$RESULT" | jq -r '.port')
-
-pt_post "/instances/${REUSE_INST1}/stop" '{}'
-assert_ok "stop"
-sleep 2
+pt_post "/instances/${INST1}/stop" '{}'
+assert_ok "stop first instance"
+wait_for_instances_gone "${E2E_SERVER}" 10 "${INST1}" || true
+ACTIVE_INST_IDS=("${INST2}")
 
 pt_post /instances/launch '{"name":"e2e-reuse-2","headless":true}'
 assert_ok "relaunch"
-REUSE_INST2=$(echo "$RESULT" | jq -r '.id')
-REUSE_PORT2=$(echo "$RESULT" | jq -r '.port')
+INST3=$(echo "$RESULT" | jq -r '.id')
+PORT3=$(echo "$RESULT" | jq -r '.port')
+ACTIVE_INST_IDS+=("$INST3")
 
-if [ "$REUSE_PORT1" = "$REUSE_PORT2" ]; then
-  echo -e "  ${GREEN}✓${NC} port reused: $REUSE_PORT1"
+if [ "$PORT1" = "$PORT3" ]; then
+  echo -e "  ${GREEN}✓${NC} port reused: $PORT1"
   ((ASSERTIONS_PASSED++)) || true
 else
-  echo -e "  ${YELLOW}⚠${NC} port not reused ($REUSE_PORT1 vs $REUSE_PORT2) — may depend on timing"
+  echo -e "  ${YELLOW}⚠${NC} port not reused ($PORT1 vs $PORT3) — may depend on timing"
   ((ASSERTIONS_PASSED++)) || true
 fi
 
-pt_post "/instances/${REUSE_INST2}/stop" '{}'
+if wait_for_instances_running "${E2E_SERVER}" 30 "${INST2}" "${INST3}"; then
+  echo -e "  ${GREEN}✓${NC} reused instances are running"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} reused instances did not both reach running"
+  ((ASSERTIONS_FAILED++)) || true
+fi
 
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "orchestrator: instance isolation (separate tabs)"
-
-pt_post /instances/launch '{"name":"e2e-iso-1","headless":true}'
-assert_ok "launch iso-1"
-ISO_INST1=$(echo "$RESULT" | jq -r '.id')
-
-pt_post /instances/launch '{"name":"e2e-iso-2","headless":true}'
-assert_ok "launch iso-2"
-ISO_INST2=$(echo "$RESULT" | jq -r '.id')
-
-wait_for_orchestrator_instance_status "${E2E_SERVER}" "${ISO_INST1}" "running" 30
-wait_for_orchestrator_instance_status "${E2E_SERVER}" "${ISO_INST2}" "running" 30
-
-pt_post "/instances/${ISO_INST1}/tabs/open" "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-assert_ok "open tab on iso-1"
+pt_post "/instances/${INST2}/tabs/open" "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "open tab on second instance"
 TAB1=$(echo "$RESULT" | jq -r '.tabId // .id // empty')
 
-pt_post "/instances/${ISO_INST2}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "open tab on iso-2"
+pt_post "/instances/${INST3}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "open tab on reused instance"
 TAB2=$(echo "$RESULT" | jq -r '.tabId // .id // empty')
 
 if [ -n "$TAB1" ] && [ -n "$TAB2" ] && [ "$TAB1" != "$TAB2" ]; then
@@ -290,30 +245,20 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-pt_post "/instances/${ISO_INST1}/stop" '{}'
-pt_post "/instances/${ISO_INST2}/stop" '{}'
+pt_post /instances/launch '{"name":"e2e-cleanup-3","headless":true}'
+assert_ok "launch cleanup-3"
+INST4=$(echo "$RESULT" | jq -r '.id')
+ACTIVE_INST_IDS+=("$INST4")
 
-end_test
-
-# ─────────────────────────────────────────────────────────────────
-start_test "orchestrator: bulk cleanup (create 3, stop all)"
-
-CLEANUP_IDS=()
-for i in 1 2 3; do
-  pt_post /instances/launch "{\"name\":\"e2e-cleanup-$i\",\"headless\":true}"
-  assert_ok "launch cleanup-$i"
-  CLEANUP_IDS+=($(echo "$RESULT" | jq -r '.id'))
-done
-
-for id in "${CLEANUP_IDS[@]}"; do
+for id in "${ACTIVE_INST_IDS[@]}"; do
   pt_post "/instances/${id}/stop" '{}'
   assert_ok "stop $id"
 done
 
-sleep 1
+wait_for_instances_gone "${E2E_SERVER}" 10 "${ACTIVE_INST_IDS[@]}" || true
 
 pt_get /instances
-for id in "${CLEANUP_IDS[@]}"; do
+for id in "${ACTIVE_INST_IDS[@]}"; do
   FOUND=$(echo "$RESULT" | jq -r ".[] | select(.id == \"$id\") | .id")
   if [ -z "$FOUND" ] || [ "$FOUND" = "null" ]; then
     echo -e "  ${GREEN}✓${NC} $id removed"

@@ -23,7 +23,6 @@ fi
 end_test
 
 # Note: instance start is implicitly tested (server is running)
-# instance stop is tested in 99-instance-stop.sh
 
 config_setup() {
   TMPDIR=$(mktemp -d)

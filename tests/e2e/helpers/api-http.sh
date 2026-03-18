@@ -36,6 +36,78 @@ wait_for_orchestrator_instance_status() {
   done
 }
 
+wait_for_instances_gone() {
+  local base_url="$1"
+  local timeout_sec="${2:-10}"
+  shift 2
+  local -a instance_ids=("$@")
+  local started_at
+  started_at=$(date +%s)
+
+  while true; do
+    local remaining=0
+    for instance_id in "${instance_ids[@]}"; do
+      local inst_json
+      inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+      if [ -n "$inst_json" ]; then
+        local inst_status
+        inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
+        if [ "$inst_status" != "stopped" ] && [ "$inst_status" != "" ] && [ "$inst_status" != "null" ]; then
+          ((remaining++)) || true
+        fi
+      fi
+    done
+
+    if [ "$remaining" -eq 0 ]; then
+      return 0
+    fi
+
+    local now
+    now=$(date +%s)
+    if [ $((now - started_at)) -ge "$timeout_sec" ]; then
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
+wait_for_instances_running() {
+  local base_url="$1"
+  local timeout_sec="${2:-30}"
+  shift 2
+  local -a instance_ids=("$@")
+  local started_at
+  started_at=$(date +%s)
+
+  while true; do
+    local ready=0
+    for instance_id in "${instance_ids[@]}"; do
+      local inst_json
+      inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+      if [ -n "$inst_json" ]; then
+        local inst_status
+        inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
+        if [ "$inst_status" = "running" ]; then
+          ((ready++)) || true
+        fi
+      fi
+    done
+
+    if [ "$ready" -eq "${#instance_ids[@]}" ]; then
+      return 0
+    fi
+
+    local now
+    now=$(date +%s)
+    if [ $((now - started_at)) -ge "$timeout_sec" ]; then
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
 RESULT=""
 HTTP_STATUS=""
 
@@ -240,6 +312,47 @@ assert_tab_id() {
     ((ASSERTIONS_PASSED++)) || true
   else
     echo -e "  ${RED}✗${NC} no tabId in response"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+assert_instance_list_contains() {
+  local instance_id="$1"
+  local present_msg="$2"
+  local missing_msg="$3"
+  local found
+  found=$(echo "$RESULT" | jq -r ".[] | select(.id == \"$instance_id\") | .id")
+  if [ "$found" = "$instance_id" ]; then
+    echo -e "  ${GREEN}✓${NC} $present_msg"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $missing_msg"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+assert_instance_list_absent() {
+  local instance_id="$1"
+  local absent_msg="$2"
+  local present_msg="$3"
+  local found
+  found=$(echo "$RESULT" | jq -r ".[] | select(.id == \"$instance_id\") | .id")
+  if [ -z "$found" ] || [ "$found" = "null" ]; then
+    echo -e "  ${GREEN}✓${NC} $absent_msg"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $present_msg"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+assert_instance_id_prefix() {
+  local instance_id="$1"
+  if echo "$instance_id" | grep -q "^inst_"; then
+    echo -e "  ${GREEN}✓${NC} instance ID has inst_ prefix: $instance_id"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} bad ID format: $instance_id"
     ((ASSERTIONS_FAILED++)) || true
   fi
 }

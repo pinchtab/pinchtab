@@ -100,14 +100,7 @@ PINCHTAB_CONFIG="$CFG" pt server --help 2>/dev/null
 # server --help won't run the wizard, use config show to trigger via maybeRunWizard
 PINCHTAB_CONFIG="$CFG" pt config show
 
-ACTUAL_VERSION=$(jq -r '.configVersion // "none"' "$CFG")
-if [ "$ACTUAL_VERSION" = "none" ]; then
-  echo -e "  ${GREEN}✓${NC} configVersion absent in pre-wizard config"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} unexpected configVersion: $ACTUAL_VERSION"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_config_version "$CFG" "none" "configVersion absent in pre-wizard config"
 config_cleanup
 
 end_test
@@ -122,14 +115,7 @@ CFG_FILE="$CFG"
 [ -f "$CFG_FILE" ] || CFG_FILE="$TMPDIR/.pinchtab/config.json"
 
 if [ -f "$CFG_FILE" ]; then
-  ACTUAL_VERSION=$(jq -r '.configVersion // "none"' "$CFG_FILE")
-  if [ "$ACTUAL_VERSION" = "0.8.0" ]; then
-    echo -e "  ${GREEN}✓${NC} configVersion set to 0.8.0"
-    ((ASSERTIONS_PASSED++)) || true
-  else
-    echo -e "  ${RED}✗${NC} expected configVersion 0.8.0, got $ACTUAL_VERSION"
-    ((ASSERTIONS_FAILED++)) || true
-  fi
+  assert_config_version "$CFG_FILE" "0.8.0" "configVersion set to 0.8.0"
 else
   echo -e "  ${RED}✗${NC} config file not created"
   ((ASSERTIONS_FAILED++)) || true
@@ -175,18 +161,10 @@ EOF
 # Non-interactive: should show upgrade notice and update version
 PINCHTAB_CONFIG="$CFG" pt daemon 2>/dev/null
 
-ACTUAL_VERSION=$(jq -r '.configVersion // "none"' "$CFG")
-if [ "$ACTUAL_VERSION" = "0.8.0" ]; then
-  echo -e "  ${GREEN}✓${NC} configVersion upgraded to 0.8.0"
-  ((ASSERTIONS_PASSED++)) || true
-elif [ "$ACTUAL_VERSION" = "0.7.0" ]; then
-  # Daemon might not trigger wizard — acceptable
-  echo -e "  ${GREEN}✓${NC} configVersion unchanged via daemon status (wizard triggers on install/server)"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} unexpected configVersion: $ACTUAL_VERSION"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_config_version_one_of \
+  "$CFG" \
+  "0.8.0" "configVersion upgraded to 0.8.0" \
+  "0.7.0" "configVersion unchanged via daemon status (wizard triggers on install/server)"
 config_cleanup
 
 end_test
@@ -219,39 +197,40 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab instance stop"
 
-pt_ok health
-INSTANCE_ID=$(echo "$PT_OUT" | jq -r '.defaultInstance.id // empty')
+pt_ok instance start
+INSTANCE_ID=$(echo "$PT_OUT" | jq -r '.id // empty')
 
 if [ -z "$INSTANCE_ID" ]; then
-  echo -e "  ${RED}✗${NC} no default instance found"
+  echo -e "  ${RED}✗${NC} no disposable instance id returned"
   ((ASSERTIONS_FAILED++)) || true
   end_test
   exit 0
 fi
 
-echo -e "  ${GREEN}✓${NC} instance running: ${INSTANCE_ID:0:12}..."
+echo -e "  ${GREEN}✓${NC} disposable instance: ${INSTANCE_ID:0:12}..."
 ((ASSERTIONS_PASSED++)) || true
 
 pt_ok instance stop "$INSTANCE_ID"
 assert_output_contains "stopped" "instance stop succeeded"
 
-# Poll with exponential backoff: 2s, 4s, 8s
+# Poll instances list instead of stopping the shared default instance.
 STOPPED=false
-for WAIT in 2 4 8; do
-  sleep "$WAIT"
-  pt_ok health
-  STATUS=$(echo "$PT_OUT" | jq -r '.defaultInstance.status // "none"')
-  if [ "$STATUS" = "stopped" ] || [ "$STATUS" = "none" ] || [ "$STATUS" = "null" ]; then
+for ATTEMPT in $(seq 0 12); do
+  if [ "$ATTEMPT" -gt 0 ]; then
+    sleep 1
+  fi
+  pt_ok instances
+  if ! echo "$PT_OUT" | jq -e --arg id "$INSTANCE_ID" '.[] | select(.id == $id)' >/dev/null 2>&1; then
     STOPPED=true
     break
   fi
 done
 
 if [ "$STOPPED" = "true" ]; then
-  echo -e "  ${GREEN}✓${NC} instance is stopped"
+  echo -e "  ${GREEN}✓${NC} disposable instance is removed after stop"
   ((ASSERTIONS_PASSED++)) || true
 else
-  echo -e "  ${YELLOW}⚠${NC} instance still $STATUS after 14s (acceptable)"
+  echo -e "  ${YELLOW}⚠${NC} disposable instance still listed after 12s (acceptable)"
   ((ASSERTIONS_PASSED++)) || true
 fi
 
