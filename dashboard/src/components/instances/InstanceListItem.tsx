@@ -45,9 +45,9 @@ export default function InstanceListItem({
       <div className="flex w-full items-center gap-2">
         <div className={`h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-text-primary">
+          <h3 className="truncate text-sm font-medium text-text-primary">
             {instance.profileName}
-          </div>
+          </h3>
           <div className="dashboard-mono text-xs text-text-muted">
             :{instance.port} · {tabCount} tabs
             {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
@@ -59,6 +59,7 @@ export default function InstanceListItem({
           {onOpenProfile && (
             <span
               role="button"
+              aria-label="Open Profile"
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
@@ -72,7 +73,7 @@ export default function InstanceListItem({
               }}
               className="rounded bg-bg-elevated px-2 py-0.5 text-[10px] font-medium uppercase text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
             >
-              Profile
+              Open Profile
             </span>
           )}
           {onStop && instance.status === "running" && (

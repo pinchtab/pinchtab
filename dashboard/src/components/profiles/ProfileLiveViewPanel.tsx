@@ -19,7 +19,7 @@ export default function ProfileLiveViewPanel({
         tabs.length === 0 ? (
           <EmptyView message="No tabs open" />
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="p-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {tabs.map((tab) => (
               <div key={tab.id} className="aspect-video">
                 <ScreencastTile

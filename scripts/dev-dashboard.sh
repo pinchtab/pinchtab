@@ -5,7 +5,9 @@
 #   1. pinchtab backend (Go) on port 9867
 #   2. Vite dev server (React) on port 5173 with proxy to backend
 #
-# Access the dashboard at: http://localhost:5173/dashboard/
+# Access the dashboard at:
+#   - http://localhost:5173/dashboard/ (hot reload via Vite)
+#   - http://localhost:9867/dashboard/ (backend-served build, no hot reload)
 # Changes to dashboard/src/* will hot-reload instantly.
 #
 # Usage: ./scripts/dev-dashboard.sh [pinchtab args...]
@@ -84,10 +86,11 @@ sleep 3
 echo ""
 echo "  ${SUCCESS}${BOLD}✓ Ready!${NC}"
 echo ""
-echo "  ${BOLD}Dashboard:${NC}  ${ACCENT}http://localhost:5173/dashboard/${NC}"
+echo "  ${BOLD}Hot reload at:${NC} ${ACCENT}http://localhost:5173/dashboard/${NC}"
+echo "  ${BOLD}Dashboard:${NC}   ${ACCENT}http://localhost:${DEV_PORT}/dashboard/${NC}"
 echo "  ${BOLD}Backend:${NC}    http://localhost:${DEV_PORT}"
 echo ""
-echo "  ${MUTED}Edit dashboard/src/* and changes will hot-reload.${NC}"
+echo "  ${MUTED}Edit dashboard/src/* and use the Vite URL above for live updates.${NC}"
 echo "  ${MUTED}Press Ctrl+C to stop.${NC}"
 echo ""
 

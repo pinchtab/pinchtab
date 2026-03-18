@@ -16,9 +16,9 @@ function TabInfo({ tab }: { tab: InstanceTab }) {
   return (
     <div className="flex flex-col gap-0.5 text-right">
       <div className="flex items-center justify-end gap-1.5">
-        <span className="truncate text-xs font-medium text-text-secondary">
+        <h3 className="truncate text-xs font-medium text-text-secondary">
           {tab.title || "Untitled"}
-        </span>
+        </h3>
         <IdBadge id={tab.id} />
       </div>
       <div className="truncate text-[10px] text-text-muted">{tab.url}</div>
@@ -45,7 +45,7 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
   }
 
   return (
-    <div className="flex min-h-48 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-48 flex-1 flex-col overflow-hidden rounded-xl">
       <div className="flex-1 min-h-0">
         <TabsLayout
           tabs={subTabs}

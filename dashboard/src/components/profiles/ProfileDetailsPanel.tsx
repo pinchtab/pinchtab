@@ -113,7 +113,7 @@ export default function ProfileDetailsPanel({
           onChange={(id) => setActiveTab(id)}
         >
           {activeTab === "profile" && (
-            <div className="h-full overflow-auto">
+            <div className="h-full overflow-auto p-4">
               <div className="grid gap-4 xl:grid-cols-2">
                 <ProfileBasicInfoPanel
                   profile={profile}

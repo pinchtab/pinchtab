@@ -8,7 +8,12 @@ interface Props {
   onTabClosed?: () => void;
 }
 
-export default function TabBar({ tabs, selectedTabId, onSelect, onTabClosed }: Props) {
+export default function TabBar({
+  tabs,
+  selectedTabId,
+  onSelect,
+  onTabClosed,
+}: Props) {
   const handleClose = async (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     try {
@@ -49,7 +54,8 @@ export default function TabBar({ tabs, selectedTabId, onSelect, onTabClosed }: P
               tabIndex={0}
               onClick={(e) => handleClose(e, tab.id)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleClose(e as unknown as React.MouseEvent, tab.id);
+                if (e.key === "Enter")
+                  handleClose(e as unknown as React.MouseEvent, tab.id);
               }}
               className="ml-0.5 shrink-0 rounded p-0.5 text-[10px] leading-none text-text-muted/40 opacity-0 transition-all hover:bg-white/10 hover:text-text-primary group-hover:opacity-100"
             >

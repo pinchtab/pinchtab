@@ -60,15 +60,15 @@ export default function InstanceLogsPanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {loading && !logs ? (
-        <div className="flex h-full items-center justify-center rounded-xl border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
+        <div className="flex h-full items-center justify-center border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
           Loading logs...
         </div>
       ) : logs ? (
-        <pre className="h-full overflow-auto rounded-xl border border-border-subtle bg-black/10 p-3 font-mono text-[10px] leading-4 text-text-secondary">
+        <pre className="h-full overflow-auto border border-border-subtle bg-black/10 p-3 font-mono text-[10px] leading-4 text-text-secondary">
           {logs}
         </pre>
       ) : (
-        <div className="flex h-full items-center justify-center rounded-xl border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
+        <div className="flex h-full items-center justify-center border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
           {emptyMessage}
         </div>
       )}

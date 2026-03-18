@@ -32,16 +32,26 @@ export default function InstanceTabsPanel({
     [selectedTabId, tabs],
   );
 
+  const heading = `Open Tabs (${tabs.length})`;
+
   if (tabs.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">
-        {emptyMessage}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <h2 className="text-sm font-medium text-text-primary">{heading}</h2>
+        </div>
+        <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">
+          {emptyMessage}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-border-subtle px-4 py-3">
+        <h2 className="text-sm font-medium text-text-primary">{heading}</h2>
+      </div>
       <TabBar
         tabs={tabs}
         selectedTabId={selectedTabId}

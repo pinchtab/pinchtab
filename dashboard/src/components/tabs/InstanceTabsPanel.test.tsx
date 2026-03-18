@@ -42,9 +42,9 @@ describe("InstanceTabsPanel", () => {
     render(<InstanceTabsPanel tabs={tabs} />);
 
     // Select Beta tab from list
-    const betaTabItem = screen
-      .getByText("Beta Tab")
-      .closest('[role="button"]')!;
+    const betaTabItem = screen.getByRole("button", {
+      name: /Beta Tab.*tab_beta/,
+    });
     await user.click(betaTabItem);
 
     // Find heading for beta tab title
