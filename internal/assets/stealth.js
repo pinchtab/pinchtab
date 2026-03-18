@@ -13,10 +13,20 @@ const seededRandom = (function() {
   };
 })();
 
-Object.defineProperty(navigator, 'webdriver', { 
-  get: () => undefined,
-  configurable: true 
-});
+// Hide webdriver: try deleting first, then make non-enumerable so
+// 'webdriver' in navigator returns false (matching non-headless Chrome).
+(function() {
+  const proto = Object.getPrototypeOf(navigator);
+  try { delete navigator.webdriver; } catch(e) {}
+  try { delete proto.webdriver; } catch(e) {}
+  const desc = { get: () => undefined, configurable: false, enumerable: false };
+  if ('webdriver' in navigator) {
+    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
+  }
+  if ('webdriver' in proto) {
+    try { Object.defineProperty(proto, 'webdriver', desc); } catch(e) {}
+  }
+})();
 
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
