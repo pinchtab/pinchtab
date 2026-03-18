@@ -83,6 +83,9 @@ func TestStealthScript_Content(t *testing.T) {
 	if !strings.Contains(assets.StealthScript, "navigator") || !strings.Contains(assets.StealthScript, "webdriver") {
 		t.Error("stealth script missing webdriver protection")
 	}
+	if !strings.Contains(assets.StealthScript, "new Proxy") || !strings.Contains(assets.StealthScript, "Object.defineProperty(window, 'navigator'") {
+		t.Error("stealth script missing navigator proxy protection")
+	}
 }
 
 func TestStealthScript_Populated(t *testing.T) {

@@ -55,17 +55,32 @@ const seededRandom = (function() {
 
 // WEBDRIVER EVASION - Hide the property
 (function() {
-  const proto = Object.getPrototypeOf(navigator);
-  try { delete navigator.webdriver; } catch(e) {}
+  const realNavigator = window.navigator;
+  const proxyNavigator = new Proxy(realNavigator, {
+    get(target, prop) {
+      if (prop === 'webdriver') return undefined;
+      return Reflect.get(target, prop, target);
+    },
+    has(target, prop) {
+      if (prop === 'webdriver') return false;
+      return Reflect.has(target, prop);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      if (prop === 'webdriver') return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    }
+  });
+
+  try {
+    Object.defineProperty(window, 'navigator', {
+      get: () => proxyNavigator,
+      configurable: true
+    });
+  } catch(e) {}
+
+  const proto = Object.getPrototypeOf(realNavigator);
+  try { delete realNavigator.webdriver; } catch(e) {}
   try { delete proto.webdriver; } catch(e) {}
-  
-  const desc = { get: () => undefined, configurable: false, enumerable: false };
-  if ('webdriver' in navigator) {
-    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
-  }
-  if ('webdriver' in proto) {
-    try { Object.defineProperty(proto, 'webdriver', desc); } catch(e) {}
-  }
 })();
 
 // BASIC CHROME OBJECT

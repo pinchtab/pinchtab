@@ -8,14 +8,17 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev                    # Interactive picker
 ./dev test               # All tests (unit + E2E)
 ./dev test unit          # Unit tests only
-./dev e2e                # Release meta-suite (full API + full CLI + full extended)
-./dev e2e pr             # PR meta-suite (recent + api-fast + cli-fast)
-./dev e2e recent         # Recent E2E coverage for fail-fast feedback
-./dev e2e api-fast       # PR-fast API suite
-./dev e2e cli-fast       # PR-fast CLI suite
-./dev e2e full-api       # Full API suite
-./dev e2e full-cli       # Full CLI suite
-./dev e2e full-extended  # Extended suite (recent + orchestrator)
+./dev e2e                # Release suite (api-full + cli-full)
+./dev e2e pr             # PR suite (api-fast + cli-fast)
+./dev e2e api-fast       # API fast, single-instance
+./dev e2e cli-fast       # CLI fast, single-instance
+./dev e2e api-full       # API full, multi-instance
+./dev e2e cli-full       # CLI full, single-instance
+
+/bin/bash tests/e2e/run.sh api
+/bin/bash tests/e2e/run.sh api all=true
+/bin/bash tests/e2e/run.sh cli
+/bin/bash tests/e2e/run.sh cli all=true
 ./dev check              # All checks (format, vet, build, lint)
 ./dev check go           # Go checks only
 ./dev check security     # Gosec security scan
@@ -41,7 +44,6 @@ End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tes
 
 ```bash
 ./dev e2e pr
-./dev e2e recent
 ./dev e2e api-fast
 ./dev e2e cli-fast
 ```
@@ -49,33 +51,24 @@ End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tes
 Use these on pull requests and during normal development:
 
 - `pr` runs the same E2E suite composition as the PR workflow
-- `recent` is the fail-fast bucket for newly added coverage
-- `api-fast` is the stable API smoke/regression set
-- `cli-fast` is the stable CLI smoke/regression set
+- `api-fast` runs the API `*-basic.sh` groups on the single-instance stack
+- `cli-fast` runs the CLI `*-basic.sh` groups on the single-instance stack
 
 ### Full API Suite
 
 ```bash
-./dev e2e full-api
+./dev e2e api-full
 ```
 
-Runs 184 HTTP-level tests using curl against the server. Tests the REST API, navigation, snapshots, activity logging, and other HTTP endpoints.
+Runs the grouped API `basic` and `full` scenarios on the multi-instance stack. `api-fast` is the `basic` layer only on the single-instance stack; `api-full` adds the extra and edge-case groups plus the multi-instance-only coverage.
 
 ### Full CLI Suite
 
 ```bash
-./dev e2e full-cli
+./dev e2e cli-full
 ```
 
-Runs CLI e2e tests. Tests the command-line interface directly, including activity queries.
-
-### Full Extended Suite
-
-```bash
-./dev e2e full-extended
-```
-
-Runs the extended/manual coverage bucket: recent edge-case scenarios plus the orchestration-focused suite, including remote bridge attachment and multi-instance flows.
+Runs the grouped CLI `basic` and `full` scenarios on the single-instance stack. `cli-fast` is the `basic` layer only; `cli-full` adds the extra and edge-case groups.
 
 ### Release Meta-Suite
 
@@ -83,7 +76,7 @@ Runs the extended/manual coverage bucket: recent edge-case scenarios plus the or
 ./dev e2e
 ```
 
-Runs `full-api`, `full-cli`, and `full-extended` in sequence.
+Runs `api-full` and `cli-full` in sequence.
 
 ## Environment Variables
 
@@ -106,88 +99,47 @@ Everything is cleaned up automatically when tests finish.
 
 ## Test File Structure
 
-E2E tests are organized by surface plus suite manifests:
+E2E tests are organized by surface and feature group:
 
-- **`tests/e2e/scenarios/*.sh`** — HTTP curl-based tests (184 tests)
-  - Test the REST API directly
-  - Use Docker Compose: `tests/e2e/docker-compose.yml`
+- **`tests/e2e/scenarios-api/*.sh`** — grouped API entrypoints such as `tabs-basic.sh` and `tabs-full.sh`
+  - `*-basic.sh` is the PR-fast happy-path layer
+  - `*-full.sh` adds the extra and edge-case coverage for the same feature
+  - Use Docker Compose: `tests/e2e/docker-compose.yml` for `api-fast`, `tests/e2e/docker-compose-multi.yml` for `api-full`
 
-- **`tests/e2e/scenarios-orchestrator/*.sh`** — orchestration-heavy curl tests
-  - Test multi-instance flows and remote bridge attachment
-  - Use Docker Compose: `tests/e2e/docker-compose-orchestrator.yml`
+- **`tests/e2e/scenarios-cli/*.sh`** — grouped CLI entrypoints such as `tabs-basic.sh` and `tabs-full.sh`
+  - Follows the same `basic` vs `full` split as the API side
+  - Use Docker Compose: `tests/e2e/docker-compose.yml` for both `cli-fast` and `cli-full`
 
-- **`tests/e2e/scenarios-cli/*.sh`** — CLI e2e tests (42 tests)
-  - Test the command-line interface
-  - Use Docker Compose: `tests/e2e/docker-compose-cli.yml`
+## E2E Results
 
-- **`tests/e2e/scenarios-recent/*.sh`** — recent edge-case coverage for fail-fast CI
+Each suite writes its own summary and markdown report under `tests/e2e/results/`:
 
-- **`tests/e2e/suites/*.txt`** — curated suite manifests
-  - `api-fast.txt`
-  - `cli-fast.txt`
+- `summary-api-fast.txt` / `report-api-fast.md`
+- `summary-api-full.txt` / `report-api-full.md`
+- `summary-cli-fast.txt` / `report-cli-fast.md`
+- `summary-cli-full.txt` / `report-cli-full.md`
 
-Each test is a standalone bash script that:
-1. Starts the test server (or uses existing)
-2. Runs curl or CLI commands
-3. Asserts expected output or exit codes
-4. Cleans up
+The runner clears the target suite files before each run so stale results do not survive into the next suite.
 
 ## Writing New E2E Tests
 
-Create a new bash script in `tests/e2e/scenarios/` (for API tests), `tests/e2e/scenarios-cli/` (for CLI tests), or `tests/e2e/scenarios-recent/` (for fresh fail-fast coverage):
+Add new coverage directly to a grouped entrypoint in `tests/e2e/scenarios-api/` or `tests/e2e/scenarios-cli/`. Keep `*-basic.sh` focused on the happy path and put the extra and edge-case coverage in the matching `*-full.sh`.
 
-### Example: Simple Curl Test
-
-```bash
-#!/bin/bash
-
-# tests/e2e/scenarios/test-my-feature.sh
-
-set -e  # Exit on error
-
-# Source helpers
-. "$(dirname "$0")/../helpers.sh"
-
-# Test setup
-SERVER_URL="http://localhost:9867"
-
-# Start server if needed
-start_test_server
-
-# Run test
-echo "Testing my feature..."
-RESPONSE=$(curl -s "$SERVER_URL/health")
-
-if [ "$(echo "$RESPONSE" | jq -r '.status')" != "ok" ]; then
-    echo "❌ Health check failed"
-    exit 1
-fi
-
-echo "✅ Test passed"
-```
-
-### Example: CLI Test
+### Example: Grouped API Entrypoint
 
 ```bash
 #!/bin/bash
 
-# tests/e2e/scenarios-cli/test-my-cli.sh
+# tests/e2e/scenarios-api/tabs-basic.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../helpers/api.sh"
 
-set -e
+start_test "tab-scoped snapshot"
+# ...
 
-# Source helpers
-. "$(dirname "$0")/../helpers.sh"
-
-# Test the CLI
-echo "Testing pinchtab CLI..."
-OUTPUT=$($PINCHTAB_BIN --version)
-
-if [[ ! "$OUTPUT" =~ pinchtab ]]; then
-    echo "❌ Version output incorrect"
-    exit 1
-fi
-
-echo "✅ CLI test passed"
+start_test "tab focus"
+# ...
+end_test
 ```
 
 ## Coverage

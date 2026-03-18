@@ -1,0 +1,60 @@
+name: E2E
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'skill/**'
+      - 'plugin/**'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  api-fast:
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: api-fast
+      summary_title: E2E API Fast Tests
+      timeout_minutes: 15
+      compose_file: tests/e2e/docker-compose.yml
+
+  cli-fast:
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: cli-fast
+      summary_title: E2E CLI Fast Tests
+      timeout_minutes: 15
+      compose_file: tests/e2e/docker-compose.yml
+
+  full-api:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: full-api
+      summary_title: E2E Full API Tests
+      timeout_minutes: 20
+      compose_file: tests/e2e/docker-compose-multi.yml
+
+  full-cli:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-e2e-suite.yml
+    with:
+      ref: ${{ github.sha }}
+      suite: full-cli
+      summary_title: E2E Full CLI Tests
+      timeout_minutes: 20
+      compose_file: tests/e2e/docker-compose.yml

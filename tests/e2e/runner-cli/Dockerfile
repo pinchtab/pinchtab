@@ -17,7 +17,7 @@ RUN chmod +x /usr/local/bin/pinchtab
 # Create results directory
 RUN mkdir -p /results
 
-WORKDIR /scenarios
+WORKDIR /e2e
 
 # Default command runs all tests
-CMD ["/scenarios/run-all.sh"]
+CMD ["/bin/bash", "/e2e/run.sh", "cli", "all=true"]

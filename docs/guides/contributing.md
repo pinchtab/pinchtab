@@ -240,6 +240,9 @@ go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
 ./dev e2e                                 # Run the default E2E release suite
 ./dev e2e docker                          # Build the local image and run Docker smoke
+./dev e2e pr                              # Run API fast + CLI fast
+./dev e2e api-full                        # Run the multi-instance API suite
+./dev e2e cli-full                        # Run the single-instance CLI full suite
 ```
 
 ### Developer Toolkit (`dev`)
@@ -268,15 +271,13 @@ All dev scripts are accessible through `./dev`:
 | `test` | Run all tests |
 | `test unit` | Unit tests only |
 | `test dashboard` | Dashboard tests only |
-| `e2e` | Run the default E2E release suite |
+| `e2e` | Run the default E2E release suite (`api-full` + `cli-full`) |
 | `e2e docker` | Build the local image and run the Docker smoke test |
-| `e2e pr` | Run the PR E2E suite |
-| `e2e recent` | Run the recent E2E suite |
-| `e2e api-fast` | Run the fast API E2E suite |
-| `e2e cli-fast` | Run the fast CLI E2E suite |
-| `e2e full-api` | Run the full API E2E suite |
-| `e2e full-cli` | Run the full CLI E2E suite |
-| `e2e full-extended` | Run the extended E2E suite |
+| `e2e pr` | Run the PR E2E suite (`api-fast` + `cli-fast`) |
+| `e2e api-fast` | Run the fast API E2E suite on the single-instance stack |
+| `e2e cli-fast` | Run the fast CLI E2E suite on the single-instance stack |
+| `e2e api-full` | Run the full API E2E suite on the multi-instance stack |
+| `e2e cli-full` | Run the full CLI E2E suite on the single-instance stack |
 | `e2e release` | Run the release E2E meta-suite |
 | `build` | Build the application |
 | `dev` | Build and run the application |

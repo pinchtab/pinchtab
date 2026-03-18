@@ -220,7 +220,7 @@ func (c *ConfigAPI) currentConfig() (config.FileConfig, string, []string, error)
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
-	reasons := make([]string, 0, 4)
+	reasons := make([]string, 0, 5)
 
 	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
@@ -230,6 +230,9 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	}
 	if c.boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
 		reasons = append(reasons, "Routing strategy")
+	}
+	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
+		reasons = append(reasons, "Stealth level")
 	}
 	if !sameIntPtr(c.boot.MultiInstance.Restart.MaxRestarts, next.MultiInstance.Restart.MaxRestarts) ||
 		!sameIntPtr(c.boot.MultiInstance.Restart.InitBackoffSec, next.MultiInstance.Restart.InitBackoffSec) ||

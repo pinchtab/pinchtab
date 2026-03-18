@@ -7,30 +7,37 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ### With Docker (recommended)
 
 ```bash
-./dev e2e          # Run the release meta-suite
-./dev e2e pr       # Run the PR meta-suite
-./dev e2e recent   # Run only recently added/changed scenarios (fast feedback)
-./dev e2e api-fast # Run the stable PR-fast API suite
-./dev e2e cli-fast # Run the stable PR-fast CLI suite
-./dev e2e full-api # Run the full API suite
-./dev e2e full-cli # Run the full CLI suite
-./dev e2e full-extended # Run the manual/pre-release extended suite
+./dev e2e          # Run the release suite
+./dev e2e pr       # Run the PR suite
+./dev e2e api-fast # Run API fast on the single-instance stack
+./dev e2e cli-fast # Run CLI fast on the single-instance stack
+./dev e2e api-full # Run API full on the multi-instance stack
+./dev e2e cli-full # Run CLI full on the single-instance stack
+
+# Manual grouped runners
+/bin/bash tests/e2e/run.sh api
+/bin/bash tests/e2e/run.sh api all=true
+/bin/bash tests/e2e/run.sh cli
+/bin/bash tests/e2e/run.sh cli all=true
 ```
 
 Or directly:
 ```bash
-docker compose -f tests/e2e/docker-compose.yml up --build
-docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
+docker compose -f tests/e2e/docker-compose.yml up --build runner-api
+docker compose -f tests/e2e/docker-compose.yml up --build runner-cli
+docker compose -f tests/e2e/docker-compose-multi.yml up --build runner-api
 ```
 
 ## Architecture
 
 ```
 tests/e2e/
-├── docker-compose.yml      # Generic curl scenarios
-├── docker-compose-orchestrator.yml # Orchestrator-specific services
+├── docker-compose.yml      # Single-instance stack for api-fast and cli suites
+├── docker-compose-multi.yml # Multi-instance API full stack
 ├── config/                 # E2E-specific PinchTab configs
 │   ├── pinchtab.json
+│   ├── pinchtab-medium-permissive.json
+│   ├── pinchtab-full-permissive.json
 │   ├── pinchtab-secure.json
 │   └── pinchtab-bridge.json
 ├── fixtures/               # Static HTML test pages
@@ -38,60 +45,66 @@ tests/e2e/
 │   ├── form.html
 │   ├── table.html
 │   └── buttons.html
-├── scenarios/              # Test scripts
-│   ├── common.sh           # Shared utilities
-│   ├── run-all.sh          # Generic curl scenarios
-│   ├── run-fast.sh         # API fast suite runner
-│   ├── 01-health.sh
-│   ├── 02-navigate.sh
-│   ├── 03-snapshot.sh
-│   ├── 04-tabs-api.sh      # Regression test for #207
-│   ├── 05-actions.sh
-│   └── 06-screenshot-pdf.sh
-├── scenarios-cli/          # CLI scenarios
-│   ├── run-all.sh
-│   ├── run-fast.sh         # CLI fast suite runner
-│   └── ...
-├── scenarios-recent/       # Recent edge-case coverage
-│   ├── run.sh
-│   └── 41-extensions.sh
-├── scenarios-orchestrator/ # Multi-instance and attach flows
-│   ├── run-all.sh
-│   ├── 01-attach-bridge.sh
-│   └── 31-multi-instance.sh
-├── suites/                 # Curated PR-fast suite manifests
-│   ├── api-fast.txt
-│   └── cli-fast.txt
-├── runner/                 # Test runner container
+├── helpers/                # Shared API/CLI E2E helpers
+│   ├── api.sh
+│   ├── api-http.sh
+│   ├── api-assertions.sh
+│   ├── api-actions.sh
+│   ├── api-snapshot.sh
+│   ├── cli.sh
+│   └── base.sh
+├── scenarios-api/          # Grouped API entrypoints
+│   ├── browser-basic.sh
+│   ├── browser-full.sh
+│   ├── tabs-basic.sh
+│   ├── tabs-full.sh
+│   ├── orchestrator-full.sh
+│   ├── stealth-basic.sh
+│   └── stealth-full.sh
+├── scenarios-cli/          # Grouped CLI entrypoints
+│   ├── browser-basic.sh
+│   ├── browser-full.sh
+│   ├── tabs-basic.sh
+│   └── tabs-full.sh
+├── runner-api/             # API test runner container
+│   └── Dockerfile
+├── runner-cli/             # CLI test runner container
 │   └── Dockerfile
 └── results/                # Test output (gitignored)
 ```
 
-The Docker stack reuses the repository root `Dockerfile` and mounts explicit config files with `PINCHTAB_CONFIG` instead of maintaining separate e2e-only images.
+The Docker stacks reuse the repository root `Dockerfile` and mount explicit config files with `PINCHTAB_CONFIG` instead of maintaining separate e2e-only images.
 
-## Test Scenarios
+## Test Groups
 
-| Script | Tests |
-|--------|-------|
-| 01-health | Basic connectivity, health endpoint |
-| 02-navigate | Navigation, tab creation, tab listing |
-| 03-snapshot | A11y tree extraction, text content |
-| 04-tabs-api | Tab-scoped APIs (regression #207) |
-| 05-actions | Click, type, press, check, and uncheck actions |
-| 06-screenshot-pdf | Screenshot and PDF export |
-| 40-activity | Activity API capture and filtering |
-| scenarios-orchestrator/01-attach-bridge | Orchestrator attaches to the dedicated `pinchtab-bridge` container and proxies tab traffic |
-| scenarios-orchestrator/31-multi-instance | Launch/list/stop and aggregate orchestration behavior |
+The API and CLI suites are grouped by feature area:
+
+- `browser-basic` / `browser-full`
+- `tabs-basic` / `tabs-full`
+- `actions-basic` / `actions-full`
+- `files-basic` / `files-full`
+- `security-basic`
+- `orchestrator-full` on API
+- `system-basic` / `system-full`
+- `stealth-basic` / `stealth-full` on API
+
+The `basic` entrypoints are the PR-fast happy path. The `full` entrypoints add extra and edge-case coverage for the same feature. The top-level runner defaults to the basic layer; pass `all=true` to run both basic and full.
+
+Compose usage:
+- `docker-compose.yml` powers `api-fast`, `cli-fast`, and `cli-full`
+- `docker-compose-multi.yml` powers `api-full`
 
 ## Adding Tests
 
-1. Create a new script in `scenarios/` following the naming pattern `NN-name.sh`
-2. Source `common.sh` for utilities
-3. Use the assertion helpers:
+1. Add or update a grouped entrypoint such as `tabs-basic.sh` or `tabs-full.sh`
+2. Source `../helpers/api.sh` or `../helpers/cli.sh`
+3. Put the happy path in `*-basic.sh` and the extra/edge cases in `*-full.sh`
+4. Use the assertion helpers:
 
 ```bash
 #!/bin/bash
-source "$(dirname "$0")/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../helpers/api.sh"
 
 start_test "My test name"
 
@@ -112,8 +125,8 @@ end_test
 ```
 
 The action scenarios already cover common interaction regressions against the bundled fixtures:
-- `tests/e2e/scenarios/05-actions.sh` covers API actions including `check` and `uncheck`
-- `tests/e2e/scenarios-cli/03-actions.sh` covers the matching CLI commands
+- `tests/e2e/scenarios-api/actions-basic.sh` groups the API happy-path actions
+- `tests/e2e/scenarios-cli/actions-basic.sh` groups the matching CLI commands
 
 ## Adding Fixtures
 
@@ -128,32 +141,39 @@ Add HTML files to `fixtures/` for testing specific scenarios:
 ## CI Integration
 
 The E2E tests run automatically:
-- On PRs and pushes to `main`: `recent`, `api-fast`, and `cli-fast`
-- Manually via workflow dispatch: `full-api`, `full-cli`, and `full-extended`
+- On PRs and pushes to `main`: `api-fast` and `cli-fast`
+- Manually via workflow dispatch: `api-full` and `cli-full`
+
+## Result Files
+
+Each suite writes its own result files in `tests/e2e/results/`:
+
+- `summary-api-fast.txt` / `report-api-fast.md`
+- `summary-api-full.txt` / `report-api-full.md`
+- `summary-cli-fast.txt` / `report-cli-fast.md`
+- `summary-cli-full.txt` / `report-cli-full.md`
+
+The launcher deletes the target suite files before each run to avoid stale output.
 
 ## Debugging
 
 ### View container logs
 ```bash
 docker compose -f tests/e2e/docker-compose.yml logs pinchtab
+docker compose -f tests/e2e/docker-compose-multi.yml logs pinchtab
 ```
 
 ### Interactive shell in runner
 ```bash
-docker compose -f tests/e2e/docker-compose.yml run runner bash
+docker compose -f tests/e2e/docker-compose.yml run runner-api bash
+docker compose -f tests/e2e/docker-compose.yml run runner-cli bash
 ```
 
 ### Run specific scenario
 ```bash
-docker compose -f tests/e2e/docker-compose.yml run runner /scenarios/04-tabs-api.sh
+docker compose -f tests/e2e/docker-compose.yml run runner-api /bin/bash /e2e/scenarios-api/tabs-basic.sh
+docker compose -f tests/e2e/docker-compose-multi.yml run runner-api /bin/bash /e2e/scenarios-api/tabs-full.sh
 ```
 
-### Run orchestrator scenarios
-```bash
-docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
-```
-
-### Run remote bridge attach scenario
-```bash
-docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner /scenarios-orchestrator/01-attach-bridge.sh
-```
+### Orchestrator Coverage
+`api-full` uses `docker-compose-multi.yml` and includes the multi-instance and remote-bridge orchestrator scenarios through `orchestrator-full.sh`.

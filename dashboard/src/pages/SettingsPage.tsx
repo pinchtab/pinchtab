@@ -597,51 +597,76 @@ export default function SettingsPage() {
                         <option value="full">Full</option>
                       </select>
                       <div className="rounded-sm border border-border-subtle bg-black/10 px-3 py-2 text-xs leading-5 text-text-muted">
-                        {backendConfig.instanceDefaults.stealthLevel === "light" && (
+                        {backendConfig.instanceDefaults.stealthLevel ===
+                          "light" && (
                           <div className="space-y-2">
                             <div>
-                              <strong className="text-text-secondary">Light:</strong> Safe baseline stealth. Hides navigator.webdriver, removes CDP markers, spoofs plugins/languages/hardware.
+                              <strong className="text-text-secondary">
+                                Light:
+                              </strong>{" "}
+                              Safe baseline stealth. Hides navigator.webdriver,
+                              removes CDP markers, spoofs
+                              plugins/languages/hardware.
                             </div>
                             <div className="text-success/80">
                               ✓ No functional side effects
                             </div>
                             <div className="text-success/80">
-                              ✓ No security implications — standard automation hiding only
+                              ✓ No security implications — standard automation
+                              hiding only
                             </div>
                           </div>
                         )}
-                        {backendConfig.instanceDefaults.stealthLevel === "medium" && (
+                        {backendConfig.instanceDefaults.stealthLevel ===
+                          "medium" && (
                           <div className="space-y-2">
                             <div>
-                              <strong className="text-warning">Medium:</strong> Adds Client Hints API, chrome.runtime.connect (for Cloudflare Turnstile), chrome.csi/loadTimes, enhanced permissions, video codec spoofing.
+                              <strong className="text-warning">Medium:</strong>{" "}
+                              Adds Client Hints API, chrome.runtime.connect (for
+                              Cloudflare Turnstile), chrome.csi/loadTimes,
+                              enhanced permissions, video codec spoofing.
                             </div>
                             <div className="text-warning/80">
-                              ⚠ May interfere with error monitoring (Sentry, LogRocket) — Error.prepareStackTrace is blocked
+                              ⚠ May interfere with error monitoring (Sentry,
+                              LogRocket) — Error.prepareStackTrace is blocked
                             </div>
                             <div className="text-warning/80">
-                              ⚠ Permissions API returns fake states — code relying on accurate permission checks may misbehave
+                              ⚠ Permissions API returns fake states — code
+                              relying on accurate permission checks may
+                              misbehave
                             </div>
                             <div className="text-warning/80">
-                              ⚠ chrome.runtime.connect returns dummy objects — real extension messaging won't work
+                              ⚠ chrome.runtime.connect returns dummy objects —
+                              real extension messaging won't work
                             </div>
                           </div>
                         )}
-                        {backendConfig.instanceDefaults.stealthLevel === "full" && (
+                        {backendConfig.instanceDefaults.stealthLevel ===
+                          "full" && (
                           <div className="space-y-2">
                             <div>
-                              <strong className="text-destructive">Full:</strong> Maximum stealth. Adds WebGL/canvas fingerprint noise, WebRTC IP leak prevention, AudioContext protection.
+                              <strong className="text-destructive">
+                                Full:
+                              </strong>{" "}
+                              Maximum stealth. Adds WebGL/canvas fingerprint
+                              noise, WebRTC IP leak prevention, AudioContext
+                              protection.
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ WebRTC forced to relay mode — direct P2P connections disabled, video calls may fail
+                              ⚠ WebRTC forced to relay mode — direct P2P
+                              connections disabled, video calls may fail
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ Canvas operations have subtle pixel noise — may affect pixel-precise rendering or image comparison
+                              ⚠ Canvas operations have subtle pixel noise — may
+                              affect pixel-precise rendering or image comparison
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ WebGL reports spoofed GPU — applications detecting GPU capabilities may behave unexpectedly
+                              ⚠ WebGL reports spoofed GPU — applications
+                              detecting GPU capabilities may behave unexpectedly
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ AudioContext has frequency noise — may affect audio fingerprinting detection or processing apps
+                              ⚠ AudioContext has frequency noise — may affect
+                              audio fingerprinting detection or processing apps
                             </div>
                           </div>
                         )}

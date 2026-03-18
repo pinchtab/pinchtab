@@ -1,0 +1,173 @@
+#!/bin/bash
+# run.sh - Run grouped E2E scenarios for a suite directory.
+
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SUITE="${1:-api}"
+shift || true
+
+case "$SUITE" in
+  api|scenarios-api|scenarios)
+    source "${ROOT_DIR}/helpers/api.sh"
+    GROUP_DIR="${ROOT_DIR}/scenarios-api"
+    SUITE_KIND="api"
+    RUN_ALL=false
+    SUITE_TITLE_BASIC="PinchTab E2E API Fast Suite"
+    SUITE_TITLE_ALL="PinchTab E2E Test Suite"
+    SUMMARY_FILE_BASIC="summary-api-fast.txt"
+    SUMMARY_FILE_ALL="summary-api-full.txt"
+    REPORT_FILE_BASIC="report-api-fast.md"
+    REPORT_FILE_ALL="report-api-full.md"
+    ;;
+  cli|scenarios-cli)
+    source "${ROOT_DIR}/helpers/cli.sh"
+    GROUP_DIR="${ROOT_DIR}/scenarios-cli"
+    SUITE_KIND="cli"
+    RUN_ALL=false
+    SUITE_TITLE_BASIC="  PinchTab CLI Fast E2E Suite"
+    SUITE_TITLE_ALL="  PinchTab CLI E2E Tests"
+    SUMMARY_FILE_BASIC="summary-cli-fast.txt"
+    SUMMARY_FILE_ALL="summary-cli-full.txt"
+    REPORT_FILE_BASIC="report-cli-fast.md"
+    REPORT_FILE_ALL="report-cli-full.md"
+    ;;
+  *)
+    echo "unknown suite: $SUITE" >&2
+    echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false]" >&2
+    exit 1
+    ;;
+esac
+
+for arg in "$@"; do
+  case "$arg" in
+    all=true)
+      RUN_ALL=true
+      ;;
+    all=false)
+      RUN_ALL=false
+      ;;
+    *)
+      echo "unknown argument: $arg" >&2
+      echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+SCENARIO_GROUPS=()
+for basic_path in "${GROUP_DIR}"/*-basic.sh; do
+  if [ ! -f "${basic_path}" ]; then
+    echo "no basic group entries found in: ${GROUP_DIR}" >&2
+    exit 1
+  fi
+
+  feature=$(basename "${basic_path}" -basic.sh)
+  basic_script="${feature}-basic.sh"
+  SCENARIO_GROUPS+=("${basic_script}")
+
+  if [ "$RUN_ALL" = "true" ]; then
+    full_script="${feature}-full.sh"
+    full_path="${GROUP_DIR}/${full_script}"
+    if [ -f "${full_path}" ]; then
+      SCENARIO_GROUPS+=("${full_script}")
+    fi
+  fi
+done
+
+if [ "$RUN_ALL" = "true" ]; then
+  for full_path in "${GROUP_DIR}"/*-full.sh; do
+    if [ ! -f "${full_path}" ]; then
+      echo "no full group entries found in: ${GROUP_DIR}" >&2
+      exit 1
+    fi
+
+    full_script=$(basename "${full_path}")
+    case " ${SCENARIO_GROUPS[*]} " in
+      *" ${full_script} "*) ;;
+      *) SCENARIO_GROUPS+=("${full_script}") ;;
+    esac
+  done
+fi
+
+if [ "$RUN_ALL" = "true" ]; then
+  SUITE_TITLE="$SUITE_TITLE_ALL"
+  SUMMARY_FILE="$SUMMARY_FILE_ALL"
+  REPORT_FILE="$REPORT_FILE_ALL"
+else
+  SUITE_TITLE="$SUITE_TITLE_BASIC"
+  SUMMARY_FILE="$SUMMARY_FILE_BASIC"
+  REPORT_FILE="$REPORT_FILE_BASIC"
+fi
+
+export E2E_SUMMARY_TITLE="$SUITE_TITLE"
+export E2E_SUMMARY_FILE="$SUMMARY_FILE"
+export E2E_REPORT_FILE="$REPORT_FILE"
+export E2E_GENERATE_MARKDOWN_REPORT=1
+
+if [ "$SUITE_KIND" = "api" ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo -e "${BLUE}${SUITE_TITLE}${NC}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "E2E_SERVER: ${E2E_SERVER}"
+  echo "FIXTURES_URL: ${FIXTURES_URL}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  echo "Waiting for instances to become ready..."
+  wait_for_instance_ready "${E2E_SERVER}"
+  if [ "$RUN_ALL" = "true" ]; then
+    wait_for_instance_ready "${E2E_SECURE_SERVER}"
+    if [ -n "${E2E_MEDIUM_SERVER:-}" ]; then
+      wait_for_instance_ready "${E2E_MEDIUM_SERVER}"
+    fi
+    if [ -n "${E2E_FULL_SERVER:-}" ]; then
+      wait_for_instance_ready "${E2E_FULL_SERVER}"
+    fi
+    if [ -n "${E2E_LITE_SERVER:-}" ]; then
+      wait_for_instance_ready "${E2E_LITE_SERVER}"
+    fi
+    if [ -n "${E2E_BRIDGE_URL:-}" ]; then
+      wait_for_instance_ready "${E2E_BRIDGE_URL}" 60 "${E2E_BRIDGE_TOKEN:-}"
+    fi
+  fi
+  echo ""
+else
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "${SUITE_TITLE}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "  Server: $E2E_SERVER"
+  echo "  Fixtures: $FIXTURES_URL"
+  echo ""
+
+  wait_for_instance_ready "$E2E_SERVER"
+
+  if ! command -v pinchtab &> /dev/null; then
+    echo "ERROR: pinchtab CLI not found in PATH"
+    exit 1
+  fi
+
+  echo ""
+  if [ "$RUN_ALL" = "true" ]; then
+    echo "Running CLI tests..."
+  else
+    echo "Running CLI fast tests..."
+  fi
+  echo ""
+fi
+
+for script_name in "${SCENARIO_GROUPS[@]}"; do
+  script_path="${GROUP_DIR}/${script_name}"
+  if [ ! -f "${script_path}" ]; then
+    echo "group entry not found: ${script_path}" >&2
+    exit 1
+  fi
+
+  echo -e "${YELLOW}Running: ${script_name}${NC}"
+  echo ""
+  source "${script_path}"
+  echo ""
+done
+
+print_summary

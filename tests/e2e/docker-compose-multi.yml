@@ -1,0 +1,155 @@
+services:
+  pinchtab:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab.json
+    volumes:
+      - ./config/pinchtab.json:/config/pinchtab.json:ro
+      - ./fixtures/test-extension:/extensions/test-extension
+      - ./fixtures/test-extension-api:/extensions/test-extension-api
+    ports:
+      - "9999:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  pinchtab-secure:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-secure.json
+    volumes:
+      - ./config/pinchtab-secure.json:/config/pinchtab-secure.json:ro
+    ports:
+      - "9998:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  pinchtab-medium:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-medium-permissive.json
+    volumes:
+      - ./config/pinchtab-medium-permissive.json:/config/pinchtab-medium-permissive.json:ro
+      - ./fixtures/test-extension:/extensions/test-extension
+    ports:
+      - "9994:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  pinchtab-full:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-full-permissive.json
+    volumes:
+      - ./config/pinchtab-full-permissive.json:/config/pinchtab-full-permissive.json:ro
+      - ./fixtures/test-extension:/extensions/test-extension
+    ports:
+      - "9995:9999"
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  pinchtab-lite:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-lite.json
+    volumes:
+      - ./config/pinchtab-lite.json:/config/pinchtab-lite.json:ro
+    ports:
+      - "9997:9999"
+    command: ["/usr/local/bin/pinchtab", "bridge"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  pinchtab-bridge:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /config/pinchtab-bridge.json
+    volumes:
+      - ./config/pinchtab-bridge.json:/config/pinchtab-bridge.json:ro
+    ports:
+      - "9996:9999"
+    command: ["/usr/local/bin/pinchtab", "bridge"]
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-bridge-token' -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  fixtures:
+    image: nginx:alpine
+    volumes:
+      - ./fixtures:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  runner-api:
+    build:
+      context: ./runner-api
+    depends_on:
+      pinchtab:
+        condition: service_healthy
+      pinchtab-secure:
+        condition: service_healthy
+      pinchtab-medium:
+        condition: service_healthy
+      pinchtab-full:
+        condition: service_healthy
+      pinchtab-lite:
+        condition: service_healthy
+      pinchtab-bridge:
+        condition: service_healthy
+      fixtures:
+        condition: service_healthy
+    environment:
+      - E2E_SERVER=http://pinchtab:9999
+      - E2E_SECURE_SERVER=http://pinchtab-secure:9999
+      - E2E_MEDIUM_SERVER=http://pinchtab-medium:9999
+      - E2E_FULL_SERVER=http://pinchtab-full:9999
+      - E2E_LITE_SERVER=http://pinchtab-lite:9999
+      - E2E_BRIDGE_URL=http://pinchtab-bridge:9999
+      - E2E_BRIDGE_TOKEN=e2e-bridge-token
+      - FIXTURES_URL=http://fixtures:80
+    volumes:
+      - ./:/e2e:ro
+      - ./results:/results
+    command: ["/bin/bash", "/e2e/run.sh", "api", "all=true"]

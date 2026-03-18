@@ -1,5 +1,4 @@
 services:
-  # Main instance: security features ENABLED (permissive)
   pinchtab:
     build:
       context: ../..
@@ -8,50 +7,11 @@ services:
       PINCHTAB_CONFIG: /config/pinchtab.json
     volumes:
       - ./config/pinchtab.json:/config/pinchtab.json:ro
-      - ./fixtures/test-extension:/extensions/test-extension
-      - ./fixtures/test-extension-api:/extensions/test-extension-api
+      - ./fixtures/test-extension:/extensions/test-extension:ro
+      - ./fixtures/test-extension-api:/extensions/test-extension-api:ro
     ports:
       - "9999:9999"
-    # Chrome needs more shared memory in Docker
     shm_size: '2gb'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
-      interval: 3s
-      timeout: 10s
-      retries: 20
-      start_period: 15s
-
-  # Secure instance: security features DISABLED (restrictive)
-  pinchtab-secure:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    environment:
-      PINCHTAB_CONFIG: /config/pinchtab-secure.json
-    volumes:
-      - ./config/pinchtab-secure.json:/config/pinchtab-secure.json:ro
-    ports:
-      - "9998:9999"
-    shm_size: '2gb'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
-      interval: 3s
-      timeout: 10s
-      retries: 20
-      start_period: 15s
-
-  # Lite engine instance: no Chrome, DOM-only (bridge mode)
-  pinchtab-lite:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    environment:
-      PINCHTAB_CONFIG: /config/pinchtab-lite.json
-    volumes:
-      - ./config/pinchtab-lite.json:/config/pinchtab-lite.json:ro
-    ports:
-      - "9997:9999"
-    command: ["/usr/local/bin/pinchtab", "bridge"]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
@@ -69,26 +29,34 @@ services:
       timeout: 5s
       retries: 5
 
-  runner:
+  runner-api:
     build:
-      context: ./runner
+      context: ./runner-api
     depends_on:
       pinchtab:
-        condition: service_healthy
-      pinchtab-secure:
-        condition: service_healthy
-      pinchtab-lite:
         condition: service_healthy
       fixtures:
         condition: service_healthy
     environment:
       - E2E_SERVER=http://pinchtab:9999
-      - E2E_SECURE_SERVER=http://pinchtab-secure:9999
-      - E2E_LITE_SERVER=http://pinchtab-lite:9999
       - FIXTURES_URL=http://fixtures:80
     volumes:
-      - ./scenarios:/scenarios:ro
-      - ./scenarios-recent:/scenarios-recent:ro
-      - ./suites:/e2e-suites:ro
+      - ./:/e2e:ro
       - ./results:/results
-    command: ["/scenarios/run-all.sh"]
+    command: ["/bin/bash", "/e2e/run.sh", "api"]
+
+  runner-cli:
+    build:
+      context: ./runner-cli
+    depends_on:
+      pinchtab:
+        condition: service_healthy
+      fixtures:
+        condition: service_healthy
+    environment:
+      - E2E_SERVER=http://pinchtab:9999
+      - FIXTURES_URL=http://fixtures:80
+    volumes:
+      - ./:/e2e:ro
+      - ./results:/results
+    command: ["/bin/bash", "/e2e/run.sh", "cli", "all=true"]

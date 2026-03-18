@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -61,5 +62,19 @@ func TestNewConfigAPISnapshotsBootConfigFromFile(t *testing.T) {
 	}
 	if len(restartReasons) != 0 {
 		t.Fatalf("currentConfig() restartReasons = %v, want none", restartReasons)
+	}
+}
+
+func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
+	cfg := config.DefaultFileConfig()
+	api := NewConfigAPI(config.Load(), nil, nil, nil, "test", time.Now())
+	api.boot = cfg
+
+	next := cfg
+	next.InstanceDefaults.StealthLevel = "full"
+
+	reasons := api.restartReasonsFor(next)
+	if !slices.Contains(reasons, "Stealth level") {
+		t.Fatalf("restartReasonsFor() = %v, want Stealth level", reasons)
 	}
 }

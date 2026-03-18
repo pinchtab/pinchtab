@@ -1,7 +1,0 @@
-# Stable PR-fast CLI coverage: health, navigation, tabs, snapshot, actions, text.
-09-health.sh
-01-nav.sh
-02-snap.sh
-03-actions.sh
-04-tabs.sh
-06-text.sh

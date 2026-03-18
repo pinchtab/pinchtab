@@ -1,8 +1,0 @@
-# Stable PR-fast API coverage: health, navigation, tabs, snapshot, actions, find, text.
-01-health.sh
-02-navigate.sh
-03-snapshot.sh
-04-tabs-api.sh
-05-actions.sh
-07-find.sh
-17-text-extraction.sh

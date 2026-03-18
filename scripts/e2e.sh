@@ -22,122 +22,127 @@ compose_down() {
   docker compose -f "${compose_file}" down -v 2>/dev/null || true
 }
 
-run_recent() {
-  echo "  ${ACCENT}${BOLD}🐳 E2E Recent tests (Docker)${NC}"
-  echo ""
-  set +e
-  docker compose -f tests/e2e/docker-compose.yml run --build --rm runner /scenarios-recent/run.sh
-  local recent_exit=$?
-  set -e
-  if [ "${recent_exit}" -ne 0 ]; then
-    echo -e "${ERROR}  Recent tests failed. Showing pinchtab logs:${NC}"
-    docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50 || true
+dump_compose_failure() {
+  local compose_file="$1"
+  shift
+  local services=("$@")
+
+  for service in "${services[@]}"; do
+    echo ""
+    echo "  ${MUTED}Recent ${service} logs:${NC}"
+    docker compose -f "${compose_file}" logs "${service}" | tail -n 80 || true
+  done
+}
+
+show_suite_summary() {
+  local summary_file="$1"
+  local report_file="$2"
+
+  if [ -f "${summary_file}" ]; then
+    echo ""
+    echo "  ${MUTED}Summary: ${summary_file}${NC}"
+    cat "${summary_file}" || true
   fi
-  compose_down tests/e2e/docker-compose.yml
-  return "${recent_exit}"
+
+  if [ -f "${report_file}" ]; then
+    echo ""
+    echo "  ${MUTED}Report: ${report_file}${NC}"
+    sed -n '1,120p' "${report_file}" || true
+  fi
+}
+
+prepare_suite_results() {
+  local summary_file="$1"
+  local report_file="$2"
+
+  rm -f \
+    "${summary_file}" \
+    "${report_file}" \
+    tests/e2e/results/summary.txt \
+    tests/e2e/results/report.md
 }
 
 run_api_fast() {
+  local compose_file="tests/e2e/docker-compose.yml"
+  local summary_file="tests/e2e/results/summary-api-fast.txt"
+  local report_file="tests/e2e/results/report-api-fast.md"
   echo "  ${ACCENT}${BOLD}🐳 E2E API Fast tests (Docker)${NC}"
   echo ""
+  prepare_suite_results "${summary_file}" "${report_file}"
   set +e
-  docker compose -f tests/e2e/docker-compose.yml run --build --rm runner /scenarios/run-fast.sh
+  docker compose -f "${compose_file}" run --build --rm runner-api /bin/bash /e2e/run.sh api
   local api_fast_exit=$?
   set -e
   if [ "${api_fast_exit}" -ne 0 ]; then
-    docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50 || true
+    show_suite_summary "${summary_file}" "${report_file}"
+    dump_compose_failure "${compose_file}" runner-api pinchtab
   fi
-  compose_down tests/e2e/docker-compose.yml
+  compose_down "${compose_file}"
   return "${api_fast_exit}"
 }
 
 run_full_api() {
+  local compose_file="tests/e2e/docker-compose-multi.yml"
+  local summary_file="tests/e2e/results/summary-api-full.txt"
+  local report_file="tests/e2e/results/report-api-full.md"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full API tests (Docker)${NC}"
   echo ""
+  prepare_suite_results "${summary_file}" "${report_file}"
   set +e
-  docker compose -f tests/e2e/docker-compose.yml up --build --abort-on-container-exit
+  docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-api runner-api
   local api_exit=$?
   set -e
   if [ "${api_exit}" -ne 0 ]; then
-    docker compose -f tests/e2e/docker-compose.yml logs pinchtab | tail -n 50 || true
+    show_suite_summary "${summary_file}" "${report_file}"
+    dump_compose_failure "${compose_file}" runner-api pinchtab pinchtab-secure pinchtab-medium pinchtab-full pinchtab-lite pinchtab-bridge
   fi
-  compose_down tests/e2e/docker-compose.yml
+  compose_down "${compose_file}"
   return "${api_exit}"
 }
 
 run_cli_fast() {
+  local compose_file="tests/e2e/docker-compose.yml"
+  local summary_file="tests/e2e/results/summary-cli-fast.txt"
+  local report_file="tests/e2e/results/report-cli-fast.md"
   echo "  ${ACCENT}${BOLD}🐳 E2E CLI Fast tests (Docker)${NC}"
   echo ""
   build_e2e_cli_binary
+  prepare_suite_results "${summary_file}" "${report_file}"
   set +e
-  docker compose -f tests/e2e/docker-compose-cli.yml run --build --rm runner /bin/bash /scenarios/run-fast.sh
+  docker compose -f "${compose_file}" run --build --rm runner-cli /bin/bash /e2e/run.sh cli
   local cli_fast_exit=$?
   set -e
   if [ "${cli_fast_exit}" -ne 0 ]; then
-    docker compose -f tests/e2e/docker-compose-cli.yml logs pinchtab | tail -n 50 || true
+    show_suite_summary "${summary_file}" "${report_file}"
+    dump_compose_failure "${compose_file}" runner-cli pinchtab
   fi
-  compose_down tests/e2e/docker-compose-cli.yml
+  compose_down "${compose_file}"
   return "${cli_fast_exit}"
 }
 
 run_full_cli() {
+  local compose_file="tests/e2e/docker-compose.yml"
+  local summary_file="tests/e2e/results/summary-cli-full.txt"
+  local report_file="tests/e2e/results/report-cli-full.md"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full CLI tests (Docker)${NC}"
   echo ""
   build_e2e_cli_binary
+  prepare_suite_results "${summary_file}" "${report_file}"
   set +e
-  docker compose -f tests/e2e/docker-compose-cli.yml up --build --abort-on-container-exit
+  docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-cli runner-cli
   local cli_exit=$?
   set -e
   if [ "${cli_exit}" -ne 0 ]; then
-    docker compose -f tests/e2e/docker-compose-cli.yml logs pinchtab | tail -n 50 || true
+    show_suite_summary "${summary_file}" "${report_file}"
+    dump_compose_failure "${compose_file}" runner-cli pinchtab
   fi
-  compose_down tests/e2e/docker-compose-cli.yml
+  compose_down "${compose_file}"
   return "${cli_exit}"
 }
 
-run_orchestrator() {
-  echo "  ${ACCENT}${BOLD}🐳 E2E Orchestrator tests (Docker)${NC}"
-  echo ""
-  set +e
-  docker compose -f tests/e2e/docker-compose-orchestrator.yml run --build --rm runner
-  local orch_exit=$?
-  set -e
-  if [ "${orch_exit}" -ne 0 ]; then
-    docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab | tail -n 50 || true
-    docker compose -f tests/e2e/docker-compose-orchestrator.yml logs pinchtab-bridge | tail -n 50 || true
-  fi
-  compose_down tests/e2e/docker-compose-orchestrator.yml
-  return "${orch_exit}"
-}
-
-run_full_extended() {
-  local recent_exit=0
-  local orch_exit=0
-
-  run_recent || recent_exit=$?
-
-  echo ""
-
-  run_orchestrator || orch_exit=$?
-
-  echo ""
-  if [ "${recent_exit}" -ne 0 ] || [ "${orch_exit}" -ne 0 ]; then
-    echo "  ${ERROR}Extended E2E suites failed${NC}"
-    echo "  ${MUTED}exit codes: recent=${recent_exit}, orchestrator=${orch_exit}${NC}"
-    return 1
-  fi
-  echo "  ${SUCCESS}Extended E2E suites passed${NC}"
-  return 0
-}
-
 run_pr() {
-  local recent_exit=0
   local api_fast_exit=0
   local cli_fast_exit=0
-
-  run_recent || recent_exit=$?
-
-  echo ""
 
   run_api_fast || api_fast_exit=$?
 
@@ -146,9 +151,9 @@ run_pr() {
   run_cli_fast || cli_fast_exit=$?
 
   echo ""
-  if [ "${recent_exit}" -ne 0 ] || [ "${api_fast_exit}" -ne 0 ] || [ "${cli_fast_exit}" -ne 0 ]; then
+  if [ "${api_fast_exit}" -ne 0 ] || [ "${cli_fast_exit}" -ne 0 ]; then
     echo "  ${ERROR}PR E2E suites failed${NC}"
-    echo "  ${MUTED}exit codes: recent=${recent_exit}, api-fast=${api_fast_exit}, cli-fast=${cli_fast_exit}${NC}"
+    echo "  ${MUTED}exit codes: api-fast=${api_fast_exit}, cli-fast=${cli_fast_exit}${NC}"
     return 1
   fi
   echo "  ${SUCCESS}PR E2E suites passed${NC}"
@@ -158,7 +163,6 @@ run_pr() {
 run_release() {
   local api_exit=0
   local cli_exit=0
-  local extended_exit=0
 
   run_full_api || api_exit=$?
 
@@ -167,13 +171,9 @@ run_release() {
   run_full_cli || cli_exit=$?
 
   echo ""
-
-  run_full_extended || extended_exit=$?
-
-  echo ""
-  if [ "${api_exit}" -ne 0 ] || [ "${cli_exit}" -ne 0 ] || [ "${extended_exit}" -ne 0 ]; then
+  if [ "${api_exit}" -ne 0 ] || [ "${cli_exit}" -ne 0 ]; then
     echo "  ${ERROR}Some E2E suites failed${NC}"
-    echo "  ${MUTED}exit codes: full-api=${api_exit}, full-cli=${cli_exit}, full-extended=${extended_exit}${NC}"
+    echo "  ${MUTED}exit codes: api-full=${api_exit}, cli-full=${cli_exit}${NC}"
     return 1
   fi
   echo "  ${SUCCESS}All E2E suites passed${NC}"
@@ -188,33 +188,24 @@ case "${suite}" in
   pr)
     run_pr
     ;;
-  recent)
-    run_recent
-    ;;
   api-fast)
     run_api_fast
     ;;
   cli-fast)
     run_cli_fast
     ;;
-  full-api|curl)
+  api-full|full-api|curl)
     run_full_api
     ;;
-  full-cli|cli)
+  cli-full|full-cli|cli)
     run_full_cli
-    ;;
-  full-extended)
-    run_full_extended
-    ;;
-  orchestrator)
-    run_orchestrator
     ;;
   release|all)
     run_release
     ;;
   *)
     echo "Unknown E2E suite: ${suite}" >&2
-    echo "Available suites: pr, recent, api-fast, cli-fast, full-api, full-cli, full-extended, orchestrator, release" >&2
+    echo "Available suites: pr, api-fast, cli-fast, api-full, cli-full, release" >&2
     exit 1
     ;;
 esac
