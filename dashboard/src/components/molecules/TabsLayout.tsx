@@ -12,6 +12,7 @@ interface Props<T extends string> {
   onChange: (id: T) => void;
   children: React.ReactNode;
   className?: string;
+  rightSlot?: React.ReactNode;
 }
 
 export default function TabsLayout<T extends string>({
@@ -20,11 +21,12 @@ export default function TabsLayout<T extends string>({
   onChange,
   children,
   className = "",
+  rightSlot,
 }: Props<T>) {
   return (
     <div className={`flex h-full flex-col overflow-hidden ${className}`}>
       <div className="border-b border-border-subtle px-4 py-2">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex items-center gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -44,9 +46,12 @@ export default function TabsLayout<T extends string>({
               )}
             </button>
           ))}
+          {rightSlot && (
+            <div className="ml-auto min-w-0 shrink">{rightSlot}</div>
+          )}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
     </div>
   );
 }

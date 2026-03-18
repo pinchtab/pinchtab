@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
-import { EmptyState, Button, ErrorBoundary } from "../components/atoms";
+import { EmptyState, ErrorBoundary } from "../components/atoms";
 import { TabsChart } from "../components/molecules";
 import InstanceListItem from "../components/instances/InstanceListItem";
 import InstanceTabsPanel from "../components/tabs/InstanceTabsPanel";
@@ -89,6 +89,15 @@ export default function MonitoringPage() {
                     }
                     selected={selectedId === inst.id}
                     onClick={() => setSelectedId(inst.id)}
+                    onStop={() => handleStop(inst.id)}
+                    onOpenProfile={() =>
+                      navigate("/dashboard/profiles", {
+                        state: {
+                          selectedProfileKey:
+                            inst.profileId || inst.profileName,
+                        },
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -97,52 +106,10 @@ export default function MonitoringPage() {
             {/* Selected instance details */}
             <div className="dashboard-panel flex flex-1 flex-col overflow-hidden">
               {selectedInstance ? (
-                <>
-                  <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-                    <div>
-                      <div className="dashboard-section-title mb-1">
-                        Active instance
-                      </div>
-                      <h3 className="text-sm font-semibold text-text-primary">
-                        {selectedInstance.profileName}
-                      </h3>
-                      <div className="dashboard-mono text-xs text-text-muted">
-                        Port {selectedInstance.port} ·{" "}
-                        {selectedInstance.headless ? "Headless" : "Headed"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          navigate("/dashboard/profiles", {
-                            state: {
-                              selectedProfileKey:
-                                selectedInstance.profileId ||
-                                selectedInstance.profileName,
-                            },
-                          })
-                        }
-                      >
-                        Open Profile
-                      </Button>
-                      {selectedInstance.status === "running" && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => handleStop(selectedInstance.id)}
-                        >
-                          Stop
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <InstanceTabsPanel
-                    tabs={selectedTabs}
-                    instanceId={selectedId || undefined}
-                  />
-                </>
+                <InstanceTabsPanel
+                  tabs={selectedTabs}
+                  instanceId={selectedId || undefined}
+                />
               ) : (
                 <div className="flex flex-1 items-center justify-center text-sm text-text-muted">
                   Select an instance to view details

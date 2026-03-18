@@ -12,6 +12,20 @@ interface Props {
 
 type SubTabId = "actions" | "live" | "console" | "errors";
 
+function TabInfo({ tab }: { tab: InstanceTab }) {
+  return (
+    <div className="flex flex-col gap-0.5 text-right">
+      <div className="flex items-center justify-end gap-1.5">
+        <span className="truncate text-xs font-medium text-text-secondary">
+          {tab.title || "Untitled"}
+        </span>
+        <IdBadge id={tab.id} />
+      </div>
+      <div className="truncate text-[10px] text-text-muted">{tab.url}</div>
+    </div>
+  );
+}
+
 export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
   const [activeSubTab, setActiveSubTab] = useState<SubTabId>("live");
 
@@ -24,32 +38,20 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
 
   if (!selectedTab) {
     return (
-      <div className="flex flex-1 rounded-xl border border-border-subtle bg-white/2">
-        <EmptyView message="Select a tab to view details" />
+      <div className="flex flex-1 items-center justify-center text-sm text-text-muted">
+        Select a tab to view details
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-48 flex-1 flex-col rounded-xl border border-border-subtle bg-white/2 relative overflow-hidden">
-      <div className="border-b border-border-subtle bg-black/5 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h5 className="truncate text-base font-semibold text-text-primary">
-              {selectedTab.title || "Untitled"}
-            </h5>
-            <div className="mt-1 truncate text-xs text-text-muted">
-              {selectedTab.url}
-            </div>
-          </div>
-          <IdBadge id={selectedTab.id} />
-        </div>
-      </div>
+    <div className="flex min-h-48 flex-1 flex-col overflow-hidden">
       <div className="flex-1 min-h-0">
         <TabsLayout
           tabs={subTabs}
           activeTab={activeSubTab}
           onChange={(id) => setActiveSubTab(id)}
+          rightSlot={<TabInfo tab={selectedTab} />}
         >
           {activeSubTab === "actions" && (
             <div className="h-full p-3">
@@ -71,18 +73,14 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
           {activeSubTab === "live" && (
             <div className="h-full">
               {instanceId ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="h-full w-full">
-                    <ScreencastTile
-                      key={selectedTab.id}
-                      instanceId={instanceId}
-                      tabId={selectedTab.id}
-                      label={selectedTab.title || selectedTab.id.slice(0, 8)}
-                      url={selectedTab.url}
-                      showTitle={false}
-                    />
-                  </div>
-                </div>
+                <ScreencastTile
+                  key={selectedTab.id}
+                  instanceId={instanceId}
+                  tabId={selectedTab.id}
+                  label={selectedTab.title || selectedTab.id.slice(0, 8)}
+                  url={selectedTab.url}
+                  showTitle={false}
+                />
               ) : (
                 <EmptyView message="No instance ID provided for live view." />
               )}

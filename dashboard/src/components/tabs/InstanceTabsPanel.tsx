@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { InstanceTab } from "../../generated/types";
-import TabItem from "./TabItem";
+import TabBar from "./TabBar";
 import SelectedTabPanel from "./SelectedTabPanel";
 
 interface Props {
@@ -32,51 +32,22 @@ export default function InstanceTabsPanel({
     [selectedTabId, tabs],
   );
 
+  if (tabs.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">
+        {emptyMessage}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-1 min-h-0 flex-col p-3">
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-        Open Tabs ({tabs.length})
-      </h4>
-
-      {tabs.length === 0 ? (
-        <div className="py-8 text-center text-sm text-text-muted">
-          {emptyMessage}
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row">
-          <div className="min-h-0 overflow-auto xl:w-80 xl:shrink-0">
-            <div className="space-y-1">
-              {tabs.map((tab) => {
-                const isSelected = tab.id === selectedTabId;
-
-                return (
-                  <div
-                    key={tab.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedTabId(tab.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedTabId(tab.id);
-                      }
-                    }}
-                    className={`w-full rounded-xl border text-left transition ${
-                      isSelected
-                        ? "border-primary bg-primary/10"
-                        : "border-border-subtle bg-white/2 hover:border-border-default hover:bg-white/3"
-                    }`}
-                  >
-                    <TabItem tab={tab} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <SelectedTabPanel selectedTab={selectedTab} instanceId={instanceId} />
-        </div>
-      )}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <TabBar
+        tabs={tabs}
+        selectedTabId={selectedTabId}
+        onSelect={setSelectedTabId}
+      />
+      <SelectedTabPanel selectedTab={selectedTab} instanceId={instanceId} />
     </div>
   );
 }

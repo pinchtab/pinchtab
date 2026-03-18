@@ -6,6 +6,8 @@ interface Props {
   memoryMB?: number;
   selected: boolean;
   onClick: () => void;
+  onStop?: () => void;
+  onOpenProfile?: () => void;
 }
 
 export default function InstanceListItem({
@@ -14,6 +16,8 @@ export default function InstanceListItem({
   memoryMB,
   selected,
   onClick,
+  onStop,
+  onOpenProfile,
 }: Props) {
   const statusColor =
     instance.status === "running"
@@ -25,22 +29,66 @@ export default function InstanceListItem({
   return (
     <button
       onClick={onClick}
-      className={`mb-2 flex w-full items-center gap-3 px-3 py-3 text-left ${
+      className={`mb-2 flex w-full flex-col gap-1 px-3 py-2.5 text-left ${
         selected
           ? "dashboard-panel dashboard-panel-selected border-primary"
           : "dashboard-panel dashboard-panel-hover"
       }`}
     >
-      <div className={`h-2 w-2 rounded-full ${statusColor}`} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-text-primary">
-          {instance.profileName}
-        </div>
-        <div className="dashboard-mono text-xs text-text-muted">
-          :{instance.port} · {tabCount} tabs
-          {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
+      <div className="flex w-full items-center gap-2">
+        <div className={`h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-text-primary">
+            {instance.profileName}
+          </div>
+          <div className="dashboard-mono text-xs text-text-muted">
+            :{instance.port} · {tabCount} tabs
+            {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
+          </div>
         </div>
       </div>
+      {selected && (
+        <div className="flex gap-1 pl-4 pt-1">
+          {onOpenProfile && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenProfile();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  onOpenProfile();
+                }
+              }}
+              className="rounded bg-bg-elevated px-2 py-0.5 text-[10px] font-medium text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+            >
+              Profile
+            </span>
+          )}
+          {onStop && instance.status === "running" && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStop();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  onStop();
+                }
+              }}
+              className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/20"
+            >
+              Stop
+            </span>
+          )}
+        </div>
+      )}
     </button>
   );
 }
