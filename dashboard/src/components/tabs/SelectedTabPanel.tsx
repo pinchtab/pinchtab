@@ -54,11 +54,11 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
           rightSlot={<TabInfo tab={selectedTab} />}
         >
           {activeSubTab === "actions" && (
-            <div className="h-full p-3">
+            <div className="h-full">
               <ActivityExplorer
                 embedded
                 showFilterMenu={false}
-                title="Tab activity"
+                title=""
                 summaryLabel="Actions"
                 initialFilters={{
                   instanceId: instanceId || "",

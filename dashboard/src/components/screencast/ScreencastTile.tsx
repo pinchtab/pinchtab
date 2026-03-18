@@ -322,8 +322,8 @@ export default function ScreencastTile({
           />
         )}
 
-        {url === "about:blank" && status !== "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 backdrop-blur-[2px]">
+        {url === "about:blank" && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-[2px]">
             <div className="text-xs text-text-muted">Empty tab</div>
             <button
               onClick={async () => {
