@@ -37,6 +37,72 @@ export default function ScreencastTile({
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
+  // ── Interactive click & scroll on the screencast canvas ──
+
+  const getPageCoords = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      // canvas.width/height = actual CDP viewport pixels
+      // rect.width/height = CSS display size
+      return {
+        x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+        y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+      };
+    },
+    [],
+  );
+
+  const handleCanvasClick = useCallback(
+    async (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (status !== "streaming") return;
+      const coords = getPageCoords(e);
+      if (!coords) return;
+      try {
+        await api.sendAction({
+          kind: "click",
+          tabId,
+          x: Math.round(coords.x),
+          y: Math.round(coords.y),
+          hasXY: true,
+        });
+      } catch (err) {
+        console.error("click failed", err);
+      }
+    },
+    [status, tabId, getPageCoords],
+  );
+
+  const handleCanvasWheel = useCallback(
+    async (e: React.WheelEvent<HTMLCanvasElement>) => {
+      if (status !== "streaming") return;
+      const coords = getPageCoords(e);
+      if (!coords) return;
+      try {
+        await api.sendAction({
+          kind: "scroll",
+          tabId,
+          x: Math.round(coords.x),
+          y: Math.round(coords.y),
+          deltaY: Math.round(e.deltaY),
+        });
+      } catch (err) {
+        console.error("scroll failed", err);
+      }
+    },
+    [status, tabId, getPageCoords],
+  );
+
+  // Prevent default wheel behavior on the canvas so the page doesn't scroll
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const prevent = (e: WheelEvent) => e.preventDefault();
+    canvas.addEventListener("wheel", prevent, { passive: false });
+    return () => canvas.removeEventListener("wheel", prevent);
+  }, []);
+
   // Reset local FPS when the tab changes to match the new tab's initial request
   useEffect(() => {
     setLocalFps(fps);
@@ -248,9 +314,11 @@ export default function ScreencastTile({
         ) : (
           <canvas
             ref={canvasRef}
-            className="max-h-full max-w-full object-contain"
+            className="max-h-full max-w-full cursor-pointer object-contain"
             width={800}
             height={600}
+            onClick={handleCanvasClick}
+            onWheel={handleCanvasWheel}
           />
         )}
 

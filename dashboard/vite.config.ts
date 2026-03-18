@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(() => {
   const backendPort = process.env.PINCHTAB_DEV_PORT || '9867'
   const backendUrl = `http://localhost:${backendPort}`
 

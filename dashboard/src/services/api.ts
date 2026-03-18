@@ -217,6 +217,16 @@ export async function closeTab(tabId: string): Promise<void> {
   await request(`/tabs/${encodeURIComponent(tabId)}`, { method: "DELETE" });
 }
 
+export async function sendAction(
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return request("/action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function subscribeToInstanceLogs(
   id: string,
   handlers: { onLogs?: (logs: string) => void },
