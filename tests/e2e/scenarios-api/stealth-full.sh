@@ -159,12 +159,8 @@ sleep 1  # Allow stealth.js injection
 
 end_test
 
-start_test "bot-detect-full: WebGL not SwiftShader (headless indicator)"
-
-pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl.getExtension(\"WEBGL_debug_renderer_info\"); return gl.getParameter(d.UNMASKED_RENDERER_WEBGL).toLowerCase().includes(\"swiftshader\"); } catch(e) { return false; } })()"}'
-assert_json_eq "$RESULT" '.result' 'false' "WebGL renderer not SwiftShader"
-
-end_test
+# Note: SwiftShader check moved to full stealth instance section below.
+# Light/medium levels don't spoof WebGL, so SwiftShader is expected in headless.
 
 start_test "bot-detect-full: outer window dimensions exist"
 
@@ -243,6 +239,20 @@ if [ -n "$FULL_URL" ]; then
 
   pt_post /evaluate '{"expression":"typeof window.chrome.loadTimes === \"function\""}'
   assert_json_eq "$RESULT" '.result' 'true' "chrome.loadTimes exists"
+
+  end_test
+
+  start_test "bot-detect-full: WebGL not SwiftShader (full stealth spoofs GPU)"
+
+  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl.getExtension(\"WEBGL_debug_renderer_info\"); return gl.getParameter(d.UNMASKED_RENDERER_WEBGL).toLowerCase().includes(\"swiftshader\"); } catch(e) { return false; } })()"}'
+  assert_json_eq "$RESULT" '.result' 'false' "WebGL renderer not SwiftShader"
+
+  end_test
+
+  start_test "bot-detect-full: WebGL reports Intel GPU"
+
+  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl.getExtension(\"WEBGL_debug_renderer_info\"); const r = gl.getParameter(d.UNMASKED_RENDERER_WEBGL); return r.includes(\"Intel\"); } catch(e) { return false; } })()"}'
+  assert_json_eq "$RESULT" '.result' 'true' "WebGL reports Intel GPU"
 
   end_test
 

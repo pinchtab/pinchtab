@@ -195,6 +195,11 @@
     addResult('screen_dimensions', screenOk, 
       `${screen.width}x${screen.height} @ ${screen.colorDepth}bit`, 'warn');
     
+    // Test: Battery API exists (headless often lacks this)
+    const hasBatteryAPI = typeof navigator.getBattery === 'function';
+    addResult('battery_api', hasBatteryAPI, 
+      hasBatteryAPI ? 'Available' : 'Missing', 'warn');
+    
     // Test: Notification permission queryable (not denied by default)
     let notifOk = true;
     try {

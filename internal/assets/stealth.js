@@ -163,6 +163,34 @@ navigator.permissions.query = (parameters) => (
     originalQuery(parameters)
 );
 
+// SCREEN DIMENSIONS - Headless often has weird/small values
+(function() {
+  const screenWidth = 1920;
+  const screenHeight = 1080;
+  const availHeight = 1055; // Account for taskbar
+  
+  Object.defineProperty(screen, 'width', { get: () => screenWidth, configurable: true });
+  Object.defineProperty(screen, 'height', { get: () => screenHeight, configurable: true });
+  Object.defineProperty(screen, 'availWidth', { get: () => screenWidth, configurable: true });
+  Object.defineProperty(screen, 'availHeight', { get: () => availHeight, configurable: true });
+  Object.defineProperty(screen, 'colorDepth', { get: () => 24, configurable: true });
+  Object.defineProperty(screen, 'pixelDepth', { get: () => 24, configurable: true });
+})();
+
+// BATTERY API - Headless often lacks this
+if (!navigator.getBattery) {
+  navigator.getBattery = function() {
+    return Promise.resolve({
+      charging: true,
+      chargingTime: 0,
+      dischargingTime: Infinity,
+      level: 1.0,
+      addEventListener: function() {},
+      removeEventListener: function() {}
+    });
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MEDIUM LEVEL - Standard stealth (may affect error monitoring)
 // ═══════════════════════════════════════════════════════════════════════════

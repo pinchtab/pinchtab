@@ -137,3 +137,21 @@ start_test "bot-detect: languages are set"
 assert_eval_poll "navigator.languages && navigator.languages.length > 0" "true" "languages present"
 
 end_test
+
+start_test "bot-detect: screen dimensions realistic"
+
+assert_eval_poll "screen.width >= 1024 && screen.height >= 768" "true" "screen dimensions realistic"
+
+end_test
+
+start_test "bot-detect: screen colorDepth is 24"
+
+assert_eval_poll "screen.colorDepth === 24" "true" "colorDepth is 24"
+
+end_test
+
+start_test "bot-detect: battery API exists"
+
+assert_eval_poll "typeof navigator.getBattery === 'function'" "true" "getBattery exists"
+
+end_test
