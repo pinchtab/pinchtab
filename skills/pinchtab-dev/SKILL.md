@@ -131,13 +131,80 @@ cd dashboard && npm test
 
 ## Dashboard Development
 
-For hot-reload development:
+### Setup
+
+Start hot-reload development:
 ```bash
 ./dev dashboard
 ```
 
-Opens at `http://localhost:5173/dashboard/` with Vite hot-reload.
-Backend runs on `:9867`, Vite proxies API calls.
+This runs:
+- Backend on `:9867`
+- Vite dev server on `:5173` with hot-reload
+- Dashboard at `http://localhost:5173/dashboard/`
+
+### Development Workflow (Use PinchTab to Develop PinchTab)
+
+**Do not assume changes worked.** Use pinchtab itself to verify changes visually:
+
+1. **Start dev mode**:
+   ```bash
+   ./dev dashboard
+   ```
+
+2. **Make changes** to files in `dashboard/src/`
+
+3. **Verify with pinchtab** — use the pinchtab skill to inspect the dashboard:
+   ```bash
+   # Navigate to the page under development
+   curl -X POST http://localhost:9867/navigate \
+     -d '{"url":"http://localhost:5173/dashboard/settings"}'
+   
+   # Take a screenshot to verify the change
+   curl -X POST http://localhost:9867/screenshot \
+     -d '{"path":"/tmp/dashboard-check.png"}'
+   
+   # Or get a snapshot to inspect elements
+   curl -s http://localhost:9867/snapshot | jq .
+   ```
+
+4. **Provide evidence** — when reporting changes, include:
+   - Link to the page: `http://localhost:5173/dashboard/{page}`
+   - Screenshot of the result
+   - Relevant snapshot data if inspecting specific elements
+
+### Example: Verifying a Settings Page Change
+
+```bash
+# Navigate to settings
+curl -X POST http://localhost:9867/navigate \
+  -d '{"url":"http://localhost:5173/dashboard/settings"}'
+
+# Screenshot the result
+curl -X POST http://localhost:9867/screenshot \
+  -d '{"path":"./dashboard-settings.png","fullPage":true}'
+
+# Find specific element
+curl -X POST http://localhost:9867/find \
+  -d '{"selector":"[data-testid=stealth-level]"}'
+```
+
+### Key Dashboard Pages
+
+| Page | URL | Purpose |
+|------|-----|---------|
+| Home | `/dashboard/` | Instance overview |
+| Settings | `/dashboard/settings` | Configuration |
+| Profiles | `/dashboard/profiles` | Browser profiles |
+| Tabs | `/dashboard/tabs` | Active tabs |
+
+### Dashboard Tech Stack
+
+- React 19 + TypeScript
+- Vite (build/dev)
+- Tailwind CSS
+- Zustand (state)
+- Vitest (tests)
 
 ## Stealth Module
 
