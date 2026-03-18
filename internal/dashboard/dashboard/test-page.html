@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PinchTab Test Page</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+  .overlay {
+    position: relative; z-index: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; min-height: 100vh; gap: 24px;
+    pointer-events: none;
+  }
+  .logo { font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #fff; }
+  .logo span { color: #00d4ff; }
+  .version { font-size: 12px; color: #666; font-family: monospace; }
+  .test-btn {
+    pointer-events: auto; background: #00d4ff22; border: 1px solid #00d4ff44;
+    color: #00d4ff; padding: 12px 32px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .test-btn:hover { background: #00d4ff33; border-color: #00d4ff88; }
+  .test-btn:active { background: #00d4ff44; transform: scale(0.97); }
+  .counter { font-size: 13px; color: #555; font-family: monospace; }
+  .hint { font-size: 11px; color: #333; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+<canvas id="dots"></canvas>
+<div class="overlay">
+  <div class="logo">PINCH<span>TAB</span></div>
+  <div class="version" id="version">test page</div>
+  <button class="test-btn" id="testBtn">Click me</button>
+  <div class="counter" id="counter">0 clicks</div>
+</div>
+<div class="hint">Click anywhere to draw • Scroll to change dot size</div>
+<script>
+  const canvas = document.getElementById('dots');
+  const ctx = canvas.getContext('2d');
+  let clicks = 0;
+  let dotSize = 12;
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Draw red dot on click anywhere
+  document.addEventListener('click', (e) => {
+    ctx.beginPath();
+    ctx.arc(e.clientX, e.clientY, dotSize, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${(clicks * 30) % 360}, 80%, 55%)`;
+    ctx.fill();
+    clicks++;
+    document.getElementById('counter').textContent = clicks + ' click' + (clicks !== 1 ? 's' : '');
+  });
+
+  // Scroll changes dot size
+  document.addEventListener('wheel', (e) => {
+    dotSize = Math.max(3, Math.min(50, dotSize + (e.deltaY > 0 ? 2 : -2)));
+  });
+
+  // Test button
+  document.getElementById('testBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const btn = e.target;
+    btn.textContent = '✓ Clicked!';
+    btn.style.borderColor = '#00ff88';
+    btn.style.color = '#00ff88';
+    setTimeout(() => { btn.textContent = 'Click me'; btn.style.borderColor = ''; btn.style.color = ''; }, 1500);
+  });
+
+  // Show version from API if available
+  fetch('/health').then(r => r.json()).then(d => {
+    document.getElementById('version').textContent = 'v' + (d.version || 'dev');
+  }).catch(() => {});
+</script>
+</body>
+</html>

@@ -322,6 +322,25 @@ export default function ScreencastTile({
           />
         )}
 
+        {url === "about:blank" && status !== "error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 backdrop-blur-[2px]">
+            <div className="text-xs text-text-muted">Empty tab</div>
+            <button
+              onClick={async () => {
+                try {
+                  const testUrl = `${window.location.origin}/dashboard/test-page.html`;
+                  await api.navigateTab(tabId, testUrl);
+                } catch (err) {
+                  console.error("navigate failed", err);
+                }
+              }}
+              className="rounded bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/30"
+            >
+              Load test page
+            </button>
+          </div>
+        )}
+
         {status === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 text-sm text-text-primary backdrop-blur-[2px]">
             <div className="font-semibold text-white drop-shadow-md">
