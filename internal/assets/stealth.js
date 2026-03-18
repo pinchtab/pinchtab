@@ -70,12 +70,21 @@ const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinch
 
 if (stealthLevel === 'full') {
 
-const getParameter = WebGLRenderingContext.prototype.getParameter;
-WebGLRenderingContext.prototype.getParameter = function(parameter) {
-  if (parameter === 37445) return 'Intel Inc.';
-  if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-  return getParameter.apply(this, arguments);
-};
+// Patch both WebGL1 and WebGL2 — modern Chrome defaults to WebGL2.
+// Without patching WebGL2, the SwiftShader renderer leaks via WEBGL_debug_renderer_info.
+function patchWebGLGetParameter(ctx) {
+  if (!ctx) return;
+  const orig = ctx.prototype.getParameter;
+  ctx.prototype.getParameter = function(parameter) {
+    if (parameter === 37445) return 'Intel Inc.';          // UNMASKED_VENDOR_WEBGL
+    if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+    return orig.apply(this, arguments);
+  };
+}
+patchWebGLGetParameter(WebGLRenderingContext);
+if (typeof WebGL2RenderingContext !== 'undefined') {
+  patchWebGLGetParameter(WebGL2RenderingContext);
+}
 
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
