@@ -129,7 +129,7 @@ func TestHandleBatchWithCallbackURL(t *testing.T) {
 
 	body := `{
 		"agentId": "a1",
-		"callbackUrl": "http://example.com/hook",
+		"callbackUrl": "http://93.184.216.34/hook",
 		"tasks": [
 			{"action":"click","tabId":"tab-1","ref":"e1"}
 		]
@@ -142,6 +142,45 @@ func TestHandleBatchWithCallbackURL(t *testing.T) {
 
 	if w.Code != 202 {
 		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleBatchRejectsInvalidCallbackURL(t *testing.T) {
+	_, mux, executor := setupHandlerTest(t)
+	defer executor.Close()
+
+	body := `{
+		"agentId": "a1",
+		"callbackUrl": "http://127.0.0.1/hook",
+		"tasks": [
+			{"action":"click","tabId":"tab-1","ref":"e1"}
+		]
+	}`
+
+	req := httptest.NewRequest("POST", "/tasks/batch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 202 {
+		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	tasks, ok := resp["tasks"].([]any)
+	if !ok || len(tasks) != 1 {
+		t.Fatalf("expected 1 task result, got %v", resp["tasks"])
+	}
+	item := tasks[0].(map[string]any)
+	if item["state"] != "rejected" {
+		t.Fatalf("expected rejected state, got %v", item["state"])
+	}
+	if item["error"] == nil || item["error"] == "" {
+		t.Fatal("expected validation error for invalid callbackUrl")
 	}
 }
 

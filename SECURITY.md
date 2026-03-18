@@ -1,14 +1,34 @@
 # Security Policy
 
+For the user-facing security guide, see
+[docs/guides/security.md](./docs/guides/security.md).
+
 ## Supported Versions
 
 We currently support the following versions of Pinchtab with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| v0.7.x  | :white_check_mark: |
-| v0.6.x  | :white_check_mark: |
-| < v0.6  | :x:                |
+| v0.8.4  | :white_check_mark: |
+| < v0.8.3  | :x: |
+
+## Current Posture
+
+The current codebase has the following security controls in place:
+
+- query-string token auth has been removed
+- browser dashboard auth uses a server-side `HttpOnly` session cookie instead
+  of raw-token URL or browser-storage flows
+- cookie-authenticated browser requests are same-origin enforced
+- sensitive dashboard actions use elevation rather than normal browser session
+  auth alone
+- login attempts are rate-limited and important auth/admin actions are audited
+- current-tab domain policy is enforced after load, not only at initial
+  navigation time
+- popup/opener abuse is hardened in the browser runtime
+- safer default Chrome flags are used than in the earlier posture
+- scheduler callback destinations are validated before use
+- attach is disabled by default
 
 ## Reporting a Vulnerability
 

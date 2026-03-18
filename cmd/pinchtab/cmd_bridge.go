@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +14,7 @@ var bridgeCmd = &cobra.Command{
 	Use:   "bridge",
 	Short: "Start single-instance bridge-only server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := config.Load()
+		cfg := loadConfig()
 		engineMode, err := resolveBridgeEngine(bridgeEngine, cfg.Engine)
 		if err != nil {
 			return err

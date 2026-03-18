@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addTokenToUrl } from "../../services/auth";
+import { sameOriginUrl } from "../../services/auth";
 import * as api from "../../services/api";
 
 interface Props {
@@ -124,7 +124,7 @@ export default function ScreencastTile({
       maxWidth: String(maxWidth),
       fps: String(localFps),
     });
-    const path = addTokenToUrl(
+    const path = sameOriginUrl(
       `/instances/${encodeURIComponent(instanceId)}/proxy/screencast?${params.toString()}`,
     );
     const wsUrl = new URL(path, window.location.origin);
@@ -190,12 +190,14 @@ export default function ScreencastTile({
     socket.onerror = () => {
       if (!disposed) {
         setStatus("error");
+        void api.handleRealtimeAuthFailure();
       }
     };
 
     socket.onclose = () => {
       if (!disposed) {
         setStatus("error");
+        void api.handleRealtimeAuthFailure();
       }
     };
 

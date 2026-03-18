@@ -11,7 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/engine"
-	"github.com/pinchtab/pinchtab/internal/idutil"
+	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/semantic"
 )
 
@@ -21,7 +21,7 @@ type Handlers struct {
 	Profiles     bridge.ProfileService
 	Dashboard    *dashboard.Dashboard
 	Orchestrator bridge.OrchestratorService
-	IdMgr        *idutil.Manager
+	IdMgr        *ids.Manager
 	Matcher      semantic.ElementMatcher
 	IntentCache  *semantic.IntentCache
 	Recovery     *semantic.RecoveryEngine
@@ -38,7 +38,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		Profiles:     p,
 		Dashboard:    d,
 		Orchestrator: o,
-		IdMgr:        idutil.NewManager(),
+		IdMgr:        ids.NewManager(),
 		Matcher:      matcher,
 		IntentCache:  intentCache,
 	}

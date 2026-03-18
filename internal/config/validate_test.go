@@ -517,6 +517,106 @@ func TestValidateIDPIConfig_FileSchemeBlocked(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_DownloadAllowedDomains(t *testing.T) {
+	tests := []struct {
+		name    string
+		domains []string
+		wantErr bool
+	}{
+		{"empty list", nil, false},
+		{"valid entries", []string{"pinchtab.com", "*.pinchtab.com"}, false},
+		{"whitespace only", []string{"   "}, true},
+		{"internal whitespace", []string{"pinchtab .com"}, true},
+		{"file scheme", []string{"file:///tmp/file.txt"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				Security: SecurityConfig{
+					DownloadAllowedDomains: tt.domains,
+				},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Fatalf("ValidateFileConfig(downloadAllowedDomains=%v) error=%v, want %v (errs: %v)", tt.domains, hasErr, tt.wantErr, errs)
+			}
+			if tt.wantErr && !strings.Contains(errs[0].Error(), "security.downloadAllowedDomains") {
+				t.Fatalf("expected security.downloadAllowedDomains error, got %v", errs[0])
+			}
+		})
+	}
+}
+
+func TestValidateFileConfig_TransferLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		apply   func(*SecurityConfig)
+		wantErr string
+	}{
+		{
+			name: "valid limits",
+			apply: func(s *SecurityConfig) {
+				s.DownloadMaxBytes = intPtr(DefaultDownloadMaxBytes)
+				s.UploadMaxRequestBytes = intPtr(DefaultUploadMaxRequestBytes)
+				s.UploadMaxFiles = intPtr(DefaultUploadMaxFiles)
+				s.UploadMaxFileBytes = intPtr(DefaultUploadMaxFileBytes)
+				s.UploadMaxTotalBytes = intPtr(DefaultUploadMaxTotalBytes)
+			},
+		},
+		{
+			name: "download max bytes too large",
+			apply: func(s *SecurityConfig) {
+				s.DownloadMaxBytes = intPtr(MaxDownloadMaxBytes + 1)
+			},
+			wantErr: "security.downloadMaxBytes",
+		},
+		{
+			name: "upload max files invalid",
+			apply: func(s *SecurityConfig) {
+				s.UploadMaxFiles = intPtr(0)
+			},
+			wantErr: "security.uploadMaxFiles",
+		},
+		{
+			name: "upload max file bytes too large",
+			apply: func(s *SecurityConfig) {
+				s.UploadMaxFileBytes = intPtr(MaxUploadMaxFileBytes + 1)
+			},
+			wantErr: "security.uploadMaxFileBytes",
+		},
+		{
+			name: "upload max file bytes exceeds total",
+			apply: func(s *SecurityConfig) {
+				s.UploadMaxFileBytes = intPtr(8 << 20)
+				s.UploadMaxTotalBytes = intPtr(4 << 20)
+			},
+			wantErr: "security.uploadMaxFileBytes/uploadMaxTotalBytes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{}
+			tt.apply(&fc.Security)
+			errs := ValidateFileConfig(fc)
+			if tt.wantErr == "" {
+				if len(errs) > 0 {
+					t.Fatalf("expected no errors, got %v", errs)
+				}
+				return
+			}
+			if len(errs) == 0 {
+				t.Fatalf("expected validation error containing %q, got none", tt.wantErr)
+			}
+			if !strings.Contains(errs[0].Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErr, errs[0])
+			}
+		})
+	}
+}
+
 // TestValidateIDPIConfig_EmptyCustomPattern verifies that an empty or
 // whitespace-only custom pattern is rejected.
 func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {

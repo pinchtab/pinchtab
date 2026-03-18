@@ -13,6 +13,9 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlinks are not allowed in imported profiles: %s", path)
+		}
 
 		rel, err := filepath.Rel(src, path)
 		if err != nil {

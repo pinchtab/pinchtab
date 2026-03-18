@@ -26,6 +26,34 @@ assert_json_contains "$RESULT" ".files" "2" "uploaded 2 files"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "tab-specific upload: locked tab rejects wrong owner"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/upload.html\"}"
+LOCKED_UPLOAD_TAB_ID=$(get_tab_id)
+show_tab "created" "$LOCKED_UPLOAD_TAB_ID"
+
+pt_post "/tabs/${LOCKED_UPLOAD_TAB_ID}/lock" -d '{"owner":"agent-a"}'
+assert_ok "lock upload tab"
+
+pinchtab POST "/tabs/${LOCKED_UPLOAD_TAB_ID}/upload" \
+  -H "X-Owner: intruder" \
+  -d '{"selector":"#single-file","files":["data:text/plain;base64,dGVzdCBmaWxl"]}'
+_echo_truncated
+assert_http_status 423 "wrong owner blocked on upload"
+assert_contains "$RESULT" "tab_locked" "locked tab error returned for upload"
+
+pinchtab POST "/tabs/${LOCKED_UPLOAD_TAB_ID}/upload" \
+  -H "X-Owner: agent-a" \
+  -d '{"selector":"#single-file","files":["data:text/plain;base64,dGVzdCBmaWxl"]}'
+_echo_truncated
+assert_ok "correct owner can upload to locked tab"
+
+pt_post "/tabs/${LOCKED_UPLOAD_TAB_ID}/unlock" -d '{"owner":"agent-a"}'
+assert_ok "unlock upload tab"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "tab-specific download: GET /tabs/{id}/download"
 
 pt_post /navigate -d '{"url":"https://httpbin.org/robots.txt"}'
@@ -54,6 +82,32 @@ end_test
 # Tests that opening a 3rd managed tab evicts the least recently used one.
 # Note: Chrome keeps an initial about:blank target that is unmanaged.
 # Eviction is based on managed tab count, not Chrome target count.
+
+# ─────────────────────────────────────────────────────────────────
+start_test "tab-specific download: locked tab rejects wrong owner"
+
+pt_post /navigate -d '{"url":"https://httpbin.org/robots.txt"}'
+LOCKED_DOWNLOAD_TAB_ID=$(get_tab_id)
+show_tab "created" "$LOCKED_DOWNLOAD_TAB_ID"
+
+pt_post "/tabs/${LOCKED_DOWNLOAD_TAB_ID}/lock" -d '{"owner":"agent-a"}'
+assert_ok "lock download tab"
+
+pinchtab GET "/tabs/${LOCKED_DOWNLOAD_TAB_ID}/download?url=https://httpbin.org/json" \
+  -H "X-Owner: intruder"
+_echo_truncated
+assert_http_status 423 "wrong owner blocked on download"
+assert_contains "$RESULT" "tab_locked" "locked tab error returned for download"
+
+pinchtab GET "/tabs/${LOCKED_DOWNLOAD_TAB_ID}/download?url=https://httpbin.org/json" \
+  -H "X-Owner: agent-a"
+_echo_truncated
+assert_ok "correct owner can download from locked tab"
+
+pt_post "/tabs/${LOCKED_DOWNLOAD_TAB_ID}/unlock" -d '{"owner":"agent-a"}'
+assert_ok "unlock download tab"
+
+end_test
 
 ORIG_URL="$E2E_SERVER"
 E2E_SERVER="$E2E_SECURE_SERVER"

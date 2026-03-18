@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -150,6 +151,11 @@ func (r *SubmitRequest) Validate() error {
 	}
 	if r.Action == "" {
 		return fmt.Errorf("missing required field 'action'")
+	}
+	if strings.TrimSpace(r.CallbackURL) != "" {
+		if err := validateCallbackURL(r.CallbackURL); err != nil {
+			return fmt.Errorf("invalid callbackUrl: %w", err)
+		}
 	}
 	return nil
 }

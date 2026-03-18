@@ -132,6 +132,15 @@ func TestSubmitRequestValidate(t *testing.T) {
 	if err := noAction.Validate(); err == nil {
 		t.Error("missing action should fail")
 	}
+
+	blockedCallback := SubmitRequest{
+		AgentID:     "a",
+		Action:      "click",
+		CallbackURL: "http://127.0.0.1/hook",
+	}
+	if err := blockedCallback.Validate(); err == nil {
+		t.Error("loopback callbackUrl should fail")
+	}
 }
 
 func TestGenerateTaskID(t *testing.T) {

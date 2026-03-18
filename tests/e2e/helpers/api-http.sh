@@ -18,7 +18,7 @@ wait_for_orchestrator_instance_status() {
     fi
 
     local inst_json
-    inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+    inst_json=$(e2e_curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
     if [ -n "$inst_json" ]; then
       local inst_status
       inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
@@ -48,7 +48,7 @@ wait_for_instances_gone() {
     local remaining=0
     for instance_id in "${instance_ids[@]}"; do
       local inst_json
-      inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+      inst_json=$(e2e_curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
       if [ -n "$inst_json" ]; then
         local inst_status
         inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
@@ -84,7 +84,7 @@ wait_for_instances_running() {
     local ready=0
     for instance_id in "${instance_ids[@]}"; do
       local inst_json
-      inst_json=$(curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
+      inst_json=$(e2e_curl -sf "${base_url}/instances/${instance_id}" 2>/dev/null || true)
       if [ -n "$inst_json" ]; then
         local inst_status
         inst_status=$(echo "$inst_json" | jq -r '.status // empty' 2>/dev/null || true)
@@ -119,7 +119,7 @@ pinchtab() {
   echo -e "${BLUE}→ curl -X $method ${E2E_SERVER}$path $(printf "%q " "$@")${NC}" >&2
 
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(e2e_curl -s -w "\n%{http_code}" \
     -X "$method" \
     "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
@@ -160,7 +160,7 @@ pt_patch() {
   local body="$2"
   echo -e "${BLUE}→ curl -X PATCH ${E2E_SERVER}$path${NC}" >&2
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(e2e_curl -s -w "\n%{http_code}" \
     -X PATCH \
     "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
@@ -174,7 +174,7 @@ pt_delete() {
   local path="$1"
   echo -e "${BLUE}→ curl -X DELETE ${E2E_SERVER}$path${NC}" >&2
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(e2e_curl -s -w "\n%{http_code}" \
     -X DELETE \
     "${E2E_SERVER}$path")
   RESULT=$(echo "$response" | head -n -1)
@@ -187,7 +187,7 @@ pt_post_raw() {
   local body="$2"
   echo -e "${BLUE}→ curl -X POST ${E2E_SERVER}$path -d '$body'${NC}" >&2
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(e2e_curl -s -w "\n%{http_code}" \
     -X POST \
     "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
@@ -297,7 +297,7 @@ press_key() {
 }
 
 get_tab_count() {
-  curl -s "${E2E_SERVER}/tabs" | jq '.tabs | length'
+  e2e_curl -s "${E2E_SERVER}/tabs" | jq '.tabs | length'
 }
 
 get_tab_id() {

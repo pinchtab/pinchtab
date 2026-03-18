@@ -17,6 +17,7 @@ E2E_SECURE_SERVER="${E2E_SECURE_SERVER:-http://localhost:9998}"
 E2E_MEDIUM_SERVER="${E2E_MEDIUM_SERVER:-}"
 E2E_FULL_SERVER="${E2E_FULL_SERVER:-}"
 E2E_BRIDGE_URL="${E2E_BRIDGE_URL:-}"
+E2E_SERVER_TOKEN="${E2E_SERVER_TOKEN:-}"
 E2E_BRIDGE_TOKEN="${E2E_BRIDGE_TOKEN:-}"
 FIXTURES_URL="${FIXTURES_URL:-http://localhost:8080}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
@@ -45,10 +46,24 @@ get_time_ms() {
   fi
 }
 
+e2e_curl() {
+  local token="${E2E_SERVER_TOKEN:-}"
+  if [ "${1:-}" = "--token" ]; then
+    token="${2:-}"
+    shift 2
+  fi
+
+  if [ -n "$token" ]; then
+    curl -H "Authorization: Bearer ${token}" "$@"
+  else
+    curl "$@"
+  fi
+}
+
 wait_for_instance_ready() {
   local base_url="$1"
   local timeout_sec="${2:-60}"
-  local token="${3:-}"
+  local token="${3:-${E2E_SERVER_TOKEN:-}}"
   local started_at
   started_at=$(date +%s)
 
@@ -61,11 +76,7 @@ wait_for_instance_ready() {
     fi
 
     local health_json
-    if [ -n "$token" ]; then
-      health_json=$(curl -sf -H "Authorization: Bearer ${token}" "${base_url}/health" 2>/dev/null || true)
-    else
-      health_json=$(curl -sf "${base_url}/health" 2>/dev/null || true)
-    fi
+    health_json=$(e2e_curl --token "$token" -sf "${base_url}/health" 2>/dev/null || true)
     if [ -n "$health_json" ]; then
       local inst_status
       inst_status=$(echo "$health_json" | jq -r '.defaultInstance.status // .status // empty' 2>/dev/null || true)

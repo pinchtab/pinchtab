@@ -11,7 +11,7 @@ import (
 	"net/http"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) evaluateEnabled() bool {
@@ -23,7 +23,7 @@ func (h *Handlers) evaluateEnabled() bool {
 // @Endpoint POST /evaluate
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	if !h.evaluateEnabled() {
-		web.ErrorCode(w, 403, "evaluate_disabled", web.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
+		httpx.ErrorCode(w, 403, "evaluate_disabled", httpx.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
 			"setting": "security.allowEvaluate",
 		})
 		return
@@ -34,23 +34,26 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 		Expression string `json:"expression"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 	if req.Expression == "" {
-		web.Error(w, 400, fmt.Errorf("expression required"))
+		httpx.Error(w, 400, fmt.Errorf("expression required"))
 		return
 	}
 
-	ctx, _, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	slog.Warn("evaluate",
 		"tabId", req.TabID,
@@ -60,11 +63,11 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 
 	var result any
 	if err := chromedp.Run(tCtx, chromedp.Evaluate(req.Expression, &result)); err != nil {
-		web.Error(w, 500, fmt.Errorf("evaluate: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("evaluate: %w", err))
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{"result": result})
+	httpx.JSON(w, 200, map[string]any{"result": result})
 }
 
 // HandleTabEvaluate runs JavaScript in a tab identified by path ID.
@@ -72,7 +75,7 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 // @Endpoint POST /tabs/{id}/evaluate
 func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
 	if !h.evaluateEnabled() {
-		web.ErrorCode(w, 403, "evaluate_disabled", web.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
+		httpx.ErrorCode(w, 403, "evaluate_disabled", httpx.DisabledEndpointMessage("evaluate", "security.allowEvaluate"), false, map[string]any{
 			"setting": "security.allowEvaluate",
 		})
 		return
@@ -80,23 +83,23 @@ func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
 
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	body := map[string]any{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if rawTabID, ok := body["tabId"]; ok {
 		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
 			return
 		} else if provided != tabID {
-			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 			return
 		}
 	}
@@ -105,7 +108,7 @@ func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 

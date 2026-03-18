@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>IDPI Domain Pivot</title>
+</head>
+<body>
+  <h1>Allowed Origin Before Pivot</h1>
+  <p>This page starts on the fixtures origin, then pivots the tab to a blocked domain.</p>
+  <script>
+    setTimeout(function () {
+      window.location.href = "https://example.com/";
+    }, 250);
+  </script>
+</body>
+</html>

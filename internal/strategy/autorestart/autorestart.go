@@ -18,10 +18,10 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
-	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 const (
@@ -435,7 +435,7 @@ func (s *Strategy) stabilityLoop() {
 func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
 	target, err := s.ensureRunning()
 	if err != nil {
-		web.Error(w, 503, err)
+		httpx.Error(w, 503, err)
 		return
 	}
 	strategy.EnrichForTarget(r, s.orch, target)
@@ -456,14 +456,14 @@ func (s *Strategy) ensureRunning() (string, error) {
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 	target := s.orch.FirstRunningURL()
 	if target == "" {
-		web.JSON(w, 200, map[string]any{"tabs": []any{}})
+		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
 	proxy.HTTP(w, r, target+"/tabs")
 }
 
 func (s *Strategy) handleStatus(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, s.State())
+	httpx.JSON(w, 200, s.State())
 }
 
 func (s *Strategy) hasRestartLimit() bool {

@@ -6,25 +6,25 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	// Guard against nil Bridge
 	if h.Bridge == nil {
-		web.JSON(w, 503, map[string]any{"status": "error", "reason": "bridge not initialized"})
+		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": "bridge not initialized"})
 		return
 	}
 
 	// Ensure Chrome is initialized before checking health
 	if err := h.ensureChrome(); err != nil {
-		web.JSON(w, 503, map[string]any{"status": "error", "reason": fmt.Sprintf("chrome initialization failed: %v", err)})
+		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": fmt.Sprintf("chrome initialization failed: %v", err)})
 		return
 	}
 
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
-		web.JSON(w, 503, map[string]any{"status": "error", "reason": err.Error()})
+		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": err.Error()})
 		return
 	}
 
@@ -41,16 +41,16 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		resp["crashes"] = bridge.CrashSnapshot()
 	}
 
-	web.JSON(w, 200, resp)
+	httpx.JSON(w, 200, resp)
 }
 
 func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized for this instance
 	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization failed: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization failed: %w", err))
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "chrome_ready"})
+	httpx.JSON(w, 200, map[string]string{"status": "chrome_ready"})
 }
 
 func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
@@ -69,40 +69,40 @@ func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	web.JSON(w, 200, result)
+	httpx.JSON(w, 200, result)
 }
 
 func (h *Handlers) HandleTabMetrics(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("missing tab id"))
+		httpx.Error(w, 400, fmt.Errorf("missing tab id"))
 		return
 	}
 
 	if h.Bridge == nil {
-		web.Error(w, 503, fmt.Errorf("bridge not initialized"))
+		httpx.Error(w, 503, fmt.Errorf("bridge not initialized"))
 		return
 	}
 
 	mem, err := h.Bridge.GetMemoryMetrics(tabID)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("failed to get metrics: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("failed to get metrics: %w", err))
 		return
 	}
 
-	web.JSON(w, 200, mem)
+	httpx.JSON(w, 200, mem)
 }
 
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	// Guard against nil Bridge
 	if h.Bridge == nil {
-		web.Error(w, 503, fmt.Errorf("bridge not initialized"))
+		httpx.Error(w, 503, fmt.Errorf("bridge not initialized"))
 		return
 	}
 
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
-		web.Error(w, 503, err)
+		httpx.Error(w, 503, err)
 		return
 	}
 
@@ -121,5 +121,5 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 		}
 		tabs = append(tabs, entry)
 	}
-	web.JSON(w, 200, map[string]any{"tabs": tabs})
+	httpx.JSON(w, 200, map[string]any{"tabs": tabs})
 }

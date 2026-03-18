@@ -190,6 +190,9 @@ func TestApplyRecommendedSecurityDefaults(t *testing.T) {
 	if fc.Security.AllowEvaluate == nil || *fc.Security.AllowEvaluate {
 		t.Fatalf("expected allowEvaluate to reset to false, got %+v", fc.Security.AllowEvaluate)
 	}
+	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
+		t.Fatalf("expected attach.enabled to reset to false, got %+v", fc.Security.Attach.Enabled)
+	}
 	if !fc.Security.IDPI.Enabled {
 		t.Fatalf("expected idpi to be enabled")
 	}
@@ -260,6 +263,9 @@ func TestRestoreSecurityDefaults(t *testing.T) {
 	}
 	if loaded.Server.Bind != "127.0.0.1" {
 		t.Fatalf("expected bind to be restored, got %q", loaded.Server.Bind)
+	}
+	if loaded.Security.Attach.Enabled == nil || *loaded.Security.Attach.Enabled {
+		t.Fatalf("expected attach.enabled to be restored to false, got %+v", loaded.Security.Attach.Enabled)
 	}
 	if !loaded.Security.IDPI.Enabled {
 		t.Fatalf("expected idpi to be enabled after restore")

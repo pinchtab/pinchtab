@@ -95,6 +95,47 @@ func TestProfileManagerImportBadSource(t *testing.T) {
 	}
 }
 
+func TestProfileManagerImportRejectsSymlinkSource(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	src := filepath.Join(t.TempDir(), "chrome-src")
+	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
+
+	link := filepath.Join(t.TempDir(), "chrome-link")
+	if err := os.Symlink(src, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	err := pm.Import("bad-link", link)
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink source import to fail, got %v", err)
+	}
+}
+
+func TestProfileManagerImportRejectsSymlinkEntry(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	src := filepath.Join(t.TempDir(), "chrome-src")
+	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
+
+	target := filepath.Join(t.TempDir(), "outside-cookie.txt")
+	if err := os.WriteFile(target, []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(src, "Default", "link.txt")); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	err := pm.Import("bad-entry", src)
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink entry import to fail, got %v", err)
+	}
+}
+
 func TestProfileManagerListReadsAccountFromPreferences(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)

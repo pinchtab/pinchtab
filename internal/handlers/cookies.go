@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
@@ -22,9 +22,12 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("url")
 	name := r.URL.Query().Get("name")
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
@@ -43,7 +46,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 			return err
 		}),
 	); err != nil {
-		web.Error(w, 500, fmt.Errorf("get cookies: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("get cookies: %w", err))
 		return
 	}
 
@@ -73,7 +76,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"url":     url,
 		"cookies": result,
 		"count":   len(result),
@@ -86,7 +89,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabGetCookies(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
@@ -121,23 +124,26 @@ type cookieSetRequest struct {
 func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 	var req cookieRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if req.URL == "" {
-		web.Error(w, 400, fmt.Errorf("url is required"))
+		httpx.Error(w, 400, fmt.Errorf("url is required"))
 		return
 	}
 
 	if len(req.Cookies) == 0 {
-		web.Error(w, 400, fmt.Errorf("cookies array is empty"))
+		httpx.Error(w, 400, fmt.Errorf("cookies array is empty"))
 		return
 	}
 
-	ctx, _, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
@@ -186,7 +192,7 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"set":    successCount,
 		"failed": len(req.Cookies) - successCount,
 		"total":  len(req.Cookies),
@@ -199,26 +205,26 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabSetCookies(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	reqBody := cookieRequest{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&reqBody); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if reqBody.TabID != "" && reqBody.TabID != tabID {
-		web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+		httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 		return
 	}
 	reqBody.TabID = tabID
 
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 

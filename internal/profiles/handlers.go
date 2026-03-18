@@ -7,7 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
@@ -28,7 +29,7 @@ func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
 func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 	profiles, err := pm.List()
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 
@@ -58,11 +59,11 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-		web.JSON(w, 200, filtered)
+		httpx.JSON(w, 200, filtered)
 		return
 	}
 
-	web.JSON(w, 200, profiles)
+	httpx.JSON(w, 200, profiles)
 }
 
 func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -72,11 +73,11 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		UseWhen     string `json:"useWhen"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 	if req.Name == "" {
-		web.Error(w, 400, fmt.Errorf("name required"))
+		httpx.Error(w, 400, fmt.Errorf("name required"))
 		return
 	}
 
@@ -88,17 +89,18 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if err := pm.CreateWithMeta(req.Name, meta); err != nil {
 		// Validation errors → 400, already exists → 409, others → 500
 		if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
-			web.Error(w, 400, err)
+			httpx.Error(w, 400, err)
 		} else if strings.Contains(err.Error(), "already exists") {
-			web.Error(w, 409, err)
+			httpx.Error(w, 409, err)
 		} else {
-			web.Error(w, 500, err)
+			httpx.Error(w, 500, err)
 		}
 		return
 	}
 
 	generatedID := profileID(req.Name)
-	web.JSON(w, 200, map[string]any{
+	authn.AuditLog(r, "profile.created", "profileId", generatedID, "profileName", req.Name)
+	httpx.JSON(w, 200, map[string]any{
 		"status": "created",
 		"id":     generatedID,
 		"name":   req.Name,
@@ -113,11 +115,11 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 		UseWhen     string `json:"useWhen"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 	if req.Name == "" || req.SourcePath == "" {
-		web.Error(w, 400, fmt.Errorf("name and sourcePath required"))
+		httpx.Error(w, 400, fmt.Errorf("name and sourcePath required"))
 		return
 	}
 
@@ -127,10 +129,11 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := pm.ImportWithMeta(req.Name, req.SourcePath, meta); err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "imported", "name": req.Name})
+	authn.AuditLog(r, "profile.imported", "profileName", req.Name)
+	httpx.JSON(w, 200, map[string]string{"status": "imported", "name": req.Name})
 }
 
 func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Request) {
@@ -140,11 +143,11 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 		UseWhen     *string `json:"useWhen"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 	if req.Name == "" {
-		web.Error(w, 400, fmt.Errorf("name required"))
+		httpx.Error(w, 400, fmt.Errorf("name required"))
 		return
 	}
 
@@ -157,10 +160,11 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := pm.UpdateMeta(req.Name, updates); err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "updated", "name": req.Name})
+	authn.AuditLog(r, "profile.meta_updated", "profileName", req.Name)
+	httpx.JSON(w, 200, map[string]string{"status": "updated", "name": req.Name})
 }
 
 func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +172,7 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 
 	profiles, err := pm.List()
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 
@@ -198,11 +202,11 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if foundProfile == nil {
-		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
+		httpx.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 
-	web.JSON(w, 200, foundProfile)
+	httpx.JSON(w, 200, foundProfile)
 }
 
 func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Request) {
@@ -210,16 +214,17 @@ func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Reques
 
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
 	if err := pm.Delete(name); err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{"status": "deleted", "id": id, "name": name})
+	authn.AuditLog(r, "profile.deleted", "profileId", id, "profileName", name)
+	httpx.JSON(w, 200, map[string]any{"status": "deleted", "id": id, "name": name})
 }
 
 func (pm *ProfileManager) resolveIDOrName(idOrName string) (string, error) {
@@ -245,7 +250,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
@@ -255,7 +260,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 		Description *string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid JSON"))
+		httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
 		return
 	}
 
@@ -263,11 +268,11 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	if req.Name != nil && *req.Name != name {
 		if err := pm.Rename(name, *req.Name); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
-				web.Error(w, 409, err)
+				httpx.Error(w, 409, err)
 			} else if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
-				web.Error(w, 400, err)
+				httpx.Error(w, 400, err)
 			} else {
-				web.Error(w, 500, err)
+				httpx.Error(w, 500, err)
 			}
 			return
 		}
@@ -283,50 +288,52 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 	if len(updates) > 0 {
 		if err := pm.UpdateMeta(finalName, updates); err != nil {
-			web.Error(w, 500, err)
+			httpx.Error(w, 500, err)
 			return
 		}
 	}
 
-	web.JSON(w, 200, map[string]any{"status": "updated", "id": profileID(finalName), "name": finalName})
+	authn.AuditLog(r, "profile.updated", "profileId", profileID(finalName), "profileName", finalName)
+	httpx.JSON(w, 200, map[string]any{"status": "updated", "id": profileID(finalName), "name": finalName})
 }
 
 func (pm *ProfileManager) handleResetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
 	if err := pm.Reset(name); err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, map[string]any{"status": "reset", "id": id, "name": name})
+	authn.AuditLog(r, "profile.reset", "profileId", id, "profileName", name)
+	httpx.JSON(w, 200, map[string]any{"status": "reset", "id": id, "name": name})
 }
 
 func (pm *ProfileManager) handleLogsByIDOrName(w http.ResponseWriter, r *http.Request) {
 	idOrName := r.PathValue("id")
 	name, err := pm.resolveIDOrName(idOrName)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	logs := pm.Logs(name, limit)
-	web.JSON(w, 200, logs)
+	httpx.JSON(w, 200, logs)
 }
 
 func (pm *ProfileManager) handleAnalyticsByIDOrName(w http.ResponseWriter, r *http.Request) {
 	idOrName := r.PathValue("id")
 	name, err := pm.resolveIDOrName(idOrName)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
 	report := pm.Analytics(name)
-	web.JSON(w, 200, report)
+	httpx.JSON(w, 200, report)
 }

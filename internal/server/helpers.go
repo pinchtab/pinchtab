@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/proxy"
-	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 func CheckPinchTabRunning(port, token string) bool {
@@ -31,7 +31,7 @@ func RegisterDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestra
 	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
 		target := orch.FirstRunningURL()
 		if target == "" {
-			web.JSON(w, 200, map[string]any{"tabs": []any{}})
+			httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 			return
 		}
 		proxy.HTTP(w, r, target+"/tabs")
@@ -52,7 +52,7 @@ func RegisterDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestra
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			target := orch.FirstRunningURL()
 			if target == "" {
-				web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
+				httpx.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
 				return
 			}
 			path := r.URL.Path

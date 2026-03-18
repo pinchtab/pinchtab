@@ -23,9 +23,14 @@ func DefaultFileConfig() FileConfig {
 	allowMacro := false
 	allowScreencast := false
 	allowDownload := false
+	downloadMaxBytes := DefaultDownloadMaxBytes
 	allowUpload := false
+	uploadMaxRequestBytes := DefaultUploadMaxRequestBytes
+	uploadMaxFiles := DefaultUploadMaxFiles
+	uploadMaxFileBytes := DefaultUploadMaxFileBytes
+	uploadMaxTotalBytes := DefaultUploadMaxTotalBytes
 	maxRedirects := -1
-	attachEnabled := true
+	attachEnabled := false
 	activityEnabled := true
 	activitySessionIdleSec := 1800
 	activityRetentionDays := 1
@@ -46,12 +51,18 @@ func DefaultFileConfig() FileConfig {
 			TabEvictionPolicy: "close_lru",
 		},
 		Security: SecurityConfig{
-			AllowEvaluate:   &allowEvaluate,
-			AllowMacro:      &allowMacro,
-			AllowScreencast: &allowScreencast,
-			AllowDownload:   &allowDownload,
-			AllowUpload:     &allowUpload,
-			MaxRedirects:    &maxRedirects,
+			AllowEvaluate:          &allowEvaluate,
+			AllowMacro:             &allowMacro,
+			AllowScreencast:        &allowScreencast,
+			AllowDownload:          &allowDownload,
+			DownloadAllowedDomains: []string{},
+			DownloadMaxBytes:       &downloadMaxBytes,
+			AllowUpload:            &allowUpload,
+			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
+			UploadMaxFiles:         &uploadMaxFiles,
+			UploadMaxFileBytes:     &uploadMaxFileBytes,
+			UploadMaxTotalBytes:    &uploadMaxTotalBytes,
+			MaxRedirects:           &maxRedirects,
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
@@ -148,14 +159,20 @@ type profilesConfigJSON struct {
 }
 
 type securityConfigJSON struct {
-	AllowEvaluate   *bool          `json:"allowEvaluate"`
-	AllowMacro      *bool          `json:"allowMacro"`
-	AllowScreencast *bool          `json:"allowScreencast"`
-	AllowDownload   *bool          `json:"allowDownload"`
-	AllowUpload     *bool          `json:"allowUpload"`
-	MaxRedirects    *int           `json:"maxRedirects"`
-	Attach          attachJSON     `json:"attach"`
-	IDPI            idpiConfigJSON `json:"idpi"`
+	AllowEvaluate          *bool          `json:"allowEvaluate"`
+	AllowMacro             *bool          `json:"allowMacro"`
+	AllowScreencast        *bool          `json:"allowScreencast"`
+	AllowDownload          *bool          `json:"allowDownload"`
+	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
+	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
+	AllowUpload            *bool          `json:"allowUpload"`
+	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
+	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
+	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
+	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
+	MaxRedirects           *int           `json:"maxRedirects"`
+	Attach                 attachJSON     `json:"attach"`
+	IDPI                   idpiConfigJSON `json:"idpi"`
 }
 
 type attachJSON struct {
@@ -259,12 +276,18 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			TabEvictionPolicy: fc.InstanceDefaults.TabEvictionPolicy,
 		},
 		Security: securityConfigJSON{
-			AllowEvaluate:   fc.Security.AllowEvaluate,
-			AllowMacro:      fc.Security.AllowMacro,
-			AllowScreencast: fc.Security.AllowScreencast,
-			AllowDownload:   fc.Security.AllowDownload,
-			AllowUpload:     fc.Security.AllowUpload,
-			MaxRedirects:    fc.Security.MaxRedirects,
+			AllowEvaluate:          fc.Security.AllowEvaluate,
+			AllowMacro:             fc.Security.AllowMacro,
+			AllowScreencast:        fc.Security.AllowScreencast,
+			AllowDownload:          fc.Security.AllowDownload,
+			DownloadAllowedDomains: copyStringSlice(fc.Security.DownloadAllowedDomains),
+			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
+			AllowUpload:            fc.Security.AllowUpload,
+			UploadMaxRequestBytes:  fc.Security.UploadMaxRequestBytes,
+			UploadMaxFiles:         fc.Security.UploadMaxFiles,
+			UploadMaxFileBytes:     fc.Security.UploadMaxFileBytes,
+			UploadMaxTotalBytes:    fc.Security.UploadMaxTotalBytes,
+			MaxRedirects:           fc.Security.MaxRedirects,
 			Attach: attachJSON{
 				Enabled:      fc.Security.Attach.Enabled,
 				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
@@ -340,7 +363,13 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	allowMacro := cfg.AllowMacro
 	allowScreencast := cfg.AllowScreencast
 	allowDownload := cfg.AllowDownload
+	downloadAllowedDomains := copyStringSlice(cfg.DownloadAllowedDomains)
+	downloadMaxBytes := cfg.EffectiveDownloadMaxBytes()
 	allowUpload := cfg.AllowUpload
+	uploadMaxRequestBytes := cfg.EffectiveUploadMaxRequestBytes()
+	uploadMaxFiles := cfg.EffectiveUploadMaxFiles()
+	uploadMaxFileBytes := cfg.EffectiveUploadMaxFileBytes()
+	uploadMaxTotalBytes := cfg.EffectiveUploadMaxTotalBytes()
 	maxRedirects := cfg.MaxRedirects
 	attachEnabled := cfg.AttachEnabled
 	start := cfg.InstancePortStart
@@ -394,12 +423,18 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			TabEvictionPolicy: cfg.TabEvictionPolicy,
 		},
 		Security: SecurityConfig{
-			AllowEvaluate:   &allowEvaluate,
-			AllowMacro:      &allowMacro,
-			AllowScreencast: &allowScreencast,
-			AllowDownload:   &allowDownload,
-			AllowUpload:     &allowUpload,
-			MaxRedirects:    &maxRedirects,
+			AllowEvaluate:          &allowEvaluate,
+			AllowMacro:             &allowMacro,
+			AllowScreencast:        &allowScreencast,
+			AllowDownload:          &allowDownload,
+			DownloadAllowedDomains: downloadAllowedDomains,
+			DownloadMaxBytes:       &downloadMaxBytes,
+			AllowUpload:            &allowUpload,
+			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
+			UploadMaxFiles:         &uploadMaxFiles,
+			UploadMaxFileBytes:     &uploadMaxFileBytes,
+			UploadMaxTotalBytes:    &uploadMaxTotalBytes,
+			MaxRedirects:           &maxRedirects,
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),

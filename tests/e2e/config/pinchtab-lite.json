@@ -2,7 +2,8 @@
   "server": {
     "bind": "0.0.0.0",
     "port": "9999",
-    "engine": "lite"
+    "engine": "lite",
+    "token": "e2e-token"
   },
   "security": {
     "allowEvaluate": false,

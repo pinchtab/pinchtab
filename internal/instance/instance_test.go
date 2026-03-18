@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pinchtab/pinchtab/internal/allocation"
 	bridgepkg "github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/instance"
+	"github.com/pinchtab/pinchtab/internal/instance/allocation"
 )
 
 // --- Test doubles ---
@@ -321,7 +321,7 @@ func TestAllocator_NoRunningInstances(t *testing.T) {
 func TestManager_DelegatesToComponents(t *testing.T) {
 	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	mgr := instance.NewManager(launcher, fetcher, &allocation.FCFS{})
+	mgr := instance.NewManager(launcher, fetcher)
 
 	// Launch via manager → delegates to repo.
 	inst, err := mgr.Launch("default", "9868", true)
@@ -372,7 +372,7 @@ func TestManager_DelegatesToComponents(t *testing.T) {
 func TestManager_StopInvalidatesTabCache(t *testing.T) {
 	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	mgr := instance.NewManager(launcher, fetcher, nil)
+	mgr := instance.NewManager(launcher, fetcher)
 
 	inst, _ := mgr.Launch("default", "9868", true)
 	mgr.RegisterTab("tab_1", inst.ID)
@@ -384,5 +384,22 @@ func TestManager_StopInvalidatesTabCache(t *testing.T) {
 	_, err := mgr.FindInstanceByTabID("tab_1")
 	if err == nil {
 		t.Error("expected error: tab cache should be invalidated after stop")
+	}
+}
+
+func TestManager_SetAllocationPolicy(t *testing.T) {
+	launcher := newMockLauncher()
+	fetcher := newMockFetcher()
+	mgr := instance.NewManager(launcher, fetcher)
+
+	if err := mgr.SetAllocationPolicy("round_robin"); err != nil {
+		t.Fatalf("SetAllocationPolicy returned error: %v", err)
+	}
+	if got := mgr.Allocator.Policy().Name(); got != "round_robin" {
+		t.Fatalf("expected round_robin policy, got %q", got)
+	}
+
+	if err := mgr.SetAllocationPolicy("does_not_exist"); err == nil {
+		t.Fatal("expected error for unknown policy")
 	}
 }

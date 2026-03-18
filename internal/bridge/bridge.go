@@ -11,8 +11,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/idutil"
-	"github.com/pinchtab/pinchtab/internal/uameta"
+	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 type TabEntry struct {
@@ -22,6 +21,8 @@ type TabEntry struct {
 	CDPID     string    // raw CDP target ID
 	CreatedAt time.Time // when the tab was first created/registered
 	LastUsed  time.Time // last time the tab was accessed via TabContext
+	Policy    TabPolicyState
+	Watching  bool
 }
 
 type RefCache struct {
@@ -35,7 +36,7 @@ type Bridge struct {
 	BrowserCtx    context.Context
 	BrowserCancel context.CancelFunc
 	Config        *config.RuntimeConfig
-	IdMgr         *idutil.Manager
+	IdMgr         *ids.Manager
 	*TabManager
 	StealthScript string
 	Actions       map[string]ActionFunc
@@ -55,7 +56,7 @@ type Bridge struct {
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
-	idMgr := idutil.NewManager()
+	idMgr := ids.NewManager()
 	netBufSize := DefaultNetworkBufferSize
 	if cfg != nil && cfg.NetworkBufferSize > 0 {
 		netBufSize = cfg.NetworkBufferSize
@@ -71,6 +72,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
+		b.StartBrowserGuards()
 	}
 	b.Locks = NewLockManager()
 	b.Dialogs = NewDialogManager()
@@ -92,8 +94,19 @@ func (b *Bridge) injectStealth(ctx context.Context) {
 	}
 }
 
+func (b *Bridge) injectPopupGuards(ctx context.Context) {
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			_, err := page.AddScriptToEvaluateOnNewDocument(popupGuardInitScript).Do(ctx)
+			return err
+		}),
+	); err != nil {
+		slog.Warn("popup guard injection failed", "err", err)
+	}
+}
+
 func (b *Bridge) tabSetup(ctx context.Context) {
-	if override := uameta.Build(b.Config.UserAgent, b.Config.ChromeVersion); override != nil {
+	if override := buildUserAgentOverride(b.Config.UserAgent, b.Config.ChromeVersion); override != nil {
 		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
 			return override.Do(c)
 		})); err != nil {
@@ -101,6 +114,7 @@ func (b *Bridge) tabSetup(ctx context.Context) {
 		}
 	}
 	b.injectStealth(ctx)
+	b.injectPopupGuards(ctx)
 	if b.Config.NoAnimations {
 		if err := b.InjectNoAnimations(ctx); err != nil {
 			slog.Warn("no-animations injection failed", "err", err)
@@ -181,10 +195,11 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	// Initialize TabManager now that browser is ready
 	if b.Config != nil && b.TabManager == nil {
 		if b.IdMgr == nil {
-			b.IdMgr = idutil.NewManager()
+			b.IdMgr = ids.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
+		b.StartBrowserGuards()
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -252,7 +267,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 	// Now initialize TabManager with the browser context
 	if b.Config != nil && b.TabManager == nil {
 		if b.IdMgr == nil {
-			b.IdMgr = idutil.NewManager()
+			b.IdMgr = ids.NewManager()
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)

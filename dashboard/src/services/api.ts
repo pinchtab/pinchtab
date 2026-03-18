@@ -24,45 +24,63 @@ import {
   normalizeDashboardServerInfo,
   normalizeMonitoringSnapshot,
 } from "../types";
-import {
-  addTokenToUrl,
-  dispatchAuthRequired,
-  getStoredAuthToken,
-} from "./auth";
+import { dispatchAuthRequired, sameOriginUrl } from "./auth";
 
 const BASE = ""; // Uses proxy in dev
 
 type RequestMeta = {
-  authToken?: string;
   suppressAuthRedirect?: boolean;
 };
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+async function parseError(
+  res: Response,
+): Promise<{ code?: string; error?: string }> {
+  return (await res
+    .json()
+    .catch(() => ({ code: "", error: res.statusText }))) as {
+    code?: string;
+    error?: string;
+  };
+}
+
+function handleUnauthorized(meta?: RequestMeta, reason?: string): void {
+  if (meta?.suppressAuthRedirect || typeof window === "undefined") {
+    return;
+  }
+  dispatchAuthRequired(reason || "unauthorized");
+}
 
 async function request<T>(
   url: string,
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<T> {
-  const headers = new Headers(options?.headers ?? {});
-  const token = meta?.authToken?.trim() || getStoredAuthToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
   const res = await fetch(BASE + url, {
     ...options,
-    headers,
+    credentials: "same-origin",
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    if (
-      res.status === 401 &&
-      !meta?.suppressAuthRedirect &&
-      typeof window !== "undefined"
-    ) {
-      window.localStorage.removeItem("pinchtab.auth.token");
-      dispatchAuthRequired(err.code || "unauthorized");
+    const err = await parseError(res);
+    if (res.status === 401) {
+      handleUnauthorized(meta, err.code);
     }
-    throw new Error(err.error || "Request failed");
+    throw new ApiError(err.error || "Request failed", res.status, err.code);
   }
   return res.json();
 }
@@ -72,27 +90,16 @@ async function requestText(
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<string> {
-  const headers = new Headers(options?.headers ?? {});
-  const token = meta?.authToken?.trim() || getStoredAuthToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
   const res = await fetch(BASE + url, {
     ...options,
-    headers,
+    credentials: "same-origin",
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    if (
-      res.status === 401 &&
-      !meta?.suppressAuthRedirect &&
-      typeof window !== "undefined"
-    ) {
-      window.localStorage.removeItem("pinchtab.auth.token");
-      dispatchAuthRequired(err.code || "unauthorized");
+    const err = await parseError(res);
+    if (res.status === 401) {
+      handleUnauthorized(meta, err.code);
     }
-    throw new Error(err.error || "Request failed");
+    throw new ApiError(err.error || "Request failed", res.status, err.code);
   }
   return res.text();
 }
@@ -102,27 +109,16 @@ async function requestBlob(
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<Blob> {
-  const headers = new Headers(options?.headers ?? {});
-  const token = meta?.authToken?.trim() || getStoredAuthToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
   const res = await fetch(BASE + url, {
     ...options,
-    headers,
+    credentials: "same-origin",
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    if (
-      res.status === 401 &&
-      !meta?.suppressAuthRedirect &&
-      typeof window !== "undefined"
-    ) {
-      window.localStorage.removeItem("pinchtab.auth.token");
-      dispatchAuthRequired(err.code || "unauthorized");
+    const err = await parseError(res);
+    if (res.status === 401) {
+      handleUnauthorized(meta, err.code);
     }
-    throw new Error(err.error || "Request failed");
+    throw new ApiError(err.error || "Request failed", res.status, err.code);
   }
   return res.blob();
 }
@@ -217,7 +213,7 @@ export function subscribeToInstanceLogs(
   id: string,
   handlers: { onLogs?: (logs: string) => void },
 ): () => void {
-  const url = addTokenToUrl(`/instances/${encodeURIComponent(id)}/logs/stream`);
+  const url = sameOriginUrl(`/instances/${encodeURIComponent(id)}/logs/stream`);
   const es = new EventSource(url);
 
   es.addEventListener("log", (e) => {
@@ -230,9 +226,7 @@ export function subscribeToInstanceLogs(
   });
 
   es.onerror = () => {
-    if (!getStoredAuthToken()) {
-      dispatchAuthRequired("missing_token");
-    }
+    void handleRealtimeAuthFailure();
   };
 
   const cleanup = () => es.close();
@@ -281,45 +275,72 @@ export async function fetchActivity(
 }
 
 export async function probeBackendAuth(): Promise<{
-  requiresAuth: boolean;
+  mode: "open" | "authenticated" | "required";
   health?: DashboardServerInfo;
 }> {
-  const res = await fetch(BASE + "/health");
+  const res = await fetch(BASE + "/health", {
+    credentials: "same-origin",
+  });
   if (res.ok) {
+    const health = normalizeDashboardServerInfo(
+      (await res.json()) as DashboardServerInfo,
+    );
     return {
-      requiresAuth: false,
-      health: normalizeDashboardServerInfo(
-        (await res.json()) as DashboardServerInfo,
-      ),
+      mode: health.authRequired ? "authenticated" : "open",
+      health,
     };
   }
 
-  const err = (await res
-    .json()
-    .catch(() => ({ code: "", error: res.statusText }))) as {
-    code?: string;
-    error?: string;
-  };
+  const err = await parseError(res);
   if (
     res.status === 401 &&
     (err.code === "missing_token" ||
       err.code === "bad_token" ||
       err.error === "unauthorized")
   ) {
-    return { requiresAuth: true };
+    return { mode: "required" };
   }
 
   throw new Error(err.error || "Request failed");
 }
 
-export async function verifyBackendToken(
-  token: string,
-): Promise<DashboardServerInfo> {
-  return normalizeDashboardServerInfo(
-    await request<DashboardServerInfo>("/health", undefined, {
-      authToken: token,
+export async function login(token: string): Promise<void> {
+  await request<{ status: string }>(
+    "/api/auth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    },
+    {
       suppressAuthRedirect: true,
-    }),
+    },
+  );
+}
+
+export async function logout(): Promise<void> {
+  await request<{ status: string }>(
+    "/api/auth/logout",
+    {
+      method: "POST",
+    },
+    {
+      suppressAuthRedirect: true,
+    },
+  );
+}
+
+export async function elevate(token: string): Promise<void> {
+  await request<{ status: string }>(
+    "/api/auth/elevate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    },
+    {
+      suppressAuthRedirect: true,
+    },
   );
 }
 
@@ -339,13 +360,6 @@ export async function saveBackendConfig(
       body: JSON.stringify(config),
     }),
   );
-}
-
-export async function generateBackendToken(): Promise<string> {
-  const res = await request<{ token: string }>("/api/config/generate-token", {
-    method: "POST",
-  });
-  return res.token;
 }
 
 // SSE Events — endpoint is /api/events
@@ -372,7 +386,7 @@ export function subscribeToEvents(
   handlers: EventHandler,
   options?: { includeMemory?: boolean },
 ): () => void {
-  const url = addTokenToUrl(
+  const url = sameOriginUrl(
     options?.includeMemory ? "/api/events?memory=1" : "/api/events",
   );
   const es = new EventSource(url);
@@ -417,9 +431,7 @@ export function subscribeToEvents(
 
   // Suppress connection errors (expected on page reload/navigation)
   es.onerror = () => {
-    if (!getStoredAuthToken()) {
-      dispatchAuthRequired("missing_token");
-    }
+    void handleRealtimeAuthFailure();
   };
 
   // Clean up on page unload to prevent ERR_INCOMPLETE_CHUNKED_ENCODING
@@ -430,4 +442,15 @@ export function subscribeToEvents(
     window.removeEventListener("beforeunload", cleanup);
     es.close();
   };
+}
+
+export async function handleRealtimeAuthFailure(): Promise<void> {
+  try {
+    const result = await probeBackendAuth();
+    if (result.mode === "required") {
+      dispatchAuthRequired("missing_token");
+    }
+  } catch {
+    // ignore transient network failures
+  }
 }

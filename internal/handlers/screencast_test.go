@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -26,7 +27,9 @@ func TestHandleScreencast_AuthRejectsWrongToken(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret-token-123", AllowScreencast: true}
 	h := New(&mockBridge{}, cfg, nil, nil, nil)
 
-	req := httptest.NewRequest("GET", "/screencast?token=wrong-token", nil)
+	req := httptest.NewRequest("GET", "/screencast", nil)
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: "wrong-token"})
+	req.Header.Set("Referer", "http://example.com/dashboard")
 	w := httptest.NewRecorder()
 	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
@@ -51,20 +54,17 @@ func TestHandleScreencast_AuthRejectsWrongHeader(t *testing.T) {
 	}
 }
 
-func TestHandleScreencast_NoTokenConfigSkipsAuth(t *testing.T) {
+func TestHandleScreencast_NoTokenConfigRejectsRequest(t *testing.T) {
 	cfg := &config.RuntimeConfig{} // No token configured
 	h := New(&mockBridge{failTab: true}, cfg, nil, nil, nil)
 
-	// With no token configured, auth is skipped. The handler will then
-	// fail at TabContext (failTab=true) and return 404 — proving auth
-	// didn't block the request.
 	req := httptest.NewRequest("GET", "/screencast", nil)
 	w := httptest.NewRecorder()
 	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
 
-	if w.Code == http.StatusUnauthorized {
-		t.Errorf("should not get 401 when no token is configured, got %d", w.Code)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 when no token is configured, got %d", w.Code)
 	}
 }
 

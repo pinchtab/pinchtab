@@ -3,7 +3,7 @@ package report
 import (
 	"os"
 
-	"github.com/pinchtab/pinchtab/internal/termstyle"
+	"github.com/pinchtab/pinchtab/internal/cli/termstyle"
 )
 
 var (

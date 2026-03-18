@@ -79,6 +79,23 @@ func GenerateAuthToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
+// EnsureFileToken guarantees that a persisted config carries a non-empty
+// server token. It returns true when a new token was generated.
+func EnsureFileToken(fc *FileConfig) (bool, error) {
+	if fc == nil {
+		return false, fmt.Errorf("file config is nil")
+	}
+	if strings.TrimSpace(fc.Server.Token) != "" {
+		return false, nil
+	}
+	token, err := GenerateAuthToken()
+	if err != nil {
+		return false, err
+	}
+	fc.Server.Token = token
+	return true, nil
+}
+
 func MaskToken(t string) string {
 	if t == "" {
 		return "(none)"

@@ -13,7 +13,7 @@ services:
       - "9999:9999"
     shm_size: '2gb'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -31,7 +31,7 @@ services:
       - "9998:9999"
     shm_size: '2gb'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -50,7 +50,7 @@ services:
       - "9994:9999"
     shm_size: '2gb'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -69,7 +69,7 @@ services:
       - "9995:9999"
     shm_size: '2gb'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -87,7 +87,7 @@ services:
       - "9997:9999"
     command: ["/usr/local/bin/pinchtab", "bridge"]
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -146,6 +146,7 @@ services:
       - E2E_MEDIUM_SERVER=http://pinchtab-medium:9999
       - E2E_FULL_SERVER=http://pinchtab-full:9999
       - E2E_LITE_SERVER=http://pinchtab-lite:9999
+      - E2E_SERVER_TOKEN=e2e-token
       - E2E_BRIDGE_URL=http://pinchtab-bridge:9999
       - E2E_BRIDGE_TOKEN=e2e-bridge-token
       - FIXTURES_URL=http://fixtures:80

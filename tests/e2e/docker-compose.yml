@@ -13,7 +13,7 @@ services:
       - "9999:9999"
     shm_size: '2gb'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9999/health"]
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
       interval: 3s
       timeout: 10s
       retries: 20
@@ -39,6 +39,7 @@ services:
         condition: service_healthy
     environment:
       - E2E_SERVER=http://pinchtab:9999
+      - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./:/e2e:ro
@@ -55,6 +56,7 @@ services:
         condition: service_healthy
     environment:
       - E2E_SERVER=http://pinchtab:9999
+      - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
     volumes:
       - ./:/e2e:ro

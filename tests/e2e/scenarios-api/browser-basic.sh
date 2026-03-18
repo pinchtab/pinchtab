@@ -136,7 +136,7 @@ start_test "pinchtab text (table.html)"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 sleep 1
 
-TEXT_RESULT=$(curl -s "${E2E_SERVER}/text" | jq -r '.text')
+TEXT_RESULT=$(e2e_curl -s "${E2E_SERVER}/text" | jq -r '.text')
 assert_table_page "$TEXT_RESULT"
 
 end_test
@@ -573,7 +573,7 @@ pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
 
 # format=text should return plain text content type
-RESPONSE=$(curl -s -w "\n%{http_code}\n%{content_type}" "${E2E_SERVER}/text?format=text")
+RESPONSE=$(e2e_curl -s -w "\n%{http_code}\n%{content_type}" "${E2E_SERVER}/text?format=text")
 BODY=$(echo "$RESPONSE" | head -n -2)
 STATUS=$(echo "$RESPONSE" | tail -n 2 | head -1)
 CTYPE=$(echo "$RESPONSE" | tail -n 1)

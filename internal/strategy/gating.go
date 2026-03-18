@@ -3,7 +3,7 @@ package strategy
 import (
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // RegisterCapabilityRoute registers a route that either proxies to the active
@@ -13,5 +13,5 @@ func RegisterCapabilityRoute(mux *http.ServeMux, route string, enabled bool, fea
 		mux.HandleFunc(route, handler)
 		return
 	}
-	mux.HandleFunc(route, web.DisabledEndpointHandler(feature, setting, code))
+	mux.HandleFunc(route, httpx.DisabledEndpointHandler(feature, setting, code))
 }

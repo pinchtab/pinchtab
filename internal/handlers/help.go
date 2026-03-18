@@ -3,12 +3,12 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 	security := h.endpointSecurityStates()
-	web.JSON(wr, 200, map[string]any{
+	httpx.JSON(wr, 200, map[string]any{
 		"name": "pinchtab",
 		"endpoints": map[string]any{
 			"GET /health":              "health status",

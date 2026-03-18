@@ -1,7 +1,8 @@
 {
   "server": {
     "bind": "0.0.0.0",
-    "port": "9999"
+    "port": "9999",
+    "token": "e2e-token"
   },
   "browser": {
     "extraFlags": "--no-sandbox --disable-dev-shm-usage"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -80,5 +81,37 @@ func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
 	}
 	if saved.Browser.ChromeExtraFlags != "--no-sandbox --disable-gpu" {
 		t.Fatalf("ChromeExtraFlags = %q, want %q", saved.Browser.ChromeExtraFlags, "--no-sandbox --disable-gpu")
+	}
+}
+
+func TestConfigShowLoadsLegacyFlatConfigWithoutToken(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	t.Setenv("PINCHTAB_TOKEN", "")
+
+	if err := os.WriteFile(configPath, []byte(`{
+  "port": "8765",
+  "headless": true,
+  "maxTabs": 30
+}`), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "show"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "8765") {
+		t.Fatalf("expected config show output to contain legacy port, got %q", output)
+	}
+	if !strings.Contains(output, "Current configuration") {
+		t.Fatalf("expected config show header, got %q", output)
 	}
 }

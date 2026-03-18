@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 type uploadRequest struct {
@@ -23,6 +23,10 @@ type uploadRequest struct {
 	Paths    []string `json:"paths"`
 }
 
+const (
+	uploadSandboxDirName = "uploads"
+)
+
 // HandleUpload sets files on an <input type="file"> element via CDP.
 //
 // POST /upload?tabId=<id>
@@ -30,25 +34,30 @@ type uploadRequest struct {
 //	{
 //	  "selector": "input[type=file]",   // unified selector: CSS, XPath, text, ref, or semantic
 //	  "files": ["data:image/png;base64,...", "base64:..."],
-//	  "paths": ["/tmp/photo.jpg"]
+//	  "paths": ["uploads/photo.jpg"]
 //	}
 //
-// Either "files" (base64 data) or "paths" (local file paths) must be provided.
-// Both can be combined. Files are written to a temp dir and passed to CDP.
+// Either "files" (base64 data) or "paths" (relative sandbox paths) must be
+// provided. Both can be combined. Files are written to a temp dir and passed to
+// CDP. Path-based uploads are limited to StateDir/uploads/.
 func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowUpload {
-		web.ErrorCode(w, 403, "upload_disabled", web.DisabledEndpointMessage("upload", "security.allowUpload"), false, map[string]any{
+		httpx.ErrorCode(w, 403, "upload_disabled", httpx.DisabledEndpointMessage("upload", "security.allowUpload"), false, map[string]any{
 			"setting": "security.allowUpload",
 		})
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
+	maxRequestBytes := h.Config.EffectiveUploadMaxRequestBytes()
+	maxFiles := h.Config.EffectiveUploadMaxFiles()
+	maxFileBytes := h.Config.EffectiveUploadMaxFileBytes()
+	maxTotalBytes := h.Config.EffectiveUploadMaxTotalBytes()
 
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxRequestBytes))
 
 	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("invalid JSON body: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("invalid JSON body: %w", err))
 		return
 	}
 
@@ -57,29 +66,28 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.Files) == 0 && len(req.Paths) == 0 {
-		web.Error(w, 400, fmt.Errorf("either 'files' (base64) or 'paths' (local paths) required"))
+		httpx.Error(w, 400, fmt.Errorf("either 'files' (base64) or 'paths' (sandbox paths) required"))
+		return
+	}
+	if len(req.Files)+len(req.Paths) > maxFiles {
+		httpx.Error(w, 400, fmt.Errorf("too many files: max %d", maxFiles))
 		return
 	}
 
-	// Validate local paths stay within the allowed StateDir.
-	absBase, _ := filepath.Abs(h.Config.StateDir)
+	uploadBase := filepath.Join(h.Config.StateDir, uploadSandboxDirName)
+	var totalBytes int64
 	for i, p := range req.Paths {
-		safe, err := web.SafePath(h.Config.StateDir, p)
+		safe, size, err := validateUploadSandboxPath(uploadBase, p, maxFileBytes)
 		if err != nil {
-			web.Error(w, 400, fmt.Errorf("invalid path: %w", err))
+			httpx.Error(w, 400, fmt.Errorf("invalid path: %w", err))
 			return
 		}
-		// Inline sanitizer: CodeQL recognizes filepath.Abs + strings.HasPrefix.
-		absPath, err := filepath.Abs(safe)
-		if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-			web.Error(w, 400, fmt.Errorf("path %q escapes allowed directory", p))
+		totalBytes += size
+		if totalBytes > int64(maxTotalBytes) {
+			httpx.Error(w, 400, fmt.Errorf("upload payload too large: max %d bytes total", maxTotalBytes))
 			return
 		}
-		if _, err := os.Stat(absPath); err != nil {
-			web.Error(w, 400, fmt.Errorf("file not found: %s", absPath))
-			return
-		}
-		req.Paths[i] = absPath
+		req.Paths[i] = safe
 	}
 
 	// Decode base64 files to temp dir.
@@ -87,7 +95,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if len(req.Files) > 0 {
 		tmpDir, err := os.MkdirTemp("", "pinchtab-upload-*")
 		if err != nil {
-			web.Error(w, 500, fmt.Errorf("create temp dir: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("create temp dir: %w", err))
 			return
 		}
 		defer func() { _ = os.RemoveAll(tmpDir) }()
@@ -95,12 +103,21 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		for i, f := range req.Files {
 			data, ext, err := decodeFileData(f)
 			if err != nil {
-				web.Error(w, 400, fmt.Errorf("file[%d]: %w", i, err))
+				httpx.Error(w, 400, fmt.Errorf("file[%d]: %w", i, err))
+				return
+			}
+			if len(data) > maxFileBytes {
+				httpx.Error(w, 400, fmt.Errorf("file[%d] exceeds max size %d bytes", i, maxFileBytes))
+				return
+			}
+			totalBytes += int64(len(data))
+			if totalBytes > int64(maxTotalBytes) {
+				httpx.Error(w, 400, fmt.Errorf("upload payload too large: max %d bytes total", maxTotalBytes))
 				return
 			}
 			path := fmt.Sprintf("%s/upload-%d%s", tmpDir, i, ext)
-			if err := os.WriteFile(path, data, 0644); err != nil {
-				web.Error(w, 500, fmt.Errorf("write temp file: %w", err))
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				httpx.Error(w, 500, fmt.Errorf("write temp file: %w", err))
 				return
 			}
 			tempFiles = append(tempFiles, path)
@@ -109,15 +126,23 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	allPaths := append(tempFiles, req.Paths...)
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	owner := resolveOwner(r, "")
+	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	// Find the file input node and set files via CDP.
 	if err := chromedp.Run(tCtx,
@@ -130,11 +155,11 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 			return dom.SetFileInputFiles(allPaths).WithNodeID(nodeID).Do(ctx)
 		}),
 	); err != nil {
-		web.Error(w, 500, fmt.Errorf("upload: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("upload: %w", err))
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"status": "ok",
 		"files":  len(allPaths),
 	})
@@ -146,7 +171,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabUpload(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
@@ -195,6 +220,34 @@ func resolveSelector(ctx context.Context, sel string) (cdp.NodeID, error) {
 		return 0, fmt.Errorf("request node: %w", err)
 	}
 	return node, nil
+}
+
+func validateUploadSandboxPath(baseDir, rawPath string, maxFileBytes int) (string, int64, error) {
+	normalized := normalizeUploadSandboxPath(rawPath)
+	safe, err := httpx.SafeExistingPath(baseDir, normalized)
+	if err != nil {
+		return "", 0, err
+	}
+	info, err := os.Lstat(safe)
+	if err != nil {
+		return "", 0, fmt.Errorf("file not found: %s", safe)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", 0, fmt.Errorf("symlinks are not allowed: %s", rawPath)
+	}
+	if !info.Mode().IsRegular() {
+		return "", 0, fmt.Errorf("path must reference a regular file: %s", rawPath)
+	}
+	if info.Size() > int64(maxFileBytes) {
+		return "", 0, fmt.Errorf("file exceeds max size %d bytes: %s", maxFileBytes, rawPath)
+	}
+	return safe, info.Size(), nil
+}
+
+func normalizeUploadSandboxPath(rawPath string) string {
+	trimmed := filepath.ToSlash(strings.TrimSpace(rawPath))
+	trimmed = strings.TrimPrefix(trimmed, uploadSandboxDirName+"/")
+	return filepath.FromSlash(trimmed)
 }
 
 // decodeFileData handles "data:mime;base64,..." and raw base64 strings.

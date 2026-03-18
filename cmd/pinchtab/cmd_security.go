@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +16,7 @@ var securityCmd = &cobra.Command{
 	Short: "Review runtime security posture",
 	Long:  "Shows runtime security posture and offers to restore recommended security defaults.",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := loadConfig()
+		cfg := loadLocalConfig()
 		handleSecurityCommand(cfg)
 	},
 }
@@ -186,7 +185,7 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		if err != nil {
 			return nil, false, err
 		}
-		return updateConfigValue("server.bind", value)
+		return workflow.UpdateValue("server.bind", value)
 	case "api_auth_enabled":
 		picked, err := promptSelect("API authentication", []menuOption{
 			{label: "Generate new token (Recommended)", value: "generate"},
@@ -203,15 +202,15 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 			if err != nil {
 				return nil, false, err
 			}
-			return updateConfigValue("server.token", token)
+			return workflow.UpdateValue("server.token", token)
 		case "custom":
 			token, err := promptInput("Set server.token:", cfg.Token)
 			if err != nil {
 				return nil, false, err
 			}
-			return updateConfigValue("server.token", token)
+			return workflow.UpdateValue("server.token", token)
 		case "disable":
-			return updateConfigValue("server.token", "")
+			return workflow.UpdateValue("server.token", "")
 		}
 	case "sensitive_endpoints_disabled":
 		current := strings.Join(cfg.EnabledSensitiveEndpoints(), ",")
@@ -219,7 +218,7 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		if err != nil {
 			return nil, false, err
 		}
-		return updateSensitiveEndpoints(value)
+		return workflow.UpdateSensitiveEndpoints(value)
 	case "attach_disabled":
 		picked, err := promptSelect("Attach endpoint", []menuOption{
 			{label: "Disable (Recommended)", value: "disable"},
@@ -229,19 +228,19 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		if err != nil || picked == "" || picked == "cancel" {
 			return cfg, false, nil
 		}
-		return updateConfigValue("security.attach.enabled", fmt.Sprintf("%t", picked == "enable"))
+		return workflow.UpdateValue("security.attach.enabled", fmt.Sprintf("%t", picked == "enable"))
 	case "attach_local_only":
 		value, err := promptInput("Set security.attach.allowHosts (comma-separated):", strings.Join(cfg.AttachAllowHosts, ","))
 		if err != nil {
 			return nil, false, err
 		}
-		return updateConfigValue("security.attach.allowHosts", value)
+		return workflow.UpdateValue("security.attach.allowHosts", value)
 	case "idpi_whitelist_scoped":
 		value, err := promptInput("Set security.idpi.allowedDomains (comma-separated):", strings.Join(cfg.IDPI.AllowedDomains, ","))
 		if err != nil {
 			return nil, false, err
 		}
-		return updateConfigValue("security.idpi.allowedDomains", value)
+		return workflow.UpdateValue("security.idpi.allowedDomains", value)
 	case "idpi_strict_mode":
 		picked, err := promptSelect("IDPI strict mode", []menuOption{
 			{label: "Enforce (Recommended)", value: "true"},
@@ -251,7 +250,7 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		if err != nil || picked == "" || picked == "cancel" {
 			return cfg, false, nil
 		}
-		return updateConfigValue("security.idpi.strictMode", picked)
+		return workflow.UpdateValue("security.idpi.strictMode", picked)
 	case "idpi_content_protection":
 		picked, err := promptSelect("IDPI content guard", []menuOption{
 			{label: "Active: scan + wrap (Recommended)", value: "both"},
@@ -263,155 +262,13 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		if err != nil || picked == "" || picked == "cancel" {
 			return cfg, false, nil
 		}
-		return updateContentGuard(picked)
+		return workflow.UpdateContentGuard(picked)
 	}
 	return cfg, false, nil
 }
 
-func updateConfigValue(path, value string) (*config.RuntimeConfig, bool, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return nil, false, fmt.Errorf("load config: %w", err)
-	}
-	if err := config.SetConfigValue(fc, path, value); err != nil {
-		return nil, false, fmt.Errorf("set %s: %w", path, err)
-	}
-	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return nil, false, errs[0]
-	}
-	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return nil, false, fmt.Errorf("save config: %w", err)
-	}
-	return config.Load(), true, nil
-}
-
-func updateSensitiveEndpoints(value string) (*config.RuntimeConfig, bool, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return nil, false, fmt.Errorf("load config: %w", err)
-	}
-
-	selected := map[string]bool{}
-	for _, item := range splitCommaList(value) {
-		selected[item] = true
-	}
-	for endpoint, path := range map[string]string{
-		"evaluate":   "security.allowEvaluate",
-		"macro":      "security.allowMacro",
-		"screencast": "security.allowScreencast",
-		"download":   "security.allowDownload",
-		"upload":     "security.allowUpload",
-	} {
-		enabled := selected[endpoint]
-		if err := config.SetConfigValue(fc, path, fmt.Sprintf("%t", enabled)); err != nil {
-			return nil, false, fmt.Errorf("set %s: %w", endpoint, err)
-		}
-	}
-	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return nil, false, errs[0]
-	}
-	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return nil, false, fmt.Errorf("save config: %w", err)
-	}
-	return config.Load(), true, nil
-}
-
-func updateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return nil, false, fmt.Errorf("load config: %w", err)
-	}
-
-	scan := mode == "both" || mode == "scan"
-	wrap := mode == "both" || mode == "wrap"
-	for _, item := range []struct {
-		path  string
-		value bool
-	}{
-		{path: "security.idpi.scanContent", value: scan},
-		{path: "security.idpi.wrapContent", value: wrap},
-	} {
-		if err := config.SetConfigValue(fc, item.path, fmt.Sprintf("%t", item.value)); err != nil {
-			return nil, false, fmt.Errorf("set %s: %w", item.path, err)
-		}
-	}
-	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return nil, false, errs[0]
-	}
-	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return nil, false, fmt.Errorf("save config: %w", err)
-	}
-	return config.Load(), true, nil
-}
-
-func applyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return nil, "", false, fmt.Errorf("load config: %w", err)
-	}
-	originalJSON, err := formatFileConfigJSON(fc)
-	if err != nil {
-		return nil, "", false, err
-	}
-
-	original, err := config.GetConfigValue(fc, "server.token")
-	if err != nil {
-		return nil, "", false, fmt.Errorf("read server.token: %w", err)
-	}
-	if strings.TrimSpace(original) == "" {
-		token, err := config.GenerateAuthToken()
-		if err != nil {
-			return nil, "", false, fmt.Errorf("generate token: %w", err)
-		}
-		if err := config.SetConfigValue(fc, "server.token", token); err != nil {
-			return nil, "", false, fmt.Errorf("set server.token: %w", err)
-		}
-	}
-
-	for _, item := range []struct {
-		path  string
-		value string
-	}{
-		{path: "server.bind", value: "127.0.0.1"},
-		{path: "security.allowEvaluate", value: "true"},
-		{path: "security.allowMacro", value: "true"},
-		{path: "security.allowScreencast", value: "true"},
-		{path: "security.allowDownload", value: "true"},
-		{path: "security.allowUpload", value: "true"},
-		{path: "security.attach.enabled", value: "true"},
-		{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
-		{path: "security.attach.allowSchemes", value: "ws,wss"},
-		{path: "security.idpi.enabled", value: "false"},
-		{path: "security.idpi.strictMode", value: "false"},
-		{path: "security.idpi.scanContent", value: "false"},
-		{path: "security.idpi.wrapContent", value: "false"},
-	} {
-		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
-			return nil, "", false, fmt.Errorf("set %s: %w", item.path, err)
-		}
-	}
-
-	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return nil, "", false, errs[0]
-	}
-
-	nextJSON, err := formatFileConfigJSON(fc)
-	if err != nil {
-		return nil, "", false, err
-	}
-	changed := originalJSON != nextJSON
-	if !changed {
-		return config.Load(), configPath, false, nil
-	}
-
-	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return nil, "", false, fmt.Errorf("save config: %w", err)
-	}
-	return config.Load(), configPath, true, nil
-}
-
 func applySecurityUp() (*config.RuntimeConfig, bool, error) {
-	configPath, changed, err := cli.RestoreSecurityDefaults()
+	configPath, changed, err := workflow.RestoreSecurityDefaults()
 	if err != nil {
 		return nil, false, fmt.Errorf("restore defaults: %w", err)
 	}
@@ -425,7 +282,7 @@ func applySecurityUp() (*config.RuntimeConfig, bool, error) {
 }
 
 func applySecurityDown() (*config.RuntimeConfig, bool, error) {
-	nextCfg, configPath, changed, err := applyGuardsDownPreset()
+	nextCfg, configPath, changed, err := workflow.ApplyGuardsDownPreset()
 	if err != nil {
 		return nil, false, fmt.Errorf("guards down: %w", err)
 	}
@@ -450,25 +307,4 @@ func handleSecurityDownCommand() {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 		os.Exit(1)
 	}
-}
-
-func formatFileConfigJSON(fc *config.FileConfig) (string, error) {
-	data, err := json.Marshal(fc)
-	if err != nil {
-		return "", fmt.Errorf("marshal config: %w", err)
-	}
-	return string(data), nil
-}
-
-func splitCommaList(value string) []string {
-	parts := strings.Split(value, ",")
-	items := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(strings.ToLower(part))
-		if trimmed != "" {
-			items = append(items, trimmed)
-		}
-	}
-	slices.Sort(items)
-	return slices.Compact(items)
 }

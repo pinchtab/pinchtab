@@ -20,12 +20,10 @@ browsers, manage tabs, and perform interactive tasks.`,
 	Example: `  pinchtab server
   pinchtab nav https://pinchtab.com`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Load()
-
 		// Check if security wizard needs to run
 		maybeRunWizard()
-
 		if isInteractiveTerminal() {
+			cfg := loadLocalConfig()
 			cli.PrintStartupBanner(cfg, cli.StartupBannerOptions{
 				Mode:         "menu",
 				ListenStatus: menuListenStatus(cfg),
@@ -48,13 +46,13 @@ browsers, manage tabs, and perform interactive tasks.`,
 
 			switch picked {
 			case "server":
-				server.RunDashboard(cfg, version)
+				server.RunDashboard(loadConfig(), version)
 			case "daemon":
-				handleDaemonCommand(cfg, "")
+				handleDaemonCommand("")
 			case "bridge":
-				server.RunBridgeServer(cfg)
+				server.RunBridgeServer(loadConfig())
 			case "mcp":
-				runMCP(cfg)
+				runMCP(loadConfig())
 			case "config":
 				handleConfigOverview(cfg)
 			case "security":
@@ -66,7 +64,7 @@ browsers, manage tabs, and perform interactive tasks.`,
 		}
 
 		// Fallback for non-interactive: start the server
-		server.RunDashboard(cfg, version)
+		server.RunDashboard(loadConfig(), version)
 	},
 }
 

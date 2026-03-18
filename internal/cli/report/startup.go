@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pinchtab/pinchtab/internal/cli/termstyle"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/termstyle"
 )
 
 var menuBannerOnce sync.Once

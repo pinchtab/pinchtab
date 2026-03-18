@@ -147,6 +147,19 @@ func ValidateFileConfig(fc *FileConfig) []error {
 
 	// IDPI validation
 	errs = append(errs, validateIDPIConfig(fc.Security.IDPI)...)
+	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
+	errs = append(errs, validatePositiveIntLimit("security.downloadMaxBytes", fc.Security.DownloadMaxBytes, MaxDownloadMaxBytes)...)
+	errs = append(errs, validatePositiveIntLimit("security.uploadMaxRequestBytes", fc.Security.UploadMaxRequestBytes, MaxUploadMaxRequestBytes)...)
+	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFiles", fc.Security.UploadMaxFiles, MaxUploadMaxFiles)...)
+	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFileBytes", fc.Security.UploadMaxFileBytes, MaxUploadMaxFileBytes)...)
+	errs = append(errs, validatePositiveIntLimit("security.uploadMaxTotalBytes", fc.Security.UploadMaxTotalBytes, MaxUploadMaxTotalBytes)...)
+	if fc.Security.UploadMaxFileBytes != nil && fc.Security.UploadMaxTotalBytes != nil &&
+		*fc.Security.UploadMaxFileBytes > *fc.Security.UploadMaxTotalBytes {
+		errs = append(errs, ValidationError{
+			Field:   "security.uploadMaxFileBytes/uploadMaxTotalBytes",
+			Message: fmt.Sprintf("uploadMaxFileBytes (%d) must be <= uploadMaxTotalBytes (%d)", *fc.Security.UploadMaxFileBytes, *fc.Security.UploadMaxTotalBytes),
+		})
+	}
 
 	// Timeouts validation
 	if fc.Timeouts.ActionSec < 0 {
@@ -290,30 +303,7 @@ func validateIDPIConfig(cfg IDPIConfig) []error {
 		return nil
 	}
 
-	var errs []error
-
-	for _, domain := range cfg.AllowedDomains {
-		trimmed := strings.TrimSpace(domain)
-		if trimmed == "" {
-			errs = append(errs, ValidationError{
-				Field:   "security.idpi.allowedDomains",
-				Message: "domain pattern must not be empty or whitespace-only",
-			})
-			continue
-		}
-		if strings.ContainsAny(trimmed, " \t") {
-			errs = append(errs, ValidationError{
-				Field:   "security.idpi.allowedDomains",
-				Message: fmt.Sprintf("domain pattern %q must not contain whitespace", trimmed),
-			})
-		}
-		if strings.HasPrefix(trimmed, "file://") {
-			errs = append(errs, ValidationError{
-				Field:   "security.idpi.allowedDomains",
-				Message: fmt.Sprintf("domain pattern %q must not use the file:// scheme; use a hostname", trimmed),
-			})
-		}
-	}
+	errs := validateAllowedDomainList("security.idpi.allowedDomains", cfg.AllowedDomains)
 
 	for _, p := range cfg.CustomPatterns {
 		if strings.TrimSpace(p) == "" {
@@ -332,6 +322,46 @@ func validateIDPIConfig(cfg IDPIConfig) []error {
 	}
 
 	return errs
+}
+
+func validateAllowedDomainList(field string, domains []string) []error {
+	var errs []error
+	for _, domain := range domains {
+		trimmed := strings.TrimSpace(domain)
+		if trimmed == "" {
+			errs = append(errs, ValidationError{
+				Field:   field,
+				Message: "domain pattern must not be empty or whitespace-only",
+			})
+			continue
+		}
+		if strings.ContainsAny(trimmed, " \t") {
+			errs = append(errs, ValidationError{
+				Field:   field,
+				Message: fmt.Sprintf("domain pattern %q must not contain whitespace", trimmed),
+			})
+		}
+		if strings.HasPrefix(trimmed, "file://") {
+			errs = append(errs, ValidationError{
+				Field:   field,
+				Message: fmt.Sprintf("domain pattern %q must not use the file:// scheme; use a hostname", trimmed),
+			})
+		}
+	}
+	return errs
+}
+
+func validatePositiveIntLimit(field string, value *int, max int) []error {
+	if value == nil {
+		return nil
+	}
+	if *value < 1 || *value > max {
+		return []error{ValidationError{
+			Field:   field,
+			Message: fmt.Sprintf("must be between 1 and %d (got %d)", max, *value),
+		}}
+	}
+	return nil
 }
 
 // ValidAllocationPolicies returns all valid allocation policy values.

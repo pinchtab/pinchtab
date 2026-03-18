@@ -148,7 +148,9 @@ assert_instance_logs_poll() {
   local i
   for i in $(seq 1 "$attempts"); do
     E2E_SERVER=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
-    if [[ "$HTTP_STATUS" =~ ^2 ]] && echo "$RESULT" | grep -Fq "$needle"; then
+    # Avoid a false negative under `set -o pipefail`: `grep -q` exits early
+    # after a match, which can SIGPIPE the writer side of a pipeline.
+    if [[ "$HTTP_STATUS" =~ ^2 ]] && grep -Fq -- "$needle" <<<"$RESULT"; then
       echo -e "  ${GREEN}✓${NC} $desc"
       ((ASSERTIONS_PASSED++)) || true
       return 0

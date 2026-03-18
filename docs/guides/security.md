@@ -42,11 +42,20 @@ Binding to loopback reduces who can reach the API. Tokens reduce who can use it 
 
 ## API Token
 
-`server.token` is the bearer token expected by the server. When it is set, requests must send:
+`server.token` is the master API token.
+
+For non-browser clients, requests should send:
 
 ```http
 Authorization: Bearer <token>
 ```
+
+The browser dashboard uses a different flow:
+
+1. the user enters the token once on the login page
+2. the server exchanges it for a same-origin `HttpOnly` session cookie
+3. sensitive dashboard actions can require token re-entry for short-lived
+   elevation
 
 Why this matters:
 

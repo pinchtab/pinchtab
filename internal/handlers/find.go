@@ -10,9 +10,9 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/pinchtab/internal/semantic"
-	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 type findRequest struct {
@@ -55,13 +55,13 @@ type findResponse struct {
 // @Response 500 application/json Snapshot or matching error
 func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
 		return
 	}
 
 	var req findRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 
 	req.Query = strings.TrimSpace(req.Query)
 	if req.Query == "" {
-		web.Error(w, 400, fmt.Errorf("missing required field 'query'"))
+		httpx.Error(w, 400, fmt.Errorf("missing required field 'query'"))
 		return
 	}
 	if req.Threshold <= 0 {
@@ -83,9 +83,12 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve tab context to get the resolved ID for cache lookup.
 	// Keep ctxTab so we can reuse it for CDP operations (e.g. auto-refresh).
-	ctxTab, resolvedTabID, err := h.Bridge.TabContext(req.TabID)
+	ctxTab, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctxTab, resolvedTabID); !ok {
 		return
 	}
 
@@ -99,7 +102,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		nodes = h.resolveSnapshotNodes(resolvedTabID)
 	}
 	if len(nodes) == 0 {
-		web.Error(w, 500, fmt.Errorf("no elements found in snapshot for tab %s — navigate first", resolvedTabID))
+		httpx.Error(w, 500, fmt.Errorf("no elements found in snapshot for tab %s — navigate first", resolvedTabID))
 		return
 	}
 
@@ -147,7 +150,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		if corpus := sb.String(); corpus != "" {
 			if ir := idpi.ScanContent(corpus, h.Config.IDPI); ir.Threat {
 				if ir.Blocked {
-					web.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
+					httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
 					return
 				}
 				w.Header().Set("X-IDPI-Warning", ir.Reason)
@@ -168,7 +171,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		Explain:         req.Explain,
 	})
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("matcher error: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("matcher error: %w", err))
 		return
 	}
 
@@ -207,7 +210,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	web.JSON(w, 200, resp)
+	httpx.JSON(w, 200, resp)
 }
 
 // resolveSnapshotNodes returns cached A11yNodes for the tab, or an empty

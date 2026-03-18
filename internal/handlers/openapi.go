@@ -3,12 +3,12 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	security := h.endpointSecurityStates()
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"openapi": "3.0.0",
 		"info": map[string]any{
 			"title":   "Pinchtab API",

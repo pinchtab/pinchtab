@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // RegisterHandlers mounts the scheduler API routes on the given mux.
@@ -21,7 +21,7 @@ func (s *Scheduler) RegisterHandlers(mux *http.ServeMux) {
 func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var req SubmitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 
@@ -29,7 +29,7 @@ func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if task != nil && task.State == StateRejected {
 			stats := s.QueueStats()
-			web.ErrorCode(w, 429, "queue_full", err.Error(), true, map[string]any{
+			httpx.ErrorCode(w, 429, "queue_full", err.Error(), true, map[string]any{
 				"agentId":     req.AgentID,
 				"queued":      stats.TotalQueued,
 				"maxQueue":    s.cfg.MaxQueueSize,
@@ -37,12 +37,12 @@ func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 
 	snap := task.Snapshot()
-	web.JSON(w, 202, map[string]any{
+	httpx.JSON(w, 202, map[string]any{
 		"taskId":    snap.ID,
 		"state":     snap.State,
 		"position":  snap.Position,
@@ -53,40 +53,40 @@ func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 func (s *Scheduler) handleGet(w http.ResponseWriter, r *http.Request) {
 	taskID := r.PathValue("id")
 	if taskID == "" {
-		web.Error(w, 400, nil)
+		httpx.Error(w, 400, nil)
 		return
 	}
 
 	task := s.GetTask(taskID)
 	if task == nil {
-		web.ErrorCode(w, 404, "not_found", "task not found", false, nil)
+		httpx.ErrorCode(w, 404, "not_found", "task not found", false, nil)
 		return
 	}
 
-	web.JSON(w, 200, task.Snapshot())
+	httpx.JSON(w, 200, task.Snapshot())
 }
 
 func (s *Scheduler) handleCancel(w http.ResponseWriter, r *http.Request) {
 	taskID := r.PathValue("id")
 	if taskID == "" {
-		web.Error(w, 400, nil)
+		httpx.Error(w, 400, nil)
 		return
 	}
 
 	if err := s.Cancel(taskID); err != nil {
 		if strings.Contains(err.Error(), "terminal state") {
-			web.ErrorCode(w, 409, "conflict", err.Error(), false, nil)
+			httpx.ErrorCode(w, 409, "conflict", err.Error(), false, nil)
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			web.ErrorCode(w, 404, "not_found", err.Error(), false, nil)
+			httpx.ErrorCode(w, 404, "not_found", err.Error(), false, nil)
 			return
 		}
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 
-	web.JSON(w, 200, map[string]string{"status": "cancelled", "taskId": taskID})
+	httpx.JSON(w, 200, map[string]string{"status": "cancelled", "taskId": taskID})
 }
 
 func (s *Scheduler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -107,13 +107,13 @@ func (s *Scheduler) handleList(w http.ResponseWriter, r *http.Request) {
 	if tasks == nil {
 		tasks = []*Task{}
 	}
-	web.JSON(w, 200, map[string]any{"tasks": tasks, "count": len(tasks)})
+	httpx.JSON(w, 200, map[string]any{"tasks": tasks, "count": len(tasks)})
 }
 
 func (s *Scheduler) handleStats(w http.ResponseWriter, _ *http.Request) {
 	queue := s.QueueStats()
 	metrics := s.GetMetrics()
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"queue":   queue,
 		"metrics": metrics,
 		"config": map[string]any{

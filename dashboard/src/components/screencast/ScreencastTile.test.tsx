@@ -25,7 +25,6 @@ describe("ScreencastTile", () => {
       "location",
       new URL("https://pinchtab.com/dashboard/profiles"),
     );
-    window.localStorage.setItem("pinchtab.auth.token", "secret-token");
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
       drawImage: vi.fn(),
     } as unknown as CanvasRenderingContext2D);
@@ -44,7 +43,6 @@ describe("ScreencastTile", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    window.localStorage.clear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -62,7 +60,7 @@ describe("ScreencastTile", () => {
     await waitFor(() => expect(webSocketMock).toHaveBeenCalledTimes(1));
 
     expect(webSocketMock).toHaveBeenCalledWith(
-      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=30&maxWidth=800&fps=1&token=secret-token",
+      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=30&maxWidth=800&fps=1",
     );
   });
 

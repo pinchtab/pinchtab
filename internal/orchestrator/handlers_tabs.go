@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // handleTabClose closes a tab by finding its instance and sending a close request.
@@ -16,13 +16,13 @@ import (
 func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
@@ -34,12 +34,12 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 
 	targetURL, err := o.instancePathURL(inst, "/tab", "")
 	if err != nil {
-		web.Error(w, 502, err)
+		httpx.Error(w, 502, err)
 		return
 	}
 	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL.String(), bytes.NewReader(reqBody))
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
@@ -48,7 +48,7 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(proxyReq)
 	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
+		httpx.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -68,11 +68,11 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 	inst, ok := o.instances[id]
 	o.mu.RUnlock()
 	if !ok {
-		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
 	if inst.Status != "running" {
-		web.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}
 
@@ -81,7 +81,7 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 	}
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			web.Error(w, 400, fmt.Errorf("invalid JSON"))
+			httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
 			return
 		}
 	}
@@ -91,7 +91,7 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 		"url":    req.URL,
 	})
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("failed to build tab open request: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("failed to build tab open request: %w", err))
 		return
 	}
 
@@ -103,7 +103,7 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 
 	targetURL, err := o.instancePathURL(inst, "/tab", r.URL.RawQuery)
 	if err != nil {
-		web.Error(w, 502, err)
+		httpx.Error(w, 502, err)
 		return
 	}
 	o.proxyToURL(w, proxyReq, targetURL)

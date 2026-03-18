@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -52,10 +53,7 @@ type BridgeAPI interface {
 	GetDialogManager() *DialogManager
 }
 
-type LockInfo struct {
-	Owner     string
-	ExpiresAt time.Time
-}
+type LockInfo = bridgetabs.LockInfo
 
 // ProfileService abstracts profile management operations.
 type ProfileService interface {

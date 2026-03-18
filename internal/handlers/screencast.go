@@ -13,14 +13,14 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
-		web.ErrorCode(w, 403, "screencast_disabled", web.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
+		httpx.ErrorCode(w, 403, "screencast_disabled", httpx.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
 			"setting": "security.allowScreencast",
 		})
 		return
@@ -33,9 +33,12 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
 		http.Error(w, "tab not found", 404)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
@@ -106,7 +109,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		}),
 	)
 	if err != nil {
-		slog.Error("start screencast failed", "err", err, "tab", tabID)
+		slog.Error("start screencast failed", "err", err, "tab", resolvedTabID)
 		return
 	}
 
@@ -119,7 +122,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
-	slog.Info("screencast started", "tab", tabID, "quality", quality, "maxWidth", maxWidth)
+	slog.Info("screencast started", "tab", resolvedTabID, "quality", quality, "maxWidth", maxWidth)
 
 	go func() {
 		for {
@@ -150,7 +153,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 // HandleScreencastAll returns info for building a multi-tab screencast view.
 func (h *Handlers) HandleScreencastAll(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
-		web.ErrorCode(w, 403, "screencast_disabled", web.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
+		httpx.ErrorCode(w, 403, "screencast_disabled", httpx.DisabledEndpointMessage("screencast", "security.allowScreencast"), false, map[string]any{
 			"setting": "security.allowScreencast",
 		})
 		return
@@ -163,7 +166,7 @@ func (h *Handlers) HandleScreencastAll(w http.ResponseWriter, r *http.Request) {
 
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
-		web.JSON(w, 200, []tabInfo{})
+		httpx.JSON(w, 200, []tabInfo{})
 		return
 	}
 
@@ -176,7 +179,7 @@ func (h *Handlers) HandleScreencastAll(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	web.JSON(w, 200, tabs)
+	httpx.JSON(w, 200, tabs)
 }
 
 func queryParamInt(r *http.Request, key string, def int) int {

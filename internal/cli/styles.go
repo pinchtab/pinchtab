@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pinchtab/pinchtab/internal/termstyle"
+	"github.com/pinchtab/pinchtab/internal/cli/termstyle"
 	"github.com/spf13/cobra"
 )
 

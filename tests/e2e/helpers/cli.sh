@@ -13,11 +13,23 @@ pt() {
   tmpout=$(mktemp)
   local tmperr
   tmperr=$(mktemp)
+  local first_arg="${1:-}"
+  local -a cmd_prefix=()
+
+  case "$first_arg" in
+    ""|config|daemon|security|help|--help|version|--version)
+      ;;
+    *)
+      if [ -n "${E2E_SERVER_TOKEN:-}" ]; then
+        cmd_prefix=(env "PINCHTAB_TOKEN=${E2E_SERVER_TOKEN}")
+      fi
+      ;;
+  esac
 
   echo -e "  ${BLUE}→ pinchtab --server $E2E_SERVER $@${NC}"
 
   set +e
-  pinchtab --server "$E2E_SERVER" "$@" > "$tmpout" 2> "$tmperr"
+  "${cmd_prefix[@]}" pinchtab --server "$E2E_SERVER" "$@" > "$tmpout" 2> "$tmperr"
   PT_CODE=$?
   set -e
 

@@ -10,8 +10,8 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
-	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 // HandleText extracts readable text from the current tab.
@@ -25,7 +25,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		h.recordEngine(r, "lite")
 		text, err := h.Router.Lite().Text(r.Context(), tabID)
 		if err != nil {
-			web.Error(w, 500, fmt.Errorf("lite text: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
 			return
 		}
 		w.Header().Set("X-Engine", "lite")
@@ -36,7 +36,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
 		return
 	}
 
@@ -49,29 +49,32 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, _, err := h.tabContext(r, tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	var text string
 	if mode == "raw" {
 		if err := chromedp.Run(tCtx,
 			chromedp.Evaluate(`document.body.innerText`, &text),
 		); err != nil {
-			web.Error(w, 500, fmt.Errorf("text extract: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("text extract: %w", err))
 			return
 		}
 	} else {
 		if err := chromedp.Run(tCtx,
 			chromedp.Evaluate(assets.ReadabilityJS, &text),
 		); err != nil {
-			web.Error(w, 500, fmt.Errorf("text extract: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("text extract: %w", err))
 			return
 		}
 	}
@@ -94,7 +97,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	if h.Config.IDPI.Enabled && h.Config.IDPI.ScanContent {
 		idpiResult = idpi.ScanContent(text, h.Config.IDPI)
 		if idpiResult.Blocked {
-			web.Error(w, http.StatusForbidden,
+			httpx.Error(w, http.StatusForbidden,
 				fmt.Errorf("content blocked by IDPI scanner: %s", idpiResult.Reason))
 			return
 		}
@@ -128,7 +131,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	if idpiResult.Threat {
 		resp["idpiWarning"] = idpiResult.Reason
 	}
-	web.JSON(w, 200, resp)
+	httpx.JSON(w, 200, resp)
 }
 
 // HandleTabText extracts text for a tab identified by path ID.
@@ -137,7 +140,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabText(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 

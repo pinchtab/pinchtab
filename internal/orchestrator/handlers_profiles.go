@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (o *Orchestrator) resolveProfileName(idOrName string) (string, error) {
@@ -25,7 +26,7 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	name, err := o.resolveProfileName(id)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
@@ -38,31 +39,33 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	inst, err := o.Launch(name, req.Port, req.Headless, nil)
 	if err != nil {
 		statusCode := classifyLaunchError(err)
-		web.Error(w, statusCode, err)
+		httpx.Error(w, statusCode, err)
 		return
 	}
-	web.JSON(w, 201, inst)
+	authn.AuditLog(r, "instance.started", "profileId", id, "profileName", name, "instanceId", inst.ID)
+	httpx.JSON(w, 201, inst)
 }
 
 func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	name, err := o.resolveProfileName(id)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 	if err := o.StopProfile(name); err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "stopped", "id": id, "name": name})
+	authn.AuditLog(r, "instance.stopped", "profileId", id, "profileName", name)
+	httpx.JSON(w, 200, map[string]string{"status": "stopped", "id": id, "name": name})
 }
 
 func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	name, err := o.resolveProfileName(id)
 	if err != nil {
-		web.JSON(w, 200, map[string]any{
+		httpx.JSON(w, 200, map[string]any{
 			"name":    id,
 			"running": false,
 			"status":  "stopped",
@@ -74,7 +77,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 	instances := o.List()
 	for _, inst := range instances {
 		if inst.ProfileName == name && (inst.Status == "running" || inst.Status == "starting") {
-			web.JSON(w, 200, map[string]any{
+			httpx.JSON(w, 200, map[string]any{
 				"name":    name,
 				"running": inst.Status == "running",
 				"status":  inst.Status,
@@ -84,7 +87,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"name":    name,
 		"running": false,
 		"status":  "stopped",

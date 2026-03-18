@@ -12,7 +12,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/idutil"
+	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 type TabSetupFunc func(ctx context.Context)
@@ -20,7 +20,7 @@ type TabSetupFunc func(ctx context.Context)
 type TabManager struct {
 	browserCtx context.Context
 	config     *config.RuntimeConfig
-	idMgr      *idutil.Manager
+	idMgr      *ids.Manager
 	tabs       map[string]*TabEntry
 	accessed   map[string]bool
 	snapshots  map[string]*RefCache
@@ -28,12 +28,13 @@ type TabManager struct {
 	dialogMgr  *DialogManager
 	currentTab string // ID of the most recently used tab
 	executor   *TabExecutor
+	guardOnce  sync.Once
 	mu         sync.RWMutex
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *idutil.Manager, onTabSetup TabSetupFunc) *TabManager {
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, onTabSetup TabSetupFunc) *TabManager {
 	if idMgr == nil {
-		idMgr = idutil.NewManager()
+		idMgr = ids.NewManager()
 	}
 	maxParallel := 0
 	if cfg != nil {
@@ -54,6 +55,51 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 // SetDialogManager sets the dialog manager for dialog event tracking on new tabs.
 func (tm *TabManager) SetDialogManager(dm *DialogManager) {
 	tm.dialogMgr = dm
+}
+
+func shouldBlockPopupTarget(info *target.Info) bool {
+	return info != nil && info.Type == TargetTypePage && info.OpenerID != ""
+}
+
+func (tm *TabManager) StartBrowserGuards() {
+	if tm == nil || tm.browserCtx == nil {
+		return
+	}
+
+	tm.guardOnce.Do(func() {
+		if err := chromedp.Run(tm.browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			c := chromedp.FromContext(ctx)
+			if c == nil || c.Browser == nil {
+				return fmt.Errorf("no browser executor")
+			}
+			return target.SetDiscoverTargets(true).Do(cdp.WithExecutor(ctx, c.Browser))
+		})); err != nil {
+			slog.Warn("browser popup guard unavailable", "err", err)
+			return
+		}
+
+		chromedp.ListenBrowser(tm.browserCtx, func(ev any) {
+			created, ok := ev.(*target.EventTargetCreated)
+			if !ok || !shouldBlockPopupTarget(created.TargetInfo) {
+				return
+			}
+
+			info := created.TargetInfo
+			go tm.closePopupTarget(info.TargetID, info.OpenerID, info.URL)
+		})
+	})
+}
+
+func (tm *TabManager) closePopupTarget(targetID, openerID target.ID, url string) {
+	closeCtx, cancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
+	defer cancel()
+
+	if err := target.CloseTarget(targetID).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
+		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", url, "err", err)
+		return
+	}
+
+	slog.Info("blocked popup target", "targetId", targetID, "openerId", openerID, "url", url)
 }
 
 func (tm *TabManager) markAccessed(tabID string) {
@@ -245,17 +291,12 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 
 	// Use target.CreateTarget CDP protocol call to create a new tab.
 	// This works for both local and remote (CDP_URL) allocators.
-	navURL := "about:blank"
-	if url != "" {
-		navURL = url
-	}
-
 	var targetID target.ID
 	createCtx, createCancel := context.WithTimeout(tm.browserCtx, 10*time.Second)
 	if err := chromedp.Run(createCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
-			targetID, err = target.CreateTarget(navURL).Do(ctx)
+			targetID, err = target.CreateTarget("about:blank").Do(ctx)
 			return err
 		}),
 	); err != nil {
@@ -289,6 +330,17 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
 
+	if url != "" && url != "about:blank" {
+		navCtx, navCancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := chromedp.Run(navCtx, chromedp.Navigate(url)); err != nil {
+			navCancel()
+			cancel()
+			_ = target.CloseTarget(targetID).Do(cdp.WithExecutor(tm.browserCtx, chromedp.FromContext(tm.browserCtx).Browser))
+			return "", nil, nil, fmt.Errorf("navigate: %w", err)
+		}
+		navCancel()
+	}
+
 	rawCDPID := string(targetID)
 	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 	now := time.Now()
@@ -304,6 +356,8 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	tm.accessed[tabID] = true
 	tm.currentTab = tabID
 	tm.mu.Unlock()
+
+	tm.startTabPolicyWatcher(tabID, ctx)
 
 	return tabID, ctx, cancel, nil
 }
@@ -472,18 +526,22 @@ func (tm *TabManager) DeleteRefCache(tabID string) {
 func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 	now := time.Now()
 	tm.mu.Lock()
-	defer tm.mu.Unlock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx, CreatedAt: now, LastUsed: now}
 	tm.currentTab = tabID
+	tm.mu.Unlock()
+
+	tm.startTabPolicyWatcher(tabID, ctx)
 }
 
 // RegisterTabWithCancel registers a tab ID with its context and cancel function.
 func (tm *TabManager) RegisterTabWithCancel(tabID, rawCDPID string, ctx context.Context, cancel context.CancelFunc) {
 	now := time.Now()
 	tm.mu.Lock()
-	defer tm.mu.Unlock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID, CreatedAt: now, LastUsed: now}
 	tm.currentTab = tabID
+	tm.mu.Unlock()
+
+	tm.startTabPolicyWatcher(tabID, ctx)
 }
 
 // Execute runs a task for a tab through the TabExecutor, ensuring per-tab

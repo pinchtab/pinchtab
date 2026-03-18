@@ -1,8 +1,8 @@
 package instance
 
 import (
-	"github.com/pinchtab/pinchtab/internal/allocation"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/instance/allocation"
 )
 
 // Manager is the InstanceManager facade.
@@ -15,14 +15,10 @@ type Manager struct {
 }
 
 // NewManager creates a fully wired Manager.
-func NewManager(launcher InstanceLauncher, fetcher TabFetcher, policy allocation.Policy) *Manager {
-	if policy == nil {
-		policy = &allocation.FCFS{}
-	}
-
+func NewManager(launcher InstanceLauncher, fetcher TabFetcher) *Manager {
 	repo := NewRepository(launcher)
 	locator := NewLocator(repo, fetcher)
-	allocator := NewAllocator(repo, policy)
+	allocator := NewAllocator(repo, &allocation.FCFS{})
 
 	return &Manager{
 		Repo:      repo,
@@ -81,4 +77,14 @@ func (m *Manager) InvalidateTab(tabID string) {
 // Allocate selects a running instance using the configured policy.
 func (m *Manager) Allocate() (*bridge.Instance, error) {
 	return m.Allocator.Allocate()
+}
+
+// SetAllocationPolicy swaps the allocation policy at runtime by name.
+func (m *Manager) SetAllocationPolicy(name string) error {
+	policy, err := allocation.New(name)
+	if err != nil {
+		return err
+	}
+	m.Allocator.SetPolicy(policy)
+	return nil
 }

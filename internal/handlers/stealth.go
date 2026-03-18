@@ -12,7 +12,7 @@ import (
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 type fingerprintRequest struct {
@@ -31,13 +31,16 @@ type fingerprintRequest struct {
 func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Request) {
 	var req fingerprintRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
-	ctx, _, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
@@ -58,7 +61,7 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 			return nil
 		}),
 	); err != nil {
-		web.Error(w, 500, fmt.Errorf("CDP UA override: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("CDP UA override: %w", err))
 		return
 	}
 
@@ -84,7 +87,7 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 		slog.Warn("JS fingerprint extras failed", "err", err)
 	}
 
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"fingerprint": fp,
 		"status":      "rotated",
 	})

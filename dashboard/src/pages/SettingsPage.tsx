@@ -1,7 +1,9 @@
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../stores/useAppStore";
-import { Button, Card } from "../components/atoms";
+import { Button, Card, Input, Modal } from "../components/atoms";
 import * as api from "../services/api";
+import { credentialUsername, storeTokenCredential } from "../services/auth";
 import type {
   BackendConfig,
   BackendConfigState,
@@ -20,6 +22,8 @@ type SectionId =
   | "network"
   | "browser"
   | "timeouts";
+
+type PendingElevatedAction = "save" | null;
 
 const sections: Array<{
   id: SectionId;
@@ -75,6 +79,13 @@ const sections: Array<{
 
 const fieldClass =
   "w-full rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+
+function backendSaveNotice(state: BackendConfigState | null): string {
+  if (state?.restartRequired) {
+    return "Backend config saved. Dynamic changes were applied where possible. Restart advised for server-level changes.";
+  }
+  return "Backend config saved. Dynamic changes were applied where possible.";
+}
 
 const selectClass =
   "rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
@@ -179,9 +190,14 @@ export default function SettingsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [generatingToken, setGeneratingToken] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [pendingElevatedAction, setPendingElevatedAction] =
+    useState<PendingElevatedAction>(null);
+  const [elevationToken, setElevationToken] = useState("");
+  const [elevationError, setElevationError] = useState("");
+  const [elevating, setElevating] = useState(false);
+  const savedCredentialUsername = useMemo(() => credentialUsername(), []);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -217,7 +233,7 @@ export default function SettingsPage() {
     [localSettings, settings],
   );
 
-  const hasBackendChanges = useMemo(
+  const hasBackendConfigChanges = useMemo(
     () =>
       Boolean(
         backendConfig &&
@@ -226,6 +242,7 @@ export default function SettingsPage() {
       ),
     [backendConfig, backendState],
   );
+  const hasBackendChanges = hasBackendConfigChanges;
 
   const hasChanges = hasDashboardChanges || hasBackendChanges;
   const restartRequired =
@@ -241,9 +258,7 @@ export default function SettingsPage() {
         backendConfig.security.allowUpload,
       ].some(Boolean)
     : false;
-  const apiTokenMissing = backendConfig
-    ? backendConfig.server.token.trim() === ""
-    : false;
+  const apiTokenMissing = !backendState?.tokenConfigured;
   const idpiEnabled = backendConfig
     ? backendConfig.security.idpi.enabled
     : false;
@@ -276,26 +291,6 @@ export default function SettingsPage() {
     setNotice("");
   };
 
-  const handleGenerateToken = async () => {
-    if (!backendConfig) {
-      return;
-    }
-    setGeneratingToken(true);
-    setError("");
-    setNotice("");
-    try {
-      const token = await api.generateBackendToken();
-      updateBackendSection("server", { token });
-      setNotice("Generated a new API token. Save changes to persist it.");
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to generate API token";
-      setError(message);
-    } finally {
-      setGeneratingToken(false);
-    }
-  };
-
   const handleSave = async () => {
     if (!hasChanges || !backendConfig) return;
 
@@ -304,19 +299,21 @@ export default function SettingsPage() {
     setNotice("");
 
     try {
+      let latestBackendState = backendState;
+
       if (hasDashboardChanges) {
         setSettings(localSettings);
       }
 
-      if (hasBackendChanges) {
+      if (hasBackendConfigChanges) {
         const saved = await api.saveBackendConfig(backendConfig);
+        latestBackendState = saved;
         setBackendState(saved);
         setBackendConfig(saved.config);
-        setNotice(
-          saved.restartRequired
-            ? "Backend config saved. Dynamic changes were applied where possible. Restart advised for server-level changes."
-            : "Backend config saved. Dynamic changes were applied where possible.",
-        );
+      }
+
+      if (hasBackendChanges) {
+        setNotice(backendSaveNotice(latestBackendState));
       }
 
       const health = await api.fetchHealth().catch(() => null);
@@ -328,11 +325,54 @@ export default function SettingsPage() {
         setNotice("Dashboard preferences saved in this browser.");
       }
     } catch (e) {
+      if (api.isApiError(e) && e.code === "elevation_required") {
+        setElevationToken("");
+        setElevationError("");
+        setPendingElevatedAction("save");
+        return;
+      }
       const message =
         e instanceof Error ? e.message : "Failed to save settings";
       setError(message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const closeElevationPrompt = () => {
+    if (elevating) {
+      return;
+    }
+    setPendingElevatedAction(null);
+    setElevationToken("");
+    setElevationError("");
+  };
+
+  const handleElevationSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingElevatedAction) {
+      return;
+    }
+
+    const action = pendingElevatedAction;
+    setElevating(true);
+    setElevationError("");
+
+    try {
+      await api.elevate(elevationToken);
+      void storeTokenCredential(elevationToken);
+      setPendingElevatedAction(null);
+      setElevationToken("");
+
+      if (action === "save") {
+        await handleSave();
+      }
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to verify API token";
+      setElevationError(message);
+    } finally {
+      setElevating(false);
     }
   };
 
@@ -387,6 +427,70 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      <Modal
+        open={pendingElevatedAction !== null}
+        onClose={closeElevationPrompt}
+        title="Confirm admin action"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={closeElevationPrompt}
+              disabled={elevating}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="settings-elevation-form"
+              disabled={elevating || elevationToken.trim() === ""}
+            >
+              {elevating ? "Verifying..." : "Continue"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="settings-elevation-form"
+          className="space-y-4"
+          autoComplete="on"
+          onSubmit={handleElevationSubmit}
+        >
+          <p className="leading-6 text-text-muted">
+            Re-enter the API token to save backend configuration changes. The
+            elevated session stays active briefly so you do not need to repeat
+            this for every admin action.
+          </p>
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value={savedCredentialUsername}
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            className="sr-only"
+          />
+          <Input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            label="API token"
+            placeholder="Paste API token"
+            value={elevationToken}
+            onChange={(e) => setElevationToken(e.target.value)}
+            autoFocus
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+          {elevationError && (
+            <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
+              {elevationError}
+            </div>
+          )}
+        </form>
+      </Modal>
 
       <div className="flex flex-1 flex-col gap-6 overflow-hidden p-4 lg:flex-row lg:p-6">
         <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto lg:w-72">
@@ -1137,7 +1241,7 @@ export default function SettingsPage() {
               {activeSection === "network" && (
                 <SectionCard
                   title="Network & Attach"
-                  description="Port and bind changes require a restart. Token changes update request auth immediately because middleware reads runtime config live."
+                  description="Port and bind changes require a restart. API token management is handled outside the dashboard."
                 >
                   <SettingRow
                     label="Server port"
@@ -1165,34 +1269,21 @@ export default function SettingsPage() {
                   </SettingRow>
                   <SettingRow
                     label="API token"
-                    description="Bearer token required by authenticated requests when set. Leaving this empty means reachable clients are unauthenticated."
+                    description="Bearer token required by authenticated requests when set. The dashboard never returns it and does not manage it."
                   >
                     <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          value={backendConfig.server.token}
-                          onChange={(e) =>
-                            updateBackendSection("server", {
-                              token: e.target.value,
-                            })
-                          }
-                          className={fieldClass}
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleGenerateToken}
-                          disabled={generatingToken}
-                        >
-                          {generatingToken ? "Generating..." : "Generate"}
-                        </Button>
+                      <div className="text-xs leading-5 text-text-muted">
+                        {backendState?.tokenConfigured
+                          ? "Token configured. Manage rotation through the CLI or config file; the current value is never returned by the server."
+                          : "No token configured. Set one through the CLI or config file."}
                       </div>
                       {apiTokenMissing && (
                         <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
                           No API token is set. Anyone who can reach this server
                           can access exposed endpoints. Keep it on trusted local
-                          networks only, or set a strong token. You are
-                          responsible for protecting access.
+                          networks only, or configure a strong token through the
+                          CLI or config file. You are responsible for protecting
+                          access.
                         </div>
                       )}
                     </div>

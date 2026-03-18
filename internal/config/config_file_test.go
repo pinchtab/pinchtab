@@ -22,6 +22,9 @@ func TestDefaultFileConfig(t *testing.T) {
 	if len(fc.Security.Attach.AllowSchemes) != 2 || fc.Security.Attach.AllowSchemes[0] != "ws" || fc.Security.Attach.AllowSchemes[1] != "wss" {
 		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want [ws wss]", fc.Security.Attach.AllowSchemes)
 	}
+	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
+		t.Errorf("DefaultFileConfig.Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(fc.Security.Attach.Enabled))
+	}
 	if fc.Security.AllowEvaluate == nil || *fc.Security.AllowEvaluate {
 		t.Errorf("DefaultFileConfig.Security.AllowEvaluate = %v, want explicit false", formatBoolPtr(fc.Security.AllowEvaluate))
 	}
@@ -34,8 +37,26 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.Security.AllowDownload == nil || *fc.Security.AllowDownload {
 		t.Errorf("DefaultFileConfig.Security.AllowDownload = %v, want explicit false", formatBoolPtr(fc.Security.AllowDownload))
 	}
+	if len(fc.Security.DownloadAllowedDomains) != 0 {
+		t.Errorf("DefaultFileConfig.Security.DownloadAllowedDomains = %v, want empty list", fc.Security.DownloadAllowedDomains)
+	}
+	if fc.Security.DownloadMaxBytes == nil || *fc.Security.DownloadMaxBytes != DefaultDownloadMaxBytes {
+		t.Errorf("DefaultFileConfig.Security.DownloadMaxBytes = %v, want %d", formatIntPtr(fc.Security.DownloadMaxBytes), DefaultDownloadMaxBytes)
+	}
 	if fc.Security.AllowUpload == nil || *fc.Security.AllowUpload {
 		t.Errorf("DefaultFileConfig.Security.AllowUpload = %v, want explicit false", formatBoolPtr(fc.Security.AllowUpload))
+	}
+	if fc.Security.UploadMaxRequestBytes == nil || *fc.Security.UploadMaxRequestBytes != DefaultUploadMaxRequestBytes {
+		t.Errorf("DefaultFileConfig.Security.UploadMaxRequestBytes = %v, want %d", formatIntPtr(fc.Security.UploadMaxRequestBytes), DefaultUploadMaxRequestBytes)
+	}
+	if fc.Security.UploadMaxFiles == nil || *fc.Security.UploadMaxFiles != DefaultUploadMaxFiles {
+		t.Errorf("DefaultFileConfig.Security.UploadMaxFiles = %v, want %d", formatIntPtr(fc.Security.UploadMaxFiles), DefaultUploadMaxFiles)
+	}
+	if fc.Security.UploadMaxFileBytes == nil || *fc.Security.UploadMaxFileBytes != DefaultUploadMaxFileBytes {
+		t.Errorf("DefaultFileConfig.Security.UploadMaxFileBytes = %v, want %d", formatIntPtr(fc.Security.UploadMaxFileBytes), DefaultUploadMaxFileBytes)
+	}
+	if fc.Security.UploadMaxTotalBytes == nil || *fc.Security.UploadMaxTotalBytes != DefaultUploadMaxTotalBytes {
+		t.Errorf("DefaultFileConfig.Security.UploadMaxTotalBytes = %v, want %d", formatIntPtr(fc.Security.UploadMaxTotalBytes), DefaultUploadMaxTotalBytes)
 	}
 	if !fc.Security.IDPI.Enabled {
 		t.Errorf("DefaultFileConfig.Security.IDPI.Enabled = %v, want true", fc.Security.IDPI.Enabled)
@@ -175,8 +196,29 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	if parsed.Security.AllowDownload == nil || *parsed.Security.AllowDownload {
 		t.Errorf("round-trip Security.AllowDownload = %v, want explicit false", formatBoolPtr(parsed.Security.AllowDownload))
 	}
+	if len(parsed.Security.DownloadAllowedDomains) != 0 {
+		t.Errorf("round-trip Security.DownloadAllowedDomains = %v, want empty list", parsed.Security.DownloadAllowedDomains)
+	}
+	if parsed.Security.DownloadMaxBytes == nil || *parsed.Security.DownloadMaxBytes != DefaultDownloadMaxBytes {
+		t.Errorf("round-trip Security.DownloadMaxBytes = %v, want %d", formatIntPtr(parsed.Security.DownloadMaxBytes), DefaultDownloadMaxBytes)
+	}
 	if parsed.Security.AllowUpload == nil || *parsed.Security.AllowUpload {
 		t.Errorf("round-trip Security.AllowUpload = %v, want explicit false", formatBoolPtr(parsed.Security.AllowUpload))
+	}
+	if parsed.Security.UploadMaxRequestBytes == nil || *parsed.Security.UploadMaxRequestBytes != DefaultUploadMaxRequestBytes {
+		t.Errorf("round-trip Security.UploadMaxRequestBytes = %v, want %d", formatIntPtr(parsed.Security.UploadMaxRequestBytes), DefaultUploadMaxRequestBytes)
+	}
+	if parsed.Security.UploadMaxFiles == nil || *parsed.Security.UploadMaxFiles != DefaultUploadMaxFiles {
+		t.Errorf("round-trip Security.UploadMaxFiles = %v, want %d", formatIntPtr(parsed.Security.UploadMaxFiles), DefaultUploadMaxFiles)
+	}
+	if parsed.Security.UploadMaxFileBytes == nil || *parsed.Security.UploadMaxFileBytes != DefaultUploadMaxFileBytes {
+		t.Errorf("round-trip Security.UploadMaxFileBytes = %v, want %d", formatIntPtr(parsed.Security.UploadMaxFileBytes), DefaultUploadMaxFileBytes)
+	}
+	if parsed.Security.UploadMaxTotalBytes == nil || *parsed.Security.UploadMaxTotalBytes != DefaultUploadMaxTotalBytes {
+		t.Errorf("round-trip Security.UploadMaxTotalBytes = %v, want %d", formatIntPtr(parsed.Security.UploadMaxTotalBytes), DefaultUploadMaxTotalBytes)
+	}
+	if parsed.Security.Attach.Enabled == nil || *parsed.Security.Attach.Enabled {
+		t.Errorf("round-trip Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.Enabled))
 	}
 	if !parsed.Security.IDPI.Enabled {
 		t.Errorf("round-trip Security.IDPI.Enabled = %v, want true", parsed.Security.IDPI.Enabled)
@@ -235,6 +277,26 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 		t.Fatal("security.idpi.allowedDomains missing from JSON")
 	} else if items, ok := allowedDomains.([]any); !ok || len(items) != 0 {
 		t.Fatalf("security.idpi.allowedDomains = %#v, want explicit empty list", allowedDomains)
+	}
+	if downloadAllowedDomains, ok := security["downloadAllowedDomains"]; !ok {
+		t.Fatal("security.downloadAllowedDomains missing from JSON")
+	} else if items, ok := downloadAllowedDomains.([]any); !ok || len(items) != 0 {
+		t.Fatalf("security.downloadAllowedDomains = %#v, want explicit empty list", downloadAllowedDomains)
+	}
+	if raw, ok := security["downloadMaxBytes"]; !ok || int(raw.(float64)) != DefaultDownloadMaxBytes {
+		t.Fatalf("security.downloadMaxBytes = %#v, want %d", raw, DefaultDownloadMaxBytes)
+	}
+	if raw, ok := security["uploadMaxRequestBytes"]; !ok || int(raw.(float64)) != DefaultUploadMaxRequestBytes {
+		t.Fatalf("security.uploadMaxRequestBytes = %#v, want %d", raw, DefaultUploadMaxRequestBytes)
+	}
+	if raw, ok := security["uploadMaxFiles"]; !ok || int(raw.(float64)) != DefaultUploadMaxFiles {
+		t.Fatalf("security.uploadMaxFiles = %#v, want %d", raw, DefaultUploadMaxFiles)
+	}
+	if raw, ok := security["uploadMaxFileBytes"]; !ok || int(raw.(float64)) != DefaultUploadMaxFileBytes {
+		t.Fatalf("security.uploadMaxFileBytes = %#v, want %d", raw, DefaultUploadMaxFileBytes)
+	}
+	if raw, ok := security["uploadMaxTotalBytes"]; !ok || int(raw.(float64)) != DefaultUploadMaxTotalBytes {
+		t.Fatalf("security.uploadMaxTotalBytes = %#v, want %d", raw, DefaultUploadMaxTotalBytes)
 	}
 }
 

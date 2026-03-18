@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/pinchtab/pinchtab/internal/urlutil"
+	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
 // maxWaitMS caps wait/timeout durations for safety.
@@ -118,7 +118,7 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		safeURL, err := urlutil.Sanitize(u)
+		safeURL, err := urls.Sanitize(u)
 		if err != nil {
 			return mcp.NewToolResultError("invalid URL: " + err.Error()), nil
 		}

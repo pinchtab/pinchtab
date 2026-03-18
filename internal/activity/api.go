@@ -7,7 +7,7 @@ import (
 	"time"
 
 	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func RegisterHandlers(mux *http.ServeMux, rec Recorder) {
@@ -18,13 +18,13 @@ func RegisterHandlers(mux *http.ServeMux, rec Recorder) {
 	mux.HandleFunc("GET /api/activity", func(w http.ResponseWriter, r *http.Request) {
 		filter, err := filterFromRequest(r)
 		if err != nil {
-			web.ErrorCode(w, http.StatusBadRequest, "bad_filter", err.Error(), false, nil)
+			httpx.ErrorCode(w, http.StatusBadRequest, "bad_filter", err.Error(), false, nil)
 			return
 		}
 
 		events, err := rec.Query(filter)
 		if err != nil {
-			web.Error(w, http.StatusInternalServerError, err)
+			httpx.Error(w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -56,7 +56,7 @@ func RegisterHandlers(mux *http.ServeMux, rec Recorder) {
 			})
 		}
 
-		web.JSON(w, http.StatusOK, resp)
+		httpx.JSON(w, http.StatusOK, resp)
 	})
 }
 

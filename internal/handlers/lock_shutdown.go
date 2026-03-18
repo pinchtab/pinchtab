@@ -10,8 +10,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleTabLock(w http.ResponseWriter, r *http.Request) {
@@ -21,11 +22,11 @@ func (h *Handlers) HandleTabLock(w http.ResponseWriter, r *http.Request) {
 		TimeoutSec int    `json:"timeoutSec"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 	if req.TabID == "" || req.Owner == "" {
-		web.Error(w, 400, fmt.Errorf("tabId and owner required"))
+		httpx.Error(w, 400, fmt.Errorf("tabId and owner required"))
 		return
 	}
 
@@ -35,12 +36,12 @@ func (h *Handlers) HandleTabLock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Bridge.Lock(req.TabID, req.Owner, timeout); err != nil {
-		web.Error(w, 409, err)
+		httpx.Error(w, 409, err)
 		return
 	}
 
 	lock := h.Bridge.TabLockInfo(req.TabID)
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"locked":    true,
 		"owner":     lock.Owner,
 		"expiresAt": lock.ExpiresAt.Format(time.RFC3339),
@@ -53,20 +54,20 @@ func (h *Handlers) HandleTabUnlock(w http.ResponseWriter, r *http.Request) {
 		Owner string `json:"owner"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 	if req.TabID == "" || req.Owner == "" {
-		web.Error(w, 400, fmt.Errorf("tabId and owner required"))
+		httpx.Error(w, 400, fmt.Errorf("tabId and owner required"))
 		return
 	}
 
 	if err := h.Bridge.Unlock(req.TabID, req.Owner); err != nil {
-		web.Error(w, 409, err)
+		httpx.Error(w, 409, err)
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{"unlocked": true})
+	httpx.JSON(w, 200, map[string]any{"unlocked": true})
 }
 
 // HandleTabLockByID locks a tab identified by path ID.
@@ -75,23 +76,23 @@ func (h *Handlers) HandleTabUnlock(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabLockByID(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	body := map[string]any{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if rawTabID, ok := body["tabId"]; ok {
 		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
 			return
 		} else if provided != tabID {
-			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 			return
 		}
 	}
@@ -100,7 +101,7 @@ func (h *Handlers) HandleTabLockByID(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 
@@ -118,23 +119,23 @@ func (h *Handlers) HandleTabLockByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabUnlockByID(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	body := map[string]any{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if rawTabID, ok := body["tabId"]; ok {
 		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
 			return
 		} else if provided != tabID {
-			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 			return
 		}
 	}
@@ -143,7 +144,7 @@ func (h *Handlers) HandleTabUnlockByID(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 
@@ -158,7 +159,8 @@ func (h *Handlers) HandleTabUnlockByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleShutdown(shutdownFn func()) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.Info("shutdown requested via API")
-		web.JSON(w, 200, map[string]any{"status": "shutting down"})
+		authn.AuditLog(r, "system.shutdown_requested")
+		httpx.JSON(w, 200, map[string]any{"status": "shutting down"})
 
 		go func() {
 			time.Sleep(100 * time.Millisecond)

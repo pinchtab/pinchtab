@@ -14,12 +14,18 @@ type RuntimeConfig struct {
 	StateDir          string
 
 	// Security settings
-	AllowEvaluate   bool
-	AllowMacro      bool
-	AllowScreencast bool
-	AllowDownload   bool
-	AllowUpload     bool
-	MaxRedirects    int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
+	AllowEvaluate          bool
+	AllowMacro             bool
+	AllowScreencast        bool
+	AllowDownload          bool
+	DownloadAllowedDomains []string
+	DownloadMaxBytes       int
+	AllowUpload            bool
+	UploadMaxRequestBytes  int
+	UploadMaxFiles         int
+	UploadMaxFileBytes     int
+	UploadMaxTotalBytes    int
+	MaxRedirects           int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
 
 	// Browser/instance settings
 	Headless          bool
@@ -166,14 +172,20 @@ type ProfilesConfig struct {
 }
 
 type SecurityConfig struct {
-	AllowEvaluate   *bool        `json:"allowEvaluate,omitempty"`
-	AllowMacro      *bool        `json:"allowMacro,omitempty"`
-	AllowScreencast *bool        `json:"allowScreencast,omitempty"`
-	AllowDownload   *bool        `json:"allowDownload,omitempty"`
-	AllowUpload     *bool        `json:"allowUpload,omitempty"`
-	MaxRedirects    *int         `json:"maxRedirects,omitempty"`
-	Attach          AttachConfig `json:"attach,omitempty"`
-	IDPI            IDPIConfig   `json:"idpi,omitempty"`
+	AllowEvaluate          *bool        `json:"allowEvaluate,omitempty"`
+	AllowMacro             *bool        `json:"allowMacro,omitempty"`
+	AllowScreencast        *bool        `json:"allowScreencast,omitempty"`
+	AllowDownload          *bool        `json:"allowDownload,omitempty"`
+	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
+	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
+	AllowUpload            *bool        `json:"allowUpload,omitempty"`
+	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
+	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
+	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`
+	UploadMaxTotalBytes    *int         `json:"uploadMaxTotalBytes,omitempty"`
+	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
+	Attach                 AttachConfig `json:"attach,omitempty"`
+	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
 }
 
 type MultiInstanceConfig struct {

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 var (
@@ -42,23 +42,23 @@ type BatchResponseItem struct {
 func (s *Scheduler) handleBatch(w http.ResponseWriter, r *http.Request) {
 	var req BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 
 	if req.AgentID == "" {
-		web.Error(w, 400, errMissingAgentID)
+		httpx.Error(w, 400, errMissingAgentID)
 		return
 	}
 	if len(req.Tasks) == 0 {
-		web.Error(w, 400, errEmptyBatch)
+		httpx.Error(w, 400, errEmptyBatch)
 		return
 	}
 	s.cfgMu.RLock()
 	maxBatch := s.cfg.MaxBatchSize
 	s.cfgMu.RUnlock()
 	if len(req.Tasks) > maxBatch {
-		web.ErrorCode(w, 400, "batch_too_large", "batch exceeds maximum size", false, map[string]any{
+		httpx.ErrorCode(w, 400, "batch_too_large", "batch exceeds maximum size", false, map[string]any{
 			"submitted": len(req.Tasks),
 			"max":       maxBatch,
 		})
@@ -96,7 +96,7 @@ func (s *Scheduler) handleBatch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	web.JSON(w, 202, map[string]any{
+	httpx.JSON(w, 202, map[string]any{
 		"tasks":     results,
 		"submitted": len(results),
 	})

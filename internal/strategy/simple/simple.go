@@ -15,10 +15,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
-	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 func init() {
@@ -75,7 +75,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 	target, err := s.ensureRunning()
 	if err != nil {
-		web.Error(w, 503, err)
+		httpx.Error(w, 503, err)
 		return
 	}
 	strategy.EnrichForTarget(r, s.orch, target)
@@ -85,7 +85,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 	target := s.orch.FirstRunningURL()
 	if target == "" {
-		web.JSON(w, 200, map[string]any{"tabs": []any{}})
+		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
 	proxy.HTTP(w, r, target+"/tabs")

@@ -82,7 +82,7 @@ func TestTabExecutor_ContextCancellation(t *testing.T) {
 	te := NewTabExecutor(1)
 
 	// Fill semaphore
-	te.semaphore <- struct{}{}
+	te.AcquireExecutionSlotForTest()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -95,7 +95,7 @@ func TestTabExecutor_ContextCancellation(t *testing.T) {
 	}
 
 	// Release semaphore
-	<-te.semaphore
+	te.ReleaseExecutionSlotForTest()
 }
 
 func TestTabExecutor_CancelledContextBeforeExecute(t *testing.T) {

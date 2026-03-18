@@ -3,12 +3,14 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 type profileLister interface {
@@ -33,12 +35,9 @@ type ConfigAPI struct {
 type configEnvelope struct {
 	Config          config.FileConfig `json:"config"`
 	ConfigPath      string            `json:"configPath"`
+	TokenConfigured bool              `json:"tokenConfigured"`
 	RestartRequired bool              `json:"restartRequired"`
 	RestartReasons  []string          `json:"restartReasons,omitempty"`
-}
-
-type tokenEnvelope struct {
-	Token string `json:"token"`
 }
 
 type healthInstanceInfo struct {
@@ -51,6 +50,7 @@ type healthEnvelope struct {
 	Mode            string              `json:"mode"`
 	Version         string              `json:"version"`
 	Uptime          int64               `json:"uptime"`
+	AuthRequired    bool                `json:"authRequired"`
 	Profiles        int                 `json:"profiles"`
 	Instances       int                 `json:"instances"`
 	DefaultInstance *healthInstanceInfo `json:"defaultInstance,omitempty"`
@@ -87,36 +87,30 @@ func NewConfigAPI(
 func (c *ConfigAPI) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/config", c.HandleGetConfig)
 	mux.HandleFunc("PUT /api/config", c.HandlePutConfig)
-	mux.HandleFunc("POST /api/config/generate-token", c.HandleGenerateToken)
 }
 
 func (c *ConfigAPI) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	info, err := c.healthInfo()
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, info)
+	httpx.JSON(w, 200, info)
 }
 
 func (c *ConfigAPI) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, path, restartReasons, err := c.currentConfig()
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, configEnvelope{
-		Config:          cfg,
-		ConfigPath:      path,
-		RestartRequired: len(restartReasons) > 0,
-		RestartReasons:  restartReasons,
-	})
+	httpx.JSON(w, 200, c.configEnvelopeFor(cfg, path, restartReasons))
 }
 
 func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 	normalized := config.DefaultFileConfig()
 	if err := json.NewDecoder(r.Body).Decode(&normalized); err != nil {
-		web.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
+		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
 		return
 	}
 
@@ -125,22 +119,27 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		for _, validationErr := range errs {
 			messages = append(messages, validationErr.Error())
 		}
-		web.ErrorCode(w, 400, "invalid_config", "config validation failed", false, map[string]any{
+		httpx.ErrorCode(w, 400, "invalid_config", "config validation failed", false, map[string]any{
 			"errors": messages,
 		})
+		return
+	}
+	if strings.TrimSpace(normalized.Server.Token) != "" {
+		httpx.ErrorCode(w, 400, "token_write_only", "manage the API token outside the dashboard", false, nil)
 		return
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	_, path, err := config.LoadFileConfig()
+	current, path, err := config.LoadFileConfig()
 	if err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
+	normalized.Server.Token = current.Server.Token
 	if err := config.SaveFileConfig(&normalized, path); err != nil {
-		web.Error(w, 500, err)
+		httpx.Error(w, 500, err)
 		return
 	}
 
@@ -150,21 +149,11 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	restartReasons := c.restartReasonsFor(normalized)
-	web.JSON(w, 200, configEnvelope{
-		Config:          normalized,
-		ConfigPath:      path,
-		RestartRequired: len(restartReasons) > 0,
-		RestartReasons:  restartReasons,
-	})
-}
-
-func (c *ConfigAPI) HandleGenerateToken(w http.ResponseWriter, r *http.Request) {
-	token, err := config.GenerateAuthToken()
-	if err != nil {
-		web.Error(w, 500, err)
-		return
-	}
-	web.JSON(w, 200, tokenEnvelope{Token: token})
+	authn.AuditLog(r, "config.updated",
+		"restartRequired", len(restartReasons) > 0,
+		"restartReasons", restartReasons,
+	)
+	httpx.JSON(w, 200, c.configEnvelopeFor(normalized, path, restartReasons))
 }
 
 func (c *ConfigAPI) healthInfo() (healthEnvelope, error) {
@@ -198,6 +187,7 @@ func (c *ConfigAPI) healthInfo() (healthEnvelope, error) {
 		Mode:            "dashboard",
 		Version:         c.version,
 		Uptime:          int64(time.Since(c.startedAt).Milliseconds()),
+		AuthRequired:    strings.TrimSpace(c.runtime.Token) != "",
 		Profiles:        profileCount,
 		Instances:       instanceCount,
 		DefaultInstance: defaultInst,
@@ -217,6 +207,28 @@ func (c *ConfigAPI) currentConfig() (config.FileConfig, string, []string, error)
 	}
 	restartReasons := c.restartReasonsFor(*fc)
 	return *fc, path, restartReasons, nil
+}
+
+func (c *ConfigAPI) configEnvelopeFor(cfg config.FileConfig, path string, restartReasons []string) configEnvelope {
+	return configEnvelope{
+		Config:          redactToken(cfg),
+		ConfigPath:      path,
+		TokenConfigured: c.tokenConfigured(cfg),
+		RestartRequired: len(restartReasons) > 0,
+		RestartReasons:  restartReasons,
+	}
+}
+
+func (c *ConfigAPI) tokenConfigured(cfg config.FileConfig) bool {
+	if c != nil && c.runtime != nil && strings.TrimSpace(c.runtime.Token) != "" {
+		return true
+	}
+	return strings.TrimSpace(cfg.Server.Token) != ""
+}
+
+func redactToken(cfg config.FileConfig) config.FileConfig {
+	cfg.Server.Token = ""
+	return cfg
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {

@@ -31,6 +31,7 @@ export interface DashboardServerInfo {
   mode: string;
   version: string;
   uptime: number;
+  authRequired?: boolean;
   profiles: number;
   instances: number;
   agents: number;
@@ -146,6 +147,7 @@ export interface BackendConfig {
 export interface BackendConfigState {
   config: BackendConfig;
   configPath: string;
+  tokenConfigured: boolean;
   restartRequired: boolean;
   restartReasons: string[];
 }
@@ -285,6 +287,7 @@ export function normalizeBackendConfigState(
   return {
     config: normalizeBackendConfig(input.config),
     configPath: input.configPath ?? "",
+    tokenConfigured: input.tokenConfigured ?? false,
     restartRequired: input.restartRequired ?? false,
     restartReasons: input.restartReasons ?? [],
   };
@@ -295,6 +298,7 @@ export function normalizeDashboardServerInfo(
 ): DashboardServerInfo {
   return {
     ...input,
+    authRequired: input.authRequired ?? false,
     restartRequired: input.restartRequired ?? false,
     restartReasons: input.restartReasons ?? [],
   };

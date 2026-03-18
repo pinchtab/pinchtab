@@ -12,16 +12,17 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/handlers"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/strategy"
-	"github.com/pinchtab/pinchtab/internal/web"
 
 	// Register strategies
 	_ "github.com/pinchtab/pinchtab/internal/strategy/alwayson"
@@ -62,6 +63,11 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		}
 	})
 	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, version, startedAt)
+	sessions := authn.NewSessionManager(authn.SessionConfig{
+		IdleTimeout: authn.DefaultSessionIdleTimeout,
+		MaxLifetime: authn.DefaultSessionMaxLifetime,
+	})
+	authAPI := dashboard.NewAuthAPI(cfg, sessions)
 
 	// Wire up instance events to SSE broadcast
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
@@ -84,6 +90,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	dash.RegisterHandlers(mux)
 	configAPI.RegisterHandlers(mux)
+	authAPI.RegisterHandlers(mux)
 	profMgr.RegisterHandlers(mux)
 	activity.RegisterHandlers(mux, actStore)
 
@@ -172,14 +179,14 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})
+		httpx.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})
 	})
 
 	handler := handlers.RequestIDMiddleware(
 		activity.Middleware(
 			actStore,
 			"server",
-			handlers.LoggingMiddleware(handlers.CorsMiddleware(handlers.AuthMiddleware(cfg, mux))),
+			handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, mux)))),
 		),
 	)
 	cli.LogSecurityWarnings(cfg)
@@ -222,7 +229,8 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	}
 
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, r *http.Request) {
-		web.JSON(w, 200, map[string]string{"status": "shutting down"})
+		authn.AuditLog(r, "system.shutdown_requested")
+		httpx.JSON(w, 200, map[string]string{"status": "shutting down"})
 		go doShutdown()
 	})
 

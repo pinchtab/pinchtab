@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // HandleDialog handles the current JavaScript dialog (accept/dismiss).
@@ -23,21 +23,21 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 		Text   string `json:"text"`   // optional prompt text
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 	if req.Action == "" {
-		web.Error(w, 400, fmt.Errorf("action required (accept or dismiss)"))
+		httpx.Error(w, 400, fmt.Errorf("action required (accept or dismiss)"))
 		return
 	}
 	if req.Action != "accept" && req.Action != "dismiss" {
-		web.Error(w, 400, fmt.Errorf("action must be 'accept' or 'dismiss'"))
+		httpx.Error(w, 400, fmt.Errorf("action must be 'accept' or 'dismiss'"))
 		return
 	}
 
 	ctx, resolvedID, err := h.Bridge.TabContext(req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
 		return
 	}
 
@@ -51,23 +51,23 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabDialog(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	body := map[string]any{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if rawTabID, ok := body["tabId"]; ok {
 		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
 			return
 		} else if provided != tabID {
-			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 			return
 		}
 	}
@@ -76,7 +76,7 @@ func (h *Handlers) HandleTabDialog(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 
@@ -91,19 +91,19 @@ func (h *Handlers) HandleTabDialog(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) handleDialogAction(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, accept bool, promptText string) {
 	dm := h.Bridge.GetDialogManager()
 	if dm == nil {
-		web.Error(w, 500, fmt.Errorf("dialog manager not available"))
+		httpx.Error(w, 500, fmt.Errorf("dialog manager not available"))
 		return
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	result, err := bridge.HandlePendingDialog(tCtx, tabID, dm, accept, promptText)
 	if err != nil {
-		web.Error(w, 400, err)
+		httpx.Error(w, 400, err)
 		return
 	}
 
-	web.JSON(w, 200, result)
+	httpx.JSON(w, 200, result)
 }

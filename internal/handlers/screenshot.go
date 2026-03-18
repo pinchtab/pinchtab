@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // HandleScreenshot captures a screenshot of the current tab.
@@ -23,7 +23,7 @@ import (
 func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
-		web.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
 		return
 	}
 
@@ -31,19 +31,22 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	output := r.URL.Query().Get("output")
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 
-	ctx, _, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	if reqNoAnim && !h.Config.NoAnimations {
 		if err := bridge.DisableAnimationsOnce(tCtx); err != nil {
-			web.Error(w, 500, fmt.Errorf("disable animations: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("disable animations: %w", err))
 			return
 		}
 	}
@@ -77,14 +80,14 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			return err
 		}),
 	); err != nil {
-		web.Error(w, 500, fmt.Errorf("screenshot: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("screenshot: %w", err))
 		return
 	}
 
 	if output == "file" {
 		screenshotDir := filepath.Join(h.Config.StateDir, "screenshots")
 		if err := os.MkdirAll(screenshotDir, 0750); err != nil {
-			web.Error(w, 500, fmt.Errorf("create screenshot dir: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("create screenshot dir: %w", err))
 			return
 		}
 
@@ -93,11 +96,11 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		filePath := filepath.Join(screenshotDir, filename)
 
 		if err := os.WriteFile(filePath, buf, 0600); err != nil {
-			web.Error(w, 500, fmt.Errorf("write screenshot: %w", err))
+			httpx.Error(w, 500, fmt.Errorf("write screenshot: %w", err))
 			return
 		}
 
-		web.JSON(w, 200, map[string]any{
+		httpx.JSON(w, 200, map[string]any{
 			"path":      filePath,
 			"size":      len(buf),
 			"format":    string(format),
@@ -114,7 +117,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{
+	httpx.JSON(w, 200, map[string]any{
 		"format": string(format),
 		"base64": base64.StdEncoding.EncodeToString(buf),
 	})
@@ -126,7 +129,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabScreenshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 

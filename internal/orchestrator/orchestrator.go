@@ -16,11 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/allocation"
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/idutil"
+	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
@@ -45,7 +44,7 @@ type Orchestrator struct {
 	childAuthToken string
 	allowEvaluate  bool
 	portAllocator  *PortAllocator
-	idMgr          *idutil.Manager
+	idMgr          *ids.Manager
 	eventHandlers  []EventHandler
 	instanceMgr    *instance.Manager
 	runtimeCfg     *config.RuntimeConfig
@@ -135,15 +134,13 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		childAuthToken: "",
 		allowEvaluate:  false,
 		portAllocator:  NewPortAllocator(9868, 9968),
-		idMgr:          idutil.NewManager(),
+		idMgr:          ids.NewManager(),
 	}
 
 	bridgeClient := instance.NewBridgeClient()
-	defaultPolicy, _ := allocation.New("fcfs")
 	orch.instanceMgr = instance.NewManager(
 		&orchestratorLauncher{orch: orch},
 		bridgeClient,
-		defaultPolicy,
 	)
 
 	return orch
@@ -156,12 +153,7 @@ func (o *Orchestrator) InstanceManager() *instance.Manager {
 
 // SetAllocationPolicy changes the allocation policy at runtime.
 func (o *Orchestrator) SetAllocationPolicy(name string) error {
-	p, err := allocation.New(name)
-	if err != nil {
-		return err
-	}
-	o.instanceMgr.Allocator.SetPolicy(p)
-	return nil
+	return o.instanceMgr.SetAllocationPolicy(name)
 }
 
 type orchestratorLauncher struct {

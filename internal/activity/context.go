@@ -2,13 +2,13 @@ package activity
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 const (
@@ -52,7 +52,7 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		sw := &web.StatusWriter{ResponseWriter: w, Code: 200}
+		sw := &httpx.StatusWriter{ResponseWriter: w, Code: 200}
 		state := &requestState{
 			event: Event{
 				Timestamp:  start.UTC(),
@@ -201,16 +201,7 @@ func actorIDFor(r *http.Request) string {
 	if actorID := strings.TrimSpace(r.Header.Get(HeaderPTActorID)); actorID != "" {
 		return actorID
 	}
-	token := strings.TrimSpace(r.URL.Query().Get("token"))
-	if token == "" {
-		auth := strings.TrimSpace(r.Header.Get("Authorization"))
-		if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
-			token = strings.TrimSpace(auth[7:])
-		} else {
-			token = auth
-		}
-	}
-	return FingerprintToken(token)
+	return FingerprintToken(authn.TokenFromRequest(r))
 }
 
 func agentIDFor(r *http.Request) string {
@@ -223,14 +214,7 @@ func agentIDFor(r *http.Request) string {
 }
 
 func remoteAddrFor(r *http.Request) string {
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
+	return authn.ClientIP(r)
 }
 
 func (s *requestState) snapshot() Event {

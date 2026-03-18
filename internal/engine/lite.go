@@ -14,7 +14,7 @@ import (
 	"github.com/gost-dom/browser/dom"
 	"github.com/gost-dom/browser/html"
 	gosturl "github.com/gost-dom/browser/url"
-	"github.com/pinchtab/pinchtab/internal/urlutil"
+	"github.com/pinchtab/pinchtab/internal/urls"
 	nethtml "golang.org/x/net/html"
 )
 
@@ -56,7 +56,7 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 	defer l.mu.Unlock()
 
 	// Validate and sanitize URL to prevent SSRF (CodeQL go/request-forgery).
-	safeURL, err := urlutil.Sanitize(url)
+	safeURL, err := urls.Sanitize(url)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
 	}

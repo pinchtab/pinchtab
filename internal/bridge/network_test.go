@@ -161,7 +161,7 @@ func TestNetworkMonitor_GetBuffer(t *testing.T) {
 	}
 
 	// Create buffer via getOrCreateBuffer
-	buf := nm.getOrCreateBuffer("tab1")
+	buf := nm.GetOrCreateBufferForTest("tab1")
 	if buf == nil {
 		t.Fatal("expected non-nil buffer")
 	}
@@ -175,7 +175,7 @@ func TestNetworkMonitor_GetBuffer(t *testing.T) {
 
 func TestNetworkMonitor_ClearTab(t *testing.T) {
 	nm := NewNetworkMonitor(50)
-	buf := nm.getOrCreateBuffer("tab1")
+	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Add(NetworkEntry{RequestID: "r1"})
 
 	nm.ClearTab("tab1")
@@ -186,8 +186,8 @@ func TestNetworkMonitor_ClearTab(t *testing.T) {
 
 func TestNetworkMonitor_ClearAll(t *testing.T) {
 	nm := NewNetworkMonitor(50)
-	buf1 := nm.getOrCreateBuffer("tab1")
-	buf2 := nm.getOrCreateBuffer("tab2")
+	buf1 := nm.GetOrCreateBufferForTest("tab1")
+	buf2 := nm.GetOrCreateBufferForTest("tab2")
 	buf1.Add(NetworkEntry{RequestID: "r1"})
 	buf2.Add(NetworkEntry{RequestID: "r2"})
 
@@ -300,31 +300,31 @@ func TestNetworkMonitor_GetOrCreateBufferWithSize(t *testing.T) {
 	nm := NewNetworkMonitor(50)
 
 	// Custom size
-	buf := nm.getOrCreateBufferWithSize("tab1", 200)
+	buf := nm.GetOrCreateBufferWithSizeForTest("tab1", 200)
 	if buf == nil {
 		t.Fatal("expected non-nil buffer")
 	}
-	if buf.maxSize != 200 {
-		t.Errorf("expected maxSize 200, got %d", buf.maxSize)
+	if buf.MaxSizeForTest() != 200 {
+		t.Errorf("expected maxSize 200, got %d", buf.MaxSizeForTest())
 	}
 
 	// Same tab returns existing buffer (doesn't resize)
-	buf2 := nm.getOrCreateBufferWithSize("tab1", 500)
+	buf2 := nm.GetOrCreateBufferWithSizeForTest("tab1", 500)
 	if buf2 != buf {
 		t.Error("expected same buffer instance")
 	}
 
 	// Zero size uses default
-	buf3 := nm.getOrCreateBufferWithSize("tab2", 0)
-	if buf3.maxSize != 50 {
-		t.Errorf("expected default maxSize 50, got %d", buf3.maxSize)
+	buf3 := nm.GetOrCreateBufferWithSizeForTest("tab2", 0)
+	if buf3.MaxSizeForTest() != 50 {
+		t.Errorf("expected default maxSize 50, got %d", buf3.MaxSizeForTest())
 	}
 }
 
 func TestNewNetworkBuffer_CustomSize(t *testing.T) {
 	buf := NewNetworkBuffer(500)
-	if buf.maxSize != 500 {
-		t.Errorf("expected maxSize 500, got %d", buf.maxSize)
+	if buf.MaxSizeForTest() != 500 {
+		t.Errorf("expected maxSize 500, got %d", buf.MaxSizeForTest())
 	}
 
 	// Add more than default (100) entries to verify custom size works
@@ -338,21 +338,21 @@ func TestNewNetworkBuffer_CustomSize(t *testing.T) {
 
 func TestNewNetworkBuffer_ZeroDefaultsTo100(t *testing.T) {
 	buf := NewNetworkBuffer(0)
-	if buf.maxSize != DefaultNetworkBufferSize {
-		t.Errorf("expected maxSize %d, got %d", DefaultNetworkBufferSize, buf.maxSize)
+	if buf.MaxSizeForTest() != DefaultNetworkBufferSize {
+		t.Errorf("expected maxSize %d, got %d", DefaultNetworkBufferSize, buf.MaxSizeForTest())
 	}
 }
 
 func TestNewNetworkBuffer_ClampsOversizedBuffer(t *testing.T) {
 	buf := NewNetworkBuffer(config.MaxNetworkBufferSize + 1)
-	if buf.maxSize != config.MaxNetworkBufferSize {
-		t.Errorf("expected maxSize %d, got %d", config.MaxNetworkBufferSize, buf.maxSize)
+	if buf.MaxSizeForTest() != config.MaxNetworkBufferSize {
+		t.Errorf("expected maxSize %d, got %d", config.MaxNetworkBufferSize, buf.MaxSizeForTest())
 	}
 }
 
 func TestNewNetworkMonitor_ClampsOversizedBuffer(t *testing.T) {
 	nm := NewNetworkMonitor(config.MaxNetworkBufferSize + 1)
-	if nm.bufSize != config.MaxNetworkBufferSize {
-		t.Errorf("expected bufSize %d, got %d", config.MaxNetworkBufferSize, nm.bufSize)
+	if nm.BufferSizeForTest() != config.MaxNetworkBufferSize {
+		t.Errorf("expected bufSize %d, got %d", config.MaxNetworkBufferSize, nm.BufferSizeForTest())
 	}
 }

@@ -18,7 +18,8 @@ import (
 
 type mockBridge struct {
 	bridge.BridgeAPI
-	failTab bool
+	failTab       bool
+	createTabURLs []string
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
@@ -44,6 +45,7 @@ func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.
 }
 
 func (m *mockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	m.createTabURLs = append(m.createTabURLs, url)
 	ctx, cancel := chromedp.NewContext(context.Background())
 	return "tab_abc12345", ctx, cancel, nil
 }
@@ -202,10 +204,18 @@ func TestHandleNavigate(t *testing.T) {
 	if w.Code != 400 {
 		t.Errorf("expected 400 for missing url, got %d", w.Code)
 	}
+
+	if len(m.createTabURLs) == 0 {
+		t.Fatalf("expected CreateTab to be called for new-tab navigate")
+	}
+	if m.createTabURLs[0] != "" {
+		t.Fatalf("expected HandleNavigate to create a blank tab first, got %q", m.createTabURLs[0])
+	}
 }
 
 func TestHandleTab(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 
 	// New Tab
 	body := `{"action": "new", "url": "about:blank"}`
@@ -214,6 +224,12 @@ func TestHandleTab(t *testing.T) {
 	h.HandleTab(w, req)
 	if w.Code != 200 && w.Code != 500 {
 		t.Errorf("unexpected status %d", w.Code)
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatalf("expected CreateTab to be called for action=new")
+	}
+	if m.createTabURLs[0] != "" {
+		t.Fatalf("expected HandleTab to create a blank tab first, got %q", m.createTabURLs[0])
 	}
 
 	// Close Tab

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 const (
@@ -81,7 +81,7 @@ func (wr *waitRequest) resolvedTimeout() time.Duration {
 func (h *Handlers) HandleWait(w http.ResponseWriter, r *http.Request) {
 	var req waitRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
@@ -94,23 +94,23 @@ func (h *Handlers) HandleWait(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleTabWait(w http.ResponseWriter, r *http.Request) {
 	tabID := r.PathValue("id")
 	if tabID == "" {
-		web.Error(w, 400, fmt.Errorf("tab id required"))
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
 
 	body := map[string]any{}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
 	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		web.Error(w, 400, fmt.Errorf("decode: %w", err))
+		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
 	if rawTabID, ok := body["tabId"]; ok {
 		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			web.Error(w, 400, fmt.Errorf("invalid tabId"))
+			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
 			return
 		} else if provided != tabID {
-			web.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
+			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
 			return
 		}
 	}
@@ -119,7 +119,7 @@ func (h *Handlers) HandleTabWait(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		web.Error(w, 500, fmt.Errorf("encode: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 
 	mode := req.mode()
 	if mode == "" {
-		web.Error(w, 400, fmt.Errorf("one of selector, text, url, load, fn, or ms is required"))
+		httpx.Error(w, 400, fmt.Errorf("one of selector, text, url, load, fn, or ms is required"))
 		return
 	}
 
@@ -151,13 +151,13 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		}
 		select {
 		case <-time.After(time.Duration(ms) * time.Millisecond):
-			web.JSON(w, 200, waitResponse{
+			httpx.JSON(w, 200, waitResponse{
 				Waited:  true,
 				Elapsed: time.Since(start).Milliseconds(),
 				Match:   fmt.Sprintf("%dms", ms),
 			})
 		case <-r.Context().Done():
-			web.JSON(w, 200, waitResponse{
+			httpx.JSON(w, 200, waitResponse{
 				Waited:  false,
 				Elapsed: time.Since(start).Milliseconds(),
 				Error:   "cancelled",
@@ -167,16 +167,19 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	}
 
 	// All other modes need a browser tab.
-	ctx, _, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		web.Error(w, 404, err)
+		httpx.Error(w, 404, err)
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
 
 	timeout := req.resolvedTimeout()
 	tCtx, tCancel := context.WithTimeout(ctx, timeout)
 	defer tCancel()
-	go web.CancelOnClientDone(r.Context(), tCancel)
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	var js string
 	var matchLabel string
@@ -195,7 +198,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 			js = `document.readyState === 'complete'`
 			matchLabel = "networkidle"
 		} else {
-			web.Error(w, 400, fmt.Errorf("unsupported load state: %s (supported: networkidle)", req.Load))
+			httpx.Error(w, 400, fmt.Errorf("unsupported load state: %s (supported: networkidle)", req.Load))
 			return
 		}
 	case "fn":
@@ -208,7 +211,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		var result bool
 		evalErr := chromedp.Run(tCtx, chromedp.Evaluate(js, &result))
 		if evalErr == nil && result {
-			web.JSON(w, 200, waitResponse{
+			httpx.JSON(w, 200, waitResponse{
 				Waited:  true,
 				Elapsed: time.Since(start).Milliseconds(),
 				Match:   matchLabel,
@@ -219,7 +222,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		select {
 		case <-tCtx.Done():
 			elapsed := time.Since(start).Milliseconds()
-			web.JSON(w, 200, waitResponse{
+			httpx.JSON(w, 200, waitResponse{
 				Waited:  false,
 				Elapsed: elapsed,
 				Error:   fmt.Sprintf("timeout after %dms waiting for %s", elapsed, mode),

@@ -51,6 +51,15 @@ assert_not_ok "rejects missing file"
 
 end_test
 
+# ─────────────────────────────────────────────────────────────────
+start_test "upload: too many files → error"
+
+pt_post /upload '{"selector":"#multi-file","files":["data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ==","data:text/plain;base64,QQ=="]}'
+assert_http_status 400 "rejects too many files"
+assert_contains "$RESULT" "too many files" "too many files message returned"
+
+end_test
+
 # Migrated from: tests/integration/pdf_test.go (PD1-PD12)
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/table.html\"}"

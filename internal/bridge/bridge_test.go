@@ -5,7 +5,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -194,5 +196,69 @@ func TestCloseTab_PreventsLastTabClose(t *testing.T) {
 	// The error should mention listing targets
 	if err != nil && !strings.Contains(err.Error(), "list targets") {
 		t.Errorf("expected error about list targets, got: %s", err.Error())
+	}
+}
+
+func TestShouldBlockPopupTarget(t *testing.T) {
+	tests := []struct {
+		name string
+		info *target.Info
+		want bool
+	}{
+		{name: "nil target", info: nil, want: false},
+		{name: "top level page", info: &target.Info{Type: TargetTypePage}, want: false},
+		{name: "non-page target with opener", info: &target.Info{Type: "service_worker", OpenerID: target.ID("opener")}, want: false},
+		{name: "page popup", info: &target.Info{Type: TargetTypePage, OpenerID: target.ID("opener")}, want: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldBlockPopupTarget(tc.info); got != tc.want {
+				t.Fatalf("shouldBlockPopupTarget(%+v) = %v, want %v", tc.info, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEvaluateTabPolicy(t *testing.T) {
+	cfg := config.IDPIConfig{
+		Enabled:        true,
+		AllowedDomains: []string{"example.com"},
+		StrictMode:     true,
+	}
+
+	allowed := EvaluateTabPolicy("https://example.com/path", cfg)
+	if allowed.Threat || allowed.Blocked {
+		t.Fatalf("expected allowed domain to pass, got %+v", allowed)
+	}
+
+	blocked := EvaluateTabPolicy("https://evil.example.net/path", cfg)
+	if !blocked.Threat || !blocked.Blocked {
+		t.Fatalf("expected blocked domain to fail, got %+v", blocked)
+	}
+	if blocked.CurrentURL == "" || blocked.UpdatedAt.IsZero() {
+		t.Fatalf("expected policy state metadata to be populated, got %+v", blocked)
+	}
+}
+
+func TestTabManagerStoresTabPolicyState(t *testing.T) {
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm.tabs["tab1"] = &TabEntry{Ctx: context.Background()}
+
+	state := TabPolicyState{
+		CurrentURL: "https://evil.example.net/path",
+		Threat:     true,
+		Blocked:    true,
+		Reason:     "blocked",
+		UpdatedAt:  time.Now(),
+	}
+	tm.SetTabPolicyState("tab1", state)
+
+	got, ok := tm.GetTabPolicyState("tab1")
+	if !ok {
+		t.Fatal("expected stored policy state")
+	}
+	if got.CurrentURL != state.CurrentURL || got.Blocked != state.Blocked || got.Reason != state.Reason {
+		t.Fatalf("stored policy state mismatch: got %+v want %+v", got, state)
 	}
 }

@@ -193,7 +193,7 @@ idpi_setup() {
 
 idpi_cleanup() {
   local base_url="$1" tab_id="$2"
-  curl -sf -X POST "${base_url}/tab" \
+  e2e_curl -sf -X POST "${base_url}/tab" \
     -H "Content-Type: application/json" \
     -d "{\"tabId\":\"$tab_id\",\"action\":\"close\"}" >/dev/null 2>&1 || true
 }
@@ -208,7 +208,7 @@ idpi_request() {
   local curl_args=(-s -w "\n%{http_code}" -X "$method" "${base_url}${path}" -H "Content-Type: application/json" -D "$tmpheaders")
   [ -n "$body" ] && curl_args+=(-d "$body")
   local response
-  response=$(curl "${curl_args[@]}")
+  response=$(e2e_curl "${curl_args[@]}")
   RESULT=$(echo "$response" | head -n -1)
   HTTP_STATUS=$(echo "$response" | tail -n 1)
   HDR_VALUE=$(grep -i "^${header_name}:" "$tmpheaders" | sed 's/^[^:]*: *//' | tr -d '\r' | head -1)
@@ -287,6 +287,29 @@ assert_contains "$RESULT" "idpi" "403 body mentions IDPI"
 idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
 end_test
 
+# ─────────────────────────────────────────────────────────────────
+start_test "idpi: same-tab domain pivot warns in warn mode"
+TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-domain-pivot.html")
+sleep 2
+idpi_request GET "$E2E_SERVER" "/tabs/${TAB_ID}/text" "" "X-IDPI-Warning"
+assert_ok "text allowed after domain pivot in warn mode"
+assert_header_present "X-IDPI-Warning present after domain pivot"
+assert_json_contains "$RESULT" ".url" "example.com" "warn mode response reflects pivoted URL"
+idpi_cleanup "$E2E_SERVER" "$TAB_ID"
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "idpi: same-tab domain pivot blocks in strict mode"
+TAB_ID=$(idpi_setup "$E2E_SECURE_SERVER" "${FIXTURES_URL}/idpi-domain-pivot.html")
+sleep 2
+idpi_request GET "$E2E_SECURE_SERVER" "/tabs/${TAB_ID}/text" "" "X-IDPI-Warning"
+assert_http_status 403 "text blocked after domain pivot in strict mode"
+assert_header_present "X-IDPI-Warning present on strict block"
+assert_contains "$RESULT" "idpi_domain_blocked" "strict block returns domain policy code"
+assert_contains "$RESULT" "allowedDomains" "strict block mentions domain policy"
+idpi_cleanup "$E2E_SECURE_SERVER" "$TAB_ID"
+end_test
+
 # /pdf — WARN MODE (main instance)
 
 start_test "idpi: /pdf clean page — no warning (warn mode)"
@@ -327,7 +350,7 @@ end_test
 start_test "idpi: multiple injection phrases — single warning header"
 TAB_ID=$(idpi_setup "$E2E_SERVER" "${FIXTURES_URL}/idpi-inject.html")
 tmpheaders=$(mktemp)
-curl -s -X POST "${E2E_SERVER}/tabs/${TAB_ID}/find" \
+e2e_curl -s -X POST "${E2E_SERVER}/tabs/${TAB_ID}/find" \
   -H "Content-Type: application/json" \
   -D "$tmpheaders" \
   -d "$FIND_BODY" >/dev/null
@@ -550,7 +573,7 @@ lite() {
   shift 2
   echo -e "${BLUE}→ curl -X $method ${LITE_URL}$path $(printf "%q " "$@")${NC}" >&2
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(e2e_curl -s -w "\n%{http_code}" \
     -X "$method" \
     "${LITE_URL}${path}" \
     -H "Content-Type: application/json" \

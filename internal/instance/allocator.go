@@ -3,8 +3,8 @@ package instance
 import (
 	"fmt"
 
-	"github.com/pinchtab/pinchtab/internal/allocation"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/instance/allocation"
 )
 
 // Allocator selects an instance using the configured AllocationPolicy.

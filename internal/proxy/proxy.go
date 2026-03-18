@@ -13,7 +13,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/handlers"
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // DefaultClient is the shared HTTP client for proxy requests.
@@ -41,11 +41,11 @@ var hopByHopHeaders = map[string]struct{}{
 
 func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Options) {
 	if targetURL == nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: missing target URL"))
+		httpx.Error(w, 502, fmt.Errorf("proxy error: missing target URL"))
 		return
 	}
 	if opts.AllowedURL != nil && !opts.AllowedURL(targetURL) {
-		web.Error(w, 400, fmt.Errorf("invalid proxy target"))
+		httpx.Error(w, 400, fmt.Errorf("invalid proxy target"))
 		return
 	}
 
@@ -70,14 +70,14 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 
 	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
 	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
+		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
 	}
 	copyHeaders(outReq.Header, proxyReq.Header)
 
 	resp, err := client.Do(outReq)
 	if err != nil {
-		web.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
+		httpx.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -106,7 +106,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		web.Error(w, 502, fmt.Errorf("proxy error: %w", err))
+		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
 	}
 	if parsed.RawQuery == "" {

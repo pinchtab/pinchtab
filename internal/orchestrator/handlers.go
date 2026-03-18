@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/web"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
@@ -11,7 +11,7 @@ func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, fea
 		mux.HandleFunc(route, next)
 		return
 	}
-	mux.HandleFunc(route, web.DisabledEndpointHandler(feature, setting, code))
+	mux.HandleFunc(route, httpx.DisabledEndpointHandler(feature, setting, code))
 }
 
 func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
@@ -70,13 +70,13 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.List())
+	httpx.JSON(w, 200, o.List())
 }
 
 func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.AllTabs())
+	httpx.JSON(w, 200, o.AllTabs())
 }
 
 func (o *Orchestrator) handleAllMetrics(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.AllMetrics())
+	httpx.JSON(w, 200, o.AllMetrics())
 }

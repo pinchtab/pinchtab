@@ -15,7 +15,7 @@ var mcpCmd = &cobra.Command{
 	Short: "Start the MCP stdio server",
 	Long:  "Start the Model Context Protocol stdio server and proxy browser actions to a running PinchTab instance.",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Load()
+		cfg := loadConfig()
 		runMCP(cfg)
 	},
 }

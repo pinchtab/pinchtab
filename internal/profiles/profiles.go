@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/idutil"
+	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
-var idMgr = idutil.NewManager()
+var idMgr = ids.NewManager()
 
 func profileID(name string) string {
 	return idMgr.ProfileID(name)
@@ -241,9 +241,12 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		}
 	}
 
-	srcInfo, err := os.Stat(sourcePath)
+	srcInfo, err := os.Lstat(sourcePath)
 	if err != nil {
 		return fmt.Errorf("source path invalid: %w", err)
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("source path must not be a symlink")
 	}
 	if !srcInfo.IsDir() {
 		return fmt.Errorf("source path must be a directory")

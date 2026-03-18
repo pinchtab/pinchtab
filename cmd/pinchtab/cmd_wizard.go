@@ -14,6 +14,10 @@ import (
 // Returns true if the user completed setup, false if they cancelled.
 func runSecurityWizard(cfg *config.FileConfig, configPath string, isNew bool) bool {
 	interactive := isInteractiveTerminal()
+	if _, err := config.EnsureFileToken(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("failed to generate auth token: %v", err)))
+		return false
+	}
 
 	if !interactive {
 		return runNonInteractiveSetup(cfg, configPath, isNew)
@@ -201,21 +205,10 @@ func printSetting(name, value string) {
 	fmt.Printf("  %-12s %s\n", name+":", value)
 }
 
-func boolPtrValue(p *bool) bool {
-	if p == nil {
-		return false
-	}
-	return *p
-}
-
 func dashboardURL(cfg *config.FileConfig, path string) string {
 	host := orDefault(cfg.Server.Bind, "127.0.0.1")
 	port := orDefault(cfg.Server.Port, "9867")
-	url := fmt.Sprintf("http://%s:%s%s", host, port, path)
-	if cfg.Server.Token != "" {
-		url += "?token=" + cfg.Server.Token
-	}
-	return url
+	return fmt.Sprintf("http://%s:%s%s", host, port, path)
 }
 
 func orDefault(val, fallback string) string {

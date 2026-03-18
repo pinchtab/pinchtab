@@ -1,23 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
-  Routes,
-  Route,
   Navigate,
+  Route,
+  Routes,
   useLocation,
   useNavigate,
 } from "react-router-dom";
 import { ActivityPage } from "./activities";
-import { useAppStore } from "./stores/useAppStore";
 import { NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
-import {
-  AUTH_REQUIRED_EVENT,
-  clearStoredAuthToken,
-  getStoredAuthToken,
-  setStoredAuthToken,
-} from "./services/auth";
+import { AUTH_REQUIRED_EVENT, AUTH_STATE_CHANGED_EVENT } from "./services/auth";
+import { useAppStore } from "./stores/useAppStore";
 
 type AuthMode = "probing" | "required" | "open" | "unreachable";
 const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
@@ -34,40 +29,22 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const memoryMetricsEnabled = settings.monitoring?.memoryMetrics ?? false;
-  // Auto-login from ?token= query parameter (e.g. from wizard URL)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get("token");
-    if (urlToken) {
-      setStoredAuthToken(urlToken);
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete("token");
-      window.history.replaceState({}, "", clean.pathname + clean.hash);
-      window.location.reload();
-    }
-  }, []);
-
-  const authToken = getStoredAuthToken();
-  const hasStoredToken = authToken !== "";
-  const [authMode, setAuthMode] = useState<AuthMode>(
-    hasStoredToken ? "required" : "probing",
-  );
+  const [authMode, setAuthMode] = useState<AuthMode>("probing");
+  const [authProtected, setAuthProtected] = useState(false);
   const [authRetryCount, setAuthRetryCount] = useState(0);
-  const dashboardAccessible = hasStoredToken || authMode === "open";
-  const loginRequired = !hasStoredToken && authMode === "required";
+  const dashboardAccessible = authMode === "open";
+  const loginRequired = authMode === "required";
 
   useEffect(() => {
     document.documentElement.setAttribute("data-site-mode", "agent");
   }, []);
 
   useEffect(() => {
-    if (hasStoredToken) {
-      setAuthMode("required");
-      setAuthRetryCount(0);
-      return;
-    }
-
-    if (authMode === "open" || authMode === "unreachable") {
+    if (
+      authMode === "open" ||
+      authMode === "required" ||
+      authMode === "unreachable"
+    ) {
       return;
     }
 
@@ -78,7 +55,8 @@ function AppContent() {
         if (cancelled) {
           return;
         }
-        setAuthMode(result.requiresAuth ? "required" : "open");
+        setAuthProtected(result.mode !== "open");
+        setAuthMode(result.mode === "required" ? "required" : "open");
         setAuthRetryCount(0);
         if (result.health) {
           setServerInfo(result.health);
@@ -95,11 +73,10 @@ function AppContent() {
     return () => {
       cancelled = true;
     };
-  }, [authMode, hasStoredToken, setServerInfo]);
+  }, [authMode, setServerInfo]);
 
   useEffect(() => {
     if (
-      hasStoredToken ||
       authMode !== "unreachable" ||
       authRetryCount >= AUTH_RETRY_DELAYS_MS.length
     ) {
@@ -114,11 +91,11 @@ function AppContent() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [authMode, authRetryCount, hasStoredToken]);
+  }, [authMode, authRetryCount]);
 
   useEffect(() => {
     const handleAuthRequired = () => {
-      clearStoredAuthToken();
+      setAuthProtected(true);
       setAuthMode("required");
       setAuthRetryCount(0);
       navigate("/login", {
@@ -126,9 +103,20 @@ function AppContent() {
         state: { from: location.pathname },
       });
     };
+    const handleAuthStateChanged = () => {
+      setAuthMode("probing");
+      setAuthRetryCount(0);
+    };
+
     window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
-    return () =>
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged);
+    return () => {
       window.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
+      window.removeEventListener(
+        AUTH_STATE_CHANGED_EVENT,
+        handleAuthStateChanged,
+      );
+    };
   }, [location.pathname, navigate]);
 
   useEffect(() => {
@@ -140,7 +128,12 @@ function AppContent() {
     }
   }, [location.pathname, loginRequired, navigate]);
 
-  // Initial load
+  useEffect(() => {
+    if (dashboardAccessible && location.pathname === "/login") {
+      navigate("/dashboard/monitoring", { replace: true });
+    }
+  }, [dashboardAccessible, location.pathname, navigate]);
+
   useEffect(() => {
     if (!dashboardAccessible) {
       return;
@@ -159,10 +152,9 @@ function AppContent() {
         console.error("Failed to load initial data", e);
       }
     };
-    load();
+    void load();
   }, [dashboardAccessible, setInstances, setProfiles, setServerInfo]);
 
-  // Subscribe to SSE events
   useEffect(() => {
     if (!dashboardAccessible) {
       return;
@@ -193,11 +185,9 @@ function AppContent() {
     applyMonitoringSnapshot,
     memoryMetricsEnabled,
     setAgents,
-    setInstances,
-    setProfiles,
   ]);
 
-  if (!hasStoredToken && authMode === "probing") {
+  if (authMode === "probing") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-app px-4">
         <div className="rounded-sm border border-border-subtle bg-black/10 px-4 py-3 text-sm text-text-muted">
@@ -207,7 +197,7 @@ function AppContent() {
     );
   }
 
-  if (!hasStoredToken && authMode === "unreachable") {
+  if (authMode === "unreachable") {
     const nextRetryDelay =
       authRetryCount < AUTH_RETRY_DELAYS_MS.length
         ? AUTH_RETRY_DELAYS_MS[authRetryCount]
@@ -259,7 +249,7 @@ function AppContent() {
 
   return (
     <div className="dashboard-shell flex h-screen flex-col bg-bg-app">
-      <NavBar />
+      <NavBar showLogout={authProtected} />
       <main className="dashboard-grid flex-1 overflow-hidden">
         <Routes>
           <Route

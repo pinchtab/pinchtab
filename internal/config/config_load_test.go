@@ -59,6 +59,24 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowEvaluate {
 		t.Errorf("default AllowEvaluate = %v, want false", cfg.AllowEvaluate)
 	}
+	if len(cfg.DownloadAllowedDomains) != 0 {
+		t.Errorf("default DownloadAllowedDomains = %v, want empty list", cfg.DownloadAllowedDomains)
+	}
+	if cfg.DownloadMaxBytes != DefaultDownloadMaxBytes {
+		t.Errorf("default DownloadMaxBytes = %d, want %d", cfg.DownloadMaxBytes, DefaultDownloadMaxBytes)
+	}
+	if cfg.UploadMaxRequestBytes != DefaultUploadMaxRequestBytes {
+		t.Errorf("default UploadMaxRequestBytes = %d, want %d", cfg.UploadMaxRequestBytes, DefaultUploadMaxRequestBytes)
+	}
+	if cfg.UploadMaxFiles != DefaultUploadMaxFiles {
+		t.Errorf("default UploadMaxFiles = %d, want %d", cfg.UploadMaxFiles, DefaultUploadMaxFiles)
+	}
+	if cfg.UploadMaxFileBytes != DefaultUploadMaxFileBytes {
+		t.Errorf("default UploadMaxFileBytes = %d, want %d", cfg.UploadMaxFileBytes, DefaultUploadMaxFileBytes)
+	}
+	if cfg.UploadMaxTotalBytes != DefaultUploadMaxTotalBytes {
+		t.Errorf("default UploadMaxTotalBytes = %d, want %d", cfg.UploadMaxTotalBytes, DefaultUploadMaxTotalBytes)
+	}
 	if cfg.Strategy != "always-on" {
 		t.Errorf("default Strategy = %v, want always-on", cfg.Strategy)
 	}
@@ -68,8 +86,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.TabEvictionPolicy != "close_lru" {
 		t.Errorf("default TabEvictionPolicy = %v, want close_lru", cfg.TabEvictionPolicy)
 	}
-	if !cfg.AttachEnabled {
-		t.Errorf("default AttachEnabled = %v, want true", cfg.AttachEnabled)
+	if cfg.AttachEnabled {
+		t.Errorf("default AttachEnabled = %v, want false", cfg.AttachEnabled)
 	}
 	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "ws" || cfg.AttachAllowSchemes[1] != "wss" {
 		t.Errorf("default AttachAllowSchemes = %v, want [ws wss]", cfg.AttachAllowSchemes)
@@ -216,6 +234,27 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	if cfg.AllowUpload {
 		t.Errorf("ApplyFileConfigToRuntime AllowUpload = %v, want false", cfg.AllowUpload)
 	}
+	if len(cfg.DownloadAllowedDomains) != 0 {
+		t.Errorf("ApplyFileConfigToRuntime DownloadAllowedDomains = %v, want empty list", cfg.DownloadAllowedDomains)
+	}
+	if cfg.DownloadMaxBytes != DefaultDownloadMaxBytes {
+		t.Errorf("ApplyFileConfigToRuntime DownloadMaxBytes = %d, want %d", cfg.DownloadMaxBytes, DefaultDownloadMaxBytes)
+	}
+	if cfg.UploadMaxRequestBytes != DefaultUploadMaxRequestBytes {
+		t.Errorf("ApplyFileConfigToRuntime UploadMaxRequestBytes = %d, want %d", cfg.UploadMaxRequestBytes, DefaultUploadMaxRequestBytes)
+	}
+	if cfg.UploadMaxFiles != DefaultUploadMaxFiles {
+		t.Errorf("ApplyFileConfigToRuntime UploadMaxFiles = %d, want %d", cfg.UploadMaxFiles, DefaultUploadMaxFiles)
+	}
+	if cfg.UploadMaxFileBytes != DefaultUploadMaxFileBytes {
+		t.Errorf("ApplyFileConfigToRuntime UploadMaxFileBytes = %d, want %d", cfg.UploadMaxFileBytes, DefaultUploadMaxFileBytes)
+	}
+	if cfg.UploadMaxTotalBytes != DefaultUploadMaxTotalBytes {
+		t.Errorf("ApplyFileConfigToRuntime UploadMaxTotalBytes = %d, want %d", cfg.UploadMaxTotalBytes, DefaultUploadMaxTotalBytes)
+	}
+	if cfg.AttachEnabled {
+		t.Errorf("ApplyFileConfigToRuntime AttachEnabled = %v, want false", cfg.AttachEnabled)
+	}
 	if !cfg.IDPI.Enabled {
 		t.Errorf("ApplyFileConfigToRuntime IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
 	}
@@ -224,6 +263,20 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	}
 	if !cfg.IDPI.StrictMode || !cfg.IDPI.ScanContent || !cfg.IDPI.WrapContent {
 		t.Errorf("ApplyFileConfigToRuntime IDPI = %+v, want strict+scan+wrap enabled", cfg.IDPI)
+	}
+}
+
+func TestApplyFileConfigToRuntimeClearsTokenWhenFileTokenRemoved(t *testing.T) {
+	clearConfigEnvVars(t)
+
+	cfg := &RuntimeConfig{Token: "secret-token"}
+	fc := DefaultFileConfig()
+	fc.Server.Token = ""
+
+	ApplyFileConfigToRuntime(cfg, &fc)
+
+	if cfg.Token != "" {
+		t.Fatalf("ApplyFileConfigToRuntime Token = %q, want empty string", cfg.Token)
 	}
 }
 
@@ -238,6 +291,102 @@ func TestApplyFileConfigToRuntime_ClampsNetworkBufferSize(t *testing.T) {
 
 	if cfg.NetworkBufferSize != MaxNetworkBufferSize {
 		t.Errorf("ApplyFileConfigToRuntime NetworkBufferSize = %d, want %d", cfg.NetworkBufferSize, MaxNetworkBufferSize)
+	}
+}
+
+func TestApplyFileConfigToRuntime_CopiesDownloadAllowedDomains(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	fc := &FileConfig{
+		Security: SecurityConfig{
+			DownloadAllowedDomains: []string{"pinchtab.com", "*.pinchtab.com"},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+	fc.Security.DownloadAllowedDomains[0] = "mutated.example.com"
+
+	if len(cfg.DownloadAllowedDomains) != 2 {
+		t.Fatalf("ApplyFileConfigToRuntime DownloadAllowedDomains = %v, want 2 entries", cfg.DownloadAllowedDomains)
+	}
+	if cfg.DownloadAllowedDomains[0] != "pinchtab.com" {
+		t.Fatalf("ApplyFileConfigToRuntime copied list = %v, want original values", cfg.DownloadAllowedDomains)
+	}
+}
+
+func TestRuntimeConfig_EffectiveTransferLimitsFallbackAndClamp(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	if cfg.EffectiveDownloadMaxBytes() != DefaultDownloadMaxBytes {
+		t.Fatalf("EffectiveDownloadMaxBytes() = %d, want %d", cfg.EffectiveDownloadMaxBytes(), DefaultDownloadMaxBytes)
+	}
+	if cfg.EffectiveUploadMaxRequestBytes() != DefaultUploadMaxRequestBytes {
+		t.Fatalf("EffectiveUploadMaxRequestBytes() = %d, want %d", cfg.EffectiveUploadMaxRequestBytes(), DefaultUploadMaxRequestBytes)
+	}
+	if cfg.EffectiveUploadMaxFiles() != DefaultUploadMaxFiles {
+		t.Fatalf("EffectiveUploadMaxFiles() = %d, want %d", cfg.EffectiveUploadMaxFiles(), DefaultUploadMaxFiles)
+	}
+	if cfg.EffectiveUploadMaxFileBytes() != DefaultUploadMaxFileBytes {
+		t.Fatalf("EffectiveUploadMaxFileBytes() = %d, want %d", cfg.EffectiveUploadMaxFileBytes(), DefaultUploadMaxFileBytes)
+	}
+	if cfg.EffectiveUploadMaxTotalBytes() != DefaultUploadMaxTotalBytes {
+		t.Fatalf("EffectiveUploadMaxTotalBytes() = %d, want %d", cfg.EffectiveUploadMaxTotalBytes(), DefaultUploadMaxTotalBytes)
+	}
+
+	cfg.DownloadMaxBytes = MaxDownloadMaxBytes + 1
+	cfg.UploadMaxRequestBytes = MaxUploadMaxRequestBytes + 1
+	cfg.UploadMaxFiles = MaxUploadMaxFiles + 1
+	cfg.UploadMaxFileBytes = MaxUploadMaxFileBytes + 1
+	cfg.UploadMaxTotalBytes = MaxUploadMaxTotalBytes + 1
+
+	if cfg.EffectiveDownloadMaxBytes() != MaxDownloadMaxBytes {
+		t.Fatalf("EffectiveDownloadMaxBytes clamp = %d, want %d", cfg.EffectiveDownloadMaxBytes(), MaxDownloadMaxBytes)
+	}
+	if cfg.EffectiveUploadMaxRequestBytes() != MaxUploadMaxRequestBytes {
+		t.Fatalf("EffectiveUploadMaxRequestBytes clamp = %d, want %d", cfg.EffectiveUploadMaxRequestBytes(), MaxUploadMaxRequestBytes)
+	}
+	if cfg.EffectiveUploadMaxFiles() != MaxUploadMaxFiles {
+		t.Fatalf("EffectiveUploadMaxFiles clamp = %d, want %d", cfg.EffectiveUploadMaxFiles(), MaxUploadMaxFiles)
+	}
+	if cfg.EffectiveUploadMaxFileBytes() != MaxUploadMaxFileBytes {
+		t.Fatalf("EffectiveUploadMaxFileBytes clamp = %d, want %d", cfg.EffectiveUploadMaxFileBytes(), MaxUploadMaxFileBytes)
+	}
+	if cfg.EffectiveUploadMaxTotalBytes() != MaxUploadMaxTotalBytes {
+		t.Fatalf("EffectiveUploadMaxTotalBytes clamp = %d, want %d", cfg.EffectiveUploadMaxTotalBytes(), MaxUploadMaxTotalBytes)
+	}
+}
+
+func TestApplyFileConfigToRuntime_ClampsTransferLimits(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	downloadTooLarge := MaxDownloadMaxBytes + 1
+	requestTooLarge := MaxUploadMaxRequestBytes + 1
+	filesTooLarge := MaxUploadMaxFiles + 1
+	fileTooLarge := MaxUploadMaxFileBytes + 1
+	totalTooLarge := MaxUploadMaxTotalBytes + 1
+	fc := &FileConfig{
+		Security: SecurityConfig{
+			DownloadMaxBytes:      &downloadTooLarge,
+			UploadMaxRequestBytes: &requestTooLarge,
+			UploadMaxFiles:        &filesTooLarge,
+			UploadMaxFileBytes:    &fileTooLarge,
+			UploadMaxTotalBytes:   &totalTooLarge,
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.DownloadMaxBytes != MaxDownloadMaxBytes {
+		t.Fatalf("DownloadMaxBytes = %d, want %d", cfg.DownloadMaxBytes, MaxDownloadMaxBytes)
+	}
+	if cfg.UploadMaxRequestBytes != MaxUploadMaxRequestBytes {
+		t.Fatalf("UploadMaxRequestBytes = %d, want %d", cfg.UploadMaxRequestBytes, MaxUploadMaxRequestBytes)
+	}
+	if cfg.UploadMaxFiles != MaxUploadMaxFiles {
+		t.Fatalf("UploadMaxFiles = %d, want %d", cfg.UploadMaxFiles, MaxUploadMaxFiles)
+	}
+	if cfg.UploadMaxFileBytes != MaxUploadMaxFileBytes {
+		t.Fatalf("UploadMaxFileBytes = %d, want %d", cfg.UploadMaxFileBytes, MaxUploadMaxFileBytes)
+	}
+	if cfg.UploadMaxTotalBytes != MaxUploadMaxTotalBytes {
+		t.Fatalf("UploadMaxTotalBytes = %d, want %d", cfg.UploadMaxTotalBytes, MaxUploadMaxTotalBytes)
 	}
 }
 

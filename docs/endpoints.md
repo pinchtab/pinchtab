@@ -194,5 +194,6 @@ Task body: `{"agentId": "...", "action": "snapshot", "tabId": "..."}`
 ```
 GET  /api/config                         # Get current configuration
 PUT  /api/config                         # Update configuration
-POST /api/config/generate-token          # Generate new auth token
 ```
+
+`server.token` is write-only and managed outside the dashboard API via CLI or config file updates.
