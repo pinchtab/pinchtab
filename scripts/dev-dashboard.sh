@@ -25,6 +25,7 @@ cleanup() {
   echo "  ${MUTED}Shutting down...${NC}"
   kill $BACKEND_PID 2>/dev/null || true
   kill $VITE_PID 2>/dev/null || true
+  [ -n "${DEV_CONFIG:-}" ] && rm -f "$DEV_CONFIG" 2>/dev/null
   exit 0
 }
 
@@ -38,21 +39,24 @@ echo ""
 echo "  ${MUTED}Building Go backend...${NC}"
 go build -o pinchtab ./cmd/pinchtab
 
-# Start backend
-echo "  ${MUTED}Starting pinchtab backend on :9867...${NC}"
-./pinchtab server "$@" &
+# Start backend on port 9867 (matches Vite proxy target)
+DEV_PORT=${PINCHTAB_DEV_PORT:-9867}
+DEV_CONFIG=$(mktemp -d)/pinchtab.json
+echo "{\"server\":{\"port\":\"${DEV_PORT}\"}}" > "$DEV_CONFIG"
+echo "  ${MUTED}Starting pinchtab backend on :${DEV_PORT}...${NC}"
+PINCHTAB_CONFIG="$DEV_CONFIG" ./pinchtab server "$@" &
 BACKEND_PID=$!
 
 # Wait for backend to be ready
 echo "  ${MUTED}Waiting for backend...${NC}"
 for i in {1..30}; do
-  if curl -s http://localhost:9867/health >/dev/null 2>&1; then
+  if curl -s http://localhost:${DEV_PORT}/health >/dev/null 2>&1; then
     break
   fi
   sleep 0.5
 done
 
-if ! curl -s http://localhost:9867/health >/dev/null 2>&1; then
+if ! curl -s http://localhost:${DEV_PORT}/health >/dev/null 2>&1; then
   echo "  ${BOLD}Backend failed to start${NC}"
   kill $BACKEND_PID 2>/dev/null || true
   exit 1
@@ -81,7 +85,7 @@ echo ""
 echo "  ${SUCCESS}${BOLD}✓ Ready!${NC}"
 echo ""
 echo "  ${BOLD}Dashboard:${NC}  ${ACCENT}http://localhost:5173/dashboard/${NC}"
-echo "  ${BOLD}Backend:${NC}    http://localhost:9867"
+echo "  ${BOLD}Backend:${NC}    http://localhost:${DEV_PORT}"
 echo ""
 echo "  ${MUTED}Edit dashboard/src/* and changes will hot-reload.${NC}"
 echo "  ${MUTED}Press Ctrl+C to stop.${NC}"
