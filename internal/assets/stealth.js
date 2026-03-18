@@ -13,31 +13,14 @@ const seededRandom = (function() {
   };
 })();
 
-// Hide webdriver: Real non-headless Chrome has navigator.webdriver === false (not undefined!).
-// CreepJS checks: (1) webdriver === undefined in Chrome context (catches bad spoofs),
-// (2) !!webdriver (catches true), (3) lieProps detection (catches non-native getters).
-// Fix: return false, match real Chrome's property descriptor on Navigator.prototype,
-// and use a native-looking getter that won't trip lie detectors.
-(function() {
-  const proto = Object.getPrototypeOf(navigator);
-  // Delete any existing own-property first
-  try { delete navigator.webdriver; } catch(e) {}
-  try { delete proto.webdriver; } catch(e) {}
-  // Real Chrome descriptor: { get: [native function], set: undefined, enumerable: true, configurable: true }
-  // We define on the prototype (like real Chrome) with a getter that returns false.
-  // Using a function expression (not arrow) so toString() looks more natural.
-  const getter = function webdriver() { return false; };
-  // Override toString to look native (CreepJS checks function string representation)
-  const nativeToString = 'function get webdriver() { [native code] }';
-  getter.toString = function() { return nativeToString; };
-  const desc = { get: getter, set: undefined, enumerable: true, configurable: true };
-  try {
-    Object.defineProperty(proto, 'webdriver', desc);
-  } catch(e) {
-    // Fallback: try on navigator directly
-    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e2) {}
-  }
-})();
+// webdriver: DO NOT override navigator.webdriver here.
+// With --enable-automation=false (set in init.go), Chrome natively has webdriver=false.
+// Any JS override triggers CreepJS lie detector (lieProps['Navigator.webdriver']).
+// "Less is more" — the native false value passes all 3 CreepJS conditions:
+//   (1) webdriver === undefined → false (it's false, not undefined)
+//   (2) !!webdriver → false
+//   (3) lieProps → false (no tampering)
+// See: d_20260318_049
 
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
 delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
@@ -118,6 +101,18 @@ Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 100,
 });
 
+// Fix noDownlinkMax: headless Chrome doesn't populate downlinkMax.
+// Real Chrome on Wi-Fi reports Infinity; on Ethernet varies.
+// CreepJS checks: !!headlessEstimate?.noDownlinkMax
+if (navigator.connection) {
+  try {
+    Object.defineProperty(navigator.connection, 'downlinkMax', {
+      get: () => Infinity,
+      configurable: true
+    });
+  } catch(e) {}
+}
+
 const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
 
 if (stealthLevel === 'full') {
@@ -158,21 +153,17 @@ if (stealthLevel === 'full') {
   } catch(e) {}
 })();
 
-// Patch both WebGL1 and WebGL2 — modern Chrome defaults to WebGL2.
-// Without patching WebGL2, the SwiftShader renderer leaks via WEBGL_debug_renderer_info.
-function patchWebGLGetParameter(ctx) {
-  if (!ctx) return;
-  const orig = ctx.prototype.getParameter;
-  ctx.prototype.getParameter = function(parameter) {
-    if (parameter === 37445) return 'Intel Inc.';          // UNMASKED_VENDOR_WEBGL
-    if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
-    return orig.apply(this, arguments);
-  };
-}
-patchWebGLGetParameter(WebGLRenderingContext);
-if (typeof WebGL2RenderingContext !== 'undefined') {
-  patchWebGLGetParameter(WebGL2RenderingContext);
-}
+// WebGL: DO NOT spoof UNMASKED_RENDERER/VENDOR here.
+// The subprocess architecture (BRIDGE_ONLY=1) gives Chrome real Metal GPU access.
+// Real GPU info (Apple M2 Metal) is fine — it's what a real Mac reports.
+// Spoofing to "Intel Iris" caused hasBadWebGL detection in CreepJS because
+// the page reported "Intel Iris" but the Service Worker reported real "Apple M2"
+// (workers access WebGL via OffscreenCanvas, bypassing our page-level spoof).
+// The original spoof was needed to hide SwiftShader (CPU renderer) in the old
+// monolithic mode. With subprocess architecture, it's counterproductive.
+//
+// If SwiftShader IS detected (fallback/CI), the old patchWebGLGetParameter can
+// be restored here. Check: ANGLE (Google, ..., SwiftShader) in the renderer string.
 
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
