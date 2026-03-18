@@ -121,16 +121,20 @@ if (stealthLevel === 'full') {
 // Use window.outerWidth/Height as the screen dimensions (they come from --window-size).
 // Also set devicePixelRatio to 2 on macOS (Retina) for consistency.
 (function() {
-  // Common screen resolutions — pick one based on session seed
+  // Common screen resolutions — sorted ascending by width
   const screens = [
-    { w: 1920, h: 1080 }, { w: 2560, h: 1440 }, { w: 1440, h: 900 },
-    { w: 1366, h: 768 },  { w: 1536, h: 864 },  { w: 1280, h: 720 },
+    { w: 1440, h: 900 },  { w: 1536, h: 864 },  { w: 1680, h: 1050 },
+    { w: 1920, h: 1080 }, { w: 2560, h: 1440 }, { w: 3840, h: 2160 },
   ];
-  const idx = Math.floor(seededRandom(sessionSeed + 9999) * screens.length);
-  const screenSize = screens[idx];
-  // Use window.outerWidth if available and reasonable, otherwise use random from pool
-  const sw = (window.outerWidth > 800 ? window.outerWidth : screenSize.w);
-  const sh = (window.outerHeight > 600 ? window.outerHeight : screenSize.h);
+  const ow = window.outerWidth || 1280;
+  const oh = window.outerHeight || 800;
+  // Screen must be STRICTLY larger than window (real monitors > browser windows).
+  // Filter pool to entries larger than current window, pick one by seed.
+  const valid = screens.filter(s => s.w > ow && s.h > oh);
+  const pool = valid.length > 0 ? valid : [screens[screens.length - 1]];
+  const picked = pool[Math.floor(seededRandom(sessionSeed + 9999) * pool.length)];
+  const sw = picked.w;
+  const sh = picked.h;
   const dpr = (navigator.platform === 'MacIntel') ? 2 : 1;
 
   const overrides = {
@@ -181,6 +185,9 @@ HTMLCanvasElement.prototype.toDataURL = function(...args) {
     const pixelCount = Math.min(10, Math.floor(imageData.data.length / 400));
     for (let i = 0; i < pixelCount; i++) {
       const idx = Math.floor(seededRandom(sessionSeed + i) * (imageData.data.length / 4)) * 4;
+      // Skip fully transparent pixels — modifying them creates detectable artifacts
+      if (imageData.data[idx] === 0 && imageData.data[idx+1] === 0 && 
+          imageData.data[idx+2] === 0 && imageData.data[idx+3] === 0) continue;
       if (imageData.data[idx] < 255) imageData.data[idx] += 1;
       if (imageData.data[idx + 1] < 255) imageData.data[idx + 1] += 1;
     }
@@ -208,6 +215,9 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   const noisyPixels = Math.min(10, pixelCount * 0.0001);
   for (let i = 0; i < noisyPixels; i++) {
     const pixelIndex = Math.floor(Math.random() * pixelCount) * 4;
+    // Skip fully transparent pixels
+    if (imageData.data[pixelIndex] === 0 && imageData.data[pixelIndex+1] === 0 && 
+        imageData.data[pixelIndex+2] === 0 && imageData.data[pixelIndex+3] === 0) continue;
     imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (Math.random() > 0.5 ? 1 : -1)));
   }
   return imageData;
@@ -243,14 +253,4 @@ Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
   }
 });
 
-const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
-const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
 
-Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => hardwareCore,
-  configurable: true
-});
-
-Object.defineProperty(navigator, 'deviceMemory', {
-  get: () => deviceMem
-});
