@@ -47,21 +47,52 @@ window.navigator.permissions.query = (parameters) => (
     originalQuery(parameters)
 );
 
-Object.defineProperty(navigator, 'plugins', {
-  get: () => [{
-    name: 'Chrome PDF Plugin',
-    filename: 'internal-pdf-viewer',
-    description: 'Portable Document Format'
-  }, {
-    name: 'Chrome PDF Viewer',
-    filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
-    description: ''
-  }, {
-    name: 'Native Client',
-    filename: 'internal-nacl-plugin',
-    description: ''
-  }],
-});
+// Create a proper PluginArray that passes all three sannysoft checks:
+//   1. navigator.plugins instanceof PluginArray
+//   2. navigator.plugins.length > 0
+//   3. navigator.plugins[0].toString() === '[object Plugin]'
+(function() {
+  const fakePlugins = [
+    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',             description: 'Portable Document Format' },
+    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+    { name: 'Native Client',     filename: 'internal-nacl-plugin',             description: '' },
+  ];
+
+  function makePlugin(p) {
+    // Use Plugin.prototype if available (gives native instanceof check).
+    // Fall back to a plain object with explicit Symbol.toStringTag so that
+    // plugin.toString() returns '[object Plugin]' either way.
+    let base = {};
+    try { if (typeof Plugin !== 'undefined') base = Object.create(Plugin.prototype); } catch(e) {}
+    Object.defineProperty(base, Symbol.toStringTag, { value: 'Plugin', configurable: false });
+    ['name','filename','description'].forEach(function(k) {
+      Object.defineProperty(base, k, { value: p[k], writable: false, enumerable: true, configurable: false });
+    });
+    Object.defineProperty(base, 'length',    { value: 1,            writable: false, enumerable: true });
+    Object.defineProperty(base, 'item',      { value: function() { return null; }, writable: false });
+    Object.defineProperty(base, 'namedItem', { value: function() { return null; }, writable: false });
+    return base;
+  }
+
+  // Borrow the real PluginArray prototype so instanceof PluginArray === true.
+  const realProto = Object.getPrototypeOf(navigator.plugins);
+  const arr = Object.create(realProto);
+  Object.defineProperty(arr, 'length',    { value: fakePlugins.length, writable: false, enumerable: true });
+  Object.defineProperty(arr, 'item',      { value: function(i) { return arr[i] || null; }, writable: false });
+  Object.defineProperty(arr, 'namedItem', { value: function(n) {
+    for (var i = 0; i < fakePlugins.length; i++) { if (arr[i] && arr[i].name === n) return arr[i]; }
+    return null;
+  }, writable: false });
+  Object.defineProperty(arr, 'refresh',   { value: function() {}, writable: false });
+
+  fakePlugins.forEach(function(p, i) {
+    var plugin = makePlugin(p);
+    Object.defineProperty(arr, i,     { value: plugin, writable: false, enumerable: true });
+    Object.defineProperty(arr, p.name, { value: plugin, writable: false, enumerable: false });
+  });
+
+  Object.defineProperty(navigator, 'plugins', { get: function() { return arr; }, configurable: true });
+})();
 
 Object.defineProperty(navigator, 'languages', {
   get: () => ['en-US', 'en'],
