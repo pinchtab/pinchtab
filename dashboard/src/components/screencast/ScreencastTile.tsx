@@ -403,21 +403,7 @@ export default function ScreencastTile({
           </button>
         </div>
         <span>{sizeDisplay}</span>
-        {url === "about:blank" && (
-          <button
-            onClick={async () => {
-              try {
-                const testUrl = `${window.location.origin}/dashboard/test-page`;
-                await api.navigateTab(tabId, testUrl);
-              } catch (err) {
-                console.error("load test page failed", err);
-              }
-            }}
-            className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-medium text-primary transition-colors hover:bg-primary/30"
-          >
-            Test page
-          </button>
-        )}
+
       </div>
     </div>
   );
