@@ -108,7 +108,7 @@ func Load() *RuntimeConfig {
 		Headless:          envBoolOr("BRIDGE_HEADLESS", true),
 		NoRestore:         os.Getenv("BRIDGE_NO_RESTORE") == "true",
 		ProfileDir:        envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile")),
-		ChromeVersion:     envOr("BRIDGE_CHROME_VERSION", "144.0.7559.133"),
+		ChromeVersion:     envOr("BRIDGE_CHROME_VERSION", "146.0.7680.80"),
 		Timezone:          os.Getenv("BRIDGE_TIMEZONE"),
 		BlockImages:       os.Getenv("BRIDGE_BLOCK_IMAGES") == "true",
 		BlockMedia:        os.Getenv("BRIDGE_BLOCK_MEDIA") == "true",

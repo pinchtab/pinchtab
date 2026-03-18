@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"runtime"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
@@ -79,10 +80,15 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	// Log configuration
 	slog.Debug("configuring chrome allocator", "headless", cfg.Headless, "binary", chromeBinary, "profile_dir", cfg.ProfileDir)
 
-	// Headless mode
+	// Headless mode — use Chrome's "new" headless mode (--headless=new) which:
+	// 1. Reports regular Chrome UA (not "HeadlessChrome") everywhere including Service Workers
+	// 2. Properly emulates screen dimensions (not default 800×600)
+	// 3. Simulates window decorations (taskbar/dock) so screenFrame isn't [0,0,0,0]
+	// Old --headless mode leaked via Service Worker UA, detected by CreepJS at 67% headless.
+	// See: d_20260318_045
 	if cfg.Headless {
-		opts = append(opts, chromedp.Headless)
-		slog.Debug("chrome mode set to headless")
+		opts = append(opts, chromedp.Flag("headless", "new"))
+		slog.Debug("chrome mode set to headless (new mode)")
 	} else {
 		opts = append(opts, chromedp.Flag("headless", false))
 		slog.Debug("chrome mode set to headed (visible window)")
@@ -106,14 +112,34 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	w, h := randomWindowSize()
 	opts = append(opts, chromedp.WindowSize(w, h))
 
-	// Common stealth flags
+	// Stealth: override --enable-automation from chromedp defaults.
+	// enable-automation sets navigator.webdriver=true and shows the automation bar.
+	// Setting it to false here overrides the default (chromedp uses a map, last write wins).
 	opts = append(opts,
-		chromedp.Flag("disable-automation", ""),
+		chromedp.Flag("enable-automation", false),
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),
 		chromedp.Flag("disable-dev-shm-usage", ""),
 		chromedp.Flag("no-first-run", ""),
 		chromedp.Flag("no-default-browser-check", ""),
 	)
+
+	// Stealth: set --user-agent flag to override UA globally (including Service Workers).
+	// CDP emulation.SetUserAgentOverride only affects the page target, not Service Worker
+	// targets. The --user-agent flag overrides the binary's built-in UA at the network level.
+	// Without this, Service Workers report "HeadlessChrome/VERSION" even in --headless=new.
+	if cfg.ChromeVersion != "" {
+		var ua string
+		switch runtime.GOOS {
+		case "darwin":
+			ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + cfg.ChromeVersion + " Safari/537.36"
+		case "windows":
+			ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + cfg.ChromeVersion + " Safari/537.36"
+		default:
+			ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + cfg.ChromeVersion + " Safari/537.36"
+		}
+		opts = append(opts, chromedp.UserAgent(ua))
+		slog.Debug("user-agent override applied globally", "version", cfg.ChromeVersion)
+	}
 
 	// Extra flags
 	if cfg.ChromeExtraFlags != "" {
