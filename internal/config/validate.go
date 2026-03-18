@@ -92,7 +92,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		if !isValidStealthLevel(fc.InstanceDefaults.StealthLevel) {
 			errs = append(errs, ValidationError{
 				Field:   "instanceDefaults.stealthLevel",
-				Message: fmt.Sprintf("invalid value %q (must be light or full)", fc.InstanceDefaults.StealthLevel),
+				Message: fmt.Sprintf("invalid value %q (must be light, medium, or full)", fc.InstanceDefaults.StealthLevel),
 			})
 		}
 	}
@@ -228,7 +228,7 @@ func validateBind(bind string, field string) error {
 
 func isValidStealthLevel(level string) bool {
 	switch level {
-	case "light", "full":
+	case "light", "medium", "full":
 		return true
 	default:
 		return false
@@ -272,7 +272,7 @@ func isValidAttachScheme(scheme string) bool {
 }
 
 func ValidStealthLevels() []string {
-	return []string{"light", "full"}
+	return []string{"light", "medium", "full"}
 }
 
 func ValidEvictionPolicies() []string {

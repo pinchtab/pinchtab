@@ -33,12 +33,15 @@ export default function ScreencastTile({
   const [localFps, setLocalFps] = useState(fps);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [hasFrame, setHasFrame] = useState(false);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   // Reset local FPS when the tab changes to match the new tab's initial request
   useEffect(() => {
     setLocalFps(fps);
     setStatus("connecting");
+    setHasFrame(false);
     setFallbackUrl(null);
   }, [tabId, fps]);
 
@@ -125,49 +128,79 @@ export default function ScreencastTile({
     const socket = new WebSocket(wsUrl.toString());
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
+    setStatus("connecting");
+    setHasFrame(false);
+
+    let disposed = false;
+    let fallbackCaptured = false;
 
     let frameCount = 0;
     let lastFpsTime = Date.now();
+    const fallbackTimer = window.setTimeout(() => {
+      if (!disposed && !fallbackCaptured) {
+        void captureFallback();
+      }
+    }, 1500);
 
     socket.onopen = () => {
-      setStatus("streaming");
+      if (!disposed) {
+        setStatus("connecting");
+      }
     };
 
     socket.onmessage = (evt) => {
+      if (disposed) return;
+      fallbackCaptured = true;
+      window.clearTimeout(fallbackTimer);
+
       const blob = new Blob([evt.data], { type: "image/jpeg" });
       const imgUrl = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
+        if (disposed) {
+          URL.revokeObjectURL(imgUrl);
+          return;
+        }
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
         URL.revokeObjectURL(imgUrl);
       };
       img.src = imgUrl;
+      setHasFrame(true);
+      setStatus("streaming");
 
       frameCount++;
       const now = Date.now();
       if (now - lastFpsTime >= 1000) {
         setFpsDisplay(`${frameCount} fps`);
-        setSizeDisplay(`${(evt.data.byteLength / 1024).toFixed(0)} KB/frame`);
+        const frameBytes =
+          evt.data instanceof Blob ? evt.data.size : evt.data.byteLength;
+        setSizeDisplay(`${(frameBytes / 1024).toFixed(0)} KB/frame`);
         frameCount = 0;
         lastFpsTime = now;
       }
     };
 
     socket.onerror = () => {
-      setStatus("error");
+      if (!disposed) {
+        setStatus("error");
+      }
     };
 
     socket.onclose = () => {
-      setStatus("error");
+      if (!disposed) {
+        setStatus("error");
+      }
     };
 
     return () => {
+      disposed = true;
+      window.clearTimeout(fallbackTimer);
       socket.close();
       socketRef.current = null;
     };
-  }, [instanceId, tabId, quality, maxWidth, localFps]);
+  }, [instanceId, tabId, quality, maxWidth, localFps, retryKey]);
 
   const statusColor =
     status === "streaming"
@@ -193,7 +226,7 @@ export default function ScreencastTile({
       )}
       {/* Canvas */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
-        {status === "error" && fallbackUrl ? (
+        {!hasFrame && fallbackUrl ? (
           <img
             src={fallbackUrl}
             alt="Tab preview"
@@ -223,7 +256,11 @@ export default function ScreencastTile({
                 </button>
               )}
               <button
-                onClick={() => setStatus("connecting")}
+                onClick={() => {
+                  setStatus("connecting");
+                  setHasFrame(false);
+                  setRetryKey((prev) => prev + 1);
+                }}
                 className="rounded bg-primary/30 px-3 py-1.5 font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-primary/40"
               >
                 Retry connection

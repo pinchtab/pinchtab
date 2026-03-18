@@ -122,7 +122,7 @@ export interface BrowserSettings {
  */
 export interface Settings {
   screencast: ScreencastSettings;
-  stealth: string; // light/full
+  stealth: string; // light/medium/full
   browser: BrowserSettings;
   monitoring: MonitoringSettings;
 }

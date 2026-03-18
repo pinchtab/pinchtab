@@ -74,26 +74,24 @@ TYGO="${GOPATH:-$HOME/go}/bin/tygo"
 if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
   section "Types (tygo)"
   TYGO_CMD="${TYGO:-tygo}"
+  GENERATED_TYPES="src/generated/types.ts"
   if [ -x "$TYGO" ]; then TYGO_CMD="$TYGO"; fi
+  BEFORE_FIX="$(mktemp)"
+  cp "$GENERATED_TYPES" "$BEFORE_FIX"
   $TYGO_CMD generate 2>/dev/null
-  npx prettier --write src/generated/types.ts 2>/dev/null || true
-  if git diff --quiet -- src/generated/types.ts 2>/dev/null; then
+  npx prettier --write "$GENERATED_TYPES" 2>/dev/null || true
+  if cmp -s "$BEFORE_FIX" "$GENERATED_TYPES"; then
     ok "Types in sync"
   else
     fail "Types out of sync" "Run: cd dashboard && tygo generate && npx prettier --write src/generated/types.ts"
     if confirm "Fix generated types now?"; then
-      $TYGO_CMD generate
-      npx prettier --write src/generated/types.ts
-      if git diff --quiet -- src/generated/types.ts 2>/dev/null; then
-        ok "Types fixed"
-      else
-        fail "Types still out of sync" "Review tygo output and rerun the check."
-        exit 1
-      fi
+      ok "Types fixed"
     else
+      rm -f "$BEFORE_FIX"
       exit 1
     fi
   fi
+  rm -f "$BEFORE_FIX"
 fi
 
 section "TypeScript"

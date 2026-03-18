@@ -109,7 +109,7 @@ type BrowserSettings struct {
 // Settings contains all dashboard settings.
 type Settings struct {
 	Screencast ScreencastSettings `json:"screencast"`
-	Stealth    string             `json:"stealth"` // light/full
+	Stealth    string             `json:"stealth"` // light/medium/full
 	Browser    BrowserSettings    `json:"browser"`
 	Monitoring MonitoringSettings `json:"monitoring"`
 }
