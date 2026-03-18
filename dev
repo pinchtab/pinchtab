@@ -19,6 +19,7 @@ NC=$'\033[0m'
 COMMANDS=(
   "build:🔨:Build the application"
   "dev:🚀:Build & run"
+  "dashboard:🔥:Hot-reload dashboard development"
   "run:🏃:Run the application"
   "check:🧪:All checks"
   "test unit:🔬:Go unit tests"
@@ -158,6 +159,7 @@ run_command() {
       exec bash scripts/e2e.sh "$suite"
       ;;
     "dev")          exec bash scripts/dev.sh ;;
+    "dashboard")    exec bash scripts/dev-dashboard.sh ;;
     "build")        exec bash scripts/build.sh ;;
     "binary")       exec bash scripts/binary.sh ;;
     "binary all"|"all") exec bash scripts/binary.sh all ;;
@@ -253,6 +255,7 @@ if [ $# -gt 0 ]; then
       if command -v gum &>/dev/null; then pick_with_gum; else pick_with_select; fi
       exit 0
       ;;
+
     check)
       if [ $# -gt 1 ]; then
         run_command "check $2"
