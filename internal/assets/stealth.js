@@ -122,6 +122,42 @@ const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinch
 
 if (stealthLevel === 'full') {
 
+// Fix screen dimensions: headless Chrome reports screen as 800×600 even in new mode.
+// Use window.outerWidth/Height as the screen dimensions (they come from --window-size).
+// Also set devicePixelRatio to 2 on macOS (Retina) for consistency.
+(function() {
+  // Common screen resolutions — pick one based on session seed
+  const screens = [
+    { w: 1920, h: 1080 }, { w: 2560, h: 1440 }, { w: 1440, h: 900 },
+    { w: 1366, h: 768 },  { w: 1536, h: 864 },  { w: 1280, h: 720 },
+  ];
+  const idx = Math.floor(seededRandom(sessionSeed + 9999) * screens.length);
+  const screenSize = screens[idx];
+  // Use window.outerWidth if available and reasonable, otherwise use random from pool
+  const sw = (window.outerWidth > 800 ? window.outerWidth : screenSize.w);
+  const sh = (window.outerHeight > 600 ? window.outerHeight : screenSize.h);
+  const dpr = (navigator.platform === 'MacIntel') ? 2 : 1;
+
+  const overrides = {
+    width: sw, height: sh, availWidth: sw, availHeight: sh - 25,
+    colorDepth: 24, pixelDepth: 24
+  };
+  // Override directly on window.screen (own properties, not prototype-inherited)
+  for (const [key, value] of Object.entries(overrides)) {
+    try {
+      Object.defineProperty(window.screen, key, { get: () => value, configurable: true });
+    } catch(e) {}
+  }
+  // Fix devicePixelRatio
+  try {
+    Object.defineProperty(window, 'devicePixelRatio', { get: () => dpr, configurable: true });
+  } catch(e) {}
+  // Fix screenX/screenY for taskbar simulation (macOS has 25px menu bar)
+  try {
+    Object.defineProperty(window, 'screenY', { get: () => 25, configurable: true });
+  } catch(e) {}
+})();
+
 // Patch both WebGL1 and WebGL2 — modern Chrome defaults to WebGL2.
 // Without patching WebGL2, the SwiftShader renderer leaks via WEBGL_debug_renderer_info.
 function patchWebGLGetParameter(ctx) {

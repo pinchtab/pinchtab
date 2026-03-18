@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,7 +27,13 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 	// Create a bridge instance with lazy initialization
 	// Chrome will be initialized on first request via ensureChrome()
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
-	bridgeInstance.StealthScript = assets.StealthScript
+	// Prepend seed + stealth level so the 'full' block in stealth.js actually executes.
+	// Without this, __pinchtab_stealth_level defaults to 'light' and advanced stealth
+	// (screen override, WebGL, canvas noise, etc.) is dead code.
+	bridgeInstance.StealthScript = fmt.Sprintf(
+		"var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n",
+		rand.Intn(1000000000), cfg.StealthLevel,
+	) + assets.StealthScript
 
 	mux := http.NewServeMux()
 

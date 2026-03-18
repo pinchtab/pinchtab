@@ -31,3 +31,4 @@ MEMORY.md
 AGENTS.md
 *.test
 memory/
+.DS_Store
