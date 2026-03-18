@@ -228,17 +228,6 @@ export async function navigateTab(
   });
 }
 
-export async function evaluate(
-  tabId: string,
-  expression: string,
-): Promise<unknown> {
-  return request("/evaluate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tabId, expression }),
-  });
-}
-
 export async function sendAction(
   body: Record<string, unknown>,
 ): Promise<unknown> {
