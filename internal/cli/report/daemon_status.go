@@ -50,6 +50,8 @@ func currentDaemonManager() (daemonService, error) {
 		return &systemdStatus{userID: u.Uid}, nil
 	case "darwin":
 		return &launchdStatus{userID: u.Uid}, nil
+	case "windows":
+		return &windowsTaskStatus{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported OS")
 	}
@@ -96,7 +98,19 @@ func runDaemonCommand(name string, args ...string) (string, error) {
 	return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, trimmed)
 }
 
+type windowsTaskStatus struct{}
+
+func (w *windowsTaskStatus) ServicePath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "pinchtab", "pinchtab-daemon.cmd")
+}
+
+func (w *windowsTaskStatus) Status() (string, error) {
+	return runDaemonCommand("schtasks.exe", "/Query", "/TN", "PinchTab", "/V", "/FO", "LIST")
+}
+
 func daemonStatusLooksRunning(status string) bool {
 	return strings.Contains(status, "state = running") ||
-		strings.Contains(status, "Active: active (running)")
+		strings.Contains(status, "Active: active (running)") ||
+		strings.Contains(status, "Status:                          Running")
 }

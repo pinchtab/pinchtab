@@ -21,6 +21,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/profiles"
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/strategy"
+	"github.com/pinchtab/pinchtab/internal/tray"
 	"github.com/pinchtab/pinchtab/internal/web"
 
 	// Register strategies
@@ -115,7 +116,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	}
 
 	listenStatus := "starting"
-	if cli.IsDaemonRunning() && CheckPinchTabRunning(dashPort, cfg.Token) {
+	if CheckPinchTabRunning(dashPort, cfg.Token) {
 		listenStatus = "running"
 	}
 
@@ -226,6 +227,14 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		go doShutdown()
 	})
 
+	// Start system tray if available (Windows)
+	if tray.IsAvailable() {
+		dashURL := fmt.Sprintf("http://localhost:%s", dashPort)
+		go tray.Run(dashURL, OpenBrowser, func() {
+			doShutdown()
+		})
+	}
+
 	go func() {
 		sig := make(chan os.Signal, 2)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -233,6 +242,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		// Kill Chrome immediately on signal — synchronous, before anything else.
 		// launchd may SIGKILL us shortly after SIGTERM, so this must happen first.
 		bridge.KillAllPinchtabChrome()
+		tray.Quit()
 		go doShutdown()
 		<-sig
 		slog.Warn("force shutdown requested")

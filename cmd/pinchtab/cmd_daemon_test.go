@@ -239,7 +239,7 @@ func TestLaunchdManagerPreflightRequiresGUIDomain(t *testing.T) {
 }
 
 func TestNewDaemonManagerRejectsUnsupportedOS(t *testing.T) {
-	_, err := newDaemonManager(daemonEnvironment{osName: "windows"}, &fakeCommandRunner{})
+	_, err := newDaemonManager(daemonEnvironment{osName: "freebsd"}, &fakeCommandRunner{})
 	if err == nil {
 		t.Fatal("expected unsupported OS error")
 	}
