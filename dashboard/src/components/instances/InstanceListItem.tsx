@@ -5,6 +5,7 @@ interface Props {
   tabCount: number;
   memoryMB?: number;
   selected: boolean;
+  autoRestart?: boolean;
   onClick: () => void;
   onStop?: () => void;
   onOpenProfile?: () => void;
@@ -15,6 +16,7 @@ export default function InstanceListItem({
   tabCount,
   memoryMB,
   selected,
+  autoRestart = false,
   onClick,
   onStop,
   onOpenProfile,
@@ -25,6 +27,11 @@ export default function InstanceListItem({
       : instance.status === "error"
         ? "bg-destructive"
         : "bg-text-muted";
+
+  const stopLabel = autoRestart ? "Restart" : "Stop";
+  const stopStyle = autoRestart
+    ? "rounded bg-warning/10 px-2 py-0.5 text-[10px] font-medium uppercase text-warning transition-colors hover:bg-warning/20"
+    : "rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium uppercase text-destructive transition-colors hover:bg-destructive/20";
 
   return (
     <button
@@ -63,7 +70,7 @@ export default function InstanceListItem({
                   onOpenProfile();
                 }
               }}
-              className="rounded bg-bg-elevated px-2 py-0.5 text-[10px] font-medium text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+              className="rounded bg-bg-elevated px-2 py-0.5 text-[10px] font-medium uppercase text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
             >
               Profile
             </span>
@@ -82,9 +89,9 @@ export default function InstanceListItem({
                   onStop();
                 }
               }}
-              className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/20"
+              className={stopStyle}
             >
-              Stop
+              {stopLabel}
             </span>
           )}
         </div>

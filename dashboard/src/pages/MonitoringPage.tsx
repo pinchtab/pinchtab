@@ -19,7 +19,21 @@ export default function MonitoringPage() {
   } = useAppStore();
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [strategy, setStrategy] = useState<string>("always-on");
   const memoryEnabled = settings.monitoring?.memoryMetrics ?? false;
+
+  // Fetch backend strategy once
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const cfg = await api.fetchBackendConfig();
+        setStrategy(cfg.config.multiInstance.strategy);
+      } catch {
+        // ignore — default to always-on
+      }
+    };
+    load();
+  }, []);
 
   // Auto-select first running instance
   useEffect(() => {
@@ -88,6 +102,11 @@ export default function MonitoringPage() {
                       memoryEnabled ? currentMemory[inst.id] : undefined
                     }
                     selected={selectedId === inst.id}
+                    autoRestart={
+                      inst.profileName === "default" &&
+                      (strategy === "always-on" ||
+                        strategy === "simple-autorestart")
+                    }
                     onClick={() => setSelectedId(inst.id)}
                     onStop={() => handleStop(inst.id)}
                     onOpenProfile={() =>
