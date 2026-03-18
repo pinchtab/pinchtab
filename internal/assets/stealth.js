@@ -101,15 +101,19 @@ Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 100,
 });
 
-// Fix noDownlinkMax: headless Chrome doesn't populate downlinkMax.
-// Real Chrome on Wi-Fi reports Infinity; on Ethernet varies.
-// CreepJS checks: !!headlessEstimate?.noDownlinkMax
+// Fix noDownlinkMax: define on prototype so it exists as a proper API property.
+// Headless Chrome's NetworkInformation prototype lacks downlinkMax entirely.
+// Real Chrome on WiFi reports Infinity.
 if (navigator.connection) {
   try {
-    Object.defineProperty(navigator.connection, 'downlinkMax', {
-      get: () => Infinity,
-      configurable: true
-    });
+    const connProto = Object.getPrototypeOf(navigator.connection);
+    if (!connProto.hasOwnProperty('downlinkMax')) {
+      Object.defineProperty(connProto, 'downlinkMax', {
+        get: () => Infinity,
+        configurable: true,
+        enumerable: true
+      });
+    }
   } catch(e) {}
 }
 
@@ -155,6 +159,43 @@ if (stealthLevel === 'full') {
   try {
     Object.defineProperty(window, 'screenY', { get: () => 25, configurable: true });
   } catch(e) {}
+})();
+
+// Fix hasKnownBgColor: headless Chrome resolves CSS system colors like 'ActiveText'
+// to hardcoded defaults (e.g. rgb(255,0,0)) instead of querying the OS theme.
+// CSS properties aren't JS descriptors — they're handled by C++ code, so we can't
+// intercept the setter. Instead, override getComputedStyle to patch the returned
+// value when the element's inline style contains a system color keyword.
+(function() {
+  const systemColorMap = {
+    'activetext': 'rgb(0, 102, 204)',
+    'accentcolor': 'rgb(0, 122, 255)',
+    'accentcolortext': 'rgb(255, 255, 255)',
+  };
+  const colorProps = ['color', 'backgroundColor', 'borderColor'];
+  const origGCS = window.getComputedStyle;
+  window.getComputedStyle = function(element, pseudoElt) {
+    const style = origGCS.call(this, element, pseudoElt);
+    if (element && element.style) {
+      for (const prop of colorProps) {
+        const inlineVal = element.style.getPropertyValue(prop === 'backgroundColor' ? 'background-color' : prop === 'borderColor' ? 'border-color' : prop);
+        const key = inlineVal ? inlineVal.toLowerCase().trim() : '';
+        if (systemColorMap[key]) {
+          try {
+            Object.defineProperty(style, prop, {
+              get: () => systemColorMap[key],
+              configurable: true,
+            });
+          } catch(e) {}
+        }
+      }
+    }
+    return style;
+  };
+  // Preserve native toString to avoid lie detection
+  window.getComputedStyle.toString = origGCS.toString.bind(origGCS);
+  Object.defineProperty(window.getComputedStyle, 'name', { value: 'getComputedStyle' });
+  Object.defineProperty(window.getComputedStyle, 'length', { value: origGCS.length });
 })();
 
 // WebGL: DO NOT spoof UNMASKED_RENDERER/VENDOR here.

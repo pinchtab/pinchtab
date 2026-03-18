@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -71,6 +72,20 @@ func (b *Bridge) injectStealth(ctx context.Context) {
 		}),
 	); err != nil {
 		slog.Warn("stealth injection failed", "err", err)
+	}
+
+	// Force prefers-color-scheme to light — headless Chrome defaults to dark,
+	// but most real users run light mode. This affects CSS media queries and
+	// makes the fingerprint more consistent with real desktop Chrome.
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return emulation.SetEmulatedMedia().
+				WithFeatures([]*emulation.MediaFeature{
+					{Name: "prefers-color-scheme", Value: "light"},
+				}).Do(ctx)
+		}),
+	); err != nil {
+		slog.Warn("emulated media failed", "err", err)
 	}
 }
 
