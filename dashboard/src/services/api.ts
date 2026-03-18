@@ -213,6 +213,10 @@ export async function fetchTabPdf(tabId: string): Promise<Blob> {
   return requestBlob(`/tabs/${encodeURIComponent(tabId)}/pdf?raw=true`);
 }
 
+export async function closeTab(tabId: string): Promise<void> {
+  await request(`/tabs/${encodeURIComponent(tabId)}`, { method: "DELETE" });
+}
+
 export function subscribeToInstanceLogs(
   id: string,
   handlers: { onLogs?: (logs: string) => void },
