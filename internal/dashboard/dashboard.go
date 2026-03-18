@@ -129,6 +129,9 @@ func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /dashboard/assets/", http.StripPrefix("/dashboard", d.withLongCache(fileServer)))
 	mux.Handle("GET /dashboard/favicon.png", http.StripPrefix("/dashboard", d.withLongCache(fileServer)))
 
+	// Test page for screencast interaction testing
+	mux.HandleFunc("GET /dashboard/test-page", handleTestPage)
+
 	// SPA: serve dashboard.html for /, /login, and /dashboard/*
 	mux.Handle("GET /{$}", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
 	mux.Handle("GET /login", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
