@@ -13,18 +13,29 @@ const seededRandom = (function() {
   };
 })();
 
-// Hide webdriver: try deleting first, then make non-enumerable so
-// 'webdriver' in navigator returns false (matching non-headless Chrome).
+// Hide webdriver: Real non-headless Chrome has navigator.webdriver === false (not undefined!).
+// CreepJS checks: (1) webdriver === undefined in Chrome context (catches bad spoofs),
+// (2) !!webdriver (catches true), (3) lieProps detection (catches non-native getters).
+// Fix: return false, match real Chrome's property descriptor on Navigator.prototype,
+// and use a native-looking getter that won't trip lie detectors.
 (function() {
   const proto = Object.getPrototypeOf(navigator);
+  // Delete any existing own-property first
   try { delete navigator.webdriver; } catch(e) {}
   try { delete proto.webdriver; } catch(e) {}
-  const desc = { get: () => undefined, configurable: false, enumerable: false };
-  if ('webdriver' in navigator) {
-    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e) {}
-  }
-  if ('webdriver' in proto) {
-    try { Object.defineProperty(proto, 'webdriver', desc); } catch(e) {}
+  // Real Chrome descriptor: { get: [native function], set: undefined, enumerable: true, configurable: true }
+  // We define on the prototype (like real Chrome) with a getter that returns false.
+  // Using a function expression (not arrow) so toString() looks more natural.
+  const getter = function webdriver() { return false; };
+  // Override toString to look native (CreepJS checks function string representation)
+  const nativeToString = 'function get webdriver() { [native code] }';
+  getter.toString = function() { return nativeToString; };
+  const desc = { get: getter, set: undefined, enumerable: true, configurable: true };
+  try {
+    Object.defineProperty(proto, 'webdriver', desc);
+  } catch(e) {
+    // Fallback: try on navigator directly
+    try { Object.defineProperty(navigator, 'webdriver', desc); } catch(e2) {}
   }
 })();
 
