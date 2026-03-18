@@ -19,6 +19,8 @@ case "$SUITE" in
     SUMMARY_FILE_ALL="summary-api-full.txt"
     REPORT_FILE_BASIC="report-api-fast.md"
     REPORT_FILE_ALL="report-api-full.md"
+    PROGRESS_FILE_BASIC="progress-api-fast.log"
+    PROGRESS_FILE_ALL="progress-api-full.log"
     ;;
   cli|scenarios-cli)
     source "${ROOT_DIR}/helpers/cli.sh"
@@ -31,6 +33,8 @@ case "$SUITE" in
     SUMMARY_FILE_ALL="summary-cli-full.txt"
     REPORT_FILE_BASIC="report-cli-fast.md"
     REPORT_FILE_ALL="report-cli-full.md"
+    PROGRESS_FILE_BASIC="progress-cli-fast.log"
+    PROGRESS_FILE_ALL="progress-cli-full.log"
     ;;
   *)
     echo "unknown suite: $SUITE" >&2
@@ -94,15 +98,18 @@ if [ "$RUN_ALL" = "true" ]; then
   SUITE_TITLE="$SUITE_TITLE_ALL"
   SUMMARY_FILE="$SUMMARY_FILE_ALL"
   REPORT_FILE="$REPORT_FILE_ALL"
+  PROGRESS_FILE="$PROGRESS_FILE_ALL"
 else
   SUITE_TITLE="$SUITE_TITLE_BASIC"
   SUMMARY_FILE="$SUMMARY_FILE_BASIC"
   REPORT_FILE="$REPORT_FILE_BASIC"
+  PROGRESS_FILE="$PROGRESS_FILE_BASIC"
 fi
 
 export E2E_SUMMARY_TITLE="$SUITE_TITLE"
 export E2E_SUMMARY_FILE="$SUMMARY_FILE"
 export E2E_REPORT_FILE="$REPORT_FILE"
+export E2E_PROGRESS_FILE="$PROGRESS_FILE"
 export E2E_GENERATE_MARKDOWN_REPORT=1
 
 if [ "$SUITE_KIND" = "api" ]; then
@@ -164,10 +171,18 @@ for script_name in "${SCENARIO_GROUPS[@]}"; do
     exit 1
   fi
 
+  if [ -d "${RESULTS_DIR:-}" ] && [ -n "${E2E_PROGRESS_FILE:-}" ]; then
+    printf '%s RUNNING %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${script_name}" >> "${RESULTS_DIR}/${E2E_PROGRESS_FILE}"
+  fi
+
   echo -e "${YELLOW}Running: ${script_name}${NC}"
   echo ""
   source "${script_path}"
   echo ""
+
+  if [ -d "${RESULTS_DIR:-}" ] && [ -n "${E2E_PROGRESS_FILE:-}" ]; then
+    printf '%s DONE %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${script_name}" >> "${RESULTS_DIR}/${E2E_PROGRESS_FILE}"
+  fi
 done
 
 print_summary

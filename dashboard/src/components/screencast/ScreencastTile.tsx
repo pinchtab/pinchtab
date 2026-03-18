@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addTokenToUrl } from "../../services/auth";
 import * as api from "../../services/api";
 
@@ -96,15 +96,20 @@ export default function ScreencastTile({
     }
   };
 
-  const captureFallback = async () => {
+  const captureFallback = useCallback(async () => {
     try {
       const blob = await api.fetchTabScreenshot(tabId, "png");
-      if (fallbackUrl) URL.revokeObjectURL(fallbackUrl);
-      setFallbackUrl(URL.createObjectURL(blob));
+      const nextUrl = URL.createObjectURL(blob);
+      setFallbackUrl((prev) => {
+        if (prev) {
+          URL.revokeObjectURL(prev);
+        }
+        return nextUrl;
+      });
     } catch (e) {
       console.error("Fallback capture failed", e);
     }
-  };
+  }, [tabId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -200,7 +205,15 @@ export default function ScreencastTile({
       socket.close();
       socketRef.current = null;
     };
-  }, [instanceId, tabId, quality, maxWidth, localFps, retryKey]);
+  }, [
+    instanceId,
+    tabId,
+    quality,
+    maxWidth,
+    localFps,
+    retryKey,
+    captureFallback,
+  ]);
 
   const statusColor =
     status === "streaming"

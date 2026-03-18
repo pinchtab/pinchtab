@@ -384,11 +384,23 @@ if (stealthLevel === 'full') {
 // WebGL SPOOFING
 // ⚠️ Changes reported GPU - may affect WebGL-dependent applications
 (function() {
+  const ua = navigator.userAgent || '';
+  let vendor = 'Google Inc. (Intel)';
+  let renderer = 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)';
+
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
+    vendor = 'Google Inc. (Apple)';
+    renderer = 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
+  } else if (ua.includes('Linux')) {
+    vendor = 'Google Inc. (Intel)';
+    renderer = 'ANGLE (Intel, Mesa Intel(R) UHD Graphics 630, OpenGL 4.6)';
+  }
+
   const spoofWebGL = (proto) => {
     const getParameter = proto.getParameter;
     proto.getParameter = function(parameter) {
-      if (parameter === 37445) return 'Google Inc. (Intel)'; // UNMASKED_VENDOR
-      if (parameter === 37446) return 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)'; // UNMASKED_RENDERER
+      if (parameter === 37445) return vendor; // UNMASKED_VENDOR
+      if (parameter === 37446) return renderer; // UNMASKED_RENDERER
       return getParameter.apply(this, arguments);
     };
   };

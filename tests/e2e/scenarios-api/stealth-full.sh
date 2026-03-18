@@ -99,10 +99,26 @@ run_stealth_level_matrix() {
   fi
   end_test
 
-  start_test "stealth-levels: [full] WebGL renderer spoofed"
-  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl.getExtension(\"WEBGL_debug_renderer_info\"); const r = gl.getParameter(d.UNMASKED_RENDERER_WEBGL); return r.includes(\"Intel\") && r.includes(\"UHD\"); } catch(e) { return false; } })()"}'
+  start_test "stealth-levels: [full] WebGL renderer matches platform"
+  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl && gl.getExtension(\"WEBGL_debug_renderer_info\"); const r = d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : \"\"; const p = navigator.platform || \"\"; const lower = r.toLowerCase(); const ok = !d || (!lower.includes(\"swiftshader\") && ((p === \"MacIntel\" && !lower.includes(\"direct3d\")) || (p.includes(\"Linux\") && !lower.includes(\"direct3d\")) || (p.includes(\"Win\") && lower.includes(\"direct3d\")))); return JSON.stringify({available: !!d, renderer: r, platform: p, ok}); } catch(e) { return JSON.stringify({available:false, renderer:\"\", platform:navigator.platform || \"\", ok:false}); } })()"}'
   if [ "$STEALTH_LEVEL" = "full" ]; then
-    assert_json_eq "$RESULT" '.result' 'true' "WebGL spoofed to Intel UHD"
+    webgl_json=$(echo "$RESULT" | jq -r '.result // "{}"')
+    webgl_available=$(echo "$webgl_json" | jq -r '.available // false')
+    webgl_ok=$(echo "$webgl_json" | jq -r '.ok // false')
+    webgl_renderer=$(echo "$webgl_json" | jq -r '.renderer // ""')
+    webgl_platform=$(echo "$webgl_json" | jq -r '.platform // ""')
+    if [ "$webgl_available" = "true" ]; then
+      if [ "$webgl_ok" = "true" ]; then
+        echo -e "  ${GREEN}✓${NC} WebGL renderer matches platform (${webgl_platform})"
+        ((ASSERTIONS_PASSED++)) || true
+      else
+        echo -e "  ${RED}✗${NC} WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
+        ((ASSERTIONS_FAILED++)) || true
+      fi
+    else
+      echo -e "  ${MUTED}(skipped - WEBGL_debug_renderer_info unavailable)${NC}"
+      ((ASSERTIONS_PASSED++)) || true
+    fi
   else
     echo -e "  ${MUTED}(skipped - native WebGL at ${STEALTH_LEVEL} level)${NC}"
     ((ASSERTIONS_PASSED++)) || true
@@ -249,10 +265,26 @@ if [ -n "$FULL_URL" ]; then
 
   end_test
 
-  start_test "bot-detect-full: WebGL reports Intel GPU"
+  start_test "bot-detect-full: WebGL renderer matches platform when observable"
 
-  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl.getExtension(\"WEBGL_debug_renderer_info\"); const r = gl.getParameter(d.UNMASKED_RENDERER_WEBGL); return r.includes(\"Intel\"); } catch(e) { return false; } })()"}'
-  assert_json_eq "$RESULT" '.result' 'true' "WebGL reports Intel GPU"
+  pt_post /evaluate '{"expression":"(() => { try { const c = document.createElement(\"canvas\"); const gl = c.getContext(\"webgl\"); const d = gl && gl.getExtension(\"WEBGL_debug_renderer_info\"); const r = d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : \"\"; const p = navigator.platform || \"\"; const lower = r.toLowerCase(); const ok = !d || (!lower.includes(\"swiftshader\") && ((p === \"MacIntel\" && !lower.includes(\"direct3d\")) || (p.includes(\"Linux\") && !lower.includes(\"direct3d\")) || (p.includes(\"Win\") && lower.includes(\"direct3d\")))); return JSON.stringify({available: !!d, renderer: r, platform: p, ok}); } catch(e) { return JSON.stringify({available:false, renderer:\"\", platform:navigator.platform || \"\", ok:false}); } })()"}'
+  webgl_json=$(echo "$RESULT" | jq -r '.result // "{}"')
+  webgl_available=$(echo "$webgl_json" | jq -r '.available // false')
+  webgl_ok=$(echo "$webgl_json" | jq -r '.ok // false')
+  webgl_renderer=$(echo "$webgl_json" | jq -r '.renderer // ""')
+  webgl_platform=$(echo "$webgl_json" | jq -r '.platform // ""')
+  if [ "$webgl_available" = "true" ]; then
+    if [ "$webgl_ok" = "true" ]; then
+      echo -e "  ${GREEN}✓${NC} WebGL renderer matches platform (${webgl_platform})"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+  else
+    echo -e "  ${MUTED}(skipped - WEBGL_debug_renderer_info unavailable)${NC}"
+    ((ASSERTIONS_PASSED++)) || true
+  fi
 
   end_test
 

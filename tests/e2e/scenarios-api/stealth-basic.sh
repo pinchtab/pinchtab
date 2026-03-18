@@ -88,6 +88,14 @@ assert_eval_poll "!('webdriver' in navigator)" "true" "webdriver property not in
 
 end_test
 
+start_test "bot-detect: iframe navigator matches parent"
+
+pt_post /evaluate '{"expression":"(() => { const iframe = document.createElement(\"iframe\"); document.body.appendChild(iframe); try { const parent = navigator; const child = iframe.contentWindow.navigator; return child.webdriver === parent.webdriver && JSON.stringify(child.languages) === JSON.stringify(parent.languages) && child.platform === parent.platform; } finally { iframe.remove(); } })()"}'
+assert_ok "iframe consistency evaluate"
+assert_json_eq "$RESULT" '.result' 'true' "iframe navigator matches parent"
+
+end_test
+
 start_test "bot-detect: no CDP traces"
 
 assert_eval_poll "!(window.cdc_adoQpoasnfa76pfcZLmcfl_Array || window.cdc_adoQpoasnfa76pfcZLmcfl_Promise)" "true" "no CDP automation traces"

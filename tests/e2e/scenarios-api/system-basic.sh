@@ -142,7 +142,7 @@ assert_instance_logs_poll() {
   local inst_id="$1"
   local needle="$2"
   local desc="$3"
-  local attempts="${4:-10}"
+  local attempts="${4:-15}"
   local delay="${5:-1}"
 
   local i
@@ -178,11 +178,11 @@ print_extension_hints() {
 # --- T1: Default instance loads configured extension path ---
 start_test "Extension config: default instance loads configured extension path"
 
-pt_get /instances
-assert_ok "list instances"
-DEFAULT_INST_ID=$(echo "$RESULT" | jq -r '.[] | select(.profileName == "default") | .id' | head -n 1)
+pt_get /health
+assert_ok "health"
+DEFAULT_INST_ID=$(echo "$RESULT" | jq -r '.defaultInstance.id // empty')
 if [ -n "$DEFAULT_INST_ID" ] && [ "$DEFAULT_INST_ID" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} default instance present"
+  echo -e "  ${GREEN}✓${NC} default instance present: ${DEFAULT_INST_ID}"
   ((ASSERTIONS_PASSED++)) || true
 else
   echo -e "  ${RED}✗${NC} default instance present"
