@@ -39,6 +39,17 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_Launch_DisabledByRuntimeConfig(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{DisableLocalLaunch: true})
+
+	_, err := o.Launch("profile1", "9001", true, nil)
+	if err == nil || !strings.Contains(err.Error(), "local instance launch is disabled") {
+		t.Fatalf("Launch() error = %v, want local launch disabled error", err)
+	}
+}
+
 func TestOrchestrator_ListAndStop(t *testing.T) {
 	alive := true
 	old := processAliveFunc

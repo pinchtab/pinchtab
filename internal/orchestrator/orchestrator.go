@@ -246,6 +246,9 @@ func installStableBinary(src, dst string) error {
 }
 
 func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths []string) (*bridge.Instance, error) {
+	if o != nil && o.runtimeCfg != nil && o.runtimeCfg.DisableLocalLaunch {
+		return nil, fmt.Errorf("local instance launch is disabled")
+	}
 	// Validate profile name to prevent path traversal attacks
 	if err := profiles.ValidateProfileName(name); err != nil {
 		return nil, err

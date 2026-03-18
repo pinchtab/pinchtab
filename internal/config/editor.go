@@ -181,6 +181,12 @@ func setMultiInstanceField(o *MultiInstanceConfig, field, value string) error {
 		o.Strategy = value
 	case "allocationPolicy":
 		o.AllocationPolicy = value
+	case "disableLocalLaunch":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("multiInstance.disableLocalLaunch must be true or false: %w", err)
+		}
+		o.DisableLocalLaunch = &b
 	case "instancePortStart":
 		n, err := strconv.Atoi(value)
 		if err != nil {
@@ -395,6 +401,8 @@ func getMultiInstanceField(o *MultiInstanceConfig, field string) (string, error)
 		return o.Strategy, nil
 	case "allocationPolicy":
 		return o.AllocationPolicy, nil
+	case "disableLocalLaunch":
+		return formatBoolPtr(o.DisableLocalLaunch), nil
 	case "instancePortStart":
 		return formatIntPtr(o.InstancePortStart), nil
 	case "instancePortEnd":

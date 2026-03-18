@@ -175,11 +175,12 @@ type idpiConfigJSON struct {
 }
 
 type multiInstanceConfigJSON struct {
-	Strategy          string                   `json:"strategy"`
-	AllocationPolicy  string                   `json:"allocationPolicy"`
-	InstancePortStart *int                     `json:"instancePortStart"`
-	InstancePortEnd   *int                     `json:"instancePortEnd"`
-	Restart           multiInstanceRestartJSON `json:"restart"`
+	Strategy           string                   `json:"strategy"`
+	AllocationPolicy   string                   `json:"allocationPolicy"`
+	DisableLocalLaunch *bool                    `json:"disableLocalLaunch,omitempty"`
+	InstancePortStart  *int                     `json:"instancePortStart"`
+	InstancePortEnd    *int                     `json:"instancePortEnd"`
+	Restart            multiInstanceRestartJSON `json:"restart"`
 }
 
 type multiInstanceRestartJSON struct {
@@ -285,10 +286,11 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			DefaultProfile: fc.Profiles.DefaultProfile,
 		},
 		MultiInstance: multiInstanceConfigJSON{
-			Strategy:          fc.MultiInstance.Strategy,
-			AllocationPolicy:  fc.MultiInstance.AllocationPolicy,
-			InstancePortStart: fc.MultiInstance.InstancePortStart,
-			InstancePortEnd:   fc.MultiInstance.InstancePortEnd,
+			Strategy:           fc.MultiInstance.Strategy,
+			AllocationPolicy:   fc.MultiInstance.AllocationPolicy,
+			DisableLocalLaunch: fc.MultiInstance.DisableLocalLaunch,
+			InstancePortStart:  fc.MultiInstance.InstancePortStart,
+			InstancePortEnd:    fc.MultiInstance.InstancePortEnd,
 			Restart: multiInstanceRestartJSON{
 				MaxRestarts:    fc.MultiInstance.Restart.MaxRestarts,
 				InitBackoffSec: fc.MultiInstance.Restart.InitBackoffSec,
@@ -349,6 +351,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	restartInitBackoffSec := int(cfg.RestartInitBackoff / time.Second)
 	restartMaxBackoffSec := int(cfg.RestartMaxBackoff / time.Second)
 	restartStableAfterSec := int(cfg.RestartStableAfter / time.Second)
+	disableLocalLaunch := cfg.DisableLocalLaunch
 	activityEnabled := cfg.Observability.Activity.Enabled
 	activitySessionIdleSec := cfg.Observability.Activity.SessionIdleSec
 	activityRetentionDays := cfg.Observability.Activity.RetentionDays
@@ -412,10 +415,11 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			DefaultProfile: cfg.DefaultProfile,
 		},
 		MultiInstance: MultiInstanceConfig{
-			Strategy:          cfg.Strategy,
-			AllocationPolicy:  cfg.AllocationPolicy,
-			InstancePortStart: &start,
-			InstancePortEnd:   &end,
+			Strategy:           cfg.Strategy,
+			AllocationPolicy:   cfg.AllocationPolicy,
+			DisableLocalLaunch: &disableLocalLaunch,
+			InstancePortStart:  &start,
+			InstancePortEnd:    &end,
 			Restart: MultiInstanceRestartConfig{
 				MaxRestarts:    &restartMaxRestarts,
 				InitBackoffSec: &restartInitBackoffSec,

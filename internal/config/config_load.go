@@ -290,6 +290,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.MultiInstance.AllocationPolicy != "" {
 		cfg.AllocationPolicy = fc.MultiInstance.AllocationPolicy
 	}
+	if fc.MultiInstance.DisableLocalLaunch != nil {
+		cfg.DisableLocalLaunch = *fc.MultiInstance.DisableLocalLaunch
+	}
 	if fc.MultiInstance.InstancePortStart != nil {
 		cfg.InstancePortStart = *fc.MultiInstance.InstancePortStart
 	}
