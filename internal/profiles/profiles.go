@@ -235,13 +235,18 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		return fmt.Errorf("profile %q already exists", name)
 	}
 
-	if _, err := os.Stat(filepath.Join(sourcePath, "Default")); err != nil {
-		if _, err2 := os.Stat(filepath.Join(sourcePath, "Preferences")); err2 != nil {
+	resolvedSourcePath, err := resolveImportSourcePath(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(filepath.Join(resolvedSourcePath, "Default")); err != nil {
+		if _, err2 := os.Stat(filepath.Join(resolvedSourcePath, "Preferences")); err2 != nil {
 			return fmt.Errorf("source doesn't look like a Chrome user data dir (no Default/ or Preferences found)")
 		}
 	}
 
-	srcInfo, err := os.Lstat(sourcePath)
+	srcInfo, err := os.Lstat(resolvedSourcePath)
 	if err != nil {
 		return fmt.Errorf("source path invalid: %w", err)
 	}
@@ -252,12 +257,12 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		return fmt.Errorf("source path must be a directory")
 	}
 
-	slog.Info("importing profile", "name", name, "source", sourcePath)
-	if err := copyDir(sourcePath, dest); err != nil {
+	slog.Info("importing profile", "name", name, "source", resolvedSourcePath)
+	if err := copyDir(resolvedSourcePath, dest); err != nil {
 		return fmt.Errorf("copy failed: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(resolvedSourcePath), 0600); err != nil {
 		slog.Warn("failed to write import marker", "err", err)
 	}
 	return writeProfileMeta(dest, ProfileMeta{
@@ -301,6 +306,51 @@ func (pm *ProfileManager) Create(name string) error {
 		ID:   profileID(name),
 		Name: name,
 	})
+}
+
+func resolveImportSourcePath(sourcePath string) (string, error) {
+	if sourcePath == "" {
+		return "", fmt.Errorf("source path required")
+	}
+
+	cleaned := filepath.Clean(sourcePath)
+	if !filepath.IsAbs(cleaned) {
+		abs, err := filepath.Abs(cleaned)
+		if err != nil {
+			return "", fmt.Errorf("source path invalid: %w", err)
+		}
+		cleaned = abs
+	}
+
+	roots, err := allowedImportRoots()
+	if err != nil {
+		return "", err
+	}
+	for _, root := range roots {
+		if pathWithinRoot(cleaned, root) {
+			return cleaned, nil
+		}
+	}
+	return "", fmt.Errorf("source path must be within %s", strings.Join(roots, " or "))
+}
+
+func allowedImportRoots() ([]string, error) {
+	roots := []string{filepath.Clean(os.TempDir())}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve home dir: %w", err)
+	}
+	roots = append(roots, filepath.Clean(homeDir))
+	return roots, nil
+}
+
+func pathWithinRoot(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != "..")
 }
 
 func (pm *ProfileManager) CreateWithMeta(name string, meta ProfileMeta) error {

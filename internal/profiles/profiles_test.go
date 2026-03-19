@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +86,37 @@ func TestProfileManagerImport(t *testing.T) {
 	}
 }
 
+func TestProfileManagerImportNormalizesSourcePath(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	srcRoot := t.TempDir()
+	src := filepath.Join(srcRoot, "chrome-src")
+	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relSource, err := filepath.Rel(cwd, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pm.Import("normalized-import", relSource); err != nil {
+		t.Fatal(err)
+	}
+
+	importMarker, err := os.ReadFile(filepath.Join(dir, profileID("normalized-import"), ".pinchtab-imported"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(importMarker), filepath.Clean(src); got != want {
+		t.Fatalf("expected normalized source %q, got %q", want, got)
+	}
+}
+
 func TestProfileManagerImportBadSource(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
@@ -92,6 +124,28 @@ func TestProfileManagerImportBadSource(t *testing.T) {
 	err := pm.Import("bad", "/nonexistent/path")
 	if err == nil {
 		t.Fatal("expected error on bad source")
+	}
+}
+
+func TestProfileManagerImportRejectsSourceOutsideAllowedRoots(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	var outside string
+	switch runtime.GOOS {
+	case "windows":
+		systemRoot := os.Getenv("SystemRoot")
+		if systemRoot == "" {
+			t.Skip("SystemRoot not set")
+		}
+		outside = systemRoot
+	default:
+		outside = string(os.PathSeparator) + "etc"
+	}
+
+	err := pm.Import("outside-root", outside)
+	if err == nil || !strings.Contains(err.Error(), "must be within") {
+		t.Fatalf("expected allowed root error, got %v", err)
 	}
 }
 
