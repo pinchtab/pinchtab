@@ -336,3 +336,59 @@ assert_json_exists "$RESULT" ".details.retryAfterSec" "retry-after details retur
 assert_auth_header_contains "Retry-After: " "retry-after header returned"
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "auth: forwarded proxy headers ignored by default"
+
+# Login with real origin to get a valid session cookie
+auth_reset_session
+auth_post_json /api/auth/login "{\"token\":\"${E2E_SERVER_TOKEN}\"}" -H "Origin: ${E2E_SERVER}"
+assert_http_status 200 "login succeeds with real origin"
+assert_session_cookie_present "session cookie set"
+
+# Session works with real origin
+auth_get /health -H "Origin: ${E2E_SERVER}"
+assert_http_status 200 "health ok with real origin"
+
+# Forwarded headers should NOT override — request still uses real host
+auth_get /health -H "Origin: https://proxy.example.com" -H "X-Forwarded-Proto: https" -H "X-Forwarded-Host: proxy.example.com"
+assert_http_status 403 "forwarded headers ignored when trustProxyHeaders is off"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "auth: forwarded proxy headers trusted when enabled"
+
+# Enable trustProxyHeaders via bearer token (bypasses origin checks)
+RESULT=$(e2e_curl -s -w "\n%{http_code}" -X PUT "${E2E_SERVER}/api/config" \
+  -H "Content-Type: application/json" \
+  -d '{"server":{"trustProxyHeaders":true}}')
+HTTP_STATUS=$(echo "$RESULT" | tail -n 1)
+RESULT=$(echo "$RESULT" | head -n -1)
+assert_http_status 200 "enable trustProxyHeaders"
+
+# Now login with forwarded origin
+auth_reset_session
+auth_post_json /api/auth/login "{\"token\":\"${E2E_SERVER_TOKEN}\"}" \
+  -H "Origin: https://proxy.example.com" \
+  -H "X-Forwarded-Proto: https" \
+  -H "X-Forwarded-Host: proxy.example.com"
+assert_http_status 200 "login succeeds with forwarded origin"
+assert_session_cookie_present "session cookie set via proxy"
+
+# Session requests work with forwarded headers
+auth_get /health \
+  -H "Origin: https://proxy.example.com" \
+  -H "X-Forwarded-Proto: https" \
+  -H "X-Forwarded-Host: proxy.example.com"
+assert_http_status 200 "health ok with forwarded proxy headers"
+
+# Disable trustProxyHeaders again
+RESULT=$(e2e_curl -s -w "\n%{http_code}" -X PUT "${E2E_SERVER}/api/config" \
+  -H "Content-Type: application/json" \
+  -d '{"server":{"trustProxyHeaders":false}}')
+HTTP_STATUS=$(echo "$RESULT" | tail -n 1)
+RESULT=$(echo "$RESULT" | head -n -1)
+assert_http_status 200 "disable trustProxyHeaders"
+
+end_test
