@@ -295,6 +295,22 @@ The supported model is:
 
 ---
 
+## Hub-Only Mode
+
+If you only want remote bridges and never want local Chrome, use the `no-instance` strategy:
+
+```json
+{
+  "multiInstance": {
+    "strategy": "no-instance"
+  }
+}
+```
+
+This blocks all local launch endpoints and starts the server as a pure hub. Remote bridges attach via `POST /instances/attach-bridge` and shorthand routes proxy to the first connected bridge.
+
+---
+
 ## Summary
 
 Use `POST /instances/attach-bridge` when you want:
@@ -303,5 +319,7 @@ Use `POST /instances/attach-bridge` when you want:
 - bridge on machine B
 - agents still talking only to machine A
 - remote browser work without remote process-management complexity
+
+Use `no-instance` strategy when you want a dedicated hub that never launches local Chrome.
 
 This is the right feature when you want distributed execution with a single control plane.
