@@ -58,6 +58,7 @@ export interface BackendServerConfig {
   bind: string;
   token: string;
   stateDir: string;
+  trustProxyHeaders: boolean;
 }
 
 export interface BackendBrowserConfig {
@@ -158,6 +159,7 @@ export const defaultBackendConfig: BackendConfig = {
     bind: "127.0.0.1",
     token: "",
     stateDir: "",
+    trustProxyHeaders: false,
   },
   browser: {
     version: "144.0.7559.133",

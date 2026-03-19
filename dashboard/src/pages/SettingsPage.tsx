@@ -1303,6 +1303,28 @@ export default function SettingsPage() {
                     />
                   </SettingRow>
                   <SettingRow
+                    label="Trust proxy headers"
+                    description="Trust X-Forwarded-Proto, X-Forwarded-Host, and Forwarded headers for origin checks. Enable only when PinchTab runs behind a trusted reverse proxy (e.g. Caddy, nginx)."
+                  >
+                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={
+                          backendConfig.server.trustProxyHeaders ?? false
+                        }
+                        onChange={(e) =>
+                          updateBackendSection("server", {
+                            trustProxyHeaders: e.target.checked,
+                          })
+                        }
+                        className="accent-primary"
+                      />
+                      {backendConfig.server.trustProxyHeaders
+                        ? "Enabled"
+                        : "Disabled"}
+                    </label>
+                  </SettingRow>
+                  <SettingRow
                     label="Allow attach"
                     description="Permit attaching PinchTab to externally managed Chrome sessions."
                   >
