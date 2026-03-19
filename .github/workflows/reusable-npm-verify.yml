@@ -6,6 +6,9 @@ on:
       ref:
         required: true
         type: string
+      version:
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -27,7 +30,7 @@ jobs:
           node-version: '22'
 
       - name: Verify npm package
-        run: bash scripts/check-npm.sh
+        run: bash scripts/check-npm.sh "${{ inputs.version }}"
 
       - name: List package contents
         working-directory: npm

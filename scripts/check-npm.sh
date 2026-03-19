@@ -5,6 +5,16 @@ cd "$(dirname "$0")/../npm"
 
 echo "Verifying npm package..."
 
+DESIRED_VERSION="${1:-}"
+if [ -n "$DESIRED_VERSION" ]; then
+  CURRENT_VERSION="$(jq -r .version package.json)"
+  if [ "$CURRENT_VERSION" != "$DESIRED_VERSION" ]; then
+    npm version "$DESIRED_VERSION" --no-git-tag-version
+  else
+    echo "Version already correct: $CURRENT_VERSION"
+  fi
+fi
+
 npm ci
 npm run lint
 npm run format:check

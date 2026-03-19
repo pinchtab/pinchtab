@@ -48,12 +48,6 @@ jobs:
           fi
 
           TAG="v$VERSION"
-          PKG_VERSION="$(jq -r .version npm/package.json)"
-          if [ "$PKG_VERSION" != "$VERSION" ]; then
-            echo "npm/package.json version is $PKG_VERSION, expected $VERSION" >&2
-            exit 1
-          fi
-
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "tag $TAG already exists locally" >&2
             exit 1
@@ -103,6 +97,7 @@ jobs:
     uses: ./.github/workflows/reusable-npm-verify.yml
     with:
       ref: ${{ needs.validate.outputs.sha }}
+      version: ${{ needs.validate.outputs.version }}
 
   e2e-release:
     needs: validate
@@ -159,6 +154,14 @@ jobs:
       - name: Dry-run npm publish
         working-directory: npm
         run: |
+          CURRENT="$(jq -r .version package.json)"
+          DESIRED="${{ needs.validate.outputs.version }}"
+          if [ "$CURRENT" != "$DESIRED" ]; then
+            npm version "$DESIRED" --no-git-tag-version
+          else
+            echo "Version already correct: $CURRENT"
+          fi
+
           npm ci --ignore-scripts
           npm run build
           npm publish --dry-run

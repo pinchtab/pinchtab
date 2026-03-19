@@ -72,8 +72,8 @@ grep -A 2 "^release:" .goreleaser.yml
 
 ## Manual Release Flow
 
-1. Bump release-facing versions on the branch first.
-   The hard gate today is `npm/package.json`, and `Prepare Release` will fail if the input version does not match it.
+1. Choose the branch, tag, or SHA you want to release.
+   `Prepare Release` now validates the requested version format and tag availability, then rewrites the npm package version inside the CI workspace for the dry-run steps.
 2. Open **Actions → Prepare Release**.
 3. Run it with:
    - `version`: the release version, for example `0.8.0`
