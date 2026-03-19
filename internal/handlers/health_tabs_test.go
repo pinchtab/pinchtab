@@ -366,6 +366,18 @@ func (m *MockBridge) Execute(ctx context.Context, tabID string, task func(ctx co
 	return task(ctx)
 }
 
+func (m *MockBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
+	return nil
+}
+
+func (m *MockBridge) ClearConsoleLogs(tabID string) {}
+
+func (m *MockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+	return nil
+}
+
+func (m *MockBridge) ClearErrorLogs(tabID string) {}
+
 type mockBridgeDisconnected struct {
 	mockBridge
 }

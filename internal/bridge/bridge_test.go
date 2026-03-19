@@ -79,7 +79,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 	// Use context.TODO() instead of nil to avoid lint warnings
 	ctx := context.TODO()
-	tm := NewTabManager(ctx, cfg, nil, nil)
+	tm := NewTabManager(ctx, cfg, nil, nil, nil)
 	if tm == nil {
 		t.Error("TabManager should be created")
 	}
@@ -93,7 +93,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 	// TabContext should reject tab IDs that aren't tracked
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Try to get context for a non-existent tab
 	_, _, err := tm.TabContext("tab_nonexistent")
@@ -108,7 +108,7 @@ func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 func TestTabContext_RejectsRawCDPID(t *testing.T) {
 	// TabContext should reject raw CDP target IDs (32-char hex)
 	// These should never be accepted - only hash-format IDs work
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Simulate a raw CDP target ID format
 	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
@@ -121,7 +121,7 @@ func TestTabContext_RejectsRawCDPID(t *testing.T) {
 
 func TestCreateTab_ReturnsRawCDPID(t *testing.T) {
 	// Verify TabIDFromCDPTarget returns raw CDP ID (no prefix)
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	if tm.idMgr == nil {
 		t.Error("TabManager should have idMgr initialized")
@@ -136,7 +136,7 @@ func TestCreateTab_ReturnsRawCDPID(t *testing.T) {
 }
 
 func TestTabContext_AcceptsRegisteredID(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	rawCDPID := "RAWCDPID123456789012345678901234"
 	ctx := context.Background()
@@ -159,7 +159,7 @@ func TestTabContext_AcceptsRegisteredID(t *testing.T) {
 }
 
 func TestTabContext_EmptyID_UsesCurrentTrackedTab(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	ctx := context.Background()
 	tabID := "SOMECDPID"
@@ -184,7 +184,7 @@ func TestTabContext_EmptyID_UsesCurrentTrackedTab(t *testing.T) {
 func TestCloseTab_PreventsLastTabClose(t *testing.T) {
 	// CloseTab should fail when attempting to close the last remaining tab
 	// This prevents Chrome from exiting and crashing the server
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 
 	// Without a valid browser context, ListTargets will fail
 	// which triggers the guard at the start of CloseTab
@@ -242,7 +242,7 @@ func TestEvaluateTabPolicy(t *testing.T) {
 }
 
 func TestTabManagerStoresTabPolicyState(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
 	tm.tabs["tab1"] = &TabEntry{Ctx: context.Background()}
 
 	state := TabPolicyState{

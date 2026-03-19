@@ -41,6 +41,8 @@ func registerBrowserCommands() {
 		keyupCmd,
 		scrollintoviewCmd,
 		dialogCmd,
+		consoleCmd,
+		errorsCmd,
 	)
 
 	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd)
@@ -82,6 +84,8 @@ func registerBrowserCommands() {
 		keyupCmd,
 		scrollintoviewCmd,
 		dialogCmd,
+		consoleCmd,
+		errorsCmd,
 	)
 }
 
@@ -203,6 +207,13 @@ func configureBrowserFlags() {
 	waitCmd.Flags().String("fn", "", "Wait for JS expression to be truthy")
 	waitCmd.Flags().String("state", "", "Element state: visible (default) or hidden")
 	waitCmd.Flags().Int("timeout", 0, "Timeout in milliseconds (default 10000, max 30000)")
+
+	consoleCmd.Flags().Bool("clear", false, "Clear console logs")
+	consoleCmd.Flags().String("limit", "", "Maximum entries to return")
+	errorsCmd.Flags().Bool("clear", false, "Clear error logs")
+	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
+
+	addTabFlag(consoleCmd, errorsCmd)
 }
 
 func configureManagementFlags() {

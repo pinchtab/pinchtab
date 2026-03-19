@@ -51,6 +51,12 @@ type BridgeAPI interface {
 
 	// Dialog management
 	GetDialogManager() *DialogManager
+
+	// Console and error logs
+	GetConsoleLogs(tabID string, limit int) []LogEntry
+	ClearConsoleLogs(tabID string)
+	GetErrorLogs(tabID string, limit int) []ErrorEntry
+	ClearErrorLogs(tabID string)
 }
 
 type LockInfo = bridgetabs.LockInfo

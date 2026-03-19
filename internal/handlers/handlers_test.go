@@ -97,6 +97,18 @@ func (m *mockBridge) GetDialogManager() *bridge.DialogManager {
 	return bridge.NewDialogManager()
 }
 
+func (m *mockBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
+	return nil
+}
+
+func (m *mockBridge) ClearConsoleLogs(tabID string) {}
+
+func (m *mockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+	return nil
+}
+
+func (m *mockBridge) ClearErrorLogs(tabID string) {}
+
 func (m *mockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
 }

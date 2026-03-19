@@ -157,6 +157,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/dialog", h.HandleTabDialog)
 	mux.HandleFunc("POST /wait", h.HandleWait)
 	mux.HandleFunc("POST /tabs/{id}/wait", h.HandleTabWait)
+	mux.HandleFunc("GET /console", h.HandleGetConsoleLogs)
+	mux.HandleFunc("POST /console/clear", h.HandleClearConsoleLogs)
+	mux.HandleFunc("GET /errors", h.HandleGetErrorLogs)
+	mux.HandleFunc("POST /errors/clear", h.HandleClearErrorLogs)
 	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(assets.WelcomeHTML))

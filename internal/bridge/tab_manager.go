@@ -9,6 +9,7 @@ import (
 
 	cdp "github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -26,13 +27,14 @@ type TabManager struct {
 	snapshots  map[string]*RefCache
 	onTabSetup TabSetupFunc
 	dialogMgr  *DialogManager
+	logStore   *ConsoleLogStore
 	currentTab string // ID of the most recently used tab
 	executor   *TabExecutor
 	guardOnce  sync.Once
 	mu         sync.RWMutex
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, onTabSetup TabSetupFunc) *TabManager {
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
 	if idMgr == nil {
 		idMgr = ids.NewManager()
 	}
@@ -48,6 +50,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
 		onTabSetup: onTabSetup,
+		logStore:   logStore,
 		executor:   NewTabExecutor(maxParallel),
 	}
 }
@@ -351,6 +354,9 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
 	}
 
+	// Set up console and error log capturing
+	tm.setupConsoleCapture(ctx, rawCDPID)
+
 	tm.mu.Lock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID, CreatedAt: now, LastUsed: now}
 	tm.accessed[tabID] = true
@@ -404,6 +410,11 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	// Clean up executor per-tab mutex
 	if tm.executor != nil {
 		tm.executor.RemoveTab(tabID)
+	}
+
+	// Clean up console/error logs for this tab
+	if tm.logStore != nil {
+		tm.logStore.RemoveTab(cdpTargetID)
 	}
 
 	return nil
@@ -604,4 +615,80 @@ func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration
 			}
 		}
 	}
+}
+
+// setupConsoleCapture enables runtime domain and listens for console/exception events.
+func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) {
+	if tm.logStore == nil {
+		return
+	}
+
+	// Listen for console API calls and exceptions
+	chromedp.ListenTarget(ctx, func(ev any) {
+		switch ev := ev.(type) {
+		case *runtime.EventConsoleAPICalled:
+			var msg string
+			for _, arg := range ev.Args {
+				if len(arg.Value) > 0 {
+					// arg.Value is jsontext.Value ([]byte), use as string directly
+					// Strip quotes if it's a JSON string
+					val := string(arg.Value)
+					if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+						val = val[1 : len(val)-1]
+					}
+					msg += val
+				} else if arg.Description != "" {
+					msg += arg.Description
+				}
+				msg += " "
+			}
+
+			var ts time.Time
+			if ev.Timestamp != nil {
+				ts = time.Time(*ev.Timestamp)
+			} else {
+				ts = time.Now()
+			}
+
+			tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
+				Timestamp: ts,
+				Level:     string(ev.Type),
+				Message:   msg,
+			})
+
+		case *runtime.EventExceptionThrown:
+			msg := ev.ExceptionDetails.Text
+			if ev.ExceptionDetails.Exception != nil && ev.ExceptionDetails.Exception.Description != "" {
+				msg += ": " + ev.ExceptionDetails.Exception.Description
+			}
+
+			var ts time.Time
+			if ev.Timestamp != nil {
+				ts = time.Time(*ev.Timestamp)
+			} else {
+				ts = time.Now()
+			}
+
+			stack := ""
+			if ev.ExceptionDetails.Exception != nil {
+				stack = ev.ExceptionDetails.Exception.Description
+			}
+
+			tm.logStore.AddErrorLog(rawCDPID, ErrorEntry{
+				Timestamp: ts,
+				Message:   msg,
+				URL:       ev.ExceptionDetails.URL,
+				Line:      ev.ExceptionDetails.LineNumber,
+				Column:    ev.ExceptionDetails.ColumnNumber,
+				Stack:     stack,
+			})
+		}
+	})
+
+	// Enable runtime domain to receive console/exception events
+	go func() {
+		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return runtime.Enable().Do(c)
+		}))
+	}()
 }
