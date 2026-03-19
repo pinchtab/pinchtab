@@ -104,8 +104,15 @@ fi
 
 # ── golangci-lint ────────────────────────────────────────────────────
 
+GOLANGCI_LINT=""
 if command -v golangci-lint &>/dev/null; then
-  LINT_VERSION=$(golangci-lint version --short 2>/dev/null || golangci-lint --version 2>/dev/null | head -1 | awk '{print $4}')
+  GOLANGCI_LINT="golangci-lint"
+elif [ -x "${GOPATH:-$HOME/go}/bin/golangci-lint" ]; then
+  GOLANGCI_LINT="${GOPATH:-$HOME/go}/bin/golangci-lint"
+fi
+
+if [ -n "$GOLANGCI_LINT" ]; then
+  LINT_VERSION=$($GOLANGCI_LINT version --short 2>/dev/null || $GOLANGCI_LINT --version 2>/dev/null | head -1 | awk '{print $4}')
   ok "golangci-lint $LINT_VERSION"
 else
   fail "golangci-lint" "Required for pre-commit hooks and CI."

@@ -61,12 +61,6 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /tabs", s.handleTabs)
 }
 
-func noLocalLaunch(w http.ResponseWriter, _ *http.Request) {
-	httpx.ErrorCode(w, 403, "local_launch_disabled",
-		"local instance launch is disabled — attach a remote bridge instead",
-		false, nil)
-}
-
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 	target := s.orch.FirstRunningURL()
 	if target == "" {

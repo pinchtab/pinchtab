@@ -78,6 +78,8 @@ section "Lint"
 LINT_CMD=""
 if command -v golangci-lint >/dev/null 2>&1; then
   LINT_CMD="golangci-lint"
+elif [ -x "${GOPATH:-$HOME/go}/bin/golangci-lint" ]; then
+  LINT_CMD="${GOPATH:-$HOME/go}/bin/golangci-lint"
 elif [ -x "$HOME/bin/golangci-lint" ]; then
   LINT_CMD="$HOME/bin/golangci-lint"
 elif [ -x "/usr/local/bin/golangci-lint" ]; then
