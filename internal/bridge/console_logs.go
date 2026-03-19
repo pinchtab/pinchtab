@@ -95,11 +95,12 @@ func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []LogEntry {
 	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	if limit <= 0 || limit > len(t.Console) {
-		limit = len(t.Console)
+	count := len(t.Console)
+	if limit <= 0 || limit > count {
+		limit = count
 	}
 	// Return most recent entries
-	start := len(t.Console) - limit
+	start := count - limit
 	result := make([]LogEntry, limit)
 	copy(result, t.Console[start:])
 	return result
@@ -115,10 +116,11 @@ func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []ErrorEntry {
 	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	if limit <= 0 || limit > len(t.Errors) {
-		limit = len(t.Errors)
+	count := len(t.Errors)
+	if limit <= 0 || limit > count {
+		limit = count
 	}
-	start := len(t.Errors) - limit
+	start := count - limit
 	result := make([]ErrorEntry, limit)
 	copy(result, t.Errors[start:])
 	return result
