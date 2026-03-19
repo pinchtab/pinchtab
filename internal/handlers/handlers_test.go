@@ -18,8 +18,9 @@ import (
 
 type mockBridge struct {
 	bridge.BridgeAPI
-	failTab       bool
-	createTabURLs []string
+	failTab        bool
+	createTabURLs  []string
+	lastErrorLimit int
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
@@ -104,6 +105,7 @@ func (m *mockBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
 func (m *mockBridge) ClearConsoleLogs(tabID string) {}
 
 func (m *mockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+	m.lastErrorLimit = limit
 	return nil
 }
 
@@ -251,6 +253,36 @@ func TestHandleTab(t *testing.T) {
 	h.HandleTab(w, req)
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandleGetErrorLogs_ClampsLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		limit    string
+		expected int
+	}{
+		{name: "negative", limit: "-5", expected: 0},
+		{name: "too_large", limit: "1001", expected: 1000},
+		{name: "in_range", limit: "25", expected: 25},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &mockBridge{}
+			h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+
+			req := httptest.NewRequest("GET", "/errors?limit="+tt.limit, nil)
+			w := httptest.NewRecorder()
+			h.HandleGetErrorLogs(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+			if m.lastErrorLimit != tt.expected {
+				t.Fatalf("expected limit %d, got %d", tt.expected, m.lastErrorLimit)
+			}
+		})
 	}
 }
 

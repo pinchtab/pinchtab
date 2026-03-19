@@ -90,9 +90,15 @@ func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
 		tabID = resolvedID
 	}
 
+	const maxErrorLogLimit = 1000
 	limit := 0
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil {
+			if v < 0 {
+				v = 0
+			} else if v > maxErrorLogLimit {
+				v = maxErrorLogLimit
+			}
 			limit = v
 		}
 	}

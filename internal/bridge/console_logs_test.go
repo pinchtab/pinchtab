@@ -93,6 +93,32 @@ func TestConsoleLogStore_GetWithLimit(t *testing.T) {
 	}
 }
 
+func TestConsoleLogStore_GetWithLimit_ClampsToMaxLines(t *testing.T) {
+	store := NewConsoleLogStore(5)
+
+	for i := 0; i < 5; i++ {
+		store.AddConsoleLog("tab1", LogEntry{
+			Timestamp: time.Now(),
+			Level:     "log",
+			Message:   string(rune('0' + i)),
+		})
+		store.AddErrorLog("tab1", ErrorEntry{
+			Timestamp: time.Now(),
+			Message:   string(rune('0' + i)),
+		})
+	}
+
+	logs := store.GetConsoleLogs("tab1", 1000)
+	if len(logs) != 5 {
+		t.Fatalf("expected 5 console logs, got %d", len(logs))
+	}
+
+	errors := store.GetErrorLogs("tab1", 1000)
+	if len(errors) != 5 {
+		t.Fatalf("expected 5 error logs, got %d", len(errors))
+	}
+}
+
 func TestConsoleLogStore_Clear(t *testing.T) {
 	store := NewConsoleLogStore(100)
 

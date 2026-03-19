@@ -51,6 +51,8 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	// Shorthand endpoints — all proxy to first running instance.
 	shorthandRoutes := []string{
 		"GET /snapshot", "GET /screenshot", "GET /text", "GET /pdf", "POST /pdf",
+		"GET /console", "POST /console/clear",
+		"GET /errors", "POST /errors/clear",
 		"POST /navigate", "POST /back", "POST /forward", "POST /reload",
 		"POST /action", "POST /actions",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",

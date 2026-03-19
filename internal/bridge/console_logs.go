@@ -99,6 +99,9 @@ func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []LogEntry {
 	if limit <= 0 || limit > count {
 		limit = count
 	}
+	if limit > s.maxLines {
+		limit = s.maxLines
+	}
 	// Return most recent entries
 	start := count - limit
 	result := make([]LogEntry, limit)
@@ -119,6 +122,9 @@ func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []ErrorEntry {
 	count := len(t.Errors)
 	if limit <= 0 || limit > count {
 		limit = count
+	}
+	if limit > s.maxLines {
+		limit = s.maxLines
 	}
 	start := count - limit
 	result := make([]ErrorEntry, limit)

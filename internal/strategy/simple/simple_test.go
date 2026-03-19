@@ -129,3 +129,33 @@ func TestStrategy_RegisterRoutes_LocksSensitiveShorthandRoutes(t *testing.T) {
 		t.Fatalf("expected lock response to mention security.allowEvaluate, got %s", rec.Body.String())
 	}
 }
+
+func TestStrategy_RegisterRoutes_RegistersConsoleAndErrorShorthands(t *testing.T) {
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	orch.ApplyRuntimeConfig(&config.RuntimeConfig{})
+
+	s := &Strategy{orch: orch}
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+
+	tests := []struct {
+		method string
+		path   string
+		route  string
+	}{
+		{method: http.MethodGet, path: "/console", route: "GET /console"},
+		{method: http.MethodPost, path: "/console/clear", route: "POST /console/clear"},
+		{method: http.MethodGet, path: "/errors", route: "GET /errors"},
+		{method: http.MethodPost, path: "/errors/clear", route: "POST /errors/clear"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			_, pattern := mux.Handler(req)
+			if pattern != tt.route {
+				t.Fatalf("expected route %q, got %q", tt.route, pattern)
+			}
+		})
+	}
+}
