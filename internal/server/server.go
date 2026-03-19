@@ -28,6 +28,7 @@ import (
 	_ "github.com/pinchtab/pinchtab/internal/strategy/alwayson"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/autorestart"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/explicit"
+	_ "github.com/pinchtab/pinchtab/internal/strategy/noinstance"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/simple"
 )
 

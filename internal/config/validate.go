@@ -259,7 +259,7 @@ func isValidEvictionPolicy(policy string) bool {
 
 func isValidStrategy(strategy string) bool {
 	switch strategy {
-	case "simple", "explicit", "simple-autorestart", "always-on":
+	case "simple", "explicit", "simple-autorestart", "always-on", "no-instance":
 		return true
 	default:
 		return false
@@ -293,7 +293,7 @@ func ValidEvictionPolicies() []string {
 }
 
 func ValidStrategies() []string {
-	return []string{"simple", "explicit", "simple-autorestart", "always-on"}
+	return []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
 }
 
 // validateIDPIConfig validates the security.idpi sub-section.

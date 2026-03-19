@@ -901,7 +901,7 @@ export default function SettingsPage() {
                 >
                   <SettingRow
                     label="Strategy"
-                    description="Controls how shorthand routes are routed in dashboard mode."
+                    description="Controls instance lifecycle and how shorthand routes are routed."
                   >
                     <select
                       value={backendConfig.multiInstance.strategy}
@@ -919,7 +919,21 @@ export default function SettingsPage() {
                       <option value="simple-autorestart">
                         Simple autorestart
                       </option>
+                      <option value="no-instance">No instance (hub)</option>
                     </select>
+                    <div className="mt-2 text-[11px] leading-relaxed text-text-muted">
+                      {backendConfig.multiInstance.strategy === "always-on" &&
+                        "Launches a default instance at boot and relaunches on crash."}
+                      {backendConfig.multiInstance.strategy === "simple" &&
+                        "Launches one instance on first request. No auto-restart."}
+                      {backendConfig.multiInstance.strategy === "explicit" &&
+                        "All instances managed via API. No automatic launches."}
+                      {backendConfig.multiInstance.strategy ===
+                        "simple-autorestart" &&
+                        "Launches on first request and relaunches on crash."}
+                      {backendConfig.multiInstance.strategy === "no-instance" &&
+                        "No local Chrome processes. Acts as a hub for remote bridges only."}
+                    </div>
                   </SettingRow>
                   <SettingRow
                     label="Allocation policy"
