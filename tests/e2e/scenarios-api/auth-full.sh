@@ -4,17 +4,27 @@
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../helpers/api.sh"
 
-AUTH_COOKIE_JAR="/tmp/pinchtab-auth-cookie-$$.txt"
+AUTH_COOKIE_FILE="/tmp/pinchtab-auth-cookie-$$.txt"
 AUTH_HEADERS_FILE="/tmp/pinchtab-auth-headers-$$.txt"
 AUTH_BODY_FILE="/tmp/pinchtab-auth-body-$$.txt"
 
-trap 'rm -f "$AUTH_COOKIE_JAR" "$AUTH_HEADERS_FILE" "$AUTH_BODY_FILE"' EXIT
+trap 'rm -f "$AUTH_COOKIE_FILE" "$AUTH_HEADERS_FILE" "$AUTH_BODY_FILE"' EXIT
 
 auth_reset_session() {
-  rm -f "$AUTH_COOKIE_JAR" "$AUTH_HEADERS_FILE" "$AUTH_BODY_FILE"
-  : > "$AUTH_COOKIE_JAR"
+  rm -f "$AUTH_COOKIE_FILE" "$AUTH_HEADERS_FILE" "$AUTH_BODY_FILE"
+  : > "$AUTH_COOKIE_FILE"
   : > "$AUTH_HEADERS_FILE"
   : > "$AUTH_BODY_FILE"
+}
+
+capture_session_cookie() {
+  local cookie_line
+  cookie_line=$(grep -i '^Set-Cookie: pinchtab_auth_token=' "$AUTH_HEADERS_FILE" | tail -n 1 | sed 's/\r$//' || true)
+  if [[ -z "$cookie_line" ]]; then
+    return
+  fi
+
+  echo "$cookie_line" | sed -E 's/^Set-Cookie: ([^;]+).*/\1/I' > "$AUTH_COOKIE_FILE"
 }
 
 auth_request() {
@@ -24,13 +34,19 @@ auth_request() {
 
   echo -e "${BLUE}→ curl -X $method ${E2E_SERVER}$path $(printf "%q " "$@")${NC}" >&2
 
+  local -a cookie_args=()
+  if [[ -s "$AUTH_COOKIE_FILE" ]]; then
+    cookie_args=(-H "Cookie: $(cat "$AUTH_COOKIE_FILE")")
+  fi
+
   local response
   response=$(e2e_curl --token "" -s -D "$AUTH_HEADERS_FILE" -w "\n%{http_code}" \
     -X "$method" \
     "${E2E_SERVER}$path" \
-    -b "$AUTH_COOKIE_JAR" \
-    -c "$AUTH_COOKIE_JAR" \
+    "${cookie_args[@]}" \
     "$@")
+
+  capture_session_cookie
 
   RESULT=$(echo "$response" | head -n -1)
   HTTP_STATUS=$(echo "$response" | tail -n 1)
@@ -73,9 +89,9 @@ assert_auth_header_contains() {
 
 assert_session_cookie_present() {
   local desc="${1:-session cookie persisted}"
-  local jar
-  jar=$(cat "$AUTH_COOKIE_JAR" 2>/dev/null || true)
-  assert_contains "$jar" "pinchtab_auth_token" "$desc"
+  local cookie
+  cookie=$(cat "$AUTH_COOKIE_FILE" 2>/dev/null || true)
+  assert_contains "$cookie" "pinchtab_auth_token=" "$desc"
 }
 
 auth_ws_get() {
@@ -88,11 +104,15 @@ auth_ws_get() {
 
   echo -e "${BLUE}→ curl -X GET ${E2E_SERVER}$path [websocket] $(printf "%q " "$@")${NC}" >&2
 
+  local -a cookie_args=()
+  if [[ -s "$AUTH_COOKIE_FILE" ]]; then
+    cookie_args=(-H "Cookie: $(cat "$AUTH_COOKIE_FILE")")
+  fi
+
   e2e_curl --token "" -s --http1.1 \
     -X GET \
     "${E2E_SERVER}$path" \
-    -b "$AUTH_COOKIE_JAR" \
-    -c "$AUTH_COOKIE_JAR" \
+    "${cookie_args[@]}" \
     -D "$AUTH_HEADERS_FILE" \
     -o "$AUTH_BODY_FILE" \
     -H "Connection: Upgrade" \
@@ -101,6 +121,8 @@ auth_ws_get() {
     -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
     --max-time 2 \
     "$@" >/dev/null 2>&1 || true
+
+  capture_session_cookie
 
   RESULT=$(cat "$AUTH_BODY_FILE" 2>/dev/null || true)
   HTTP_STATUS=$(grep '^HTTP/' "$AUTH_HEADERS_FILE" | tail -n 1 | awk '{print $2}')

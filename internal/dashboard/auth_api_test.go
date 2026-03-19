@@ -38,6 +38,9 @@ func TestAuthAPIHandleLogin(t *testing.T) {
 	if !cookie.HttpOnly {
 		t.Fatal("expected auth cookie to be HttpOnly")
 	}
+	if !cookie.Secure {
+		t.Fatal("expected auth cookie to be Secure")
+	}
 	if cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteStrictMode)
 	}
@@ -84,6 +87,9 @@ func TestAuthAPIHandleLogoutClearsCookie(t *testing.T) {
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != authn.CookieName || cookies[0].MaxAge != -1 {
 		t.Fatalf("expected expired auth cookie, got %+v", cookies)
+	}
+	if !cookies[0].Secure {
+		t.Fatal("expected expired auth cookie to remain Secure")
 	}
 	if sessions.Validate(sessionID, "secret-token") {
 		t.Fatal("expected logout to revoke session")
