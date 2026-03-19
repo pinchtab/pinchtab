@@ -1,4 +1,4 @@
-name: Reusable Documentation Verification
+name: Reusable / Docs
 
 on:
   workflow_call:

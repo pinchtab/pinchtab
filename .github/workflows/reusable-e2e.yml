@@ -1,4 +1,4 @@
-name: Reusable E2E Suite
+name: Reusable / E2E
 
 on:
   workflow_call:

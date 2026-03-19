@@ -1,4 +1,4 @@
-name: Branch Naming
+name: CI / Branch Naming
 
 on:
   pull_request:

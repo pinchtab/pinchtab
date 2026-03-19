@@ -1,0 +1,62 @@
+name: Release / Manual Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.8.0, without v prefix)'
+        required: true
+      ref:
+        description: 'Git ref to tag. Defaults to main.'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-manual-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable-validate-release.yml
+    with:
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}
+
+  create-tag:
+    name: Create Release Tag
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: release-approval
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - name: Create and push tag
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists on origin" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG (manual)"
+          git push origin "refs/tags/$TAG"
+
+      - name: Summarize
+        run: |
+          echo "## Release Tag Created (Manual)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ needs.validate.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ needs.validate.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The **Release / Publish** workflow will trigger automatically." >> "$GITHUB_STEP_SUMMARY"

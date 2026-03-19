@@ -1,4 +1,4 @@
-name: Reusable Go Verification
+name: Reusable / Go
 
 on:
   workflow_call:

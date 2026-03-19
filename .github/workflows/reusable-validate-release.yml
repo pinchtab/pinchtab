@@ -1,0 +1,82 @@
+name: Reusable / Validate Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.8.0, without v prefix)'
+        required: true
+        type: string
+      ref:
+        description: 'Git ref to release. Defaults to main.'
+        required: false
+        type: string
+        default: 'main'
+    outputs:
+      version:
+        description: 'Validated version (without v prefix)'
+        value: ${{ jobs.validate.outputs.version }}
+      tag:
+        description: 'Release tag (v-prefixed)'
+        value: ${{ jobs.validate.outputs.tag }}
+      sha:
+        description: 'Resolved commit SHA'
+        value: ${{ jobs.validate.outputs.sha }}
+      ref:
+        description: 'Git ref used'
+        value: ${{ jobs.validate.outputs.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Release Input
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+      ref: ${{ steps.meta.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - name: Validate version and tag target
+        id: meta
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must look like 0.8.0" >&2
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists locally" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists on origin" >&2
+            exit 1
+          fi
+
+          SHA="$(git rev-parse HEAD)"
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "sha=$SHA"
+            echo "ref=${{ inputs.ref }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize candidate
+        run: |
+          echo "## Release Candidate" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.meta.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ steps.meta.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: ${{ steps.meta.outputs.ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ steps.meta.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

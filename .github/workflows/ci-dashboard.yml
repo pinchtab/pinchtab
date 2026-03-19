@@ -1,4 +1,4 @@
-name: Dashboard
+name: CI / Dashboard
 
 on:
   push:
@@ -7,14 +7,14 @@ on:
       - 'dashboard/**'
       - 'internal/api/types/**'
       - 'scripts/build-dashboard.sh'
-      - '.github/workflows/dashboard.yml'
+      - '.github/workflows/ci-dashboard.yml'
       - '.github/workflows/reusable-dashboard.yml'
   pull_request:
     paths:
       - 'dashboard/**'
       - 'internal/api/types/**'
       - 'scripts/build-dashboard.sh'
-      - '.github/workflows/dashboard.yml'
+      - '.github/workflows/ci-dashboard.yml'
       - '.github/workflows/reusable-dashboard.yml'
   workflow_dispatch:
 

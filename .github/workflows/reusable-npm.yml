@@ -1,4 +1,4 @@
-name: Reusable npm Package Verification
+name: Reusable / npm
 
 on:
   workflow_call:

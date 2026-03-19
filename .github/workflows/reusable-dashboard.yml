@@ -1,4 +1,4 @@
-name: Reusable Dashboard Checks
+name: Reusable / Dashboard
 
 on:
   workflow_call:

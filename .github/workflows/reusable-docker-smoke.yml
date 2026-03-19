@@ -1,4 +1,4 @@
-name: Reusable Docker Smoke Test
+name: Reusable / Docker Smoke
 
 on:
   workflow_call:

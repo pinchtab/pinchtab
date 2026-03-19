@@ -1,4 +1,4 @@
-name: Release
+name: Release / Publish
 
 on:
   push:
@@ -154,7 +154,7 @@ jobs:
     needs:
       - release
       - npm
-    uses: ./.github/workflows/publish-skill.yml
+    uses: ./.github/workflows/reusable-publish-skill.yml
     with:
       version: ${{ github.ref_name }}
     secrets:

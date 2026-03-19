@@ -1,24 +1,18 @@
-name: Go Verification
+name: CI / Docs
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
+    paths:
       - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'skill/**'
-      - 'plugin/**'
+      - '.github/workflows/ci-docs.yml'
+      - '.github/workflows/reusable-docs.yml'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
+    paths:
       - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'skill/**'
-      - 'plugin/**'
+      - '.github/workflows/ci-docs.yml'
+      - '.github/workflows/reusable-docs.yml'
   workflow_dispatch:
 
 env:
@@ -28,8 +22,8 @@ permissions:
   contents: read
 
 jobs:
-  go:
+  docs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    uses: ./.github/workflows/reusable-go-verify.yml
+    uses: ./.github/workflows/reusable-docs.yml
     with:
       ref: ${{ github.sha }}

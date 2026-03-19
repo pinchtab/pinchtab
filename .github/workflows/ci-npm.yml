@@ -1,0 +1,24 @@
+name: CI / npm
+
+on:
+  pull_request:
+    paths:
+      - 'npm/**'
+      - '.github/workflows/ci-npm.yml'
+      - '.github/workflows/reusable-npm.yml'
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    uses: ./.github/workflows/reusable-npm.yml
+    with:
+      ref: ${{ github.sha }}
