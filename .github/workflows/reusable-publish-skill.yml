@@ -15,8 +15,6 @@ on:
         description: 'Skill version (e.g. 0.2.0, without v prefix)'
         required: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read

@@ -12,7 +12,6 @@ on:
         default: 'main'
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   GORELEASER_VERSION: v2.14.3
 
 permissions:
