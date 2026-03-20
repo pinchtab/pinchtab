@@ -173,10 +173,11 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 			parentMap[childID] = n.NodeID
 		}
 	}
+	maxAncestorWalk := max(len(parentMap)+1, 1)
 	depthOf := func(nodeID string) int {
 		d := 0
 		cur := nodeID
-		for {
+		for range maxAncestorWalk {
 			p, ok := parentMap[cur]
 			if !ok {
 				break
@@ -198,7 +199,7 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 	// Propagate: if a parent is hidden, all descendants inherit hidden status.
 	isHidden := func(nodeID string) bool {
 		cur := nodeID
-		for {
+		for range maxAncestorWalk {
 			if hiddenNodes[cur] {
 				return true
 			}

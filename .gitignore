@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 browser-bridge
 /pinchtab
+cover.out
 coverage.out
 
 # Build artifacts and test output

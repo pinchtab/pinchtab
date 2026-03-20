@@ -41,7 +41,7 @@ assert_ok "navigate to hidden injection page"
 sleep 0.5
 
 # Get snapshot — injection content should be present in the output
-pt_get "/snapshot"
+pt_get "/snapshot?format=json"
 assert_ok "snapshot succeeds"
 assert_contains "$RESULT" "Safe Button" "visible content present"
 assert_contains "$RESULT" "Learn more" "normal link present"
