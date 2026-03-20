@@ -43,9 +43,11 @@ func registerBrowserCommands() {
 		dialogCmd,
 		consoleCmd,
 		errorsCmd,
+		clipboardCmd,
 	)
 
 	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd)
+	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
 
@@ -86,6 +88,7 @@ func registerBrowserCommands() {
 		dialogCmd,
 		consoleCmd,
 		errorsCmd,
+		clipboardCmd,
 	)
 }
 
@@ -214,6 +217,7 @@ func configureBrowserFlags() {
 	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
 
 	addTabFlag(consoleCmd, errorsCmd)
+	addTabFlag(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 }
 
 func configureManagementFlags() {

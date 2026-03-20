@@ -35,6 +35,10 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 			"POST /tabs/{id}/upload":   endpointStatusSummary(security["upload"], "set files on a file input in a specific tab"),
 			"GET /screencast":          endpointStatusSummary(security["screencast"], "stream live tab frames"),
 			"GET /screencast/tabs":     endpointStatusSummary(security["screencast"], "list tabs available for live capture"),
+			"GET /clipboard/read":      "read clipboard text (optional tabId query)",
+			"POST /clipboard/write":    "write clipboard text (body: {text, tabId?})",
+			"POST /clipboard/copy":     "alias for clipboard write",
+			"POST /clipboard/paste":    "read clipboard text (alias for read)",
 		},
 		"security": security,
 		"notes": []string{
