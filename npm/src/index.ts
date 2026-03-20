@@ -144,9 +144,17 @@ export class Pinchtab {
     const binaryName = getBinaryName(platform);
 
     // Try version-specific path first
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
-    const binaryPath = getBinaryPath(binaryName, pkg.version);
+    let version: string | undefined;
+    try {
+      const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8');
+      version = JSON.parse(pkg).version;
+    } catch (err) {
+      console.warn(
+        `Could not read version from package.json, falling back to unversioned binary. (${(err as Error).message})`
+      );
+    }
 
+    const binaryPath = getBinaryPath(binaryName, version);
     if (!fs.existsSync(binaryPath)) {
       throw new Error(
         `Pinchtab binary not found at ${binaryPath}.\n` +
