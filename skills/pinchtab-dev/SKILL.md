@@ -121,7 +121,14 @@ go test ./internal/handlers  # Specific package
 ./dev e2e api-fast    # API tests only
 ./dev e2e cli-fast    # CLI tests only
 ./dev e2e release     # Full release suite
+
+# Run specific test file(s) by name (without .sh extension)
+./dev e2e test api-fast clipboard       # Single file
+./dev e2e test api-full console browser # Multiple files
+./dev e2e test cli-fast clipboard       # CLI tests
 ```
+
+The `test` subcommand runs specific scenario files within a suite. Use the filename without `.sh` extension.
 
 ### Dashboard Tests
 ```bash
