@@ -6,10 +6,26 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	if h.Router != nil && h.Router.Mode() == engine.ModeLite {
+		resp := map[string]any{
+			"status": "ok",
+			"engine": "lite",
+		}
+		if hasFailureDiagnostics() {
+			resp["failures"] = FailureSnapshot()
+		}
+		if bridge.HasCrashDiagnostics() {
+			resp["crashes"] = bridge.CrashSnapshot()
+		}
+		httpx.JSON(w, http.StatusOK, resp)
+		return
+	}
+
 	// Guard against nil Bridge
 	if h.Bridge == nil {
 		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": "bridge not initialized"})

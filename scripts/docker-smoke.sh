@@ -2,6 +2,7 @@
 set -euo pipefail
 
 IMAGE="${1:-pinchtab-local:test}"
+SMOKE_TOKEN="pinchtab-smoke-token-${RANDOM}${RANDOM}"
 
 NAME="pinchtab-smoke-${RANDOM}${RANDOM}"
 FAILED=0
@@ -18,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker run -d --name "$NAME" -p 127.0.0.1::9867 "$IMAGE" >/dev/null
+docker run -d --name "$NAME" -e PINCHTAB_TOKEN="$SMOKE_TOKEN" -p 127.0.0.1::9867 "$IMAGE" >/dev/null
 
 HOST_PORT="$(docker port "$NAME" 9867/tcp | head -1 | awk -F: '{print $NF}')"
 if [ -z "$HOST_PORT" ]; then
@@ -27,21 +28,20 @@ if [ -z "$HOST_PORT" ]; then
   exit 1
 fi
 
-AUTH_HEADER=()
-TOKEN="$(docker exec "$NAME" pinchtab config get server.token | tr -d '\r')"
-if [ -n "$TOKEN" ]; then
-  AUTH_HEADER=(-H "Authorization: Bearer ${TOKEN}")
-fi
+health_check() {
+  printf 'fail\nsilent\nshow-error\nheader = "Authorization: Bearer %s"\nurl = "http://127.0.0.1:%s/health"\n' "$SMOKE_TOKEN" "$HOST_PORT" \
+    | curl --config - >/dev/null 2>&1
+}
 
 echo "Waiting for PinchTab to become healthy on port $HOST_PORT..."
 for _ in $(seq 1 60); do
-  if curl -fsS "${AUTH_HEADER[@]}" "http://127.0.0.1:${HOST_PORT}/health" >/dev/null 2>&1; then
+  if health_check; then
     break
   fi
   sleep 1
 done
 
-if ! curl -fsS "${AUTH_HEADER[@]}" "http://127.0.0.1:${HOST_PORT}/health" >/dev/null 2>&1; then
+if ! health_check; then
   FAILED=1
   echo "health check did not pass"
   exit 1

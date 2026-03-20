@@ -12,6 +12,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/engine"
 )
 
 // TestHandleHealth_NilBridge verifies health endpoint returns 503 when bridge is nil
@@ -252,6 +253,43 @@ func TestHandleHealth_EnsureChromeSuccess(t *testing.T) {
 
 	if status, ok := resp["status"]; !ok || status != "ok" {
 		t.Errorf("expected status=ok, got %v", status)
+	}
+}
+
+func TestHandleHealth_LiteModeSkipsChrome(t *testing.T) {
+	mockBridge := &MockBridge{
+		ensureChromeErr: "should not be called",
+	}
+
+	h := &Handlers{
+		Bridge: mockBridge,
+		Config: &config.RuntimeConfig{},
+		Router: engine.NewRouter(engine.ModeLite, engine.NewLiteEngine()),
+	}
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleHealth(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	if mockBridge.ensureChromeCalled {
+		t.Error("expected lite health to skip ensureChrome")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if status, ok := resp["status"]; !ok || status != "ok" {
+		t.Errorf("expected status=ok, got %v", status)
+	}
+	if engineName, ok := resp["engine"]; !ok || engineName != "lite" {
+		t.Errorf("expected engine=lite, got %v", engineName)
 	}
 }
 

@@ -64,7 +64,7 @@ ENV HOME=/data \
 EXPOSE 9867
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q -O /dev/null http://localhost:9867/health || exit 1
+  CMD /bin/sh -lc 'pinchtab health >/dev/null' || exit 1
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/local/bin/docker-entrypoint.sh", "pinchtab"]
