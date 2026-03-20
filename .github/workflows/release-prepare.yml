@@ -28,6 +28,16 @@ jobs:
       version: ${{ inputs.version }}
       ref: ${{ inputs.ref }}
 
+  release-secret-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-validate-release-secrets.yml
+    secrets:
+      HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
   go-checks:
     needs: validate
     uses: ./.github/workflows/reusable-go.yml
@@ -133,6 +143,7 @@ jobs:
     name: Manual Approval
     needs:
       - validate
+      - release-secret-checks
       - go-checks
       - dashboard-checks
       - docs-checks
@@ -144,6 +155,7 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.validate.result == 'success'
+      && needs.release-secret-checks.result == 'success'
       && needs.go-checks.result == 'success'
       && needs.dashboard-checks.result == 'success'
       && needs.docs-checks.result == 'success'
@@ -159,6 +171,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Release secrets | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Go | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Dashboard | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docs | ✅ |" >> "$GITHUB_STEP_SUMMARY"

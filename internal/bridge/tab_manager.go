@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -676,9 +678,30 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 		return
 	}
 
+	execContextSources := make(map[runtime.ExecutionContextID]string)
+	var execContextMu sync.RWMutex
+
 	// Listen for console API calls and exceptions
 	chromedp.ListenTarget(ctx, func(ev any) {
 		switch ev := ev.(type) {
+		case *runtime.EventExecutionContextCreated:
+			if ev.Context == nil {
+				return
+			}
+			execContextMu.Lock()
+			execContextSources[ev.Context.ID] = executionContextSource(ev.Context)
+			execContextMu.Unlock()
+
+		case *runtime.EventExecutionContextDestroyed:
+			execContextMu.Lock()
+			delete(execContextSources, ev.ExecutionContextID)
+			execContextMu.Unlock()
+
+		case *runtime.EventExecutionContextsCleared:
+			execContextMu.Lock()
+			clear(execContextSources)
+			execContextMu.Unlock()
+
 		case *runtime.EventConsoleAPICalled:
 			var msg string
 			for _, arg := range ev.Args {
@@ -703,10 +726,24 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 				ts = time.Now()
 			}
 
+			source := stackTraceSource(ev.StackTrace)
+			if source == "" {
+				execContextMu.RLock()
+				source = execContextSources[ev.ExecutionContextID]
+				execContextMu.RUnlock()
+			}
+			if source == "" {
+				source = strings.TrimSpace(ev.Context)
+			}
+			if isInternalConsoleSource(source) {
+				return
+			}
+
 			tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
 				Timestamp: ts,
 				Level:     string(ev.Type),
 				Message:   msg,
+				Source:    source,
 			})
 
 		case *runtime.EventExceptionThrown:
@@ -720,6 +757,16 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 				ts = time.Time(*ev.Timestamp)
 			} else {
 				ts = time.Now()
+			}
+
+			source := exceptionSource(ev.ExceptionDetails)
+			if source == "" {
+				execContextMu.RLock()
+				source = execContextSources[ev.ExceptionDetails.ExecutionContextID]
+				execContextMu.RUnlock()
+			}
+			if isInternalConsoleSource(source) {
+				return
 			}
 
 			stack := ""
@@ -744,4 +791,69 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			return runtime.Enable().Do(c)
 		}))
 	}()
+}
+
+func executionContextSource(ctx *runtime.ExecutionContextDescription) string {
+	if ctx == nil {
+		return ""
+	}
+	if source := strings.TrimSpace(ctx.Origin); source != "" {
+		return source
+	}
+	return strings.TrimSpace(ctx.Name)
+}
+
+func exceptionSource(details *runtime.ExceptionDetails) string {
+	if details == nil {
+		return ""
+	}
+	if source := strings.TrimSpace(details.URL); source != "" {
+		return source
+	}
+	return stackTraceSource(details.StackTrace)
+}
+
+func stackTraceSource(trace *runtime.StackTrace) string {
+	for trace != nil {
+		for _, frame := range trace.CallFrames {
+			if frame == nil {
+				continue
+			}
+			if source := strings.TrimSpace(frame.URL); source != "" {
+				return source
+			}
+		}
+		trace = trace.Parent
+	}
+	return ""
+}
+
+func isInternalConsoleSource(source string) bool {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return false
+	}
+
+	lower := strings.ToLower(source)
+	switch {
+	case strings.HasPrefix(lower, "chrome-extension://"),
+		strings.HasPrefix(lower, "edge-extension://"),
+		strings.HasPrefix(lower, "moz-extension://"),
+		strings.HasPrefix(lower, "safari-extension://"),
+		strings.HasPrefix(lower, "devtools://"),
+		strings.HasPrefix(lower, "chrome://"),
+		strings.HasPrefix(lower, "about:"):
+		return true
+	}
+
+	parsed, err := url.Parse(source)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "chrome-extension", "edge-extension", "moz-extension", "safari-extension", "devtools", "chrome", "about":
+		return true
+	default:
+		return false
+	}
 }

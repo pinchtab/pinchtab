@@ -41,6 +41,7 @@ pinchtab-small
 MY_PROJECT_NOTES.md
 debug.log
 pinchtab.exe
+.tools/
 
 .gomodcache/
 .gocache

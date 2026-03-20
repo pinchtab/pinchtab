@@ -46,7 +46,7 @@ services:
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh api \"filter=${E2E_SCENARIO_FILTER}\"; else exec /bin/bash /e2e/run.sh api; fi"]
+    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh api \"filter=${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh api; fi"]
 
   runner-cli:
     build:
@@ -64,4 +64,4 @@ services:
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh cli all=true \"filter=${E2E_SCENARIO_FILTER}\"; else exec /bin/bash /e2e/run.sh cli all=true; fi"]
+    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh cli all=true \"filter=${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh cli all=true; fi"]

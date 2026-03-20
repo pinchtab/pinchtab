@@ -18,6 +18,15 @@ build_e2e_cli_binary() {
   echo ""
 }
 
+show_filter_status() {
+  if [ -n "${E2E_FILTER}" ]; then
+    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
+    return
+  fi
+
+  echo "  ${MUTED}filter: none (running all scenarios in this suite)${NC}"
+}
+
 compose_down() {
   local compose_file="$1"
   docker compose -f "${compose_file}" down -v 2>/dev/null || true
@@ -102,9 +111,7 @@ run_api_fast() {
   local progress_file="tests/e2e/results/progress-api-fast.log"
   local log_prefix="logs-api-fast"
   echo "  ${ACCENT}${BOLD}🐳 E2E API Fast tests (Docker)${NC}"
-  if [ -n "${E2E_FILTER}" ]; then
-    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
-  fi
+  show_filter_status
   echo ""
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
@@ -130,9 +137,7 @@ run_full_api() {
   local progress_file="tests/e2e/results/progress-api-full.log"
   local log_prefix="logs-api-full"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full API tests (Docker)${NC}"
-  if [ -n "${E2E_FILTER}" ]; then
-    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
-  fi
+  show_filter_status
   echo ""
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
@@ -154,9 +159,7 @@ run_cli_fast() {
   local progress_file="tests/e2e/results/progress-cli-fast.log"
   local log_prefix="logs-cli-fast"
   echo "  ${ACCENT}${BOLD}🐳 E2E CLI Fast tests (Docker)${NC}"
-  if [ -n "${E2E_FILTER}" ]; then
-    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
-  fi
+  show_filter_status
   echo ""
   build_e2e_cli_binary
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
@@ -183,9 +186,7 @@ run_full_cli() {
   local progress_file="tests/e2e/results/progress-cli-full.log"
   local log_prefix="logs-cli-full"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full CLI tests (Docker)${NC}"
-  if [ -n "${E2E_FILTER}" ]; then
-    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
-  fi
+  show_filter_status
   echo ""
   build_e2e_cli_binary
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
