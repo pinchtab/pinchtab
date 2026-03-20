@@ -25,6 +25,7 @@ func DefaultFileConfig() FileConfig {
 	allowDownload := false
 	downloadMaxBytes := DefaultDownloadMaxBytes
 	allowUpload := false
+	allowClipboard := false
 	uploadMaxRequestBytes := DefaultUploadMaxRequestBytes
 	uploadMaxFiles := DefaultUploadMaxFiles
 	uploadMaxFileBytes := DefaultUploadMaxFileBytes
@@ -58,6 +59,7 @@ func DefaultFileConfig() FileConfig {
 			DownloadAllowedDomains: []string{},
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
+			AllowClipboard:         &allowClipboard,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,
@@ -167,6 +169,7 @@ type securityConfigJSON struct {
 	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
 	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
 	AllowUpload            *bool          `json:"allowUpload"`
+	AllowClipboard         *bool          `json:"allowClipboard"`
 	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
 	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
 	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
@@ -285,6 +288,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			DownloadAllowedDomains: copyStringSlice(fc.Security.DownloadAllowedDomains),
 			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
 			AllowUpload:            fc.Security.AllowUpload,
+			AllowClipboard:         fc.Security.AllowClipboard,
 			UploadMaxRequestBytes:  fc.Security.UploadMaxRequestBytes,
 			UploadMaxFiles:         fc.Security.UploadMaxFiles,
 			UploadMaxFileBytes:     fc.Security.UploadMaxFileBytes,
@@ -368,6 +372,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	downloadAllowedDomains := copyStringSlice(cfg.DownloadAllowedDomains)
 	downloadMaxBytes := cfg.EffectiveDownloadMaxBytes()
 	allowUpload := cfg.AllowUpload
+	allowClipboard := cfg.AllowClipboard
 	uploadMaxRequestBytes := cfg.EffectiveUploadMaxRequestBytes()
 	uploadMaxFiles := cfg.EffectiveUploadMaxFiles()
 	uploadMaxFileBytes := cfg.EffectiveUploadMaxFileBytes()
@@ -433,6 +438,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			DownloadAllowedDomains: downloadAllowedDomains,
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
+			AllowClipboard:         &allowClipboard,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,
@@ -490,6 +496,7 @@ type legacyFileConfig struct {
 	AllowScreencast   *bool  `json:"allowScreencast,omitempty"`
 	AllowDownload     *bool  `json:"allowDownload,omitempty"`
 	AllowUpload       *bool  `json:"allowUpload,omitempty"`
+	AllowClipboard    *bool  `json:"allowClipboard,omitempty"`
 	StateDir          string `json:"stateDir"`
 	ProfileDir        string `json:"profileDir"`
 	Headless          *bool  `json:"headless,omitempty"`
@@ -534,6 +541,7 @@ func convertLegacyConfig(lc *legacyFileConfig) *FileConfig {
 	fc.Security.AllowScreencast = lc.AllowScreencast
 	fc.Security.AllowDownload = lc.AllowDownload
 	fc.Security.AllowUpload = lc.AllowUpload
+	fc.Security.AllowClipboard = lc.AllowClipboard
 
 	// Timeouts
 	fc.Timeouts.ActionSec = lc.TimeoutSec

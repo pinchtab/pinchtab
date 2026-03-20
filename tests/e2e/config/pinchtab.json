@@ -38,6 +38,7 @@
     "allowEvaluate": true,
     "allowDownload": true,
     "allowUpload": true,
+    "allowClipboard": true,
     "attach": {
       "enabled": true,
       "allowHosts": [

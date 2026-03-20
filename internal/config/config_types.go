@@ -22,6 +22,7 @@ type RuntimeConfig struct {
 	DownloadAllowedDomains []string
 	DownloadMaxBytes       int
 	AllowUpload            bool
+	AllowClipboard         bool
 	UploadMaxRequestBytes  int
 	UploadMaxFiles         int
 	UploadMaxFileBytes     int
@@ -181,6 +182,7 @@ type SecurityConfig struct {
 	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
 	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
 	AllowUpload            *bool        `json:"allowUpload,omitempty"`
+	AllowClipboard         *bool        `json:"allowClipboard,omitempty"`
 	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
 	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
 	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`

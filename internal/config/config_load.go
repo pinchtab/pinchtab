@@ -217,6 +217,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.AllowUpload != nil {
 		cfg.AllowUpload = *fc.Security.AllowUpload
 	}
+	if fc.Security.AllowClipboard != nil {
+		cfg.AllowClipboard = *fc.Security.AllowClipboard
+	}
 	if fc.Security.UploadMaxRequestBytes != nil {
 		cfg.UploadMaxRequestBytes = clampPositiveLimit(*fc.Security.UploadMaxRequestBytes, DefaultUploadMaxRequestBytes, MaxUploadMaxRequestBytes)
 	}
