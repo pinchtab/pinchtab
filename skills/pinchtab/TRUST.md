@@ -36,7 +36,7 @@ Binaries are built automatically from tagged commits via GitHub Actions (publicl
 
 - **Source**: https://github.com/pinchtab/pinchtab (MIT)
 - **Releases**: https://github.com/pinchtab/pinchtab/releases
-- **Latest**: v0.8.0 (March 2026)
+- **Latest**: v0.8.4 (Mar 2026)
 
 If you're concerned, audit the source—it's 12MB, zero external dependencies, mostly Go stdlib.
 
@@ -63,6 +63,18 @@ Pinchtab runs a separate Chrome process with:
 - Standard Chrome security model (site isolation, CSP, etc.)
 
 Use `profiles.baseDir`, `profiles.defaultProfile`, or `PINCHTAB_CONFIG` if you need to control where PinchTab stores browser state.
+
+## Security History
+
+| CVE | Severity | Affected | Fixed In | Endpoint |
+| --- | --- | --- | --- | --- |
+| [CVE-2026-30834](https://github.com/advisories/GHSA-rw8p-c6hf-q3pg) | High (7.5) | < 0.7.7 | 0.7.7 | `/download` |
+
+**Type:** Server-Side Request Forgery (SSRF) — allowed exfiltration of internal files and network probing via crafted download URLs.
+
+**Fix PRs:** [#135](https://github.com/pinchtab/pinchtab/pull/135) (SafePath validation), [#288](https://github.com/pinchtab/pinchtab/pull/288) (expanded URL validation).
+
+**Minimum recommended version:** 0.8.3+ (includes full SSRF hardening).
 
 ## Questions?
 
