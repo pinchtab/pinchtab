@@ -57,6 +57,12 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 			Message: httpx.DisabledEndpointMessage("upload", "security.allowUpload"),
 			Paths:   []string{"POST /upload", "POST /tabs/{id}/upload"},
 		},
+		"clipboard": {
+			Enabled: h.clipboardEnabled(),
+			Setting: "security.allowClipboard",
+			Message: httpx.DisabledEndpointMessage("clipboard", "security.allowClipboard"),
+			Paths:   []string{"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste"},
+		},
 	}
 }
 

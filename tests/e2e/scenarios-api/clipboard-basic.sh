@@ -7,21 +7,17 @@ source "${GROUP_DIR}/../helpers/api.sh"
 # ─────────────────────────────────────────────────────────────────
 start_test "POST /clipboard/write sets clipboard text"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-
 UNIQUE_TEXT="pinchtab-test-$(date +%s)"
-pt_post "/clipboard/write?tabId=${TAB_ID}" -d "{\"text\":\"${UNIQUE_TEXT}\"}"
+pt_post "/clipboard/write" -d "{\"text\":\"${UNIQUE_TEXT}\"}"
 assert_ok "write clipboard"
 assert_json_exists "$RESULT" '.success' "has success"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "GET /clipboard/read returns clipboard text"
+start_test "GET /clipboard/read returns clipboard text without a tab"
 
-pt_get "/clipboard/read?tabId=${TAB_ID}"
+pt_get "/clipboard/read"
 assert_ok "read clipboard"
 assert_json_contains "$RESULT" '.text' "$UNIQUE_TEXT" "reads back written text"
 
@@ -31,19 +27,19 @@ end_test
 start_test "POST /clipboard/copy (alias for write)"
 
 COPY_TEXT="pinchtab-copy-$(date +%s)"
-pt_post "/clipboard/copy?tabId=${TAB_ID}" -d "{\"text\":\"${COPY_TEXT}\"}"
+pt_post "/clipboard/copy" -d "{\"text\":\"${COPY_TEXT}\"}"
 assert_ok "copy"
 assert_json_exists "$RESULT" '.success' "has success"
 
-pt_get "/clipboard/read?tabId=${TAB_ID}"
+pt_get "/clipboard/read"
 assert_json_contains "$RESULT" '.text' "$COPY_TEXT" "copy updated clipboard"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "POST /clipboard/paste returns clipboard text"
+start_test "GET /clipboard/paste returns clipboard text"
 
-pt_post "/clipboard/paste?tabId=${TAB_ID}" -d "{}"
+pt_get "/clipboard/paste"
 assert_ok "paste"
 assert_json_contains "$RESULT" '.text' "$COPY_TEXT" "paste returns clipboard text"
 
@@ -52,16 +48,26 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "POST /clipboard/write without text → error"
 
-pt_post "/clipboard/write?tabId=${TAB_ID}" -d "{}"
+pt_post "/clipboard/write" -d "{}"
 assert_not_ok "rejects missing text"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "GET /clipboard/read with invalid tab → error"
+start_test "Clipboard ignores tabId for compatibility"
 
 pt_get "/clipboard/read?tabId=nonexistent_xyz_999"
-assert_not_ok "rejects bad tab"
+assert_ok "read ignores tabId"
+assert_json_contains "$RESULT" '.text' "$COPY_TEXT" "compat tabId does not affect shared clipboard"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /clipboard/write rejects oversized text"
+
+OVERSIZED_TEXT=$(head -c $((64 * 1024 + 1)) /dev/zero | tr '\0' 'x')
+pt_post "/clipboard/write" -d "$(jq -n --arg t "$OVERSIZED_TEXT" '{text: $t}')"
+assert_not_ok "rejects oversized clipboard text"
 
 end_test
 
@@ -69,10 +75,10 @@ end_test
 start_test "Clipboard with special characters"
 
 SPECIAL_TEXT='Hello "world" with <html> & symbols!'
-pt_post "/clipboard/write?tabId=${TAB_ID}" -d "$(jq -n --arg t "$SPECIAL_TEXT" '{text: $t}')"
+pt_post "/clipboard/write" -d "$(jq -n --arg t "$SPECIAL_TEXT" '{text: $t}')"
 assert_ok "write special chars"
 
-pt_get "/clipboard/read?tabId=${TAB_ID}"
+pt_get "/clipboard/read"
 assert_ok "read special chars"
 GOT_TEXT=$(echo "$RESULT" | jq -r '.text')
 if [ "$GOT_TEXT" = "$SPECIAL_TEXT" ]; then
@@ -89,10 +95,10 @@ end_test
 start_test "Clipboard with multiline text"
 
 MULTI_TEXT=$'line one\nline two\nline three'
-pt_post "/clipboard/write?tabId=${TAB_ID}" -d "$(jq -n --arg t "$MULTI_TEXT" '{text: $t}')"
+pt_post "/clipboard/write" -d "$(jq -n --arg t "$MULTI_TEXT" '{text: $t}')"
 assert_ok "write multiline"
 
-pt_get "/clipboard/read?tabId=${TAB_ID}"
+pt_get "/clipboard/read"
 assert_ok "read multiline"
 GOT_TEXT=$(echo "$RESULT" | jq -r '.text')
 if [ "$GOT_TEXT" = "$MULTI_TEXT" ]; then

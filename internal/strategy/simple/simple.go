@@ -53,7 +53,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 		"GET /snapshot", "GET /screenshot", "GET /text", "GET /pdf", "POST /pdf",
 		"GET /console", "POST /console/clear",
 		"GET /errors", "POST /errors/clear",
-		"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "POST /clipboard/paste",
+		"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste",
 		"POST /navigate", "POST /back", "POST /forward", "POST /reload",
 		"POST /action", "POST /actions",
 		"POST /tab", "POST /tab/lock", "POST /tab/unlock",

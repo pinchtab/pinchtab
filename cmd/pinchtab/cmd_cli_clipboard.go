@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -15,7 +13,7 @@ import (
 var clipboardCmd = &cobra.Command{
 	Use:   "clipboard",
 	Short: "Clipboard operations",
-	Long:  "Read and write browser clipboard content.",
+	Long:  "Read and write shared clipboard content.",
 }
 
 var clipboardReadCmd = &cobra.Command{
@@ -23,7 +21,7 @@ var clipboardReadCmd = &cobra.Command{
 	Short: "Read clipboard text",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardRead(rt.client, rt.base, rt.token, cmd)
+			clipboardRead(rt.client, rt.base, rt.token)
 		})
 	},
 }
@@ -34,7 +32,7 @@ var clipboardWriteCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardWrite(rt.client, rt.base, rt.token, cmd, strings.Join(args, " "))
+			clipboardWrite(rt.client, rt.base, rt.token, args)
 		})
 	},
 }
@@ -45,7 +43,7 @@ var clipboardCopyCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardWrite(rt.client, rt.base, rt.token, cmd, strings.Join(args, " "))
+			clipboardWrite(rt.client, rt.base, rt.token, args)
 		})
 	},
 }
@@ -55,26 +53,20 @@ var clipboardPasteCmd = &cobra.Command{
 	Short: "Paste clipboard text (alias for read)",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardRead(rt.client, rt.base, rt.token, cmd)
+			clipboardRead(rt.client, rt.base, rt.token)
 		})
 	},
 }
 
-func clipboardRead(client *http.Client, base, token string, cmd *cobra.Command) {
-	params := url.Values{}
-	if v, _ := cmd.Flags().GetString("tab"); v != "" {
-		params.Set("tabId", v)
-	}
-
-	result := apiclient.DoGetRaw(client, base, token, "/clipboard/read", params)
+func clipboardRead(client *http.Client, base, token string) {
+	result := apiclient.DoGetRaw(client, base, token, "/clipboard/read", nil)
 	if result == nil {
 		fmt.Fprintln(os.Stderr, "Failed to read clipboard")
 		os.Exit(1)
 	}
 
 	var resp struct {
-		TabID string `json:"tabId"`
-		Text  string `json:"text"`
+		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(result, &resp); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
@@ -84,22 +76,23 @@ func clipboardRead(client *http.Client, base, token string, cmd *cobra.Command) 
 	fmt.Println(resp.Text)
 }
 
-func clipboardWrite(client *http.Client, base, token string, cmd *cobra.Command, text string) {
-	params := url.Values{}
-	if v, _ := cmd.Flags().GetString("tab"); v != "" {
-		params.Set("tabId", v)
-	}
-
-	path := "/clipboard/write"
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-
-	result := apiclient.DoPost(client, base, token, path, map[string]any{
-		"text": text,
+func clipboardWrite(client *http.Client, base, token string, args []string) {
+	result := apiclient.DoPost(client, base, token, "/clipboard/write", map[string]any{
+		"text": joinArgs(args),
 	})
 
 	if result != nil {
 		fmt.Println("Clipboard updated")
 	}
+}
+
+func joinArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	out := args[0]
+	for _, arg := range args[1:] {
+		out += " " + arg
+	}
+	return out
 }

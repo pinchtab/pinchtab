@@ -217,7 +217,6 @@ func configureBrowserFlags() {
 	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
 
 	addTabFlag(consoleCmd, errorsCmd)
-	addTabFlag(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 }
 
 func configureManagementFlags() {
