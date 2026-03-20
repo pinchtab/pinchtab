@@ -1,10 +1,14 @@
 package dashboard
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
 )
 
 func TestNewDashboard(t *testing.T) {
@@ -93,4 +97,134 @@ func TestDashboardShutdownTimeout(t *testing.T) {
 
 	d.Shutdown()
 	time.Sleep(50 * time.Millisecond) // Verify shutdown completes
+}
+
+func TestDashboardRecordEventTracksAgentsAndReplay(t *testing.T) {
+	d := NewDashboard(nil)
+	now := time.Now().UTC()
+	d.RecordEvent(apiTypes.ActivityEvent{
+		ID:        "evt-1",
+		AgentID:   "agent-1",
+		Channel:   "tool_call",
+		Type:      "navigate",
+		Method:    http.MethodPost,
+		Path:      "/navigate",
+		Timestamp: now,
+	})
+
+	agents := d.Agents()
+	if len(agents) != 1 {
+		t.Fatalf("Agents() len = %d, want 1", len(agents))
+	}
+	if agents[0].ID != "agent-1" {
+		t.Fatalf("Agents()[0].ID = %q, want agent-1", agents[0].ID)
+	}
+	if agents[0].RequestCount != 1 {
+		t.Fatalf("Agents()[0].RequestCount = %d, want 1", agents[0].RequestCount)
+	}
+	if d.AgentCount() != 1 {
+		t.Fatalf("AgentCount() = %d, want 1", d.AgentCount())
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 1 {
+		t.Fatalf("RecentEvents() len = %d, want 1", len(events))
+	}
+	if events[0].ID != "evt-1" {
+		t.Fatalf("RecentEvents()[0].ID = %q, want evt-1", events[0].ID)
+	}
+}
+
+func TestDashboardHandleAgentsReturnsTrackedAgents(t *testing.T) {
+	d := NewDashboard(nil)
+	d.RecordEvent(apiTypes.ActivityEvent{
+		ID:        "evt-1",
+		AgentID:   "agent-1",
+		Channel:   "progress",
+		Type:      "progress",
+		Message:   "Thinking",
+		Timestamp: time.Now().UTC(),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	w := httptest.NewRecorder()
+	d.handleAgents(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("handleAgents() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var agents []apiTypes.Agent
+	if err := json.NewDecoder(w.Body).Decode(&agents); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if len(agents) != 1 || agents[0].ID != "agent-1" {
+		t.Fatalf("agents = %#v, want tracked agent", agents)
+	}
+}
+
+func TestDashboardHandleAgentEventsValidation(t *testing.T) {
+	d := NewDashboard(nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-events", bytes.NewBufferString(`{"agentId":"","message":""}`))
+	w := httptest.NewRecorder()
+	d.handleAgentEvents(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("handleAgentEvents() status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestDashboardHandleAgentEventsRecordsProgress(t *testing.T) {
+	d := NewDashboard(nil)
+	body := map[string]any{
+		"agentId":  "agent-1",
+		"message":  "Step 1",
+		"progress": 1,
+		"total":    3,
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-events", bytes.NewReader(data))
+	w := httptest.NewRecorder()
+	d.handleAgentEvents(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("handleAgentEvents() status = %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 1 {
+		t.Fatalf("RecentEvents() len = %d, want 1", len(events))
+	}
+	if events[0].Channel != "progress" {
+		t.Fatalf("RecentEvents()[0].Channel = %q, want progress", events[0].Channel)
+	}
+	if events[0].Type != "progress" {
+		t.Fatalf("RecentEvents()[0].Type = %q, want progress", events[0].Type)
+	}
+}
+
+func TestMatchesMode(t *testing.T) {
+	tests := []struct {
+		mode    string
+		channel string
+		want    bool
+	}{
+		{mode: "tool_calls", channel: "tool_call", want: true},
+		{mode: "tool_calls", channel: "progress", want: false},
+		{mode: "progress", channel: "tool_call", want: false},
+		{mode: "progress", channel: "progress", want: true},
+		{mode: "both", channel: "tool_call", want: true},
+		{mode: "both", channel: "progress", want: true},
+	}
+
+	for _, tc := range tests {
+		if got := matchesMode(tc.mode, tc.channel); got != tc.want {
+			t.Fatalf("matchesMode(%q, %q) = %v, want %v", tc.mode, tc.channel, got, tc.want)
+		}
+	}
 }

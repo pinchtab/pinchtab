@@ -163,6 +163,7 @@ func cookieAuthAllowed(r *http.Request) bool {
 		case path == "/health",
 			path == "/metrics",
 			path == "/api/activity",
+			path == "/api/agents",
 			path == "/api/events",
 			path == "/api/config",
 			path == "/profiles",
@@ -181,6 +182,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 	case http.MethodPost:
 		switch {
 		case path == "/api/auth/elevate":
+			return true
+		case path == "/api/agent-events":
 			return true
 		case path == "/action":
 			return true

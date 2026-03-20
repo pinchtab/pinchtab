@@ -59,6 +59,7 @@ interface AppState {
   agents: Agent[];
   selectedAgentId: string | null;
   setAgents: (agents: Agent[]) => void;
+  upsertAgentFromEvent: (event: ActivityEvent) => void;
   setSelectedAgentId: (id: string | null) => void;
 
   // Activity feed
@@ -82,6 +83,7 @@ const defaultSettings: Settings = {
   stealth: "light",
   browser: { blockImages: false, blockMedia: false, noAnimations: false },
   monitoring: { memoryMetrics: false, pollInterval: 30 },
+  agents: { reasoningMode: "tool_calls" },
 };
 
 const SETTINGS_KEY = "pinchtab_settings";
@@ -195,6 +197,44 @@ export const useAppStore = create<AppState>((set) => ({
   agents: [],
   selectedAgentId: null,
   setAgents: (agents) => set({ agents }),
+  upsertAgentFromEvent: (event) =>
+    set((state) => {
+      const agentId = event.agentId || "anonymous";
+      const existing = state.agents.find((agent) => agent.id === agentId);
+
+      if (!existing) {
+        return {
+          agents: [
+            {
+              id: agentId,
+              name: agentId,
+              connectedAt: event.timestamp,
+              lastActivity: event.timestamp,
+              requestCount: 1,
+            },
+            ...state.agents,
+          ],
+        };
+      }
+
+      return {
+        agents: state.agents
+          .map((agent) =>
+            agent.id === agentId
+              ? {
+                  ...agent,
+                  lastActivity: event.timestamp,
+                  requestCount: agent.requestCount + 1,
+                }
+              : agent,
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.lastActivity || b.connectedAt).getTime() -
+              new Date(a.lastActivity || a.connectedAt).getTime(),
+          ),
+      };
+    }),
   setSelectedAgentId: (selectedAgentId) => set({ selectedAgentId }),
 
   // Activity feed

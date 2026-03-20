@@ -63,7 +63,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			RateBucketHosts: MetricInt(snapshot["rateBucketHosts"]),
 		}
 	})
-	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, version, startedAt)
+	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, dash, version, startedAt)
 	sessions := authn.NewSessionManager(authn.SessionConfig{
 		IdleTimeout: authn.DefaultSessionIdleTimeout,
 		MaxLifetime: authn.DefaultSessionMaxLifetime,
@@ -93,7 +93,8 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	configAPI.RegisterHandlers(mux)
 	authAPI.RegisterHandlers(mux)
 	profMgr.RegisterHandlers(mux)
-	activity.RegisterHandlers(mux, actStore)
+	liveActivity := newDashboardActivityRecorder(actStore, dash)
+	activity.RegisterHandlers(mux, liveActivity)
 
 	strategyName := cfg.Strategy
 	if strategyName == "" {
@@ -185,7 +186,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	handler := handlers.RequestIDMiddleware(
 		activity.Middleware(
-			actStore,
+			liveActivity,
 			"server",
 			handlers.SecurityHeadersMiddleware(cfg,
 				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, mux)))),

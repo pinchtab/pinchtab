@@ -2,17 +2,31 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
+	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
+
+func envWithFallback(newKey, oldKey string) string {
+	if v := os.Getenv(newKey); v != "" {
+		return v
+	}
+	return os.Getenv(oldKey)
+}
 
 type DashboardConfig struct {
 	IdleTimeout       time.Duration
@@ -23,19 +37,6 @@ type DashboardConfig struct {
 
 //go:embed dashboard/*
 var dashboardFS embed.FS
-
-// AgentEvent is sent via SSE when an agent performs an action.
-type AgentEvent struct {
-	AgentID    string    `json:"agentId"`
-	Profile    string    `json:"profile,omitempty"`
-	Action     string    `json:"action"`
-	URL        string    `json:"url,omitempty"`
-	TabID      string    `json:"tabId,omitempty"`
-	Detail     string    `json:"detail,omitempty"`
-	Status     int       `json:"status"`
-	DurationMs int64     `json:"durationMs"`
-	Timestamp  time.Time `json:"timestamp"`
-}
 
 // SystemEvent is sent for instance lifecycle changes.
 type SystemEvent struct {
@@ -50,14 +51,19 @@ type InstanceLister interface {
 
 type Dashboard struct {
 	cfg            DashboardConfig
-	sseConns       map[chan AgentEvent]struct{}
+	activityConns  map[chan apiTypes.ActivityEvent]struct{}
 	sysConns       map[chan SystemEvent]struct{}
 	cancel         context.CancelFunc
 	instances      InstanceLister
 	monitoring     MonitoringSource
 	serverMetrics  ServerMetricsProvider
 	childAuthToken string
-	mu             sync.RWMutex
+
+	agents       map[string]*apiTypes.Agent
+	recentEvents []apiTypes.ActivityEvent
+	maxEvents    int
+
+	mu sync.RWMutex
 }
 
 // BroadcastSystemEvent sends a system event to all SSE clients.
@@ -80,6 +86,141 @@ func (d *Dashboard) BroadcastSystemEvent(evt SystemEvent) {
 // SetInstanceLister sets the orchestrator for managing instances.
 func (d *Dashboard) SetInstanceLister(il InstanceLister) {
 	d.instances = il
+}
+
+// RecordActivityEvent converts a backend activity record into a live tool-call event.
+func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
+	details := map[string]any{
+		"status":     evt.Status,
+		"durationMs": evt.DurationMs,
+	}
+	if evt.Source != "" {
+		details["source"] = evt.Source
+	}
+	if evt.RequestID != "" {
+		details["requestId"] = evt.RequestID
+	}
+	if evt.SessionID != "" {
+		details["sessionId"] = evt.SessionID
+	}
+	if evt.ActorID != "" {
+		details["actorId"] = evt.ActorID
+	}
+	if evt.InstanceID != "" {
+		details["instanceId"] = evt.InstanceID
+	}
+	if evt.ProfileID != "" {
+		details["profileId"] = evt.ProfileID
+	}
+	if evt.ProfileName != "" {
+		details["profileName"] = evt.ProfileName
+	}
+	if evt.TabID != "" {
+		details["tabId"] = evt.TabID
+	}
+	if evt.URL != "" {
+		details["url"] = evt.URL
+	}
+	if evt.Ref != "" {
+		details["ref"] = evt.Ref
+	}
+	if evt.Engine != "" {
+		details["engine"] = evt.Engine
+	}
+
+	d.RecordEvent(apiTypes.ActivityEvent{
+		ID:        evt.RequestID,
+		AgentID:   agentIDOrAnonymous(evt.AgentID),
+		Channel:   "tool_call",
+		Type:      classifyActivityType(evt),
+		Method:    evt.Method,
+		Path:      evt.Path,
+		Timestamp: evt.Timestamp,
+		Details:   details,
+	})
+}
+
+// RecordEvent records an activity event, updates the live agent summary, and broadcasts to SSE subscribers.
+func (d *Dashboard) RecordEvent(evt apiTypes.ActivityEvent) {
+	if evt.ID == "" {
+		evt.ID = generateID()
+	}
+	if evt.Timestamp.IsZero() {
+		evt.Timestamp = time.Now().UTC()
+	}
+	if evt.Channel == "" {
+		evt.Channel = "tool_call"
+	}
+	if evt.AgentID == "" {
+		evt.AgentID = "anonymous"
+	}
+
+	d.mu.Lock()
+	d.upsertAgentLocked(evt)
+	if len(d.recentEvents) >= d.maxEvents {
+		copy(d.recentEvents, d.recentEvents[1:])
+		d.recentEvents[len(d.recentEvents)-1] = evt
+	} else {
+		d.recentEvents = append(d.recentEvents, evt)
+	}
+
+	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
+	for ch := range d.activityConns {
+		chans = append(chans, ch)
+	}
+	d.mu.Unlock()
+
+	for _, ch := range chans {
+		select {
+		case ch <- evt:
+		default:
+		}
+	}
+}
+
+func (d *Dashboard) upsertAgentLocked(evt apiTypes.ActivityEvent) {
+	agentID := agentIDOrAnonymous(evt.AgentID)
+	agent, ok := d.agents[agentID]
+	if !ok {
+		agent = &apiTypes.Agent{
+			ID:          agentID,
+			Name:        agentID,
+			ConnectedAt: evt.Timestamp,
+		}
+		d.agents[agentID] = agent
+	}
+	agent.LastActivity = evt.Timestamp
+	agent.RequestCount++
+}
+
+// Agents returns the current agent summary list ordered by most recent activity.
+func (d *Dashboard) Agents() []apiTypes.Agent {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	result := make([]apiTypes.Agent, 0, len(d.agents))
+	for _, agent := range d.agents {
+		result = append(result, *agent)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LastActivity.After(result[j].LastActivity)
+	})
+	return result
+}
+
+// AgentCount returns the number of currently observed agents.
+func (d *Dashboard) AgentCount() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return len(d.agents)
+}
+
+// RecentEvents returns a copy of the buffered live event history.
+func (d *Dashboard) RecentEvents() []apiTypes.ActivityEvent {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]apiTypes.ActivityEvent, len(d.recentEvents))
+	copy(out, d.recentEvents)
+	return out
 }
 
 func NewDashboard(cfg *DashboardConfig) *Dashboard {
@@ -105,14 +246,16 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 	}
 
 	_, cancel := context.WithCancel(context.Background())
-	d := &Dashboard{
+	return &Dashboard{
 		cfg:            c,
-		sseConns:       make(map[chan AgentEvent]struct{}),
+		activityConns:  make(map[chan apiTypes.ActivityEvent]struct{}),
 		sysConns:       make(map[chan SystemEvent]struct{}),
 		cancel:         cancel,
-		childAuthToken: os.Getenv("PINCHTAB_TOKEN"),
+		childAuthToken: envWithFallback("PINCHTAB_TOKEN", "BRIDGE_TOKEN"),
+		agents:         make(map[string]*apiTypes.Agent),
+		recentEvents:   make([]apiTypes.ActivityEvent, 0, 200),
+		maxEvents:      200,
 	}
-	return d
 }
 
 func (d *Dashboard) Shutdown() { d.cancel() }
@@ -120,6 +263,8 @@ func (d *Dashboard) Shutdown() { d.cancel() }
 func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 	// API endpoints
 	mux.HandleFunc("GET /api/events", d.handleSSE)
+	mux.HandleFunc("GET /api/agents", d.handleAgents)
+	mux.HandleFunc("POST /api/agent-events", d.handleAgentEvents)
 
 	// Static files served at /dashboard/
 	sub, _ := fs.Sub(dashboardFS, "dashboard")
@@ -134,6 +279,38 @@ func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /login", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
 	mux.Handle("GET /dashboard", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
 	mux.Handle("GET /dashboard/{path...}", d.withNoCache(http.HandlerFunc(d.handleDashboardUI)))
+}
+
+func (d *Dashboard) handleAgents(w http.ResponseWriter, _ *http.Request) {
+	httpx.JSON(w, http.StatusOK, d.Agents())
+}
+
+func (d *Dashboard) handleAgentEvents(w http.ResponseWriter, r *http.Request) {
+	var evt apiTypes.ActivityEvent
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&evt); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_agent_event", "invalid activity event payload", false, nil)
+		return
+	}
+
+	evt.AgentID = strings.TrimSpace(evt.AgentID)
+	evt.Message = strings.TrimSpace(evt.Message)
+	if evt.AgentID == "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", false, nil)
+		return
+	}
+	if evt.Message == "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "missing_message", "message is required", false, nil)
+		return
+	}
+	if evt.Channel != "" && evt.Channel != "progress" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_channel", "channel must be progress", false, nil)
+		return
+	}
+
+	evt.Channel = "progress"
+	evt.Type = "progress"
+	d.RecordEvent(evt)
+	httpx.JSON(w, http.StatusCreated, map[string]string{"status": "ok", "id": evt.ID})
 }
 
 func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
@@ -151,31 +328,46 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mode := strings.TrimSpace(r.URL.Query().Get("mode"))
+	if mode == "" {
+		mode = "tool_calls"
+	}
+	if mode != "tool_calls" && mode != "progress" && mode != "both" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_mode", "mode must be tool_calls, progress, or both", false, nil)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	agentCh := make(chan AgentEvent, d.cfg.SSEBufferSize)
+	activityCh := make(chan apiTypes.ActivityEvent, d.cfg.SSEBufferSize)
 	sysCh := make(chan SystemEvent, d.cfg.SSEBufferSize)
 	d.mu.Lock()
-	d.sseConns[agentCh] = struct{}{}
+	d.activityConns[activityCh] = struct{}{}
 	d.sysConns[sysCh] = struct{}{}
 	d.mu.Unlock()
 
 	defer func() {
 		d.mu.Lock()
-		delete(d.sseConns, agentCh)
+		delete(d.activityConns, activityCh)
 		delete(d.sysConns, sysCh)
 		d.mu.Unlock()
 	}()
 
 	includeMemory := r.URL.Query().Get("memory") == "1"
-
-	// Send initial empty agent list
-	data, _ := json.Marshal([]interface{}{})
+	agents := d.Agents()
+	data, _ := json.Marshal(agents)
 	_, _ = fmt.Fprintf(w, "event: init\ndata: %s\n\n", data)
 	flusher.Flush()
+
+	for _, evt := range d.RecentEvents() {
+		if !matchesMode(mode, evt.Channel) {
+			continue
+		}
+		d.emitActivityEvent(w, flusher, evt)
+	}
 
 	if d.monitoring != nil || d.instances != nil {
 		data, _ = json.Marshal(d.monitoringSnapshot(includeMemory))
@@ -190,10 +382,10 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case evt := <-agentCh:
-			data, _ := json.Marshal(evt)
-			_, _ = fmt.Fprintf(w, "event: action\ndata: %s\n\n", data)
-			flusher.Flush()
+		case evt := <-activityCh:
+			if matchesMode(mode, evt.Channel) {
+				d.emitActivityEvent(w, flusher, evt)
+			}
 		case evt := <-sysCh:
 			data, _ := json.Marshal(evt)
 			_, _ = fmt.Fprintf(w, "event: system\ndata: %s\n\n", data)
@@ -205,7 +397,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-monitoring.C:
 			if d.monitoring != nil || d.instances != nil {
-				data, _ = json.Marshal(d.monitoringSnapshot(includeMemory))
+				data, _ := json.Marshal(d.monitoringSnapshot(includeMemory))
 				_, _ = fmt.Fprintf(w, "event: monitoring\ndata: %s\n\n", data)
 				flusher.Flush()
 			}
@@ -216,6 +408,61 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (d *Dashboard) emitActivityEvent(w http.ResponseWriter, flusher http.Flusher, evt apiTypes.ActivityEvent) {
+	name := "action"
+	if evt.Channel == "progress" {
+		name = "progress"
+	}
+	data, _ := json.Marshal(evt)
+	_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data)
+	flusher.Flush()
+}
+
+func matchesMode(mode, channel string) bool {
+	switch mode {
+	case "both":
+		return channel == "tool_call" || channel == "progress"
+	case "progress":
+		return channel == "progress"
+	default:
+		return channel == "tool_call"
+	}
+}
+
+func classifyActivityType(evt activity.Event) string {
+	if evt.Action != "" {
+		switch evt.Action {
+		case "navigate", "snapshot", "screenshot", "text":
+			return evt.Action
+		default:
+			return "action"
+		}
+	}
+	path := evt.Path
+	switch {
+	case strings.Contains(path, "/navigate"):
+		return "navigate"
+	case strings.Contains(path, "/snapshot"):
+		return "snapshot"
+	case strings.Contains(path, "/screenshot"):
+		return "screenshot"
+	case strings.Contains(path, "/text"):
+		return "text"
+	case strings.Contains(path, "/action"):
+		return "action"
+	default:
+		return "other"
+	}
+}
+
+func agentIDOrAnonymous(agentID string) string {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return "anonymous"
+	}
+	return agentID
 }
 
 const fallbackHTML = `<!DOCTYPE html>
@@ -255,4 +502,10 @@ func (d *Dashboard) withLongCache(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func generateID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

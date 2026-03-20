@@ -23,11 +23,16 @@ type runtimeConfigApplier interface {
 	ApplyRuntimeConfig(*config.RuntimeConfig)
 }
 
+type agentCounter interface {
+	AgentCount() int
+}
+
 type ConfigAPI struct {
 	runtime   *config.RuntimeConfig
 	instances InstanceLister
 	profiles  profileLister
 	applier   runtimeConfigApplier
+	agents    agentCounter
 	version   string
 	startedAt time.Time
 	boot      config.FileConfig
@@ -66,6 +71,7 @@ func NewConfigAPI(
 	instances InstanceLister,
 	profiles profileLister,
 	applier runtimeConfigApplier,
+	agents agentCounter,
 	version string,
 	startedAt time.Time,
 ) *ConfigAPI {
@@ -80,6 +86,7 @@ func NewConfigAPI(
 		instances: instances,
 		profiles:  profiles,
 		applier:   applier,
+		agents:    agents,
 		version:   version,
 		startedAt: startedAt,
 		boot:      boot,
@@ -200,6 +207,10 @@ func (c *ConfigAPI) healthInfo() (healthEnvelope, error) {
 			}
 		}
 	}
+	agentCount := 0
+	if c.agents != nil {
+		agentCount = c.agents.AgentCount()
+	}
 	return healthEnvelope{
 		Status:          "ok",
 		Mode:            "dashboard",
@@ -209,7 +220,7 @@ func (c *ConfigAPI) healthInfo() (healthEnvelope, error) {
 		Profiles:        profileCount,
 		Instances:       instanceCount,
 		DefaultInstance: defaultInst,
-		Agents:          0,
+		Agents:          agentCount,
 		RestartRequired: len(restartReasons) > 0,
 		RestartReasons:  restartReasons,
 	}, nil

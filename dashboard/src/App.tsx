@@ -7,7 +7,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { ActivityPage } from "./activities";
+import { ActivityPage, AgentsPage } from "./activities";
 import { NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
@@ -22,6 +22,8 @@ function AppContent() {
     setInstances,
     setProfiles,
     setAgents,
+    upsertAgentFromEvent,
+    addEvent,
     setServerInfo,
     applyMonitoringSnapshot,
     settings,
@@ -167,8 +169,9 @@ function AppContent() {
         onSystem: (event) => {
           console.log("System event:", event);
         },
-        onAgent: (event) => {
-          console.log("Agent event:", event);
+        onActivity: (event) => {
+          upsertAgentFromEvent(event);
+          addEvent(event);
         },
         onMonitoring: (snapshot) => {
           applyMonitoringSnapshot(snapshot, memoryMetricsEnabled);
@@ -176,15 +179,19 @@ function AppContent() {
       },
       {
         includeMemory: memoryMetricsEnabled,
+        reasoningMode: settings.agents?.reasoningMode ?? "tool_calls",
       },
     );
 
     return unsubscribe;
   }, [
     dashboardAccessible,
+    addEvent,
     applyMonitoringSnapshot,
     memoryMetricsEnabled,
+    settings.agents?.reasoningMode,
     setAgents,
+    upsertAgentFromEvent,
   ]);
 
   if (authMode === "probing") {
@@ -267,10 +274,7 @@ function AppContent() {
           <Route path="/dashboard/monitoring" element={<MonitoringPage />} />
           <Route path="/dashboard/activity" element={<ActivityPage />} />
           <Route path="/dashboard/profiles" element={<ProfilesPage />} />
-          <Route
-            path="/dashboard/agents"
-            element={<Navigate to="/dashboard/activity" replace />}
-          />
+          <Route path="/dashboard/agents" element={<AgentsPage />} />
           <Route path="/dashboard/settings" element={<SettingsPage />} />
           <Route
             path="*"

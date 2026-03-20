@@ -5,6 +5,8 @@ import ActivityLine from "./ActivityLine";
 
 const filters = [
   { key: "all", label: "All" },
+  { key: "progress", label: "Progress" },
+  { key: "tool_call", label: "Tool Calls" },
   { key: "navigate", label: "Navigate" },
   { key: "snapshot", label: "Snapshot" },
   { key: "action", label: "Actions" },
@@ -23,6 +25,9 @@ export default function AgentsPage() {
   const filteredEvents = events.filter((e) => {
     if (selectedAgentId && e.agentId !== selectedAgentId) return false;
     if (eventFilter === "all") return true;
+    if (eventFilter === "progress" || eventFilter === "tool_call") {
+      return e.channel === eventFilter;
+    }
     if (eventFilter === "action") return e.type === "action";
     return e.type === eventFilter;
   });

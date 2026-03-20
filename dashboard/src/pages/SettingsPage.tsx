@@ -666,6 +666,31 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   </SettingRow>
+                  <SettingRow
+                    label="Reasoning output"
+                    description="Choose whether the live agent feed shows tool calls, progress updates, or both."
+                  >
+                    <select
+                      value={localSettings.agents.reasoningMode}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          agents: {
+                            ...localSettings.agents,
+                            reasoningMode: e.target.value as
+                              | "tool_calls"
+                              | "progress"
+                              | "both",
+                          },
+                        })
+                      }
+                      className={selectClass}
+                    >
+                      <option value="tool_calls">Tool calls only</option>
+                      <option value="progress">Progress only</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </SettingRow>
                 </SectionCard>
               )}
 

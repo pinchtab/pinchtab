@@ -15,6 +15,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
+type stubAgentCounter struct {
+	count int
+}
+
+func (s stubAgentCounter) AgentCount() int { return s.count }
+
 func TestNewConfigAPISnapshotsBootConfigFromFile(t *testing.T) {
 	defaults := config.DefaultFileConfig()
 	configPath := filepath.Join(t.TempDir(), "config.json")
@@ -51,7 +57,7 @@ func TestNewConfigAPISnapshotsBootConfigFromFile(t *testing.T) {
 	}
 
 	runtime := config.Load()
-	api := NewConfigAPI(runtime, nil, nil, nil, "test", time.Now())
+	api := NewConfigAPI(runtime, nil, nil, nil, nil, "test", time.Now())
 
 	if api.boot.MultiInstance.Restart.MaxRestarts != nil {
 		t.Fatalf("boot restart maxRestarts = %v, want nil from file snapshot", *api.boot.MultiInstance.Restart.MaxRestarts)
@@ -71,7 +77,7 @@ func TestNewConfigAPISnapshotsBootConfigFromFile(t *testing.T) {
 
 func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
 	cfg := config.DefaultFileConfig()
-	api := NewConfigAPI(config.Load(), nil, nil, nil, "test", time.Now())
+	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
 	api.boot = cfg
 
 	next := cfg
@@ -208,6 +214,28 @@ func TestHandlePutConfigRejectsWriteOnlyTokenField(t *testing.T) {
 	}
 }
 
+func TestHandleHealthIncludesAgentCount(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	api := newConfigAPITestAPI(t, fc)
+	api.agents = stubAgentCounter{count: 3}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	api.HandleHealth(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HandleHealth() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var health healthEnvelope
+	if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if health.Agents != 3 {
+		t.Fatalf("health agents = %d, want 3", health.Agents)
+	}
+}
+
 func newConfigAPITestAPI(t *testing.T, fc config.FileConfig) *ConfigAPI {
 	t.Helper()
 
@@ -217,7 +245,7 @@ func newConfigAPITestAPI(t *testing.T, fc config.FileConfig) *ConfigAPI {
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	return NewConfigAPI(config.Load(), nil, nil, nil, "test", time.Now())
+	return NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
 }
 
 func decodeConfigEnvelope(t *testing.T, w *httptest.ResponseRecorder) configEnvelope {

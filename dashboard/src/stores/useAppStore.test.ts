@@ -10,11 +10,25 @@ describe("useAppStore", () => {
       instances: [],
       instancesLoading: false,
       tabsChartData: [],
+      memoryChartData: [],
+      serverChartData: [],
       currentTabs: {},
+      currentMemory: {},
       agents: [],
       selectedAgentId: null,
       events: [],
       eventFilter: "all",
+      settings: {
+        screencast: { fps: 1, quality: 30, maxWidth: 800 },
+        stealth: "light",
+        browser: {
+          blockImages: false,
+          blockMedia: false,
+          noAnimations: false,
+        },
+        monitoring: { memoryMetrics: false, pollInterval: 30 },
+        agents: { reasoningMode: "tool_calls" },
+      },
       serverInfo: null,
     });
   });
@@ -124,6 +138,38 @@ describe("useAppStore", () => {
       useAppStore.getState().setSelectedAgentId(null);
       expect(useAppStore.getState().selectedAgentId).toBeNull();
     });
+
+    it("upserts agent details from live events", () => {
+      useAppStore.getState().upsertAgentFromEvent({
+        id: "evt_1",
+        agentId: "agent_1",
+        channel: "progress",
+        type: "progress",
+        method: "",
+        path: "",
+        message: "Thinking",
+        timestamp: "2024-01-01T00:00:00Z",
+      } as any);
+
+      let agents = useAppStore.getState().agents;
+      expect(agents).toHaveLength(1);
+      expect(agents[0].id).toBe("agent_1");
+      expect(agents[0].requestCount).toBe(1);
+
+      useAppStore.getState().upsertAgentFromEvent({
+        id: "evt_2",
+        agentId: "agent_1",
+        channel: "tool_call",
+        type: "navigate",
+        method: "POST",
+        path: "/navigate",
+        timestamp: "2024-01-01T00:01:00Z",
+      } as any);
+
+      agents = useAppStore.getState().agents;
+      expect(agents[0].requestCount).toBe(2);
+      expect(agents[0].lastActivity).toBe("2024-01-01T00:01:00Z");
+    });
   });
 
   describe("settings", () => {
@@ -132,6 +178,7 @@ describe("useAppStore", () => {
       expect(settings.stealth).toBe("light");
       expect(settings.screencast?.fps).toBe(1);
       expect(settings.monitoring?.memoryMetrics).toBe(false);
+      expect(settings.agents?.reasoningMode).toBe("tool_calls");
     });
 
     it("updates settings", () => {
@@ -140,6 +187,7 @@ describe("useAppStore", () => {
         stealth: "strict" as const,
         browser: { blockImages: true, blockMedia: true, noAnimations: true },
         monitoring: { memoryMetrics: true, pollInterval: 30 },
+        agents: { reasoningMode: "both" as const },
       };
       useAppStore.getState().setSettings(newSettings);
       expect(useAppStore.getState().settings).toEqual(newSettings);
@@ -151,6 +199,7 @@ describe("useAppStore", () => {
         stealth: "full" as const,
         browser: { blockImages: false, blockMedia: false, noAnimations: false },
         monitoring: { memoryMetrics: true, pollInterval: 30 },
+        agents: { reasoningMode: "progress" as const },
       };
       useAppStore.getState().setSettings(newSettings);
 
