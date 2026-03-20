@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -56,7 +58,14 @@ func ScanContent(text string, cfg config.IDPIConfig) CheckResult {
 		return CheckResult{}
 	}
 
-	lower := strings.ToLower(text)
+	// Multi-step normalization to defeat encoding-based scanner bypasses:
+	// 1. NFKC: collapses fullwidth chars (ｉ→i), decomposes ligatures
+	// 2. Strip zero-width characters that break pattern matching
+	// 3. Replace common Cyrillic/Greek homoglyphs with Latin equivalents
+	normalized := norm.NFKC.String(text)
+	normalized = stripZeroWidth(normalized)
+	normalized = replaceHomoglyphs(normalized)
+	lower := strings.ToLower(normalized)
 
 	for _, p := range builtinPatterns {
 		if strings.Contains(lower, p) {
@@ -86,6 +95,64 @@ func ScanContent(text string, cfg config.IDPIConfig) CheckResult {
 	}
 
 	return CheckResult{}
+}
+
+// zeroWidthChars are Unicode characters that have no visible width and are
+// commonly inserted to break string-matching scanners.
+var zeroWidthChars = strings.NewReplacer(
+	"\u200B", "", // zero-width space
+	"\u200C", "", // zero-width non-joiner
+	"\u200D", "", // zero-width joiner
+	"\uFEFF", "", // BOM / zero-width no-break space
+	"\u2060", "", // word joiner
+	"\u180E", "", // Mongolian vowel separator
+	"\u00AD", "", // soft hyphen
+)
+
+// stripZeroWidth removes invisible zero-width characters that can be inserted
+// between letters to defeat substring matching.
+func stripZeroWidth(s string) string {
+	return zeroWidthChars.Replace(s)
+}
+
+// homoglyphMap maps the most commonly abused Cyrillic and Greek lookalikes to
+// their Latin equivalents. Only lowercase variants are needed because the
+// caller lowercases after replacement.
+var homoglyphMap = strings.NewReplacer(
+	// Cyrillic → Latin
+	"\u0410", "A", "\u0430", "a", // А/а
+	"\u0412", "B", "\u0432", "b", // В/в (actually looks like B)
+	"\u0421", "C", "\u0441", "c", // С/с
+	"\u0415", "E", "\u0435", "e", // Е/е
+	"\u041D", "H", "\u043D", "h", // Н/н
+	"\u0406", "I", "\u0456", "i", // І/і (Ukrainian)
+	"\u041A", "K", "\u043A", "k", // К/к
+	"\u041C", "M", "\u043C", "m", // М/м
+	"\u041E", "O", "\u043E", "o", // О/о
+	"\u0420", "P", "\u0440", "p", // Р/р
+	"\u0422", "T", "\u0442", "t", // Т/т
+	"\u0425", "X", "\u0445", "x", // Х/х
+	"\u0423", "Y", "\u0443", "y", // У/у
+	// Greek → Latin
+	"\u0391", "A", "\u03B1", "a", // Α/α
+	"\u0392", "B", "\u03B2", "b", // Β/β
+	"\u0395", "E", "\u03B5", "e", // Ε/ε
+	"\u0397", "H", "\u03B7", "h", // Η/η
+	"\u0399", "I", "\u03B9", "i", // Ι/ι
+	"\u039A", "K", "\u03BA", "k", // Κ/κ
+	"\u039C", "M", "\u03BC", "m", // Μ/μ
+	"\u039D", "N", "\u03BD", "n", // Ν/ν
+	"\u039F", "O", "\u03BF", "o", // Ο/ο
+	"\u03A1", "P", "\u03C1", "p", // Ρ/ρ
+	"\u03A4", "T", "\u03C4", "t", // Τ/τ
+	"\u03A7", "X", "\u03C7", "x", // Χ/χ
+	"\u03A5", "Y", "\u03C5", "y", // Υ/υ
+)
+
+// replaceHomoglyphs substitutes visually identical Cyrillic and Greek characters
+// with their Latin counterparts so that "Іgnore" matches "ignore".
+func replaceHomoglyphs(s string) string {
+	return homoglyphMap.Replace(s)
 }
 
 // WrapContent wraps text in <untrusted_web_content> XML delimiters and prepends
