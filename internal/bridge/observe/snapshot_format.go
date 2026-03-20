@@ -27,6 +27,9 @@ func FormatSnapshotText(nodes []A11yNode) string {
 		if n.Disabled {
 			b.WriteString(" [disabled]")
 		}
+		if n.Hidden {
+			b.WriteString(" [hidden]")
+		}
 		b.WriteByte('\n')
 	}
 	return b.String()
@@ -53,6 +56,9 @@ func FormatSnapshotCompact(nodes []A11yNode) string {
 		}
 		if n.Disabled {
 			b.WriteString(" -")
+		}
+		if n.Hidden {
+			b.WriteString(" [hidden]")
 		}
 		b.WriteByte('\n')
 	}

@@ -17,6 +17,7 @@ type A11yNode struct {
 	Value    string `json:"value,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
 	Focused  bool   `json:"focused,omitempty"`
+	Hidden   bool   `json:"hidden,omitempty"`
 	NodeID   int64  `json:"nodeId,omitempty"`
 }
 
@@ -153,6 +154,18 @@ var InteractiveRoles = map[string]bool{
 
 const FilterInteractive = "interactive"
 
+// isAXNodeHidden checks whether a raw accessibility node has properties
+// indicating it is hidden from the user (aria-hidden, display:none, etc.).
+// Chrome's accessibility tree marks these via the "hidden" boolean property.
+func isAXNodeHidden(n RawAXNode) bool {
+	for _, prop := range n.Properties {
+		if prop.Name == "hidden" && prop.Value.String() == "true" {
+			return true
+		}
+	}
+	return false
+}
+
 func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, map[string]int64) {
 	parentMap := make(map[string]string)
 	for _, n := range nodes {
@@ -172,6 +185,30 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 			cur = p
 		}
 		return d
+	}
+
+	// Build a set of AX node IDs that are hidden, including inherited hidden
+	// status from ancestors. A child of a hidden node is also hidden.
+	hiddenNodes := make(map[string]bool, len(nodes)/4)
+	for _, n := range nodes {
+		if isAXNodeHidden(n) {
+			hiddenNodes[n.NodeID] = true
+		}
+	}
+	// Propagate: if a parent is hidden, all descendants inherit hidden status.
+	isHidden := func(nodeID string) bool {
+		cur := nodeID
+		for {
+			if hiddenNodes[cur] {
+				return true
+			}
+			p, ok := parentMap[cur]
+			if !ok {
+				break
+			}
+			cur = p
+		}
+		return false
 	}
 
 	flat := make([]A11yNode, 0)
@@ -224,6 +261,13 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 			if prop.Name == "focused" && prop.Value.String() == "true" {
 				entry.Focused = true
 			}
+		}
+
+		// Tag nodes that are visually hidden but still present in the a11y tree
+		// (e.g. display:none with explicit ARIA attributes). This lets consumers
+		// (AI agents) know the content is not visible to the user.
+		if isHidden(n.NodeID) {
+			entry.Hidden = true
 		}
 
 		flat = append(flat, entry)
