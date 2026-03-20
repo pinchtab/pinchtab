@@ -115,20 +115,23 @@ tests/e2e/        E2E test suites
 go test ./internal/handlers  # Specific package
 ```
 
-### E2E Tests
+### E2E Tests (requires Docker)
 ```bash
-./dev e2e pr          # Fast suite for PRs
-./dev e2e api-fast    # API tests only
-./dev e2e cli-fast    # CLI tests only
-./dev e2e release     # Full release suite
+./dev e2e pr                    # Fast suite for PRs (api-fast + cli-fast)
+./dev e2e api-fast              # API tests only (fast)
+./dev e2e cli-fast              # CLI tests only (fast)
+./dev e2e api-full              # API tests (full, with multiple configs)
+./dev e2e cli-full              # CLI tests (full)
+./dev e2e release               # Full release suite (api-full + cli-full)
+./dev e2e docker                # Docker smoke test only
 
-# Run specific test file(s) by name (without .sh extension)
-./dev e2e test api-fast clipboard       # Single file
-./dev e2e test api-full console browser # Multiple files
-./dev e2e test cli-fast clipboard       # CLI tests
+# Run specific test file(s) with filter (second argument)
+./dev e2e api-fast clipboard              # Run only clipboard-basic.sh
+./dev e2e api-full "clipboard|console"    # Run clipboard and console tests
+./dev e2e cli-fast browser                # Run browser-basic.sh in CLI suite
 ```
 
-The `test` subcommand runs specific scenario files within a suite. Use the filename without `.sh` extension.
+The filter is a regex pattern matched against scenario filenames. Requires Docker daemon running.
 
 ### Dashboard Tests
 ```bash
