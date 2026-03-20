@@ -10,6 +10,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+const maxLogLimit = 1000
+
 func (h *Handlers) resolveConsoleTab(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
 	tabID := r.URL.Query().Get("tabId")
 	if tabID == "" {
@@ -29,6 +31,23 @@ func (h *Handlers) resolveConsoleTab(w http.ResponseWriter, r *http.Request) (co
 	return ctx, resolvedID, true
 }
 
+func parseLogLimit(raw string) int {
+	if raw == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	if v > maxLogLimit {
+		return maxLogLimit
+	}
+	return v
+}
+
 // HandleGetConsoleLogs returns console logs for a tab.
 func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, tabID, ok := h.resolveConsoleTab(w, r)
@@ -39,12 +58,7 @@ func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	limit := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil {
-			limit = v
-		}
-	}
+	limit := parseLogLimit(r.URL.Query().Get("limit"))
 
 	logs := h.Bridge.GetConsoleLogs(tabID, limit)
 	if logs == nil {
@@ -80,18 +94,7 @@ func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const maxErrorLogLimit = 1000
-	limit := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil {
-			if v < 0 {
-				v = 0
-			} else if v > maxErrorLogLimit {
-				v = maxErrorLogLimit
-			}
-			limit = v
-		}
-	}
+	limit := parseLogLimit(r.URL.Query().Get("limit"))
 
 	errors := h.Bridge.GetErrorLogs(tabID, limit)
 	if errors == nil {

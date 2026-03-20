@@ -7,6 +7,7 @@ import (
 
 const (
 	defaultConsoleLogMaxLines = 1000
+	maxConsoleLogStoreLines   = 1000
 	maxConsoleLevelBytes      = 32
 	maxConsoleMessageBytes    = 4 * 1024
 	maxConsoleSourceBytes     = 512
@@ -54,6 +55,8 @@ type ConsoleLogStore struct {
 func NewConsoleLogStore(maxLines int) *ConsoleLogStore {
 	if maxLines <= 0 {
 		maxLines = defaultConsoleLogMaxLines
+	} else if maxLines > maxConsoleLogStoreLines {
+		maxLines = maxConsoleLogStoreLines
 	}
 	return &ConsoleLogStore{
 		tabs:     make(map[string]*TabLogs),
