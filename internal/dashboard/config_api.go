@@ -1,7 +1,9 @@
 package dashboard
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -108,8 +110,37 @@ func (c *ConfigAPI) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
-	normalized := config.DefaultFileConfig()
-	if err := json.NewDecoder(r.Body).Decode(&normalized); err != nil {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	current, path, err := config.LoadFileConfig()
+	if err != nil {
+		httpx.Error(w, 500, err)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
+		return
+	}
+
+	var tokenProbe struct {
+		Server struct {
+			Token *string `json:"token"`
+		} `json:"server"`
+	}
+	if err := json.Unmarshal(body, &tokenProbe); err != nil {
+		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
+		return
+	}
+	if tokenProbe.Server.Token != nil && strings.TrimSpace(*tokenProbe.Server.Token) != "" {
+		httpx.ErrorCode(w, 400, "token_write_only", "manage the API token outside the dashboard", false, nil)
+		return
+	}
+
+	normalized := *current
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&normalized); err != nil {
 		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
 		return
 	}
@@ -122,19 +153,6 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, 400, "invalid_config", "config validation failed", false, map[string]any{
 			"errors": messages,
 		})
-		return
-	}
-	if strings.TrimSpace(normalized.Server.Token) != "" {
-		httpx.ErrorCode(w, 400, "token_write_only", "manage the API token outside the dashboard", false, nil)
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	current, path, err := config.LoadFileConfig()
-	if err != nil {
-		httpx.Error(w, 500, err)
 		return
 	}
 	normalized.Server.Token = current.Server.Token

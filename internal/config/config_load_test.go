@@ -110,6 +110,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.IDPI.WrapContent {
 		t.Errorf("default IDPI.WrapContent = %v, want true", cfg.IDPI.WrapContent)
 	}
+	if !cfg.Observability.Activity.Enabled {
+		t.Errorf("default Observability.Activity.Enabled = %v, want true", cfg.Observability.Activity.Enabled)
+	}
+	if cfg.Observability.Activity.RetentionDays != 30 {
+		t.Errorf("default Observability.Activity.RetentionDays = %d, want 30", cfg.Observability.Activity.RetentionDays)
+	}
 }
 
 func TestLoadConfigTokenEnvOverride(t *testing.T) {
@@ -313,6 +319,34 @@ func TestApplyFileConfigToRuntime_CopiesDownloadAllowedDomains(t *testing.T) {
 	}
 	if cfg.DownloadAllowedDomains[0] != "pinchtab.com" {
 		t.Fatalf("ApplyFileConfigToRuntime copied list = %v, want original values", cfg.DownloadAllowedDomains)
+	}
+}
+
+func TestApplyFileConfigToRuntime_CopiesAttachConfig(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	enabled := true
+	fc := &FileConfig{
+		Security: SecurityConfig{
+			Attach: AttachConfig{
+				Enabled:      &enabled,
+				AllowHosts:   []string{"127.0.0.1", "pinchtab-bridge"},
+				AllowSchemes: []string{"http", "https"},
+			},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+	fc.Security.Attach.AllowHosts[0] = "mutated.example.com"
+	fc.Security.Attach.AllowSchemes[0] = "ws"
+
+	if !cfg.AttachEnabled {
+		t.Fatalf("ApplyFileConfigToRuntime AttachEnabled = %v, want true", cfg.AttachEnabled)
+	}
+	if len(cfg.AttachAllowHosts) != 2 || cfg.AttachAllowHosts[1] != "pinchtab-bridge" {
+		t.Fatalf("ApplyFileConfigToRuntime AttachAllowHosts = %v, want copied hosts", cfg.AttachAllowHosts)
+	}
+	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "http" {
+		t.Fatalf("ApplyFileConfigToRuntime AttachAllowSchemes = %v, want copied schemes", cfg.AttachAllowSchemes)
 	}
 }
 

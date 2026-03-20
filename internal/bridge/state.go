@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,6 +42,14 @@ func isTransientURL(url string) bool {
 		strings.HasPrefix(url, "devtools://") ||
 		strings.HasPrefix(url, "file://") ||
 		strings.Contains(url, "localhost:")
+}
+
+func safeURLHostForLog(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
 
 func MarkCleanExit(profileDir string) {
@@ -201,7 +210,11 @@ func (b *Bridge) RestoreState() {
 		if err := chromedp.Run(ctx); err != nil {
 			cancel()
 			<-tabSem
-			slog.Warn("restore tab failed", "url", tab.URL, "err", err)
+			attrs := []any{"err", err}
+			if host := safeURLHostForLog(tab.URL); host != "" {
+				attrs = append(attrs, "host", host)
+			}
+			slog.Warn("restore tab failed", attrs...)
 			continue
 		}
 

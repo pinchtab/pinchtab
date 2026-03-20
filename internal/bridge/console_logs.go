@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+const (
+	defaultConsoleLogMaxLines = 1000
+	maxConsoleLevelBytes      = 32
+	maxConsoleMessageBytes    = 4 * 1024
+	maxConsoleSourceBytes     = 512
+	maxErrorMessageBytes      = 4 * 1024
+	maxErrorTypeBytes         = 128
+	maxErrorURLBytes          = 2 * 1024
+	maxErrorStackBytes        = 8 * 1024
+	truncationSuffix          = "..."
+)
+
 // LogEntry represents a single console log entry.
 type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -41,7 +53,7 @@ type ConsoleLogStore struct {
 // NewConsoleLogStore creates a new log store with the given max lines per tab.
 func NewConsoleLogStore(maxLines int) *ConsoleLogStore {
 	if maxLines <= 0 {
-		maxLines = 1000
+		maxLines = defaultConsoleLogMaxLines
 	}
 	return &ConsoleLogStore{
 		tabs:     make(map[string]*TabLogs),
@@ -66,6 +78,7 @@ func (s *ConsoleLogStore) getOrCreateTab(tabID string) *TabLogs {
 // AddConsoleLog adds a console log entry for a tab.
 func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry LogEntry) {
 	t := s.getOrCreateTab(tabID)
+	entry = normalizeConsoleLogEntry(entry)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.Console = append(t.Console, entry)
@@ -77,6 +90,7 @@ func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry LogEntry) {
 // AddErrorLog adds an error log entry for a tab.
 func (s *ConsoleLogStore) AddErrorLog(tabID string, entry ErrorEntry) {
 	t := s.getOrCreateTab(tabID)
+	entry = normalizeErrorLogEntry(entry)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.Errors = append(t.Errors, entry)
@@ -163,4 +177,44 @@ func (s *ConsoleLogStore) RemoveTab(tabID string) {
 	s.mu.Lock()
 	delete(s.tabs, tabID)
 	s.mu.Unlock()
+}
+
+func normalizeConsoleLogEntry(entry LogEntry) LogEntry {
+	entry.Level = truncateUTF8Bytes(entry.Level, maxConsoleLevelBytes)
+	entry.Message = truncateUTF8Bytes(entry.Message, maxConsoleMessageBytes)
+	entry.Source = truncateUTF8Bytes(entry.Source, maxConsoleSourceBytes)
+	return entry
+}
+
+func normalizeErrorLogEntry(entry ErrorEntry) ErrorEntry {
+	entry.Message = truncateUTF8Bytes(entry.Message, maxErrorMessageBytes)
+	entry.Type = truncateUTF8Bytes(entry.Type, maxErrorTypeBytes)
+	entry.URL = truncateUTF8Bytes(entry.URL, maxErrorURLBytes)
+	entry.Stack = truncateUTF8Bytes(entry.Stack, maxErrorStackBytes)
+	return entry
+}
+
+func truncateUTF8Bytes(s string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
+	if len(s) <= maxBytes {
+		return s
+	}
+	if maxBytes <= len(truncationSuffix) {
+		return truncationSuffix[:maxBytes]
+	}
+
+	limit := maxBytes - len(truncationSuffix)
+	cut := 0
+	for i := range s {
+		if i > limit {
+			break
+		}
+		cut = i
+	}
+	if cut == 0 && limit > 0 {
+		return truncationSuffix
+	}
+	return s[:cut] + truncationSuffix
 }

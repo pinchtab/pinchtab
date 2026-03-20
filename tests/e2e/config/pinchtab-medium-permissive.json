@@ -55,12 +55,14 @@
     },
     "idpi": {
       "enabled": true,
+      "strictMode": false,
       "scanContent": true,
       "allowedDomains": [
         "localhost",
         "127.0.0.1",
         "::1",
-        "fixtures"
+        "fixtures",
+        "httpbin.org"
       ]
     }
   }

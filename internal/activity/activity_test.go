@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,6 +93,37 @@ func TestStorePrunesExpiredDailyFiles(t *testing.T) {
 	}
 }
 
+func TestNewStorePrunesExpiredDailyFilesOnStartup(t *testing.T) {
+	root := t.TempDir()
+	activityDir := filepath.Join(root, "activity")
+	if err := os.MkdirAll(activityDir, 0750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	oldDay := time.Now().UTC().AddDate(0, 0, -31)
+	oldPath := filepath.Join(activityDir, "events-"+oldDay.Format(time.DateOnly)+".jsonl")
+	if err := os.WriteFile(oldPath, []byte("{\"path\":\"/old\"}\n"), 0600); err != nil {
+		t.Fatalf("WriteFile old: %v", err)
+	}
+
+	keepDay := time.Now().UTC()
+	keepPath := filepath.Join(activityDir, "events-"+keepDay.Format(time.DateOnly)+".jsonl")
+	if err := os.WriteFile(keepPath, []byte("{\"path\":\"/new\"}\n"), 0600); err != nil {
+		t.Fatalf("WriteFile keep: %v", err)
+	}
+
+	if _, err := NewStore(root, 30*time.Minute, 30); err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected expired activity file to be pruned on startup, stat err = %v", err)
+	}
+	if _, err := os.Stat(keepPath); err != nil {
+		t.Fatalf("expected current activity file to remain, stat err = %v", err)
+	}
+}
+
 func TestNewRecorderDisabledReturnsNoop(t *testing.T) {
 	rec, err := NewRecorder(Config{}, t.TempDir())
 	if err != nil {
@@ -99,6 +131,12 @@ func TestNewRecorderDisabledReturnsNoop(t *testing.T) {
 	}
 	if rec.Enabled() {
 		t.Fatal("expected disabled recorder")
+	}
+}
+
+func TestNewStoreRejectsZeroRetentionDays(t *testing.T) {
+	if _, err := NewStore(t.TempDir(), 30*time.Minute, 0); err == nil {
+		t.Fatal("expected NewStore to reject zero retentionDays")
 	}
 }
 
@@ -111,5 +149,39 @@ func TestClampQueryLimit(t *testing.T) {
 	}
 	if got := clampQueryLimit(25); got != 25 {
 		t.Fatalf("clampQueryLimit(25) = %d, want 25", got)
+	}
+}
+
+func TestStoreRecord_SanitizesURLBeforePersisting(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(root, 30*time.Minute, 1)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if err := store.Record(Event{
+		Timestamp: now,
+		Source:    "server",
+		Method:    "GET",
+		Path:      "/navigate",
+		Status:    200,
+		URL:       "https://user:pass@example.com/callback?code=secret#done",
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	path := filepath.Join(root, "activity", "events-"+now.Format(time.DateOnly)+".jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var evt Event
+	if err := json.Unmarshal(data[:len(data)-1], &evt); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if evt.URL != "https://example.com/callback" {
+		t.Fatalf("evt.URL = %q, want sanitized URL", evt.URL)
 	}
 }

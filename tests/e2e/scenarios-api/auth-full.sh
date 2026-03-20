@@ -319,25 +319,6 @@ assert_contains "$RESULT" "missing_token" "session cookie no longer accepted"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "auth: login attempts are rate limited"
-
-auth_reset_session
-
-for attempt in $(seq 1 10); do
-  auth_post_json /api/auth/login '{"token":"wrong-token"}'
-  assert_http_status 401 "bad login attempt ${attempt}"
-  assert_contains "$RESULT" "bad_token" "bad token rejected on attempt ${attempt}"
-done
-
-auth_post_json /api/auth/login '{"token":"wrong-token"}'
-assert_http_status 429 "rate limit triggers after repeated failures"
-assert_contains "$RESULT" "login_rate_limited" "rate limit error code returned"
-assert_json_exists "$RESULT" ".details.retryAfterSec" "retry-after details returned"
-assert_auth_header_contains "Retry-After: " "retry-after header returned"
-
-end_test
-
-# ─────────────────────────────────────────────────────────────────
 start_test "auth: forwarded proxy headers ignored by default"
 
 # Login with real origin to get a valid session cookie
@@ -390,5 +371,31 @@ RESULT=$(e2e_curl -s -w "\n%{http_code}" -X PUT "${E2E_SERVER}/api/config" \
 HTTP_STATUS=$(echo "$RESULT" | tail -n 1)
 RESULT=$(echo "$RESULT" | head -n -1)
 assert_http_status 200 "disable trustProxyHeaders"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+# Keep this rate-limit scenario last in the file.
+#
+# It intentionally exhausts the shared login-attempt bucket for the runner's
+# client IP. auth_reset_session only clears cookies and headers; it does not
+# reset the server-side login limiter. Moving this block earlier will cause
+# subsequent auth/login scenarios from the same runner container to fail with
+# 429 before they exercise their intended assertions.
+start_test "auth: login attempts are rate limited"
+
+auth_reset_session
+
+for attempt in $(seq 1 10); do
+  auth_post_json /api/auth/login '{"token":"wrong-token"}'
+  assert_http_status 401 "bad login attempt ${attempt}"
+  assert_contains "$RESULT" "bad_token" "bad token rejected on attempt ${attempt}"
+done
+
+auth_post_json /api/auth/login '{"token":"wrong-token"}'
+assert_http_status 429 "rate limit triggers after repeated failures"
+assert_contains "$RESULT" "login_rate_limited" "rate limit error code returned"
+assert_json_exists "$RESULT" ".details.retryAfterSec" "retry-after details returned"
+assert_auth_header_contains "Retry-After: " "retry-after header returned"
 
 end_test

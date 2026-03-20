@@ -38,10 +38,12 @@ case "$SUITE" in
     ;;
   *)
     echo "unknown suite: $SUITE" >&2
-    echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false]" >&2
+    echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false] [filter=<substring>]" >&2
     exit 1
     ;;
 esac
+
+SCENARIO_FILTER="${E2E_SCENARIO_FILTER:-}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -51,9 +53,12 @@ for arg in "$@"; do
     all=false)
       RUN_ALL=false
       ;;
+    filter=*)
+      SCENARIO_FILTER="${arg#filter=}"
+      ;;
     *)
       echo "unknown argument: $arg" >&2
-      echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false]" >&2
+      echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false] [filter=<substring>]" >&2
       exit 1
       ;;
   esac
@@ -94,6 +99,20 @@ if [ "$RUN_ALL" = "true" ]; then
   done
 fi
 
+if [ -n "$SCENARIO_FILTER" ]; then
+  FILTERED_GROUPS=()
+  for script_name in "${SCENARIO_GROUPS[@]}"; do
+    if [[ "${script_name}" == *"${SCENARIO_FILTER}"* ]]; then
+      FILTERED_GROUPS+=("${script_name}")
+    fi
+  done
+  SCENARIO_GROUPS=("${FILTERED_GROUPS[@]}")
+  if [ "${#SCENARIO_GROUPS[@]}" -eq 0 ]; then
+    echo "no scenario files matched filter: ${SCENARIO_FILTER}" >&2
+    exit 1
+  fi
+fi
+
 if [ "$RUN_ALL" = "true" ]; then
   SUITE_TITLE="$SUITE_TITLE_ALL"
   SUMMARY_FILE="$SUMMARY_FILE_ALL"
@@ -118,6 +137,9 @@ if [ "$SUITE_KIND" = "api" ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "E2E_SERVER: ${E2E_SERVER}"
   echo "FIXTURES_URL: ${FIXTURES_URL}"
+  if [ -n "$SCENARIO_FILTER" ]; then
+    echo "FILTER: ${SCENARIO_FILTER}"
+  fi
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
@@ -146,6 +168,9 @@ else
   echo ""
   echo "  Server: $E2E_SERVER"
   echo "  Fixtures: $FIXTURES_URL"
+  if [ -n "$SCENARIO_FILTER" ]; then
+    echo "  Filter: $SCENARIO_FILTER"
+  fi
   echo ""
 
   wait_for_instance_ready "$E2E_SERVER"
@@ -177,6 +202,7 @@ for script_name in "${SCENARIO_GROUPS[@]}"; do
 
   echo -e "${YELLOW}Running: ${script_name}${NC}"
   echo ""
+  CURRENT_SCENARIO_FILE="${script_name%.sh}"
   source "${script_path}"
   echo ""
 

@@ -37,9 +37,6 @@ func runNonInteractiveSetup(cfg *config.FileConfig, configPath string, isNew boo
 		fmt.Println()
 		fmt.Println("   Guard: UP (maximum security)")
 		fmt.Printf("   Allowed domains: %s\n", strings.Join(getAllowedDomains(cfg), ", "))
-		if cfg.Server.Token != "" {
-			fmt.Printf("   Token: %s\n", cfg.Server.Token[:min(12, len(cfg.Server.Token))]+"...")
-		}
 		fmt.Println()
 		fmt.Println("   Run " + cli.StyleStdout(cli.CommandStyle, "pinchtab security") + " to review all settings.")
 		fmt.Println()
@@ -145,10 +142,6 @@ func runUpgradeNotice(cfg *config.FileConfig, configPath string) bool {
 		oldVersion = "pre-0.8.0"
 	}
 	fmt.Printf("   Upgraded: %s → %s\n", oldVersion, config.CurrentConfigVersion)
-
-	if cfg.Server.Token != "" {
-		fmt.Printf("   Token: %s\n", cli.StyleStdout(cli.ValueStyle, cfg.Server.Token[:min(12, len(cfg.Server.Token))]+"..."))
-	}
 
 	fmt.Println()
 	fmt.Println("   Run " + cli.StyleStdout(cli.CommandStyle, "pinchtab security") + " to review all settings.")

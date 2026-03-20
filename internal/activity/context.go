@@ -136,7 +136,7 @@ func EnrichRequest(r *http.Request, update Update) {
 		state.event.TabID = update.TabID
 	}
 	if update.URL != "" {
-		state.event.URL = update.URL
+		state.event.URL = sanitizeActivityURL(update.URL)
 	}
 	if update.Action != "" {
 		state.event.Action = update.Action
@@ -257,7 +257,7 @@ func initialAction(r *http.Request) string {
 
 func initialURL(r *http.Request) string {
 	if u := strings.TrimSpace(r.URL.Query().Get("url")); u != "" {
-		return u
+		return sanitizeActivityURL(u)
 	}
 	return ""
 }

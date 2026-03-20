@@ -107,7 +107,7 @@ func printConsoleLogs(data []byte) {
 	for _, entry := range resp.Console {
 		timeStr := entry.Timestamp.Format("15:04:05")
 		level := strings.ToUpper(entry.Level)
-		fmt.Printf("%s [%s] %s\n", timeStr, level, entry.Message)
+		fmt.Printf("%s [%s] %s\n", timeStr, level, sanitizeTerminalText(entry.Message))
 	}
 }
 
@@ -134,9 +134,34 @@ func printErrorLogs(data []byte) {
 
 	for _, entry := range resp.Errors {
 		timeStr := entry.Timestamp.Format("15:04:05")
-		fmt.Printf("%s [ERROR] %s\n", timeStr, entry.Message)
+		fmt.Printf("%s [ERROR] %s\n", timeStr, sanitizeTerminalText(entry.Message))
 		if entry.URL != "" {
-			fmt.Printf("  at %s:%d:%d\n", entry.URL, entry.Line, entry.Column)
+			fmt.Printf("  at %s:%d:%d\n", sanitizeTerminalText(entry.URL), entry.Line, entry.Column)
 		}
 	}
+}
+
+func sanitizeTerminalText(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if isTerminalControlRune(r) {
+				continue
+			}
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isTerminalControlRune(r rune) bool {
+	return (r >= 0 && r < 0x20) || r == 0x7f || (r >= 0x80 && r <= 0x9f)
 }

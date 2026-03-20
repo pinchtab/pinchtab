@@ -71,7 +71,7 @@ func ListenDialogEvents(ctx context.Context, tabID string, dm *DialogManager, au
 				Message:       e.Message,
 				DefaultPrompt: e.DefaultPrompt,
 			}
-			slog.Debug("dialog opened", "tabId", tabID, "type", e.Type, "message", e.Message)
+			slog.Debug("dialog opened", "tabId", tabID, "type", e.Type)
 
 			if autoAccept {
 				state.HasBrowserHandler = true

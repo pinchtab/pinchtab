@@ -174,7 +174,7 @@ pt_delete "/profiles/${PROFILE_ID}"
 end_test
 
 # Tests content-based IDPI scanning:
-#   - E2E_SERVER (main): IDPI enabled, scanContent=true (default), warn mode
+#   - E2E_SERVER (main): IDPI enabled, scanContent=true, strictMode=false (warn mode)
 #   - E2E_SECURE_SERVER (secure): IDPI enabled, strictMode=true
 
 # ─────────────────────────────────────────────────────────────────
@@ -354,7 +354,8 @@ e2e_curl -s -X POST "${E2E_SERVER}/tabs/${TAB_ID}/find" \
   -H "Content-Type: application/json" \
   -D "$tmpheaders" \
   -d "$FIND_BODY" >/dev/null
-HDR_COUNT=$(grep -ci "^X-IDPI-Warning:" "$tmpheaders" 2>/dev/null || echo "0")
+HDR_COUNT=$(grep -ci "^X-IDPI-Warning:" "$tmpheaders" 2>/dev/null)
+HDR_COUNT=$(printf "%s" "${HDR_COUNT:-0}" | tr -d '[:space:]')
 rm -f "$tmpheaders"
 if [ "$HDR_COUNT" -eq 1 ]; then
   echo -e "  ${GREEN}✓${NC} exactly one X-IDPI-Warning header"

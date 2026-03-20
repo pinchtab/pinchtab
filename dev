@@ -153,8 +153,16 @@ run_command() {
       ;;
     "e2e"*)
       local suite="release"
+      local filter=""
       if [ "$target" != "e2e" ]; then
-        suite="${target#e2e }"
+        local e2e_args="${target#e2e }"
+        suite="${e2e_args%% *}"
+        if [ "$suite" != "$e2e_args" ]; then
+          filter="${e2e_args#"$suite "}"
+        fi
+      fi
+      if [ -n "$filter" ]; then
+        exec bash scripts/e2e.sh "$suite" "$filter"
       fi
       exec bash scripts/e2e.sh "$suite"
       ;;

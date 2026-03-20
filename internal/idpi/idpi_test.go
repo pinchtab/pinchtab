@@ -175,19 +175,29 @@ func TestCheckDomain_ReasonContainsDomain(t *testing.T) {
 	}
 }
 
-// TestCheckDomain_FileURLBlockedByWhitelist verifies that file:// and similar
-// scheme-only URLs (which have no domain component) are treated as a threat
-// when a whitelist is active. Silently allowing them would be a security bypass.
-func TestCheckDomain_FileURLBlockedByWhitelist(t *testing.T) {
+// TestCheckDomain_NoHostURLHandling verifies that only explicitly allowed
+// special URLs bypass the whitelist; other no-host URLs remain blocked.
+func TestCheckDomain_NoHostURLHandling(t *testing.T) {
 	cfg := enabledCfg(func(c *config.IDPIConfig) {
 		c.AllowedDomains = []string{"example.com"}
 	})
-	noHostURLs := []string{
-		"file:///etc/passwd",
+	allowedNoHostURLs := []string{
 		"about:blank",
-		"about:srcdoc",
+		" ABOUT:BLANK ",
 	}
-	for _, u := range noHostURLs {
+	for _, u := range allowedNoHostURLs {
+		r := CheckDomain(u, cfg)
+		if r.Threat {
+			t.Errorf("URL %q should be explicitly allowed despite having no domain", u)
+		}
+	}
+
+	blockedNoHostURLs := []string{
+		"file:///etc/passwd",
+		"about:srcdoc",
+		"data:text/html,<h1>x</h1>",
+	}
+	for _, u := range blockedNoHostURLs {
 		r := CheckDomain(u, cfg)
 		if !r.Threat {
 			t.Errorf("URL %q has no domain and active whitelist — must be treated as a threat", u)

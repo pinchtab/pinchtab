@@ -118,6 +118,9 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 			}
 
 		case *target.EventTargetDestroyed:
+			if b.TabManager != nil {
+				go b.purgeTrackedTabStateByTargetID(string(e.TargetID))
+			}
 			slog.Debug("target destroyed", "targetId", e.TargetID)
 		}
 	})

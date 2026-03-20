@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
@@ -283,6 +284,62 @@ func TestHandleGetErrorLogs_ClampsLimit(t *testing.T) {
 				t.Fatalf("expected limit %d, got %d", tt.expected, m.lastErrorLimit)
 			}
 		})
+	}
+}
+
+func TestHandleGetConsoleLogs_BlocksWhenCachedTabPolicyIsBlocked(t *testing.T) {
+	b := &policyMockBridge{
+		state: bridge.TabPolicyState{
+			CurrentURL: "https://evil.example.net",
+			Threat:     true,
+			Blocked:    true,
+			Reason:     `domain "evil.example.net" is not in the allowed list`,
+			UpdatedAt:  time.Now(),
+		},
+		hasState: true,
+	}
+	h := New(b, &config.RuntimeConfig{
+		IDPI: config.IDPIConfig{
+			Enabled:        true,
+			AllowedDomains: []string{"example.com"},
+			StrictMode:     true,
+		},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/console?tabId=tab1", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetConsoleLogs(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleGetErrorLogs_BlocksWhenCachedTabPolicyIsBlocked(t *testing.T) {
+	b := &policyMockBridge{
+		state: bridge.TabPolicyState{
+			CurrentURL: "https://evil.example.net",
+			Threat:     true,
+			Blocked:    true,
+			Reason:     `domain "evil.example.net" is not in the allowed list`,
+			UpdatedAt:  time.Now(),
+		},
+		hasState: true,
+	}
+	h := New(b, &config.RuntimeConfig{
+		IDPI: config.IDPIConfig{
+			Enabled:        true,
+			AllowedDomains: []string{"example.com"},
+			StrictMode:     true,
+		},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/errors?tabId=tab1", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetErrorLogs(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

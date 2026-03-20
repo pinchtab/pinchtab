@@ -92,7 +92,7 @@ func Load() *RuntimeConfig {
 			Activity: ActivityConfig{
 				Enabled:        true,
 				SessionIdleSec: 1800,
-				RetentionDays:  1,
+				RetentionDays:  30,
 			},
 		},
 	}
@@ -232,6 +232,11 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.MaxRedirects != nil {
 		cfg.MaxRedirects = *fc.Security.MaxRedirects
 	}
+	if fc.Security.Attach.Enabled != nil {
+		cfg.AttachEnabled = *fc.Security.Attach.Enabled
+	}
+	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
+	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
 	if fc.Observability.Activity.Enabled != nil {

@@ -230,8 +230,7 @@ func copyConfigToken(token string) error {
 		return nil
 	}
 
-	fmt.Println(cli.StyleStdout(cli.WarningStyle, "Clipboard unavailable; copy the token manually:"))
-	fmt.Println(cli.StyleStdout(cli.ValueStyle, token))
+	fmt.Println(cli.StyleStdout(cli.WarningStyle, "Clipboard unavailable; token not shown for safety."))
 	return nil
 }
 
@@ -315,7 +314,7 @@ func handleConfigGet(path string) {
 		os.Exit(1)
 	}
 
-	fmt.Println(value)
+	fmt.Println(displayConfigValue(path, value))
 }
 
 func handleConfigSet(path, value string) {
@@ -343,7 +342,14 @@ func handleConfigSet(path, value string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Set %s = %s\n", path, value)
+	fmt.Printf("Set %s = %s\n", path, displayConfigValue(path, value))
+}
+
+func displayConfigValue(path, value string) string {
+	if strings.EqualFold(strings.TrimSpace(path), "server.token") {
+		return config.MaskToken(value)
+	}
+	return value
 }
 
 func handleConfigPatch(jsonPatch string) {

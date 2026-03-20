@@ -74,3 +74,21 @@ func promptInput(prompt, defaultValue string) (string, error) {
 	}
 	return value, nil
 }
+
+func promptInputHiddenDefault(prompt, defaultValue string) (string, error) {
+	if prompt != "" {
+		fmt.Print(prompt + " ")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil && strings.TrimSpace(input) == "" {
+		return "", err
+	}
+
+	value := strings.TrimSpace(input)
+	if value == "" {
+		return defaultValue, nil
+	}
+	return value, nil
+}

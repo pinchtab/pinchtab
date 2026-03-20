@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test - Long Text</title>
+</head>
+<body>
+  <main>
+    <h1>Long Text Fixture</h1>
+    <p>
+      This fixture exists specifically for maxChars truncation tests. It keeps a
+      deterministic block of readable prose so the text endpoint always has more
+      than enough content to exceed a small truncation threshold.
+    </p>
+    <p>
+      The browser test should not depend on incidental content from unrelated
+      pages like the home page or button demo. By using a dedicated fixture, the
+      assertion stays stable even if those other fixtures are edited later.
+    </p>
+    <p>
+      PinchTab should return a truncated response when maxChars is set to a
+      small value, and the API should mark that response with the truncated
+      flag. This paragraph intentionally adds more plain text so the result is
+      comfortably above the threshold used by the E2E scenario.
+    </p>
+  </main>
+</body>
+</html>

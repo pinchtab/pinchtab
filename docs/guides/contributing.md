@@ -116,6 +116,14 @@ Verify:
 golangci-lint --version
 ```
 
+### Install gotestsum (Recommended)
+
+Recommended for the cleaner local unit test output used by `./dev test unit`:
+
+```bash
+go install gotest.tools/gotestsum@latest
+```
+
 ### Install Chrome/Chromium
 
 **macOS (Homebrew):**

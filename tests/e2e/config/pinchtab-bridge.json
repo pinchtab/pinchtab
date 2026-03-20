@@ -10,6 +10,15 @@
   "security": {
     "allowEvaluate": false,
     "allowDownload": false,
-    "allowUpload": false
+    "allowUpload": false,
+    "idpi": {
+      "enabled": true,
+      "allowedDomains": [
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "fixtures"
+      ]
+    }
   }
 }

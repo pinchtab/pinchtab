@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// Manager generates stable hash-based IDs for profiles, instances, and tabs
+// Manager generates stable hash-based IDs for profiles and instances.
+// Runtime tab IDs use raw CDP target IDs via TabIDFromCDPTarget.
 type Manager struct{}
 
 // NewManager creates a new ID manager
@@ -29,9 +30,8 @@ func (m *Manager) InstanceID(profileID, instanceName string) string {
 	return hashID("inst", data)
 }
 
-// TabID generates a stable hash-based ID for a tab within an instance
-// Uses instance ID and tab number for uniqueness
-// Format: tab_XXXXXXXX (12 chars total)
+// TabID generates a synthetic hash-based ID for callers that need one.
+// Runtime browser tab routing uses raw CDP target IDs via TabIDFromCDPTarget.
 func (m *Manager) TabID(instanceID string, tabIndex int) string {
 	data := fmt.Sprintf("%s:%d", instanceID, tabIndex)
 	return hashID("tab", data)

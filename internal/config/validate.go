@@ -193,10 +193,10 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.Observability.Activity.SessionIdleSec),
 		})
 	}
-	if fc.Observability.Activity.RetentionDays != nil && *fc.Observability.Activity.RetentionDays < 0 {
+	if fc.Observability.Activity.RetentionDays != nil && *fc.Observability.Activity.RetentionDays <= 0 {
 		errs = append(errs, ValidationError{
 			Field:   "observability.activity.retentionDays",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.Observability.Activity.RetentionDays),
+			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Observability.Activity.RetentionDays),
 		})
 	}
 

@@ -4,11 +4,12 @@ services:
       context: ../..
       dockerfile: Dockerfile
     environment:
-      PINCHTAB_CONFIG: /config/pinchtab.json
+      PINCHTAB_CONFIG: /data/e2e-config/pinchtab.json
     volumes:
-      - ./config/pinchtab.json:/config/pinchtab.json:ro
+      - ./config/pinchtab.json:/fixture-config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension:ro
       - ./fixtures/test-extension-api:/extensions/test-extension-api:ro
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab.json /data/e2e-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
     ports:
       - "9999:9999"
     shm_size: '2gb'
@@ -41,10 +42,11 @@ services:
       - E2E_SERVER=http://pinchtab:9999
       - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
+      - E2E_SCENARIO_FILTER
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "/e2e/run.sh", "api"]
+    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh api \"filter=${E2E_SCENARIO_FILTER}\"; else exec /bin/bash /e2e/run.sh api; fi"]
 
   runner-cli:
     build:
@@ -58,7 +60,8 @@ services:
       - E2E_SERVER=http://pinchtab:9999
       - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
+      - E2E_SCENARIO_FILTER
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "/e2e/run.sh", "cli", "all=true"]
+    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh cli all=true \"filter=${E2E_SCENARIO_FILTER}\"; else exec /bin/bash /e2e/run.sh cli all=true; fi"]

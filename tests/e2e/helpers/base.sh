@@ -23,6 +23,7 @@ FIXTURES_URL="${FIXTURES_URL:-http://localhost:8080}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
 
 CURRENT_TEST="${CURRENT_TEST:-}"
+CURRENT_SCENARIO_FILE="${CURRENT_SCENARIO_FILE:-}"
 TESTS_PASSED="${TESTS_PASSED:-0}"
 TESTS_FAILED="${TESTS_FAILED:-0}"
 ASSERTIONS_PASSED="${ASSERTIONS_PASSED:-0}"
@@ -91,7 +92,11 @@ wait_for_instance_ready() {
 }
 
 start_test() {
-  CURRENT_TEST="$1"
+  if [ -n "${CURRENT_SCENARIO_FILE}" ]; then
+    CURRENT_TEST="[${CURRENT_SCENARIO_FILE}] $1"
+  else
+    CURRENT_TEST="$1"
+  fi
   TEST_START_TIME=$(get_time_ms)
   echo -e "${BLUE}▶ ${CURRENT_TEST}${NC}"
 }

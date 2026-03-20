@@ -15,6 +15,8 @@ NC='\033[0m'
 CRITICAL=0
 WARNINGS=0
 BUN_MIN_VERSION="1.2.0"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TOOLS_BIN="$ROOT_DIR/.tools/bin"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -123,6 +125,36 @@ else
   else
     hint "brew install golangci-lint"
     hint "go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+  fi
+fi
+
+# ── gotestsum ────────────────────────────────────────────────────────
+
+mkdir -p "$TOOLS_BIN"
+
+GOTESTSUM=""
+if command -v gotestsum &>/dev/null; then
+  GOTESTSUM="gotestsum"
+elif [ -x "$TOOLS_BIN/gotestsum" ]; then
+  GOTESTSUM="$TOOLS_BIN/gotestsum"
+elif [ -x "${GOPATH:-$HOME/go}/bin/gotestsum" ]; then
+  GOTESTSUM="${GOPATH:-$HOME/go}/bin/gotestsum"
+fi
+
+if [ -n "$GOTESTSUM" ]; then
+  GOTESTSUM_VERSION=$($GOTESTSUM --version 2>/dev/null | head -1)
+  if [ -n "$GOTESTSUM_VERSION" ]; then
+    ok "$GOTESTSUM_VERSION"
+  else
+    ok "gotestsum"
+  fi
+else
+  warn "gotestsum not found" "Recommended — used by ./dev test unit for cleaner package-oriented output."
+  if command -v go &>/dev/null && confirm "Install gotestsum via go install?"; then
+    GOBIN="$TOOLS_BIN" go install gotest.tools/gotestsum@latest && ok "gotestsum installed in .tools/bin" && WARNINGS=$((WARNINGS - 1))
+  else
+    hint "GOBIN=\"$TOOLS_BIN\" go install gotest.tools/gotestsum@latest"
+    hint "go install gotest.tools/gotestsum@latest"
   fi
 fi
 

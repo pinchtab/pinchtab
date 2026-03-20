@@ -148,6 +148,40 @@ func TestHandlePutConfigPreservesExistingToken(t *testing.T) {
 	}
 }
 
+func TestHandlePutConfigPreservesUnspecifiedAttachSettings(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	attachEnabled := true
+	fc.Security.Attach.Enabled = &attachEnabled
+	fc.Security.Attach.AllowHosts = []string{"127.0.0.1", "pinchtab-bridge"}
+	fc.Security.Attach.AllowSchemes = []string{"http", "https"}
+
+	api := newConfigAPITestAPI(t, fc)
+
+	body := []byte(`{"server":{"trustProxyHeaders":true}}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HandlePutConfig() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Security.Attach.Enabled == nil || !*saved.Security.Attach.Enabled {
+		t.Fatalf("saved attach.enabled = %v, want true", saved.Security.Attach.Enabled)
+	}
+	if len(saved.Security.Attach.AllowHosts) != 2 || saved.Security.Attach.AllowHosts[1] != "pinchtab-bridge" {
+		t.Fatalf("saved attach.allowHosts = %v, want preserved hosts", saved.Security.Attach.AllowHosts)
+	}
+	if len(saved.Security.Attach.AllowSchemes) != 2 || saved.Security.Attach.AllowSchemes[0] != "http" {
+		t.Fatalf("saved attach.allowSchemes = %v, want preserved schemes", saved.Security.Attach.AllowSchemes)
+	}
+}
+
 func TestHandlePutConfigRejectsWriteOnlyTokenField(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"

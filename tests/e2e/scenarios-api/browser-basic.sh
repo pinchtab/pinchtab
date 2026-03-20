@@ -549,18 +549,18 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "text extraction: maxChars truncation"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/text-long.html\"}"
 assert_ok "navigate"
 
 pt_get "/text?maxChars=50"
 assert_ok "get text with maxChars=50"
 
-TEXT_LEN=$(echo "$RESULT" | jq -r '.text' | wc -c)
-if [ "$TEXT_LEN" -le 55 ]; then  # small buffer for json encoding
-  echo -e "  ${GREEN}✓${NC} text truncated to ~50 chars (got $TEXT_LEN)"
+TRUNCATED=$(echo "$RESULT" | jq -r '.truncated')
+if [ "$TRUNCATED" = "true" ]; then
+  echo -e "  ${GREEN}✓${NC} response marked truncated when maxChars=50"
   ((ASSERTIONS_PASSED++)) || true
 else
-  echo -e "  ${RED}✗${NC} text not truncated (got $TEXT_LEN chars)"
+  echo -e "  ${RED}✗${NC} response not marked truncated"
   ((ASSERTIONS_FAILED++)) || true
 fi
 

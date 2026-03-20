@@ -15,9 +15,7 @@ type BridgeAPI interface {
 	BrowserContext() context.Context
 	TabContext(tabID string) (ctx context.Context, resolvedID string, err error)
 	ListTargets() ([]*target.Info, error)
-	// CreateTab creates a new browser tab and returns a hash-based tab ID (e.g., "tab_XXXXXXXX").
-	// The raw CDP target ID is stored internally and used for CDP operations.
-	CreateTab(url string) (hashTabID string, ctx context.Context, cancel context.CancelFunc, err error)
+	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
 	FocusTab(tabID string) error
 
@@ -145,7 +143,7 @@ type Instance struct {
 }
 
 type InstanceTab struct {
-	ID         string `json:"id"`         // Hash-based tab ID: tab_XXXXXXXX
+	ID         string `json:"id"`         // Runtime tab ID (raw CDP target ID on this branch)
 	InstanceID string `json:"instanceId"` // Hash-based instance ID: inst_XXXXXXXX
 	URL        string `json:"url"`
 	Title      string `json:"title"`

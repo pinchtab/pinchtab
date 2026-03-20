@@ -1,14 +1,15 @@
 package bridge
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestConsoleLogStore_AddAndGet(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	// Add console logs
 	store.AddConsoleLog("tab1", LogEntry{
 		Timestamp: time.Now(),
 		Level:     "log",
@@ -52,7 +53,6 @@ func TestConsoleLogStore_AddAndGetErrors(t *testing.T) {
 func TestConsoleLogStore_Limit(t *testing.T) {
 	store := NewConsoleLogStore(5)
 
-	// Add more than max
 	for i := 0; i < 10; i++ {
 		store.AddConsoleLog("tab1", LogEntry{
 			Timestamp: time.Now(),
@@ -180,4 +180,45 @@ func TestConsoleLogStore_NonexistentTab(t *testing.T) {
 	store.ClearConsoleLogs("nonexistent")
 	store.ClearErrorLogs("nonexistent")
 	store.RemoveTab("nonexistent")
+}
+
+func TestConsoleLogStore_TruncatesOversizedFields(t *testing.T) {
+	store := NewConsoleLogStore(10)
+
+	store.AddConsoleLog("tab1", LogEntry{
+		Level:   strings.Repeat("L", maxConsoleLevelBytes+10),
+		Message: strings.Repeat("界", 3000),
+		Source:  strings.Repeat("s", maxConsoleSourceBytes+10),
+	})
+	store.AddErrorLog("tab1", ErrorEntry{
+		Message: strings.Repeat("界", 3000),
+		Type:    strings.Repeat("t", maxErrorTypeBytes+10),
+		URL:     strings.Repeat("u", maxErrorURLBytes+10),
+		Stack:   strings.Repeat("界", 6000),
+	})
+
+	logs := store.GetConsoleLogs("tab1", 0)
+	if got := logs[0].Level; len(got) > maxConsoleLevelBytes {
+		t.Fatalf("expected truncated level <= %d bytes, got %d", maxConsoleLevelBytes, len(got))
+	}
+	if got := logs[0].Message; len(got) > maxConsoleMessageBytes || !utf8.ValidString(got) || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated console message: len=%d valid=%v suffix=%v", len(got), utf8.ValidString(got), strings.HasSuffix(got, truncationSuffix))
+	}
+	if got := logs[0].Source; len(got) > maxConsoleSourceBytes || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated console source: len=%d suffix=%v", len(got), strings.HasSuffix(got, truncationSuffix))
+	}
+
+	errors := store.GetErrorLogs("tab1", 0)
+	if got := errors[0].Message; len(got) > maxErrorMessageBytes || !utf8.ValidString(got) || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated error message: len=%d valid=%v suffix=%v", len(got), utf8.ValidString(got), strings.HasSuffix(got, truncationSuffix))
+	}
+	if got := errors[0].Type; len(got) > maxErrorTypeBytes || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated error type: len=%d suffix=%v", len(got), strings.HasSuffix(got, truncationSuffix))
+	}
+	if got := errors[0].URL; len(got) > maxErrorURLBytes || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated error url: len=%d suffix=%v", len(got), strings.HasSuffix(got, truncationSuffix))
+	}
+	if got := errors[0].Stack; len(got) > maxErrorStackBytes || !utf8.ValidString(got) || !strings.HasSuffix(got, truncationSuffix) {
+		t.Fatalf("unexpected truncated error stack: len=%d valid=%v suffix=%v", len(got), utf8.ValidString(got), strings.HasSuffix(got, truncationSuffix))
+	}
 }

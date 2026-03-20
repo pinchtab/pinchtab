@@ -9,6 +9,7 @@ MUTED=$'\033[38;2;90;100;128m'
 SUCCESS=$'\033[38;2;0;229;204m'
 ERROR=$'\033[38;2;230;57;70m'
 NC=$'\033[0m'
+E2E_FILTER="${2:-}"
 
 build_e2e_cli_binary() {
   echo "  ${MUTED}Building static binary for E2E CLI tests...${NC}"
@@ -101,10 +102,17 @@ run_api_fast() {
   local progress_file="tests/e2e/results/progress-api-fast.log"
   local log_prefix="logs-api-fast"
   echo "  ${ACCENT}${BOLD}🐳 E2E API Fast tests (Docker)${NC}"
+  if [ -n "${E2E_FILTER}" ]; then
+    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
+  fi
   echo ""
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
-  docker compose -f "${compose_file}" run --build --rm runner-api /bin/bash /e2e/run.sh api
+  if [ -n "${E2E_FILTER}" ]; then
+    docker compose -f "${compose_file}" run --build --rm runner-api /bin/bash /e2e/run.sh api "filter=${E2E_FILTER}"
+  else
+    docker compose -f "${compose_file}" run --build --rm runner-api /bin/bash /e2e/run.sh api
+  fi
   local api_fast_exit=$?
   set -e
   if [ "${api_fast_exit}" -ne 0 ]; then
@@ -122,10 +130,13 @@ run_full_api() {
   local progress_file="tests/e2e/results/progress-api-full.log"
   local log_prefix="logs-api-full"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full API tests (Docker)${NC}"
+  if [ -n "${E2E_FILTER}" ]; then
+    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
+  fi
   echo ""
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
-  docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-api runner-api
+  E2E_SCENARIO_FILTER="${E2E_FILTER}" docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-api runner-api
   local api_exit=$?
   set -e
   if [ "${api_exit}" -ne 0 ]; then
@@ -143,11 +154,18 @@ run_cli_fast() {
   local progress_file="tests/e2e/results/progress-cli-fast.log"
   local log_prefix="logs-cli-fast"
   echo "  ${ACCENT}${BOLD}🐳 E2E CLI Fast tests (Docker)${NC}"
+  if [ -n "${E2E_FILTER}" ]; then
+    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
+  fi
   echo ""
   build_e2e_cli_binary
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
-  docker compose -f "${compose_file}" run --build --rm runner-cli /bin/bash /e2e/run.sh cli
+  if [ -n "${E2E_FILTER}" ]; then
+    docker compose -f "${compose_file}" run --build --rm runner-cli /bin/bash /e2e/run.sh cli "filter=${E2E_FILTER}"
+  else
+    docker compose -f "${compose_file}" run --build --rm runner-cli /bin/bash /e2e/run.sh cli
+  fi
   local cli_fast_exit=$?
   set -e
   if [ "${cli_fast_exit}" -ne 0 ]; then
@@ -165,11 +183,14 @@ run_full_cli() {
   local progress_file="tests/e2e/results/progress-cli-full.log"
   local log_prefix="logs-cli-full"
   echo "  ${ACCENT}${BOLD}🐳 E2E Full CLI tests (Docker)${NC}"
+  if [ -n "${E2E_FILTER}" ]; then
+    echo "  ${MUTED}filter: ${E2E_FILTER}${NC}"
+  fi
   echo ""
   build_e2e_cli_binary
   prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}"
   set +e
-  docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-cli runner-cli
+  E2E_SCENARIO_FILTER="${E2E_FILTER}" docker compose -f "${compose_file}" up --build --abort-on-container-exit --exit-code-from runner-cli runner-cli
   local cli_exit=$?
   set -e
   if [ "${cli_exit}" -ne 0 ]; then

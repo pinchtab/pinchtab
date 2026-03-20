@@ -24,6 +24,9 @@ func CheckDomain(rawURL string, cfg config.IDPIConfig) CheckResult {
 	if !cfg.Enabled || len(cfg.AllowedDomains) == 0 {
 		return CheckResult{}
 	}
+	if isAllowedSpecialURL(rawURL) {
+		return CheckResult{}
+	}
 
 	host := extractHost(rawURL)
 	if host == "" {
@@ -46,6 +49,10 @@ func CheckDomain(rawURL string, cfg config.IDPIConfig) CheckResult {
 
 	return makeResult(cfg.StrictMode,
 		fmt.Sprintf("domain %q is not in the allowed list (security.idpi.allowedDomains)", host))
+}
+
+func isAllowedSpecialURL(rawURL string) bool {
+	return strings.EqualFold(strings.TrimSpace(rawURL), "about:blank")
 }
 
 // extractHost parses rawURL and returns the lowercase bare hostname (no port).

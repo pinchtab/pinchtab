@@ -342,6 +342,36 @@ func TestValidateFileConfig_InvalidTimeouts(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_InvalidActivityRetentionDays(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   *int
+		wantErr bool
+	}{
+		{name: "nil", value: nil, wantErr: false},
+		{name: "positive", value: intPtr(30), wantErr: false},
+		{name: "zero", value: intPtr(0), wantErr: true},
+		{name: "negative", value: intPtr(-1), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				Observability: ObservabilityFileConfig{
+					Activity: ActivityFileConfig{
+						RetentionDays: tt.value,
+					},
+				},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Fatalf("RetentionDays=%v: got error=%v, want %v (errs: %v)", tt.value, hasErr, tt.wantErr, errs)
+			}
+		})
+	}
+}
+
 func TestValidateFileConfig_InstancePortRange(t *testing.T) {
 	start := 9900
 	end := 9800 // invalid: start > end

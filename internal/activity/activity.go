@@ -19,7 +19,7 @@ const (
 	defaultSessionIdleTimeout = 30 * time.Minute
 	defaultQueryLimit         = 200
 	maxQueryLimit             = 1000
-	defaultRetentionDays      = 1
+	defaultRetentionDays      = 30
 )
 
 type Config struct {
@@ -108,19 +108,20 @@ func NewStore(stateDir string, sessionIdle time.Duration, retentionDays int) (*S
 	if sessionIdle <= 0 {
 		sessionIdle = defaultSessionIdleTimeout
 	}
-	if retentionDays < 0 {
-		retentionDays = 0
-	}
-	if retentionDays == 0 {
-		retentionDays = defaultRetentionDays
+	if retentionDays <= 0 {
+		return nil, fmt.Errorf("activity retentionDays must be > 0 (got %d)", retentionDays)
 	}
 
-	return &Store{
+	store := &Store{
 		dir:              activityDir,
 		sessionIdleLimit: sessionIdle,
 		retentionDays:    retentionDays,
 		sessions:         make(map[string]sessionState),
-	}, nil
+	}
+	if err := store.pruneExpiredFiles(time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) Enabled() bool {
@@ -140,6 +141,7 @@ func (s *Store) Record(evt Event) error {
 	} else {
 		evt.Timestamp = evt.Timestamp.UTC()
 	}
+	evt.URL = sanitizeActivityURL(evt.URL)
 	if evt.SessionID == "" {
 		evt.SessionID = s.sessionIDLocked(evt)
 	}
@@ -316,11 +318,7 @@ func (s *Store) filePathFor(ts time.Time) string {
 }
 
 func (s *Store) queryFiles() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now().UTC()
-	_ = s.pruneExpiredFilesLocked(now)
+	_ = s.pruneExpiredFiles(time.Now().UTC())
 
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
@@ -346,6 +344,12 @@ func (s *Store) queryFiles() []string {
 
 	sort.Strings(files)
 	return files
+}
+
+func (s *Store) pruneExpiredFiles(now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pruneExpiredFilesLocked(now)
 }
 
 func (s *Store) pruneExpiredFilesLocked(now time.Time) error {

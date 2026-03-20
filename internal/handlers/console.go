@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,23 +10,33 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-// HandleGetConsoleLogs returns console logs for a tab.
-func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) resolveConsoleTab(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
 	tabID := r.URL.Query().Get("tabId")
 	if tabID == "" {
-		_, resolvedID, err := h.Bridge.TabContext("")
+		ctx, resolvedID, err := h.Bridge.TabContext("")
 		if err != nil {
 			httpx.Error(w, http.StatusBadRequest, err)
-			return
+			return nil, "", false
 		}
-		tabID = resolvedID
-	} else {
-		_, resolvedID, err := h.Bridge.TabContext(tabID)
-		if err != nil {
-			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
-			return
-		}
-		tabID = resolvedID
+		return ctx, resolvedID, true
+	}
+
+	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
+		return nil, "", false
+	}
+	return ctx, resolvedID, true
+}
+
+// HandleGetConsoleLogs returns console logs for a tab.
+func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, tabID, ok := h.resolveConsoleTab(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, tabID); !ok {
+		return
 	}
 
 	limit := 0
@@ -47,21 +58,9 @@ func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) 
 
 // HandleClearConsoleLogs clears console logs for a tab.
 func (h *Handlers) HandleClearConsoleLogs(w http.ResponseWriter, r *http.Request) {
-	tabID := r.URL.Query().Get("tabId")
-	if tabID == "" {
-		_, resolvedID, err := h.Bridge.TabContext("")
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
-			return
-		}
-		tabID = resolvedID
-	} else {
-		_, resolvedID, err := h.Bridge.TabContext(tabID)
-		if err != nil {
-			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
-			return
-		}
-		tabID = resolvedID
+	_, tabID, ok := h.resolveConsoleTab(w, r)
+	if !ok {
+		return
 	}
 
 	h.Bridge.ClearConsoleLogs(tabID)
@@ -73,21 +72,12 @@ func (h *Handlers) HandleClearConsoleLogs(w http.ResponseWriter, r *http.Request
 
 // HandleGetErrorLogs returns error logs for a tab.
 func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
-	tabID := r.URL.Query().Get("tabId")
-	if tabID == "" {
-		_, resolvedID, err := h.Bridge.TabContext("")
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
-			return
-		}
-		tabID = resolvedID
-	} else {
-		_, resolvedID, err := h.Bridge.TabContext(tabID)
-		if err != nil {
-			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
-			return
-		}
-		tabID = resolvedID
+	ctx, tabID, ok := h.resolveConsoleTab(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, tabID); !ok {
+		return
 	}
 
 	const maxErrorLogLimit = 1000
@@ -115,21 +105,9 @@ func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
 
 // HandleClearErrorLogs clears error logs for a tab.
 func (h *Handlers) HandleClearErrorLogs(w http.ResponseWriter, r *http.Request) {
-	tabID := r.URL.Query().Get("tabId")
-	if tabID == "" {
-		_, resolvedID, err := h.Bridge.TabContext("")
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
-			return
-		}
-		tabID = resolvedID
-	} else {
-		_, resolvedID, err := h.Bridge.TabContext(tabID)
-		if err != nil {
-			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
-			return
-		}
-		tabID = resolvedID
+	_, tabID, ok := h.resolveConsoleTab(w, r)
+	if !ok {
+		return
 	}
 
 	h.Bridge.ClearErrorLogs(tabID)

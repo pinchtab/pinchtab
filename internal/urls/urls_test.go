@@ -124,3 +124,24 @@ func TestSanitize_BrowserURLs(t *testing.T) {
 		}
 	}
 }
+
+func TestRedactForLog(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"https://user:pass@Example.COM:8443/callback?code=secret#done", "https://example.com:8443/callback"},
+		{"example.com/path?q=1", "https://example.com/path"},
+		{"about:blank#frag", "about:blank"},
+		{"", ""},
+		{"://bad-url", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := RedactForLog(tt.input); got != tt.expected {
+				t.Fatalf("RedactForLog(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}

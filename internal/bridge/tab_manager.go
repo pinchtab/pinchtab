@@ -14,6 +14,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 type TabSetupFunc func(ctx context.Context)
@@ -96,13 +97,14 @@ func (tm *TabManager) StartBrowserGuards() {
 func (tm *TabManager) closePopupTarget(targetID, openerID target.ID, url string) {
 	closeCtx, cancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
 	defer cancel()
+	logURL := internalurls.RedactForLog(url)
 
 	if err := target.CloseTarget(targetID).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
-		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", url, "err", err)
+		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", logURL, "err", err)
 		return
 	}
 
-	slog.Info("blocked popup target", "targetId", targetID, "openerId", openerID, "url", url)
+	slog.Info("blocked popup target", "targetId", targetID, "openerId", openerID, "url", logURL)
 }
 
 func (tm *TabManager) markAccessed(tabID string) {
@@ -401,21 +403,7 @@ func (tm *TabManager) CloseTab(tabID string) error {
 		}
 		slog.Debug("close target CDP", "tabId", tabID, "cdpId", cdpTargetID, "err", err)
 	}
-
-	tm.mu.Lock()
-	delete(tm.tabs, tabID)
-	delete(tm.snapshots, tabID)
-	tm.mu.Unlock()
-
-	// Clean up executor per-tab mutex
-	if tm.executor != nil {
-		tm.executor.RemoveTab(tabID)
-	}
-
-	// Clean up console/error logs for this tab
-	if tm.logStore != nil {
-		tm.logStore.RemoveTab(cdpTargetID)
-	}
+	tm.purgeTrackedTabState(tabID, cdpTargetID)
 
 	return nil
 }
@@ -591,30 +579,95 @@ func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration
 			alive[string(t.TargetID)] = true
 		}
 
-		// Collect stale tab IDs while holding the lock, then clean up
-		// executor mutexes outside the lock to avoid blocking TabManager
-		// operations if RemoveTab has to wait for an in-flight task.
-		var staleIDs []string
-		tm.mu.Lock()
+		type staleTab struct {
+			tabID string
+			cdpID string
+		}
+		var staleTabs []staleTab
+		tm.mu.RLock()
 		for id, entry := range tm.tabs {
 			if !alive[id] {
-				if entry.Cancel != nil {
-					entry.Cancel()
+				cdpID := entry.CDPID
+				if cdpID == "" {
+					cdpID = id
 				}
-				delete(tm.tabs, id)
-				delete(tm.snapshots, id)
-				staleIDs = append(staleIDs, id)
-				slog.Info("cleaned stale tab", "id", id)
+				staleTabs = append(staleTabs, staleTab{tabID: id, cdpID: cdpID})
 			}
 		}
-		tm.mu.Unlock()
+		tm.mu.RUnlock()
 
-		if tm.executor != nil {
-			for _, id := range staleIDs {
-				tm.executor.RemoveTab(id)
-			}
+		for _, stale := range staleTabs {
+			tm.purgeTrackedTabState(stale.tabID, stale.cdpID)
+			slog.Info("cleaned stale tab", "id", stale.tabID)
 		}
 	}
+}
+
+func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
+	resolvedTabID, resolvedCDPID, cancel, ok := tm.lookupTrackedTabForCleanup(tabID, cdpTargetID)
+	if !ok {
+		return false
+	}
+	if cancel != nil {
+		cancel()
+	}
+
+	tm.mu.Lock()
+	delete(tm.tabs, resolvedTabID)
+	delete(tm.snapshots, resolvedTabID)
+	delete(tm.accessed, resolvedTabID)
+	if tm.currentTab == resolvedTabID {
+		tm.currentTab = ""
+	}
+	tm.mu.Unlock()
+
+	if tm.dialogMgr != nil {
+		tm.dialogMgr.ClearPending(resolvedTabID)
+	}
+	if tm.executor != nil {
+		tm.executor.RemoveTab(resolvedTabID)
+	}
+	if tm.logStore != nil {
+		tm.logStore.RemoveTab(resolvedCDPID)
+	}
+	return true
+}
+
+func (tm *TabManager) lookupTrackedTabForCleanup(tabID, cdpTargetID string) (string, string, context.CancelFunc, bool) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	if tabID != "" {
+		if entry, ok := tm.tabs[tabID]; ok {
+			resolvedCDPID := cdpTargetID
+			if resolvedCDPID == "" {
+				resolvedCDPID = entry.CDPID
+			}
+			if resolvedCDPID == "" {
+				resolvedCDPID = tabID
+			}
+			return tabID, resolvedCDPID, entry.Cancel, true
+		}
+	}
+
+	if cdpTargetID == "" {
+		return "", "", nil, false
+	}
+
+	for id, entry := range tm.tabs {
+		resolvedCDPID := entry.CDPID
+		if resolvedCDPID == "" {
+			resolvedCDPID = id
+		}
+		if id == cdpTargetID || resolvedCDPID == cdpTargetID {
+			return id, resolvedCDPID, entry.Cancel, true
+		}
+	}
+	return "", "", nil, false
+}
+
+func (tm *TabManager) purgeTrackedTabStateByTargetID(cdpTargetID string) bool {
+	return tm.purgeTrackedTabState("", cdpTargetID)
 }
 
 // setupConsoleCapture enables runtime domain and listens for console/exception events.

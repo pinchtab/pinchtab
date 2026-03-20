@@ -180,7 +180,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		}
 		// Create a blank tab first so the requested URL becomes the first
 		// real history entry.
-		hashTabID, newCtx, _, err := h.Bridge.CreateTab("")
+		newTabID, newCtx, _, err := h.Bridge.CreateTab("")
 		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("new tab: %w", err))
 			return
@@ -214,10 +214,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		var url string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
 		title, _ := bridge.WaitForTitle(tCtx, titleWait)
-		h.recordResolvedTab(r, hashTabID)
+		h.recordResolvedTab(r, newTabID)
 		h.recordResolvedURL(r, url)
 
-		httpx.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": url, "title": title})
+		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": url, "title": title})
 		return
 	}
 
@@ -381,7 +381,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 	case tabActionNew:
 		// Create a blank tab first so the requested URL becomes the first
 		// real history entry.
-		hashTabID, ctx, _, err := h.Bridge.CreateTab("")
+		newTabID, ctx, _, err := h.Bridge.CreateTab("")
 		if err != nil {
 			httpx.Error(w, 500, err)
 			return
@@ -391,7 +391,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
 			defer tCancel()
 			if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
-				_ = h.Bridge.CloseTab(hashTabID)
+				_ = h.Bridge.CloseTab(newTabID)
 				code := 500
 				if errors.Is(err, bridge.ErrTooManyRedirects) {
 					code = 422
@@ -404,7 +404,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
 
-		httpx.JSON(w, 200, map[string]any{"tabId": hashTabID, "url": curURL, "title": title})
+		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
 
 	case tabActionClose:
 		if req.TabID == "" {

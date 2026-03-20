@@ -14,9 +14,11 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev e2e cli-fast       # CLI fast, single-instance
 ./dev e2e api-full       # API full, multi-instance
 ./dev e2e cli-full       # CLI full, single-instance
+./dev e2e full-api auth  # Full API suite filtered to scenario filenames containing "auth"
 
 /bin/bash tests/e2e/run.sh api
 /bin/bash tests/e2e/run.sh api all=true
+/bin/bash tests/e2e/run.sh api all=true filter=auth
 /bin/bash tests/e2e/run.sh cli
 /bin/bash tests/e2e/run.sh cli all=true
 ./dev check              # All checks (format, vet, build, lint)
@@ -25,6 +27,8 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev format dashboard   # Run Prettier on dashboard sources
 ./dev doctor             # Setup dev environment
 ```
+
+E2E summaries and markdown reports prefix each test with its scenario filename, for example `[auth-full] auth: login sets session cookie`, so it is easy to see which filename filter to use.
 
 ## Unit Tests
 

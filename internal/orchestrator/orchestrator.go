@@ -22,6 +22,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 // InstanceEvent is emitted when instance state changes.
@@ -425,7 +426,7 @@ func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
 		return nil, err
 	}
 
-	slog.Info("attached to external Chrome", "id", inst.ID, "name", name, "cdpUrl", cdpURL)
+	slog.Info("attached to external Chrome", "id", inst.ID, "name", name, "cdpUrl", internalurls.RedactForLog(cdpURL))
 
 	// Emit event
 	o.emitEvent("instance.attached", inst)
@@ -443,7 +444,7 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 		return nil, err
 	}
 
-	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", inst.URL)
+	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", internalurls.RedactForLog(inst.URL))
 	o.emitEvent("instance.attached", inst)
 	return inst, nil
 }

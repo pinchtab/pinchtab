@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 var errNoValidatedWebhookIPs = errors.New("no validated callback IPs")
@@ -52,10 +54,11 @@ func sendWebhook(callbackURL string, t *Task) {
 	if callbackURL == "" {
 		return
 	}
+	logURL := internalurls.RedactForLog(callbackURL)
 
 	target, err := validateCallbackTarget(callbackURL)
 	if err != nil {
-		slog.Warn("webhook: callback rejected", "task", t.ID, "url", callbackURL, "err", err)
+		slog.Warn("webhook: callback rejected", "task", t.ID, "url", logURL, "err", err)
 		return
 	}
 
@@ -82,7 +85,7 @@ func sendWebhook(callbackURL string, t *Task) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Warn("webhook: delivery failed", "task", t.ID, "url", callbackURL, "err", err)
+		slog.Warn("webhook: delivery failed", "task", t.ID, "url", logURL, "err", err)
 		return
 	}
 	// Drain body so the underlying connection can be reused.
@@ -90,9 +93,9 @@ func sendWebhook(callbackURL string, t *Task) {
 	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slog.Warn("webhook: non-success response", "task", t.ID, "url", callbackURL, "status", resp.StatusCode)
+		slog.Warn("webhook: non-success response", "task", t.ID, "url", logURL, "status", resp.StatusCode)
 		return
 	}
 
-	slog.Info("webhook: delivered", "task", t.ID, "url", callbackURL, "status", resp.StatusCode)
+	slog.Info("webhook: delivered", "task", t.ID, "url", logURL, "status", resp.StatusCode)
 }

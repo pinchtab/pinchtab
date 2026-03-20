@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 // ProxyWebSocket tunnels WebSocket connections with proper HTTP headers
@@ -17,7 +19,7 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "invalid backend target", http.StatusBadGateway)
-		slog.Error("ws proxy: invalid target", "target", targetURL, "err", err)
+		slog.Error("ws proxy: invalid target", "target", internalurls.RedactForLog(targetURL), "err", err)
 		return
 	}
 

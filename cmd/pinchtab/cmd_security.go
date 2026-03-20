@@ -204,7 +204,7 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 			}
 			return workflow.UpdateValue("server.token", token)
 		case "custom":
-			token, err := promptInput("Set server.token:", cfg.Token)
+			token, err := promptInputHiddenDefault("Set server.token:", cfg.Token)
 			if err != nil {
 				return nil, false, err
 			}

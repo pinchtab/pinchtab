@@ -51,6 +51,23 @@ func TestClipboardCommands(t *testing.T) {
 	}
 }
 
+func TestCopyConfigTokenDoesNotPrintTokenWhenClipboardUnavailable(t *testing.T) {
+	t.Setenv("PATH", "")
+
+	output := captureStdout(t, func() {
+		if err := copyConfigToken("very-secret-token-value"); err != nil {
+			t.Fatalf("copyConfigToken() error = %v", err)
+		}
+	})
+
+	if strings.Contains(output, "very-secret-token-value") {
+		t.Fatalf("expected token to stay hidden, got %q", output)
+	}
+	if !strings.Contains(output, "token not shown for safety") {
+		t.Fatalf("expected safe fallback message, got %q", output)
+	}
+}
+
 func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
 	t.Setenv("PINCHTAB_CONFIG", configPath)
@@ -113,5 +130,63 @@ func TestConfigShowLoadsLegacyFlatConfigWithoutToken(t *testing.T) {
 	}
 	if !strings.Contains(output, "Current configuration") {
 		t.Fatalf("expected config show header, got %q", output)
+	}
+}
+
+func TestConfigGetMasksServerToken(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	t.Setenv("PINCHTAB_TOKEN", "")
+
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "very-secret-token-value"
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "get", "server.token"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if strings.Contains(output, "very-secret-token-value") {
+		t.Fatalf("expected token to stay masked, got %q", output)
+	}
+	if !strings.Contains(output, "very...alue") {
+		t.Fatalf("expected masked token, got %q", output)
+	}
+}
+
+func TestConfigSetMasksServerTokenInOutput(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	fc := config.DefaultFileConfig()
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "set", "server.token", "very-secret-token-value"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if strings.Contains(output, "very-secret-token-value") {
+		t.Fatalf("expected token to stay masked, got %q", output)
+	}
+	if !strings.Contains(output, "very...alue") {
+		t.Fatalf("expected masked token in success output, got %q", output)
 	}
 }

@@ -6,6 +6,7 @@ set -e
 # Default: all
 
 cd "$(dirname "$0")/.."
+TOOLS_BIN="$(pwd)/.tools/bin"
 
 BOLD=$'\033[1m'
 ACCENT=$'\033[38;2;251;191;36m'
@@ -22,6 +23,40 @@ fail() { echo -e "  ${ERROR}✗${NC} $1"; }
 section() {
   echo ""
   echo -e "  ${ACCENT}${BOLD}$1${NC}"
+}
+
+format_elapsed() {
+  local elapsed="$1"
+  if [ -z "$elapsed" ]; then
+    return
+  fi
+  printf "%.3f" "$elapsed"
+}
+
+resolve_gotestsum() {
+  if command -v gotestsum >/dev/null 2>&1; then
+    command -v gotestsum
+    return 0
+  fi
+  if [ -x "$TOOLS_BIN/gotestsum" ]; then
+    echo "$TOOLS_BIN/gotestsum"
+    return 0
+  fi
+  if command -v go >/dev/null 2>&1; then
+    local gobin
+    gobin="$(go env GOBIN 2>/dev/null)"
+    if [ -n "$gobin" ] && [ -x "$gobin/gotestsum" ]; then
+      echo "$gobin/gotestsum"
+      return 0
+    fi
+    local gopath
+    gopath="$(go env GOPATH 2>/dev/null)"
+    if [ -n "$gopath" ] && [ -x "$gopath/bin/gotestsum" ]; then
+      echo "$gopath/bin/gotestsum"
+      return 0
+    fi
+  fi
+  return 1
 }
 
 # Parse gotestsum JSON and print summary
@@ -102,6 +137,7 @@ test_summary() {
     echo -e "    ${ERROR}Failed tests:${NC}"
     jq -r 'select(.Test != null and .Action == "fail") | "      ✗ \(.Test)"' "$json_file" | sort -u
   fi
+
 }
 
 # Live progress for go test -json streams
@@ -141,13 +177,42 @@ run_go_test_json() {
     fi
   }
 
-  go test -json "$@" 2>&1 | tee "$json_file" | while IFS= read -r line; do
-    local action test_name package_name elapsed output_text
-    action=$(echo "$line" | jq -r '.Action // empty' 2>/dev/null) || continue
-    test_name=$(echo "$line" | jq -r '.Test // empty' 2>/dev/null) || continue
-    package_name=$(echo "$line" | jq -r '.Package // empty' 2>/dev/null) || continue
-    elapsed=$(echo "$line" | jq -r '.Elapsed // empty' 2>/dev/null)
-    output_text=$(echo "$line" | jq -r '.Output // empty' 2>/dev/null)
+  print_package_line() {
+    local pkg_action="$1"
+    local package_name="$2"
+    local elapsed="$3"
+    local status_label="${SUCCESS}PASS${NC}"
+    local elapsed_display=""
+
+    if [ "$pkg_action" = "fail" ]; then
+      status_label="${ERROR}FAIL${NC}"
+    elif [ "$pkg_action" = "skip" ]; then
+      status_label="${ACCENT}SKIP${NC}"
+    fi
+    if [ -n "$elapsed" ]; then
+      elapsed_display="$(format_elapsed "$elapsed")"
+    fi
+
+    clear_progress_line
+    if [ -n "$elapsed_display" ]; then
+      printf "    %b ${MUTED}package${NC} %s ${MUTED}%6ss${NC}\n" "$status_label" "$package_name" "$elapsed_display"
+    else
+      printf "    %b ${MUTED}package${NC} %s\n" "$status_label" "$package_name"
+    fi
+  }
+
+  go test -json "$@" 2>&1 \
+    | tee "$json_file" \
+    | jq -r --unbuffered '
+        [
+          (.Action // ""),
+          (.Test // ""),
+          (.Package // ""),
+          ((.Elapsed // "") | tostring),
+          ((.Output // "") | gsub("\r?\n$"; ""))
+        ] | @tsv
+      ' \
+    | while IFS=$'\t' read -r action test_name package_name elapsed output_text; do
 
     if [ -z "$test_name" ]; then
       case "$action" in
@@ -162,7 +227,7 @@ run_go_test_json() {
           fi
           ;;
         output)
-          if [ -n "$output_text" ] && [[ "$output_text" =~ ^panic:|^FAIL[[:space:]]|^---[[:space:]]FAIL ]]; then
+          if [ -n "$output_text" ] && [[ "$output_text" =~ ^panic:|^---[[:space:]]FAIL ]]; then
             if ! $interactive; then
               output_text=${output_text%$'\n'}
               printf "      %s\n" "$output_text"
@@ -170,40 +235,33 @@ run_go_test_json() {
           fi
           ;;
         pass)
-          if [ -n "$package_name" ] && $interactive; then
-            render_progress "${SUCCESS}${package_name}${NC}"
+          if [ -n "$package_name" ]; then
+            print_package_line "$action" "$package_name" "$elapsed"
           fi
           ;;
         fail)
           if [ -n "$package_name" ]; then
-            if $interactive; then
-              render_progress "${ERROR}${package_name}${NC}"
-            else
-              if [ -n "$elapsed" ]; then
-                printf "    ${ERROR}✗${NC} ${MUTED}package${NC} %s ${MUTED}%6ss${NC}\n" "$package_name" "$elapsed"
-              else
-                printf "    ${ERROR}✗${NC} ${MUTED}package${NC} %s\n" "$package_name"
-              fi
-            fi
+            print_package_line "$action" "$package_name" "$elapsed"
+          fi
+          ;;
+        skip)
+          if [ -n "$package_name" ]; then
+            print_package_line "$action" "$package_name" "$elapsed"
           fi
           ;;
       esac
       continue
     fi
 
-    local display="$test_name"
     local top_level="$test_name"
     if [[ "$top_level" == *"/"* ]]; then
       top_level="${top_level%%/*}"
-    fi
-    if [ ${#display} -gt $max_len ]; then
-      display="${display:0:$((max_len - 1))}…"
     fi
 
     case "$action" in
       run)
             if $interactive; then
-              render_progress "${current_package} ${MUTED}${display}${NC}"
+              render_progress "${MUTED}${current_package}${NC}"
             fi ;;
       pass)
             if ! grep -Fq "$package_name	$top_level" "$status_file"; then
@@ -212,7 +270,7 @@ run_go_test_json() {
               passed=$((passed + 1))
             fi
             if $interactive; then
-              render_progress "${current_package} ${SUCCESS}${display}${NC}"
+              render_progress "${MUTED}${current_package}${NC}"
             fi ;;
       fail)
             if ! grep -Fq "$package_name	$top_level" "$status_file"; then
@@ -221,13 +279,7 @@ run_go_test_json() {
               failed=$((failed + 1))
             fi
             if $interactive; then
-              render_progress "${current_package} ${ERROR}${display}${NC}"
-            else
-              if [ -n "$elapsed" ]; then
-                printf "    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s ${MUTED}%6ss${NC}\n" "$completed" "$display" "$elapsed"
-              else
-                printf "    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s\n" "$completed" "$display"
-              fi
+              render_progress "${MUTED}${current_package}${NC}"
             fi ;;
       skip)
             if ! grep -Fq "$package_name	$top_level" "$status_file"; then
@@ -236,7 +288,7 @@ run_go_test_json() {
               skipped=$((skipped + 1))
             fi
             if $interactive; then
-              render_progress "${current_package} ${ACCENT}${display}${NC}"
+              render_progress "${MUTED}${current_package}${NC}"
             fi ;;
     esac
   done
@@ -255,14 +307,31 @@ if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "unit" ]; then
   section "test:🔬:go unit"
 
   UNIT_JSON="$TMPDIR_TEST/unit.json"
+  GOTESTSUM_BIN=""
+  if GOTESTSUM_BIN="$(resolve_gotestsum)"; then
+    :
+  else
+    GOTESTSUM_BIN=""
+  fi
 
-  if ! run_go_test_json "$UNIT_JSON" "unit" -p 1 -count=1 ./...; then
-    fail "test:🔬:go unit"
+  if [ -n "$GOTESTSUM_BIN" ]; then
+    if ! "$GOTESTSUM_BIN" --format=pkgname --hide-summary=output --jsonfile "$UNIT_JSON" -- -p 1 -count=1 ./...; then
+      fail "test:🔬:go unit"
+      exit 1
+    fi
+  else
+    echo -e "    ${MUTED}gotestsum not found; using built-in formatter${NC}"
+    echo -e "    ${MUTED}Install: go install gotest.tools/gotestsum@latest${NC}"
+    echo -e "    ${MUTED}Or run: ./dev doctor${NC}"
+    echo ""
+    if ! run_go_test_json "$UNIT_JSON" "unit" -p 1 -count=1 ./...; then
+      fail "test:🔬:go unit"
+      test_summary "$UNIT_JSON" "Unit Test Results"
+      exit 1
+    fi
     test_summary "$UNIT_JSON" "Unit Test Results"
-    exit 1
   fi
   ok "test:🔬:go unit"
-  test_summary "$UNIT_JSON" "Unit Test Results"
 fi
 
 # ── Dashboard ────────────────────────────────────────────────────────
