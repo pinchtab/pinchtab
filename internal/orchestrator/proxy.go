@@ -182,7 +182,14 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 	req := r.Clone(r.Context())
 	req.Header = r.Header.Clone()
 	activity.PropagateHeaders(r.Context(), req)
-	o.applyInstanceAuth(req, inst)
+	req.Header.Del("Authorization")
+	req.Header.Del("Cookie")
+	handlers.SetProxyWSBackendAuthorization(req.Header, "")
+	if token := inst.authToken; token != "" {
+		handlers.SetProxyWSBackendAuthorization(req.Header, "Bearer "+token)
+	} else if token := o.childAuthToken; token != "" {
+		handlers.SetProxyWSBackendAuthorization(req.Header, "Bearer "+token)
+	}
 
 	// Use WebSocket proxy for proper upgrade
 	handlers.ProxyWebSocket(w, req, targetURL.String())
