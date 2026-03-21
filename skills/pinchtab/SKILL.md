@@ -2,6 +2,7 @@
 name: pinchtab
 description: "Use this skill when a task needs browser automation through PinchTab: open a website, inspect interactive elements, click through flows, fill out forms, scrape page text, log into sites with a persistent profile, export screenshots or PDFs, manage multiple browser instances, or fall back to the HTTP API when the CLI is unavailable. Prefer this skill for token-efficient browser work driven by stable accessibility refs such as `e5` and `e12`."
 metadata:
+  release_version: "0.7.6"
   openclaw:
     requires:
       bins:
