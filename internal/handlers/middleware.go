@@ -25,7 +25,10 @@ var (
 	metricStaleRefRetries uint64
 )
 
-const defaultCSP = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
+const (
+	defaultCSP              = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
+	strictTransportSecurity = "max-age=31536000"
+)
 
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,11 +59,15 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+func SecurityHeadersMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", defaultCSP)
+		trustProxy := cfg != nil && cfg.TrustProxyHeaders
+		if requestScheme(r, trustProxy) == "https" {
+			w.Header().Set("Strict-Transport-Security", strictTransportSecurity)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

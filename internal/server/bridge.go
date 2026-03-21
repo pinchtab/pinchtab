@@ -66,7 +66,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 			activity.Middleware(
 				actStore,
 				"bridge",
-				handlers.SecurityHeadersMiddleware(
+				handlers.SecurityHeadersMiddleware(cfg,
 					handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
 				),
 			),

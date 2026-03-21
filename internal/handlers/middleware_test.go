@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,7 +34,7 @@ func TestAuthMiddleware_NoToken(t *testing.T) {
 }
 
 func TestSecurityHeadersMiddleware_AddsHeaders(t *testing.T) {
-	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -49,6 +50,39 @@ func TestSecurityHeadersMiddleware_AddsHeaders(t *testing.T) {
 	}
 	if got := w.Header().Get("Content-Security-Policy"); got != defaultCSP {
 		t.Fatalf("Content-Security-Policy = %q, want %q", got, defaultCSP)
+	}
+	if got := w.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty for http requests", got)
+	}
+}
+
+func TestSecurityHeadersMiddleware_AddsHSTSForTLS(t *testing.T) {
+	handler := SecurityHeadersMiddleware(nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "https://pinchtab.test/dashboard", nil)
+	request.TLS = &tls.ConnectionState{}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, request)
+
+	if got := w.Header().Get("Strict-Transport-Security"); got != strictTransportSecurity {
+		t.Fatalf("Strict-Transport-Security = %q, want %q", got, strictTransportSecurity)
+	}
+}
+
+func TestSecurityHeadersMiddleware_UsesTrustedForwardedProtoForHSTS(t *testing.T) {
+	handler := SecurityHeadersMiddleware(&config.RuntimeConfig{TrustProxyHeaders: true}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "http://pinchtab/dashboard", nil)
+	request.Header.Set("X-Forwarded-Proto", "https")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, request)
+
+	if got := w.Header().Get("Strict-Transport-Security"); got != strictTransportSecurity {
+		t.Fatalf("Strict-Transport-Security = %q, want %q", got, strictTransportSecurity)
 	}
 }
 

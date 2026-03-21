@@ -187,7 +187,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		activity.Middleware(
 			actStore,
 			"server",
-			handlers.SecurityHeadersMiddleware(
+			handlers.SecurityHeadersMiddleware(cfg,
 				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, mux)))),
 			),
 		),
