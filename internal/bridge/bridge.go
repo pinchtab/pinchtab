@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -64,6 +65,18 @@ func (b *Bridge) tabSetup(ctx context.Context) {
 	if b.Config.NoAnimations {
 		b.InjectNoAnimations(ctx)
 	}
+
+	// CDP Leak Mitigation: disable Runtime domain after setup.
+	// chromedp auto-enables Runtime.enable on target attach, which activates
+	// Runtime.consoleAPICalled events. Anti-bot scripts (zse_ck) use
+	// console.debug() getter traps to detect this. Disabling Runtime
+	// suppresses the leak while Runtime.evaluate still works.
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return runtime.Disable().Do(ctx)
+	})); err != nil {
+		slog.Debug("runtime.disable", "err", err)
+	}
+
 }
 
 func (b *Bridge) Lock(tabID, owner string, ttl time.Duration) error {
