@@ -137,6 +137,7 @@ type serverConfigJSON struct {
 type browserConfigJSON struct {
 	ChromeVersion    string   `json:"version"`
 	ChromeBinary     string   `json:"binary"`
+	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
 	ChromeExtraFlags string   `json:"extraFlags"`
 	ExtensionPaths   []string `json:"extensionPaths"`
 }
@@ -263,6 +264,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 		Browser: browserConfigJSON{
 			ChromeVersion:    fc.Browser.ChromeVersion,
 			ChromeBinary:     fc.Browser.ChromeBinary,
+			ChromeDebugPort:  fc.Browser.ChromeDebugPort,
 			ChromeExtraFlags: fc.Browser.ChromeExtraFlags,
 			ExtensionPaths:   copyStringSlice(fc.Browser.ExtensionPaths),
 		},
@@ -413,6 +415,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 		Browser: BrowserConfig{
 			ChromeVersion:    cfg.ChromeVersion,
 			ChromeBinary:     cfg.ChromeBinary,
+			ChromeDebugPort:  intPtrIfPositive(cfg.ChromeDebugPort),
 			ChromeExtraFlags: cfg.ChromeExtraFlags,
 			ExtensionPaths:   append([]string(nil), cfg.ExtensionPaths...),
 		},
@@ -483,6 +486,14 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	}
 
 	return fc
+}
+
+func intPtrIfPositive(v int) *int {
+	if v <= 0 {
+		return nil
+	}
+	n := v
+	return &n
 }
 
 // legacyFileConfig is the old flat structure for backward compatibility.

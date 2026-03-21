@@ -154,7 +154,10 @@ func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, co
 	}
 
 	debugPort := 0
-	if port, err := findFreePort(cfg.InstancePortStart, cfg.InstancePortEnd); err == nil {
+	if cfg.ChromeDebugPort > 0 {
+		debugPort = cfg.ChromeDebugPort
+		opts = append(opts, chromedp.Flag("remote-debugging-port", strconv.Itoa(debugPort)))
+	} else if port, err := findFreePort(cfg.InstancePortStart, cfg.InstancePortEnd); err == nil {
 		debugPort = port
 		opts = append(opts, chromedp.Flag("remote-debugging-port", strconv.Itoa(port)))
 	}

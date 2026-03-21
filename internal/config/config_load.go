@@ -259,6 +259,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Browser.ChromeBinary != "" {
 		cfg.ChromeBinary = fc.Browser.ChromeBinary
 	}
+	if fc.Browser.ChromeDebugPort != nil && *fc.Browser.ChromeDebugPort > 0 {
+		cfg.ChromeDebugPort = *fc.Browser.ChromeDebugPort
+	}
 	if fc.Browser.ChromeExtraFlags != "" {
 		cfg.ChromeExtraFlags = fc.Browser.ChromeExtraFlags
 	}

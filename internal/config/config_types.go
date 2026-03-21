@@ -43,6 +43,7 @@ type RuntimeConfig struct {
 	MaxTabs           int
 	MaxParallelTabs   int // 0 = auto-detect from runtime.NumCPU
 	ChromeBinary      string
+	ChromeDebugPort   int
 	ChromeExtraFlags  string
 	ExtensionPaths    []string
 	UserAgent         string
@@ -149,6 +150,7 @@ type ServerConfig struct {
 type BrowserConfig struct {
 	ChromeVersion    string   `json:"version,omitempty"`
 	ChromeBinary     string   `json:"binary,omitempty"`
+	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
 	ChromeExtraFlags string   `json:"extraFlags,omitempty"`
 	ExtensionPaths   []string `json:"extensionPaths,omitempty"`
 }

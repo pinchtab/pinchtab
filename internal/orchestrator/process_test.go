@@ -13,6 +13,8 @@ type mockRunner struct {
 	runCalled bool
 	portAvail bool
 	args      []string
+	env       []string
+	runErr    error
 }
 
 type mockCmd struct {
@@ -27,6 +29,10 @@ func (m *mockCmd) Cancel()     {}
 func (m *mockRunner) Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error) {
 	m.runCalled = true
 	m.args = append([]string(nil), args...)
+	m.env = append([]string(nil), env...)
+	if m.runErr != nil {
+		return nil, m.runErr
+	}
 	return &mockCmd{pid: 1234, isAlive: true}, nil
 }
 
@@ -35,6 +41,10 @@ func (m *mockRunner) IsPortAvailable(port string) bool {
 }
 
 func TestLaunch_Mocked(t *testing.T) {
+	old := portAvailableFunc
+	portAvailableFunc = func(int) bool { return true }
+	defer func() { portAvailableFunc = old }()
+
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
@@ -55,6 +65,10 @@ func TestLaunch_Mocked(t *testing.T) {
 }
 
 func TestLaunch_PortConflict(t *testing.T) {
+	old := portAvailableFunc
+	portAvailableFunc = func(int) bool { return true }
+	defer func() { portAvailableFunc = old }()
+
 	runner := &mockRunner{portAvail: false}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 

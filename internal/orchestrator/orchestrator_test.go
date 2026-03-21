@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -11,10 +13,31 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
+func envMap(items []string) map[string]string {
+	out := make(map[string]string, len(items))
+	for _, item := range items {
+		key, value, ok := strings.Cut(item, "=")
+		if ok {
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func stubPortAvailability(t *testing.T, fn func(int) bool) {
+	t.Helper()
+	old := portAvailableFunc
+	portAvailableFunc = fn
+	t.Cleanup(func() {
+		portAvailableFunc = old
+	})
+}
+
 func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
@@ -44,6 +67,7 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return alive }
 	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
@@ -107,6 +131,7 @@ func TestOrchestrator_Launch_RejectsPathTraversal(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
@@ -143,6 +168,7 @@ func TestOrchestrator_Launch_AcceptsValidNames(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
@@ -169,6 +195,130 @@ func TestOrchestrator_Launch_AcceptsValidNames(t *testing.T) {
 				t.Errorf("Launch(%q) profileName = %q", name, inst.ProfileName)
 			}
 		})
+	}
+}
+
+func TestOrchestrator_Launch_ReservesDistinctChromeDebugPort(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		Token:             "child-token",
+		InstancePortStart: 9900,
+		InstancePortEnd:   9903,
+	})
+
+	inst, err := o.Launch("profile1", "", true, nil)
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+
+	if inst.Port != "9900" {
+		t.Fatalf("bridge port = %s, want 9900", inst.Port)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	if cfgPath == "" {
+		t.Fatal("PINCHTAB_CONFIG missing from child env")
+	}
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+	if fc.Browser.ChromeDebugPort == nil {
+		t.Fatal("child config missing browser.remoteDebuggingPort")
+	}
+	if *fc.Browser.ChromeDebugPort != 9901 {
+		t.Fatalf("chrome debug port = %d, want 9901", *fc.Browser.ChromeDebugPort)
+	}
+	if *fc.Browser.ChromeDebugPort == 9900 {
+		t.Fatal("chrome debug port should differ from bridge port")
+	}
+
+	gotPorts := o.portAllocator.AllocatedPorts()
+	if len(gotPorts) != 2 {
+		t.Fatalf("allocated ports = %v, want 2 reserved ports", gotPorts)
+	}
+	if !o.portAllocator.IsAllocated(9900) || !o.portAllocator.IsAllocated(9901) {
+		t.Fatalf("expected ports 9900 and 9901 reserved, got %v", gotPorts)
+	}
+}
+
+func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctChromeDebugPort(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		InstancePortStart: 9910,
+		InstancePortEnd:   9913,
+	})
+
+	inst, err := o.Launch("profile1", "9911", true, nil)
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+	if inst.Port != "9911" {
+		t.Fatalf("bridge port = %s, want 9911", inst.Port)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+	if fc.Browser.ChromeDebugPort == nil {
+		t.Fatal("child config missing browser.remoteDebuggingPort")
+	}
+	if *fc.Browser.ChromeDebugPort == 9911 {
+		t.Fatalf("chrome debug port = %d, must differ from bridge port", *fc.Browser.ChromeDebugPort)
+	}
+	if !o.portAllocator.IsAllocated(9911) {
+		t.Fatal("explicit bridge port should remain reserved in allocator while instance is active")
+	}
+}
+
+func TestOrchestrator_Stop_ReleasesBridgeAndChromeDebugPorts(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return false }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		InstancePortStart: 9920,
+		InstancePortEnd:   9923,
+	})
+
+	inst, err := o.Launch("profile1", "", true, nil)
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+
+	if err := o.Stop(inst.ID); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+	if got := o.portAllocator.AllocatedPorts(); len(got) != 0 {
+		t.Fatalf("allocated ports after stop = %v, want none", got)
 	}
 }
 

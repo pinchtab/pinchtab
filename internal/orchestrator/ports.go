@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+var portAvailableFunc = isPortAvailableInt
+
 type PortAllocator struct {
 	mu            sync.Mutex
 	start         int
@@ -52,7 +54,7 @@ func (pa *PortAllocator) AllocatePort() (int, error) {
 			continue
 		}
 
-		if isPortAvailableInt(candidate) {
+		if portAvailableFunc(candidate) {
 			pa.allocated[candidate] = true
 			slog.Debug("allocated port", "port", candidate)
 			return candidate, nil
@@ -62,6 +64,24 @@ func (pa *PortAllocator) AllocatePort() (int, error) {
 	}
 
 	return 0, fmt.Errorf("no available ports in range %d-%d", pa.start, pa.end)
+}
+
+func (pa *PortAllocator) ReservePort(port int) error {
+	pa.mu.Lock()
+	defer pa.mu.Unlock()
+
+	if port < pa.start || port > pa.end {
+		return nil
+	}
+	if pa.allocated[port] {
+		return fmt.Errorf("port %d already reserved", port)
+	}
+	if !portAvailableFunc(port) {
+		return fmt.Errorf("port %d is already in use", port)
+	}
+	pa.allocated[port] = true
+	slog.Debug("reserved port", "port", port)
+	return nil
 }
 
 func (pa *PortAllocator) ReleasePort(port int) {

@@ -82,6 +82,7 @@ type InstanceInternal struct {
 	Error string
 
 	authToken string
+	cdpPort   int
 	cmd       Cmd
 	logBuf    *ringBuffer
 }
@@ -243,6 +244,13 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 	if err := profiles.ValidateProfileName(name); err != nil {
 		return nil, err
 	}
+	reservedPorts := make([]int, 0, 2)
+	defer func() {
+		for _, reserved := range reservedPorts {
+			o.portAllocator.ReleasePort(reserved)
+		}
+	}()
+
 	o.mu.Lock()
 
 	if port == "" || port == "0" {
@@ -252,6 +260,18 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 			return nil, fmt.Errorf("failed to allocate port: %w", err)
 		}
 		port = fmt.Sprintf("%d", allocatedPort)
+		reservedPorts = append(reservedPorts, allocatedPort)
+		o.mu.Lock()
+	} else {
+		o.mu.Unlock()
+		if portInt, err := strconv.Atoi(port); err == nil {
+			if err := o.portAllocator.ReservePort(portInt); err != nil {
+				return nil, fmt.Errorf("failed to reserve port %s: %w", port, err)
+			}
+			if portInt >= o.portAllocator.start && portInt <= o.portAllocator.end {
+				reservedPorts = append(reservedPorts, portInt)
+			}
+		}
 		o.mu.Lock()
 	}
 
@@ -280,6 +300,12 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 
 	o.mu.Unlock()
 
+	cdpPort, err := o.portAllocator.AllocatePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate chrome debug port: %w", err)
+	}
+	reservedPorts = append(reservedPorts, cdpPort)
+
 	profilePath := filepath.Join(o.baseDir, name)
 	if o.profiles != nil {
 		if resolvedPath, err := o.profiles.ProfilePath(name); err == nil {
@@ -294,7 +320,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 		return nil, fmt.Errorf("create state dir: %w", err)
 	}
 
-	childConfigPath, err := o.writeChildConfig(port, profilePath, instanceStateDir, headless, extensionPaths)
+	childConfigPath, err := o.writeChildConfig(port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths)
 	if err != nil {
 		return nil, fmt.Errorf("write child config: %w", err)
 	}
@@ -324,24 +350,27 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 			Status:      "starting",
 			StartTime:   time.Now(),
 		},
-		URL:    fmt.Sprintf("http://localhost:%s", port),
-		cmd:    cmd,
-		logBuf: logBuf,
+		URL:     fmt.Sprintf("http://localhost:%s", port),
+		cdpPort: cdpPort,
+		cmd:     cmd,
+		logBuf:  logBuf,
 	}
 
 	o.mu.Lock()
 	o.instances[instanceID] = inst
 	o.mu.Unlock()
+	reservedPorts = nil
 
 	go o.monitor(inst)
 
 	return &inst.Instance, nil
 }
 
-func (o *Orchestrator) writeChildConfig(port, profilePath, instanceStateDir string, headless bool, extensionPaths []string) (string, error) {
+func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string) (string, error) {
 	fc := config.FileConfigFromRuntime(o.runtimeCfg)
 	fc.Server.Port = port
 	fc.Server.StateDir = instanceStateDir
+	fc.Browser.ChromeDebugPort = intPtr(cdpPort)
 	fc.Profiles.BaseDir = filepath.Dir(profilePath)
 	fc.Profiles.DefaultProfile = filepath.Base(profilePath)
 	if headless {
@@ -379,6 +408,14 @@ func (o *Orchestrator) writeChildConfig(port, profilePath, instanceStateDir stri
 		return "", err
 	}
 	return configPath, nil
+}
+
+func intPtr(v int) *int {
+	if v <= 0 {
+		return nil
+	}
+	n := v
+	return &n
 }
 
 func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance, authToken string) (*bridge.Instance, error) {
@@ -566,6 +603,10 @@ func (o *Orchestrator) markStopped(id string) {
 	if portInt, err := strconv.Atoi(portStr); err == nil {
 		o.portAllocator.ReleasePort(portInt)
 		slog.Debug("released port", "id", id, "port", portStr)
+	}
+	if inst.cdpPort > 0 {
+		o.portAllocator.ReleasePort(inst.cdpPort)
+		slog.Debug("released chrome debug port", "id", id, "port", inst.cdpPort)
 	}
 
 	profileName := inst.ProfileName
