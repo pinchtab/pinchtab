@@ -26,13 +26,43 @@ export function credentialUsername(): string {
   return `${CREDENTIAL_USERNAME_PREFIX}@${window.location.host}`;
 }
 
-type PasswordCredentialConstructor = new (data: {
+type PasswordCredentialData = {
   id: string;
   password: string;
   name?: string;
-}) => Credential;
+};
 
-export async function storeTokenCredential(token: string): Promise<void> {
+type PasswordCredentialConstructor = {
+  new (form: HTMLFormElement): Credential;
+  new (data: PasswordCredentialData): Credential;
+};
+
+function setCredentialFormValues(
+  form: HTMLFormElement,
+  token: string,
+): PasswordCredentialData {
+  const id = credentialUsername();
+  const usernameField = form.elements.namedItem("username");
+  if (usernameField instanceof HTMLInputElement) {
+    usernameField.value = id;
+  }
+
+  const passwordField = form.elements.namedItem("password");
+  if (passwordField instanceof HTMLInputElement) {
+    passwordField.value = token;
+  }
+
+  return {
+    id,
+    password: token,
+    name: `PinchTab ${window.location.host}`,
+  };
+}
+
+export async function storeTokenCredential(
+  token: string,
+  form?: HTMLFormElement,
+): Promise<void> {
   const trimmed = token.trim();
   if (
     trimmed === "" ||
@@ -50,11 +80,21 @@ export async function storeTokenCredential(token: string): Promise<void> {
   }
 
   try {
-    const credential = new PasswordCredentialImpl({
-      id: credentialUsername(),
-      password: trimmed,
-      name: `PinchTab ${window.location.host}`,
-    });
+    let credential: Credential;
+    if (form) {
+      const fallback = setCredentialFormValues(form, trimmed);
+      try {
+        credential = new PasswordCredentialImpl(form);
+      } catch {
+        credential = new PasswordCredentialImpl(fallback);
+      }
+    } else {
+      credential = new PasswordCredentialImpl({
+        id: credentialUsername(),
+        password: trimmed,
+        name: `PinchTab ${window.location.host}`,
+      });
+    }
     await navigator.credentials.store(credential);
   } catch {
     // Ignore password-manager failures and continue with the session flow.

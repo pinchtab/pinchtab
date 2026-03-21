@@ -360,7 +360,7 @@ export default function SettingsPage() {
 
     try {
       await api.elevate(elevationToken);
-      void storeTokenCredential(elevationToken);
+      await storeTokenCredential(elevationToken, event.currentTarget);
       setPendingElevatedAction(null);
       setElevationToken("");
 
@@ -463,6 +463,7 @@ export default function SettingsPage() {
             this for every admin action.
           </p>
           <input
+            id="settings-elevation-username"
             type="text"
             name="username"
             autoComplete="username"
@@ -473,6 +474,7 @@ export default function SettingsPage() {
             className="sr-only"
           />
           <Input
+            id="settings-elevation-password"
             type="password"
             name="password"
             autoComplete="current-password"

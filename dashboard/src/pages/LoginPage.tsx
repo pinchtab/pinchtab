@@ -29,7 +29,7 @@ export default function LoginPage() {
     setError("");
     try {
       await api.login(token);
-      void storeTokenCredential(token);
+      await storeTokenCredential(token, event.currentTarget);
       dispatchAuthStateChanged();
       navigate(from, { replace: true });
     } catch (e) {
@@ -53,8 +53,14 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="space-y-4" autoComplete="on" onSubmit={handleSubmit}>
+        <form
+          id="login-form"
+          className="space-y-4"
+          autoComplete="on"
+          onSubmit={handleSubmit}
+        >
           <input
+            id="login-username"
             type="text"
             name="username"
             autoComplete="username"
@@ -65,6 +71,7 @@ export default function LoginPage() {
             className="sr-only"
           />
           <input
+            id="login-password"
             type="password"
             autoFocus
             name="password"
