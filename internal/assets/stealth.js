@@ -166,3 +166,99 @@ Object.defineProperty(navigator, 'hardwareConcurrency', {
 Object.defineProperty(navigator, 'deviceMemory', {
   get: () => deviceMem
 });
+
+
+// ========== Layer 2: Deep Anti-Detection Patches ==========
+
+// --- 2a: Iframe Isolation ---
+// Anti-bot scripts create about:blank iframes and check navigator.webdriver
+// inside them BEFORE our stealth script can inject. This MutationObserver
+// intercepts iframe creation and patches them instantly.
+(function() {
+  function patchFrame(frame) {
+    try {
+      const win = frame.contentWindow;
+      if (win && win.navigator) {
+        Object.defineProperty(win.navigator, 'webdriver', {
+          get: () => undefined, configurable: true
+        });
+      }
+    } catch(e) {} // cross-origin iframes will throw, that's fine
+  }
+
+  // Patch any existing iframes
+  document.querySelectorAll('iframe').forEach(patchFrame);
+
+  // Watch for new iframes
+  const obs = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.tagName === 'IFRAME') patchFrame(node);
+        if (node.querySelectorAll) {
+          node.querySelectorAll('iframe').forEach(patchFrame);
+        }
+      }
+    }
+  });
+  if (document.documentElement) {
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+})();
+
+// --- 2b: Error.stack Sanitization ---
+// When CDP-injected scripts throw, their stack traces contain revealing
+// references like __puppeteer_evaluation_script__, __chromedp_eval,
+// pptr:evaluate, or devtools:// URLs. Sanitize them.
+(function() {
+  const OrigError = Error;
+  const origDesc = Object.getOwnPropertyDescriptor(OrigError.prototype, 'stack');
+  if (origDesc && origDesc.get) {
+    Object.defineProperty(OrigError.prototype, 'stack', {
+      get() {
+        const stack = origDesc.get.call(this);
+        if (typeof stack !== 'string') return stack;
+        return stack.split('\n').filter(line =>
+          !line.includes('__puppeteer') &&
+          !line.includes('__chromedp') &&
+          !line.includes('pptr:') &&
+          !line.includes('://devtools') &&
+          !line.includes('__pinchtab')
+        ).join('\n');
+      },
+      set(v) { if (origDesc.set) origDesc.set.call(this, v); },
+      configurable: true
+    });
+  }
+})();
+
+// --- 2c: Native Function.toString Masking ---
+// When we override navigator properties with Object.defineProperty,
+// the getter's toString() returns JS source instead of "[native code]".
+// Advanced anti-bot checks detect this. Patch toString for our overrides.
+(function() {
+  const nativeToString = Function.prototype.toString;
+  const overrides = new Map();
+
+  // Register a function as "native-looking"
+  function maskAsNative(fn, name) {
+    overrides.set(fn, `function ${name || ''}() { [native code] }`);
+  }
+
+  Function.prototype.toString = function() {
+    if (overrides.has(this)) return overrides.get(this);
+    return nativeToString.call(this);
+  };
+  // Make the toString override itself look native
+  maskAsNative(Function.prototype.toString, 'toString');
+
+  // Re-apply navigator.webdriver with a maskable getter
+  const wdGetter = function() { return undefined; };
+  maskAsNative(wdGetter, 'get webdriver');
+  Object.defineProperty(navigator, 'webdriver', {
+    get: wdGetter,
+    configurable: true
+  });
+
+  // Expose utility for other scripts (e.g., fingerprint rotation)
+  window.__pinchtab_maskAsNative = maskAsNative;
+})();
