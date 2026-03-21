@@ -2,6 +2,8 @@
 
 Get PinchTab running in a few minutes, from zero to browser automation.
 
+This guide covers the default local setup. If you plan to publish ports beyond localhost, bind to non-loopback interfaces, or run a remote or distributed topology, treat that as an advanced deployment and read the [Security guide](guides/security.md) first.
+
 ---
 
 ## Installation
@@ -34,7 +36,7 @@ pinchtab --version
 **Requires:** Docker
 
 ```bash
-docker run -d -p 9867:9867 pinchtab/pinchtab
+docker run -d -p 127.0.0.1:9867:9867 pinchtab/pinchtab
 curl http://localhost:9867/health
 ```
 
@@ -51,6 +53,12 @@ go build -o pinchtab ./cmd/pinchtab
 ```
 
 **[Full build guide ->](architecture/building.md)**
+
+## Platform Support
+
+PinchTab's primary tested workflow is local macOS and Linux.
+
+Windows binaries are available, but Windows support is currently limited and best-effort because the project does not have the same level of test coverage there. On Windows, prefer direct runs with `pinchtab server` instead of expecting the full daemon workflow.
 
 ## Shell Completion
 
@@ -81,7 +89,7 @@ The normal flow is:
 ### Step 1: start the server
 
 ```bash
-pinchtab
+pinchtab server
 # Response
 🦀 PinchTab port=9867
 dashboard ready url=http://localhost:9867
@@ -155,14 +163,14 @@ curl http://localhost:9867/health
 If that fails, start the server:
 
 ```bash
-pinchtab
+pinchtab server
 ```
 
 ### Port already in use
 
 ```bash
 pinchtab config set server.port 9868
-pinchtab
+pinchtab server
 ```
 
 ### Chrome not found
@@ -175,7 +183,7 @@ brew install chromium
 sudo apt install chromium-browser
 
 # Custom Chrome binary (set in config)
-pinchtab config set browser.chromeBinary /path/to/chrome
+pinchtab config set browser.binary /path/to/chrome
 ```
 
 ---

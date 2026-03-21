@@ -35,7 +35,7 @@ pinchtab mcp
   ├── reads PINCHTAB_TOKEN  (env or config)
   │
   ├── creates internal/mcp.Client  (HTTP client with 120 s timeout)
-  ├── registers 21 MCP tools via mcp-go SDK
+  ├── registers 34 MCP tools via mcp-go SDK
   └── calls server.ServeStdio()  (blocking read loop)
 ```
 
@@ -46,7 +46,7 @@ The process exits when stdin is closed by the client.
 ```
 internal/mcp/
 ├── server.go      # NewServer() wires tools → handlers; Serve() starts stdio
-├── tools.go       # allTools() — JSON-schema tool definitions for all 21 tools
+├── tools.go       # allTools() — JSON-schema tool definitions for all 34 tools
 ├── handlers.go    # handlerMap() — one handler closure per tool
 └── client.go      # Client — thin HTTP wrapper for PinchTab REST API
 
@@ -68,7 +68,7 @@ cmd/pinchtab/
 - a human-readable description used by the LLM to select the right tool
 - typed parameter schemas with `Required()` / `Description()` annotations
 
-The declarations are grouped by category: Navigation, Interaction, Content, Tab Management, Utility.
+The declarations are grouped by category: Navigation, Interaction, Keyboard, Content, Tab Management, Wait utilities, Network, and Dialog.
 
 ### handlers.go
 
@@ -95,10 +95,13 @@ The context passed from the MCP SDK carries the client's deadline, so long-runni
 | Category | Count | REST Endpoints Used |
 |----------|-------|---------------------|
 | Navigation | 4 | `/navigate`, `/snapshot`, `/screenshot`, `/text` |
-| Interaction | 8 | `/action` (with `action` field) |
+| Interaction | 8 | `/action` |
+| Keyboard | 4 | `/action` |
 | Content | 3 | `/evaluate`, `/pdf`, `/find` |
-| Tab Management | 4 | `/tabs`, `/health`, `/cookies` |
-| Utility | 2 | `/evaluate` (wait-for-selector), local sleep |
+| Tab Management | 5 | `/tabs`, `/health`, `/cookies`, `/profiles/{id}/instance` |
+| Wait utilities | 6 | `/wait` |
+| Network | 3 | `/network` |
+| Dialog | 1 | `/dialog` |
 
 ## Security Considerations
 

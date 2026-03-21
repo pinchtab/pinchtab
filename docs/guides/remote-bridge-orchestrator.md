@@ -6,6 +6,8 @@ Use this guide when:
 - a PinchTab bridge server runs on another machine
 - you want agents to keep talking to the orchestrator while the browser work happens remotely
 
+This is an advanced deployment pattern. Use it only when you understand the security model, keep the bridge on a private or otherwise closed network, and avoid exposing the bridge or orchestrator broadly beyond the systems that need to reach them. High-risk endpoint families should remain disabled unless they are explicitly required, and if enabled they should be reachable only by the minimum trusted systems involved in the deployment.
+
 This is now a supported orchestration mode through:
 
 ```text

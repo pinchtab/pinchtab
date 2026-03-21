@@ -1,199 +1,356 @@
 # Endpoints Reference
 
-## Health & Server
+This page lists the live HTTP surface exposed by PinchTab. Some routes are only available in bridge mode, some only in full server mode, and some are gated by security settings.
 
-```
-GET  /health                             # Server health check (tab count, crash logs)
-POST /ensure-chrome                      # Force Chrome initialization
-GET  /help                               # List all available endpoints
-GET  /openapi.json                       # OpenAPI spec
-GET  /metrics                            # Global metrics snapshot
-GET  /welcome                            # Welcome HTML page
-POST /shutdown                           # Graceful server shutdown
-GET  /api/events                         # SSE event stream (dashboard)
-```
+## Health And Server Metadata
 
-## Navigation
-
-```
-POST /navigate                           # Navigate current tab to URL
-GET  /navigate?url=<url>                 # Navigate (GET variant)
-
-POST /tabs/{id}/navigate                 # Navigate a specific tab
+```text
+GET  /health
+POST /ensure-chrome
+GET  /help
+GET  /openapi.json
+GET  /metrics
+GET  /welcome
+POST /shutdown
+GET  /api/events
 ```
 
-Body: `{"url": "...", "timeout": 60, "blockImages": true, "newTab": true, "blockAds": true}`
+Notes:
 
-## History & Reload
+- in bridge mode, `/health` reports bridge health and tab count
+- in full server mode, `/health` reports dashboard health, auth state, and instance count
+- `/metrics` in full server mode is a server metrics snapshot, not the bridge memory view
 
-```
-POST /back                               # Go back in current tab
-POST /back?tabId=<id>                    # Go back in specific tab
-POST /tabs/{id}/back                     # Go back (tab-scoped)
-POST /forward                            # Go forward in current tab
-POST /forward?tabId=<id>                 # Go forward in specific tab
-POST /tabs/{id}/forward                  # Go forward (tab-scoped)
-POST /reload                             # Reload current tab
-POST /reload?tabId=<id>                  # Reload specific tab
-POST /tabs/{id}/reload                   # Reload (tab-scoped)
-```
+## Dashboard Auth And Config
 
-## Tab Management
-
-```
-GET  /tabs                               # List all open tabs
-POST /tab                                # Tab actions: new, close, focus
-POST /tabs/{id}/close                    # Close a specific tab (orchestrator)
-GET  /tabs/{id}/metrics                  # Per-tab metrics
+```text
+POST /api/auth/login
+POST /api/auth/elevate
+POST /api/auth/logout
+GET  /api/config
+PUT  /api/config
 ```
 
-Actions via `POST /tab`:
-- `{"action": "new", "url": "..."}` — open new tab
-- `{"action": "close", "tabId": "..."}` — close tab
-- `{"action": "focus", "tabId": "..."}` — focus/switch to tab
+Notes:
 
-## Tab Locking (multi-agent)
+- `server.token` is treated as write-only by `PUT /api/config`
+- auth routes are for the dashboard session flow
 
-```
-POST /tab/lock                           # Lock a tab {tabId, owner, timeoutSec}
-POST /tab/unlock                         # Unlock a tab {tabId, owner}
-POST /tabs/{id}/lock                     # Lock specific tab
-POST /tabs/{id}/unlock                   # Unlock specific tab
-```
+## Navigation And Tabs
 
-## Interaction
-
-```
-POST /action                             # Single action on current tab
-GET  /action                             # Action (GET variant)
-POST /actions                            # Batch actions in sequence
-POST /macro                              # Multi-step macro with per-step timeout
-POST /tabs/{id}/action                   # Action on specific tab
-POST /tabs/{id}/actions                  # Batch actions on specific tab
-```
-
-Action kinds: `click`, `dblclick`, `type`, `fill`, `press`, `hover`, `scroll`, `select`, `focus`, `drag`, `check`, `uncheck`
-
-Body: `{"kind": "click", "ref": "e5"}` / `{"kind": "dblclick", "ref": "e5"}` / `{"kind": "type", "ref": "e12", "text": "hello"}` / `{"kind": "check", "selector": "#terms"}` / `{"kind": "uncheck", "ref": "e7"}`
-
-## Page Analysis
-
-```
-GET  /snapshot                           # Accessibility tree (current tab)
-GET  /tabs/{id}/snapshot                 # Accessibility tree (specific tab)
-GET  /text                               # Extract readable text
-GET  /tabs/{id}/text                     # Extract text (specific tab)
-POST /find                               # Semantic search in page
-POST /tabs/{id}/find                     # Semantic search (specific tab)
-POST /evaluate                           # Evaluate JavaScript
-POST /tabs/{id}/evaluate                 # Evaluate JS (specific tab)
+```text
+POST /navigate
+GET  /navigate
+POST /tabs/{id}/navigate
+POST /back
+POST /back?tabId=<id>
+POST /tabs/{id}/back
+POST /forward
+POST /forward?tabId=<id>
+POST /tabs/{id}/forward
+POST /reload
+POST /reload?tabId=<id>
+POST /tabs/{id}/reload
+GET  /tabs
+POST /tab
+POST /tabs/{id}/close
+GET  /tabs/{id}/metrics
 ```
 
-Snapshot params: `?filter=interactive`, `?format=compact|text|yaml`, `?depth=5`, `?diff=true`, `?selector=main`, `?maxTokens=2000`, `?noAnimations=true`, `?output=file`
+Navigation request fields:
 
-Text params: `?mode=raw`, `?format=text`
+- `url` required
+- `tabId` optional
+- `newTab` optional
+- `timeout` optional
+- `blockImages`, `blockMedia`, `blockAds` optional
+- `waitFor`, `waitSelector`, `waitTitle` optional
 
-## Screenshot & PDF
+Important behavior:
 
-```
-GET  /screenshot                         # Screenshot (current tab)
-GET  /tabs/{id}/screenshot               # Screenshot (specific tab)
-GET  /pdf                                # PDF export (current tab)
-POST /pdf                                # PDF export with options
-GET  /tabs/{id}/pdf                      # PDF export (specific tab)
-POST /tabs/{id}/pdf                      # PDF export with options (specific tab)
-GET  /screencast                         # WebRTC screencast stream
-GET  /screencast/tabs                    # All tabs screencast
-```
+- `POST /navigate` creates a new tab when `tabId` is omitted
+- `POST /tab` supports `new`, `close`, and `focus`
 
-Screenshot params: `?raw=true`, `?quality=80`
+## Tab Locking
 
-PDF params: `?raw=true`, `?landscape=true`, `?scale=0.8`, `?pageRanges=1-5`, `?output=file`, `?path=/tmp/out.pdf`
-
-## Downloads & Uploads
-
-```
-GET  /download                           # Download file via browser session
-GET  /tabs/{id}/download                 # Download (specific tab)
-POST /upload                             # Upload file to input element
-POST /tabs/{id}/upload                   # Upload (specific tab)
+```text
+POST /tab/lock
+POST /tab/unlock
+POST /tabs/{id}/lock
+POST /tabs/{id}/unlock
 ```
 
-Download params: `?url=<url>`, `?raw=true`, `?output=file`
+## Interaction And Analysis
 
-Upload body: `{"selector": "input[type=file]", "files": ["data:...base64..."]}`
-
-## Cookies
-
-```
-GET  /cookies                            # Get cookies for current page
-POST /cookies                            # Set cookies
-GET  /tabs/{id}/cookies                  # Get cookies (specific tab)
-POST /tabs/{id}/cookies                  # Set cookies (specific tab)
-```
-
-## Fingerprint
-
-```
-POST /fingerprint/rotate                 # Rotate browser fingerprint
-```
-
-## Instances (multi-instance)
-
-```
-GET  /instances                          # List all instances
-GET  /instances/{id}                     # Get instance details
-GET  /instances/tabs                     # List tabs across all instances
-GET  /instances/metrics                  # Metrics across all instances
-POST /instances/start                    # Start new instance
-POST /instances/launch                   # Launch by profile name
-POST /instances/attach                   # Attach external browser
-POST /instances/{id}/start               # Start specific instance
-POST /instances/{id}/stop                # Stop specific instance
-GET  /instances/{id}/logs                # Instance logs (ring buffer)
-GET  /instances/{id}/logs/stream         # Stream logs (SSE)
-GET  /instances/{id}/tabs                # List instance tabs
-POST /instances/{id}/tabs/open           # Open tab in instance
-POST /instances/{id}/tab                 # Tab action proxied to instance
+```text
+POST /action
+GET  /action
+POST /actions
+POST /macro
+POST /tabs/{id}/action
+POST /tabs/{id}/actions
+GET  /snapshot
+GET  /tabs/{id}/snapshot
+GET  /text
+GET  /tabs/{id}/text
+POST /find
+POST /tabs/{id}/find
+POST /evaluate
+POST /tabs/{id}/evaluate
 ```
 
-## Profiles
+Action kinds currently include:
 
+- `click`
+- `dblclick`
+- `type`
+- `fill`
+- `press`
+- `hover`
+- `focus`
+- `select`
+- `scroll`
+- `drag`
+- `check`
+- `uncheck`
+- `keyboard-type`
+- `keyboard-inserttext`
+- `keydown`
+- `keyup`
+- `scrollintoview`
+
+Action targeting fields:
+
+- `ref`
+- `selector`
+- `nodeId`
+- `x` and `y`
+
+Snapshot query parameters:
+
+- `interactive`
+- `compact`
+- `diff`
+- `selector`
+- `maxTokens`
+- `depth`
+- `format`
+- `noAnimations`
+- `output`
+
+Text query parameters:
+
+- `mode=raw`
+- `format`
+
+Find body fields:
+
+- `query`
+- `tabId`
+- `threshold`
+- `topK`
+- `lexicalWeight`
+- `embeddingWeight`
+- `explain`
+
+## Screenshot, PDF, And Screencast
+
+```text
+GET  /screenshot
+GET  /tabs/{id}/screenshot
+GET  /pdf
+POST /pdf
+GET  /tabs/{id}/pdf
+POST /tabs/{id}/pdf
+GET  /screencast
+GET  /screencast/tabs
+GET  /instances/{id}/screencast
+GET  /instances/{id}/proxy/screencast
 ```
-GET  /profiles                           # List all profiles
-POST /profiles                           # Create profile
-POST /profiles/create                    # Create profile (alias)
-GET  /profiles/{id}                      # Get profile details
-PATCH /profiles/{id}                     # Update profile
-DELETE /profiles/{id}                    # Delete profile
-POST /profiles/{id}/start               # Start instance for profile
-POST /profiles/{id}/stop                # Stop instance for profile
-GET  /profiles/{id}/instance            # Get profile's running instance
-POST /profiles/{id}/reset               # Reset profile data
-GET  /profiles/{id}/logs                # Profile action logs
-GET  /profiles/{id}/analytics           # Profile analytics
-POST /profiles/import                   # Import profile from path
-PATCH /profiles/meta                    # Update profile metadata
+
+Screenshot query parameters:
+
+- `tabId`
+- `format=jpeg|png`
+- `quality`
+- `raw=true`
+- `output=file`
+- `noAnimations=true`
+
+PDF query parameters:
+
+- `tabId`
+- `raw=true`
+- `output=file`
+- `path`
+- `landscape`
+- `scale`
+- `paperWidth`
+- `paperHeight`
+- `marginTop`
+- `marginBottom`
+- `marginLeft`
+- `marginRight`
+- `pageRanges`
+- `preferCSSPageSize`
+- `displayHeaderFooter`
+- `headerTemplate`
+- `footerTemplate`
+- `generateTaggedPDF`
+- `generateDocumentOutline`
+
+## Downloads, Uploads, Cookies, And Clipboard
+
+```text
+GET  /download
+GET  /tabs/{id}/download
+POST /upload
+POST /tabs/{id}/upload
+GET  /cookies
+POST /cookies
+GET  /tabs/{id}/cookies
+POST /tabs/{id}/cookies
+GET  /clipboard/read
+POST /clipboard/write
+POST /clipboard/copy
+GET  /clipboard/paste
 ```
 
-## Scheduler
+Notes:
 
+- download and upload endpoints are gated by `security.allowDownload` and `security.allowUpload`
+- clipboard endpoints are gated by `security.allowClipboard`
+- upload uses a JSON body with `selector` and `files`
+
+## Wait, Network, Dialog, Console, And Errors
+
+```text
+POST /wait
+POST /tabs/{id}/wait
+GET  /network
+GET  /network/stream
+GET  /network/{requestId}
+POST /network/clear
+GET  /tabs/{id}/network
+GET  /tabs/{id}/network/stream
+GET  /tabs/{id}/network/{requestId}
+POST /dialog
+POST /tabs/{id}/dialog
+GET  /console
+POST /console/clear
+GET  /errors
+POST /errors/clear
 ```
-POST /tasks                              # Submit task to queue
-GET  /tasks                              # List queued/running tasks
-GET  /tasks/{id}                         # Get task status and result
-POST /tasks/{id}/cancel                  # Cancel a task
-POST /tasks/batch                        # Submit batch of tasks
-GET  /scheduler/stats                    # Queue stats (depth, inflight, agents)
+
+Wait body fields:
+
+- one of `selector`, `text`, `url`, `load`, `fn`, or `ms`
+- optional `tabId`
+- optional `timeout`
+- optional `state` for selector waits
+
+Network query parameters:
+
+- `tabId`
+- `filter`
+- `method`
+- `status`
+- `type`
+- `limit`
+- `bufferSize`
+- `body=true` on detail requests
+
+Dialog body fields:
+
+- `action`: `accept` or `dismiss`
+- `text`: optional prompt text
+- `tabId`: optional on `/dialog`
+
+Console and error routes use query parameters:
+
+- `tabId`
+- `limit`
+
+## Profiles And Instances
+
+```text
+GET  /profiles
+POST /profiles
+POST /profiles/create
+GET  /profiles/{id}
+PATCH /profiles/{id}
+DELETE /profiles/{id}
+POST /profiles/{id}/start
+POST /profiles/{id}/stop
+GET  /profiles/{id}/instance
+POST /profiles/{id}/reset
+GET  /profiles/{id}/logs
+GET  /profiles/{id}/analytics
+POST /profiles/import
+PATCH /profiles/meta
+GET  /instances
+GET  /instances/{id}
+GET  /instances/tabs
+GET  /instances/metrics
+POST /instances/start
+POST /instances/launch
+POST /instances/attach
+POST /instances/attach-bridge
+POST /instances/{id}/start
+POST /instances/{id}/stop
+GET  /instances/{id}/logs
+GET  /instances/{id}/logs/stream
+GET  /instances/{id}/tabs
+POST /instances/{id}/tabs/open
+POST /instances/{id}/tab
 ```
 
-Task body: `{"agentId": "...", "action": "snapshot", "tabId": "..."}`
+Notes:
 
-## Config (Dashboard API)
+- `/instances/start` and `/instances/launch` use `mode`, not `headless`
+- `/profiles/{id}/start` uses `headless`
+- attach routes are gated by `security.attach`
 
+## Activity And Scheduler
+
+```text
+GET  /api/activity
+POST /tasks
+GET  /tasks
+GET  /tasks/{id}
+POST /tasks/{id}/cancel
+POST /tasks/batch
+GET  /scheduler/stats
 ```
-GET  /api/config                         # Get current configuration
-PUT  /api/config                         # Update configuration
-```
 
-`server.token` is write-only and managed outside the dashboard API via CLI or config file updates.
+Activity query parameters include:
+
+- `limit`
+- `ageSec`
+- `since`
+- `until`
+- `source`
+- `requestId`
+- `sessionId`
+- `actorId`
+- `agentId`
+- `instanceId`
+- `profileId`
+- `profileName`
+- `tabId`
+- `action`
+- `engine`
+- `pathPrefix`
+
+Scheduler routes are only present when `scheduler.enabled` is true.
+
+## Feature Gates
+
+Some endpoints are intentionally disabled unless the matching config allows them:
+
+- `/evaluate` and `/tabs/{id}/evaluate` -> `security.allowEvaluate`
+- `/download` and `/tabs/{id}/download` -> `security.allowDownload`
+- `/upload` and `/tabs/{id}/upload` -> `security.allowUpload`
+- clipboard routes -> `security.allowClipboard`
+- attach routes -> `security.attach`
+- screencast routes -> `security.allowScreencast`

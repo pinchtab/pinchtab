@@ -128,7 +128,7 @@ curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
 # CLI Alternative
-pinchtab instance start --profileId prof_278be873 --mode headed
+pinchtab instance start --profile prof_278be873 --mode headed
 # Response
 {
   "id": "inst_ea2e747f",
@@ -212,7 +212,9 @@ ssh -X user@server 'pinchtab instance start --mode headed'
 
 ### Windows
 
-Headed mode works with the native desktop session.
+Windows builds are available, but Windows support is currently limited and best-effort.
+Headed mode targets the native desktop session.
+Prefer direct local runs with `pinchtab server` or `pinchtab bridge`; the daemon workflow is not the primary Windows path.
 
 ### Docker
 

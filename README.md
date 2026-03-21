@@ -39,6 +39,10 @@ pinchtab daemon install
 
 This installs the control-plane server and starts a default headless Chrome instance, ready to accept requests from agents or manual API calls.
 
+PinchTab is designed first for local, single-user control on a machine you manage. Remote and distributed layouts are supported, but they are advanced operator-managed deployments. If you bind beyond loopback, publish ports, or attach remote bridges, you are responsible for tokens, network boundaries, TLS or reverse proxying, and which endpoint families you expose.
+
+If you run PinchTab on a different machine, do it only when you understand the security model. Keep it on a private or otherwise closed network, avoid exposing it directly to the public internet, and keep high-risk endpoint families disabled unless you explicitly need them. If you do enable them, lock them down so only the systems that need them can reach them.
+
 
 If you prefer not to run a daemon, or if you're on Windows, you can instead run:
 
@@ -64,6 +68,8 @@ PinchTab defaults to a **local-first security posture**:
 > The restriction exists to make the security implications of browser automation clear before enabling wider access.
 
 See the full guide: [docs/guides/security.md](docs/guides/security.md)
+
+Remote, container, and distributed setups are possible, but PinchTab is not positioned as a turnkey internet-facing browser service. Treat any non-local deployment as an advanced setup that you must secure explicitly.
 
 ## What can you use it for
 
@@ -164,6 +170,12 @@ brew install pinchtab/tap/pinchtab
 ```bash
 npm install -g pinchtab
 ```
+
+### Platform Support
+
+PinchTab's primary tested operator workflow is local macOS and Linux.
+
+Windows binaries are published, but Windows support is currently limited and best-effort because the project does not have the same level of automated and manual coverage there. On Windows, prefer running `pinchtab server` or `pinchtab bridge` directly instead of relying on the daemon workflow.
 
 ### Shell Completion
 
@@ -290,7 +302,7 @@ Read more in the [Core Concepts](https://pinchtab.com/docs/core-concepts) guide.
 
 ## Privacy
 
-PinchTab is a fully open-source, local-only tool. No telemetry, no analytics, no outbound connections. The binary binds to `127.0.0.1` by default. Persistent profiles store browser sessions locally on your machine — similar to how a human reuses their browser. The single Go binary (~16 MB) is fully verifiable: build from source at [github.com/pinchtab/pinchtab](https://github.com/pinchtab/pinchtab).
+PinchTab is a fully open-source, local-first tool. No telemetry, no analytics, and no required outbound service dependency. The binary binds to `127.0.0.1` by default. Persistent profiles store browser sessions locally on your machine, similar to how a human reuses their browser. Remote and distributed deployments are available for advanced use cases, but they are explicit operator-managed setups rather than the default posture. The single Go binary (~16 MB) is fully verifiable: build from source at [github.com/pinchtab/pinchtab](https://github.com/pinchtab/pinchtab).
 
 ---
 

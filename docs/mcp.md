@@ -1,28 +1,25 @@
 # MCP Server
 
-PinchTab includes a native [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI agents control the browser directly through the standardized MCP interface.
+PinchTab includes a native [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI agents control the browser through MCP over stdio.
 
 ## Quick Start
 
-1. **Start PinchTab** in any mode (server or bridge):
+1. Start PinchTab in server or bridge mode:
    ```bash
    pinchtab server
-   #or
-   pinchtab daemon install
+   # or
+   pinchtab bridge
    ```
-
-2. **Start the MCP server** (in a separate terminal or from your MCP client config):
+2. Start the MCP server in another terminal or from your MCP client config:
    ```bash
    pinchtab mcp
    ```
 
-The MCP server communicates over **stdio** (stdin/stdout with JSON-RPC 2.0), which is the standard transport for MCP tools.
+The MCP server communicates over stdio using JSON-RPC, which is the standard MCP transport.
 
 ## Client Configuration
 
 ### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -36,8 +33,6 @@ Add to your `claude_desktop_config.json`:
 ```
 
 ### VS Code / GitHub Copilot
-
-Create `.vscode/mcp.json` in your workspace:
 
 ```json
 {
@@ -53,8 +48,6 @@ Create `.vscode/mcp.json` in your workspace:
 
 ### Cursor
 
-Add to your Cursor MCP settings:
-
 ```json
 {
   "mcpServers": {
@@ -66,284 +59,108 @@ Add to your Cursor MCP settings:
 }
 ```
 
-## Environment Variables
+## Environment
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PINCHTAB_TOKEN` | *(from config)* | Auth token for secured servers |
+| Variable | Description |
+| --- | --- |
+| `PINCHTAB_TOKEN` | Auth token for secured servers |
 
-For remote servers, use the `--server` flag: `pinchtab --server http://remote:9867 mcp`
+For remote servers, use the root `--server` flag:
+
+```bash
+pinchtab --server http://remote:9867 mcp
+```
 
 ## Available Tools
 
-### Navigation (4 tools)
+PinchTab currently exposes 34 tools:
 
-| Tool | Description |
-|------|-------------|
-| `pinchtab_navigate` | Navigate to a URL |
-| `pinchtab_snapshot` | Get accessibility tree snapshot |
-| `pinchtab_screenshot` | Take a screenshot (base64 JPEG or PNG) |
-| `pinchtab_get_text` | Extract readable text content |
+- Navigation: 4
+- Interaction: 8
+- Keyboard: 4
+- Content: 3
+- Tab management: 5
+- Wait utilities: 6
+- Network: 3
+- Dialog: 1
 
-### Interaction (8 tools)
+### Navigation
 
-| Tool | Description |
-|------|-------------|
-| `pinchtab_click` | Click an element by ref |
-| `pinchtab_type` | Type text into an input |
-| `pinchtab_press` | Press a keyboard key |
-| `pinchtab_hover` | Hover over an element |
-| `pinchtab_focus` | Focus an element |
-| `pinchtab_select` | Select a dropdown option |
-| `pinchtab_scroll` | Scroll page or element |
-| `pinchtab_fill` | Fill input via JS dispatch |
+- `pinchtab_navigate`
+- `pinchtab_snapshot`
+- `pinchtab_screenshot`
+- `pinchtab_get_text`
 
-### Content (3 tools)
+### Interaction
 
-| Tool | Description |
-|------|-------------|
-| `pinchtab_eval` | Execute JavaScript |
-| `pinchtab_pdf` | Export page as PDF |
-| `pinchtab_find` | Find elements by text or CSS |
+- `pinchtab_click`
+- `pinchtab_type`
+- `pinchtab_press`
+- `pinchtab_hover`
+- `pinchtab_focus`
+- `pinchtab_select`
+- `pinchtab_scroll`
+- `pinchtab_fill`
 
-### Tab Management (4 tools)
+### Keyboard
 
-| Tool | Description |
-|------|-------------|
-| `pinchtab_list_tabs` | List open browser tabs |
-| `pinchtab_close_tab` | Close a tab |
-| `pinchtab_health` | Check server health |
-| `pinchtab_cookies` | Get page cookies |
+- `pinchtab_keyboard_type`
+- `pinchtab_keyboard_inserttext`
+- `pinchtab_keydown`
+- `pinchtab_keyup`
 
-### Utility (2 tools)
+### Content
 
-| Tool | Description |
-|------|-------------|
-| `pinchtab_wait` | Wait for N milliseconds |
-| `pinchtab_wait_for_selector` | Wait for a CSS selector to appear |
+- `pinchtab_eval`
+- `pinchtab_pdf`
+- `pinchtab_find`
 
-## Tool Reference
+### Tab Management
 
-### pinchtab_navigate
+- `pinchtab_list_tabs`
+- `pinchtab_close_tab`
+- `pinchtab_health`
+- `pinchtab_cookies`
+- `pinchtab_connect_profile`
 
-Navigate the browser to a URL.
+### Wait Utilities
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | string | Yes | URL to navigate to |
-| `tabId` | string | No | Target tab (uses current if empty) |
+- `pinchtab_wait`
+- `pinchtab_wait_for_selector`
+- `pinchtab_wait_for_text`
+- `pinchtab_wait_for_url`
+- `pinchtab_wait_for_load`
+- `pinchtab_wait_for_function`
 
-### pinchtab_snapshot
+### Network
 
-Get an accessibility tree snapshot of the page. This is the primary way agents understand page structure.
+- `pinchtab_network`
+- `pinchtab_network_detail`
+- `pinchtab_network_clear`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Target tab |
-| `interactive` | boolean | No | Only interactive elements |
-| `compact` | boolean | No | Compact format (fewer tokens) |
-| `diff` | boolean | No | Only changes since last snapshot |
-| `selector` | string | No | CSS selector to scope |
+### Dialog
 
-### pinchtab_screenshot
+- `pinchtab_dialog`
 
-Capture a screenshot of the page. Defaults to JPEG.
+## Selector Model
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Target tab |
-| `format` | string | No | `jpeg` (default) or `png` |
-| `quality` | number | No | JPEG quality 0-100 |
+For selector-based interaction tools, prefer `selector`. `ref` is still accepted as a deprecated fallback on the element-action tools.
 
-### pinchtab_get_text
+Common selector forms:
 
-Extract readable text from the page.
+- `e5`
+- `#login`
+- `xpath://button`
+- `text:Submit`
+- `find:login button`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Target tab |
-| `raw` | boolean | No | Raw text without formatting |
+## Practical Flow
 
-### pinchtab_click
+The normal MCP browser loop is:
 
-Click an element identified by its ref from a snapshot.
+1. `pinchtab_navigate`
+2. `pinchtab_snapshot`
+3. `pinchtab_click` / `pinchtab_type` / other action tools
+4. `pinchtab_wait_*` or `pinchtab_network` when needed
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Element ref (e.g., `e5`) |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_type
-
-Type text into an input element.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Element ref |
-| `text` | string | Yes | Text to type |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_press
-
-Press a keyboard key.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `key` | string | Yes | Key name (Enter, Tab, Escape, etc.) |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_hover
-
-Hover over an element.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Element ref |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_focus
-
-Focus an element.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Element ref |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_select
-
-Select a dropdown option.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Select element ref |
-| `value` | string | Yes | Option value |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_scroll
-
-Scroll the page or a specific element.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | No | Element ref (omit for page scroll) |
-| `pixels` | number | No | Pixels to scroll (positive=down) |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_fill
-
-Fill an input using JavaScript dispatch (works with React/Vue/Angular).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ref` | string | Yes | Element ref or CSS selector |
-| `value` | string | Yes | Value to fill |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_eval
-
-Execute JavaScript in the browser. Requires `security.allowEvaluate: true` in config.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `expression` | string | Yes | JavaScript expression |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_pdf
-
-Export the page as a PDF document.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Target tab |
-| `landscape` | boolean | No | Landscape orientation |
-| `scale` | number | No | Print scale 0.1-2.0 |
-| `pageRanges` | string | No | Pages (e.g., "1-3,5") |
-
-### pinchtab_find
-
-Find elements by text content or CSS selector using semantic matching.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | Text or CSS selector |
-| `tabId` | string | No | Target tab |
-
-### pinchtab_list_tabs
-
-List all open browser tabs. No parameters.
-
-### pinchtab_close_tab
-
-Close a browser tab.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Tab to close (current if empty) |
-
-### pinchtab_health
-
-Check server health. No parameters.
-
-### pinchtab_cookies
-
-Get cookies for the current page.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tabId` | string | No | Target tab |
-
-### pinchtab_wait
-
-Wait for a specified duration.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `ms` | number | Yes | Milliseconds (max 30000) |
-
-### pinchtab_wait_for_selector
-
-Wait for a CSS selector to appear on the page. Polls every 250ms.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `selector` | string | Yes | CSS selector |
-| `timeout` | number | No | Timeout ms (default 10000, max 30000) |
-| `tabId` | string | No | Target tab |
-
-## Typical Agent Workflow
-
-```
-1. pinchtab_navigate → go to URL
-2. pinchtab_snapshot  → understand page structure
-3. pinchtab_click     → interact with elements
-4. pinchtab_type      → fill in forms
-5. pinchtab_snapshot  → verify changes
-6. pinchtab_get_text  → extract results
-```
-
-## Architecture
-
-The MCP server is a thin stdio-based JSON-RPC layer that translates MCP tool calls into HTTP requests to a running PinchTab instance:
-
-```
-LLM Client ──stdio──▶ pinchtab mcp ──HTTP──▶ PinchTab Server
-```
-
-This architecture means:
-- The MCP server works with any PinchTab deployment (local, remote, Docker)
-- No direct Chrome dependency — the server delegates to PinchTab
-- Built with [mcp-go](https://github.com/mark3labs/mcp-go) SDK (MCP spec 2025-11-25)
-
-## Code Layout
-
-```
-internal/mcp/
-├── server.go      # MCP server setup and stdio transport
-├── tools.go       # Tool definitions with JSON schemas
-├── handlers.go    # Tool handler implementations
-└── client.go      # HTTP client for PinchTab API
-
-cmd/pinchtab/
-└── cmd_mcp.go     # `pinchtab mcp` subcommand
-```
+For full parameter details, see [MCP Tool Reference](./reference/mcp-tools.md).

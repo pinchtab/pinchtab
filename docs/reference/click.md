@@ -1,6 +1,6 @@
 # Click
 
-Click an element by ref from a previous snapshot.
+Click an element using a snapshot ref, CSS selector, XPath selector, text selector, or semantic selector.
 
 ```bash
 curl -X POST http://localhost:9867/action \
@@ -20,6 +20,8 @@ pinchtab click e5
 Notes:
 
 - element refs come from `/snapshot`
+- the raw action endpoint also accepts `selector`, for example `{"kind":"click","selector":"#login"}`
+- the CLI also accepts `#login`, `xpath://button`, `text:Submit`, and `find:login button`
 - `--wait-nav` exists on the top-level CLI command
 
 ## Related Pages

@@ -19,8 +19,8 @@ pinchtab fill e8 "ada@example.com"
 
 Notes:
 
-- the top-level CLI also accepts a selector form: `pinchtab fill 'input[name=email]' "ada@example.com"`
-- for the raw HTTP action endpoint, selectors use `selector`, not `ref`
+- the top-level CLI accepts unified selector forms such as `e8`, `#email`, or `text:Email`
+- for the raw HTTP action endpoint, use `selector` for CSS, XPath, text, or semantic selectors
 
 ## Related Pages
 

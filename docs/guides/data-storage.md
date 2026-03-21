@@ -107,7 +107,7 @@ Request activity is stored as one JSONL file per UTC day:
 <server.stateDir>/activity/events-YYYY-MM-DD.jsonl
 ```
 
-By default PinchTab keeps one day of activity data and prunes older daily files when new activity is recorded. You can change that with:
+By default PinchTab keeps 1 day of activity data and prunes older daily files when new activity is recorded. You can change that with:
 
 ```json
 {

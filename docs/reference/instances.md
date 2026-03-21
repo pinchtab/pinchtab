@@ -16,89 +16,61 @@ One profile can have at most one active managed instance at a time.
 curl http://localhost:9867/instances
 # CLI Alternative
 pinchtab instances
-# Response
-[
-  {
-    "id": "inst_0a89a5bb",
-    "profileId": "prof_278be873",
-    "profileName": "work",
-    "port": "9868",
-    "headless": true,
-    "status": "running",
-    "startTime": "2026-03-01T05:21:38.27432Z"
-  }
-]
 ```
 
 `pinchtab instances` is the simplest way to inspect the current fleet from the CLI.
 
 ## Start An Instance
 
-### Primary: Start by profileId and mode
+### `POST /instances/start`
+
+Use `/instances/start` when you want to start by profile ID or profile name, or let PinchTab create a temporary profile.
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed","port":"9999"}'
 # CLI Alternative
-pinchtab instance start --profileId prof_278be873 --mode headed --port 9999
-# Response
-{
-  "id": "inst_ea2e747f",
-  "profileId": "prof_278be873",
-  "profileName": "work",
-  "port": "9999",
-  "headless": false,
-  "status": "starting",
-  "startTime": "2026-03-01T05:21:38.27432Z"
-}
+pinchtab instance start --profile prof_278be873 --mode headed --port 9999
 ```
+
+Request body:
+
+- `profileId`: optional; accepts a profile ID or an existing profile name
+- `mode`: optional; use `headed` for a visible browser, anything else is treated as headless
+- `port`: optional
+- `extensionPaths`: optional array of extension paths
 
 Notes:
 
-- if `profileId` is omitted, PinchTab creates an auto-generated temporary profile such as `instance-...`
+- if `profileId` is omitted, PinchTab creates an auto-generated temporary profile
 - if `port` is omitted, PinchTab allocates one from the configured instance port range
+- the CLI flag is `--profile`, even though the API field is `profileId`
 
-### Alternative: Start by profile name
+### `POST /instances/launch`
 
-You can also start an instance using a profile name and headless flag:
+Use `/instances/launch` when you want to launch by profile name or `profileId` through the compatibility route.
 
 ```bash
 curl -X POST http://localhost:9867/instances/launch \
   -H "Content-Type: application/json" \
-  -d '{"name":"work","headless":false}'
-# Response
-{
-  "id": "inst_ea2e747f",
-  "profileId": "prof_278be873",
-  "profileName": "work",
-  "port": "9999",
-  "headless": false,
-  "status": "starting",
-  "startTime": "2026-03-01T05:21:38.27432Z"
-}
+  -d '{"name":"work","mode":"headed"}'
 ```
 
-The `POST /instances/launch` endpoint takes:
-- `name` — profile name (required)
-- `headless` — true for headless mode, false for headed mode (optional, defaults to true)
+Request body:
 
-Port is automatically allocated from the configured instance port range.
+- `name`: optional profile name
+- `profileId`: optional profile ID
+- `mode`: optional; `headed` or headless by default
+- `port`: optional
+- `extensionPaths`: optional array of extension paths
+
+Important: `/instances/launch` does not read a `headless` field. Use `mode:"headed"` when you want a headed browser.
 
 ## Get One Instance
 
 ```bash
 curl http://localhost:9867/instances/inst_ea2e747f
-# Response
-{
-  "id": "inst_ea2e747f",
-  "profileId": "prof_278be873",
-  "profileName": "work",
-  "port": "9999",
-  "headless": false,
-  "status": "running",
-  "startTime": "2026-03-01T05:21:38.27432Z"
-}
 ```
 
 Common status values:
@@ -117,7 +89,7 @@ curl http://localhost:9867/instances/inst_ea2e747f/logs
 pinchtab instance logs inst_ea2e747f
 ```
 
-Response is plain text.
+Response is plain text. There is also an SSE stream at `GET /instances/{id}/logs/stream`.
 
 ## Stop An Instance
 
@@ -125,11 +97,6 @@ Response is plain text.
 curl -X POST http://localhost:9867/instances/inst_ea2e747f/stop
 # CLI Alternative
 pinchtab instance stop inst_ea2e747f
-# Response
-{
-  "id": "inst_ea2e747f",
-  "status": "stopped"
-}
 ```
 
 Stopping an instance preserves the profile unless it was a temporary auto-generated profile.
@@ -142,18 +109,9 @@ You can also start an instance from a profile-oriented route:
 curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
   -d '{"headless":false,"port":"9999"}'
-# Response
-{
-  "id": "inst_ea2e747f",
-  "profileId": "prof_278be873",
-  "profileName": "work",
-  "port": "9999",
-  "headless": false,
-  "status": "starting"
-}
 ```
 
-This route accepts a profile ID or profile name in the path. Its request body uses `headless` rather than `mode`.
+This route accepts a profile ID or profile name in the path. Unlike `/instances/start` and `/instances/launch`, its request body uses `headless` instead of `mode`.
 
 ## Open A Tab In An Instance
 
@@ -161,35 +119,20 @@ This route accepts a profile ID or profile name in the path. Its request body us
 curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# Response
-{
-  "tabId": "8f9c7d4e1234567890abcdef12345678",
-  "url": "https://pinchtab.com",
-  "title": "PinchTab"
-}
 ```
 
-There is no dedicated instance-scoped `tab open` CLI command today. The CLI shortcut is:
+There is no dedicated instance-scoped `tab open` CLI command. The CLI shortcut is:
 
 ```bash
 pinchtab instance navigate inst_ea2e747f https://pinchtab.com
 ```
 
-That command opens a tab for the instance and then navigates it.
+That command opens a blank tab for the instance and then navigates it.
 
 ## List Tabs For One Instance
 
 ```bash
 curl http://localhost:9867/instances/inst_ea2e747f/tabs
-# Response
-[
-  {
-    "id": "8f9c7d4e1234567890abcdef12345678",
-    "instanceId": "inst_ea2e747f",
-    "url": "https://pinchtab.com",
-    "title": "PinchTab"
-  }
-]
 ```
 
 ## List All Tabs Across Running Instances
@@ -198,7 +141,7 @@ curl http://localhost:9867/instances/inst_ea2e747f/tabs
 curl http://localhost:9867/instances/tabs
 ```
 
-This is the fleet-wide tab listing endpoint. It is different from `GET /tabs`, which is shorthand/bridge-style and not a fleet-wide inventory.
+This is the fleet-wide tab listing endpoint. It is different from `GET /tabs`, which is shorthand or bridge scoped.
 
 ## List Metrics Across Instances
 
@@ -206,23 +149,12 @@ This is the fleet-wide tab listing endpoint. It is different from `GET /tabs`, w
 curl http://localhost:9867/instances/metrics
 ```
 
-Use this when you want per-instance memory metrics across all running instances.
-
 ## Attach An Existing Chrome
 
 ```bash
 curl -X POST http://localhost:9867/instances/attach \
   -H "Content-Type: application/json" \
   -d '{"name":"shared-chrome","cdpUrl":"ws://127.0.0.1:9222/devtools/browser/..."}'
-# Response
-{
-  "id": "inst_0a89a5bb",
-  "profileId": "prof_278be873",
-  "profileName": "shared-chrome",
-  "status": "running",
-  "attached": true,
-  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/..."
-}
 ```
 
 Notes:
@@ -240,22 +172,10 @@ curl -X POST http://localhost:9867/instances/attach-bridge \
     "baseUrl":"http://10.0.12.24:9868",
     "token":"bridge-secret-token"
   }'
-# Response
-{
-  "id": "inst_0a89a5bb",
-  "profileId": "prof_278be873",
-  "profileName": "shared-bridge",
-  "port": "",
-  "url": "http://10.0.12.24:9868",
-  "status": "running",
-  "attached": true,
-  "attachType": "bridge"
-}
 ```
 
 Notes:
 
-- `baseUrl` must point at a running PinchTab bridge
+- `baseUrl` must point at a running PinchTab bridge and must not include a path
 - the orchestrator performs a health check before registering it
 - `security.attach.allowHosts` must allow the bridge host
-- `security.attach.allowSchemes` must include `http` or `https` for bridge attachment

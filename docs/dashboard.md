@@ -96,7 +96,7 @@ curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
 # CLI Alternative
-pinchtab instance start --profileId prof_278be873 --mode headed
+pinchtab instance start --profile prof_278be873 --mode headed
 # Response
 {
   "id": "inst_ea2e747f",

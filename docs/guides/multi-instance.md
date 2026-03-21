@@ -12,7 +12,7 @@ PinchTab can run multiple isolated Chrome instances at the same time. Each runni
 ## Start The Orchestrator
 
 ```bash
-pinchtab
+pinchtab server
 ```
 
 By default the orchestrator listens on `http://localhost:9867`.
@@ -81,7 +81,7 @@ curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"278be873adeb","mode":"headless"}'
 # CLI Alternative
-pinchtab instance start --profileId 278be873adeb --mode headless
+pinchtab instance start --profile 278be873adeb --mode headless
 ```
 
 Because a profile can have only one active managed instance, starting the same profile again while it is already active returns an error instead of creating a duplicate browser.

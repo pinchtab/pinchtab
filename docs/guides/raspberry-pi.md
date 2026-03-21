@@ -29,8 +29,8 @@ which chromium
 If auto-detection misses it, set the binary path in config:
 
 ```bash
-pinchtab config set browser.chromeBinary /usr/bin/chromium-browser
-pinchtab
+pinchtab config set browser.binary /usr/bin/chromium-browser
+pinchtab server
 ```
 
 ## Install PinchTab
@@ -44,7 +44,7 @@ go build -o pinchtab ./cmd/pinchtab
 Then start it:
 
 ```bash
-./pinchtab
+./pinchtab server
 ```
 
 ## Pi-Friendly Config
@@ -163,10 +163,10 @@ sudo systemctl status pinchtab
 
 ### Chrome Binary Not Found
 
-Set `browser.chromeBinary` in config:
+Set `browser.binary` in config:
 
 ```bash
-pinchtab config set browser.chromeBinary /usr/bin/chromium-browser
+pinchtab config set browser.binary /usr/bin/chromium-browser
 ```
 
 ### Out Of Memory
@@ -189,5 +189,5 @@ Change the port in config:
 
 ```bash
 pinchtab config set server.port 9868
-./pinchtab
+./pinchtab server
 ```

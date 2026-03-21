@@ -1,6 +1,6 @@
 # Select
 
-Choose a value in a select element by ref.
+Choose a value in a select element by selector or ref.
 
 ```bash
 curl -X POST http://localhost:9867/action \
@@ -17,7 +17,7 @@ pinchtab select e12 it
 }
 ```
 
-The `value` should match the option value expected by the page.
+The `value` should match the option value expected by the page. The raw action endpoint accepts `ref` or `selector`, and the CLI accepts the same unified selector forms as the other action commands.
 
 ## Related Pages
 

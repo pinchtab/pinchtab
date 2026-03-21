@@ -2,8 +2,6 @@
 
 `pinchtab config` is the CLI entry point for creating, inspecting, validating, and editing PinchTab's config file.
 
-Use this page as the command and schema reference. Broader deployment patterns can move to a separate guide later.
-
 For security posture, token usage, sensitive endpoint policy, and IDPI guidance, see [Security](../guides/security.md).
 
 ## Commands
@@ -24,7 +22,7 @@ It also shows:
 - the active config file path
 - the dashboard URL when the server is running
 - the masked server token
-- a `Copy token` action for clipboard/manual copy
+- a `Copy token` action
 
 ```bash
 pinchtab config
@@ -32,24 +30,17 @@ pinchtab config
 
 ### `pinchtab config init`
 
-Creates a default config file at the standard user config location.
+Creates a default config file at the current config path.
 
 ```bash
 pinchtab config init
 ```
 
-Current behavior note:
-
-- `config init` writes to the default config path
-- it does not currently switch to a custom `PINCHTAB_CONFIG` target path
+`config init` respects `PINCHTAB_CONFIG`. If that environment variable is set, the file is created there.
 
 ### `pinchtab config show`
 
-Shows the effective runtime configuration after applying:
-
-```text
-env vars -> config file -> built-in defaults
-```
+Shows the effective runtime configuration.
 
 ```bash
 pinchtab config show
@@ -73,7 +64,7 @@ pinchtab config validate
 
 ### `pinchtab config get`
 
-Reads a single dotted-path value from the config file.
+Reads a single dotted-path value from the file config.
 
 ```bash
 pinchtab config get server.port
@@ -83,7 +74,7 @@ pinchtab config get security.attach.allowHosts
 
 ### `pinchtab config set`
 
-Sets a single dotted-path value in the config file.
+Sets a single dotted-path value in the file config.
 
 ```bash
 pinchtab config set server.port 8080
@@ -93,43 +84,42 @@ pinchtab config set multiInstance.strategy explicit
 
 ### `pinchtab config patch`
 
-Applies a JSON patch object to the config file.
+Merges a JSON object into the config file.
 
 ```bash
 pinchtab config patch '{"server":{"port":"8080"}}'
 pinchtab config patch '{"instanceDefaults":{"mode":"headed","maxTabs":50}}'
+pinchtab config patch '{"observability":{"activity":{"retentionDays":14}}}'
 ```
 
-## Config Priority
+## Load Order
 
-PinchTab loads configuration in this order:
+PinchTab applies configuration in this order:
 
-1. environment variables
-2. config file
-3. built-in defaults
+1. built-in defaults
+2. the config file selected by `PINCHTAB_CONFIG` or the default path
+3. `PINCHTAB_TOKEN`, if set, overriding `server.token` at runtime
 
-The supported env vars are:
+Supported environment variables:
 
-- `PINCHTAB_CONFIG` — path to config file
-- `PINCHTAB_TOKEN` — auth token (overrides config file)
+- `PINCHTAB_CONFIG`: choose the config file path
+- `PINCHTAB_TOKEN`: override the API token at runtime
 
-Everything else is configured in `config.json`. For CLI targeting a remote server, use the `--server` flag.
-
-For the common local workflow, prefer the interactive `pinchtab config` screen for everyday changes and use `get`, `set`, or `patch` when you need an exact scripted edit.
+For remote CLI targeting, use the root `--server` flag instead of config.
 
 ## Config File Location
 
 Default location by OS:
 
 - macOS: `~/Library/Application Support/pinchtab/config.json`
-- Linux: `~/.config/pinchtab/config.json` (respects `$XDG_CONFIG_HOME` if set)
+- Linux: `~/.config/pinchtab/config.json` or `$XDG_CONFIG_HOME/pinchtab/config.json`
 - Windows: `%APPDATA%\pinchtab\config.json`
 
 Legacy fallback:
 
 - if `~/.pinchtab/config.json` exists and the newer location does not, PinchTab still uses the legacy location
 
-Override the read path with:
+Override the config path with:
 
 ```bash
 export PINCHTAB_CONFIG=/path/to/config.json
@@ -137,40 +127,55 @@ export PINCHTAB_CONFIG=/path/to/config.json
 
 ## Config Shape
 
-Current nested config shape:
+Current nested file-config shape:
 
 ```json
 {
+  "configVersion": "0.8.0",
   "server": {
     "port": "9867",
     "bind": "127.0.0.1",
     "token": "your-secret-token",
-    "stateDir": "/path/to/state"
+    "stateDir": "/path/to/state",
+    "engine": "chrome",
+    "networkBufferSize": 100,
+    "trustProxyHeaders": false
   },
   "browser": {
     "version": "144.0.7559.133",
     "binary": "/path/to/chrome",
-    "extraFlags": "",
+    "extraFlags": "--disable-gpu",
     "extensionPaths": []
   },
   "instanceDefaults": {
     "mode": "headless",
-    "maxTabs": 20,
-    "maxParallelTabs": 0,
-    "stealthLevel": "light",
-    "tabEvictionPolicy": "close_lru",
-    "blockAds": false,
+    "noRestore": false,
+    "timezone": "Europe/Rome",
     "blockImages": false,
     "blockMedia": false,
-    "noRestore": false,
-    "noAnimations": false
+    "blockAds": false,
+    "maxTabs": 20,
+    "maxParallelTabs": 0,
+    "userAgent": "",
+    "noAnimations": false,
+    "stealthLevel": "light",
+    "tabEvictionPolicy": "close_lru",
+    "dialogAutoAccept": false
   },
   "security": {
     "allowEvaluate": false,
     "allowMacro": false,
     "allowScreencast": false,
     "allowDownload": false,
+    "downloadAllowedDomains": [],
+    "downloadMaxBytes": 20971520,
     "allowUpload": false,
+    "allowClipboard": false,
+    "uploadMaxRequestBytes": 10485760,
+    "uploadMaxFiles": 8,
+    "uploadMaxFileBytes": 5242880,
+    "uploadMaxTotalBytes": 10485760,
+    "maxRedirects": -1,
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
@@ -182,7 +187,8 @@ Current nested config shape:
       "strictMode": true,
       "scanContent": true,
       "wrapContent": true,
-      "customPatterns": []
+      "customPatterns": [],
+      "scanTimeoutSec": 5
     }
   },
   "profiles": {
@@ -216,6 +222,13 @@ Current nested config shape:
     "maxPerAgentInflight": 10,
     "resultTTLSec": 300,
     "workerCount": 4
+  },
+  "observability": {
+    "activity": {
+      "enabled": true,
+      "sessionIdleSec": 1800,
+      "retentionDays": 1
+    }
   }
 }
 ```
@@ -224,14 +237,40 @@ Current nested config shape:
 
 | Section | Purpose |
 | --- | --- |
-| `server` | HTTP server settings |
-| `browser` | Chrome executable and launch wiring |
+| `server` | HTTP server settings, engine selection, proxy trust, and network buffer defaults |
+| `browser` | Chrome executable, version pin, extra flags, and extension paths |
 | `instanceDefaults` | Default behavior for managed instances |
-| `security` | Sensitive feature gates, attach policy, and IDPI |
+| `security` | Sensitive feature gates, transfer limits, attach policy, and IDPI |
 | `profiles` | Profile storage defaults |
-| `multiInstance` | Strategy, allocation, instance port range, and restart policy |
-| `timeouts` | Runtime timeouts |
-| `scheduler` | Optional task queue (see [Scheduler](./scheduler.md)) |
+| `multiInstance` | Orchestrator strategy, allocation, port range, and restart policy |
+| `timeouts` | Action, navigation, shutdown, and navigation wait delays |
+| `scheduler` | Optional task queue |
+| `observability` | Activity logging and retention |
+
+## `config get` And `config set` Support
+
+`pinchtab config get` and `pinchtab config set` only support these top-level sections:
+
+- `server`
+- `browser`
+- `instanceDefaults`
+- `security`
+- `profiles`
+- `multiInstance`
+- `timeouts`
+
+They do not expose every field in those sections, and they do not support `scheduler.*` or `observability.*`.
+
+Use `pinchtab config patch` or edit `config.json` directly for fields such as:
+
+- `server.engine`
+- `server.networkBufferSize`
+- `browser.extensionPaths`
+- `instanceDefaults.dialogAutoAccept`
+- `security.allowClipboard`
+- `security.idpi.scanTimeoutSec`
+- `scheduler.*`
+- `observability.*`
 
 ## Common Examples
 
@@ -250,30 +289,16 @@ Current nested config shape:
 ```bash
 pinchtab config set server.bind 0.0.0.0
 pinchtab config set server.token secret
-pinchtab
+pinchtab server
 ```
 
 ### Custom Instance Port Range
 
 ```json
 {
-  "server": {
-    "port": "8080"
-  },
   "multiInstance": {
     "instancePortStart": 8100,
     "instancePortEnd": 8200
-  }
-}
-```
-
-### Tab Eviction Policy
-
-```json
-{
-  "instanceDefaults": {
-    "maxTabs": 10,
-    "tabEvictionPolicy": "close_lru"
   }
 }
 ```
@@ -286,30 +311,24 @@ pinchtab
     "attach": {
       "enabled": true,
       "allowHosts": ["127.0.0.1", "localhost", "chrome.internal"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss", "http", "https"]
     }
   }
 }
 ```
 
-### IDPI Policy
+### Activity Retention
 
 ```json
 {
-  "security": {
-    "idpi": {
-      "enabled": true,
-      "allowedDomains": ["example.com", "*.example.com"],
-      "strictMode": true,
-      "scanContent": true,
-      "wrapContent": true,
-      "customPatterns": []
+  "observability": {
+    "activity": {
+      "retentionDays": 14,
+      "sessionIdleSec": 1800
     }
   }
 }
 ```
-
-This is policy only. The actual `cdpUrl` is provided in the attach request, not in global config.
 
 ## Legacy Flat Format
 
@@ -326,13 +345,12 @@ Older flat config is still accepted for backward compatibility:
 }
 ```
 
-Use `pinchtab config init` to create a nested config file.
+Use `pinchtab config init` to create the current nested format.
 
 ## Validation
 
-`pinchtab config validate` currently checks, among other things:
+`pinchtab config validate` checks, among other things:
 
-- valid server port values
 - valid `instanceDefaults.mode`
 - valid `instanceDefaults.stealthLevel`
 - valid `instanceDefaults.tabEvictionPolicy`
@@ -345,6 +363,9 @@ Use `pinchtab config init` to create a nested config file.
 - `multiInstance.instancePortStart <= multiInstance.instancePortEnd`
 - `multiInstance.restart.initBackoffSec <= multiInstance.restart.maxBackoffSec`
 - non-negative timeout values
+- non-negative `server.networkBufferSize`
+- non-negative `security.idpi.scanTimeoutSec`
+- positive `observability.activity.sessionIdleSec` and `retentionDays`
 
 Valid enum values:
 
@@ -352,13 +373,13 @@ Valid enum values:
 | --- | --- |
 | `instanceDefaults.mode` | `headless`, `headed` |
 | `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
-| `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` (default) |
-| `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on` (default), `no-instance` |
+| `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` |
+| `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |
 
 ## Notes
 
 - `config show` reports effective runtime values, not just raw file contents.
-- `config get`, `set`, and `patch` operate on the file config model, not on transient env overrides.
-- Most operational behavior now belongs in `config.json`, not in startup env vars.
+- `config get`, `set`, and `patch` operate on the file config model, not transient runtime overrides.
+- the dashboard config API treats `server.token` as write-only; use the CLI or file editing to manage it.

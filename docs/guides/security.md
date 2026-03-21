@@ -2,6 +2,10 @@
 
 PinchTab is designed to be usable by default on a local machine without exposing high-risk browser control features unless you explicitly turn them on.
 
+PinchTab's default and primary deployment model is local-first: one user, one machine, one operator-controlled browser control plane. More complex topologies such as Docker, LAN access, remote bridges, or distributed orchestrator setups are supported, but they are advanced deployments. PinchTab should not be treated as a turnkey internet-facing service, and securing those deployments is the operator's responsibility.
+
+If you run PinchTab on a different machine, do so only if you understand the security model you are operating. Prefer a private or otherwise closed network, avoid exposing the service directly to the public internet, and keep high-risk capabilities disabled unless they are required for that deployment. If they must be enabled, restrict them so only the minimum trusted systems that need them can reach them.
+
 The default security posture is:
 
 - `server.bind = 127.0.0.1`
@@ -37,6 +41,20 @@ This means there are two independent questions:
 2. what the server is allowed to do once reached
 
 Both matter.
+
+## Advanced Deployments
+
+If you intentionally run PinchTab beyond the default local setup, the minimum operator checklist is:
+
+- keep `server.token` set to a strong random value
+- narrow network reachability with a trusted network boundary, VPN, firewall, or reverse proxy
+- add TLS at the proxy or transport layer when traffic leaves the local machine
+- keep sensitive endpoint families disabled unless they are explicitly needed, and if they are enabled, restrict them to the minimum trusted callers or network paths that must reach them
+- scope `security.attach` and `security.idpi` deliberately for the remote topology you are operating
+
+Those choices are deployment responsibilities, not defaults that PinchTab can infer safely on your behalf.
+
+When the server is not running on the same machine as the user or agent, the bar should be higher: know which hosts can reach it, know which credentials protect it, know which endpoint families are enabled, and know which network boundary is containing it.
 
 Binding to loopback reduces who can reach the API. Tokens reduce who can use it successfully. Sensitive endpoint gates reduce what a successful caller can do. IDPI reduces which websites and extracted content are trusted enough to pass deeper into an agent workflow.
 
@@ -216,4 +234,4 @@ For a secure local setup:
 }
 ```
 
-If you intentionally expose PinchTab beyond localhost, treat the token as mandatory and keep the sensitive endpoint families disabled unless you have a specific reason to enable them.
+If you intentionally expose PinchTab beyond localhost, treat the token as mandatory and keep the sensitive endpoint families disabled unless you have a specific reason to enable them. For anything more exposed than a single-machine local setup, assume you are operating an advanced deployment and review each security control explicitly.

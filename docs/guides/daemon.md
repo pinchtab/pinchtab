@@ -1,6 +1,8 @@
 # Background Service (Daemon)
 
-PinchTab can run as a user-level background service (daemon) on both macOS (`launchd`) and Linux (`systemd`). This ensures that the PinchTab server is always available to your agents without needing an open terminal window.
+PinchTab can run as a user-level background service (daemon) on macOS (`launchd`) and Linux (`systemd`). This ensures that the PinchTab server is always available to your agents without needing an open terminal window.
+
+This workflow is not currently provided on Windows. Windows binaries are available, but Windows support is limited and best-effort; on Windows, prefer running `pinchtab server` or `pinchtab bridge` directly.
 
 ![Daemon Status & Picker](../media/daemon-status.png)
 

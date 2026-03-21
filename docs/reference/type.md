@@ -20,7 +20,7 @@ pinchtab type e8 "Ada Lovelace"
 Notes:
 
 - use `fill` when you want to set the value more directly
-- top-level `type` expects a ref, not a CSS selector
+- the top-level CLI accepts unified selector forms such as `e8`, `#name`, `xpath://input`, or `text:Name`
 
 ## Related Pages
 

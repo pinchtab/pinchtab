@@ -6,7 +6,7 @@ It works against the accessibility snapshot for a tab and returns the best match
 
 ## Endpoints
 
-PinchTab currently exposes two useful forms:
+PinchTab exposes two forms:
 
 - `POST /find`
 - `POST /tabs/{id}/find`
@@ -33,27 +33,17 @@ Use `POST /tabs/{id}/find` when you already know the tab ID and want the orchest
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"login button","threshold":0.3,"topK":3}'
-# Response
-{
-  "best_ref": "e5",
-  "confidence": "high",
-  "score": 0.85,
-  "matches": [
-    {
-      "ref": "e5",
-      "score": 0.85,
-      "role": "button",
-      "name": "Log in"
-    }
-  ],
-  "strategy": "combined:lexical+embedding:hashing",
-  "threshold": 0.3,
-  "latency_ms": 2,
-  "element_count": 42
-}
+# CLI Alternative
+pinchtab find --tab <tabId> "login button"
 ```
 
-There is no dedicated CLI `find` command at the moment.
+There is a dedicated CLI `find` command:
+
+```bash
+pinchtab find "login button"
+pinchtab find --threshold 0.5 --explain "primary submit button"
+pinchtab find --ref-only "search input"
+```
 
 ## Using `POST /find`
 
@@ -61,24 +51,6 @@ There is no dedicated CLI `find` command at the moment.
 curl -X POST http://localhost:9867/find \
   -H "Content-Type: application/json" \
   -d '{"tabId":"<tabId>","query":"search input"}'
-# Response
-{
-  "best_ref": "e7",
-  "confidence": "high",
-  "score": 0.91,
-  "matches": [
-    {
-      "ref": "e7",
-      "score": 0.91,
-      "role": "textbox",
-      "name": "Search"
-    }
-  ],
-  "strategy": "combined:lexical+embedding:hashing",
-  "threshold": 0.3,
-  "latency_ms": 18,
-  "element_count": 142
-}
 ```
 
 If `tabId` is omitted, PinchTab uses the active tab in the current bridge context.
@@ -95,12 +67,9 @@ If `tabId` is omitted, PinchTab uses the active tab in the current bridge contex
 | `threshold` | Threshold used for the request |
 | `latency_ms` | Matching time in milliseconds |
 | `element_count` | Number of elements evaluated |
+| `idpiWarning` | Advisory warning when IDPI is in warn mode |
 
-When `explain` is enabled, each match may also include:
-
-- `lexical_score`
-- `embedding_score`
-- `composite`
+When `explain` is enabled, each match may also include lexical and embedding score details.
 
 ## Confidence Levels
 
@@ -124,12 +93,6 @@ Example:
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"username input"}'
-# Response
-{
-  "best_ref": "e14",
-  "confidence": "high",
-  "score": 0.85
-}
 ```
 
 Then use the returned ref:
@@ -152,5 +115,6 @@ curl -X POST http://localhost:9867/tabs/<tabId>/action \
 | Status | Condition |
 | --- | --- |
 | `400` | invalid JSON or missing `query` |
+| `403` | blocked by IDPI in strict mode |
 | `404` | tab not found |
 | `500` | Chrome not initialized, snapshot unavailable, or matcher failure |

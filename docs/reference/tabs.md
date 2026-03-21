@@ -1,16 +1,21 @@
 # Tabs
 
-Tabs are the main execution surface for browsing, extracting, and interacting with pages.
+Tabs are the main execution surface for browsing, extraction, interaction, and diagnostics.
 
-Use tab-scoped routes once you already have a tab ID. Use instance-scoped routes when you need to create a new tab in a specific instance.
+Use tab-scoped HTTP routes once you already have a tab ID. In the CLI, use the normal top-level browser commands with `--tab <id>`.
 
-Tab IDs should be treated as opaque values returned by the API. Do not construct them yourself or assume one stable format across all routes.
+`pinchtab tab` itself is only for:
 
-## Shorthand Browser Commands
+- listing tabs
+- focusing a tab
+- opening a new tab
+- closing a tab
 
-Top-level browser commands such as `nav`, `snap`, `text`, `click`, `type`, `fill`, `pdf`, `ss`, `eval`, and `health` now have their own quick reference pages.
+There are no subcommands such as `pinchtab tab navigate` or `pinchtab tab click`.
 
-Use those pages when you want the shorthand route plus the matching CLI command:
+## Top-Level Browser Commands
+
+These pages cover the shorthand routes and matching CLI commands:
 
 - [Health](./health.md)
 - [Navigate](./navigate.md)
@@ -27,6 +32,7 @@ Use those pages when you want the shorthand route plus the matching CLI command:
 - [Scroll](./scroll.md)
 - [Select](./select.md)
 - [Focus](./focus.md)
+- [Find](./find.md)
 
 ## Open A Tab In A Specific Instance
 
@@ -42,17 +48,17 @@ curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
 }
 ```
 
-There is no dedicated instance-scoped `tab open` CLI command today.
-
-If you want a CLI shortcut that opens a tab and navigates it, use:
+There is still no dedicated instance-scoped tab-open CLI command. The CLI shortcut is:
 
 ```bash
 pinchtab instance navigate inst_ea2e747f https://pinchtab.com
 ```
 
+That command opens a tab for the instance and then navigates it.
+
 ## List Tabs
 
-### Shorthand Or Bridge List
+### Active Bridge Or Shorthand Context
 
 ```bash
 curl http://localhost:9867/tabs
@@ -73,126 +79,116 @@ pinchtab tab
 
 Notes:
 
-- `GET /tabs` is not a fleet-wide orchestrator inventory
+- `GET /tabs` is not a fleet-wide inventory
 - in bridge mode or shorthand mode it lists tabs from the active browser context
 - `pinchtab tab` follows that shorthand behavior
 
-### One Instance
+### Tabs For One Instance
 
 ```bash
 curl http://localhost:9867/instances/inst_ea2e747f/tabs
-# Response
-[
-  {
-    "id": "8f9c7d4e1234567890abcdef12345678",
-    "instanceId": "inst_ea2e747f",
-    "url": "https://pinchtab.com",
-    "title": "PinchTab"
-  }
-]
 ```
 
-### All Running Instances
+### Tabs Across All Running Instances
 
 ```bash
 curl http://localhost:9867/instances/tabs
 ```
 
-Use `GET /instances/tabs` when you need the fleet-wide view.
+Use `GET /instances/tabs` when you need the orchestrator-wide view.
 
-## Navigate An Existing Tab
+## Focus, Create, And Close From The CLI
+
+```bash
+pinchtab tab                           # list tabs
+pinchtab tab 2                         # focus tab by 1-based index
+pinchtab tab 8f9c7d4e1234...           # focus tab by tab ID
+pinchtab tab new                       # open blank tab
+pinchtab tab new https://example.com   # open and navigate
+pinchtab tab close 8f9c7d4e1234...     # close tab
+```
+
+Numeric arguments are resolved as 1-based indices against `GET /tabs`. Non-numeric arguments are treated as tab IDs.
+
+## Operate On An Existing Tab
+
+Use the tab-scoped HTTP route or the top-level CLI command with `--tab`.
+
+### Navigate
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 # CLI Alternative
-pinchtab tab navigate <tabId> https://example.com
-# Response
-{
-  "tabId": "8f9c7d4e1234567890abcdef12345678",
-  "url": "https://example.com",
-  "title": "Example Domain"
-}
+pinchtab nav https://example.com --tab <tabId>
 ```
 
-## Snapshot
+### Snapshot
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/snapshot?interactive=true&compact=true"
 # CLI Alternative
-pinchtab tab snapshot <tabId> -i -c
+pinchtab snap --tab <tabId> -i -c
 ```
 
-Use this to retrieve the accessibility snapshot and element refs for the page.
-
-## Text
+### Text
 
 ```bash
-curl "http://localhost:9867/tabs/<tabId>/text?raw=true"
+curl "http://localhost:9867/tabs/<tabId>/text?mode=raw"
 # CLI Alternative
-pinchtab tab text <tabId> --raw
+pinchtab text --tab <tabId> --raw
 ```
 
-## Find
+### Find
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"login button"}'
-# Response
-{
-  "best_ref": "e5",
-  "confidence": "high",
-  "score": 0.85
-}
+# CLI Alternative
+pinchtab find --tab <tabId> "login button"
 ```
 
-There is no dedicated CLI `find` command today.
-
-## Action
+### Actions
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e5"}'
-# CLI Alternative
-pinchtab tab click <tabId> e5
+# CLI Alternatives
+pinchtab click --tab <tabId> e5
+pinchtab fill --tab <tabId> '#email' 'ada@example.com'
+pinchtab wait --tab <tabId> 'text:Done'
+pinchtab network --tab <tabId> --limit 20
 ```
 
-Other CLI-backed tab operations include:
-
-- `pinchtab tab type <tabId> <ref> <text>`
-- `pinchtab tab fill <tabId> <ref> <text>`
-- `pinchtab tab press <tabId> <key>`
-- `pinchtab tab hover <tabId> <ref>`
-- `pinchtab tab scroll <tabId> <direction|pixels>`
-- `pinchtab tab select <tabId> <ref> <value>`
-- `pinchtab tab focus <tabId> <ref>`
-
-## Screenshot
+### Screenshot
 
 ```bash
-curl "http://localhost:9867/tabs/<tabId>/screenshot?raw=true" > out.png
+curl "http://localhost:9867/tabs/<tabId>/screenshot?raw=true" > out.jpg
 # CLI Alternative
-pinchtab tab screenshot <tabId> -o out.png
+pinchtab screenshot --tab <tabId> -o out.jpg
 ```
 
-## PDF
+### PDF
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/pdf?raw=true" > page.pdf
 # CLI Alternative
-pinchtab tab pdf <tabId> -o page.pdf
+pinchtab pdf --tab <tabId> -o page.pdf
 ```
 
 ## Cookies
 
 ```bash
 curl http://localhost:9867/tabs/<tabId>/cookies
-# CLI Alternative
-pinchtab tab cookies <tabId>
+curl -X POST http://localhost:9867/tabs/<tabId>/cookies \
+  -H "Content-Type: application/json" \
+  -d '{"cookies":[{"name":"session","value":"abc"}]}'
 ```
+
+There is no dedicated top-level cookies CLI command today.
 
 ## Metrics
 
@@ -200,57 +196,26 @@ pinchtab tab cookies <tabId>
 curl http://localhost:9867/tabs/<tabId>/metrics
 ```
 
-This returns aggregate browser metrics for the tab's owning instance, not isolated per-tab memory.
+This reports memory metrics for the tab through the bridge, not a full per-tab performance profile.
 
 ## Lock And Unlock
 
-Tab lock/unlock is **API-only** — no CLI commands exist yet.
-
-### Lock A Specific Tab
+Tab locking is API-only.
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/lock \
   -H "Content-Type: application/json" \
   -d '{"owner":"my-agent","ttl":60}'
-```
 
-### Lock The Active Tab
-
-```bash
-curl -X POST http://localhost:9867/tab/lock \
-  -H "Content-Type: application/json" \
-  -d '{"owner":"my-agent","ttl":60}'
-```
-
-### Unlock A Specific Tab
-
-```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/unlock \
   -H "Content-Type: application/json" \
   -d '{"owner":"my-agent"}'
 ```
 
-### Unlock The Active Tab
-
-```bash
-curl -X POST http://localhost:9867/tab/unlock \
-  -H "Content-Type: application/json" \
-  -d '{"owner":"my-agent"}'
-```
-
-## Close A Tab
-
-```bash
-curl -X POST http://localhost:9867/tabs/<tabId>/close
-# CLI Alternative
-pinchtab tab close <tabId>
-# Response
-{
-  "status": "closed"
-}
-```
+There are also active-tab forms at `POST /tab/lock` and `POST /tab/unlock`.
 
 ## Important Limits
 
-- **There is no `GET /tabs/{id}` endpoint** for fetching single tab info. Use `GET /tabs` to list all tabs or access tab-scoped sub-paths like `/tabs/{id}/snapshot`, `/tabs/{id}/action`, etc.
-- `GET /tabs` and `GET /instances/tabs` serve different purposes and should not be treated as interchangeable
+- There is no `GET /tabs/{id}` endpoint for fetching single-tab metadata.
+- `GET /tabs` and `GET /instances/tabs` serve different purposes and are not interchangeable.
+- In the CLI, tab-scoped work happens through top-level commands with `--tab`, not through `pinchtab tab <subcommand>` variants.

@@ -5,12 +5,11 @@
 - interactive menu mode
 - direct command mode
 
-Use menu mode when you want a guided local control surface.
-Use direct commands when you want a faster shell workflow or want to script PinchTab.
+Use the menu when you want a guided local control surface. Use direct commands when you want shell history, scripts, or remote targeting with `--server`.
 
 ## Interactive Menu
 
-When you run `pinchtab` with no subcommand in an interactive terminal, it shows the startup banner and main menu.
+Running `pinchtab` with no subcommand in an interactive terminal opens the menu. It does not immediately start the server.
 
 Typical flow:
 
@@ -31,117 +30,97 @@ Main Menu
   8. Exit
 ```
 
-What each entry does:
-
-- `Start server` starts the full PinchTab server
-- `Daemon` shows background service status and actions
-- `Start bridge` starts the single-instance bridge runtime
-- `Start MCP server` starts the stdio MCP server
-- `Config` opens the interactive config screen
-- `Security` opens the interactive security screen
-- `Help` shows the command help tree
-
 ## Direct Commands
 
-You can always bypass the menu and call commands directly.
-
-Common examples:
+Use direct commands when you already know the action you want:
 
 ```bash
 pinchtab server
-pinchtab daemon
+pinchtab bridge
+pinchtab mcp
 pinchtab config
-pinchtab security
 pinchtab nav https://example.com
 pinchtab snap -i -c
 pinchtab click e5
-pinchtab text
+pinchtab find "login button"
+pinchtab network --limit 20
 ```
 
-Direct commands are the better fit when:
-
-- you are scripting PinchtTab
-- you want repeatable shell history
-- you are calling PinchtTab from another tool
-- you already know which command you want
-
-## Core Local Commands
-
-These are the main local-control commands surfaced in the menu:
+## Core Commands
 
 | Command | Purpose |
 | --- | --- |
-| `pinchtab` | Open the interactive menu in a terminal, or start the server in non-interactive use |
 | `pinchtab server` | Start the full server and dashboard |
-| `pinchtab daemon` | Show daemon status and manage the background service |
-| `pinchtab config` | Open the interactive config overview/editor |
-| `pinchtab security` | Review or change the current security posture |
-| `pinchtab completion <shell>` | Generate shell completion scripts for `bash`, `zsh`, `fish`, or `powershell` |
 | `pinchtab bridge` | Start the single-instance bridge runtime |
 | `pinchtab mcp` | Start the stdio MCP server |
+| `pinchtab daemon` | Show daemon status and manage the background service |
+| `pinchtab config` | Open the interactive config overview/editor |
+| `pinchtab security` | Open the interactive security overview |
+| `pinchtab completion <shell>` | Generate shell completion scripts |
 
-## Shell Completion
+## Browser Commands
 
-Use the built-in completion command to generate shell-specific scripts:
+The browser control surface is top-level. `tab` is only for list/focus/new/close.
 
-```bash
-# Generate and install zsh completions
-pinchtab completion zsh > "${fpath[1]}/_pinchtab"
-
-# Generate bash completions
-pinchtab completion bash > /etc/bash_completion.d/pinchtab
-
-# Generate fish completions
-pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
-```
-
-## Browser Shortcuts
-
-The most common browser control shortcuts are top-level commands:
+Common commands:
 
 | Command | Purpose |
 | --- | --- |
-| `pinchtab nav <url>` | Navigate to a URL |
-| `pinchtab quick <url>` | Navigate and analyze the page |
-| `pinchtab snap` | Get an accessibility snapshot |
-| `pinchtab click <ref>` | Click an element ref |
-| `pinchtab type <ref> <text>` | Type into an element |
-| `pinchtab fill <ref|selector> <text>` | Fill an input directly |
+| `pinchtab nav <url>` | Open a new tab and navigate it |
+| `pinchtab quick <url>` | Navigate and snapshot |
+| `pinchtab snap` | Accessibility snapshot |
+| `pinchtab click <selector>` | Click an element |
+| `pinchtab type <selector> <text>` | Type via key events |
+| `pinchtab fill <selector> <text>` | Fill directly |
 | `pinchtab text` | Extract page text |
-| `pinchtab screenshot` | Capture a screenshot |
-| `pinchtab pdf` | Export the current page as PDF |
-| `pinchtab health` | Check server health |
+| `pinchtab find <query>` | Semantic element search |
+| `pinchtab screenshot` | Save a screenshot |
+| `pinchtab pdf` | Export the page as PDF |
+| `pinchtab network` | Inspect captured network requests |
+| `pinchtab wait ...` | Wait for selector, text, URL, JS, or time |
+| `pinchtab console` | Show browser console logs |
+| `pinchtab errors` | Show browser error logs |
+
+Many browser commands accept `--tab <id>` to target an existing tab instead of the active one.
+
+## Tab Command
+
+`pinchtab tab` is intentionally small:
+
+```bash
+pinchtab tab
+pinchtab tab <id>
+pinchtab tab new [url]
+pinchtab tab close <id>
+```
+
+For tab-scoped actions, use the normal top-level command with `--tab`:
+
+```bash
+pinchtab click --tab <id> e5
+pinchtab pdf --tab <id> -o page.pdf
+```
 
 ## Config From The CLI
 
-`pinchtab config` now acts as the main interactive config screen.
+`pinchtab config` shows:
 
-It shows:
-
-- instance strategy
-- allocation policy
-- default stealth level
-- default tab eviction policy
-- config file path
-- dashboard URL when the server is running
+- `multiInstance.strategy`
+- `multiInstance.allocationPolicy`
+- `instanceDefaults.stealthLevel`
+- `instanceDefaults.tabEvictionPolicy`
+- the active config file path
+- the dashboard URL when the server is running
 - the masked server token
-- a `Copy token` action for clipboard/manual copy
+- a `Copy token` action
 
-For exact config commands and schema details, see [Config](./config.md).
+For file schema details and `config get/set/patch`, see [Config](./config.md).
 
 ## Security From The CLI
 
-`pinchtab security` is the main interactive security screen.
+`pinchtab security` is the interactive security screen.
 
-Use it to:
-
-- review the current posture
-- inspect warnings
-- edit individual security controls
-- apply `security up`
-- apply `security down`
-
-The direct subcommands also exist:
+Direct subcommands:
 
 ```bash
 pinchtab security up
@@ -150,28 +129,23 @@ pinchtab security down
 
 For broader security guidance, see [Security Guide](../guides/security.md).
 
-## Daemon From The CLI
+## Daemon
 
-`pinchtab daemon` shows status, recent logs, and available actions.
-
-The command is supported on:
+`pinchtab daemon` supports:
 
 - macOS via `launchd`
 - Linux via user `systemd`
 
-It will fail fast when the current environment cannot manage a user service, for example:
-
-- Linux shells without a working `systemctl --user` session
-- macOS sessions without an active GUI `launchd` domain
+Windows binaries exist, but daemon workflows are not currently supported there. Use `pinchtab server` or `pinchtab bridge` directly.
 
 For operational details, see [Background Service (Daemon)](../guides/daemon.md).
 
 ## Full Command Tree
 
-Use the built-in help for the current command tree:
+Use built-in help for the live command tree:
 
 ```bash
 pinchtab --help
 ```
 
-For per-command reference pages, start at [Reference Index](./index.md).
+For per-command pages, start at [Reference Index](./index.md).

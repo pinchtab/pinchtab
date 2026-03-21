@@ -1,6 +1,6 @@
 # Focus
 
-Move focus to an element by ref.
+Move focus to an element by selector or ref.
 
 ```bash
 curl -X POST http://localhost:9867/action \
@@ -18,6 +18,8 @@ pinchtab focus e8
 ```
 
 This is useful before keyboard-only flows such as `press Enter` or `type`.
+
+The raw action endpoint accepts either `ref` or `selector`. The CLI accepts the same unified selector forms as other top-level action commands.
 
 ## Related Pages
 

@@ -1,11 +1,11 @@
 # Scroll
 
-Scroll the current tab by direction or pixel amount.
+Scroll the current tab or a specific element.
 
 ```bash
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"scroll","direction":"down"}'
+  -d '{"kind":"scroll","scrollY":800}'
 # CLI Alternative
 pinchtab scroll down
 # Response
@@ -20,7 +20,8 @@ pinchtab scroll down
 Notes:
 
 - the top-level CLI also accepts a pixel value such as `pinchtab scroll 800`
-- the raw API can also use `scrollY`
+- the raw API uses `scrollY` and `scrollX` for page scrolling
+- the raw API can also target an element with `ref` or `selector`
 
 ## Related Pages
 
