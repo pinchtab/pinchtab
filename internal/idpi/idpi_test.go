@@ -214,6 +214,28 @@ func TestCheckDomain_EmptyListAllowsNoHost(t *testing.T) {
 	}
 }
 
+func TestDomainAllowed(t *testing.T) {
+	cfg := enabledCfg(func(c *config.IDPIConfig) {
+		c.AllowedDomains = []string{"fixtures", "*.example.com"}
+	})
+
+	if !DomainAllowed("http://fixtures:80/index.html", cfg) {
+		t.Fatal("expected fixtures to match explicit allowlist")
+	}
+	if !DomainAllowed("https://api.example.com", cfg) {
+		t.Fatal("expected wildcard subdomain to match explicit allowlist")
+	}
+	if DomainAllowed("https://evil.com", cfg) {
+		t.Fatal("unexpected allowlist match for evil.com")
+	}
+	if DomainAllowed("about:blank", cfg) {
+		t.Fatal("special URLs should not count as explicit allowlist matches")
+	}
+	if DomainAllowed("http://fixtures:80/index.html", config.IDPIConfig{}) {
+		t.Fatal("disabled/empty IDPI config should not report explicit allowlist matches")
+	}
+}
+
 // ─── ScanContent ──────────────────────────────────────────────────────────────
 
 func TestScanContent_DisabledAlwaysPasses(t *testing.T) {

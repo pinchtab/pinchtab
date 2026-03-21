@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -191,6 +192,10 @@ func TestOpenAPIIncludesSensitiveEndpointStatus(t *testing.T) {
 }
 
 func TestHandleNavigate(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	})
+
 	cfg := &config.RuntimeConfig{}
 	m := &mockBridge{}
 	h := New(m, cfg, nil, nil, nil)

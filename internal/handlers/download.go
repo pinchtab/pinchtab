@@ -5,9 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -27,18 +25,10 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
-var resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
-	return net.DefaultResolver.LookupIP(ctx, network, host)
-}
-
 var errDownloadTooLarge = errors.New("download response too large")
-
-var blockedDownloadPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("100.64.0.0/10"), // Carrier-grade NAT/shared address space.
-	netip.MustParsePrefix("198.18.0.0/15"), // Benchmark/testing networks.
-}
 
 type downloadURLGuard struct {
 	allowedDomains []string
@@ -58,28 +48,22 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 		return fmt.Errorf("only http/https schemes are allowed")
 	}
 
-	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
-	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	host := netguard.NormalizeHost(parsed.Hostname())
+	if host == "" || netguard.IsLocalHost(host) {
 		return fmt.Errorf("internal or blocked host")
 	}
 
-	if ip := net.ParseIP(host); ip != nil {
-		if err := validateDownloadIP(ip); err != nil {
-			return err
-		}
-	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
 
-		ips, err := resolveDownloadHostIPs(ctx, "ip", host)
-		if err != nil {
+	if _, err := netguard.ResolveAndValidatePublicIPs(ctx, host); err != nil {
+		if errors.Is(err, netguard.ErrResolveHost) {
 			return fmt.Errorf("could not resolve host")
 		}
-		for _, ip := range ips {
-			if err := validateDownloadIP(ip); err != nil {
-				return err
-			}
+		if errors.Is(err, netguard.ErrPrivateInternalIP) {
+			return fmt.Errorf("private/internal IP blocked")
 		}
+		return fmt.Errorf("could not resolve host")
 	}
 
 	if result := idpi.CheckDomain(rawURL, config.IDPIConfig{
@@ -92,27 +76,6 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 	return nil
 }
 
-func validateDownloadIP(ip net.IP) error {
-	if ip == nil {
-		return fmt.Errorf("private/internal IP blocked")
-	}
-
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return fmt.Errorf("private/internal IP blocked")
-	}
-	addr = addr.Unmap()
-	if addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsInterfaceLocalMulticast() || addr.IsMulticast() || addr.IsUnspecified() {
-		return fmt.Errorf("private/internal IP blocked")
-	}
-	for _, prefix := range blockedDownloadPrefixes {
-		if prefix.Contains(addr) {
-			return fmt.Errorf("private/internal IP blocked")
-		}
-	}
-	return nil
-}
-
 func validateDownloadRemoteIPAddress(raw string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -121,15 +84,15 @@ func validateDownloadRemoteIPAddress(raw string) error {
 		return nil
 	}
 
-	raw = strings.TrimPrefix(raw, "[")
-	raw = strings.TrimSuffix(raw, "]")
-
-	ip := net.ParseIP(raw)
-	if ip == nil {
+	normalized := netguard.NormalizeRemoteIP(raw)
+	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
+		if errors.Is(err, netguard.ErrUnparseableRemoteIP) {
+			return fmt.Errorf("download connected to an unparseable remote IP %q", normalized)
+		}
+		if errors.Is(err, netguard.ErrPrivateInternalIP) {
+			return fmt.Errorf("download connected to blocked remote IP %s", normalized)
+		}
 		return fmt.Errorf("download connected to an unparseable remote IP %q", raw)
-	}
-	if err := validateDownloadIP(ip); err != nil {
-		return fmt.Errorf("download connected to blocked remote IP %s", raw)
 	}
 	return nil
 }

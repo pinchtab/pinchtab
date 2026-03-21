@@ -15,6 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 type downloadPolicyBridge struct {
@@ -45,6 +46,15 @@ func (m *downloadPolicyBridge) GetTabPolicyState(tabID string) (bridge.TabPolicy
 	return m.policy, m.hasState
 }
 
+func stubDownloadHostResolution(t *testing.T, fn func(context.Context, string, string) ([]net.IP, error)) {
+	t.Helper()
+	originalResolver := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = fn
+	t.Cleanup(func() {
+		netguard.ResolveHostIPs = originalResolver
+	})
+}
+
 func TestHandleDownload_MissingURL(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{AllowDownload: true}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/download", nil)
@@ -66,11 +76,7 @@ func TestHandleDownload_EmptyURL(t *testing.T) {
 }
 
 func TestValidateDownloadURL(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
@@ -79,7 +85,7 @@ func TestValidateDownloadURL(t *testing.T) {
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	tests := []struct {
 		name    string
@@ -191,18 +197,14 @@ func TestHandleDownload_Disabled(t *testing.T) {
 }
 
 func TestDownloadRequestGuard_BlocksBrowserSideRequests(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	guard := newDownloadRequestGuard(newDownloadURLGuard(nil), -1)
 	err := guard.Validate("http://127.0.0.1:1337/increment", false)
@@ -215,18 +217,14 @@ func TestDownloadRequestGuard_BlocksBrowserSideRequests(t *testing.T) {
 }
 
 func TestDownloadURLGuard_EnforcesAllowedDomains(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com", "cdn.pinchtab.com", "example.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	guard := newDownloadURLGuard([]string{"pinchtab.com", "*.pinchtab.com"})
 
@@ -279,18 +277,14 @@ func TestParseContentLengthHeader(t *testing.T) {
 }
 
 func TestHandleDownload_TabLocked(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	b := &downloadPolicyBridge{
 		lock: &bridge.LockInfo{
@@ -308,18 +302,14 @@ func TestHandleDownload_TabLocked(t *testing.T) {
 }
 
 func TestHandleDownload_TabScopedCrossOriginBlockedForCookieAuth(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com", "example.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	b := &downloadPolicyBridge{
 		hasState: true,
@@ -345,18 +335,14 @@ func TestHandleDownload_TabScopedCrossOriginBlockedForCookieAuth(t *testing.T) {
 }
 
 func TestHandleDownload_TabScopedCrossOriginAllowedForHeaderAuth(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com", "example.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	b := &downloadPolicyBridge{
 		hasState: true,
@@ -382,18 +368,14 @@ func TestHandleDownload_TabScopedCrossOriginAllowedForHeaderAuth(t *testing.T) {
 }
 
 func TestDownloadRequestGuard_TracksRedirectLimits(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	guard := newDownloadRequestGuard(newDownloadURLGuard(nil), 0)
 	err := guard.Validate("https://pinchtab.com/redirected", true)
@@ -403,18 +385,14 @@ func TestDownloadRequestGuard_TracksRedirectLimits(t *testing.T) {
 }
 
 func TestHandleDownload_RejectsURLOutsideAllowedDomains(t *testing.T) {
-	originalResolver := resolveDownloadHostIPs
-	t.Cleanup(func() {
-		resolveDownloadHostIPs = originalResolver
-	})
-	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
 		switch host {
 		case "pinchtab.com", "example.com":
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		default:
 			return nil, errors.New("not found")
 		}
-	}
+	})
 
 	h := New(&mockBridge{}, &config.RuntimeConfig{
 		AllowDownload:          true,

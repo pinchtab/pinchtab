@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +19,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 )
-
-const maxBodySize = 1 << 20
 
 // HandleNavigate navigates a tab to a URL or creates a new tab.
 //
@@ -91,8 +88,23 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.URL == "" {
-		httpx.Error(w, 400, fmt.Errorf("url required"))
+	if err := validateNavigateURL(req.URL); err != nil {
+		httpx.Error(w, 400, err)
+		return
+	}
+
+	domainResult := idpi.CheckDomain(req.URL, h.Config.IDPI)
+	if domainResult.Blocked {
+		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
+		return
+	}
+	if domainResult.Threat {
+		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
+	}
+
+	target, err := validateNavigateTarget(req.URL, idpi.DomainAllowed(req.URL, h.Config.IDPI))
+	if err != nil {
+		httpx.Error(w, http.StatusForbidden, err)
 		return
 	}
 	h.recordNavigateRequest(r, req.TabID, req.URL)
@@ -162,22 +174,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
-		// Block dangerous/unsupported schemes; allow bare hostnames (e.g. "pinchtab.com")
-		// which Chrome handles gracefully by prepending https://.
-		if parsed, err := url.Parse(req.URL); err == nil && parsed.Scheme != "" {
-			blocked := parsed.Scheme == "javascript" || parsed.Scheme == "vbscript" || parsed.Scheme == "data"
-			if blocked {
-				httpx.Error(w, 400, fmt.Errorf("invalid URL scheme: %s", parsed.Scheme))
-				return
-			}
-		}
-		// IDPI: block or warn on non-whitelisted domains before the tab opens.
-		if result := idpi.CheckDomain(req.URL, h.Config.IDPI); result.Blocked {
-			httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", result.Reason))
-			return
-		} else if result.Threat {
-			w.Header().Set("X-IDPI-Warning", result.Reason)
-		}
 		// Create a blank tab first so the requested URL becomes the first
 		// real history entry.
 		newTabID, newCtx, _, err := h.Bridge.CreateTab("")
@@ -189,12 +185,23 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		tCtx, tCancel := context.WithTimeout(newCtx, navTimeout)
 		defer tCancel()
 		go httpx.CancelOnClientDone(r.Context(), tCancel)
+		navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
+			return
+		}
 
 		if len(blockPatterns) > 0 {
 			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 		}
 
 		if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
+			if navGuard != nil {
+				if blockedErr := navGuard.blocked(); blockedErr != nil {
+					httpx.Error(w, http.StatusForbidden, blockedErr)
+					return
+				}
+			}
 			code := 500
 			errMsg := err.Error()
 			if errors.Is(err, bridge.ErrTooManyRedirects) {
@@ -227,17 +234,14 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// IDPI: domain whitelist check also applies when re-navigating an existing tab.
-	if result := idpi.CheckDomain(req.URL, h.Config.IDPI); result.Blocked {
-		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", result.Reason))
-		return
-	} else if result.Threat {
-		w.Header().Set("X-IDPI-Warning", result.Reason)
-	}
-
 	tCtx, tCancel := context.WithTimeout(ctx, navTimeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target)
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
+		return
+	}
 	if len(blockPatterns) > 0 {
 		_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 	} else {
@@ -246,6 +250,12 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
+		if navGuard != nil {
+			if blockedErr := navGuard.blocked(); blockedErr != nil {
+				httpx.Error(w, http.StatusForbidden, blockedErr)
+				return
+			}
+		}
 		code := 500
 		errMsg := err.Error()
 		if errors.Is(err, bridge.ErrTooManyRedirects) {
@@ -317,48 +327,6 @@ func (h *Handlers) HandleTabNavigate(w http.ResponseWriter, r *http.Request) {
 	req.Header = r.Header.Clone()
 	req.Header.Set("Content-Type", "application/json")
 	h.HandleNavigate(w, req)
-}
-
-func (h *Handlers) waitForNavigationState(ctx context.Context, waitFor, waitSelector string) error {
-	waitMode := strings.ToLower(strings.TrimSpace(waitFor))
-	switch waitMode {
-	case "", "none":
-		return nil
-	case "dom":
-		var ready string
-		return chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &ready))
-	case "selector":
-		if waitSelector == "" {
-			return fmt.Errorf("waitSelector required when waitFor=selector")
-		}
-		return chromedp.Run(ctx, chromedp.WaitVisible(waitSelector, chromedp.ByQuery))
-	case "networkidle":
-		// Approximation for "network idle": require fully loaded readyState and no URL changes
-		var lastURL string
-		idleChecks := 0
-		for i := 0; i < 12; i++ { // up to ~3s
-			var ready, curURL string
-			if err := chromedp.Run(ctx,
-				chromedp.Evaluate(`document.readyState`, &ready),
-				chromedp.Location(&curURL),
-			); err != nil {
-				return err
-			}
-			if ready == "complete" && curURL == lastURL {
-				idleChecks++
-				if idleChecks >= 2 {
-					return nil
-				}
-			} else {
-				idleChecks = 0
-			}
-			lastURL = curURL
-			time.Sleep(250 * time.Millisecond)
-		}
-		return fmt.Errorf("networkidle wait timed out")
-	default:
-		return fmt.Errorf("unsupported waitFor %q (use: none|dom|selector|networkidle)", waitMode)
-	}
 }
 
 const (

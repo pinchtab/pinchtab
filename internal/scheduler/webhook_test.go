@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 func configureWebhookTestTarget(t *testing.T, serverURL string, timeout time.Duration) (string, *atomic.Value, func()) {
@@ -29,8 +31,8 @@ func configureWebhookTestTarget(t *testing.T, serverURL string, timeout time.Dur
 	}
 	callbackURL += parsed.Path
 
-	origResolver := resolveWebhookHostIPs
-	resolveWebhookHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	origResolver := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
 		if strings.EqualFold(host, "callback.example") {
 			return []net.IP{net.ParseIP("93.184.216.34")}, nil
 		}
@@ -56,7 +58,7 @@ func configureWebhookTestTarget(t *testing.T, serverURL string, timeout time.Dur
 	cleanup := func() {
 		dialWebhookAddress = origDial
 		webhookHTTPTimeout = origTimeout
-		resolveWebhookHostIPs = origResolver
+		netguard.ResolveHostIPs = origResolver
 	}
 	return callbackURL, dialedAddr, cleanup
 }
@@ -143,11 +145,11 @@ func TestSendWebhookRejectedHost(t *testing.T) {
 }
 
 func TestValidateCallbackURLRejectsResolvedBlockedHost(t *testing.T) {
-	origResolver := resolveWebhookHostIPs
-	resolveWebhookHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	origResolver := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("10.0.0.8")}, nil
 	}
-	defer func() { resolveWebhookHostIPs = origResolver }()
+	defer func() { netguard.ResolveHostIPs = origResolver }()
 
 	if err := validateCallbackURL("http://callback.example/hook"); err == nil {
 		t.Fatal("expected resolved private host to be rejected")

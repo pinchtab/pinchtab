@@ -2,22 +2,15 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
-
-var resolveWebhookHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
-	return net.DefaultResolver.LookupIP(ctx, network, host)
-}
-
-var blockedWebhookPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-}
 
 type callbackURLGuard struct{}
 
@@ -50,8 +43,8 @@ func (g *callbackURLGuard) ValidateTarget(rawURL string) (*validatedCallbackTarg
 		return nil, fmt.Errorf("callback URL credentials are not allowed")
 	}
 
-	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
-	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	host := netguard.NormalizeHost(parsed.Hostname())
+	if host == "" || netguard.IsLocalHost(host) {
 		return nil, fmt.Errorf("callback URL host is not allowed")
 	}
 	port := parsed.Port()
@@ -72,40 +65,20 @@ func (g *callbackURLGuard) ValidateTarget(rawURL string) (*validatedCallbackTarg
 		Port: port,
 	}
 
-	if ip := net.ParseIP(host); ip != nil {
-		addr, err := validateWebhookIP(ip)
-		if err != nil {
-			return nil, err
-		}
-		target.IPs = []netip.Addr{addr}
-		return target, nil
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	ips, err := resolveWebhookHostIPs(ctx, "ip", host)
+	ips, err := netguard.ResolveAndValidatePublicIPs(ctx, host)
 	if err != nil {
-		return nil, fmt.Errorf("could not resolve callback host")
-	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("could not resolve callback host")
-	}
-	seen := make(map[netip.Addr]struct{}, len(ips))
-	for _, ip := range ips {
-		addr, err := validateWebhookIP(ip)
-		if err != nil {
-			return nil, err
+		if errors.Is(err, netguard.ErrResolveHost) {
+			return nil, fmt.Errorf("could not resolve callback host")
 		}
-		if _, ok := seen[addr]; ok {
-			continue
+		if errors.Is(err, netguard.ErrPrivateInternalIP) {
+			return nil, fmt.Errorf("callback URL host is not allowed")
 		}
-		seen[addr] = struct{}{}
-		target.IPs = append(target.IPs, addr)
-	}
-	if len(target.IPs) == 0 {
 		return nil, fmt.Errorf("could not resolve callback host")
 	}
+	target.IPs = append(target.IPs, ips...)
 	return target, nil
 }
 
@@ -115,31 +88,4 @@ func validateCallbackURL(rawURL string) error {
 
 func validateCallbackTarget(rawURL string) (*validatedCallbackTarget, error) {
 	return newCallbackURLGuard().ValidateTarget(rawURL)
-}
-
-func validateWebhookIP(ip net.IP) (netip.Addr, error) {
-	if ip == nil {
-		return netip.Addr{}, fmt.Errorf("callback URL host is not allowed")
-	}
-
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return netip.Addr{}, fmt.Errorf("callback URL host is not allowed")
-	}
-	addr = addr.Unmap()
-	if addr.IsPrivate() ||
-		addr.IsLoopback() ||
-		addr.IsLinkLocalUnicast() ||
-		addr.IsLinkLocalMulticast() ||
-		addr.IsInterfaceLocalMulticast() ||
-		addr.IsMulticast() ||
-		addr.IsUnspecified() {
-		return netip.Addr{}, fmt.Errorf("callback URL host is not allowed")
-	}
-	for _, prefix := range blockedWebhookPrefixes {
-		if prefix.Contains(addr) {
-			return netip.Addr{}, fmt.Errorf("callback URL host is not allowed")
-		}
-	}
-	return addr, nil
 }
