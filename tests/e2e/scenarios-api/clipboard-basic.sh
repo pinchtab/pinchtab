@@ -54,11 +54,10 @@ assert_not_ok "rejects missing text"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "Clipboard ignores tabId for compatibility"
+start_test "Clipboard rejects tabId"
 
 pt_get "/clipboard/read?tabId=nonexistent_xyz_999"
-assert_ok "read ignores tabId"
-assert_json_contains "$RESULT" '.text' "$COPY_TEXT" "compat tabId does not affect shared clipboard"
+assert_not_ok "read rejects tabId"
 
 end_test
 

@@ -13,7 +13,7 @@ import (
 var clipboardCmd = &cobra.Command{
 	Use:   "clipboard",
 	Short: "Clipboard operations",
-	Long:  "Read and write shared clipboard content.",
+	Long:  "Read and write the shared server clipboard.",
 }
 
 var clipboardReadCmd = &cobra.Command{

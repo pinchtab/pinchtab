@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 type clipboardRequest struct {
-	TabID string  `json:"tabId"`
-	Text  *string `json:"text"`
+	Text *string `json:"text"`
 }
 
 const maxClipboardTextBytes = 64 << 10
@@ -41,12 +41,23 @@ func (h *Handlers) clipboardEnabled() bool {
 	return h != nil && h.Config != nil && h.Config.AllowClipboard
 }
 
+func rejectClipboardTabID(w http.ResponseWriter, r *http.Request) bool {
+	if strings.TrimSpace(r.URL.Query().Get("tabId")) != "" {
+		httpx.Error(w, http.StatusBadRequest, fmt.Errorf("tabId is not supported for shared clipboard operations"))
+		return true
+	}
+	return false
+}
+
 // HandleClipboardRead reads text from the clipboard.
 func (h *Handlers) HandleClipboardRead(w http.ResponseWriter, r *http.Request) {
 	if !h.clipboardEnabled() {
 		httpx.ErrorCode(w, 403, "clipboard_disabled", httpx.DisabledEndpointMessage("clipboard", "security.allowClipboard"), false, map[string]any{
 			"setting": "security.allowClipboard",
 		})
+		return
+	}
+	if rejectClipboardTabID(w, r) {
 		return
 	}
 
@@ -70,9 +81,14 @@ func (h *Handlers) HandleClipboardWrite(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
+	if rejectClipboardTabID(w, r) {
+		return
+	}
 
 	var req clipboardRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, fmt.Errorf("decode: %w", err))
 		return
 	}

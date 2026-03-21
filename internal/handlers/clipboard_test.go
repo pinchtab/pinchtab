@@ -37,7 +37,7 @@ func TestHandleClipboardReadWriteWithoutTabs(t *testing.T) {
 	}
 }
 
-func TestHandleClipboardReadIgnoresTabID(t *testing.T) {
+func TestHandleClipboardReadRejectsTabID(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowClipboard: true}, nil, nil, nil)
 	h.clipboard.Write("shared")
 
@@ -45,11 +45,20 @@ func TestHandleClipboardReadIgnoresTabID(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleClipboardRead(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected read status 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected read status 400, got %d: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), `"text":"shared"`) {
-		t.Fatalf("expected shared clipboard text, got %s", w.Body.String())
+}
+
+func TestHandleClipboardWriteRejectsTabIDInBody(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowClipboard: true}, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/clipboard/write", bytes.NewReader([]byte(`{"text":"hello","tabId":"tab1"}`)))
+	w := httptest.NewRecorder()
+	h.HandleClipboardWrite(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected write status 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

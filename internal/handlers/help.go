@@ -35,15 +35,16 @@ func (h *Handlers) HandleHelp(wr http.ResponseWriter, _ *http.Request) {
 			"POST /tabs/{id}/upload":   endpointStatusSummary(security["upload"], "set files on a file input in a specific tab"),
 			"GET /screencast":          endpointStatusSummary(security["screencast"], "stream live tab frames"),
 			"GET /screencast/tabs":     endpointStatusSummary(security["screencast"], "list tabs available for live capture"),
-			"GET /clipboard/read":      endpointStatusSummary(security["clipboard"], "read shared clipboard text"),
-			"POST /clipboard/write":    endpointStatusSummary(security["clipboard"], "write shared clipboard text (body: {text})"),
+			"GET /clipboard/read":      endpointStatusSummary(security["clipboard"], "read shared server clipboard text (not tab-scoped)"),
+			"POST /clipboard/write":    endpointStatusSummary(security["clipboard"], "write shared server clipboard text (body: {text})"),
 			"POST /clipboard/copy":     endpointStatusSummary(security["clipboard"], "alias for clipboard write"),
-			"GET /clipboard/paste":     endpointStatusSummary(security["clipboard"], "read shared clipboard text (alias for read)"),
+			"GET /clipboard/paste":     endpointStatusSummary(security["clipboard"], "read shared server clipboard text (alias for read)"),
 		},
 		"security": security,
 		"notes": []string{
 			"Use Authorization: Bearer <token> when auth is enabled.",
 			"Prefer /text with maxChars for token-efficient reads.",
+			"Clipboard endpoints operate on shared server-side state and do not accept tabId.",
 		},
 	})
 }
