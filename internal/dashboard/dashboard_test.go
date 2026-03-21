@@ -163,6 +163,39 @@ func TestDashboardHandleAgentsReturnsTrackedAgents(t *testing.T) {
 	}
 }
 
+func TestDashboardHandleAgentReturnsDetail(t *testing.T) {
+	d := NewDashboard(nil)
+	d.RecordEvent(apiTypes.ActivityEvent{
+		ID:        "evt-1",
+		AgentID:   "agent-1",
+		Channel:   "tool_call",
+		Type:      "navigate",
+		Method:    http.MethodPost,
+		Path:      "/navigate",
+		Timestamp: time.Now().UTC(),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent-1", nil)
+	req.SetPathValue("id", "agent-1")
+	w := httptest.NewRecorder()
+	d.handleAgent(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("handleAgent() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var detail apiTypes.AgentDetail
+	if err := json.NewDecoder(w.Body).Decode(&detail); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if detail.Agent.ID != "agent-1" {
+		t.Fatalf("detail.Agent.ID = %q, want agent-1", detail.Agent.ID)
+	}
+	if len(detail.Events) != 1 || detail.Events[0].AgentID != "agent-1" {
+		t.Fatalf("detail.Events = %#v, want agent-specific events", detail.Events)
+	}
+}
+
 func TestDashboardHandleAgentEventsValidation(t *testing.T) {
 	d := NewDashboard(nil)
 
@@ -205,6 +238,24 @@ func TestDashboardHandleAgentEventsRecordsProgress(t *testing.T) {
 	}
 	if events[0].Type != "progress" {
 		t.Fatalf("RecentEvents()[0].Type = %q, want progress", events[0].Type)
+	}
+}
+
+func TestDashboardHandleAgentEventsByIDUsesRouteAgent(t *testing.T) {
+	d := NewDashboard(nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent-1/events", bytes.NewBufferString(`{"message":"Thinking"}`))
+	req.SetPathValue("id", "agent-1")
+	w := httptest.NewRecorder()
+	d.handleAgentEventsByID(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("handleAgentEventsByID() status = %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 1 || events[0].AgentID != "agent-1" {
+		t.Fatalf("events = %#v, want route agent id", events)
 	}
 }
 

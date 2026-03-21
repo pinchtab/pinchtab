@@ -172,6 +172,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 			path == "/instances/metrics":
 			return true
 		case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/tabs"),
+			strings.HasPrefix(path, "/api/agents/") && !strings.HasSuffix(path, "/events"),
+			strings.HasPrefix(path, "/api/agents/") && strings.HasSuffix(path, "/events"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/logs"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/logs/stream"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/proxy/screencast"),
@@ -184,6 +186,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 		case path == "/api/auth/elevate":
 			return true
 		case path == "/api/agent-events":
+			return true
+		case strings.HasPrefix(path, "/api/agents/") && strings.HasSuffix(path, "/events"):
 			return true
 		case path == "/action":
 			return true

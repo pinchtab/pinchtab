@@ -59,6 +59,13 @@ export interface Agent {
   requestCount: number /* int */;
 }
 /**
+ * AgentDetail returns agent-centric dashboard data for a single agent.
+ */
+export interface AgentDetail {
+  agent: Agent;
+  events: ActivityEvent[];
+}
+/**
  * ActivityEvent represents an action in the activity feed.
  */
 export interface ActivityEvent {

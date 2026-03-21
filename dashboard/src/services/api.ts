@@ -4,6 +4,7 @@ import type {
   InstanceTab,
   InstanceMetrics,
   Agent,
+  AgentDetail,
   ActivityEvent,
   CreateProfileRequest,
   CreateProfileResponse,
@@ -272,6 +273,14 @@ export async function fetchAllMetrics(): Promise<InstanceMetrics[]> {
   return request<InstanceMetrics[]>("/instances/metrics");
 }
 
+export async function fetchAgents(): Promise<Agent[]> {
+  return request<Agent[]>("/api/agents");
+}
+
+export async function fetchAgent(id: string): Promise<AgentDetail> {
+  return request<AgentDetail>(`/api/agents/${encodeURIComponent(id)}`);
+}
+
 export async function fetchServerMetrics(): Promise<MonitoringServerMetrics> {
   const res = await request<{ metrics: MonitoringServerMetrics }>("/metrics");
   return res.metrics;
@@ -406,6 +415,7 @@ export function subscribeToEvents(
   options?: {
     includeMemory?: boolean;
     reasoningMode?: string;
+    agentId?: string;
   },
 ): () => void {
   const params = new URLSearchParams();
@@ -416,7 +426,10 @@ export function subscribeToEvents(
     params.set("mode", options.reasoningMode);
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const url = sameOriginUrl(`/api/events${suffix}`);
+  const basePath = options?.agentId
+    ? `/api/agents/${encodeURIComponent(options.agentId)}/events`
+    : "/api/events";
+  const url = sameOriginUrl(`${basePath}${suffix}`);
   const es = new EventSource(url);
 
   es.addEventListener("init", (e) => {
@@ -487,17 +500,19 @@ export async function postProgress(
   progress?: number,
   total?: number,
 ): Promise<{ status: string; id: string }> {
-  return request<{ status: string; id: string }>("/api/agent-events", {
+  return request<{ status: string; id: string }>(
+    `/api/agents/${encodeURIComponent(agentId)}/events`,
+    {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      agentId,
       channel: "progress",
       message,
       progress,
       total,
     }),
-  });
+    },
+  );
 }
 
 export async function handleRealtimeAuthFailure(): Promise<void> {

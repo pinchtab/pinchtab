@@ -52,6 +52,12 @@ type Agent struct {
 	RequestCount int       `json:"requestCount"`
 }
 
+// AgentDetail returns agent-centric dashboard data for a single agent.
+type AgentDetail struct {
+	Agent  Agent           `json:"agent"`
+	Events []ActivityEvent `json:"events"`
+}
+
 // ActivityEvent represents an action in the activity feed.
 type ActivityEvent struct {
 	ID        string                 `json:"id"`

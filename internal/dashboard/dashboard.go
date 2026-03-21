@@ -207,6 +207,18 @@ func (d *Dashboard) Agents() []apiTypes.Agent {
 	return result
 }
 
+// Agent returns the current summary for a single observed agent.
+func (d *Dashboard) Agent(agentID string) (apiTypes.Agent, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	agent, ok := d.agents[agentIDOrAnonymous(agentID)]
+	if !ok {
+		return apiTypes.Agent{}, false
+	}
+	return *agent, true
+}
+
 // AgentCount returns the number of currently observed agents.
 func (d *Dashboard) AgentCount() int {
 	d.mu.RLock()
@@ -220,6 +232,22 @@ func (d *Dashboard) RecentEvents() []apiTypes.ActivityEvent {
 	defer d.mu.RUnlock()
 	out := make([]apiTypes.ActivityEvent, len(d.recentEvents))
 	copy(out, d.recentEvents)
+	return out
+}
+
+// EventsForAgent returns buffered events for a single agent filtered by mode.
+func (d *Dashboard) EventsForAgent(agentID, mode string) []apiTypes.ActivityEvent {
+	agentID = agentIDOrAnonymous(agentID)
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	out := make([]apiTypes.ActivityEvent, 0, len(d.recentEvents))
+	for _, evt := range d.recentEvents {
+		if evt.AgentID != agentID || !matchesMode(mode, evt.Channel) {
+			continue
+		}
+		out = append(out, evt)
+	}
 	return out
 }
 
@@ -264,6 +292,9 @@ func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 	// API endpoints
 	mux.HandleFunc("GET /api/events", d.handleSSE)
 	mux.HandleFunc("GET /api/agents", d.handleAgents)
+	mux.HandleFunc("GET /api/agents/{id}", d.handleAgent)
+	mux.HandleFunc("GET /api/agents/{id}/events", d.handleAgentSSE)
+	mux.HandleFunc("POST /api/agents/{id}/events", d.handleAgentEventsByID)
 	mux.HandleFunc("POST /api/agent-events", d.handleAgentEvents)
 
 	// Static files served at /dashboard/
@@ -285,32 +316,95 @@ func (d *Dashboard) handleAgents(w http.ResponseWriter, _ *http.Request) {
 	httpx.JSON(w, http.StatusOK, d.Agents())
 }
 
-func (d *Dashboard) handleAgentEvents(w http.ResponseWriter, r *http.Request) {
-	var evt apiTypes.ActivityEvent
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&evt); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "bad_agent_event", "invalid activity event payload", false, nil)
+func (d *Dashboard) handleAgent(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	agent, ok := d.Agent(agentID)
+	if !ok {
+		httpx.ErrorCode(w, http.StatusNotFound, "agent_not_found", "agent not found", false, nil)
 		return
 	}
 
+	mode := strings.TrimSpace(r.URL.Query().Get("mode"))
+	if mode == "" {
+		mode = "both"
+	}
+	if mode != "tool_calls" && mode != "progress" && mode != "both" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_mode", "mode must be tool_calls, progress, or both", false, nil)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, apiTypes.AgentDetail{
+		Agent:  agent,
+		Events: d.EventsForAgent(agentID, mode),
+	})
+}
+
+func (d *Dashboard) handleAgentEvents(w http.ResponseWriter, r *http.Request) {
+	evt, ok := d.decodeProgressEvent(w, r, "")
+	if !ok {
+		return
+	}
+	d.RecordEvent(evt)
+	httpx.JSON(w, http.StatusCreated, map[string]string{"status": "ok", "id": evt.ID})
+}
+
+func (d *Dashboard) handleAgentEventsByID(w http.ResponseWriter, r *http.Request) {
+	pathAgentID := agentIDOrAnonymous(r.PathValue("id"))
+	evt, ok := d.decodeProgressEvent(w, r, pathAgentID)
+	if !ok {
+		return
+	}
+	if evt.AgentID != "" && evt.AgentID != pathAgentID {
+		httpx.ErrorCode(w, http.StatusBadRequest, "agent_mismatch", "agentId must match route parameter", false, nil)
+		return
+	}
+	evt.AgentID = pathAgentID
+	d.RecordEvent(evt)
+	httpx.JSON(w, http.StatusCreated, map[string]string{"status": "ok", "id": evt.ID})
+}
+
+func (d *Dashboard) decodeProgressEvent(w http.ResponseWriter, r *http.Request, fallbackAgentID string) (apiTypes.ActivityEvent, bool) {
+	var evt apiTypes.ActivityEvent
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&evt); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_agent_event", "invalid activity event payload", false, nil)
+		return apiTypes.ActivityEvent{}, false
+	}
+
 	evt.AgentID = strings.TrimSpace(evt.AgentID)
+	if evt.AgentID == "" {
+		evt.AgentID = agentIDOrAnonymous(fallbackAgentID)
+	}
 	evt.Message = strings.TrimSpace(evt.Message)
 	if evt.AgentID == "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", false, nil)
-		return
+		return apiTypes.ActivityEvent{}, false
 	}
 	if evt.Message == "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "missing_message", "message is required", false, nil)
-		return
+		return apiTypes.ActivityEvent{}, false
 	}
 	if evt.Channel != "" && evt.Channel != "progress" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_channel", "channel must be progress", false, nil)
-		return
+		return apiTypes.ActivityEvent{}, false
 	}
 
 	evt.Channel = "progress"
 	evt.Type = "progress"
-	d.RecordEvent(evt)
-	httpx.JSON(w, http.StatusCreated, map[string]string{"status": "ok", "id": evt.ID})
+	return evt, true
+}
+
+func (d *Dashboard) handleAgentSSE(w http.ResponseWriter, r *http.Request) {
+	agentID := agentIDOrAnonymous(r.PathValue("id"))
+	if _, ok := d.Agent(agentID); !ok {
+		httpx.ErrorCode(w, http.StatusNotFound, "agent_not_found", "agent not found", false, nil)
+		return
+	}
+
+	r2 := r.Clone(r.Context())
+	q := r2.URL.Query()
+	q.Set("agentId", agentID)
+	r2.URL.RawQuery = q.Encode()
+	d.handleSSE(w, r2)
 }
 
 func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
@@ -357,6 +451,10 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	includeMemory := r.URL.Query().Get("memory") == "1"
+	agentFilter := agentIDOrAnonymous(strings.TrimSpace(r.URL.Query().Get("agentId")))
+	if strings.TrimSpace(r.URL.Query().Get("agentId")) == "" {
+		agentFilter = ""
+	}
 	agents := d.Agents()
 	data, _ := json.Marshal(agents)
 	_, _ = fmt.Fprintf(w, "event: init\ndata: %s\n\n", data)
@@ -364,6 +462,9 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	for _, evt := range d.RecentEvents() {
 		if !matchesMode(mode, evt.Channel) {
+			continue
+		}
+		if agentFilter != "" && evt.AgentID != agentFilter {
 			continue
 		}
 		d.emitActivityEvent(w, flusher, evt)
@@ -383,7 +484,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case evt := <-activityCh:
-			if matchesMode(mode, evt.Channel) {
+			if matchesMode(mode, evt.Channel) && (agentFilter == "" || evt.AgentID == agentFilter) {
 				d.emitActivityEvent(w, flusher, evt)
 			}
 		case evt := <-sysCh:

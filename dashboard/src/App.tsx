@@ -142,20 +142,22 @@ function AppContent() {
     }
     const load = async () => {
       try {
-        const [instances, profiles, health] = await Promise.all([
+        const [instances, profiles, agents, health] = await Promise.all([
           api.fetchInstances(),
           api.fetchProfiles(),
+          api.fetchAgents(),
           api.fetchHealth(),
         ]);
         setInstances(instances);
         setProfiles(profiles);
+        setAgents(agents);
         setServerInfo(health);
       } catch (e) {
         console.error("Failed to load initial data", e);
       }
     };
     void load();
-  }, [dashboardAccessible, setInstances, setProfiles, setServerInfo]);
+  }, [dashboardAccessible, setAgents, setInstances, setProfiles, setServerInfo]);
 
   useEffect(() => {
     if (!dashboardAccessible) {
