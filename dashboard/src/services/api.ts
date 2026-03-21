@@ -503,14 +503,14 @@ export async function postProgress(
   return request<{ status: string; id: string }>(
     `/api/agents/${encodeURIComponent(agentId)}/events`,
     {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      channel: "progress",
-      message,
-      progress,
-      total,
-    }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "progress",
+        message,
+        progress,
+        total,
+      }),
     },
   );
 }

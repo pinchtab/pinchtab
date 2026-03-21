@@ -157,7 +157,13 @@ function AppContent() {
       }
     };
     void load();
-  }, [dashboardAccessible, setAgents, setInstances, setProfiles, setServerInfo]);
+  }, [
+    dashboardAccessible,
+    setAgents,
+    setInstances,
+    setProfiles,
+    setServerInfo,
+  ]);
 
   useEffect(() => {
     if (!dashboardAccessible) {
