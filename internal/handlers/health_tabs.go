@@ -124,6 +124,10 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 
 	tabs := make([]map[string]any, 0, len(targets))
 	for _, t := range targets {
+		// Skip the initial about:blank tab that Chrome creates on launch
+		if bridge.IsTransientURL(t.URL) {
+			continue
+		}
 		tabID := string(t.TargetID)
 		entry := map[string]any{
 			"id":    tabID,

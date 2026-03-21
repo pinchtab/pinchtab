@@ -32,7 +32,9 @@ type SessionState struct {
 	SavedAt string     `json:"savedAt"`
 }
 
-func isTransientURL(url string) bool {
+// IsTransientURL returns true for URLs that should not be shown in the UI
+// or persisted to session state (about:blank, chrome://, etc.).
+func IsTransientURL(url string) bool {
 	switch url {
 	case "about:blank", "chrome://newtab/", "chrome://new-tab-page/":
 		return true
@@ -133,7 +135,7 @@ func (b *Bridge) SaveState() {
 	tabs := make([]TabState, 0, len(targets))
 	seen := make(map[string]bool, len(targets))
 	for _, t := range targets {
-		if t.URL == "" || isTransientURL(t.URL) {
+		if t.URL == "" || IsTransientURL(t.URL) {
 			continue
 		}
 		if seen[t.URL] {
@@ -222,6 +224,7 @@ func (b *Bridge) RestoreState() {
 		b.tabSetup(ctx)
 		b.mu.Lock()
 		b.tabs[newID] = &TabEntry{Ctx: ctx, Cancel: cancel}
+		b.accessed[newID] = true
 		b.mu.Unlock()
 		restored++
 

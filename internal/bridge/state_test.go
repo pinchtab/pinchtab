@@ -139,7 +139,7 @@ func TestIsTransientURL(t *testing.T) {
 		"http://localhost:3000/dashboard",
 	}
 	for _, u := range transient {
-		if !isTransientURL(u) {
+		if !IsTransientURL(u) {
 			t.Errorf("expected transient: %s", u)
 		}
 	}
@@ -151,7 +151,7 @@ func TestIsTransientURL(t *testing.T) {
 		"https://httpbin.org/get",
 	}
 	for _, u := range persistent {
-		if isTransientURL(u) {
+		if IsTransientURL(u) {
 			t.Errorf("expected persistent: %s", u)
 		}
 	}

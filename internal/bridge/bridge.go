@@ -258,6 +258,11 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		b.InitActionRegistry()
 	}
 
+	// Restore tabs from previous session (if any saved state exists)
+	if b.tempProfileDir == "" {
+		b.RestoreState()
+	}
+
 	// Start crash monitoring
 	b.MonitorCrashes(nil)
 
@@ -267,6 +272,16 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 // Cleanup releases browser resources and removes temporary profile directories.
 // Must be called on shutdown to prevent Chrome process and disk leaks.
 func (b *Bridge) Cleanup() {
+	// Persist open tabs so next startup can restore them
+	if b.TabManager != nil && b.tempProfileDir == "" {
+		b.SaveState()
+	}
+
+	// Mark a clean exit so Chrome doesn't show a crash recovery bar
+	if b.Config != nil && b.tempProfileDir == "" {
+		MarkCleanExit(b.Config.ProfileDir)
+	}
+
 	// Cancel chromedp contexts (kills main Chrome process)
 	if b.BrowserCancel != nil {
 		b.BrowserCancel()
