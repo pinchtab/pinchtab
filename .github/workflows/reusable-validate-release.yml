@@ -60,6 +60,12 @@ jobs:
             exit 1
           fi
 
+          if ! grep -q "$VERSION" skills/pinchtab/SKILL.md; then
+            echo "Error: skills/pinchtab/SKILL.md does not reference version $VERSION" >&2
+            echo "Please update the skill documentation before releasing." >&2
+            exit 1
+          fi
+
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "tag $TAG already exists on origin" >&2
             exit 1
