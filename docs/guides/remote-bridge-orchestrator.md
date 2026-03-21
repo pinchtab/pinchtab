@@ -102,6 +102,9 @@ Important notes:
 - `allowHosts` must include the remote bridge host
 - `allowSchemes` must include `http` or `https` for bridge attachment
 - `ws` and `wss` are still used for CDP attachment
+- `baseUrl` must be a bare bridge origin; do not include credentials, query strings, fragments, or a path
+
+If you use `allowHosts: ["*"]`, the orchestrator will accept any reachable bridge host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
 
 If you leave `allowSchemes` as only `ws,wss`, `attach-bridge` will be rejected.
 
@@ -120,6 +123,8 @@ pinchtab config set server.token bridge-secret-token
 # Start the bridge
 pinchtab bridge
 ```
+
+This non-loopback bind is a documented, non-default, security-reducing deployment change. It is appropriate here only because the bridge must be reachable from the orchestrator. Keep the bridge token set and expose the port only on a controlled network boundary.
 
 Example bridge origin:
 

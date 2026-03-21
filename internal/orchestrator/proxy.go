@@ -246,6 +246,12 @@ func (o *Orchestrator) parseHTTPInstanceURL(rawURL, port string) (*url.URL, erro
 	if parsed.Path != "" && parsed.Path != "/" {
 		return nil, fmt.Errorf("instance URL %q must not include a path", rawURL)
 	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf("instance URL %q must not include userinfo", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("instance URL %q must not include query or fragment", rawURL)
+	}
 	return parsed, nil
 }
 

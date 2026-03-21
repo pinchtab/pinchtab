@@ -86,6 +86,52 @@ func TestHTTP_CopiesResponseHeaders(t *testing.T) {
 	}
 }
 
+func TestHTTP_StripsSensitiveRequestHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"authorization":   r.Header.Get("Authorization"),
+			"cookie":          r.Header.Get("Cookie"),
+			"xForwardedFor":   r.Header.Get("X-Forwarded-For"),
+			"xForwardedHost":  r.Header.Get("X-Forwarded-Host"),
+			"xForwardedProto": r.Header.Get("X-Forwarded-Proto"),
+			"forwarded":       r.Header.Get("Forwarded"),
+			"xRealIP":         r.Header.Get("X-Real-Ip"),
+			"xRequestID":      r.Header.Get("X-Request-Id"),
+		})
+	}))
+	defer srv.Close()
+
+	req := httptest.NewRequest("GET", "/snapshot", nil)
+	req.Header.Set("Authorization", "Bearer user-token")
+	req.Header.Set("Cookie", "pinchtab_auth_token=session-secret")
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
+	req.Header.Set("X-Forwarded-Host", "app.example")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Forwarded", `for=203.0.113.10;host=app.example;proto=https`)
+	req.Header.Set("X-Real-Ip", "203.0.113.10")
+	req.Header.Set("X-Request-Id", "req-123")
+
+	rec := httptest.NewRecorder()
+	HTTP(rec, req, srv.URL+"/snapshot")
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["authorization"] != "Bearer user-token" {
+		t.Fatalf("authorization = %v, want preserved bearer token", resp["authorization"])
+	}
+	for _, field := range []string{"cookie", "xForwardedFor", "xForwardedHost", "xForwardedProto", "forwarded", "xRealIP", "xRequestID"} {
+		if got := resp[field]; got != "" {
+			t.Fatalf("%s should have been stripped, got %v", field, got)
+		}
+	}
+}
+
 func TestHTTP_UsesSharedClient(t *testing.T) {
 	if DefaultClient == nil {
 		t.Fatal("DefaultClient should not be nil")

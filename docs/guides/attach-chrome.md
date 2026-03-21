@@ -200,6 +200,8 @@ Recommended rules:
 - set `PINCHTAB_TOKEN` when the server is reachable outside localhost
 - only attach to CDP endpoints you trust
 
+If you set `allowHosts` to `["*"]`, PinchTab accepts any reachable attach host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
+
 Also remember:
 
 - Chrome DevTools gives powerful browser control

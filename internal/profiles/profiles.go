@@ -85,6 +85,10 @@ func ValidateProfileName(name string) error {
 	return nil
 }
 
+func isProfileNameValidationError(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "profile name ")
+}
+
 type ProfileManager struct {
 	baseDir string
 	tracker *ActionTracker
@@ -428,6 +432,12 @@ func (pm *ProfileManager) Reset(name string) error {
 		return err
 	}
 
+	resetProfileDir(dir)
+	slog.Info("profile reset", "name", name)
+	return nil
+}
+
+func resetProfileDir(dir string) {
 	nukeDirs := []string{
 		"Default/Sessions",
 		"Default/Session Storage",
@@ -457,9 +467,6 @@ func (pm *ProfileManager) Reset(name string) error {
 	for _, f := range nukeFiles {
 		_ = os.Remove(filepath.Join(dir, f))
 	}
-
-	slog.Info("profile reset", "name", name)
-	return nil
 }
 
 func (pm *ProfileManager) Delete(name string) error {

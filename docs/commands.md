@@ -180,7 +180,7 @@ pinchtab config set <path> <val>        # Set one file-config value
 pinchtab config patch <json>            # Merge JSON into the config file
 pinchtab security                       # Interactive security overview
 pinchtab security up                    # Apply stricter defaults
-pinchtab security down                  # Relax defaults
+pinchtab security down                  # Apply documented guards-down preset
 ```
 
 ## Global Flags

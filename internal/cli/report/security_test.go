@@ -63,6 +63,15 @@ func TestAssessSecurityWarnings(t *testing.T) {
 				t.Fatalf("expected warning %q, got %+v", expected, warnings)
 			}
 		}
+
+		for _, warning := range warnings {
+			if warning.ID != "non_loopback_bind" {
+				continue
+			}
+			if len(warning.Attrs) < 4 || warning.Attrs[3] != "non-loopback bind is a documented, non-default, security-reducing choice; keep a token set and review reverse proxy or port-publishing boundaries explicitly" {
+				t.Fatalf("unexpected non_loopback_bind warning attrs: %+v", warning)
+			}
+		}
 	})
 
 	t.Run("wildcard whitelist is warned", func(t *testing.T) {
@@ -85,6 +94,39 @@ func TestAssessSecurityWarnings(t *testing.T) {
 
 		if !ids["idpi_whitelist_allows_all"] {
 			t.Fatalf("expected wildcard whitelist warning, got %+v", warnings)
+		}
+	})
+
+	t.Run("wildcard attach hosts are called out explicitly", func(t *testing.T) {
+		cfg := &config.RuntimeConfig{
+			Bind:             "127.0.0.1",
+			Token:            "secret",
+			AttachEnabled:    true,
+			AttachAllowHosts: []string{"*"},
+			AttachAllowSchemes: []string{
+				"http",
+				"https",
+			},
+		}
+
+		warnings := assessSecurityWarnings(cfg)
+		ids := make(map[string]bool, len(warnings))
+		var wildcardWarning SecurityWarning
+		for _, warning := range warnings {
+			ids[warning.ID] = true
+			if warning.ID == "attach_wildcard_hosts" {
+				wildcardWarning = warning
+			}
+		}
+
+		if !ids["attach_wildcard_hosts"] {
+			t.Fatalf("expected wildcard attach warning, got %+v", warnings)
+		}
+		if ids["attach_external_hosts"] {
+			t.Fatalf("expected wildcard attach warning to replace generic external-host warning, got %+v", warnings)
+		}
+		if wildcardWarning.Message != "attach allowHosts disables host allowlisting" {
+			t.Fatalf("unexpected wildcard attach warning message: %+v", wildcardWarning)
 		}
 	})
 
@@ -131,6 +173,35 @@ func TestAssessSecurityPosture(t *testing.T) {
 		if posture.Level != "LOCKED" {
 			t.Fatalf("expected LOCKED posture, got %q", posture.Level)
 		}
+	})
+
+	t.Run("wildcard attach scope is surfaced in posture detail", func(t *testing.T) {
+		cfg := &config.RuntimeConfig{
+			Bind:               "127.0.0.1",
+			Token:              "secret",
+			AttachAllowHosts:   []string{"*"},
+			AttachAllowSchemes: []string{"http", "https"},
+			IDPI: config.IDPIConfig{
+				Enabled:        true,
+				AllowedDomains: []string{"example.com"},
+				StrictMode:     true,
+				ScanContent:    true,
+				WrapContent:    true,
+			},
+		}
+
+		posture := assessSecurityPosture(cfg)
+		for _, check := range posture.Checks {
+			if check.ID != "attach_local_only" {
+				continue
+			}
+			if check.Detail != "wildcard (*)" {
+				t.Fatalf("expected wildcard host scope detail, got %q", check.Detail)
+			}
+			return
+		}
+
+		t.Fatal("attach_local_only check not found")
 	})
 
 	t.Run("exposed config drops posture score", func(t *testing.T) {

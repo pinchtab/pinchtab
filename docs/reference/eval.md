@@ -2,6 +2,8 @@
 
 Run JavaScript in the current tab. This endpoint is disabled unless evaluation is explicitly enabled in config.
 
+Enabling `security.allowEvaluate` is a documented, non-default, security-reducing configuration change. It allows arbitrary JavaScript execution in page context and should only be used on trusted systems with authentication and network exposure reviewed explicitly.
+
 ```bash
 curl -X POST http://localhost:9867/evaluate \
   -H "Content-Type: application/json" \

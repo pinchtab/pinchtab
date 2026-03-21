@@ -6,6 +6,11 @@ PinchTab's default and primary deployment model is local-first: one user, one ma
 
 If you run PinchTab on a different machine, do so only if you understand the security model you are operating. Prefer a private or otherwise closed network, avoid exposing the service directly to the public internet, and keep high-risk capabilities disabled unless they are required for that deployment. If they must be enabled, restrict them so only the minimum trusted systems that need them can reach them.
 
+> [!WARNING]
+> PinchTab's dashboard, HTTP API, remote CLI targeting, MCP integrations, and automation routes are all part of the same privileged control plane. They are intended for trusted operators and trusted systems only. Do not expose them to untrusted users, untrusted client systems, or the public internet.
+>
+> If you are unsure whether a non-local or partially exposed deployment is safe, do not expose it yet. Review this guide first and use the private security contact path in `SECURITY.md` before proceeding.
+
 The default security posture is:
 
 - `server.bind = 127.0.0.1`
@@ -42,6 +47,21 @@ This means there are two independent questions:
 
 Both matter.
 
+## Trust Boundary
+
+The important operational rule is simple:
+
+- if a person or system should not be allowed to control browser state, profiles, configuration, attachments, or sensitive endpoint families, it should not be able to reach PinchTab and it should not be given credentials for PinchTab
+
+That includes:
+
+- the browser dashboard
+- direct HTTP API clients
+- CLI usage against a remote server with `--server`
+- MCP clients, plugins, scripts, and other automation layers built on top of the API
+
+These are different interfaces to the same control plane, not separate trust domains.
+
 ## Advanced Deployments
 
 If you intentionally run PinchTab beyond the default local setup, the minimum operator checklist is:
@@ -49,6 +69,7 @@ If you intentionally run PinchTab beyond the default local setup, the minimum op
 - keep `server.token` set to a strong random value
 - narrow network reachability with a trusted network boundary, VPN, firewall, or reverse proxy
 - add TLS at the proxy or transport layer when traffic leaves the local machine
+- enable `server.trustProxyHeaders` only when a trusted reverse proxy is actually stripping and rebuilding `Forwarded` / `X-Forwarded-*` headers for you
 - keep sensitive endpoint families disabled unless they are explicitly needed, and if they are enabled, restrict them to the minimum trusted callers or network paths that must reach them
 - scope `security.attach` and `security.idpi` deliberately for the remote topology you are operating
 
@@ -151,8 +172,13 @@ If you enable attach:
 - keep `allowHosts` narrowly scoped
 - prefer local-only hosts unless external Chrome targets or remote bridges are intentional
 - only attach to browsers and CDP endpoints you trust
+- `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable attach host with an allowed scheme. Use it only on isolated, operator-controlled networks.
 
 If you use `POST /instances/attach-bridge`, `security.attach.allowSchemes` must also include `http` or `https`.
+
+`security.attach.allowSchemes` and `security.attach.enabled` still apply when `allowHosts` contains `"*"`, but host allowlisting no longer provides protection in that configuration.
+
+For `attach-bridge`, `baseUrl` should be a bare bridge origin such as `http://bridge.internal:9868`. Do not include credentials, query strings, fragments, or a path.
 
 ## IDPI
 

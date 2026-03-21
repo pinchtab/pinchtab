@@ -472,10 +472,15 @@ func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
 
 // AttachBridge registers an already-running bridge server as an attached instance.
 func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instance, error) {
+	normalizedBaseURL := strings.TrimRight(baseURL, "/")
+	if parsed, err := url.Parse(normalizedBaseURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		normalizedBaseURL = parsed.Scheme + "://" + parsed.Host
+	}
+
 	inst, err := o.attachExternalInstance(name, bridge.Instance{
 		Attached:   true,
 		AttachType: "bridge",
-		URL:        strings.TrimRight(baseURL, "/"),
+		URL:        normalizedBaseURL,
 	}, token)
 	if err != nil {
 		return nil, err

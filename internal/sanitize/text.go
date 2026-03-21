@@ -10,8 +10,8 @@ const TruncationSuffix = "..."
 
 var (
 	ansiCSI = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
-	unixAbs = regexp.MustCompile(`(^|[\s"'(=])((?:/Users|/home|/var|/tmp|/private|/opt|/etc|/Volumes)(?:/[^\s"'():;<>{}\[\]]+)+)`)
-	winAbs  = regexp.MustCompile(`(^|[\s"'(=])([A-Za-z]:\\(?:[^\s"'():;<>{}\[\]]+\\?)+)`)
+	unixAbs = regexp.MustCompile(`(^|[\s"'(=:])((?:/Users|/home|/var|/tmp|/private|/opt|/etc|/Volumes)(?:/[^\s"'():;<>{}\[\]]+)+)`)
+	winAbs  = regexp.MustCompile(`(^|[\s"'(=:])([A-Za-z]:\\(?:[^\s"'():;<>{}\[\]]+\\?)+)`)
 )
 
 func TruncateUTF8Bytes(s string, maxBytes int) string {

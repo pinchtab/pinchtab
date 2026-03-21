@@ -12,6 +12,9 @@ You can open the dashboard at:
 - `http://localhost:9867`
 - `http://localhost:9867/dashboard`
 
+> [!WARNING]
+> The dashboard is an operator/admin control surface, not a public or multi-user application. Do not expose it to untrusted users. Anyone who can use the dashboard can manage profiles, instances, configuration, and other browser-control capabilities that are enabled on that server.
+
 ---
 
 ## Dashboard overview

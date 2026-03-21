@@ -180,6 +180,8 @@ Notes:
 
 - there is no CLI attach command
 - attach is allowed only when enabled in config under `security.attach`
+- `security.attach.allowHosts` must allow the `cdpUrl` host
+- `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable CDP host with an allowed scheme. Use it only on isolated, operator-controlled networks.
 
 ## Attach An Existing Bridge
 
@@ -195,6 +197,7 @@ curl -X POST http://localhost:9867/instances/attach-bridge \
 
 Notes:
 
-- `baseUrl` must point at a running PinchTab bridge and must not include a path
+- `baseUrl` must be a bare bridge origin; do not include credentials, query strings, fragments, or a path
 - the orchestrator performs a health check before registering it
 - `security.attach.allowHosts` must allow the bridge host
+- `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable bridge host with an allowed scheme. Use it only on isolated, operator-controlled networks.

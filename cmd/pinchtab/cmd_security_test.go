@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -37,6 +38,45 @@ func TestHandleSecurityCommandDefaultConfigSkipsEmptySections(t *testing.T) {
 	for _, needle := range unwanted {
 		if strings.Contains(output, needle) {
 			t.Fatalf("expected output to skip %q\n%s", needle, output)
+		}
+	}
+}
+
+func TestApplySecurityDownPrintsExplicitRiskFraming(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "guarded-token"
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	output := captureStdout(t, func() {
+		cfg, changed, err := applySecurityDown()
+		if err != nil {
+			t.Fatalf("applySecurityDown() error = %v", err)
+		}
+		if !changed {
+			t.Fatal("expected applySecurityDown() to change config")
+		}
+		if cfg == nil {
+			t.Fatal("expected runtime config result")
+		}
+	})
+
+	for _, needle := range []string{
+		"Guards down preset applied",
+		"This is a documented, non-default, security-reducing preset.",
+		"sensitive endpoints and attach are enabled, and IDPI protections are disabled.",
+		"Attach host allowlisting remains local-only.",
+		"Changing server.bind away from 127.0.0.1 later is also an additional explicit weakening",
+	} {
+		if !strings.Contains(output, needle) {
+			t.Fatalf("expected output to contain %q\n%s", needle, output)
 		}
 	}
 }

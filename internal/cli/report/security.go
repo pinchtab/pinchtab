@@ -148,7 +148,7 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 		warnings = append(warnings, SecurityWarning{
 			ID:      "non_loopback_bind",
 			Message: "server exposed on a non-loopback bind address",
-			Attrs:   []any{"bind", cfg.Bind, "hint", "prefer 127.0.0.1 or localhost unless remote access is intentional"},
+			Attrs:   []any{"bind", cfg.Bind, "hint", "non-loopback bind is a documented, non-default, security-reducing choice; keep a token set and review reverse proxy or port-publishing boundaries explicitly"},
 		})
 	}
 
@@ -190,11 +190,20 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 		}
 	}
 
-	if attachAllowsNonLocalHosts(cfg.AttachAllowHosts) {
+	if allowsAllAttachHosts(cfg.AttachAllowHosts) {
+		warnings = append(warnings, SecurityWarning{
+			ID:      "attach_wildcard_hosts",
+			Message: "attach allowHosts disables host allowlisting",
+			Attrs: []any{
+				"allowHosts", cfg.AttachAllowHosts,
+				"hint", "remove '*' and list only approved hosts; wildcard is an explicit security-reducing override for isolated, operator-controlled networks only",
+			},
+		})
+	} else if attachAllowsNonLocalHosts(cfg.AttachAllowHosts) {
 		warnings = append(warnings, SecurityWarning{
 			ID:      "attach_external_hosts",
 			Message: "attach allowHosts includes non-local hosts",
-			Attrs:   []any{"allowHosts", cfg.AttachAllowHosts, "hint", "keep security.attach.allowHosts limited to local addresses unless external Chrome instances are intentional"},
+			Attrs:   []any{"allowHosts", cfg.AttachAllowHosts, "hint", "keep security.attach.allowHosts limited to approved hosts you operate; broad entries expand the remote attach trust boundary"},
 		})
 	}
 
@@ -224,6 +233,15 @@ func isLoopbackBind(bind string) bool {
 func allowsAllDomains(domains []string) bool {
 	for _, domain := range domains {
 		if strings.TrimSpace(domain) == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func allowsAllAttachHosts(hosts []string) bool {
+	for _, host := range hosts {
+		if strings.TrimSpace(host) == "*" {
 			return true
 		}
 	}
@@ -268,6 +286,9 @@ func formatEndpointStatus(enabled []string) string {
 }
 
 func formatHostScope(hosts []string) string {
+	if allowsAllAttachHosts(hosts) {
+		return "wildcard (*)"
+	}
 	if attachAllowsNonLocalHosts(hosts) {
 		return "external hosts allowed"
 	}

@@ -144,6 +144,8 @@ pinchtab config set server.token bridge-secret-token
 pinchtab bridge
 ```
 
+This non-loopback bind is a documented, non-default, security-reducing deployment change. It is appropriate here only because the bridge is intended to be reachable on your tailnet. Keep the bridge token set and do not publish the port beyond that controlled network boundary.
+
 If you are using a daemon or service manager, ensure the config file has `bind: "0.0.0.0"`.
 
 The first common mistake is to leave the bridge on the default localhost bind. When that happens:
@@ -202,6 +204,9 @@ Important details:
 - `allowHosts` must contain the exact hostname or IP you plan to use in `baseUrl`
 - `allowSchemes` must include `http` or `https` for `attach-bridge`
 - `ws` and `wss` remain relevant for CDP attach, not bridge attach
+- `baseUrl` must be a bare origin such as `https://bridge-host:9868`; do not include credentials, query strings, fragments, or a path
+
+Using `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host validation and allows attachment to any reachable bridge host with an allowed scheme. Use it only on isolated, operator-controlled networks.
 
 The second common mistake is to accidentally configure `allowHosts` as one comma-separated string instead of a real JSON array. It must be:
 

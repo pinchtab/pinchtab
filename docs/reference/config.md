@@ -292,6 +292,8 @@ pinchtab config set server.token secret
 pinchtab server
 ```
 
+Changing `server.bind` away from loopback is a documented, non-default, security-reducing deployment change. Use it only when remote reachability is intentional, keep a token set, and review the outer network boundary explicitly.
+
 ### Custom Instance Port Range
 
 ```json
@@ -317,6 +319,8 @@ pinchtab server
 }
 ```
 
+`security.attach.allowHosts` is an allowlist. If you set it to `["*"]`, PinchTab accepts any reachable attach host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
+
 ### Activity Retention
 
 ```json
@@ -329,6 +333,8 @@ pinchtab server
   }
 }
 ```
+
+`server.trustProxyHeaders` should stay `false` unless PinchTab is behind a trusted reverse proxy that overwrites `Forwarded` and `X-Forwarded-*` headers. Do not enable it on direct-exposure deployments or behind proxies that pass client-supplied forwarding headers through unchanged.
 
 ## Legacy Flat Format
 

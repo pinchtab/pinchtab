@@ -47,7 +47,7 @@ Selector forms include:
 
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_eval` | `expression` required, `tabId` | Requires `security.allowEvaluate` |
+| `pinchtab_eval` | `expression` required, `tabId` | Requires `security.allowEvaluate` (documented non-default JS-execution opt-in) |
 | `pinchtab_pdf` | `tabId`, `landscape`, `scale`, `pageRanges` | Returns base64-encoded PDF content |
 | `pinchtab_find` | `query` required, `tabId` | Semantic element search |
 

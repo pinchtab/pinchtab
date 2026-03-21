@@ -43,6 +43,9 @@ PinchTab is designed first for local, single-user control on a machine you manag
 
 If you run PinchTab on a different machine, do it only when you understand the security model. Keep it on a private or otherwise closed network, avoid exposing it directly to the public internet, and keep high-risk endpoint families disabled unless you explicitly need them. If you do enable them, lock them down so only the systems that need them can reach them.
 
+> [!WARNING]
+> The dashboard, HTTP API, MCP server, and remote CLI integrations are privileged operator control surfaces. They are not designed for untrusted users, multi-tenant exposure, or direct public-internet access. If you are unsure how to secure a non-local deployment, review [docs/guides/security.md](docs/guides/security.md) and use the private security contact path in [SECURITY.md](SECURITY.md) before exposing the service.
+
 
 If you prefer not to run a daemon, or if you're on Windows, you can instead run:
 

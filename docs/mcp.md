@@ -2,6 +2,9 @@
 
 PinchTab includes a native [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI agents control the browser through MCP over stdio.
 
+> [!WARNING]
+> The MCP server is part of PinchTab's privileged control plane. It is intended for trusted operators and trusted agent systems only. Do not expose it to untrusted users, untrusted client systems, or the public internet. If you are unsure how to secure a non-local deployment, review [Security](guides/security.md) and use the private security contact path in `SECURITY.md` before exposing the service.
+
 ## Quick Start
 
 1. Start PinchTab in server or bridge mode:

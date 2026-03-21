@@ -10,6 +10,19 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+func profileMutationStatus(err error) int {
+	switch {
+	case err == nil:
+		return http.StatusOK
+	case isProfileNameValidationError(err):
+		return http.StatusBadRequest
+	case strings.Contains(err.Error(), "already exists"):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
 func (pm *ProfileManager) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /profiles", pm.handleList)
 	mux.HandleFunc("POST /profiles", pm.handleCreate)
@@ -86,14 +99,7 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := pm.CreateWithMeta(req.Name, meta); err != nil {
-		// Validation errors → 400, already exists → 409, others → 500
-		if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
-			httpx.Error(w, 400, err)
-		} else if strings.Contains(err.Error(), "already exists") {
-			httpx.Error(w, 409, err)
-		} else {
-			httpx.Error(w, 500, err)
-		}
+		httpx.Error(w, profileMutationStatus(err), err)
 		return
 	}
 
@@ -128,7 +134,7 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := pm.ImportWithMeta(req.Name, req.SourcePath, meta); err != nil {
-		httpx.Error(w, 500, err)
+		httpx.Error(w, profileMutationStatus(err), err)
 		return
 	}
 	authn.AuditLog(r, "profile.imported", "profileName", req.Name)
@@ -159,7 +165,7 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := pm.UpdateMeta(req.Name, updates); err != nil {
-		httpx.Error(w, 500, err)
+		httpx.Error(w, profileMutationStatus(err), err)
 		return
 	}
 	authn.AuditLog(r, "profile.meta_updated", "profileName", req.Name)
@@ -266,13 +272,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	finalName := name
 	if req.Name != nil && *req.Name != name {
 		if err := pm.Rename(name, *req.Name); err != nil {
-			if strings.Contains(err.Error(), "already exists") {
-				httpx.Error(w, 409, err)
-			} else if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
-				httpx.Error(w, 400, err)
-			} else {
-				httpx.Error(w, 500, err)
-			}
+			httpx.Error(w, profileMutationStatus(err), err)
 			return
 		}
 		finalName = *req.Name
@@ -287,7 +287,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 	if len(updates) > 0 {
 		if err := pm.UpdateMeta(finalName, updates); err != nil {
-			httpx.Error(w, 500, err)
+			httpx.Error(w, profileMutationStatus(err), err)
 			return
 		}
 	}

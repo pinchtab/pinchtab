@@ -417,8 +417,16 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 		return fmt.Errorf("scheme %q not allowed (allowed: %v)", parsed.Scheme, o.runtimeCfg.AttachAllowSchemes)
 	}
 
-	if (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Path != "" && parsed.Path != "/" {
-		return fmt.Errorf("bridge baseUrl must not include a path")
+	if parsed.Scheme == "http" || parsed.Scheme == "https" {
+		if parsed.Path != "" && parsed.Path != "/" {
+			return fmt.Errorf("bridge baseUrl must not include a path")
+		}
+		if parsed.User != nil {
+			return fmt.Errorf("bridge baseUrl must not include userinfo")
+		}
+		if parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("bridge baseUrl must not include query or fragment")
+		}
 	}
 
 	// Validate host

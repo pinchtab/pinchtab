@@ -7,6 +7,8 @@
 
 Use the menu when you want a guided local control surface. Use direct commands when you want shell history, scripts, or remote targeting with `--server`.
 
+When you target a remote server with `--server`, the CLI is exercising the same privileged control plane as the dashboard and HTTP API. Do not use it as an access path for untrusted users or untrusted systems. For deployment guidance, see [Security](../guides/security.md).
+
 ## Interactive Menu
 
 Running `pinchtab` with no subcommand in an interactive terminal opens the menu. It does not immediately start the server.
@@ -126,6 +128,8 @@ Direct subcommands:
 pinchtab security up
 pinchtab security down
 ```
+
+`pinchtab security down` applies the documented, non-default, security-reducing preset for local operator workflows. It is not the baseline security posture.
 
 For broader security guidance, see [Security Guide](../guides/security.md).
 

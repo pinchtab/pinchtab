@@ -2,6 +2,9 @@
 
 This directory holds plugins for [SMCP](https://github.com/sanctumos/smcp) (Model Context Protocol server for the Animus/Letta/Sanctum ecosystem). SMCP discovers plugins by scanning a directory for `plugins/<name>/cli.py` and running `python cli.py --describe` to get tool schemas.
 
+> [!WARNING]
+> These plugins expose PinchTab's privileged browser-control surface to MCP/SMCP clients. They are not designed for untrusted users, shared multi-tenant access, or direct public-internet exposure. If you are unsure how to secure a non-local deployment, review [../docs/guides/security.md](../docs/guides/security.md) and use the private security contact path in [../SECURITY.md](../SECURITY.md) before exposing the service.
+
 ## SMCP contract (reference)
 
 Instructions below match the SMCP plugin contract. If your SMCP version differs, prefer [sanctumos/smcp](https://github.com/sanctumos/smcp) and its docs.

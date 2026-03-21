@@ -2,6 +2,9 @@
 
 This guide walks through setting up PinchTab as an MCP tool server for AI coding assistants and agent frameworks.
 
+> [!WARNING]
+> When you connect an MCP client to PinchTab, that client is exercising the same privileged control plane as the dashboard, API, and remote CLI. Only trusted operators and trusted agent systems should be allowed to use it. If you are unsure whether a non-local or partially exposed deployment is safe, stop and review [Security](security.md) before proceeding.
+
 ## What is MCP?
 
 The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard for connecting AI models to external tools. PinchTab implements an MCP server that exposes 21 browser-control tools — navigation, interaction, screenshot, PDF export, and more — over a simple stdio interface that every major AI client supports.
@@ -152,7 +155,7 @@ security:
 
 Restart PinchTab after changing this setting.
 
-> **Warning:** Enabling evaluate allows the agent (and any page it visits) to run arbitrary JavaScript in the browser. Only enable this on trusted networks with a token set.
+> **Warning:** Enabling evaluate is a documented, non-default, security-reducing configuration change. It allows the agent (and any page it visits) to run arbitrary JavaScript in the browser. Only enable it on trusted networks with a token set.
 
 ## Connecting to a Remote PinchTab
 

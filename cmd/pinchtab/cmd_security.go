@@ -32,7 +32,11 @@ func init() {
 	})
 	securityCmd.AddCommand(&cobra.Command{
 		Use:   "down",
-		Short: "Lower guards while keeping loopback bind and API auth enabled",
+		Short: "Apply a documented security-reducing preset while keeping loopback bind and API auth enabled",
+		Long: "Applies the guards-down preset for local operator workflows. " +
+			"This is a documented, non-default, security-reducing configuration change: " +
+			"sensitive endpoint families and attach are enabled, while IDPI protections are disabled. " +
+			"Loopback bind and API authentication remain enabled, and attach host allowlisting stays local-only until you widen it explicitly.",
 		Run: func(cmd *cobra.Command, args []string) {
 			handleSecurityDownCommand()
 		},
@@ -181,9 +185,16 @@ func promptSecurityEdit(cfg *config.RuntimeConfig, posture cli.SecurityPosture, 
 func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck) (*config.RuntimeConfig, bool, error) {
 	switch check.ID {
 	case "bind_loopback":
-		value, err := promptInput("Set server.bind:", cfg.Bind)
+		value, err := promptInput("Set server.bind (127.0.0.1 keeps it local):", cfg.Bind)
 		if err != nil {
 			return nil, false, err
+		}
+		if !isLoopbackBindValue(value) {
+			fmt.Println()
+			fmt.Println("  " + cli.StyleStdout(cli.WarningStyle, "Warning: server.bind is non-loopback"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "effect") + ": " + cli.StyleStdout(cli.ValueStyle, "may expose the server beyond the local machine unless an outer network boundary still restricts access"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "scope") + ": " + cli.StyleStdout(cli.ValueStyle, "documented, non-default, security-reducing override"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "hint") + ": " + cli.StyleStdout(cli.ValueStyle, "keep a token set and review reverse proxy or port-publishing behavior explicitly"))
 		}
 		return workflow.UpdateValue("server.bind", value)
 	case "api_auth_enabled":
@@ -230,9 +241,16 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		}
 		return workflow.UpdateValue("security.attach.enabled", fmt.Sprintf("%t", picked == "enable"))
 	case "attach_local_only":
-		value, err := promptInput("Set security.attach.allowHosts (comma-separated):", strings.Join(cfg.AttachAllowHosts, ","))
+		value, err := promptInput("Set security.attach.allowHosts (comma-separated; '*' disables host allowlisting):", strings.Join(cfg.AttachAllowHosts, ","))
 		if err != nil {
 			return nil, false, err
+		}
+		if attachHostsContainsWildcard(value) {
+			fmt.Println()
+			fmt.Println("  " + cli.StyleStdout(cli.WarningStyle, "Warning: security.attach.allowHosts includes '*'"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "effect") + ": " + cli.StyleStdout(cli.ValueStyle, "disables host allowlisting and allows any reachable attach host with an allowed scheme"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "scope") + ": " + cli.StyleStdout(cli.ValueStyle, "documented, non-default, security-reducing override"))
+			fmt.Println("      " + cli.StyleStdout(cli.MutedStyle, "hint") + ": " + cli.StyleStdout(cli.ValueStyle, "use only on isolated, operator-controlled networks"))
 		}
 		return workflow.UpdateValue("security.attach.allowHosts", value)
 	case "idpi_whitelist_scoped":
@@ -267,6 +285,24 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 	return cfg, false, nil
 }
 
+func attachHostsContainsWildcard(value string) bool {
+	for _, part := range strings.Split(value, ",") {
+		if strings.TrimSpace(part) == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func isLoopbackBindValue(value string) bool {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "127.0.0.1", "localhost", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
 func applySecurityUp() (*config.RuntimeConfig, bool, error) {
 	configPath, changed, err := workflow.RestoreSecurityDefaults()
 	if err != nil {
@@ -291,7 +327,10 @@ func applySecurityDown() (*config.RuntimeConfig, bool, error) {
 		return nextCfg, false, nil
 	}
 	fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Guards down preset applied in %s", configPath)))
-	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Loopback bind and API auth remain enabled; sensitive endpoints and attach are enabled, IDPI is disabled."))
+	fmt.Println(cli.StyleStdout(cli.WarningStyle, "This is a documented, non-default, security-reducing preset."))
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Loopback bind and API auth remain enabled; sensitive endpoints and attach are enabled, and IDPI protections are disabled."))
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Attach host allowlisting remains local-only. Widening allowHosts or enabling bridge schemes later is an additional explicit weakening."))
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Changing server.bind away from 127.0.0.1 later is also an additional explicit weakening unless another network boundary still constrains access."))
 	return nextCfg, true, nil
 }
 

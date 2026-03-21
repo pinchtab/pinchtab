@@ -39,6 +39,16 @@ var hopByHopHeaders = map[string]struct{}{
 	"host":                {},
 }
 
+var strippedProxyRequestHeaders = map[string]struct{}{
+	"cookie":            {},
+	"forwarded":         {},
+	"x-forwarded-for":   {},
+	"x-forwarded-host":  {},
+	"x-forwarded-proto": {},
+	"x-real-ip":         {},
+	"x-request-id":      {},
+}
+
 func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Options) {
 	if targetURL == nil {
 		httpx.Error(w, 502, fmt.Errorf("proxy error: missing target URL"))
@@ -73,7 +83,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
 	}
-	copyHeaders(outReq.Header, proxyReq.Header)
+	copyRequestHeaders(outReq.Header, proxyReq.Header)
 
 	resp, err := client.Do(outReq)
 	if err != nil {
@@ -127,6 +137,21 @@ func isWebSocketUpgrade(r *http.Request) bool {
 func copyHeaders(dst, src http.Header) {
 	for k, vv := range src {
 		if _, skip := hopByHopHeaders[strings.ToLower(k)]; skip {
+			continue
+		}
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+func copyRequestHeaders(dst, src http.Header) {
+	for k, vv := range src {
+		lower := strings.ToLower(k)
+		if _, skip := hopByHopHeaders[lower]; skip {
+			continue
+		}
+		if _, skip := strippedProxyRequestHeaders[lower]; skip {
 			continue
 		}
 		for _, v := range vv {

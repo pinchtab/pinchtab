@@ -459,6 +459,21 @@ func TestProfileUpdateMeta(t *testing.T) {
 	}
 }
 
+func TestProfileUpdateMetaRejectsInvalidProfileName(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	req := httptest.NewRequest(http.MethodPatch, "/profiles/meta", strings.NewReader(`{"name":"poc';calc","description":"x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestProfileUpdateByIDCanClearMetadata(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
 	mux := http.NewServeMux()
@@ -493,6 +508,25 @@ func TestProfileUpdateByIDCanClearMetadata(t *testing.T) {
 	}
 	if profiles[0].Description != "" {
 		t.Errorf("expected empty description after clear, got %q", profiles[0].Description)
+	}
+}
+
+func TestProfileUpdateByIDRejectsInvalidRename(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	if err := pm.Create("renameable"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/profiles/"+profileID("renameable"), strings.NewReader(`{"name":"poc';calc"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -650,6 +684,10 @@ func TestProfileHandlerCreateRejectsPathTraversal(t *testing.T) {
 		{"path traversal ..", `{"name":"../malicious"}`, 400},
 		{"path traversal /", `{"name":"test/nested"}`, 400},
 		{"path traversal backslash", `{"name":"test\\nested"}`, 400},
+		{"powershell metacharacter", `{"name":"poc';calc"}`, 400},
+		{"reserved device name", `{"name":"CON"}`, 400},
+		{"trailing dot", `{"name":"bad."}`, 400},
+		{"leading whitespace", `{"name":" bad"}`, 400},
 		{"empty name", `{"name":""}`, 400},
 		{"valid name", `{"name":"valid-profile"}`, 200},
 	}
@@ -666,6 +704,30 @@ func TestProfileHandlerCreateRejectsPathTraversal(t *testing.T) {
 					tt.body, w.Code, tt.wantStatus, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestProfileHandlerImportRejectsInvalidProfileName(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	src := filepath.Join(t.TempDir(), "chrome-src")
+	if err := os.MkdirAll(filepath.Join(src, "Default"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	body := fmt.Sprintf(`{"name":"poc';calc","sourcePath":%q}`, src)
+	req := httptest.NewRequest(http.MethodPost, "/profiles/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
