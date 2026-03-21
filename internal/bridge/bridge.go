@@ -181,11 +181,26 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	defer b.initMu.Unlock()
 
 	if b.initialized && b.BrowserCtx != nil {
-		return nil // Already initialized
+		// Check if browser context is still alive
+		if b.BrowserCtx.Err() == nil {
+			return nil
+		}
+		// Chrome died — reset state for re-initialization
+		slog.Warn("chrome context cancelled, re-initializing")
+		b.initialized = false
+		b.BrowserCtx = nil
+		b.BrowserCancel = nil
+		b.AllocCtx = nil
+		b.AllocCancel = nil
+		b.TabManager = nil
 	}
 
 	if b.BrowserCtx != nil {
-		return nil // Already has browser context
+		if b.BrowserCtx.Err() == nil {
+			return nil
+		}
+		b.BrowserCtx = nil
+		b.BrowserCancel = nil
 	}
 
 	slog.Debug("ensure chrome called", "headless", cfg.Headless, "profile", cfg.ProfileDir)

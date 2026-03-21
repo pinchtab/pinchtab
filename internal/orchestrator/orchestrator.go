@@ -446,6 +446,12 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 
 	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", internalurls.RedactForLog(inst.URL))
 	o.emitEvent("instance.attached", inst)
+	o.mu.RLock()
+	internal := o.instances[inst.ID]
+	o.mu.RUnlock()
+	if internal != nil {
+		go o.monitorAttachedBridge(internal)
+	}
 	return inst, nil
 }
 

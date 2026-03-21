@@ -256,6 +256,45 @@ func TestOrchestrator_AttachBridge(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_AttachBridge_RemovesUnhealthyBridge(t *testing.T) {
+	unhealthy := false
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("path = %q, want /health", r.URL.Path)
+		}
+		if unhealthy {
+			http.Error(w, "unhealthy", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.client = backend.Client()
+
+	inst, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
+	if err != nil {
+		t.Fatalf("AttachBridge failed: %v", err)
+	}
+
+	unhealthy = true
+
+	o.mu.RLock()
+	internal := o.instances[inst.ID]
+	o.mu.RUnlock()
+	if internal == nil {
+		t.Fatalf("attached instance %q missing from orchestrator", inst.ID)
+	}
+
+	if o.checkAttachedBridgeHealth(internal) {
+		t.Fatal("expected unhealthy attached bridge to stop monitoring")
+	}
+	if len(o.List()) != 0 {
+		t.Fatalf("expected attached bridge to be removed, got %d instances", len(o.List()))
+	}
+}
+
 func TestValidateAttachURL_AllowsBridgeHTTP(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
