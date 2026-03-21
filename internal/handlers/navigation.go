@@ -107,6 +107,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusForbidden, err)
 		return
 	}
+	trustedCIDRs := parseCIDRs(h.Config.TrustedProxyCIDRs)
 	h.recordNavigateRequest(r, req.TabID, req.URL)
 
 	// --- Lite engine fast path ---
@@ -185,7 +186,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		tCtx, tCancel := context.WithTimeout(newCtx, navTimeout)
 		defer tCancel()
 		go httpx.CancelOnClientDone(r.Context(), tCancel)
-		navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target)
+		navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
 		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
 			return
@@ -237,7 +238,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, navTimeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
-	navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target)
+	navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
 		return

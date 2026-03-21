@@ -142,6 +142,10 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.DownloadAllowedDomains = parseCSVList(value)
 		return nil
 	}
+	if field == "trustedProxyCIDRs" {
+		s.TrustedProxyCIDRs = parseCSVList(value)
+		return nil
+	}
 	switch field {
 	case "downloadMaxBytes":
 		n, err := strconv.Atoi(value)

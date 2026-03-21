@@ -130,6 +130,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatIntPtr(s.UploadMaxTotalBytes), nil
 	case "maxRedirects":
 		return formatIntPtr(s.MaxRedirects), nil
+	case "trustedProxyCIDRs":
+		return strings.Join(s.TrustedProxyCIDRs, ","), nil
 	default:
 		return "", fmt.Errorf("unknown field security.%s", field)
 	}
