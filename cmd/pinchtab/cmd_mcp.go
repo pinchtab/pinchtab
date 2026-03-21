@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/mcp"
@@ -26,23 +25,10 @@ func init() {
 }
 
 func runMCP(cfg *config.RuntimeConfig) {
-	// Default: http://127.0.0.1:{port}
-	port := cfg.Port
-	if port == "" {
-		port = "9867"
-	}
-	baseURL := "http://127.0.0.1:" + port
-
-	// --server flag overrides
-	if serverURL != "" {
-		baseURL = strings.TrimRight(serverURL, "/")
-	}
+	baseURL := resolveCLIBase(cfg)
 
 	// Token from config, env var overrides
-	token := cfg.Token
-	if envToken := os.Getenv("PINCHTAB_TOKEN"); envToken != "" {
-		token = envToken
-	}
+	token := resolveCLIToken(cfg)
 
 	mcp.Version = version
 
