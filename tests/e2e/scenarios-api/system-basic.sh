@@ -163,6 +163,38 @@ assert_instance_logs_poll() {
   return 1
 }
 
+assert_instance_logs_poll_all() {
+  local inst_id="$1"
+  local desc="$2"
+  shift 2
+
+  local attempts=15
+  local delay=1
+  local i needle ok
+  for i in $(seq 1 "$attempts"); do
+    E2E_SERVER=$ORCH_URL pt_get "/instances/${inst_id}/logs" >/dev/null
+    if [[ "$HTTP_STATUS" =~ ^2 ]]; then
+      ok=1
+      for needle in "$@"; do
+        if ! grep -Fq -- "$needle" <<<"$RESULT"; then
+          ok=0
+          break
+        fi
+      done
+      if [ "$ok" -eq 1 ]; then
+        echo -e "  ${GREEN}✓${NC} $desc"
+        ((ASSERTIONS_PASSED++)) || true
+        return 0
+      fi
+    fi
+    sleep "$delay"
+  done
+
+  echo -e "  ${RED}✗${NC} $desc (missing fragments: $*)"
+  ((ASSERTIONS_FAILED++)) || true
+  return 1
+}
+
 print_extension_hints() {
   local inst_id="${1:-}"
   echo ""
@@ -196,10 +228,11 @@ assert_ok "navigate"
 
 DEFAULT_LOG_PASS=1
 if [ -n "$DEFAULT_INST_ID" ] && [ "$DEFAULT_INST_ID" != "null" ]; then
-  assert_instance_logs_poll \
+  assert_instance_logs_poll_all \
     "$DEFAULT_INST_ID" \
-    "loading extensions paths=/extensions/test-extension" \
-    "default instance logs configured extension path"
+    "default instance logs configured extension path" \
+    "loading extensions" \
+    "paths=/extensions/test-extension"
   DEFAULT_LOG_PASS=$?
 
   assert_instance_logs_poll \
@@ -229,10 +262,11 @@ E2E_SERVER="http://pinchtab:${INST_PORT}"
 wait_for_instance_ready "${E2E_SERVER}"
 E2E_SERVER=$ORIG_URL
 
-assert_instance_logs_poll \
+assert_instance_logs_poll_all \
   "$INST_ID" \
-  "loading extensions paths=/extensions/test-extension" \
-  "API-started instance logs extension path"
+  "API-started instance logs extension path" \
+  "loading extensions" \
+  "paths=/extensions/test-extension"
 
 end_test
 
@@ -250,10 +284,11 @@ wait_for_instance_ready "${E2E_SERVER}"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
-assert_instance_logs_poll \
+assert_instance_logs_poll_all \
   "$INST_ID" \
-  "loading extensions paths=/extensions/test-extension,/extensions/test-extension-api" \
-  "child instance logs merged extension paths"
+  "child instance logs merged extension paths" \
+  "loading extensions" \
+  "paths=/extensions/test-extension,/extensions/test-extension-api"
 MERGE_PASS=$?
 
 assert_instance_logs_poll \

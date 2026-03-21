@@ -555,6 +555,7 @@ func TestValidateProfileName(t *testing.T) {
 		{"valid with numbers", "profile123", false, ""},
 		{"valid with underscore", "my_profile", false, ""},
 		{"valid with dots", "my.profile", false, ""},
+		{"valid with spaces", "Work Profile", false, ""},
 		{"valid single char", "a", false, ""},
 
 		// Empty name
@@ -574,6 +575,18 @@ func TestValidateProfileName(t *testing.T) {
 		{"forward slash suffix", "test/", true, "cannot contain '/'"},
 		{"backslash", "test\\profile", true, "cannot contain '/'"},
 		{"backslash prefix", "\\test", true, "cannot contain '/'"},
+		{"single quote", "poc';calc", true, "contains invalid character"},
+		{"semicolon", "poc;calc", true, "contains invalid character"},
+		{"pipe", "poc|calc", true, "contains invalid character"},
+		{"dollar", "poc$calc", true, "contains invalid character"},
+		{"backtick", "poc`calc", true, "contains invalid character"},
+		{"colon", "poc:calc", true, "contains invalid character"},
+		{"trailing dot", "poc.", true, "cannot end with '.'"},
+		{"leading whitespace", " profile", true, "cannot start or end with whitespace"},
+		{"trailing whitespace", "profile ", true, "cannot start or end with whitespace"},
+		{"reserved device name", "CON", true, "reserved device name"},
+		{"reserved device name with extension", "con.txt", true, "reserved device name"},
+		{"reserved printer name", "LPT1", true, "reserved device name"},
 
 		// Combined attacks
 		{"traversal with slash", "../../../etc/passwd", true, "cannot contain"},
@@ -608,6 +621,10 @@ func TestProfileCreateRejectsPathTraversal(t *testing.T) {
 		"../../etc/passwd",
 		"test/subdir",
 		"/absolute",
+		"poc';calc",
+		"bad|name",
+		"CON",
+		"con.txt",
 	}
 
 	for _, name := range badNames {

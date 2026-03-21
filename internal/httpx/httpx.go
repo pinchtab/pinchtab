@@ -4,10 +4,18 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+
+	"github.com/pinchtab/pinchtab/internal/sanitize"
+)
+
+const (
+	DefaultMaxJSONBodyBytes = 1 << 20
+	maxErrorMessageBytes    = 1024
 )
 
 func JSON(w http.ResponseWriter, code int, data any) {
@@ -19,12 +27,19 @@ func JSON(w http.ResponseWriter, code int, data any) {
 }
 
 func Error(w http.ResponseWriter, code int, err error) {
-	ErrorCode(w, code, "error", err.Error(), false, nil)
+	message := http.StatusText(code)
+	if err != nil {
+		message = err.Error()
+	}
+	if message == "" {
+		message = "error"
+	}
+	ErrorCode(w, code, "error", message, false, nil)
 }
 
 func ErrorCode(w http.ResponseWriter, status int, code, message string, retryable bool, details map[string]any) {
 	payload := map[string]any{
-		"error": message,
+		"error": SanitizeErrorMessage(message),
 		"code":  code,
 	}
 	if retryable {
@@ -34,6 +49,29 @@ func ErrorCode(w http.ResponseWriter, status int, code, message string, retryabl
 		payload["details"] = details
 	}
 	JSON(w, status, payload)
+}
+
+func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxJSONBodyBytes
+	}
+	return json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes)).Decode(dst)
+}
+
+func StatusForJSONDecodeError(err error) int {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
+}
+
+func SanitizeErrorMessage(message string) string {
+	message = sanitize.CleanError(message, maxErrorMessageBytes)
+	if message == "" {
+		return "error"
+	}
+	return message
 }
 
 // CancelOnClientDone cancels the given cancel func when the HTTP client disconnects.

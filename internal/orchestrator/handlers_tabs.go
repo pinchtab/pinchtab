@@ -80,8 +80,8 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 		URL string `json:"url,omitempty"`
 	}
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 			return
 		}
 	}

@@ -8,7 +8,10 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
+
+const maxDialogTextBytes = 8 * 1024
 
 // DialogState represents a pending JavaScript dialog.
 type DialogState struct {
@@ -33,7 +36,7 @@ func NewDialogManager() *DialogManager {
 func (dm *DialogManager) SetPending(tabID string, state *DialogState) {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
-	dm.pending[tabID] = state
+	dm.pending[tabID] = normalizeDialogState(state)
 }
 
 func (dm *DialogManager) GetPending(tabID string) *DialogState {
@@ -66,11 +69,11 @@ func ListenDialogEvents(ctx context.Context, tabID string, dm *DialogManager, au
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
 		switch e := ev.(type) {
 		case *page.EventJavascriptDialogOpening:
-			state := &DialogState{
+			state := normalizeDialogState(&DialogState{
 				Type:          string(e.Type),
 				Message:       e.Message,
 				DefaultPrompt: e.DefaultPrompt,
-			}
+			})
 			slog.Debug("dialog opened", "tabId", tabID, "type", e.Type)
 
 			if autoAccept {
@@ -120,4 +123,16 @@ func HandlePendingDialog(ctx context.Context, tabID string, dm *DialogManager, a
 		Message: state.Message,
 		Handled: true,
 	}, nil
+}
+
+func normalizeDialogState(state *DialogState) *DialogState {
+	if state == nil {
+		return nil
+	}
+
+	copyState := *state
+	copyState.Type = sanitize.TruncateUTF8Bytes(copyState.Type, 32)
+	copyState.Message = sanitize.TruncateUTF8Bytes(copyState.Message, maxDialogTextBytes)
+	copyState.DefaultPrompt = sanitize.TruncateUTF8Bytes(copyState.DefaultPrompt, maxDialogTextBytes)
+	return &copyState
 }

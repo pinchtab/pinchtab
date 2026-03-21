@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -20,8 +19,8 @@ func (s *Scheduler) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var req SubmitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, err)
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 

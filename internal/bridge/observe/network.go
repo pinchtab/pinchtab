@@ -13,10 +13,24 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
 // DefaultNetworkBufferSize is the default number of entries kept per tab.
 const DefaultNetworkBufferSize = 100
+
+const (
+	maxNetworkURLBytes          = 8 * 1024
+	maxNetworkMethodBytes       = 32
+	maxNetworkResourceTypeBytes = 64
+	maxNetworkStatusTextBytes   = 512
+	maxNetworkMimeTypeBytes     = 512
+	maxNetworkErrorBytes        = 2 * 1024
+	maxNetworkPostDataBytes     = 64 * 1024
+	maxNetworkHeaderKeyBytes    = 256
+	maxNetworkHeaderValueBytes  = 4 * 1024
+	maxNetworkHeaderTotalBytes  = 32 * 1024
+)
 
 // NetworkEntry represents a single captured network request/response pair.
 type NetworkEntry struct {
@@ -67,6 +81,7 @@ func NewNetworkBuffer(size int) *NetworkBuffer {
 
 // Add inserts or updates a network entry.
 func (nb *NetworkBuffer) Add(entry NetworkEntry) {
+	entry = normalizeNetworkEntry(entry)
 	nb.mu.Lock()
 
 	isNew := false
@@ -140,6 +155,7 @@ func (nb *NetworkBuffer) Update(requestID string, fn func(*NetworkEntry)) {
 		return
 	}
 	fn(&nb.entries[idx])
+	nb.entries[idx] = normalizeNetworkEntry(nb.entries[idx])
 }
 
 // List returns all entries, optionally filtered.
@@ -454,4 +470,58 @@ func GetResponseBodyDirect(ctx context.Context, requestID string) (string, bool,
 	}))
 
 	return body, base64Encoded, err
+}
+
+func normalizeNetworkEntry(entry NetworkEntry) NetworkEntry {
+	entry.URL = sanitize.TruncateUTF8Bytes(entry.URL, maxNetworkURLBytes)
+	entry.Method = sanitize.TruncateUTF8Bytes(entry.Method, maxNetworkMethodBytes)
+	entry.ResourceType = sanitize.TruncateUTF8Bytes(entry.ResourceType, maxNetworkResourceTypeBytes)
+	entry.StatusText = sanitize.TruncateUTF8Bytes(entry.StatusText, maxNetworkStatusTextBytes)
+	entry.MimeType = sanitize.TruncateUTF8Bytes(entry.MimeType, maxNetworkMimeTypeBytes)
+	entry.Error = sanitize.TruncateUTF8Bytes(entry.Error, maxNetworkErrorBytes)
+	entry.PostData = sanitize.TruncateUTF8Bytes(entry.PostData, maxNetworkPostDataBytes)
+	entry.RequestHeaders = normalizeNetworkHeaders(entry.RequestHeaders)
+	entry.ResponseHeaders = normalizeNetworkHeaders(entry.ResponseHeaders)
+	return entry
+}
+
+func normalizeNetworkHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	remaining := maxNetworkHeaderTotalBytes
+	normalized := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if remaining <= 0 {
+			break
+		}
+
+		key = sanitize.TruncateUTF8Bytes(key, maxNetworkHeaderKeyBytes)
+		if key == "" {
+			continue
+		}
+
+		valueLimit := maxNetworkHeaderValueBytes
+		if max := remaining - len(key); max < valueLimit {
+			valueLimit = max
+		}
+		if valueLimit <= 0 {
+			break
+		}
+
+		value = sanitize.TruncateUTF8Bytes(value, valueLimit)
+		entryBytes := len(key) + len(value)
+		if entryBytes <= 0 {
+			continue
+		}
+
+		normalized[key] = value
+		remaining -= entryBytes
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }

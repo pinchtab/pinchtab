@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -41,8 +40,8 @@ type BatchResponseItem struct {
 
 func (s *Scheduler) handleBatch(w http.ResponseWriter, r *http.Request) {
 	var req BatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, err)
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 

@@ -79,7 +79,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "orchestrator: launch new instance"
 
-pt_post /instances/launch '{"name":"e2e-multi-test","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch instance"
 
 INST_ID=$(echo "$RESULT" | jq -r '.id')
@@ -167,7 +167,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "orchestrator: ID format (inst_ prefix)"
 
-pt_post /instances/launch '{"name":"e2e-id-format","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch"
 ID_CHECK_INST=$(echo "$RESULT" | jq -r '.id')
 
@@ -182,13 +182,13 @@ start_test "orchestrator: ports, isolation, and cleanup"
 
 ACTIVE_INST_IDS=()
 
-pt_post /instances/launch '{"name":"e2e-port-1","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch 1"
 INST1=$(echo "$RESULT" | jq -r '.id')
 PORT1=$(echo "$RESULT" | jq -r '.port')
 ACTIVE_INST_IDS+=("$INST1")
 
-pt_post /instances/launch '{"name":"e2e-port-2","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch 2"
 INST2=$(echo "$RESULT" | jq -r '.id')
 PORT2=$(echo "$RESULT" | jq -r '.port')
@@ -207,7 +207,7 @@ assert_ok "stop first instance"
 wait_for_instances_gone "${E2E_SERVER}" 10 "${INST1}" || true
 ACTIVE_INST_IDS=("${INST2}")
 
-pt_post /instances/launch '{"name":"e2e-reuse-2","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "relaunch"
 INST3=$(echo "$RESULT" | jq -r '.id')
 PORT3=$(echo "$RESULT" | jq -r '.port')
@@ -245,7 +245,7 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-pt_post /instances/launch '{"name":"e2e-cleanup-3","headless":true}'
+pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch cleanup-3"
 INST4=$(echo "$RESULT" | jq -r '.id')
 ACTIVE_INST_IDS+=("$INST4")

@@ -184,9 +184,12 @@ Use this when the agent cannot call the CLI directly.
 
 ```bash
 curl http://localhost:9867/health
-curl -X POST http://localhost:9867/instances/launch \
+curl -X POST http://localhost:9867/profiles \
   -H "Content-Type: application/json" \
-  -d '{"name":"work","headless":true}'
+  -d '{"name":"work"}'
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"work","mode":"headless"}'
 curl -X POST http://localhost:9868/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","selector":"e5"}'

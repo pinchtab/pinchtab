@@ -148,6 +148,8 @@ func TestOrchestrator_Launch_RejectsPathTraversal(t *testing.T) {
 		{"backslash", "test\\nested", "cannot contain '/'"},
 		{"empty name", "", "cannot be empty"},
 		{"absolute path attempt", "../../../etc/passwd", "cannot contain"},
+		{"powershell metacharacter", "poc';calc", "contains invalid character"},
+		{"reserved windows device name", "CON", "reserved device name"},
 	}
 
 	for _, tt := range badNames {
@@ -178,6 +180,7 @@ func TestOrchestrator_Launch_AcceptsValidNames(t *testing.T) {
 		"with-dash",
 		"with_underscore",
 		"with.dot",
+		"Work Profile",
 		"CamelCase",
 		"123numeric",
 		"a",

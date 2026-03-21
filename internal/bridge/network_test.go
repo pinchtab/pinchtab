@@ -2,10 +2,17 @@ package bridge
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+)
+
+const (
+	testMaxNetworkURLBytes         = 8 * 1024
+	testMaxNetworkPostDataBytes    = 64 * 1024
+	testMaxNetworkHeaderTotalBytes = 32 * 1024
 )
 
 func TestNetworkBuffer_AddAndGet(t *testing.T) {
@@ -67,6 +74,36 @@ func TestNetworkBuffer_Update(t *testing.T) {
 	}
 	if !e.Finished {
 		t.Error("expected finished to be true")
+	}
+}
+
+func TestNetworkBuffer_TruncatesOversizedFields(t *testing.T) {
+	buf := NewNetworkBuffer(10)
+	buf.Add(NetworkEntry{
+		RequestID: "r1",
+		URL:       "https://example.com/" + strings.Repeat("a", testMaxNetworkURLBytes),
+		PostData:  strings.Repeat("b", testMaxNetworkPostDataBytes+1024),
+		RequestHeaders: map[string]string{
+			"X-Test": strings.Repeat("c", testMaxNetworkHeaderTotalBytes),
+		},
+	})
+
+	entry, ok := buf.Get("r1")
+	if !ok {
+		t.Fatal("expected entry to exist")
+	}
+	if len(entry.URL) > testMaxNetworkURLBytes {
+		t.Fatalf("URL length = %d, want <= %d", len(entry.URL), testMaxNetworkURLBytes)
+	}
+	if len(entry.PostData) > testMaxNetworkPostDataBytes {
+		t.Fatalf("PostData length = %d, want <= %d", len(entry.PostData), testMaxNetworkPostDataBytes)
+	}
+	totalHeaderBytes := 0
+	for key, value := range entry.RequestHeaders {
+		totalHeaderBytes += len(key) + len(value)
+	}
+	if totalHeaderBytes > testMaxNetworkHeaderTotalBytes {
+		t.Fatalf("header bytes = %d, want <= %d", totalHeaderBytes, testMaxNetworkHeaderTotalBytes)
 	}
 }
 

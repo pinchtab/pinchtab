@@ -71,6 +71,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 				),
 			),
 		),
+		MaxHeaderBytes:    maxHeaderBytes,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

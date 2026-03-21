@@ -12,6 +12,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+func resetRateLimitStateForTests() {
+	rateMu.Lock()
+	rateBuckets = map[string][]time.Time{}
+	rateMu.Unlock()
+}
+
 func TestAuthMiddleware_NoToken(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: ""}
 
@@ -694,9 +700,8 @@ func TestRequestIDMiddleware_SetsHeader(t *testing.T) {
 }
 
 func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
-	rateMu.Lock()
-	rateBuckets = map[string][]time.Time{}
-	rateMu.Unlock()
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
 
 	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -710,41 +715,69 @@ func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddleware_HealthAndMetricsAreRateLimited(t *testing.T) {
-	rateMu.Lock()
-	rateBuckets = map[string][]time.Time{}
-	rateMu.Unlock()
+func TestRateLimitMiddleware_RateLimitsHealthAndMetrics(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
 
 	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
-
-	for _, path := range []string{"/health", "/metrics"} {
-		rateMu.Lock()
-		rateBuckets = map[string][]time.Time{}
-		rateMu.Unlock()
-
+	for _, p := range []string{"/health", "/metrics"} {
+		resetRateLimitStateForTests()
 		for i := 0; i < rateLimitMaxReq; i++ {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req := httptest.NewRequest("GET", p, nil)
 			req.RemoteAddr = "127.0.0.1:12345"
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 			if w.Code != http.StatusOK {
-				t.Fatalf("request %d for %s: expected 200, got %d", i+1, path, w.Code)
+				t.Fatalf("%s request %d: expected 200, got %d", p, i+1, w.Code)
 			}
 		}
 
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequest("GET", p, nil)
 		req.RemoteAddr = "127.0.0.1:12345"
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusTooManyRequests {
-			t.Fatalf("expected 429 for %s after limit exceeded, got %d", path, w.Code)
+			t.Fatalf("expected 429 for %s after limit exceeded, got %d", p, w.Code)
 		}
 	}
 }
 
+func TestRateLimitMiddleware_IgnoresSpoofedForwardedHeaders(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
+
+	now := time.Now()
+	hits := make([]time.Time, rateLimitMaxReq)
+	for i := range hits {
+		hits[i] = now
+	}
+
+	rateMu.Lock()
+	rateBuckets["198.51.100.10"] = hits
+	rateMu.Unlock()
+
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.RemoteAddr = "198.51.100.10:41000"
+	req.Header.Set("X-Forwarded-For", "203.0.113.1")
+	req.Header.Set("X-Real-Ip", "203.0.113.2")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 when forwarded headers spoof a new IP, got %d", w.Code)
+	}
+}
+
 func TestEvictStaleRateBuckets_DeletesEmptyHosts(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
+
 	now := time.Now()
 	window := 10 * time.Second
 
@@ -770,9 +803,6 @@ func TestEvictStaleRateBuckets_DeletesEmptyHosts(t *testing.T) {
 	if got := len(rateBuckets["fresh"]); got != 1 {
 		t.Fatalf("expected fresh bucket to keep 1 hit, got %d", got)
 	}
-
-	// Cleanup
-	rateBuckets = map[string][]time.Time{}
 }
 
 func TestStatusWriter(t *testing.T) {

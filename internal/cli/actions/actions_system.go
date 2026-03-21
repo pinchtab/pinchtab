@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,17 +18,10 @@ func Health(client *http.Client, base, token string) {
 func Instances(client *http.Client, base, token string) {
 	body := apiclient.DoGetRaw(client, base, token, "/instances", nil)
 
-	// Parse and format as JSON
-	var instances []map[string]any
-	if err := json.Unmarshal(body, &instances); err != nil {
-		var envelope struct {
-			Instances []map[string]any `json:"instances"`
-		}
-		if err := json.Unmarshal(body, &envelope); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse instances: %v\n", err)
-			os.Exit(1)
-		}
-		instances = envelope.Instances
+	instances, err := decodeInstancesResponse(body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse instances: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Transform to cleaner output format
@@ -95,25 +89,30 @@ func getInstances(client *http.Client, base, token string) []map[string]any {
 	}
 	defer func() { _ = result.Body.Close() }()
 
-	var data map[string]any
-	if err := json.NewDecoder(result.Body).Decode(&data); err != nil {
-		log.Printf("warning: error decoding instances response: %v", err)
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		log.Printf("warning: error reading instances response: %v", err)
+		return nil
 	}
 
-	if instances, ok := data["instances"].([]interface{}); ok {
-		converted := make([]map[string]any, len(instances))
-		for i, inst := range instances {
-			if m, ok := inst.(map[string]any); ok {
-				converted[i] = m
-			}
-		}
-		return converted
+	instances, err := decodeInstancesResponse(body)
+	if err != nil {
+		log.Printf("warning: error decoding instances response: %v", err)
+		return nil
 	}
-	return nil
+	return instances
 }
 
-// launchInstance launches a default instance
+// launchInstance launches a managed instance for the requested profile.
 func launchInstance(client *http.Client, base, token string, profile string) {
-	body := map[string]any{"profile": profile}
-	apiclient.DoPost(client, base, token, "/instances/launch", body)
+	body := map[string]any{"profileId": profile}
+	apiclient.DoPost(client, base, token, "/instances/start", body)
+}
+
+func decodeInstancesResponse(body []byte) ([]map[string]any, error) {
+	var instances []map[string]any
+	if err := json.Unmarshal(body, &instances); err == nil {
+		return instances, nil
+	}
+	return nil, fmt.Errorf("expected /instances to return a JSON array")
 }

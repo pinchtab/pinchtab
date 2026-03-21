@@ -308,6 +308,8 @@ POST /instances/{id}/tab
 Notes:
 
 - `/instances/start` and `/instances/launch` use `mode`, not `headless`
+- `/instances/launch` is a compatibility alias over `/instances/start`
+- create profiles explicitly with `POST /profiles`; `name` is no longer supported on `/instances/launch`
 - `/profiles/{id}/start` uses `headless`
 - attach routes are gated by `security.attach`
 

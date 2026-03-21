@@ -40,7 +40,7 @@ pinchtab instance start --mode headed --port 9999
 
 Notes:
 
-- `POST /instances/launch` still exists as a compatibility endpoint, but `POST /instances/start` is the clearer primary form.
+- `POST /instances/launch` still exists as a compatibility endpoint, but it now follows the same semantics as `POST /instances/start`.
 - If you omit `profileId`, PinchTab creates a managed instance with an auto-generated profile name.
 - Starting an instance is only optional in workflows that use shorthand routes with auto-launch behavior, such as the `simple` strategy. In `explicit`, you should assume you need to start one yourself.
 

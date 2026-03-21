@@ -2,8 +2,11 @@ package bridge
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
+
+const testMaxDialogTextBytes = 8 * 1024
 
 func TestDialogManager_SetAndGetPending(t *testing.T) {
 	dm := NewDialogManager()
@@ -132,6 +135,26 @@ func TestDialogState_Fields(t *testing.T) {
 	}
 	if !state.HasBrowserHandler {
 		t.Error("expected HasBrowserHandler to be true")
+	}
+}
+
+func TestDialogManager_TruncatesOversizedDialogText(t *testing.T) {
+	dm := NewDialogManager()
+	dm.SetPending("tab1", &DialogState{
+		Type:          "prompt",
+		Message:       strings.Repeat("m", testMaxDialogTextBytes+256),
+		DefaultPrompt: strings.Repeat("p", testMaxDialogTextBytes+256),
+	})
+
+	got := dm.GetPending("tab1")
+	if got == nil {
+		t.Fatal("expected pending dialog")
+	}
+	if len(got.Message) > testMaxDialogTextBytes {
+		t.Fatalf("message length = %d, want <= %d", len(got.Message), testMaxDialogTextBytes)
+	}
+	if len(got.DefaultPrompt) > testMaxDialogTextBytes {
+		t.Fatalf("default prompt length = %d, want <= %d", len(got.DefaultPrompt), testMaxDialogTextBytes)
 	}
 }
 

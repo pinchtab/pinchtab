@@ -6,6 +6,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/safelog"
 	"github.com/pinchtab/pinchtab/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -95,6 +96,7 @@ func menuListenStatus(cfg *config.RuntimeConfig) string {
 }
 
 func Execute() {
+	safelog.InstallDefault()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

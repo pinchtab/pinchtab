@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -34,7 +33,12 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		Port     string `json:"port,omitempty"`
 		Headless bool   `json:"headless"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if r.ContentLength > 0 {
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+			return
+		}
+	}
 
 	inst, err := o.Launch(name, req.Port, req.Headless, nil)
 	if err != nil {

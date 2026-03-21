@@ -248,10 +248,15 @@ pinchtab text
 
 Or use the HTTP API directly:
 ```bash
-# Create an instance (returns instance id)
-INST=$(curl -s -X POST http://localhost:9867/instances/launch \
+# Create a profile first (returns profile id)
+PROF=$(curl -s -X POST http://localhost:9867/profiles \
   -H "Content-Type: application/json" \
-  -d '{"name":"work","mode":"headless"}' | jq -r '.id')
+  -d '{"name":"work"}' | jq -r '.id')
+
+# Start an instance for that profile (returns instance id)
+INST=$(curl -s -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d "{\"profileId\":\"$PROF\",\"mode\":\"headless\"}" | jq -r '.id')
 
 # Open a tab in that instance
 TAB=$(curl -s -X POST http://localhost:9867/instances/$INST/tabs/open \

@@ -113,8 +113,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.Observability.Activity.Enabled {
 		t.Errorf("default Observability.Activity.Enabled = %v, want true", cfg.Observability.Activity.Enabled)
 	}
-	if cfg.Observability.Activity.RetentionDays != 30 {
-		t.Errorf("default Observability.Activity.RetentionDays = %d, want 30", cfg.Observability.Activity.RetentionDays)
+	if cfg.Observability.Activity.RetentionDays != 1 {
+		t.Errorf("default Observability.Activity.RetentionDays = %d, want 1", cfg.Observability.Activity.RetentionDays)
 	}
 }
 

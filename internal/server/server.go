@@ -197,6 +197,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	srv := &http.Server{
 		Addr:              cfg.Bind + ":" + dashPort,
 		Handler:           handler,
+		MaxHeaderBytes:    maxHeaderBytes,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

@@ -34,7 +34,7 @@ func DefaultFileConfig() FileConfig {
 	attachEnabled := false
 	activityEnabled := true
 	activitySessionIdleSec := 1800
-	activityRetentionDays := 30
+	activityRetentionDays := 1
 	return FileConfig{
 		ConfigVersion: CurrentConfigVersion,
 		Server: ServerConfig{

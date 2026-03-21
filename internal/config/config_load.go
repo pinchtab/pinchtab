@@ -92,7 +92,7 @@ func Load() *RuntimeConfig {
 			Activity: ActivityConfig{
 				Enabled:        true,
 				SessionIdleSec: 1800,
-				RetentionDays:  30,
+				RetentionDays:  1,
 			},
 		},
 	}

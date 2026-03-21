@@ -19,7 +19,7 @@ const (
 	defaultSessionIdleTimeout = 30 * time.Minute
 	defaultQueryLimit         = 200
 	maxQueryLimit             = 1000
-	defaultRetentionDays      = 30
+	defaultRetentionDays      = 1
 )
 
 type Config struct {

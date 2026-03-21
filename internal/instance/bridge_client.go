@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // BridgeClient makes HTTP calls to a bridge instance.
@@ -161,21 +162,21 @@ func (bc *BridgeClient) ProxyWithTabID(w http.ResponseWriter, r *http.Request, p
 
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("encode body: %s", err), http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("encode body: %w", err))
 		return
 	}
 
 	targetURL := bridgeURL(port, path)
 	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, strings.NewReader(string(encoded)))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("proxy request: %s", err), http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("proxy request: %w", err))
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := bc.client.Do(proxyReq)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("proxy failed: %s", err), http.StatusBadGateway)
+		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -200,7 +201,7 @@ func (bc *BridgeClient) ProxyToTab(w http.ResponseWriter, r *http.Request, port,
 
 	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("proxy request: %s", err), http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("proxy request: %w", err))
 		return
 	}
 
@@ -217,7 +218,7 @@ func (bc *BridgeClient) ProxyToTab(w http.ResponseWriter, r *http.Request, port,
 
 	resp, err := bc.client.Do(proxyReq)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("proxy failed: %s", err), http.StatusBadGateway)
+		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()

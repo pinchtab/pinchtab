@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func setupHandlerTest(t *testing.T) (*Scheduler, *http.ServeMux, *httptest.Server) {
@@ -103,6 +105,22 @@ func TestHandlerSubmitBadJSON(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandlerSubmitBodyTooLarge(t *testing.T) {
+	_, mux, executor := setupHandlerTest(t)
+	defer executor.Close()
+
+	body := `{"agentId":"agent-1","action":"click","ref":"` + strings.Repeat("x", int(httpx.DefaultMaxJSONBodyBytes)) + `"}`
+	req := httptest.NewRequest("POST", "/tasks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

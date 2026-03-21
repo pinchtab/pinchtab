@@ -12,6 +12,13 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+type startInstanceRequest struct {
+	ProfileID      string   `json:"profileId,omitempty"`
+	Mode           string   `json:"mode,omitempty"`
+	Port           string   `json:"port,omitempty"`
+	ExtensionPaths []string `json:"extensionPaths,omitempty"`
+}
+
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	o.mu.RLock()
@@ -39,55 +46,23 @@ func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request)
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProfileId      string   `json:"profileId,omitempty"`
-		Name           string   `json:"name,omitempty"`
-		Mode           string   `json:"mode"`
-		Port           string   `json:"port,omitempty"`
-		ExtensionPaths []string `json:"extensionPaths,omitempty"`
+		startInstanceRequest
+		Name string `json:"name,omitempty"`
 	}
 
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 			return
 		}
 	}
 
-	headless := req.Mode != "headed"
-
-	var name string
-	if req.ProfileId != "" {
-		profs, err := o.profiles.List()
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("failed to list profiles: %w", err))
-			return
-		}
-		found := false
-		for _, p := range profs {
-			if p.ID == req.ProfileId {
-				name = p.Name
-				found = true
-				break
-			}
-		}
-		if !found {
-			httpx.Error(w, 400, fmt.Errorf("profile %q not found", req.ProfileId))
-			return
-		}
-	} else if req.Name != "" {
-		name = req.Name
-	} else {
-		name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
-	}
-
-	inst, err := o.Launch(name, req.Port, headless, req.ExtensionPaths)
-	if err != nil {
-		statusCode := classifyLaunchError(err)
-		httpx.Error(w, statusCode, err)
+	if req.Name != "" {
+		httpx.Error(w, 400, fmt.Errorf("name is not supported on /instances/launch; create the profile first via /profiles and then use profileId"))
 		return
 	}
-	authn.AuditLog(r, "instance.launched", "profileName", name, "instanceId", inst.ID)
-	httpx.JSON(w, 201, inst)
+
+	o.startInstanceWithRequest(w, r, req.startInstanceRequest, "instance.launched")
 }
 
 func (o *Orchestrator) handleStopByInstanceID(w http.ResponseWriter, r *http.Request) {
@@ -226,20 +201,19 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 }
 
 func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ProfileID      string   `json:"profileId,omitempty"`
-		Mode           string   `json:"mode,omitempty"`
-		Port           string   `json:"port,omitempty"`
-		ExtensionPaths []string `json:"extensionPaths,omitempty"`
-	}
+	var req startInstanceRequest
 
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 			return
 		}
 	}
 
+	o.startInstanceWithRequest(w, r, req, "instance.started")
+}
+
+func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.Request, req startInstanceRequest, auditEvent string) {
 	var profileName string
 	var err error
 
@@ -262,7 +236,7 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	authn.AuditLog(r, "instance.started", "instanceId", inst.ID, "profileName", profileName)
+	authn.AuditLog(r, auditEvent, "instanceId", inst.ID, "profileName", profileName)
 	httpx.JSON(w, 201, inst)
 }
 
@@ -308,8 +282,8 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		Name   string `json:"name,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 		return
 	}
 
@@ -347,8 +321,8 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		Token   string `json:"token,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 		return
 	}
 	if req.BaseURL == "" {

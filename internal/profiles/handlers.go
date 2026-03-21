@@ -1,7 +1,6 @@
 package profiles
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -72,8 +71,8 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 		UseWhen     string `json:"useWhen"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, err)
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 	if req.Name == "" {
@@ -114,8 +113,8 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 		UseWhen     string `json:"useWhen"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, err)
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 	if req.Name == "" || req.SourcePath == "" {
@@ -142,8 +141,8 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 		Description *string `json:"description"`
 		UseWhen     *string `json:"useWhen"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, err)
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 	if req.Name == "" {
@@ -259,8 +258,8 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 		UseWhen     *string `json:"useWhen"`
 		Description *string `json:"description"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("invalid JSON"))
+	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
 		return
 	}
 

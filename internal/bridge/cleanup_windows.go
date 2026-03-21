@@ -6,18 +6,22 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 )
 
+const findPIDsByPowerShellScript = `$needle = $env:PINCHTAB_NEEDLE
+if ([string]::IsNullOrEmpty($needle)) { exit 0 }
+Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" |
+Where-Object { $_.CommandLine -and $_.CommandLine.Contains($needle) } |
+Select-Object -ExpandProperty ProcessId`
+
 // findPIDsByPowerShell finds Chrome PIDs whose command line contains the needle.
 func findPIDsByPowerShell(needle string) []int {
-	escaped := strings.ReplaceAll(needle, `\`, `\\`)
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
-		fmt.Sprintf(`Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | `+
-			`Where-Object { $_.CommandLine -like '*%s*' } | `+
-			`Select-Object -ExpandProperty ProcessId`, escaped))
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", findPIDsByPowerShellScript)
+	cmd.Env = append(os.Environ(), "PINCHTAB_NEEDLE="+needle)
 
 	out, err := cmd.Output()
 	if err != nil {
