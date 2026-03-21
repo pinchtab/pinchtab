@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +41,23 @@ var pdfQueryParams = map[string]struct{}{
 	"raw":                     {},
 }
 
+var pdfActiveTemplatePattern = regexp.MustCompile(`(?i)<\s*script\b|javascript\s*:|\bon[a-z]+\s*=`)
+
 // HandlePDF generates a PDF of the current tab.
 //
 // @Endpoint GET /pdf
 func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
+	headerTemplate := r.URL.Query().Get("headerTemplate")
+	footerTemplate := r.URL.Query().Get("footerTemplate")
+	if err := validatePDFTemplate(headerTemplate); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := validatePDFTemplate(footerTemplate); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
@@ -124,9 +138,6 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pageRanges := r.URL.Query().Get("pageRanges") // e.g., "1-3,5"
-	headerTemplate := r.URL.Query().Get("headerTemplate")
-	footerTemplate := r.URL.Query().Get("footerTemplate")
-
 	// IDPI: scan page title, URL, and body text for injection patterns before
 	// rendering to PDF. PDF output is opaque binary — any signal is conveyed
 	// via response headers. The scan timeout is taken from IDPI config so
@@ -247,6 +258,16 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		"format": "pdf",
 		"base64": base64.StdEncoding.EncodeToString(buf),
 	})
+}
+
+func validatePDFTemplate(template string) error {
+	if template == "" {
+		return nil
+	}
+	if pdfActiveTemplatePattern.MatchString(template) {
+		return fmt.Errorf("invalid pdf template")
+	}
+	return nil
 }
 
 // HandleTabPDF generates a PDF for a tab identified by path ID.
