@@ -451,7 +451,7 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	host := parsed.Hostname()
 	hostAllowed := false
 	for _, allowed := range o.runtimeCfg.AttachAllowHosts {
-		if host == allowed {
+		if allowed == "*" || host == allowed {
 			hostAllowed = true
 			break
 		}

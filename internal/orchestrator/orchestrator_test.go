@@ -436,6 +436,22 @@ func TestValidateAttachURL_RejectsBridgeBaseURLWithPath(t *testing.T) {
 	}
 }
 
+func TestValidateAttachURL_WildcardHost(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"*"},
+		AttachAllowSchemes: []string{"http", "ws"},
+	})
+
+	if err := o.validateAttachURL("http://192.168.1.100:9868"); err != nil {
+		t.Fatalf("wildcard host should allow any host, got: %v", err)
+	}
+	if err := o.validateAttachURL("http://bridge-container:9868"); err != nil {
+		t.Fatalf("wildcard host should allow hostname, got: %v", err)
+	}
+}
+
 func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{})
