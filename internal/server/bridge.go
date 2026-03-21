@@ -66,7 +66,9 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 			activity.Middleware(
 				actStore,
 				"bridge",
-				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+				handlers.SecurityHeadersMiddleware(
+					handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+				),
 			),
 		),
 		ReadHeaderTimeout: 10 * time.Second,

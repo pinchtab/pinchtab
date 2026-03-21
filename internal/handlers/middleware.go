@@ -25,6 +25,8 @@ var (
 	metricStaleRefRetries uint64
 )
 
+const defaultCSP = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
+
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -51,6 +53,15 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			"status", sw.Code,
 			"ms", ms,
 		)
+	})
+}
+
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", defaultCSP)
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -340,11 +351,6 @@ const (
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	startRateLimiterJanitor(rateLimitWindow, evictionInterval)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := strings.TrimSpace(r.URL.Path)
-		if p == "/health" || p == "/metrics" || strings.HasPrefix(p, "/health/") || strings.HasPrefix(p, "/metrics/") {
-			next.ServeHTTP(w, r)
-			return
-		}
 		host := authn.ClientIP(r)
 
 		now := time.Now()
