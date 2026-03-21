@@ -187,12 +187,35 @@ func TestHandleWait_URLNoTab(t *testing.T) {
 }
 
 func TestHandleWait_FnNoTab(t *testing.T) {
-	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"fn":"document.readyState === 'complete'"}`)))
 	w := httptest.NewRecorder()
 	h.HandleWait(w, req)
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleWait_FnBlockedWhenEvaluateDisabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: false}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"fn":"true"}`)))
+	w := httptest.NewRecorder()
+	h.HandleWait(w, req)
+	if w.Code != 403 {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("evaluate_disabled")) {
+		t.Fatalf("expected evaluate_disabled response, got %s", w.Body.String())
+	}
+}
+
+func TestHandleWait_SelectorNotBlockedByEvaluateSetting(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowEvaluate: false}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"selector":"#results"}`)))
+	w := httptest.NewRecorder()
+	h.HandleWait(w, req)
+	if w.Code != 404 {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

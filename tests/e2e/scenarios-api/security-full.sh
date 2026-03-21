@@ -32,6 +32,19 @@ assert_contains "$RESULT" "evaluate_disabled" "correct error code"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "security: wait fn BLOCKED when evaluate disabled"
+
+secure_post /navigate -d '{"url":"http://fixtures:80/index.html"}'
+assert_ok "navigate to allowed fixture page"
+TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+
+secure_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"fn\":\"true\",\"timeout\":1000}"
+assert_http_status 403 "wait fn blocked"
+assert_contains "$RESULT" "evaluate_disabled" "wait fn uses evaluate_disabled guard"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "security: download BLOCKED when disabled"
 
 secure_get "/download?url=https://httpbin.org/robots.txt"
