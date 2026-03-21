@@ -240,6 +240,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
 	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
+	cfg.TrustedProxyCIDRs = append([]string(nil), fc.Security.TrustedProxyCIDRs...)
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
 	if fc.Observability.Activity.Enabled != nil {

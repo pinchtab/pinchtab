@@ -155,15 +155,39 @@ func extractNavigateHost(raw string) (string, bool) {
 	return "", false
 }
 
-func validateNavigateRemoteIPAddress(raw string) error {
+func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet) error {
 	normalized := netguard.NormalizeRemoteIP(raw)
 	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
+		if ip := net.ParseIP(normalized); ip != nil {
+			for _, cidr := range trustedCIDRs {
+				if cidr.Contains(ip) {
+					return nil
+				}
+			}
+		}
 		return fmt.Errorf("navigation connected to blocked remote IP %s", normalized)
 	}
 	return nil
 }
 
-func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFunc, target *validatedNavigateTarget) (*navigateRuntimeGuard, error) {
+func parseCIDRs(raw []string) []*net.IPNet {
+	var nets []*net.IPNet
+	for _, s := range raw {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if !strings.Contains(s, "/") {
+			s += "/32"
+		}
+		if _, cidr, err := net.ParseCIDR(s); err == nil {
+			nets = append(nets, cidr)
+		}
+	}
+	return nets
+}
+
+func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFunc, target *validatedNavigateTarget, trustedCIDRs []*net.IPNet) (*navigateRuntimeGuard, error) {
 	if target == nil || target.allowInternal {
 		return nil, nil
 	}
@@ -185,7 +209,7 @@ func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFun
 			if !guard.isMainDocumentResponse(string(e.RequestID)) {
 				return
 			}
-			if err := validateNavigateRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
+			if err := validateNavigateRemoteIPAddress(e.Response.RemoteIPAddress, trustedCIDRs); err != nil {
 				guard.setBlocked(err)
 				tCancel()
 			}

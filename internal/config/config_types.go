@@ -27,7 +27,8 @@ type RuntimeConfig struct {
 	UploadMaxFiles         int
 	UploadMaxFileBytes     int
 	UploadMaxTotalBytes    int
-	MaxRedirects           int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
+	MaxRedirects           int      // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
+	TrustedProxyCIDRs      []string // CIDRs/IPs whose RemoteIPAddress is trusted in navigation responses (e.g. internal proxy)
 
 	// Browser/instance settings
 	Headless          bool
@@ -190,6 +191,7 @@ type SecurityConfig struct {
 	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`
 	UploadMaxTotalBytes    *int         `json:"uploadMaxTotalBytes,omitempty"`
 	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
+	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
 	Attach                 AttachConfig `json:"attach,omitempty"`
 	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
 }

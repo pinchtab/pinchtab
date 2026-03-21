@@ -176,6 +176,7 @@ type securityConfigJSON struct {
 	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
 	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
 	MaxRedirects           *int           `json:"maxRedirects"`
+	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
 	Attach                 attachJSON     `json:"attach"`
 	IDPI                   idpiConfigJSON `json:"idpi"`
 }
@@ -296,6 +297,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			UploadMaxFileBytes:     fc.Security.UploadMaxFileBytes,
 			UploadMaxTotalBytes:    fc.Security.UploadMaxTotalBytes,
 			MaxRedirects:           fc.Security.MaxRedirects,
+			TrustedProxyCIDRs:      copyStringSlice(fc.Security.TrustedProxyCIDRs),
 			Attach: attachJSON{
 				Enabled:      fc.Security.Attach.Enabled,
 				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
@@ -447,6 +449,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			UploadMaxFileBytes:     &uploadMaxFileBytes,
 			UploadMaxTotalBytes:    &uploadMaxTotalBytes,
 			MaxRedirects:           &maxRedirects,
+			TrustedProxyCIDRs:      append([]string(nil), cfg.TrustedProxyCIDRs...),
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
