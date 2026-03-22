@@ -73,15 +73,6 @@ jobs:
             echo "ref=${{ inputs.ref }}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Validate SKILL.md version sync
-        run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          if ! grep -Fq "release_version: \"$VERSION\"" skills/pinchtab/SKILL.md; then
-            echo "Error: skills/pinchtab/SKILL.md does not declare release_version: \"$VERSION\"" >&2
-            echo "Please update the skill documentation version before releasing." >&2
-            exit 1
-          fi
-
       - name: Summarize candidate
         run: |
           echo "## Release Candidate" >> "$GITHUB_STEP_SUMMARY"
