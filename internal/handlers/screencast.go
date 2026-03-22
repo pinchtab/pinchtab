@@ -16,6 +16,56 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+const screencastRepaintStartJS = `(function() {
+  const key = "__pinchtabScreencastRepaint";
+  const state = globalThis[key] || (globalThis[key] = { refs: 0 });
+  state.refs += 1;
+  if (state.refs > 1) {
+    return state.refs;
+  }
+
+  const el = document.createElement("div");
+  el.id = "__pinchtab_screencast_repaint";
+  el.setAttribute("aria-hidden", "true");
+  el.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none;opacity:0.999;background:rgba(0,0,0,0.001);transform:translateZ(0);will-change:opacity;z-index:2147483647;";
+  (document.body || document.documentElement).appendChild(el);
+
+  state.element = el;
+  state.animation = el.animate(
+    [{ opacity: 0.999 }, { opacity: 1 }],
+    { duration: 1000, iterations: Infinity, direction: "alternate", easing: "linear" }
+  );
+  return state.refs;
+})()`
+
+const screencastRepaintStopJS = `(function() {
+  const key = "__pinchtabScreencastRepaint";
+  const state = globalThis[key];
+  if (!state) {
+    return 0;
+  }
+
+  state.refs = Math.max(0, (state.refs || 1) - 1);
+  if (state.refs > 0) {
+    return state.refs;
+  }
+
+  try {
+    if (state.animation) {
+      state.animation.cancel();
+    }
+  } catch (_) {}
+
+  try {
+    if (state.element) {
+      state.element.remove();
+    }
+  } catch (_) {}
+
+  delete globalThis[key];
+  return 0;
+})()`
+
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +110,11 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 
 	if ctx == nil {
 		return
+	}
+
+	stopRepaintLoop := func() {}
+	if h.Config != nil && h.Config.Headless {
+		stopRepaintLoop = startScreencastRepaintLoop(ctx)
 	}
 
 	frameCh := make(chan []byte, 3)
@@ -115,6 +170,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		once.Do(func() { close(done) })
+		stopRepaintLoop()
 		_ = chromedp.Run(ctx,
 			chromedp.ActionFunc(func(c context.Context) error {
 				return page.StopScreencast().Do(c)
@@ -146,6 +202,19 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 			if err := wsutil.WriteServerMessage(conn, ws.OpPing, nil); err != nil {
 				return
 			}
+		}
+	}
+}
+
+func startScreencastRepaintLoop(ctx context.Context) func() {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(screencastRepaintStartJS, nil)); err != nil {
+		slog.Warn("enable screencast repaint loop failed", "err", err)
+		return func() {}
+	}
+
+	return func() {
+		if err := chromedp.Run(ctx, chromedp.Evaluate(screencastRepaintStopJS, nil)); err != nil {
+			slog.Warn("disable screencast repaint loop failed", "err", err)
 		}
 	}
 }
