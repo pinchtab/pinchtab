@@ -5,7 +5,7 @@ description: Develop and contribute to the PinchTab project. Use when working on
 
 # PinchTab Development
 
-PinchTab is a browser control server for AI agents — 12MB Go binary with HTTP API.
+PinchTab is a browser control server for AI agents — Small Go binary with HTTP API.
 
 ## Project Location
 

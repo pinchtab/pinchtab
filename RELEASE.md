@@ -66,15 +66,15 @@ grep -A 2 "^release:" .goreleaser.yml
 - ✅ `checksum:` generates `checksums.txt` (used by npm postinstall verification)
 - ✅ `release:` points to GitHub (uploads everything automatically)
 
-**Ready to release.** The recommended path is now the manual `Prepare Release` workflow, which runs the full verification suite, pauses for approval, and only then creates the tag.
+**Ready to release.** The recommended path is now the manual `Release` workflow, which runs the full verification suite, pauses for approval, creates the tag, and then finishes publishing in the same run.
 
 ## Releasing
 
 ## Manual Release Flow
 
 1. Choose the branch, tag, or SHA you want to release.
-   `Prepare Release` now validates the requested version format and tag availability, then rewrites the npm package version inside the CI workspace for the dry-run steps.
-2. Open **Actions → Prepare Release**.
+   `Release` now validates the requested version format and tag availability, then rewrites the npm package version inside the CI workspace for the dry-run steps.
+2. Open **Actions → Release**.
 3. Run it with:
    - `version`: the release version, for example `0.8.0`
    - `ref`: the branch, tag, or SHA you want to release
@@ -88,12 +88,20 @@ grep -A 2 "^release:" .goreleaser.yml
    - GoReleaser snapshot
    - `npm publish --dry-run`
 5. After those pass, GitHub pauses at the `release-approval` environment gate.
-6. Approve the run. The workflow creates and pushes `v0.8.0` from the exact tested commit SHA.
-7. That tag triggers the `Release` workflow automatically.
+6. Approve the run. The workflow creates and pushes `v0.8.0` from the exact tested commit SHA, then continues publishing from that tag in the same run.
+7. Monitor the remaining publish jobs in the same workflow run:
+   - GitHub release binaries
+   - npm publish
+   - Docker image publish
+   - ClawHub skill publish
 
 ### Required GitHub setup
 
 Configure a protected environment named `release-approval` with the required reviewers for the manual gate to be effective.
+
+### Recovery publish
+
+If a tag already exists and you need to retry publishing, use **Actions → Release / Manual Publish** with the existing tag, for example `v0.8.0`.
 
 ## Pipeline details
 

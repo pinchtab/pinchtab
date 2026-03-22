@@ -3,60 +3,68 @@ name: Release / Manual Publish
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g. 0.8.0, without v prefix)'
+      tag:
+        description: 'Existing release tag to publish (e.g. v0.8.0)'
         required: true
-      ref:
-        description: 'Git ref to tag. Defaults to main.'
-        required: false
-        default: 'main'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-manual-${{ inputs.version }}
+  group: release-manual-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   validate:
-    uses: ./.github/workflows/reusable-validate-release.yml
-    with:
-      version: ${{ inputs.version }}
-      ref: ${{ inputs.ref }}
-
-  create-tag:
-    name: Create Release Tag
-    needs: validate
+    name: Validate Existing Tag
     runs-on: ubuntu-latest
-    environment:
-      name: release-approval
-    permissions:
-      contents: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      ref: ${{ steps.meta.outputs.ref }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ needs.validate.outputs.sha }}
 
-      - name: Create and push tag
+      - name: Normalize and validate tag
+        id: meta
         run: |
-          TAG="${{ needs.validate.outputs.tag }}"
+          TAG="${{ inputs.tag }}"
+          if [ "${TAG#v}" = "$TAG" ]; then
+            TAG="v$TAG"
+          fi
 
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "tag $TAG already exists on origin" >&2
+          git fetch --tags origin
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "tag $TAG not found on origin" >&2
             exit 1
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Release $TAG (manual)"
-          git push origin "refs/tags/$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
 
+  approval:
+    name: Manual Approval
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: release-approval
+    steps:
       - name: Summarize
         run: |
-          echo "## Release Tag Created (Manual)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Manual Publish Approval" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ needs.validate.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: \`${{ needs.validate.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "The **Release / Publish** workflow will trigger automatically." >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish Existing Tag
+    needs:
+      - validate
+      - approval
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/reusable-release-publish.yml
+    with:
+      ref: ${{ needs.validate.outputs.ref }}
+      tag: ${{ needs.validate.outputs.tag }}
+    secrets: inherit

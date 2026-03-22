@@ -38,7 +38,7 @@ Binaries are built automatically from tagged commits via GitHub Actions (publicl
 - **Releases**: https://github.com/pinchtab/pinchtab/releases
 - **Latest**: v0.8.4 (Mar 2026)
 
-If you're concerned, audit the source—it's 12MB, zero external dependencies, mostly Go stdlib.
+If you're concerned, audit the source—it's ~15MB, zero external dependencies, mostly Go stdlib.
 
 ## VirusTotal Flag
 

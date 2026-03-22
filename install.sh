@@ -12,7 +12,7 @@ ERROR='\033[38;2;230;57;70m'        # red #e63946
 MUTED='\033[38;2;90;100;128m'       # text-muted #5a6480
 NC='\033[0m' # No Color
 
-TAGLINE="12MB binary. Zero config. Accessibility-first browser control."
+TAGLINE="Small binary. Zero config. Accessibility-first browser control."
 
 cleanup_tmpfiles() {
     local f

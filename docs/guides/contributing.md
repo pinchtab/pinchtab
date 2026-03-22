@@ -356,7 +356,7 @@ Workflows follow a naming convention:
 |--------|---------|---------|
 | `ci-*` | Automatic checks on PR/push | `ci-go.yml` → **CI / Go** |
 | `reusable-*` | Building blocks (`workflow_call` only) | `reusable-e2e.yml` → **Reusable / E2E** |
-| `release-*` | Release pipeline | `release-prepare.yml` → **Release / Prepare** |
+| `release-*` | Release pipeline | `release.yml` → **Release** |
 
 ### CI Checks
 
@@ -375,11 +375,10 @@ Run automatically on pull requests and/or push to `main`:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| **Release / Prepare** | Manual | Runs all checks + E2E → manual approval gate → creates tag |
-| **Release / Publish** | Tag push (`v*`) | GoReleaser + npm + Docker + ClawHub skill |
-| **Release / Manual Publish** | Manual | Validates + creates tag (bypasses Prepare) → triggers Publish |
+| **Release** | Manual | Runs all checks + E2E → manual approval gate → creates tag → publishes binaries, npm, Docker, and skill |
+| **Release / Manual Publish** | Manual | Publishes an existing tag as a recovery path |
 
-In **Release / Prepare**, E2E and Docker smoke failures are non-blocking — they surface
+In **Release**, E2E and Docker smoke failures are non-blocking — they surface
 in the approval summary so you can decide whether to proceed. Core checks (Go, Dashboard,
 Docs, npm, publish dry-run) must pass for the approval gate to appear.
 

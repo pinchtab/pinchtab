@@ -5,7 +5,7 @@
 <p align="center">
   <strong>PinchTab</strong><br/>
   <strong>Browser control for AI agents</strong><br/>
-  12MB Go binary • HTTP API • Token-efficient
+  Small Go binary • HTTP API • Token-efficient
 </p>
 
 
@@ -16,7 +16,7 @@
     </td>
     <td align="left" valign="middle">
       <a href="https://github.com/pinchtab/pinchtab/releases/latest"><img src="https://img.shields.io/github/v/release/pinchtab/pinchtab?style=flat-square&color=FFD700" alt="Release"/></a><br/>
-      <a href="https://github.com/pinchtab/pinchtab/actions/workflows/go-verify.yml"><img src="https://img.shields.io/github/actions/workflow/status/pinchtab/pinchtab/go-verify.yml?branch=main&style=flat-square&label=Build" alt="Build"/></a><br/>
+      <a href="https://github.com/pinchtab/pinchtab/actions/workflows/ci-go.yml"><img src="https://img.shields.io/github/actions/workflow/status/pinchtab/pinchtab/ci-go.yml?branch=main&style=flat-square&label=Go%20CI" alt="Go CI"/></a><br/>
       <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.25+"/><br/>
       <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License"/></a>
     </td>

@@ -1,8 +1,16 @@
-name: Release / Publish
+name: Reusable / Release Publish
 
 on:
-  push:
-    tags: ['v*']
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to publish from (for example refs/tags/v0.8.0)'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag with v prefix'
+        required: true
+        type: string
 
 env:
   GORELEASER_VERSION: v2.14.3
@@ -11,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +32,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-go@v6
         with:
@@ -54,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v6
         with:
@@ -64,7 +72,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ inputs.tag }}"
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -106,12 +114,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Extract Docker metadata
         id: meta
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ inputs.tag }}"
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -155,6 +163,6 @@ jobs:
       - npm
     uses: ./.github/workflows/reusable-publish-skill.yml
     with:
-      version: ${{ github.ref_name }}
+      version: ${{ inputs.tag }}
     secrets:
       CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}

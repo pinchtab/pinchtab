@@ -1,4 +1,4 @@
-name: Release / Prepare
+name: Release
 
 on:
   workflow_dispatch:
@@ -222,3 +222,19 @@ jobs:
           echo "## Release Tag Created" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ needs.validate.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit: \`${{ needs.validate.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Publishing continues in this workflow from the approved tag." >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish Release
+    needs:
+      - validate
+      - create-tag
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/reusable-release-publish.yml
+    with:
+      ref: refs/tags/${{ needs.validate.outputs.tag }}
+      tag: ${{ needs.validate.outputs.tag }}
+    secrets: inherit
