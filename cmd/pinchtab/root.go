@@ -109,7 +109,7 @@ func init() {
 	rootCmd.SetVersionTemplate("pinchtab {{.Version}}\n")
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "PinchTab server URL (default: http://127.0.0.1:{port})")
+	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "PinchTab server URL (default: http://127.0.0.1:9867)")
 
 	// Grouping commands
 	primaryGroup := &cobra.Group{ID: "primary", Title: "Primary Commands"}

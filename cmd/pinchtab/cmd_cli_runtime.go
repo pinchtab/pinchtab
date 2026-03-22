@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -33,26 +32,10 @@ func resolveCLIBase(cfg *config.RuntimeConfig) string {
 	if serverURL != "" {
 		return strings.TrimRight(serverURL, "/")
 	}
-	if envURL := os.Getenv("PINCHTAB_URL"); envURL != "" {
+	if envURL := os.Getenv("PINCHTAB_SERVER"); envURL != "" {
 		return strings.TrimRight(envURL, "/")
 	}
-
-	port := cfg.Port
-	if port == "" {
-		port = "9867"
-	}
-
-	bind := cfg.Bind
-	if bind == "127.0.0.1" || bind == "localhost" {
-		return fmt.Sprintf("http://%s:%s", bind, port)
-	}
-	if bind == "::1" || bind == "[::1]" {
-		return fmt.Sprintf("http://[::1]:%s", port)
-	}
-
-	// For empty, 0.0.0.0, ::, or any other non-loopback bind,
-	// fall back to 127.0.0.1 for implicit CLI targeting.
-	return fmt.Sprintf("http://127.0.0.1:%s", port)
+	return "http://127.0.0.1:9867"
 }
 
 func resolveCLIToken(cfg *config.RuntimeConfig) string {
