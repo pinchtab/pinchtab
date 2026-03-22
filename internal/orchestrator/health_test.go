@@ -26,8 +26,7 @@ func TestIsInstanceHealthyStatus(t *testing.T) {
 }
 
 func TestInstanceBaseURLs(t *testing.T) {
-	port := "1234"
-	urls := instanceBaseURLs("", port)
+	urls := instanceBaseURLs(1234)
 
 	expected := []string{
 		"http://127.0.0.1:1234",
@@ -43,15 +42,5 @@ func TestInstanceBaseURLs(t *testing.T) {
 		if url != expected[i] {
 			t.Errorf("url[%d] = %q, want %q", i, url, expected[i])
 		}
-	}
-}
-
-func TestInstanceBaseURLs_UsesCanonicalURLWhenPresent(t *testing.T) {
-	urls := instanceBaseURLs("https://bridge.example.com:9868/", "1234")
-	if len(urls) != 1 {
-		t.Fatalf("expected 1 URL, got %d", len(urls))
-	}
-	if urls[0] != "https://bridge.example.com:9868" {
-		t.Fatalf("url = %q, want %q", urls[0], "https://bridge.example.com:9868")
 	}
 }

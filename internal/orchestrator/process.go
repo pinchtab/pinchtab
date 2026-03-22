@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -39,7 +40,11 @@ func isProcessAlive(pid int) bool {
 }
 
 func isPortAvailable(port string) bool {
-	ln, err := net.Listen("tcp", ":"+port)
+	portNum, err := parsePortNumber(port)
+	if err != nil {
+		return false
+	}
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", portNum))
 	if err != nil {
 		return false
 	}

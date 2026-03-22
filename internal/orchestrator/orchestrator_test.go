@@ -201,6 +201,17 @@ func TestOrchestrator_Launch_AcceptsValidNames(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_Launch_RejectsInvalidPort(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	for _, raw := range []string{"abc", "0x1234", "65536"} {
+		if _, err := o.Launch("profile1", raw, true, nil); err == nil {
+			t.Fatalf("Launch should reject invalid port %q", raw)
+		}
+	}
+}
+
 func TestOrchestrator_Launch_ReservesDistinctChromeDebugPort(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }

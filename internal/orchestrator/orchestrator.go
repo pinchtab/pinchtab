@@ -264,13 +264,16 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 		o.mu.Lock()
 	} else {
 		o.mu.Unlock()
-		if portInt, err := strconv.Atoi(port); err == nil {
-			if err := o.portAllocator.ReservePort(portInt); err != nil {
-				return nil, fmt.Errorf("failed to reserve port %s: %w", port, err)
-			}
-			if portInt >= o.portAllocator.start && portInt <= o.portAllocator.end {
-				reservedPorts = append(reservedPorts, portInt)
-			}
+		portInt, err := parsePortNumber(port)
+		if err != nil {
+			return nil, err
+		}
+		port = strconv.Itoa(portInt)
+		if err := o.portAllocator.ReservePort(portInt); err != nil {
+			return nil, fmt.Errorf("failed to reserve port %s: %w", port, err)
+		}
+		if portInt >= o.portAllocator.start && portInt <= o.portAllocator.end {
+			reservedPorts = append(reservedPorts, portInt)
 		}
 		o.mu.Lock()
 	}

@@ -27,6 +27,10 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	}()
 	var waitErr error
 	started := time.Now()
+	probePort, portErr := parsePortNumber(inst.Port)
+	if portErr != nil {
+		lastProbe = portErr.Error()
+	}
 	for time.Since(started) < instanceStartupTimeout {
 		select {
 		case waitErr = <-waitCh:
@@ -36,8 +40,13 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		if exitedEarly {
 			break
 		}
+		if portErr != nil {
+			break
+		}
 		time.Sleep(instanceHealthPollInterval)
 
+		// monitor only probes child bridge processes started by Launch.
+		// Attached remote bridges are validated and probed during attach.
 		healthy, resolvedURL, lastProbe = o.probeInstanceHealth(inst)
 		if healthy {
 			break
@@ -144,13 +153,25 @@ func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
 
 func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string, string) {
 	lastProbe := "no response"
-	for _, baseURL := range instanceBaseURLs(inst.URL, inst.Port) {
-		baseParsed, parseErr := url.Parse(baseURL)
-		if parseErr != nil {
-			lastProbe = fmt.Sprintf("%s -> %s", baseURL, parseErr.Error())
+	var baseURLs []string
+	if inst.URL != "" {
+		baseURLs = []string{strings.TrimRight(inst.URL, "/")}
+	} else {
+		probePort, err := parsePortNumber(inst.Port)
+		if err != nil {
+			return false, "", err.Error()
+		}
+		baseURLs = instanceBaseURLs(probePort)
+	}
+
+	for _, baseURL := range baseURLs {
+		target, err := url.Parse(baseURL)
+		if err != nil {
+			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
 			continue
 		}
-		target := &url.URL{Scheme: baseParsed.Scheme, Host: baseParsed.Host, Path: "/health"}
+		target.Path = "/health"
+
 		req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
 		if reqErr != nil {
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
@@ -252,13 +273,10 @@ func isInstanceHealthyStatus(code int) bool {
 	return code > 0 && code < http.StatusInternalServerError
 }
 
-func instanceBaseURLs(rawURL, port string) []string {
-	if rawURL != "" {
-		return []string{strings.TrimRight(rawURL, "/")}
-	}
+func instanceBaseURLs(port int) []string {
 	return []string{
-		fmt.Sprintf("http://127.0.0.1:%s", port),
-		fmt.Sprintf("http://[::1]:%s", port),
-		fmt.Sprintf("http://localhost:%s", port),
+		fmt.Sprintf("http://127.0.0.1:%d", port),
+		fmt.Sprintf("http://[::1]:%d", port),
+		fmt.Sprintf("http://localhost:%d", port),
 	}
 }
