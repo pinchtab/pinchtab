@@ -8,6 +8,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 // BridgeAPI abstracts browser tab operations for handler testing.
@@ -35,6 +36,7 @@ type BridgeAPI interface {
 	Unlock(tabID, owner string) error
 
 	EnsureChrome(cfg *config.RuntimeConfig) error
+	StealthStatus() *stealth.Status
 
 	// Memory metrics
 	GetMemoryMetrics(tabID string) (*MemoryMetrics, error)

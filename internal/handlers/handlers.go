@@ -138,6 +138,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /cookies", h.HandleGetCookies)
 	mux.HandleFunc("POST /cookies", h.HandleSetCookies)
 	mux.HandleFunc("POST /fingerprint/rotate", h.HandleFingerprintRotate)
+	mux.HandleFunc("GET /stealth/status", h.HandleStealthStatus)
 	mux.HandleFunc("GET /tabs/{id}/download", h.HandleTabDownload)
 	mux.HandleFunc("POST /tabs/{id}/upload", h.HandleTabUpload)
 	mux.HandleFunc("GET /download", h.HandleDownload)

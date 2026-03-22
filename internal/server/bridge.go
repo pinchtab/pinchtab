@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -32,7 +31,6 @@ func RunBridgeServer(cfg *config.RuntimeConfig) {
 	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
 
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
-	bridgeInstance.StealthScript = assets.StealthScript
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
 		SessionIdle:   time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,

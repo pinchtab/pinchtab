@@ -15,6 +15,7 @@ func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
 		"--disable-session-crashed-bubble",
 		"--hide-crash-restore-bubble",
 		"--noerrdialogs",
+		"--enable-automation=false",
 	} {
 		if !slices.Contains(args, want) {
 			t.Fatalf("missing chrome arg %q in %v", want, args)

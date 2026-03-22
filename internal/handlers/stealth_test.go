@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 func TestHandleFingerprintRotate_InvalidJSON(t *testing.T) {
@@ -90,9 +92,50 @@ func TestStealthScript_Content(t *testing.T) {
 
 func TestStealthScript_Populated(t *testing.T) {
 	b := bridge.New(context.Background(), context.Background(), &config.RuntimeConfig{})
-	b.StealthScript = assets.StealthScript
 
-	if b.StealthScript == "" {
-		t.Error("expected stealth script to be populated")
+	if b.StealthBundle == nil || b.StealthBundle.Script == "" {
+		t.Error("expected stealth bundle script to be populated")
+	}
+}
+
+func (m *mockBridge) StealthStatus() *stealth.Status {
+	return &stealth.Status{
+		Level:         stealth.LevelMedium,
+		Headless:      true,
+		LaunchMode:    stealth.LaunchModeAllocator,
+		ScriptHash:    "sha256:test",
+		WebdriverMode: stealth.WebdriverModeJSProxy,
+		Flags: map[string]bool{
+			"headlessNew": true,
+		},
+		Capabilities: map[string]bool{
+			"userAgentData": true,
+		},
+		TabOverrides: map[string]bool{
+			"fingerprintRotateActive": false,
+		},
+	}
+}
+
+func TestHandleStealthStatus(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/stealth/status", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleStealthStatus(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if got := resp["level"]; got != "medium" {
+		t.Fatalf("expected level=medium, got %v", got)
+	}
+	if got := resp["launchMode"]; got != "allocator" {
+		t.Fatalf("expected launchMode=allocator, got %v", got)
 	}
 }

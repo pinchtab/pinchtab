@@ -13,6 +13,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 // TestHandleHealth_NilBridge verifies health endpoint returns 503 when bridge is nil
@@ -419,6 +420,17 @@ func (m *MockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		return fmt.Errorf("%s", m.ensureChromeErr)
 	}
 	return nil
+}
+
+func (m *MockBridge) StealthStatus() *stealth.Status {
+	return &stealth.Status{
+		Level:         stealth.LevelLight,
+		LaunchMode:    stealth.LaunchModeUninitialized,
+		WebdriverMode: stealth.WebdriverModeJSProxy,
+		Flags:         map[string]bool{},
+		Capabilities:  map[string]bool{},
+		TabOverrides:  map[string]bool{"fingerprintRotateActive": false},
+	}
 }
 
 func (m *MockBridge) GetMemoryMetrics(tabID string) (*bridge.MemoryMetrics, error) {

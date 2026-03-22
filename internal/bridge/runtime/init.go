@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 type Hooks struct {
@@ -31,19 +31,19 @@ type Hooks struct {
 }
 
 // InitChrome initializes a Chrome browser for a Bridge instance.
-func InitChrome(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, error) {
+func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	slog.Info("starting chrome initialization", "headless", cfg.Headless, "profile", cfg.ProfileDir, "binary", cfg.ChromeBinary)
 
 	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, hooks)
-	browserCtx, browserCancel, err := startChrome(allocCtx, cfg, opts, debugPort, hooks)
+	browserCtx, browserCancel, launchMode, err := startChrome(allocCtx, cfg, bundle, opts, debugPort, hooks)
 	if err != nil {
 		allocCancel()
 		slog.Error("chrome initialization failed", "headless", cfg.Headless, "error", err.Error())
-		return nil, nil, nil, nil, fmt.Errorf("failed to start chrome: %w", err)
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start chrome: %w", err)
 	}
 
 	slog.Info("chrome initialized successfully", "headless", cfg.Headless, "profile", cfg.ProfileDir)
-	return allocCtx, allocCancel, browserCtx, browserCancel, nil
+	return allocCtx, allocCancel, browserCtx, browserCancel, launchMode, nil
 }
 
 func findChromeBinary() string {
@@ -172,19 +172,20 @@ func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, co
 	return ctx, cancel, opts, debugPort
 }
 
-func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks) (context.Context, context.CancelFunc, error) {
-	return startChromeWithRecovery(parentCtx, cfg, opts, debugPort, hooks, false)
+func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+	return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, false)
 }
 
-func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, retriedProfileLock bool) (context.Context, context.CancelFunc, error) {
+func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, retriedProfileLock bool) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 
-	stealthSeed := rand.Intn(1000000000)
-	if hooks.SetHumanRandSeed != nil {
-		hooks.SetHumanRandSeed(int64(stealthSeed))
+	if bundle == nil {
+		bundle = stealth.NewBundle(cfg, rand.Int63n(1000000000))
 	}
-	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript + "\n" + assets.PopupGuardScript
+	if hooks.SetHumanRandSeed != nil {
+		hooks.SetHumanRandSeed(bundle.Seed)
+	}
 
 	const chromeStartupTimeout = 20 * time.Second
 	type runResult struct{ err error }
@@ -212,7 +213,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 			if hooks.ClearStaleChromeProfile != nil {
 				if recovered, _ := hooks.ClearStaleChromeProfile(cfg.ProfileDir, errMsg); recovered {
 					time.Sleep(250 * time.Millisecond)
-					return startChromeWithRecovery(parentCtx, cfg, opts, debugPort, hooks, true)
+					return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, true)
 				}
 			}
 		}
@@ -220,24 +221,24 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 		if isStartupTimeout(err) && debugPort > 0 {
 			slog.Warn("chrome startup timeout (Chrome 145+ regression), trying direct-launch fallback", "port", debugPort)
 			time.Sleep(500 * time.Millisecond)
-			return startChromeWithRemoteAllocator(parentCtx, cfg, debugPort, seededScript)
+			return startChromeWithRemoteAllocator(parentCtx, cfg, debugPort, bundle.Script)
 		}
 
-		return nil, nil, fmt.Errorf("failed to connect to chrome: %w", err)
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w", err)
 	}
 
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return injectedScript(ctx, seededScript)
+		return injectedScript(ctx, bundle.Script)
 	})); err != nil {
 		browserCancel()
 		allocCancel()
-		return nil, nil, fmt.Errorf("failed to inject stealth script: %w", err)
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to inject stealth script: %w", err)
 	}
 
 	return browserCtx, func() {
 		browserCancel()
 		allocCancel()
-	}, nil
+	}, stealth.LaunchModeAllocator, nil
 }
 
 func isStartupTimeout(err error) bool {
@@ -248,13 +249,13 @@ func isStartupTimeout(err error) bool {
 	return strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context deadline exceeded")
 }
 
-func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, debugPort int, seededScript string) (context.Context, context.CancelFunc, error) {
+func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
 		chromeBinary = findChromeBinary()
 	}
 	if chromeBinary == "" {
-		return nil, nil, fmt.Errorf("chrome/chromium not found: please install chrome or chromium, or set 'binary' in config.json")
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("chrome/chromium not found: please install chrome or chromium, or set 'binary' in config.json")
 	}
 
 	args := BuildChromeArgs(cfg, debugPort)
@@ -263,32 +264,32 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 	cmd.Stdout = newPrefixedLogWriter(os.Stdout, "chrome stdout")
 	cmd.Stderr = newPrefixedLogWriter(os.Stderr, "chrome stderr")
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("failed to start chrome directly: %w", err)
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start chrome directly: %w", err)
 	}
 
 	wsURL, err := waitForChromeDevTools(debugPort, 30*time.Second)
 	if err != nil {
 		_ = cmd.Process.Kill()
-		return nil, nil, fmt.Errorf("chrome devtools not ready on port %d: %w", debugPort, err)
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("chrome devtools not ready on port %d: %w", debugPort, err)
 	}
 
 	remoteAllocCtx, remoteAllocCancel := chromedp.NewRemoteAllocator(parentCtx, wsURL)
 	browserCtx, browserCancel := chromedp.NewContext(remoteAllocCtx)
 
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return injectedScript(ctx, seededScript)
+		return injectedScript(ctx, injectedStealthScript)
 	})); err != nil {
 		browserCancel()
 		remoteAllocCancel()
 		_ = cmd.Process.Kill()
-		return nil, nil, fmt.Errorf("failed to connect/inject via remote: %w", err)
+		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect/inject via remote: %w", err)
 	}
 
 	return browserCtx, func() {
 		browserCancel()
 		remoteAllocCancel()
 		_ = cmd.Process.Kill()
-	}, nil
+	}, stealth.LaunchModeDirectFallback, nil
 }
 
 func findFreePort(start, end int) (int, error) {
@@ -350,6 +351,7 @@ func DefaultChromeFlagArgs() []string {
 		"--password-store=basic",
 		"--use-mock-keychain",
 		"--disable-automation",
+		"--enable-automation=false",
 		"--disable-blink-features=AutomationControlled",
 	}
 }
