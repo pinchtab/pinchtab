@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 // buildUserAgentOverride creates a SetUserAgentOverride action with full UserAgentMetadata.
@@ -16,17 +17,7 @@ func buildUserAgentOverride(userAgent, chromeVersion string) *emulation.SetUserA
 		return nil
 	}
 
-	// If no custom user agent is provided, generate a default one based on OS
-	if userAgent == "" {
-		switch runtime.GOOS {
-		case "darwin":
-			userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
-		case "windows":
-			userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
-		default:
-			userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36"
-		}
-	}
+	userAgent = stealth.ResolveUserAgent(userAgent, chromeVersion)
 
 	major := chromeVersion
 	if i := strings.Index(chromeVersion, "."); i > 0 {

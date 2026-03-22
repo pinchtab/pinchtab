@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stealth Capabilities</title>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      margin: 24px;
+      background: #10161f;
+      color: #e6edf3;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 16px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 16px;
+    }
+    th, td {
+      border: 1px solid #2f3b4d;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #17202d;
+    }
+    .ok {
+      color: #5ee27a;
+    }
+    .bad {
+      color: #ff7b72;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #17202d;
+      padding: 12px;
+      border: 1px solid #2f3b4d;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stealth Capabilities</h1>
+  <table id="results">
+    <tr><th>Check</th><th>Pass</th><th>Value</th></tr>
+  </table>
+  <h2>Raw</h2>
+  <pre id="raw"></pre>
+
+  <script>
+    (function() {
+      function safe(fn, fallback) {
+        try {
+          return fn();
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      function collect() {
+        const plugin0 = safe(() => navigator.plugins[0], null);
+        const connection = navigator.connection || null;
+        const connectionProto = connection ? Object.getPrototypeOf(connection) : null;
+        const video = safe(() => document.createElement('video'), null);
+        const uaData = navigator.userAgentData || null;
+        const uaDataPlatform = uaData ? uaData.platform : '';
+        const navPlatform = navigator.platform || '';
+        const pluginObjectTag = plugin0 ? Object.prototype.toString.call(plugin0) : '';
+        const h264 = video ? video.canPlayType('video/mp4; codecs="avc1.42E01E"') : '';
+        const vp9 = video ? video.canPlayType('video/webm; codecs="vp9"') : '';
+
+        return {
+          webdriverValue: safe(() => navigator.webdriver, 'error'),
+          webdriverNotTrue: safe(() => navigator.webdriver !== true, false),
+          webdriverPropertyHidden: safe(() => !('webdriver' in navigator), false),
+          pluginArray: safe(() => navigator.plugins instanceof PluginArray, false),
+          pluginsPresent: safe(() => navigator.plugins.length > 0, false),
+          pluginObjectSemantics: pluginObjectTag === '[object Plugin]',
+          pluginObjectTag,
+          batteryApi: typeof navigator.getBattery === 'function',
+          outerDimensions: window.outerWidth > 0 && window.outerHeight > 0,
+          screenWindowCoherent: screen.width >= window.outerWidth && screen.height >= window.outerHeight,
+          userAgent: navigator.userAgent,
+          navigatorPlatform: navPlatform,
+          userAgentData: !!(uaData && uaData.brands),
+          userAgentDataPlatform: uaDataPlatform,
+          userAgentDataPlatformCoherent: safe(() => {
+            if (!uaDataPlatform) return true;
+            if (uaDataPlatform === 'Windows') return navPlatform.indexOf('Win') >= 0;
+            if (uaDataPlatform === 'macOS') return navPlatform === 'MacIntel';
+            if (uaDataPlatform === 'Linux') return navPlatform.indexOf('Linux') >= 0;
+            return false;
+          }, false),
+          chromeRuntime: !!(window.chrome && window.chrome.runtime),
+          chromeRuntimeConnect: !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function'),
+          chromeRuntimeSendMessage: !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.sendMessage === 'function'),
+          chromeApp: !!(window.chrome && window.chrome.app),
+          chromeCsi: !!(window.chrome && typeof window.chrome.csi === 'function'),
+          chromeLoadTimes: !!(window.chrome && typeof window.chrome.loadTimes === 'function'),
+          maxTouchPointsDefined: typeof navigator.maxTouchPoints !== 'undefined',
+          downlinkMaxPresent: !!(connection && (('downlinkMax' in connection) || (connectionProto && 'downlinkMax' in connectionProto))),
+          h264,
+          vp9,
+          prefersColorSchemeLight: safe(() => window.matchMedia('(prefers-color-scheme: light)').matches, false)
+        };
+      }
+
+      const capabilities = collect();
+      window.__stealthCapabilities = capabilities;
+
+      const rows = [
+        ['webdriverNotTrue', capabilities.webdriverNotTrue, capabilities.webdriverValue],
+        ['webdriverPropertyHidden', capabilities.webdriverPropertyHidden, String(capabilities.webdriverPropertyHidden)],
+        ['pluginArray', capabilities.pluginArray, String(capabilities.pluginArray)],
+        ['pluginsPresent', capabilities.pluginsPresent, String(navigator.plugins.length)],
+        ['pluginObjectSemantics', capabilities.pluginObjectSemantics, capabilities.pluginObjectTag],
+        ['batteryApi', capabilities.batteryApi, String(capabilities.batteryApi)],
+        ['outerDimensions', capabilities.outerDimensions, window.outerWidth + 'x' + window.outerHeight],
+        ['screenWindowCoherent', capabilities.screenWindowCoherent, screen.width + 'x' + screen.height],
+        ['userAgentData', capabilities.userAgentData, String(capabilities.userAgentData)],
+        ['userAgentDataPlatformCoherent', capabilities.userAgentDataPlatformCoherent, capabilities.navigatorPlatform + ' / ' + capabilities.userAgentDataPlatform],
+        ['chromeRuntimeConnect', capabilities.chromeRuntimeConnect, String(capabilities.chromeRuntimeConnect)],
+        ['chromeRuntimeSendMessage', capabilities.chromeRuntimeSendMessage, String(capabilities.chromeRuntimeSendMessage)],
+        ['chromeApp', capabilities.chromeApp, String(capabilities.chromeApp)],
+        ['maxTouchPointsDefined', capabilities.maxTouchPointsDefined, String(navigator.maxTouchPoints)],
+        ['downlinkMaxPresent', capabilities.downlinkMaxPresent, String(capabilities.downlinkMaxPresent)],
+        ['prefersColorSchemeLight', capabilities.prefersColorSchemeLight, String(capabilities.prefersColorSchemeLight)],
+        ['videoCodecSummary', capabilities.h264 === 'probably' || capabilities.vp9 === 'probably', 'H264=' + capabilities.h264 + ' VP9=' + capabilities.vp9]
+      ];
+
+      const table = document.getElementById('results');
+      for (const row of rows) {
+        const tr = table.insertRow();
+        tr.innerHTML =
+          '<td>' + row[0] + '</td>' +
+          '<td class="' + (row[1] ? 'ok' : 'bad') + '">' + (row[1] ? 'PASS' : 'FAIL') + '</td>' +
+          '<td>' + String(row[2]) + '</td>';
+      }
+
+      document.getElementById('raw').textContent = JSON.stringify(capabilities, null, 2);
+    })();
+  </script>
+</body>
+</html>

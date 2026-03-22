@@ -15,5 +15,10 @@ func (h *Handlers) HandleStealthStatus(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if tabID := r.URL.Query().Get("tabId"); tabID != "" {
+		if tracker, ok := h.Bridge.(interface{ FingerprintRotateActive(string) bool }); ok {
+			status.TabOverrides["fingerprintRotateActive"] = tracker.FingerprintRotateActive(tabID)
+		}
+	}
 	httpx.JSON(w, 200, status)
 }

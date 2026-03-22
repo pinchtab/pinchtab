@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,16 @@ func TestBuild_Empty(t *testing.T) {
 	}
 	if p.UserAgent == "" {
 		t.Fatal("expected generated user agent")
+	}
+}
+
+func TestBuild_UsesResolvedUserAgent(t *testing.T) {
+	p := buildUserAgentOverride("", "144.0.0.0")
+	if p == nil {
+		t.Fatal("expected non-nil")
+	}
+	if !strings.Contains(p.UserAgent, "Chrome/144.0.0.0") {
+		t.Fatalf("expected resolved UA to contain full Chrome version, got %q", p.UserAgent)
 	}
 }
 

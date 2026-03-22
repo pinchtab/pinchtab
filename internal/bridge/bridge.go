@@ -49,6 +49,9 @@ type Bridge struct {
 	// Network monitoring
 	netMonitor *NetworkMonitor
 
+	fingerprintMu       sync.RWMutex
+	fingerprintOverlays map[string]bool
+
 	// Lazy initialization
 	initMu      sync.Mutex
 	initialized bool
@@ -68,13 +71,14 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	}
 	logStore := NewConsoleLogStore(1000)
 	b := &Bridge{
-		AllocCtx:          allocCtx,
-		BrowserCtx:        browserCtx,
-		Config:            cfg,
-		IdMgr:             idMgr,
-		netMonitor:        NewNetworkMonitor(netBufSize),
-		LogStore:          logStore,
-		stealthLaunchMode: stealth.LaunchModeUninitialized,
+		AllocCtx:            allocCtx,
+		BrowserCtx:          browserCtx,
+		Config:              cfg,
+		IdMgr:               idMgr,
+		netMonitor:          NewNetworkMonitor(netBufSize),
+		fingerprintOverlays: make(map[string]bool),
+		LogStore:            logStore,
+		stealthLaunchMode:   stealth.LaunchModeUninitialized,
 	}
 	b.ensureStealthBundle()
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
@@ -350,6 +354,24 @@ func (b *Bridge) ensureStealthBundle() {
 func (b *Bridge) StealthStatus() *stealth.Status {
 	b.ensureStealthBundle()
 	return stealth.StatusFromBundle(b.StealthBundle, b.Config, b.stealthLaunchMode)
+}
+
+func (b *Bridge) SetFingerprintRotateActive(tabID string, active bool) {
+	if tabID == "" {
+		return
+	}
+	b.fingerprintMu.Lock()
+	defer b.fingerprintMu.Unlock()
+	b.fingerprintOverlays[tabID] = active
+}
+
+func (b *Bridge) FingerprintRotateActive(tabID string) bool {
+	if tabID == "" {
+		return false
+	}
+	b.fingerprintMu.RLock()
+	defer b.fingerprintMu.RUnlock()
+	return b.fingerprintOverlays[tabID]
 }
 
 func (b *Bridge) BrowserContext() context.Context {

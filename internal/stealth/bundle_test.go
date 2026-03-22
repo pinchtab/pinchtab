@@ -47,3 +47,13 @@ func TestStatusFromBundleReflectsCurrentCapabilityShape(t *testing.T) {
 		t.Fatal("expected headlessNew flag to be true for headless config")
 	}
 }
+
+func TestResolveUserAgent(t *testing.T) {
+	if got := ResolveUserAgent("custom-agent", "144.0.0.0"); got != "custom-agent" {
+		t.Fatalf("expected explicit UA to win, got %q", got)
+	}
+	got := ResolveUserAgent("", "144.0.0.0")
+	if !strings.Contains(got, "Chrome/144.0.0.0") {
+		t.Fatalf("expected generated UA to include chrome version, got %q", got)
+	}
+}

@@ -87,6 +87,10 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 		slog.Warn("JS fingerprint extras failed", "err", err)
 	}
 
+	if tracker, ok := h.Bridge.(interface{ SetFingerprintRotateActive(string, bool) }); ok {
+		tracker.SetFingerprintRotateActive(resolvedTabID, true)
+	}
+
 	httpx.JSON(w, 200, map[string]any{
 		"fingerprint": fp,
 		"status":      "rotated",

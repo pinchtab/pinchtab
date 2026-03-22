@@ -118,7 +118,8 @@ func (m *mockBridge) StealthStatus() *stealth.Status {
 }
 
 func TestHandleStealthStatus(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mb := &mockBridge{fingerprintTabs: map[string]bool{"tab1": true}}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/stealth/status", nil)
 	w := httptest.NewRecorder()
 
@@ -137,5 +138,30 @@ func TestHandleStealthStatus(t *testing.T) {
 	}
 	if got := resp["launchMode"]; got != "allocator" {
 		t.Fatalf("expected launchMode=allocator, got %v", got)
+	}
+}
+
+func TestHandleStealthStatus_WithTabOverride(t *testing.T) {
+	mb := &mockBridge{fingerprintTabs: map[string]bool{"tab-special": true}}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/stealth/status?tabId=tab-special", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleStealthStatus(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	tabOverrides, ok := resp["tabOverrides"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected tabOverrides object, got %T", resp["tabOverrides"])
+	}
+	if got := tabOverrides["fingerprintRotateActive"]; got != true {
+		t.Fatalf("expected fingerprintRotateActive=true, got %v", got)
 	}
 }

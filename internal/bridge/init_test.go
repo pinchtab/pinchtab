@@ -39,6 +39,21 @@ func TestBuildChromeArgsHeadlessUsesSoftwareRendering(t *testing.T) {
 	}
 }
 
+func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{ChromeVersion: "144.0.7559.133"}, 9222)
+
+	found := false
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--user-agent=Mozilla/5.0") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected global user-agent arg in %v", args)
+	}
+}
+
 func TestDefaultChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
 	args := defaultChromeFlagArgs()
 	for _, want := range []string{"--disable-metrics-reporting", "--metrics-recording-only"} {

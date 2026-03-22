@@ -137,6 +137,10 @@ func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, co
 		opts = append(opts, chromedp.UserDataDir(cfg.ProfileDir))
 	}
 
+	if ua := stealth.ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion); ua != "" {
+		opts = append(opts, chromedp.UserAgent(ua))
+	}
+
 	w, h := randomWindowSize()
 	opts = append(opts, chromedp.WindowSize(w, h))
 
@@ -385,6 +389,10 @@ func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 
 	if cfg.ProfileDir != "" {
 		args = append(args, "--user-data-dir="+cfg.ProfileDir)
+	}
+
+	if ua := stealth.ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion); ua != "" {
+		args = append(args, "--user-agent="+ua)
 	}
 
 	w, h := randomWindowSize()

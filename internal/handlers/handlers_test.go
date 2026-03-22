@@ -24,6 +24,7 @@ type mockBridge struct {
 	createTabURLs    []string
 	lastConsoleLimit int
 	lastErrorLimit   int
+	fingerprintTabs  map[string]bool
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
@@ -117,6 +118,17 @@ func (m *mockBridge) ClearErrorLogs(tabID string) {}
 
 func (m *mockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
+}
+
+func (m *mockBridge) SetFingerprintRotateActive(tabID string, active bool) {
+	if m.fingerprintTabs == nil {
+		m.fingerprintTabs = make(map[string]bool)
+	}
+	m.fingerprintTabs[tabID] = active
+}
+
+func (m *mockBridge) FingerprintRotateActive(tabID string) bool {
+	return m.fingerprintTabs != nil && m.fingerprintTabs[tabID]
 }
 
 func TestHandlers(t *testing.T) {

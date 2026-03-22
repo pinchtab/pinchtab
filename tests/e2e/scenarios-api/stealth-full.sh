@@ -32,9 +32,16 @@ run_stealth_level_matrix() {
   sleep 1
   end_test
 
+  start_test "stealth-levels: status reports configured level"
+  pt_get /stealth/status
+  assert_json_eq "$RESULT" '.level' "$STEALTH_LEVEL" "status level matches instance"
+  assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
+  assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
+  end_test
+
   start_test "stealth-levels: [light] webdriver hidden"
-  pt_post /evaluate '{"expression":"navigator.webdriver === true"}'
-  assert_json_eq "$RESULT" '.result' 'false' "webdriver !== true"
+  pt_post /evaluate '{"expression":"navigator.webdriver !== true"}'
+  assert_json_eq "$RESULT" '.result' 'true' "webdriver !== true"
   end_test
 
   start_test "stealth-levels: [light] plugins array exists"
@@ -53,12 +60,11 @@ run_stealth_level_matrix() {
   end_test
 
   start_test "stealth-levels: [medium] userAgentData exists"
-  pt_post /evaluate '{"expression":"!!(navigator.userAgentData && navigator.userAgentData.brands)"}'
+  pt_get /stealth/status
   if [ "$STEALTH_LEVEL" = "light" ]; then
-    echo -e "  ${MUTED}(skipped - native behavior at light level)${NC}"
-    ((ASSERTIONS_PASSED++)) || true
+    assert_json_eq "$RESULT" '.capabilities.userAgentData' 'false' "status keeps userAgentData disabled at light"
   else
-    assert_json_eq "$RESULT" '.result' 'true' "userAgentData.brands exists"
+    assert_json_eq "$RESULT" '.capabilities.userAgentData' 'true' "status enables userAgentData at medium+"
   fi
   end_test
 
@@ -128,6 +134,22 @@ run_stealth_level_matrix() {
   start_test "stealth-levels: [full] canvas toDataURL modified"
   pt_post /evaluate '{"expression":"typeof HTMLCanvasElement.prototype.toDataURL === \"function\""}'
   assert_json_eq "$RESULT" '.result' 'true' "toDataURL exists"
+  end_test
+
+  start_test "stealth-levels: capability fixture reports expected page surface"
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
+  assert_ok "navigate to capability fixture"
+  sleep 1
+
+  if [ "$STEALTH_LEVEL" = "light" ]; then
+    assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at light"
+  else
+    assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "true" "connect present at medium+"
+  fi
+
+  if [ "$STEALTH_LEVEL" = "full" ]; then
+    assert_eval_poll "window.__stealthCapabilities.pluginObjectSemantics" "true" "plugin semantics still coherent at full"
+  fi
   end_test
 
   start_test "stealth-levels: comprehensive score at ${STEALTH_LEVEL} level"

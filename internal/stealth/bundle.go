@@ -48,6 +48,7 @@ type Status struct {
 	Headless      bool            `json:"headless"`
 	LaunchMode    LaunchMode      `json:"launchMode"`
 	ScriptHash    string          `json:"scriptHash"`
+	UserAgent     string          `json:"userAgent,omitempty"`
 	WebdriverMode WebdriverMode   `json:"webdriverMode"`
 	PatchIDs      []string        `json:"patchIds"`
 	Flags         map[string]bool `json:"flags"`
@@ -103,6 +104,7 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 		Headless:      cfg != nil && cfg.Headless,
 		LaunchMode:    launchMode,
 		ScriptHash:    bundle.ScriptHash,
+		UserAgent:     resolveStatusUserAgent(cfg),
 		WebdriverMode: bundle.Webdriver,
 		PatchIDs:      append([]string(nil), bundle.PatchIDs...),
 		Flags:         flagStatus(cfg),
@@ -126,14 +128,17 @@ func hashScript(script string) string {
 func flagStatus(cfg *config.RuntimeConfig) map[string]bool {
 	extraFlags := ""
 	headless := false
+	userAgent := ""
 	if cfg != nil {
 		extraFlags = cfg.ChromeExtraFlags
 		headless = cfg.Headless
+		userAgent = ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion)
 	}
 
 	return map[string]bool{
 		"automationControlledDisabled": true,
 		"enableAutomationFalse":        true,
+		"globalUserAgent":              userAgent != "",
 		"headlessNew":                  headless,
 		"swiftshader":                  headless,
 		"downlinkMaxFlag":              hasFlag(extraFlags, "--enable-network-information-downlink-max"),
@@ -262,4 +267,11 @@ func cloneBoolMap(src map[string]bool) map[string]bool {
 		dst[k] = v
 	}
 	return dst
+}
+
+func resolveStatusUserAgent(cfg *config.RuntimeConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion)
 }

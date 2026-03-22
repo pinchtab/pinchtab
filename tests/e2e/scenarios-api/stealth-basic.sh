@@ -11,9 +11,20 @@ assert_ok "navigate"
 sleep 1
 
 # ─────────────────────────────────────────────────────────────────
-start_test "stealth: webdriver is undefined"
+start_test "stealth: status endpoint available"
 
-assert_eval_poll "navigator.webdriver === undefined" "true" "navigator.webdriver is undefined"
+pt_get /stealth/status
+assert_json_eq "$RESULT" '.level' 'light' "default level is light"
+assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
+assert_json_eq "$RESULT" '.capabilities.webdriverNotTrue' 'true' "status reports webdriver-not-true capability"
+assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "stealth: webdriver is not true"
+
+assert_eval_poll "navigator.webdriver !== true" "true" "navigator.webdriver is not true"
 
 end_test
 
@@ -57,6 +68,9 @@ TAB_ID=$(get_tab_id)
 pt_post /fingerprint/rotate "{\"tabId\":\"${TAB_ID}\",\"os\":\"mac\"}"
 assert_ok "fingerprint rotate on tab"
 
+pt_get "/stealth/status?tabId=${TAB_ID}"
+assert_json_eq "$RESULT" '.tabOverrides.fingerprintRotateActive' 'true' "status reports fingerprint rotate overlay on tab"
+
 end_test
 
 # Tests the core stealth invariants from GitHub issue #275.
@@ -76,9 +90,9 @@ assert_eval_poll "navigator.webdriver !== true" "true" "navigator.webdriver is n
 
 end_test
 
-start_test "bot-detect: navigator.webdriver is undefined"
+start_test "bot-detect: navigator.webdriver is not true"
 
-assert_eval_poll "navigator.webdriver === undefined || navigator.webdriver === false" "true" "navigator.webdriver is undefined or false"
+assert_eval_poll "navigator.webdriver !== true" "true" "navigator.webdriver is undefined or false"
 
 end_test
 
@@ -161,5 +175,37 @@ end_test
 start_test "bot-detect: battery API exists"
 
 assert_eval_poll "typeof navigator.getBattery === 'function'" "true" "getBattery exists"
+
+end_test
+
+start_test "stealth-capabilities: navigate to capability fixture"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
+assert_ok "navigate to stealth-capabilities fixture"
+sleep 1
+
+end_test
+
+start_test "stealth-capabilities: plugin object semantics"
+
+assert_eval_poll "window.__stealthCapabilities.pluginObjectSemantics" "true" "plugin object semantics are coherent"
+
+end_test
+
+start_test "stealth-capabilities: outer dimensions available"
+
+assert_eval_poll "window.__stealthCapabilities.outerDimensions" "true" "outer dimensions exist"
+
+end_test
+
+start_test "stealth-capabilities: screen and window coherent"
+
+assert_eval_poll "window.__stealthCapabilities.screenWindowCoherent" "true" "screen and outer window are coherent"
+
+end_test
+
+start_test "stealth-capabilities: battery API reported"
+
+assert_eval_poll "window.__stealthCapabilities.batteryApi" "true" "battery API reported by capability fixture"
 
 end_test
