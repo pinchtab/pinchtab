@@ -349,6 +349,7 @@ func DefaultChromeFlagArgs() []string {
 		"--disable-renderer-backgrounding",
 		"--disable-sync",
 		"--force-color-profile=srgb",
+		"--enable-network-information-downlink-max",
 		"--metrics-recording-only",
 		"--noerrdialogs",
 		"--safebrowsing-disable-auto-update",

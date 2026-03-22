@@ -37,6 +37,8 @@ run_stealth_level_matrix() {
   assert_json_eq "$RESULT" '.level' "$STEALTH_LEVEL" "status level matches instance"
   assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
   assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
+  assert_json_eq "$RESULT" '.capabilities.webdriverNativeStrategy' 'true' "status reports native webdriver strategy"
+  assert_json_eq "$RESULT" '.capabilities.downlinkMax' 'true' "status reports downlinkMax capability"
   end_test
 
   start_test "stealth-levels: [light] webdriver hidden"
@@ -150,6 +152,18 @@ run_stealth_level_matrix() {
   if [ "$STEALTH_LEVEL" = "full" ]; then
     assert_eval_poll "window.__stealthCapabilities.pluginObjectSemantics" "true" "plugin semantics still coherent at full"
   fi
+  assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax present in capability fixture"
+  end_test
+
+  start_test "stealth-levels: worker parity fixture stays coherent"
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-workers.html\"}"
+  assert_ok "navigate to worker parity fixture"
+  sleep 1
+  assert_eval_poll "!!window.__stealthWorkerReport && window.__stealthWorkerReport.ready" "true" "worker report ready"
+  assert_eval_poll "window.__stealthWorkerReport.matches.userAgent" "true" "worker userAgent matches page"
+  assert_eval_poll "window.__stealthWorkerReport.matches.platform" "true" "worker platform matches page"
+  assert_eval_poll "window.__stealthWorkerReport.matches.hardwareConcurrency" "true" "worker hardwareConcurrency matches page"
+  assert_eval_poll "window.__stealthWorkerReport.matches.deviceMemory" "true" "worker deviceMemory matches page"
   end_test
 
   start_test "stealth-levels: comprehensive score at ${STEALTH_LEVEL} level"

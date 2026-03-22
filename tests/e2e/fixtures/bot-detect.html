@@ -63,10 +63,11 @@
     addResult('webdriver_value', webdriverValue === undefined || webdriverValue === false, 
       `navigator.webdriver = ${webdriverValue}`);
     
-    // Test: "webdriver" in navigator (property should not exist)
+    // Test: webdriver property semantics look native enough.
+    // A native false is acceptable; a truthy webdriver is not.
     const webdriverExists = 'webdriver' in navigator;
-    addResult('webdriver_in_navigator', !webdriverExists, 
-      `"webdriver" in navigator = ${webdriverExists}`);
+    addResult('webdriver_in_navigator', !webdriverExists || webdriverValue === false, 
+      `"webdriver" in navigator = ${webdriverExists}, value = ${webdriverValue}`);
     
     // Test: Plugins instanceof PluginArray
     const pluginsValid = navigator.plugins instanceof PluginArray;

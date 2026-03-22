@@ -85,8 +85,11 @@ func TestStealthScript_Content(t *testing.T) {
 	if !strings.Contains(assets.StealthScript, "navigator") || !strings.Contains(assets.StealthScript, "webdriver") {
 		t.Error("stealth script missing webdriver protection")
 	}
-	if !strings.Contains(assets.StealthScript, "new Proxy") || !strings.Contains(assets.StealthScript, "Object.defineProperty(window, 'navigator'") {
-		t.Error("stealth script missing navigator proxy protection")
+	if strings.Contains(assets.StealthScript, "proxyNavigator") || strings.Contains(assets.StealthScript, "Object.defineProperty(window, 'navigator'") {
+		t.Error("stealth script should not proxy window.navigator in light mode")
+	}
+	if !strings.Contains(assets.StealthScript, "downlinkMax") {
+		t.Error("stealth script missing downlinkMax coverage")
 	}
 }
 
@@ -104,12 +107,14 @@ func (m *mockBridge) StealthStatus() *stealth.Status {
 		Headless:      true,
 		LaunchMode:    stealth.LaunchModeAllocator,
 		ScriptHash:    "sha256:test",
-		WebdriverMode: stealth.WebdriverModeJSProxy,
+		WebdriverMode: stealth.WebdriverModeNativeBaseline,
 		Flags: map[string]bool{
 			"headlessNew": true,
 		},
 		Capabilities: map[string]bool{
-			"userAgentData": true,
+			"userAgentData":           true,
+			"webdriverNativeStrategy": true,
+			"downlinkMax":             true,
 		},
 		TabOverrides: map[string]bool{
 			"fingerprintRotateActive": false,

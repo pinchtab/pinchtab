@@ -76,7 +76,7 @@
         return {
           webdriverValue: safe(() => navigator.webdriver, 'error'),
           webdriverNotTrue: safe(() => navigator.webdriver !== true, false),
-          webdriverPropertyHidden: safe(() => !('webdriver' in navigator), false),
+          webdriverNativeLike: safe(() => !('webdriver' in navigator) || navigator.webdriver === false, false),
           pluginArray: safe(() => navigator.plugins instanceof PluginArray, false),
           pluginsPresent: safe(() => navigator.plugins.length > 0, false),
           pluginObjectSemantics: pluginObjectTag === '[object Plugin]',
@@ -114,7 +114,7 @@
 
       const rows = [
         ['webdriverNotTrue', capabilities.webdriverNotTrue, capabilities.webdriverValue],
-        ['webdriverPropertyHidden', capabilities.webdriverPropertyHidden, String(capabilities.webdriverPropertyHidden)],
+        ['webdriverNativeLike', capabilities.webdriverNativeLike, String(capabilities.webdriverNativeLike)],
         ['pluginArray', capabilities.pluginArray, String(capabilities.pluginArray)],
         ['pluginsPresent', capabilities.pluginsPresent, String(navigator.plugins.length)],
         ['pluginObjectSemantics', capabilities.pluginObjectSemantics, capabilities.pluginObjectTag],

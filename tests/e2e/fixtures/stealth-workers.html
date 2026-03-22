@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stealth Worker Parity</title>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      margin: 24px;
+      background: #0f1720;
+      color: #e6edf3;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 16px;
+    }
+    th, td {
+      border: 1px solid #2f3b4d;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: #17202d;
+    }
+    .ok {
+      color: #5ee27a;
+    }
+    .bad {
+      color: #ff7b72;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stealth Worker Parity</h1>
+  <table id="results">
+    <tr><th>Check</th><th>Pass</th><th>Value</th></tr>
+  </table>
+
+  <script>
+    (function() {
+      const page = {
+        userAgent: navigator.userAgent || '',
+        platform: navigator.platform || '',
+        hardwareConcurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null,
+        deviceMemory: typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null
+      };
+
+      function render(report) {
+        const table = document.getElementById('results');
+        const rows = [
+          ['workerReady', report.ready, report.error || 'ready'],
+          ['userAgentMatch', report.matches.userAgent, page.userAgent + ' / ' + report.worker.userAgent],
+          ['platformMatch', report.matches.platform, page.platform + ' / ' + report.worker.platform],
+          ['hardwareConcurrencyMatch', report.matches.hardwareConcurrency, String(page.hardwareConcurrency) + ' / ' + String(report.worker.hardwareConcurrency)],
+          ['deviceMemoryMatch', report.matches.deviceMemory, String(page.deviceMemory) + ' / ' + String(report.worker.deviceMemory)]
+        ];
+
+        for (const row of rows) {
+          const tr = table.insertRow();
+          tr.innerHTML =
+            '<td>' + row[0] + '</td>' +
+            '<td class="' + (row[1] ? 'ok' : 'bad') + '">' + (row[1] ? 'PASS' : 'FAIL') + '</td>' +
+            '<td>' + String(row[2]) + '</td>';
+        }
+      }
+
+      function finalize(workerData, error) {
+        const report = {
+          ready: !error,
+          error: error || '',
+          page: page,
+          worker: workerData || {},
+          matches: {
+            userAgent: !!workerData && workerData.userAgent === page.userAgent,
+            platform: !!workerData && workerData.platform === page.platform,
+            hardwareConcurrency: !!workerData && workerData.hardwareConcurrency === page.hardwareConcurrency,
+            deviceMemory: !!workerData && workerData.deviceMemory === page.deviceMemory
+          }
+        };
+        window.__stealthWorkerReport = report;
+        render(report);
+      }
+
+      const source = `
+        self.onmessage = function() {
+          const nav = self.navigator || {};
+          self.postMessage({
+            userAgent: nav.userAgent || '',
+            platform: nav.platform || '',
+            hardwareConcurrency: typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
+            deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null
+          });
+        };
+      `;
+
+      try {
+        const blob = new Blob([source], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        const timeout = setTimeout(function() {
+          finalize(null, 'worker timeout');
+        }, 5000);
+
+        worker.onmessage = function(event) {
+          clearTimeout(timeout);
+          finalize(event.data, '');
+          worker.terminate();
+        };
+        worker.onerror = function(event) {
+          clearTimeout(timeout);
+          finalize(null, event.message || 'worker error');
+          worker.terminate();
+        };
+        worker.postMessage({ type: 'collect' });
+      } catch (error) {
+        finalize(null, error && error.message ? error.message : String(error));
+      }
+    })();
+  </script>
+</body>
+</html>

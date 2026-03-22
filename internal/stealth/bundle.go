@@ -29,7 +29,7 @@ const (
 type WebdriverMode string
 
 const (
-	WebdriverModeJSProxy WebdriverMode = "js_proxy"
+	WebdriverModeNativeBaseline WebdriverMode = "native_baseline"
 )
 
 type Bundle struct {
@@ -79,7 +79,7 @@ func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 		PatchIDs:     patchIDsForLevel(level),
 		Capabilities: capabilityMap(level),
 		Tradeoffs:    tradeoffs(level),
-		Webdriver:    WebdriverModeJSProxy,
+		Webdriver:    WebdriverModeNativeBaseline,
 	}
 }
 
@@ -141,7 +141,7 @@ func flagStatus(cfg *config.RuntimeConfig) map[string]bool {
 		"globalUserAgent":              userAgent != "",
 		"headlessNew":                  headless,
 		"swiftshader":                  headless,
-		"downlinkMaxFlag":              hasFlag(extraFlags, "--enable-network-information-downlink-max"),
+		"downlinkMaxFlag":              true,
 		"testTypeGPU":                  hasFlag(extraFlags, "--test-type=gpu"),
 		"disableInfobars":              hasFlag(extraFlags, "--disable-infobars"),
 		"disableDesktopNotifications":  hasFlag(extraFlags, "--disable-desktop-notifications"),
@@ -162,9 +162,11 @@ func hasFlag(args string, want string) bool {
 func capabilityMap(level Level) map[string]bool {
 	caps := map[string]bool{
 		"webdriverNotTrue":            true,
-		"webdriverNativeStrategy":     false,
+		"webdriverNativeStrategy":     true,
 		"batteryAPIBaseline":          true,
 		"pluginArray":                 true,
+		"workerHardwareConsistency":   true,
+		"workerUserAgentConsistency":  true,
 		"userAgentData":               false,
 		"chromeRuntimeConnect":        false,
 		"chromeRuntimeSendMessage":    false,
@@ -174,7 +176,7 @@ func capabilityMap(level Level) map[string]bool {
 		"iframeIsolation":             false,
 		"errorStackSanitized":         false,
 		"functionToStringMasked":      false,
-		"downlinkMax":                 false,
+		"downlinkMax":                 true,
 		"webglSpoofing":               false,
 		"canvasNoise":                 false,
 		"systemColorFix":              false,
@@ -204,11 +206,11 @@ func capabilityMap(level Level) map[string]bool {
 func patchIDsForLevel(level Level) []string {
 	patches := []string{
 		"marker-cleanup",
-		"webdriver-proxy",
+		"webdriver-native-baseline",
 		"plugins",
 		"languages",
 		"platform",
-		"hardware",
+		"downlink-max",
 		"permissions",
 		"screen",
 		"battery",

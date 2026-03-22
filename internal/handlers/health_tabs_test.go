@@ -426,7 +426,7 @@ func (m *MockBridge) StealthStatus() *stealth.Status {
 	return &stealth.Status{
 		Level:         stealth.LevelLight,
 		LaunchMode:    stealth.LaunchModeUninitialized,
-		WebdriverMode: stealth.WebdriverModeJSProxy,
+		WebdriverMode: stealth.WebdriverModeNativeBaseline,
 		Flags:         map[string]bool{},
 		Capabilities:  map[string]bool{},
 		TabOverrides:  map[string]bool{"fingerprintRotateActive": false},

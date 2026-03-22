@@ -17,7 +17,10 @@ pt_get /stealth/status
 assert_json_eq "$RESULT" '.level' 'light' "default level is light"
 assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
 assert_json_eq "$RESULT" '.capabilities.webdriverNotTrue' 'true' "status reports webdriver-not-true capability"
+assert_json_eq "$RESULT" '.capabilities.webdriverNativeStrategy' 'true' "status reports native webdriver strategy"
+assert_json_eq "$RESULT" '.capabilities.downlinkMax' 'true' "status reports downlinkMax capability"
 assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
+assert_json_eq "$RESULT" '.flags.downlinkMaxFlag' 'true' "status reports downlinkMax launch flag"
 
 end_test
 
@@ -96,9 +99,9 @@ assert_eval_poll "navigator.webdriver !== true" "true" "navigator.webdriver is u
 
 end_test
 
-start_test "bot-detect: webdriver property does not exist"
+start_test "bot-detect: webdriver property semantics are acceptable"
 
-assert_eval_poll "!('webdriver' in navigator)" "true" "webdriver property not in navigator"
+assert_eval_poll "!('webdriver' in navigator) || navigator.webdriver === false" "true" "webdriver property is hidden or native false"
 
 end_test
 
@@ -207,5 +210,49 @@ end_test
 start_test "stealth-capabilities: battery API reported"
 
 assert_eval_poll "window.__stealthCapabilities.batteryApi" "true" "battery API reported by capability fixture"
+
+end_test
+
+start_test "stealth-capabilities: downlinkMax reported"
+
+assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax reported by capability fixture"
+
+end_test
+
+start_test "stealth-workers: navigate to worker parity fixture"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-workers.html\"}"
+assert_ok "navigate to stealth-workers fixture"
+sleep 1
+
+end_test
+
+start_test "stealth-workers: worker report ready"
+
+assert_eval_poll "!!window.__stealthWorkerReport && window.__stealthWorkerReport.ready" "true" "worker report ready"
+
+end_test
+
+start_test "stealth-workers: user agent matches worker"
+
+assert_eval_poll "window.__stealthWorkerReport.matches.userAgent" "true" "page and worker userAgent match"
+
+end_test
+
+start_test "stealth-workers: platform matches worker"
+
+assert_eval_poll "window.__stealthWorkerReport.matches.platform" "true" "page and worker platform match"
+
+end_test
+
+start_test "stealth-workers: hardware concurrency matches worker"
+
+assert_eval_poll "window.__stealthWorkerReport.matches.hardwareConcurrency" "true" "page and worker hardwareConcurrency match"
+
+end_test
+
+start_test "stealth-workers: device memory matches worker"
+
+assert_eval_poll "window.__stealthWorkerReport.matches.deviceMemory" "true" "page and worker deviceMemory match"
 
 end_test

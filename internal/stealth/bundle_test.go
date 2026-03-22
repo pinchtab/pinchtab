@@ -40,8 +40,11 @@ func TestStatusFromBundleReflectsCurrentCapabilityShape(t *testing.T) {
 	if !status.Capabilities["webglSpoofing"] {
 		t.Fatal("expected full mode to report webgl spoofing")
 	}
-	if status.Capabilities["webdriverNativeStrategy"] {
-		t.Fatal("expected current status to report non-native webdriver strategy")
+	if !status.Capabilities["webdriverNativeStrategy"] {
+		t.Fatal("expected current status to report native webdriver strategy")
+	}
+	if !status.Capabilities["downlinkMax"] {
+		t.Fatal("expected light/full baseline to report downlinkMax capability")
 	}
 	if !status.Flags["headlessNew"] {
 		t.Fatal("expected headlessNew flag to be true for headless config")

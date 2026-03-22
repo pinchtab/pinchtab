@@ -28,10 +28,10 @@ const seededRandom = (function() {
 // ═══════════════════════════════════════════════════════════════════════════
 // LIGHT LEVEL - Safe, no functional impact
 // ═══════════════════════════════════════════════════════════════════════════
-// - Hides navigator.webdriver
+// - Relies on launch-layer webdriver behavior instead of JS navigator proxying
 // - Removes CDP markers (cdc_*, __webdriver, etc.)
 // - Spoofs plugins array
-// - Sets navigator.languages, platform, hardwareConcurrency, deviceMemory
+// - Sets navigator.languages, platform
 // - Basic chrome.runtime object
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -51,36 +51,6 @@ const seededRandom = (function() {
       try { delete window[prop]; } catch(e) {}
     }
   }
-})();
-
-// WEBDRIVER EVASION - Hide the property
-(function() {
-  const realNavigator = window.navigator;
-  const proxyNavigator = new Proxy(realNavigator, {
-    get(target, prop) {
-      if (prop === 'webdriver') return undefined;
-      return Reflect.get(target, prop, target);
-    },
-    has(target, prop) {
-      if (prop === 'webdriver') return false;
-      return Reflect.has(target, prop);
-    },
-    getOwnPropertyDescriptor(target, prop) {
-      if (prop === 'webdriver') return undefined;
-      return Reflect.getOwnPropertyDescriptor(target, prop);
-    }
-  });
-
-  try {
-    Object.defineProperty(window, 'navigator', {
-      get: () => proxyNavigator,
-      configurable: true
-    });
-  } catch(e) {}
-
-  const proto = Object.getPrototypeOf(realNavigator);
-  try { delete realNavigator.webdriver; } catch(e) {}
-  try { delete proto.webdriver; } catch(e) {}
 })();
 
 // BASIC CHROME OBJECT
@@ -137,16 +107,26 @@ Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'], conf
   Object.defineProperty(navigator, 'platform', { get: () => platform, configurable: true });
 })();
 
-const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
-const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
-
-Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => hardwareCore, configurable: true });
-Object.defineProperty(navigator, 'deviceMemory', { get: () => deviceMem, configurable: true });
-
 Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 50 + Math.floor(seededRandom(sessionSeed * 3) * 100),
   configurable: true
 });
+
+// NETWORK INFORMATION - downlinkMax is often missing in headless.
+// Define it on the prototype so page checks see a normal API surface without
+// creating an own-property mismatch on navigator.connection instances.
+if (navigator.connection) {
+  try {
+    const connectionProto = Object.getPrototypeOf(navigator.connection);
+    if (connectionProto && !Object.prototype.hasOwnProperty.call(connectionProto, 'downlinkMax')) {
+      Object.defineProperty(connectionProto, 'downlinkMax', {
+        get: () => Infinity,
+        configurable: true,
+        enumerable: true
+      });
+    }
+  } catch (e) {}
+}
 
 // TIMEZONE OVERRIDE
 const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
@@ -425,6 +405,8 @@ HTMLCanvasElement.prototype.toDataURL = function(...args) {
     const pixelCount = Math.min(10, Math.floor(imageData.data.length / 400));
     for (let i = 0; i < pixelCount; i++) {
       const idx = Math.floor(seededRandom(sessionSeed + i) * (imageData.data.length / 4)) * 4;
+      if (imageData.data[idx] === 0 && imageData.data[idx + 1] === 0 &&
+          imageData.data[idx + 2] === 0 && imageData.data[idx + 3] === 0) continue;
       if (imageData.data[idx] < 255) imageData.data[idx] += 1;
       if (imageData.data[idx + 1] < 255) imageData.data[idx + 1] += 1;
     }
@@ -451,6 +433,8 @@ CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   const noisyPixels = Math.min(10, pixelCount * 0.0001);
   for (let i = 0; i < noisyPixels; i++) {
     const pixelIndex = Math.floor(seededRandom(sessionSeed + 2000 + i) * pixelCount) * 4;
+    if (imageData.data[pixelIndex] === 0 && imageData.data[pixelIndex + 1] === 0 &&
+        imageData.data[pixelIndex + 2] === 0 && imageData.data[pixelIndex + 3] === 0) continue;
     imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (seededRandom(sessionSeed + 3000 + i) > 0.5 ? 1 : -1)));
   }
   return imageData;

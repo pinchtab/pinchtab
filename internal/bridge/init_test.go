@@ -16,6 +16,7 @@ func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
 		"--hide-crash-restore-bubble",
 		"--noerrdialogs",
 		"--enable-automation=false",
+		"--enable-network-information-downlink-max",
 	} {
 		if !slices.Contains(args, want) {
 			t.Fatalf("missing chrome arg %q in %v", want, args)
