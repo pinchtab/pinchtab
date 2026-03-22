@@ -15,8 +15,20 @@ func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
 		"--disable-session-crashed-bubble",
 		"--hide-crash-restore-bubble",
 		"--noerrdialogs",
+	} {
+		if !slices.Contains(args, want) {
+			t.Fatalf("missing chrome arg %q in %v", want, args)
+		}
+	}
+}
+
+func TestBuildChromeArgsIncludesStealthLaunchFlags(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{}, 9222)
+
+	for _, want := range []string{
 		"--enable-automation=false",
 		"--enable-network-information-downlink-max",
+		"--disable-blink-features=AutomationControlled",
 	} {
 		if !slices.Contains(args, want) {
 			t.Fatalf("missing chrome arg %q in %v", want, args)
@@ -55,8 +67,8 @@ func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
 	}
 }
 
-func TestDefaultChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
-	args := defaultChromeFlagArgs()
+func TestBaseChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
+	args := baseChromeFlagArgs()
 	for _, want := range []string{"--disable-metrics-reporting", "--metrics-recording-only"} {
 		found := false
 		for _, arg := range args {
@@ -71,12 +83,15 @@ func TestDefaultChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
 	}
 }
 
-func TestDefaultChromeFlagArgsPreservesPopupBlockingAndSiteIsolation(t *testing.T) {
-	args := defaultChromeFlagArgs()
+func TestBaseChromeFlagArgsPreservesPopupBlockingAndSiteIsolation(t *testing.T) {
+	args := baseChromeFlagArgs()
 	for _, forbidden := range []string{
 		"--disable-popup-blocking",
 		"--no-sandbox",
 		"--disable-features=site-per-process,Translate,BlinkGenPropertyTrees",
+		"--enable-automation=false",
+		"--disable-blink-features=AutomationControlled",
+		"--enable-network-information-downlink-max",
 	} {
 		if slices.Contains(args, forbidden) {
 			t.Fatalf("did not expect %s in args: %v", forbidden, args)

@@ -37,6 +37,7 @@ type Bundle struct {
 	Seed         int64           `json:"seed"`
 	Script       string          `json:"-"`
 	ScriptHash   string          `json:"scriptHash"`
+	Launch       LaunchContract  `json:"-"`
 	PatchIDs     []string        `json:"patchIds"`
 	Capabilities map[string]bool `json:"capabilities"`
 	Tradeoffs    []string        `json:"tradeoffs,omitempty"`
@@ -76,6 +77,7 @@ func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 		Seed:         seed,
 		Script:       script,
 		ScriptHash:   hashScript(script),
+		Launch:       BuildLaunchContract(cfg, level),
 		PatchIDs:     patchIDsForLevel(level),
 		Capabilities: capabilityMap(level),
 		Tradeoffs:    tradeoffs(level),
@@ -104,10 +106,10 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 		Headless:      cfg != nil && cfg.Headless,
 		LaunchMode:    launchMode,
 		ScriptHash:    bundle.ScriptHash,
-		UserAgent:     resolveStatusUserAgent(cfg),
+		UserAgent:     bundle.LaunchUserAgent(),
 		WebdriverMode: bundle.Webdriver,
 		PatchIDs:      append([]string(nil), bundle.PatchIDs...),
-		Flags:         flagStatus(cfg),
+		Flags:         statusFlags(bundle, cfg),
 		Capabilities:  cloneBoolMap(bundle.Capabilities),
 		Tradeoffs:     append([]string(nil), bundle.Tradeoffs...),
 		TabOverrides: map[string]bool{
@@ -125,29 +127,26 @@ func hashScript(script string) string {
 	return fmt.Sprintf("sha256:%x", sum)
 }
 
-func flagStatus(cfg *config.RuntimeConfig) map[string]bool {
+func statusFlags(bundle *Bundle, cfg *config.RuntimeConfig) map[string]bool {
 	extraFlags := ""
 	headless := false
-	userAgent := ""
 	if cfg != nil {
 		extraFlags = cfg.ChromeExtraFlags
 		headless = cfg.Headless
-		userAgent = ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion)
 	}
 
-	return map[string]bool{
-		"automationControlledDisabled": true,
-		"enableAutomationFalse":        true,
-		"globalUserAgent":              userAgent != "",
-		"headlessNew":                  headless,
-		"swiftshader":                  headless,
-		"downlinkMaxFlag":              true,
-		"testTypeGPU":                  hasFlag(extraFlags, "--test-type=gpu"),
-		"disableInfobars":              hasFlag(extraFlags, "--disable-infobars"),
-		"disableDesktopNotifications":  hasFlag(extraFlags, "--disable-desktop-notifications"),
-		"disableWindowActivation":      hasFlag(extraFlags, "--disable-window-activation"),
-		"silentDebuggerExtensionAPI":   hasFlag(extraFlags, "--silent-debugger-extension-api"),
+	flags := map[string]bool{}
+	if bundle != nil {
+		flags = cloneBoolMap(bundle.Launch.Flags)
 	}
+	flags["headlessNew"] = headless
+	flags["swiftshader"] = headless
+	flags["testTypeGPU"] = hasFlag(extraFlags, "--test-type=gpu")
+	flags["disableInfobars"] = hasFlag(extraFlags, "--disable-infobars")
+	flags["disableDesktopNotifications"] = hasFlag(extraFlags, "--disable-desktop-notifications")
+	flags["disableWindowActivation"] = hasFlag(extraFlags, "--disable-window-activation")
+	flags["silentDebuggerExtensionAPI"] = hasFlag(extraFlags, "--silent-debugger-extension-api")
+	return flags
 }
 
 func hasFlag(args string, want string) bool {
@@ -271,9 +270,14 @@ func cloneBoolMap(src map[string]bool) map[string]bool {
 	return dst
 }
 
-func resolveStatusUserAgent(cfg *config.RuntimeConfig) string {
-	if cfg == nil {
+func (b *Bundle) LaunchUserAgent() string {
+	if b == nil {
 		return ""
 	}
-	return ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion)
+	for _, arg := range b.Launch.Args {
+		if strings.HasPrefix(arg, "--user-agent=") {
+			return strings.TrimPrefix(arg, "--user-agent=")
+		}
+	}
+	return ""
 }

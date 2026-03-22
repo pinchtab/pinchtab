@@ -34,7 +34,8 @@ type Hooks struct {
 func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	slog.Info("starting chrome initialization", "headless", cfg.Headless, "profile", cfg.ProfileDir, "binary", cfg.ChromeBinary)
 
-	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, hooks)
+	bundle = ensureStealthBundle(cfg, bundle)
+	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, bundle, hooks)
 	browserCtx, browserCancel, launchMode, err := startChrome(allocCtx, cfg, bundle, opts, debugPort, hooks)
 	if err != nil {
 		allocCancel()
@@ -84,14 +85,27 @@ func appendExecAllocatorFlag(opts []chromedp.ExecAllocatorOption, flag string) [
 	return append(opts, chromedp.Flag(name, true))
 }
 
-func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int) {
+func ensureStealthBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle) *stealth.Bundle {
+	if bundle != nil {
+		return bundle
+	}
+	return stealth.NewBundle(cfg, rand.Int63n(1000000000))
+}
+
+func appendExecAllocatorFlags(opts []chromedp.ExecAllocatorOption, flags []string) []chromedp.ExecAllocatorOption {
+	for _, flag := range flags {
+		opts = appendExecAllocatorFlag(opts, flag)
+	}
+	return opts
+}
+
+func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int) {
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
 	}
-	for _, flag := range DefaultChromeFlagArgs() {
-		opts = appendExecAllocatorFlag(opts, flag)
-	}
+	opts = appendExecAllocatorFlags(opts, BaseChromeFlagArgs())
+	opts = appendExecAllocatorFlags(opts, bundle.Launch.Args)
 
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
@@ -124,21 +138,14 @@ func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, co
 			opts = append(opts, chromedp.Flag("disable-extensions", false))
 			opts = append(opts, chromedp.Flag("load-extension", joined))
 			opts = append(opts, chromedp.Flag("disable-extensions-except", joined))
-			opts = append(opts, chromedp.Flag("enable-automation", false))
 			slog.Info("loading extensions", "paths", joined)
 		}
-		opts = append(opts, chromedp.Flag("enable-automation", false))
 	} else {
 		opts = append(opts, chromedp.Flag("disable-extensions", true))
-		opts = append(opts, chromedp.Flag("enable-automation", false))
 	}
 
 	if cfg.ProfileDir != "" {
 		opts = append(opts, chromedp.UserDataDir(cfg.ProfileDir))
-	}
-
-	if ua := stealth.ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion); ua != "" {
-		opts = append(opts, chromedp.UserAgent(ua))
 	}
 
 	w, h := randomWindowSize()
@@ -184,9 +191,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 
-	if bundle == nil {
-		bundle = stealth.NewBundle(cfg, rand.Int63n(1000000000))
-	}
+	bundle = ensureStealthBundle(cfg, bundle)
 	if hooks.SetHumanRandSeed != nil {
 		hooks.SetHumanRandSeed(bundle.Seed)
 	}
@@ -225,7 +230,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 		if isStartupTimeout(err) && debugPort > 0 {
 			slog.Warn("chrome startup timeout (Chrome 145+ regression), trying direct-launch fallback", "port", debugPort)
 			time.Sleep(500 * time.Millisecond)
-			return startChromeWithRemoteAllocator(parentCtx, cfg, debugPort, bundle.Script)
+			return startChromeWithRemoteAllocator(parentCtx, cfg, bundle, debugPort, bundle.Script)
 		}
 
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w", err)
@@ -253,7 +258,7 @@ func isStartupTimeout(err error) bool {
 	return strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context deadline exceeded")
 }
 
-func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
 		chromeBinary = findChromeBinary()
@@ -262,7 +267,7 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("chrome/chromium not found: please install chrome or chromium, or set 'binary' in config.json")
 	}
 
-	args := BuildChromeArgs(cfg, debugPort)
+	args := buildChromeArgsWithBundle(cfg, bundle, debugPort)
 	// #nosec G204 -- chromeBinary from user config or findChromeBinary() known system paths
 	cmd := exec.Command(chromeBinary, args...)
 	cmd.Stdout = newPrefixedLogWriter(os.Stdout, "chrome stdout")
@@ -329,7 +334,7 @@ func waitForChromeDevTools(port int, timeout time.Duration) (string, error) {
 	return "", fmt.Errorf("chrome devtools not ready on port %d after %v", port, timeout)
 }
 
-func DefaultChromeFlagArgs() []string {
+func BaseChromeFlagArgs() []string {
 	return []string{
 		"--disable-background-networking",
 		"--enable-features=NetworkService,NetworkServiceInProcess",
@@ -349,15 +354,11 @@ func DefaultChromeFlagArgs() []string {
 		"--disable-renderer-backgrounding",
 		"--disable-sync",
 		"--force-color-profile=srgb",
-		"--enable-network-information-downlink-max",
 		"--metrics-recording-only",
 		"--noerrdialogs",
 		"--safebrowsing-disable-auto-update",
 		"--password-store=basic",
 		"--use-mock-keychain",
-		"--disable-automation",
-		"--enable-automation=false",
-		"--disable-blink-features=AutomationControlled",
 	}
 }
 
@@ -369,7 +370,13 @@ func appendChromeCompatibilityFlags(args []string) []string {
 }
 
 func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
-	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, DefaultChromeFlagArgs()...)
+	return buildChromeArgsWithBundle(cfg, nil, port)
+}
+
+func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle, port int) []string {
+	bundle = ensureStealthBundle(cfg, bundle)
+	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, BaseChromeFlagArgs()...)
+	args = append(args, bundle.Launch.Args...)
 
 	if len(cfg.ExtensionPaths) > 0 {
 		joined := strings.Join(cfg.ExtensionPaths, ",")
@@ -390,10 +397,6 @@ func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 
 	if cfg.ProfileDir != "" {
 		args = append(args, "--user-data-dir="+cfg.ProfileDir)
-	}
-
-	if ua := stealth.ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion); ua != "" {
-		args = append(args, "--user-agent="+ua)
 	}
 
 	w, h := randomWindowSize()

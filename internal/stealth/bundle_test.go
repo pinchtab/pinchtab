@@ -60,3 +60,19 @@ func TestResolveUserAgent(t *testing.T) {
 		t.Fatalf("expected generated UA to include chrome version, got %q", got)
 	}
 }
+
+func TestBuildLaunchContractOwnsStealthLaunchFlags(t *testing.T) {
+	launch := BuildLaunchContract(&config.RuntimeConfig{ChromeVersion: "144.0.0.0"}, LevelLight)
+	for _, want := range []string{
+		"--enable-automation=false",
+		"--disable-blink-features=AutomationControlled",
+		"--enable-network-information-downlink-max",
+	} {
+		if !HasLaunchArg(launch.Args, want) {
+			t.Fatalf("expected stealth launch arg %q in %v", want, launch.Args)
+		}
+	}
+	if !HasLaunchArgPrefix(launch.Args, "--user-agent=Mozilla/5.0") {
+		t.Fatalf("expected stealth launch contract to own user-agent, got %v", launch.Args)
+	}
+}

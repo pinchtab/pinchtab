@@ -20,8 +20,8 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle) (context.Cont
 	})
 }
 
-func defaultChromeFlagArgs() []string {
-	return bridgeruntime.DefaultChromeFlagArgs()
+func baseChromeFlagArgs() []string {
+	return bridgeruntime.BaseChromeFlagArgs()
 }
 
 func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
