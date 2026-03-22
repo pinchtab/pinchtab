@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -26,14 +25,14 @@ func TestResolveCLIBase(t *testing.T) {
 			expected:   "http://remote:1234",
 		},
 		{
-			name:       "PINCHTAB_SERVER overrides fallback",
-			envURL:     "http://env:5678",
-			expected:   "http://env:5678",
+			name:     "PINCHTAB_SERVER overrides fallback",
+			envURL:   "http://env:5678",
+			expected: "http://env:5678",
 		},
 		{
-			name:       "PINCHTAB_SERVER trims trailing slash",
-			envURL:     "http://env:5678/",
-			expected:   "http://env:5678",
+			name:     "PINCHTAB_SERVER trims trailing slash",
+			envURL:   "http://env:5678/",
+			expected: "http://env:5678",
 		},
 		{
 			name:     "default fallback uses 127.0.0.1 and 9867",
@@ -49,10 +48,9 @@ func TestResolveCLIBase(t *testing.T) {
 			defer func() { serverURL = oldServerURL }()
 
 			if tt.envURL != "" {
-				os.Setenv("PINCHTAB_SERVER", tt.envURL)
-				defer os.Unsetenv("PINCHTAB_SERVER")
+				t.Setenv("PINCHTAB_SERVER", tt.envURL)
 			} else {
-				os.Unsetenv("PINCHTAB_SERVER")
+				t.Setenv("PINCHTAB_SERVER", "")
 			}
 
 			cfg := &config.RuntimeConfig{}
