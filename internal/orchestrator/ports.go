@@ -127,6 +127,9 @@ func isPortAvailableInt(port int) bool {
 
 func parsePortNumber(port string) (int, error) {
 	value := strings.TrimSpace(port)
+	if len(value) > 1 && value[0] == '0' {
+		return 0, fmt.Errorf("invalid port %q: leading zeros not allowed", port)
+	}
 	portNum, err := strconv.Atoi(value)
 	if err != nil {
 		return 0, fmt.Errorf("invalid port %q", port)

@@ -60,7 +60,7 @@ describe("ScreencastTile", () => {
     await waitFor(() => expect(webSocketMock).toHaveBeenCalledTimes(1));
 
     expect(webSocketMock).toHaveBeenCalledWith(
-      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=60&maxWidth=800&fps=1",
+      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=40&maxWidth=800&fps=1",
     );
   });
 

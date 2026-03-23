@@ -67,7 +67,7 @@ export default function ScreencastTile({
   tabId,
   label,
   url,
-  quality = 60,
+  quality = 40,
   maxWidth = 800,
   fps = 1,
   showTitle = true,
