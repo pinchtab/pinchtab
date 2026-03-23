@@ -27,7 +27,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	}()
 	var waitErr error
 	started := time.Now()
-	probePort, portErr := parsePortNumber(inst.Port)
+	_, portErr := parsePortNumber(inst.Port)
 	if portErr != nil {
 		lastProbe = portErr.Error()
 	}
