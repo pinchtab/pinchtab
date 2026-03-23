@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityExplorer } from "../../activities";
 import type { InstanceTab } from "../../generated/types";
 import { TabsLayout, EmptyView } from "../molecules";
@@ -21,6 +21,15 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
     { id: "console", label: "Console" },
     { id: "errors", label: "Errors" },
   ];
+
+  const activityInitialFilters = useMemo(
+    () => ({ instanceId: instanceId || "", tabId: selectedTab?.id ?? "" }),
+    [instanceId, selectedTab?.id],
+  );
+  const activityLockedFilters = useMemo(
+    () => ({ tabId: selectedTab?.id ?? "" }),
+    [selectedTab?.id],
+  );
 
   if (!selectedTab) {
     return (
@@ -46,13 +55,8 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
                 showFilterMenu={false}
                 title=""
                 summaryLabel="Actions"
-                initialFilters={{
-                  instanceId: instanceId || "",
-                  tabId: selectedTab.id,
-                }}
-                lockedFilters={{
-                  tabId: selectedTab.id,
-                }}
+                initialFilters={activityInitialFilters}
+                lockedFilters={activityLockedFilters}
               />
             </div>
           )}

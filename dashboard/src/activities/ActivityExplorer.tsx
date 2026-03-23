@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import * as api from "../services/api";
 import type { InstanceTab } from "../types";
@@ -51,6 +51,9 @@ export default function ActivityExplorer({
     () => buildActivityQuery(effectiveFilters),
     [effectiveFilters],
   );
+  const queryKey = JSON.stringify(query);
+  const stableQuery = useRef(query);
+  stableQuery.current = query;
 
   useEffect(() => {
     setFilters((current) => {
@@ -88,7 +91,7 @@ export default function ActivityExplorer({
       setLoading(true);
       setError("");
       try {
-        const response = await fetchActivity(query);
+        const response = await fetchActivity(stableQuery.current);
         if (cancelled) return;
         setEvents(response.events);
         setCount(response.count);
@@ -107,7 +110,8 @@ export default function ActivityExplorer({
     return () => {
       cancelled = true;
     };
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryKey]);
 
   const stats = useMemo(() => {
     const agents = new Set(
