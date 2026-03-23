@@ -27,7 +27,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	}()
 	var waitErr error
 	started := time.Now()
-	_, portErr := parsePortNumber(inst.Port)
+	probePort, portErr := parsePortNumber(inst.Port)
 	if portErr != nil {
 		lastProbe = portErr.Error()
 	}
@@ -47,7 +47,26 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 
 		// monitor only probes child bridge processes started by Launch.
 		// Attached remote bridges are validated and probed during attach.
-		healthy, resolvedURL, lastProbe = o.probeInstanceHealth(inst)
+		for _, baseURL := range instanceBaseURLs(probePort) {
+			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
+			if reqErr != nil {
+				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
+				continue
+			}
+			o.applyInstanceAuth(req, inst)
+			resp, err := o.client.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+				lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
+				if isInstanceHealthyStatus(resp.StatusCode) {
+					healthy = true
+					resolvedURL = baseURL
+					break
+				}
+			} else {
+				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
+			}
+		}
 		if healthy {
 			break
 		}
@@ -165,12 +184,16 @@ func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string
 	}
 
 	for _, baseURL := range baseURLs {
-		target, err := url.Parse(baseURL)
+		parsed, err := url.Parse(baseURL)
 		if err != nil {
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
 			continue
 		}
-		target.Path = "/health"
+		target := &url.URL{
+			Scheme: parsed.Scheme,
+			Host:   parsed.Host,
+			Path:   "/health",
+		}
 
 		req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
 		if reqErr != nil {
