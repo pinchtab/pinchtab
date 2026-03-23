@@ -16,7 +16,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/selector"
-	"github.com/pinchtab/pinchtab/internal/semantic"
+	"github.com/pinchtab/semantic"
+	"github.com/pinchtab/semantic/recovery"
 )
 
 func resolveOwner(r *http.Request, fallback string) string {
@@ -261,7 +262,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	var result map[string]any
 	var engineName string
 	var actionErr error
-	var recoveryResult *semantic.RecoveryResult
+	var recoveryResult *recovery.RecoveryResult
 
 	if refMissing && req.Ref != "" && h.Recovery != nil {
 		rr, actionRes, recoveryErr := h.Recovery.Attempt(
@@ -298,7 +299,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		if actionErr != nil && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(actionErr, req.Ref) {
 			rr, actionRes, recoveryErr := h.Recovery.AttemptWithClassification(
 				tCtx, resolvedTabID, req.Ref, req.Kind,
-				semantic.ClassifyFailure(actionErr),
+				recovery.ClassifyFailure(actionErr),
 				func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 					req.NodeID = nodeID
 					res, _, err := h.executeAction(ctx, req)
@@ -670,7 +671,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			if err != nil && action.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, action.Ref) {
 				rr, recRes, recErr := h.Recovery.AttemptWithClassification(
 					tCtx, resolvedTabID, action.Ref, action.Kind,
-					semantic.ClassifyFailure(err),
+					recovery.ClassifyFailure(err),
 					func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 						action.NodeID = nodeID
 						res, _, err := h.executeAction(ctx, action)
@@ -933,7 +934,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			if err != nil && step.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, step.Ref) {
 				rr, recRes, recErr := h.Recovery.AttemptWithClassification(
 					tCtx, resolvedTabID, step.Ref, step.Kind,
-					semantic.ClassifyFailure(err),
+					recovery.ClassifyFailure(err),
 					func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 						step.NodeID = nodeID
 						res, _, err := h.executeAction(ctx, step)
@@ -1001,7 +1002,7 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 			}
 		}
 	}
-	h.Recovery.RecordIntent(tabID, req.Ref, semantic.IntentEntry{
+	h.Recovery.RecordIntent(tabID, req.Ref, recovery.IntentEntry{
 		Descriptor: desc,
 		CachedAt:   time.Now(),
 	})

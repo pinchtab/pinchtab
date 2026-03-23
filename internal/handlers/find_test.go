@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/semantic"
+	"github.com/pinchtab/semantic"
 )
 
 // findMockBridge implements the subset of bridge.BridgeAPI required by HandleFind.
@@ -295,7 +295,7 @@ func TestHandleFind_EmbeddingMatcher(t *testing.T) {
 
 	mb := &findMockBridge{refCache: cache}
 	h := New(mb, &config.RuntimeConfig{ActionTimeout: 10 * time.Second}, nil, nil, nil)
-	h.Matcher = semantic.NewEmbeddingMatcher(semantic.NewDummyEmbedder(64))
+	h.Matcher = semantic.NewEmbeddingMatcher(semantic.NewHashingEmbedder(64))
 
 	body := `{"query": "login button", "threshold": 0.0, "topK": 3}`
 	req := httptest.NewRequest("POST", "/find", bytes.NewReader([]byte(body)))
