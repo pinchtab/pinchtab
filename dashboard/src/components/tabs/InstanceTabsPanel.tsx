@@ -29,7 +29,10 @@ export default function InstanceTabsPanel({
       return;
     }
 
-    if (!tabs.some((tab) => tab.id === selectedTabId) || selectedTabId !== tabs[0].id) {
+    if (
+      !tabs.some((tab) => tab.id === selectedTabId) ||
+      selectedTabId !== tabs[0].id
+    ) {
       setSelectedTabId(tabs[0].id);
       if (selectionPinned) {
         setSelectionPinned(false);

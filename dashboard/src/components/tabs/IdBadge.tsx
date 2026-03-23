@@ -22,11 +22,14 @@ export default function IdBadge({
 
   const shortId = id.split("_").pop()?.substring(0, 8) || id;
 
-  const baseStyles = "flex shrink-0 items-center transition-colors focus:outline-none font-mono";
-  
+  const baseStyles =
+    "flex shrink-0 items-center transition-colors focus:outline-none font-mono";
+
   const variantStyles = {
-    default: "rounded bg-bg-elevated px-1.5 py-0.5 text-[10px] text-text-muted hover:bg-border-subtle hover:text-text-primary",
-    compact: "rounded bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/20",
+    default:
+      "rounded bg-bg-elevated px-1.5 py-0.5 text-[10px] text-text-muted hover:bg-border-subtle hover:text-text-primary",
+    compact:
+      "rounded bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/20",
   };
 
   const content = (
@@ -56,8 +59,6 @@ export default function IdBadge({
   }
 
   return (
-    <div className={`${baseStyles} ${variantStyles[variant]}`}>
-      {content}
-    </div>
+    <div className={`${baseStyles} ${variantStyles[variant]}`}>{content}</div>
   );
 }

@@ -12,10 +12,7 @@ interface Props {
 
 type SubTabId = "actions" | "live" | "console" | "errors";
 
-export default function SelectedTabPanel({
-  selectedTab,
-  instanceId,
-}: Props) {
+export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
   const [activeSubTab, setActiveSubTab] = useState<SubTabId>("live");
 
   const subTabs: { id: SubTabId; label: string }[] = [
@@ -40,9 +37,7 @@ export default function SelectedTabPanel({
           tabs={subTabs}
           activeTab={activeSubTab}
           onChange={(id) => setActiveSubTab(id)}
-          rightSlot={
-            <SelectedTabTitle tab={selectedTab} />
-          }
+          rightSlot={<SelectedTabTitle tab={selectedTab} />}
         >
           {activeSubTab === "actions" && (
             <div className="h-full">

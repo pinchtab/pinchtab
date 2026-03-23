@@ -61,22 +61,32 @@ describe("InstanceTabsPanel", () => {
     const { rerender } = render(<InstanceTabsPanel tabs={tabs} />);
 
     rerender(<InstanceTabsPanel tabs={[tabs[1], tabs[0]]} />);
-    expect(screen.getByRole("heading", { name: "Beta Tab" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Beta Tab" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^Alpha Tab$/ }));
-    expect(screen.getByRole("heading", { name: "Alpha Tab" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Alpha Tab" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Unpin Alpha Tab and follow focus" }),
     ).toBeInTheDocument();
 
     rerender(<InstanceTabsPanel tabs={[tabs[1], tabs[0]]} />);
-    expect(screen.getByRole("heading", { name: "Alpha Tab" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Alpha Tab" }),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Unpin Alpha Tab and follow focus" }),
     );
-    expect(screen.getByRole("button", { name: "Pin Beta Tab" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Beta Tab" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin Beta Tab" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Beta Tab" }),
+    ).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no tabs", () => {

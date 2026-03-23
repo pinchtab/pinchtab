@@ -80,9 +80,7 @@ export default function TabBar({
                   onTogglePinned(tab.id);
                 }}
                 aria-label={
-                  isPinned
-                    ? `Unpin ${title} and follow focus`
-                    : `Pin ${title}`
+                  isPinned ? `Unpin ${title} and follow focus` : `Pin ${title}`
                 }
                 title={
                   isPinned
