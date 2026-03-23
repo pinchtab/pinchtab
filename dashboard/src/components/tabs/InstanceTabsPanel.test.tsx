@@ -31,8 +31,8 @@ describe("InstanceTabsPanel", () => {
       within(detailPanel).getByText("https://example.com/alpha"),
     ).toBeInTheDocument();
 
-    // IdBadge will show "alpha" instead of "tab_alpha"
-    expect(within(detailPanel).getByText("alpha")).toBeInTheDocument();
+    // IdBadge will show "ID" instead of "alpha" (shortened tab_alpha)
+    expect(within(detailPanel).getByText("ID")).toBeInTheDocument();
   });
 
   it("updates the selected tab details when a tab is clicked", async () => {
@@ -50,7 +50,7 @@ describe("InstanceTabsPanel", () => {
     expect(
       within(detailPanel).getByText("https://example.com/beta"),
     ).toBeInTheDocument();
-    expect(within(detailPanel).getByText("beta")).toBeInTheDocument();
+    expect(within(detailPanel).getByText("ID")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Unpin Beta Tab and follow focus" }),
     ).toBeInTheDocument();

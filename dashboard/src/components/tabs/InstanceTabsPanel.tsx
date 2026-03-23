@@ -10,11 +10,10 @@ interface Props {
 }
 
 export default function InstanceTabsPanel({
-  tabs: unsortedTabs,
+  tabs,
   emptyMessage = "No tabs open",
   instanceId,
 }: Props) {
-  const tabs = [...unsortedTabs].sort((a, b) => a.id.localeCompare(b.id));
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [selectionPinned, setSelectionPinned] = useState(false);
 
