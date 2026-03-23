@@ -67,6 +67,10 @@ func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.HoverByCoordinate(ctx, x, y)
 }
 
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	return bridgecdpops.ScrollByCoordinate(ctx, x, y, deltaX, deltaY)
+}
+
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
 	return bridgecdpops.HoverByNodeID(ctx, nodeID)
 }

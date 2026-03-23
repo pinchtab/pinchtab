@@ -6,7 +6,7 @@ interface Props {
 
 export default function TabItem({ tab }: Props) {
   return (
-    <div className="rounded-md border border-border-subtle/80 bg-white/2 px-3 py-2.5 transition-colors hover:border-border-default hover:bg-white/[0.03]">
+    <div className="rounded-md border border-border-subtle/80 bg-white/2 px-3 py-2.5 transition-colors hover:border-border-default hover:bg-white/3">
       <div className="truncate text-sm font-medium text-text-primary">
         {tab.title || "Untitled"}
       </div>

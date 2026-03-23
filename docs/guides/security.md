@@ -218,6 +218,7 @@ Important notes:
 - `strictMode = false` allows the request but emits warnings instead
 - `scanContent` protects `/text` and `/snapshot` style extraction paths
 - `wrapContent` adds explicit untrusted-content framing for downstream consumers
+- widening navigation to non-local or non-trusted sites is still a security-reducing choice; IDPI lowers risk, but it does not make hostile pages safe or remove browser attack surface
 
 Supported domain patterns are:
 

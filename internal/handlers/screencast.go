@@ -3,68 +3,37 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-const screencastRepaintStartJS = `(function() {
-  const key = "__pinchtabScreencastRepaint";
-  const state = globalThis[key] || (globalThis[key] = { refs: 0 });
-  state.refs += 1;
-  if (state.refs > 1) {
-    return state.refs;
-  }
+const screencastRepaintWorldName = "__pinchtab_screencast"
 
-  const el = document.createElement("div");
-  el.id = "__pinchtab_screencast_repaint";
-  el.setAttribute("aria-hidden", "true");
-  el.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none;opacity:0.999;background:rgba(0,0,0,0.001);transform:translateZ(0);will-change:opacity;z-index:2147483647;";
-  (document.body || document.documentElement).appendChild(el);
+var getScreencastFrameTree = func(ctx context.Context) (*page.FrameTree, error) {
+	return page.GetFrameTree().Do(ctx)
+}
 
-  state.element = el;
-  state.animation = el.animate(
-    [{ opacity: 0.999 }, { opacity: 1 }],
-    { duration: 1000, iterations: Infinity, direction: "alternate", easing: "linear" }
-  );
-  return state.refs;
-})()`
+var createScreencastIsolatedWorld = func(ctx context.Context, params *page.CreateIsolatedWorldParams) (runtime.ExecutionContextID, error) {
+	return params.Do(ctx)
+}
 
-const screencastRepaintStopJS = `(function() {
-  const key = "__pinchtabScreencastRepaint";
-  const state = globalThis[key];
-  if (!state) {
-    return 0;
-  }
-
-  state.refs = Math.max(0, (state.refs || 1) - 1);
-  if (state.refs > 0) {
-    return state.refs;
-  }
-
-  try {
-    if (state.animation) {
-      state.animation.cancel();
-    }
-  } catch (_) {}
-
-  try {
-    if (state.element) {
-      state.element.remove();
-    }
-  } catch (_) {}
-
-  delete globalThis[key];
-  return 0;
-})()`
+var evaluateScreencastInWorld = func(ctx context.Context, params *runtime.EvaluateParams) (*runtime.RemoteObject, *runtime.ExceptionDetails, error) {
+	return params.Do(ctx)
+}
 
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
@@ -112,27 +81,67 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stopRepaintLoop := func() {}
-	if h.Config != nil && h.Config.Headless {
-		stopRepaintLoop = startScreencastRepaintLoop(ctx)
-	}
-
-	frameCh := make(chan []byte, 3)
 	var once sync.Once
 	done := make(chan struct{})
+
+	slog.Info("screencast started", "tab", resolvedTabID, "quality", quality, "maxWidth", maxWidth)
+
+	go func() {
+		for {
+			_, _, err := wsutil.ReadClientData(conn)
+			if err != nil {
+				once.Do(func() { close(done) })
+				return
+			}
+		}
+	}()
+
+	if h.Config != nil && h.Config.Headless {
+		h.streamHeadlessScreencast(ctx, conn, quality, minFrameInterval, done)
+		return
+	}
+
+	stopRepaintLoop := func() {}
+	frameCh := make(chan []byte, 3)
+	ackCh := make(chan int64, 128)
+
+	go func() {
+		for {
+			select {
+			case sessionID := <-ackCh:
+				if err := chromedp.Run(ctx,
+					chromedp.ActionFunc(func(c context.Context) error {
+						return page.ScreencastFrameAck(sessionID).Do(c)
+					}),
+				); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Debug("screencast ack failed", "err", err, "tab", resolvedTabID)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 
 	// Listen for screencast frames with rate limiting
 	var lastFrame time.Time
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
 		switch e := ev.(type) {
 		case *page.EventScreencastFrame:
-			go func() {
-				_ = chromedp.Run(ctx,
-					chromedp.ActionFunc(func(c context.Context) error {
-						return page.ScreencastFrameAck(e.SessionID).Do(c)
-					}),
-				)
-			}()
+			select {
+			case ackCh <- e.SessionID:
+			case <-done:
+				return
+			default:
+				go func(sessionID int64) {
+					if err := chromedp.Run(ctx,
+						chromedp.ActionFunc(func(c context.Context) error {
+							return page.ScreencastFrameAck(sessionID).Do(c)
+						}),
+					); err != nil && !errors.Is(err, context.Canceled) {
+						slog.Debug("screencast ack fallback failed", "err", err, "tab", resolvedTabID)
+					}
+				}(e.SessionID)
+			}
 
 			now := time.Now()
 			if now.Sub(lastFrame) < minFrameInterval {
@@ -178,18 +187,6 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
-	slog.Info("screencast started", "tab", resolvedTabID, "quality", quality, "maxWidth", maxWidth)
-
-	go func() {
-		for {
-			_, _, err := wsutil.ReadClientData(conn)
-			if err != nil {
-				once.Do(func() { close(done) })
-				return
-			}
-		}
-	}()
-
 	for {
 		select {
 		case frame := <-frameCh:
@@ -206,17 +203,115 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handlers) streamHeadlessScreencast(ctx context.Context, conn net.Conn, quality int, frameInterval time.Duration, done <-chan struct{}) {
+	if frameInterval <= 0 {
+		frameInterval = time.Second
+	}
+
+	sendFrame := func() error {
+		frame, err := captureScreencastJPEG(ctx, quality)
+		if err != nil {
+			return err
+		}
+		return wsutil.WriteServerBinary(conn, frame)
+	}
+
+	if err := sendFrame(); err != nil {
+		return
+	}
+
+	frameTicker := time.NewTicker(frameInterval)
+	defer frameTicker.Stop()
+
+	pingTicker := time.NewTicker(10 * time.Second)
+	defer pingTicker.Stop()
+
+	for {
+		select {
+		case <-frameTicker.C:
+			if err := sendFrame(); err != nil {
+				return
+			}
+		case <-pingTicker.C:
+			if err := wsutil.WriteServerMessage(conn, ws.OpPing, nil); err != nil {
+				return
+			}
+		case <-done:
+			return
+		}
+	}
+}
+
+func captureScreencastJPEG(ctx context.Context, quality int) ([]byte, error) {
+	var buf []byte
+	err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(c context.Context) error {
+			var err error
+			buf, err = page.CaptureScreenshot().
+				WithFormat(page.CaptureScreenshotFormatJpeg).
+				WithQuality(int64(quality)).
+				Do(c)
+			return err
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
 func startScreencastRepaintLoop(ctx context.Context) func() {
-	if err := chromedp.Run(ctx, chromedp.Evaluate(screencastRepaintStartJS, nil)); err != nil {
+	execCtxID, err := createScreencastExecutionContext(ctx)
+	if err != nil {
+		slog.Warn("enable screencast repaint loop failed", "err", err)
+		return func() {}
+	}
+
+	if err := evaluateScreencastJS(ctx, execCtxID, assets.ScreencastRepaintStartJS); err != nil {
 		slog.Warn("enable screencast repaint loop failed", "err", err)
 		return func() {}
 	}
 
 	return func() {
-		if err := chromedp.Run(ctx, chromedp.Evaluate(screencastRepaintStopJS, nil)); err != nil {
+		if err := evaluateScreencastJS(ctx, execCtxID, assets.ScreencastRepaintStopJS); err != nil {
 			slog.Warn("disable screencast repaint loop failed", "err", err)
 		}
 	}
+}
+
+func createScreencastExecutionContext(ctx context.Context) (runtime.ExecutionContextID, error) {
+	frameTree, err := getScreencastFrameTree(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("get frame tree: %w", err)
+	}
+	if frameTree == nil || frameTree.Frame == nil {
+		return 0, errors.New("missing top frame")
+	}
+
+	execCtxID, err := createScreencastIsolatedWorld(ctx, newScreencastIsolatedWorldParams(frameTree.Frame.ID))
+	if err != nil {
+		return 0, fmt.Errorf("create isolated world: %w", err)
+	}
+	return execCtxID, nil
+}
+
+func evaluateScreencastJS(ctx context.Context, execCtxID runtime.ExecutionContextID, expression string) error {
+	_, exceptionDetails, err := evaluateScreencastInWorld(ctx, newScreencastEvaluateParams(execCtxID, expression))
+	if err != nil {
+		return fmt.Errorf("evaluate in isolated world: %w", err)
+	}
+	if exceptionDetails != nil {
+		return fmt.Errorf("evaluate in isolated world: %w", exceptionDetails)
+	}
+	return nil
+}
+
+func newScreencastIsolatedWorldParams(frameID cdp.FrameID) *page.CreateIsolatedWorldParams {
+	return page.CreateIsolatedWorld(frameID).WithWorldName(screencastRepaintWorldName)
+}
+
+func newScreencastEvaluateParams(execCtxID runtime.ExecutionContextID, expression string) *runtime.EvaluateParams {
+	return runtime.Evaluate(expression).WithContextID(execCtxID)
 }
 
 // HandleScreencastAll returns info for building a multi-tab screencast view.

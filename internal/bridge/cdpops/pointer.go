@@ -202,6 +202,31 @@ func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	}))
 }
 
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	if x < 0 || y < 0 {
+		return fmt.Errorf("x/y coordinates must be >= 0")
+	}
+
+	return chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type": "mouseMoved",
+				"x":    x,
+				"y":    y,
+			}, nil)
+		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type":   "mouseWheel",
+				"x":      x,
+				"y":      y,
+				"deltaX": deltaX,
+				"deltaY": deltaY,
+			}, nil)
+		}),
+	)
+}
+
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
 	x, y, err := GetElementCenter(ctx, nodeID)
 	if err != nil {

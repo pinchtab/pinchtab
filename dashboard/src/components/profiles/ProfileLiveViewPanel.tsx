@@ -13,6 +13,8 @@ export default function ProfileLiveViewPanel({
   tabs,
   isRunning,
 }: Props) {
+  const sortedTabs = [...tabs].sort((a, b) => a.id.localeCompare(b.id));
+
   return (
     <div className="h-full overflow-y-auto">
       {isRunning && instance ? (
@@ -20,7 +22,7 @@ export default function ProfileLiveViewPanel({
           <EmptyView message="No tabs open" />
         ) : (
           <div className="p-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {tabs.map((tab) => (
+            {sortedTabs.map((tab) => (
               <div key={tab.id} className="aspect-video">
                 <ScreencastTile
                   instanceId={instance.id}

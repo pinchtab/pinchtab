@@ -1200,7 +1200,9 @@ export default function SettingsPage() {
                       />
                       <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
                         Keep this list narrow. Empty or wildcard entries weaken
-                        the main IDPI boundary.
+                        the main IDPI boundary. Allowing non-local or
+                        non-trusted sites increases browser attack surface even
+                        when IDPI is enabled.
                       </div>
                     </div>
                   </SettingRow>

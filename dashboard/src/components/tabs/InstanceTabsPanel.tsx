@@ -10,36 +10,41 @@ interface Props {
 }
 
 export default function InstanceTabsPanel({
-  tabs,
+  tabs: unsortedTabs,
   emptyMessage = "No tabs open",
   instanceId,
 }: Props) {
+  const tabs = [...unsortedTabs].sort((a, b) => a.id.localeCompare(b.id));
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const [selectionPinned, setSelectionPinned] = useState(false);
 
   useEffect(() => {
     if (tabs.length === 0) {
       setSelectedTabId(null);
+      setSelectionPinned(false);
       return;
     }
 
-    if (!tabs.some((tab) => tab.id === selectedTabId)) {
-      setSelectedTabId(tabs[0].id);
+    if (selectionPinned && tabs.some((tab) => tab.id === selectedTabId)) {
+      return;
     }
-  }, [selectedTabId, tabs]);
+
+    if (!tabs.some((tab) => tab.id === selectedTabId) || selectedTabId !== tabs[0].id) {
+      setSelectedTabId(tabs[0].id);
+      if (selectionPinned) {
+        setSelectionPinned(false);
+      }
+    }
+  }, [selectedTabId, selectionPinned, tabs]);
 
   const selectedTab = useMemo(
     () => tabs.find((tab) => tab.id === selectedTabId) ?? null,
     [selectedTabId, tabs],
   );
 
-  const heading = `Open Tabs (${tabs.length})`;
-
   if (tabs.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-border-subtle px-4 py-3">
-          <h2 className="text-sm font-medium text-text-primary">{heading}</h2>
-        </div>
         <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">
           {emptyMessage}
         </div>
@@ -49,13 +54,23 @@ export default function InstanceTabsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border-subtle px-4 py-3">
-        <h2 className="text-sm font-medium text-text-primary">{heading}</h2>
-      </div>
       <TabBar
         tabs={tabs}
         selectedTabId={selectedTabId}
-        onSelect={setSelectedTabId}
+        pinnedTabId={selectionPinned ? selectedTabId : null}
+        onSelect={(id) => {
+          setSelectedTabId(id);
+          setSelectionPinned(true);
+        }}
+        onTogglePinned={(id) => {
+          if (selectionPinned && selectedTabId === id) {
+            setSelectionPinned(false);
+            setSelectedTabId(tabs[0]?.id ?? null);
+            return;
+          }
+          setSelectedTabId(id);
+          setSelectionPinned(true);
+        }}
       />
       <SelectedTabPanel selectedTab={selectedTab} instanceId={instanceId} />
     </div>

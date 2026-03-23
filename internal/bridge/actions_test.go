@@ -53,6 +53,114 @@ func TestHoverAction_UsesCoordinatePath(t *testing.T) {
 	}
 }
 
+func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origScrollByCoordinate := scrollByCoordinateAction
+	origScrollViewportCenter := scrollViewportCenter
+	t.Cleanup(func() {
+		scrollByCoordinateAction = origScrollByCoordinate
+		scrollViewportCenter = origScrollViewportCenter
+	})
+
+	called := false
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+		called = true
+		if x != 12.5 || y != 34.5 {
+			t.Fatalf("wheel coordinates = (%v, %v), want (12.5, 34.5)", x, y)
+		}
+		if deltaX != 0 || deltaY != 50 {
+			t.Fatalf("wheel delta = (%d, %d), want (0, 50)", deltaX, deltaY)
+		}
+		return nil
+	}
+	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+		t.Fatal("viewport center should not be used when explicit coordinates are provided")
+		return 0, 0, nil
+	}
+
+	result, err := b.Actions[ActionScroll](context.Background(), ActionRequest{
+		HasXY:   true,
+		X:       12.5,
+		Y:       34.5,
+		ScrollY: 50,
+	})
+	if err != nil {
+		t.Fatalf("scroll returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected coordinate wheel path to be used")
+	}
+	if result["x"] != 0 || result["y"] != 50 {
+		t.Fatalf("unexpected result payload: %#v", result)
+	}
+}
+
+func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origScrollByCoordinate := scrollByCoordinateAction
+	origScrollViewportCenter := scrollViewportCenter
+	t.Cleanup(func() {
+		scrollByCoordinateAction = origScrollByCoordinate
+		scrollViewportCenter = origScrollViewportCenter
+	})
+
+	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+		return 400, 300, nil
+	}
+
+	called := false
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+		called = true
+		if x != 400 || y != 300 {
+			t.Fatalf("wheel coordinates = (%v, %v), want (400, 300)", x, y)
+		}
+		if deltaX != 0 || deltaY != 800 {
+			t.Fatalf("wheel delta = (%d, %d), want (0, 800)", deltaX, deltaY)
+		}
+		return nil
+	}
+
+	result, err := b.Actions[ActionScroll](context.Background(), ActionRequest{})
+	if err != nil {
+		t.Fatalf("scroll returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected viewport-center wheel path to be used")
+	}
+	if result["x"] != 0 || result["y"] != 800 {
+		t.Fatalf("unexpected result payload: %#v", result)
+	}
+}
+
+func TestScrollAction_PropagatesViewportCenterError(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origScrollByCoordinate := scrollByCoordinateAction
+	origScrollViewportCenter := scrollViewportCenter
+	t.Cleanup(func() {
+		scrollByCoordinateAction = origScrollByCoordinate
+		scrollViewportCenter = origScrollViewportCenter
+	})
+
+	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+		return 0, 0, context.Canceled
+	}
+	scrollByCoordinateAction = func(context.Context, float64, float64, int, int) error {
+		t.Fatal("wheel dispatch should not be called when viewport center resolution fails")
+		return nil
+	}
+
+	_, err := b.Actions[ActionScroll](context.Background(), ActionRequest{})
+	if err == nil {
+		t.Fatal("expected error when viewport center resolution fails")
+	}
+	if !strings.Contains(err.Error(), "resolve scroll viewport center") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCheckAction_Registered(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 	if _, ok := b.Actions[ActionCheck]; !ok {

@@ -8,6 +8,21 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+var scrollByCoordinateAction = ScrollByCoordinate
+var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
+	var viewport struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`({
+		x: Math.max(1, Math.floor(window.innerWidth / 2)),
+		y: Math.max(1, Math.floor(window.innerHeight / 2))
+	})`, &viewport)); err != nil {
+		return 0, 0, err
+	}
+	return viewport.X, viewport.Y, nil
+}
+
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	var err error
 	if req.Selector != "" {
@@ -64,13 +79,25 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 	if req.NodeID > 0 {
 		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, req.NodeID)
 	}
-	if req.ScrollX != 0 || req.ScrollY != 0 {
-		js := fmt.Sprintf("window.scrollBy(%d, %d)", req.ScrollX, req.ScrollY)
-		return map[string]any{"scrolled": true, "x": req.ScrollX, "y": req.ScrollY},
-			chromedp.Run(ctx, chromedp.Evaluate(js, nil))
+
+	scrollX := req.ScrollX
+	scrollY := req.ScrollY
+	if scrollX == 0 && scrollY == 0 {
+		scrollY = 800
 	}
-	return map[string]any{"scrolled": true, "y": 800},
-		chromedp.Run(ctx, chromedp.Evaluate("window.scrollBy(0, 800)", nil))
+
+	scrollTargetX := req.X
+	scrollTargetY := req.Y
+	if !req.HasXY {
+		var err error
+		scrollTargetX, scrollTargetY, err = scrollViewportCenter(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve scroll viewport center: %w", err)
+		}
+	}
+
+	return map[string]any{"scrolled": true, "x": scrollX, "y": scrollY},
+		scrollByCoordinateAction(ctx, scrollTargetX, scrollTargetY, scrollX, scrollY)
 }
 
 func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]any, error) {

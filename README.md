@@ -69,6 +69,8 @@ PinchTab defaults to a **local-first security posture**:
 > By default, IDPI restricts browsing to **locally hosted websites only**.
 > This prevents agents from navigating the public internet until you explicitly allow it.
 > The restriction exists to make the security implications of browser automation clear before enabling wider access.
+>
+> Expanding browsing to non-local or non-trusted websites is a security-reducing choice. Hostile pages can still increase browser attack surface and interact badly with enabled automation features even when PinchTab's content defenses are on.
 
 See the full guide: [docs/guides/security.md](docs/guides/security.md)
 

@@ -48,4 +48,11 @@ describe("IdBadge", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("12345678")).toBeInTheDocument();
   });
+
+  it("renders compact variant with correct classes", () => {
+    const { container } = render(<IdBadge id={mockId} variant="compact" />);
+    const badge = container.firstChild;
+    expect(badge).toHaveClass("bg-primary/10");
+    expect(badge).toHaveClass("text-primary");
+  });
 });

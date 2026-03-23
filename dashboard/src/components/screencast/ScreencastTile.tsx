@@ -16,12 +16,58 @@ interface Props {
   showTitle?: boolean;
 }
 
+function loadImageElement(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const imgUrl = URL.createObjectURL(blob);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(imgUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(imgUrl);
+      reject(new Error("Failed to decode screencast frame"));
+    };
+
+    img.src = imgUrl;
+  });
+}
+
+async function drawFrameToCanvas(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  frameData: ArrayBuffer | Blob,
+): Promise<void> {
+  const blob =
+    frameData instanceof Blob
+      ? frameData
+      : new Blob([frameData], { type: "image/jpeg" });
+
+  if (typeof window.createImageBitmap === "function") {
+    const bitmap = await window.createImageBitmap(blob);
+    try {
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      ctx.drawImage(bitmap, 0, 0);
+      return;
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  const image = await loadImageElement(blob);
+  canvas.width = image.width;
+  canvas.height = image.height;
+  ctx.drawImage(image, 0, 0);
+}
+
 export default function ScreencastTile({
   instanceId,
   tabId,
   label,
   url,
-  quality = 30,
+  quality = 60,
   maxWidth = 800,
   fps = 1,
   showTitle = true,
@@ -195,15 +241,44 @@ export default function ScreencastTile({
     setHasFrame(false);
 
     let disposed = false;
-    let fallbackCaptured = false;
+    let hasRenderedFrame = false;
+    let pendingFrame: ArrayBuffer | Blob | null = null;
+    let renderInFlight = false;
 
     let frameCount = 0;
     let lastFpsTime = Date.now();
     const fallbackTimer = window.setTimeout(() => {
-      if (!disposed && !fallbackCaptured) {
+      if (!disposed && !hasRenderedFrame) {
         void captureFallback();
       }
     }, 1500);
+
+    const renderNextFrame = async () => {
+      if (disposed || renderInFlight || !pendingFrame) return;
+
+      renderInFlight = true;
+      const frameData = pendingFrame;
+      pendingFrame = null;
+
+      try {
+        await drawFrameToCanvas(canvas, ctx, frameData);
+        if (disposed) return;
+
+        hasRenderedFrame = true;
+        window.clearTimeout(fallbackTimer);
+        setHasFrame(true);
+        setStatus("streaming");
+      } catch (err) {
+        if (!disposed) {
+          console.error("screencast frame render failed", err);
+        }
+      } finally {
+        renderInFlight = false;
+        if (!disposed && pendingFrame) {
+          void renderNextFrame();
+        }
+      }
+    };
 
     socket.onopen = () => {
       if (!disposed) {
@@ -213,25 +288,8 @@ export default function ScreencastTile({
 
     socket.onmessage = (evt) => {
       if (disposed) return;
-      fallbackCaptured = true;
-      window.clearTimeout(fallbackTimer);
-
-      const blob = new Blob([evt.data], { type: "image/jpeg" });
-      const imgUrl = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        if (disposed) {
-          URL.revokeObjectURL(imgUrl);
-          return;
-        }
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(imgUrl);
-      };
-      img.src = imgUrl;
-      setHasFrame(true);
-      setStatus("streaming");
+      pendingFrame = evt.data;
+      void renderNextFrame();
 
       frameCount++;
       const now = Date.now();

@@ -23,8 +23,6 @@ describe("InstanceTabsPanel", () => {
   it("auto-selects the first tab and shows its details", () => {
     render(<InstanceTabsPanel tabs={tabs} />);
 
-    expect(screen.getByText("Open Tabs (2)")).toBeInTheDocument();
-
     // Find heading for first tab title
     const titleHeading = screen.getByRole("heading", { name: "Alpha Tab" });
     const detailPanel = titleHeading.closest(".rounded-xl") as HTMLElement;
@@ -42,9 +40,7 @@ describe("InstanceTabsPanel", () => {
     render(<InstanceTabsPanel tabs={tabs} />);
 
     // Select Beta tab from list
-    const betaTabItem = screen.getByRole("button", {
-      name: /Beta Tab.*tab_beta/,
-    });
+    const betaTabItem = screen.getByRole("button", { name: /^Beta Tab$/ });
     await user.click(betaTabItem);
 
     // Find heading for beta tab title
@@ -55,12 +51,37 @@ describe("InstanceTabsPanel", () => {
       within(detailPanel).getByText("https://example.com/beta"),
     ).toBeInTheDocument();
     expect(within(detailPanel).getByText("beta")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Unpin Beta Tab and follow focus" }),
+    ).toBeInTheDocument();
+  });
+
+  it("follows the focused tab until a manual selection is pinned", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<InstanceTabsPanel tabs={tabs} />);
+
+    rerender(<InstanceTabsPanel tabs={[tabs[1], tabs[0]]} />);
+    expect(screen.getByRole("heading", { name: "Beta Tab" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Alpha Tab$/ }));
+    expect(screen.getByRole("heading", { name: "Alpha Tab" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Unpin Alpha Tab and follow focus" }),
+    ).toBeInTheDocument();
+
+    rerender(<InstanceTabsPanel tabs={[tabs[1], tabs[0]]} />);
+    expect(screen.getByRole("heading", { name: "Alpha Tab" })).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Unpin Alpha Tab and follow focus" }),
+    );
+    expect(screen.getByRole("button", { name: "Pin Beta Tab" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Beta Tab" })).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no tabs", () => {
     render(<InstanceTabsPanel tabs={[]} />);
 
-    expect(screen.getByText("Open Tabs (0)")).toBeInTheDocument();
     expect(screen.getByText("No tabs open")).toBeInTheDocument();
   });
 });

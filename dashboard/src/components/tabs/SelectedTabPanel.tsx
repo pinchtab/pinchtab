@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { ActivityExplorer } from "../../activities";
 import type { InstanceTab } from "../../generated/types";
-import IdBadge from "./IdBadge";
 import { TabsLayout, EmptyView } from "../molecules";
 import ScreencastTile from "../screencast/ScreencastTile";
+import SelectedTabTitle from "./SelectedTabTitle";
 
 interface Props {
   selectedTab: InstanceTab | null;
@@ -12,21 +12,10 @@ interface Props {
 
 type SubTabId = "actions" | "live" | "console" | "errors";
 
-function TabInfo({ tab }: { tab: InstanceTab }) {
-  return (
-    <div className="flex flex-col gap-0.5 text-right">
-      <div className="flex items-center justify-end gap-1.5">
-        <h3 className="truncate text-xs font-medium text-text-secondary">
-          {tab.title || "Untitled"}
-        </h3>
-        <IdBadge id={tab.id} />
-      </div>
-      <div className="truncate text-[10px] text-text-muted">{tab.url}</div>
-    </div>
-  );
-}
-
-export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
+export default function SelectedTabPanel({
+  selectedTab,
+  instanceId,
+}: Props) {
   const [activeSubTab, setActiveSubTab] = useState<SubTabId>("live");
 
   const subTabs: { id: SubTabId; label: string }[] = [
@@ -51,7 +40,9 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
           tabs={subTabs}
           activeTab={activeSubTab}
           onChange={(id) => setActiveSubTab(id)}
-          rightSlot={<TabInfo tab={selectedTab} />}
+          rightSlot={
+            <SelectedTabTitle tab={selectedTab} />
+          }
         >
           {activeSubTab === "actions" && (
             <div className="h-full">
