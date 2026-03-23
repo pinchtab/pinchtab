@@ -137,10 +137,10 @@ dashboard_assert_screencast_continues() {
 
 dashboard_assert_screencast_hidden() {
   local label="$1"
-  pt_post /evaluate -d '{"expression":"({ hasGlobal: Object.prototype.hasOwnProperty.call(globalThis, \"__pinchtabScreencastRepaint\"), hasElement: !!document.getElementById(\"__pinchtab_screencast_repaint\") })"}'
+  pt_post /evaluate -d '{"expression":"({ hasGlobal: Object.prototype.hasOwnProperty.call(globalThis, \"__pinchtabScreencastRepaint\"), hasIdentifiableElement: !!document.querySelector(\"[id*=pinchtab],[class*=pinchtab],[data-pinchtab]\") })"}'
   assert_ok "evaluate main world ${label}"
   assert_result_eq ".result.hasGlobal" "false" "main world cannot see screencast global ${label}"
-  assert_result_eq ".result.hasElement" "false" "main world cannot see screencast marker ${label}"
+  assert_result_eq ".result.hasIdentifiableElement" "false" "no pinchtab-identifiable element leaks into DOM ${label}"
 }
 
 # ─────────────────────────────────────────────────────────────────

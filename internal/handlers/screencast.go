@@ -177,6 +177,8 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stopRepaintLoop = startScreencastRepaintLoop(ctx)
+
 	defer func() {
 		once.Do(func() { close(done) })
 		stopRepaintLoop()
