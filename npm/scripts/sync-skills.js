@@ -117,7 +117,7 @@ function syncSkills({ verbose = false } = {}) {
 if (require.main === module) {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
   console.log('Syncing Pinchtab skill files...\n');
-  const { updated, skipped } = syncSkills({ verbose: true });
+  const { updated, skipped } = syncSkills({ verbose });
 
   if (updated.length > 0) {
     console.log(`\n✓ Updated ${updated.length} skill director${updated.length === 1 ? 'y' : 'ies'}`);
