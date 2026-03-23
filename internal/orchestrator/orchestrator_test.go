@@ -403,9 +403,12 @@ func TestOrchestrator_AttachBridge(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
-	inst, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token")
+	inst, created, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token")
 	if err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)
+	}
+	if !created {
+		t.Fatal("expected new bridge to be created")
 	}
 	if !inst.Attached {
 		t.Fatal("expected attached instance")
@@ -425,14 +428,18 @@ func TestOrchestrator_AttachBridge_UpsertsExistingBridge(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
-	first, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
+	first, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
 	if err != nil {
 		t.Fatalf("first AttachBridge failed: %v", err)
 	}
 
-	second, err := o.AttachBridge("bridge1", "http://10.0.0.9:9868", "bridge-token-2")
+	// Same token → upsert succeeds
+	second, created, err := o.AttachBridge("bridge1", "http://10.0.0.9:9868", "bridge-token-1")
 	if err != nil {
 		t.Fatalf("second AttachBridge failed: %v", err)
+	}
+	if created {
+		t.Fatal("expected upsert, not create")
 	}
 
 	if second.ID != first.ID {
@@ -448,13 +455,32 @@ func TestOrchestrator_AttachBridge_UpsertsExistingBridge(t *testing.T) {
 	if internal == nil {
 		t.Fatalf("attached instance %q missing from orchestrator", first.ID)
 	}
-	if internal.authToken != "bridge-token-2" {
-		t.Fatalf("authToken = %q, want %q", internal.authToken, "bridge-token-2")
+	if internal.authToken != "bridge-token-1" {
+		t.Fatalf("authToken = %q, want %q", internal.authToken, "bridge-token-1")
 	}
 
 	list := o.List()
 	if len(list) != 1 {
 		t.Fatalf("expected 1 instance in list, got %d", len(list))
+	}
+}
+
+func TestOrchestrator_AttachBridge_RejectsTokenMismatch(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	_, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
+	if err != nil {
+		t.Fatalf("first AttachBridge failed: %v", err)
+	}
+
+	// Different token → rejected
+	_, _, err = o.AttachBridge("bridge1", "http://10.0.0.9:9868", "bridge-token-2")
+	if err == nil {
+		t.Fatal("expected error for token mismatch, got nil")
+	}
+	if !strings.Contains(err.Error(), "token mismatch") {
+		t.Fatalf("expected token mismatch error, got: %v", err)
 	}
 }
 
@@ -475,7 +501,7 @@ func TestOrchestrator_AttachBridge_RemovesUnhealthyBridge(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.client = backend.Client()
 
-	inst, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
+	inst, _, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
 	if err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)
 	}
@@ -570,7 +596,7 @@ func TestOrchestrator_AttachBridge_NormalizesBaseURL(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
-	inst, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868/?debug=1#frag", "bridge-token")
+	inst, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868/?debug=1#frag", "bridge-token")
 	if err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)
 	}

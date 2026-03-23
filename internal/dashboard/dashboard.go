@@ -295,7 +295,6 @@ func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}", d.handleAgent)
 	mux.HandleFunc("GET /api/agents/{id}/events", d.handleAgentSSE)
 	mux.HandleFunc("POST /api/agents/{id}/events", d.handleAgentEventsByID)
-	mux.HandleFunc("POST /api/agent-events", d.handleAgentEvents)
 
 	// Static files served at /dashboard/
 	sub, _ := fs.Sub(dashboardFS, "dashboard")
@@ -337,15 +336,6 @@ func (d *Dashboard) handleAgent(w http.ResponseWriter, r *http.Request) {
 		Agent:  agent,
 		Events: d.EventsForAgent(agentID, mode),
 	})
-}
-
-func (d *Dashboard) handleAgentEvents(w http.ResponseWriter, r *http.Request) {
-	evt, ok := d.decodeProgressEvent(w, r, "")
-	if !ok {
-		return
-	}
-	d.RecordEvent(evt)
-	httpx.JSON(w, http.StatusCreated, map[string]string{"status": "ok", "id": evt.ID})
 }
 
 func (d *Dashboard) handleAgentEventsByID(w http.ResponseWriter, r *http.Request) {

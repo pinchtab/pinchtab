@@ -343,13 +343,18 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		name = fmt.Sprintf("bridge-%d", time.Now().UnixNano())
 	}
 
-	inst, err := o.AttachBridge(name, req.BaseURL, req.Token)
+	inst, created, err := o.AttachBridge(name, req.BaseURL, req.Token)
 	if err != nil {
 		httpx.Error(w, classifyLaunchError(err), err)
 		return
 	}
-	authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "bridge")
-	httpx.JSON(w, 201, inst)
+	if created {
+		authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "bridge")
+		httpx.JSON(w, 201, inst)
+	} else {
+		authn.AuditLog(r, "instance.reattached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "bridge")
+		httpx.JSON(w, 200, inst)
+	}
 }
 
 // probeAttachBridge checks that a remote bridge is reachable.

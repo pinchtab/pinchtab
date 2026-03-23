@@ -1,10 +1,3 @@
-
-!dashboard/eslint.config.js
-!dashboard/vite.config.ts
-!internal/assets/*.js
-!npm/bin/pinchtab
-!scripts/**/*.js
-!tests/e2e/results/.gitkeep
 # Build artifacts and test output
 # E2E test results
 # Go code serves a built-in fallback when these files are absent.
@@ -14,6 +7,12 @@
 # npm package
 # package-lock.json is committed for reproducible installs via npm ci
 *.js
+!dashboard/eslint.config.js
+!dashboard/vite.config.ts
+!internal/assets/*.js
+!npm/bin/pinchtab
+!scripts/**/*.js
+!tests/e2e/results/.gitkeep
 *.pyc
 *.test
 .DS_Store

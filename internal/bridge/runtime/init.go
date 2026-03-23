@@ -184,7 +184,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	if hooks.SetHumanRandSeed != nil {
 		hooks.SetHumanRandSeed(int64(stealthSeed))
 	}
-	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript + "\n" + PopupGuardInitScript
+	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, cfg.StealthLevel) + assets.StealthScript + "\n" + assets.PopupGuardScript
 
 	const chromeStartupTimeout = 20 * time.Second
 	type runResult struct{ err error }
@@ -398,47 +398,6 @@ func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 
 	return appendChromeCompatibilityFlags(args)
 }
-
-const PopupGuardInitScript = `(function() {
-  const mergeWindowFeatures = function(features) {
-    const parts = typeof features === 'string'
-      ? features.split(',').map(function(part) { return String(part).trim(); }).filter(Boolean)
-      : [];
-    const seen = new Set(parts.map(function(part) { return part.toLowerCase(); }));
-    if (!seen.has('noopener')) {
-      parts.push('noopener');
-    }
-    if (!seen.has('noreferrer')) {
-      parts.push('noreferrer');
-    }
-    return parts.join(',');
-  };
-
-  try {
-    const originalOpen = window.open;
-    if (typeof originalOpen === 'function') {
-      Object.defineProperty(window, 'open', {
-        configurable: true,
-        writable: true,
-        value: function(url, target, features) {
-          return originalOpen.call(window, url, target, mergeWindowFeatures(features));
-        }
-      });
-    }
-  } catch (_) {}
-
-  try {
-    Object.defineProperty(window, 'opener', {
-      configurable: true,
-      get: function() { return null; },
-      set: function() { return true; }
-    });
-  } catch (_) {
-    try {
-      window.opener = null;
-    } catch (_) {}
-  }
-})();`
 
 func injectedScript(ctx context.Context, script string) error {
 	return chromedp.FromContext(ctx).Target.Execute(ctx,

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -427,8 +428,11 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 	o.mu.Lock()
 	for _, existing := range o.instances {
 		if existing.ProfileName == name && instanceIsActive(existing) {
-			// Allow upsert for bridge re-attach Other attach types still conflict.
 			if existing.Attached && inst.AttachType == "bridge" && existing.AttachType == "bridge" {
+				if existing.authToken != "" && subtle.ConstantTimeCompare([]byte(existing.authToken), []byte(authToken)) != 1 {
+					o.mu.Unlock()
+					return nil, false, fmt.Errorf("bridge %q already attached: token mismatch", name)
+				}
 				existing.URL = inst.URL
 				existing.Instance.URL = inst.URL
 				existing.authToken = authToken
@@ -490,8 +494,9 @@ func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
 }
 
 // AttachBridge registers an already-running bridge server as an attached instance.
-// If a bridge with the same name is already attached, it is updated in place (upsert).
-func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instance, error) {
+// If a bridge with the same name is already attached, it is updated in place (upsert)
+// provided the caller presents the current bridge token.
+func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instance, bool, error) {
 	normalizedBaseURL := strings.TrimRight(baseURL, "/")
 	if parsed, err := url.Parse(normalizedBaseURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
 		normalizedBaseURL = parsed.Scheme + "://" + parsed.Host
@@ -503,7 +508,7 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 		URL:        normalizedBaseURL,
 	}, token)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", internalurls.RedactForLog(inst.URL))
@@ -516,7 +521,7 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 			go o.monitorAttachedBridge(internal)
 		}
 	}
-	return inst, nil
+	return inst, created, nil
 }
 
 func (o *Orchestrator) Stop(id string) error {

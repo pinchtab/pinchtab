@@ -7,6 +7,9 @@ import (
 //go:embed stealth.js
 var StealthScript string
 
+//go:embed popup_guard.js
+var PopupGuardScript string
+
 //go:embed readability.js
 var ReadabilityJS string
 

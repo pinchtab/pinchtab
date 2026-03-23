@@ -196,51 +196,6 @@ func TestDashboardHandleAgentReturnsDetail(t *testing.T) {
 	}
 }
 
-func TestDashboardHandleAgentEventsValidation(t *testing.T) {
-	d := NewDashboard(nil)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/agent-events", bytes.NewBufferString(`{"agentId":"","message":""}`))
-	w := httptest.NewRecorder()
-	d.handleAgentEvents(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("handleAgentEvents() status = %d, want %d", w.Code, http.StatusBadRequest)
-	}
-}
-
-func TestDashboardHandleAgentEventsRecordsProgress(t *testing.T) {
-	d := NewDashboard(nil)
-	body := map[string]any{
-		"agentId":  "agent-1",
-		"message":  "Step 1",
-		"progress": 1,
-		"total":    3,
-	}
-	data, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/agent-events", bytes.NewReader(data))
-	w := httptest.NewRecorder()
-	d.handleAgentEvents(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("handleAgentEvents() status = %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	events := d.RecentEvents()
-	if len(events) != 1 {
-		t.Fatalf("RecentEvents() len = %d, want 1", len(events))
-	}
-	if events[0].Channel != "progress" {
-		t.Fatalf("RecentEvents()[0].Channel = %q, want progress", events[0].Channel)
-	}
-	if events[0].Type != "progress" {
-		t.Fatalf("RecentEvents()[0].Type = %q, want progress", events[0].Type)
-	}
-}
-
 func TestDashboardHandleAgentEventsByIDUsesRouteAgent(t *testing.T) {
 	d := NewDashboard(nil)
 
