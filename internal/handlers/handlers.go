@@ -23,9 +23,9 @@ type Handlers struct {
 	Dashboard    *dashboard.Dashboard
 	Orchestrator bridge.OrchestratorService
 	IdMgr        *ids.Manager
-	Matcher     semantic.ElementMatcher
-	IntentCache *recovery.IntentCache
-	Recovery    *recovery.RecoveryEngine
+	Matcher      semantic.ElementMatcher
+	IntentCache  *recovery.IntentCache
+	Recovery     *recovery.RecoveryEngine
 	Router       *engine.Router // optional; nil ⇒ chrome-only
 	clipboard    clipboardStore
 }
