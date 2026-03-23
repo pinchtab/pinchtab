@@ -12,7 +12,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
-	"github.com/pinchtab/pinchtab/internal/semantic"
+	"github.com/pinchtab/semantic"
+	"github.com/pinchtab/semantic/recovery"
 )
 
 type findRequest struct {
@@ -200,7 +201,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		h.Recovery.RecordIntent(resolvedTabID, result.BestRef, semantic.IntentEntry{
+		h.Recovery.RecordIntent(resolvedTabID, result.BestRef, recovery.IntentEntry{
 			Query:      req.Query,
 			Descriptor: bestDesc,
 			Score:      result.BestScore,
