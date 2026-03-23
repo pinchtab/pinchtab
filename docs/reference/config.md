@@ -233,6 +233,27 @@ Current nested file-config shape:
 }
 ```
 
+`browser.extraFlags` is validated and sanitized. It is only for user-safe Chrome flags that do not weaken browser security and do not override PinchTab-owned launch behavior.
+
+Rejected examples include:
+
+- `--no-sandbox`
+- `--disable-web-security`
+- `--ignore-certificate-errors`
+- `--user-agent=...`
+- `--enable-automation=...`
+- `--disable-blink-features=...`
+
+Use the dedicated config fields instead:
+
+- `instanceDefaults.userAgent` for UA overrides
+- `instanceDefaults.mode` for headed/headless
+- `instanceDefaults.timezone` for timezone
+- `browser.extensionPaths` for extension loading
+- `browser.remoteDebuggingPort` for the remote debugging port
+
+For Linux container compatibility, use the runtime-managed path instead of `browser.extraFlags`. PinchTab enables `--no-sandbox` automatically when needed, and you can force that compatibility mode with `PINCHTAB_CHROME_NO_SANDBOX=1`.
+
 ## Sections
 
 | Section | Purpose |

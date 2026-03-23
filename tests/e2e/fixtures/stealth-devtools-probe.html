@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stealth DevTools Probe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 24px;
+      line-height: 1.5;
+    }
+    pre {
+      padding: 12px;
+      background: #f4f4f4;
+      border-radius: 8px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stealth DevTools Probe</h1>
+  <pre id="report">running...</pre>
+  <script>
+    (function() {
+      const reportEl = document.getElementById('report');
+      const report = {
+        ready: false,
+        initialFormattersLen: 0,
+        formatterCalled: false,
+        formatterCalls: 0,
+        getterCalled: false,
+        getterCalls: 0,
+        stackGetterCalled: false,
+        stackGetterCalls: 0,
+        error: ''
+      };
+
+      window.__stealthDevtoolsProbe = report;
+
+      try {
+        const existingFormatters = Array.isArray(window.devtoolsFormatters) ? window.devtoolsFormatters.slice() : [];
+        report.initialFormattersLen = existingFormatters.length;
+        const formatterMarker = { __pinchtabFormatterProbe: true };
+        const formatter = {
+          header(object) {
+            if (object && object.__pinchtabFormatterProbe) {
+              report.formatterCalled = true;
+              report.formatterCalls += 1;
+            }
+            return null;
+          },
+          hasBody() {
+            return false;
+          }
+        };
+
+        window.devtoolsFormatters = existingFormatters.concat(formatter);
+
+        const getterProbe = document.createElement('div');
+        Object.defineProperty(getterProbe, 'id', {
+          get() {
+            report.getterCalled = true;
+            report.getterCalls += 1;
+            return 'pinchtab-devtools-probe';
+          },
+          configurable: true
+        });
+
+        const stackProbe = new Error('pinchtab-devtools-stack');
+        Object.defineProperty(stackProbe, 'stack', {
+          get() {
+            report.stackGetterCalled = true;
+            report.stackGetterCalls += 1;
+            return 'pinchtab-devtools-stack';
+          },
+          configurable: true
+        });
+
+        console.log('pinchtab-devtools-formatter', formatterMarker);
+        console.dir(getterProbe);
+        console.log(stackProbe);
+      } catch (error) {
+        report.error = String((error && error.message) || error || '');
+      }
+
+      setTimeout(() => {
+        report.ready = true;
+        reportEl.textContent = JSON.stringify(report, null, 2);
+      }, 1200);
+    })();
+  </script>
+</body>
+</html>

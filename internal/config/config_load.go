@@ -264,7 +264,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.ChromeDebugPort = *fc.Browser.ChromeDebugPort
 	}
 	if fc.Browser.ChromeExtraFlags != "" {
-		cfg.ChromeExtraFlags = fc.Browser.ChromeExtraFlags
+		cfg.ChromeExtraFlags = SanitizeChromeExtraFlags(fc.Browser.ChromeExtraFlags)
 	}
 	if len(fc.Browser.ExtensionPaths) > 0 {
 		cfg.ExtensionPaths = fc.Browser.ExtensionPaths

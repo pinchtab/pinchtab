@@ -382,8 +382,6 @@ func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, i
 	} else {
 		fc.InstanceDefaults.Mode = "headed"
 	}
-	noRestore := true
-	fc.InstanceDefaults.NoRestore = &noRestore
 
 	if len(extensionPaths) > 0 {
 		seen := make(map[string]bool)

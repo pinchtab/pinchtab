@@ -145,6 +145,10 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
+	if fc.Browser.ChromeExtraFlags != "" {
+		errs = append(errs, validateChromeExtraFlags(fc.Browser.ChromeExtraFlags)...)
+	}
+
 	// IDPI validation
 	errs = append(errs, validateIDPIConfig(fc.Security.IDPI)...)
 	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)

@@ -358,11 +358,19 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
 	}
 
-	// Set up console and error log capturing
-	tm.setupConsoleCapture(ctx, rawCDPID)
+	if tm.shouldEagerlyCaptureConsole() {
+		tm.setupConsoleCapture(ctx, rawCDPID)
+	}
 
 	tm.mu.Lock()
-	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID, CreatedAt: now, LastUsed: now}
+	tm.tabs[tabID] = &TabEntry{
+		Ctx:                   ctx,
+		Cancel:                cancel,
+		CDPID:                 rawCDPID,
+		CreatedAt:             now,
+		LastUsed:              now,
+		ConsoleCaptureEnabled: tm.shouldEagerlyCaptureConsole(),
+	}
 	tm.accessed[tabID] = true
 	tm.currentTab = tabID
 	tm.mu.Unlock()
@@ -791,6 +799,35 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			return runtime.Enable().Do(c)
 		}))
 	}()
+}
+
+func (tm *TabManager) shouldEagerlyCaptureConsole() bool {
+	if tm == nil || tm.config == nil {
+		return true
+	}
+	return !strings.EqualFold(strings.TrimSpace(tm.config.StealthLevel), "full")
+}
+
+func (tm *TabManager) EnsureConsoleCapture(tabID string) {
+	if tm == nil || tm.logStore == nil {
+		return
+	}
+
+	tm.mu.Lock()
+	entry := tm.tabs[tabID]
+	if entry == nil && tabID == "" {
+		entry = tm.tabs[tm.currentTab]
+	}
+	if entry == nil || entry.Ctx == nil || entry.ConsoleCaptureEnabled {
+		tm.mu.Unlock()
+		return
+	}
+	entry.ConsoleCaptureEnabled = true
+	ctx := entry.Ctx
+	rawCDPID := entry.CDPID
+	tm.mu.Unlock()
+
+	tm.setupConsoleCapture(ctx, rawCDPID)
 }
 
 func executionContextSource(ctx *runtime.ExecutionContextDescription) string {

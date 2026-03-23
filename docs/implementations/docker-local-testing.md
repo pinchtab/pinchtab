@@ -55,9 +55,6 @@ Create a local config file, for example `./tmp/config.json`:
     "bind": "0.0.0.0",
     "port": "9867",
     "token": "local-test-token"
-  },
-  "browser": {
-    "extraFlags": "--no-sandbox --disable-gpu"
   }
 }
 ```
@@ -113,16 +110,12 @@ docker exec pinchtab sh -lc 'cat /data/.config/pinchtab/config.json'
 
 ## Current Caveat
 
-The development Docker path may still need explicit Chrome flags on some hosts.
+The Docker runtime path owns `--no-sandbox` compatibility now. Do not put it in `browser.extraFlags`.
 
-If Chromium fails to launch in the local development image, add:
+If Chromium still fails to launch in an unusual Linux container environment, set:
 
-```json
-{
-  "browser": {
-    "extraFlags": "--no-sandbox --disable-gpu"
-  }
-}
+```bash
+PINCHTAB_CHROME_NO_SANDBOX=1
 ```
 
-The release image path backfills those flags into the managed config automatically.
+Use that environment variable instead of saving `--no-sandbox` into config.

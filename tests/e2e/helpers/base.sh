@@ -92,6 +92,8 @@ wait_for_instance_ready() {
 }
 
 start_test() {
+  ASSERTIONS_PASSED=0
+  ASSERTIONS_FAILED=0
   if [ -n "${CURRENT_SCENARIO_FILE}" ]; then
     CURRENT_TEST="[${CURRENT_SCENARIO_FILE}] $1"
   else
@@ -111,7 +113,7 @@ end_test() {
     TEST_RESULTS+=("✅ ${CURRENT_TEST}|${duration}ms|passed")
     ((TESTS_PASSED++)) || true
   else
-    echo -e "${RED}✗ ${CURRENT_TEST} failed${NC} ${MUTED}(${duration}ms)${NC}\n"
+    echo -e "${RED}✗ ${CURRENT_TEST} failed${NC} ${MUTED}(${duration}ms, failed assertions: ${ASSERTIONS_FAILED})${NC}\n"
     TEST_RESULTS+=("❌ ${CURRENT_TEST}|${duration}ms|failed")
     ((TESTS_FAILED++)) || true
   fi

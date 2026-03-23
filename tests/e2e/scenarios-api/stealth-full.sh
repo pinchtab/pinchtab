@@ -24,6 +24,7 @@ run_stealth_level_matrix() {
 
   ORIG_URL="$E2E_SERVER"
   E2E_SERVER="$MATRIX_URL"
+  MATRIX_STATUS=""
   echo -e "${BLUE}Testing stealth level: ${STEALTH_LEVEL}${NC}\n"
 
   start_test "stealth-levels: navigate to test page"
@@ -34,6 +35,7 @@ run_stealth_level_matrix() {
 
   start_test "stealth-levels: status reports configured level"
   pt_get /stealth/status
+  MATRIX_STATUS="$RESULT"
   assert_json_eq "$RESULT" '.level' "$STEALTH_LEVEL" "status level matches instance"
   assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
   assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
@@ -65,35 +67,32 @@ run_stealth_level_matrix() {
   pt_get /stealth/status
   if [ "$STEALTH_LEVEL" = "light" ]; then
     assert_json_eq "$RESULT" '.capabilities.userAgentData' 'false' "status keeps userAgentData disabled at light"
+    assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "status keeps iframe isolation disabled at light"
+    assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at light"
+    assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at light"
+    assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "status keeps native Function.prototype.toString at light"
   else
     assert_json_eq "$RESULT" '.capabilities.userAgentData' 'true' "status enables userAgentData at medium+"
+    if [ "$STEALTH_LEVEL" = "medium" ]; then
+      assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'true' "status enables iframe isolation at medium"
+    else
+      assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "status keeps iframe isolation disabled at full"
+    fi
+    assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium+"
+    assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium+"
+    assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "status keeps native Function.prototype.toString at medium+"
   fi
+  assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "status reports locale coherence"
+  assert_json_eq "$RESULT" '.capabilities.errorPrepareStackTraceNative' 'true' "status reports native Error.prepareStackTrace semantics"
+  assert_json_eq "$RESULT" '.capabilities.navigatorOverridesAbsent' 'true' "status reports no navigator own-property overrides"
   end_test
 
   start_test "stealth-levels: [medium] chrome.runtime.connect exists"
   pt_post /evaluate '{"expression":"typeof window.chrome.runtime.connect === \"function\""}'
-  if [ "$STEALTH_LEVEL" = "light" ]; then
-    assert_json_eq "$RESULT" '.result' 'false' "connect not spoofed at light"
+  if [ "$STEALTH_LEVEL" = "medium" ]; then
+    assert_json_eq "$RESULT" '.result' 'true' "connect exists at medium"
   else
-    assert_json_eq "$RESULT" '.result' 'true' "connect exists at medium+"
-  fi
-  end_test
-
-  start_test "stealth-levels: [medium] chrome.csi exists"
-  pt_post /evaluate '{"expression":"typeof window.chrome.csi === \"function\""}'
-  if [ "$STEALTH_LEVEL" = "light" ]; then
-    assert_json_eq "$RESULT" '.result' 'false' "csi not spoofed at light"
-  else
-    assert_json_eq "$RESULT" '.result' 'true' "csi exists at medium+"
-  fi
-  end_test
-
-  start_test "stealth-levels: [medium] chrome.loadTimes exists"
-  pt_post /evaluate '{"expression":"typeof window.chrome.loadTimes === \"function\""}'
-  if [ "$STEALTH_LEVEL" = "light" ]; then
-    assert_json_eq "$RESULT" '.result' 'false' "loadTimes not spoofed at light"
-  else
-    assert_json_eq "$RESULT" '.result' 'true' "loadTimes exists at medium+"
+    assert_json_eq "$RESULT" '.result' 'false' "connect remains absent outside medium"
   fi
   end_test
 
@@ -145,14 +144,227 @@ run_stealth_level_matrix() {
 
   if [ "$STEALTH_LEVEL" = "light" ]; then
     assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at light"
+    assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains absent at light"
+    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at light"
+    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "false" "native-looking toString masking remains absent at light"
+  elif [ "$STEALTH_LEVEL" = "medium" ]; then
+    assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "true" "connect present at medium"
+    assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "true" "iframe isolation present at medium"
+    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at medium"
+    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "false" "native-looking toString masking remains absent at medium"
   else
-    assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "true" "connect present at medium+"
+    assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "false" "native-looking toString masking remains absent at full"
   fi
+  assert_eval_poll "window.__stealthCapabilities.functionToStringNative" "true" "Function.prototype.toString remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.webdriverDescriptorNativeLike" "true" "webdriver descriptor getter stays native-like"
+  assert_eval_poll "window.__stealthCapabilities.canPlayTypeNativeLike" "true" "canPlayType remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.canvasToDataURLNativeLike" "true" "canvas toDataURL remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.canvasToBlobNativeLike" "true" "canvas toBlob remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.canvasGetImageDataNativeLike" "true" "canvas getImageData remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.canvasMeasureTextNativeLike" "true" "canvas measureText remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.canvasTransparentPixelPreserved" "true" "transparent canvas pixels stay untouched"
+  assert_eval_poll "window.__stealthCapabilities.webglGetParameterNativeLike" "true" "WebGL getParameter remains native-like"
+  assert_eval_poll "window.__stealthCapabilities.rtcPeerConnectionNativeLike" "true" "RTCPeerConnection stays native-like"
+  assert_eval_poll "window.__stealthCapabilities.audioContextCreateOscillatorNativeLike" "true" "AudioContext.createOscillator stays native-like"
+  assert_eval_poll "window.__stealthCapabilities.getComputedStyleNameNative" "true" "getComputedStyle keeps its native name"
+  assert_eval_poll "window.__stealthCapabilities.matchMediaNameNative" "true" "matchMedia keeps its native name"
+  assert_eval_poll "window.__stealthCapabilities.timeZoneDateCoherent" "true" "resolved timezone matches local Date clock"
+  assert_eval_poll "window.__stealthCapabilities.timeZoneOffsetSane" "true" "timezone offset stays in a sane range"
+  assert_eval_poll "window.__stealthCapabilities.intlLocaleCoherent" "true" "Intl locale family stays coherent"
+  assert_eval_poll "window.__stealthCapabilities.intlDateTimeLocaleCoherent" "true" "Intl.DateTimeFormat locale matches navigator.language"
+  assert_eval_poll "window.__stealthCapabilities.intlNumberLocaleCoherent" "true" "Intl.NumberFormat locale matches navigator.language"
+  assert_eval_poll "window.__stealthCapabilities.errorPrepareStackTraceNative" "true" "Error.prepareStackTrace is not trapped"
+  assert_eval_poll "window.__stealthCapabilities.navigatorOverridesAbsent" "true" "navigator keeps core properties off the instance"
+  assert_eval_poll "window.__stealthCapabilities.userAgentVersionCoherent" "true" "appVersion aligns with the UA version"
+  assert_eval_poll "window.__stealthCapabilities.userAgentDataBrandMajorCoherent" "true" "userAgentData brand major matches UA major"
+  assert_eval_poll "window.__stealthCapabilities.userAgentDataVersionCoherent" "true" "userAgentData versions align with UA major"
+  assert_eval_poll "window.__stealthCapabilities.userAgentDataFullVersionCoherent" "true" "userAgentData full version aligns with the UA version"
 
   if [ "$STEALTH_LEVEL" = "full" ]; then
+    assert_eval_poll "window.__stealthCapabilities.getComputedStyleNativeLike" "true" "getComputedStyle remains native-like at full"
+    assert_eval_poll "window.__stealthCapabilities.matchMediaNativeLike" "true" "matchMedia remains native-like at full"
     assert_eval_poll "window.__stealthCapabilities.pluginObjectSemantics" "true" "plugin semantics still coherent at full"
+    assert_eval_poll "window.__stealthCapabilities.webglRendererNoSwiftShader" "true" "WebGL renderer avoids SwiftShader at full"
+    assert_eval_poll "window.__stealthCapabilities.webglRendererPlatformCoherent" "true" "WebGL renderer stays coherent with platform at full"
+    assert_eval_poll "window.__stealthCapabilities.systemColorsResolved" "true" "system colors resolve cleanly at full"
+    assert_eval_poll "window.__stealthCapabilities.screenYDefined" "true" "screenY/screenTop defined at full"
   fi
   assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax present in capability fixture"
+  assert_eval_poll "window.__stealthCapabilities.devicePixelRatioPositive" "true" "devicePixelRatio stays positive"
+  assert_eval_poll "window.__stealthCapabilities.screenAvailCoherent" "true" "available screen stays within screen bounds"
+  assert_eval_poll "window.__stealthCapabilities.devtoolsFormattersAbsentByDefault" "true" "page starts without preinstalled devtools formatters"
+  end_test
+
+  start_test "stealth-levels: created tab inherits stealth contract"
+  base_status=""
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
+  assert_ok "navigate baseline capability tab"
+  base_tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  if [ -n "$base_tab_id" ]; then
+    pt_get "/stealth/status?tabId=${base_tab_id}"
+    base_status="$RESULT"
+    echo "$base_status" | jq -e '.scriptHash and .level' >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+      echo -e "  ${GREEN}✓${NC} baseline tab exposes stealth status"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} baseline tab missing stealth status fields"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+  else
+    echo -e "  ${RED}✗${NC} baseline capability tab missing tabId"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\",\"newTab\":true}"
+  assert_ok "navigate created capability tab"
+  sleep 1
+  created_tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  if [ -n "$created_tab_id" ] && [ -n "$base_status" ]; then
+    pt_get "/stealth/status?tabId=${created_tab_id}"
+    created_status="$RESULT"
+
+    base_level=$(echo "$base_status" | jq -r '.level // empty')
+    created_level=$(echo "$created_status" | jq -r '.level // empty')
+    if [ "$created_level" = "$base_level" ] && [ -n "$created_level" ]; then
+      echo -e "  ${GREEN}✓${NC} created tab keeps same stealth level"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} created tab level drifted (${created_level} vs ${base_level})"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+
+    base_hash=$(echo "$base_status" | jq -r '.scriptHash // empty')
+    created_hash=$(echo "$created_status" | jq -r '.scriptHash // empty')
+    if [ "$created_hash" = "$base_hash" ] && [ -n "$created_hash" ]; then
+      echo -e "  ${GREEN}✓${NC} created tab keeps same script hash"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} created tab script hash drifted (${created_hash} vs ${base_hash})"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+
+    base_launch_mode=$(echo "$base_status" | jq -r '.launchMode // empty')
+    created_launch_mode=$(echo "$created_status" | jq -r '.launchMode // empty')
+    if [ "$created_launch_mode" = "$base_launch_mode" ] && [ -n "$created_launch_mode" ]; then
+      echo -e "  ${GREEN}✓${NC} created tab keeps same launch mode"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} created tab launch mode drifted (${created_launch_mode} vs ${base_launch_mode})"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+
+    pt_post "/tabs/${created_tab_id}/evaluate" '{"expression":"!!window.__stealthCapabilities && window.__stealthCapabilities.webdriverDescriptorNativeLike && window.__stealthCapabilities.userAgentVersionCoherent"}'
+    assert_json_eq "$RESULT" '.result' 'true' "created tab exposes the same capability fixture contract"
+  else
+    echo -e "  ${RED}✗${NC} created capability tab missing tabId or baseline status"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+  end_test
+
+  start_test "stealth-levels: restored tab keeps stealth contract"
+  restore_profile_name="stealth-restore-${STEALTH_LEVEL}-$$-$(date +%s)"
+  restore_profile_id=""
+  restore_instance_id=""
+  matrix_hash=$(echo "$MATRIX_STATUS" | jq -r '.scriptHash // empty')
+  matrix_launch_mode=$(echo "$MATRIX_STATUS" | jq -r '.launchMode // empty')
+
+  pt_post /profiles "{\"name\":\"${restore_profile_name}\"}"
+  assert_ok "create restore profile"
+  restore_profile_id=$(echo "$RESULT" | jq -r '.id // empty')
+
+  if [ -n "$restore_profile_id" ]; then
+    pt_post "/profiles/${restore_profile_id}/start" '{"headless":true}'
+    assert_http_status "201" "start restore profile instance"
+    restore_instance_id=$(echo "$RESULT" | jq -r '.id // empty')
+
+    if [ -n "$restore_instance_id" ] && wait_for_orchestrator_instance_status "${E2E_SERVER}" "${restore_instance_id}" "running" 30; then
+      echo -e "  ${GREEN}✓${NC} restore profile instance reached running"
+      ((ASSERTIONS_PASSED++)) || true
+      pt_post "/instances/${restore_instance_id}/tabs/open" "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
+      assert_ok "open tab on restore profile instance"
+      sleep 1
+
+      pt_post "/profiles/${restore_profile_id}/stop" '{}'
+      assert_ok "stop restore profile instance"
+      wait_for_instances_gone "${E2E_SERVER}" 15 "${restore_instance_id}" || true
+
+      pt_post "/profiles/${restore_profile_id}/start" '{"headless":true}'
+      assert_http_status "201" "restart restore profile instance"
+      restore_instance_id=$(echo "$RESULT" | jq -r '.id // empty')
+
+      if [ -n "$restore_instance_id" ] && wait_for_orchestrator_instance_status "${E2E_SERVER}" "${restore_instance_id}" "running" 30; then
+        restored_tab_id=$(poll_instance_tab_id_by_url "${restore_instance_id}" "${FIXTURES_URL}/stealth-capabilities.html" 30 0.5)
+        if [ -n "${restored_tab_id:-}" ]; then
+          echo -e "  ${GREEN}✓${NC} restored tab reappeared after restart"
+          ((ASSERTIONS_PASSED++)) || true
+          pt_get "/stealth/status?tabId=${restored_tab_id}"
+          restored_status="$RESULT"
+
+          restored_level=$(echo "$restored_status" | jq -r '.level // empty')
+          restored_hash=$(echo "$restored_status" | jq -r '.scriptHash // empty')
+          restored_launch_mode=$(echo "$restored_status" | jq -r '.launchMode // empty')
+
+          if [ "$restored_level" = "$STEALTH_LEVEL" ] && [ -n "$restored_level" ]; then
+            echo -e "  ${GREEN}✓${NC} restored tab keeps same stealth level"
+            ((ASSERTIONS_PASSED++)) || true
+          else
+            echo -e "  ${RED}✗${NC} restored tab level drifted (${restored_level} vs ${STEALTH_LEVEL})"
+            ((ASSERTIONS_FAILED++)) || true
+          fi
+
+          if [ "$restored_hash" = "$matrix_hash" ] && [ -n "$restored_hash" ]; then
+            echo -e "  ${GREEN}✓${NC} restored tab keeps same script hash"
+            ((ASSERTIONS_PASSED++)) || true
+          else
+            echo -e "  ${RED}✗${NC} restored tab script hash drifted (${restored_hash} vs ${matrix_hash})"
+            ((ASSERTIONS_FAILED++)) || true
+          fi
+
+          if [ "$restored_launch_mode" = "$matrix_launch_mode" ] && [ -n "$restored_launch_mode" ]; then
+            echo -e "  ${GREEN}✓${NC} restored tab keeps same launch mode"
+            ((ASSERTIONS_PASSED++)) || true
+          else
+            echo -e "  ${RED}✗${NC} restored tab launch mode drifted (${restored_launch_mode} vs ${matrix_launch_mode})"
+            ((ASSERTIONS_FAILED++)) || true
+          fi
+
+          assert_eval_poll "!!window.__stealthCapabilities && window.__stealthCapabilities.webdriverDescriptorNativeLike && window.__stealthCapabilities.userAgentVersionCoherent" "true" "restored tab exposes the same capability fixture contract" 10 0.5 "${restored_tab_id}"
+        else
+          echo -e "  ${RED}✗${NC} restored tab did not reappear after restart"
+          ((ASSERTIONS_FAILED++)) || true
+        fi
+      else
+        echo -e "  ${RED}✗${NC} restore profile instance failed to restart"
+        ((ASSERTIONS_FAILED++)) || true
+      fi
+    else
+      echo -e "  ${RED}✗${NC} restore profile instance failed to reach running"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
+
+    if [ -n "$restore_instance_id" ]; then
+      pt_post "/profiles/${restore_profile_id}/stop" '{}' >/dev/null 2>&1 || true
+    fi
+    pt_delete "/profiles/${restore_profile_id}" >/dev/null 2>&1 || true
+  else
+    echo -e "  ${RED}✗${NC} restore profile creation did not return an id"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+  end_test
+
+  start_test "stealth-levels: local devtools probe stays quiet"
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-devtools-probe.html\"}"
+  assert_ok "navigate to devtools probe fixture"
+  sleep 2
+  assert_eval_poll "!!window.__stealthDevtoolsProbe && window.__stealthDevtoolsProbe.ready" "true" "devtools probe report ready"
+  assert_eval_poll "window.__stealthDevtoolsProbe.initialFormattersLen" "0" "page starts without preinstalled devtools formatters"
+  assert_eval_poll "window.__stealthDevtoolsProbe.formatterCalled" "false" "console formatter probe stays untouched"
+  assert_eval_poll "window.__stealthDevtoolsProbe.getterCalled" "false" "console getter probe stays untouched"
+  assert_eval_poll "window.__stealthDevtoolsProbe.stackGetterCalls <= 1" "true" "error stack getter stays within baseline console access"
   end_test
 
   start_test "stealth-levels: worker parity fixture stays coherent"
@@ -167,6 +379,9 @@ run_stealth_level_matrix() {
   end_test
 
   start_test "stealth-levels: comprehensive score at ${STEALTH_LEVEL} level"
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/bot-detect.html\"}"
+  assert_ok "navigate back to bot-detect fixture"
+  sleep 1
   pt_post /evaluate '{"expression":"JSON.stringify(window.__botDetectScore || {})"}'
   score_json=$(echo "$RESULT" | jq -r '.result // "{}"')
   critical_passed=$(echo "$score_json" | jq -r '.critical // 0')
@@ -186,14 +401,34 @@ run_stealth_level_matrix() {
       ;;
   esac
 
-  echo -e "  ${GREEN}✓${NC} score meets ${STEALTH_LEVEL} level expectations"
+  if [ "$ASSERTIONS_FAILED" -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} score meets ${STEALTH_LEVEL} level expectations"
+  else
+    echo -e "  ${RED}✗${NC} score below ${STEALTH_LEVEL} level expectations"
+  fi
   end_test
 
   E2E_SERVER="$ORIG_URL"
 }
 
 if [ "${STEALTH_MATRIX:-0}" = "1" ]; then
-  run_stealth_level_matrix
+  matrix_levels=()
+  if [ -n "${STEALTH_LEVEL:-}" ]; then
+    matrix_levels=("${STEALTH_LEVEL}")
+  else
+    matrix_levels=(light medium full)
+  fi
+
+  original_level="${STEALTH_LEVEL:-}"
+  for matrix_level in "${matrix_levels[@]}"; do
+    STEALTH_LEVEL="${matrix_level}"
+    run_stealth_level_matrix
+  done
+  if [ -n "${original_level}" ]; then
+    STEALTH_LEVEL="${original_level}"
+  else
+    unset STEALTH_LEVEL
+  fi
   if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     print_summary
   fi
@@ -228,10 +463,10 @@ assert_json_eq "$RESULT" '.result' 'true' "hardwareConcurrency >= 2"
 
 end_test
 
-start_test "bot-detect-full: device memory exists"
+start_test "bot-detect-full: device memory shape acceptable"
 
-pt_post /evaluate '{"expression":"navigator.deviceMemory > 0"}'
-assert_json_eq "$RESULT" '.result' 'true' "deviceMemory > 0"
+pt_post /evaluate '{"expression":"navigator.deviceMemory === undefined || navigator.deviceMemory > 0"}'
+assert_json_eq "$RESULT" '.result' 'true' "deviceMemory is absent or > 0"
 
 end_test
 
@@ -281,16 +516,6 @@ if [ -n "$FULL_URL" ]; then
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/bot-detect.html\"}"
   assert_ok "navigate to bot-detect fixture (permissive full stealth)"
   sleep 1
-
-  end_test
-
-  start_test "bot-detect-full: permissive full legacy shims are present"
-
-  pt_post /evaluate '{"expression":"typeof window.chrome.csi === \"function\""}'
-  assert_json_eq "$RESULT" '.result' 'true' "chrome.csi exists"
-
-  pt_post /evaluate '{"expression":"typeof window.chrome.loadTimes === \"function\""}'
-  assert_json_eq "$RESULT" '.result' 'true' "chrome.loadTimes exists"
 
   end_test
 

@@ -52,7 +52,7 @@
   <pre id="raw"></pre>
 
   <script>
-    (function() {
+    (async function() {
       function safe(fn, fallback) {
         try {
           return fn();
@@ -61,22 +61,273 @@
         }
       }
 
-      function collect() {
+      async function safeAsync(fn, fallback) {
+        try {
+          return await fn();
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      async function probeIframeIsolation() {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.srcdoc = '<!doctype html><html><body>iframe probe</body></html>';
+        document.body.appendChild(iframe);
+
+        await new Promise((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          iframe.addEventListener('load', finish, { once: true });
+          setTimeout(finish, 150);
+        });
+
+        const childWindow = safe(() => iframe.contentWindow, null);
+        const childNavigator = childWindow ? childWindow.navigator : null;
+        const parentRuntime = window.chrome && window.chrome.runtime ? window.chrome.runtime : null;
+        const childRuntime = childWindow && childWindow.chrome && childWindow.chrome.runtime ? childWindow.chrome.runtime : null;
+        const parentUADataPlatform = safe(() => navigator.userAgentData && navigator.userAgentData.platform, '');
+        const childUADataPlatform = safe(() => childNavigator && childNavigator.userAgentData && childNavigator.userAgentData.platform, '');
+        const isolated = !!childWindow &&
+          !!childNavigator &&
+          childNavigator.platform === (navigator.platform || '') &&
+          (!parentUADataPlatform || childUADataPlatform === parentUADataPlatform) &&
+          childNavigator.maxTouchPoints === navigator.maxTouchPoints &&
+          !!childRuntime &&
+          !!parentRuntime &&
+          typeof parentRuntime.connect === 'function' &&
+          typeof parentRuntime.sendMessage === 'function' &&
+          typeof childRuntime.connect === 'function' &&
+          typeof childRuntime.sendMessage === 'function';
+
+        iframe.remove();
+        return isolated;
+      }
+
+      function probeStackSanitization() {
+        function __pinchtab_stack_probe__() {
+          return new Error('stack probe');
+        }
+
+        const error = __pinchtab_stack_probe__();
+        const stack = safe(() => String(error.stack || ''), '');
+        return {
+          sanitized: !/__pinchtab_stack_probe__/.test(stack),
+          stack
+        };
+      }
+
+      async function collect() {
+        const nativeLikeFunction = (fn) => {
+          if (typeof fn !== 'function') return false;
+          const source = safe(() => Function.prototype.toString.call(fn), '');
+          return /\[native code\]/.test(source);
+        };
+        const extractChromeFullVersion = (value) => {
+          const match = String(value || '').match(/Chrome\/([0-9.]+)/);
+          return match ? match[1] : '';
+        };
+        const extractChromeMajor = (value) => {
+          const match = String(value || '').match(/Chrome\/(\d+)/);
+          return match ? match[1] : '';
+        };
+        const now = new Date();
         const plugin0 = safe(() => navigator.plugins[0], null);
         const connection = navigator.connection || null;
         const connectionProto = connection ? Object.getPrototypeOf(connection) : null;
         const video = safe(() => document.createElement('video'), null);
         const uaData = navigator.userAgentData || null;
+        const uaDataHighEntropy = uaData && typeof uaData.getHighEntropyValues === 'function'
+          ? await safeAsync(() => uaData.getHighEntropyValues(['fullVersionList', 'uaFullVersion', 'platformVersion']), {})
+          : {};
         const uaDataPlatform = uaData ? uaData.platform : '';
         const navPlatform = navigator.platform || '';
         const pluginObjectTag = plugin0 ? Object.prototype.toString.call(plugin0) : '';
         const h264 = video ? video.canPlayType('video/mp4; codecs="avc1.42E01E"') : '';
         const vp9 = video ? video.canPlayType('video/webm; codecs="vp9"') : '';
+        const uaFullVersion = extractChromeFullVersion(navigator.userAgent || '');
+        const appVersionFull = extractChromeFullVersion(navigator.appVersion || '');
+        const uaMajorMatch = extractChromeMajor(navigator.userAgent || '');
+        const timeZone = safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '', '');
+        const timeZoneOffsetMinutes = safe(() => now.getTimezoneOffset(), NaN);
+        const timeZoneOffsetSane = Number.isInteger(timeZoneOffsetMinutes) && Math.abs(timeZoneOffsetMinutes) <= (14 * 60);
+        const localClock = {
+          year: String(now.getFullYear()).padStart(4, '0'),
+          month: String(now.getMonth() + 1).padStart(2, '0'),
+          day: String(now.getDate()).padStart(2, '0'),
+          hour: String(now.getHours()).padStart(2, '0'),
+          minute: String(now.getMinutes()).padStart(2, '0')
+        };
+        const zonedClock = safe(() => {
+          if (!timeZone) return null;
+          const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone,
+            hourCycle: 'h23',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }).formatToParts(now);
+          const out = {};
+          for (const part of parts) {
+            if (part.type !== 'literal') out[part.type] = part.value;
+          }
+          return out;
+        }, null);
+        const timeZoneDateCoherent = !!zonedClock &&
+          zonedClock.year === localClock.year &&
+          zonedClock.month === localClock.month &&
+          zonedClock.day === localClock.day &&
+          zonedClock.hour === localClock.hour &&
+          zonedClock.minute === localClock.minute;
+        const uaDataFullVersionList = safe(() => Array.isArray(uaDataHighEntropy.fullVersionList) ? uaDataHighEntropy.fullVersionList : [], []);
+        const uaDataFullVersion = safe(() => String(uaDataHighEntropy.uaFullVersion || ''), '');
+        const userAgentVersionCoherent = !uaFullVersion || !appVersionFull || uaFullVersion === appVersionFull;
+        const systemColorProbe = document.createElement('div');
+        systemColorProbe.style.color = 'CanvasText';
+        systemColorProbe.style.backgroundColor = 'Canvas';
+        systemColorProbe.style.borderTop = '1px solid ButtonText';
+        document.body.appendChild(systemColorProbe);
+        const systemColorStyle = safe(() => window.getComputedStyle(systemColorProbe), null);
+        const systemColorsResolved = !!systemColorStyle &&
+          /^rgb/.test(systemColorStyle.color || '') &&
+          /^rgb/.test(systemColorStyle.backgroundColor || '') &&
+          /^rgb/.test(systemColorStyle.borderTopColor || '');
+        systemColorProbe.remove();
+        const iframeIsolation = await probeIframeIsolation();
+        const stackProbe = probeStackSanitization();
+        const permissionsQueryToString = safe(() => Function.prototype.toString.call(navigator.permissions.query), '');
+        const runtimeConnectToString = safe(() => {
+          return window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function'
+            ? Function.prototype.toString.call(window.chrome.runtime.connect)
+            : '';
+        }, '');
+        const ownNav = safe(() => Object.getOwnPropertyNames(navigator).filter((name) => [
+          'plugins', 'mimeTypes', 'language', 'languages', 'platform', 'userAgentData', 'maxTouchPoints'
+        ].includes(name)), []);
+        const webdriverDescriptor = safe(() => {
+          const proto = Object.getPrototypeOf(navigator);
+          const descriptor = Object.getOwnPropertyDescriptor(proto, 'webdriver') || Object.getOwnPropertyDescriptor(navigator, 'webdriver');
+          if (!descriptor) return null;
+          return {
+            configurable: !!descriptor.configurable,
+            enumerable: !!descriptor.enumerable,
+            hasGetter: typeof descriptor.get === 'function',
+            getterString: descriptor.get ? Function.prototype.toString.call(descriptor.get) : ''
+          };
+        }, null);
+        const webdriverDescriptorNativeLike = !webdriverDescriptor ||
+          (!!webdriverDescriptor.hasGetter && /\[native code\]/.test(webdriverDescriptor.getterString || ''));
+        const functionToStringOwnNames = safe(() => Object.getOwnPropertyNames(Function.prototype.toString), []);
+        const functionToStringDescriptor = safe(() => Object.getOwnPropertyDescriptor(Function.prototype, 'toString'), null);
+        const functionToStringNative = safe(() => {
+          if (Function.prototype.toString.name !== 'toString') return false;
+          if (functionToStringOwnNames.some((name) => name !== 'length' && name !== 'name')) return false;
+          return !functionToStringDescriptor || functionToStringDescriptor.value === Function.prototype.toString;
+        }, false);
+        const intlLocaleValues = safe(() => {
+          const ctors = [
+            Intl.DateTimeFormat,
+            Intl.NumberFormat,
+            Intl.Collator,
+            Intl.PluralRules,
+            Intl.RelativeTimeFormat,
+            Intl.ListFormat,
+            Intl.DisplayNames,
+            Intl.Segmenter
+          ].filter((ctor) => typeof ctor === 'function');
+          return ctors.map((Ctor) => {
+            try {
+              const options = Ctor === Intl.DisplayNames
+                ? new Ctor(undefined, { type: 'language' }).resolvedOptions()
+                : new Ctor().resolvedOptions();
+              return options && options.locale ? String(options.locale) : '';
+            } catch (_) {
+              return '';
+            }
+          }).filter(Boolean);
+        }, []);
+        const intlDateTimeLocale = intlLocaleValues[0] || '';
+        const intlNumberLocale = intlLocaleValues[1] || '';
+        const primaryLanguage = String(navigator.language || '').toLowerCase();
+        const localeMatchesPrimary = (locale) => {
+          const lower = String(locale || '').toLowerCase();
+          return !lower || lower === primaryLanguage || lower.indexOf(primaryLanguage + '-') === 0 || primaryLanguage.indexOf(lower + '-') === 0;
+        };
+        const intlDateTimeLocaleCoherent = localeMatchesPrimary(intlDateTimeLocale);
+        const intlNumberLocaleCoherent = localeMatchesPrimary(intlNumberLocale);
+        const intlLocaleCoherent = intlLocaleValues.every(localeMatchesPrimary);
+        const prepareStackTraceDescriptor = safe(() => Object.getOwnPropertyDescriptor(Error, 'prepareStackTrace'), null);
+        const uaDataBrands = safe(() => uaData ? uaData.brands || [] : [], []);
+        const userAgentDataBrandMajorCoherent = !uaDataBrands.length || !uaMajorMatch || uaDataBrands.some((brand) => {
+          if (!brand || (brand.brand !== 'Google Chrome' && brand.brand !== 'Chromium')) return false;
+          return String(brand.version || '') === uaMajorMatch;
+        });
+        const userAgentDataVersionCoherent = userAgentDataBrandMajorCoherent;
+        const userAgentDataFullVersionCoherent = !uaData || !uaFullVersion ||
+          (!uaDataFullVersion && !uaDataFullVersionList.length) ||
+          uaDataFullVersion === uaFullVersion ||
+          uaDataFullVersionList.some((brand) => (
+            brand &&
+            (brand.brand === 'Google Chrome' || brand.brand === 'Chromium') &&
+            String(brand.version || '') === uaFullVersion
+          ));
+        const blankCanvas = safe(() => document.createElement('canvas'), null);
+        if (blankCanvas) {
+          blankCanvas.width = 2;
+          blankCanvas.height = 2;
+        }
+        const blankCtx = blankCanvas ? safe(() => blankCanvas.getContext('2d'), null) : null;
+        const transparentPixel = blankCtx ? safe(() => Array.from(blankCtx.getImageData(0, 0, 1, 1).data), []) : [];
+        const canvasTransparentPixelPreserved = transparentPixel.length === 4 && transparentPixel.every((value) => value === 0);
+        const canvasToDataURLNativeLike = nativeLikeFunction(HTMLCanvasElement.prototype.toDataURL);
+        const canvasToBlobNativeLike = typeof HTMLCanvasElement.prototype.toBlob !== 'function' || nativeLikeFunction(HTMLCanvasElement.prototype.toBlob);
+        const canvasGetImageDataNativeLike = nativeLikeFunction(CanvasRenderingContext2D.prototype.getImageData);
+        const canvasMeasureTextNativeLike = nativeLikeFunction(CanvasRenderingContext2D.prototype.measureText);
+        const webglGetParameterNativeLike = safe(() => {
+          if (typeof WebGLRenderingContext === 'undefined') return true;
+          return nativeLikeFunction(WebGLRenderingContext.prototype.getParameter);
+        }, false);
+        const rtcPeerConnectionNativeLike = safe(() => {
+          if (typeof window.RTCPeerConnection !== 'function') return true;
+          return nativeLikeFunction(window.RTCPeerConnection);
+        }, false);
+        const audioContextCreateOscillatorNativeLike = safe(() => {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass || !AudioContextClass.prototype || typeof AudioContextClass.prototype.createOscillator !== 'function') return true;
+          return nativeLikeFunction(AudioContextClass.prototype.createOscillator);
+        }, false);
+        const glCanvas = safe(() => document.createElement('canvas'), null);
+        const gl = glCanvas ? safe(() => glCanvas.getContext('webgl') || glCanvas.getContext('experimental-webgl'), null) : null;
+        const webglRendererProbe = safe(() => {
+          const debugInfo = gl && gl.getExtension('WEBGL_debug_renderer_info');
+          const renderer = debugInfo ? String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '') : '';
+          const lower = renderer.toLowerCase();
+          const platform = navigator.platform || '';
+          return {
+            available: !!debugInfo,
+            renderer,
+            noSwiftShader: !debugInfo || !lower.includes('swiftshader'),
+            platformCoherent: !debugInfo || (
+              (platform === 'MacIntel' && !lower.includes('direct3d')) ||
+              (platform.includes('Linux') && !lower.includes('direct3d')) ||
+              (platform.includes('Win') && lower.includes('direct3d'))
+            )
+          };
+        }, { available: false, renderer: '', noSwiftShader: true, platformCoherent: true });
+        const devtoolsFormattersAbsentByDefault = !Array.isArray(window.devtoolsFormatters) || window.devtoolsFormatters.length === 0;
 
         return {
           webdriverValue: safe(() => navigator.webdriver, 'error'),
           webdriverNotTrue: safe(() => navigator.webdriver !== true, false),
           webdriverNativeLike: safe(() => !('webdriver' in navigator) || navigator.webdriver === false, false),
+          webdriverDescriptorNativeLike,
+          webdriverDescriptor,
           pluginArray: safe(() => navigator.plugins instanceof PluginArray, false),
           pluginsPresent: safe(() => navigator.plugins.length > 0, false),
           pluginObjectSemantics: pluginObjectTag === '[object Plugin]',
@@ -84,7 +335,13 @@
           batteryApi: typeof navigator.getBattery === 'function',
           outerDimensions: window.outerWidth > 0 && window.outerHeight > 0,
           screenWindowCoherent: screen.width >= window.outerWidth && screen.height >= window.outerHeight,
+          screenAvailCoherent: screen.availWidth <= screen.width && screen.availHeight <= screen.height,
+          devicePixelRatioPositive: window.devicePixelRatio > 0,
+          screenYDefined: typeof window.screenY === 'number' && typeof window.screenTop === 'number',
           userAgent: navigator.userAgent,
+          userAgentFullVersion: uaFullVersion,
+          appVersionFull,
+          userAgentVersionCoherent,
           navigatorPlatform: navPlatform,
           userAgentData: !!(uaData && uaData.brands),
           userAgentDataPlatform: uaDataPlatform,
@@ -95,40 +352,122 @@
             if (uaDataPlatform === 'Linux') return navPlatform.indexOf('Linux') >= 0;
             return false;
           }, false),
+          userAgentDataFullVersion: uaDataFullVersion,
+          userAgentDataFullVersionList: uaDataFullVersionList,
+          userAgentDataFullVersionCoherent,
           chromeRuntime: !!(window.chrome && window.chrome.runtime),
           chromeRuntimeConnect: !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function'),
           chromeRuntimeSendMessage: !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.sendMessage === 'function'),
+          chromeRuntimeConnectNativeLike: !(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function') || nativeLikeFunction(window.chrome.runtime.connect),
           chromeApp: !!(window.chrome && window.chrome.app),
           chromeCsi: !!(window.chrome && typeof window.chrome.csi === 'function'),
           chromeLoadTimes: !!(window.chrome && typeof window.chrome.loadTimes === 'function'),
+          canPlayTypeNativeLike: nativeLikeFunction(HTMLMediaElement.prototype.canPlayType),
+          canvasToDataURLNativeLike,
+          canvasToBlobNativeLike,
+          canvasGetImageDataNativeLike,
+          canvasMeasureTextNativeLike,
+          canvasTransparentPixelPreserved,
+          webglGetParameterNativeLike,
+          rtcPeerConnectionNativeLike,
+          audioContextCreateOscillatorNativeLike,
+          webglRendererNoSwiftShader: webglRendererProbe.noSwiftShader,
+          webglRendererPlatformCoherent: webglRendererProbe.platformCoherent,
+          webglRenderer: webglRendererProbe.renderer,
+          getComputedStyleNativeLike: nativeLikeFunction(window.getComputedStyle),
+          getComputedStyleNameNative: safe(() => window.getComputedStyle.name === 'getComputedStyle', false),
+          matchMediaNativeLike: nativeLikeFunction(window.matchMedia),
+          matchMediaNameNative: typeof window.matchMedia !== 'function' || safe(() => window.matchMedia.name === 'matchMedia', false),
           maxTouchPointsDefined: typeof navigator.maxTouchPoints !== 'undefined',
+          iframeIsolation,
+          errorStackSanitized: false,
+          stackProbe: stackProbe.stack,
+          functionToStringMasked: false,
+          functionToStringNative,
+          functionToStringName: safe(() => Function.prototype.toString.name, ''),
+          functionToStringOwnNames,
+          permissionsQueryToString,
+          runtimeConnectToString,
+          navigatorOverridesAbsent: ownNav.length === 0,
+          navigatorOverrideNames: ownNav,
+          timeZone,
+          timeZoneOffsetMinutes,
+          timeZoneOffsetSane,
+          timeZoneDateCoherent,
+          intlDateTimeLocaleCoherent,
+          intlDateTimeLocale,
+          intlNumberLocaleCoherent,
+          intlNumberLocale,
+          intlLocaleCoherent,
+          intlLocaleValues,
+          errorPrepareStackTraceNative: !prepareStackTraceDescriptor,
+          devtoolsFormattersAbsentByDefault,
+          userAgentDataBrandMajorCoherent,
+          userAgentDataBrands: uaDataBrands,
+          userAgentDataVersionCoherent,
           downlinkMaxPresent: !!(connection && (('downlinkMax' in connection) || (connectionProto && 'downlinkMax' in connectionProto))),
           h264,
           vp9,
-          prefersColorSchemeLight: safe(() => window.matchMedia('(prefers-color-scheme: light)').matches, false)
+          prefersColorSchemeLight: safe(() => window.matchMedia('(prefers-color-scheme: light)').matches, false),
+          systemColorsResolved
         };
       }
 
-      const capabilities = collect();
+      const capabilities = await collect();
       window.__stealthCapabilities = capabilities;
 
       const rows = [
         ['webdriverNotTrue', capabilities.webdriverNotTrue, capabilities.webdriverValue],
         ['webdriverNativeLike', capabilities.webdriverNativeLike, String(capabilities.webdriverNativeLike)],
+        ['webdriverDescriptorNativeLike', capabilities.webdriverDescriptorNativeLike, JSON.stringify(capabilities.webdriverDescriptor)],
         ['pluginArray', capabilities.pluginArray, String(capabilities.pluginArray)],
         ['pluginsPresent', capabilities.pluginsPresent, String(navigator.plugins.length)],
         ['pluginObjectSemantics', capabilities.pluginObjectSemantics, capabilities.pluginObjectTag],
         ['batteryApi', capabilities.batteryApi, String(capabilities.batteryApi)],
         ['outerDimensions', capabilities.outerDimensions, window.outerWidth + 'x' + window.outerHeight],
         ['screenWindowCoherent', capabilities.screenWindowCoherent, screen.width + 'x' + screen.height],
+        ['screenAvailCoherent', capabilities.screenAvailCoherent, screen.availWidth + 'x' + screen.availHeight],
+        ['devicePixelRatioPositive', capabilities.devicePixelRatioPositive, String(window.devicePixelRatio)],
+        ['screenYDefined', capabilities.screenYDefined, String(window.screenY) + ' / ' + String(window.screenTop)],
+        ['timeZoneDateCoherent', capabilities.timeZoneDateCoherent, capabilities.timeZone + ' / ' + String(capabilities.timeZoneOffsetMinutes)],
+        ['timeZoneOffsetSane', capabilities.timeZoneOffsetSane, String(capabilities.timeZoneOffsetMinutes)],
+        ['userAgentVersionCoherent', capabilities.userAgentVersionCoherent, capabilities.userAgentFullVersion + ' / ' + capabilities.appVersionFull],
         ['userAgentData', capabilities.userAgentData, String(capabilities.userAgentData)],
         ['userAgentDataPlatformCoherent', capabilities.userAgentDataPlatformCoherent, capabilities.navigatorPlatform + ' / ' + capabilities.userAgentDataPlatform],
+        ['userAgentDataFullVersionCoherent', capabilities.userAgentDataFullVersionCoherent, capabilities.userAgentFullVersion + ' / ' + (capabilities.userAgentDataFullVersion || JSON.stringify(capabilities.userAgentDataFullVersionList))],
         ['chromeRuntimeConnect', capabilities.chromeRuntimeConnect, String(capabilities.chromeRuntimeConnect)],
         ['chromeRuntimeSendMessage', capabilities.chromeRuntimeSendMessage, String(capabilities.chromeRuntimeSendMessage)],
+        ['chromeRuntimeConnectNativeLike', capabilities.chromeRuntimeConnectNativeLike, capabilities.runtimeConnectToString || 'none'],
         ['chromeApp', capabilities.chromeApp, String(capabilities.chromeApp)],
+        ['canPlayTypeNativeLike', capabilities.canPlayTypeNativeLike, String(capabilities.canPlayTypeNativeLike)],
+        ['canvasToDataURLNativeLike', capabilities.canvasToDataURLNativeLike, String(capabilities.canvasToDataURLNativeLike)],
+        ['canvasToBlobNativeLike', capabilities.canvasToBlobNativeLike, String(capabilities.canvasToBlobNativeLike)],
+        ['canvasGetImageDataNativeLike', capabilities.canvasGetImageDataNativeLike, String(capabilities.canvasGetImageDataNativeLike)],
+        ['canvasMeasureTextNativeLike', capabilities.canvasMeasureTextNativeLike, String(capabilities.canvasMeasureTextNativeLike)],
+        ['canvasTransparentPixelPreserved', capabilities.canvasTransparentPixelPreserved, String(capabilities.canvasTransparentPixelPreserved)],
+        ['webglGetParameterNativeLike', capabilities.webglGetParameterNativeLike, String(capabilities.webglGetParameterNativeLike)],
+        ['rtcPeerConnectionNativeLike', capabilities.rtcPeerConnectionNativeLike, String(capabilities.rtcPeerConnectionNativeLike)],
+        ['audioContextCreateOscillatorNativeLike', capabilities.audioContextCreateOscillatorNativeLike, String(capabilities.audioContextCreateOscillatorNativeLike)],
+        ['webglRendererNoSwiftShader', capabilities.webglRendererNoSwiftShader, capabilities.webglRenderer || 'none'],
+        ['webglRendererPlatformCoherent', capabilities.webglRendererPlatformCoherent, capabilities.webglRenderer || 'none'],
+        ['getComputedStyleNativeLike', capabilities.getComputedStyleNativeLike, String(capabilities.getComputedStyleNativeLike)],
+        ['getComputedStyleNameNative', capabilities.getComputedStyleNameNative, window.getComputedStyle.name],
+        ['matchMediaNativeLike', capabilities.matchMediaNativeLike, String(capabilities.matchMediaNativeLike)],
+        ['matchMediaNameNative', capabilities.matchMediaNameNative, typeof window.matchMedia === 'function' ? window.matchMedia.name : 'absent'],
         ['maxTouchPointsDefined', capabilities.maxTouchPointsDefined, String(navigator.maxTouchPoints)],
+        ['iframeIsolation', capabilities.iframeIsolation, String(capabilities.iframeIsolation)],
+        ['navigatorOverridesAbsent', capabilities.navigatorOverridesAbsent, capabilities.navigatorOverrideNames.join(', ') || 'none'],
+        ['intlDateTimeLocaleCoherent', capabilities.intlDateTimeLocaleCoherent, capabilities.intlDateTimeLocale || 'none'],
+        ['intlNumberLocaleCoherent', capabilities.intlNumberLocaleCoherent, capabilities.intlNumberLocale || 'none'],
+        ['intlLocaleCoherent', capabilities.intlLocaleCoherent, capabilities.intlLocaleValues.join(', ') || 'none'],
+        ['errorPrepareStackTraceNative', capabilities.errorPrepareStackTraceNative, String(capabilities.errorPrepareStackTraceNative)],
+        ['functionToStringNative', capabilities.functionToStringNative, capabilities.functionToStringName + ' [' + capabilities.functionToStringOwnNames.join(', ') + ']'],
+        ['devtoolsFormattersAbsentByDefault', capabilities.devtoolsFormattersAbsentByDefault, String(capabilities.devtoolsFormattersAbsentByDefault)],
+        ['userAgentDataBrandMajorCoherent', capabilities.userAgentDataBrandMajorCoherent, JSON.stringify(capabilities.userAgentDataBrands)],
+        ['userAgentDataVersionCoherent', capabilities.userAgentDataVersionCoherent, capabilities.userAgent + ' / ' + capabilities.userAgentDataPlatform],
         ['downlinkMaxPresent', capabilities.downlinkMaxPresent, String(capabilities.downlinkMaxPresent)],
         ['prefersColorSchemeLight', capabilities.prefersColorSchemeLight, String(capabilities.prefersColorSchemeLight)],
+        ['systemColorsResolved', capabilities.systemColorsResolved, String(capabilities.systemColorsResolved)],
         ['videoCodecSummary', capabilities.h264 === 'probably' || capabilities.vp9 === 'probably', 'H264=' + capabilities.h264 + ' VP9=' + capabilities.vp9]
       ];
 

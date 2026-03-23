@@ -416,6 +416,60 @@ func TestValidateFileConfig_MultipleErrors(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_ChromeExtraFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		flags   string
+		wantErr bool
+		wantMsg string
+	}{
+		{
+			name:  "safe flags",
+			flags: "--disable-gpu --ash-no-nudges --disable-focus-on-load",
+		},
+		{
+			name:    "unsafe no sandbox",
+			flags:   "--no-sandbox",
+			wantErr: true,
+			wantMsg: "PINCHTAB_CHROME_NO_SANDBOX",
+		},
+		{
+			name:    "reserved user agent",
+			flags:   "--user-agent=PinchTab-Test/1.0",
+			wantErr: true,
+			wantMsg: "instanceDefaults.userAgent",
+		},
+		{
+			name:    "site isolation disabled",
+			flags:   "--disable-features=Translate,SitePerProcess",
+			wantErr: true,
+			wantMsg: "site isolation",
+		},
+		{
+			name:    "malformed token",
+			flags:   "disable-gpu",
+			wantErr: true,
+			wantMsg: "--name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				Browser: BrowserConfig{ChromeExtraFlags: tt.flags},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Fatalf("ChromeExtraFlags=%q: got error=%v, want %v (errs: %v)", tt.flags, hasErr, tt.wantErr, errs)
+			}
+			if tt.wantErr && !strings.Contains(errs[0].Error(), tt.wantMsg) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantMsg, errs[0])
+			}
+		})
+	}
+}
+
 func TestValidationError_Error(t *testing.T) {
 	err := ValidationError{
 		Field:   "server.port",

@@ -21,6 +21,13 @@ assert_json_eq "$RESULT" '.capabilities.webdriverNativeStrategy' 'true' "status 
 assert_json_eq "$RESULT" '.capabilities.downlinkMax' 'true' "status reports downlinkMax capability"
 assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
 assert_json_eq "$RESULT" '.flags.downlinkMaxFlag' 'true' "status reports downlinkMax launch flag"
+assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "light status keeps iframe isolation disabled"
+assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "light status keeps stack sanitization disabled"
+assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "light status keeps toString masking disabled"
+assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "light status keeps Function.prototype.toString native"
+assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "light status keeps Intl locale coherence"
+assert_json_eq "$RESULT" '.capabilities.errorPrepareStackTraceNative' 'true' "light status keeps Error.prepareStackTrace native"
+assert_json_eq "$RESULT" '.capabilities.navigatorOverridesAbsent' 'true' "light status avoids navigator own-property overrides"
 
 end_test
 
@@ -68,11 +75,50 @@ pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
 TAB_ID=$(get_tab_id)
 
-pt_post /fingerprint/rotate "{\"tabId\":\"${TAB_ID}\",\"os\":\"mac\"}"
+pt_post "/tabs/${TAB_ID}/evaluate" '{"expression":"JSON.stringify({userAgent:navigator.userAgent,platform:navigator.platform,language:navigator.language,viewportWidth:window.innerWidth,viewportHeight:window.innerHeight})"}'
+assert_ok "capture pre-rotate tab fingerprint"
+PRE_ROTATE_SURFACE=$(echo "$RESULT" | jq -r '.result // "{}"')
+PRE_ROTATE_UA=$(echo "$PRE_ROTATE_SURFACE" | jq -r '.userAgent // ""')
+PRE_ROTATE_PLATFORM=$(echo "$PRE_ROTATE_SURFACE" | jq -r '.platform // ""')
+PRE_ROTATE_LANGUAGE=$(echo "$PRE_ROTATE_SURFACE" | jq -r '.language // ""')
+
+pt_post /fingerprint/rotate "{\"tabId\":\"${TAB_ID}\",\"os\":\"windows\",\"screen\":\"1366x768\",\"language\":\"en-US\"}"
 assert_ok "fingerprint rotate on tab"
+ROTATE_FINGERPRINT_JSON=$(echo "$RESULT" | jq -c '.fingerprint // {}')
+ROTATE_USER_AGENT=$(echo "$ROTATE_FINGERPRINT_JSON" | jq -r '.userAgent // empty')
+ROTATE_PLATFORM=$(echo "$ROTATE_FINGERPRINT_JSON" | jq -r '.platform // empty')
+ROTATE_WIDTH=$(echo "$ROTATE_FINGERPRINT_JSON" | jq -r '.screenWidth // 0')
+ROTATE_HEIGHT=$(echo "$ROTATE_FINGERPRINT_JSON" | jq -r '.screenHeight // 0')
+ROTATE_LANGUAGE=$(echo "$ROTATE_FINGERPRINT_JSON" | jq -r '.language // empty')
 
 pt_get "/stealth/status?tabId=${TAB_ID}"
 assert_json_eq "$RESULT" '.tabOverrides.fingerprintRotateActive' 'true' "status reports fingerprint rotate overlay on tab"
+
+if [ -n "$ROTATE_USER_AGENT" ] && { [ "$PRE_ROTATE_UA" != "$ROTATE_USER_AGENT" ] || [ "$PRE_ROTATE_PLATFORM" != "$ROTATE_PLATFORM" ] || [ "$PRE_ROTATE_LANGUAGE" != "$ROTATE_LANGUAGE" ]; }; then
+  echo -e "  ${GREEN}✓${NC} fingerprint rotate changes tab persona"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} fingerprint rotate did not change tab persona"
+  echo -e "    ${MUTED}before:${NC} ua=${PRE_ROTATE_UA} platform=${PRE_ROTATE_PLATFORM} language=${PRE_ROTATE_LANGUAGE}"
+  echo -e "    ${MUTED}after:${NC}  ua=${ROTATE_USER_AGENT} platform=${ROTATE_PLATFORM} language=${ROTATE_LANGUAGE}"
+  ((ASSERTIONS_FAILED++)) || true
+fi
+
+assert_eval_poll "navigator.userAgent === $(jq -Rn --arg v "$ROTATE_USER_AGENT" '$v')" "true" "rotated tab userAgent matches fingerprint" 8 0.3 "$TAB_ID"
+assert_eval_poll "navigator.platform === $(jq -Rn --arg v "$ROTATE_PLATFORM" '$v')" "true" "rotated tab platform matches fingerprint" 8 0.3 "$TAB_ID"
+assert_eval_poll "navigator.language === $(jq -Rn --arg v "$ROTATE_LANGUAGE" '$v')" "true" "rotated tab language matches fingerprint" 8 0.3 "$TAB_ID"
+assert_eval_poll "window.innerWidth === ${ROTATE_WIDTH}" "true" "rotated tab viewport width matches fingerprint" 8 0.3 "$TAB_ID"
+assert_eval_poll "window.innerHeight === ${ROTATE_HEIGHT}" "true" "rotated tab viewport height matches fingerprint" 8 0.3 "$TAB_ID"
+
+pt_post "/tabs/${TAB_ID}/navigate" "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "navigate rotated tab"
+sleep 1
+
+assert_eval_poll "navigator.userAgent === $(jq -Rn --arg v "$ROTATE_USER_AGENT" '$v')" "true" "rotated userAgent persists across navigation" 8 0.3 "$TAB_ID"
+assert_eval_poll "navigator.platform === $(jq -Rn --arg v "$ROTATE_PLATFORM" '$v')" "true" "rotated platform persists across navigation" 8 0.3 "$TAB_ID"
+assert_eval_poll "navigator.language === $(jq -Rn --arg v "$ROTATE_LANGUAGE" '$v')" "true" "rotated language persists across navigation" 8 0.3 "$TAB_ID"
+assert_eval_poll "window.innerWidth === ${ROTATE_WIDTH}" "true" "rotated viewport width persists across navigation" 8 0.3 "$TAB_ID"
+assert_eval_poll "window.innerHeight === ${ROTATE_HEIGHT}" "true" "rotated viewport height persists across navigation" 8 0.3 "$TAB_ID"
 
 end_test
 
@@ -204,6 +250,13 @@ end_test
 start_test "stealth-capabilities: screen and window coherent"
 
 assert_eval_poll "window.__stealthCapabilities.screenWindowCoherent" "true" "screen and outer window are coherent"
+assert_eval_poll "window.__stealthCapabilities.screenAvailCoherent" "true" "available screen stays within screen bounds"
+
+end_test
+
+start_test "stealth-capabilities: devicePixelRatio positive"
+
+assert_eval_poll "window.__stealthCapabilities.devicePixelRatioPositive" "true" "devicePixelRatio stays positive"
 
 end_test
 
@@ -216,6 +269,95 @@ end_test
 start_test "stealth-capabilities: downlinkMax reported"
 
 assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax reported by capability fixture"
+
+end_test
+
+start_test "stealth-capabilities: medium-only iframe isolation absent at light"
+
+assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains disabled at light"
+
+end_test
+
+start_test "stealth-capabilities: native Function.prototype.toString preserved"
+
+assert_eval_poll "window.__stealthCapabilities.functionToStringNative" "true" "Function.prototype.toString remains native-like"
+assert_eval_poll "window.__stealthCapabilities.canPlayTypeNativeLike" "true" "canPlayType remains native-like"
+assert_eval_poll "window.__stealthCapabilities.getComputedStyleNameNative" "true" "getComputedStyle keeps its native name"
+assert_eval_poll "window.__stealthCapabilities.matchMediaNameNative" "true" "matchMedia keeps its native name"
+
+end_test
+
+start_test "stealth-capabilities: Intl locale stays coherent"
+
+assert_eval_poll "window.__stealthCapabilities.timeZoneDateCoherent" "true" "resolved timezone matches local Date clock"
+assert_eval_poll "window.__stealthCapabilities.timeZoneOffsetSane" "true" "timezone offset stays in a sane range"
+assert_eval_poll "window.__stealthCapabilities.intlLocaleCoherent" "true" "Intl locale family stays coherent"
+assert_eval_poll "window.__stealthCapabilities.intlDateTimeLocaleCoherent" "true" "Intl.DateTimeFormat locale matches navigator.language"
+assert_eval_poll "window.__stealthCapabilities.intlNumberLocaleCoherent" "true" "Intl.NumberFormat locale matches navigator.language"
+
+end_test
+
+start_test "stealth-capabilities: Error.prepareStackTrace remains native"
+
+assert_eval_poll "window.__stealthCapabilities.errorPrepareStackTraceNative" "true" "Error.prepareStackTrace is not trapped"
+
+end_test
+
+start_test "stealth-capabilities: navigator own-property overrides absent"
+
+assert_eval_poll "window.__stealthCapabilities.navigatorOverridesAbsent" "true" "navigator keeps core properties off the instance"
+
+end_test
+
+start_test "stealth-capabilities: userAgentData versions coherent"
+
+assert_eval_poll "window.__stealthCapabilities.userAgentVersionCoherent" "true" "appVersion aligns with the UA version"
+assert_eval_poll "window.__stealthCapabilities.userAgentDataBrandMajorCoherent" "true" "userAgentData brand major aligns with UA major"
+assert_eval_poll "window.__stealthCapabilities.userAgentDataVersionCoherent" "true" "userAgentData versions align with UA major"
+assert_eval_poll "window.__stealthCapabilities.userAgentDataFullVersionCoherent" "true" "userAgentData full version aligns with the UA version"
+
+end_test
+
+start_test "stealth-capabilities: canvas and WebGL probes stay low-noise"
+
+assert_eval_poll "window.__stealthCapabilities.canvasToDataURLNativeLike" "true" "canvas toDataURL remains native-like"
+assert_eval_poll "window.__stealthCapabilities.canvasGetImageDataNativeLike" "true" "canvas getImageData remains native-like"
+assert_eval_poll "window.__stealthCapabilities.canvasTransparentPixelPreserved" "true" "transparent canvas pixels stay untouched"
+assert_eval_poll "window.__stealthCapabilities.webglGetParameterNativeLike" "true" "WebGL getParameter remains native-like"
+
+end_test
+
+start_test "stealth-capabilities: webdriver descriptor remains native-like"
+
+assert_eval_poll "window.__stealthCapabilities.webdriverDescriptorNativeLike" "true" "webdriver descriptor getter stays native-like"
+
+end_test
+
+start_test "stealth-devtools-probe: navigate to local probe fixture"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-devtools-probe.html\"}"
+assert_ok "navigate to devtools probe fixture"
+sleep 2
+
+end_test
+
+start_test "stealth-devtools-probe: report ready"
+
+assert_eval_poll "!!window.__stealthDevtoolsProbe && window.__stealthDevtoolsProbe.ready" "true" "devtools probe report ready"
+
+end_test
+
+start_test "stealth-devtools-probe: formatter probe not triggered"
+
+assert_eval_poll "window.__stealthDevtoolsProbe.formatterCalled" "false" "console formatter probe stays untouched"
+assert_eval_poll "window.__stealthDevtoolsProbe.initialFormattersLen" "0" "page starts without preinstalled devtools formatters"
+
+end_test
+
+start_test "stealth-devtools-probe: getter probe not triggered"
+
+assert_eval_poll "window.__stealthDevtoolsProbe.getterCalled" "false" "console getter probe stays untouched"
+assert_eval_poll "window.__stealthDevtoolsProbe.stackGetterCalls <= 1" "true" "error stack getter stays within baseline console access"
 
 end_test
 

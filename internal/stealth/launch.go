@@ -12,9 +12,9 @@ type LaunchContract struct {
 }
 
 func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract {
-	ua := ""
+	persona := BrowserPersona{}
 	if cfg != nil {
-		ua = ResolveUserAgent(cfg.UserAgent, cfg.ChromeVersion)
+		persona = BuildPersona(cfg.UserAgent, cfg.ChromeVersion)
 	}
 
 	args := []string{
@@ -23,8 +23,11 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 		"--disable-blink-features=AutomationControlled",
 		"--enable-network-information-downlink-max",
 	}
-	if ua != "" {
-		args = append(args, "--user-agent="+ua)
+	if persona.UserAgent != "" {
+		args = append(args, "--user-agent="+persona.UserAgent)
+	}
+	if persona.Language != "" {
+		args = append(args, "--lang="+persona.Language)
 	}
 
 	return LaunchContract{
@@ -33,7 +36,8 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 			"automationControlledDisabled": true,
 			"enableAutomationFalse":        true,
 			"downlinkMaxFlag":              true,
-			"globalUserAgent":              ua != "",
+			"globalUserAgent":              persona.UserAgent != "",
+			"globalLanguage":               persona.Language != "",
 		},
 	}
 }

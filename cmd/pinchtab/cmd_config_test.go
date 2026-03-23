@@ -82,13 +82,13 @@ func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
 	})
 
 	output := captureStdout(t, func() {
-		rootCmd.SetArgs([]string{"config", "set", "browser.extraFlags", "--no-sandbox --disable-gpu"})
+		rootCmd.SetArgs([]string{"config", "set", "browser.extraFlags", "--disable-gpu --ash-no-nudges"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("Execute() error = %v", err)
 		}
 	})
 
-	if !strings.Contains(output, "Set browser.extraFlags = --no-sandbox --disable-gpu") {
+	if !strings.Contains(output, "Set browser.extraFlags = --disable-gpu --ash-no-nudges") {
 		t.Fatalf("expected success output, got %q", output)
 	}
 
@@ -96,8 +96,41 @@ func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFileConfig() error = %v", err)
 	}
-	if saved.Browser.ChromeExtraFlags != "--no-sandbox --disable-gpu" {
-		t.Fatalf("ChromeExtraFlags = %q, want %q", saved.Browser.ChromeExtraFlags, "--no-sandbox --disable-gpu")
+	if saved.Browser.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
+		t.Fatalf("ChromeExtraFlags = %q, want %q", saved.Browser.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	}
+}
+
+func TestConfigSetRejectsUnsafeChromeExtraFlags(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	fc := config.DefaultFileConfig()
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "set", "browser.extraFlags", "--no-sandbox --disable-gpu"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "browser.extraFlags") || !strings.Contains(output, "PINCHTAB_CHROME_NO_SANDBOX") {
+		t.Fatalf("expected unsafe flag warning, got %q", output)
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Browser.ChromeExtraFlags != "" {
+		t.Fatalf("ChromeExtraFlags = %q, want empty string after declining unsafe save", saved.Browser.ChromeExtraFlags)
 	}
 }
 

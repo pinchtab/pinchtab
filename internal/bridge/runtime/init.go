@@ -23,6 +23,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
+var (
+	runtimeGOOS         = goruntime.GOOS
+	osGeteuid           = os.Geteuid
+	containerMarkerPath = "/.dockerenv"
+)
+
 type Hooks struct {
 	SetHumanRandSeed          func(int64)
 	IsChromeProfileLockError  func(string) bool
@@ -155,11 +161,7 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		opts = append(opts, chromedp.Flag("tz", cfg.Timezone))
 	}
 
-	if cfg.ChromeExtraFlags != "" {
-		for _, f := range strings.Fields(cfg.ChromeExtraFlags) {
-			opts = appendExecAllocatorFlag(opts, f)
-		}
-	}
+	opts = appendExecAllocatorFlags(opts, config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags))
 	for _, flag := range appendChromeCompatibilityFlags(nil) {
 		opts = appendExecAllocatorFlag(opts, flag)
 	}
@@ -237,6 +239,9 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	}
 
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := stealth.ApplyTargetEmulation(ctx, cfg, bundle.LaunchUserAgent()); err != nil {
+			return err
+		}
 		return injectedScript(ctx, bundle.Script)
 	})); err != nil {
 		browserCancel()
@@ -286,6 +291,9 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 	browserCtx, browserCancel := chromedp.NewContext(remoteAllocCtx)
 
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := stealth.ApplyTargetEmulation(ctx, cfg, bundle.LaunchUserAgent()); err != nil {
+			return err
+		}
 		return injectedScript(ctx, injectedStealthScript)
 	})); err != nil {
 		browserCancel()
@@ -363,10 +371,26 @@ func BaseChromeFlagArgs() []string {
 }
 
 func appendChromeCompatibilityFlags(args []string) []string {
-	if goruntime.GOOS == "linux" && os.Geteuid() == 0 {
+	if chromeNeedsNoSandbox() {
 		return append(args, "--no-sandbox")
 	}
 	return args
+}
+
+func chromeNeedsNoSandbox() bool {
+	if runtimeGOOS != "linux" {
+		return false
+	}
+	if os.Getenv(config.ChromeNoSandboxEnvVar()) == "1" {
+		return true
+	}
+	if osGeteuid() == 0 {
+		return true
+	}
+	if _, err := os.Stat(containerMarkerPath); err == nil {
+		return true
+	}
+	return false
 }
 
 func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
@@ -406,9 +430,7 @@ func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle
 		args = append(args, "--tz="+cfg.Timezone)
 	}
 
-	if cfg.ChromeExtraFlags != "" {
-		args = append(args, strings.Fields(cfg.ChromeExtraFlags)...)
-	}
+	args = append(args, config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags)...)
 
 	return appendChromeCompatibilityFlags(args)
 }

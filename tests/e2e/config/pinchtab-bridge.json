@@ -4,9 +4,6 @@
     "port": "9999",
     "token": "e2e-bridge-token"
   },
-  "browser": {
-    "extraFlags": "--no-sandbox --disable-dev-shm-usage"
-  },
   "security": {
     "allowEvaluate": false,
     "allowDownload": false,

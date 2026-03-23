@@ -155,6 +155,7 @@ services:
       - E2E_BRIDGE_TOKEN=e2e-bridge-token
       - FIXTURES_URL=http://fixtures:80
       - E2E_SCENARIO_FILTER
+      - STEALTH_MATRIX
     volumes:
       - ./:/e2e:ro
       - ./results:/results

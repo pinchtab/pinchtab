@@ -191,6 +191,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 			return true
 		case path == "/instances/launch":
 			return true
+		case strings.HasPrefix(path, "/tabs/") && strings.HasSuffix(path, "/close"):
+			return true
 		case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/stop"):
 			return true
 		case path == "/profiles":

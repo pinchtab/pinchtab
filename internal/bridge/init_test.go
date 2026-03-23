@@ -29,6 +29,7 @@ func TestBuildChromeArgsIncludesStealthLaunchFlags(t *testing.T) {
 		"--enable-automation=false",
 		"--enable-network-information-downlink-max",
 		"--disable-blink-features=AutomationControlled",
+		"--lang=en-US",
 	} {
 		if !slices.Contains(args, want) {
 			t.Fatalf("missing chrome arg %q in %v", want, args)
@@ -64,6 +65,25 @@ func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected global user-agent arg in %v", args)
+	}
+}
+
+func TestBuildChromeArgsSanitizesUnsafeAndReservedExtraFlags(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{
+		ChromeVersion:    "144.0.7559.133",
+		ChromeExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
+	}, 9222)
+
+	if !slices.Contains(args, "--disable-gpu") {
+		t.Fatalf("expected safe extra flag to be preserved in %v", args)
+	}
+	if !slices.Contains(args, "--ash-no-nudges") {
+		t.Fatalf("expected safe extra flag to be preserved in %v", args)
+	}
+	for _, forbidden := range []string{"--user-agent=Bad/1.0", "--disable-web-security"} {
+		if slices.Contains(args, forbidden) {
+			t.Fatalf("did not expect forbidden extra flag %q in %v", forbidden, args)
+		}
 	}
 }
 

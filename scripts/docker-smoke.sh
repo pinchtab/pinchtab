@@ -54,13 +54,6 @@ if [ "$bind_addr" != "0.0.0.0" ]; then
   exit 1
 fi
 
-extra_flags="$(docker exec "$NAME" pinchtab config get browser.extraFlags | tr -d '\r')"
-if [ "$extra_flags" != "--no-sandbox --disable-gpu" ]; then
-  FAILED=1
-  echo "unexpected browser.extraFlags: $extra_flags"
-  exit 1
-fi
-
 docker exec "$NAME" test -f /data/.config/pinchtab/config.json
 
 echo "Docker smoke test passed."

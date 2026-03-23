@@ -78,6 +78,25 @@ func TestGenerateFingerprint_Config(t *testing.T) {
 	}
 }
 
+func TestTimezoneIDFromOffset(t *testing.T) {
+	if got := timezoneIDFromOffset(-300); got != "America/New_York" {
+		t.Fatalf("timezoneIDFromOffset(-300) = %q, want America/New_York", got)
+	}
+	if got := timezoneIDFromOffset(999); got != "" {
+		t.Fatalf("timezoneIDFromOffset(999) = %q, want empty string", got)
+	}
+}
+
+func TestFingerprintRotatePlatformOverlayScript(t *testing.T) {
+	script := fingerprintRotatePlatformOverlayScript("Win32")
+	if !strings.Contains(script, "Object.defineProperty(proto, 'platform'") {
+		t.Fatalf("expected platform overlay script to patch navigator platform, got %q", script)
+	}
+	if !strings.Contains(script, "\"Win32\"") {
+		t.Fatalf("expected platform overlay script to embed platform, got %q", script)
+	}
+}
+
 func TestStealthScript_Content(t *testing.T) {
 	if assets.StealthScript == "" {
 		t.Fatal("StealthScript is empty")

@@ -123,17 +123,17 @@
     // Test: chrome.runtime.connect exists (required by Cloudflare Turnstile)
     const hasChromeConnect = !!(window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function');
     addResult('chrome_runtime_connect', hasChromeConnect, 
-      hasChromeConnect ? 'Available' : 'Missing');
+      hasChromeConnect ? 'Available' : 'Missing', 'warn');
     
-    // Test: chrome.csi exists (Chrome Speed Index - some sites check)
+    // Test: chrome.csi exists (deprecated legacy surface)
     const hasChromeCsi = !!(window.chrome && typeof window.chrome.csi === 'function');
     addResult('chrome_csi', hasChromeCsi, 
-      hasChromeCsi ? 'Available' : 'Missing');
+      hasChromeCsi ? 'Available' : 'Missing', 'warn');
     
-    // Test: chrome.loadTimes exists (deprecated but still checked)
+    // Test: chrome.loadTimes exists (deprecated legacy surface)
     const hasChromeLoadTimes = !!(window.chrome && typeof window.chrome.loadTimes === 'function');
     addResult('chrome_loadtimes', hasChromeLoadTimes, 
-      hasChromeLoadTimes ? 'Available' : 'Missing');
+      hasChromeLoadTimes ? 'Available' : 'Missing', 'warn');
     
     // Test: No CDP markers in window object
     let cdpMarkerCount = 0;
@@ -183,8 +183,8 @@
     
     // Test: Device memory exists
     const deviceMem = navigator.deviceMemory;
-    const hasDeviceMem = deviceMem && deviceMem > 0;
-    addResult('device_memory', hasDeviceMem, `${deviceMem || 0} GB`, 'warn');
+    const hasDeviceMem = deviceMem === undefined || deviceMem === null || deviceMem > 0;
+    addResult('device_memory', hasDeviceMem, deviceMem == null ? 'absent' : `${deviceMem} GB`, 'warn');
     
     // Test: Connection RTT exists
     const rtt = navigator.connection?.rtt;
@@ -210,14 +210,65 @@
     addResult('notification_api', notifOk, 
       `Notification.permission = ${Notification.permission}`, 'warn');
     
-    // Test: Function.toString not modified (automation tools sometimes wrap functions)
+    // Test: global Function.prototype.toString looks native
     let toStringOk = true;
     try {
-      const fnStr = Function.prototype.toString.call(navigator.permissions.query);
-      toStringOk = fnStr.includes('[native code]');
+      const ownNames = Object.getOwnPropertyNames(Function.prototype.toString);
+      toStringOk = Function.prototype.toString.name === 'toString' &&
+        ownNames.every((name) => name === 'length' || name === 'name');
     } catch (e) { toStringOk = false; }
-    addResult('function_tostring', toStringOk, 
-      toStringOk ? 'Native' : 'Modified', 'warn');
+    addResult('function_tostring', toStringOk,
+      toStringOk ? 'Native' : `Modified (${Function.prototype.toString.name})`, 'warn');
+
+    // Test: Intl locale family matches navigator.language
+    let intlLocaleOk = true;
+    let intlDateTimeLocale = '';
+    let intlNumberLocale = '';
+    try {
+      const expected = String(navigator.language || '').toLowerCase();
+      const localeMatchesExpected = (locale) => (
+        locale === expected || locale.startsWith(expected + '-') || expected.startsWith(locale + '-')
+      );
+      const locales = [
+        Intl.DateTimeFormat,
+        Intl.NumberFormat,
+        Intl.Collator,
+        Intl.PluralRules,
+        Intl.RelativeTimeFormat,
+        Intl.ListFormat,
+        Intl.DisplayNames,
+        Intl.Segmenter
+      ].filter((Ctor) => typeof Ctor === 'function').map((Ctor) => {
+        try {
+          const options = Ctor === Intl.DisplayNames
+            ? new Ctor(undefined, { type: 'language' }).resolvedOptions()
+            : new Ctor().resolvedOptions();
+          return String(options.locale || '').toLowerCase();
+        } catch (_) {
+          return '';
+        }
+      }).filter(Boolean);
+      intlDateTimeLocale = locales[0] || '';
+      intlNumberLocale = locales[1] || '';
+      intlLocaleOk = locales.every((locale) => (
+        localeMatchesExpected(locale)
+      ));
+      addResult('intl_datetime_locale_coherent', localeMatchesExpected(intlDateTimeLocale), intlDateTimeLocale || 'none', 'warn');
+      addResult('intl_number_locale_coherent', localeMatchesExpected(intlNumberLocale), intlNumberLocale || 'none', 'warn');
+      addResult('intl_locale_coherent', intlLocaleOk, locales.join(', '), 'warn');
+    } catch (e) {
+      addResult('intl_datetime_locale_coherent', false, String(e), 'warn');
+      addResult('intl_number_locale_coherent', false, String(e), 'warn');
+      addResult('intl_locale_coherent', false, String(e), 'warn');
+    }
+
+    // Test: Error.prepareStackTrace left untouched
+    let prepareStackTraceOk = true;
+    try {
+      prepareStackTraceOk = !Object.getOwnPropertyDescriptor(Error, 'prepareStackTrace');
+    } catch (e) { prepareStackTraceOk = false; }
+    addResult('prepare_stacktrace_native', prepareStackTraceOk,
+      prepareStackTraceOk ? 'Absent' : 'Descriptor present', 'warn');
     
     // Test: maxTouchPoints is 0 for desktop
     const touchPoints = navigator.maxTouchPoints;
@@ -249,6 +300,22 @@
     }
     addResult('useragentdata_platform_match', uaPlatformMatch, 
       navigator.userAgentData ? `${navigator.userAgentData.platform} / ${navigator.platform}` : 'N/A', 'warn');
+
+    // Test: userAgentData version aligns with Chrome major in UA
+    let uaVersionMatch = true;
+    if (navigator.userAgentData) {
+      const uaMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+      const uaMajor = uaMatch ? uaMatch[1] : '';
+      const brands = navigator.userAgentData.brands || [];
+      if (uaMajor) {
+        uaVersionMatch = brands.some((brand) => (
+          (brand.brand === 'Google Chrome' || brand.brand === 'Chromium') &&
+          String(brand.version) === uaMajor
+        ));
+      }
+    }
+    addResult('useragentdata_version_match', uaVersionMatch,
+      navigator.userAgentData ? JSON.stringify(navigator.userAgentData.brands) : 'N/A', 'warn');
     
     // ═══════════════════════════════════════════════════════════════════
     // INFO - Just for debugging
@@ -257,6 +324,8 @@
     addInfo('Platform', navigator.platform);
     addInfo('Vendor', navigator.vendor);
     addInfo('Languages', navigator.languages?.join(', '));
+    addInfo('Intl DateTime Locale', intlDateTimeLocale || 'N/A');
+    addInfo('Intl Number Locale', intlNumberLocale || 'N/A');
     addInfo('Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
     addInfo('Screen', `${screen.width}x${screen.height} @ ${screen.colorDepth}bit`);
     addInfo('Window Inner', `${window.innerWidth}x${window.innerHeight}`);

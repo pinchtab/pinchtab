@@ -17,14 +17,15 @@ import (
 )
 
 type TabEntry struct {
-	Ctx       context.Context
-	Cancel    context.CancelFunc
-	Accessed  bool
-	CDPID     string    // raw CDP target ID
-	CreatedAt time.Time // when the tab was first created/registered
-	LastUsed  time.Time // last time the tab was accessed via TabContext
-	Policy    TabPolicyState
-	Watching  bool
+	Ctx                   context.Context
+	Cancel                context.CancelFunc
+	Accessed              bool
+	CDPID                 string    // raw CDP target ID
+	CreatedAt             time.Time // when the tab was first created/registered
+	LastUsed              time.Time // last time the tab was accessed via TabContext
+	Policy                TabPolicyState
+	Watching              bool
+	ConsoleCaptureEnabled bool
 }
 
 type RefCache struct {
@@ -49,8 +50,9 @@ type Bridge struct {
 	// Network monitoring
 	netMonitor *NetworkMonitor
 
-	fingerprintMu       sync.RWMutex
-	fingerprintOverlays map[string]bool
+	fingerprintMu        sync.RWMutex
+	fingerprintOverlays  map[string]bool
+	workerStealthTargets sync.Map
 
 	// Lazy initialization
 	initMu      sync.Mutex
@@ -85,12 +87,18 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, logStore, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
-		b.StartBrowserGuards()
+		if !b.quietStealthObservers() {
+			b.StartBrowserGuards()
+		}
 	}
 	b.Locks = NewLockManager()
 	b.Dialogs = NewDialogManager()
 	b.InitActionRegistry()
 	return b
+}
+
+func (b *Bridge) quietStealthObservers() bool {
+	return b != nil && b.Config != nil && stealth.NormalizeLevel(b.Config.StealthLevel) == stealth.LevelFull
 }
 
 func (b *Bridge) injectStealth(ctx context.Context) {
@@ -107,14 +115,26 @@ func (b *Bridge) injectStealth(ctx context.Context) {
 	}
 }
 
-func (b *Bridge) tabSetup(ctx context.Context) {
-	if override := buildUserAgentOverride(b.Config.UserAgent, b.Config.ChromeVersion); override != nil {
-		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
-			return override.Do(c)
-		})); err != nil {
-			slog.Warn("ua override failed on tab setup", "err", err)
-		}
+func (b *Bridge) applyTargetStealth(ctx context.Context) {
+	if b == nil || b.Config == nil {
+		return
 	}
+
+	ua := ""
+	if b.StealthBundle != nil {
+		ua = b.StealthBundle.LaunchUserAgent()
+	}
+
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return stealth.ApplyTargetEmulation(ctx, b.Config, ua)
+	})); err != nil {
+		slog.Warn("stealth target emulation failed", "err", err)
+	}
+}
+
+func (b *Bridge) tabSetup(ctx context.Context) {
+	b.applyTargetStealth(ctx)
+	b.installWorkerStealthParity(ctx)
 	b.injectStealth(ctx)
 	if b.Config.NoAnimations {
 		if err := b.InjectNoAnimations(ctx); err != nil {
@@ -149,6 +169,9 @@ func (b *Bridge) GetConsoleLogs(tabID string, limit int) []LogEntry {
 	if b.LogStore == nil {
 		return nil
 	}
+	if b.TabManager != nil {
+		b.EnsureConsoleCapture(tabID)
+	}
 	return b.LogStore.GetConsoleLogs(tabID, limit)
 }
 
@@ -163,6 +186,9 @@ func (b *Bridge) ClearConsoleLogs(tabID string) {
 func (b *Bridge) GetErrorLogs(tabID string, limit int) []ErrorEntry {
 	if b.LogStore == nil {
 		return nil
+	}
+	if b.TabManager != nil {
+		b.EnsureConsoleCapture(tabID)
 	}
 	return b.LogStore.GetErrorLogs(tabID, limit)
 }
@@ -250,7 +276,9 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
-		b.StartBrowserGuards()
+		if !b.quietStealthObservers() {
+			b.StartBrowserGuards()
+		}
 	}
 
 	// Ensure action registry is populated (idempotent)
@@ -264,7 +292,9 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	}
 
 	// Start crash monitoring
-	b.MonitorCrashes(nil)
+	if !b.quietStealthObservers() {
+		b.MonitorCrashes(nil)
+	}
 
 	return nil
 }

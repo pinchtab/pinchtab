@@ -744,16 +744,15 @@ export default function SettingsPage() {
                               <strong className="text-text-secondary">
                                 Light:
                               </strong>{" "}
-                              Safe baseline stealth. Hides navigator.webdriver,
-                              removes CDP markers, spoofs
-                              plugins/languages/hardware.
+                              Default baseline stealth. Keeps the lowest-risk
+                              launch and JS contract while hiding basic
+                              automation markers.
                             </div>
                             <div className="text-success/80">
-                              ✓ No functional side effects
+                              ✓ Default product security baseline
                             </div>
                             <div className="text-success/80">
-                              ✓ No security implications — standard automation
-                              hiding only
+                              ✓ No intentional API realism or security tradeoff
                             </div>
                           </div>
                         )}
@@ -762,22 +761,25 @@ export default function SettingsPage() {
                           <div className="space-y-2">
                             <div>
                               <strong className="text-warning">Medium:</strong>{" "}
-                              Adds Client Hints API, chrome.runtime.connect (for
-                              Cloudflare Turnstile), chrome.csi/loadTimes,
-                              enhanced permissions, video codec spoofing.
+                              Non-default risk mode. Adds Client Hints,
+                              `chrome.runtime` shims, iframe propagation, stack
+                              filtering, and native-looking function masking to
+                              improve anti-bot compatibility.
                             </div>
                             <div className="text-warning/80">
-                              ⚠ May interfere with error monitoring (Sentry,
-                              LogRocket) — Error.prepareStackTrace is blocked
+                              ⚠ Alters browser-visible APIs and error/stack
+                              behavior. Monitoring and debugging tools may see
+                              different results.
                             </div>
                             <div className="text-warning/80">
-                              ⚠ Permissions API returns fake states — code
-                              relying on accurate permission checks may
-                              misbehave
+                              ⚠ Permissions and compatibility shims can return
+                              intentionally altered values. Do not use this as
+                              the default safety baseline.
                             </div>
                             <div className="text-warning/80">
-                              ⚠ chrome.runtime.connect returns dummy objects —
-                              real extension messaging won't work
+                              ⚠ Reports that require explicitly enabling Medium
+                              should be treated as opt-in risk acceptance, not
+                              default-path behavior.
                             </div>
                           </div>
                         )}
@@ -788,25 +790,28 @@ export default function SettingsPage() {
                               <strong className="text-destructive">
                                 Full:
                               </strong>{" "}
-                              Maximum stealth. Adds WebGL/canvas fingerprint
-                              noise, WebRTC IP leak prevention, AudioContext
-                              protection.
+                              Highest-risk non-default mode. Adds graphics,
+                              canvas, audio, system-color, and WebRTC
+                              alterations on top of Medium.
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ WebRTC forced to relay mode — direct P2P
-                              connections disabled, video calls may fail
+                              ⚠ Browser output is intentionally less native and
+                              less stable. Rendering, media, and networking
+                              behavior may break or drift from real Chrome.
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ Canvas operations have subtle pixel noise — may
-                              affect pixel-precise rendering or image comparison
+                              ⚠ This mode is not an acceptable default security
+                              posture. Only enable it when you explicitly accept
+                              the tradeoff surface.
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ WebGL reports spoofed GPU — applications
-                              detecting GPU capabilities may behave unexpectedly
+                              ⚠ Reports that depend on enabling Full should be
+                              triaged as non-default operator risk unless a
+                              default-path bypass is shown.
                             </div>
                             <div className="text-destructive/80">
-                              ⚠ AudioContext has frequency noise — may affect
-                              audio fingerprinting detection or processing apps
+                              ⚠ WebRTC, WebGL, canvas, and audio behavior can
+                              all diverge from baseline Chrome.
                             </div>
                           </div>
                         )}

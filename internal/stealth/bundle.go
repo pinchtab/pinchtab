@@ -2,6 +2,7 @@ package stealth
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -60,29 +61,45 @@ type Status struct {
 
 func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 	levelName := ""
+	headless := false
 	if cfg != nil {
 		levelName = cfg.StealthLevel
+		headless = cfg.Headless
 	}
 	level := NormalizeLevel(levelName)
-	script := fmt.Sprintf(
-		"var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n%s\n%s",
-		seed,
-		level,
-		assets.StealthScript,
-		PopupGuardInitScript,
-	)
+	personaJSON := "{}"
+	if cfg != nil {
+		if encoded, err := json.Marshal(BuildPersona(cfg.UserAgent, cfg.ChromeVersion)); err == nil {
+			personaJSON = string(encoded)
+		}
+	}
+	script := renderBundleScript(level, personaJSON, seed, headless)
 
 	return &Bundle{
-		Level:        level,
-		Seed:         seed,
-		Script:       script,
-		ScriptHash:   hashScript(script),
+		Level:  level,
+		Seed:   seed,
+		Script: script,
+		// Keep the status hash stable across identical configs even when the
+		// per-process seed changes. The seed is runtime entropy, not contract.
+		ScriptHash:   hashScript(renderBundleScript(level, personaJSON, 0, headless)),
 		Launch:       BuildLaunchContract(cfg, level),
-		PatchIDs:     patchIDsForLevel(level),
-		Capabilities: capabilityMap(level),
+		PatchIDs:     patchIDsForLevel(level, headless),
+		Capabilities: capabilityMap(level, headless),
 		Tradeoffs:    tradeoffs(level),
 		Webdriver:    WebdriverModeNativeBaseline,
 	}
+}
+
+func renderBundleScript(level Level, personaJSON string, seed int64, headless bool) string {
+	return fmt.Sprintf(
+		"var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\nvar __pinchtab_headless = %t;\nvar __pinchtab_profile = %s;\n%s\n%s",
+		seed,
+		level,
+		headless,
+		personaJSON,
+		assets.StealthScript,
+		PopupGuardInitScript,
+	)
 }
 
 func NormalizeLevel(level string) Level {
@@ -128,10 +145,10 @@ func hashScript(script string) string {
 }
 
 func statusFlags(bundle *Bundle, cfg *config.RuntimeConfig) map[string]bool {
-	extraFlags := ""
+	var extraFlags []string
 	headless := false
 	if cfg != nil {
-		extraFlags = cfg.ChromeExtraFlags
+		extraFlags = config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags)
 		headless = cfg.Headless
 	}
 
@@ -149,8 +166,8 @@ func statusFlags(bundle *Bundle, cfg *config.RuntimeConfig) map[string]bool {
 	return flags
 }
 
-func hasFlag(args string, want string) bool {
-	for _, field := range strings.Fields(args) {
+func hasFlag(args []string, want string) bool {
+	for _, field := range args {
 		if field == want {
 			return true
 		}
@@ -158,51 +175,56 @@ func hasFlag(args string, want string) bool {
 	return false
 }
 
-func capabilityMap(level Level) map[string]bool {
+func capabilityMap(level Level, headless bool) map[string]bool {
 	caps := map[string]bool{
-		"webdriverNotTrue":            true,
-		"webdriverNativeStrategy":     true,
-		"batteryAPIBaseline":          true,
-		"pluginArray":                 true,
-		"workerHardwareConsistency":   true,
-		"workerUserAgentConsistency":  true,
-		"userAgentData":               false,
-		"chromeRuntimeConnect":        false,
-		"chromeRuntimeSendMessage":    false,
-		"chromeApp":                   false,
-		"videoCodecs":                 false,
-		"maxTouchPoints":              false,
-		"iframeIsolation":             false,
-		"errorStackSanitized":         false,
-		"functionToStringMasked":      false,
-		"downlinkMax":                 true,
-		"webglSpoofing":               false,
-		"canvasNoise":                 false,
-		"systemColorFix":              false,
-		"transparentPixelCanvasNoise": false,
-		"audioNoise":                  false,
-		"webrtcMitigation":            false,
+		"webdriverNotTrue":                  true,
+		"webdriverNativeStrategy":           true,
+		"batteryAPIBaseline":                true,
+		"pluginArray":                       true,
+		"workerHardwareConsistency":         true,
+		"workerUserAgentConsistency":        true,
+		"serviceWorkerHardwareConsistency":  true,
+		"serviceWorkerUserAgentConsistency": true,
+		"userAgentData":                     false,
+		"chromeRuntimeConnect":              false,
+		"chromeRuntimeSendMessage":          false,
+		"chromeApp":                         false,
+		"videoCodecs":                       false,
+		"maxTouchPoints":                    false,
+		"iframeIsolation":                   false,
+		"errorStackSanitized":               false,
+		"functionToStringMasked":            false,
+		"functionToStringNative":            true,
+		"intlLocaleCoherent":                true,
+		"errorPrepareStackTraceNative":      true,
+		"navigatorOverridesAbsent":          true,
+		"userAgentDataVersionCoherent":      true,
+		"downlinkMax":                       true,
+		"webglSpoofing":                     false,
+		"canvasNoise":                       false,
+		"systemColorFix":                    false,
+		"transparentPixelCanvasNoise":       false,
+		"audioNoise":                        false,
+		"webrtcMitigation":                  false,
 	}
 
 	if level == LevelMedium || level == LevelFull {
 		caps["userAgentData"] = true
-		caps["chromeRuntimeConnect"] = true
-		caps["chromeRuntimeSendMessage"] = true
-		caps["chromeApp"] = true
-		caps["videoCodecs"] = true
 		caps["maxTouchPoints"] = true
 	}
-	if level == LevelFull {
+	if level == LevelMedium {
+		caps["iframeIsolation"] = true
+		caps["chromeRuntimeConnect"] = true
+		caps["chromeRuntimeSendMessage"] = true
+	}
+	if level == LevelFull && headless {
 		caps["webglSpoofing"] = true
-		caps["canvasNoise"] = true
-		caps["audioNoise"] = true
-		caps["webrtcMitigation"] = true
 	}
 
 	return caps
 }
 
-func patchIDsForLevel(level Level) []string {
+func patchIDsForLevel(level Level, headless bool) []string {
 	patches := []string{
 		"marker-cleanup",
 		"webdriver-native-baseline",
@@ -211,28 +233,28 @@ func patchIDsForLevel(level Level) []string {
 		"platform",
 		"downlink-max",
 		"permissions",
-		"screen",
 		"battery",
+	}
+	if headless {
+		patches = append(patches, "screen")
 	}
 
 	if level == LevelMedium || level == LevelFull {
 		patches = append(patches,
 			"user-agent-data",
-			"chrome-runtime",
-			"chrome-app",
-			"codecs",
 			"touch-points",
-			"prepare-stack-trace-lock",
 		)
 	}
+	if level == LevelMedium {
+		patches = append(patches, "chrome-runtime", "iframe-isolation")
+	}
 	if level == LevelFull {
-		patches = append(patches,
-			"webgl",
-			"canvas-noise",
-			"font-noise",
-			"audio-noise",
-			"webrtc-relay",
-		)
+		if headless {
+			patches = append(patches, "screen-position")
+		}
+		if headless {
+			patches = append(patches, "webgl")
+		}
 	}
 
 	return patches
@@ -243,16 +265,13 @@ func tradeoffs(level Level) []string {
 	case LevelMedium:
 		return []string{
 			"non-default-risk-mode",
-			"error-monitoring-risk",
 			"api-realism-risk",
 		}
 	case LevelFull:
 		return []string{
 			"non-default-risk-mode",
-			"error-monitoring-risk",
 			"api-realism-risk",
 			"graphics-and-media-breakage-risk",
-			"webrtc-behavior-risk",
 		}
 	default:
 		return nil

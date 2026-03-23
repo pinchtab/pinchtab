@@ -18,6 +18,8 @@ func TestNewBundleIncludesSeedLevelAndPopupGuard(t *testing.T) {
 	for _, want := range []string{
 		"var __pinchtab_seed = 1234;",
 		`var __pinchtab_stealth_level = "medium";`,
+		"var __pinchtab_headless = false;",
+		"var __pinchtab_profile = ",
 		"window.open",
 		"window.opener",
 	} {
@@ -27,6 +29,18 @@ func TestNewBundleIncludesSeedLevelAndPopupGuard(t *testing.T) {
 	}
 	if !strings.HasPrefix(bundle.ScriptHash, "sha256:") {
 		t.Fatalf("expected script hash prefix, got %q", bundle.ScriptHash)
+	}
+}
+
+func TestScriptHashStableAcrossSeeds(t *testing.T) {
+	cfg := &config.RuntimeConfig{StealthLevel: "full", ChromeVersion: "144.0.7559.133"}
+	first := NewBundle(cfg, 111)
+	second := NewBundle(cfg, 222)
+	if first.ScriptHash != second.ScriptHash {
+		t.Fatalf("expected script hash to stay stable across seeds, got %q vs %q", first.ScriptHash, second.ScriptHash)
+	}
+	if first.Script == second.Script {
+		t.Fatalf("expected runtime script to still vary with seed")
 	}
 }
 
@@ -46,8 +60,56 @@ func TestStatusFromBundleReflectsCurrentCapabilityShape(t *testing.T) {
 	if !status.Capabilities["downlinkMax"] {
 		t.Fatal("expected light/full baseline to report downlinkMax capability")
 	}
+	if status.Capabilities["iframeIsolation"] {
+		t.Fatal("expected current full mode to keep iframe isolation capability disabled")
+	}
+	if status.Capabilities["errorStackSanitized"] {
+		t.Fatal("expected current full mode to keep stack sanitization disabled")
+	}
+	if status.Capabilities["functionToStringMasked"] {
+		t.Fatal("expected current full mode to keep function-toString masking disabled")
+	}
+	if !status.Capabilities["functionToStringNative"] {
+		t.Fatal("expected full mode to report native Function.prototype.toString semantics")
+	}
+	if !status.Capabilities["intlLocaleCoherent"] {
+		t.Fatal("expected full mode to report locale coherence capability")
+	}
+	if !status.Capabilities["errorPrepareStackTraceNative"] {
+		t.Fatal("expected full mode to report native Error.prepareStackTrace semantics")
+	}
+	if status.Capabilities["systemColorFix"] {
+		t.Fatal("expected current full mode to keep system color wrappers disabled")
+	}
+	if status.Capabilities["videoCodecs"] {
+		t.Fatal("expected current full mode to keep codec spoofing disabled")
+	}
+	if status.Capabilities["canvasNoise"] {
+		t.Fatal("expected full mode to keep canvas noise disabled in the current public-site profile")
+	}
+	if status.Capabilities["transparentPixelCanvasNoise"] {
+		t.Fatal("expected full mode to keep transparent pixel canvas noise disabled in the current public-site profile")
+	}
+	if status.Capabilities["audioNoise"] {
+		t.Fatal("expected full mode to keep audio noise disabled in the current public-site profile")
+	}
+	if status.Capabilities["webrtcMitigation"] {
+		t.Fatal("expected full mode to keep JS WebRTC mitigation disabled in the current public-site profile")
+	}
 	if !status.Flags["headlessNew"] {
 		t.Fatal("expected headlessNew flag to be true for headless config")
+	}
+}
+
+func TestStatusFromBundleDisablesWebGLSpoofingWhenHeaded(t *testing.T) {
+	cfg := &config.RuntimeConfig{StealthLevel: "full", Headless: false}
+	bundle := NewBundle(cfg, 7)
+	status := StatusFromBundle(bundle, cfg, LaunchModeAllocator)
+	if status == nil {
+		t.Fatal("expected non-nil status")
+	}
+	if status.Capabilities["webglSpoofing"] {
+		t.Fatal("expected headed full mode to avoid WebGL spoofing")
 	}
 }
 
@@ -67,6 +129,7 @@ func TestBuildLaunchContractOwnsStealthLaunchFlags(t *testing.T) {
 		"--enable-automation=false",
 		"--disable-blink-features=AutomationControlled",
 		"--enable-network-information-downlink-max",
+		"--lang=en-US",
 	} {
 		if !HasLaunchArg(launch.Args, want) {
 			t.Fatalf("expected stealth launch arg %q in %v", want, launch.Args)

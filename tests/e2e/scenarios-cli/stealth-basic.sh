@@ -48,6 +48,48 @@ assert_json_field '.result' 'true' "chrome.runtime"
 end_test
 
 # ─────────────────────────────────────────────────────────────────────────────
+start_test "stealth-cli: capability fixture reports native webdriver contract"
+
+pt_ok nav "${FIXTURES_URL}/stealth-capabilities.html"
+sleep 1
+
+pt_ok eval "window.__stealthCapabilities.webdriverDescriptorNativeLike"
+assert_json_field '.result' 'true' "webdriver descriptor stays native-like"
+
+pt_ok eval "window.__stealthCapabilities.userAgentVersionCoherent"
+assert_json_field '.result' 'true' "user agent version remains coherent"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────────────────
+start_test "stealth-cli: created tab keeps stealth capability contract"
+
+pt_ok tab new
+assert_output_json "tab new returns JSON"
+TAB_ID=$(echo "$PT_OUT" | jq -r '.tabId // empty')
+
+if [ -n "$TAB_ID" ]; then
+  echo -e "  ${GREEN}✓${NC} created tab returned id"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} created tab did not return id"
+  ((ASSERTIONS_FAILED++)) || true
+fi
+
+pt_ok nav "${FIXTURES_URL}/stealth-capabilities.html" --tab "$TAB_ID"
+sleep 1
+
+pt_ok eval "window.__stealthCapabilities.webdriverDescriptorNativeLike" --tab "$TAB_ID"
+assert_json_field '.result' 'true' "created tab keeps native webdriver descriptor"
+
+pt_ok eval "window.__stealthCapabilities.intlLocaleCoherent" --tab "$TAB_ID"
+assert_json_field '.result' 'true' "created tab keeps locale coherence"
+
+pt_ok tab close "$TAB_ID"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────────────────
 start_test "bot-detect-cli: full test suite score"
 
 pt_ok eval "JSON.stringify(window.__botDetectScore || {})"

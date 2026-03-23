@@ -208,6 +208,34 @@ func TestAuthMiddleware_CookieRestrictedEndpointRejected(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_CookieAllowsTabCloseEndpoint(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "secret123"}
+	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessionID, err := sessions.Create(cfg.Token)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/tabs/tab_123/close", nil)
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+	req.Header.Set("Referer", "http://example.com/dashboard")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if !called {
+		t.Fatal("handler should allow same-origin cookie-authenticated tab close")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
 func TestAuthMiddleware_CookieCrossOriginRejected(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
 	sessions := authn.NewSessionManager(authn.SessionConfig{})

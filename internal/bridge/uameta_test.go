@@ -53,9 +53,28 @@ func TestBuild_Versions(t *testing.T) {
 	}
 }
 
-func TestDetectPlatform(t *testing.T) {
-	platform, arch := detectPlatform()
-	if platform == "" || arch == "" {
-		t.Fatal("expected non-empty platform and arch")
+func TestBuild_UsesPersonaMetadata(t *testing.T) {
+	p := buildUserAgentOverride("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.133 Safari/537.36", "144.0.7559.133")
+	if p == nil || p.UserAgentMetadata == nil {
+		t.Fatal("expected metadata")
+	}
+	if p.AcceptLanguage != "en-US,en" {
+		t.Fatalf("expected accept language from persona, got %q", p.AcceptLanguage)
+	}
+	if p.Platform != "Win32" {
+		t.Fatalf("expected navigator platform Win32, got %q", p.Platform)
+	}
+	if got := p.UserAgentMetadata.Platform; got != "Windows" {
+		t.Fatalf("expected UA data platform Windows, got %q", got)
+	}
+}
+
+func TestBuildLocaleOverride_UsesPersonaLanguage(t *testing.T) {
+	p := buildLocaleOverride("", "144.0.7559.133")
+	if p == nil {
+		t.Fatal("expected locale override")
+	}
+	if p.Locale != "en-US" {
+		t.Fatalf("expected locale override en-US, got %q", p.Locale)
 	}
 }

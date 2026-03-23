@@ -7,6 +7,7 @@
 # npm package
 # package-lock.json is committed for reproducible installs via npm ci
 *.js
+!tests/e2e/fixtures/stealth-service-worker.js
 !dashboard/eslint.config.js
 !dashboard/vite.config.ts
 !internal/assets/*.js

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"net/http"
 	"time"
@@ -58,33 +57,40 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 			if err != nil {
 				return fmt.Errorf("setUserAgentOverride: %w", err)
 			}
+			if fp.Language != "" {
+				if err := emulation.SetLocaleOverride().WithLocale(fp.Language).Do(ctx); err != nil {
+					return fmt.Errorf("setLocaleOverride: %w", err)
+				}
+			}
+			if timezoneID := timezoneIDFromOffset(fp.TimezoneOffset); timezoneID != "" {
+				if err := emulation.SetTimezoneOverride(timezoneID).Do(ctx); err != nil {
+					return fmt.Errorf("setTimezoneOverride: %w", err)
+				}
+			}
+			if fp.ScreenWidth > 0 && fp.ScreenHeight > 0 {
+				if err := emulation.SetDeviceMetricsOverride(int64(fp.ScreenWidth), int64(fp.ScreenHeight), 1, false).
+					WithScreenWidth(int64(fp.ScreenWidth)).
+					WithScreenHeight(int64(fp.ScreenHeight)).
+					Do(ctx); err != nil {
+					return fmt.Errorf("setDeviceMetricsOverride: %w", err)
+				}
+			}
 			return nil
 		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if fp.Platform == "" {
+				return nil
+			}
+			overlayScript := fingerprintRotatePlatformOverlayScript(fp.Platform)
+			if _, err := page.AddScriptToEvaluateOnNewDocument(overlayScript).Do(ctx); err != nil {
+				return fmt.Errorf("add platform overlay: %w", err)
+			}
+			return nil
+		}),
+		chromedp.Evaluate(fingerprintRotatePlatformOverlayScript(fp.Platform), nil),
 	); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP UA override: %w", err))
 		return
-	}
-
-	script := fmt.Sprintf(`
-(function() {
-  Object.defineProperty(screen, 'width', { get: () => %d, configurable: true });
-  Object.defineProperty(screen, 'height', { get: () => %d, configurable: true });
-  Object.defineProperty(screen, 'availWidth', { get: () => %d, configurable: true });
-  Object.defineProperty(screen, 'availHeight', { get: () => %d, configurable: true });
-  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => %d, configurable: true });
-  Object.defineProperty(navigator, 'deviceMemory', { get: () => %d, configurable: true });
-})();
-	`, fp.ScreenWidth, fp.ScreenHeight, fp.ScreenWidth-20, fp.ScreenHeight-80,
-		fp.CPUCores, fp.Memory)
-
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
-			return err
-		}),
-		chromedp.Evaluate(script, nil),
-	); err != nil {
-		slog.Warn("JS fingerprint extras failed", "err", err)
 	}
 
 	if tracker, ok := h.Bridge.(interface{ SetFingerprintRotateActive(string, bool) }); ok {
@@ -192,4 +198,47 @@ func (h *Handlers) generateFingerprint(req fingerprintRequest) fingerprint {
 	fp.Memory = 4 + rand.Intn(4)*2
 
 	return fp
+}
+
+func timezoneIDFromOffset(offset int) string {
+	switch offset {
+	case -480:
+		return "America/Los_Angeles"
+	case -420:
+		return "America/Denver"
+	case -360:
+		return "America/Chicago"
+	case -300:
+		return "America/New_York"
+	case -240:
+		return "America/Halifax"
+	case 0:
+		return "UTC"
+	case 60:
+		return "Europe/Berlin"
+	case 120:
+		return "Europe/Helsinki"
+	case 330:
+		return "Asia/Kolkata"
+	case 480:
+		return "Asia/Shanghai"
+	case 540:
+		return "Asia/Tokyo"
+	default:
+		return ""
+	}
+}
+
+func fingerprintRotatePlatformOverlayScript(platform string) string {
+	return fmt.Sprintf(`(() => {
+  try {
+    const nav = navigator;
+    const proto = Object.getPrototypeOf(nav) || Navigator.prototype;
+    Object.defineProperty(proto, 'platform', {
+      get: () => %q,
+      configurable: true,
+      enumerable: true
+    });
+  } catch (e) {}
+})()`, platform)
 }

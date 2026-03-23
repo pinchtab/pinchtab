@@ -111,6 +111,16 @@ wait_for_instances_running() {
 RESULT=""
 HTTP_STATUS=""
 
+split_pinchtab_response() {
+  local response="$1"
+  HTTP_STATUS="${response##*$'\n'}"
+  if [[ "$response" == *$'\n'* ]]; then
+    RESULT="${response%$'\n'*}"
+  else
+    RESULT=""
+  fi
+}
+
 pinchtab() {
   local method="$1"
   local path="$2"
@@ -125,8 +135,7 @@ pinchtab() {
     -H "Content-Type: application/json" \
     "$@")
 
-  RESULT=$(echo "$response" | head -n -1)
-  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  split_pinchtab_response "$response"
 
   if [[ ! "$HTTP_STATUS" =~ ^2 ]]; then
     echo -e "${ERROR}  HTTP $HTTP_STATUS: $RESULT${NC}" >&2
@@ -165,8 +174,7 @@ pt_patch() {
     "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
     -d "$body")
-  RESULT=$(echo "$response" | head -n -1)
-  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  split_pinchtab_response "$response"
   _echo_truncated
 }
 
@@ -177,8 +185,7 @@ pt_delete() {
   response=$(e2e_curl -s -w "\n%{http_code}" \
     -X DELETE \
     "${E2E_SERVER}$path")
-  RESULT=$(echo "$response" | head -n -1)
-  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  split_pinchtab_response "$response"
   _echo_truncated
 }
 
@@ -192,8 +199,7 @@ pt_post_raw() {
     "${E2E_SERVER}$path" \
     -H "Content-Type: application/json" \
     -d "$body")
-  RESULT=$(echo "$response" | head -n -1)
-  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  split_pinchtab_response "$response"
   _echo_truncated
 }
 
@@ -302,6 +308,43 @@ get_tab_count() {
 
 get_tab_id() {
   echo "$RESULT" | jq -r '.tabId'
+}
+
+normalize_default_port_url() {
+  local raw="${1:-}"
+  raw="${raw/http:\/\/127.0.0.1:80\//http:\/\/127.0.0.1/}"
+  raw="${raw/http:\/\/localhost:80\//http:\/\/localhost/}"
+  raw="${raw/https:\/\/127.0.0.1:443\//https:\/\/127.0.0.1/}"
+  raw="${raw/https:\/\/localhost:443\//https:\/\/localhost/}"
+  printf '%s' "$raw" | sed -E \
+    -e 's#^http://([^/:]+):80(/|$)#http://\1\2#' \
+    -e 's#^https://([^/:]+):443(/|$)#https://\1\2#'
+}
+
+poll_instance_tab_id_by_url() {
+  local instance_id="$1"
+  local url="$2"
+  local attempts="${3:-20}"
+  local delay="${4:-0.5}"
+  local base_url="${5:-$E2E_SERVER}"
+  local normalized_url
+  normalized_url=$(normalize_default_port_url "$url")
+
+  for i in $(seq 1 "$attempts"); do
+    local tabs_json
+    tabs_json=$(e2e_curl -sf "${base_url}/instances/${instance_id}/tabs" 2>/dev/null || true)
+    if [ -n "$tabs_json" ]; then
+      local tab_id
+      tab_id=$(echo "$tabs_json" | jq -r --arg url "$url" --arg normalized_url "$normalized_url" '[.[] | select(.url == $url or .url == $normalized_url) | .id] | first // empty' 2>/dev/null || true)
+      if [ -n "$tab_id" ] && [ "$tab_id" != "null" ]; then
+        printf '%s' "$tab_id"
+        return 0
+      fi
+    fi
+    sleep "$delay"
+  done
+
+  return 1
 }
 
 assert_tab_id() {
@@ -422,12 +465,19 @@ assert_eval_poll() {
   for i in $(seq 1 "$attempts"); do
     local json_body
     if [ -n "$tab_id" ]; then
-      json_body=$(jq -n --arg expr "$expr" --arg tabId "$tab_id" '{"expression": $expr, "tabId": $tabId}')
+      json_body=$(jq -n --arg expr "$expr" '{"expression": $expr}')
+      pt_post "/tabs/${tab_id}/evaluate" "$json_body"
     else
       json_body=$(jq -n --arg expr "$expr" '{"expression": $expr}')
+      pt_post /evaluate "$json_body"
     fi
-    pt_post /evaluate "$json_body"
-    actual=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+    actual=$(echo "$RESULT" | jq -r '
+      if has("result") then
+        .result | if . == null then "null" else tostring end
+      else
+        empty
+      end
+    ' 2>/dev/null)
     if [ "$actual" = "$expected" ]; then
       ok=true
       break

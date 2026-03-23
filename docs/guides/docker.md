@@ -243,6 +243,8 @@ PinchTab runs Chrome with `--no-sandbox` in containers. This is standard practic
 
 This configuration is used by major headless browser services (Puppeteer, Playwright, Browserless).
 
+PinchTab manages this compatibility at runtime. Do not put `--no-sandbox` in `browser.extraFlags`.
+
 ## Resource Notes
 
 Chrome in containers usually needs:

@@ -116,6 +116,15 @@ func TestTabContext_RejectsUnknownRawCDPID(t *testing.T) {
 	}
 }
 
+func TestQuietStealthObservers(t *testing.T) {
+	if (&Bridge{Config: &config.RuntimeConfig{StealthLevel: "full"}}).quietStealthObservers() != true {
+		t.Fatal("expected full stealth to suppress nonessential observers")
+	}
+	if (&Bridge{Config: &config.RuntimeConfig{StealthLevel: "medium"}}).quietStealthObservers() {
+		t.Fatal("did not expect medium stealth to suppress observers")
+	}
+}
+
 func TestCreateTab_ReturnsRawCDPID(t *testing.T) {
 	// Verify TabIDFromCDPTarget returns raw CDP ID (no prefix)
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)

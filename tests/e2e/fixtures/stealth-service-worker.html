@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stealth Service Worker Parity</title>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      margin: 24px;
+      background: #10161f;
+      color: #e6edf3;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 16px;
+    }
+    th, td {
+      border: 1px solid #2f3b4d;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: #17202d;
+    }
+    .ok {
+      color: #5ee27a;
+    }
+    .bad {
+      color: #ff7b72;
+    }
+    .skip {
+      color: #f2cc60;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stealth Service Worker Parity</h1>
+  <table id="results">
+    <tr><th>Check</th><th>Pass</th><th>Value</th></tr>
+  </table>
+
+  <script>
+    (async function() {
+      function render(report) {
+        const table = document.getElementById('results');
+        const rows = [
+          ['secureContext', report.secureContext, String(report.secureContext)],
+          ['serviceWorkerSupported', report.supported, String(report.supported)],
+          ['serviceWorkerReady', report.skipped ? null : report.ready, report.skipped ? ('skipped: ' + report.skipReason) : (report.error || 'ready')],
+          ['webdriverNotTrue', report.skipped ? null : report.matches.webdriverNotTrue, report.skipped ? 'skipped' : String(report.serviceWorker.webdriverValue)],
+          ['userAgentMatch', report.skipped ? null : report.matches.userAgent, report.skipped ? 'skipped' : (report.page.userAgent + ' / ' + report.serviceWorker.userAgent)],
+          ['platformMatch', report.skipped ? null : report.matches.platform, report.skipped ? 'skipped' : (report.page.platform + ' / ' + report.serviceWorker.platform)],
+          ['hardwareConcurrencyMatch', report.skipped ? null : report.matches.hardwareConcurrency, report.skipped ? 'skipped' : (String(report.page.hardwareConcurrency) + ' / ' + String(report.serviceWorker.hardwareConcurrency))],
+          ['deviceMemoryMatch', report.skipped ? null : report.matches.deviceMemory, report.skipped ? 'skipped' : (String(report.page.deviceMemory) + ' / ' + String(report.serviceWorker.deviceMemory))]
+        ];
+
+        for (const row of rows) {
+          const tr = table.insertRow();
+          const stateClass = row[1] === null ? 'skip' : (row[1] ? 'ok' : 'bad');
+          const stateLabel = row[1] === null ? 'SKIP' : (row[1] ? 'PASS' : 'FAIL');
+          tr.innerHTML =
+            '<td>' + row[0] + '</td>' +
+            '<td class="' + stateClass + '">' + stateLabel + '</td>' +
+            '<td>' + String(row[2]) + '</td>';
+        }
+      }
+
+      function finalize(serviceWorkerData, options) {
+        const settings = options || {};
+        const page = {
+          userAgent: navigator.userAgent || '',
+          platform: navigator.platform || '',
+          hardwareConcurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null,
+          deviceMemory: typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null
+        };
+
+        const report = {
+          ready: !!serviceWorkerData && !settings.error && !settings.skipReason,
+          error: settings.error || '',
+          secureContext: window.isSecureContext === true,
+          supported: 'serviceWorker' in navigator,
+          skipped: !!settings.skipReason,
+          skipReason: settings.skipReason || '',
+          page,
+          serviceWorker: serviceWorkerData || {},
+          matches: {
+            webdriverNotTrue: !!serviceWorkerData && serviceWorkerData.webdriverNotTrue === true,
+            userAgent: !!serviceWorkerData && serviceWorkerData.userAgent === page.userAgent,
+            platform: !!serviceWorkerData && serviceWorkerData.platform === page.platform,
+            hardwareConcurrency: !!serviceWorkerData && serviceWorkerData.hardwareConcurrency === page.hardwareConcurrency,
+            deviceMemory: !!serviceWorkerData && serviceWorkerData.deviceMemory === page.deviceMemory
+          }
+        };
+        window.__stealthServiceWorkerReport = report;
+        render(report);
+      }
+
+      if (!window.isSecureContext) {
+        finalize(null, { skipReason: 'service worker requires a secure context' });
+        return;
+      }
+
+      if (!('serviceWorker' in navigator)) {
+        finalize(null, { skipReason: 'service worker unavailable in this browser context' });
+        return;
+      }
+
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+
+        const registration = await navigator.serviceWorker.register('./stealth-service-worker.js?ts=' + Date.now(), { scope: './' });
+        await navigator.serviceWorker.ready;
+
+        const worker = registration.active || registration.waiting || registration.installing;
+        if (!worker) {
+          finalize(null, { error: 'no active service worker' });
+          return;
+        }
+
+        if (worker.state !== 'activated') {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('service worker activation timeout')), 5000);
+            worker.addEventListener('statechange', function onStateChange() {
+              if (worker.state === 'activated') {
+                clearTimeout(timeout);
+                worker.removeEventListener('statechange', onStateChange);
+                resolve();
+              }
+            });
+          });
+        }
+
+        const channel = new MessageChannel();
+        const timeout = setTimeout(() => finalize(null, { error: 'service worker response timeout' }), 5000);
+
+        channel.port1.onmessage = function(event) {
+          clearTimeout(timeout);
+          finalize(event.data, {});
+        };
+        channel.port1.onmessageerror = function() {
+          clearTimeout(timeout);
+          finalize(null, { error: 'service worker message error' });
+        };
+
+        worker.postMessage({ type: 'collect' }, [channel.port2]);
+      } catch (error) {
+        finalize(null, { error: error && error.message ? error.message : String(error) });
+      }
+    })();
+  </script>
+</body>
+</html>

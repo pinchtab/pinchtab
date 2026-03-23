@@ -448,6 +448,21 @@ func TestApplyFileConfigToRuntime_TrustProxyHeaders(t *testing.T) {
 	}
 }
 
+func TestApplyFileConfigToRuntime_SanitizesChromeExtraFlags(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	fc := &FileConfig{
+		Browser: BrowserConfig{
+			ChromeExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
+		t.Fatalf("ChromeExtraFlags = %q, want %q", cfg.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	}
+}
+
 // clearConfigEnvVars unsets all config-related env vars for clean tests.
 func clearConfigEnvVars(t *testing.T) {
 	t.Helper()

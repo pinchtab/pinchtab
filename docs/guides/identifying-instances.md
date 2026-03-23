@@ -24,12 +24,15 @@ Now a process listing such as `ps -axo pid,command | rg pinchtab-chrome` gives y
 
 ## 2. Add Recognizable Chrome Flags
 
-Extra Chrome flags are configured through `browser.extraFlags` in `config.json`:
+Use `instanceDefaults.userAgent` for a visible process marker, and reserve `browser.extraFlags` for safe non-security-reducing flags:
 
 ```json
 {
+  "instanceDefaults": {
+    "userAgent": "PinchTab-Automation/1.0"
+  },
   "browser": {
-    "extraFlags": "--user-agent=PinchTab-Automation/1.0 --disable-dev-shm-usage"
+    "extraFlags": "--ash-no-nudges --disable-focus-on-load"
   }
 }
 ```
@@ -41,6 +44,8 @@ ps -axo pid,command | rg 'PinchTab-Automation|user-data-dir'
 ```
 
 Use this when you want to differentiate roles such as “scraper”, “monitor”, or “debug”.
+
+Do not put security-reducing or PinchTab-owned flags in `browser.extraFlags`. For example, `--user-agent=...`, `--no-sandbox`, and stealth/runtime-owned flags are rejected.
 
 ## 3. Use Profile Paths As An Identifier
 
@@ -74,7 +79,7 @@ curl http://localhost:9867/instances
 For most setups, this combination is enough:
 
 1. point PinchTab to a renamed Chrome binary via `browser.binary` in config
-2. add a recognizable `browser.extraFlags` marker in config
+2. add a recognizable `instanceDefaults.userAgent` marker or a safe `browser.extraFlags` marker in config
 3. verify the profile path or instance ID in the dashboard
 
 ## Docker
@@ -82,5 +87,5 @@ For most setups, this combination is enough:
 The same approach works in containers:
 
 - set `browser.binary` in config if you need to override the bundled browser path
-- put identifying flags in `browser.extraFlags`
+- put only safe identifying flags in `browser.extraFlags`
 - inspect the instance list from the API or dashboard rather than relying only on process names inside the container
