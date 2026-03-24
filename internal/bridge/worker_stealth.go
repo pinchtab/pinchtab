@@ -56,10 +56,7 @@ func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, 
 }
 
 func workerStealthParityScript(persona stealth.BrowserPersona) string {
-	languagesJSON, err := json.Marshal(persona.Languages)
-	if err != nil {
-		languagesJSON = []byte(`["en-US","en"]`)
-	}
+	languagesJSON := safeJSONStringArray(persona.Languages, `["en-US","en"]`)
 
 	return fmt.Sprintf(`(() => {
   try {
@@ -73,12 +70,27 @@ func workerStealthParityScript(persona stealth.BrowserPersona) string {
     const ua = %q || nav.userAgent || '';
     const platform = %q || nav.platform || '';
     const language = %q || nav.language || 'en-US';
-    const languages = %s;
+    const languages = JSON.parse(%q);
     if (ua) define('userAgent', () => ua);
     if (platform) define('platform', () => platform);
     define('language', () => language);
     define('languages', () => languages.slice());
     define('webdriver', () => false);
   } catch (e) {}
-})()`, persona.UserAgent, persona.NavigatorPlatform, persona.Language, string(languagesJSON))
+})()`, persona.UserAgent, persona.NavigatorPlatform, persona.Language, languagesJSON)
+}
+
+// safeJSONStringArray marshals a string slice to JSON and validates the output
+// is a JSON array of strings. Returns fallback on any error.
+func safeJSONStringArray(values []string, fallback string) string {
+	data, err := json.Marshal(values)
+	if err != nil {
+		return fallback
+	}
+	// Round-trip to verify output is a valid string array
+	var check []string
+	if json.Unmarshal(data, &check) != nil {
+		return fallback
+	}
+	return string(data)
 }
