@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -189,6 +190,11 @@ func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
 			continue
 		}
+		if !isAllowedProbeHost(parsed.Hostname()) {
+			lastProbe = fmt.Sprintf("%s -> blocked: non-loopback host", baseURL)
+			slog.Warn("health probe blocked: non-loopback host", "url", baseURL, "host", parsed.Hostname())
+			continue
+		}
 		target := &url.URL{
 			Scheme: parsed.Scheme,
 			Host:   parsed.Host,
@@ -294,6 +300,16 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 
 func isInstanceHealthyStatus(code int) bool {
 	return code > 0 && code < http.StatusInternalServerError
+}
+
+// isAllowedProbeHost restricts health probes to loopback addresses to
+// prevent SSRF when inst.URL is attacker-controlled.
+func isAllowedProbeHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func instanceBaseURLs(port int) []string {
