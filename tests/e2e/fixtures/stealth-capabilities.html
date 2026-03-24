@@ -474,10 +474,16 @@
       const table = document.getElementById('results');
       for (const row of rows) {
         const tr = table.insertRow();
-        tr.innerHTML =
-          '<td>' + row[0] + '</td>' +
-          '<td class="' + (row[1] ? 'ok' : 'bad') + '">' + (row[1] ? 'PASS' : 'FAIL') + '</td>' +
-          '<td>' + String(row[2]) + '</td>';
+        const tdCheck = document.createElement('td');
+        tdCheck.textContent = row[0];
+        const tdStatus = document.createElement('td');
+        tdStatus.className = row[1] ? 'ok' : 'bad';
+        tdStatus.textContent = row[1] ? 'PASS' : 'FAIL';
+        const tdValue = document.createElement('td');
+        tdValue.textContent = String(row[2]);
+        tr.appendChild(tdCheck);
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdValue);
       }
 
       document.getElementById('raw').textContent = JSON.stringify(capabilities, null, 2);
