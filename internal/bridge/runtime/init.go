@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -95,7 +96,7 @@ func ensureStealthBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle) *ste
 	if bundle != nil {
 		return bundle
 	}
-	return stealth.NewBundle(cfg, rand.Int63n(1000000000))
+	return stealth.NewBundle(cfg, cryptoRandSeed())
 }
 
 func appendExecAllocatorFlags(opts []chromedp.ExecAllocatorOption, flags []string) []chromedp.ExecAllocatorOption {
@@ -448,7 +449,12 @@ func randomWindowSize() (int, int) {
 		{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900},
 		{1280, 720}, {1600, 900}, {2560, 1440}, {1280, 800},
 	}
-	s := sizes[rand.Intn(len(sizes))]
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(sizes))))
+	idx := 0
+	if err == nil {
+		idx = int(n.Int64())
+	}
+	s := sizes[idx]
 	return s[0], s[1]
 }
 
@@ -478,4 +484,12 @@ func (w *prefixedLogWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+func cryptoRandSeed() int64 {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000000))
+	if err != nil {
+		return 42
+	}
+	return n.Int64()
 }

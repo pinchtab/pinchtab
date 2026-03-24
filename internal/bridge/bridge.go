@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -378,7 +379,7 @@ func (b *Bridge) ensureStealthBundle() {
 	if b.StealthBundle != nil || b.Config == nil {
 		return
 	}
-	b.StealthBundle = stealth.NewBundle(b.Config, rand.Int63n(1000000000))
+	b.StealthBundle = stealth.NewBundle(b.Config, cryptoRandSeed())
 }
 
 func (b *Bridge) StealthStatus() *stealth.Status {
@@ -497,4 +498,12 @@ func (r *ActionRequest) NormalizeSelector() {
 	}
 	// If Selector is already set (either from JSON or from Ref promotion),
 	// leave it as-is — Parse() will auto-detect the kind.
+}
+
+func cryptoRandSeed() int64 {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000000))
+	if err != nil {
+		return 42
+	}
+	return n.Int64()
 }
