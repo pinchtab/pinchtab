@@ -32,6 +32,17 @@ func TestTokenFromRequest_CookieFallback(t *testing.T) {
 	}
 }
 
+func TestCookieValueFromHeaders(t *testing.T) {
+	const want = "cookie token/+"
+	headers := []string{
+		"theme=dark; " + CookieName + "=" + url.QueryEscape(want),
+	}
+
+	if got := cookieValueFromHeaders(headers, CookieName); got != want {
+		t.Fatalf("cookieValueFromHeaders() = %q, want %q", got, want)
+	}
+}
+
 func TestTokenFromRequest_NoToken(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 

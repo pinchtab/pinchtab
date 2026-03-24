@@ -36,18 +36,15 @@ func CredentialsFromRequest(r *http.Request) Credentials {
 	}
 
 	cookie, err := r.Cookie(CookieName)
-	if err != nil {
-		return Credentials{}
+	if err == nil {
+		if value := normalizeCookieValue(cookie.Value); value != "" {
+			return Credentials{Value: value, Method: MethodCookie}
+		}
 	}
-
-	value := strings.TrimSpace(cookie.Value)
-	if value == "" {
-		return Credentials{}
+	if value := cookieValueFromHeaders(r.Header.Values("Cookie"), CookieName); value != "" {
+		return Credentials{Value: value, Method: MethodCookie}
 	}
-	if decoded, err := url.QueryUnescape(value); err == nil {
-		return Credentials{Value: strings.TrimSpace(decoded), Method: MethodCookie}
-	}
-	return Credentials{Value: value, Method: MethodCookie}
+	return Credentials{}
 }
 
 // TokenFromRequest extracts the bearer token from the request.
@@ -79,4 +76,34 @@ func tokenFromAuthorizationHeader(auth string) string {
 		return strings.TrimSpace(auth[7:])
 	}
 	return auth
+}
+
+func normalizeCookieValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if decoded, err := url.QueryUnescape(value); err == nil {
+		return strings.TrimSpace(decoded)
+	}
+	return value
+}
+
+func cookieValueFromHeaders(headers []string, name string) string {
+	for _, header := range headers {
+		for _, part := range strings.Split(header, ";") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			key, value, ok := strings.Cut(part, "=")
+			if !ok || strings.TrimSpace(key) != name {
+				continue
+			}
+			if normalized := normalizeCookieValue(value); normalized != "" {
+				return normalized
+			}
+		}
+	}
+	return ""
 }

@@ -84,7 +84,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		if a.loginLimiter != nil {
 			a.loginLimiter.RecordFailure(clientIP)
 		}
-		authn.ClearSessionCookie(w, r)
+		authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders)
 		authn.AuditWarn(r, "auth.login_failed", "reason", "bad_token")
 		w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 		httpx.ErrorCode(w, http.StatusUnauthorized, "bad_token", "unauthorized", false, nil)
@@ -107,7 +107,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime())
+	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime(), a.runtime != nil && a.runtime.TrustProxyHeaders)
 	authn.AuditLog(r, "auth.session_created",
 		"sessionIdleSec", int(authn.DefaultSessionIdleTimeout.Seconds()),
 		"sessionMaxLifetimeSec", int(a.sessions.MaxLifetime().Seconds()),
@@ -122,7 +122,7 @@ func (a *AuthAPI) HandleLogout(w http.ResponseWriter, r *http.Request) {
 			authn.AuditLog(r, "auth.session_revoked", "reason", "logout")
 		}
 	}
-	authn.ClearSessionCookie(w, r)
+	authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders)
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -165,7 +165,7 @@ func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.sessions.Elevate(creds.Value, token) {
-		authn.ClearSessionCookie(w, r)
+		authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders)
 		w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 		httpx.ErrorCode(w, http.StatusUnauthorized, "bad_token", "unauthorized", false, nil)
 		return

@@ -49,6 +49,57 @@ func TestAuthAPIHandleLogin(t *testing.T) {
 	}
 }
 
+func TestAuthAPIHandleLogin_LocalhostHTTPUsesNonSecureCookie(t *testing.T) {
+	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	api := NewAuthAPI(&config.RuntimeConfig{Token: "secret-token"}, sessions)
+
+	req := httptest.NewRequest("POST", "http://localhost:9867/api/auth/login", strings.NewReader(`{"token":"secret-token"}`))
+	req.Host = "localhost:9867"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	api.HandleLogin(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	if cookies[0].Secure {
+		t.Fatal("expected localhost http auth cookie to omit Secure so browser sessions work reliably")
+	}
+}
+
+func TestAuthAPIHandleLogin_TrustedProxyHTTPSUsesSecureCookie(t *testing.T) {
+	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	api := NewAuthAPI(&config.RuntimeConfig{
+		Token:             "secret-token",
+		TrustProxyHeaders: true,
+	}, sessions)
+
+	req := httptest.NewRequest("POST", "http://127.0.0.1:9867/api/auth/login", strings.NewReader(`{"token":"secret-token"}`))
+	req.Host = "127.0.0.1:9867"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "pinchtab.example")
+	w := httptest.NewRecorder()
+
+	api.HandleLogin(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	if !cookies[0].Secure {
+		t.Fatal("expected proxied https auth cookie to remain Secure")
+	}
+}
+
 func TestAuthAPIHandleLoginRejectsBadToken(t *testing.T) {
 	api := NewAuthAPI(&config.RuntimeConfig{Token: "secret-token"}, authn.NewSessionManager(authn.SessionConfig{}))
 
@@ -93,6 +144,33 @@ func TestAuthAPIHandleLogoutClearsCookie(t *testing.T) {
 	}
 	if sessions.Validate(sessionID, "secret-token") {
 		t.Fatal("expected logout to revoke session")
+	}
+}
+
+func TestAuthAPIHandleLogout_LocalhostHTTPClearsNonSecureCookie(t *testing.T) {
+	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	api := NewAuthAPI(&config.RuntimeConfig{Token: "secret-token"}, sessions)
+
+	req := httptest.NewRequest("POST", "http://localhost:9867/api/auth/logout", nil)
+	req.Host = "localhost:9867"
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+	w := httptest.NewRecorder()
+
+	api.HandleLogout(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != authn.CookieName || cookies[0].MaxAge != -1 {
+		t.Fatalf("expected expired auth cookie, got %+v", cookies)
+	}
+	if cookies[0].Secure {
+		t.Fatal("expected localhost http logout cookie clearing to omit Secure")
 	}
 }
 

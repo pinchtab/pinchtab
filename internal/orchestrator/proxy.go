@@ -132,6 +132,20 @@ func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, target
 	})
 }
 
+// ProxyToTarget proxies a shorthand dashboard request to a managed instance URL,
+// preserving orchestrator-side auth injection for the child bridge.
+func (o *Orchestrator) ProxyToTarget(w http.ResponseWriter, r *http.Request, target string) {
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
+		return
+	}
+	if targetURL.RawQuery == "" {
+		targetURL.RawQuery = r.URL.RawQuery
+	}
+	o.proxyToURL(w, r, targetURL)
+}
+
 // findRunningInstanceByTabID finds the instance that owns the given tab.
 func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceInternal, error) {
 	o.mu.RLock()

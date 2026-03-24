@@ -116,3 +116,38 @@ func TestProxyToURL_UsesAttachedBridgeOriginAndAuth(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 }
+
+func TestProxyToTarget_InjectsChildAuthAndStripsCookie(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer child-token" {
+			t.Fatalf("authorization = %q, want %q", got, "Bearer child-token")
+		}
+		if got := r.Header.Get("Cookie"); got != "" {
+			t.Fatalf("cookie = %q, want empty", got)
+		}
+		if r.URL.Path != "/action" {
+			t.Fatalf("path = %q, want /action", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `ok`)
+	}))
+	defer backend.Close()
+
+	o := NewOrchestrator(t.TempDir())
+	o.client = backend.Client()
+	o.childAuthToken = "child-token"
+	o.instances["inst_1"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "inst_1", Status: "running"},
+		URL:      backend.URL,
+		cmd:      &mockCmd{pid: 1234, isAlive: true},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/action", nil)
+	req.Header.Set("Cookie", "pinchtab_auth_token=session-secret")
+	w := httptest.NewRecorder()
+
+	o.ProxyToTarget(w, req, backend.URL+"/action")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}

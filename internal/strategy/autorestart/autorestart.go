@@ -20,7 +20,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
-	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 )
 
@@ -445,7 +444,7 @@ func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	strategy.EnrichForTarget(r, s.orch, target)
-	proxy.HTTP(w, r, target+r.URL.Path)
+	s.orch.ProxyToTarget(w, r, target+r.URL.Path)
 }
 
 // ensureRunning returns the URL of the managed instance if running.
@@ -465,7 +464,7 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
-	proxy.HTTP(w, r, target+"/tabs")
+	s.orch.ProxyToTarget(w, r, target+"/tabs")
 }
 
 func (s *Strategy) handleStatus(w http.ResponseWriter, r *http.Request) {

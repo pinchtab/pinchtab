@@ -90,7 +90,7 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 
 		creds := authn.CredentialsFromRequest(r)
 		if creds.Value == "" {
-			authn.ClearSessionCookie(w, r)
+			authn.ClearSessionCookie(w, r, cfg != nil && cfg.TrustProxyHeaders)
 			w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="missing_token"`)
 			httpx.ErrorCode(w, 401, "missing_token", "unauthorized", false, nil)
 			return
@@ -99,7 +99,7 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 		switch creds.Method {
 		case authn.MethodHeader:
 			if subtle.ConstantTimeCompare([]byte(creds.Value), []byte(token)) != 1 {
-				authn.ClearSessionCookie(w, r)
+				authn.ClearSessionCookie(w, r, cfg != nil && cfg.TrustProxyHeaders)
 				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 				httpx.ErrorCode(w, 401, "bad_token", "unauthorized", false, nil)
 				return
@@ -112,7 +112,7 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 				return
 			}
 			if sessions == nil || !sessions.Validate(creds.Value, token) {
-				authn.ClearSessionCookie(w, r)
+				authn.ClearSessionCookie(w, r, cfg != nil && cfg.TrustProxyHeaders)
 				w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 				httpx.ErrorCode(w, 401, "bad_token", "unauthorized", false, nil)
 				return
@@ -129,7 +129,7 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 				return
 			}
 		default:
-			authn.ClearSessionCookie(w, r)
+			authn.ClearSessionCookie(w, r, cfg != nil && cfg.TrustProxyHeaders)
 			w.Header().Set("WWW-Authenticate", `Bearer realm="pinchtab", error="bad_token"`)
 			httpx.ErrorCode(w, 401, "bad_token", "unauthorized", false, nil)
 			return
