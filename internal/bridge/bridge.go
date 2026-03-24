@@ -2,9 +2,9 @@ package bridge
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
-	"crypto/rand"
 	"math/big"
 	"os"
 	"sync"
