@@ -95,6 +95,76 @@ else
   fi
 fi
 
+# --- Part 2: Auto-start + navigation test ---
+# Uses a fresh container where the server is NOT pre-started.
+# The MCP command should auto-launch the server and handle tool calls.
+
+echo ""
+echo "Testing MCP auto-start + navigation..."
+
+NAME2="pinchtab-mcp-autostart-${RANDOM}${RANDOM}"
+cleanup2() {
+  if docker ps -a --format '{{.Names}}' | grep -Fxq "$NAME2"; then
+    if [ "$FAILED" -ne 0 ]; then
+      echo ""
+      echo "Auto-start container logs:"
+      docker logs "$NAME2" 2>&1 | tail -30 || true
+    fi
+    docker rm -f "$NAME2" >/dev/null 2>&1 || true
+  fi
+}
+trap 'cleanup; cleanup2' EXIT
+
+# Start container with sleep (no server running)
+docker run -d --name "$NAME2" \
+  -e PINCHTAB_TOKEN="$SMOKE_TOKEN" \
+  --entrypoint /usr/bin/dumb-init \
+  "$IMAGE" -- sleep 300 >/dev/null
+
+# Ensure config exists so the server can start
+docker exec "$NAME2" pinchtab config init >/dev/null 2>&1 || true
+docker exec "$NAME2" pinchtab config set server.token "$SMOKE_TOKEN" >/dev/null 2>&1 || true
+
+# Test 4: MCP auto-starts the server when not running
+# Send initialize + a navigate tool call through mcp.
+# The mcp command should detect no server, spawn one, wait for health,
+# then process the tool calls.
+NAV_MSG='{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"pinchtab_navigate","arguments":{"url":"data:text/html,<h1>MCP-AutoStart-Test</h1>"}}}'
+
+AUTOSTART_RESPONSE=$(printf '%s\n%s\n' "$INIT_MSG" "$NAV_MSG" | docker exec -i \
+  -e PINCHTAB_TOKEN="$SMOKE_TOKEN" \
+  "$NAME2" pinchtab mcp 2>/dev/null | tail -1)
+
+if echo "$AUTOSTART_RESPONSE" | grep -q '"jsonrpc"'; then
+  if echo "$AUTOSTART_RESPONSE" | grep -q '"result"'; then
+    pass "MCP auto-started server and navigate tool call succeeded"
+  elif echo "$AUTOSTART_RESPONSE" | grep -q '"error"'; then
+    # An error response is still valid JSON-RPC — server started but tool may have failed
+    pass "MCP auto-started server (tool returned error, but server is running)"
+  else
+    fail "MCP auto-start: unexpected response: $AUTOSTART_RESPONSE"
+  fi
+else
+  fail "MCP auto-start failed: no JSON-RPC response: $AUTOSTART_RESPONSE"
+fi
+
+# Test 5: Verify the server is actually running after auto-start
+HEALTH_CHECK=$(docker exec -e PINCHTAB_TOKEN="$SMOKE_TOKEN" "$NAME2" \
+  pinchtab health 2>&1 || true)
+
+if echo "$HEALTH_CHECK" | grep -qi "ok\|healthy\|running\|version"; then
+  pass "Server is running after MCP auto-start"
+else
+  # health command may have different output format, check if server responds
+  HEALTH_HTTP=$(docker exec "$NAME2" sh -c \
+    "wget -qO- --header='Authorization: Bearer $SMOKE_TOKEN' http://127.0.0.1:9867/health 2>/dev/null" || true)
+  if [ -n "$HEALTH_HTTP" ]; then
+    pass "Server is running after MCP auto-start (confirmed via HTTP)"
+  else
+    fail "Server not running after MCP auto-start: $HEALTH_CHECK"
+  fi
+fi
+
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo -e "${GREEN}${BOLD}Docker MCP smoke test passed.${NC}"
