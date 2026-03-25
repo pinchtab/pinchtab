@@ -1,5 +1,5 @@
-import type { InstanceTab } from "../../generated/types";
-import * as api from "../../services/api";
+import type { InstanceTab } from "../generated/types";
+import * as api from "../services/api";
 
 interface Props {
   tabs: InstanceTab[];

@@ -1,6 +1,6 @@
-import type { Instance, InstanceTab } from "../../generated/types";
-import ScreencastTile from "../screencast/ScreencastTile";
-import { EmptyView } from "../molecules";
+import type { Instance, InstanceTab } from "../generated/types";
+import ScreencastTile from "../components/screencast/ScreencastTile";
+import { EmptyView } from "../components/molecules";
 
 interface Props {
   instance?: Instance;

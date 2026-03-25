@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import type { ActivityFilters } from "./types";
-import ActivityExplorer from "./ActivityExplorer";
+import AgentActivityWorkspace from "./AgentActivityWorkspace";
 
 interface ActivityPageLocationState {
   profileName?: string;
@@ -123,10 +123,10 @@ export default function ActivityPage() {
   }, [derivedInitialFilters, didAutoSelect]);
 
   return (
-    <ActivityExplorer
-      title="Request timeline"
-      summaryLabel="Activity"
+    <AgentActivityWorkspace
       initialFilters={initialFilters}
+      defaultSidebarTab="activities"
+      hiddenSources={["dashboard"]}
     />
   );
 }

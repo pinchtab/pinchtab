@@ -7,7 +7,7 @@ const { fetchInstanceLogs, subscribeToInstanceLogs } = vi.hoisted(() => ({
   subscribeToInstanceLogs: vi.fn(),
 }));
 
-vi.mock("../../services/api", () => ({
+vi.mock("../services/api", () => ({
   fetchInstanceLogs,
   subscribeToInstanceLogs,
 }));

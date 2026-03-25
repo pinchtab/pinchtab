@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import ProfileCard from "./ProfileCard";
-import type { Profile, Instance } from "../../types";
+import type { Profile, Instance } from "../types";
 
 const mockProfile: Profile = {
   id: "prof_123",

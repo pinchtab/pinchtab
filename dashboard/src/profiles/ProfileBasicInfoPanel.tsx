@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Input } from "../atoms";
-import type { Profile } from "../../generated/types";
+import { Input } from "../components/atoms";
+import type { Profile } from "../generated/types";
 
 interface Props {
   profile: Profile;

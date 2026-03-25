@@ -1,4 +1,4 @@
-import type { InstanceTab } from "../../generated/types";
+import type { InstanceTab } from "../generated/types";
 
 interface Props {
   tab: InstanceTab;

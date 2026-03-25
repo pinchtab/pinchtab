@@ -29,7 +29,11 @@ jobs:
 
       - name: Format check
         run: |
-          unformatted=$(gofmt -l .)
+          mapfile -t go_files < <(git ls-files -- '*.go')
+          unformatted=""
+          if [ ${#go_files[@]} -gt 0 ]; then
+            unformatted=$(gofmt -l "${go_files[@]}")
+          fi
           if [ -n "$unformatted" ]; then
             echo "Files not formatted:"
             echo "$unformatted"

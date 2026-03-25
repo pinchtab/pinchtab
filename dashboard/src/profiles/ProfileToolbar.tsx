@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "../atoms";
-import type { Profile, Instance } from "../../generated/types";
+import { Button } from "../components/atoms";
+import type { Profile, Instance } from "../generated/types";
 
 interface Props {
   profile: Profile;

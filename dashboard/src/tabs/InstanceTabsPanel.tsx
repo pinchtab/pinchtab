@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { InstanceTab } from "../../generated/types";
+import type { InstanceTab } from "../generated/types";
 import TabBar from "./TabBar";
 import SelectedTabPanel from "./SelectedTabPanel";
 

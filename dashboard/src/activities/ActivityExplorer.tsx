@@ -110,7 +110,6 @@ export default function ActivityExplorer({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryKey]);
 
   const stats = useMemo(() => {

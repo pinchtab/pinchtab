@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import { EmptyState, ErrorBoundary } from "../components/atoms";
 import { TabsChart } from "../components/molecules";
-import InstanceListItem from "../components/instances/InstanceListItem";
-import InstanceTabsPanel from "../components/tabs/InstanceTabsPanel";
+import InstanceListItem from "../instances/InstanceListItem";
+import InstanceTabsPanel from "../tabs/InstanceTabsPanel";
 import * as api from "../services/api";
 
 export default function MonitoringPage() {

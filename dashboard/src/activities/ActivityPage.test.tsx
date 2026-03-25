@@ -91,10 +91,9 @@ describe("ActivityPage", () => {
       expect(fetchActivity).toHaveBeenCalled();
     });
 
-    expect(screen.getByText("Request timeline")).toBeInTheDocument();
     expect(screen.getByText("/tabs/tab_123/action")).toBeInTheDocument();
     expect(screen.getByText("agent:cli")).toBeInTheDocument();
-    expect(screen.getByText("tab:tab_123")).toBeInTheDocument();
+    expect(screen.getAllByText("tab:tab_123").length).toBeGreaterThan(0);
   });
 
   it("defaults to the current running profile and tab", async () => {

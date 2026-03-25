@@ -1,5 +1,5 @@
-import { Card, Badge, Button } from "../atoms";
-import type { Profile, Instance } from "../../types";
+import { Card, Badge, Button } from "../components/atoms";
+import type { Profile, Instance } from "../types";
 
 interface Props {
   profile: Profile;

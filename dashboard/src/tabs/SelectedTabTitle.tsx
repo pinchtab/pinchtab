@@ -1,5 +1,5 @@
-import type { InstanceTab } from "../../generated/types";
-import IdBadge from "./IdBadge";
+import type { InstanceTab } from "../generated/types";
+import IdBadge from "../components/molecules/IdBadge";
 
 interface Props {
   tab: InstanceTab;

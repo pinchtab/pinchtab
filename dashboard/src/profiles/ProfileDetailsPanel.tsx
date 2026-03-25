@@ -5,9 +5,9 @@ import ProfileBasicInfoPanel from "./ProfileBasicInfoPanel";
 import ProfileLiveViewPanel from "./ProfileLiveViewPanel";
 import ProfileToolbar from "./ProfileToolbar";
 import { InstanceTabsPanel } from "../tabs";
-import { TabsLayout, EmptyView } from "../molecules";
-import type { Profile, Instance, InstanceTab } from "../../generated/types";
-import * as api from "../../services/api";
+import { TabsLayout, EmptyView } from "../components/molecules";
+import type { Profile, Instance, InstanceTab } from "../generated/types";
+import * as api from "../services/api";
 
 interface Props {
   profile: Profile | null;

@@ -2,13 +2,13 @@ import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import { Toolbar, EmptyState, Button, Badge } from "../components/atoms";
-import {
-  CreateProfileModal,
-  ProfileDetailsPanel,
-  StartInstanceModal,
-} from "../components/molecules";
 import * as api from "../services/api";
 import type { Profile } from "../generated/types";
+import {
+  CreateProfileModal,
+  StartInstanceModal,
+} from "../components/molecules";
+import ProfileDetailsPanel from "../profiles/ProfileDetailsPanel";
 
 function getProfileKey(profile: Profile) {
   return profile.id || profile.name;
@@ -206,7 +206,7 @@ export default function ProfilesPage() {
             />
           ) : (
             <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row">
-              <div className="dashboard-panel flex max-h-[22rem] w-full shrink-0 flex-col overflow-hidden lg:max-h-none lg:w-80">
+              <div className="dashboard-panel flex max-h-88 w-full shrink-0 flex-col overflow-hidden lg:max-h-none lg:w-80">
                 <div className="border-b border-border-subtle px-4 py-3">
                   <div className="dashboard-section-label mb-1">Profiles</div>
                   <div className="flex items-center justify-between gap-3">

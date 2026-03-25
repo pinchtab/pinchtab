@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { ActivityExplorer } from "../../activities";
-import type { InstanceTab } from "../../generated/types";
-import { TabsLayout, EmptyView } from "../molecules";
-import ScreencastTile from "../screencast/ScreencastTile";
+import { ActivityExplorer } from "../activities";
+import type { InstanceTab } from "../generated/types";
+import { TabsLayout, EmptyView } from "../components/molecules";
+import ScreencastTile from "../components/screencast/ScreencastTile";
 import SelectedTabTitle from "./SelectedTabTitle";
 
 interface Props {

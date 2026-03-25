@@ -1,4 +1,4 @@
-import type { Profile, Instance } from "../../generated/types";
+import type { Profile, Instance } from "../generated/types";
 
 interface Props {
   profile: Profile;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import * as api from "../../services/api";
+import * as api from "../services/api";
 
 interface Props {
   instanceId?: string;

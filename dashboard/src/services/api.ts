@@ -29,6 +29,8 @@ import {
 import { dispatchAuthRequired, sameOriginUrl } from "./auth";
 
 const BASE = ""; // Uses proxy in dev
+const DASHBOARD_SOURCE_HEADER = "X-PinchTab-Source";
+const DASHBOARD_SOURCE = "dashboard";
 
 type RequestMeta = {
   suppressAuthRedirect?: boolean;
@@ -74,7 +76,7 @@ async function request<T>(
   meta?: RequestMeta,
 ): Promise<T> {
   const res = await fetch(BASE + url, {
-    ...options,
+    ...withDashboardSource(options),
     credentials: "same-origin",
   });
   if (!res.ok) {
@@ -93,7 +95,7 @@ async function requestText(
   meta?: RequestMeta,
 ): Promise<string> {
   const res = await fetch(BASE + url, {
-    ...options,
+    ...withDashboardSource(options),
     credentials: "same-origin",
   });
   if (!res.ok) {
@@ -112,7 +114,7 @@ async function requestBlob(
   meta?: RequestMeta,
 ): Promise<Blob> {
   const res = await fetch(BASE + url, {
-    ...options,
+    ...withDashboardSource(options),
     credentials: "same-origin",
   });
   if (!res.ok) {
@@ -123,6 +125,15 @@ async function requestBlob(
     throw new ApiError(err.error || "Request failed", res.status, err.code);
   }
   return res.blob();
+}
+
+function withDashboardSource(options?: RequestInit): RequestInit {
+  const headers = new Headers(options?.headers);
+  headers.set(DASHBOARD_SOURCE_HEADER, DASHBOARD_SOURCE);
+  return {
+    ...options,
+    headers,
+  };
 }
 
 // Profiles — endpoint is /profiles (no /api prefix)
@@ -314,6 +325,7 @@ export async function probeBackendAuth(): Promise<{
   health?: DashboardServerInfo;
 }> {
   const res = await fetch(BASE + "/health", {
+    ...withDashboardSource(),
     credentials: "same-origin",
   });
   if (res.ok) {

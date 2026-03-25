@@ -1,180 +1,122 @@
-import type { FormEvent } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useAppStore } from "../stores/useAppStore";
 import { Button, Card, Input, Modal } from "../components/atoms";
-import * as api from "../services/api";
 import { credentialUsername, storeTokenCredential } from "../services/auth";
+import * as api from "../services/api";
+import { useAppStore } from "../stores/useAppStore";
 import type {
   BackendConfig,
   BackendConfigState,
-  BackendIDPIConfig,
-  BackendSecurityConfig,
   LocalDashboardSettings,
 } from "../types";
-
-type SectionId =
-  | "dashboard"
-  | "defaults"
-  | "orchestration"
-  | "security"
-  | "security-idpi"
-  | "profiles"
-  | "network"
-  | "browser"
-  | "timeouts";
+import { BrowserSettingsSection } from "./settings/BrowserSettingsSection";
+import { DashboardSettingsSection } from "./settings/DashboardSettingsSection";
+import { DefaultsSettingsSection } from "./settings/DefaultsSettingsSection";
+import { NetworkSettingsSection } from "./settings/NetworkSettingsSection";
+import { OrchestrationSettingsSection } from "./settings/OrchestrationSettingsSection";
+import { ProfilesSettingsSection } from "./settings/ProfilesSettingsSection";
+import { SecurityIdpiSettingsSection } from "./settings/SecurityIdpiSettingsSection";
+import { SecuritySettingsSection } from "./settings/SecuritySettingsSection";
+import {
+  backendSaveNotice,
+  sections,
+  type SectionId,
+  type UpdateBackendSection,
+} from "./settings/settingsShared";
+import { TimeoutsSettingsSection } from "./settings/TimeoutsSettingsSection";
 
 type PendingElevatedAction = "save" | null;
 
-const sections: Array<{
-  id: SectionId;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    description: "Local monitoring and screencast preferences.",
+function renderActiveSection(
+  activeSection: SectionId,
+  options: {
+    apiTokenMissing: boolean;
+    attachWildcard: boolean;
+    backendConfig: BackendConfig;
+    backendState: BackendConfigState | null;
+    idpiDomainsConfigured: boolean;
+    idpiEnabled: boolean;
+    idpiWildcard: boolean;
+    localSettings: LocalDashboardSettings;
+    nonLoopbackBind: boolean;
+    sensitiveEndpointsEnabled: boolean;
+    setLocalSettings: Dispatch<SetStateAction<LocalDashboardSettings>>;
+    updateBackendSection: UpdateBackendSection;
   },
-  {
-    id: "defaults",
-    label: "Instance Defaults",
-    description: "How new managed browser instances launch.",
-  },
-  {
-    id: "orchestration",
-    label: "Orchestration",
-    description: "Routing strategy, port range, and allocation policy.",
-  },
-  {
-    id: "security",
-    label: "Security",
-    description: "Sensitive endpoint gates and access controls.",
-  },
-  {
-    id: "security-idpi",
-    label: "Security IDPI",
-    description: "Indirect prompt injection website and content defenses.",
-  },
-  {
-    id: "profiles",
-    label: "Profiles",
-    description: "Shared profile storage and default profile behavior.",
-  },
-  {
-    id: "network",
-    label: "Network & Attach",
-    description: "Server binding, auth, and attach policy.",
-  },
-  {
-    id: "browser",
-    label: "Browser Runtime",
-    description: "Chrome binary, version, flags, and extensions.",
-  },
-  {
-    id: "timeouts",
-    label: "Timeouts",
-    description: "Action, navigation, shutdown, and wait timing.",
-  },
-];
-
-const fieldClass =
-  "w-full rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
-
-function backendSaveNotice(state: BackendConfigState | null): string {
-  if (state?.restartRequired) {
-    return "Backend config saved. Dynamic changes were applied where possible. Restart advised for server-level changes.";
+) {
+  switch (activeSection) {
+    case "dashboard":
+      return (
+        <DashboardSettingsSection
+          localSettings={options.localSettings}
+          setLocalSettings={options.setLocalSettings}
+        />
+      );
+    case "defaults":
+      return (
+        <DefaultsSettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "orchestration":
+      return (
+        <OrchestrationSettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "security":
+      return (
+        <SecuritySettingsSection
+          backendConfig={options.backendConfig}
+          sensitiveEndpointsEnabled={options.sensitiveEndpointsEnabled}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "security-idpi":
+      return (
+        <SecurityIdpiSettingsSection
+          backendConfig={options.backendConfig}
+          idpiDomainsConfigured={options.idpiDomainsConfigured}
+          idpiEnabled={options.idpiEnabled}
+          idpiWildcard={options.idpiWildcard}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "profiles":
+      return (
+        <ProfilesSettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "network":
+      return (
+        <NetworkSettingsSection
+          apiTokenMissing={options.apiTokenMissing}
+          attachWildcard={options.attachWildcard}
+          backendConfig={options.backendConfig}
+          backendState={options.backendState}
+          nonLoopbackBind={options.nonLoopbackBind}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "browser":
+      return (
+        <BrowserSettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
+    case "timeouts":
+      return (
+        <TimeoutsSettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
   }
-  return "Backend config saved. Dynamic changes were applied where possible.";
-}
-
-const selectClass =
-  "rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
-
-type SecurityEndpointKey = Exclude<keyof BackendSecurityConfig, "attach">;
-type IDPIToggleKey = Exclude<
-  keyof BackendIDPIConfig,
-  "allowedDomains" | "customPatterns"
->;
-
-const securityEndpointRows = [
-  ["allowEvaluate", "Allow evaluate"],
-  ["allowMacro", "Allow macro"],
-  ["allowScreencast", "Allow screencast"],
-  ["allowDownload", "Allow download"],
-  ["allowUpload", "Allow upload"],
-] as const satisfies ReadonlyArray<readonly [SecurityEndpointKey, string]>;
-
-const idpiToggleRows = [
-  ["enabled", "Enable IDPI", "Turn on indirect prompt injection defenses."],
-  [
-    "strictMode",
-    "Strict mode",
-    "Block disallowed domains and suspicious content instead of only warning.",
-  ],
-  [
-    "scanContent",
-    "Scan content",
-    "Inspect extracted text and snapshots for prompt-injection patterns.",
-  ],
-  [
-    "wrapContent",
-    "Wrap content",
-    "Mark returned page text as untrusted content for downstream consumers.",
-  ],
-] as const satisfies ReadonlyArray<readonly [IDPIToggleKey, string, string]>;
-
-function csvToList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function listToCsv(value: string[]): string {
-  return value.join(", ");
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="mb-5 border-b border-border-subtle pb-4">
-        <div className="dashboard-section-label mb-2">Settings</div>
-        <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
-          {description}
-        </p>
-      </div>
-      <div className="space-y-4">{children}</div>
-    </Card>
-  );
-}
-
-function SettingRow({
-  label,
-  description,
-  children,
-}: {
-  label: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-sm border border-border-subtle bg-black/10 p-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="max-w-xl">
-        <div className="text-sm font-medium text-text-primary">{label}</div>
-        <p className="mt-1 text-xs leading-5 text-text-muted">{description}</p>
-      </div>
-      <div className="w-full max-w-md">{children}</div>
-    </div>
-  );
 }
 
 export default function SettingsPage() {
@@ -218,13 +160,12 @@ export default function SettingsPage() {
           setServerInfo(health);
         }
       } catch (e) {
-        const message =
-          e instanceof Error ? e.message : "Failed to load settings";
-        setError(message);
+        setError(e instanceof Error ? e.message : "Failed to load settings");
       } finally {
         setLoading(false);
       }
     };
+
     load();
   }, [setServerInfo]);
 
@@ -242,8 +183,8 @@ export default function SettingsPage() {
       ),
     [backendConfig, backendState],
   );
-  const hasBackendChanges = hasBackendConfigChanges;
 
+  const hasBackendChanges = hasBackendConfigChanges;
   const hasChanges = hasDashboardChanges || hasBackendChanges;
   const restartRequired =
     backendState?.restartRequired || serverInfo?.restartRequired || false;
@@ -277,10 +218,7 @@ export default function SettingsPage() {
       )
     : false;
 
-  const updateBackendSection = <K extends keyof BackendConfig>(
-    section: K,
-    patch: Partial<BackendConfig[K]>,
-  ) => {
+  const updateBackendSection: UpdateBackendSection = (section, patch) => {
     setBackendConfig((current) =>
       current
         ? {
@@ -301,7 +239,9 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!hasChanges || !backendConfig) return;
+    if (!hasChanges || !backendConfig) {
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -340,9 +280,7 @@ export default function SettingsPage() {
         setPendingElevatedAction("save");
         return;
       }
-      const message =
-        e instanceof Error ? e.message : "Failed to save settings";
-      setError(message);
+      setError(e instanceof Error ? e.message : "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -377,9 +315,9 @@ export default function SettingsPage() {
         await handleSave();
       }
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to verify API token";
-      setElevationError(message);
+      setElevationError(
+        e instanceof Error ? e.message : "Failed to verify API token",
+      );
     } finally {
       setElevating(false);
     }
@@ -436,6 +374,7 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
       <Modal
         open={pendingElevatedAction !== null}
         onClose={closeElevationPrompt}
@@ -535,1070 +474,20 @@ export default function SettingsPage() {
               <div className="text-sm text-text-muted">Loading settings…</div>
             </Card>
           ) : (
-            <>
-              {activeSection === "dashboard" && (
-                <SectionCard
-                  title="Dashboard Preferences"
-                  description="These controls affect this dashboard UI only. They are stored locally in your browser and do not require a backend restart."
-                >
-                  <SettingRow
-                    label="Screencast frame rate"
-                    description="Controls how often live previews request new frames."
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={1}
-                        max={15}
-                        value={localSettings.screencast.fps}
-                        onChange={(e) =>
-                          setLocalSettings({
-                            ...localSettings,
-                            screencast: {
-                              ...localSettings.screencast,
-                              fps: Number(e.target.value),
-                            },
-                          })
-                        }
-                        className="w-full"
-                      />
-                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
-                        {localSettings.screencast.fps} fps
-                      </span>
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Screencast quality"
-                    description="JPEG quality for tab preview streams."
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={10}
-                        max={80}
-                        value={localSettings.screencast.quality}
-                        onChange={(e) =>
-                          setLocalSettings({
-                            ...localSettings,
-                            screencast: {
-                              ...localSettings.screencast,
-                              quality: Number(e.target.value),
-                            },
-                          })
-                        }
-                        className="w-full"
-                      />
-                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
-                        {localSettings.screencast.quality}%
-                      </span>
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Screencast width"
-                    description="Maximum preview width for live tiles."
-                  >
-                    <select
-                      value={localSettings.screencast.maxWidth}
-                      onChange={(e) =>
-                        setLocalSettings({
-                          ...localSettings,
-                          screencast: {
-                            ...localSettings.screencast,
-                            maxWidth: Number(e.target.value),
-                          },
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      {[400, 600, 800, 1024, 1280].map((width) => (
-                        <option key={width} value={width}>
-                          {width}px
-                        </option>
-                      ))}
-                    </select>
-                  </SettingRow>
-                  <SettingRow
-                    label="Memory metrics"
-                    description="Enable per-tab heap collection in the dashboard. Useful for debugging, but heavier."
-                  >
-                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.monitoring.memoryMetrics}
-                        onChange={(e) =>
-                          setLocalSettings({
-                            ...localSettings,
-                            monitoring: {
-                              ...localSettings.monitoring,
-                              memoryMetrics: e.target.checked,
-                            },
-                          })
-                        }
-                        className="h-4 w-4"
-                      />
-                      Enable
-                    </label>
-                  </SettingRow>
-                  <SettingRow
-                    label="Polling interval"
-                    description="How frequently the dashboard asks the backend for fresh metrics."
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={5}
-                        max={120}
-                        step={5}
-                        value={localSettings.monitoring.pollInterval}
-                        onChange={(e) =>
-                          setLocalSettings({
-                            ...localSettings,
-                            monitoring: {
-                              ...localSettings.monitoring,
-                              pollInterval: Number(e.target.value),
-                            },
-                          })
-                        }
-                        className="w-full"
-                      />
-                      <span className="dashboard-mono w-16 text-right text-sm text-text-secondary">
-                        {localSettings.monitoring.pollInterval}s
-                      </span>
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Reasoning output"
-                    description="Choose whether the live agent feed shows tool calls, progress updates, or both."
-                  >
-                    <select
-                      value={localSettings.agents.reasoningMode}
-                      onChange={(e) =>
-                        setLocalSettings({
-                          ...localSettings,
-                          agents: {
-                            ...localSettings.agents,
-                            reasoningMode: e.target.value as
-                              | "tool_calls"
-                              | "progress"
-                              | "both",
-                          },
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="tool_calls">Tool calls only</option>
-                      <option value="progress">Progress only</option>
-                      <option value="both">Both</option>
-                    </select>
-                  </SettingRow>
-                </SectionCard>
-              )}
-
-              {activeSection === "defaults" && (
-                <SectionCard
-                  title="Instance Defaults"
-                  description="These values are written to config and used for new managed instances. Existing running instances keep their current runtime."
-                >
-                  <SettingRow
-                    label="Mode"
-                    description="Default browser mode for new launches."
-                  >
-                    <select
-                      value={backendConfig.instanceDefaults.mode}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          mode: e.target
-                            .value as BackendConfig["instanceDefaults"]["mode"],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="headless">Headless</option>
-                      <option value="headed">Headed</option>
-                    </select>
-                  </SettingRow>
-                  <SettingRow
-                    label="Stealth level"
-                    description="Bot detection evasion profile. Higher levels may affect error monitoring and certain browser features."
-                  >
-                    <div className="space-y-2">
-                      <select
-                        value={backendConfig.instanceDefaults.stealthLevel}
-                        onChange={(e) =>
-                          updateBackendSection("instanceDefaults", {
-                            stealthLevel: e.target
-                              .value as BackendConfig["instanceDefaults"]["stealthLevel"],
-                          })
-                        }
-                        className={selectClass}
-                      >
-                        <option value="light">Light</option>
-                        <option value="medium">Medium</option>
-                        <option value="full">Full</option>
-                      </select>
-                      <div className="rounded-sm border border-border-subtle bg-black/10 px-3 py-2 text-xs leading-5 text-text-muted">
-                        {backendConfig.instanceDefaults.stealthLevel ===
-                          "light" && (
-                          <div className="space-y-2">
-                            <div>
-                              <strong className="text-text-secondary">
-                                Light:
-                              </strong>{" "}
-                              Default baseline stealth. Keeps the lowest-risk
-                              launch and JS contract while hiding basic
-                              automation markers.
-                            </div>
-                            <div className="text-success/80">
-                              ✓ Default product security baseline
-                            </div>
-                            <div className="text-success/80">
-                              ✓ No intentional API realism or security tradeoff
-                            </div>
-                          </div>
-                        )}
-                        {backendConfig.instanceDefaults.stealthLevel ===
-                          "medium" && (
-                          <div className="space-y-2">
-                            <div>
-                              <strong className="text-warning">Medium:</strong>{" "}
-                              Non-default risk mode. Adds Client Hints,
-                              `chrome.runtime` shims, iframe propagation, stack
-                              filtering, and native-looking function masking to
-                              improve anti-bot compatibility.
-                            </div>
-                            <div className="text-warning/80">
-                              ⚠ Alters browser-visible APIs and error/stack
-                              behavior. Monitoring and debugging tools may see
-                              different results.
-                            </div>
-                            <div className="text-warning/80">
-                              ⚠ Permissions and compatibility shims can return
-                              intentionally altered values. Do not use this as
-                              the default safety baseline.
-                            </div>
-                            <div className="text-warning/80">
-                              ⚠ Reports that require explicitly enabling Medium
-                              should be treated as opt-in risk acceptance, not
-                              default-path behavior.
-                            </div>
-                          </div>
-                        )}
-                        {backendConfig.instanceDefaults.stealthLevel ===
-                          "full" && (
-                          <div className="space-y-2">
-                            <div>
-                              <strong className="text-destructive">
-                                Full:
-                              </strong>{" "}
-                              Highest-risk non-default mode. Adds graphics,
-                              canvas, audio, system-color, and WebRTC
-                              alterations on top of Medium.
-                            </div>
-                            <div className="text-destructive/80">
-                              ⚠ Browser output is intentionally less native and
-                              less stable. Rendering, media, and networking
-                              behavior may break or drift from real Chrome.
-                            </div>
-                            <div className="text-destructive/80">
-                              ⚠ This mode is not an acceptable default security
-                              posture. Only enable it when you explicitly accept
-                              the tradeoff surface.
-                            </div>
-                            <div className="text-destructive/80">
-                              ⚠ Reports that depend on enabling Full should be
-                              triaged as non-default operator risk unless a
-                              default-path bypass is shown.
-                            </div>
-                            <div className="text-destructive/80">
-                              ⚠ WebRTC, WebGL, canvas, and audio behavior can
-                              all diverge from baseline Chrome.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Tab eviction policy"
-                    description="How PinchTab behaves when a managed instance reaches its tab limit."
-                  >
-                    <select
-                      value={backendConfig.instanceDefaults.tabEvictionPolicy}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          tabEvictionPolicy: e.target
-                            .value as BackendConfig["instanceDefaults"]["tabEvictionPolicy"],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="reject">Reject new tabs</option>
-                      <option value="close_oldest">Close oldest</option>
-                      <option value="close_lru">
-                        Close least recently used
-                      </option>
-                    </select>
-                  </SettingRow>
-                  <SettingRow
-                    label="Max tabs"
-                    description="Maximum number of tabs per managed instance."
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      value={backendConfig.instanceDefaults.maxTabs}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          maxTabs: Number(e.target.value),
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Max parallel tabs"
-                    description="Set to 0 to auto-detect from CPU count."
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      value={backendConfig.instanceDefaults.maxParallelTabs}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          maxParallelTabs: Number(e.target.value),
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Timezone"
-                    description="Optional timezone override for launched instances."
-                  >
-                    <input
-                      value={backendConfig.instanceDefaults.timezone}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          timezone: e.target.value,
-                        })
-                      }
-                      placeholder="Europe/Rome"
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="User agent"
-                    description="Optional override applied to new managed instances."
-                  >
-                    <input
-                      value={backendConfig.instanceDefaults.userAgent}
-                      onChange={(e) =>
-                        updateBackendSection("instanceDefaults", {
-                          userAgent: e.target.value,
-                        })
-                      }
-                      placeholder="Custom user agent"
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  {[
-                    ["blockImages", "Block images"],
-                    ["blockMedia", "Block media"],
-                    ["blockAds", "Block ads"],
-                    ["noAnimations", "Disable CSS animations"],
-                    ["noRestore", "Skip session restore"],
-                  ].map(([key, label]) => (
-                    <SettingRow
-                      key={key}
-                      label={label}
-                      description="Applies to newly launched managed instances."
-                    >
-                      <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                        <input
-                          type="checkbox"
-                          checked={
-                            backendConfig.instanceDefaults[
-                              key as keyof BackendConfig["instanceDefaults"]
-                            ] as boolean
-                          }
-                          onChange={(e) =>
-                            updateBackendSection("instanceDefaults", {
-                              [key]: e.target.checked,
-                            } as Partial<BackendConfig["instanceDefaults"]>)
-                          }
-                          className="h-4 w-4"
-                        />
-                        Enable
-                      </label>
-                    </SettingRow>
-                  ))}
-                </SectionCard>
-              )}
-
-              {activeSection === "orchestration" && (
-                <SectionCard
-                  title="Orchestration"
-                  description="Port range and allocation policy can be applied immediately for future launches. Strategy and restart-policy changes require a dashboard restart because strategy routes and lifecycle state are registered at startup."
-                >
-                  <SettingRow
-                    label="Strategy"
-                    description="Controls instance lifecycle and how shorthand routes are routed."
-                  >
-                    <select
-                      value={backendConfig.multiInstance.strategy}
-                      onChange={(e) =>
-                        updateBackendSection("multiInstance", {
-                          strategy: e.target
-                            .value as BackendConfig["multiInstance"]["strategy"],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="always-on">Always on</option>
-                      <option value="simple">Simple</option>
-                      <option value="explicit">Explicit</option>
-                      <option value="simple-autorestart">
-                        Simple autorestart
-                      </option>
-                      <option value="no-instance">No instance (hub)</option>
-                    </select>
-                    <div className="mt-2 text-[11px] leading-relaxed text-text-muted">
-                      {backendConfig.multiInstance.strategy === "always-on" &&
-                        "Launches a default instance at boot and relaunches on crash."}
-                      {backendConfig.multiInstance.strategy === "simple" &&
-                        "Launches one instance on first request. No auto-restart."}
-                      {backendConfig.multiInstance.strategy === "explicit" &&
-                        "All instances managed via API. No automatic launches."}
-                      {backendConfig.multiInstance.strategy ===
-                        "simple-autorestart" &&
-                        "Launches on first request and relaunches on crash."}
-                      {backendConfig.multiInstance.strategy === "no-instance" &&
-                        "No local Chrome processes. Acts as a hub for remote bridges only."}
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Allocation policy"
-                    description="Determines how running instances are chosen for shorthand requests."
-                  >
-                    <select
-                      value={backendConfig.multiInstance.allocationPolicy}
-                      onChange={(e) =>
-                        updateBackendSection("multiInstance", {
-                          allocationPolicy: e.target
-                            .value as BackendConfig["multiInstance"]["allocationPolicy"],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="fcfs">First available</option>
-                      <option value="round_robin">Round robin</option>
-                      <option value="random">Random</option>
-                    </select>
-                  </SettingRow>
-                  <SettingRow
-                    label="Instance port start"
-                    description="Lower bound for auto-allocated instance ports."
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      value={backendConfig.multiInstance.instancePortStart}
-                      onChange={(e) =>
-                        updateBackendSection("multiInstance", {
-                          instancePortStart: Number(e.target.value),
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Instance port end"
-                    description="Upper bound for auto-allocated instance ports."
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      value={backendConfig.multiInstance.instancePortEnd}
-                      onChange={(e) =>
-                        updateBackendSection("multiInstance", {
-                          instancePortEnd: Number(e.target.value),
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  {(backendConfig.multiInstance.strategy === "always-on" ||
-                    backendConfig.multiInstance.strategy ===
-                      "simple-autorestart") && (
-                    <>
-                      <SettingRow
-                        label="Max restarts"
-                        description="Maximum restart attempts. Use -1 for unlimited, 0 for no restarts."
-                      >
-                        <input
-                          type="number"
-                          min={-1}
-                          value={
-                            backendConfig.multiInstance.restart.maxRestarts
-                          }
-                          onChange={(e) =>
-                            updateBackendSection("multiInstance", {
-                              restart: {
-                                ...backendConfig.multiInstance.restart,
-                                maxRestarts: Number(e.target.value),
-                              },
-                            })
-                          }
-                          className={fieldClass}
-                        />
-                      </SettingRow>
-                      <SettingRow
-                        label="Initial backoff"
-                        description="Delay in seconds before the first restart attempt."
-                      >
-                        <input
-                          type="number"
-                          min={1}
-                          value={
-                            backendConfig.multiInstance.restart.initBackoffSec
-                          }
-                          onChange={(e) =>
-                            updateBackendSection("multiInstance", {
-                              restart: {
-                                ...backendConfig.multiInstance.restart,
-                                initBackoffSec: Number(e.target.value),
-                              },
-                            })
-                          }
-                          className={fieldClass}
-                        />
-                      </SettingRow>
-                      <SettingRow
-                        label="Max backoff"
-                        description="Upper bound in seconds for exponential restart backoff."
-                      >
-                        <input
-                          type="number"
-                          min={1}
-                          value={
-                            backendConfig.multiInstance.restart.maxBackoffSec
-                          }
-                          onChange={(e) =>
-                            updateBackendSection("multiInstance", {
-                              restart: {
-                                ...backendConfig.multiInstance.restart,
-                                maxBackoffSec: Number(e.target.value),
-                              },
-                            })
-                          }
-                          className={fieldClass}
-                        />
-                      </SettingRow>
-                      <SettingRow
-                        label="Stable after"
-                        description="Seconds the instance must stay healthy before the restart counter resets."
-                      >
-                        <input
-                          type="number"
-                          min={1}
-                          value={
-                            backendConfig.multiInstance.restart.stableAfterSec
-                          }
-                          onChange={(e) =>
-                            updateBackendSection("multiInstance", {
-                              restart: {
-                                ...backendConfig.multiInstance.restart,
-                                stableAfterSec: Number(e.target.value),
-                              },
-                            })
-                          }
-                          className={fieldClass}
-                        />
-                      </SettingRow>
-                    </>
-                  )}
-                </SectionCard>
-              )}
-
-              {activeSection === "security" && (
-                <SectionCard
-                  title="Security"
-                  description="These controls define what risky capabilities PinchTab exposes."
-                >
-                  <div
-                    className={`rounded-sm px-4 py-3 text-sm leading-6 ${
-                      sensitiveEndpointsEnabled
-                        ? "border border-destructive/35 bg-destructive/10 text-destructive"
-                        : "border border-warning/25 bg-warning/10 text-warning"
-                    }`}
-                  >
-                    {sensitiveEndpointsEnabled
-                      ? "One or more sensitive endpoint families are enabled. Features like script execution, downloads, uploads, and live capture can expose high-risk capabilities. Only enable them in trusted environments. You are responsible for securing network access, authentication, and downstream use."
-                      : "These endpoint families can expose high-risk capabilities when enabled. Only turn them on in trusted environments, and only when you accept responsibility for network access, authentication, and downstream use."}
-                  </div>
-                  {securityEndpointRows.map(([key, label]) => (
-                    <SettingRow
-                      key={key}
-                      label={label}
-                      description="Controls whether the corresponding endpoint family is enabled."
-                    >
-                      <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                        <input
-                          type="checkbox"
-                          checked={backendConfig.security[key]}
-                          onChange={(e) =>
-                            updateBackendSection("security", {
-                              [key]: e.target.checked,
-                            } as Partial<
-                              Pick<BackendSecurityConfig, SecurityEndpointKey>
-                            >)
-                          }
-                          className="h-4 w-4"
-                        />
-                        Enable
-                      </label>
-                    </SettingRow>
-                  ))}
-                </SectionCard>
-              )}
-
-              {activeSection === "security-idpi" && (
-                <SectionCard
-                  title="Security IDPI"
-                  description="Indirect prompt injection controls restrict which websites are allowed and add protections around extracted content before it reaches downstream automation."
-                >
-                  <div
-                    className={`mb-4 rounded-sm px-4 py-3 text-sm leading-6 ${
-                      !idpiEnabled || !idpiDomainsConfigured
-                        ? "border border-destructive/35 bg-destructive/10 text-destructive"
-                        : idpiWildcard
-                          ? "border border-warning/25 bg-warning/10 text-warning"
-                          : "border border-success/25 bg-success/10 text-success"
-                    }`}
-                  >
-                    {!idpiEnabled
-                      ? "IDPI is disabled. Browser content is not being filtered by website allowlist or content protections."
-                      : !idpiDomainsConfigured
-                        ? "The website whitelist is not set to a restricted domain list. This is the main IDPI defense and should be configured."
-                        : idpiWildcard
-                          ? "The website whitelist contains '*', which effectively disables domain restriction."
-                          : "IDPI is enforcing a specific website whitelist and content protections."}
-                  </div>
-                  {idpiToggleRows.map(([key, label, description]) => (
-                    <SettingRow
-                      key={key}
-                      label={label}
-                      description={description}
-                    >
-                      <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                        <input
-                          type="checkbox"
-                          checked={backendConfig.security.idpi[key]}
-                          onChange={(e) =>
-                            updateBackendSection("security", {
-                              idpi: {
-                                ...backendConfig.security.idpi,
-                                [key]: e.target.checked,
-                              },
-                            })
-                          }
-                          className="h-4 w-4"
-                        />
-                        Enable
-                      </label>
-                    </SettingRow>
-                  ))}
-                  <SettingRow
-                    label="Allowed websites"
-                    description="Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com."
-                  >
-                    <div className="space-y-2">
-                      <input
-                        value={listToCsv(
-                          backendConfig.security.idpi.allowedDomains,
-                        )}
-                        onChange={(e) =>
-                          updateBackendSection("security", {
-                            idpi: {
-                              ...backendConfig.security.idpi,
-                              allowedDomains: csvToList(e.target.value),
-                            },
-                          })
-                        }
-                        className={fieldClass}
-                        placeholder="127.0.0.1, localhost, ::1"
-                      />
-                      <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-                        Keep this list narrow. Empty or wildcard entries weaken
-                        the main IDPI boundary. Allowing non-local or
-                        non-trusted sites increases browser attack surface even
-                        when IDPI is enabled.
-                      </div>
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Custom patterns"
-                    description="Optional comma-separated phrases to treat as suspicious prompt-injection content."
-                  >
-                    <input
-                      value={listToCsv(
-                        backendConfig.security.idpi.customPatterns,
-                      )}
-                      onChange={(e) =>
-                        updateBackendSection("security", {
-                          idpi: {
-                            ...backendConfig.security.idpi,
-                            customPatterns: csvToList(e.target.value),
-                          },
-                        })
-                      }
-                      className={fieldClass}
-                      placeholder="ignore previous instructions, exfiltrate data"
-                    />
-                  </SettingRow>
-                </SectionCard>
-              )}
-
-              {activeSection === "profiles" && (
-                <SectionCard
-                  title="Profiles"
-                  description="Profile storage is host-level. Changing the base directory requires restart because the profile manager and orchestrator are created with it at boot."
-                >
-                  <SettingRow
-                    label="Profiles base directory"
-                    description="Root directory where browser profiles are stored."
-                  >
-                    <input
-                      value={backendConfig.profiles.baseDir}
-                      onChange={(e) =>
-                        updateBackendSection("profiles", {
-                          baseDir: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Default profile"
-                    description="Profile name used when the server needs an implicit default."
-                  >
-                    <input
-                      value={backendConfig.profiles.defaultProfile}
-                      onChange={(e) =>
-                        updateBackendSection("profiles", {
-                          defaultProfile: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                </SectionCard>
-              )}
-
-              {activeSection === "network" && (
-                <SectionCard
-                  title="Network & Attach"
-                  description="Port and bind changes require a restart. API token management is handled outside the dashboard."
-                >
-                  <SettingRow
-                    label="Server port"
-                    description="HTTP port for the dashboard process."
-                  >
-                    <input
-                      value={backendConfig.server.port}
-                      onChange={(e) =>
-                        updateBackendSection("server", { port: e.target.value })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Bind address"
-                    description="Network interface the dashboard process binds to. Keeping 127.0.0.1 or localhost limits direct reachability to the local machine."
-                  >
-                    <div className="space-y-2">
-                      <input
-                        value={backendConfig.server.bind}
-                        onChange={(e) =>
-                          updateBackendSection("server", {
-                            bind: e.target.value,
-                          })
-                        }
-                        className={fieldClass}
-                      />
-                      {nonLoopbackBind ? (
-                        <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive/80">
-                          A non-loopback bind is a documented, non-default,
-                          security-reducing configuration change. It may expose
-                          the server beyond the local machine unless another
-                          network boundary still restricts access. Keep a token
-                          set and review proxy or port-publishing behavior
-                          explicitly.
-                        </div>
-                      ) : (
-                        <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-                          Loopback bind keeps direct server reachability local.
-                          Moving to <code>0.0.0.0</code> or another non-local
-                          address widens the trust boundary.
-                        </div>
-                      )}
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="API token"
-                    description="Bearer token required by authenticated requests when set. The dashboard never returns it and does not manage it."
-                  >
-                    <div className="space-y-2">
-                      <div className="text-xs leading-5 text-text-muted">
-                        {backendState?.tokenConfigured
-                          ? "Token configured. Manage rotation through the CLI or config file; the current value is never returned by the server."
-                          : "No token configured. Set one through the CLI or config file."}
-                      </div>
-                      {apiTokenMissing && (
-                        <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
-                          No API token is set. Anyone who can reach this server
-                          can access exposed endpoints. Keep it on trusted local
-                          networks only, or configure a strong token through the
-                          CLI or config file. You are responsible for protecting
-                          access.
-                        </div>
-                      )}
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="State directory"
-                    description="Base state path used by managed child instances."
-                  >
-                    <input
-                      value={backendConfig.server.stateDir}
-                      onChange={(e) =>
-                        updateBackendSection("server", {
-                          stateDir: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Trust proxy headers"
-                    description="Trust X-Forwarded-Proto, X-Forwarded-Host, and Forwarded headers for origin checks. Enable only when PinchTab runs behind a trusted reverse proxy (e.g. Caddy, nginx)."
-                  >
-                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={
-                          backendConfig.server.trustProxyHeaders ?? false
-                        }
-                        onChange={(e) =>
-                          updateBackendSection("server", {
-                            trustProxyHeaders: e.target.checked,
-                          })
-                        }
-                        className="accent-primary"
-                      />
-                      {backendConfig.server.trustProxyHeaders
-                        ? "Enabled"
-                        : "Disabled"}
-                    </label>
-                  </SettingRow>
-                  <SettingRow
-                    label="Allow attach"
-                    description="Permit attaching PinchTab to externally managed Chrome sessions."
-                  >
-                    <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={backendConfig.security.attach.enabled}
-                        onChange={(e) =>
-                          updateBackendSection("security", {
-                            attach: {
-                              ...backendConfig.security.attach,
-                              enabled: e.target.checked,
-                            },
-                          })
-                        }
-                        className="h-4 w-4"
-                      />
-                      Enable
-                    </label>
-                  </SettingRow>
-                  <SettingRow
-                    label="Allowed attach hosts"
-                    description={
-                      'Comma-separated host allowlist for attach requests. Only include hosts you control and trust. Using "*" disables host allowlisting.'
-                    }
-                  >
-                    <div className="space-y-2">
-                      <input
-                        value={listToCsv(
-                          backendConfig.security.attach.allowHosts,
-                        )}
-                        onChange={(e) =>
-                          updateBackendSection("security", {
-                            attach: {
-                              ...backendConfig.security.attach,
-                              allowHosts: csvToList(e.target.value),
-                            },
-                          })
-                        }
-                        className={fieldClass}
-                      />
-                      {attachWildcard ? (
-                        <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive/80">
-                          <code>allowHosts: ["*"]</code> is a documented,
-                          non-default, security-reducing override. It disables
-                          host allowlisting entirely and allows remote attach
-                          requests to any reachable host with an allowed scheme.
-                          Use it only on isolated, operator-controlled networks.
-                        </div>
-                      ) : (
-                        <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-                          Hosts in this allowlist may be used for remote attach
-                          requests. Broad or untrusted entries expand the trust
-                          boundary and can expose external Chrome sessions and
-                          browser contents.
-                        </div>
-                      )}
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    label="Allowed attach schemes"
-                    description="Comma-separated scheme allowlist, usually ws and wss."
-                  >
-                    <input
-                      value={listToCsv(
-                        backendConfig.security.attach.allowSchemes,
-                      )}
-                      onChange={(e) =>
-                        updateBackendSection("security", {
-                          attach: {
-                            ...backendConfig.security.attach,
-                            allowSchemes: csvToList(e.target.value),
-                          },
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                </SectionCard>
-              )}
-
-              {activeSection === "browser" && (
-                <SectionCard
-                  title="Browser Runtime"
-                  description="These settings are written into the generated child config for new managed instances."
-                >
-                  <SettingRow
-                    label="Chrome version"
-                    description="Version string used in generated UA/fingerprint defaults."
-                  >
-                    <input
-                      value={backendConfig.browser.version}
-                      onChange={(e) =>
-                        updateBackendSection("browser", {
-                          version: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Chrome binary"
-                    description="Optional path override for the Chrome executable."
-                  >
-                    <input
-                      value={backendConfig.browser.binary}
-                      onChange={(e) =>
-                        updateBackendSection("browser", {
-                          binary: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Extra flags"
-                    description="Additional Chrome flags appended when launching managed instances."
-                  >
-                    <input
-                      value={backendConfig.browser.extraFlags}
-                      onChange={(e) =>
-                        updateBackendSection("browser", {
-                          extraFlags: e.target.value,
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Extension paths"
-                    description="Comma-separated extension directories to load."
-                  >
-                    <input
-                      value={listToCsv(backendConfig.browser.extensionPaths)}
-                      onChange={(e) =>
-                        updateBackendSection("browser", {
-                          extensionPaths: csvToList(e.target.value),
-                        })
-                      }
-                      className={fieldClass}
-                    />
-                  </SettingRow>
-                </SectionCard>
-              )}
-
-              {activeSection === "timeouts" && (
-                <SectionCard
-                  title="Timeouts"
-                  description="Runtime timing defaults written into new child configs. Existing running instances keep their current timeouts."
-                >
-                  {[
-                    [
-                      "actionSec",
-                      "Action timeout",
-                      "Maximum time for action requests.",
-                    ],
-                    [
-                      "navigateSec",
-                      "Navigate timeout",
-                      "Maximum time for navigation requests.",
-                    ],
-                    [
-                      "shutdownSec",
-                      "Shutdown timeout",
-                      "Grace period before force-closing a child process.",
-                    ],
-                    [
-                      "waitNavMs",
-                      "Wait-after-navigation delay",
-                      "Post-navigation stabilization delay in milliseconds.",
-                    ],
-                  ].map(([key, label, description]) => (
-                    <SettingRow
-                      key={key}
-                      label={label}
-                      description={description}
-                    >
-                      <input
-                        type="number"
-                        min={0}
-                        value={
-                          backendConfig.timeouts[
-                            key as keyof BackendConfig["timeouts"]
-                          ]
-                        }
-                        onChange={(e) =>
-                          updateBackendSection("timeouts", {
-                            [key]: Number(e.target.value),
-                          } as Partial<BackendConfig["timeouts"]>)
-                        }
-                        className={fieldClass}
-                      />
-                    </SettingRow>
-                  ))}
-                </SectionCard>
-              )}
-            </>
+            renderActiveSection(activeSection, {
+              apiTokenMissing,
+              attachWildcard,
+              backendConfig,
+              backendState,
+              idpiDomainsConfigured,
+              idpiEnabled,
+              idpiWildcard,
+              localSettings,
+              nonLoopbackBind,
+              sensitiveEndpointsEnabled,
+              setLocalSettings,
+              updateBackendSection,
+            })
           )}
         </div>
       </div>
