@@ -331,17 +331,10 @@ func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy h
 		}
 	}
 
-	// Reconstruct from validated components to break the CodeQL taint chain
-	// from the user-controlled rawURL to the outgoing HTTP request.
-	return sanitizedBaseURL(baseURL.Scheme, baseURL.Host), nil
-}
-
-// sanitizedBaseURL builds a fresh url.URL from individually validated scheme
-// and host strings. This intentionally severs any data-flow link to the
-// original user-supplied URL so static-analysis tools (CodeQL CWE-918) can
-// verify the value is server-controlled.
-func sanitizedBaseURL(scheme, host string) *url.URL {
-	return &url.URL{Scheme: scheme, Host: host}
+	return &url.URL{
+		Scheme: baseURL.Scheme,
+		Host:   baseURL.Host,
+	}, nil
 }
 
 func healthProbeURL(baseURL *url.URL) string {
