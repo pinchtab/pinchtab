@@ -78,23 +78,15 @@ watch_signature() {
   shasum "${files[@]}" 2>/dev/null | shasum | awk '{print $1}'
 }
 
-load_token_from_config() {
-  local config_path=""
-  local config_token=""
-
-  if [ ! -x "./pinchtab-dev" ]; then
-    return
+generate_dev_token() {
+  local token=""
+  token="$(od -An -N24 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
+  if [ -z "${token}" ]; then
+    echo "  ${ERROR}✗${NC} Failed to generate a dev server token."
+    return 1
   fi
-
-  config_path="$(./pinchtab-dev config path 2>/dev/null | tail -n 1)"
-  if [ -z "${config_path}" ] || [ ! -f "${config_path}" ]; then
-    return
-  fi
-
-  config_token="$(sed -nE 's/.*"token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "${config_path}" | head -n 1)"
-  if [ -n "${config_token}" ]; then
-    DEV_TOKEN="${config_token}"
-  fi
+  DEV_TOKEN="${token}"
+  return 0
 }
 
 build_backend() {
@@ -111,19 +103,8 @@ build_backend() {
 }
 
 resolve_dev_token() {
-  if [ -n "${PINCHTAB_TOKEN:-}" ]; then
-    DEV_TOKEN="${PINCHTAB_TOKEN}"
-    return 0
-  fi
-
-  load_token_from_config
-  if [ -n "${DEV_TOKEN}" ]; then
-    return 0
-  fi
-
-  echo "  ${ERROR}✗${NC} No server token found in your current PinchTab config."
-  echo "  ${MUTED}Set PINCHTAB_TOKEN or add server.token to your normal config, then retry.${NC}"
-  return 1
+  DEV_TOKEN="dev"
+  # generate_dev_token
 }
 
 wait_for_backend() {
@@ -254,7 +235,7 @@ echo "  ${BOLD}Backend:${NC}    http://localhost:${DEV_PORT}"
 echo ""
 echo "  ${MUTED}Frontend changes hot-reload through Vite.${NC}"
 echo "  ${MUTED}Backend changes rebuild and restart the server automatically.${NC}"
-echo "  ${MUTED}The Vite proxy uses your configured PinchTab token automatically.${NC}"
+echo "  ${MUTED}The Vite proxy uses the isolated dev token automatically.${NC}"
 echo "  ${MUTED}Press Ctrl+C to stop.${NC}"
 echo ""
 

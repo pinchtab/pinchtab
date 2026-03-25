@@ -33,7 +33,11 @@ echo -e "  ${INFO}Running pre-push checks (matches GitHub Actions CI)...${NC}"
 
 section "Format"
 
-unformatted=$(gofmt -l .)
+mapfile -t go_files < <(git ls-files -- '*.go')
+unformatted=""
+if [ ${#go_files[@]} -gt 0 ]; then
+  unformatted=$(gofmt -l "${go_files[@]}")
+fi
 if [ -n "$unformatted" ]; then
   fail "gofmt" "Files not formatted:"
   echo "$unformatted" | while read f; do hint "  $f"; done
@@ -41,10 +45,10 @@ if [ -n "$unformatted" ]; then
   printf "  Fix formatting now? (Y/n) "
   read -r answer
   if [ "$answer" != "n" ] && [ "$answer" != "N" ]; then
-    gofmt -w .
+    gofmt -w "${go_files[@]}"
     ok "gofmt (fixed)"
   else
-    hint "Run: gofmt -w ."
+    hint "Run: gofmt -w \$(git ls-files -- '*.go')"
     exit 1
   fi
 else
