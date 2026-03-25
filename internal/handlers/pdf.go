@@ -17,7 +17,6 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
 var pdfQueryParams = map[string]struct{}{
@@ -156,7 +155,7 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 			chromedp.Evaluate(`document.body ? document.body.innerText : ""`, &pageText),
 		)
 		corpus := pageTitle + "\n" + pageURL + "\n" + pageText
-		if ir := idpi.ScanContent(corpus, h.Config.IDPI); ir.Threat {
+		if ir := h.IDPIGuard.ScanContent(corpus); ir.Threat {
 			if ir.Blocked {
 				httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
 				return

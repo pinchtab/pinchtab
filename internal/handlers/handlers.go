@@ -11,6 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
@@ -27,6 +28,7 @@ type Handlers struct {
 	IntentCache  *recovery.IntentCache
 	Recovery     *recovery.RecoveryEngine
 	Router       *engine.Router // optional; nil ⇒ chrome-only
+	IDPIGuard    idpi.Guard
 	clipboard    clipboardStore
 }
 
@@ -43,6 +45,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		IdMgr:        ids.NewManager(),
 		Matcher:      matcher,
 		IntentCache:  intentCache,
+		IDPIGuard:    idpi.NewGuard(cfg.IDPI),
 	}
 
 	// Wire up the recovery engine with callbacks that delegate back to

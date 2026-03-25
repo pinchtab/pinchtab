@@ -11,7 +11,6 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -149,7 +148,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		scanCancel()
 		sb.WriteString(bodyText)
 		if corpus := sb.String(); corpus != "" {
-			if ir := idpi.ScanContent(corpus, h.Config.IDPI); ir.Threat {
+			if ir := h.IDPIGuard.ScanContent(corpus); ir.Threat {
 				if ir.Blocked {
 					httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
 					return

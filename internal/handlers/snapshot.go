@@ -15,7 +15,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/idpi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -193,34 +192,27 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	// The scan runs after the snapshot is built so truncation has already reduced
 	// the corpus. Headers are set before any write so they always reach the client.
 	wrapContent := h.Config.IDPI.Enabled && h.Config.IDPI.WrapContent
-	var idpiResult idpi.CheckResult
-	if h.Config.IDPI.Enabled && h.Config.IDPI.ScanContent {
-		var sb strings.Builder
-		for _, n := range flat {
-			// Join Name and Value within the same node with a space so multi-word
-			// fields are scanned as a unit. Separate different nodes with \n so
-			// that injection phrases split across node boundaries are not merged
-			// into a false positive by the concatenation.
-			if n.Name != "" || n.Value != "" {
-				sb.WriteString(n.Name)
-				if n.Name != "" && n.Value != "" {
-					sb.WriteByte(' ')
-				}
-				sb.WriteString(n.Value)
-				sb.WriteByte('\n')
+	var sb strings.Builder
+	for _, n := range flat {
+		if n.Name != "" || n.Value != "" {
+			sb.WriteString(n.Name)
+			if n.Name != "" && n.Value != "" {
+				sb.WriteByte(' ')
 			}
+			sb.WriteString(n.Value)
+			sb.WriteByte('\n')
 		}
-		idpiResult = idpi.ScanContent(sb.String(), h.Config.IDPI)
-		if idpiResult.Blocked {
-			httpx.Error(w, http.StatusForbidden,
-				fmt.Errorf("snapshot blocked by IDPI scanner: %s", idpiResult.Reason))
-			return
-		}
-		if idpiResult.Threat {
-			w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
-			if idpiResult.Pattern != "" {
-				w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
-			}
+	}
+	idpiResult := h.IDPIGuard.ScanContent(sb.String())
+	if idpiResult.Blocked {
+		httpx.Error(w, http.StatusForbidden,
+			fmt.Errorf("snapshot blocked by IDPI scanner: %s", idpiResult.Reason))
+		return
+	}
+	if idpiResult.Threat {
+		w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
+		if idpiResult.Pattern != "" {
+			w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
 		}
 	}
 
@@ -363,7 +355,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("\n"))
 		content := bridge.FormatSnapshotCompact(flat)
 		if wrapContent {
-			content = idpi.WrapContent(content, url)
+			content = h.IDPIGuard.WrapContent(content, url)
 		}
 		_, _ = w.Write([]byte(content))
 	case "text":
@@ -372,7 +364,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "# %s\n# %s\n# %d nodes\n\n", title, url, len(flat))
 		content := bridge.FormatSnapshotText(flat)
 		if wrapContent {
-			content = idpi.WrapContent(content, url)
+			content = h.IDPIGuard.WrapContent(content, url)
 		}
 		_, _ = w.Write([]byte(content))
 	case "yaml":

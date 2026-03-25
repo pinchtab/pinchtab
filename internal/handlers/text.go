@@ -11,7 +11,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
 // HandleText extracts readable text from the current tab.
@@ -93,26 +92,23 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	h.recordResolvedURL(r, url)
 
 	// IDPI: scan extracted text for injection patterns before it reaches the caller.
-	var idpiResult idpi.CheckResult
-	if h.Config.IDPI.Enabled && h.Config.IDPI.ScanContent {
-		idpiResult = idpi.ScanContent(text, h.Config.IDPI)
-		if idpiResult.Blocked {
-			httpx.Error(w, http.StatusForbidden,
-				fmt.Errorf("content blocked by IDPI scanner: %s", idpiResult.Reason))
-			return
-		}
-		if idpiResult.Threat {
-			w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
-			if idpiResult.Pattern != "" {
-				w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
-			}
+	idpiResult := h.IDPIGuard.ScanContent(text)
+	if idpiResult.Blocked {
+		httpx.Error(w, http.StatusForbidden,
+			fmt.Errorf("content blocked by IDPI scanner: %s", idpiResult.Reason))
+		return
+	}
+	if idpiResult.Threat {
+		w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
+		if idpiResult.Pattern != "" {
+			w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
 		}
 	}
 
 	// IDPI: wrap plain-text content in <untrusted_web_content> delimiters so
 	// downstream LLMs treat it as data, not instructions.
 	if h.Config.IDPI.Enabled && h.Config.IDPI.WrapContent {
-		text = idpi.WrapContent(text, url)
+		text = h.IDPIGuard.WrapContent(text, url)
 	}
 
 	if format == "text" || format == "plain" {

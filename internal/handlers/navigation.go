@@ -17,7 +17,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
 // HandleNavigate navigates a tab to a URL or creates a new tab.
@@ -93,7 +92,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domainResult := idpi.CheckDomain(req.URL, h.Config.IDPI)
+	domainResult := h.IDPIGuard.CheckDomain(req.URL)
 	if domainResult.Blocked {
 		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
 		return
@@ -102,7 +101,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
 	}
 
-	target, err := validateNavigateTarget(req.URL, idpi.DomainAllowed(req.URL, h.Config.IDPI))
+	target, err := validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL))
 	if err != nil {
 		httpx.Error(w, http.StatusForbidden, err)
 		return
