@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -500,6 +501,15 @@ func TestOrchestrator_AttachBridge_RemovesUnhealthyBridge(t *testing.T) {
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.client = backend.Client()
+	backendURL, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatalf("parse backend URL: %v", err)
+	}
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{backendURL.Hostname()},
+		AttachAllowSchemes: []string{"http"},
+	})
 
 	inst, _, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
 	if err != nil {

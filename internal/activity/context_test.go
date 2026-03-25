@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/authn"
 )
 
 type captureRecorder struct {
@@ -93,5 +95,69 @@ func TestEnrichRequestSanitizesURL(t *testing.T) {
 	}
 	if got := rec.events[0].URL; got != "https://example.com/callback" {
 		t.Fatalf("event.URL = %q, want sanitized URL", got)
+	}
+}
+
+func TestMiddlewareUsesSourceHeaderOverride(t *testing.T) {
+	rec := &captureRecorder{}
+	handler := Middleware(rec, "server", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set(HeaderPTSource, "dashboard")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if len(rec.events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(rec.events))
+	}
+	if got := rec.events[0].Source; got != "dashboard" {
+		t.Fatalf("event.Source = %q, want dashboard", got)
+	}
+}
+
+func TestMiddlewareUsesDashboardSourceForCookieAuth(t *testing.T) {
+	rec := &captureRecorder{}
+	handler := Middleware(rec, "server", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  authn.CookieName,
+		Value: "session-token",
+	})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if len(rec.events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(rec.events))
+	}
+	if got := rec.events[0].Source; got != "dashboard" {
+		t.Fatalf("event.Source = %q, want dashboard", got)
+	}
+}
+
+func TestMiddlewarePrefersExplicitSourceHeaderOverCookieAuth(t *testing.T) {
+	rec := &captureRecorder{}
+	handler := Middleware(rec, "server", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req.Header.Set(HeaderPTSource, "mcp")
+	req.AddCookie(&http.Cookie{
+		Name:  authn.CookieName,
+		Value: "session-token",
+	})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if len(rec.events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(rec.events))
+	}
+	if got := rec.events[0].Source; got != "mcp" {
+		t.Fatalf("event.Source = %q, want mcp", got)
 	}
 }

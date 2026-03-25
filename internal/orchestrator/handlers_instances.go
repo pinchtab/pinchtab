@@ -360,24 +360,12 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 // probeAttachBridge checks that a remote bridge is reachable.
 // The baseURL MUST have been validated by validateAttachURL before calling this.
 func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
-	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
+	targetBaseURL, err := o.validatedHealthProbeBaseURL(strings.TrimRight(baseURL, "/"), "", healthProbePolicyAttachAllowlist)
 	if err != nil {
 		return fmt.Errorf("invalid bridge baseUrl: %w", err)
 	}
 
-	// Re-validate scheme inside this function so the safety check is visible
-	// to static analysis (CodeQL SSRF). validateAttachURL already enforces
-	// the allowlist, but CodeQL can't trace across function boundaries.
-	switch parsed.Scheme {
-	case "http", "https":
-		// allowed
-	default:
-		return fmt.Errorf("unsupported bridge scheme %q", parsed.Scheme)
-	}
-
-	healthURL := parsed.Scheme + "://" + parsed.Host + "/health"
-
-	req, err := http.NewRequest(http.MethodGet, healthURL, nil)
+	req, err := http.NewRequest(http.MethodGet, healthProbeURL(targetBaseURL), nil)
 	if err != nil {
 		return fmt.Errorf("build bridge health request: %w", err)
 	}
@@ -436,16 +424,18 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 
 	// Validate host
 	host := parsed.Hostname()
-	hostAllowed := false
-	for _, allowed := range o.runtimeCfg.AttachAllowHosts {
-		if allowed == "*" || host == allowed {
-			hostAllowed = true
-			break
-		}
-	}
-	if !hostAllowed {
+	if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
 		return fmt.Errorf("host %q not allowed (allowed: %v)", host, o.runtimeCfg.AttachAllowHosts)
 	}
 
 	return nil
+}
+
+func isAllowedAttachHost(host string, allowedHosts []string) bool {
+	for _, allowed := range allowedHosts {
+		if allowed == "*" || host == allowed {
+			return true
+		}
+	}
+	return false
 }

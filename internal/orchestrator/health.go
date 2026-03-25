@@ -17,6 +17,13 @@ const (
 	attachedBridgeHealthPollInterval = 60 * time.Second
 )
 
+type healthProbePolicy int
+
+const (
+	healthProbePolicyLoopback healthProbePolicy = iota
+	healthProbePolicyAttachAllowlist
+)
+
 func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	healthy := false
 	exitedEarly := false
@@ -49,7 +56,12 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		// monitor only probes child bridge processes started by Launch.
 		// Attached remote bridges are validated and probed during attach.
 		for _, baseURL := range instanceBaseURLs(probePort) {
-			req, reqErr := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
+			targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", healthProbePolicyLoopback)
+			if err != nil {
+				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
+				continue
+			}
+			req, reqErr := http.NewRequest(http.MethodGet, healthProbeURL(targetBaseURL), nil)
 			if reqErr != nil {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
 				continue
@@ -184,24 +196,18 @@ func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string
 		baseURLs = instanceBaseURLs(probePort)
 	}
 
+	policy := healthProbePolicyLoopback
+	if inst.Attached && inst.AttachType == "bridge" {
+		policy = healthProbePolicyAttachAllowlist
+	}
+
 	for _, baseURL := range baseURLs {
-		parsed, err := url.Parse(baseURL)
+		targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", policy)
 		if err != nil {
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
 			continue
 		}
-		if !isAllowedProbeHost(parsed.Hostname()) {
-			lastProbe = fmt.Sprintf("%s -> blocked: non-loopback host", baseURL)
-			slog.Warn("health probe blocked: non-loopback host", "url", baseURL, "host", parsed.Hostname())
-			continue
-		}
-		target := &url.URL{
-			Scheme: parsed.Scheme,
-			Host:   parsed.Host,
-			Path:   "/health",
-		}
-
-		req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
+		req, reqErr := http.NewRequest(http.MethodGet, healthProbeURL(targetBaseURL), nil)
 		if reqErr != nil {
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
 			continue
@@ -300,6 +306,43 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 
 func isInstanceHealthyStatus(code int) bool {
 	return code > 0 && code < http.StatusInternalServerError
+}
+
+func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy healthProbePolicy) (*url.URL, error) {
+	baseURL, err := o.parseHTTPInstanceURL(rawURL, port)
+	if err != nil {
+		return nil, err
+	}
+
+	host := baseURL.Hostname()
+	switch policy {
+	case healthProbePolicyAttachAllowlist:
+		if o.runtimeCfg == nil {
+			return nil, fmt.Errorf("blocked: attach not configured")
+		}
+		if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
+			slog.Warn("health probe blocked: host not allowed", "url", rawURL, "host", host)
+			return nil, fmt.Errorf("blocked: host not allowed")
+		}
+	default:
+		if !isAllowedProbeHost(host) {
+			slog.Warn("health probe blocked: non-loopback host", "url", rawURL, "host", host)
+			return nil, fmt.Errorf("blocked: non-loopback host")
+		}
+	}
+
+	return &url.URL{
+		Scheme: baseURL.Scheme,
+		Host:   baseURL.Host,
+	}, nil
+}
+
+func healthProbeURL(baseURL *url.URL) string {
+	return (&url.URL{
+		Scheme: baseURL.Scheme,
+		Host:   baseURL.Host,
+		Path:   "/health",
+	}).String()
 }
 
 // isAllowedProbeHost restricts health probes to loopback addresses to

@@ -56,7 +56,7 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 		state := &requestState{
 			event: Event{
 				Timestamp:  start.UTC(),
-				Source:     source,
+				Source:     sourceFor(r, source),
 				RequestID:  requestIDFor(r, w),
 				ActorID:    actorIDFor(r),
 				AgentID:    agentIDFor(r),
@@ -97,6 +97,16 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 		}
 		_ = rec.Record(evt)
 	})
+}
+
+func sourceFor(r *http.Request, fallback string) string {
+	if source := strings.TrimSpace(r.Header.Get(HeaderPTSource)); source != "" {
+		return source
+	}
+	if authn.CredentialsFromRequest(r).Method == authn.MethodCookie {
+		return "dashboard"
+	}
+	return fallback
 }
 
 func EnrichRequest(r *http.Request, update Update) {
