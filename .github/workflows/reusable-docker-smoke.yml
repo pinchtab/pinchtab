@@ -28,3 +28,6 @@ jobs:
 
       - name: Verify bootstrap path in container
         run: bash scripts/docker-smoke.sh pinchtab-release-smoke:${{ github.run_id }}
+
+      - name: Verify MCP stdio in container
+        run: bash scripts/docker-mcp-smoke.sh pinchtab-release-smoke:${{ github.run_id }}

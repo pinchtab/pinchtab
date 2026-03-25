@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 
@@ -111,7 +111,41 @@ if (!fs.existsSync(binaryPath)) {
   process.exit(1);
 }
 
-const proc = spawn(binaryPath, process.argv.slice(2), {
+// MCP stdio JSON-RPC needs the Go binary to own stdin/stdout directly.
+// The normal spawn() path plus parent signal handlers can interfere with
+// process lifecycle in ways that break some MCP clients (e.g. Claude Code).
+// Use spawnSync for the mcp subcommand so Node blocks without an event
+// loop or signal handlers sitting between the client and the Go process.
+// Note: Node still exists as the parent PID — this is not a true exec —
+// but removing the async event loop and signal forwarding is sufficient
+// for the known failure modes.
+function firstSubcommand(argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--server') { i += 1; continue; }
+    if (arg.startsWith('--server=')) continue;
+    if (!arg.startsWith('-')) return arg;
+  }
+  return null;
+}
+
+if (firstSubcommand(args) === 'mcp') {
+  const result = spawnSync(binaryPath, args, {
+    stdio: 'inherit',
+    shell: false,
+  });
+
+  if (result.error) {
+    console.error(`Failed to run Pinchtab: ${result.error.message}`);
+    process.exit(1);
+  }
+  if (result.signal) {
+    process.kill(process.pid, result.signal);
+  }
+  process.exit(result.status ?? 0);
+}
+
+const proc = spawn(binaryPath, args, {
   stdio: 'inherit',
   shell: false,
 });

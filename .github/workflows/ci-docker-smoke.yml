@@ -1,0 +1,13 @@
+name: CI / Docker Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    uses: ./.github/workflows/reusable-docker-smoke.yml
+    with:
+      ref: ${{ github.sha }}
