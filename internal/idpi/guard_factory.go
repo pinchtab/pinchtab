@@ -14,8 +14,8 @@ func NewGuard(cfg config.IDPIConfig) Guard {
 // noopGuard is a Guard that does nothing (IDPI disabled).
 type noopGuard struct{}
 
-func (noopGuard) Enabled() bool                          { return false }
-func (noopGuard) ScanContent(string) CheckResult         { return CheckResult{} }
-func (noopGuard) CheckDomain(string) CheckResult         { return CheckResult{} }
-func (noopGuard) DomainAllowed(string) bool               { return true }
-func (noopGuard) WrapContent(text, _ string) string       { return text }
+func (noopGuard) Enabled() bool                     { return false }
+func (noopGuard) ScanContent(string) CheckResult    { return CheckResult{} }
+func (noopGuard) CheckDomain(string) CheckResult    { return CheckResult{} }
+func (noopGuard) DomainAllowed(string) bool         { return false }
+func (noopGuard) WrapContent(text, _ string) string { return text }
