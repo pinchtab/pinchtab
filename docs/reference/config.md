@@ -188,7 +188,8 @@ Current nested file-config shape:
       "scanContent": true,
       "wrapContent": true,
       "customPatterns": [],
-      "scanTimeoutSec": 5
+      "scanTimeoutSec": 5,
+      "shieldThreshold": 30
     }
   },
   "profiles": {
@@ -290,6 +291,7 @@ Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 - `instanceDefaults.dialogAutoAccept`
 - `security.allowClipboard`
 - `security.idpi.scanTimeoutSec`
+- `security.idpi.shieldThreshold`
 - `scheduler.*`
 - `observability.*`
 

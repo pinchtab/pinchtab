@@ -100,6 +100,10 @@ type IDPIConfig struct {
 	WrapContent    bool     `json:"wrapContent,omitempty"`
 	CustomPatterns []string `json:"customPatterns,omitempty"`
 	ScanTimeoutSec int      `json:"scanTimeoutSec,omitempty"`
+	// ShieldThreshold sets the minimum score (0-100) from idpishield
+	// to flag content as a threat. Lower = more sensitive.
+	// When zero, idpishield defaults apply (40 strict, 60 normal).
+	ShieldThreshold int `json:"shieldThreshold,omitempty"`
 }
 
 // SchedulerConfig holds task scheduler settings.
