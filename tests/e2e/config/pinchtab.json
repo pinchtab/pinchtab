@@ -63,7 +63,8 @@
         "::1",
         "fixtures",
         "httpbin.org"
-      ]
+      ],
+      "shieldThreshold": 30
     }
   }
 }

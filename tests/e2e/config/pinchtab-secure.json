@@ -29,7 +29,8 @@
       "allowedDomains": [
         "internal-test.invalid",
         "fixtures"
-      ]
+      ],
+      "shieldThreshold": 30
     }
   }
 }
