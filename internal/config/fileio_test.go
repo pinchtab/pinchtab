@@ -58,6 +58,7 @@ func TestLoadAndSaveFileConfigPreservesExplicitZeroValues(t *testing.T) {
 	fc.Security.IDPI.StrictMode = false
 	fc.Security.IDPI.AllowedDomains = []string{}
 	fc.Security.IDPI.CustomPatterns = []string{}
+	fc.Security.IDPI.ShieldThreshold = 30
 
 	if err := SaveFileConfig(&fc, configPath); err != nil {
 		t.Fatalf("SaveFileConfig() error = %v", err)
@@ -76,6 +77,9 @@ func TestLoadAndSaveFileConfigPreservesExplicitZeroValues(t *testing.T) {
 	}
 	if len(loaded.Security.IDPI.AllowedDomains) != 0 {
 		t.Errorf("loaded allowedDomains = %v, want empty list", loaded.Security.IDPI.AllowedDomains)
+	}
+	if loaded.Security.IDPI.ShieldThreshold != 30 {
+		t.Errorf("loaded shieldThreshold = %d, want 30", loaded.Security.IDPI.ShieldThreshold)
 	}
 	if len(loaded.Browser.ExtensionPaths) != 0 {
 		t.Errorf("loaded extensionPaths = %v, want empty list", loaded.Browser.ExtensionPaths)

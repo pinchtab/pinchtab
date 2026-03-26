@@ -21,11 +21,16 @@ func NewShieldGuard(cfg config.IDPIConfig) *ShieldGuard {
 		mode = idpishield.ModeDeep
 	}
 
+	blockThreshold := 0
+	if cfg.StrictMode {
+		blockThreshold = cfg.ShieldThreshold
+	}
+
 	shield := idpishield.New(idpishield.Config{
 		Mode:           mode,
 		AllowedDomains: cfg.AllowedDomains,
 		StrictMode:     cfg.StrictMode,
-		BlockThreshold: cfg.ShieldThreshold,
+		BlockThreshold: blockThreshold,
 	})
 
 	return &ShieldGuard{

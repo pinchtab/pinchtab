@@ -275,6 +275,35 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	}
 }
 
+func TestLoadPreservesIDPIShieldThreshold(t *testing.T) {
+	clearConfigEnvVars(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
+	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
+
+	if err := os.WriteFile(configPath, []byte(`{
+		"security": {
+			"idpi": {
+				"enabled": true,
+				"strictMode": true,
+				"scanContent": true,
+				"wrapContent": true,
+				"allowedDomains": ["fixtures"],
+				"shieldThreshold": 30
+			}
+		}
+	}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Load()
+	if cfg.IDPI.ShieldThreshold != 30 {
+		t.Fatalf("IDPI.ShieldThreshold = %d, want 30", cfg.IDPI.ShieldThreshold)
+	}
+}
+
 func TestApplyFileConfigToRuntimeClearsTokenWhenFileTokenRemoved(t *testing.T) {
 	clearConfigEnvVars(t)
 
