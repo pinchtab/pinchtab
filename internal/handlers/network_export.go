@@ -27,6 +27,30 @@ const maxExportStreamDuration = 30 * time.Minute
 // bodyFetchConcurrency limits parallel CDP GetResponseBody calls to avoid tying up the tab.
 const bodyFetchConcurrency = 4
 
+// staleTmpAge is the minimum age of a .tmp file before it's considered orphaned.
+const staleTmpAge = 5 * time.Minute
+
+// CleanupStaleTmpExports removes orphaned .tmp files from the exports directory.
+// Called at startup to handle files left behind by a crash or hard kill.
+func CleanupStaleTmpExports(stateDir string) {
+	exportDir := filepath.Join(stateDir, "exports")
+	entries, err := os.ReadDir(exportDir)
+	if err != nil {
+		return // directory doesn't exist yet — nothing to clean
+	}
+	cutoff := time.Now().Add(-staleTmpAge)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tmp") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue // skip files that might still be in-flight
+		}
+		_ = os.Remove(filepath.Join(exportDir, entry.Name()))
+	}
+}
+
 // HandleNetworkExport exports captured network data in a registered format (HAR, NDJSON, etc.).
 //
 // @Endpoint GET /network/export
