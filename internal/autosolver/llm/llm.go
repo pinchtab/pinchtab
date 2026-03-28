@@ -14,10 +14,10 @@ import (
 
 // ProviderConfig holds LLM provider configuration.
 type ProviderConfig struct {
-	Provider    string `json:"provider"`    // "openai", "anthropic", etc.
-	Model       string `json:"model"`       // Model name (e.g., "gpt-4o-mini")
-	APIKey      string `json:"apiKey"`      // Provider API key
-	MaxTokens   int    `json:"maxTokens"`   // Max output tokens (default: 256)
+	Provider    string  `json:"provider"`    // "openai", "anthropic", etc.
+	Model       string  `json:"model"`       // Model name (e.g., "gpt-4o-mini")
+	APIKey      string  `json:"apiKey"`      // Provider API key
+	MaxTokens   int     `json:"maxTokens"`   // Max output tokens (default: 256)
 	Temperature float64 `json:"temperature"` // Sampling temperature (default: 0.1)
 }
 
