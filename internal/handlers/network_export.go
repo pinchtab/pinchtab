@@ -21,6 +21,12 @@ import (
 // maxExportBodyBytes caps the size of a single response body included in an export.
 const maxExportBodyBytes = 10 << 20 // 10 MB
 
+// maxExportStreamDuration caps how long a streaming export can run before auto-closing.
+const maxExportStreamDuration = 30 * time.Minute
+
+// bodyFetchConcurrency limits parallel CDP GetResponseBody calls to avoid tying up the tab.
+const bodyFetchConcurrency = 4
+
 // HandleNetworkExport exports captured network data in a registered format (HAR, NDJSON, etc.).
 //
 // @Endpoint GET /network/export
@@ -121,26 +127,41 @@ func (h *Handlers) HandleNetworkExport(w http.ResponseWriter, r *http.Request) {
 	defer fetchCancel()
 	go httpx.CancelOnClientDone(r.Context(), fetchCancel)
 
-	// Convert entries
-	exportEntries := make([]observe.ExportEntry, 0, len(entries))
-	for _, entry := range entries {
-		var body string
-		var b64 bool
-		if includeBody && entry.Finished && !entry.Failed {
-			body, b64, _ = nm.GetResponseBody(fetchCtx, entry.RequestID)
-			// Cap body size (#3)
-			if len(body) > maxExportBodyBytes {
-				body = ""
-				b64 = false
+	// Convert entries with throttled body fetches to avoid tying up the tab context.
+	exportEntries := make([]observe.ExportEntry, len(entries))
+	bodySem := make(chan struct{}, bodyFetchConcurrency)
+	var wg sync.WaitGroup
+
+	for i, entry := range entries {
+		needBody := includeBody && entry.Finished && !entry.Failed
+		if needBody {
+			wg.Add(1)
+			bodySem <- struct{}{}
+			go func(idx int, ent bridge.NetworkEntry) {
+				defer wg.Done()
+				defer func() { <-bodySem }()
+				body, b64, _ := nm.GetResponseBody(fetchCtx, ent.RequestID)
+				if len(body) > maxExportBodyBytes {
+					body = ""
+					b64 = false
+				}
+				e := observe.NetworkEntryToExport(ent, body, b64)
+				if redactHeaders {
+					e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
+					e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
+				}
+				exportEntries[idx] = e
+			}(i, entry)
+		} else {
+			e := observe.NetworkEntryToExport(entry, "", false)
+			if redactHeaders {
+				e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
+				e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
 			}
+			exportEntries[i] = e
 		}
-		e := observe.NetworkEntryToExport(entry, body, b64)
-		if redactHeaders {
-			e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
-			e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
-		}
-		exportEntries = append(exportEntries, e)
 	}
+	wg.Wait()
 
 	enc := factory("PinchTab", h.version())
 
@@ -350,6 +371,9 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Semaphore to throttle concurrent body fetches in streaming mode.
+	streamBodySem := make(chan struct{}, bodyFetchConcurrency)
+
 	// Subscribe for live entries
 	subID, ch := buf.Subscribe()
 	defer buf.Unsubscribe(subID)
@@ -369,7 +393,11 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Clear write deadline for long-lived SSE (#7)
+	// Set a hard deadline so forgotten streams don't leak resources.
+	streamDeadline := time.NewTimer(maxExportStreamDuration)
+	defer streamDeadline.Stop()
+
+	// Clear per-write deadline for long-lived SSE (#7), the stream timer above caps total duration.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 	count := 0
@@ -393,6 +421,17 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
+	// sendDone emits the final SSE event with the correct path (empty when no file was written).
+	sendDone := func() {
+		result := map[string]any{"entries": count}
+		if count > 0 {
+			result["path"] = absPath
+		}
+		data, _ := json.Marshal(result)
+		_, _ = fmt.Fprintf(w, "event: done\ndata: %s\n\n", data)
+		flusher.Flush()
+	}
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -400,12 +439,17 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 			// Don't write to ResponseWriter after client disconnect (#6)
 			return
 
+		case <-streamDeadline.C:
+			finalize()
+			data, _ := json.Marshal(map[string]any{"entries": count, "reason": "max_duration_reached"})
+			_, _ = fmt.Fprintf(w, "event: timeout\ndata: %s\n\n", data)
+			sendDone()
+			return
+
 		case entry, ok := <-ch:
 			if !ok {
 				finalize()
-				data, _ := json.Marshal(map[string]any{"entries": count, "path": absPath})
-				_, _ = fmt.Fprintf(w, "event: done\ndata: %s\n\n", data)
-				flusher.Flush()
+				sendDone()
 				return
 			}
 
@@ -445,7 +489,10 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 			var body string
 			var b64 bool
 			if includeBody && entry.Finished && !entry.Failed {
+				// Throttle body fetches to avoid saturating the CDP connection.
+				streamBodySem <- struct{}{}
 				body, b64, _ = nm.GetResponseBody(tabCtx, entry.RequestID)
+				<-streamBodySem
 				if len(body) > maxExportBodyBytes {
 					body = ""
 					b64 = false
