@@ -88,6 +88,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, logStore, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
+		b.SetNetworkMonitor(b.netMonitor)
 		if !b.quietStealthObservers() {
 			b.StartBrowserGuards()
 		}
@@ -277,6 +278,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
+		b.SetNetworkMonitor(b.netMonitor)
 		if !b.quietStealthObservers() {
 			b.StartBrowserGuards()
 		}
@@ -372,6 +374,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
 		b.SetDialogManager(b.Dialogs)
+		b.SetNetworkMonitor(b.netMonitor)
 	}
 }
 

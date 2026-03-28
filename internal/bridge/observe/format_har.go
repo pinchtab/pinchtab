@@ -33,11 +33,18 @@ func (e *harEncoder) FileExtension() string { return ".har" }
 func (e *harEncoder) Start(w io.Writer) error {
 	e.w = w
 	e.started = true
-	header := fmt.Sprintf(
-		`{"log":{"version":"1.2","creator":%s,"entries":[`,
-		mustMarshal(e.creator),
-	)
-	_, err := io.WriteString(e.w, header)
+	creatorJSON, err := json.Marshal(e.creator)
+	if err != nil {
+		return fmt.Errorf("marshal creator: %w", err)
+	}
+	_, err = io.WriteString(e.w, `{"log":{"version":"1.2","creator":`)
+	if err != nil {
+		return err
+	}
+	if _, err = e.w.Write(creatorJSON); err != nil {
+		return err
+	}
+	_, err = io.WriteString(e.w, `,"entries":[`)
 	return err
 }
 
@@ -67,12 +74,4 @@ func (e *harEncoder) Finish() error {
 	}
 	_, err := io.WriteString(e.w, "]}}\n")
 	return err
-}
-
-func mustMarshal(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
 }
