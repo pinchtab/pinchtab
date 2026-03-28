@@ -20,7 +20,9 @@ func TestCleanupStaleTmpExports(t *testing.T) {
 		t.Fatal(err)
 	}
 	staleTime := time.Now().Add(-10 * time.Minute)
-	os.Chtimes(stalePath, staleTime, staleTime)
+	if err := os.Chtimes(stalePath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create a fresh .tmp file that should be kept (could be in-flight).
 	freshPath := filepath.Join(exportDir, "network-new.ndjson.tmp")
