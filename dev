@@ -35,6 +35,7 @@ COMMANDS=(
   "doctor:🩺:Setup dev environment"
   "check go:🧪:Go only"
   "check dashboard:🧪:Dashboard only"
+  "check npm:🧪:npm package only"
   "check security:🧪:Gosec security scan"
   "check docs:🧪:Validate docs JSON"
   "binary:📦:Build release-style binary into dist/"
@@ -90,6 +91,11 @@ run_command() {
       echo "  ${ACCENT}${BOLD}🧪 Dashboard checks${NC}"
       echo ""
       exec bash scripts/check-dashboard.sh
+      ;;
+    "check npm")
+      echo "  ${ACCENT}${BOLD}🧪 npm package checks${NC}"
+      echo ""
+      exec bash scripts/check-npm.sh
       ;;
     "check security")
       echo "  ${ACCENT}${BOLD}🔒 Security scan${NC}"

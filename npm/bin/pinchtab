@@ -7,7 +7,16 @@ const fs = require('fs');
 
 function getBinaryName() {
   const platform = process.platform;
-  const arch = (process.arch === 'arm64' || process.arch === 'aarch64') ? 'arm64' : 'amd64';
+  let arch;
+  if (process.arch === 'x64') {
+    arch = 'amd64';
+  } else if (process.arch === 'arm64') {
+    arch = 'arm64';
+  } else {
+    throw new Error(
+      `Unsupported architecture: ${process.arch}. Only x64 (amd64) and arm64 are supported.`
+    );
+  }
 
   if (platform === 'darwin') {
     return `pinchtab-darwin-${arch}`;

@@ -66,7 +66,14 @@ describe('MCP wrapper integration', () => {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pinchtab-home-'));
     const pkgPath = path.join(__dirname, '..', '..', 'package.json');
     const version = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version;
-    const arch = process.arch === 'arm64' || process.arch === 'aarch64' ? 'arm64' : 'amd64';
+    let arch: 'amd64' | 'arm64';
+    if (process.arch === 'x64') {
+      arch = 'amd64';
+    } else if (process.arch === 'arm64') {
+      arch = 'arm64';
+    } else {
+      throw new Error(`Unsupported architecture: ${process.arch}`);
+    }
 
     let binaryName: string;
     if (process.platform === 'darwin') {
