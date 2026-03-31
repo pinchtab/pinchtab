@@ -16,6 +16,10 @@ func resetRateLimitStateForTests() {
 	rateMu.Lock()
 	rateBuckets = map[string][]time.Time{}
 	rateMu.Unlock()
+
+	streamMu.Lock()
+	streamConnections = map[string]int{}
+	streamMu.Unlock()
 }
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
@@ -857,6 +861,60 @@ func TestRateLimitMiddleware_DoesNotRateLimitStreamingEndpoints(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("%s request %d: expected 200, got %d", p, i+1, w.Code)
 			}
+		}
+	}
+}
+
+func TestRateLimitMiddleware_LimitsConcurrentStreamingEndpointsPerHost(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
+
+	entered := make(chan struct{}, maxConcurrentStreamRequestsPerHost)
+	release := make(chan struct{})
+	results := make(chan int, maxConcurrentStreamRequestsPerHost)
+
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		go func() {
+			req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			results <- w.Code
+		}()
+	}
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for stream %d to enter handler", i+1)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 once concurrent stream limit is reached, got %d", w.Code)
+	}
+
+	close(release)
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		select {
+		case code := <-results:
+			if code != http.StatusOK {
+				t.Fatalf("stream %d completed with %d, want 200", i+1, code)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for stream %d to complete", i+1)
 		}
 	}
 }

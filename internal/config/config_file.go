@@ -401,7 +401,6 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 				Enabled:        fc.Observability.Activity.Enabled,
 				SessionIdleSec: fc.Observability.Activity.SessionIdleSec,
 				RetentionDays:  fc.Observability.Activity.RetentionDays,
-				StateDir:       fc.Observability.Activity.StateDir,
 			},
 		},
 		Sessions: sessionsFileConfigJSON{
@@ -465,7 +464,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	activityEnabled := cfg.Observability.Activity.Enabled
 	activitySessionIdleSec := cfg.Observability.Activity.SessionIdleSec
 	activityRetentionDays := cfg.Observability.Activity.RetentionDays
-	activityStateDir := cfg.Observability.Activity.StateDir
 	dashboardSessionPersist := cfg.Sessions.Dashboard.Persist
 	dashboardSessionIdleSec := int(cfg.Sessions.Dashboard.IdleTimeout / time.Second)
 	dashboardSessionMaxLifetimeSec := int(cfg.Sessions.Dashboard.MaxLifetime / time.Second)
@@ -565,7 +563,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				Enabled:        &activityEnabled,
 				SessionIdleSec: &activitySessionIdleSec,
 				RetentionDays:  &activityRetentionDays,
-				StateDir:       activityStateDir,
 			},
 		},
 		Sessions: SessionsFileConfig{

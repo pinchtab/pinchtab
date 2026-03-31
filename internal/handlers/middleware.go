@@ -23,6 +23,13 @@ var (
 	metricRequestLatencyN uint64
 	metricRateLimited     uint64
 	metricStaleRefRetries uint64
+
+	streamMu          sync.Mutex
+	streamConnections = map[string]int{}
+)
+
+const (
+	maxConcurrentStreamRequestsPerHost = 8
 )
 
 const (
@@ -376,6 +383,15 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 	startRateLimiterJanitor(rateLimitWindow, evictionInterval)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isLongLivedStreamRequest(r) {
+			host := authn.ClientIP(r)
+			if !acquireStreamConnection(host) {
+				atomic.AddUint64(&metricRateLimited, 1)
+				httpx.ErrorCode(w, 429, "stream_limit_reached", "too many concurrent streaming connections", true, map[string]any{
+					"maxConcurrent": maxConcurrentStreamRequestsPerHost,
+				})
+				return
+			}
+			defer releaseStreamConnection(host)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -420,6 +436,29 @@ func isLongLivedStreamRequest(r *http.Request) bool {
 	default:
 		return false
 	}
+}
+
+func acquireStreamConnection(host string) bool {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+
+	if streamConnections[host] >= maxConcurrentStreamRequestsPerHost {
+		return false
+	}
+	streamConnections[host]++
+	return true
+}
+
+func releaseStreamConnection(host string) {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+
+	current := streamConnections[host]
+	if current <= 1 {
+		delete(streamConnections, host)
+		return
+	}
+	streamConnections[host] = current - 1
 }
 
 func startRateLimiterJanitor(window, interval time.Duration) {

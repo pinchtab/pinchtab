@@ -95,6 +95,10 @@ func (d *Dashboard) SetInstanceLister(il InstanceLister) {
 
 // RecordActivityEvent converts a backend activity record into a live tool-call event.
 func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
+	d.recordEvents([]apiTypes.ActivityEvent{activityEventToLiveEvent(evt)})
+}
+
+func activityEventToLiveEvent(evt activity.Event) apiTypes.ActivityEvent {
 	details := map[string]any{
 		"status":     evt.Status,
 		"durationMs": evt.DurationMs,
@@ -136,7 +140,7 @@ func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
 		details["action"] = evt.Action
 	}
 
-	d.RecordEvent(apiTypes.ActivityEvent{
+	return apiTypes.ActivityEvent{
 		ID:        evt.RequestID,
 		AgentID:   agentIDOrAnonymous(evt.AgentID),
 		Channel:   "tool_call",
@@ -145,50 +149,12 @@ func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
 		Path:      evt.Path,
 		Timestamp: evt.Timestamp,
 		Details:   details,
-	})
+	}
 }
 
 // RecordEvent records an activity event, updates the live agent summary, and broadcasts to SSE subscribers.
 func (d *Dashboard) RecordEvent(evt apiTypes.ActivityEvent) {
-	if evt.ID == "" {
-		evt.ID = generateID()
-	}
-	if evt.Timestamp.IsZero() {
-		evt.Timestamp = time.Now().UTC()
-	}
-	if evt.Channel == "" {
-		evt.Channel = "tool_call"
-	}
-	if evt.AgentID == "" {
-		evt.AgentID = "anonymous"
-	}
-
-	d.mu.Lock()
-	if _, ok := d.seenEventIDs[evt.ID]; ok {
-		d.mu.Unlock()
-		return
-	}
-	d.rememberEventIDLocked(evt.ID)
-	d.upsertAgentLocked(evt)
-	if len(d.recentEvents) >= d.maxEvents {
-		copy(d.recentEvents, d.recentEvents[1:])
-		d.recentEvents[len(d.recentEvents)-1] = evt
-	} else {
-		d.recentEvents = append(d.recentEvents, evt)
-	}
-
-	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
-	for ch := range d.activityConns {
-		chans = append(chans, ch)
-	}
-	d.mu.Unlock()
-
-	for _, ch := range chans {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
+	d.recordEvents([]apiTypes.ActivityEvent{evt})
 }
 
 func (d *Dashboard) upsertAgentLocked(evt apiTypes.ActivityEvent) {
@@ -280,6 +246,7 @@ func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since ti
 	}
 
 	latest := since
+	batch := make([]apiTypes.ActivityEvent, 0, len(events))
 	for _, evt := range events {
 		if evt.Timestamp.After(latest) {
 			latest = evt.Timestamp
@@ -290,8 +257,9 @@ func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since ti
 		if !shouldTrackPersistedAgentActivity(evt) {
 			continue
 		}
-		d.RecordActivityEvent(evt)
+		batch = append(batch, activityEventToLiveEvent(evt))
 	}
+	d.recordEvents(batch)
 
 	return latest, nil
 }
@@ -593,6 +561,61 @@ func (d *Dashboard) rememberEventIDLocked(id string) {
 	evicted := d.seenEventLog[0]
 	d.seenEventLog = d.seenEventLog[1:]
 	delete(d.seenEventIDs, evicted)
+}
+
+func normalizeEvent(evt apiTypes.ActivityEvent) apiTypes.ActivityEvent {
+	if evt.ID == "" {
+		evt.ID = generateID()
+	}
+	if evt.Timestamp.IsZero() {
+		evt.Timestamp = time.Now().UTC()
+	}
+	if evt.Channel == "" {
+		evt.Channel = "tool_call"
+	}
+	if evt.AgentID == "" {
+		evt.AgentID = "anonymous"
+	}
+	return evt
+}
+
+func (d *Dashboard) recordEvents(events []apiTypes.ActivityEvent) {
+	if d == nil || len(events) == 0 {
+		return
+	}
+
+	d.mu.Lock()
+	broadcast := make([]apiTypes.ActivityEvent, 0, len(events))
+	for _, raw := range events {
+		evt := normalizeEvent(raw)
+		if _, ok := d.seenEventIDs[evt.ID]; ok {
+			continue
+		}
+		d.rememberEventIDLocked(evt.ID)
+		d.upsertAgentLocked(evt)
+		if len(d.recentEvents) >= d.maxEvents {
+			copy(d.recentEvents, d.recentEvents[1:])
+			d.recentEvents[len(d.recentEvents)-1] = evt
+		} else {
+			d.recentEvents = append(d.recentEvents, evt)
+		}
+		broadcast = append(broadcast, evt)
+	}
+
+	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
+	for ch := range d.activityConns {
+		chans = append(chans, ch)
+	}
+	d.mu.Unlock()
+
+	for _, evt := range broadcast {
+		for _, ch := range chans {
+			select {
+			case ch <- evt:
+			default:
+			}
+		}
+	}
 }
 
 func classifyActivityType(evt activity.Event) string {

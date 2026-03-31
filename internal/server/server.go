@@ -104,7 +104,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
-		lastSync := time.Now().UTC().Add(-2 * time.Second)
+		lastSync := time.Now().UTC()
 		for {
 			select {
 			case <-syncCtx.Done():
@@ -116,7 +116,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 					continue
 				}
 				if !nextSync.IsZero() {
-					lastSync = nextSync.Add(-2 * time.Second)
+					lastSync = nextSync
 				}
 			}
 		}

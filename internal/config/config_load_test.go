@@ -197,7 +197,7 @@ func TestConfigFileWithNestedValues(t *testing.T) {
 	}
 }
 
-func TestLoadConfigActivityStateDir(t *testing.T) {
+func TestLoadConfigActivityStateDirIgnoresConfigOverride(t *testing.T) {
 	clearConfigEnvVars(t)
 
 	tmpDir := t.TempDir()
@@ -220,11 +220,11 @@ func TestLoadConfigActivityStateDir(t *testing.T) {
 	}
 
 	cfg := Load()
-	if cfg.Observability.Activity.StateDir != sharedActivityDir {
-		t.Fatalf("Observability.Activity.StateDir = %q, want %q", cfg.Observability.Activity.StateDir, sharedActivityDir)
+	if cfg.Observability.Activity.StateDir != "" {
+		t.Fatalf("Observability.Activity.StateDir = %q, want empty", cfg.Observability.Activity.StateDir)
 	}
-	if cfg.ActivityStateDir() != sharedActivityDir {
-		t.Fatalf("ActivityStateDir() = %q, want %q", cfg.ActivityStateDir(), sharedActivityDir)
+	if cfg.ActivityStateDir() != "/tmp/profile-state" {
+		t.Fatalf("ActivityStateDir() = %q, want %q", cfg.ActivityStateDir(), "/tmp/profile-state")
 	}
 }
 

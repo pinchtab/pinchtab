@@ -313,7 +313,7 @@ func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctChromeDebugPort(t *
 	}
 }
 
-func TestOrchestrator_Launch_ChildConfigKeepsSharedActivityStateDir(t *testing.T) {
+func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
@@ -349,8 +349,11 @@ func TestOrchestrator_Launch_ChildConfigKeepsSharedActivityStateDir(t *testing.T
 	if fc.Server.StateDir != wantChildStateDir {
 		t.Fatalf("child Server.StateDir = %q, want %q", fc.Server.StateDir, wantChildStateDir)
 	}
-	if fc.Observability.Activity.StateDir != sharedActivityStateDir {
-		t.Fatalf("child Observability.Activity.StateDir = %q, want %q", fc.Observability.Activity.StateDir, sharedActivityStateDir)
+	if fc.Observability.Activity.StateDir != "" {
+		t.Fatalf("child Observability.Activity.StateDir = %q, want empty", fc.Observability.Activity.StateDir)
+	}
+	if got := envMap(runner.env)["PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR"]; got != "" {
+		t.Fatalf("PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR = %q, want empty", got)
 	}
 	if inst.Port != "9930" {
 		t.Fatalf("bridge port = %s, want 9930", inst.Port)

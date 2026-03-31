@@ -32,8 +32,5 @@ func (cfg *RuntimeConfig) ActivityStateDir() string {
 	if cfg == nil {
 		return ""
 	}
-	if cfg.Observability.Activity.StateDir != "" {
-		return cfg.Observability.Activity.StateDir
-	}
 	return cfg.StateDir
 }

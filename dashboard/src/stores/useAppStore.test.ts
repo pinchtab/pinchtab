@@ -223,6 +223,40 @@ describe("useAppStore", () => {
         expect.objectContaining({ id: "evt_live" }),
       ]);
     });
+
+    it("keeps only the 20 most recent agent caches", () => {
+      for (let i = 0; i < 22; i++) {
+        const agentId = `agent_${i}`;
+        const timestamp = new Date(Date.UTC(2024, 0, 1, 0, i)).toISOString();
+        useAppStore.getState().upsertAgentFromEvent({
+          id: `evt_${i}`,
+          agentId,
+          channel: "tool_call",
+          type: "navigate",
+          method: "POST",
+          path: "/navigate",
+          timestamp,
+        } as any);
+        useAppStore.getState().appendAgentEvent({
+          id: `evt_cache_${i}`,
+          agentId,
+          channel: "tool_call",
+          type: "navigate",
+          method: "POST",
+          path: "/navigate",
+          timestamp,
+        } as any);
+      }
+
+      const { agents, agentEventsById } = useAppStore.getState();
+      expect(agents).toHaveLength(20);
+      expect(Object.keys(agentEventsById)).toHaveLength(20);
+      expect(agents.map((agent) => agent.id)).not.toContain("agent_0");
+      expect(agents.map((agent) => agent.id)).not.toContain("agent_1");
+      expect(agentEventsById.agent_0).toBeUndefined();
+      expect(agentEventsById.agent_1).toBeUndefined();
+      expect(agentEventsById.agent_21).toBeDefined();
+    });
   });
 
   describe("settings", () => {
