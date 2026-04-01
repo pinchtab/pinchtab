@@ -84,6 +84,14 @@ function matchesVisibleEvent(
   if (hiddenSources.includes(event.source)) {
     return false;
   }
+  // Hide API management calls (sessions, activity queries, health) from the stream
+  if (
+    event.path.startsWith("/api/") ||
+    event.path === "/health" ||
+    event.path === "/metrics"
+  ) {
+    return false;
+  }
   if (requireAgentIdentity && !(event.agentId || "").trim()) {
     return false;
   }

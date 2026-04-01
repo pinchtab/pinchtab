@@ -30,6 +30,16 @@ function compactId(value: string): string {
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }
 
+function isDefaultProfile(name: string | undefined): boolean {
+  if (!name) return true;
+  const lower = name.toLowerCase();
+  return lower === "default" || lower === "chrome-profile";
+}
+
+function isApiPath(path: string): boolean {
+  return path.startsWith("/api/") || path === "/health" || path === "/metrics";
+}
+
 function quoted(value: string): string {
   return `"${value}"`;
 }
@@ -138,19 +148,11 @@ export default function StreamRow({
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {event.profileName && (
+                {event.profileName && !isDefaultProfile(event.profileName) && (
                   <FilterPill
                     label={`profile:${event.profileName}`}
                     onClick={() =>
                       onFilterChange("profileName", event.profileName || "")
-                    }
-                  />
-                )}
-                {event.instanceId && (
-                  <FilterPill
-                    label={`instance:${event.instanceId}`}
-                    onClick={() =>
-                      onFilterChange("instanceId", event.instanceId || "")
                     }
                   />
                 )}
@@ -194,19 +196,11 @@ export default function StreamRow({
                   onClick={() => onFilterChange("tabId", event.tabId || "")}
                 />
               ))}
-            {event.profileName && (
+            {event.profileName && !isDefaultProfile(event.profileName) && (
               <FilterPill
                 label={`profile:${event.profileName}`}
                 onClick={() =>
                   onFilterChange("profileName", event.profileName || "")
-                }
-              />
-            )}
-            {event.instanceId && (
-              <FilterPill
-                label={`instance:${event.instanceId}`}
-                onClick={() =>
-                  onFilterChange("instanceId", event.instanceId || "")
                 }
               />
             )}

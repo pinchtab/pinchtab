@@ -1,7 +1,10 @@
 package orchestrator
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +27,10 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
+
+	// Enrich activity with action/navigate details from the request body
+	// before proxying, so the dashboard stream shows meaningful labels.
+	enrichRouteActivity(r)
 
 	proxyToInstance := func(inst *bridge.Instance) {
 		activity.EnrichRequest(r, activity.Update{
@@ -317,6 +324,52 @@ func classifyLaunchError(err error) int {
 		return 409 // Conflict - resource already exists
 	}
 	return 500 // Internal Server Error
+}
+
+// enrichRouteActivity peeks at the request body to extract action/navigate
+// details for the activity stream. This is necessary because the orchestrator
+// proxies requests without parsing them, so activity would otherwise lack
+// action, ref, and URL fields. The body is restored for the downstream handler.
+func enrichRouteActivity(r *http.Request) {
+	if r.Body == nil || r.Method != http.MethodPost {
+		return
+	}
+	path := r.URL.Path
+	isAction := strings.HasSuffix(path, "/action")
+	isNavigate := strings.HasSuffix(path, "/navigate")
+	if !isAction && !isNavigate {
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<10))
+	if err != nil || len(body) == 0 {
+		return
+	}
+	// Restore the body for the downstream proxy
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	var peek struct {
+		Kind string `json:"kind"`
+		Ref  string `json:"ref"`
+		URL  string `json:"url"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(body, &peek) != nil {
+		return
+	}
+
+	update := activity.Update{}
+	if isAction && peek.Kind != "" {
+		update.Action = peek.Kind
+		update.Ref = peek.Ref
+	}
+	if isNavigate && peek.URL != "" {
+		update.Action = "navigate"
+		update.URL = peek.URL
+	}
+	if update.Action != "" {
+		activity.EnrichRequest(r, update)
+	}
 }
 
 func (o *Orchestrator) singleRunningInstance() *InstanceInternal {
