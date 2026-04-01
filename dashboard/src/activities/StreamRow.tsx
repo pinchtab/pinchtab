@@ -65,8 +65,27 @@ function eventSummary(event: DashboardActivityEvent): string {
       return event.ref ? `Type into ${quoted(event.ref)}` : "Type into page";
     case "hover":
       return event.ref ? `Hover ${quoted(event.ref)}` : "Hover on page";
+    case "fill":
+      return event.ref ? `Fill ${quoted(event.ref)}` : "Fill field";
+    case "select":
+      return event.ref ? `Select ${quoted(event.ref)}` : "Select option";
+    case "scroll":
+      return "Scroll page";
+    case "press":
+      return event.ref ? `Press key on ${quoted(event.ref)}` : "Press key";
+    case "wait":
+      return "Wait for condition";
+    case "evaluate":
+      return "Evaluate JavaScript";
+    case "upload":
+      return "Upload file";
+    case "download":
+      return "Download file";
     default:
-      return "Run browser operation";
+      if (event.action) {
+        return `${event.action} ${event.ref ? quoted(event.ref) : ""}`.trim();
+      }
+      return `${event.method} ${event.path}`;
   }
 }
 

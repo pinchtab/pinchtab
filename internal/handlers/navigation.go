@@ -94,6 +94,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	domainResult := h.IDPIGuard.CheckDomain(req.URL)
 	if domainResult.Blocked {
+		h.recordNavigateRequest(r, req.TabID, req.URL)
 		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
 		return
 	}
