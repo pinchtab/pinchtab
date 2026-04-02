@@ -315,13 +315,30 @@ func deriveKey(passphrase string) []byte {
 
 // sanitizeFilename strips path separators and problematic characters.
 func sanitizeFilename(name string) string {
+	// Normalize Windows path separators so filepath.Base works on all OSes.
+	name = strings.ReplaceAll(name, "\\", "/")
+
+	// Drop any directory components.
 	name = filepath.Base(name)
+
+	// Remove leading dot-segments.
+	for strings.HasPrefix(name, "../") {
+		name = strings.TrimPrefix(name, "../")
+	}
+	name = strings.TrimPrefix(name, "./")
+
+	// Replace disallowed characters.
 	name = strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
 			return '_'
+		default:
+			return r
 		}
-		return r
 	}, name)
+
+	// Final safety.
+	name = strings.TrimLeft(name, ".")
 	if name == "" || name == "." || name == ".." {
 		return "state"
 	}
