@@ -28,6 +28,7 @@ func Load() *RuntimeConfig {
 		DownloadAllowedDomains: nil,
 		DownloadMaxBytes:       DefaultDownloadMaxBytes,
 		AllowUpload:            false,
+		EnableActionGuards:     true,
 		UploadMaxRequestBytes:  DefaultUploadMaxRequestBytes,
 		UploadMaxFiles:         DefaultUploadMaxFiles,
 		UploadMaxFileBytes:     DefaultUploadMaxFileBytes,
@@ -228,6 +229,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Security.AllowClipboard != nil {
 		cfg.AllowClipboard = *fc.Security.AllowClipboard
+	}
+	if fc.Security.EnableActionGuards != nil {
+		cfg.EnableActionGuards = *fc.Security.EnableActionGuards
 	}
 	if fc.Security.UploadMaxRequestBytes != nil {
 		cfg.UploadMaxRequestBytes = clampPositiveLimit(*fc.Security.UploadMaxRequestBytes, DefaultUploadMaxRequestBytes, MaxUploadMaxRequestBytes)

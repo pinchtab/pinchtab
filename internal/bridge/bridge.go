@@ -529,7 +529,29 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", kind)
 	}
-	return fn(ctx, req)
+	guardEnabled := b.Config == nil || b.Config.EnableActionGuards
+	var beforeURL string
+	if guardEnabled && shouldCheckUnexpectedNavigation(kind, req) {
+		if u, err := readActionURL(ctx); err == nil {
+			beforeURL = u
+		}
+	}
+
+	res, err := fn(ctx, req)
+	if err != nil {
+		return nil, classifyActionError(err)
+	}
+
+	if guardEnabled && beforeURL != "" && shouldCheckUnexpectedNavigation(kind, req) {
+		afterURL, uErr := readActionURL(ctx)
+		if uErr == nil {
+			if navErr := checkUnexpectedNavigation(beforeURL, afterURL); navErr != nil {
+				return nil, navErr
+			}
+		}
+	}
+
+	return res, nil
 }
 
 // Execute delegates to TabManager.Execute for safe parallel tab execution.

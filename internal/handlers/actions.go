@@ -321,6 +321,10 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		if errors.Is(actionErr, bridge.ErrUnexpectedNavigation) {
+			httpx.ErrorCode(w, 409, "navigation_changed", actionErr.Error(), false, nil)
+			return
+		}
 		if errors.Is(actionErr, engine.ErrLiteNotSupported) {
 			httpx.ErrorCode(w, http.StatusNotImplemented, "not_supported", actionErr.Error(), false, nil)
 			return
@@ -1075,6 +1079,9 @@ func actionCapability(kind string) (engine.Capability, bool) {
 func shouldRetryStaleRef(err error) bool {
 	if err == nil {
 		return false
+	}
+	if errors.Is(err, bridge.ErrElementStale) {
+		return true
 	}
 	e := strings.ToLower(err.Error())
 	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")
