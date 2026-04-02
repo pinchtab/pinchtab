@@ -90,6 +90,9 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 	b := &Bridge{
 		Config: &config.RuntimeConfig{EnableActionGuards: true},
 		Actions: map[string]ActionFunc{
+			ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
+				return map[string]any{"ok": true}, nil
+			},
 			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
 				return map[string]any{"ok": true}, nil
 			},
