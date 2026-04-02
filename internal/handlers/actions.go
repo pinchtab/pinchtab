@@ -1083,6 +1083,9 @@ func shouldRetryStaleRef(err error) bool {
 	if errors.Is(err, bridge.ErrElementStale) {
 		return true
 	}
+	// Fallback string matching is still needed for stale failures that can bypass
+	// bridge.ExecuteAction classification (for example, lite-engine paths or other
+	// non-bridge error surfaces that return raw backend-node messages).
 	e := strings.ToLower(err.Error())
 	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")
 }

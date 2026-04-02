@@ -65,7 +65,7 @@ func TestShouldCheckUnexpectedNavigation(t *testing.T) {
 }
 
 func TestReadActionURL_NoChromeDPContext(t *testing.T) {
-	u, err := readActionURL(context.Background())
+	u, err := defaultActionURLReader(context.Background())
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -75,11 +75,8 @@ func TestReadActionURL_NoChromeDPContext(t *testing.T) {
 }
 
 func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
-	oldReadURL := readActionURL
-	defer func() { readActionURL = oldReadURL }()
-
 	call := 0
-	readActionURL = func(context.Context) (string, error) {
+	readActionURL := func(context.Context) (string, error) {
 		call++
 		if call == 1 {
 			return "https://a.example", nil
@@ -89,6 +86,7 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 
 	b := &Bridge{
 		Config: &config.RuntimeConfig{EnableActionGuards: true},
+		URLReader: readActionURL,
 		Actions: map[string]ActionFunc{
 			ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
 				return map[string]any{"ok": true}, nil
@@ -106,17 +104,15 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 }
 
 func TestExecuteAction_UnexpectedNavigationGuardDisabled(t *testing.T) {
-	oldReadURL := readActionURL
-	defer func() { readActionURL = oldReadURL }()
-
 	called := 0
-	readActionURL = func(context.Context) (string, error) {
+	readActionURL := func(context.Context) (string, error) {
 		called++
 		return "https://a.example", nil
 	}
 
 	b := &Bridge{
 		Config: &config.RuntimeConfig{EnableActionGuards: false},
+		URLReader: readActionURL,
 		Actions: map[string]ActionFunc{
 			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
 				return map[string]any{"ok": true}, nil
@@ -133,11 +129,8 @@ func TestExecuteAction_UnexpectedNavigationGuardDisabled(t *testing.T) {
 }
 
 func TestExecuteAction_UnexpectedNavigation_WithNilConfigDefaultsEnabled(t *testing.T) {
-	oldReadURL := readActionURL
-	defer func() { readActionURL = oldReadURL }()
-
 	call := 0
-	readActionURL = func(context.Context) (string, error) {
+	readActionURL := func(context.Context) (string, error) {
 		call++
 		if call == 1 {
 			return "https://a.example", nil
@@ -146,6 +139,7 @@ func TestExecuteAction_UnexpectedNavigation_WithNilConfigDefaultsEnabled(t *test
 	}
 
 	b := &Bridge{
+		URLReader: readActionURL,
 		Actions: map[string]ActionFunc{
 			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
 				return map[string]any{"ok": true}, nil

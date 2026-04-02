@@ -21,7 +21,7 @@ var (
 // URLReader is used by guards to read the current tab URL from an action context.
 type URLReader func(ctx context.Context) (string, error)
 
-var readActionURL URLReader = func(ctx context.Context) (string, error) {
+func defaultActionURLReader(ctx context.Context) (string, error) {
 	if chromedp.FromContext(ctx) == nil {
 		return "", nil
 	}

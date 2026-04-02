@@ -40,6 +40,7 @@ type Bridge struct {
 	BrowserCtx    context.Context
 	BrowserCancel context.CancelFunc
 	Config        *config.RuntimeConfig
+	URLReader     URLReader
 	IdMgr         *ids.Manager
 	*TabManager
 	StealthBundle *stealth.Bundle
@@ -530,9 +531,14 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 		return nil, fmt.Errorf("unknown action: %s", kind)
 	}
 	guardEnabled := b.Config == nil || b.Config.EnableActionGuards
+	checkNav := guardEnabled && shouldCheckUnexpectedNavigation(req)
+	urlReader := b.URLReader
+	if urlReader == nil {
+		urlReader = defaultActionURLReader
+	}
 	var beforeURL string
-	if guardEnabled && shouldCheckUnexpectedNavigation(req) {
-		if u, err := readActionURL(ctx); err == nil {
+	if checkNav {
+		if u, err := urlReader(ctx); err == nil {
 			beforeURL = u
 		}
 	}
@@ -542,8 +548,8 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 		return nil, classifyActionError(err)
 	}
 
-	if guardEnabled && beforeURL != "" && shouldCheckUnexpectedNavigation(req) {
-		afterURL, uErr := readActionURL(ctx)
+	if checkNav && beforeURL != "" {
+		afterURL, uErr := urlReader(ctx)
 		if uErr == nil {
 			if navErr := checkUnexpectedNavigation(beforeURL, afterURL); navErr != nil {
 				return nil, navErr
