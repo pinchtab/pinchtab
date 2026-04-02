@@ -10,7 +10,6 @@ POST /ensure-chrome
 GET  /help
 GET  /openapi.json
 GET  /metrics
-GET  /welcome
 POST /shutdown
 GET  /api/events
 ```

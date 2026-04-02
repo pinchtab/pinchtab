@@ -20,7 +20,7 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 			"/browser/restart": map[string]any{"post": map[string]any{"summary": "Soft restart the browser process without restarting the bridge"}},
 			"/tabs":            map[string]any{"get": map[string]any{"summary": "List tabs"}},
 			"/metrics":         map[string]any{"get": map[string]any{"summary": "Runtime metrics"}},
-			"/help":            map[string]any{"get": map[string]any{"summary": "Human help"}},
+			"/help":            map[string]any{"get": map[string]any{"summary": "Alias for /openapi.json"}},
 			"/text":            map[string]any{"get": map[string]any{"summary": "Extract text", "parameters": []map[string]any{{"name": "maxChars", "in": "query", "schema": map[string]string{"type": "integer"}}, {"name": "format", "in": "query", "schema": map[string]string{"type": "string"}}}}},
 			"/navigate":        map[string]any{"post": map[string]any{"summary": "Navigate"}, "get": map[string]any{"summary": "Navigate (query params)"}},
 			"/nav":             map[string]any{"get": map[string]any{"summary": "Navigate alias"}},

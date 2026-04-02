@@ -111,7 +111,7 @@ func TestHelpIncludesClipboardSecurityStatus(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/help", nil)
 	w := httptest.NewRecorder()
-	h.HandleHelp(w, req)
+	h.HandleOpenAPI(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected help status 200, got %d", w.Code)

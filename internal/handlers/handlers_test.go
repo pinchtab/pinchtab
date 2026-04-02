@@ -146,8 +146,8 @@ func TestHandlers(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("expected 200 from /help, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "endpoints") {
-		t.Fatalf("expected /help response to include endpoints")
+	if !strings.Contains(w.Body.String(), "paths") {
+		t.Fatalf("expected /help response to include paths (now alias for openapi.json)")
 	}
 
 	req = httptest.NewRequest("GET", "/openapi.json", nil)
@@ -179,12 +179,12 @@ func TestHelpIncludesSecurityStatus(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/help", nil)
 	w := httptest.NewRecorder()
-	h.HandleHelp(w, req)
+	h.HandleOpenAPI(w, req)
 
 	if w.Code != 200 {
 		t.Fatalf("expected 200 from /help, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "\"security\"") {
+	if !strings.Contains(w.Body.String(), "x-pinchtab-security") {
 		t.Fatalf("expected /help response to include security status")
 	}
 	if !strings.Contains(w.Body.String(), "security.allowEvaluate") {
@@ -468,7 +468,6 @@ func TestRoutesRegistration(t *testing.T) {
 	}{
 		{"GET", "/health", 200},
 		{"GET", "/tabs", 200},
-		{"GET", "/welcome", 200},
 		{"POST", "/browser/restart", 200},
 		{"POST", "/navigate", 400}, // missing body
 	}

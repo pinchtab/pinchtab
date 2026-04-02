@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
@@ -156,8 +155,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /pdf", h.HandlePDF)
 	mux.HandleFunc("POST /pdf", h.HandlePDF)
 	mux.HandleFunc("GET /text", h.HandleText)
-	mux.HandleFunc("GET /help", h.HandleHelp)
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)
+	mux.HandleFunc("GET /help", h.HandleOpenAPI) // alias
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
 	mux.HandleFunc("GET /navigate", h.HandleNavigate)
 
@@ -217,10 +216,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /console/clear", h.HandleClearConsoleLogs)
 	mux.HandleFunc("GET /errors", h.HandleGetErrorLogs)
 	mux.HandleFunc("POST /errors/clear", h.HandleClearErrorLogs)
-	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(assets.WelcomeHTML))
-	})
 	mux.HandleFunc("POST /cache/clear", h.HandleCacheClear)
 	mux.HandleFunc("GET /cache/status", h.HandleCacheStatus)
 
