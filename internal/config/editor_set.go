@@ -264,6 +264,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 	switch field {
 	case "allowEvaluate":
 		s.AllowEvaluate = &b
+	case "allowClipboard":
+		s.AllowClipboard = &b
 	case "allowMacro":
 		s.AllowMacro = &b
 	case "allowScreencast":

@@ -138,6 +138,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 	switch field {
 	case "allowEvaluate":
 		return formatBoolPtr(s.AllowEvaluate), nil
+	case "allowClipboard":
+		return formatBoolPtr(s.AllowClipboard), nil
 	case "allowMacro":
 		return formatBoolPtr(s.AllowMacro), nil
 	case "allowScreencast":
