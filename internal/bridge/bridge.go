@@ -531,7 +531,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	}
 	guardEnabled := b.Config == nil || b.Config.EnableActionGuards
 	var beforeURL string
-	if guardEnabled && shouldCheckUnexpectedNavigation(kind, req) {
+	if guardEnabled && shouldCheckUnexpectedNavigation(req) {
 		if u, err := readActionURL(ctx); err == nil {
 			beforeURL = u
 		}
@@ -542,7 +542,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 		return nil, classifyActionError(err)
 	}
 
-	if guardEnabled && beforeURL != "" && shouldCheckUnexpectedNavigation(kind, req) {
+	if guardEnabled && beforeURL != "" && shouldCheckUnexpectedNavigation(req) {
 		afterURL, uErr := readActionURL(ctx)
 		if uErr == nil {
 			if navErr := checkUnexpectedNavigation(beforeURL, afterURL); navErr != nil {

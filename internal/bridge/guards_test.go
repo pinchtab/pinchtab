@@ -36,14 +36,30 @@ func TestCheckUnexpectedNavigation_NoChange(t *testing.T) {
 	}
 }
 
+func TestCheckUnexpectedNavigation_EquivalentURLs(t *testing.T) {
+	if err := checkUnexpectedNavigation("https://A.EXAMPLE/path?x=1#section", "https://a.example/path?x=1"); err != nil {
+		t.Fatalf("expected nil error for equivalent URLs, got %v", err)
+	}
+}
+
+func TestNormalizeGuardURL(t *testing.T) {
+	got, ok := normalizeGuardURL("https://A.EXAMPLE/path#frag")
+	if !ok {
+		t.Fatal("expected URL normalization to succeed")
+	}
+	if got != "https://a.example/path" {
+		t.Fatalf("expected normalized URL, got %q", got)
+	}
+}
+
 func TestShouldCheckUnexpectedNavigation(t *testing.T) {
-	if shouldCheckUnexpectedNavigation(ActionClick, ActionRequest{}) {
-		t.Fatal("click should not be guarded by default")
+	if !shouldCheckUnexpectedNavigation(ActionRequest{}) {
+		t.Fatal("click should be guarded when WaitNav is false")
 	}
-	if !shouldCheckUnexpectedNavigation(ActionType, ActionRequest{}) {
-		t.Fatal("type should be guarded")
+	if !shouldCheckUnexpectedNavigation(ActionRequest{}) {
+		t.Fatal("press should be guarded when WaitNav is false")
 	}
-	if shouldCheckUnexpectedNavigation(ActionType, ActionRequest{WaitNav: true}) {
+	if shouldCheckUnexpectedNavigation(ActionRequest{WaitNav: true}) {
 		t.Fatal("WaitNav=true should disable navigation guard")
 	}
 }
@@ -80,7 +96,7 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 		},
 	}
 
-	_, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{})
+	_, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{})
 	if !errors.Is(err, ErrUnexpectedNavigation) {
 		t.Fatalf("expected ErrUnexpectedNavigation, got %v", err)
 	}

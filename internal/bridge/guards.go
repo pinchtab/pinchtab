@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/chromedp/chromedp"
@@ -48,16 +49,8 @@ func classifyActionError(err error) error {
 	return err
 }
 
-func shouldCheckUnexpectedNavigation(kind string, req ActionRequest) bool {
-	if req.WaitNav {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case ActionClick, ActionDoubleClick, ActionHumanClick, ActionPress:
-		return false
-	default:
-		return true
-	}
+func shouldCheckUnexpectedNavigation(req ActionRequest) bool {
+	return !req.WaitNav
 }
 
 func checkUnexpectedNavigation(before, after string) error {
@@ -66,5 +59,22 @@ func checkUnexpectedNavigation(before, after string) error {
 	if before == "" || after == "" || before == after {
 		return nil
 	}
+	if normalizedBefore, ok := normalizeGuardURL(before); ok {
+		if normalizedAfter, ok := normalizeGuardURL(after); ok && normalizedBefore == normalizedAfter {
+			return nil
+		}
+	}
 	return fmt.Errorf("%w: %s -> %s", ErrUnexpectedNavigation, before, after)
+}
+
+func normalizeGuardURL(raw string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed == nil {
+		return "", false
+	}
+	parsed.Fragment = ""
+	if parsed.Host != "" {
+		parsed.Host = strings.ToLower(parsed.Host)
+	}
+	return parsed.String(), true
 }
