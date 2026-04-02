@@ -85,7 +85,7 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 	}
 
 	b := &Bridge{
-		Config: &config.RuntimeConfig{EnableActionGuards: true},
+		Config:    &config.RuntimeConfig{EnableActionGuards: true},
 		URLReader: readActionURL,
 		Actions: map[string]ActionFunc{
 			ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
@@ -111,7 +111,7 @@ func TestExecuteAction_UnexpectedNavigationGuardDisabled(t *testing.T) {
 	}
 
 	b := &Bridge{
-		Config: &config.RuntimeConfig{EnableActionGuards: false},
+		Config:    &config.RuntimeConfig{EnableActionGuards: false},
 		URLReader: readActionURL,
 		Actions: map[string]ActionFunc{
 			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
