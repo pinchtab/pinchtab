@@ -535,22 +535,32 @@ When working with benchmark fixture pages, use these CSS selectors for reliable 
 
 ### Shop / E-commerce (ecommerce.html)
 
+**Price Extraction Pattern:** Prices are in `<p class="price">$XXX.XX</p>` elements. Use full snapshot (not `-c`) or `text` to reliably see price values.
+
 ```bash
-# Extract all product prices
-pinchtab snap -c | grep 'class="price"'
+# Extract all product prices (shows price text values)
+pinchtab snapshot | grep "price"
+
+# Or extract just text with prices visible
+pinchtab text | grep "\\$"
+
+# Get specific product price - use full snapshot for text values
+pinchtab snapshot | grep -A 1 "Wireless Headphones"  # Shows the price below the title
 
 # Click first product's "Add to Cart" button
 pinchtab click ".add-to-cart"
 
-# Get specific product price (selector for first product)
-pinchtab snap -c 'p.price'
-
-# Extract cart count
+# Extract cart count (numeric values in snapshots)
 pinchtab snap -c '#cart-count'
 
 # Click checkout button
 pinchtab click '#checkout-btn'
+
+# Verify prices in cart (use snapshot to see "$149.99" format)
+pinchtab snapshot | grep "\\$[0-9]"
 ```
+
+**Why this works**: `snapshot` includes all visible text including prices. The `-c` (compact) flag shows element refs but may omit text content; use full `snapshot` when you need to see actual values like "$149.99".
 
 ### Search Page (search.html)
 
