@@ -506,3 +506,25 @@ PinchTab is a fully open-source, local-only browser automation tool:
 - Profiles: [profiles.md](./references/profiles.md)
 - MCP: [mcp.md](./references/mcp.md)
 - Security model: [TRUST.md](./TRUST.md)
+
+## Content Extraction: text vs snapshot
+
+Choose the right extraction method:
+
+| Use Case | Recommended | Why |
+|----------|-------------|-----|
+| Article body, paragraphs | `text` | Clean prose extraction |
+| Prices, numbers in cards | `snapshot` | Text strips structured data |
+| Form field values | `snapshot` | See current input values |
+| Verify element exists | `snapshot` with selector | Text won't show headings |
+| JS-rendered content | `snapshot` after wait | Text may miss dynamic content |
+
+**Common pitfall**: `/text` extracts readable prose but strips headings, prices, and structured UI elements. If you need to verify a heading, price, or button label, use `/snapshot` instead.
+
+```bash
+# Wrong: looking for "$149.99" in text output
+pinchtab text | grep "149.99"  # May fail - prices often stripped
+
+# Right: snapshot includes all visible text
+pinchtab snap -c | grep "149.99"  # Works
+```
