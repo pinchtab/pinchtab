@@ -528,3 +528,72 @@ pinchtab text | grep "149.99"  # May fail - prices often stripped
 # Right: snapshot includes all visible text
 pinchtab snap -c | grep "149.99"  # Works
 ```
+
+## Benchmark Fixture Quick Reference
+
+When working with benchmark fixture pages, use these CSS selectors for reliable element targeting:
+
+### Shop / E-commerce (ecommerce.html)
+
+```bash
+# Extract all product prices
+pinchtab snap -c | grep 'class="price"'
+
+# Click first product's "Add to Cart" button
+pinchtab click ".add-to-cart"
+
+# Get specific product price (selector for first product)
+pinchtab snap -c 'p.price'
+
+# Extract cart count
+pinchtab snap -c '#cart-count'
+
+# Click checkout button
+pinchtab click '#checkout-btn'
+```
+
+### Search Page (search.html)
+
+```bash
+# Find search input field
+pinchtab snap -c '#search-input'
+
+# Fill and submit search
+pinchtab fill '#search-input' "golang"
+pinchtab press Enter
+
+# Check results appear
+pinchtab snap -c '.search-results'
+```
+
+### Contact Form (form.html)
+
+```bash
+# Fill name field
+pinchtab fill '#name' "John Doe"
+
+# Fill email field
+pinchtab fill '#email' "john@example.com"
+
+# Fill message textarea
+pinchtab fill '#message' "Test message"
+
+# Submit form
+pinchtab click '#submit'
+```
+
+### Wiki Pages (wiki.html, wiki-go.html)
+
+```bash
+# Extract article title
+pinchtab snap -c 'h1'
+
+# Find all section headers
+pinchtab snap -c 'h2'
+
+# Extract article body text
+pinchtab text
+```
+
+**Key tip**: Use `snapshot -c` (compact mode) when hunting for specific elements; use `text` for prose content extraction. Prices, buttons, and form fields always appear in snapshots but may be stripped from text output.
+```

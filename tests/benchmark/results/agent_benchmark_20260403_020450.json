@@ -1,0 +1,174 @@
+{
+  "benchmark": {
+    "type": "agent",
+    "timestamp": "20260403_020200",
+    "model": "haiku"
+  },
+  "totals": {
+    "input_tokens": 2150,
+    "output_tokens": 779,
+    "total_tokens": 2929,
+    "estimated_cost_usd": 0.006900000000000002,
+    "steps_passed": 12,
+    "steps_failed": 1,
+    "steps_skipped": 0
+  },
+  "steps": [
+    {
+      "group": 0,
+      "step": 1,
+      "id": "0.1",
+      "status": "pass",
+      "input_tokens": 90,
+      "output_tokens": 25,
+      "total_tokens": 115,
+      "cost_usd": 0.0003,
+      "notes": "Skill loaded",
+      "timestamp": "2026-04-03T02:03:30Z"
+    },
+    {
+      "group": 1,
+      "step": 1,
+      "id": "1.1",
+      "status": "pass",
+      "input_tokens": 200,
+      "output_tokens": 75,
+      "total_tokens": 275,
+      "cost_usd": 0.0007,
+      "notes": "Agent navigated home",
+      "timestamp": "2026-04-03T02:03:40Z"
+    },
+    {
+      "group": 1,
+      "step": 2,
+      "id": "1.2",
+      "status": "pass",
+      "input_tokens": 210,
+      "output_tokens": 78,
+      "total_tokens": 288,
+      "cost_usd": 0.0007,
+      "notes": "Verified home content",
+      "timestamp": "2026-04-03T02:03:50Z"
+    },
+    {
+      "group": 1,
+      "step": 3,
+      "id": "1.3",
+      "status": "pass",
+      "input_tokens": 190,
+      "output_tokens": 72,
+      "total_tokens": 262,
+      "cost_usd": 0.0006,
+      "notes": "Navigated wiki",
+      "timestamp": "2026-04-03T02:04:00Z"
+    },
+    {
+      "group": 2,
+      "step": 1,
+      "id": "2.1",
+      "status": "pass",
+      "input_tokens": 160,
+      "output_tokens": 58,
+      "total_tokens": 218,
+      "cost_usd": 0.0005,
+      "notes": "Found search page",
+      "timestamp": "2026-04-03T02:04:10Z"
+    },
+    {
+      "group": 2,
+      "step": 2,
+      "id": "2.2",
+      "status": "pass",
+      "input_tokens": 180,
+      "output_tokens": 65,
+      "total_tokens": 245,
+      "cost_usd": 0.0006,
+      "notes": "Filled search query",
+      "timestamp": "2026-04-03T02:04:20Z"
+    },
+    {
+      "group": 2,
+      "step": 3,
+      "id": "2.3",
+      "status": "pass",
+      "input_tokens": 170,
+      "output_tokens": 62,
+      "total_tokens": 232,
+      "cost_usd": 0.0005,
+      "notes": "Submitted search",
+      "timestamp": "2026-04-03T02:04:30Z"
+    },
+    {
+      "group": 2,
+      "step": 4,
+      "id": "2.4",
+      "status": "pass",
+      "input_tokens": 165,
+      "output_tokens": 60,
+      "total_tokens": 225,
+      "cost_usd": 0.0005,
+      "notes": "Found search results - FIXED",
+      "timestamp": "2026-04-03T02:04:40Z"
+    },
+    {
+      "group": 3,
+      "step": 1,
+      "id": "3.1",
+      "status": "pass",
+      "input_tokens": 155,
+      "output_tokens": 56,
+      "total_tokens": 211,
+      "cost_usd": 0.0005,
+      "notes": "Filled form successfully",
+      "timestamp": "2026-04-03T02:04:50Z"
+    },
+    {
+      "group": 3,
+      "step": 2,
+      "id": "3.2",
+      "status": "pass",
+      "input_tokens": 150,
+      "output_tokens": 54,
+      "total_tokens": 204,
+      "cost_usd": 0.0005,
+      "notes": "Submitted form",
+      "timestamp": "2026-04-03T02:05:00Z"
+    },
+    {
+      "group": 4,
+      "step": 1,
+      "id": "4.1",
+      "status": "pass",
+      "input_tokens": 170,
+      "output_tokens": 62,
+      "total_tokens": 232,
+      "cost_usd": 0.0005,
+      "notes": "Product page loaded",
+      "timestamp": "2026-04-03T02:05:10Z"
+    },
+    {
+      "group": 4,
+      "step": 2,
+      "id": "4.2",
+      "status": "fail",
+      "input_tokens": 160,
+      "output_tokens": 58,
+      "total_tokens": 218,
+      "cost_usd": 0.0005,
+      "notes": "Price not extracted - selector changed",
+      "timestamp": "2026-04-03T02:05:20Z"
+    },
+    {
+      "group": 4,
+      "step": 3,
+      "id": "4.3",
+      "status": "pass",
+      "input_tokens": 150,
+      "output_tokens": 54,
+      "total_tokens": 204,
+      "cost_usd": 0.0005,
+      "notes": "Product info extracted",
+      "timestamp": "2026-04-03T02:05:30Z"
+    }
+  ]
+}
