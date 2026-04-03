@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form - PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav><a href="/">Home</a> | <a href="/form.html">Form</a></nav>
+  </header>
+  <main>
+    <h1>Contact Form — VERIFY_FORM_PAGE_22222</h1>
+    
+    <form id="contact-form">
+      <div class="form-group">
+        <label for="fullname">Full Name:</label>
+        <input type="text" id="fullname" name="fullname" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email Address:</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="phone">Phone Number:</label>
+        <input type="tel" id="phone" name="phone">
+      </div>
+      
+      <div class="form-group">
+        <label for="country">Country:</label>
+        <select id="country" name="country">
+          <option value="">Select a country</option>
+          <option value="us">United States</option>
+          <option value="uk">United Kingdom</option>
+          <option value="de">Germany</option>
+          <option value="fr">France</option>
+          <option value="it">Italy</option>
+          <option value="jp">Japan</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="subject">Subject:</label>
+        <select id="subject" name="subject">
+          <option value="">Choose a subject</option>
+          <option value="general">General Inquiry</option>
+          <option value="support">Technical Support</option>
+          <option value="sales">Sales Question</option>
+          <option value="feedback">Feedback</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="message">Message:</label>
+        <textarea id="message" name="message" rows="5"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="newsletter" name="newsletter">
+          Subscribe to newsletter
+        </label>
+      </div>
+      
+      <div class="form-group">
+        <label>Priority:</label>
+        <label><input type="radio" name="priority" value="low"> Low</label>
+        <label><input type="radio" name="priority" value="medium" checked> Medium</label>
+        <label><input type="radio" name="priority" value="high"> High</label>
+      </div>
+      
+      <div class="form-actions">
+        <button type="submit" id="submit-btn">Submit Form</button>
+        <button type="reset" id="reset-btn">Reset</button>
+      </div>
+    </form>
+    
+    <div id="form-result" style="display: none;">
+      <h2>Form Submitted Successfully!</h2>
+      <p class="verification-text">VERIFY_FORM_SUBMITTED_SUCCESS</p>
+      <div id="submitted-data"></div>
+    </div>
+  </main>
+  
+  <script>
+    document.getElementById('contact-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        fullname: form.fullname.value,
+        email: form.email.value,
+        phone: form.phone.value,
+        country: form.country.value,
+        subject: form.subject.value,
+        message: form.message.value,
+        newsletter: form.newsletter.checked,
+        priority: form.priority.value
+      };
+      
+      document.getElementById('form-result').style.display = 'block';
+      document.getElementById('submitted-data').innerHTML = `
+        <ul>
+          <li>Name: ${data.fullname}</li>
+          <li>Email: ${data.email}</li>
+          <li>Country: ${data.country}</li>
+          <li>Subject: ${data.subject}</li>
+        </ul>
+        <p>SUBMISSION_DATA_NAME_${data.fullname.replace(/\s/g, '_').toUpperCase()}</p>
+      `;
+      form.style.display = 'none';
+    });
+  </script>
+</body>
+</html>

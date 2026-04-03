@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search - PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav><a href="/">Home</a> | <a href="/search.html">Search</a></nav>
+  </header>
+  <main>
+    <h1>Search — VERIFY_SEARCH_PAGE_11111</h1>
+    
+    <div id="search-box">
+      <input type="text" id="search-input" placeholder="Search articles..." autocomplete="off">
+      <button id="search-btn">Search</button>
+    </div>
+    
+    <div id="results" style="display: none;">
+      <h2>Search Results for: <span id="query-display"></span></h2>
+      <div id="results-list"></div>
+    </div>
+    
+    <div id="no-results" style="display: none;">
+      <p>No results found for "<span id="no-results-query"></span>"</p>
+    </div>
+  </main>
+  
+  <script>
+    const articles = [
+      { title: "The Future of Artificial Intelligence", category: "Technology", keywords: ["ai", "artificial", "intelligence", "machine", "learning"] },
+      { title: "Climate Action in 2026", category: "Environment", keywords: ["climate", "environment", "carbon", "renewable"] },
+      { title: "Mars Colony: First Steps", category: "Space", keywords: ["mars", "space", "colony", "planet"] },
+      { title: "Quantum Computing Breakthrough", category: "Technology", keywords: ["quantum", "computing", "technology"] },
+      { title: "Ocean Conservation Efforts", category: "Environment", keywords: ["ocean", "marine", "conservation"] }
+    ];
+    
+    function search(query) {
+      query = query.toLowerCase();
+      return articles.filter(a => 
+        a.title.toLowerCase().includes(query) || 
+        a.keywords.some(k => k.includes(query))
+      );
+    }
+    
+    document.getElementById('search-btn').addEventListener('click', performSearch);
+    document.getElementById('search-input').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') performSearch();
+    });
+    
+    function performSearch() {
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+      
+      const results = search(query);
+      const resultsDiv = document.getElementById('results');
+      const noResultsDiv = document.getElementById('no-results');
+      const resultsList = document.getElementById('results-list');
+      
+      if (results.length > 0) {
+        resultsDiv.style.display = 'block';
+        noResultsDiv.style.display = 'none';
+        document.getElementById('query-display').textContent = query;
+        resultsList.innerHTML = results.map((r, i) => `
+          <div class="result-item" id="result-${i+1}">
+            <h3>${r.title}</h3>
+            <span class="category">${r.category}</span>
+            <p class="verification">RESULT_FOUND_${r.title.replace(/\s/g, '_').toUpperCase()}</p>
+          </div>
+        `).join('');
+      } else {
+        resultsDiv.style.display = 'none';
+        noResultsDiv.style.display = 'block';
+        document.getElementById('no-results-query').textContent = query;
+      }
+    }
+  </script>
+</body>
+</html>
