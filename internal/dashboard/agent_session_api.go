@@ -11,6 +11,12 @@ import (
 )
 
 // AgentSessionAPI handles CRUD operations for agent sessions.
+//
+// SECURITY NOTE: There is no per-agent authorization scoping. Any authenticated
+// caller (bearer or cookie) can create sessions for any agentId, list all sessions,
+// revoke any agent's session, and rotate any agent's token. This is by design for
+// trusted single-operator environments. For multi-agent setups, consider restricting
+// session management to bearer-only auth or adding agent-scoped permissions.
 type AgentSessionAPI struct {
 	store *agentsession.Store
 }

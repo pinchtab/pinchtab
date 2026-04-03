@@ -535,6 +535,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	urlReader := b.URLReader
 	if urlReader == nil {
 		urlReader = defaultActionURLReader
+		slog.Debug("URLReader is nil, using default fallback (guard checks may be no-ops without chromedp context)")
 	}
 	var beforeURL string
 	if checkNav {

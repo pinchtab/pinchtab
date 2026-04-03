@@ -99,6 +99,17 @@ func Load() *RuntimeConfig {
 		},
 
 		// Session defaults
+		// NOTE: Agent sessions are enabled by default with mode "preferred".
+		// This means every instance accepts Authorization: Session tokens out of the box.
+		// Creating a session requires bearer auth first, but the default-on posture adds
+		// an auth surface that users may not be aware of. Consider setting Enabled: false
+		// if agent sessions are not needed.
+		//
+		// There is currently no per-agent authorization scoping on session management:
+		// any authenticated caller can create/list/revoke/rotate sessions for any agentId.
+		// This is acceptable in trusted single-operator environments but should be
+		// restricted (e.g. bearer-only or agent-scoped permissions) for multi-agent setups
+		// where one compromised agent could disrupt others.
 		Sessions: SessionsRuntimeConfig{
 			Agent: AgentSessionRuntimeConfig{
 				Enabled:     true,
