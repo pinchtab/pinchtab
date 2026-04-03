@@ -4,6 +4,46 @@ Automated improvement runs tracking benchmark results and changes.
 
 ---
 
+## Run #9 — 2026-04-03 11:13
+
+**Results:**
+- Baseline: 64/68 (94%) — Groups 0-10
+- Agent: 27/27 (100%) — Groups 0-9
+- Gap: Agent outperforms baseline due to baseline test bugs
+
+**Agent Failures:**
+- None! Agent achieved 100% on all Groups 0-9.
+
+**Baseline Failures (4 steps):**
+- Step 2.5: Search redirect failed — test script grep pattern issue
+- Step 6.2: Shop verification failed — race condition after login navigation
+- Step 6.8: Checkout verification failed — ORDER_TOTAL mismatch (wrong products)
+- Step 7.6: Comment verification failed — maxTokens=500 too low, marker at e92
+
+**Root Cause Analysis:**
+1. **AGENT_TASKS.md product mismatch**: Group 6 said add Headphones+Charger (\$199.98) but BENCHMARK_TASKS.md and fixtures expect Headphones+SmartWatch (\$449.98) with verification string ORDER_TOTAL_449_98
+2. **Token limit too low**: Group 7.6 used maxTokens=500 but COMMENT_POSTED_RATING_5_TEXT_RECEIVED appears at ~800 tokens in snapshot
+3. **Navigation race**: No delay between Group 5 (login) and Group 6 (ecommerce) causing stale tab state
+
+**Change Made:**
+- **Type:** Test fix (AGENT_TASKS.md + baseline script)
+- **Description:** 
+  1. Fixed AGENT_TASKS.md Group 6.2 to add Headphones+Smart Watch (matching BENCHMARK_TASKS.md)
+  2. Increased maxTokens from 500 to 1000 for Group 7.6 comment verification
+  3. Added 0.5s sleep before Group 6 navigation to allow login page to unload
+- **Expected impact:** Baseline should now pass 7.6 and 6.x steps. Agent tasks now aligned with baseline expectations.
+- **Commit:** 5c7099a
+
+**Key Insight:**
+When agent outperforms baseline (100% vs 94%), the problem is in test infrastructure, not the API or skill docs. The agent correctly used form submission patterns (click button, not press Enter) and followed SKILL.md guidance accurately.
+
+**Next Focus:**
+1. Re-run baseline to verify fixes close the 4-step gap
+2. Add Groups 10-15 tests (modals, state persistence, lazy loading) per expanded AGENT_TASKS.md
+3. Once baseline stabilizes at 100%, expand test coverage to edge cases
+
+---
+
 ## Run #1 — 2026-04-03 01:47
 
 **Results:**
