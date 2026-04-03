@@ -415,28 +415,40 @@ pinchtab text
 ### Search, then extract the result page cheaply
 
 ```bash
-pinchtab nav https://example.com
+pinchtab nav https://example.com/search
 pinchtab snap -i -c
 pinchtab fill e2 "quarterly report"
-pinchtab press Enter
+pinchtab click e3  # Click the Search button
 pinchtab text
 ```
 
 **Form submission rules:**
-- **Text inputs with `press Enter`**: Works only if the form has `<input type="search">` or the form's `onkeypress` handler submits on Enter.
-- **Standard form inputs**: Do NOT auto-submit on Enter by default in HTML5. Always click the submit button.
-- **Common mistake**: Filling a search input and pressing Enter — if nothing happens, click the Search/Submit button instead.
+- ❌ **NEVER use `press Enter` on regular form inputs.** It does NOT submit standard HTML forms.
+- ✅ **ALWAYS click the submit button** to trigger form submission handlers.
+- **Why?** HTML5 forms only auto-submit on Enter if they have explicit JavaScript `onkeypress` or `onkeyup` handlers. The `<form onsubmit>` handler only fires when you click the button, not on Enter.
 
-**Right way to submit a form:**
+**Real-world example from benchmark:**
 ```bash
-# WRONG: Enter may not work
-pinchtab fill "#search-input" "query"
-pinchtab press Enter
+# WRONG: This fails
+pinchtab nav http://fixtures/wiki.html
+pinchtab snap -i -c
+pinchtab fill "#wiki-search-input" "go"
+pinchtab press Enter  # ❌ Does NOT submit the form
 
-# RIGHT: Click the submit button
-pinchtab fill "#search-input" "query"
-pinchtab click "#search-btn"  # or click the button ref: pinchtab click e5
-pinchtab text
+# RIGHT: This works
+pinchtab nav http://fixtures/wiki.html
+pinchtab snap -i -c
+pinchtab fill "#wiki-search-input" "go"
+pinchtab click "#wiki-search-btn"  # ✅ Triggers onsubmit handler
+pinchtab text  # Now on the results page
+```
+
+**Always follow this pattern:**
+```bash
+# Template: fill, then click
+pinchtab fill "<selector>" "value"
+pinchtab click "<button-selector>"  # Always click, never press Enter
+pinchtab text  # Verify the form was submitted
 ```
 
 ### Use diff snapshots in a multi-step flow
@@ -585,9 +597,9 @@ pinchtab snapshot | grep "\\$[0-9]"
 # Find search input field
 pinchtab snap -c '#search-input'
 
-# Fill and submit search
+# Fill and submit search - ALWAYS click the button, never press Enter
 pinchtab fill '#search-input' "golang"
-pinchtab press Enter
+pinchtab click '#search-btn'  # Click the Search button
 
 # Check results appear
 pinchtab snap -c '.search-results'
