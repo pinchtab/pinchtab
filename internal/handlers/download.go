@@ -42,6 +42,21 @@ func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
 }
 
+// isDomainAllowed reports whether rawURL's domain is on the configured
+// allowlist. Allowlisted domains bypass private-IP checks because they
+// are explicitly trusted by the operator (e.g. internal docker hosts).
+func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
+	if len(g.allowedDomains) == 0 {
+		return false
+	}
+	result := idpi.CheckDomain(rawURL, config.IDPIConfig{
+		Enabled:        true,
+		AllowedDomains: append([]string(nil), g.allowedDomains...),
+		StrictMode:     true,
+	})
+	return !result.Blocked
+}
+
 func (g *downloadURLGuard) Validate(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -355,14 +370,16 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 				requestID = e.RequestID
 				responseMIME = e.Response.MimeType
 				responseStatus = int(e.Response.Status)
-				if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
-					requestGuard.NoteBlocked(err)
-					select {
-					case done <- struct{}{}:
-					default:
+				if !validator.isDomainAllowed(e.Response.URL) {
+					if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
+						requestGuard.NoteBlocked(err)
+						select {
+						case done <- struct{}{}:
+						default:
+						}
+						tCancel()
+						return
 					}
-					tCancel()
-					return
 				}
 				if contentLength, ok := parseContentLengthHeader(e.Response.Headers); ok && contentLength > int64(maxDownloadBytes) {
 					requestGuard.NoteBlocked(downloadTooLargeError(contentLength, maxDownloadBytes))

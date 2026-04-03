@@ -31,9 +31,9 @@ fi
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab download (rejects private IP)"
+start_test "pinchtab download (rejects non-allowed domain)"
 
-pt_fail download "${FIXTURES_URL}/index.html"
+pt_fail download "http://not-on-allowlist.local/index.html"
 
 end_test
 

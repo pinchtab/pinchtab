@@ -223,7 +223,7 @@ Notes:
 
 - download and upload endpoints are gated by `security.allowDownload` and `security.allowUpload`
 - download automatically decompresses `.gz` files and returns the decompressed content
-- `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains)
+- `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains). Setting `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - clipboard endpoints are gated by `security.allowClipboard`
 - upload uses a JSON body with `selector` and `files`
 
