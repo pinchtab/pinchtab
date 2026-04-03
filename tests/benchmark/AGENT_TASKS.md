@@ -55,7 +55,7 @@ Extract the key metrics from the dashboard (Total Users, Revenue, Orders).
 ## Group 2: Search Flow
 
 ### 2.1 Go to the search page
-Navigate to the search page.
+Navigate to the search page at `http://fixtures/search.html`.
 
 **Verify**: Search page loaded
 
@@ -79,7 +79,7 @@ Verify that search results appeared containing the AI article.
 ## Group 3: Form Interaction
 
 ### 3.1 Open the contact form
-Navigate to the form page.
+Navigate to the form page at `http://fixtures/form.html`.
 
 **Verify**: Form page loaded
 
@@ -102,7 +102,7 @@ Click the submit button to send the form.
 ## Group 4: E-commerce Flow
 
 ### 4.1 Browse the product catalog
-Navigate to the shop/e-commerce page.
+Navigate to the e-commerce page at `http://fixtures/ecommerce.html`.
 
 **Verify**: Product catalog loaded
 
