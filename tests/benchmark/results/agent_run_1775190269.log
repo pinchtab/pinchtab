@@ -1,0 +1,6 @@
+Starting PinchTab Agent Benchmark
+PINCHTAB_SERVER: http://localhost:9867
+AGENT_ID: benchmark-agent
+Timestamp: Fri Apr  3 05:24:29 BST 2026
+
+[GROUP ? / STEP ?] EXEC: curl -X GET -H 'Authorization: Bearer benchmark-token' http://localhost:9867/health

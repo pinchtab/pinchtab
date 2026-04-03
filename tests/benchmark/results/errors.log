@@ -4,3 +4,48 @@
 [2026-04-03T02:19:13Z] Step 2.1 FAILED: curl -X POST http://localhost:9867/navigate ... wiki.html; fill #wiki-search-input; press Enter
 [2026-04-03T02:19:18Z] Step 7.1 FAILED: curl -X POST http://localhost:9867/navigate ... wiki-go.html; fill comment; select rating; click submit
 [2026-04-03T02:19:48Z] Step 8.2 FAILED: curl -X POST http://localhost:9867/action ... click #fake-button-that-does-not-exist
+[2026-04-03T04:48:49Z] Step 2.2 FAILED: Search input not found
+[2026-04-03T04:49:14Z] Step 6.2 FAILED: Shop verification failed
+[2026-04-03T04:49:14Z] Step 6.8 FAILED: Checkout verification failed
+[2026-04-03T04:49:15Z] Step 7.6 FAILED: Comment verification failed
+[2026-04-03T04:51:13Z] Step 0.2 FAILED: Navigated to http://fixtures/ - page title contains Benchmark/PinchTab
+[2026-04-03T04:53:28Z] Step 0.1 FAILED: Server status failed
+[2026-04-03T04:53:37Z] Step 0.2 FAILED: Fixtures not verified
+[2026-04-03T04:54:13Z] Step 0.2 FAILED: Instance ports not responding to HTTP requests, Chrome instances experiencing crashes
+[2026-04-03T04:55:12Z] Step 1.1 FAILED: PinchTab instances not responding to HTTP requests
+[2026-04-03T04:55:12Z] Step 1.2 FAILED: PinchTab instances not responding
+[2026-04-03T04:55:12Z] Step 1.3 FAILED: PinchTab instances not responding
+[2026-04-03T04:55:12Z] Step 1.4 FAILED: PinchTab instances not responding
+[2026-04-03T04:55:12Z] Step 1.5 FAILED: PinchTab instances not responding
+[2026-04-03T04:55:13Z] Step 1.6 FAILED: PinchTab instances not responding
+[2026-04-03T04:55:13Z] Step 2.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 2.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 2.3 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 3.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 3.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 4.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 4.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 4.3 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 5.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 5.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 6.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 6.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 6.3 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 7.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 7.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 8.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 8.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 9.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 9.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 10.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 10.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 11.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 11.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 12.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 12.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 13.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 13.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 14.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 14.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 15.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T04:55:13Z] Step 15.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
