@@ -1,6 +1,0 @@
-curl -s -H "Authorization: Bearer benchmark-token" -X GET http://localhost:9867/health -H "Content-Type: application/json" -d ''
-curl -s -H "Authorization: Bearer benchmark-token" -X POST http://localhost:9867/navigate -H "Content-Type: application/json" -d '{"url":"http://fixtures/"}'
-curl -s -H "Authorization: Bearer benchmark-token" -X GET http://localhost:9867/text -H "Content-Type: application/json" -d ''
-curl -s -H "Authorization: Bearer benchmark-token" -X POST http://localhost:9867/navigate -H "Content-Type: application/json" -d '{"url":"http://fixtures/wiki.html"}'
-curl -s -H "Authorization: Bearer benchmark-token" -X GET http://localhost:9867/text -H "Content-Type: application/json" -d ''
-curl -s -H "Authorization: Bearer benchmark-token" -X GET http://localhost:9867/snapshot?format=compact&filter=interactive -H "Content-Type: application/json" -d ''
