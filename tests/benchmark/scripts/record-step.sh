@@ -12,10 +12,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESULTS_DIR="${SCRIPT_DIR}/results"
+RESULTS_DIR="${SCRIPT_DIR}/../results"
 
 # Find most recent report file
-REPORT_FILE=$(ls -t "${RESULTS_DIR}"/baseline_*.json 2>/dev/null | head -1)
+REPORT_FILE=$(ls -t "${RESULTS_DIR}"/baseline_*.json "${RESULTS_DIR}"/benchmark_*.json 2>/dev/null | head -1)
 
 if [[ -z "${REPORT_FILE}" ]]; then
     echo "ERROR: No benchmark report found. Run ./run-benchmark.sh first."
