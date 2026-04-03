@@ -57,6 +57,7 @@ fi
 
 # Group 6: E-commerce
 echo "Group 6..."
+sleep 0.5  # Allow previous page to fully unload
 curl -sf -X POST http://localhost:9867/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"url":"http://fixtures/ecommerce.html"}' > /dev/null
 ./record-step.sh 6 1 pass 150 200 "Navigate to shop"
 
@@ -110,7 +111,7 @@ curl -sf -X POST http://localhost:9867/action -H "Authorization: Bearer $TOKEN" 
 curl -sf -X POST http://localhost:9867/action -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"kind":"click","selector":"#submit-comment"}' > /dev/null
 ./record-step.sh 7 5 pass 150 200 "Comment submitted"
 
-SNAP=$(curl -sf "http://localhost:9867/snapshot?format=compact&maxTokens=500" -H "Authorization: Bearer $TOKEN")
+SNAP=$(curl -sf "http://localhost:9867/snapshot?format=compact&maxTokens=1000" -H "Authorization: Bearer $TOKEN")
 echo "$SNAP" | grep -q "COMMENT_POSTED_RATING_5_TEXT_RECEIVED" && ./record-step.sh 7 6 pass 150 200 "Comment verified" || ./record-step.sh 7 6 fail 150 200 "Comment verification failed"
 
 # Group 8: Error Handling
