@@ -422,6 +422,23 @@ pinchtab press Enter
 pinchtab text
 ```
 
+**Form submission rules:**
+- **Text inputs with `press Enter`**: Works only if the form has `<input type="search">` or the form's `onkeypress` handler submits on Enter.
+- **Standard form inputs**: Do NOT auto-submit on Enter by default in HTML5. Always click the submit button.
+- **Common mistake**: Filling a search input and pressing Enter — if nothing happens, click the Search/Submit button instead.
+
+**Right way to submit a form:**
+```bash
+# WRONG: Enter may not work
+pinchtab fill "#search-input" "query"
+pinchtab press Enter
+
+# RIGHT: Click the submit button
+pinchtab fill "#search-input" "query"
+pinchtab click "#search-btn"  # or click the button ref: pinchtab click e5
+pinchtab text
+```
+
 ### Use diff snapshots in a multi-step flow
 
 ```bash

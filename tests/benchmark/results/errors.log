@@ -1,3 +1,6 @@
 [2026-04-03T00:47:19Z] Step 4.2 FAILED: Price not found
 [2026-04-03T00:47:53Z] Step 2.4 FAILED: Results not found
 [2026-04-03T00:47:54Z] Step 4.2 FAILED: Price not found
+[2026-04-03T02:19:13Z] Step 2.1 FAILED: curl -X POST http://localhost:9867/navigate ... wiki.html; fill #wiki-search-input; press Enter
+[2026-04-03T02:19:18Z] Step 7.1 FAILED: curl -X POST http://localhost:9867/navigate ... wiki-go.html; fill comment; select rating; click submit
+[2026-04-03T02:19:48Z] Step 8.2 FAILED: curl -X POST http://localhost:9867/action ... click #fake-button-that-does-not-exist
