@@ -474,3 +474,71 @@ The dip to 88% in Run #5 actually reveals the fix needed. The skill documentatio
 2. **Medium priority**: Improve API error message for missing selector (context deadline exceeded → "selector not found after X ms")
 3. **Lower priority**: Expand test coverage to edge cases (nested forms, multi-step submission flows)
 4. Once agent reaches 96%+: Add harder test cases (state persistence across pages, complex SPA interactions)
+
+---
+
+## Run #12 — 2026-04-03 12:49
+
+**Results:**
+- Baseline: 67/67 (100%)
+- Agent: 39/39 (100%)
+- Gap: 0 steps
+
+**Summary:**
+Both benchmarks achieved 100% pass rate. All test groups (0-15) executed successfully.
+
+**Agent Pass Rate by Group:**
+- Group 0 (Setup): 2/2 ✅
+- Group 1 (Navigation & Content): 6/6 ✅
+- Group 2 (Search & Dynamic): 3/3 ✅
+- Group 3 (Complex Form): 2/2 ✅
+- Group 4 (SPA State): 3/3 ✅
+- Group 5 (Login Flow): 2/2 ✅
+- Group 6 (E-commerce): 3/3 ✅
+- Group 7 (Content + Interaction): 2/2 ✅
+- Group 8 (Error Handling): 2/2 ✅
+- Group 9 (Export): 2/2 ✅
+- Group 10 (Modal Settings): 2/2 ✅
+- Group 11 (State Persistence): 2/2 ✅
+- Group 12 (Multi-Page Nav): 2/2 ✅
+- Group 13 (Form Validation): 2/2 ✅
+- Group 14 (Dynamic Loading): 2/2 ✅
+- Group 15 (Data Extraction): 2/2 ✅
+
+**Key Observations:**
+1. Element refs (e0, e1, etc.) from `filter=interactive` snapshots work reliably for all action types (fill, click, select)
+2. Text selectors (`text:Browser Automation`) with `waitNav:true` navigate correctly
+3. SPA state persists across reloads (TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD)
+4. Lazy loading works (ADDITIONAL_PRODUCTS_LOADED after clicking Load More)
+5. Form validation correctly blocks submission when required fields missing
+6. OPTIONAL_FIELD_SKIPPED_SUCCESS verifies partial form submission works
+7. PROFIT_MARGIN_CALCULATED and COMPARISON_TABLE_BUILT verify data extraction
+
+**Token Efficiency:**
+- Baseline: 16,780 tokens (~$0.017) for 67 fine-grained steps
+- Agent: 14,980 tokens (~$0.014) for 39 high-level task completions
+- Agent is 11% more token-efficient at achieving same functional coverage
+
+**Why This Run Succeeded:**
+1. Prior SKILL.md improvements (form submission via button click) embedded in agent reasoning
+2. Fixture markers (VERIFY_*, COUNT_*, TASK_*) provide clear verification points
+3. Element refs from snapshots are stable and reliable for single-page interactions
+4. waitNav:true prevents race conditions on page transitions
+
+**Change Made:**
+- Type: none needed
+- Description: Agent at 100%, no failures to fix
+- Action: Expand test coverage with harder edge cases
+
+**Planned Test Expansions (for next run):**
+1. **Nested modals** - Open modal A, then modal B from within A
+2. **Concurrent state** - Two independent task lists on same page
+3. **Form prefill** - Navigate away and back, verify form retains values
+4. **Accessibility testing** - ARIA label navigation, keyboard-only flow
+5. **Long content scrolling** - Verify elements outside initial viewport
+
+**Next Focus:**
+Since agent is at 100%, implement 2-3 harder test cases from the list above. Target: maintain 95%+ as difficulty increases.
+
+---
+
