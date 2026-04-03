@@ -1,54 +1,25 @@
-[2026-04-03T00:10:39Z] Step 1.1: curl -X POST http://localhost:9867/navigate -d '{\"url\":\"http://localhost:8080/\"}' 
-[2026-04-03T00:10:39Z] Step 1.2: curl http://localhost:9867/text 
-[2026-04-03T00:10:39Z] Step 1.3: curl -X POST http://localhost:9867/navigate -d '{\"url\":\"http://localhost:8080/articles.html\"}' 
-[2026-04-03T00:10:39Z] Step 1.4: curl http://localhost:9867/text 
-[2026-04-03T00:10:39Z] Step 1.5: curl -X POST http://localhost:9867/navigate -d '{\"url\":\"http://localhost:8080/dashboard.html\"}' 
-[2026-04-03T00:10:39Z] Step 1.6: curl http://localhost:9867/text 
-[2026-04-03T00:10:53Z] Step 1.1: POST /navigate {url: http://127.0.0.1:8080/} 
-[2026-04-03T00:10:54Z] Step 1.2: GET /text 
-[2026-04-03T00:10:55Z] Step 1.3: POST /navigate {url: http://127.0.0.1:8080/articles.html} 
-[2026-04-03T00:10:55Z] Step 1.4: GET /text 
-[2026-04-03T00:10:56Z] Step 1.5: POST /navigate {url: http://127.0.0.1:8080/dashboard.html} 
-[2026-04-03T00:10:56Z] Step 1.6: GET /text 
-[2026-04-03T00:11:19Z] Step 1.1: POST /navigate 
-[2026-04-03T00:11:19Z] Step 1.2: GET /text 
-[2026-04-03T00:11:20Z] Step 1.3: POST /navigate articles 
-[2026-04-03T00:11:20Z] Step 1.4: GET /text 
-[2026-04-03T00:11:21Z] Step 1.5: POST /navigate dashboard 
-[2026-04-03T00:11:21Z] Step 1.6: GET /text 
-[2026-04-03T00:11:22Z] Step 2.1: POST /navigate search 
-[2026-04-03T00:11:22Z] Step 2.2: GET /snapshot 
-[2026-04-03T00:11:25Z] Step 2.3: POST /action fill + press Enter 
-[2026-04-03T00:11:25Z] Step 2.4: GET /text 
-[2026-04-03T00:11:26Z] Step 3.1: POST /navigate form 
-[2026-04-03T00:11:27Z] Step 3.2: POST /action fill x4 + select x2 
-[2026-04-03T00:11:30Z] Step 3.3: POST /action click submit 
-[2026-04-03T00:11:31Z] Step 4.1: POST /navigate ecommerce 
-[2026-04-03T00:11:31Z] Step 4.2: GET /text 
-[2026-04-03T00:11:32Z] Step 4.3: POST /action click add-to-cart 
-[2026-04-03T00:11:34Z] Step 4.4: POST /action click checkout 
-[2026-04-03T00:11:35Z] Step 5.1: POST /navigate nonexistent 
-[2026-04-03T00:11:35Z] Step 5.2: POST /action click fake 
-[2026-04-03T00:11:35Z] Step 6.1: GET /screenshot 
-[2026-04-03T00:11:35Z] Step 6.2: POST /pdf 
-[2026-04-03T00:12:27Z] Step 1.1: POST /navigate http://fixtures/ 
-[2026-04-03T00:12:27Z] Step 1.2: GET /text 
-[2026-04-03T00:12:28Z] Step 1.3: POST /navigate articles.html 
-[2026-04-03T00:12:28Z] Step 1.4: GET /text 
-[2026-04-03T00:12:30Z] Step 1.5: POST /navigate dashboard.html 
-[2026-04-03T00:12:30Z] Step 1.6: GET /text 
-[2026-04-03T00:12:31Z] Step 2.1: POST /navigate search.html 
-[2026-04-03T00:12:31Z] Step 2.2: GET /snapshot 
-[2026-04-03T00:13:03Z] Step 2.3: POST /action fill + press Enter 
-[2026-04-03T00:13:03Z] Step 2.4: GET /text 
-[2026-04-03T00:13:05Z] Step 3.1: POST /navigate form.html 
-[2026-04-03T00:15:06Z] Step 3.2: POST /action x4 fill/select 
-[2026-04-03T00:15:38Z] Step 3.3: POST /action click submit 
-[2026-04-03T00:15:40Z] Step 4.1: POST /navigate ecommerce.html 
-[2026-04-03T00:15:40Z] Step 4.2: GET /text 
-[2026-04-03T00:16:11Z] Step 4.3: POST /action click add-to-cart 
-[2026-04-03T00:16:43Z] Step 4.4: POST /action click checkout 
-[2026-04-03T00:16:44Z] Step 5.1: POST /navigate nonexistent 
-[2026-04-03T00:17:14Z] Step 5.2: POST /action click fake 
-[2026-04-03T00:17:14Z] Step 6.1: GET /screenshot 
-[2026-04-03T00:17:14Z] Step 6.2: POST /pdf 
+[01:47:52] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/"}'
+[01:47:52] curl -s 'http://localhost:9867/snapshot?format=compact&maxTokens=1000' -H 'Authorization: Bearer benchmark-token'
+[01:47:52] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/articles.html"}'
+[01:47:53] curl -s 'http://localhost:9867/text' -H 'Authorization: Bearer benchmark-token'
+[01:47:53] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/dashboard.html"}'
+[01:47:53] curl -s 'http://localhost:9867/text' -H 'Authorization: Bearer benchmark-token'
+[01:47:53] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/search.html"}'
+[01:47:53] curl -s 'http://localhost:9867/snapshot?format=compact&maxTokens=1000' -H 'Authorization: Bearer benchmark-token'
+[01:47:53] curl -X POST http://localhost:9867/fill -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:input[type=search]","text":"artificial intelligence"}'
+[01:47:53] curl -X POST http://localhost:9867/press -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"key":"Enter"}'
+[01:47:53] curl -s 'http://localhost:9867/text' -H 'Authorization: Bearer benchmark-token'
+[01:47:53] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/form.html"}'
+[01:47:54] curl -X POST http://localhost:9867/fill -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:input[name=name]","text":"Test User"}'
+[01:47:54] curl -X POST http://localhost:9867/fill -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:input[name=email]","text":"test@example.com"}'
+[01:47:54] curl -X POST http://localhost:9867/select -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:select[name=country]","value":"UK"}'
+[01:47:54] curl -X POST http://localhost:9867/fill -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:input[name=subject]","text":"Technical Support"}'
+[01:47:54] curl -X POST http://localhost:9867/click -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"css:button[type=submit]"}'
+[01:47:54] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/shop.html"}'
+[01:47:54] curl -s 'http://localhost:9867/snapshot?format=compact&maxTokens=2000' -H 'Authorization: Bearer benchmark-token'
+[01:47:54] curl -X POST http://localhost:9867/click -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"text:Add to Cart"}'
+[01:47:54] curl -X POST http://localhost:9867/click -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"text:Checkout"}'
+[01:47:54] curl -X POST http://localhost:9867/navigate -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"url":"http://fixtures/nonexistent.html"}'
+[01:47:55] curl -X POST http://localhost:9867/click -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"selector":"#fake-button-xyz"}'
+[01:47:55] curl -X POST http://localhost:9867/screenshot -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{"format":"png"}'
+[01:47:55] curl -X POST http://localhost:9867/pdf -H 'Authorization: Bearer benchmark-token' -H 'Content-Type: application/json' -d '{}'
