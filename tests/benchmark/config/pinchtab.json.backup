@@ -6,7 +6,7 @@
   },
   "instanceDefaults": {
     "maxTabs": 20,
-    "stealthLevel": "light",
+    "stealthLevel": "full",
     "headless": true
   },
   "multiInstance": {
@@ -37,13 +37,7 @@
     "allowClipboard": true,
     "idpi": {
       "enabled": true,
-      "allowedDomains": [
-        "fixtures",
-        "localhost",
-        "127.0.0.1",
-        "::1",
-        "172.18.0.2"
-      ]
+      "allowedDomains": ["fixtures", "localhost", "127.0.0.1", "::1", "172.18.0.2"]
     }
   },
   "activity": {
