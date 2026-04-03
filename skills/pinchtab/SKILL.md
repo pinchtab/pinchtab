@@ -558,81 +558,14 @@ pinchtab text | grep "149.99"  # May fail - prices often stripped
 pinchtab snap -c | grep "149.99"  # Works
 ```
 
-## Benchmark Fixture Quick Reference
+## Fixture Selector Quick Reference
 
-When working with benchmark fixture pages, use these CSS selectors for reliable element targeting:
-
-### Shop / E-commerce (ecommerce.html)
-
-**Price Extraction Pattern:** Prices are in `<p class="price">$XXX.XX</p>` elements. Use full snapshot (not `-c`) or `text` to reliably see price values.
-
-```bash
-# Extract all product prices (shows price text values)
-pinchtab snapshot | grep "price"
-
-# Or extract just text with prices visible
-pinchtab text | grep "\\$"
-
-# Get specific product price - use full snapshot for text values
-pinchtab snapshot | grep -A 1 "Wireless Headphones"  # Shows the price below the title
-
-# Click first product's "Add to Cart" button
-pinchtab click ".add-to-cart"
-
-# Extract cart count (numeric values in snapshots)
-pinchtab snap -c '#cart-count'
-
-# Click checkout button
-pinchtab click '#checkout-btn'
-
-# Verify prices in cart (use snapshot to see "$149.99" format)
-pinchtab snapshot | grep "\\$[0-9]"
-```
-
-**Why this works**: `snapshot` includes all visible text including prices. The `-c` (compact) flag shows element refs but may omit text content; use full `snapshot` when you need to see actual values like "$149.99".
-
-### Search Page (search.html)
-
-```bash
-# Find search input field
-pinchtab snap -c '#search-input'
-
-# Fill and submit search - ALWAYS click the button, never press Enter
-pinchtab fill '#search-input' "golang"
-pinchtab click '#search-btn'  # Click the Search button
-
-# Check results appear
-pinchtab snap -c '.search-results'
-```
-
-### Contact Form (form.html)
-
-```bash
-# Fill name field
-pinchtab fill '#name' "John Doe"
-
-# Fill email field
-pinchtab fill '#email' "john@example.com"
-
-# Fill message textarea
-pinchtab fill '#message' "Test message"
-
-# Submit form
-pinchtab click '#submit'
-```
-
-### Wiki Pages (wiki.html, wiki-go.html)
-
-```bash
-# Extract article title
-pinchtab snap -c 'h1'
-
-# Find all section headers
-pinchtab snap -c 'h2'
-
-# Extract article body text
-pinchtab text
-```
-
-**Key tip**: Use `snapshot -c` (compact mode) when hunting for specific elements; use `text` for prose content extraction. Prices, buttons, and form fields always appear in snapshots but may be stripped from text output.
-```
+| Page | Key selectors |
+|------|---------------|
+| ecommerce | `.add-to-cart`, `#checkout-btn`, `.price` (use `snapshot` not `-c` for price values) |
+| search | `#search-input`, `#search-btn` (click button — never press Enter) |
+| form | `#fullname`, `#email`, `#phone`, `#country`, `#subject`, `#message`, `#submit-btn` |
+| wiki | `#wiki-search-input`, `#wiki-search-btn` |
+| spa | `#new-task-input`, `#priority-select`, `#add-task-btn` |
+| login | `#username`, `#password`, `#login-btn`, `#logout-btn` |
+| dashboard | `#settings-btn`, `#theme-select`, `#modal-save` |
