@@ -9,11 +9,11 @@
     }
   },
   "totals": {
-    "input_tokens": 44830,
-    "output_tokens": 49450,
-    "total_tokens": 94280,
-    "estimated_cost_usd": 0.8762399999999966,
-    "steps_passed": 304,
+    "input_tokens": 45330,
+    "output_tokens": 50500,
+    "total_tokens": 95830,
+    "estimated_cost_usd": 0.8934899999999966,
+    "steps_passed": 310,
     "steps_failed": 13,
     "steps_skipped": 0,
     "duration_ms": 0
@@ -3823,6 +3823,78 @@
       "cost_usd": 0.003450,
       "notes": "Beta activity retrieved",
       "timestamp": "2026-04-03T11:04:45Z"
+    },
+    {
+      "group": 0,
+      "step": 1,
+      "id": "0.1",
+      "status": "pass",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "notes": "Skill loaded",
+      "timestamp": "2026-04-03T11:28:27Z"
+    },
+    {
+      "group": 0,
+      "step": 2,
+      "id": "0.2",
+      "status": "pass",
+      "input_tokens": 100,
+      "output_tokens": 200,
+      "total_tokens": 300,
+      "cost_usd": 0.003300,
+      "notes": "Health check passed: status=ok, authRequired=true, instances=1",
+      "timestamp": "2026-04-03T11:28:33Z"
+    },
+    {
+      "group": 0,
+      "step": 3,
+      "id": "0.3",
+      "status": "pass",
+      "input_tokens": 150,
+      "output_tokens": 200,
+      "total_tokens": 350,
+      "cost_usd": 0.003450,
+      "notes": "Fixtures server reachable: url=http://fixtures/",
+      "timestamp": "2026-04-03T11:28:39Z"
+    },
+    {
+      "group": 0,
+      "step": 4,
+      "id": "0.4",
+      "status": "pass",
+      "input_tokens": 50,
+      "output_tokens": 50,
+      "total_tokens": 100,
+      "cost_usd": 0.000900,
+      "notes": "Chrome instance status=running",
+      "timestamp": "2026-04-03T11:28:45Z"
+    },
+    {
+      "group": 1,
+      "step": 1,
+      "id": "1.1",
+      "status": "pass",
+      "input_tokens": 100,
+      "output_tokens": 100,
+      "total_tokens": 200,
+      "cost_usd": 0.001800,
+      "notes": "HTTP 200, navigated to fixtures home",
+      "timestamp": "2026-04-03T11:28:51Z"
+    },
+    {
+      "group": 1,
+      "step": 2,
+      "id": "1.2",
+      "status": "pass",
+      "input_tokens": 100,
+      "output_tokens": 500,
+      "total_tokens": 600,
+      "cost_usd": 0.007800,
+      "notes": "Contains VERIFY_HOME_LOADED_12345",
+      "timestamp": "2026-04-03T11:28:57Z"
     }
   ]
 }
