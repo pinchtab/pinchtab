@@ -213,6 +213,62 @@ Since agent is at 100%, expand test coverage:
 
 ---
 
+## Run #6 — 2026-04-03 04:32 (Agent Benchmark Only)
+
+**Results:**
+- Agent: **27/27 (100%)** ✅
+- Gap from baseline: **Baseline incomplete** (last full run was 16/18 = 88%)
+- Agent maintained 100% pass rate across Groups 0-9
+
+**Analysis:**
+This run confirms the agent's reliability on all originally-designed test cases. The baseline script was incomplete in prior runs, so direct comparison is against the partial baseline from Run #4 (35/36 = 97% on Groups 0-4 only).
+
+**Breakdown by Group:**
+- Group 0 (Setup): 2/2 ✅
+- Group 1 (Reading & Extracting): 6/6 ✅
+- Group 2 (Search & Dynamic): 3/3 ✅
+- Group 3 (Forms): 2/2 ✅
+- Group 4 (SPA): 3/3 ✅
+- Group 5 (Login): 2/2 ✅
+- Group 6 (E-commerce): 3/3 ✅
+- Group 7 (Content + Interaction): 2/2 ✅
+- Group 8 (Error Handling): 2/2 ✅
+- Group 9 (Export): 2/2 ✅
+
+**Token Usage:**
+- Total: 6,350 tokens (3,850 input, 2,500 output)
+- Avg per task: ~235 tokens
+- Cost: $0.0041
+
+**Change Made (Per Task Instructions):**
+- **Type:** Test expansion (new test cases)
+- **Description:** Added 6 new test groups (10-15) with 12 additional test cases covering:
+  - Group 10: Modal dialogs and nested interactions (theme toggle)
+  - Group 11: State persistence across page reloads
+  - Group 12: Multi-page navigation and back button flows
+  - Group 13: Form validation and optional field handling
+  - Group 14: Dynamic content loading (pagination/lazy loading)
+  - Group 15: Complex data aggregation and comparison tasks
+- **Rationale:** Agent achieved 100% on baseline coverage (27/27), so per task instructions: "When gap closes, increase test complexity." New cases target scenarios not covered by original Groups 0-9.
+- **Expected Impact:** These harder cases will reveal gaps in:
+  1. Browser history management (back/forward)
+  2. Modal/dialog handling via browser APIs
+  3. Lazy loading and dynamic DOM updates
+  4. State management across navigation
+  5. Complex multi-source data aggregation
+- **Commit:** e4f1a9b ("test: add challenging cases for modals, state persistence, lazy loading")
+
+**Next Steps:**
+1. Implement fixture updates to support new test groups (add settings modal, pagination, comparison features)
+2. Re-run agent benchmark against expanded test suite (target Groups 0-15)
+3. Identify which new groups fail and debug root causes
+4. Each failure informs SKILL.md or fixture improvements
+
+**Key Insight:**
+The agent's 100% pass rate on Groups 0-9 isn't the endpoint — it's evidence the baseline tests are well-designed and the API is sound. The real value is expanding coverage to find edge cases and improve the documentation/API accordingly.
+
+---
+
 ## Run #5 — 2026-04-03 03:19
 
 **Results:**
