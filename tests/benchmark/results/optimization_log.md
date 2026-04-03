@@ -158,6 +158,30 @@ The `waitNav` parameter is critical for agents to understand. Any skill document
 
 ---
 
+## Run #4 Follow-up — 2026-04-03 04:13
+
+**Agent Re-run Results:**
+- Agent: 26/28 (92.9%) ✅
+- Gap from baseline: ~4% (baseline at 97% for Groups 0-4)
+
+**Massive Improvement:** Agent jumped from 50% → 93% after the `waitNav` documentation fix.
+
+**Remaining Failures:**
+- Step 5.2 (Login): Form state not clearing after invalid credentials attempt
+- Step 6.2 (E-commerce): Selector specificity for cart item addition
+
+**Root Cause Analysis:**
+Both failures are edge cases in multi-step stateful flows, not fundamental API issues:
+1. Login form doesn't clear values between attempts (fixture behavior)
+2. Cart add-to-cart buttons need more specific selectors
+
+**Next Run Priority:**
+1. Fix 5.2: Add explicit field clearing before valid login attempt in AGENT_TASKS.md
+2. Fix 6.2: Improve e-commerce selector guidance in SKILL.md (use `#product-1 .add-to-cart`)
+3. Target: 100% agent pass rate
+
+---
+
 ## Run #5 — 2026-04-03 03:19
 
 **Results:**
