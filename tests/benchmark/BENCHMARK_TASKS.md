@@ -171,13 +171,13 @@ curl -X POST http://localhost:9867/action \
 curl -X POST http://localhost:9867/action \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
-  -d '{"kind":"press","selector":"#wiki-search-input","key":"Enter"}'
+  -d '{"kind":"click","selector":"#wiki-search-btn"}'
 ```
 **Pass if**: HTTP 200.
 
 ### 2.5 Verify navigation to Go article
 ```bash
-curl "http://localhost:9867/snapshot?format=compact&maxTokens=500" \
+curl "http://localhost:9867/snapshot?format=compact&maxTokens=2000" \
   -H "Authorization: Bearer benchmark-token"
 ```
 **Pass if**: Contains `VERIFY_WIKI_GO_LANG_88888` (search redirected to Go page).

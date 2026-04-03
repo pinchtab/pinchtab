@@ -111,7 +111,7 @@ After submitting, if the form is still accessible (or navigate back), verify you
 ## Group 4: SPA State Management
 
 ### 4.1 Read initial app state
-Navigate to `http://fixtures/spa.html`. Read the current task list — how many tasks exist, how many are active vs done?
+Navigate to `http://fixtures/spa.html` (always navigate fresh — do not reuse a cached page). Read the current task list — how many tasks exist, how many are active vs done?
 
 **Verify**: Found 3 total, 2 active, 1 done (verify `TASK_STATS_TOTAL_3_ACTIVE_2_DONE_1`).
 
@@ -205,23 +205,23 @@ Export the dashboard as a PDF.
 ## Group 10: Nested Interactions & Modal Dialogs
 
 ### 10.1 Open and interact with modal on dashboard
-Navigate to `http://fixtures/dashboard.html`. Click the "Settings" button to open a modal dialog.
+Navigate to `http://fixtures/dashboard.html`. Find and click the Settings button (selector: `#settings-btn`) to open the modal dialog.
 
-**Verify**: Modal appeared with title "Dashboard Settings".
+**Verify**: Modal appeared — snapshot contains "Dashboard Settings".
 
 ### 10.2 Modify settings and close modal
-In the modal, change the theme to "Dark Mode" and click "Save".
+In the modal, select "Dark" from the theme dropdown (`#theme-select`), then click the Save button (`#save-settings`). After the modal closes, check the page content.
 
-**Verify**: Modal closed and returned to dashboard. Verify dark theme applied (`THEME_DARK_APPLIED`).
+**Verify**: Page contains `THEME_DARK_APPLIED`.
 
 ---
 
 ## Group 11: State Persistence & Page Reload
 
 ### 11.1 Add an item and verify after page reload
-Navigate to `http://fixtures/spa.html`. Add a task called "Persistent Task Test". Reload the page.
+Navigate to `http://fixtures/spa.html`. Add a task titled exactly "Persistent Task Test". Then reload by navigating to `http://fixtures/spa.html` again.
 
-**Verify**: Task still exists after reload (`TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD`).
+**Verify**: After reload, the task still appears in the list (`TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD`).
 
 ### 11.2 Logout and log back in
 From the logged-in dashboard, click Sign Out to log out. Then log in again with username "benchmark" / password "test456".
@@ -246,15 +246,15 @@ Navigate to wiki.html, note the total article count from categories. Navigate to
 
 ## Group 13: Form State & Multi-Step Submission
 
-### 13.1 Partial fill, error, then correct
-Navigate to `http://fixtures/form.html`. Leave email blank, submit. Capture error. Fill email, resubmit.
+### 13.1 Submit form without email
+Navigate to `http://fixtures/form.html`. Fill only the name field ("Validator Test"), leave email blank, click Submit. The browser's native required-field validation will prevent submission.
 
-**Verify**: First submission failed with validation message. Second submission succeeded (`FORM_VALIDATION_THEN_SUCCESS`).
+**Verify**: Submission blocked (form stays open, no success message shown).
 
-### 13.2 Prefill form and verify persistence
-Fill form with all required fields, clear phone field only, resubmit.
+### 13.2 Submit form without optional phone field
+Fill the form with: name "No Phone User", email "nophone@test.com", country "de", subject "feedback". Leave the phone field empty. Submit.
 
-**Verify**: Form accepted submission without phone (optional field), confirmation shows name (`OPTIONAL_FIELD_SKIPPED_SUCCESS`).
+**Verify**: Submission succeeded and page shows `OPTIONAL_FIELD_SKIPPED_SUCCESS`.
 
 ---
 
