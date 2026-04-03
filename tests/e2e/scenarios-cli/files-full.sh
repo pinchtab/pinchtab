@@ -79,10 +79,16 @@ if [ -f "$GZ_FIXTURE" ]; then
 
   python3 -m http.server 0 --directory "$GZ_DIR" --bind 0.0.0.0 &>/tmp/e2e-gz-server.log &
   GZ_PID=$!
-  sleep 1
 
-  # Extract the port from the log
-  GZ_PORT=$(grep -oE 'port [0-9]+' /tmp/e2e-gz-server.log | head -1 | grep -oE '[0-9]+')
+  # Poll for server startup with timeout (handles slow CI)
+  GZ_PORT=""
+  for i in {1..10}; do
+    GZ_PORT=$(grep -oE 'port [0-9]+' /tmp/e2e-gz-server.log 2>/dev/null | head -1 | grep -oE '[0-9]+' || true)
+    if [ -n "$GZ_PORT" ] && [ "$GZ_PORT" != "0" ]; then
+      break
+    fi
+    sleep 0.5
+  done
 
   if [ -n "$GZ_PORT" ] && [ "$GZ_PORT" != "0" ]; then
     # The server binds 0.0.0.0, access via the host the pinchtab instance can reach.

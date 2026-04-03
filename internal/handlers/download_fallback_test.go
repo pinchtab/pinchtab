@@ -21,6 +21,13 @@ func TestIsGzipContent(t *testing.T) {
 		{"application/xml", "https://example.com/sitemap.xml", false},
 		{"text/html", "https://example.com/page", false},
 		{"", "https://example.com/data.gz", true},
+		// Edge cases: path.Ext should not match these as .gz
+		{"", "https://example.com/file.pgz", false},
+		{"", "https://example.com/file.ngz", false},
+		{"", "https://example.com/filegz", false},
+		// Query params should not affect extension detection
+		{"", "https://example.com/data.gz?token=abc", true},
+		{"", "https://example.com/data.tar.gz", true},
 	}
 	for _, tt := range tests {
 		if got := isGzipContent(tt.contentType, tt.url); got != tt.want {

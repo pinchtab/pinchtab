@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -654,7 +655,12 @@ func isGzipContent(contentType, rawURL string) bool {
 	if strings.Contains(strings.ToLower(contentType), "gzip") {
 		return true
 	}
-	return strings.HasSuffix(strings.ToLower(rawURL), ".gz")
+	// Use path.Ext for precise extension matching (.gz, not .pgz or .ngz)
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(path.Ext(parsed.Path), ".gz")
 }
 
 func inferDecompressedContentType(rawURL, fallback string) string {
