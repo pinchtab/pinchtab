@@ -102,7 +102,11 @@ func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
 		return
 	}
 
-	lite := engine.NewLiteEngine()
+	lite := engine.BuildLite(engine.BuildConfig{
+		Mode:        mode,
+		Guard:       h.IDPIGuard,
+		WrapContent: cfg.IDPI.Enabled && cfg.IDPI.WrapContent,
+	})
 	h.Router = engine.NewRouter(mode, lite)
 	slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
 }
