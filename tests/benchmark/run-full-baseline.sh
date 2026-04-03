@@ -86,7 +86,7 @@ fi
 curl -sf -X POST http://localhost:9867/action \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","selector":"#link-go"}' > /dev/null
+  -d '{"kind":"click","selector":"#link-go","waitNav":true}' > /dev/null
 record 1 5 pass 150 40 "Click to Go article"
 
 # 1.6

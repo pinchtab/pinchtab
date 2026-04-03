@@ -105,9 +105,11 @@ curl "http://localhost:9867/snapshot?format=compact&maxTokens=1500" \
 curl -X POST http://localhost:9867/action \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
-  -d '{"kind":"click","selector":"#link-go"}'
+  -d '{"kind":"click","selector":"#link-go","waitNav":true}'
 ```
-**Pass if**: HTTP 200.
+**Pass if**: HTTP 200 with `{"success":true}`.
+
+**Note**: Use `waitNav: true` when clicking a link that causes page navigation. Without it, PinchTab returns a 409 "navigation_changed" error to protect against unexpected navigation during form interactions.
 
 ### 1.6 Verify Go article loaded and extract key facts
 ```bash
