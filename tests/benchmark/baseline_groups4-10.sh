@@ -62,7 +62,7 @@ curl -sf -X POST http://localhost:9867/navigate -H "Authorization: Bearer $TOKEN
 ./record-step.sh 6 1 pass 150 200 "Navigate to shop"
 
 SNAP=$(curl -sf "http://localhost:9867/snapshot?format=compact&maxTokens=2000" -H "Authorization: Bearer $TOKEN")
-if echo "$SNAP" | grep -q "VERIFY_SHOP_PAGE_44444" && echo "$SNAP" | grep -q "\\$149.99" && echo "$SNAP" | grep -q "\\$299.99" && echo "$SNAP" | grep -q "Out of Stock"; then
+if echo "$SNAP" | grep -q "VERIFY_SHOP_PAGE_44444" && echo "$SNAP" | grep -qF '$149.99' && echo "$SNAP" | grep -qF '$299.99' && echo "$SNAP" | grep -q "Out of Stock"; then
   ./record-step.sh 6 2 pass 200 250 "Shop page and prices verified"
 else
   ./record-step.sh 6 2 fail 200 250 "Shop verification failed"

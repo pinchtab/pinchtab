@@ -53,3 +53,12 @@
 [2026-04-03T10:14:24Z] Step 6.2 FAILED: Shop verification failed
 [2026-04-03T10:14:24Z] Step 6.8 FAILED: Checkout verification failed
 [2026-04-03T10:14:25Z] Step 7.6 FAILED: Comment verification failed
+[2026-04-03T10:38:39Z] Step 2.5 FAILED: Search redirect failed
+[2026-04-03T10:39:16Z] Step 6.2 FAILED: Shop verification failed
+[2026-04-03T10:39:17Z] Step 6.8 FAILED: Checkout verification failed
+[2026-04-03T10:43:00Z] Step 4.1 FAILED: navigate + snapshot
+[2026-04-03T10:46:03Z] Step 10.1 FAILED: click settings + snapshot
+[2026-04-03T10:46:03Z] Step 10.2 FAILED: snapshot interactive
+[2026-04-03T10:46:59Z] Step 13.1 FAILED: validation flow
+[2026-04-03T10:47:00Z] Step 13.2 FAILED: optional field test
+[2026-04-03T10:48:15Z] Step 14.2 FAILED: add lazy product - timeout

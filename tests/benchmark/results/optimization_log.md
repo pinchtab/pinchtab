@@ -4,6 +4,55 @@ Automated improvement runs tracking benchmark results and changes.
 
 ---
 
+## Run #10 — 2026-04-03 11:37
+
+**Results:**
+- Baseline: 65/68 (96%) — Groups 0-10
+  - Step 2.5: Search uses `press Enter` (should click button per SKILL.md)
+  - Step 6.2: grep pattern `\\$149.99` causes "invalid backreference" error
+  - Step 6.8: Checkout verification intermittent
+- Agent: 33/39 (85%) — Groups 0-15 (expanded test suite)
+  - Original Groups 0-9: 27/27 (100%) ✅
+  - New Groups 10-15: 6/12 (50%)
+- Gap: 15% on new tests (fixture/test alignment issues)
+
+**Agent Failures (new expanded tests only):**
+- Step 4.1: SPA residual state (TASK_STATS shows 5 not 3 due to prior runs)
+- Step 10.1: Used wrong selector (`text:Settings` vs `#settings-btn`)
+- Step 10.2: Theme toggle test logic incomplete
+- Step 13.1: Form validation uses HTML5 native (no JS marker)
+- Step 13.2: OPTIONAL_FIELD_SKIPPED_SUCCESS marker missing from fixture
+- Step 14.2: Lazy product add-to-cart selector timing issue
+
+**Root Cause Analysis:**
+The original Groups 0-9 continue to pass at 100% for the agent. The failures are all in the newly expanded Groups 10-15, which test features that:
+1. Have verification strings in AGENT_TASKS.md that don't exist in fixtures
+2. Use test logic that doesn't match fixture behavior
+3. Have timing dependencies not accounted for in test scripts
+
+**Baseline Issue:**
+The `grep -q "\\$149.99"` pattern in baseline_groups4-10.sh is being interpreted by bash+grep as a backreference (`\$1`). Fix: use `grep -qF '$149.99'` for fixed-string matching.
+
+**Change Made:**
+- **Type:** Test fix (baseline script)
+- **Description:** Fixed grep pattern in baseline_groups4-10.sh line 66 from `grep -q "\\$149.99"` to `grep -qF '$149.99'` to avoid regex backreference error
+- **Expected impact:** Baseline step 6.2 should pass, bringing baseline to 66/68 (97%)
+- **Commit:** (pending)
+
+**Key Insight:**
+Original agent benchmark (Groups 0-9) remains at 100%. The expanded tests (Groups 10-15) reveal that:
+1. AGENT_TASKS.md expects verification strings that fixtures don't output
+2. Test scripts use selectors/patterns that don't match fixture HTML
+3. Before adding more tests, fixtures must be updated to output expected markers
+
+**Next Focus:**
+1. Update fixtures to output expected verification strings for Groups 10-15
+2. Fix SPA fixture to reset state between benchmark runs
+3. Add proper verification markers: THEME_DARK_APPLIED, FORM_VALIDATION_THEN_SUCCESS, OPTIONAL_FIELD_SKIPPED_SUCCESS
+4. Increase timeout for lazy-loaded product interactions
+
+---
+
 ## Run #9 — 2026-04-03 11:13
 
 **Results:**
