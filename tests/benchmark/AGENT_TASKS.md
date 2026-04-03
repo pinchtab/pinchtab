@@ -210,7 +210,7 @@ Navigate to `http://fixtures/dashboard.html`. Find and click the Settings button
 **Verify**: Modal appeared — snapshot contains "Dashboard Settings".
 
 ### 10.2 Modify settings and close modal
-In the modal, select "Dark" from the theme dropdown (`#theme-select`), then click the Save button (`#save-settings`). After the modal closes, check the page content.
+In the modal, select "Dark" from the theme dropdown (`#theme-select`), then click the Save button (`#modal-save`). After the modal closes, check the page content.
 
 **Verify**: Page contains `THEME_DARK_APPLIED`.
 

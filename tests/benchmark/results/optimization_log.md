@@ -4,6 +4,41 @@ Automated improvement runs tracking benchmark results and changes.
 
 ---
 
+## Run #11 — 2026-04-03 12:02
+
+**Results:**
+- Baseline: 64/68 (94%)
+  - Step 6.8: maxTokens=500 too low, truncated ORDER_TOTAL_449_98 marker
+- Agent: 35/39 (90%)
+  - Original Groups 0-9: 26/27 (96%)
+  - Expanded Groups 10-15: 9/12 (75%)
+- Gap: 4% (4 steps)
+
+**Agent Failures:**
+- Step 3.2: Form success page doesn't show visible reset/back button — Test Ambiguity
+- Step 4.1: SPA residual state from prior test runs — Test Infrastructure
+- Step 8.2: Click on missing element times out instead of fast error — API Behavior
+- Step 10.2: AGENT_TASKS.md uses wrong selector `#save-settings` but fixture uses `#modal-save` — Test Ambiguity
+
+**Root Cause:**
+Selector mismatch in AGENT_TASKS.md Group 10.2. The agent correctly followed the documented selector (`#save-settings`) but that selector doesn't exist in the dashboard.html fixture. The actual save button has ID `#modal-save`.
+
+**Change Made:**
+- Type: test(agent)
+- Description: Fixed AGENT_TASKS.md Group 10.2 to use correct selector `#modal-save` instead of `#save-settings`
+- Expected impact: Step 10.2 should pass, bringing agent to 36/39 (92%)
+- Commit: pending
+
+**Key Insight:**
+When AGENT_TASKS.md contains selectors that don't match fixtures, agents fail even when using correct methodology. Always verify test file selectors against actual fixture HTML.
+
+**Next Focus:**
+1. Fix baseline 6.8 by increasing maxTokens from 500 to 1500
+2. Address 4.1 SPA residual state with fixture reset mechanism
+3. Consider API improvement for faster missing-element errors
+
+---
+
 ## Run #10 — 2026-04-03 11:37
 
 **Results:**

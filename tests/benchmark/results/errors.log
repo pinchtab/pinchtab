@@ -62,3 +62,5 @@
 [2026-04-03T10:46:59Z] Step 13.1 FAILED: validation flow
 [2026-04-03T10:47:00Z] Step 13.2 FAILED: optional field test
 [2026-04-03T10:48:15Z] Step 14.2 FAILED: add lazy product - timeout
+[2026-04-03T11:03:34Z] Step 1.2 FAILED: VERIFY_HOME_LOADED_12345 not found
+[2026-04-03T11:03:42Z] Step 6.8 FAILED: Checkout verification failed
