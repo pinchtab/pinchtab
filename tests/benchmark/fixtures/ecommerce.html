@@ -111,6 +111,7 @@
       document.getElementById('cart-count').textContent = cart.length;
       if (cart.length > 0) {
         document.getElementById('cart-section').style.display = 'block';
+        const hasLazyItem = cart.some(item => parseInt(item.id) >= 5);
         const items = cart.map((item, i) => `
           <div class="cart-item" id="cart-item-${i}">
             <span>${item.name}</span>
@@ -118,7 +119,8 @@
             <span>CART_ITEM_${item.name.replace(/\s/g, '_').toUpperCase()}</span>
           </div>
         `).join('');
-        document.getElementById('cart-items').innerHTML = items;
+        document.getElementById('cart-items').innerHTML = items +
+          (hasLazyItem ? '<p>CART_UPDATED_WITH_LAZY_PRODUCT</p>' : '');
         const total = cart.reduce((sum, item) => sum + item.price, 0);
         document.getElementById('total-amount').textContent = total.toFixed(2);
       }

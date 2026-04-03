@@ -1,0 +1,55 @@
+{
+  "benchmark": {
+    "type": "agent",
+    "run_number": 9,
+    "timestamp": "20260403_104757",
+    "model": "claude-haiku-4-5"
+  },
+  "totals": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "estimated_cost_usd": 0,
+    "steps_passed": 3,
+    "steps_failed": 0,
+    "steps_skipped": 0
+  },
+  "steps": [
+    {
+      "group": 0,
+      "step": 1,
+      "id": "0.1",
+      "status": "pass",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "notes": "pinchtab health",
+      "timestamp": "2026-04-03T09:58:14Z"
+    },
+    {
+      "group": 0,
+      "step": 2,
+      "id": "0.2",
+      "status": "pass",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "notes": "pinchtab nav + snap",
+      "timestamp": "2026-04-03T09:58:25Z"
+    },
+    {
+      "group": 1,
+      "step": 1,
+      "id": "1.1",
+      "status": "pass",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0,
+      "notes": "pinchtab nav + snap -c",
+      "timestamp": "2026-04-03T09:58:33Z"
+    }
+  ]
+}

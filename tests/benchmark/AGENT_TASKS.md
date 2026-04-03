@@ -223,10 +223,10 @@ Navigate to `http://fixtures/spa.html`. Add a task called "Persistent Task Test"
 
 **Verify**: Task still exists after reload (`TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD`).
 
-### 11.2 Logout and verify session cleared
-Navigate to login page, verify you are logged out. Then log in again with username "benchmark" / password "test456".
+### 11.2 Logout and log back in
+From the logged-in dashboard, click Sign Out to log out. Then log in again with username "benchmark" / password "test456".
 
-**Verify**: Session cookie updated (`SESSION_RENEWED`).
+**Verify**: Successfully logged back in and dashboard shows `SESSION_RENEWED`.
 
 ---
 
@@ -260,15 +260,15 @@ Fill form with all required fields, clear phone field only, resubmit.
 
 ## Group 14: Dynamic Content Loading
 
-### 14.1 Lazy load products in e-commerce
-Navigate to `http://fixtures/ecommerce.html`. Scroll down or trigger pagination to load more products.
+### 14.1 Load more products
+Navigate to `http://fixtures/ecommerce.html`. Find and click the "Load More Products" button to reveal additional products.
 
-**Verify**: Additional products loaded (`ADDITIONAL_PRODUCTS_LOADED`).
+**Verify**: Additional products appeared (`ADDITIONAL_PRODUCTS_LOADED`).
 
-### 14.2 Verify cart updates with lazy-loaded items
-Add a lazy-loaded product to cart and verify cart total updated.
+### 14.2 Add a lazy-loaded product to cart
+After loading more products, add product #5 (USB-C Cable) to the cart.
 
-**Verify**: Cart reflects new item (`CART_UPDATED_WITH_LAZY_PRODUCT`).
+**Verify**: Cart shows the lazy-loaded item (`CART_UPDATED_WITH_LAZY_PRODUCT`).
 
 ---
 
@@ -280,9 +280,14 @@ Navigate to `http://fixtures/dashboard.html`. Extract revenue and profit values,
 **Verify**: Correctly calculated: profit_margin = (profit / revenue) * 100 (`PROFIT_MARGIN_CALCULATED`).
 
 ### 15.2 Build comparison table from multiple sources
-Gather feature lists from 3 different programming language articles (Go, Python, Rust) and compare them.
+Visit these 3 pages and compare their feature counts and key features:
+- `http://fixtures/wiki-go.html` (Go: 6 features)
+- `http://fixtures/wiki-python.html` (Python: 7 features)
+- `http://fixtures/wiki-rust.html` (Rust: 5 features)
 
-**Verify**: Created comparison showing which features are unique vs shared (`COMPARISON_TABLE_BUILT`).
+Report which language has the most features and name 1 feature unique to each.
+
+**Verify**: Response is factually correct AND wiki-python.html contains `COMPARISON_TABLE_BUILT`.
 
 ---
 

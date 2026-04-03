@@ -49,3 +49,7 @@
 [2026-04-03T04:55:13Z] Step 14.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
 [2026-04-03T04:55:13Z] Step 15.1 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
 [2026-04-03T04:55:13Z] Step 15.2 FAILED: PinchTab instances not responding - Docker networking issue with instance HTTP ports
+[2026-04-03T10:13:46Z] Step 2.5 FAILED: Search redirect failed
+[2026-04-03T10:14:24Z] Step 6.2 FAILED: Shop verification failed
+[2026-04-03T10:14:24Z] Step 6.8 FAILED: Checkout verification failed
+[2026-04-03T10:14:25Z] Step 7.6 FAILED: Comment verification failed
