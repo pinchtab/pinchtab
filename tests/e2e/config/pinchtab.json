@@ -38,6 +38,7 @@
     "allowDownload": true,
     "allowUpload": true,
     "allowClipboard": true,
+    "downloadAllowedDomains": ["fixtures"],
     "attach": {
       "enabled": true,
       "allowHosts": [
