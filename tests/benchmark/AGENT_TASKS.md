@@ -202,6 +202,90 @@ Export the dashboard as a PDF.
 
 ---
 
+## Group 10: Nested Interactions & Modal Dialogs
+
+### 10.1 Open and interact with modal on dashboard
+Navigate to `http://fixtures/dashboard.html`. Click the "Settings" button to open a modal dialog.
+
+**Verify**: Modal appeared with title "Dashboard Settings".
+
+### 10.2 Modify settings and close modal
+In the modal, change the theme to "Dark Mode" and click "Save".
+
+**Verify**: Modal closed and returned to dashboard. Verify dark theme applied (`THEME_DARK_APPLIED`).
+
+---
+
+## Group 11: State Persistence & Page Reload
+
+### 11.1 Add an item and verify after page reload
+Navigate to `http://fixtures/spa.html`. Add a task called "Persistent Task Test". Reload the page.
+
+**Verify**: Task still exists after reload (`TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD`).
+
+### 11.2 Logout and verify session cleared
+Navigate to login page, verify you are logged out. Then log in again with username "benchmark" / password "test456".
+
+**Verify**: Session cookie updated (`SESSION_RENEWED`).
+
+---
+
+## Group 12: Multi-Page Navigation & Back Button
+
+### 12.1 Navigate through multiple pages and return
+Starting from `http://fixtures/`, navigate to wiki → Go article → back to wiki → back to home.
+
+**Verify**: Successfully returned to home page (title contains "Benchmark" or "Home").
+
+### 12.2 Compare data across pages
+Navigate to wiki.html, note the total article count from categories. Navigate to articles.html, count articles there. Compare totals.
+
+**Verify**: Can report totals from both pages and explain difference (`COMPARISON_DATA_FOUND`).
+
+---
+
+## Group 13: Form State & Multi-Step Submission
+
+### 13.1 Partial fill, error, then correct
+Navigate to `http://fixtures/form.html`. Leave email blank, submit. Capture error. Fill email, resubmit.
+
+**Verify**: First submission failed with validation message. Second submission succeeded (`FORM_VALIDATION_THEN_SUCCESS`).
+
+### 13.2 Prefill form and verify persistence
+Fill form with all required fields, clear phone field only, resubmit.
+
+**Verify**: Form accepted submission without phone (optional field), confirmation shows name (`OPTIONAL_FIELD_SKIPPED_SUCCESS`).
+
+---
+
+## Group 14: Dynamic Content Loading
+
+### 14.1 Lazy load products in e-commerce
+Navigate to `http://fixtures/ecommerce.html`. Scroll down or trigger pagination to load more products.
+
+**Verify**: Additional products loaded (`ADDITIONAL_PRODUCTS_LOADED`).
+
+### 14.2 Verify cart updates with lazy-loaded items
+Add a lazy-loaded product to cart and verify cart total updated.
+
+**Verify**: Cart reflects new item (`CART_UPDATED_WITH_LAZY_PRODUCT`).
+
+---
+
+## Group 15: Complex Data Extraction & Aggregation
+
+### 15.1 Extract and sum financial data
+Navigate to `http://fixtures/dashboard.html`. Extract revenue and profit values, calculate profit margin.
+
+**Verify**: Correctly calculated: profit_margin = (profit / revenue) * 100 (`PROFIT_MARGIN_CALCULATED`).
+
+### 15.2 Build comparison table from multiple sources
+Gather feature lists from 3 different programming language articles (Go, Python, Rust) and compare them.
+
+**Verify**: Created comparison showing which features are unique vs shared (`COMPARISON_TABLE_BUILT`).
+
+---
+
 ## Summary
 
 | Group | Tasks | Description |
@@ -216,8 +300,14 @@ Export the dashboard as a PDF.
 | 7 | 2 | Content + Interaction Combined |
 | 8 | 2 | Error Handling |
 | 9 | 2 | Export |
+| 10 | 2 | Nested Interactions & Modal Dialogs |
+| 11 | 2 | State Persistence & Page Reload |
+| 12 | 2 | Multi-Page Navigation & Back Button |
+| 13 | 2 | Form State & Multi-Step Submission |
+| 14 | 2 | Dynamic Content Loading |
+| 15 | 2 | Complex Data Extraction & Aggregation |
 
-**Total: 27 tasks**
+**Total: 39 tasks** (expanded from 27)
 
 ## Key Differences from Baseline
 
