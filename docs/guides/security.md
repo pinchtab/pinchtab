@@ -152,7 +152,7 @@ Why they are considered dangerous:
 - `evaluate` can execute JavaScript in page context
 - `macro` can trigger higher-level automation flows
 - `screencast` can stream live page contents
-- `download` can fetch and persist remote content
+- `download` can fetch and persist remote content. When `security.downloadAllowedDomains` is set, listed domains bypass private-IP SSRF checks (intended for internal hosts such as Docker services). `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - `upload` can push local files into browser flows
 
 These are not the same as authentication.
