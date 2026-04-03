@@ -182,6 +182,37 @@ Both failures are edge cases in multi-step stateful flows, not fundamental API i
 
 ---
 
+## Run #5 — 2026-04-03 04:39
+
+**Results:**
+- Agent: **29/29 (100%)** ✅ 🎉
+- All groups passed: Setup, Content Extraction, Search, Forms, SPA, Login, E-commerce, Comments, Error Handling, Export
+
+**Milestone Achieved:** Agent benchmark now matches baseline capability.
+
+**Pass Rate Progression:**
+- Run #1: 90%
+- Run #2: 92%
+- Run #3: 92%
+- Run #4: 50% (test infrastructure issues)
+- Run #4 follow-up: 93%
+- Run #5: **100%** ✅
+
+**Key Fixes That Closed the Gap:**
+1. `waitNav: true` for link clicks that cause navigation
+2. Explicit fixture URLs in AGENT_TASKS.md
+3. Clear selector guidance in SKILL.md
+4. Form submission pattern: click button, not press Enter
+
+**What's Next:**
+Since agent is at 100%, expand test coverage:
+1. Add nested interaction tests (modal dialogs, multi-step wizards)
+2. Add state persistence tests (page reload, back/forward navigation)
+3. Add parallel agent tests (multiple instances)
+4. Add timing-sensitive tests (animations, lazy loading)
+
+---
+
 ## Run #5 — 2026-04-03 03:19
 
 **Results:**
