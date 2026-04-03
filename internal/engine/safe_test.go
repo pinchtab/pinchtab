@@ -16,20 +16,20 @@ type stubGuard struct {
 	domainAllowed bool
 }
 
-func (g *stubGuard) Enabled() bool                          { return g.enabled }
-func (g *stubGuard) CheckDomain(_ string) idpi.CheckResult  { return g.domainResult }
-func (g *stubGuard) ScanContent(_ string) idpi.CheckResult  { return g.contentResult }
-func (g *stubGuard) DomainAllowed(_ string) bool             { return g.domainAllowed }
-func (g *stubGuard) WrapContent(text, _ string) string       { return "<wrapped>" + text + "</wrapped>" }
+func (g *stubGuard) Enabled() bool                         { return g.enabled }
+func (g *stubGuard) CheckDomain(_ string) idpi.CheckResult { return g.domainResult }
+func (g *stubGuard) ScanContent(_ string) idpi.CheckResult { return g.contentResult }
+func (g *stubGuard) DomainAllowed(_ string) bool           { return g.domainAllowed }
+func (g *stubGuard) WrapContent(text, _ string) string     { return "<wrapped>" + text + "</wrapped>" }
 
 // mockEngine implements Engine for testing SafeEngine.
 type mockEngine struct {
-	navigateResult  *NavigateResult
-	snapshotResult  *SnapshotResult
-	textResult      *TextResult
-	navigateCalled  bool
-	snapshotCalled  bool
-	textCalled      bool
+	navigateResult *NavigateResult
+	snapshotResult *SnapshotResult
+	textResult     *TextResult
+	navigateCalled bool
+	snapshotCalled bool
+	textCalled     bool
 }
 
 func (m *mockEngine) Name() string { return "mock" }

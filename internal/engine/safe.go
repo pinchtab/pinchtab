@@ -31,9 +31,9 @@ func NewSafeEngine(inner Engine, guard idpi.Guard, wrapContent bool) Engine {
 	}
 }
 
-func (s *SafeEngine) Name() string        { return s.inner.Name() }
+func (s *SafeEngine) Name() string               { return s.inner.Name() }
 func (s *SafeEngine) Capabilities() []Capability { return s.inner.Capabilities() }
-func (s *SafeEngine) Close() error         { return s.inner.Close() }
+func (s *SafeEngine) Close() error               { return s.inner.Close() }
 
 func (s *SafeEngine) Navigate(ctx context.Context, url string) (*NavigateResult, error) {
 	// Pre-flight: IDPI domain check.
