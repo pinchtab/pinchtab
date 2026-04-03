@@ -77,6 +77,11 @@
       </div>
     </form>
     
+    <div id="form-errors" style="display: none; color: red; margin-bottom: 20px; border: 1px solid red; padding: 10px;">
+      <h3>Validation Errors:</h3>
+      <ul id="error-list"></ul>
+    </div>
+    
     <div id="form-result" style="display: none;">
       <h2>Form Submitted Successfully!</h2>
       <p class="verification-text">VERIFY_FORM_SUBMITTED_SUCCESS</p>
@@ -88,6 +93,35 @@
     document.getElementById('contact-form').addEventListener('submit', function(e) {
       e.preventDefault();
       const form = e.target;
+      const errors = [];
+      
+      // Validation
+      if (!form.fullname.value.trim()) {
+        errors.push('Full Name is required');
+      }
+      if (!form.email.value.trim()) {
+        errors.push('Email is required');
+      } else if (!form.email.value.includes('@')) {
+        errors.push('Email must be valid');
+      }
+      if (!form.country.value) {
+        errors.push('Country is required');
+      }
+      if (!form.subject.value) {
+        errors.push('Subject is required');
+      }
+      
+      if (errors.length > 0) {
+        // Show errors
+        const errorList = document.getElementById('error-list');
+        errorList.innerHTML = errors.map(e => `<li>${e}</li>`).join('');
+        document.getElementById('form-errors').style.display = 'block';
+        return;
+      }
+      
+      // Hide errors if form is valid
+      document.getElementById('form-errors').style.display = 'none';
+      
       const data = {
         fullname: form.fullname.value,
         email: form.email.value,
@@ -102,12 +136,14 @@
       document.getElementById('form-result').style.display = 'block';
       document.getElementById('submitted-data').innerHTML = `
         <ul>
-          <li>Name: ${data.fullname}</li>
+          <li>Name: ${data.fullname.toUpperCase()}</li>
           <li>Email: ${data.email}</li>
           <li>Country: ${data.country}</li>
           <li>Subject: ${data.subject}</li>
         </ul>
         <p>SUBMISSION_DATA_NAME_${data.fullname.replace(/\s/g, '_').toUpperCase()}</p>
+        <p>FORM_VALIDATION_THEN_SUCCESS</p>
+        ${!data.phone ? '<p>OPTIONAL_FIELD_SKIPPED_SUCCESS</p>' : ''}
       `;
       form.style.display = 'none';
     });

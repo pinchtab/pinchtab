@@ -105,7 +105,76 @@
     </section>
   </main>
   
+  
+  <button id="settings-btn">Settings</button>
+  
+  <!-- Modal Dialog -->
+  <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div id="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 300px;">
+      <h2>Dashboard Settings</h2>
+      <div id="theme-section">
+        <label>Theme:</label>
+        <select id="theme-select">
+          <option value="light">Light Mode</option>
+          <option value="dark">Dark Mode</option>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+      <div id="notifications-section" style="margin-top: 15px;">
+        <label>
+          <input type="checkbox" id="notifications-enable" checked>
+          Enable Notifications
+        </label>
+      </div>
+      <div id="refresh-section" style="margin-top: 15px;">
+        <label>Auto-refresh (seconds):</label>
+        <input type="number" id="refresh-interval" value="30" min="5" max="300">
+      </div>
+      <div style="margin-top: 20px;">
+        <button id="modal-save">Save</button>
+        <button id="modal-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
   <script>
+    // Load settings from localStorage
+    function loadSettings() {
+      const savedTheme = localStorage.getItem('dashboardTheme') || 'light';
+      document.getElementById('theme-select').value = savedTheme;
+      if (savedTheme === 'dark') {
+        document.body.style.backgroundColor = '#333';
+        document.body.style.color = '#fff';
+      }
+    }
+    
+    // Modal logic
+    document.getElementById('settings-btn').addEventListener('click', function() {
+      loadSettings();
+      document.getElementById('settings-modal').style.display = 'block';
+    });
+    
+    document.getElementById('modal-close').addEventListener('click', function() {
+      document.getElementById('settings-modal').style.display = 'none';
+    });
+    
+    document.getElementById('modal-save').addEventListener('click', function() {
+      const theme = document.getElementById('theme-select').value;
+      localStorage.setItem('dashboardTheme', theme);
+      if (theme === 'dark') {
+        document.body.style.backgroundColor = '#333';
+        document.body.style.color = '#fff';
+        document.getElementById('modal-content').innerHTML += '<p style="color: #fff;">THEME_DARK_APPLIED</p>';
+      } else {
+        document.body.style.backgroundColor = '#fff';
+        document.body.style.color = '#000';
+        document.getElementById('modal-content').innerHTML += '<p>THEME_LIGHT_APPLIED</p>';
+      }
+      setTimeout(() => {
+        document.getElementById('settings-modal').style.display = 'none';
+      }, 500);
+    });
+    
     document.getElementById('apply-filter').addEventListener('click', function() {
       const status = document.getElementById('status-filter').value;
       const dateFrom = document.getElementById('date-from').value;
@@ -114,6 +183,9 @@
         <p>FILTER_APPLIED_STATUS_${status.toUpperCase()}_FROM_${dateFrom}_TO_${dateTo}</p>
       `;
     });
+    
+    // Load settings on page load
+    loadSettings();
   </script>
 </body>
 </html>

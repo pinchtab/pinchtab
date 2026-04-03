@@ -53,35 +53,85 @@
   </main>
   <script>
     let taskCount = 3;
+    let tasks = [];
+
+    // Load tasks from localStorage on page load
+    function loadTasks() {
+      const saved = localStorage.getItem('tasks');
+      if (saved) {
+        tasks = JSON.parse(saved);
+        taskCount = tasks.length;
+        renderTasks();
+      } else {
+        // Initialize default tasks
+        tasks = [
+          { id: 1, title: 'Write benchmark tests', status: 'active', priority: 'high' },
+          { id: 2, title: 'Set up Docker environment', status: 'done', priority: 'medium' },
+          { id: 3, title: 'Review pull request', status: 'active', priority: 'low' }
+        ];
+        saveTasks();
+        renderTasks();
+      }
+    }
+
+    function saveTasks() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
+
+    function renderTasks() {
+      const tasksList = document.getElementById('tasks');
+      tasksList.innerHTML = '';
+      let activeCount = 0;
+      let doneCount = 0;
+      
+      tasks.forEach(task => {
+        if (task.status === 'active') activeCount++;
+        if (task.status === 'done') doneCount++;
+        
+        const li = document.createElement('li');
+        li.className = 'task-item';
+        li.id = `task-${task.id}`;
+        li.dataset.status = task.status;
+        li.dataset.priority = task.priority;
+        li.innerHTML = `
+          <input type="checkbox" class="task-check" ${task.status === 'done' ? 'checked' : ''}>
+          <span class="task-title">${task.title}</span>
+          <span class="task-priority">${task.priority.toUpperCase()}</span>
+          <button class="delete-task" data-id="${task.id}">✕</button>
+          ${task.title.includes('Persistent') ? '<span>TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD</span>' : ''}
+        `;
+        tasksList.appendChild(li);
+      });
+      
+      document.getElementById('total-count').textContent = tasks.length;
+      document.getElementById('task-stats').textContent = `TASK_STATS_TOTAL_${tasks.length}_ACTIVE_${activeCount}_DONE_${doneCount}`;
+    }
 
     document.getElementById('add-task-btn').addEventListener('click', function() {
       const title = document.getElementById('new-task-input').value.trim();
       const priority = document.getElementById('priority-select').value;
       if (!title) return;
       taskCount++;
-      const li = document.createElement('li');
-      li.className = 'task-item';
-      li.id = `task-${taskCount}`;
-      li.dataset.status = 'active';
-      li.dataset.priority = priority;
-      li.innerHTML = `
-        <input type="checkbox" class="task-check">
-        <span class="task-title">${title}</span>
-        <span class="task-priority">${priority.toUpperCase()}</span>
-        <button class="delete-task" data-id="${taskCount}">✕</button>
-        <span>TASK_ADDED_${title.replace(/\s/g,'_').toUpperCase()}_PRIORITY_${priority.toUpperCase()}</span>
-      `;
-      document.getElementById('tasks').appendChild(li);
-      document.getElementById('total-count').textContent = taskCount;
+      const newTask = { id: taskCount, title: title, status: 'active', priority: priority };
+      tasks.push(newTask);
+      saveTasks();
+      renderTasks();
       document.getElementById('new-task-input').value = '';
+      // Show verification span
+      const taskEl = document.getElementById(`task-${taskCount}`);
+      if (taskEl) {
+        const span = document.createElement('span');
+        span.textContent = `TASK_ADDED_${title.replace(/\s/g,'_').toUpperCase()}_PRIORITY_${priority.toUpperCase()}`;
+        taskEl.appendChild(span);
+      }
     });
 
     document.getElementById('tasks').addEventListener('click', function(e) {
       if (e.target.classList.contains('delete-task')) {
-        const id = e.target.dataset.id;
-        document.getElementById(`task-${id}`).remove();
-        taskCount--;
-        document.getElementById('total-count').textContent = taskCount;
+        const id = parseInt(e.target.dataset.id);
+        tasks = tasks.filter(t => t.id !== id);
+        saveTasks();
+        renderTasks();
       }
     });
 
@@ -89,6 +139,9 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.getElementById(`tab-${tab}`).classList.add('active');
     }
+
+    // Load tasks on page load
+    loadTasks();
   </script>
 </body>
 </html>
