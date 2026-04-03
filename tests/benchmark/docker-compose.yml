@@ -1,0 +1,45 @@
+services:
+  pinchtab:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /data/benchmark-config/pinchtab.json
+    volumes:
+      - ./config/pinchtab.json:/fixture-config/pinchtab.json:ro
+    command: ["/bin/sh", "-lc", "mkdir -p /data/benchmark-config && cp /fixture-config/pinchtab.json /data/benchmark-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    ports:
+      - "9867:9867"
+    shm_size: '2gb'
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    healthcheck:
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer benchmark-token' -q -O /dev/null http://localhost:9867/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+    networks:
+      - benchmark-net
+    depends_on:
+      fixtures:
+        condition: service_healthy
+
+  fixtures:
+    image: nginx:alpine
+    volumes:
+      - ./fixtures:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+    networks:
+      - benchmark-net
+
+networks:
+  benchmark-net:
+    driver: bridge

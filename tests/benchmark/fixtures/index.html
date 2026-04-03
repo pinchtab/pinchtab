@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PinchTab Benchmark - Home</title>
+</head>
+<body>
+  <header>
+    <h1>PinchTab Benchmark Suite</h1>
+    <nav>
+      <a href="/articles.html" id="nav-articles">Articles</a>
+      <a href="/search.html" id="nav-search">Search</a>
+      <a href="/form.html" id="nav-form">Form</a>
+      <a href="/dashboard.html" id="nav-dashboard">Dashboard</a>
+      <a href="/ecommerce.html" id="nav-shop">Shop</a>
+    </nav>
+  </header>
+  <main>
+    <section id="hero">
+      <h2>Welcome to the Benchmark Test Suite</h2>
+      <p>This site contains controlled test pages for verifying browser automation accuracy. VERIFY_HOME_LOADED_12345</p>
+    </section>
+    <section id="quick-links">
+      <h3>Test Categories</h3>
+      <ul>
+        <li><a href="/articles.html">Article Reading</a> - Long-form content extraction</li>
+        <li><a href="/search.html">Search Flow</a> - Query input and results</li>
+        <li><a href="/form.html">Form Interaction</a> - Input, select, checkbox, submit</li>
+        <li><a href="/dashboard.html">Dashboard</a> - Dynamic data, tables, charts</li>
+        <li><a href="/ecommerce.html">E-commerce</a> - Product listing, cart, checkout</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Benchmark Fixtures v1.0 | <span id="timestamp"></span></p>
+  </footer>
+  <script>
+    document.getElementById('timestamp').textContent = new Date().toISOString();
+  </script>
+</body>
+</html>

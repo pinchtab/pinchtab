@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav><a href="/">Home</a> | <a href="/dashboard.html">Dashboard</a></nav>
+  </header>
+  <main>
+    <h1>Analytics Dashboard — VERIFY_DASHBOARD_PAGE_33333</h1>
+    
+    <section id="metrics">
+      <div class="metric-card" id="metric-users">
+        <h3>Total Users</h3>
+        <span class="value">24,582</span>
+        <span class="change positive">+12.5%</span>
+      </div>
+      <div class="metric-card" id="metric-revenue">
+        <h3>Revenue</h3>
+        <span class="value">$1,284,930</span>
+        <span class="change positive">+8.2%</span>
+      </div>
+      <div class="metric-card" id="metric-orders">
+        <h3>Orders</h3>
+        <span class="value">3,847</span>
+        <span class="change negative">-2.1%</span>
+      </div>
+      <div class="metric-card" id="metric-conversion">
+        <h3>Conversion Rate</h3>
+        <span class="value">4.28%</span>
+        <span class="change positive">+0.3%</span>
+      </div>
+    </section>
+    
+    <section id="data-table">
+      <h2>Recent Transactions</h2>
+      <table id="transactions">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Customer</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="row-1">
+            <td>TXN-001</td>
+            <td>Alice Johnson</td>
+            <td>$245.00</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-15</td>
+          </tr>
+          <tr id="row-2">
+            <td>TXN-002</td>
+            <td>Bob Smith</td>
+            <td>$189.50</td>
+            <td class="status-pending">Pending</td>
+            <td>2026-03-15</td>
+          </tr>
+          <tr id="row-3">
+            <td>TXN-003</td>
+            <td>Carol Williams</td>
+            <td>$567.25</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-14</td>
+          </tr>
+          <tr id="row-4">
+            <td>TXN-004</td>
+            <td>David Brown</td>
+            <td>$92.00</td>
+            <td class="status-failed">Failed</td>
+            <td>2026-03-14</td>
+          </tr>
+          <tr id="row-5">
+            <td>TXN-005</td>
+            <td>Eve Davis</td>
+            <td>$1,234.99</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-13</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="table-footer">TABLE_ROW_COUNT_5</p>
+    </section>
+    
+    <section id="filters">
+      <h2>Filter Data</h2>
+      <div class="filter-controls">
+        <select id="status-filter">
+          <option value="all">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+        </select>
+        <input type="date" id="date-from" value="2026-03-01">
+        <input type="date" id="date-to" value="2026-03-15">
+        <button id="apply-filter">Apply Filter</button>
+      </div>
+      <div id="filter-result"></div>
+    </section>
+  </main>
+  
+  <script>
+    document.getElementById('apply-filter').addEventListener('click', function() {
+      const status = document.getElementById('status-filter').value;
+      const dateFrom = document.getElementById('date-from').value;
+      const dateTo = document.getElementById('date-to').value;
+      document.getElementById('filter-result').innerHTML = `
+        <p>FILTER_APPLIED_STATUS_${status.toUpperCase()}_FROM_${dateFrom}_TO_${dateTo}</p>
+      `;
+    });
+  </script>
+</body>
+</html>
