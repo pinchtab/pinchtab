@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+
 	"github.com/pinchtab/pinchtab/internal/config"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +13,10 @@ func TestHandleStorageDelete_EmptyBody(t *testing.T) {
 	// Setup handlers with a mock bridge
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	h.evalJS = func(ctx context.Context, expr string, out *string) error {
+		*out = `{"success":true,"origin":"http://example.com"}`
+		return nil
+	}
 
 	// Create a DELETE request with NO body
 	req := httptest.NewRequest("DELETE", "/storage", nil)
@@ -28,14 +34,18 @@ func TestHandleStorageDelete_EmptyBody(t *testing.T) {
 	// If it got past decode, it should try to find a tab.
 	// Our mockBridge return a context for any tabID, so it should proceed to domain check.
 	// We expect 200 if the mock allows it.
-	if w.Code != 200 && w.Code != 404 {
-		t.Errorf("unexpected status code: %d, body: %s", w.Code, w.Body.String())
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
 func TestHandleStorageDelete_WithBody(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	h.evalJS = func(ctx context.Context, expr string, out *string) error {
+		*out = `{"success":true,"origin":"http://example.com"}`
+		return nil
+	}
 
 	// Valid body
 	body := `{"type": "local", "key": "test"}`
@@ -44,7 +54,7 @@ func TestHandleStorageDelete_WithBody(t *testing.T) {
 
 	h.handleStorageDelete(w, req)
 
-	if w.Code == 400 {
-		t.Fatalf("expected handleStorageDelete to handle valid body, got 400: %s", w.Body.String())
+	if w.Code != 200 {
+		t.Fatalf("expected handleStorageDelete to handle valid body and return 200, got %d: %s", w.Code, w.Body.String())
 	}
 }

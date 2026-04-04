@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -64,7 +63,7 @@ func (h *Handlers) handleStorageGet(w http.ResponseWriter, r *http.Request) {
 	script := buildStorageGetScript(storageType, key)
 
 	var resultJSON string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(script, &resultJSON)); err != nil {
+	if err := h.evalJS(tCtx, script, &resultJSON); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("evaluate storage get: %w", err))
 		return
 	}
@@ -143,7 +142,7 @@ func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
 	`, storageObj, string(keyJSON), string(valueJSON))
 
 	var resultJSON string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(script, &resultJSON)); err != nil {
+	if err := h.evalJS(tCtx, script, &resultJSON); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("evaluate storage set: %w", err))
 		return
 	}
@@ -217,7 +216,7 @@ func (h *Handlers) handleStorageDelete(w http.ResponseWriter, r *http.Request) {
 	script := buildStorageDeleteScript(req.Type, req.Key)
 
 	var resultJSON string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(script, &resultJSON)); err != nil {
+	if err := h.evalJS(tCtx, script, &resultJSON); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("evaluate storage delete: %w", err))
 		return
 	}

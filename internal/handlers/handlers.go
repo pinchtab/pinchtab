@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
@@ -33,6 +34,9 @@ type Handlers struct {
 	IDPIGuard    idpi.Guard
 	Version      string // build version injected at startup
 	clipboard    clipboardStore
+
+	// Optional dependency injection (for unit testing)
+	evalJS func(ctx context.Context, expression string, out *string) error
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -86,6 +90,11 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 			return descs
 		},
 	)
+
+	// Default evalJS backed by chromedp for production
+	h.evalJS = func(ctx context.Context, expression string, out *string) error {
+		return chromedp.Run(ctx, chromedp.Evaluate(expression, out))
+	}
 
 	// Clean up .tmp export files orphaned by a previous crash.
 	go CleanupStaleTmpExports(cfg.StateDir)
