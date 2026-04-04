@@ -33,8 +33,17 @@ start_test "pinchtab hover <ref>"
 
 pt_ok nav "${FIXTURES_URL}/buttons.html"
 pt_ok snap
-REF=$(echo "$PT_OUT" | grep -oE 'e[0-9]+' | head -1)
-if [ -n "$REF" ]; then
+
+# Pick a stable, interactive element ref instead of the first arbitrary ref.
+REF=$(find_ref_by_name "Increment" "$PT_OUT")
+if [ -z "$REF" ] || [ "$REF" = "null" ]; then
+  REF=$(find_ref_by_name "Decrement" "$PT_OUT")
+fi
+if [ -z "$REF" ] || [ "$REF" = "null" ]; then
+  REF=$(find_ref_by_name "Reset" "$PT_OUT")
+fi
+
+if [ -n "$REF" ] && [ "$REF" != "null" ]; then
   pt_ok hover "$REF"
 else
   echo -e "  ${YELLOW}⚠${NC} no ref found, skipping hover"
