@@ -32,6 +32,11 @@ func NewRouter(mode Mode, lite Engine) *Router {
 			CapabilityRule{},  // screenshot/pdf → chrome always
 			DefaultLiteRule{}, // everything else → lite
 		}
+	case ModeLightpanda:
+		r.rules = []RouteRule{
+			LightpandaCapabilityRule{}, // screenshot/pdf/eval/cookies → chrome
+			DefaultLightpandaRule{},    // everything else → lightpanda
+		}
 	case ModeAuto:
 		r.rules = []RouteRule{
 			CapabilityRule{},    // chrome-only caps first

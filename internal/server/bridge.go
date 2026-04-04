@@ -107,15 +107,27 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 
 func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
 	mode := engine.Mode(cfg.Engine)
-	if mode != engine.ModeLite && mode != engine.ModeAuto {
-		return
-	}
 
-	lite := engine.BuildLite(engine.BuildConfig{
+	buildCfg := engine.BuildConfig{
 		Mode:        mode,
 		Guard:       h.IDPIGuard,
 		WrapContent: cfg.IDPI.Enabled && cfg.IDPI.WrapContent,
-	})
-	h.Router = engine.NewRouter(mode, lite)
+	}
+
+	switch mode {
+	case engine.ModeLite, engine.ModeAuto:
+		lite := engine.BuildLite(buildCfg)
+		h.Router = engine.NewRouter(mode, lite)
+	case engine.ModeLightpanda:
+		lp, err := engine.BuildLightpanda(cfg.LightpandaURL, buildCfg)
+		if err != nil {
+			slog.Error("failed to build lightpanda engine", "err", err)
+			return
+		}
+		h.Router = engine.NewRouter(mode, lp)
+	default:
+		return
+	}
+
 	slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
 }

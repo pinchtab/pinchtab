@@ -46,9 +46,10 @@ const (
 type Mode string
 
 const (
-	ModeChrome Mode = "chrome" // always Chrome (default)
-	ModeLite   Mode = "lite"   // always lite (screenshot/pdf return 501)
-	ModeAuto   Mode = "auto"   // per-request routing via rules
+	ModeChrome     Mode = "chrome"     // always Chrome (default)
+	ModeLite       Mode = "lite"       // always lite (screenshot/pdf return 501)
+	ModeLightpanda Mode = "lightpanda" // always Lightpanda (screenshot/pdf/eval/cookies return 501)
+	ModeAuto       Mode = "auto"       // per-request routing via rules
 )
 
 // Decision is the routing verdict returned by a RouteRule.
@@ -56,8 +57,11 @@ type Decision int
 
 const (
 	Undecided Decision = iota // rule has no opinion
-	UseLite                   // route to Gost-DOM
+	UseLite                   // route to Gost-DOM (or any registered alt engine)
 	UseChrome                 // route to Chrome
+
+	// UseAlt is an alias for UseLite — both mean "use the alternative engine".
+	UseAlt = UseLite
 )
 
 // NavigateResult is the response from a navigation.

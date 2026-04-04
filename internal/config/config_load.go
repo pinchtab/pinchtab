@@ -91,6 +91,9 @@ func Load() *RuntimeConfig {
 		// Engine default (set via config.json only)
 		Engine: "chrome",
 
+		// Lightpanda defaults
+		LightpandaURL: envOr("PINCHTAB_LIGHTPANDA_URL", "ws://127.0.0.1:19222"),
+
 		// Observability defaults
 		Observability: ObservabilityConfig{
 			Activity: ActivityConfig{
