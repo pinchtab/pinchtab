@@ -92,7 +92,7 @@ func Load() *RuntimeConfig {
 		Engine: "chrome",
 
 		// Lightpanda defaults
-		LightpandaURL: envOr("PINCHTAB_LIGHTPANDA_URL", "ws://127.0.0.1:19222"),
+		LightpandaURL: "ws://127.0.0.1:19222",
 
 		// Observability defaults
 		Observability: ObservabilityConfig{
@@ -217,6 +217,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Server.Engine != "" {
 		cfg.Engine = fc.Server.Engine
+	}
+	if fc.Server.LightpandaURL != "" {
+		cfg.LightpandaURL = fc.Server.LightpandaURL
 	}
 	if fc.Server.NetworkBufferSize != nil && *fc.Server.NetworkBufferSize > 0 {
 		cfg.NetworkBufferSize = ClampNetworkBufferSize(*fc.Server.NetworkBufferSize)
