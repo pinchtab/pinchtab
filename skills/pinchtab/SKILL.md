@@ -23,6 +23,30 @@ metadata:
 
 # Browser Automation with PinchTab
 
+## Quick Start — everything you need in 10 lines
+
+```bash
+# 1. Navigate
+pinchtab nav https://example.com
+
+# 2. Read content (prose → text, structure/prices/buttons → snap)
+pinchtab text          # prose extraction
+pinchtab snap -i -c    # interactive elements with refs
+
+# 3. Interact
+pinchtab fill "#email" "user@example.com"  # fill a field
+pinchtab click "#submit-btn"               # click (fires full submit chain)
+pinchtab select "#country" "uk"            # dropdown
+
+# 4. Auth (HTTP API)
+curl -H "Authorization: Bearer <token>" http://localhost:9867/health
+```
+
+Token: `pinchtab config token` or `~/.pinchtab/config.json` → `server.token`
+Default port: `9867`. Check health before any other call.
+
+---
+
 PinchTab gives agents a browser they can drive through stable accessibility refs, low-token text extraction, and persistent profiles or instances. Treat it as a CLI-first browser skill; use the HTTP API only when the CLI is unavailable or you need profile-management routes that do not exist in the CLI yet.
 
 Preferred tool surface:
