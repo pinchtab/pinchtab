@@ -73,16 +73,24 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 				"x-pinchtab-enabled": security["screencast"].Enabled,
 			}},
 			"/storage": map[string]any{
-				"post":   map[string]any{"summary": "Set a storage item"},
-				"delete": map[string]any{"summary": "Delete storage items or clear storage"},
+				"get": map[string]any{
+					"summary":            "Get localStorage/sessionStorage items (current origin only)",
+					"description":        security["stateExport"].Message,
+					"x-pinchtab-enabled": security["stateExport"].Enabled,
+				},
+				"post": map[string]any{
+					"summary":            "Set a storage item",
+					"description":        security["stateExport"].Message,
+					"x-pinchtab-enabled": security["stateExport"].Enabled,
+				},
+				"delete": map[string]any{
+					"summary":            "Delete storage items or clear storage",
+					"description":        security["stateExport"].Message,
+					"x-pinchtab-enabled": security["stateExport"].Enabled,
+				},
 			},
 			"/state/list": map[string]any{"get": map[string]any{"summary": "List saved state files"}},
 			// CapStateExport-gated endpoints
-			"/storage (GET)": map[string]any{"get": map[string]any{
-				"summary":            "Get localStorage/sessionStorage items (current origin only)",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
 			"/state/show": map[string]any{"get": map[string]any{
 				"summary":            "Show state file details",
 				"description":        security["stateExport"].Message,

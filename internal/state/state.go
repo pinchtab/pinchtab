@@ -238,9 +238,13 @@ func FindByPrefix(stateDir, prefix string) ([]StateEntry, error) {
 func Delete(stateDir, name string) error {
 	dir := SessionsDir(stateDir)
 	base := sanitizeFilename(name)
+	cleanDir := filepath.Clean(dir) + string(os.PathSeparator)
 	// Try encrypted extension first.
 	for _, ext := range []string{".json.enc", ".json"} {
-		path := filepath.Join(dir, base+ext)
+		path := filepath.Clean(filepath.Join(dir, base+ext))
+		if !strings.HasPrefix(path, cleanDir) {
+			return fmt.Errorf("resolved path escapes sessions dir")
+		}
 		if err := os.Remove(path); err == nil {
 			return nil
 		} else if !os.IsNotExist(err) {

@@ -31,6 +31,16 @@ func (h *Handlers) HandleStorage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handlers) ensureStateExportEnabled(w http.ResponseWriter) bool {
+	if h.stateExportEnabled() {
+		return true
+	}
+	httpx.ErrorCode(w, 403, "state_export_disabled", httpx.DisabledEndpointMessage("stateExport", "security.allowStateExport"), false, map[string]any{
+		"setting": "security.allowStateExport",
+	})
+	return false
+}
+
 // handleStorageGet retrieves localStorage and/or sessionStorage items.
 // Gated behind CapStateExport: storage can contain auth tokens and session data.
 //
@@ -38,10 +48,7 @@ func (h *Handlers) HandleStorage(w http.ResponseWriter, r *http.Request) {
 //   - type: "local", "session", or "" (both)
 //   - key:  optional specific key to retrieve
 func (h *Handlers) handleStorageGet(w http.ResponseWriter, r *http.Request) {
-	if !h.stateExportEnabled() {
-		httpx.ErrorCode(w, 403, "state_export_disabled", httpx.DisabledEndpointMessage("stateExport", "security.allowStateExport"), false, map[string]any{
-			"setting": "security.allowStateExport",
-		})
+	if !h.ensureStateExportEnabled(w) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
@@ -93,6 +100,10 @@ type storageSetRequest struct {
 
 // handleStorageSet sets a single storage item.
 func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureStateExportEnabled(w) {
+		return
+	}
+
 	var req storageSetRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -166,6 +177,10 @@ func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
 // handleStorageDelete removes a storage item or clears storage.
 // Supports type=local, type=session, or type=all (clears both).
 func (h *Handlers) handleStorageDelete(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureStateExportEnabled(w) {
+		return
+	}
+
 	var req struct {
 		TabID string `json:"tabId"`
 		Key   string `json:"key"`

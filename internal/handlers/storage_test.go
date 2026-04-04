@@ -3,58 +3,144 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"net/http/httptest"
-	"testing"
 )
 
-func TestHandleStorageDelete_EmptyBody(t *testing.T) {
-	// Setup handlers with a mock bridge
-	m := &mockBridge{}
-	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
-	h.evalJS = func(ctx context.Context, expr string, out *string) error {
-		*out = `{"success":true,"origin":"http://example.com"}`
-		return nil
+func TestHandleStorage_StateExportGateDisabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowStateExport: false}, nil, nil, nil)
+
+	tests := []struct {
+		name   string
+		method string
+		body   string
+	}{
+		{name: "get blocked", method: http.MethodGet},
+		{name: "post blocked", method: http.MethodPost, body: `{"key":"k","value":"v","type":"local"}`},
+		{name: "delete blocked", method: http.MethodDelete, body: `{"type":"all"}`},
 	}
 
-	// Create a DELETE request with NO body
-	req := httptest.NewRequest("DELETE", "/storage", nil)
-	w := httptest.NewRecorder()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var req *httptest.ResponseRecorder
+			if tc.body != "" {
+				r := httptest.NewRequest(tc.method, "/storage", bytes.NewReader([]byte(tc.body)))
+				w := httptest.NewRecorder()
+				h.HandleStorage(w, r)
+				req = w
+			} else {
+				r := httptest.NewRequest(tc.method, "/storage", nil)
+				w := httptest.NewRecorder()
+				h.HandleStorage(w, r)
+				req = w
+			}
 
-	// Direct call to handleStorageDelete (which is unexported but in same package)
-	h.handleStorageDelete(w, req)
-
-	// It should NOT return 400 (EOF)
-	// It might return 404 if the tab isn't found in the mock, but we want to see it pass the decode stage.
-	if w.Code == 400 {
-		t.Fatalf("expected handleStorageDelete to handle empty body, got 400: %s", w.Body.String())
-	}
-
-	// If it got past decode, it should try to find a tab.
-	// Our mockBridge return a context for any tabID, so it should proceed to domain check.
-	// We expect 200 if the mock allows it.
-	if w.Code != 200 {
-		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			if req.Code != http.StatusForbidden {
+				t.Fatalf("expected 403, got %d: %s", req.Code, req.Body.String())
+			}
+		})
 	}
 }
 
-func TestHandleStorageDelete_WithBody(t *testing.T) {
-	m := &mockBridge{}
-	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+func TestHandleStorage_StateExportGateEnabled(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowStateExport: true}, nil, nil, nil)
 	h.evalJS = func(ctx context.Context, expr string, out *string) error {
-		*out = `{"success":true,"origin":"http://example.com"}`
+		switch {
+		case bytes.Contains([]byte(expr), []byte("setItem")):
+			*out = `{"success":true,"origin":"http://example.com"}`
+		case bytes.Contains([]byte(expr), []byte("clear")) || bytes.Contains([]byte(expr), []byte("removeItem")):
+			*out = `{"success":true,"origin":"http://example.com"}`
+		default:
+			*out = `{"local":[],"session":[],"origin":"http://example.com"}`
+		}
 		return nil
 	}
 
-	// Valid body
-	body := `{"type": "local", "key": "test"}`
-	req := httptest.NewRequest("DELETE", "/storage", bytes.NewReader([]byte(body)))
+	tests := []struct {
+		name   string
+		method string
+		body   string
+	}{
+		{name: "get allowed", method: http.MethodGet},
+		{name: "post allowed", method: http.MethodPost, body: `{"key":"k","value":"v","type":"local"}`},
+		{name: "delete allowed", method: http.MethodDelete, body: `{"type":"all"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var r *http.Request
+			if tc.body != "" {
+				r = httptest.NewRequest(tc.method, "/storage", bytes.NewReader([]byte(tc.body)))
+			} else {
+				r = httptest.NewRequest(tc.method, "/storage", nil)
+			}
+			w := httptest.NewRecorder()
+			h.HandleStorage(w, r)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestEndpointSecurityState_IncludesStorageMutations(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowStateExport: false}, nil, nil, nil)
+	state := h.endpointSecurityStates()["stateExport"]
+
+	want := []string{"GET /storage", "POST /storage", "DELETE /storage"}
+	for _, p := range want {
+		found := false
+		for _, have := range state.Paths {
+			if have == p {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected %q in stateExport paths, got %v", p, state.Paths)
+		}
+	}
+}
+
+func TestOpenAPI_StorageModeledOnceWithMethodMetadata(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowStateExport: false}, nil, nil, nil)
 	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
 
-	h.handleStorageDelete(w, req)
+	h.HandleOpenAPI(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
 
-	if w.Code != 200 {
-		t.Fatalf("expected handleStorageDelete to handle valid body and return 200, got %d: %s", w.Code, w.Body.String())
+	if strings.Contains(w.Body.String(), "/storage (GET)") {
+		t.Fatalf("openapi should not expose synthetic /storage (GET) path")
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+	paths, ok := doc["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("paths missing or invalid")
+	}
+	storagePath, ok := paths["/storage"].(map[string]any)
+	if !ok {
+		t.Fatalf("/storage path missing")
+	}
+	for _, method := range []string{"get", "post", "delete"} {
+		meta, ok := storagePath[method].(map[string]any)
+		if !ok {
+			t.Fatalf("/storage.%s missing", method)
+		}
+		if _, ok := meta["x-pinchtab-enabled"]; !ok {
+			t.Fatalf("/storage.%s missing x-pinchtab-enabled", method)
+		}
 	}
 }

@@ -109,10 +109,9 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/cache/clear", "Clear browser cache", CapNone, false},
 	{"GET", "/cache/status", "Cache status", CapNone, false},
 
-	// Storage — GET reads sensitive client-side state and is gated alongside state export.
-	// POST/DELETE mutate state and are gated to prevent unauthorized writes.
-	{"POST", "/storage", "Set storage item", CapNone, true},
-	{"DELETE", "/storage", "Delete storage items", CapNone, true},
+	// Storage operations are gated under stateExport because they access/mutate sensitive client-side state.
+	{"POST", "/storage", "Set storage item", CapStateExport, true},
+	{"DELETE", "/storage", "Delete storage items", CapStateExport, true},
 
 	// State management — list is read-only summary, ungated.
 	{"GET", "/state/list", "List saved states", CapNone, false},
