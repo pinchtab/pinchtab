@@ -33,7 +33,9 @@ echo -e "  ${INFO}Running pre-push checks (matches GitHub Actions CI)...${NC}"
 
 section "Format"
 
-mapfile -t go_files < <(git ls-files -- '*.go')
+mapfile -t go_files < <(git ls-files -- '*.go' | while read -r file; do
+  [ -f "$file" ] && printf '%s\n' "$file"
+done)
 unformatted=""
 if [ ${#go_files[@]} -gt 0 ]; then
   unformatted=$(gofmt -l "${go_files[@]}")
@@ -48,7 +50,7 @@ if [ -n "$unformatted" ]; then
     gofmt -w "${go_files[@]}"
     ok "gofmt (fixed)"
   else
-    hint "Run: gofmt -w \$(git ls-files -- '*.go')"
+    hint "Run: gofmt -w \$(git ls-files -- '*.go' | while read -r file; do [ -f \"\$file\" ] && printf '%s\\n' \"\$file\"; done)"
     exit 1
   fi
 else

@@ -1,4 +1,13 @@
 import { Badge } from "../components/atoms";
+import {
+  IconBrain,
+  IconCamera,
+  IconCompass,
+  IconFileText,
+  IconHandClick,
+  IconPhoto,
+  IconSearch,
+} from "../components/atoms/Icon";
 import type { ActivityEvent } from "../types";
 
 interface Props {
@@ -15,14 +24,14 @@ const typeColors: Record<string, "default" | "success" | "info" | "warning"> = {
   other: "default",
 };
 
-const typeIcons: Record<string, string> = {
-  navigate: "🧭",
-  snapshot: "📸",
-  action: "👆",
-  screenshot: "🖼️",
-  text: "🔎",
-  progress: "🧠",
-  other: "📝",
+const typeIcons: Record<string, React.ReactNode> = {
+  navigate: <IconCompass size={18} />,
+  snapshot: <IconCamera size={18} />,
+  action: <IconHandClick size={18} />,
+  screenshot: <IconPhoto size={18} />,
+  text: <IconSearch size={18} />,
+  progress: <IconBrain size={18} />,
+  other: <IconFileText size={18} />,
 };
 
 function formatTime(ts: string): string {
@@ -100,7 +109,9 @@ export default function ActivityLine({ event }: Props) {
 
   return (
     <div className="flex items-center gap-3 border-b border-border-subtle/70 px-4 py-3 text-sm transition-colors hover:bg-white/2">
-      <span className="text-lg">{typeIcons[event.type] || "📝"}</span>
+      <span className="text-text-muted">
+        {typeIcons[event.type] || <IconFileText size={18} />}
+      </span>
       <span className="dashboard-mono w-18 shrink-0 text-xs text-text-muted">
         {formatTime(event.timestamp)}
       </span>

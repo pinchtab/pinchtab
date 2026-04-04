@@ -264,6 +264,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 	switch field {
 	case "allowEvaluate":
 		s.AllowEvaluate = &b
+	case "allowClipboard":
+		s.AllowClipboard = &b
 	case "allowMacro":
 		s.AllowMacro = &b
 	case "allowScreencast":
@@ -272,6 +274,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowDownload = &b
 	case "allowUpload":
 		s.AllowUpload = &b
+	case "enableActionGuards":
+		s.EnableActionGuards = &b
 	default:
 		return fmt.Errorf("unknown field security.%s", field)
 	}

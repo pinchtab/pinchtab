@@ -29,7 +29,9 @@ jobs:
 
       - name: Format check
         run: |
-          mapfile -t go_files < <(git ls-files -- '*.go')
+          mapfile -t go_files < <(git ls-files -- '*.go' | while read -r file; do
+            [ -f "$file" ] && printf '%s\n' "$file"
+          done)
           unformatted=""
           if [ ${#go_files[@]} -gt 0 ]; then
             unformatted=$(gofmt -l "${go_files[@]}")

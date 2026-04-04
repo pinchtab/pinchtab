@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,30 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
+
+type noFlusherResponseWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (w *noFlusherResponseWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *noFlusherResponseWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(b)
+}
+
+func (w *noFlusherResponseWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+}
 
 // networkMockBridge extends mockBridge with a real NetworkMonitor.
 type networkMockBridge struct {
@@ -584,6 +609,29 @@ func TestHandleNetworkStream_NilMonitor(t *testing.T) {
 
 	if w.Code != 500 {
 		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestHandleNetworkStream_StreamingNotSupportedReturnsProblem(t *testing.T) {
+	h := newNetworkTestHandler(bridge.NewNetworkMonitor(100))
+
+	req := httptest.NewRequest("GET", "/network/stream", nil)
+	w := &noFlusherResponseWriter{}
+	h.HandleNetworkStream(w, req)
+
+	if w.status != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.status)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("expected application/problem+json, got %q", ct)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode problem payload: %v", err)
+	}
+	if payload["code"] != "streaming_not_supported" {
+		t.Fatalf("code = %v, want streaming_not_supported", payload["code"])
 	}
 }
 

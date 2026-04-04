@@ -7,10 +7,10 @@ This page lists the live HTTP surface exposed by PinchTab. Some routes are only 
 ```text
 GET  /health
 POST /ensure-chrome
-GET  /help
 GET  /openapi.json
+GET  /help          (alias for /openapi.json)
 GET  /metrics
-GET  /welcome
+GET  /api/metrics
 POST /shutdown
 GET  /api/events
 ```
@@ -19,7 +19,8 @@ Notes:
 
 - in bridge mode, `/health` reports bridge health and tab count
 - in full server mode, `/health` reports dashboard health, auth state, and instance count
-- `/metrics` in full server mode is a server metrics snapshot, not the bridge memory view
+- `/metrics` proxies to the bridge instance (per-instance runtime metrics)
+- `/api/metrics` in full server mode is a server-level metrics snapshot (aggregated)
 
 ## Dashboard Auth And Config
 
@@ -74,8 +75,8 @@ Important behavior:
 ## Tab Locking
 
 ```text
-POST /tab/lock
-POST /tab/unlock
+POST /lock
+POST /unlock
 POST /tabs/{id}/lock
 POST /tabs/{id}/unlock
 ```
@@ -221,6 +222,8 @@ GET  /cache/status
 Notes:
 
 - download and upload endpoints are gated by `security.allowDownload` and `security.allowUpload`
+- download automatically decompresses `.gz` files and returns the decompressed content
+- `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains). Setting `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - clipboard endpoints are gated by `security.allowClipboard`
 - upload uses a JSON body with `selector` and `files`
 
@@ -380,7 +383,28 @@ Activity query parameters include:
 - `engine`
 - `pathPrefix`
 
+Activity attribution and source behavior:
+
+- requests tagged with `X-Agent-Id` are recorded as `agentId` and can be filtered with `GET /api/activity?agentId=<id>`
+- unfiltered `GET /api/activity` returns the primary activity feed
+- named internal sources such as `dashboard` or `orchestrator` are stored in source-specific daily files and can be queried with `?source=<name>`
+
 Scheduler routes are only present when `scheduler.enabled` is true.
+
+## Agent Sessions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/agent-sessions` | Create a new agent session (body: `{agentId, label?}`) |
+| `GET` | `/api/agent-sessions` | List all agent sessions |
+| `GET` | `/api/agent-sessions/me` | Get current session (requires `Authorization: Session` auth) |
+| `GET` | `/api/agent-sessions/{id}` | Get session details by ID |
+| `POST` | `/api/agent-sessions/{id}/rotate` | Rotate session token |
+| `POST` | `/api/agent-sessions/{id}/revoke` | Revoke session |
+
+All endpoints except `/me` require dashboard auth (bearer or cookie). The `/me` endpoint requires session auth.
+
+Create and rotate return `sessionToken` — the plaintext token shown only once.
 
 ## Feature Gates
 
@@ -394,3 +418,20 @@ These gates are not ordinary feature toggles. Enabling them is a documented, non
 - clipboard routes -> `security.allowClipboard`
 - attach routes -> `security.attach`
 - screencast routes -> `security.allowScreencast`
+
+## Error Response Format
+
+PinchTab currently uses two JSON error shapes during a transition period:
+
+- Legacy JSON errors: `application/json` with fields like `error` and `code`
+- Problem Details errors: `application/problem+json` (RFC 7807 style)
+
+Problem Details is currently used for selected precondition and capability failures, including:
+
+- websocket proxy pre-upgrade backend/hijack failures
+- network stream unsupported streaming capability
+- dashboard SSE unsupported streaming capability or deadline control
+- instance logs SSE unsupported streaming capability or deadline control
+- screencast tab-not-found precondition failure
+
+Additional endpoints may be migrated over time. Clients should tolerate both error content types and branch on `Content-Type` when parsing failures.

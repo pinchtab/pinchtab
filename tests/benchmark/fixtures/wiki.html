@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Encyclopedia — PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Home</a> |
+      <a href="/wiki.html">Encyclopedia</a> |
+      <a href="/wiki-go.html">Go Language</a> |
+      <a href="/wiki-http.html">HTTP Protocol</a>
+    </nav>
+    <form id="wiki-search">
+      <input type="text" id="wiki-search-input" placeholder="Search encyclopedia...">
+      <button type="submit" id="wiki-search-btn">Search</button>
+    </form>
+  </header>
+  <main>
+    <h1>Encyclopedia — VERIFY_WIKI_INDEX_55555</h1>
+    <p>A reference collection covering technology, science, and engineering.</p>
+
+    <section id="featured">
+      <h2>Featured Articles</h2>
+      <ul>
+        <li><a href="/wiki-go.html" id="link-go">Go (programming language)</a> — Compiled, statically typed, garbage-collected language from Google</li>
+        <li><a href="/wiki-http.html" id="link-http">HTTP/2</a> — Binary protocol for web communication</li>
+        <li><a href="/wiki-browser.html" id="link-browser">Browser Automation</a> — Techniques for programmatic browser control</li>
+      </ul>
+    </section>
+
+    <section id="categories">
+      <h2>Categories</h2>
+      <div class="category" id="cat-languages">
+        <h3>Programming Languages</h3>
+        <p>COUNT_LANGUAGES_12 articles</p>
+        <p class="data-marker">COMPARISON_DATA_FOUND</p>
+        <a href="/wiki-go.html" id="link-go-lang">Go</a>, <a href="/wiki-python.html" id="link-python">Python</a>, <a href="/wiki-rust.html" id="link-rust">Rust</a>, TypeScript, Java, C++
+      </div>
+      <div class="category" id="cat-protocols">
+        <h3>Network Protocols</h3>
+        <p>COUNT_PROTOCOLS_8 articles</p>
+        <a href="/wiki-http.html">HTTP</a>, WebSocket, gRPC, QUIC
+      </div>
+      <div class="category" id="cat-tools">
+        <h3>Developer Tools</h3>
+        <p>COUNT_TOOLS_15 articles</p>
+        Browser automation, CI/CD, Package managers
+      </div>
+    </section>
+  </main>
+  <script>
+    document.getElementById('wiki-search').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const q = document.getElementById('wiki-search-input').value.toLowerCase();
+      if (q.includes('go') || q.includes('golang')) {
+        window.location.href = '/wiki-go.html';
+      } else if (q.includes('http')) {
+        window.location.href = '/wiki-http.html';
+      } else {
+        document.querySelector('main').insertAdjacentHTML('beforeend',
+          `<p id="search-no-result">No results found for "${q}". SEARCH_MISS_RESULT</p>`);
+      }
+    });
+  </script>
+</body>
+</html>

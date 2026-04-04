@@ -49,11 +49,11 @@ func (f *fakeLiteEngine) Name() string { return "lite-test" }
 func (f *fakeLiteEngine) Navigate(ctx context.Context, url string) (*engine.NavigateResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLiteEngine) Snapshot(ctx context.Context, tabID, filter string) ([]engine.SnapshotNode, error) {
+func (f *fakeLiteEngine) Snapshot(ctx context.Context, tabID, filter string) (*engine.SnapshotResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLiteEngine) Text(ctx context.Context, tabID string) (string, error) {
-	return "", fmt.Errorf("not implemented")
+func (f *fakeLiteEngine) Text(ctx context.Context, tabID string) (*engine.TextResult, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 func (f *fakeLiteEngine) Click(ctx context.Context, tabID, ref string) error {
 	f.clickRefs = append(f.clickRefs, ref)

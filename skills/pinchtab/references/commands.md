@@ -29,10 +29,10 @@ Check if the server is running and healthy.
 Navigate the current tab to a URL.
 
 ```bash
-pinchtab nav https://example.com
-pinchtab nav https://example.com --new-tab
-pinchtab nav https://example.com --block-images
-pinchtab nav https://example.com --timeout 60
+pinchtab nav https://pinchtab.com
+pinchtab nav https://pinchtab.com --new-tab
+pinchtab nav https://pinchtab.com --block-images
+pinchtab nav https://pinchtab.com --timeout 60
 ```
 
 | Flag | Description |

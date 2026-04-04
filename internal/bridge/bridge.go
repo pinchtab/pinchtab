@@ -40,6 +40,7 @@ type Bridge struct {
 	BrowserCtx    context.Context
 	BrowserCancel context.CancelFunc
 	Config        *config.RuntimeConfig
+	URLReader     URLReader
 	IdMgr         *ids.Manager
 	*TabManager
 	StealthBundle *stealth.Bundle
@@ -532,7 +533,35 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", kind)
 	}
-	return fn(ctx, req)
+	guardEnabled := b.Config == nil || b.Config.EnableActionGuards
+	checkNav := guardEnabled && shouldCheckUnexpectedNavigation(req)
+	urlReader := b.URLReader
+	if urlReader == nil {
+		urlReader = defaultActionURLReader
+		slog.Debug("URLReader is nil, using default fallback (guard checks may be no-ops without chromedp context)")
+	}
+	var beforeURL string
+	if checkNav {
+		if u, err := urlReader(ctx); err == nil {
+			beforeURL = u
+		}
+	}
+
+	res, err := fn(ctx, req)
+	if err != nil {
+		return nil, classifyActionError(err)
+	}
+
+	if checkNav && beforeURL != "" {
+		afterURL, uErr := urlReader(ctx)
+		if uErr == nil {
+			if navErr := checkUnexpectedNavigation(beforeURL, afterURL); navErr != nil {
+				return nil, navErr
+			}
+		}
+	}
+
+	return res, nil
 }
 
 // Execute delegates to TabManager.Execute for safe parallel tab execution.

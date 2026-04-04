@@ -40,7 +40,7 @@ PinchTab must be running (`pinchtab start`) before the MCP server can proxy requ
 > [!CAUTION]
 > Widening MCP browsing beyond local or explicitly trusted domains is a security-reducing choice. If IDPI allowlists or strict protections are relaxed, `pinchtab_snapshot` and `pinchtab_get_text` may surface hostile instructions from untrusted pages.
 >
-> Treat all page-derived MCP output as untrusted data, not operator guidance. Review [../../docs/guides/security.md#idpi](../../docs/guides/security.md#idpi) before allowing broader browsing.
+> Treat all page-derived MCP output as untrusted data, not operator guidance. Review IDPI settings in the server config before allowing broader browsing.
 
 ---
 
@@ -168,6 +168,6 @@ MCP tools surface errors as tool errors (not protocol-level errors). Common case
 
 ## Related
 
-- [MCP Tools Full Parameter Reference](../../docs/reference/mcp-tools.md)
+- MCP Tools Full Parameter Reference: see `pinchtab mcp --help` for available tools and parameters
 - [API Reference](api.md)
 - [Agent Optimization Playbook](agent-optimization.md)

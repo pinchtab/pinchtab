@@ -22,16 +22,23 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	h.recordReadRequest(r, "text", tabID)
 	if h.useLite(engine.CapText, "") {
 		h.recordEngine(r, "lite")
-		text, err := h.Router.Lite().Text(r.Context(), tabID)
+		result, err := h.Router.Lite().Text(r.Context(), tabID)
 		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
+			if engine.IsIDPIBlocked(err) {
+				httpx.Error(w, http.StatusForbidden, err)
+			} else {
+				httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
+			}
 			return
 		}
 		w.Header().Set("X-Engine", "lite")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte(text))
+		_, _ = w.Write([]byte(result.Text))
 		return
 	}
+
+	h.recordEngine(r, "chrome")
+	w.Header().Set("X-Engine", "chrome")
 
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {

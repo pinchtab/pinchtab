@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
+import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -140,14 +141,14 @@ export class Pinchtab {
    * Lock a tab
    */
   async lock(params: TabLockParams): Promise<void> {
-    await this.request('/tab/lock', params);
+    await this.request('/lock', params);
   }
 
   /**
    * Unlock a tab
    */
   async unlock(params: TabUnlockParams): Promise<void> {
-    await this.request('/tab/unlock', params);
+    await this.request('/unlock', params);
   }
 
   /**
@@ -239,7 +240,7 @@ export class Pinchtab {
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pinchtab-npm-'));
     const configPath = path.join(configDir, 'config.json');
     const stateDir = path.join(configDir, 'state');
-    const token = this.configuredToken || `npm-${process.pid}-${Date.now()}`;
+    const token = this.configuredToken || `npm-${randomBytes(16).toString('hex')}`;
     this.token = token;
 
     fs.writeFileSync(

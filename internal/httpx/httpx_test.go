@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -88,5 +89,44 @@ func TestStatusForJSONDecodeError(t *testing.T) {
 	err := &http.MaxBytesError{Limit: 1}
 	if got := StatusForJSONDecodeError(err); got != http.StatusRequestEntityTooLarge {
 		t.Fatalf("StatusForJSONDecodeError(max bytes) = %d, want %d", got, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestProblem(t *testing.T) {
+	w := httptest.NewRecorder()
+	Problem(w, http.StatusBadGateway, "backend_unavailable", "backend \x1b[31m unavailable", true, map[string]any{"service": "bridge"})
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected status 502, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("expected content-type application/problem+json, got %q", ct)
+	}
+
+	var got ProblemDetails
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to decode problem payload: %v", err)
+	}
+
+	if got.Type != "about:blank" {
+		t.Fatalf("Type = %q, want about:blank", got.Type)
+	}
+	if got.Title != http.StatusText(http.StatusBadGateway) {
+		t.Fatalf("Title = %q, want %q", got.Title, http.StatusText(http.StatusBadGateway))
+	}
+	if got.Status != http.StatusBadGateway {
+		t.Fatalf("Status = %d, want %d", got.Status, http.StatusBadGateway)
+	}
+	if strings.Contains(got.Detail, "\x1b") {
+		t.Fatalf("expected sanitized detail, got %q", got.Detail)
+	}
+	if got.Code != "backend_unavailable" {
+		t.Fatalf("Code = %q, want backend_unavailable", got.Code)
+	}
+	if !got.Retryable {
+		t.Fatalf("Retryable = false, want true")
+	}
+	if got.Details["service"] != "bridge" {
+		t.Fatalf("details.service = %v, want bridge", got.Details["service"])
 	}
 }

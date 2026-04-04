@@ -10,9 +10,10 @@ import (
 type Method string
 
 const (
-	MethodNone   Method = ""
-	MethodHeader Method = "header"
-	MethodCookie Method = "cookie"
+	MethodNone    Method = ""
+	MethodHeader  Method = "header"
+	MethodCookie  Method = "cookie"
+	MethodSession Method = "session"
 )
 
 type Credentials struct {
@@ -31,8 +32,15 @@ func CredentialsFromRequest(r *http.Request) Credentials {
 		return Credentials{}
 	}
 
-	if token := tokenFromAuthorizationHeader(r.Header.Get("Authorization")); token != "" {
-		return Credentials{Value: token, Method: MethodHeader}
+	bearer, session := parseAuthorizationHeader(r.Header.Get("Authorization"))
+	if bearer != "" && session != "" {
+		return Credentials{}
+	}
+	if session != "" {
+		return Credentials{Value: session, Method: MethodSession}
+	}
+	if bearer != "" {
+		return Credentials{Value: bearer, Method: MethodHeader}
 	}
 
 	cookie, err := r.Cookie(CookieName)
@@ -67,15 +75,20 @@ func ClientIP(r *http.Request) string {
 	return strings.TrimSpace(r.RemoteAddr)
 }
 
-func tokenFromAuthorizationHeader(auth string) string {
+func parseAuthorizationHeader(auth string) (bearer, session string) {
 	auth = strings.TrimSpace(auth)
 	if auth == "" {
-		return ""
+		return "", ""
 	}
-	if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
-		return strings.TrimSpace(auth[7:])
+	lower := strings.ToLower(auth)
+	if strings.HasPrefix(lower, "session ") {
+		return "", strings.TrimSpace(auth[8:])
 	}
-	return auth
+	if strings.HasPrefix(lower, "bearer ") {
+		return strings.TrimSpace(auth[7:]), ""
+	}
+	// Bare token treated as bearer
+	return auth, ""
 }
 
 func normalizeCookieValue(value string) string {

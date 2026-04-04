@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
@@ -20,9 +21,7 @@ func DoGet(client *http.Client, base, token, path string, params url.Values) map
 		u += "?" + params.Encode()
 	}
 	req, _ := http.NewRequest("GET", u, nil)
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	setAuthHeader(req, token)
 	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -32,7 +31,7 @@ func DoGet(client *http.Client, base, token, path string, params url.Values) map
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(body))
+		handleAPIError(resp.StatusCode, body)
 		os.Exit(1)
 	}
 
@@ -58,9 +57,7 @@ func DoGetRaw(client *http.Client, base, token, path string, params url.Values) 
 		u += "?" + params.Encode()
 	}
 	req, _ := http.NewRequest("GET", u, nil)
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	setAuthHeader(req, token)
 	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -80,9 +77,7 @@ func DoPost(client *http.Client, base, token, path string, body map[string]any) 
 	data, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	setAuthHeader(req, token)
 	req.Header.Set(activity.HeaderAgentID, "cli")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -92,7 +87,7 @@ func DoPost(client *http.Client, base, token, path string, body map[string]any) 
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(respBody))
+		handleAPIError(resp.StatusCode, respBody)
 		os.Exit(1)
 	}
 
@@ -127,6 +122,49 @@ func ResolveInstanceBase(orchBase, token, instanceID, bind string) string {
 		fatal("instance %q has no port assigned (is it still starting?)", instanceID)
 	}
 	return fmt.Sprintf("http://%s:%s", bind, inst.Port)
+}
+
+func setAuthHeader(req *http.Request, token string) {
+	if token == "" {
+		return
+	}
+	if strings.HasPrefix(token, "ses_") {
+		req.Header.Set("Authorization", "Session "+token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+// handleAPIError parses and displays API error responses with hints
+func handleAPIError(statusCode int, body []byte) {
+	var errResp struct {
+		Error   string         `json:"error"`
+		Code    string         `json:"code"`
+		Details map[string]any `json:"details"`
+	}
+
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		// Fallback to raw output if not valid JSON
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, string(body))
+		return
+	}
+
+	// Print main error
+	if errResp.Error != "" {
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, errResp.Error)
+	} else {
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, string(body))
+	}
+
+	// Print hint and remedy if present
+	if errResp.Details != nil {
+		if hint, ok := errResp.Details["hint"].(string); ok && hint != "" {
+			fmt.Fprintf(os.Stderr, "\n💡 %s\n", hint)
+		}
+		if remedy, ok := errResp.Details["remedy"].(string); ok && remedy != "" {
+			fmt.Fprintf(os.Stderr, "   Remedy: %s\n", remedy)
+		}
+	}
 }
 
 func fatal(format string, args ...any) {

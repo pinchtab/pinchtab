@@ -158,12 +158,12 @@ func (o *Orchestrator) handleLogsByID(w http.ResponseWriter, r *http.Request) {
 func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
 		return
 	}
 
 	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
-		http.Error(w, "streaming deadline unsupported", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "streaming_deadline_unsupported", "streaming deadline unsupported", false, nil)
 		return
 	}
 

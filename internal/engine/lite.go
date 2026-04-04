@@ -118,7 +118,7 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 }
 
 // Snapshot returns the DOM tree as snapshot nodes.
-func (l *LiteEngine) Snapshot(_ context.Context, tabID, filter string) ([]SnapshotNode, error) {
+func (l *LiteEngine) Snapshot(_ context.Context, tabID, filter string) (*SnapshotResult, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -139,31 +139,46 @@ func (l *LiteEngine) Snapshot(_ context.Context, tabID, filter string) ([]Snapsh
 
 	tab.refMap = make(map[string]dom.Element)
 	nodes := l.walkDOM(tab, body, filter, 0)
-	return nodes, nil
+
+	title := l.getTitle(tab.window)
+
+	return &SnapshotResult{
+		Nodes:  nodes,
+		URL:    tab.url,
+		Title:  title,
+		Engine: "lite",
+	}, nil
 }
 
 // Text returns the visible text content of the page.
-func (l *LiteEngine) Text(_ context.Context, tabID string) (string, error) {
+func (l *LiteEngine) Text(_ context.Context, tabID string) (*TextResult, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	tab, err := l.resolveTab(tabID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	doc := tab.window.Document()
 	if doc == nil {
-		return "", errors.New("no document")
+		return nil, errors.New("no document")
 	}
 
 	body := doc.Body()
 	if body == nil {
-		return "", errors.New("no body element")
+		return nil, errors.New("no body element")
 	}
 
 	raw := body.TextContent()
-	return normalizeWhitespace(raw), nil
+	title := l.getTitle(tab.window)
+
+	return &TextResult{
+		Text:   normalizeWhitespace(raw),
+		URL:    tab.url,
+		Title:  title,
+		Engine: "lite",
+	}, nil
 }
 
 // Click clicks an element identified by ref.

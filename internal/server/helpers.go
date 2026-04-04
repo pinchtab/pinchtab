@@ -40,7 +40,7 @@ func RegisterDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestra
 	proxyEndpoints := []string{
 		"GET /snapshot", "GET /screenshot", "GET /text",
 		"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
-		"POST /tab", "POST /tab/lock", "POST /tab/unlock",
+		"POST /tab", "POST /lock", "POST /unlock",
 		"GET /cookies", "POST /cookies",
 		"GET /download", "POST /upload",
 		"GET /stealth/status", "POST /fingerprint/rotate",

@@ -1,6 +1,11 @@
 import type { ActivityLogEvent, ActivityLogResponse } from "../generated/types";
 
-export type DashboardActivityEvent = ActivityLogEvent;
+export type DashboardActivityEvent = ActivityLogEvent & {
+  channel?: string;
+  message?: string;
+  progress?: number;
+  total?: number;
+};
 export type DashboardActivityResponse = ActivityLogResponse;
 
 export interface ActivityFilters {
@@ -10,7 +15,6 @@ export interface ActivityFilters {
   profileName: string;
   sessionId: string;
   action: string;
-  source: string;
   pathPrefix: string;
   ageSec: string;
   limit: string;

@@ -17,7 +17,7 @@ Use the `--server` CLI flag instead of environment variables:
 
 ```bash
 pinchtab --server http://192.168.1.50:9867 snap
-pinchtab --server https://pinchtab.example.com snap
+pinchtab --server https://pinchtab.com snap
 ```
 
 ## What is intentionally not listed
@@ -32,5 +32,13 @@ For most agent tasks, the only variable you need is:
 ```bash
 PINCHTAB_TOKEN=...
 ```
+
+Or use agent sessions for per-agent identity and revocability:
+
+```bash
+PINCHTAB_SESSION=ses_...
+```
+
+When `PINCHTAB_SESSION` is set, the CLI uses `Authorization: Session <token>` instead of bearer auth. The session maps to a specific agentId server-side and can be revoked independently.
 
 Everything else should be handled through config, profiles, instances, and the `--server` flag.

@@ -5,9 +5,9 @@ Set an input value directly without relying on the same event sequence as `type`
 ```bash
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
-  -d '{"kind":"fill","ref":"e8","text":"ada@example.com"}'
+  -d '{"kind":"fill","ref":"e8","text":"ada@pinchtab.com"}'
 # CLI Alternative
-pinchtab fill e8 "ada@example.com"
+pinchtab fill e8 "ada@pinchtab.com"
 # Response
 {
   "success": true,

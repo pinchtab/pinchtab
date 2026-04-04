@@ -62,9 +62,14 @@ type Dashboard struct {
 	agents       map[string]*apiTypes.Agent
 	recentEvents []apiTypes.ActivityEvent
 	maxEvents    int
+	seenEventIDs map[string]struct{}
+	seenEventLog []string
+	maxSeenIDs   int
 
 	mu sync.RWMutex
 }
+
+const persistedAgentBootstrapLimit = 1000
 
 // BroadcastSystemEvent sends a system event to all SSE clients.
 func (d *Dashboard) BroadcastSystemEvent(evt SystemEvent) {
@@ -90,6 +95,10 @@ func (d *Dashboard) SetInstanceLister(il InstanceLister) {
 
 // RecordActivityEvent converts a backend activity record into a live tool-call event.
 func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
+	d.recordEvents([]apiTypes.ActivityEvent{activityEventToLiveEvent(evt)})
+}
+
+func activityEventToLiveEvent(evt activity.Event) apiTypes.ActivityEvent {
 	details := map[string]any{
 		"status":     evt.Status,
 		"durationMs": evt.DurationMs,
@@ -127,8 +136,11 @@ func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
 	if evt.Engine != "" {
 		details["engine"] = evt.Engine
 	}
+	if evt.Action != "" {
+		details["action"] = evt.Action
+	}
 
-	d.RecordEvent(apiTypes.ActivityEvent{
+	return apiTypes.ActivityEvent{
 		ID:        evt.RequestID,
 		AgentID:   agentIDOrAnonymous(evt.AgentID),
 		Channel:   "tool_call",
@@ -137,45 +149,12 @@ func (d *Dashboard) RecordActivityEvent(evt activity.Event) {
 		Path:      evt.Path,
 		Timestamp: evt.Timestamp,
 		Details:   details,
-	})
+	}
 }
 
 // RecordEvent records an activity event, updates the live agent summary, and broadcasts to SSE subscribers.
 func (d *Dashboard) RecordEvent(evt apiTypes.ActivityEvent) {
-	if evt.ID == "" {
-		evt.ID = generateID()
-	}
-	if evt.Timestamp.IsZero() {
-		evt.Timestamp = time.Now().UTC()
-	}
-	if evt.Channel == "" {
-		evt.Channel = "tool_call"
-	}
-	if evt.AgentID == "" {
-		evt.AgentID = "anonymous"
-	}
-
-	d.mu.Lock()
-	d.upsertAgentLocked(evt)
-	if len(d.recentEvents) >= d.maxEvents {
-		copy(d.recentEvents, d.recentEvents[1:])
-		d.recentEvents[len(d.recentEvents)-1] = evt
-	} else {
-		d.recentEvents = append(d.recentEvents, evt)
-	}
-
-	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
-	for ch := range d.activityConns {
-		chans = append(chans, ch)
-	}
-	d.mu.Unlock()
-
-	for _, ch := range chans {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
+	d.recordEvents([]apiTypes.ActivityEvent{evt})
 }
 
 func (d *Dashboard) upsertAgentLocked(evt apiTypes.ActivityEvent) {
@@ -251,6 +230,47 @@ func (d *Dashboard) EventsForAgent(agentID, mode string) []apiTypes.ActivityEven
 	return out
 }
 
+// IngestPersistedAgentActivity loads new agent-tagged requests from the shared
+// activity store into the live dashboard cache.
+func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since time.Time) (time.Time, error) {
+	if d == nil || rec == nil || !rec.Enabled() {
+		return since, nil
+	}
+
+	events, err := rec.Query(activity.Filter{
+		Since: since,
+		Limit: persistedAgentBootstrapLimit,
+	})
+	if err != nil {
+		return since, err
+	}
+
+	latest := since
+	batch := make([]apiTypes.ActivityEvent, 0, len(events))
+	for _, evt := range events {
+		if evt.Timestamp.After(latest) {
+			latest = evt.Timestamp
+		}
+		if strings.TrimSpace(evt.AgentID) == "" {
+			continue
+		}
+		if !shouldTrackPersistedAgentActivity(evt) {
+			continue
+		}
+		batch = append(batch, activityEventToLiveEvent(evt))
+	}
+	d.recordEvents(batch)
+
+	return latest, nil
+}
+
+// LoadPersistedAgentActivity rebuilds the in-memory agent summaries and recent
+// tool-call history from the persisted activity log on server startup.
+func (d *Dashboard) LoadPersistedAgentActivity(rec activity.Recorder) error {
+	_, err := d.IngestPersistedAgentActivity(rec, time.Time{})
+	return err
+}
+
 func NewDashboard(cfg *DashboardConfig) *Dashboard {
 	c := DashboardConfig{
 		IdleTimeout:       30 * time.Second,
@@ -283,6 +303,9 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 		agents:         make(map[string]*apiTypes.Agent),
 		recentEvents:   make([]apiTypes.ActivityEvent, 0, 200),
 		maxEvents:      200,
+		seenEventIDs:   make(map[string]struct{}),
+		seenEventLog:   make([]string, 0, 2000),
+		maxSeenIDs:     2000,
 	}
 }
 
@@ -400,7 +423,7 @@ func (d *Dashboard) handleAgentSSE(w http.ResponseWriter, r *http.Request) {
 func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
 		return
 	}
 
@@ -408,7 +431,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	// deadline for this response so the stream is not terminated after
 	// http.Server.WriteTimeout elapses.
 	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
-		http.Error(w, "streaming deadline unsupported", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "streaming_deadline_unsupported", "streaming deadline unsupported", false, nil)
 		return
 	}
 
@@ -519,6 +542,79 @@ func matchesMode(mode, channel string) bool {
 		return channel == "progress"
 	default:
 		return channel == "tool_call"
+	}
+}
+
+func shouldTrackPersistedAgentActivity(evt activity.Event) bool {
+	return strings.TrimSpace(evt.AgentID) != ""
+}
+
+func (d *Dashboard) rememberEventIDLocked(id string) {
+	if id == "" {
+		return
+	}
+	d.seenEventIDs[id] = struct{}{}
+	d.seenEventLog = append(d.seenEventLog, id)
+	if len(d.seenEventLog) <= d.maxSeenIDs {
+		return
+	}
+	evicted := d.seenEventLog[0]
+	d.seenEventLog = d.seenEventLog[1:]
+	delete(d.seenEventIDs, evicted)
+}
+
+func normalizeEvent(evt apiTypes.ActivityEvent) apiTypes.ActivityEvent {
+	if evt.ID == "" {
+		evt.ID = generateID()
+	}
+	if evt.Timestamp.IsZero() {
+		evt.Timestamp = time.Now().UTC()
+	}
+	if evt.Channel == "" {
+		evt.Channel = "tool_call"
+	}
+	if evt.AgentID == "" {
+		evt.AgentID = "anonymous"
+	}
+	return evt
+}
+
+func (d *Dashboard) recordEvents(events []apiTypes.ActivityEvent) {
+	if d == nil || len(events) == 0 {
+		return
+	}
+
+	d.mu.Lock()
+	broadcast := make([]apiTypes.ActivityEvent, 0, len(events))
+	for _, raw := range events {
+		evt := normalizeEvent(raw)
+		if _, ok := d.seenEventIDs[evt.ID]; ok {
+			continue
+		}
+		d.rememberEventIDLocked(evt.ID)
+		d.upsertAgentLocked(evt)
+		if len(d.recentEvents) >= d.maxEvents {
+			copy(d.recentEvents, d.recentEvents[1:])
+			d.recentEvents[len(d.recentEvents)-1] = evt
+		} else {
+			d.recentEvents = append(d.recentEvents, evt)
+		}
+		broadcast = append(broadcast, evt)
+	}
+
+	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
+	for ch := range d.activityConns {
+		chans = append(chans, ch)
+	}
+	d.mu.Unlock()
+
+	for _, evt := range broadcast {
+		for _, ch := range chans {
+			select {
+			case ch <- evt:
+			default:
+			}
+		}
 	}
 }
 

@@ -388,20 +388,20 @@ func runRealworldSuite(t *testing.T, tc realworldTestCase) {
 
 func snapshotNodes(t *testing.T, lite *LiteEngine, filter string) []SnapshotNode {
 	t.Helper()
-	nodes, err := lite.Snapshot(context.Background(), "", filter)
+	result, err := lite.Snapshot(context.Background(), "", filter)
 	if err != nil {
 		t.Fatalf("Snapshot(%q): %v", filter, err)
 	}
-	return nodes
+	return result.Nodes
 }
 
 func getText(t *testing.T, lite *LiteEngine) string {
 	t.Helper()
-	text, err := lite.Text(context.Background(), "")
+	result, err := lite.Text(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Text: %v", err)
 	}
-	return text
+	return result.Text
 }
 
 func requireRole(t *testing.T, nodes []SnapshotNode, role string, minCount int) {
@@ -822,21 +822,21 @@ func TestRealworld_EmptyPage(t *testing.T) {
 		t.Fatalf("Navigate: %v", err)
 	}
 
-	nodes, err := lite.Snapshot(context.Background(), "", "all")
+	snapRes, err := lite.Snapshot(context.Background(), "", "all")
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 	// Empty body should yield 0 or very few nodes
-	if len(nodes) > 1 {
-		t.Errorf("expected <= 1 nodes for empty page, got %d", len(nodes))
+	if len(snapRes.Nodes) > 1 {
+		t.Errorf("expected <= 1 nodes for empty page, got %d", len(snapRes.Nodes))
 	}
 
-	text, err := lite.Text(context.Background(), "")
+	textRes, err := lite.Text(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Text: %v", err)
 	}
-	if strings.TrimSpace(text) != "" {
-		t.Errorf("expected empty text for empty page, got %q", text)
+	if strings.TrimSpace(textRes.Text) != "" {
+		t.Errorf("expected empty text for empty page, got %q", textRes.Text)
 	}
 }
 
@@ -1024,12 +1024,12 @@ func TestRealworld_ClickWorkflow(t *testing.T) {
 	}
 
 	// Engine should still be usable
-	text, err := lite.Text(context.Background(), "")
+	textRes2, err := lite.Text(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Text after clicks: %v", err)
 	}
-	if !strings.Contains(text, "Some content here") {
-		t.Errorf("unexpected text after clicks: %s", text)
+	if !strings.Contains(textRes2.Text, "Some content here") {
+		t.Errorf("unexpected text after clicks: %s", textRes2.Text)
 	}
 }
 

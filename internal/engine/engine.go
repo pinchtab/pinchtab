@@ -6,7 +6,26 @@
 // or any other package.
 package engine
 
-import "context"
+import (
+	"context"
+	"errors"
+	"fmt"
+)
+
+// IDPIBlockedError is returned when IDPI security checks block a request.
+type IDPIBlockedError struct {
+	Reason string
+}
+
+func (e *IDPIBlockedError) Error() string {
+	return fmt.Sprintf("blocked by IDPI: %s", e.Reason)
+}
+
+// IsIDPIBlocked reports whether err is an IDPI block.
+func IsIDPIBlocked(err error) bool {
+	var target *IDPIBlockedError
+	return errors.As(err, &target)
+}
 
 // Capability identifies an operation the engine may handle.
 type Capability string
@@ -43,9 +62,10 @@ const (
 
 // NavigateResult is the response from a navigation.
 type NavigateResult struct {
-	TabID string `json:"tabId"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
+	TabID  string `json:"tabId"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	Engine string `json:"engine,omitempty"` // which engine fulfilled the request
 }
 
 // SnapshotNode represents a single node in the accessibility-style snapshot.
@@ -59,12 +79,36 @@ type SnapshotNode struct {
 	Interactive bool   `json:"interactive,omitempty"`
 }
 
+// SnapshotResult is the response from a snapshot operation.
+type SnapshotResult struct {
+	Nodes       []SnapshotNode `json:"nodes"`
+	URL         string         `json:"url,omitempty"`
+	Title       string         `json:"title,omitempty"`
+	Engine      string         `json:"engine,omitempty"`
+	IDPIWarning string         `json:"idpiWarning,omitempty"`
+}
+
+// TextResult is the response from a text extraction operation.
+type TextResult struct {
+	Text      string `json:"text"`
+	URL       string `json:"url,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Engine    string `json:"engine,omitempty"`
+}
+
+// ActionResult is the response from a click/type/other action.
+type ActionResult struct {
+	Data   map[string]any `json:"data,omitempty"`
+	Engine string         `json:"engine,omitempty"`
+}
+
 // Engine is the minimal interface both lite and chrome wrappers implement.
 type Engine interface {
 	Name() string
 	Navigate(ctx context.Context, url string) (*NavigateResult, error)
-	Snapshot(ctx context.Context, tabID, filter string) ([]SnapshotNode, error)
-	Text(ctx context.Context, tabID string) (string, error)
+	Snapshot(ctx context.Context, tabID, filter string) (*SnapshotResult, error)
+	Text(ctx context.Context, tabID string) (*TextResult, error)
 	Click(ctx context.Context, tabID, ref string) error
 	Type(ctx context.Context, tabID, ref, text string) error
 	Capabilities() []Capability

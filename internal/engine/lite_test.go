@@ -63,17 +63,17 @@ func TestLiteEngine_Snapshot_All(t *testing.T) {
 		t.Fatalf("Navigate: %v", err)
 	}
 
-	nodes, err := lite.Snapshot(context.Background(), "", "all")
+	result, err := lite.Snapshot(context.Background(), "", "all")
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	if len(nodes) == 0 {
+	if len(result.Nodes) == 0 {
 		t.Fatal("expected nodes in snapshot")
 	}
 
 	// Verify roles are assigned
 	roleSet := make(map[string]bool)
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		roleSet[n.Role] = true
 	}
 	for _, expected := range []string{"heading", "link", "button", "textbox", "combobox"} {
@@ -92,19 +92,19 @@ func TestLiteEngine_Snapshot_Interactive(t *testing.T) {
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
 
-	nodes, err := lite.Snapshot(context.Background(), "", "interactive")
+	result, err := lite.Snapshot(context.Background(), "", "interactive")
 	if err != nil {
 		t.Fatalf("Snapshot interactive: %v", err)
 	}
 
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		if !n.Interactive {
 			t.Errorf("interactive filter returned non-interactive node: %+v", n)
 		}
 	}
 
-	if len(nodes) < 3 {
-		t.Errorf("expected at least 3 interactive nodes (link, button, input), got %d", len(nodes))
+	if len(result.Nodes) < 3 {
+		t.Errorf("expected at least 3 interactive nodes (link, button, input), got %d", len(result.Nodes))
 	}
 }
 
@@ -117,14 +117,14 @@ func TestLiteEngine_Text(t *testing.T) {
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
 
-	text, err := lite.Text(context.Background(), "")
+	result, err := lite.Text(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Text: %v", err)
 	}
 
 	for _, want := range []string{"Hello World", "About", "Click Me", "Some content here"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text should contain %q, got: %s", want, text)
+		if !strings.Contains(result.Text, want) {
+			t.Errorf("text should contain %q, got: %s", want, result.Text)
 		}
 	}
 }
@@ -138,9 +138,9 @@ func TestLiteEngine_Click(t *testing.T) {
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
 
-	nodes, _ := lite.Snapshot(context.Background(), "", "interactive")
+	result, _ := lite.Snapshot(context.Background(), "", "interactive")
 	var buttonRef string
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		if n.Role == "button" {
 			buttonRef = n.Ref
 			break
@@ -164,9 +164,9 @@ func TestLiteEngine_Type(t *testing.T) {
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
 
-	nodes, _ := lite.Snapshot(context.Background(), "", "interactive")
+	result, _ := lite.Snapshot(context.Background(), "", "interactive")
 	var inputRef string
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		if n.Role == "textbox" {
 			inputRef = n.Ref
 			break
@@ -219,9 +219,9 @@ func TestLiteEngine_ScriptStyleSkipped(t *testing.T) {
 	defer func() { _ = lite.Close() }()
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
-	nodes, _ := lite.Snapshot(context.Background(), "", "all")
+	result, _ := lite.Snapshot(context.Background(), "", "all")
 
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		if n.Tag == "script" || n.Tag == "style" {
 			t.Errorf("snapshot should skip %s elements", n.Tag)
 		}
@@ -243,11 +243,11 @@ func TestLiteEngine_AriaAttributes(t *testing.T) {
 	defer func() { _ = lite.Close() }()
 
 	_, _ = lite.Navigate(context.Background(), ts.URL)
-	nodes, _ := lite.Snapshot(context.Background(), "", "all")
+	result, _ := lite.Snapshot(context.Background(), "", "all")
 
 	foundNav := false
 	foundBtn := false
-	for _, n := range nodes {
+	for _, n := range result.Nodes {
 		if n.Role == "navigation" && n.Name == "Main Nav" {
 			foundNav = true
 		}
@@ -283,14 +283,14 @@ func TestLiteEngine_MultiTab(t *testing.T) {
 	}
 
 	// Current tab is the most recent (page2)
-	text, _ := lite.Text(context.Background(), "")
-	if !strings.Contains(text, "Second") {
-		t.Errorf("expected page 2 text, got: %s", text)
+	result, _ := lite.Text(context.Background(), "")
+	if !strings.Contains(result.Text, "Second") {
+		t.Errorf("expected page 2 text, got: %s", result.Text)
 	}
 
-	text, _ = lite.Text(context.Background(), res1.TabID)
-	if !strings.Contains(text, "First") {
-		t.Errorf("expected page 1 text via tab ID, got: %s", text)
+	result2, _ := lite.Text(context.Background(), res1.TabID)
+	if !strings.Contains(result2.Text, "First") {
+		t.Errorf("expected page 1 text via tab ID, got: %s", result2.Text)
 	}
 }
 

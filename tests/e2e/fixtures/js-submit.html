@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>E2E Test - JS Submit Handler</title>
+</head>
+<body>
+  <h1>JS Submit Handler Test</h1>
+  <!--
+    This fixture simulates frameworks like Odoo where form submission
+    is handled exclusively by a JS 'submit' event listener.
+    Calling form.submit() directly bypasses the listener and produces
+    no visible result — the submit event MUST be dispatched.
+  -->
+  <form id="login-form">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password">
+
+    <button type="submit" id="submit-btn">Sign In</button>
+  </form>
+
+  <div id="result"></div>
+
+  <script>
+    // Intercept the submit event — this is the ONLY way this form produces output.
+    // A raw form.submit() call (without the event) will not set #result.
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var user = document.getElementById('username').value;
+      var pass = document.getElementById('password').value;
+      var el = document.getElementById('result');
+      if (user === 'admin' && pass === 'secret') {
+        el.id = 'result-success';
+        el.textContent = 'LOGIN_SUCCESS';
+      } else {
+        el.id = 'result-failure';
+        el.textContent = 'LOGIN_FAILURE';
+      }
+    });
+  </script>
+</body>
+</html>

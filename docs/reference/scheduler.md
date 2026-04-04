@@ -114,6 +114,7 @@ Important:
 - request validation enforces only `agentId` and `action`
 - missing `tabId` is rejected later during execution with `tabId is required for task execution`
 - past deadlines are rejected at submission time
+- `agentId` is also forwarded to the executor as `X-Agent-Id`, so the resulting browser action is attributed to the same agent in `/api/activity` and the dashboard Agents view
 
 ## Queue Full Response
 
@@ -260,6 +261,7 @@ That means:
 - `action` becomes `kind`
 - top-level `ref` is forwarded when present
 - every key in `params` is merged into the top-level action body
+- `agentId` is propagated as `X-Agent-Id`
 
 Example:
 
@@ -363,7 +365,7 @@ curl -X POST http://localhost:9867/tasks \
     "agentId": "my-agent",
     "action": "click",
     "tabId": "8f9c7d4e1234567890abcdef12345678",
-    "callbackUrl": "https://example.com/hooks/task-done"
+    "callbackUrl": "https://pinchtab.com/hooks/task-done"
   }'
 ```
 
@@ -389,7 +391,7 @@ curl -X POST http://localhost:9867/tasks/batch \
   -H "Content-Type: application/json" \
   -d '{
     "agentId": "agent-crawl-01",
-    "callbackUrl": "https://example.com/hooks/batch",
+    "callbackUrl": "https://pinchtab.com/hooks/batch",
     "tasks": [
       { "action": "click", "tabId": "TAB_ID", "params": { "selector": "#btn" } },
       { "action": "scroll", "tabId": "TAB_ID", "params": { "scrollY": 400 } },

@@ -41,11 +41,31 @@ pinchtab server
 pinchtab bridge
 pinchtab mcp
 pinchtab config
-pinchtab nav https://example.com
+pinchtab --agent-id agent-main nav https://pinchtab.com
+pinchtab nav https://pinchtab.com
 pinchtab snap -i -c
 pinchtab click e5
 pinchtab find "login button"
 pinchtab network --limit 20
+```
+
+Global flags such as `--server` and `--agent-id` apply to direct command mode. `--agent-id` is recorded in activity logs and dashboard agent views so multiple CLI-driven agents are distinguishable.
+
+## Agent Attribution
+
+CLI requests carry agent identity over the `X-Agent-Id` request header.
+
+- `--agent-id <value>` sets the header explicitly for that command
+- `PINCHTAB_AGENT_ID` sets the default agent ID for the current shell or script
+- if neither is set, the CLI uses `cli`
+
+That agent ID is what appears as `agentId` in `/api/activity`, the Agents page, and scheduler-driven activity.
+
+Example:
+
+```bash
+PINCHTAB_AGENT_ID=agent-crawl-01 pinchtab nav https://pinchtab.com
+curl 'http://127.0.0.1:9867/api/activity?agentId=agent-crawl-01'
 ```
 
 ## Core Commands

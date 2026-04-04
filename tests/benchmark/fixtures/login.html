@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login — PinchTab Benchmark</title>
+</head>
+<body>
+  <main id="login-page">
+    <h1>Sign In — VERIFY_LOGIN_PAGE_77777</h1>
+    <form id="login-form">
+      <div>
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username">
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password">
+      </div>
+      <div>
+        <label><input type="checkbox" id="remember-me"> Remember me</label>
+      </div>
+      <button type="submit" id="login-btn">Sign In</button>
+      <p id="login-error" style="display:none;color:red">INVALID_CREDENTIALS_ERROR</p>
+    </form>
+  </main>
+
+  <main id="dashboard-page" style="display:none">
+    <h1>Welcome back — VERIFY_LOGIN_SUCCESS_DASHBOARD</h1>
+    <p>Logged in as: <strong id="logged-user"></strong></p>
+    <p>SESSION_TOKEN_ACTIVE_TRUE SESSION_RENEWED</p>
+    <nav>
+      <a href="/wiki.html">Encyclopedia</a>
+      <a href="/spa.html">Task Manager</a>
+      <a href="/dashboard.html">Analytics</a>
+    </nav>
+    <button id="logout-btn">Sign Out</button>
+  </main>
+
+  <script>
+    const VALID = { 'admin': 'password123', 'benchmark': 'test456', 'luigi': 'secret789' };
+
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+      if (VALID[user] && VALID[user] === pass) {
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('dashboard-page').style.display = 'block';
+        document.getElementById('logged-user').textContent = user;
+      } else {
+        document.getElementById('login-error').style.display = 'block';
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', function() {
+      document.getElementById('dashboard-page').style.display = 'none';
+      document.getElementById('login-page').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

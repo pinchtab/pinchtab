@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
@@ -23,9 +24,63 @@ var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
 	return viewport.X, viewport.Y, nil
 }
 
+// submitFormIfButton checks whether the target element is a submit button and,
+// if so, uses requestSubmit() for a single-shot submission: constraint
+// validation + submit event (so JS handlers run) + actual submission.
+// Falls back to CDP click if the element is not a submit button or on error.
+func submitFormIfButton(ctx context.Context, selector string) (bool, error) {
+	var isSubmit bool
+	err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`
+		(function() {
+			var el = document.querySelector(%q);
+			if (!el) return false;
+			var tag = el.tagName.toLowerCase();
+			var type = (el.type || '').toLowerCase();
+			return (tag === 'button' && (type === 'submit' || type === '')) ||
+			       (tag === 'input' && type === 'submit');
+		})()
+	`, selector), &isSubmit))
+	if err != nil || !isSubmit {
+		return false, err
+	}
+	// Fire full event chain via requestSubmit(el):
+	// - runs constraint validation
+	// - dispatches the submit event (so JS handlers like Odoo's fire)
+	// - submits the form if nothing cancels it
+	// One call, no double-fire (replaces manual dispatchEvent + form.submit).
+	var submitted bool
+	err = chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`
+		(function() {
+			var el = document.querySelector(%q);
+			if (!el) return false;
+			el.focus();
+			var opts = {bubbles: true, cancelable: true};
+			el.dispatchEvent(new MouseEvent('mousedown', opts));
+			el.dispatchEvent(new MouseEvent('mouseup', opts));
+			el.dispatchEvent(new MouseEvent('click', opts));
+			var form = el.closest('form');
+			if (form) { form.requestSubmit(el); }
+			return true;
+		})()
+	`, selector), &submitted))
+	return submitted, err
+}
+
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	var err error
 	if req.Selector != "" {
+		// For submit buttons, use requestSubmit() to fire constraint validation,
+		// JS submit handlers, and actual submission in one shot (issue #411).
+		submitted, subErr := submitFormIfButton(ctx, req.Selector)
+		if subErr != nil {
+			slog.Debug("submitFormIfButton failed, falling back to CDP click",
+				"selector", req.Selector, "error", subErr)
+		} else if submitted {
+			if req.WaitNav {
+				_ = chromedp.Run(ctx, chromedp.Sleep(b.Config.WaitNavDelay))
+			}
+			return map[string]any{"clicked": true, "submitted": true}, nil
+		}
 		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
 		if nodeErr != nil {
 			return nil, nodeErr

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -81,6 +82,30 @@ func TestHandleScreencast_Disabled(t *testing.T) {
 	h.HandleScreencast(w, req)
 	if w.Code != 403 {
 		t.Errorf("expected 403 when screencast disabled, got %d", w.Code)
+	}
+}
+
+func TestHandleScreencast_TabNotFoundReturnsProblem(t *testing.T) {
+	cfg := &config.RuntimeConfig{AllowScreencast: true}
+	h := New(&mockBridge{failTab: true}, cfg, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/screencast?tabId=missing", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleScreencast(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("expected application/problem+json, got %q", ct)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode problem payload: %v", err)
+	}
+	if payload["code"] != "tab_not_found" {
+		t.Fatalf("code = %v, want tab_not_found", payload["code"])
 	}
 }
 

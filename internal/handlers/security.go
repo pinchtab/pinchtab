@@ -65,10 +65,3 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 		},
 	}
 }
-
-func endpointStatusSummary(state endpointSecurityState, summary string) string {
-	if state.Enabled {
-		return summary + " (enabled)"
-	}
-	return summary + " (locked by " + state.Setting + ")"
-}

@@ -126,7 +126,7 @@ export default function ActivityPage() {
     <AgentActivityWorkspace
       initialFilters={initialFilters}
       defaultSidebarTab="activities"
-      hiddenSources={["dashboard"]}
+      preferKnownAgents
     />
   );
 }

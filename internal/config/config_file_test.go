@@ -88,6 +88,9 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.Sessions.Dashboard.RequireElevation == nil || *fc.Sessions.Dashboard.RequireElevation {
 		t.Errorf("DefaultFileConfig.Sessions.Dashboard.RequireElevation = %v, want explicit false", formatBoolPtr(fc.Sessions.Dashboard.RequireElevation))
 	}
+	if fc.Observability.Activity.StateDir != "" {
+		t.Errorf("DefaultFileConfig.Observability.Activity.StateDir = %q, want empty string", fc.Observability.Activity.StateDir)
+	}
 }
 
 // TestIsLegacyConfig tests the format detection logic.
@@ -234,6 +237,9 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	}
 	if parsed.Security.Attach.Enabled == nil || *parsed.Security.Attach.Enabled {
 		t.Errorf("round-trip Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.Enabled))
+	}
+	if parsed.Observability.Activity.StateDir != "" {
+		t.Errorf("round-trip Observability.Activity.StateDir = %q, want empty string", parsed.Observability.Activity.StateDir)
 	}
 	if !parsed.Security.IDPI.Enabled {
 		t.Errorf("round-trip Security.IDPI.Enabled = %v, want true", parsed.Security.IDPI.Enabled)

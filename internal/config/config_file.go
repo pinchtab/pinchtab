@@ -26,6 +26,7 @@ func DefaultFileConfig() FileConfig {
 	downloadMaxBytes := DefaultDownloadMaxBytes
 	allowUpload := false
 	allowClipboard := false
+	enableActionGuards := true
 	uploadMaxRequestBytes := DefaultUploadMaxRequestBytes
 	uploadMaxFiles := DefaultUploadMaxFiles
 	uploadMaxFileBytes := DefaultUploadMaxFileBytes
@@ -66,6 +67,7 @@ func DefaultFileConfig() FileConfig {
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
 			AllowClipboard:         &allowClipboard,
+			EnableActionGuards:     &enableActionGuards,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,
@@ -112,6 +114,7 @@ func DefaultFileConfig() FileConfig {
 				Enabled:        &activityEnabled,
 				SessionIdleSec: &activitySessionIdleSec,
 				RetentionDays:  &activityRetentionDays,
+				StateDir:       "",
 			},
 		},
 		Sessions: SessionsFileConfig{
@@ -190,6 +193,7 @@ type securityConfigJSON struct {
 	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
 	AllowUpload            *bool          `json:"allowUpload"`
 	AllowClipboard         *bool          `json:"allowClipboard"`
+	EnableActionGuards     *bool          `json:"enableActionGuards"`
 	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
 	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
 	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
@@ -255,9 +259,10 @@ type observabilityFileConfigJSON struct {
 }
 
 type activityConfigJSON struct {
-	Enabled        *bool `json:"enabled"`
-	SessionIdleSec *int  `json:"sessionIdleSec"`
-	RetentionDays  *int  `json:"retentionDays"`
+	Enabled        *bool  `json:"enabled"`
+	SessionIdleSec *int   `json:"sessionIdleSec"`
+	RetentionDays  *int   `json:"retentionDays"`
+	StateDir       string `json:"stateDir"`
 }
 
 type sessionsFileConfigJSON struct {
@@ -340,6 +345,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
 			AllowUpload:            fc.Security.AllowUpload,
 			AllowClipboard:         fc.Security.AllowClipboard,
+			EnableActionGuards:     fc.Security.EnableActionGuards,
 			UploadMaxRequestBytes:  fc.Security.UploadMaxRequestBytes,
 			UploadMaxFiles:         fc.Security.UploadMaxFiles,
 			UploadMaxFileBytes:     fc.Security.UploadMaxFileBytes,
@@ -447,6 +453,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	downloadMaxBytes := cfg.EffectiveDownloadMaxBytes()
 	allowUpload := cfg.AllowUpload
 	allowClipboard := cfg.AllowClipboard
+	enableActionGuards := cfg.EnableActionGuards
 	uploadMaxRequestBytes := cfg.EffectiveUploadMaxRequestBytes()
 	uploadMaxFiles := cfg.EffectiveUploadMaxFiles()
 	uploadMaxFileBytes := cfg.EffectiveUploadMaxFileBytes()
@@ -521,6 +528,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
 			AllowClipboard:         &allowClipboard,
+			EnableActionGuards:     &enableActionGuards,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,

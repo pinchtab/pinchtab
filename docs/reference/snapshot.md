@@ -8,7 +8,7 @@ curl "http://localhost:9867/snapshot?filter=interactive"
 pinchtab snap -i
 # Response
 {
-  "url": "https://example.com",
+  "url": "https://pinchtab.com",
   "title": "Example Domain",
   "nodes": [
     {

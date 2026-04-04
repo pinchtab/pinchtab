@@ -246,12 +246,12 @@ start_test "tab lock: lock and unlock"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 TAB_ID=$(get_tab_id)
 
-pt_post /tab/lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-agent\"}"
+pt_post /lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-agent\"}"
 assert_ok "lock tab"
 assert_json_eq "$RESULT" '.locked' 'true' "tab is locked"
 assert_json_eq "$RESULT" '.owner' 'test-agent' "owner matches"
 
-pt_post /tab/unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-agent\"}"
+pt_post /unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-agent\"}"
 assert_ok "unlock tab"
 assert_json_eq "$RESULT" '.unlocked' 'true' "tab is unlocked"
 
@@ -263,13 +263,13 @@ start_test "tab lock: wrong owner cannot unlock"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 TAB_ID=$(get_tab_id)
 
-pt_post /tab/lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-a\"}"
+pt_post /lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-a\"}"
 assert_ok "lock tab"
 
-pt_post /tab/unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-b\"}"
+pt_post /unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-b\"}"
 assert_not_ok "wrong owner rejected"
 
-pt_post /tab/unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-a\"}"
+pt_post /unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"agent-a\"}"
 
 end_test
 
@@ -281,11 +281,11 @@ start_test "tab lock: lock with timeoutSec"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 TAB_ID=$(get_tab_id)
 
-pt_post /tab/lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-ttl\",\"timeoutSec\":60}"
+pt_post /lock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-ttl\",\"timeoutSec\":60}"
 assert_ok "lock with timeout"
 assert_json_exists "$RESULT" '.expiresAt' "has expiration time"
 
-pt_post /tab/unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-ttl\"}"
+pt_post /unlock -d "{\"tabId\":\"${TAB_ID}\",\"owner\":\"test-ttl\"}"
 
 end_test
 

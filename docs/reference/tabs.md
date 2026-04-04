@@ -104,7 +104,7 @@ pinchtab tab                           # list tabs
 pinchtab tab 2                         # focus tab by 1-based index
 pinchtab tab 8f9c7d4e1234...           # focus tab by tab ID
 pinchtab tab new                       # open blank tab
-pinchtab tab new https://example.com   # open and navigate
+pinchtab tab new https://pinchtab.com   # open and navigate
 pinchtab tab close 8f9c7d4e1234...     # close tab
 ```
 
@@ -119,9 +119,9 @@ Use the tab-scoped HTTP route or the top-level CLI command with `--tab`.
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
+  -d '{"url":"https://pinchtab.com"}'
 # CLI Alternative
-pinchtab nav https://example.com --tab <tabId>
+pinchtab nav https://pinchtab.com --tab <tabId>
 ```
 
 ### Snapshot
@@ -212,7 +212,7 @@ curl -X POST http://localhost:9867/tabs/<tabId>/unlock \
   -d '{"owner":"my-agent"}'
 ```
 
-There are also active-tab forms at `POST /tab/lock` and `POST /tab/unlock`.
+There are also active-tab forms at `POST /lock` and `POST /unlock`.
 
 ## Important Limits
 

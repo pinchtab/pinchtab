@@ -1,0 +1,54 @@
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9867",
+    "token": "benchmark-token"
+  },
+  "instanceDefaults": {
+    "maxTabs": 20,
+    "stealthLevel": "light",
+    "headless": true
+  },
+  "multiInstance": {
+    "strategy": "always-on",
+    "allocationPolicy": "fcfs",
+    "poolSize": 2,
+    "restart": {
+      "maxRestarts": 10,
+      "initBackoffSec": 2,
+      "maxBackoffSec": 60,
+      "stableAfterSec": 300
+    }
+  },
+  "scheduler": {
+    "enabled": true,
+    "strategy": "fair-fifo",
+    "maxQueueSize": 10,
+    "maxPerAgent": 5,
+    "maxInflight": 3,
+    "workerCount": 2,
+    "maxBatchSize": 5,
+    "resultTTLSec": 300
+  },
+  "security": {
+    "allowEvaluate": true,
+    "allowDownload": true,
+    "allowUpload": true,
+    "allowClipboard": true,
+    "idpi": {
+      "enabled": true,
+      "allowedDomains": [
+        "fixtures",
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "172.18.0.2"
+      ]
+    }
+  },
+  "activity": {
+    "enabled": true,
+    "maxEvents": 10000,
+    "retentionHours": 24
+  }
+}

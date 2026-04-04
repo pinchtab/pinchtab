@@ -105,6 +105,7 @@ func Execute() {
 
 // serverURL is the global --server flag for CLI commands
 var serverURL string
+var cliAgentID string
 
 func init() {
 	rootCmd.Version = version
@@ -112,6 +113,7 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "PinchTab server URL (default: http://127.0.0.1:<instancePortStart>)")
+	rootCmd.PersistentFlags().StringVar(&cliAgentID, "agent-id", "", "Agent identifier recorded in activity logs")
 
 	// Grouping commands
 	primaryGroup := &cobra.Group{ID: "primary", Title: "Primary Commands"}

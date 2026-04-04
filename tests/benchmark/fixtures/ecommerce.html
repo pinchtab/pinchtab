@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shop - PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Home</a> | <a href="/ecommerce.html">Shop</a>
+      <span id="cart-icon">🛒 Cart (<span id="cart-count">0</span>)</span>
+    </nav>
+  </header>
+  <main>
+    <h1>Product Catalog — VERIFY_SHOP_PAGE_44444</h1>
+    
+    <section id="products">
+      <div class="product-card" id="product-1">
+        <h3>Wireless Headphones</h3>
+        <p class="price">$149.99</p>
+        <p class="description">Premium noise-canceling wireless headphones with 30-hour battery life.</p>
+        <p class="stock in-stock">In Stock (24 available)</p>
+        <button class="add-to-cart" data-id="1" data-name="Wireless Headphones" data-price="149.99">Add to Cart</button>
+      </div>
+      
+      <div class="product-card" id="product-2">
+        <h3>Smart Watch Pro</h3>
+        <p class="price">$299.99</p>
+        <p class="description">Advanced fitness tracking, heart rate monitor, GPS, and 7-day battery.</p>
+        <p class="stock in-stock">In Stock (12 available)</p>
+        <button class="add-to-cart" data-id="2" data-name="Smart Watch Pro" data-price="299.99">Add to Cart</button>
+      </div>
+      
+      <div class="product-card" id="product-3">
+        <h3>Portable Charger 20000mAh</h3>
+        <p class="price">$49.99</p>
+        <p class="description">Fast-charging portable battery pack with USB-C and dual USB-A ports.</p>
+        <p class="stock in-stock">In Stock (56 available)</p>
+        <button class="add-to-cart" data-id="3" data-name="Portable Charger" data-price="49.99">Add to Cart</button>
+      </div>
+      
+      <div class="product-card" id="product-4">
+        <h3>Mechanical Keyboard</h3>
+        <p class="price">$129.99</p>
+        <p class="description">RGB backlit mechanical keyboard with Cherry MX switches.</p>
+        <p class="stock out-of-stock">Out of Stock</p>
+        <button class="add-to-cart" data-id="4" data-name="Mechanical Keyboard" data-price="129.99" disabled>Out of Stock</button>
+      </div>
+    </section>
+    
+    <section id="pagination-section">
+      <button id="load-more-btn">Load More Products</button>
+      <div id="more-products" style="display: none;">
+        <div class="product-card" id="product-5">
+          <h3>USB-C Cable (3 pack)</h3>
+          <p class="price">$19.99</p>
+          <p class="description">High-quality USB-C cables with fast charging capability.</p>
+          <p class="stock in-stock">In Stock (100 available)</p>
+          <button class="add-to-cart" data-id="5" data-name="USB-C Cable" data-price="19.99">Add to Cart</button>
+          <span>ADDITIONAL_PRODUCTS_LOADED</span>
+        </div>
+        <div class="product-card" id="product-6">
+          <h3>Screen Protector (2 pack)</h3>
+          <p class="price">$14.99</p>
+          <p class="description">Tempered glass screen protectors for smartphones.</p>
+          <p class="stock in-stock">In Stock (75 available)</p>
+          <button class="add-to-cart" data-id="6" data-name="Screen Protector" data-price="14.99">Add to Cart</button>
+        </div>
+      </div>
+    </section>
+    
+    <section id="cart-section" style="display: none;">
+      <h2>Shopping Cart</h2>
+      <div id="cart-items"></div>
+      <div id="cart-total">
+        <strong>Total: $<span id="total-amount">0.00</span></strong>
+      </div>
+      <button id="checkout-btn">Proceed to Checkout</button>
+    </section>
+    
+    <section id="checkout-section" style="display: none;">
+      <h2>Checkout Complete!</h2>
+      <p class="verification-text">VERIFY_CHECKOUT_SUCCESS_ORDER</p>
+      <div id="order-summary"></div>
+    </section>
+  </main>
+  
+  <script>
+    let cart = [];
+    
+    function attachAddToCartListeners() {
+      document.querySelectorAll('.add-to-cart').forEach(btn => {
+        btn.removeEventListener('click', addToCartHandler);
+        btn.addEventListener('click', addToCartHandler);
+      });
+    }
+    
+    function addToCartHandler() {
+      if (this.disabled) return;
+      const item = {
+        id: this.dataset.id,
+        name: this.dataset.name,
+        price: parseFloat(this.dataset.price)
+      };
+      cart.push(item);
+      updateCart();
+    }
+    
+    function updateCart() {
+      document.getElementById('cart-count').textContent = cart.length;
+      if (cart.length > 0) {
+        document.getElementById('cart-section').style.display = 'block';
+        const hasLazyItem = cart.some(item => parseInt(item.id) >= 5);
+        const items = cart.map((item, i) => `
+          <div class="cart-item" id="cart-item-${i}">
+            <span>${item.name}</span>
+            <span>$${item.price.toFixed(2)}</span>
+            <span>CART_ITEM_${item.name.replace(/\s/g, '_').toUpperCase()}</span>
+          </div>
+        `).join('');
+        document.getElementById('cart-items').innerHTML = items +
+          (hasLazyItem ? '<p>CART_UPDATED_WITH_LAZY_PRODUCT</p>' : '');
+        const total = cart.reduce((sum, item) => sum + item.price, 0);
+        document.getElementById('total-amount').textContent = total.toFixed(2);
+      }
+    }
+    
+    document.getElementById('load-more-btn').addEventListener('click', function() {
+      document.getElementById('more-products').style.display = 'block';
+      this.style.display = 'none';
+      attachAddToCartListeners();
+      document.querySelector('#more-products .add-to-cart').addEventListener('click', addToCartHandler);
+    });
+    
+    document.getElementById('checkout-btn').addEventListener('click', function() {
+      const total = cart.reduce((sum, item) => sum + item.price, 0);
+      document.getElementById('cart-section').style.display = 'none';
+      document.getElementById('checkout-section').style.display = 'block';
+      document.getElementById('order-summary').innerHTML = `
+        <p>Order Total: $${total.toFixed(2)}</p>
+        <p>Items: ${cart.length}</p>
+        <p>ORDER_TOTAL_${total.toFixed(2).replace('.', '_')}</p>
+      `;
+    });
+    
+    // Attach listeners on load
+    attachAddToCartListeners();
+  </script>
+</body>
+</html>

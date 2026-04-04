@@ -5,13 +5,13 @@ Open a new tab and navigate it to a URL, or reuse a tab when a tab ID is provide
 ```bash
 curl -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
+  -d '{"url":"https://pinchtab.com"}'
 # CLI Alternative
-pinchtab nav https://example.com
+pinchtab nav https://pinchtab.com
 # Response
 {
   "tabId": "8f9c7d4e1234567890abcdef12345678",
-  "url": "https://example.com",
+  "url": "https://pinchtab.com",
   "title": "Example Domain"
 }
 ```

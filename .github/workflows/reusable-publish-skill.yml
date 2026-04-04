@@ -32,11 +32,14 @@ jobs:
 
       - name: Resolve version
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [ -n "$DISPATCH_VERSION" ]; then
+            VERSION="$DISPATCH_VERSION"
           else
             VERSION=${GITHUB_REF_NAME#v}
           fi
@@ -52,8 +55,9 @@ jobs:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
 
       - name: Publish skill
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
         run: |
-          VERSION="${{ steps.version.outputs.value }}"
           clawhub publish skills/pinchtab \
             --slug pinchtab \
             --name "Pinchtab" \

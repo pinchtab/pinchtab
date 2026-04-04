@@ -1,6 +1,9 @@
 package server
 
 import (
+	"net/http"
+	"strings"
+
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 )
@@ -27,7 +30,7 @@ func (r dashboardActivityRecorder) Record(evt activity.Event) error {
 			return err
 		}
 	}
-	if r.dash != nil {
+	if r.dash != nil && shouldBroadcastDashboardActivity(evt) {
 		r.dash.RecordActivityEvent(evt)
 	}
 	return nil
@@ -38,4 +41,19 @@ func (r dashboardActivityRecorder) Query(filter activity.Filter) ([]activity.Eve
 		return []activity.Event{}, nil
 	}
 	return r.base.Query(filter)
+}
+
+func shouldBroadcastDashboardActivity(evt activity.Event) bool {
+	if !strings.EqualFold(strings.TrimSpace(evt.Source), "orchestrator") {
+		return true
+	}
+	if evt.Method != http.MethodGet {
+		return true
+	}
+	switch evt.Path {
+	case "/health", "/tabs", "/metrics", "/api/metrics":
+		return false
+	default:
+		return true
+	}
 }

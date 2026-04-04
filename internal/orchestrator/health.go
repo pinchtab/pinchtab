@@ -9,12 +9,15 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/activity"
 )
 
 const (
 	instanceHealthPollInterval       = 500 * time.Millisecond
 	instanceStartupTimeout           = 45 * time.Second
 	attachedBridgeHealthPollInterval = 60 * time.Second
+	orchestratorActivitySource       = "orchestrator"
 )
 
 type healthProbePolicy int
@@ -66,6 +69,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
 				continue
 			}
+			tagOrchestratorMonitoringRequest(req)
 			o.applyInstanceAuth(req, inst)
 			resp, err := o.client.Do(req)
 			if err == nil {
@@ -212,6 +216,7 @@ func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
 			continue
 		}
+		tagOrchestratorMonitoringRequest(req)
 		o.applyInstanceAuth(req, inst)
 		resp, err := o.client.Do(req)
 		if err != nil {
@@ -255,6 +260,7 @@ func (o *Orchestrator) fetchTabs(inst *InstanceInternal) ([]remoteTab, error) {
 	if err != nil {
 		return nil, err
 	}
+	tagOrchestratorMonitoringRequest(req)
 	o.applyInstanceAuth(req, inst)
 
 	resp, err := o.client.Do(req)
@@ -285,6 +291,7 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 	if err != nil {
 		return nil, err
 	}
+	tagOrchestratorMonitoringRequest(req)
 	o.applyInstanceAuth(req, inst)
 
 	resp, err := o.client.Do(req)
@@ -302,6 +309,13 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 		return nil, err
 	}
 	return result.Memory, nil
+}
+
+func tagOrchestratorMonitoringRequest(req *http.Request) {
+	if req == nil {
+		return
+	}
+	req.Header.Set(activity.HeaderPTSource, orchestratorActivitySource)
 }
 
 func isInstanceHealthyStatus(code int) bool {

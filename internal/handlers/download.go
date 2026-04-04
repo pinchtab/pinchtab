@@ -1,13 +1,17 @@
 package handlers
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -38,6 +42,21 @@ func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
 }
 
+// isDomainAllowed reports whether rawURL's domain is on the configured
+// allowlist. Allowlisted domains bypass private-IP checks because they
+// are explicitly trusted by the operator (e.g. internal docker hosts).
+func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
+	if len(g.allowedDomains) == 0 {
+		return false
+	}
+	result := idpi.CheckDomain(rawURL, config.IDPIConfig{
+		Enabled:        true,
+		AllowedDomains: append([]string(nil), g.allowedDomains...),
+		StrictMode:     true,
+	})
+	return !result.Blocked
+}
+
 func (g *downloadURLGuard) Validate(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -53,6 +72,19 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 		return fmt.Errorf("internal or blocked host")
 	}
 
+	// Allowlisted domains bypass IP validation (e.g. internal docker hosts).
+	if len(g.allowedDomains) > 0 {
+		result := idpi.CheckDomain(rawURL, config.IDPIConfig{
+			Enabled:        true,
+			AllowedDomains: append([]string(nil), g.allowedDomains...),
+			StrictMode:     true,
+		})
+		if result.Blocked {
+			return fmt.Errorf("domain not allowed by security.downloadAllowedDomains")
+		}
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
@@ -64,14 +96,6 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 			return fmt.Errorf("private/internal IP blocked")
 		}
 		return fmt.Errorf("could not resolve host")
-	}
-
-	if result := idpi.CheckDomain(rawURL, config.IDPIConfig{
-		Enabled:        len(g.allowedDomains) > 0,
-		AllowedDomains: append([]string(nil), g.allowedDomains...),
-		StrictMode:     true,
-	}); result.Blocked {
-		return fmt.Errorf("domain not allowed by security.downloadAllowedDomains")
 	}
 	return nil
 }
@@ -346,14 +370,16 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 				requestID = e.RequestID
 				responseMIME = e.Response.MimeType
 				responseStatus = int(e.Response.Status)
-				if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
-					requestGuard.NoteBlocked(err)
-					select {
-					case done <- struct{}{}:
-					default:
+				if !validator.isDomainAllowed(e.Response.URL) {
+					if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
+						requestGuard.NoteBlocked(err)
+						select {
+						case done <- struct{}{}:
+						default:
+						}
+						tCancel()
+						return
 					}
-					tCancel()
-					return
 				}
 				if contentLength, ok := parseContentLengthHeader(e.Response.Headers); ok && contentLength > int64(maxDownloadBytes) {
 					requestGuard.NoteBlocked(downloadTooLargeError(contentLength, maxDownloadBytes))
@@ -415,6 +441,29 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		if writeDownloadGuardError(w, requestGuard.BlockedError(), maxDownloadBytes) {
 			return
 		}
+		// Chrome aborts navigation for binary downloads (.gz, etc.).
+		// Fall back to a direct Go HTTP fetch using the browser's cookies.
+		if isNavigationAborted(err) {
+			slog.Info("download: Chrome navigation aborted, falling back to direct fetch", "url", dlURL)
+			body, mime, status, fetchErr := h.fetchDirectWithCookies(tCtx, browserCtx, dlURL, maxDownloadBytes)
+			if fetchErr != nil {
+				// Return 400 for redirect-blocked errors (SSRF protection)
+				errMsg := fetchErr.Error()
+				if strings.Contains(errMsg, "blocked") || strings.Contains(errMsg, "private") {
+					httpx.Error(w, 400, fmt.Errorf("unsafe browser request: %w", fetchErr))
+					return
+				}
+				httpx.Error(w, 502, fmt.Errorf("download fallback: %w", fetchErr))
+				return
+			}
+			if status >= 400 {
+				httpx.Error(w, 502, fmt.Errorf("remote server returned HTTP %d", status))
+				return
+			}
+			responseMIME = mime
+			h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+			return
+		}
 		httpx.Error(w, 502, fmt.Errorf("navigate to download URL: %w", err))
 		return
 	}
@@ -458,19 +507,22 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("get response body: %w", err))
 		return
 	}
-	if len(body) > maxDownloadBytes {
+	h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+}
+
+func (h *Handlers) writeDownloadResponse(w http.ResponseWriter, body []byte, mime, dlURL, output, filePath string, raw bool, maxBytes int) {
+	if len(body) > maxBytes {
 		httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "download_too_large",
-			downloadTooLargeError(int64(len(body)), maxDownloadBytes).Error(), false, map[string]any{
-				"maxBytes": maxDownloadBytes,
+			downloadTooLargeError(int64(len(body)), maxBytes).Error(), false, map[string]any{
+				"maxBytes": maxBytes,
 			})
 		return
 	}
 
-	if responseMIME == "" {
-		responseMIME = "application/octet-stream"
+	if mime == "" {
+		mime = "application/octet-stream"
 	}
 
-	// Write to file.
 	if output == "file" {
 		if filePath == "" {
 			httpx.Error(w, 400, fmt.Errorf("path required when output=file"))
@@ -500,27 +552,147 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 			"status":      "saved",
 			"path":        filePath,
 			"size":        len(body),
-			"contentType": responseMIME,
+			"contentType": mime,
 		})
 		return
 	}
 
-	// Raw bytes.
 	if raw {
-		w.Header().Set("Content-Type", responseMIME)
+		w.Header().Set("Content-Type", mime)
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
 		w.WriteHeader(200)
 		_, _ = w.Write(body)
 		return
 	}
 
-	// Default: base64 JSON response.
 	httpx.JSON(w, 200, map[string]any{
 		"data":        base64.StdEncoding.EncodeToString(body),
-		"contentType": responseMIME,
+		"contentType": mime,
 		"size":        len(body),
 		"url":         dlURL,
 	})
+}
+
+// fetchDirectWithCookies performs a Go HTTP fetch with browser cookies.
+// Fallback for when Chrome navigation aborts (e.g. .gz files).
+func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx context.Context, dlURL string, maxBytes int) (body []byte, contentType string, statusCode int, err error) {
+	var browserCookies []*network.Cookie
+	if fetchErr := chromedp.Run(browserCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			browserCookies, err = network.GetCookies().WithURLs([]string{dlURL}).Do(ctx)
+			return err
+		}),
+	); fetchErr != nil {
+		slog.Debug("download fallback: failed to get browser cookies", "err", fetchErr)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", dlURL, nil)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if h.Config.UserAgent != "" {
+		req.Header.Set("User-Agent", h.Config.UserAgent)
+	}
+	req.Header.Set("Accept", "*/*")
+
+	for _, c := range browserCookies {
+		req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			host := req.URL.Hostname()
+			if netguard.IsLocalHost(host) {
+				return fmt.Errorf("redirect to local network blocked: %s", host)
+			}
+			if _, err := netguard.ResolveAndValidatePublicIPs(req.Context(), host); err != nil {
+				return fmt.Errorf("redirect to private network blocked: %s", host)
+			}
+			return nil
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		if contentLength, parseErr := strconv.ParseInt(cl, 10, 64); parseErr == nil {
+			if contentLength > int64(maxBytes) {
+				return nil, "", 0, errDownloadTooLarge
+			}
+		}
+	}
+
+	reader := io.Reader(resp.Body)
+	isGzip := isGzipContent(resp.Header.Get("Content-Type"), dlURL) &&
+		!strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip")
+
+	if isGzip {
+		gz, gzErr := gzip.NewReader(resp.Body)
+		if gzErr != nil {
+			return nil, "", 0, fmt.Errorf("gzip decompress: %w", gzErr)
+		}
+		defer func() { _ = gz.Close() }()
+		reader = gz
+	}
+
+	// LimitReader on decompressed stream protects against gzip bombs.
+	data, err := io.ReadAll(io.LimitReader(reader, int64(maxBytes)+1))
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if len(data) > maxBytes {
+		return nil, "", 0, errDownloadTooLarge
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	// If we decompressed gzip, report the inner content type
+	if isGzip {
+		ct = inferDecompressedContentType(dlURL, ct)
+	}
+
+	return data, ct, resp.StatusCode, nil
+}
+
+func isGzipContent(contentType, rawURL string) bool {
+	if strings.Contains(strings.ToLower(contentType), "gzip") {
+		return true
+	}
+	// Use path.Ext for precise extension matching (.gz, not .pgz or .ngz)
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(path.Ext(parsed.Path), ".gz")
+}
+
+func inferDecompressedContentType(rawURL, fallback string) string {
+	lower := strings.ToLower(rawURL)
+	// Strip .gz to infer inner type
+	if strings.HasSuffix(lower, ".xml.gz") {
+		return "application/xml"
+	}
+	if strings.HasSuffix(lower, ".json.gz") {
+		return "application/json"
+	}
+	if strings.HasSuffix(lower, ".txt.gz") || strings.HasSuffix(lower, ".csv.gz") {
+		return "text/plain"
+	}
+	return "application/octet-stream"
+}
+
+func isNavigationAborted(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "net::ERR_ABORTED")
 }
 
 // HandleTabDownload fetches a URL using the browser session for a tab identified by path ID.

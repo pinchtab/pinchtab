@@ -10,14 +10,14 @@ type fakeEngine struct{ name string }
 
 func (f *fakeEngine) Name() string                                                  { return f.name }
 func (f *fakeEngine) Navigate(_ context.Context, _ string) (*NavigateResult, error) { return nil, nil }
-func (f *fakeEngine) Snapshot(_ context.Context, _, _ string) ([]SnapshotNode, error) {
+func (f *fakeEngine) Snapshot(_ context.Context, _, _ string) (*SnapshotResult, error) {
 	return nil, nil
 }
-func (f *fakeEngine) Text(_ context.Context, _ string) (string, error) { return "", nil }
-func (f *fakeEngine) Click(_ context.Context, _, _ string) error       { return nil }
-func (f *fakeEngine) Type(_ context.Context, _, _, _ string) error     { return nil }
-func (f *fakeEngine) Capabilities() []Capability                       { return nil }
-func (f *fakeEngine) Close() error                                     { return nil }
+func (f *fakeEngine) Text(_ context.Context, _ string) (*TextResult, error) { return nil, nil }
+func (f *fakeEngine) Click(_ context.Context, _, _ string) error            { return nil }
+func (f *fakeEngine) Type(_ context.Context, _, _, _ string) error          { return nil }
+func (f *fakeEngine) Capabilities() []Capability                            { return nil }
+func (f *fakeEngine) Close() error                                          { return nil }
 
 func TestRouterChromeMode(t *testing.T) {
 	r := NewRouter(ModeChrome, nil)

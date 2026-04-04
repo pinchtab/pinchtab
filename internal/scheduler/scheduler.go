@@ -407,7 +407,6 @@ func (s *Scheduler) executeTask(ctx context.Context, t *Task) (any, error) {
 	req.Header.Set(activity.HeaderPTTabID, t.TabID)
 	if t.AgentID != "" {
 		req.Header.Set(activity.HeaderAgentID, t.AgentID)
-		req.Header.Set(activity.HeaderPTAgentID, t.AgentID)
 	}
 
 	resp, err := s.client.Do(req)

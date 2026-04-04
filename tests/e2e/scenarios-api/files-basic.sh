@@ -118,12 +118,12 @@ assert_ok "download public"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab download (SSRF blocked)"
+start_test "pinchtab download (non-allowed domain blocked)"
 
-pt_get "/download?url=${FIXTURES_URL}/sample.txt"
+pt_get "/download?url=http://not-on-allowlist.local/sample.txt"
 assert_http_status 400 "download blocked"
 
-assert_contains "$RESULT" "blocked\|private" "SSRF error message"
+assert_contains "$RESULT" "not allowed\|blocked" "domain rejection error message"
 
 end_test
 

@@ -70,3 +70,52 @@ func TestClientIP_FallsBackToRawRemoteAddr(t *testing.T) {
 		t.Fatalf("ClientIP() = %q, want %q", got, "198.51.100.10")
 	}
 }
+
+func TestCredentialsFromRequest_SessionAuth(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Session ses_abc123")
+
+	creds := CredentialsFromRequest(req)
+	if creds.Method != MethodSession {
+		t.Fatalf("Method = %q, want %q", creds.Method, MethodSession)
+	}
+	if creds.Value != "ses_abc123" {
+		t.Fatalf("Value = %q, want %q", creds.Value, "ses_abc123")
+	}
+}
+
+func TestCredentialsFromRequest_SessionAuthCaseInsensitive(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "SESSION ses_token")
+
+	creds := CredentialsFromRequest(req)
+	if creds.Method != MethodSession {
+		t.Fatalf("Method = %q, want %q", creds.Method, MethodSession)
+	}
+}
+
+func TestCredentialsFromRequest_BearerStillWorks(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer my-token")
+
+	creds := CredentialsFromRequest(req)
+	if creds.Method != MethodHeader {
+		t.Fatalf("Method = %q, want %q", creds.Method, MethodHeader)
+	}
+	if creds.Value != "my-token" {
+		t.Fatalf("Value = %q, want %q", creds.Value, "my-token")
+	}
+}
+
+func TestCredentialsFromRequest_BareTokenIsBearerNotSession(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "raw-token-value")
+
+	creds := CredentialsFromRequest(req)
+	if creds.Method != MethodHeader {
+		t.Fatalf("Method = %q, want %q", creds.Method, MethodHeader)
+	}
+	if creds.Value != "raw-token-value" {
+		t.Fatalf("Value = %q, want %q", creds.Value, "raw-token-value")
+	}
+}

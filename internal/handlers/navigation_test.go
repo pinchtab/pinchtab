@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"net/http/httptest"
 	"strings"
@@ -283,5 +284,33 @@ func TestHandleTab_CloseMissingID(t *testing.T) {
 	h.HandleTab(w, req)
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestIsNavigateAbortedOnBinary(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		url    string
+		expect bool
+	}{
+		{"gz file with ERR_ABORTED", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/file.gz", true},
+		{"xml.gz file with ERR_ABORTED", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/sitemap.xml.gz", true},
+		{"zip file with ERR_ABORTED", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/archive.zip", true},
+		{"pdf file with ERR_ABORTED", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/doc.pdf", true},
+		{"gz with query param", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/file.gz?token=abc", true},
+		{"html file with ERR_ABORTED", fmt.Errorf("net::ERR_ABORTED"), "https://example.com/page.html", false},
+		{"gz file without ERR_ABORTED", fmt.Errorf("net::ERR_CONNECTION_REFUSED"), "https://example.com/file.gz", false},
+		{"html file different error", fmt.Errorf("timeout"), "https://example.com/page.html", false},
+		{"nil error", nil, "https://example.com/file.gz", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isNavigateAbortedOnBinary(tt.err, tt.url)
+			if result != tt.expect {
+				t.Errorf("isNavigateAbortedOnBinary(%v, %q) = %v, want %v", tt.err, tt.url, result, tt.expect)
+			}
+		})
 	}
 }

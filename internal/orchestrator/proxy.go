@@ -25,6 +25,10 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enrich activity with action/navigate details from the request body
+	// before proxying, so the dashboard stream shows meaningful labels.
+	activity.EnrichRouteActivity(r)
+
 	proxyToInstance := func(inst *bridge.Instance) {
 		activity.EnrichRequest(r, activity.Update{
 			InstanceID:  inst.ID,

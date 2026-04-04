@@ -17,7 +17,7 @@ pinchtab keyboard type "hello world"
 Insert text directly without dispatching key events. Equivalent to pasting text — faster but won't trigger keydown/keypress/keyup listeners.
 
 ```bash
-pinchtab keyboard inserttext "test@example.com"
+pinchtab keyboard inserttext "test@pinchtab.com"
 ```
 
 Use `inserttext` when:

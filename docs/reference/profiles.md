@@ -51,7 +51,7 @@ curl http://localhost:9867/profiles/prof_278be873
   "sizeMB": 510.17,
   "source": "created",
   "chromeProfileName": "Your Chrome",
-  "accountEmail": "admin@example.com",
+  "accountEmail": "admin@pinchtab.com",
   "accountName": "Luigi",
   "hasAccount": true,
   "useWhen": "Use for work accounts",
@@ -194,7 +194,7 @@ curl http://localhost:9867/profiles/prof_278be873/logs
 curl 'http://localhost:9867/profiles/work/logs?limit=50'
 ```
 
-`logs` accepts either the profile ID or the profile name.
+`logs` accepts either the profile ID or the profile name. Results are derived from the activity store for that profile.
 
 ### Get Analytics
 
@@ -203,7 +203,7 @@ curl http://localhost:9867/profiles/prof_278be873/analytics
 curl http://localhost:9867/profiles/work/analytics
 ```
 
-`analytics` also accepts either the profile ID or the profile name.
+`analytics` also accepts either the profile ID or the profile name. It is computed from the same activity data used by `/api/activity`.
 
 ## Related Pages
 

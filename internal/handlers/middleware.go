@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/agentsession"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -23,6 +25,13 @@ var (
 	metricRequestLatencyN uint64
 	metricRateLimited     uint64
 	metricStaleRefRetries uint64
+
+	streamMu          sync.Mutex
+	streamConnections = map[string]int{}
+)
+
+const (
+	maxConcurrentStreamRequestsPerHost = 8
 )
 
 const (
@@ -73,10 +82,10 @@ func SecurityHeadersMiddleware(cfg *config.RuntimeConfig, next http.Handler) htt
 }
 
 func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
-	return AuthMiddlewareWithSessions(cfg, nil, next)
+	return AuthMiddlewareWithSessions(cfg, nil, nil, next)
 }
 
-func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.SessionManager, next http.Handler) http.Handler {
+func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.SessionManager, agentSessions *agentsession.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isPublicDashboardPath(r.URL.Path) || isPublicAuthPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
@@ -97,6 +106,24 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 		}
 
 		switch creds.Method {
+		case authn.MethodSession:
+			if agentSessions == nil || !agentSessions.Enabled() {
+				httpx.ErrorCode(w, 401, "session_auth_unavailable", "agent session authentication is not enabled", false, nil)
+				return
+			}
+			sess, ok := agentSessions.Authenticate(creds.Value)
+			if !ok || sess == nil {
+				w.Header().Set("WWW-Authenticate", `Session realm="pinchtab", error="bad_session"`)
+				httpx.ErrorCode(w, 401, "bad_session", "invalid or expired agent session", false, nil)
+				return
+			}
+			// Inject agent identity into request headers for activity tracking
+			r.Header.Set(activity.HeaderAgentID, sess.AgentID)
+			r.Header.Set(activity.HeaderPTSessionID, sess.ID)
+			activity.EnrichRequest(r, activity.Update{
+				AgentID:   sess.AgentID,
+				SessionID: sess.ID,
+			})
 		case authn.MethodHeader:
 			if subtle.ConstantTimeCompare([]byte(creds.Value), []byte(token)) != 1 {
 				authn.ClearSessionCookie(w, r, cfg != nil && cfg.TrustProxyHeaders, cookieSecureSetting(cfg))
@@ -162,10 +189,13 @@ func cookieAuthAllowed(r *http.Request) bool {
 		switch {
 		case path == "/health",
 			path == "/metrics",
+			path == "/api/metrics",
 			path == "/api/activity",
 			path == "/api/agents",
 			path == "/api/events",
 			path == "/api/config",
+			path == "/api/sessions",
+			strings.HasPrefix(path, "/api/sessions/"),
 			path == "/profiles",
 			path == "/instances",
 			path == "/instances/tabs",
@@ -368,13 +398,27 @@ var (
 
 const (
 	rateLimitWindow  = 10 * time.Second
-	rateLimitMaxReq  = 120
+	rateLimitMaxReq  = 300
 	evictionInterval = 30 * time.Second
 )
 
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	startRateLimiterJanitor(rateLimitWindow, evictionInterval)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isLongLivedStreamRequest(r) {
+			host := authn.ClientIP(r)
+			if !acquireStreamConnection(host) {
+				atomic.AddUint64(&metricRateLimited, 1)
+				httpx.ErrorCode(w, 429, "stream_limit_reached", "too many concurrent streaming connections", true, map[string]any{
+					"maxConcurrent": maxConcurrentStreamRequestsPerHost,
+				})
+				return
+			}
+			defer releaseStreamConnection(host)
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		host := authn.ClientIP(r)
 
 		now := time.Now()
@@ -398,6 +442,46 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isLongLivedStreamRequest(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodGet {
+		return false
+	}
+	path := strings.TrimSpace(r.URL.Path)
+	switch {
+	case path == "/api/events":
+		return true
+	case strings.HasPrefix(path, "/api/agents/") && strings.HasSuffix(path, "/events"):
+		return true
+	case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/logs/stream"):
+		return true
+	default:
+		return false
+	}
+}
+
+func acquireStreamConnection(host string) bool {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+
+	if streamConnections[host] >= maxConcurrentStreamRequestsPerHost {
+		return false
+	}
+	streamConnections[host]++
+	return true
+}
+
+func releaseStreamConnection(host string) {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+
+	current := streamConnections[host]
+	if current <= 1 {
+		delete(streamConnections, host)
+		return
+	}
+	streamConnections[host] = current - 1
 }
 
 func startRateLimiterJanitor(window, interval time.Duration) {

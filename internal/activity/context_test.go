@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -159,5 +160,42 @@ func TestMiddlewarePrefersExplicitSourceHeaderOverCookieAuth(t *testing.T) {
 	}
 	if got := rec.events[0].Source; got != "mcp" {
 		t.Fatalf("event.Source = %q, want mcp", got)
+	}
+}
+
+func TestMiddlewareUsesAgentIDHeader(t *testing.T) {
+	rec := &captureRecorder{}
+	handler := Middleware(rec, "server", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set(HeaderAgentID, "agent-main")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if len(rec.events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(rec.events))
+	}
+	if got := rec.events[0].AgentID; got != "agent-main" {
+		t.Fatalf("event.AgentID = %q, want agent-main", got)
+	}
+}
+
+func TestPropagateHeadersUsesAgentIDHeader(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	state := &requestState{event: Event{
+		AgentID:   "agent-main",
+		RequestID: "req-1",
+	}}
+
+	proxyReq := httptest.NewRequest(http.MethodGet, "http://example.test/health", nil)
+	PropagateHeaders(context.WithValue(req.Context(), requestStateKey{}, state), proxyReq)
+
+	if got := proxyReq.Header.Get(HeaderAgentID); got != "agent-main" {
+		t.Fatalf("X-Agent-Id = %q, want agent-main", got)
+	}
+	if got := proxyReq.Header.Get("X-PinchTab-Agent-Id"); got != "" {
+		t.Fatalf("X-PinchTab-Agent-Id = %q, want empty", got)
 	}
 }

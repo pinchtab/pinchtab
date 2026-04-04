@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
@@ -306,29 +307,51 @@ func TestProfileManagerDelete(t *testing.T) {
 	}
 }
 
-func TestActionTracker(t *testing.T) {
-	at := NewActionTracker()
-	profName := fmt.Sprintf("prof-%d", time.Now().UnixNano())
+func TestProfileManagerLogsAndAnalyticsUseActivityRecorder(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	store, err := activity.NewStore(t.TempDir(), 1)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	pm.SetActivityRecorder(store)
 
+	profileName := fmt.Sprintf("prof-%d", time.Now().UnixNano())
+	now := time.Now().UTC()
 	for i := 0; i < 5; i++ {
-		at.Record(profName, bridge.ActionRecord{
-			Timestamp:  time.Now().Add(time.Duration(i) * time.Second),
-			Method:     "GET",
-			Endpoint:   "/snapshot",
-			URL:        "https://pinchtab.com",
-			DurationMs: 100,
-			Status:     200,
-		})
+		if err := store.Record(activity.Event{
+			Timestamp:   now.Add(time.Duration(i) * time.Second),
+			Source:      "server",
+			ProfileName: profileName,
+			Method:      "GET",
+			Path:        "/snapshot",
+			URL:         "https://pinchtab.com/page",
+			DurationMs:  100,
+			Status:      200,
+		}); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
 	}
 
-	logs := at.GetLogs(profName, 3)
+	logs := pm.Logs(profileName, 3)
 	if len(logs) != 3 {
-		t.Errorf("expected 3 logs, got %d", len(logs))
+		t.Fatalf("expected 3 logs, got %d", len(logs))
+	}
+	if logs[0].Endpoint != "/snapshot" {
+		t.Fatalf("logs[0].Endpoint = %q, want /snapshot", logs[0].Endpoint)
 	}
 
-	report := at.Analyze(profName)
+	report := pm.Analytics(profileName)
 	if report.TotalActions != 5 {
-		t.Errorf("expected 5 total actions, got %d", report.TotalActions)
+		t.Fatalf("expected 5 total actions, got %d", report.TotalActions)
+	}
+	if report.Last24h != 5 {
+		t.Fatalf("expected 5 last24h actions, got %d", report.Last24h)
+	}
+	if report.CommonHosts["pinchtab.com"] != 5 {
+		t.Fatalf("CommonHosts = %#v, want pinchtab.com=5", report.CommonHosts)
+	}
+	if report.TopEndpoints["/snapshot"] != 5 {
+		t.Fatalf("TopEndpoints = %#v, want /snapshot=5", report.TopEndpoints)
 	}
 }
 

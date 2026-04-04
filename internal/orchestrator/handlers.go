@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
@@ -59,36 +60,36 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	// Tab operations - custom handlers
 	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
 
-	// Tab operations - generic proxy (all route to the appropriate instance)
-	for _, route := range []string{
-		"POST /tabs/{id}/navigate",
-		"GET /tabs/{id}/snapshot",
-		"GET /tabs/{id}/screenshot",
-		"POST /tabs/{id}/action",
-		"POST /tabs/{id}/actions",
-		"GET /tabs/{id}/text",
-		"GET /tabs/{id}/pdf",
-		"POST /tabs/{id}/pdf",
-		"POST /tabs/{id}/lock",
-		"POST /tabs/{id}/unlock",
-		"GET /tabs/{id}/cookies",
-		"POST /tabs/{id}/cookies",
-		"GET /tabs/{id}/metrics",
-		"POST /tabs/{id}/find",
-		"POST /tabs/{id}/back",
-		"POST /tabs/{id}/forward",
-		"POST /tabs/{id}/reload",
-		"POST /tabs/{id}/wait",
-		"POST /tabs/{id}/solve",
-		"POST /tabs/{id}/solve/{name}",
-		"GET /tabs/{id}/network/export",
-		"GET /tabs/{id}/network/export/stream",
-	} {
+	// Tab operations - generic proxy (all route to the appropriate instance).
+	// Sourced from routes.Core() catalogue to stay in sync with bridge and strategy.
+	for _, route := range routes.TabScopedRoutes() {
 		mux.HandleFunc(route, o.proxyTabRequest)
 	}
-	registerCapabilityRoute(mux, "POST /tabs/{id}/evaluate", o.AllowsEvaluate(), "evaluate", "security.allowEvaluate", "evaluate_disabled", o.proxyTabRequest)
-	registerCapabilityRoute(mux, "GET /tabs/{id}/download", o.AllowsDownload(), "download", "security.allowDownload", "download_disabled", o.proxyTabRequest)
-	registerCapabilityRoute(mux, "POST /tabs/{id}/upload", o.AllowsUpload(), "upload", "security.allowUpload", "upload_disabled", o.proxyTabRequest)
+	// Tab-scoped capability-gated routes.
+	for cap, eps := range routes.TabScopedCapabilityRoutes() {
+		var enabled bool
+		var feature, setting, code string
+		switch cap {
+		case routes.CapEvaluate:
+			enabled = o.AllowsEvaluate()
+			feature, setting, code = "evaluate", "security.allowEvaluate", "evaluate_disabled"
+		case routes.CapDownload:
+			enabled = o.AllowsDownload()
+			feature, setting, code = "download", "security.allowDownload", "download_disabled"
+		case routes.CapUpload:
+			enabled = o.AllowsUpload()
+			feature, setting, code = "upload", "security.allowUpload", "upload_disabled"
+		case routes.CapScreencast:
+			enabled = o.AllowsScreencast()
+			feature, setting, code = "screencast", "security.allowScreencast", "screencast_disabled"
+		case routes.CapMacro:
+			enabled = o.AllowsMacro()
+			feature, setting, code = "macro", "security.allowMacro", "macro_disabled"
+		}
+		for _, ep := range eps {
+			registerCapabilityRoute(mux, ep.TabRoute(), enabled, feature, setting, code, o.proxyTabRequest)
+		}
+	}
 
 	// Cache operations - per-instance (browser-wide shorthands are in strategy routes)
 	mux.HandleFunc("POST /instances/{id}/cache/clear", o.proxyToInstance)

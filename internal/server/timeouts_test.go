@@ -41,11 +41,11 @@ func TestDashboardHandlerChainAppliesRateLimit(t *testing.T) {
 		activity.Middleware(
 			nil,
 			"server",
-			handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, mux)))),
+			handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, nil, mux)))),
 		),
 	)
 
-	for i := 0; i < 120; i++ {
+	for i := 0; i < 300; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 		req.RemoteAddr = "198.51.100.11:41001"
 		req.Header.Set("Authorization", "Bearer secret")

@@ -61,3 +61,20 @@ pt_ok pdf --scale 0.5 -o /tmp/e2e-scaled.pdf
 rm -f /tmp/e2e-scaled.pdf
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab download .gz file (gzip fallback)"
+
+# fixtures domain allowlisted in e2e config for this test
+GZ_URL="${FIXTURES_URL}/sitemap.xml.gz"
+
+pt_ok download "$GZ_URL" -o /tmp/e2e-download-gz.xml
+assert_file_exists /tmp/e2e-download-gz.xml ".gz download file created"
+
+if [ -f /tmp/e2e-download-gz.xml ]; then
+  PT_OUT=$(cat /tmp/e2e-download-gz.xml)
+  assert_output_contains "example.com" ".gz file decompressed correctly"
+fi
+rm -f /tmp/e2e-download-gz.xml
+
+end_test

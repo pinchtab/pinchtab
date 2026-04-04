@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -23,10 +24,21 @@ func runCLI(fn func(cliRuntime)) {
 
 func runCLIWith(cfg *config.RuntimeConfig, fn func(cliRuntime)) {
 	fn(cliRuntime{
-		client: &http.Client{Timeout: 60 * time.Second},
+		client: newCLIHTTPClient(resolveCLIAgentID()),
 		base:   resolveCLIBase(cfg),
 		token:  resolveCLIToken(cfg),
 	})
+}
+
+func newCLIHTTPClient(agentID string) *http.Client {
+	baseTransport := http.DefaultTransport
+	return &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: agentHeaderTransport{
+			base:    baseTransport,
+			agentID: normalizeCLIAgentID(agentID),
+		},
+	}
 }
 
 func resolveCLIBase(cfg *config.RuntimeConfig) string {
@@ -45,11 +57,49 @@ func resolveCLIBase(cfg *config.RuntimeConfig) string {
 }
 
 func resolveCLIToken(cfg *config.RuntimeConfig) string {
+	if sessionToken := os.Getenv("PINCHTAB_SESSION"); sessionToken != "" {
+		return sessionToken
+	}
 	token := cfg.Token
 	if envToken := os.Getenv("PINCHTAB_TOKEN"); envToken != "" {
 		token = envToken
 	}
 	return token
+}
+
+func resolveCLIAgentID() string {
+	if trimmed := strings.TrimSpace(cliAgentID); trimmed != "" {
+		return trimmed
+	}
+	if trimmed := strings.TrimSpace(os.Getenv("PINCHTAB_AGENT_ID")); trimmed != "" {
+		return trimmed
+	}
+	return "cli"
+}
+
+func normalizeCLIAgentID(raw string) string {
+	if trimmed := strings.TrimSpace(raw); trimmed != "" {
+		return trimmed
+	}
+	return "cli"
+}
+
+type agentHeaderTransport struct {
+	base    http.RoundTripper
+	agentID string
+}
+
+func (t agentHeaderTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+
+	cloned := req.Clone(req.Context())
+	cloned.Header = req.Header.Clone()
+	cloned.Header.Set(activity.HeaderAgentID, normalizeCLIAgentID(t.agentID))
+
+	return base.RoundTrip(cloned)
 }
 
 func optionalArg(args []string) string {

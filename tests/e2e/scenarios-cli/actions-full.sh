@@ -159,6 +159,38 @@ assert_json_field ".result" "192.168.1.100" "multiple dots preserved"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab click submit button fires JS submit handler (#411)"
+
+# Issue #411: clicking a submit button must dispatch the full event chain
+# (mousedown, mouseup, click, submit) so JS-only form handlers run.
+# Regression: bare CDP click skipped the 'submit' event, causing a timeout
+# on frameworks like Odoo that rely on addEventListener('submit').
+
+pt_ok nav "${FIXTURES_URL}/js-submit.html"
+pt_ok fill "#username" "admin"
+pt_ok fill "#password" "secret"
+pt_ok click "--css" "#submit-btn"
+
+# The JS submit handler must have fired and written LOGIN_SUCCESS to #result.
+pt_ok eval "document.getElementById('result-success')?.textContent"
+assert_json_field ".result" "LOGIN_SUCCESS" "JS submit handler fired on button click"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab click submit button with wrong creds shows failure (#411)"
+
+pt_ok nav "${FIXTURES_URL}/js-submit.html"
+pt_ok fill "#username" "wrong"
+pt_ok fill "#password" "wrong"
+pt_ok click "--css" "#submit-btn"
+
+pt_ok eval "document.getElementById('result-failure')?.textContent"
+assert_json_field ".result" "LOGIN_FAILURE" "JS submit handler fired and returned failure"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab keyboard type handles long strings (#413)"
 
 # Issue #413: keyboard type with 50+ chars caused timeout and daemon freeze

@@ -81,6 +81,9 @@ func TestSetConfigValue_SecurityFields(t *testing.T) {
 		wantErr bool
 	}{
 		{"security.allowEvaluate", "true", func(fc *FileConfig) bool { return *fc.Security.AllowEvaluate == true }, false},
+		{"security.allowClipboard", "true", func(fc *FileConfig) bool {
+			return fc.Security.AllowClipboard != nil && *fc.Security.AllowClipboard
+		}, false},
 		{"security.allowMacro", "1", func(fc *FileConfig) bool { return *fc.Security.AllowMacro == true }, false},
 		{"security.allowScreencast", "false", func(fc *FileConfig) bool { return *fc.Security.AllowScreencast == false }, false},
 		{"security.allowDownload", "on", func(fc *FileConfig) bool { return *fc.Security.AllowDownload == true }, false},
@@ -93,6 +96,9 @@ func TestSetConfigValue_SecurityFields(t *testing.T) {
 			return fc.Security.DownloadMaxBytes != nil && *fc.Security.DownloadMaxBytes == 33554432
 		}, false},
 		{"security.allowUpload", "off", func(fc *FileConfig) bool { return *fc.Security.AllowUpload == false }, false},
+		{"security.enableActionGuards", "true", func(fc *FileConfig) bool {
+			return fc.Security.EnableActionGuards != nil && *fc.Security.EnableActionGuards
+		}, false},
 		{"security.uploadMaxRequestBytes", "12582912", func(fc *FileConfig) bool {
 			return fc.Security.UploadMaxRequestBytes != nil && *fc.Security.UploadMaxRequestBytes == 12582912
 		}, false},
@@ -106,6 +112,8 @@ func TestSetConfigValue_SecurityFields(t *testing.T) {
 			return fc.Security.UploadMaxTotalBytes != nil && *fc.Security.UploadMaxTotalBytes == 18874368
 		}, false},
 		{"security.allowEvaluate", "maybe", nil, true},
+		{"security.allowClipboard", "maybe", nil, true},
+		{"security.enableActionGuards", "maybe", nil, true},
 		{"security.unknown", "true", nil, true},
 	}
 

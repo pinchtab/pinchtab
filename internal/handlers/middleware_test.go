@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/agentsession"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -16,6 +17,10 @@ func resetRateLimitStateForTests() {
 	rateMu.Lock()
 	rateBuckets = map[string][]time.Time{}
 	rateMu.Unlock()
+
+	streamMu.Lock()
+	streamConnections = map[string]int{}
+	streamMu.Unlock()
 }
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
@@ -163,7 +168,7 @@ func TestAuthMiddleware_ValidCookie(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(200)
 	}))
@@ -190,7 +195,7 @@ func TestAuthMiddleware_CookieRestrictedEndpointRejected(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(200)
 	}))
@@ -217,7 +222,7 @@ func TestAuthMiddleware_CookieAllowsTabCloseEndpoint(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -245,7 +250,7 @@ func TestAuthMiddleware_CookieAllowsActionEndpoint(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -273,7 +278,7 @@ func TestAuthMiddleware_CookieCrossOriginRejected(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -301,7 +306,7 @@ func TestAuthMiddleware_CookieRequestWithoutOriginOrRefererRejected(t *testing.T
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -328,7 +333,7 @@ func TestAuthMiddleware_CookieSameOriginRefererAccepted(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -356,7 +361,7 @@ func TestAuthMiddleware_CookieIgnoresForwardedOriginHints(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -387,7 +392,7 @@ func TestAuthMiddleware_CookieWebSocketRequiresSameOrigin(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -439,7 +444,7 @@ func TestAuthMiddleware_CookieElevatedEndpointRequiresElevation(t *testing.T) {
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -485,7 +490,7 @@ func TestAuthMiddleware_CookieConfigEndpointDoesNotRequireElevationByDefault(t *
 	}
 
 	called := false
-	handler := AuthMiddlewareWithSessions(cfg, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddlewareWithSessions(cfg, sessions, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -835,6 +840,86 @@ func TestRateLimitMiddleware_RateLimitsHealthAndMetrics(t *testing.T) {
 	}
 }
 
+func TestRateLimitMiddleware_DoesNotRateLimitStreamingEndpoints(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
+
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, p := range []string{
+		"/api/events",
+		"/api/agents/agent-1/events",
+		"/instances/inst-1/logs/stream",
+	} {
+		resetRateLimitStateForTests()
+		for i := 0; i < rateLimitMaxReq+5; i++ {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s request %d: expected 200, got %d", p, i+1, w.Code)
+			}
+		}
+	}
+}
+
+func TestRateLimitMiddleware_LimitsConcurrentStreamingEndpointsPerHost(t *testing.T) {
+	resetRateLimitStateForTests()
+	t.Cleanup(resetRateLimitStateForTests)
+
+	entered := make(chan struct{}, maxConcurrentStreamRequestsPerHost)
+	release := make(chan struct{})
+	results := make(chan int, maxConcurrentStreamRequestsPerHost)
+
+	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		go func() {
+			req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			results <- w.Code
+		}()
+	}
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for stream %d to enter handler", i+1)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 once concurrent stream limit is reached, got %d", w.Code)
+	}
+
+	close(release)
+
+	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+		select {
+		case code := <-results:
+			if code != http.StatusOK {
+				t.Fatalf("stream %d completed with %d, want 200", i+1, code)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for stream %d to complete", i+1)
+		}
+	}
+}
+
 func TestRateLimitMiddleware_IgnoresSpoofedForwardedHeaders(t *testing.T) {
 	resetRateLimitStateForTests()
 	t.Cleanup(resetRateLimitStateForTests)
@@ -903,5 +988,71 @@ func TestStatusWriter(t *testing.T) {
 	sw.WriteHeader(404)
 	if sw.Code != 404 {
 		t.Errorf("expected 404, got %d", sw.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuth(t *testing.T) {
+	store := agentsession.NewStore(agentsession.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	_, token, _ := store.Create("test-agent", "test")
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("expected handler to be called with valid session token")
+	}
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthInvalid(t *testing.T) {
+	store := agentsession.NewStore(agentsession.Config{Enabled: true})
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Authorization", "Session ses_invalidtoken")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Fatal("handler should not be called with invalid session token")
+	}
+	if rr.Code != 401 {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthDisabled(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Authorization", "Session ses_sometoken")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Fatal("handler should not be called when agent sessions disabled")
+	}
+	if rr.Code != 401 {
+		t.Fatalf("expected 401, got %d", rr.Code)
 	}
 }

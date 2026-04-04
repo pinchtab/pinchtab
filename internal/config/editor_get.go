@@ -138,6 +138,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 	switch field {
 	case "allowEvaluate":
 		return formatBoolPtr(s.AllowEvaluate), nil
+	case "allowClipboard":
+		return formatBoolPtr(s.AllowClipboard), nil
 	case "allowMacro":
 		return formatBoolPtr(s.AllowMacro), nil
 	case "allowScreencast":
@@ -150,6 +152,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatIntPtr(s.DownloadMaxBytes), nil
 	case "allowUpload":
 		return formatBoolPtr(s.AllowUpload), nil
+	case "enableActionGuards":
+		return formatBoolPtr(s.EnableActionGuards), nil
 	case "uploadMaxRequestBytes":
 		return formatIntPtr(s.UploadMaxRequestBytes), nil
 	case "uploadMaxFiles":

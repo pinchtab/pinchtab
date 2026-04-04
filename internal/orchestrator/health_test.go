@@ -136,3 +136,92 @@ func TestProbeInstanceHealth_RejectsUnsupportedScheme(t *testing.T) {
 		t.Fatalf("lastProbe = %q, want invalid HTTP bridge message", lastProbe)
 	}
 }
+
+func TestProbeInstanceHealth_TagsBridgeHealthProbeAsOrchestrator(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"10.0.0.8"},
+		AttachAllowSchemes: []string{"http"},
+	})
+
+	var source string
+	o.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			source = req.Header.Get("X-PinchTab-Source")
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	healthy, _, _ := o.probeInstanceHealth(&InstanceInternal{
+		Instance: bridge.Instance{
+			Attached:   true,
+			AttachType: "bridge",
+		},
+		URL: "http://10.0.0.8:9868",
+	})
+	if !healthy {
+		t.Fatal("expected probe to succeed")
+	}
+	if source != "orchestrator" {
+		t.Fatalf("X-PinchTab-Source = %q, want orchestrator", source)
+	}
+}
+
+func TestFetchTabs_TagsBridgeRequestAsOrchestrator(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+
+	var source string
+	o.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			source = req.Header.Get("X-PinchTab-Source")
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"tabs":[]}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	_, err := o.fetchTabs(&InstanceInternal{
+		Instance: bridge.Instance{ID: "inst-1"},
+		URL:      "http://127.0.0.1:9868",
+	})
+	if err != nil {
+		t.Fatalf("fetchTabs() error = %v", err)
+	}
+	if source != "orchestrator" {
+		t.Fatalf("X-PinchTab-Source = %q, want orchestrator", source)
+	}
+}
+
+func TestFetchMetrics_TagsBridgeRequestAsOrchestrator(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+
+	var source string
+	o.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			source = req.Header.Get("X-PinchTab-Source")
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"memory":{"jsHeapUsedMB":1}}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	_, err := o.fetchMetrics(&InstanceInternal{
+		Instance: bridge.Instance{ID: "inst-1"},
+		URL:      "http://127.0.0.1:9868",
+	})
+	if err != nil {
+		t.Fatalf("fetchMetrics() error = %v", err)
+	}
+	if source != "orchestrator" {
+		t.Fatalf("X-PinchTab-Source = %q, want orchestrator", source)
+	}
+}

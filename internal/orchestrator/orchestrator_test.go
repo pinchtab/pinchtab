@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -309,6 +310,53 @@ func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctChromeDebugPort(t *
 	}
 	if !o.portAllocator.IsAllocated(9911) {
 		t.Fatal("explicit bridge port should remain reserved in allocator while instance is active")
+	}
+}
+
+func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	root := t.TempDir()
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(root, runner)
+	sharedActivityStateDir := filepath.Join(root, "dashboard-state")
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		StateDir:          sharedActivityStateDir,
+		InstancePortStart: 9930,
+		InstancePortEnd:   9933,
+	})
+
+	inst, err := o.Launch("profile1", "", true, nil)
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+
+	wantChildStateDir := filepath.Join(root, "profile1", ".pinchtab-state")
+	if fc.Server.StateDir != wantChildStateDir {
+		t.Fatalf("child Server.StateDir = %q, want %q", fc.Server.StateDir, wantChildStateDir)
+	}
+	if fc.Observability.Activity.StateDir != "" {
+		t.Fatalf("child Observability.Activity.StateDir = %q, want empty", fc.Observability.Activity.StateDir)
+	}
+	if got := envMap(runner.env)["PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR"]; got != "" {
+		t.Fatalf("PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR = %q, want empty", got)
+	}
+	if inst.Port != "9930" {
+		t.Fatalf("bridge port = %s, want 9930", inst.Port)
 	}
 }
 

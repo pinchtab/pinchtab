@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { IconCamera } from "../atoms/Icon";
 import * as api from "../../services/api";
 
 export type ScreencastStatus = "connecting" | "streaming" | "error";
@@ -99,7 +100,7 @@ export default function ScreencastStatusBar({
           {isCapturing ? (
             <span className="animate-pulse">⌛</span>
           ) : (
-            <span>📸</span>
+            <IconCamera size={14} />
           )}
         </button>
 

@@ -31,6 +31,22 @@ Preferred tool surface:
 - Use `curl` for profile-management routes or non-shell/API fallback flows.
 - Use `jq` only when you need structured parsing from JSON responses.
 
+## Agent Identity And Attribution
+
+When multiple agents share one PinchTab server, always give each agent a stable ID.
+
+- CLI flows: prefer `pinchtab --agent-id <agent-id> ...`
+- long-running shells: set `PINCHTAB_AGENT_ID=<agent-id>`
+- raw HTTP flows: send `X-Agent-Id: <agent-id>` on requests that should be attributed to that agent
+
+That identity is recorded as `agentId` in activity events and powers:
+
+- the dashboard Agents view
+- `GET /api/activity?agentId=<agent-id>`
+- scheduler task attribution when work is dispatched on behalf of an agent
+
+If you are switching between unrelated browser tasks, do not reuse the same agent ID unless you intentionally want one combined activity trail.
+
 ## Safety Defaults
 
 - Default to `http://localhost` targets. Only use a remote PinchTab server when the user explicitly provides it and, if needed, a token.
@@ -98,15 +114,15 @@ Use `&&` only when you do not need to inspect intermediate output before decidin
 Good:
 
 ```bash
-pinchtab nav https://example.com && pinchtab snap -i -c
+pinchtab nav https://pinchtab.com && pinchtab snap -i -c
 pinchtab click --wait-nav e5 && pinchtab snap -i -c
-pinchtab nav https://example.com --block-images && pinchtab text
+pinchtab nav https://pinchtab.com --block-images && pinchtab text
 ```
 
 Run commands separately when you must read the snapshot output first:
 
 ```bash
-pinchtab nav https://example.com
+pinchtab nav https://pinchtab.com
 pinchtab snap -i -c
 # Read refs, choose the correct e#
 pinchtab click e7
@@ -172,7 +188,7 @@ Use a temporary instance for public pages, scraping, or tasks that do not need l
 pinchtab instance start
 pinchtab instances
 # Point CLI commands at the instance port you want to use.
-pinchtab --server http://localhost:9868 nav https://example.com
+pinchtab --server http://localhost:9868 nav https://pinchtab.com
 pinchtab --server http://localhost:9868 text
 ```
 
@@ -235,11 +251,14 @@ curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"work","mode":"headless"}'
 curl -X POST http://localhost:9868/action \
+  -H "X-Agent-Id: agent-main" \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","selector":"e5"}'
 ```
 
-If the server is exposed beyond localhost, require a token and use a dedicated automation profile. See [TRUST.md](./TRUST.md) and [config.md](../../docs/reference/config.md).
+If the server is exposed beyond localhost, require a token and use a dedicated automation profile. See [TRUST.md](./TRUST.md).
+
+**Agent sessions**: Instead of sharing the server bearer token, each agent can get its own revocable session token. Set `PINCHTAB_SESSION=ses_...` or send `Authorization: Session ses_...`. Create via `POST /api/sessions` with `{"agentId":"...", "label":"..."}`. Sessions have idle timeout (default 12h) and max lifetime (default 24h). Manage with rotate (`POST /api/sessions/{id}/rotate`) and revoke (`POST /api/sessions/{id}/revoke`).
 
 ## Essential Commands
 
@@ -396,11 +415,40 @@ pinchtab text
 ### Search, then extract the result page cheaply
 
 ```bash
-pinchtab nav https://example.com
+pinchtab nav https://example.com/search
 pinchtab snap -i -c
 pinchtab fill e2 "quarterly report"
-pinchtab press Enter
+pinchtab click e3  # Click the Search button
 pinchtab text
+```
+
+**Form submission rules:**
+- ❌ **NEVER use `press Enter` on regular form inputs.** It does NOT submit standard HTML forms.
+- ✅ **ALWAYS click the submit button** to trigger form submission handlers.
+- **Why?** HTML5 forms only auto-submit on Enter if they have explicit JavaScript `onkeypress` or `onkeyup` handlers. The `<form onsubmit>` handler only fires when you click the button, not on Enter.
+
+**Real-world example from benchmark:**
+```bash
+# WRONG: This fails
+pinchtab nav http://fixtures/wiki.html
+pinchtab snap -i -c
+pinchtab fill "#wiki-search-input" "go"
+pinchtab press Enter  # ❌ Does NOT submit the form
+
+# RIGHT: This works
+pinchtab nav http://fixtures/wiki.html
+pinchtab snap -i -c
+pinchtab fill "#wiki-search-input" "go"
+pinchtab click "#wiki-search-btn"  # ✅ Triggers onsubmit handler
+pinchtab text  # Now on the results page
+```
+
+**Always follow this pattern:**
+```bash
+# Template: fill, then click
+pinchtab fill "<selector>" "value"
+pinchtab click "<button-selector>"  # Always click, never press Enter
+pinchtab text  # Verify the form was submitted
 ```
 
 ### Use diff snapshots in a multi-step flow
@@ -481,11 +529,43 @@ PinchTab is a fully open-source, local-only browser automation tool:
 
 ## References
 
-- Command surface: [commands.md](../../docs/commands.md)
-- CLI overview: [cli.md](../../docs/reference/cli.md)
-- Profiles: [profiles.md](../../docs/reference/profiles.md)
-- Instances: [instances.md](../../docs/reference/instances.md)
 - Full API: [api.md](./references/api.md)
 - Minimal env vars: [env.md](./references/env.md)
-- Config reference: [config.md](../../docs/reference/config.md)
+- Agent optimization: [agent-optimization.md](./references/agent-optimization.md)
+- Profiles: [profiles.md](./references/profiles.md)
+- MCP: [mcp.md](./references/mcp.md)
 - Security model: [TRUST.md](./TRUST.md)
+
+## Content Extraction: text vs snapshot
+
+Choose the right extraction method:
+
+| Use Case | Recommended | Why |
+|----------|-------------|-----|
+| Article body, paragraphs | `text` | Clean prose extraction |
+| Prices, numbers in cards | `snapshot` | Text strips structured data |
+| Form field values | `snapshot` | See current input values |
+| Verify element exists | `snapshot` with selector | Text won't show headings |
+| JS-rendered content | `snapshot` after wait | Text may miss dynamic content |
+
+**Common pitfall**: `/text` extracts readable prose but strips headings, prices, and structured UI elements. If you need to verify a heading, price, or button label, use `/snapshot` instead.
+
+```bash
+# Wrong: looking for "$149.99" in text output
+pinchtab text | grep "149.99"  # May fail - prices often stripped
+
+# Right: snapshot includes all visible text
+pinchtab snap -c | grep "149.99"  # Works
+```
+
+## Fixture Selector Quick Reference
+
+| Page | Key selectors |
+|------|---------------|
+| ecommerce | `.add-to-cart`, `#checkout-btn`, `.price` (use `snapshot` not `-c` for price values) |
+| search | `#search-input`, `#search-btn` (click button — never press Enter) |
+| form | `#fullname`, `#email`, `#phone`, `#country`, `#subject`, `#message`, `#submit-btn` |
+| wiki | `#wiki-search-input`, `#wiki-search-btn` |
+| spa | `#new-task-input`, `#priority-select`, `#add-task-btn` |
+| login | `#username`, `#password`, `#login-btn`, `#logout-btn` |
+| dashboard | `#settings-btn`, `#theme-select`, `#modal-save` |

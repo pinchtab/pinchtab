@@ -166,6 +166,7 @@ pinchtab nav <url> --block-images --timeout 60
 
 ## General Efficiency Rules
 
+- **Set a stable agent ID up front.** Use `pinchtab --agent-id <agent-id> ...`, `PINCHTAB_AGENT_ID`, or `X-Agent-Id` for raw HTTP calls so the dashboard Agents view and `/api/activity?agentId=...` stay attributable.
 - **Batch reads before writes.** Snap once, extract all refs, then act. Avoid snap → act → snap → act loops when you can snap → act × N → snap once to verify.
 - **Use `text` for extraction tasks.** If you only need to read content (not interact), `text` is cheaper than `snap` + parsing.
 - **Scope snapshots.** Use `snap -s <selector>` to target a specific section of the page when you know where the element is.

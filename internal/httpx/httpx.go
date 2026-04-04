@@ -18,6 +18,17 @@ const (
 	maxErrorMessageBytes    = 1024
 )
 
+type ProblemDetails struct {
+	Type      string         `json:"type"`
+	Title     string         `json:"title"`
+	Status    int            `json:"status"`
+	Detail    string         `json:"detail,omitempty"`
+	Instance  string         `json:"instance,omitempty"`
+	Code      string         `json:"code,omitempty"`
+	Retryable bool           `json:"retryable,omitempty"`
+	Details   map[string]any `json:"details,omitempty"`
+}
+
 func JSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -49,6 +60,31 @@ func ErrorCode(w http.ResponseWriter, status int, code, message string, retryabl
 		payload["details"] = details
 	}
 	JSON(w, status, payload)
+}
+
+func Problem(w http.ResponseWriter, status int, code, detail string, retryable bool, details map[string]any) {
+	title := http.StatusText(status)
+	if title == "" {
+		title = "Error"
+	}
+
+	payload := ProblemDetails{
+		Type:    "about:blank",
+		Title:   title,
+		Status:  status,
+		Detail:  SanitizeErrorMessage(detail),
+		Code:    code,
+		Details: details,
+	}
+	if retryable {
+		payload.Retryable = true
+	}
+
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		slog.Error("problem encode", "err", err)
+	}
 }
 
 func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {

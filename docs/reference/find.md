@@ -100,7 +100,7 @@ Then use the returned ref:
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
-  -d '{"ref":"e14","kind":"type","text":"user@example.com"}'
+  -d '{"ref":"e14","kind":"type","text":"user@pinchtab.com"}'
 ```
 
 ## Operational Notes

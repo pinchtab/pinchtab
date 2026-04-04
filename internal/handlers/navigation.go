@@ -94,6 +94,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	domainResult := h.IDPIGuard.CheckDomain(req.URL)
 	if domainResult.Blocked {
+		h.recordNavigateRequest(r, req.TabID, req.URL)
 		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
 		return
 	}
@@ -114,13 +115,20 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		h.recordEngine(r, "lite")
 		result, err := h.Router.Lite().Navigate(r.Context(), req.URL)
 		if err != nil {
-			httpx.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
+			if engine.IsIDPIBlocked(err) {
+				httpx.Error(w, http.StatusForbidden, err)
+			} else {
+				httpx.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
+			}
 			return
 		}
 		w.Header().Set("X-Engine", "lite")
 		httpx.JSON(w, 200, map[string]any{"tabId": result.TabID, "url": result.URL, "title": result.Title})
 		return
 	}
+
+	h.recordEngine(r, "chrome")
+	w.Header().Set("X-Engine", "chrome")
 
 	// Ensure Chrome is initialized
 
@@ -209,7 +217,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			} else if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
 				code = 400
 			}
-			httpx.Error(w, code, fmt.Errorf("navigate: %w", err))
+			navigateErrorWithHint(w, code, err, req.URL)
 			return
 		}
 
@@ -218,13 +226,13 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var url string
-		_ = chromedp.Run(tCtx, chromedp.Location(&url))
+		var navURL string
+		_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
 		title, _ := bridge.WaitForTitle(tCtx, titleWait)
 		h.recordResolvedTab(r, newTabID)
-		h.recordResolvedURL(r, url)
+		h.recordResolvedURL(r, navURL)
 
-		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": url, "title": title})
+		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": navURL, "title": title})
 		return
 	}
 
@@ -263,7 +271,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		} else if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
 			code = 400
 		}
-		httpx.Error(w, code, fmt.Errorf("navigate: %w", err))
+		navigateErrorWithHint(w, code, err, req.URL)
 		return
 	}
 
@@ -274,12 +282,12 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var url string
-	_ = chromedp.Run(tCtx, chromedp.Location(&url))
+	var navURL string
+	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
 	title, _ := bridge.WaitForTitle(tCtx, titleWait)
-	h.recordResolvedURL(r, url)
+	h.recordResolvedURL(r, navURL)
 
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
+	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": navURL, "title": title})
 }
 
 // HandleTabNavigate navigates an existing tab identified by path ID.
@@ -364,7 +372,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, bridge.ErrTooManyRedirects) {
 					code = 422
 				}
-				httpx.Error(w, code, fmt.Errorf("navigate: %w", err))
+				navigateErrorWithHint(w, code, err, req.URL)
 				return
 			}
 		}
@@ -494,6 +502,39 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 	var curURL string
 	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
+}
+
+// binaryFileExtensions are extensions that Chrome cannot render and will abort on
+var binaryFileExtensions = []string{".gz", ".zip", ".tar", ".rar", ".7z", ".bz2", ".xz", ".pdf", ".exe", ".bin", ".dmg", ".iso"}
+
+// isNavigateAbortedOnBinary checks if a navigation error is ERR_ABORTED on a likely binary URL
+func isNavigateAbortedOnBinary(err error, url string) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "ERR_ABORTED") {
+		return false
+	}
+	lowerURL := strings.ToLower(url)
+	for _, ext := range binaryFileExtensions {
+		if strings.HasSuffix(lowerURL, ext) || strings.Contains(lowerURL, ext+"?") {
+			return true
+		}
+	}
+	return false
+}
+
+// navigateErrorWithHint returns an error response with remedy hints for binary content
+func navigateErrorWithHint(w http.ResponseWriter, code int, err error, url string) {
+	if isNavigateAbortedOnBinary(err, url) {
+		httpx.ErrorCode(w, 502, "nav_binary_aborted", fmt.Sprintf("navigate: %s", err.Error()), false, map[string]any{
+			"remedy": "download",
+			"hint":   fmt.Sprintf("Chrome cannot render binary/compressed files. Use: pinchtab download %q", url),
+		})
+		return
+	}
+	httpx.Error(w, code, fmt.Errorf("navigate: %w", err))
 }
 
 // HandleReload reloads the current (or specified) tab.

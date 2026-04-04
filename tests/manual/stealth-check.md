@@ -80,7 +80,7 @@ Expected for this manual suite:
 curl -sf -H 'Authorization: Bearer live-test-token' \
   -H 'Content-Type: application/json' \
   http://127.0.0.1:9988/navigate \
-  -d '{"url":"https://example.com"}'
+  -d '{"url":"https://pinchtab.com"}'
 ```
 
 2. Wait for the page to settle.

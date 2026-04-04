@@ -171,11 +171,11 @@ build_download_redirect_url() {
   jq -rn --arg u "$attacker_url" '$u|@uri'
 }
 
-start_test "download security: direct internal target blocked"
+start_test "download security: non-allowed domain blocked"
 
-pt_get "/download?url=${FIXTURES_URL}/sample.txt"
-assert_http_status 400 "direct internal target blocked"
-assert_contains "$RESULT" "blocked\|private" "direct SSRF error message"
+pt_get "/download?url=http://not-on-allowlist.local/sample.txt"
+assert_http_status 400 "non-allowed domain blocked"
+assert_contains "$RESULT" "not allowed\|blocked" "domain rejection error message"
 
 end_test
 

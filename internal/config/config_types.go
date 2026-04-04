@@ -24,6 +24,7 @@ type RuntimeConfig struct {
 	DownloadMaxBytes       int
 	AllowUpload            bool
 	AllowClipboard         bool
+	EnableActionGuards     bool // Enable bridge-level stale/navigation guard checks around actions
 	UploadMaxRequestBytes  int
 	UploadMaxFiles         int
 	UploadMaxFileBytes     int
@@ -99,6 +100,14 @@ type RuntimeConfig struct {
 
 type SessionsRuntimeConfig struct {
 	Dashboard DashboardSessionRuntimeConfig `json:"dashboard,omitempty"`
+	Agent     AgentSessionRuntimeConfig     `json:"agent,omitempty"`
+}
+
+type AgentSessionRuntimeConfig struct {
+	Enabled     bool          `json:"enabled,omitempty"`
+	Mode        string        `json:"mode,omitempty"`
+	IdleTimeout time.Duration `json:"idleTimeout,omitempty"`
+	MaxLifetime time.Duration `json:"maxLifetime,omitempty"`
 }
 
 type DashboardSessionRuntimeConfig struct {
@@ -154,9 +163,10 @@ type ObservabilityConfig struct {
 }
 
 type ActivityConfig struct {
-	Enabled        bool `json:"enabled,omitempty"`
-	SessionIdleSec int  `json:"sessionIdleSec,omitempty"`
-	RetentionDays  int  `json:"retentionDays,omitempty"`
+	Enabled        bool   `json:"enabled,omitempty"`
+	SessionIdleSec int    `json:"sessionIdleSec,omitempty"`
+	RetentionDays  int    `json:"retentionDays,omitempty"`
+	StateDir       string `json:"stateDir,omitempty"`
 }
 
 // FileConfig is the persistent configuration written to disk.
@@ -188,6 +198,14 @@ type ServerConfig struct {
 
 type SessionsFileConfig struct {
 	Dashboard DashboardSessionFileConfig `json:"dashboard,omitempty"`
+	Agent     AgentSessionFileConfig     `json:"agent,omitempty"`
+}
+
+type AgentSessionFileConfig struct {
+	Enabled        *bool  `json:"enabled,omitempty"`
+	Mode           string `json:"mode,omitempty"`
+	IdleTimeoutSec *int   `json:"idleTimeoutSec,omitempty"`
+	MaxLifetimeSec *int   `json:"maxLifetimeSec,omitempty"`
 }
 
 type DashboardSessionFileConfig struct {
@@ -237,6 +255,7 @@ type SecurityConfig struct {
 	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
 	AllowUpload            *bool        `json:"allowUpload,omitempty"`
 	AllowClipboard         *bool        `json:"allowClipboard,omitempty"`
+	EnableActionGuards     *bool        `json:"enableActionGuards,omitempty"`
 	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
 	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
 	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`
@@ -292,9 +311,10 @@ type ObservabilityFileConfig struct {
 }
 
 type ActivityFileConfig struct {
-	Enabled        *bool `json:"enabled,omitempty"`
-	SessionIdleSec *int  `json:"sessionIdleSec,omitempty"`
-	RetentionDays  *int  `json:"retentionDays,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
+	SessionIdleSec *int   `json:"sessionIdleSec,omitempty"`
+	RetentionDays  *int   `json:"retentionDays,omitempty"`
+	StateDir       string `json:"stateDir,omitempty"`
 }
 
 // AutoSolverFileConfig is the persistent configuration for the autosolver system.

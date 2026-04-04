@@ -19,7 +19,7 @@ func TestHandleTabLock(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-a", "timeoutSec": 10})
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))
+	r, _ := http.NewRequest("POST", "/lock", bytes.NewReader(body))
 	h.HandleTabLock(w, r)
 
 	if w.Code != 200 {
@@ -37,7 +37,7 @@ func TestHandleTabLock(t *testing.T) {
 
 	body, _ = json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-b"})
 	w = httptest.NewRecorder()
-	r, _ = http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))
+	r, _ = http.NewRequest("POST", "/lock", bytes.NewReader(body))
 	h.HandleTabLock(w, r)
 
 	if w.Code != 409 {
@@ -52,7 +52,7 @@ func TestHandleTabUnlock(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-b"})
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "/tab/unlock", bytes.NewReader(body))
+	r, _ := http.NewRequest("POST", "/unlock", bytes.NewReader(body))
 	h.HandleTabUnlock(w, r)
 	if w.Code != 409 {
 		t.Fatalf("expected 409, got %d", w.Code)
@@ -60,7 +60,7 @@ func TestHandleTabUnlock(t *testing.T) {
 
 	body, _ = json.Marshal(map[string]any{"tabId": "t1", "owner": "agent-a"})
 	w = httptest.NewRecorder()
-	r, _ = http.NewRequest("POST", "/tab/unlock", bytes.NewReader(body))
+	r, _ = http.NewRequest("POST", "/unlock", bytes.NewReader(body))
 	h.HandleTabUnlock(w, r)
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -73,7 +73,7 @@ func TestHandleTabLockValidation(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"tabId": "t1"})
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "/tab/lock", bytes.NewReader(body))
+	r, _ := http.NewRequest("POST", "/lock", bytes.NewReader(body))
 	h.HandleTabLock(w, r)
 	if w.Code != 400 {
 		t.Fatalf("expected 400, got %d", w.Code)

@@ -50,7 +50,7 @@ func TestBridgeHandlerChainAppliesRateLimit(t *testing.T) {
 		),
 	)
 
-	for i := 0; i < 120; i++ {
+	for i := 0; i < 300; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 		req.RemoteAddr = "198.51.100.10:41000"
 		req.Header.Set("Authorization", "Bearer secret")

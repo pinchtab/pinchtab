@@ -271,7 +271,7 @@ Open a tab on the remote bridge:
 curl -X POST http://127.0.0.1:9867/instances/<instanceId>/tabs/open \
   -H "Authorization: Bearer orchestrator-token" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
+  -d '{"url":"https://pinchtab.com"}'
 ```
 
 Read a tab through the orchestrator:

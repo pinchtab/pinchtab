@@ -4,6 +4,27 @@ Base URL for all examples: `http://localhost:9867`
 
 > **CLI alternative:** All endpoints have CLI equivalents. Use `pinchtab help` for the full list. Examples are shown as `# CLI:` comments below.
 
+## Agent Attribution
+
+If an agent is calling the HTTP API directly, include `X-Agent-Id: <agent-id>` on the requests that should show up under that agent in dashboard and activity views.
+
+Example:
+
+```bash
+curl -X POST /navigate \
+  -H 'X-Agent-Id: agent-crawl-01' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://pinchtab.com"}'
+
+curl '/api/activity?agentId=agent-crawl-01'
+```
+
+Notes:
+
+- CLI users should prefer `pinchtab --agent-id <agent-id> ...` instead of setting the header manually
+- scheduler-submitted tasks reuse their `agentId` as `X-Agent-Id` when the task is executed
+- bare `GET /api/activity` returns the primary activity feed; named internal sources such as `dashboard` or `orchestrator` are queried with `?source=<name>`
+
 ## Navigate
 
 ```bash
@@ -304,11 +325,11 @@ These are equivalent to using `?tabId=TARGET_ID` on top-level endpoints but foll
 
 ```bash
 # Lock a tab (default 30s timeout, max 5min)
-curl -X POST /tab/lock -H 'Content-Type: application/json' \
+curl -X POST /lock -H 'Content-Type: application/json' \
   -d '{"tabId": "TARGET_ID", "owner": "agent-1", "timeoutSec": 60}'
 
 # Unlock
-curl -X POST /tab/unlock -H 'Content-Type: application/json' \
+curl -X POST /unlock -H 'Content-Type: application/json' \
   -d '{"tabId": "TARGET_ID", "owner": "agent-1"}'
 ```
 
@@ -423,4 +444,23 @@ curl -X POST /fingerprint/rotate -H 'Content-Type: application/json' \
 
 ```bash
 curl /health
+```
+
+## Agent Sessions
+
+```bash
+# Create agent session (requires bearer/cookie auth)
+curl -X POST /api/sessions -d '{"agentId":"my-agent","label":"dev"}'
+
+# List sessions
+curl /api/sessions
+
+# Get current session (requires Session auth)
+curl -H "Authorization: Session ses_..." /api/sessions/me
+
+# Rotate token
+curl -X POST /api/sessions/{id}/rotate
+
+# Revoke session
+curl -X POST /api/sessions/{id}/revoke
 ```

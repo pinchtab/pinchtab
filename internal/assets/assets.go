@@ -18,6 +18,3 @@ var ScreencastRepaintStartJS string
 
 //go:embed screencast_repaint_stop.js
 var ScreencastRepaintStopJS string
-
-//go:embed welcome.html
-var WelcomeHTML string

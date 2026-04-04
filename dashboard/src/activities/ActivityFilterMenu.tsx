@@ -2,7 +2,7 @@ import { useState, type ChangeEvent } from "react";
 import { Button, Input } from "../components/atoms";
 import type { Profile, Instance, InstanceTab } from "../types";
 import type { ActivityFilters } from "./types";
-import { actionOptions, sourceOptions } from "./helpers";
+import { actionOptions } from "./helpers";
 
 interface Props {
   filters: ActivityFilters;
@@ -10,6 +10,7 @@ interface Props {
   instanceOptions: Instance[];
   tabOptions: InstanceTab[];
   loading: boolean;
+  showAgentFilter?: boolean;
   onClear: () => void;
   onRefresh: () => void;
   onFilterChange: (key: keyof ActivityFilters, value: string) => void;
@@ -53,6 +54,7 @@ export default function ActivityFilterMenu({
   instanceOptions,
   tabOptions,
   loading,
+  showAgentFilter = true,
   onClear,
   onRefresh,
   onFilterChange,
@@ -92,12 +94,16 @@ export default function ActivityFilterMenu({
         </div>
 
         <div className="space-y-3 border-t border-border-subtle pt-4">
-          <Input
-            label="Agent"
-            placeholder="cli, mcp, custom"
-            value={filters.agentId}
-            onChange={(event) => onFilterChange("agentId", event.target.value)}
-          />
+          {showAgentFilter && (
+            <Input
+              label="Agent"
+              placeholder="cli, mcp, custom"
+              value={filters.agentId}
+              onChange={(event) =>
+                onFilterChange("agentId", event.target.value)
+              }
+            />
+          )}
           <FilterSelect
             label="Action"
             value={filters.action}
@@ -147,19 +153,6 @@ export default function ActivityFilterMenu({
                 value={filters.sessionId}
                 onChange={(event) =>
                   onFilterChange("sessionId", event.target.value)
-                }
-              />
-              <FilterSelect
-                label="Source"
-                value={filters.source}
-                options={[
-                  { value: "", label: "Any source" },
-                  ...sourceOptions
-                    .filter(Boolean)
-                    .map((option) => ({ value: option, label: option })),
-                ]}
-                onChange={(event) =>
-                  onFilterChange("source", event.target.value)
                 }
               />
               <Input

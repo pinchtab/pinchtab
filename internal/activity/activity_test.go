@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestStoreRecordAndQuery(t *testing.T) {
-	store, err := NewStore(t.TempDir(), 30*time.Minute, 1)
+	store, err := NewStore(t.TempDir(), 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestStoreRecordAndQuery(t *testing.T) {
 
 func TestStoreWritesJSONLFile(t *testing.T) {
 	root := t.TempDir()
-	store, err := NewStore(root, 30*time.Minute, 1)
+	store, err := NewStore(root, 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
@@ -60,9 +61,82 @@ func TestStoreWritesJSONLFile(t *testing.T) {
 	}
 }
 
+func TestStorePartitionsDashboardEventsOutsidePrimaryLog(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(root, 1)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if err := store.Record(Event{
+		Timestamp: now,
+		Source:    "dashboard",
+		Method:    "GET",
+		Path:      "/api/events",
+		Status:    200,
+	}); err != nil {
+		t.Fatalf("Record dashboard: %v", err)
+	}
+	if err := store.Record(Event{
+		Timestamp: now.Add(time.Second),
+		Source:    "server",
+		Method:    "GET",
+		Path:      "/health",
+		Status:    200,
+	}); err != nil {
+		t.Fatalf("Record server: %v", err)
+	}
+
+	mainPath := filepath.Join(root, "activity", "events-"+now.Format(time.DateOnly)+".jsonl")
+	mainData, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("ReadFile main: %v", err)
+	}
+	if strings.Contains(string(mainData), "\"source\":\"dashboard\"") {
+		t.Fatal("primary activity log should not include dashboard events")
+	}
+	if !strings.Contains(string(mainData), "\"source\":\"server\"") {
+		t.Fatal("primary activity log should include server events")
+	}
+
+	dashboardPath := filepath.Join(root, "activity", "events-dashboard-"+now.Format(time.DateOnly)+".jsonl")
+	dashboardData, err := os.ReadFile(dashboardPath)
+	if err != nil {
+		t.Fatalf("ReadFile dashboard: %v", err)
+	}
+	if !strings.Contains(string(dashboardData), "\"source\":\"dashboard\"") {
+		t.Fatal("dashboard activity log missing dashboard event")
+	}
+
+	gotMain, err := store.Query(Filter{Limit: 10})
+	if err != nil {
+		t.Fatalf("Query main: %v", err)
+	}
+	if len(gotMain) != 1 || gotMain[0].Source != "server" {
+		t.Fatalf("main query = %#v, want only external server event", gotMain)
+	}
+
+	gotDashboard, err := store.Query(Filter{Source: "dashboard", Limit: 10})
+	if err != nil {
+		t.Fatalf("Query dashboard: %v", err)
+	}
+	if len(gotDashboard) != 1 || gotDashboard[0].Source != "dashboard" {
+		t.Fatalf("dashboard query = %#v, want dashboard event", gotDashboard)
+	}
+
+	gotServer, err := store.Query(Filter{Source: "server", Limit: 10})
+	if err != nil {
+		t.Fatalf("Query server: %v", err)
+	}
+	if len(gotServer) != 1 || gotServer[0].Source != "server" {
+		t.Fatalf("server query = %#v, want one deduplicated server event", gotServer)
+	}
+}
+
 func TestStorePrunesExpiredDailyFiles(t *testing.T) {
 	root := t.TempDir()
-	store, err := NewStore(root, 30*time.Minute, 1)
+	store, err := NewStore(root, 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
@@ -112,7 +186,7 @@ func TestNewStorePrunesExpiredDailyFilesOnStartup(t *testing.T) {
 		t.Fatalf("WriteFile keep: %v", err)
 	}
 
-	if _, err := NewStore(root, 30*time.Minute, 30); err != nil {
+	if _, err := NewStore(root, 30); err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
 
@@ -121,6 +195,37 @@ func TestNewStorePrunesExpiredDailyFilesOnStartup(t *testing.T) {
 	}
 	if _, err := os.Stat(keepPath); err != nil {
 		t.Fatalf("expected current activity file to remain, stat err = %v", err)
+	}
+}
+
+func TestNewStorePrunesExpiredSourceSpecificDailyFilesOnStartup(t *testing.T) {
+	root := t.TempDir()
+	activityDir := filepath.Join(root, "activity")
+	if err := os.MkdirAll(activityDir, 0750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	oldDay := time.Now().UTC().AddDate(0, 0, -31)
+	oldPath := filepath.Join(activityDir, "events-dashboard-"+oldDay.Format(time.DateOnly)+".jsonl")
+	if err := os.WriteFile(oldPath, []byte("{\"source\":\"dashboard\"}\n"), 0600); err != nil {
+		t.Fatalf("WriteFile old: %v", err)
+	}
+
+	keepDay := time.Now().UTC()
+	keepPath := filepath.Join(activityDir, "events-dashboard-"+keepDay.Format(time.DateOnly)+".jsonl")
+	if err := os.WriteFile(keepPath, []byte("{\"source\":\"dashboard\"}\n"), 0600); err != nil {
+		t.Fatalf("WriteFile keep: %v", err)
+	}
+
+	if _, err := NewStore(root, 30); err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected expired source-specific activity file to be pruned, stat err = %v", err)
+	}
+	if _, err := os.Stat(keepPath); err != nil {
+		t.Fatalf("expected current source-specific activity file to remain, stat err = %v", err)
 	}
 }
 
@@ -135,7 +240,7 @@ func TestNewRecorderDisabledReturnsNoop(t *testing.T) {
 }
 
 func TestNewStoreRejectsZeroRetentionDays(t *testing.T) {
-	if _, err := NewStore(t.TempDir(), 30*time.Minute, 0); err == nil {
+	if _, err := NewStore(t.TempDir(), 0); err == nil {
 		t.Fatal("expected NewStore to reject zero retentionDays")
 	}
 }
@@ -154,7 +259,7 @@ func TestClampQueryLimit(t *testing.T) {
 
 func TestStoreRecord_SanitizesURLBeforePersisting(t *testing.T) {
 	root := t.TempDir()
-	store, err := NewStore(root, 30*time.Minute, 1)
+	store, err := NewStore(root, 1)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
@@ -183,5 +288,23 @@ func TestStoreRecord_SanitizesURLBeforePersisting(t *testing.T) {
 	}
 	if evt.URL != "https://example.com/callback" {
 		t.Fatalf("evt.URL = %q, want sanitized URL", evt.URL)
+	}
+}
+
+func TestNormalizeSourceName(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "dashboard", want: "dashboard"},
+		{in: " Dashboard UI ", want: "dashboard-ui"},
+		{in: "mcp/agent", want: "mcp-agent"},
+		{in: "___", want: ""},
+	}
+
+	for _, tt := range tests {
+		if got := normalizeSourceName(tt.in); got != tt.want {
+			t.Fatalf("normalizeSourceName(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }

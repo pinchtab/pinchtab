@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"net/url"
 
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
@@ -20,7 +21,7 @@ const proxyWSBackendAuthorizationHeader = "X-Pinchtab-Proxy-Authorization"
 func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		http.Error(w, "invalid backend target", http.StatusBadGateway)
+		httpx.Problem(w, http.StatusBadGateway, "invalid_backend_target", "invalid backend target", false, nil)
 		slog.Error("ws proxy: invalid target", "target", internalurls.RedactForLog(targetURL), "err", err)
 		return
 	}
@@ -39,7 +40,7 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 		backend, err = net.Dial("tcp", host)
 	}
 	if err != nil {
-		http.Error(w, "backend unavailable", http.StatusBadGateway)
+		httpx.Problem(w, http.StatusBadGateway, "backend_unavailable", "backend unavailable", true, nil)
 		slog.Error("ws proxy: backend dial failed", "target", host, "err", err)
 		return
 	}
@@ -47,7 +48,7 @@ func ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		http.Error(w, "server doesn't support hijacking", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "hijack_unsupported", "server does not support hijacking", false, nil)
 		return
 	}
 	client, _, err := hj.Hijack()

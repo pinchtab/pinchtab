@@ -12,25 +12,22 @@ import { NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
 import { AUTH_REQUIRED_EVENT, AUTH_STATE_CHANGED_EVENT } from "./services/auth";
+import { acquireDashboardRealtime } from "./services/dashboardRealtime";
 import { useAppStore } from "./stores/useAppStore";
 
 type AuthMode = "probing" | "required" | "open" | "unreachable";
 const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
 
 function AppContent() {
-  const {
-    setInstances,
-    setProfiles,
-    setAgents,
-    upsertAgentFromEvent,
-    addEvent,
-    setServerInfo,
-    applyMonitoringSnapshot,
-    settings,
-  } = useAppStore();
+  const setInstances = useAppStore((state) => state.setInstances);
+  const setProfiles = useAppStore((state) => state.setProfiles);
+  const setAgents = useAppStore((state) => state.setAgents);
+  const setServerInfo = useAppStore((state) => state.setServerInfo);
+  const memoryMetricsEnabled = useAppStore(
+    (state) => state.settings.monitoring?.memoryMetrics ?? false,
+  );
   const location = useLocation();
   const navigate = useNavigate();
-  const memoryMetricsEnabled = settings.monitoring?.memoryMetrics ?? false;
   const [authMode, setAuthMode] = useState<AuthMode>("probing");
   const [authProtected, setAuthProtected] = useState(false);
   const [authRetryCount, setAuthRetryCount] = useState(0);
@@ -169,38 +166,8 @@ function AppContent() {
     if (!dashboardAccessible) {
       return;
     }
-    const unsubscribe = api.subscribeToEvents(
-      {
-        onInit: (agents) => {
-          setAgents(agents);
-        },
-        onSystem: (event) => {
-          console.log("System event:", event);
-        },
-        onActivity: (event) => {
-          upsertAgentFromEvent(event);
-          addEvent(event);
-        },
-        onMonitoring: (snapshot) => {
-          applyMonitoringSnapshot(snapshot, memoryMetricsEnabled);
-        },
-      },
-      {
-        includeMemory: memoryMetricsEnabled,
-        reasoningMode: settings.agents?.reasoningMode ?? "tool_calls",
-      },
-    );
-
-    return unsubscribe;
-  }, [
-    dashboardAccessible,
-    addEvent,
-    applyMonitoringSnapshot,
-    memoryMetricsEnabled,
-    settings.agents?.reasoningMode,
-    setAgents,
-    upsertAgentFromEvent,
-  ]);
+    return acquireDashboardRealtime(memoryMetricsEnabled);
+  }, [dashboardAccessible, memoryMetricsEnabled]);
 
   if (authMode === "probing") {
     return (

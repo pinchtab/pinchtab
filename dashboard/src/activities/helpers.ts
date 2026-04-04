@@ -7,7 +7,6 @@ export const defaultActivityFilters: ActivityFilters = {
   profileName: "",
   sessionId: "",
   action: "",
-  source: "",
   pathPrefix: "",
   ageSec: "3600",
   limit: "200",
@@ -21,14 +20,6 @@ export const actionOptions = [
   "type",
   "hover",
 ];
-export const sourceOptions = [
-  "",
-  "server",
-  "bridge",
-  "scheduler",
-  "mcp",
-  "cli",
-];
 
 export function buildActivityQuery(filters: ActivityFilters): ActivityQuery {
   const query: ActivityQuery = {};
@@ -40,7 +31,6 @@ export function buildActivityQuery(filters: ActivityFilters): ActivityQuery {
   }
   if (filters.sessionId.trim()) query.sessionId = filters.sessionId.trim();
   if (filters.action.trim()) query.action = filters.action.trim();
-  if (filters.source.trim()) query.source = filters.source.trim();
   if (filters.pathPrefix.trim()) query.pathPrefix = filters.pathPrefix.trim();
   if (filters.ageSec.trim()) {
     const ageSec = Number(filters.ageSec);
@@ -78,7 +68,6 @@ export function sameActivityFilters(
     left.profileName === right.profileName &&
     left.sessionId === right.sessionId &&
     left.action === right.action &&
-    left.source === right.source &&
     left.pathPrefix === right.pathPrefix &&
     left.ageSec === right.ageSec &&
     left.limit === right.limit

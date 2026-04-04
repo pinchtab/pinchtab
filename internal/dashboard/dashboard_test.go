@@ -8,13 +8,96 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
 )
+
+type stubActivityRecorder struct {
+	events []activity.Event
+}
+
+func (s stubActivityRecorder) Enabled() bool { return true }
+
+func (s stubActivityRecorder) Record(activity.Event) error { return nil }
+
+func (s stubActivityRecorder) Query(activity.Filter) ([]activity.Event, error) {
+	return s.events, nil
+}
 
 func TestNewDashboard(t *testing.T) {
 	d := NewDashboard(nil)
 	if d == nil {
 		t.Fatal("expected non-nil dashboard")
+	}
+}
+
+type noFlusherDashboardResponseWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (w *noFlusherDashboardResponseWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *noFlusherDashboardResponseWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(b)
+}
+
+func (w *noFlusherDashboardResponseWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+}
+
+func TestDashboardHandleSSE_StreamingNotSupportedReturnsProblem(t *testing.T) {
+	d := NewDashboard(nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	w := &noFlusherDashboardResponseWriter{}
+
+	d.handleSSE(w, req)
+
+	if w.status != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", w.status, http.StatusInternalServerError)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("content-type = %q, want application/problem+json", ct)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode problem payload: %v", err)
+	}
+	if payload["code"] != "streaming_not_supported" {
+		t.Fatalf("code = %v, want streaming_not_supported", payload["code"])
+	}
+}
+
+func TestDashboardHandleSSE_StreamingDeadlineUnsupportedReturnsProblem(t *testing.T) {
+	d := NewDashboard(nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	w := httptest.NewRecorder()
+
+	d.handleSSE(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("content-type = %q, want application/problem+json", ct)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode problem payload: %v", err)
+	}
+	if payload["code"] != "streaming_deadline_unsupported" {
+		t.Fatalf("code = %v, want streaming_deadline_unsupported", payload["code"])
 	}
 }
 
@@ -211,6 +294,129 @@ func TestDashboardHandleAgentEventsByIDUsesRouteAgent(t *testing.T) {
 	events := d.RecentEvents()
 	if len(events) != 1 || events[0].AgentID != "agent-1" {
 		t.Fatalf("events = %#v, want route agent id", events)
+	}
+}
+
+func TestDashboardLoadPersistedAgentActivityRestoresAgentsAndEvents(t *testing.T) {
+	d := NewDashboard(nil)
+	now := time.Now().UTC()
+
+	err := d.LoadPersistedAgentActivity(stubActivityRecorder{
+		events: []activity.Event{
+			{
+				Timestamp:  now.Add(-2 * time.Minute),
+				Source:     "bridge",
+				RequestID:  "req-1",
+				AgentID:    "agent-1",
+				Method:     http.MethodPost,
+				Path:       "/tabs/tab_1/action",
+				Status:     http.StatusOK,
+				DurationMs: 11,
+				TabID:      "tab_1",
+				Action:     "click",
+			},
+			{
+				Timestamp:  now.Add(-1 * time.Minute),
+				Source:     "bridge",
+				RequestID:  "req-2",
+				Method:     http.MethodGet,
+				Path:       "/health",
+				Status:     http.StatusOK,
+				DurationMs: 4,
+			},
+			{
+				Timestamp:  now,
+				Source:     "server",
+				RequestID:  "req-3",
+				AgentID:    "agent-2",
+				Method:     http.MethodGet,
+				Path:       "/tabs/tab_2/text",
+				Status:     http.StatusOK,
+				DurationMs: 8,
+				TabID:      "tab_2",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoadPersistedAgentActivity() error = %v", err)
+	}
+
+	agents := d.Agents()
+	if len(agents) != 2 {
+		t.Fatalf("Agents() len = %d, want 2", len(agents))
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 2 {
+		t.Fatalf("RecentEvents() len = %d, want 2", len(events))
+	}
+	if events[0].ID != "req-1" || events[1].ID != "req-3" {
+		t.Fatalf("RecentEvents() IDs = [%s, %s], want [req-1, req-3]", events[0].ID, events[1].ID)
+	}
+}
+
+func TestDashboardIngestPersistedAgentActivityAddsNewEventsWithoutDuplicatingLiveOnes(t *testing.T) {
+	d := NewDashboard(nil)
+	now := time.Now().UTC()
+
+	d.RecordActivityEvent(activity.Event{
+		Timestamp:  now.Add(-2 * time.Second),
+		Source:     "bridge",
+		RequestID:  "req-live",
+		AgentID:    "agent-1",
+		Method:     http.MethodPost,
+		Path:       "/tabs/tab_1/action",
+		Status:     http.StatusOK,
+		DurationMs: 12,
+		TabID:      "tab_1",
+		Action:     "click",
+	})
+
+	latest, err := d.IngestPersistedAgentActivity(stubActivityRecorder{
+		events: []activity.Event{
+			{
+				Timestamp:  now.Add(-2 * time.Second),
+				Source:     "bridge",
+				RequestID:  "req-live",
+				AgentID:    "agent-1",
+				Method:     http.MethodPost,
+				Path:       "/tabs/tab_1/action",
+				Status:     http.StatusOK,
+				DurationMs: 12,
+				TabID:      "tab_1",
+				Action:     "click",
+			},
+			{
+				Timestamp:  now,
+				Source:     "bridge",
+				RequestID:  "req-new",
+				AgentID:    "agent-2",
+				Method:     http.MethodGet,
+				Path:       "/tabs/tab_2/text",
+				Status:     http.StatusOK,
+				DurationMs: 7,
+				TabID:      "tab_2",
+			},
+		},
+	}, now.Add(-5*time.Second))
+	if err != nil {
+		t.Fatalf("IngestPersistedAgentActivity() error = %v", err)
+	}
+	if !latest.Equal(now) {
+		t.Fatalf("latest = %v, want %v", latest, now)
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 2 {
+		t.Fatalf("RecentEvents() len = %d, want 2", len(events))
+	}
+	if events[0].ID != "req-live" || events[1].ID != "req-new" {
+		t.Fatalf("RecentEvents() IDs = [%s, %s], want [req-live, req-new]", events[0].ID, events[1].ID)
+	}
+
+	agents := d.Agents()
+	if len(agents) != 2 {
+		t.Fatalf("Agents() len = %d, want 2", len(agents))
 	}
 }
 

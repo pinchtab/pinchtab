@@ -217,7 +217,7 @@ func (h *Handlers) HandleNetworkClear(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		httpx.Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
 		return
 	}
 

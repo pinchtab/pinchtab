@@ -33,9 +33,8 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
-		SessionIdle:   time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
 		RetentionDays: cfg.Observability.Activity.RetentionDays,
-	}, cfg.StateDir)
+	}, cfg.ActivityStateDir())
 	if err != nil {
 		slog.Error("activity store", "err", err)
 		os.Exit(1)
@@ -103,7 +102,11 @@ func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
 		return
 	}
 
-	lite := engine.NewLiteEngine()
+	lite := engine.BuildLite(engine.BuildConfig{
+		Mode:        mode,
+		Guard:       h.IDPIGuard,
+		WrapContent: cfg.IDPI.Enabled && cfg.IDPI.WrapContent,
+	})
 	h.Router = engine.NewRouter(mode, lite)
 	slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
 }

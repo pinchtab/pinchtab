@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/agentsession"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -68,6 +70,16 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	configAPI.SetSessionManager(sessions)
 	authAPI := dashboard.NewAuthAPI(cfg, sessions)
 
+	// Agent sessions
+	agentSessionStore := agentsession.NewStore(agentsession.Config{
+		Enabled:     cfg.Sessions.Agent.Enabled,
+		Mode:        cfg.Sessions.Agent.Mode,
+		IdleTimeout: cfg.Sessions.Agent.IdleTimeout,
+		MaxLifetime: cfg.Sessions.Agent.MaxLifetime,
+		PersistPath: filepath.Join(cfg.StateDir, "sessions.json"),
+	})
+	agentSessionAPI := dashboard.NewAgentSessionAPI(agentSessionStore)
+
 	// Wire up instance events to SSE broadcast
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
 		dash.BroadcastSystemEvent(dashboard.SystemEvent{
@@ -77,22 +89,52 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	})
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
-		SessionIdle:   time.Duration(cfg.Observability.Activity.SessionIdleSec) * time.Second,
 		RetentionDays: cfg.Observability.Activity.RetentionDays,
-	}, cfg.StateDir)
+	}, cfg.ActivityStateDir())
 	if err != nil {
 		slog.Error("activity store", "err", err)
 		os.Exit(1)
 	}
+	profMgr.SetActivityRecorder(actStore)
 
 	mux := http.NewServeMux()
 
-	dash.RegisterHandlers(mux)
-	configAPI.RegisterHandlers(mux)
-	authAPI.RegisterHandlers(mux)
-	profMgr.RegisterHandlers(mux)
+	if err := dash.LoadPersistedAgentActivity(actStore); err != nil {
+		slog.Warn("restore dashboard agent activity", "err", err)
+	}
+
 	liveActivity := newDashboardActivityRecorder(actStore, dash)
-	activity.RegisterHandlers(mux, liveActivity)
+	dash.RegisterAdminRoutes(mux, dashboard.AdminDeps{
+		ConfigAPI:       configAPI,
+		AuthAPI:         authAPI,
+		AgentSessionAPI: agentSessionAPI,
+		Activity:        liveActivity,
+		ServerMetrics:   handlers.SnapshotMetrics,
+	})
+	profMgr.RegisterHandlers(mux)
+
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		lastSync := time.Now().UTC()
+		for {
+			select {
+			case <-syncCtx.Done():
+				return
+			case <-ticker.C:
+				nextSync, err := dash.IngestPersistedAgentActivity(actStore, lastSync)
+				if err != nil {
+					slog.Warn("sync dashboard agent activity", "err", err)
+					continue
+				}
+				if !nextSync.IsZero() {
+					lastSync = nextSync
+				}
+			}
+		}
+	}()
 
 	strategyName := cfg.Strategy
 	if strategyName == "" {
@@ -178,16 +220,13 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	}
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
-		httpx.JSON(w, 200, map[string]any{"metrics": handlers.SnapshotMetrics()})
-	})
 
 	handler := handlers.RequestIDMiddleware(
 		activity.Middleware(
 			liveActivity,
 			"server",
 			handlers.SecurityHeadersMiddleware(cfg,
-				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, mux)))),
+				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, agentSessionStore, mux)))),
 			),
 		),
 	)
@@ -221,6 +260,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			if sched != nil {
 				sched.Stop()
 			}
+			syncCancel()
 			dash.Shutdown()
 			orch.Shutdown()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

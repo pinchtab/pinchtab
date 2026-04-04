@@ -8,9 +8,9 @@ PinchTab stores configuration, profiles, session state, and usage logs on local 
 | --- | --- | --- |
 | `config.json` | Main PinchTab configuration | `PINCHTAB_CONFIG` selects the file |
 | `profiles/<profile>/` | Chrome user data for each profile | `profiles.baseDir` |
-| `action_logs.json` | Profile activity log used by profile analytics | not currently configurable |
 | `sessions.json` | Saved tab/session state for a bridge instance | `server.stateDir` |
-| `activity/events-YYYY-MM-DD.jsonl` | Daily request/activity logs for `/api/activity`, CLI activity, and dashboard activity views | `server.stateDir`, `observability.activity.retentionDays` |
+| `activity/events-YYYY-MM-DD.jsonl` | Primary daily request/activity log for `/api/activity`, CLI activity, and dashboard activity views | `server.stateDir`, `observability.activity.retentionDays` |
+| `activity/events-<source>-YYYY-MM-DD.jsonl` | Source-specific daily activity log for named sources such as `dashboard` or `orchestrator` | `server.stateDir`, `observability.activity.retentionDays` |
 | `<profile>/.pinchtab-state/config.json` | Child instance config written by the orchestrator | generated automatically for managed instances |
 
 ## Default Storage Location
@@ -28,7 +28,6 @@ Typical layout:
 ```text
 pinchtab/
 ├── config.json
-├── action_logs.json
 ├── activity/
 │   └── events-2026-03-16.jsonl
 ├── sessions.json
@@ -107,6 +106,12 @@ Request activity is stored as one JSONL file per UTC day:
 <server.stateDir>/activity/events-YYYY-MM-DD.jsonl
 ```
 
+Named sources also get their own daily files:
+
+```text
+<server.stateDir>/activity/events-<source>-YYYY-MM-DD.jsonl
+```
+
 By default PinchTab keeps 1 day of activity data and prunes older daily files when new activity is recorded. You can change that with:
 
 ```json
@@ -122,6 +127,10 @@ By default PinchTab keeps 1 day of activity data and prunes older daily files wh
 
 `retentionDays` controls on-disk retention for activity logs. `sessionIdleSec` controls session grouping only.
 
+Requests that carry `X-Agent-Id` are stored with that value as `agentId` in the activity event. This is what powers agent-scoped queries such as `GET /api/activity?agentId=<id>` and the dashboard Agents view.
+
+Unfiltered `GET /api/activity` reads the primary feed. Source-specific logs remain queryable by passing `source=<name>`.
+
 In orchestrator mode, child instances get their own state directory under the profile:
 
 ```text
@@ -130,15 +139,9 @@ In orchestrator mode, child instances get their own state directory under the pr
 
 PinchTab writes a child `config.json` there so the launched instance can inherit the correct profile path, state directory, and port.
 
-## Action Logs
+Managed child bridges still write activity into the shared parent activity store. That keeps `/api/activity`, `/api/agents`, and dashboard activity views unified across orchestrator-managed instances instead of splitting activity by per-instance state directory.
 
-PinchTab also stores profile-level analytics data in:
-
-```text
-<user-config-dir>/action_logs.json
-```
-
-This powers profile analytics endpoints. It is separate from the request/activity JSONL files and from per-instance session restore state.
+Profile `logs` and `analytics` endpoints are derived from the activity store rather than a separate analytics file.
 
 ## Customizing Storage
 
@@ -210,7 +213,6 @@ Removing the PinchTab data directory deletes:
 
 - saved profiles
 - session restore data
-- action logs
 - local configuration
 
 Back up the profile directories first if you need to preserve logged-in browser sessions.

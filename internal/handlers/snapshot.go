@@ -66,20 +66,27 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	h.recordReadRequest(r, "snapshot", tabID)
 	if h.useLite(engine.CapSnapshot, "") {
 		h.recordEngine(r, "lite")
-		nodes, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
+		result, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
 		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
+			if engine.IsIDPIBlocked(err) {
+				httpx.Error(w, http.StatusForbidden, err)
+			} else {
+				httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
+			}
 			return
 		}
 		// Convert to bridge.A11yNode for API compatibility.
-		flat := make([]bridge.A11yNode, len(nodes))
-		for i, n := range nodes {
+		flat := make([]bridge.A11yNode, len(result.Nodes))
+		for i, n := range result.Nodes {
 			flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
 		}
 		w.Header().Set("X-Engine", "lite")
-		httpx.JSON(w, 200, map[string]any{"nodes": flat})
+		httpx.JSON(w, 200, map[string]any{"engine": "lite", "nodes": flat})
 		return
 	}
+
+	h.recordEngine(r, "chrome")
+	w.Header().Set("X-Engine", "chrome")
 
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
@@ -333,6 +340,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{
 			"url":     url,
 			"title":   title,
+			"engine":  "chrome",
 			"diff":    true,
 			"added":   added,
 			"changed": changed,
@@ -387,10 +395,11 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(yamlContent)
 	default:
 		resp := map[string]any{
-			"url":   url,
-			"title": title,
-			"nodes": flat,
-			"count": len(flat),
+			"url":    url,
+			"title":  title,
+			"engine": "chrome",
+			"nodes":  flat,
+			"count":  len(flat),
 		}
 		if truncated {
 			resp["truncated"] = true

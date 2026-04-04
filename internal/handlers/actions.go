@@ -336,18 +336,27 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		if errors.Is(actionErr, bridge.ErrUnexpectedNavigation) {
+			httpx.ErrorCode(w, 409, "navigation_changed", actionErr.Error(), false, nil)
+			return
+		}
 		if errors.Is(actionErr, engine.ErrLiteNotSupported) {
 			httpx.ErrorCode(w, http.StatusNotImplemented, "not_supported", actionErr.Error(), false, nil)
+			return
+		}
+		if engine.IsIDPIBlocked(actionErr) {
+			httpx.ErrorCode(w, http.StatusForbidden, "idpi_blocked", actionErr.Error(), false, nil)
 			return
 		}
 		httpx.ErrorCode(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, actionErr), true, nil)
 		return
 	}
 
-	if engineName == "lite" {
-		w.Header().Set("X-Engine", "lite")
-		h.recordEngine(r, "lite")
+	if engineName == "" {
+		engineName = "chrome"
 	}
+	w.Header().Set("X-Engine", engineName)
+	h.recordEngine(r, engineName)
 	resp := map[string]any{"success": true, "result": result}
 	if recoveryResult != nil {
 		resp["recovery"] = recoveryResult
@@ -1134,6 +1143,12 @@ func shouldRetryStaleRef(err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, bridge.ErrElementStale) {
+		return true
+	}
+	// Fallback string matching is still needed for stale failures that can bypass
+	// bridge.ExecuteAction classification (for example, lite-engine paths or other
+	// non-bridge error surfaces that return raw backend-node messages).
 	e := strings.ToLower(err.Error())
 	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")
 }
