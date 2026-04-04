@@ -1,7 +1,7 @@
 # Initialization Benchmark Tasks
 
-These tasks measure how efficiently an agent can initialize and start using
-PinchTab from scratch. Record tokens for EACH phase separately.
+Measures how efficiently an agent initializes PinchTab and completes real tasks
+using only the skill. Record tokens per phase separately.
 
 ## Recording
 
@@ -11,116 +11,158 @@ PinchTab from scratch. Record tokens for EACH phase separately.
 
 ## Environment
 
-- PinchTab: `http://localhost:9867`
-- Token: from `pinchtab config token` or `~/.pinchtab/config.json`
-- Fixtures: `http://fixtures/` (Docker) or any stable URL
+- PinchTab: `http://localhost:9867`, token: `benchmark-token`
+- Fixtures: `http://fixtures/` (Docker nginx)
+- Real sites: GitHub, Wikipedia, Hacker News (stable, predictable content)
 
 ---
 
 ## Phase 0: Skill Loading
 
-### 0.1 Load the skill
-Read `skills/pinchtab/SKILL.md`.
+### 0.1 Read the skill once
+Read `skills/pinchtab/SKILL.md` once. Stop when you can answer:
+1. How do you authenticate?
+2. What CLI command navigates to a URL?
+3. How do you read page content? (When to use text vs snapshot?)
+4. How do you fill a form field?
+5. How do you click a submit button on a JS-heavy form?
 
-Record how many tokens it took to load and understand:
-- What the server URL looks like
-- How auth works
-- What the first action should be for a simple task
-
-**Pass if**: You can answer these 3 questions without re-reading the skill:
-1. How do you authenticate? (Bearer token header)
-2. What endpoint navigates to a URL? (`POST /navigate`)
-3. How do you read page content? (`GET /text` or `GET /snapshot`)
+**Pass if**: All 5 answered correctly without re-reading.
+Record tokens used to load + answer.
 
 ---
 
-## Phase 1: Server Discovery
+## Phase 1: Server Setup Verification
 
-### 1.1 Check server health
-Without reading any docs — just from the skill — check that the server is
-running and get the auth token.
+### 1.1 Health check
+Confirm server is running and authenticated in 1 call.
 
-**Pass if**: Got a 200 health response on first try (no retries, no wrong URL).
+**Pass if**: Health response on first attempt, no retries.
 
-### 1.2 Confirm auth works
-Make one authenticated request that confirms your token is valid.
+### 1.2 Get token
+Find the auth token without guessing.
 
-**Pass if**: Request succeeds on first attempt.
-
----
-
-## Phase 2: First Navigation
-
-### 2.1 Navigate to a page
-Navigate to `http://fixtures/` (or `https://example.com` if fixtures unavailable).
-
-**Pass if**: Navigation succeeds, tabId returned.
-
-### 2.2 Get page content
-Extract text or snapshot from the current page.
-
-**Pass if**: Content returned on first attempt, chose the right endpoint
-(`/text` for prose, `/snapshot` for structure).
+**Pass if**: Correct token used on first API call.
 
 ---
 
-## Phase 3: First Interaction
+## Phase 2: Fixture Navigation
 
-### 3.1 Find an interactive element
-Navigate to `http://fixtures/search.html` and find the search input
-without trial and error.
+### 2.1 Navigate and verify home
+Navigate to `http://fixtures/` and confirm page loaded.
 
-**Pass if**: Identified the correct selector on first snapshot.
+**Pass if**: Success on first call.
 
-### 3.2 Fill and submit
-Fill the search field with "artificial intelligence" and click the button.
+### 2.2 Choose right extraction method
+Get the article headlines from `http://fixtures/articles.html`.
 
-**Pass if**: Correct sequence: fill → click button (not press Enter).
-No retries needed.
+**Pass if**: Used `/snapshot` (not `/text`) and got all 3 headlines.
+Note: `/text` strips headings — skill should make this clear.
 
-### 3.3 Verify result
-Confirm the search result appeared.
+### 2.3 Read structured data
+Get the Total Users and Revenue from `http://fixtures/dashboard.html`.
 
-**Pass if**: Verification string found on first text/snapshot call.
+**Pass if**: Correct values extracted on first snapshot call.
 
 ---
 
-## Phase 4: End-to-End Efficiency
+## Phase 3: Real Site Navigation
 
-### 4.1 Complete a task from natural language
-Given only this instruction:
-> "Go to http://fixtures/form.html, fill in name=Benchmark, email=bench@test.com, submit the form, confirm it worked."
+### 3.1 Navigate to GitHub repo
+Navigate to `https://github.com/pinchtab/pinchtab`.
 
-Complete the task and count:
-- Total tokens used
-- Number of API calls
-- Any retries or wrong turns
+**Pass if**: Loaded successfully, no IDPI errors.
 
-**Pass if**: Task completed with ≤ 8 API calls and ≤ 2000 tokens.
-**Ideal**: ≤ 5 API calls, ≤ 1000 tokens.
+### 3.2 Extract repo metadata
+Read the repo's description, primary language, and star count.
+
+**Pass if**: All 3 facts extracted in ≤ 2 calls (nav + text/snapshot).
+
+### 3.3 Navigate to Wikipedia
+Navigate to `https://en.wikipedia.org/wiki/Go_(programming_language)`.
+
+**Pass if**: Loaded successfully.
+
+### 3.4 Extract specific fact
+What year was Go first released? (Answer: 2009)
+
+**Pass if**: Correct answer, ≤ 2 calls.
+
+### 3.5 Navigate to Hacker News
+Navigate to `https://news.ycombinator.com`.
+
+**Pass if**: Loaded successfully.
+
+### 3.6 List top 3 headlines
+Extract the top 3 story titles from the front page.
+
+**Pass if**: 3 valid titles returned, ≤ 2 calls.
+
+---
+
+## Phase 4: Form Interaction (Fixtures)
+
+### 4.1 Fill and submit form
+Navigate to `http://fixtures/form.html`, complete and submit:
+- Full Name: `Benchmark Agent`
+- Email: `bench@test.com`
+- Country: United Kingdom
+- Subject: Technical Support
+- Submit
+
+**Pass if**: Completed in ≤ 6 API calls, confirmed `SUBMISSION_DATA_NAME_BENCHMARK_AGENT`.
+
+### 4.2 Search flow
+On `http://fixtures/search.html`, search for "artificial intelligence",
+verify result appears.
+
+**Pass if**: ≤ 4 calls (nav, fill, click, verify). No press-Enter mistakes.
+
+---
+
+## Phase 5: Multi-Site Task (End-to-End)
+
+Given only this natural language request, complete it:
+
+> "Find out what the current top story on Hacker News is, then search
+> for that topic on the fixtures search page and tell me if any results
+> appear."
+
+No re-reading the skill. Use what you learned in Phase 0.
+
+**Pass if**:
+- HN top story title extracted
+- Fixtures search attempted with that topic
+- Result (found/not found) reported
+- Total API calls ≤ 8
+- Total tokens ≤ 1500
 
 ---
 
 ## Scoring
 
-| Phase | Max tokens | Actual | Score |
-|-------|-----------|--------|-------|
-| 0 Skill loading | 300 | | |
-| 1 Server discovery | 100 | | |
-| 2 First navigation | 200 | | |
-| 3 First interaction | 400 | | |
-| 4 E2E task | 1000 | | |
-| **Total** | **2000** | | |
+| Phase | Description | Token budget | Ideal calls |
+|-------|-------------|-------------|-------------|
+| 0 | Skill loading | 400 | — |
+| 1 | Server setup | 100 | 1 |
+| 2 | Fixture nav | 400 | 5 |
+| 3 | Real sites | 600 | 6 |
+| 4 | Form interaction | 400 | 8 |
+| 5 | Multi-site E2E | 1500 | 8 |
+| **Total** | | **3400** | **28** |
 
-Score = max_tokens / actual_tokens (higher is better, 1.0 = perfect).
+Score = budget / actual (higher = more efficient skill).
 
 ## What "improvement" looks like
 
-After each run, the optimization loop looks at the highest-cost phase and
-asks: "What in SKILL.md caused extra tokens here?" Then proposes one fix:
+After each run, the loop finds the highest-cost phase and asks:
+"What in SKILL.md caused extra tokens or wrong turns here?"
 
-- Phase 0 high cost → skill is too long / hard to scan
-- Phase 1 high cost → auth/URL discovery is buried
-- Phase 2 high cost → wrong endpoint chosen first
-- Phase 3 high cost → selector discovery requires multiple snapshots
-- Phase 4 high cost → multi-step flow guidance is unclear
+| Phase high cost | Likely cause | Fix |
+|----------------|-------------|-----|
+| 0 | Skill too long to scan | Compress, move key info up |
+| 1 | Auth discovery unclear | Add token location to Quick Start |
+| 2 | text vs snapshot unclear | Strengthen extraction guidance |
+| 3 | IDPI errors on real sites | Document domain allowlist |
+| 4 | Press Enter instead of click | Reinforce submit button rule |
+| 5 | Re-reading skill for multi-step | Better cross-reference within skill |
