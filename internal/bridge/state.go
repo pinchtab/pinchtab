@@ -22,9 +22,11 @@ var crashedPrefsReplacer = strings.NewReplacer(
 )
 
 type TabState struct {
-	ID    string `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
+	ID            string `json:"id"`
+	URL           string `json:"url"`
+	Title         string `json:"title"`
+	Status        string `json:"status,omitempty"`
+	HandoffReason string `json:"handoffReason,omitempty"`
 }
 
 type SessionState struct {
@@ -145,10 +147,18 @@ func (b *Bridge) SaveState() {
 			continue
 		}
 		seen[t.URL] = true
+		status := "active"
+		handoffReason := ""
+		if hs, ok := b.TabHandoffState(string(t.TargetID)); ok {
+			status = hs.Status
+			handoffReason = hs.Reason
+		}
 		tabs = append(tabs, TabState{
-			ID:    string(t.TargetID),
-			URL:   t.URL,
-			Title: t.Title,
+			ID:            string(t.TargetID),
+			URL:           t.URL,
+			Title:         t.Title,
+			Status:        status,
+			HandoffReason: handoffReason,
 		})
 	}
 

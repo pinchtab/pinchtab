@@ -82,6 +82,17 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 				req.HasXY = b
 			}
 		}
+		req.Button = q.Get("button")
+		if v := q.Get("wheelDeltaX"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				req.WheelDeltaX = n
+			}
+		}
+		if v := q.Get("wheelDeltaY"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				req.WheelDeltaY = n
+			}
+		}
 	} else {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -284,15 +295,19 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		result, engineName, actionErr = h.executeAction(tCtx, req)
-		if actionErr != nil && req.Ref != "" && shouldRetryStaleRef(actionErr) {
-			recordStaleRefRetry()
-			h.refreshRefCache(tCtx, resolvedTabID)
-			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-				if nid, ok := cache.Refs[req.Ref]; ok {
-					req.NodeID = nid
-					result, engineName, actionErr = h.executeAction(tCtx, req)
+		if actionErr != nil && shouldRetryPointerAction(req, actionErr) {
+			if req.Ref != "" && shouldRetryStaleRef(actionErr) {
+				recordStaleRefRetry()
+				h.refreshRefCache(tCtx, resolvedTabID)
+				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+					if nid, ok := cache.Refs[req.Ref]; ok {
+						req.NodeID = nid
+					}
 				}
 			}
+			h.refreshActionNodeIDFromSelector(tCtx, &req)
+			time.Sleep(pointerRetryDelay)
+			result, engineName, actionErr = h.executeAction(tCtx, req)
 		}
 		// Semantic self-healing: if stale-ref retry still failed, attempt
 		// recovery via the semantic matcher.
@@ -657,15 +672,19 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			continue
 		} else {
 			actionRes, _, err = h.executeAction(tCtx, action)
-			if err != nil && action.Ref != "" && shouldRetryStaleRef(err) {
-				recordStaleRefRetry()
-				h.refreshRefCache(tCtx, resolvedTabID)
-				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-					if nid, ok := cache.Refs[action.Ref]; ok {
-						action.NodeID = nid
-						actionRes, _, err = h.executeAction(tCtx, action)
+			if err != nil && shouldRetryPointerAction(action, err) {
+				if action.Ref != "" && shouldRetryStaleRef(err) {
+					recordStaleRefRetry()
+					h.refreshRefCache(tCtx, resolvedTabID)
+					if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+						if nid, ok := cache.Refs[action.Ref]; ok {
+							action.NodeID = nid
+						}
 					}
 				}
+				h.refreshActionNodeIDFromSelector(tCtx, &action)
+				time.Sleep(pointerRetryDelay)
+				actionRes, _, err = h.executeAction(tCtx, action)
 			}
 			// Semantic self-healing for batched actions.
 			if err != nil && action.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, action.Ref) {
@@ -920,15 +939,19 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			continue
 		} else {
 			res, _, err = h.executeAction(tCtx, step)
-			if err != nil && step.Ref != "" && shouldRetryStaleRef(err) {
-				recordStaleRefRetry()
-				h.refreshRefCache(tCtx, resolvedTabID)
-				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-					if nid, ok := cache.Refs[step.Ref]; ok {
-						step.NodeID = nid
-						res, _, err = h.executeAction(tCtx, step)
+			if err != nil && shouldRetryPointerAction(step, err) {
+				if step.Ref != "" && shouldRetryStaleRef(err) {
+					recordStaleRefRetry()
+					h.refreshRefCache(tCtx, resolvedTabID)
+					if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+						if nid, ok := cache.Refs[step.Ref]; ok {
+							step.NodeID = nid
+						}
 					}
 				}
+				h.refreshActionNodeIDFromSelector(tCtx, &step)
+				time.Sleep(pointerRetryDelay)
+				res, _, err = h.executeAction(tCtx, step)
 			}
 			// Semantic self-healing for macro steps.
 			if err != nil && step.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, step.Ref) {
@@ -1070,6 +1093,41 @@ func actionCapability(kind string) (engine.Capability, bool) {
 	default:
 		return "", false
 	}
+}
+
+const pointerRetryDelay = 50 * time.Millisecond
+
+func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
+	if err == nil {
+		return false
+	}
+	kind := strings.ToLower(strings.TrimSpace(req.Kind))
+	switch kind {
+	case bridge.ActionClick, bridge.ActionDoubleClick, bridge.ActionHover, bridge.ActionDrag,
+		bridge.ActionMouseDown, bridge.ActionMouseUp, bridge.ActionMouseWheel:
+		// pointer action kinds
+	default:
+		return false
+	}
+
+	if errors.Is(err, bridge.ErrElementOccluded) ||
+		errors.Is(err, bridge.ErrElementBlocked) ||
+		errors.Is(err, bridge.ErrElementOffscreen) {
+		return true
+	}
+
+	return shouldRetryStaleRef(err)
+}
+
+func (h *Handlers) refreshActionNodeIDFromSelector(ctx context.Context, req *bridge.ActionRequest) {
+	if req == nil || req.NodeID > 0 || strings.TrimSpace(req.Selector) == "" {
+		return
+	}
+	nid, err := bridge.ResolveCSSToNodeID(ctx, req.Selector)
+	if err != nil {
+		return
+	}
+	req.NodeID = nid
 }
 
 func shouldRetryStaleRef(err error) bool {

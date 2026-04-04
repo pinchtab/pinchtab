@@ -10,6 +10,10 @@ const (
 	ActionHover          = "hover"
 	ActionSelect         = "select"
 	ActionScroll         = "scroll"
+	ActionMouseMove      = "mousemove"
+	ActionMouseDown      = "mousedown"
+	ActionMouseUp        = "mouseup"
+	ActionMouseWheel     = "mousewheel"
 	ActionDrag           = "drag"
 	ActionHumanClick     = "humanClick"
 	ActionHumanType      = "humanType"
@@ -33,6 +37,10 @@ func (b *Bridge) InitActionRegistry() {
 		ActionHover:          b.actionHover,
 		ActionSelect:         b.actionSelect,
 		ActionScroll:         b.actionScroll,
+		ActionMouseMove:      b.actionMouseMove,
+		ActionMouseDown:      b.actionMouseDown,
+		ActionMouseUp:        b.actionMouseUp,
+		ActionMouseWheel:     b.actionMouseWheel,
 		ActionDrag:           b.actionDrag,
 		ActionHumanClick:     b.actionHumanClick,
 		ActionHumanType:      b.actionHumanType,

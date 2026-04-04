@@ -106,7 +106,7 @@ function GlassTooltip({
 
         return (
           <div
-            key={entry.dataKey}
+              key={String(entry.dataKey)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -268,9 +268,9 @@ export default function TabsChart({
     return vals;
   }, [mergedData, instances, instanceColors]);
 
-  const tooltipContent = (props: TooltipContentProps<number, string>) => (
-    <GlassTooltip {...props} instances={instances} />
-  );
+    const tooltipContent = ((props: TooltipContentProps<number, string>) => (
+      <GlassTooltip {...props} instances={instances} />
+    )) as any;
 
   if (mergedData.length < 2) {
     return (

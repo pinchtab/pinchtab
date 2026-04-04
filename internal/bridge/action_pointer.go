@@ -26,7 +26,11 @@ var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	var err error
 	if req.Selector != "" {
-		err = chromedp.Run(ctx, chromedp.Click(req.Selector, chromedp.ByQuery))
+		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
+		if nodeErr != nil {
+			return nil, nodeErr
+		}
+		err = ClickByNodeID(ctx, int64(node.BackendNodeID))
 	} else if req.NodeID > 0 {
 		err = ClickByNodeID(ctx, req.NodeID)
 	} else if req.HasXY {
@@ -46,7 +50,11 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	var err error
 	if req.Selector != "" {
-		err = chromedp.Run(ctx, chromedp.DoubleClick(req.Selector, chromedp.ByQuery))
+		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
+		if nodeErr != nil {
+			return nil, nodeErr
+		}
+		err = DoubleClickByNodeID(ctx, int64(node.BackendNodeID))
 	} else if req.NodeID > 0 {
 		err = DoubleClickByNodeID(ctx, req.NodeID)
 	} else if req.HasXY {
@@ -65,14 +73,94 @@ func (b *Bridge) actionHover(ctx context.Context, req ActionRequest) (map[string
 		return map[string]any{"hovered": true}, HoverByNodeID(ctx, req.NodeID)
 	}
 	if req.Selector != "" {
-		return map[string]any{"hovered": true}, chromedp.Run(ctx,
-			chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`, req.Selector), nil),
-		)
+		node, err := firstNodeBySelector(ctx, req.Selector)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"hovered": true}, HoverByNodeID(ctx, int64(node.BackendNodeID))
 	}
 	if req.HasXY {
 		return map[string]any{"hovered": true}, HoverByCoordinate(ctx, req.X, req.Y)
 	}
 	return nil, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
+}
+
+func pointerCoordinatesFromRequest(ctx context.Context, req ActionRequest) (float64, float64, error) {
+	if req.HasXY {
+		return req.X, req.Y, nil
+	}
+	if req.NodeID > 0 {
+		return PointerPointForNode(ctx, req.NodeID, false)
+	}
+	if req.Selector != "" {
+		node, err := firstNodeBySelector(ctx, req.Selector)
+		if err != nil {
+			return 0, 0, err
+		}
+		return PointerPointForNode(ctx, int64(node.BackendNodeID), false)
+	}
+	return 0, 0, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
+}
+
+func (b *Bridge) actionMouseMove(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	x, y, err := pointerCoordinatesFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := MouseMoveByCoordinate(ctx, x, y); err != nil {
+		return nil, err
+	}
+	return map[string]any{"moved": true, "x": x, "y": y}, nil
+}
+
+func (b *Bridge) actionMouseDown(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	x, y, err := pointerCoordinatesFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	button := req.Button
+	if button == "" {
+		button = "left"
+	}
+	if err := MouseDownByCoordinate(ctx, x, y, button); err != nil {
+		return nil, err
+	}
+	return map[string]any{"down": true, "x": x, "y": y, "button": button}, nil
+}
+
+func (b *Bridge) actionMouseUp(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	x, y, err := pointerCoordinatesFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	button := req.Button
+	if button == "" {
+		button = "left"
+	}
+	if err := MouseUpByCoordinate(ctx, x, y, button); err != nil {
+		return nil, err
+	}
+	return map[string]any{"up": true, "x": x, "y": y, "button": button}, nil
+}
+
+func (b *Bridge) actionMouseWheel(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	x, y, err := pointerCoordinatesFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	deltaX := req.WheelDeltaX
+	deltaY := req.WheelDeltaY
+	if deltaX == 0 && deltaY == 0 {
+		deltaX = req.ScrollX
+		deltaY = req.ScrollY
+	}
+	if deltaX == 0 && deltaY == 0 {
+		deltaY = 800
+	}
+	if err := scrollByCoordinateAction(ctx, x, y, deltaX, deltaY); err != nil {
+		return nil, err
+	}
+	return map[string]any{"wheel": true, "x": x, "y": y, "deltaX": deltaX, "deltaY": deltaY}, nil
 }
 
 func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[string]any, error) {

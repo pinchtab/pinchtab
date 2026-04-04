@@ -56,6 +56,19 @@ var fillCmd = newSimpleActionCmd("fill <ref|selector> <text>", "Fill input direc
 
 var hoverCmd = newOptionalRefActionCmd("hover <ref>", "Hover element", "hover")
 
+var mouseCmd = &cobra.Command{
+	Use:   "mouse",
+	Short: "Low-level mouse actions (move, down, up, wheel)",
+}
+
+var mouseMoveCmd = newOptionalRefActionCmd("move [ref|selector]", "Move mouse to coordinates or element center", "mousemove")
+
+var mouseDownCmd = newOptionalRefActionCmd("down [ref|selector]", "Press mouse button", "mousedown")
+
+var mouseUpCmd = newOptionalRefActionCmd("up [ref|selector]", "Release mouse button", "mouseup")
+
+var mouseWheelCmd = newOptionalRefActionCmd("wheel [ref|selector]", "Dispatch mouse wheel deltas", "mousewheel")
+
 var focusCmd = newOptionalRefActionCmd("focus <ref>", "Focus element", "focus")
 
 var scrollCmd = newSimpleActionCmd("scroll <ref|pixels>", "Scroll to element or by pixels", "scroll", cobra.MinimumNArgs(1))

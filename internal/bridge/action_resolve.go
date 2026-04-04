@@ -117,22 +117,74 @@ func ResolveTextToNodeID(ctx context.Context, text string) (int64, error) {
 			if (!root) {
 				return null;
 			}
+
+			const normalize = (value) => String(value || "")
+				.toLowerCase()
+				.replace(/\s+/g, " ")
+				.trim();
+
+			const semanticWeight = (el) => {
+				const tag = (el.tagName || "").toLowerCase();
+				if (tag === "button" || tag === "a" || tag === "input") {
+					return 0.25;
+				}
+				const role = normalize(el.getAttribute && el.getAttribute("role"));
+				if (role === "button" || role === "link" || role === "textbox") {
+					return 0.2;
+				}
+				return 0;
+			};
+
+			const needleNorm = normalize(needle);
+			if (!needleNorm) {
+				return null;
+			}
+
 			const elements = root.querySelectorAll("*");
+			let best = null;
+			let bestScore = 0;
+
 			for (const el of elements) {
-				const text = el.innerText || "";
-				if (!text.includes(needle)) {
+				const rawText = el.innerText || el.textContent || "";
+				const textNorm = normalize(rawText);
+				if (!textNorm) {
 					continue;
 				}
-				let childContainsText = false;
+
+				let childContains = false;
 				for (const child of el.children) {
-					if ((child.innerText || "").includes(needle)) {
-						childContainsText = true;
+					const childNorm = normalize(child.innerText || child.textContent || "");
+					if (childNorm && childNorm.includes(needleNorm)) {
+						childContains = true;
 						break;
 					}
 				}
-				if (!childContainsText) {
+
+				if (textNorm.includes(needleNorm) && !childContains) {
 					return el;
 				}
+
+				// Fuzzy fallback: token-overlap score with semantic weighting.
+				const tokens = needleNorm.split(" ").filter(Boolean);
+				if (tokens.length === 0) {
+					continue;
+				}
+				let hits = 0;
+				for (const token of tokens) {
+					if (textNorm.includes(token)) {
+						hits++;
+					}
+				}
+				let score = hits / tokens.length;
+				score += semanticWeight(el);
+				if (score > bestScore) {
+					bestScore = score;
+					best = el;
+				}
+			}
+
+			if (best && bestScore >= 0.7) {
+				return best;
 			}
 			return null;
 		}`

@@ -54,6 +54,8 @@ type Bridge struct {
 	fingerprintMu        sync.RWMutex
 	fingerprintOverlays  map[string]bool
 	workerStealthTargets sync.Map
+	handoffMu            sync.RWMutex
+	handoffs             map[string]TabHandoffState
 
 	// Lazy initialization / restart coordination
 	initMu      sync.Mutex
@@ -82,6 +84,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		IdMgr:               idMgr,
 		netMonitor:          NewNetworkMonitor(netBufSize),
 		fingerprintOverlays: make(map[string]bool),
+		handoffs:            make(map[string]TabHandoffState),
 		LogStore:            logStore,
 		stealthLaunchMode:   stealth.LaunchModeUninitialized,
 	}
@@ -587,14 +590,19 @@ type ActionRequest struct {
 	Value    string `json:"value"`
 	NodeID   int64  `json:"nodeId"`
 
-	X     float64 `json:"x"`
-	Y     float64 `json:"y"`
-	HasXY bool    `json:"hasXY,omitempty"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	HasXY  bool    `json:"hasXY,omitempty"`
+	Button string  `json:"button,omitempty"`
 
 	ScrollX int `json:"scrollX"`
 	ScrollY int `json:"scrollY"`
-	DragX   int `json:"dragX"`
-	DragY   int `json:"dragY"`
+	// WheelDeltaX/WheelDeltaY are explicit mouse-wheel deltas for low-level
+	// mousewheel actions. ScrollX/ScrollY remain for backward compatibility.
+	WheelDeltaX int `json:"wheelDeltaX,omitempty"`
+	WheelDeltaY int `json:"wheelDeltaY,omitempty"`
+	DragX       int `json:"dragX"`
+	DragY       int `json:"dragY"`
 
 	WaitNav bool   `json:"waitNav"`
 	Fast    bool   `json:"fast"`

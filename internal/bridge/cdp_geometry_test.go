@@ -35,3 +35,13 @@ func TestGetElementCenterJS_ContextCancelled(t *testing.T) {
 		t.Error("expected error for cancelled context, got nil")
 	}
 }
+
+func TestPointerPointForNode_ContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := PointerPointForNode(ctx, 1, true)
+	if err == nil {
+		t.Error("expected error for cancelled context, got nil")
+	}
+}

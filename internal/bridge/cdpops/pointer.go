@@ -4,47 +4,114 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/chromedp/chromedp"
 )
 
-func ClickByCoordinate(ctx context.Context, x, y float64) error {
+func normalizeMouseButton(button string) string {
+	switch strings.ToLower(strings.TrimSpace(button)) {
+	case "right":
+		return "right"
+	case "middle":
+		return "middle"
+	default:
+		return "left"
+	}
+}
+
+func validatePointerCoordinates(x, y float64) error {
 	if x < 0 || y < 0 {
 		return fmt.Errorf("x/y coordinates must be >= 0")
 	}
-
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mousePressed",
-				"button":     "left",
-				"clickCount": 1,
-				"x":          x,
-				"y":          y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mouseReleased",
-				"button":     "left",
-				"clickCount": 1,
-				"x":          x,
-				"y":          y,
-			}, nil)
-		}),
-	)
+	return nil
 }
 
-func ClickByNodeID(ctx context.Context, nodeID int64) error {
-	x, y, err := GetElementCenter(ctx, nodeID)
-	if err != nil {
+func dispatchMouseEvent(ctx context.Context, payload map[string]any) error {
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", payload, nil)
+	}))
+}
+
+func MouseMoveByCoordinate(ctx context.Context, x, y float64) error {
+	if err := validatePointerCoordinates(x, y); err != nil {
+		return err
+	}
+	return dispatchMouseEvent(ctx, map[string]any{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+}
+
+func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) error {
+	if err := validatePointerCoordinates(x, y); err != nil {
+		return err
+	}
+	return dispatchMouseEvent(ctx, map[string]any{
+		"type":       "mousePressed",
+		"button":     normalizeMouseButton(button),
+		"clickCount": 1,
+		"x":          x,
+		"y":          y,
+	})
+}
+
+func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error {
+	if err := validatePointerCoordinates(x, y); err != nil {
+		return err
+	}
+	return dispatchMouseEvent(ctx, map[string]any{
+		"type":       "mouseReleased",
+		"button":     normalizeMouseButton(button),
+		"clickCount": 1,
+		"x":          x,
+		"y":          y,
+	})
+}
+
+func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
 
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type": "mouseMoved",
+				"x":    x,
+				"y":    y,
+			}, nil)
 		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type":   "mouseWheel",
+				"x":      x,
+				"y":      y,
+				"deltaX": deltaX,
+				"deltaY": deltaY,
+			}, nil)
+		}),
+	)
+}
+
+func ClickByCoordinate(ctx context.Context, x, y float64) error {
+	if err := validatePointerCoordinates(x, y); err != nil {
+		return err
+	}
+	if err := MouseDownByCoordinate(ctx, x, y, "left"); err != nil {
+		return err
+	}
+	return MouseUpByCoordinate(ctx, x, y, "left")
+}
+
+func ClickByNodeID(ctx context.Context, nodeID int64) error {
+	x, y, err := PointerPointForNode(ctx, nodeID, true)
+	if err != nil {
+		return err
+	}
+
+	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
@@ -68,8 +135,8 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 }
 
 func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {
-	if x < 0 || y < 0 {
-		return fmt.Errorf("x/y coordinates must be >= 0")
+	if err := validatePointerCoordinates(x, y); err != nil {
+		return err
 	}
 
 	return chromedp.Run(ctx,
@@ -95,15 +162,12 @@ func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {
 }
 
 func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
-	x, y, err := GetElementCenter(ctx, nodeID)
+	x, y, err := PointerPointForNode(ctx, nodeID, true)
 	if err != nil {
 		return err
 	}
 
 	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
@@ -128,7 +192,7 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 
 // DragByNodeID drags an element by (dx, dy) pixels using mousePressed → mouseMoved → mouseReleased.
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int) error {
-	x, y, err := GetElementCenter(ctx, nodeID)
+	x, y, err := PointerPointForNode(ctx, nodeID, true)
 	if err != nil {
 		return err
 	}
@@ -145,9 +209,6 @@ func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int) error {
 	}
 
 	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
 				"type": "mouseMoved",
@@ -189,54 +250,20 @@ func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int) error {
 }
 
 func HoverByCoordinate(ctx context.Context, x, y float64) error {
-	if x < 0 || y < 0 {
-		return fmt.Errorf("x/y coordinates must be >= 0")
-	}
-
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-			"type": "mouseMoved",
-			"x":    x,
-			"y":    y,
-		}, nil)
-	}))
+	return MouseMoveByCoordinate(ctx, x, y)
 }
 
 func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
-	if x < 0 || y < 0 {
-		return fmt.Errorf("x/y coordinates must be >= 0")
-	}
-
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type": "mouseMoved",
-				"x":    x,
-				"y":    y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":   "mouseWheel",
-				"x":      x,
-				"y":      y,
-				"deltaX": deltaX,
-				"deltaY": deltaY,
-			}, nil)
-		}),
-	)
+	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY)
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
-	x, y, err := GetElementCenter(ctx, nodeID)
+	x, y, err := PointerPointForNode(ctx, nodeID, true)
 	if err != nil {
 		return err
 	}
 
 	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
 				"type": "mouseMoved",

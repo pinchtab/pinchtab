@@ -1,6 +1,25 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/spf13/cobra"
+)
+
+func findCommand(cmd *cobra.Command, use string) *cobra.Command {
+	if cmd == nil {
+		return nil
+	}
+	if cmd.Name() == use || cmd.Use == use {
+		return cmd
+	}
+	for _, child := range cmd.Commands() {
+		if found := findCommand(child, use); found != nil {
+			return found
+		}
+	}
+	return nil
+}
 
 func TestNormalizeRequiredURL(t *testing.T) {
 	t.Run("normalizes bare hostname", func(t *testing.T) {
@@ -16,4 +35,26 @@ func TestNormalizeRequiredURL(t *testing.T) {
 			t.Fatalf("normalizeRequiredURL() = %q, want %q", got, "https://pinchtab.com")
 		}
 	})
+}
+
+func TestMouseCommandGroupRegistered(t *testing.T) {
+	m := findCommand(rootCmd, "mouse")
+	if m == nil {
+		t.Fatal("expected mouse command to be registered")
+	}
+	if m.GroupID != "browser" {
+		t.Fatalf("expected mouse command group browser, got %q", m.GroupID)
+	}
+}
+
+func TestMouseSubCommandsRegistered(t *testing.T) {
+	m := findCommand(rootCmd, "mouse")
+	if m == nil {
+		t.Fatal("expected mouse command to be registered")
+	}
+	for _, name := range []string{"move", "down", "up", "wheel"} {
+		if findCommand(m, name) == nil {
+			t.Fatalf("expected mouse subcommand %q to be registered", name)
+		}
+	}
 }

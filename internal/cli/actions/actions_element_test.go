@@ -12,6 +12,11 @@ func newActionCmd() *cobra.Command {
 	cmd.Flags().String("css", "", "")
 	cmd.Flags().Bool("wait-nav", false, "")
 	cmd.Flags().String("tab", "", "")
+	cmd.Flags().Float64("x", 0, "")
+	cmd.Flags().Float64("y", 0, "")
+	cmd.Flags().String("button", "", "")
+	cmd.Flags().Int("wheel-delta-x", 0, "")
+	cmd.Flags().Int("wheel-delta-y", 0, "")
 	return cmd
 }
 
@@ -124,6 +129,57 @@ func TestClickWithCSS_AndWaitNav(t *testing.T) {
 	}
 	if body["waitNav"] != true {
 		t.Error("expected waitNav=true")
+	}
+}
+
+func TestMouseDownIncludesButton(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("button", "right")
+	_ = cmd.Flags().Set("x", "25")
+	_ = cmd.Flags().Set("y", "40")
+
+	Action(client, m.base(), "", "mousedown", "", cmd)
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "mousedown" {
+		t.Errorf("expected kind=mousedown, got %v", body["kind"])
+	}
+	if body["button"] != "right" {
+		t.Errorf("expected button=right, got %v", body["button"])
+	}
+	if body["hasXY"] != true {
+		t.Errorf("expected hasXY=true, got %v", body["hasXY"])
+	}
+}
+
+func TestMouseWheelIncludesExplicitDeltas(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("wheel-delta-x", "120")
+	_ = cmd.Flags().Set("wheel-delta-y", "-300")
+	_ = cmd.Flags().Set("x", "10")
+	_ = cmd.Flags().Set("y", "20")
+
+	Action(client, m.base(), "", "mousewheel", "", cmd)
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["kind"] != "mousewheel" {
+		t.Errorf("expected kind=mousewheel, got %v", body["kind"])
+	}
+	if body["wheelDeltaX"] != float64(120) {
+		t.Errorf("expected wheelDeltaX=120, got %v", body["wheelDeltaX"])
+	}
+	if body["wheelDeltaY"] != float64(-300) {
+		t.Errorf("expected wheelDeltaY=-300, got %v", body["wheelDeltaY"])
 	}
 }
 

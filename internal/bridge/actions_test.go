@@ -53,6 +53,108 @@ func TestHoverAction_UsesCoordinatePath(t *testing.T) {
 	}
 }
 
+func TestMouseMoveAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionMouseMove]; !ok {
+		t.Fatal("ActionMouseMove not registered in action registry")
+	}
+}
+
+func TestMouseDownAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionMouseDown]; !ok {
+		t.Fatal("ActionMouseDown not registered in action registry")
+	}
+}
+
+func TestMouseUpAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionMouseUp]; !ok {
+		t.Fatal("ActionMouseUp not registered in action registry")
+	}
+}
+
+func TestMouseWheelAction_Registered(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	if _, ok := b.Actions[ActionMouseWheel]; !ok {
+		t.Fatal("ActionMouseWheel not registered in action registry")
+	}
+}
+
+func TestMouseDownAction_UsesCoordinatePath(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := b.Actions[ActionMouseDown](ctx, ActionRequest{HasXY: true, X: 0, Y: 0, Button: "right"})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if strings.Contains(err.Error(), "need selector") {
+		t.Fatalf("expected coordinate path, got selector/ref validation error: %v", err)
+	}
+}
+
+func TestMouseUpAction_UsesCoordinatePath(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := b.Actions[ActionMouseUp](ctx, ActionRequest{HasXY: true, X: 0, Y: 0})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if strings.Contains(err.Error(), "need selector") {
+		t.Fatalf("expected coordinate path, got selector/ref validation error: %v", err)
+	}
+}
+
+func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origScrollByCoordinate := scrollByCoordinateAction
+	origScrollViewportCenter := scrollViewportCenter
+	t.Cleanup(func() {
+		scrollByCoordinateAction = origScrollByCoordinate
+		scrollViewportCenter = origScrollViewportCenter
+	})
+
+	called := false
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+		called = true
+		if x != 50 || y != 75 {
+			t.Fatalf("wheel coordinates = (%v, %v), want (50, 75)", x, y)
+		}
+		if deltaX != 123 || deltaY != -456 {
+			t.Fatalf("wheel delta = (%d, %d), want (123, -456)", deltaX, deltaY)
+		}
+		return nil
+	}
+	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+		t.Fatal("viewport center should not be used when explicit coordinates are provided")
+		return 0, 0, nil
+	}
+
+	res, err := b.Actions[ActionMouseWheel](context.Background(), ActionRequest{
+		HasXY:       true,
+		X:           50,
+		Y:           75,
+		WheelDeltaX: 123,
+		WheelDeltaY: -456,
+	})
+	if err != nil {
+		t.Fatalf("mouse wheel returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected wheel path to be used")
+	}
+	if !res["wheel"].(bool) {
+		t.Fatalf("expected wheel=true in result payload, got %#v", res)
+	}
+}
+
 func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 

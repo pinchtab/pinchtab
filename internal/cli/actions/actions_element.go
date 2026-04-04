@@ -26,6 +26,20 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		body["hasXY"] = true
 	}
 
+	if button, _ := cmd.Flags().GetString("button"); button != "" {
+		body["button"] = button
+	}
+	if cmd.Flags().Changed("wheel-delta-x") {
+		if deltaX, err := cmd.Flags().GetInt("wheel-delta-x"); err == nil {
+			body["wheelDeltaX"] = deltaX
+		}
+	}
+	if cmd.Flags().Changed("wheel-delta-y") {
+		if deltaY, err := cmd.Flags().GetInt("wheel-delta-y"); err == nil {
+			body["wheelDeltaY"] = deltaY
+		}
+	}
+
 	if css != "" {
 		// Explicit --css flag: send as plain CSS selector
 		body["selector"] = css
