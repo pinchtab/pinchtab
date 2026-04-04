@@ -194,6 +194,7 @@ type ServerConfig struct {
 	Token             string `json:"token,omitempty"`
 	StateDir          string `json:"stateDir,omitempty"`
 	Engine            string `json:"engine,omitempty"`
+	LightpandaURL     string `json:"lightpandaURL,omitempty"`
 	NetworkBufferSize *int   `json:"networkBufferSize,omitempty"`
 	TrustProxyHeaders *bool  `json:"trustProxyHeaders,omitempty"`
 	CookieSecure      *bool  `json:"cookieSecure,omitempty"`
