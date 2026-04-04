@@ -9,6 +9,7 @@ import (
 )
 
 var bridgeEngine string
+var bridgeLightpandaURL string
 
 var bridgeCmd = &cobra.Command{
 	Use:   "bridge",
@@ -20,6 +21,9 @@ var bridgeCmd = &cobra.Command{
 			return err
 		}
 		cfg.Engine = engineMode
+		if bridgeLightpandaURL != "" {
+			cfg.LightpandaURL = bridgeLightpandaURL
+		}
 		server.RunBridgeServer(cfg, version)
 		return nil
 	},
@@ -33,14 +37,15 @@ func resolveBridgeEngine(flagValue, configValue string) (string, error) {
 	if engineMode == "" {
 		engineMode = "chrome"
 	}
-	if engineMode != "chrome" && engineMode != "lite" && engineMode != "auto" {
-		return "", fmt.Errorf("invalid --engine %q (expected chrome, lite, or auto)", engineMode)
+	if engineMode != "chrome" && engineMode != "lite" && engineMode != "lightpanda" && engineMode != "auto" {
+		return "", fmt.Errorf("invalid --engine %q (expected chrome, lite, lightpanda, or auto)", engineMode)
 	}
 	return engineMode, nil
 }
 
 func init() {
 	bridgeCmd.GroupID = "primary"
-	bridgeCmd.Flags().StringVar(&bridgeEngine, "engine", "", "Bridge engine: chrome, lite, or auto (overrides config)")
+	bridgeCmd.Flags().StringVar(&bridgeEngine, "engine", "", "Bridge engine: chrome, lite, lightpanda, or auto (overrides config)")
+	bridgeCmd.Flags().StringVar(&bridgeLightpandaURL, "lightpanda-url", "", "Lightpanda WebSocket URL (default ws://127.0.0.1:19222)")
 	rootCmd.AddCommand(bridgeCmd)
 }
