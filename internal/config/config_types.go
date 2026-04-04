@@ -79,8 +79,11 @@ type RuntimeConfig struct {
 	// Dialog settings
 	DialogAutoAccept bool
 
-	// Engine mode: "chrome" (default), "lite", or "auto"
+	// Engine mode: "chrome" (default), "lite", "lightpanda", or "auto"
 	Engine string
+
+	// LightpandaURL is the WebSocket URL for the Lightpanda browser engine.
+	LightpandaURL string
 
 	// Network monitoring
 	NetworkBufferSize int // Per-tab network buffer size (default 100)

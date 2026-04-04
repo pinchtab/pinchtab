@@ -59,6 +59,36 @@ func (DefaultLiteRule) Decide(op Capability, _ string) Decision {
 	return Undecided
 }
 
+// LightpandaCapabilityRule routes chrome-only operations to Chrome and
+// everything Lightpanda supports to the alt engine.
+type LightpandaCapabilityRule struct{}
+
+func (LightpandaCapabilityRule) Name() string { return "lp-capability" }
+
+func (LightpandaCapabilityRule) Decide(op Capability, _ string) Decision {
+	switch op {
+	case CapScreenshot, CapPDF, CapEvaluate, CapCookies:
+		return UseChrome
+	case CapNavigate, CapSnapshot, CapText, CapClick, CapType:
+		return UseAlt
+	}
+	return Undecided
+}
+
+// DefaultLightpandaRule is a catch-all that sends every remaining DOM
+// operation to the Lightpanda engine. Used when Mode == ModeLightpanda.
+type DefaultLightpandaRule struct{}
+
+func (DefaultLightpandaRule) Name() string { return "default-lightpanda" }
+
+func (DefaultLightpandaRule) Decide(op Capability, _ string) Decision {
+	switch op {
+	case CapNavigate, CapSnapshot, CapText, CapClick, CapType:
+		return UseAlt
+	}
+	return Undecided
+}
+
 // DefaultChromeRule is a catch-all that sends everything to Chrome.
 // Used as the final fallback in ModeAuto.
 type DefaultChromeRule struct{}
