@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "../components/atoms";
 import { useAppStore } from "../stores/useAppStore";
 import * as api from "../services/api";
 import type { InstanceTab } from "../types";
@@ -283,13 +284,13 @@ export default function ActivityExplorer({
         <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-1.5">
           <label className="flex items-center gap-1.5 text-xs text-text-muted">
             Agent
-            <select
+            <Select
               value={effectiveFilters.agentId}
               onChange={(e) => {
                 updateFilter("agentId", e.target.value);
                 if (!e.target.value) updateFilter("sessionId", "");
               }}
-              className="rounded border border-border-subtle bg-bg-surface px-2 py-1 text-xs text-text-primary"
+              variant="compact"
             >
               <option value="">All</option>
               {agentOptions.map((id) => (
@@ -297,15 +298,15 @@ export default function ActivityExplorer({
                   {id}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex items-center gap-1.5 text-xs text-text-muted">
             Session
-            <select
+            <Select
               value={effectiveFilters.sessionId}
               onChange={(e) => updateFilter("sessionId", e.target.value)}
               disabled={!effectiveFilters.agentId}
-              className="rounded border border-border-subtle bg-bg-surface px-2 py-1 text-xs text-text-primary disabled:opacity-40"
+              variant="compact"
             >
               <option value="">All</option>
               {sessionOptions.map((s) => (
@@ -313,7 +314,7 @@ export default function ActivityExplorer({
                   {s.label || s.id}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <span className="ml-auto text-[0.68rem] text-text-muted">
             {summary}

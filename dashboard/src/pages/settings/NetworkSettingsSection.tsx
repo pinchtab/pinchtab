@@ -1,3 +1,4 @@
+import { Select } from "../../components/atoms";
 import type { BackendConfig, BackendConfigState } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
 import { csvToList, fieldClass, listToCsv } from "./settingsShared";
@@ -134,7 +135,7 @@ export function NetworkSettingsSection({
         description="Controls whether dashboard session cookies require HTTPS. Auto enables Secure only on HTTPS. Force Secure is appropriate when TLS is in front of PinchTab."
       >
         <div className="space-y-2">
-          <select
+          <Select
             value={
               backendConfig.server.cookieSecure === true
                 ? "true"
@@ -150,12 +151,11 @@ export function NetworkSettingsSection({
                     : e.target.value === "true",
               })
             }
-            className={fieldClass}
           >
             <option value="auto">Auto</option>
             <option value="true">Force Secure</option>
             <option value="false">Force Insecure</option>
-          </select>
+          </Select>
           <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
             Force Secure blocks dashboard login on plain HTTP. Use it when
             PinchTab is served through HTTPS directly or behind a trusted proxy.

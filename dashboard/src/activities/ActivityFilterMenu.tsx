@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from "react";
-import { Button, Input } from "../components/atoms";
+import { Button, Input, Select } from "../components/atoms";
 import type { Profile, Instance, InstanceTab } from "../types";
 import type { ActivityFilters } from "./types";
 import { actionOptions } from "./helpers";
@@ -31,21 +31,13 @@ function FilterSelect({
   onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="dashboard-section-title text-[0.68rem]">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={onChange}
-        className="appearance-none rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%236b7280%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[position:right_0.5rem_center] bg-no-repeat pl-3 pr-8 py-2 text-sm text-text-primary transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-      >
-        {options.map((option) => (
-          <option key={option.value || "all"} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select aria-label={label} label={label} value={value} onChange={onChange}>
+      {options.map((option) => (
+        <option key={option.value || "all"} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 

@@ -1,6 +1,7 @@
+import { Select } from "../../components/atoms";
 import type { BackendConfig } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
-import { fieldClass, selectClass } from "./settingsShared";
+import { fieldClass } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
 
 interface OrchestrationSettingsSectionProps {
@@ -21,7 +22,7 @@ export function OrchestrationSettingsSection({
         label="Strategy"
         description="Controls instance lifecycle and how shorthand routes are routed."
       >
-        <select
+        <Select
           value={backendConfig.multiInstance.strategy}
           onChange={(e) =>
             updateBackendSection("multiInstance", {
@@ -29,14 +30,13 @@ export function OrchestrationSettingsSection({
                 .value as BackendConfig["multiInstance"]["strategy"],
             })
           }
-          className={selectClass}
         >
           <option value="always-on">Always on</option>
           <option value="simple">Simple</option>
           <option value="explicit">Explicit</option>
           <option value="simple-autorestart">Simple autorestart</option>
           <option value="no-instance">No instance (hub)</option>
-        </select>
+        </Select>
         <div className="mt-2 text-[11px] leading-relaxed text-text-muted">
           {backendConfig.multiInstance.strategy === "always-on" &&
             "Launches a default instance at boot and relaunches on crash."}
@@ -54,7 +54,7 @@ export function OrchestrationSettingsSection({
         label="Allocation policy"
         description="Determines how running instances are chosen for shorthand requests."
       >
-        <select
+        <Select
           value={backendConfig.multiInstance.allocationPolicy}
           onChange={(e) =>
             updateBackendSection("multiInstance", {
@@ -62,12 +62,11 @@ export function OrchestrationSettingsSection({
                 .value as BackendConfig["multiInstance"]["allocationPolicy"],
             })
           }
-          className={selectClass}
         >
           <option value="fcfs">First available</option>
           <option value="round_robin">Round robin</option>
           <option value="random">Random</option>
-        </select>
+        </Select>
       </SettingRow>
       <SettingRow
         label="Instance port start"

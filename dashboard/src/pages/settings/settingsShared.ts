@@ -77,9 +77,6 @@ export const sections: Array<{
 export const fieldClass =
   "w-full rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
-export const selectClass =
-  "rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
-
 export type UpdateBackendSection = <K extends keyof BackendConfig>(
   section: K,
   patch: Partial<BackendConfig[K]>,

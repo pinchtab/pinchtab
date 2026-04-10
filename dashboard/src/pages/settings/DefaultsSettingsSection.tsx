@@ -1,10 +1,7 @@
+import { Select } from "../../components/atoms";
 import type { BackendConfig } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
-import {
-  fieldClass,
-  instanceDefaultsBooleanRows,
-  selectClass,
-} from "./settingsShared";
+import { fieldClass, instanceDefaultsBooleanRows } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
 
 interface DefaultsSettingsSectionProps {
@@ -25,25 +22,24 @@ export function DefaultsSettingsSection({
         label="Mode"
         description="Default browser mode for new launches."
       >
-        <select
+        <Select
           value={backendConfig.instanceDefaults.mode}
           onChange={(e) =>
             updateBackendSection("instanceDefaults", {
               mode: e.target.value as BackendConfig["instanceDefaults"]["mode"],
             })
           }
-          className={selectClass}
         >
           <option value="headless">Headless</option>
           <option value="headed">Headed</option>
-        </select>
+        </Select>
       </SettingRow>
       <SettingRow
         label="Stealth level"
         description="Bot detection evasion profile. Higher levels may affect error monitoring and certain browser features."
       >
         <div className="space-y-2">
-          <select
+          <Select
             value={backendConfig.instanceDefaults.stealthLevel}
             onChange={(e) =>
               updateBackendSection("instanceDefaults", {
@@ -51,12 +47,11 @@ export function DefaultsSettingsSection({
                   .value as BackendConfig["instanceDefaults"]["stealthLevel"],
               })
             }
-            className={selectClass}
           >
             <option value="light">Light</option>
             <option value="medium">Medium</option>
             <option value="full">Full</option>
-          </select>
+          </Select>
           <div className="rounded-sm border border-border-subtle bg-black/10 px-3 py-2 text-xs leading-5 text-text-muted">
             {backendConfig.instanceDefaults.stealthLevel === "light" && (
               <div className="space-y-2">
@@ -131,7 +126,7 @@ export function DefaultsSettingsSection({
         label="Tab eviction policy"
         description="How PinchTab behaves when a managed instance reaches its tab limit."
       >
-        <select
+        <Select
           value={backendConfig.instanceDefaults.tabEvictionPolicy}
           onChange={(e) =>
             updateBackendSection("instanceDefaults", {
@@ -139,12 +134,11 @@ export function DefaultsSettingsSection({
                 .value as BackendConfig["instanceDefaults"]["tabEvictionPolicy"],
             })
           }
-          className={selectClass}
         >
           <option value="reject">Reject new tabs</option>
           <option value="close_oldest">Close oldest</option>
           <option value="close_lru">Close least recently used</option>
-        </select>
+        </Select>
       </SettingRow>
       <SettingRow
         label="Max tabs"
