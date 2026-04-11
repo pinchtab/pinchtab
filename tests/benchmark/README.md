@@ -31,8 +31,7 @@ If Docker build fails or is skipped, the benchmark is **INVALID**.
 | File | Purpose |
 |------|---------|
 | `../../skills/pinchtab/SKILL.md` | PinchTab skill (same as shipped product) |
-| `BENCHMARK_TASKS.md` | Standalone task list (same as skill) |
-| `AGENT_SCRIPT.md` | Extended: 100+ comprehensive tasks |
+| `BASELINE_TASKS.md` | Standalone task list (same as skill) |
 | `run-agent-benchmark.sh` | **Recommended**: Start Docker + spawn subagent |
 | `run-benchmark.sh` | Start Docker environment only |
 | `record-step.sh` | Record step results with token counts |
@@ -114,7 +113,7 @@ Reports are generated in `results/`:
 
 For automated benchmarks, you can:
 
-1. Parse `BENCHMARK_TASKS.md` for curl commands
+1. Parse `BASELINE_TASKS.md` for curl commands
 2. Execute each command
 3. Parse responses for pass/fail
 4. Call `record-step.sh` with results

@@ -1,12 +1,18 @@
 # PinchTab Benchmark Test Cases
 
-39 test cases covering realistic browser automation scenarios against local fixture pages.
+54 test cases covering realistic browser automation scenarios against local fixture pages.
 
 | # | Task | Description |
 |---|------|-------------|
-| **Group 0: Setup** | | |
-| 0.1 | Health check | Confirm PinchTab is running with active instance |
-| 0.2 | Fixtures reachable | Navigate to fixtures root, confirm accessible |
+| **Group 0: Setup & Diagnosis** | | |
+| 0.1 | Server reachable | `GET /health` returns `status: ok` |
+| 0.2 | Auth required | Request without token returns 401 |
+| 0.3 | Auth works with token | Request with bearer token returns 200 |
+| 0.4 | Instance available | At least one instance running, or start one |
+| 0.5 | List existing tabs | `GET /tabs` returns array without error |
+| 0.6 | Clean stale tabs | Close any leftover tabs from previous runs |
+| 0.7 | Network reach to target | Navigate to fixtures root, get success |
+| 0.8 | Capture initial tab ID | Save tab ID from 0.7 for subsequent tasks |
 | **Group 1: Reading & Extracting** | | |
 | 1.1 | Wiki categories | Extract category names + article counts from wiki index |
 | 1.2 | Click a link | From wiki, click through to Go article |
@@ -59,3 +65,17 @@
 | **Group 15: Data Aggregation** | | |
 | 15.1 | Financial calc | Extract revenue + profit, calculate margin |
 | 15.2 | Multi-page comparison | Compare features across 3 wiki language pages |
+| **Group 16: Hover & Tooltips** | | |
+| 16.1 | Hover reveals info | Hover first avatar, verify hidden content appears |
+| 16.2 | Hover swap | Hover second avatar, verify different content appears |
+| **Group 17: Scrolling** | | |
+| 17.1 | Scroll by pixels | Scroll down 1500px, verify mid-page marker visible |
+| 17.2 | Scroll to footer | Scroll to bottom, verify footer marker visible |
+| **Group 18: File Download** | | |
+| 18.1 | Download a file | Download sample.txt, verify content marker present |
+| **Group 19: iFrame** | | |
+| 19.1 | Read iframe content | Verify content from inside iframe is accessible |
+| 19.2 | Type into iframe | Fill input inside iframe, verify saved value |
+| **Group 20: Dialogs** | | |
+| 20.1 | Accept alert | Trigger alert, accept, verify result marker |
+| 20.2 | Cancel confirm | Trigger confirm dialog, cancel, verify cancelled marker |

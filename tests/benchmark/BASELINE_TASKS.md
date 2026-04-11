@@ -53,16 +53,63 @@ tab ID captured in step 0.2.
 
 ---
 
-## Group 0: Setup
+## Group 0: Setup & Diagnosis
 
-### 0.1 Health check
+### 0.1 Server reachable
 ```bash
 curl -sf http://localhost:9867/health \
   -H "Authorization: Bearer benchmark-token"
 ```
-**Pass if**: `status == "ok"`, `authRequired == true`, `instances >= 1`, `defaultInstance.status == "running"`.
+**Pass if**: `status == "ok"` in response body.
 
-### 0.2 Fixtures reachable
+### 0.2 Auth required
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9867/health
+```
+**Pass if**: HTTP status is `401` (auth rejected without token).
+
+### 0.3 Auth works with token
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9867/health \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: HTTP status is `200`.
+
+### 0.4 Instance available
+```bash
+curl -sf http://localhost:9867/health \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Response contains `defaultInstance.status == "running"`. If not, run:
+```bash
+curl -X POST http://localhost:9867/instances/start \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+And re-verify the new instance is running.
+
+### 0.5 List existing tabs
+```bash
+curl -sf http://localhost:9867/tabs \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Returns a JSON array (possibly empty) without error.
+
+### 0.6 Clean stale tabs
+For each tab returned by step 0.5, close it:
+```bash
+curl -X POST http://localhost:9867/tabs/TAB_ID/close \
+  -H "Authorization: Bearer benchmark-token"
+```
+Then verify cleanup:
+```bash
+curl -sf http://localhost:9867/tabs \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: After cleanup, the tab list is empty or contains only an about:blank tab.
+
+### 0.7 Network reach to target
 ```bash
 curl -sf -X POST http://localhost:9867/navigate \
   -H "Authorization: Bearer benchmark-token" \
@@ -75,6 +122,13 @@ curl -sf "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=50
   -H "Authorization: Bearer benchmark-token"
 ```
 **Pass if**: Navigate returns HTTP 200 AND snapshot contains `VERIFY_HOME_LOADED_12345`.
+
+### 0.8 Capture initial tab ID
+```bash
+curl -sf http://localhost:9867/tabs \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: The captured `TAB_ID` from step 0.7 appears in the tabs list.
 
 ---
 
@@ -286,7 +340,7 @@ curl "http://localhost:9867/tabs/TAB_ID/snapshot?filter=interactive&format=compa
 curl -X POST http://localhost:9867/navigate \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
-  -d '{"tabId":"TAB_ID","url":"http://fixtures/spa.html"}'
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/spa.html?reset=1"}'
 
 curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=1500" \
   -H "Authorization: Bearer benchmark-token"
@@ -574,11 +628,13 @@ curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=500" \
 
 ### 11.1 State after reload
 ```bash
+# Start fresh (reset param clears localStorage on this load only)
 curl -X POST http://localhost:9867/navigate \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
-  -d '{"tabId":"TAB_ID","url":"http://fixtures/spa.html"}'
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/spa.html?reset=1"}'
 
+# Add the persistent task
 curl -X POST http://localhost:9867/tabs/TAB_ID/action \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
@@ -588,6 +644,12 @@ curl -X POST http://localhost:9867/tabs/TAB_ID/action \
   -H "Authorization: Bearer benchmark-token" \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","selector":"#add-task-btn"}'
+
+# Navigate away then back WITHOUT reset param — state should persist in localStorage
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/"}'
 
 curl -X POST http://localhost:9867/navigate \
   -H "Authorization: Bearer benchmark-token" \
@@ -840,11 +902,151 @@ curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=1000" 
 
 ---
 
+## Group 16: Hover & Tooltips
+
+### 16.1 Hover reveals info
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/hovers.html"}'
+
+curl -X POST http://localhost:9867/tabs/TAB_ID/action \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"hover","selector":"#avatar-1"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=1000" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Snapshot contains `HOVER_REVEALED_USER_1`.
+
+### 16.2 Hover swap
+```bash
+curl -X POST http://localhost:9867/tabs/TAB_ID/action \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"hover","selector":"#avatar-2"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=1000" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Snapshot contains `HOVER_REVEALED_USER_2`.
+
+---
+
+## Group 17: Scrolling
+
+### 17.1 Scroll by pixels
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/scroll.html"}'
+
+curl -X POST http://localhost:9867/tabs/TAB_ID/evaluate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"window.scrollTo(0, 1500); document.querySelector(\"#middle-block\").innerText;"}'
+```
+**Pass if**: Response value contains `SCROLL_MIDDLE_MARKER`.
+
+### 17.2 Scroll to footer
+```bash
+curl -X POST http://localhost:9867/tabs/TAB_ID/evaluate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"document.querySelector(\"#footer\").scrollIntoView(); document.querySelector(\"#footer\").innerText;"}'
+```
+**Pass if**: Response value contains `SCROLL_REACHED_FOOTER`.
+
+---
+
+## Group 18: File Download
+
+### 18.1 Download a file
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/download-sample.txt"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/text" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Response text contains `DOWNLOAD_FILE_CONTENT_VERIFIED`.
+
+**Note**: PinchTab's `/download` endpoint blocks private/internal IPs as a safety measure. For local fixture downloads, navigate to the file URL and read body text instead.
+
+---
+
+## Group 19: iFrame
+
+### 19.1 Read iframe content
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/iframe.html"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=2000" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Snapshot contains `IFRAME_INNER_CONTENT_LOADED`.
+
+### 19.2 Type into iframe input
+```bash
+curl -X POST http://localhost:9867/tabs/TAB_ID/evaluate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"const f=document.getElementById(\"content-frame\").contentDocument; f.getElementById(\"iframe-input\").value=\"Hello World\"; f.getElementById(\"iframe-submit\").click(); f.getElementById(\"iframe-result\").textContent;"}'
+```
+**Pass if**: Response value contains `IFRAME_INPUT_RECEIVED_HELLO_WORLD`.
+
+**Note**: PinchTab's `/action` selectors don't reach inside iframes. Use `/evaluate` with `contentDocument` to interact with iframe content.
+
+---
+
+## Group 20: Dialogs
+
+### 20.1 Accept alert
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"tabId":"TAB_ID","url":"http://fixtures/alerts.html"}'
+
+curl -X POST http://localhost:9867/tabs/TAB_ID/action \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","selector":"#alert-btn","dialogAction":"accept"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=500" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Snapshot contains `DIALOG_ALERT_DISMISSED`.
+
+### 20.2 Cancel confirm
+```bash
+curl -X POST http://localhost:9867/tabs/TAB_ID/action \
+  -H "Authorization: Bearer benchmark-token" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"click","selector":"#confirm-btn","dialogAction":"dismiss"}'
+
+curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=500" \
+  -H "Authorization: Bearer benchmark-token"
+```
+**Pass if**: Snapshot contains `DIALOG_CONFIRM_CANCELLED`.
+
+**Note**: Use `dialogAction` on the click action to auto-accept or auto-dismiss a JS dialog that the click opens. Without it, the click would hang until `/dialog` is called from a separate request.
+
+---
+
 ## Summary
 
 | Group | Tasks | Description |
 |-------|-------|-------------|
-| 0 | 2 | Setup |
+| 0 | 8 | Setup & Diagnosis |
 | 1 | 6 | Reading & Extracting |
 | 2 | 3 | Search & Dynamic |
 | 3 | 2 | Form |
@@ -860,8 +1062,13 @@ curl "http://localhost:9867/tabs/TAB_ID/snapshot?format=compact&maxTokens=1000" 
 | 13 | 2 | Form Validation |
 | 14 | 2 | Dynamic Content |
 | 15 | 2 | Data Aggregation |
+| 16 | 2 | Hover & Tooltips |
+| 17 | 2 | Scrolling |
+| 18 | 1 | File Download |
+| 19 | 2 | iFrame |
+| 20 | 2 | Dialogs |
 
-**Total: 39 tasks**
+**Total: 54 tasks**
 
 ## Verification Strings
 

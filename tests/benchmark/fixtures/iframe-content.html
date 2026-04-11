@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>iFrame Inner</title>
+</head>
+<body>
+  <h2>Inner Frame — IFRAME_INNER_CONTENT_LOADED</h2>
+  <form id="iframe-form">
+    <label>Comment:</label>
+    <input type="text" id="iframe-input" name="comment">
+    <button type="button" id="iframe-submit">Save</button>
+  </form>
+  <p id="iframe-result"></p>
+
+  <script>
+    document.getElementById('iframe-submit').addEventListener('click', function() {
+      const value = document.getElementById('iframe-input').value;
+      document.getElementById('iframe-result').textContent = 'IFRAME_INPUT_RECEIVED_' + value.replace(/\s/g, '_').toUpperCase();
+    });
+  </script>
+</body>
+</html>

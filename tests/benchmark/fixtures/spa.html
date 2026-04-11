@@ -55,6 +55,11 @@
     let taskCount = 3;
     let tasks = [];
 
+    // Support ?reset=1 to clear state between benchmark runs
+    if (new URLSearchParams(window.location.search).has('reset')) {
+      localStorage.removeItem('tasks');
+    }
+
     // Load tasks from localStorage on page load
     function loadTasks() {
       const saved = localStorage.getItem('tasks');

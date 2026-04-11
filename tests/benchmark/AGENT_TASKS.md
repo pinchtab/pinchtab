@@ -18,17 +18,47 @@ Natural language tasks to test how well an agent uses PinchTab from skill docs a
 
 ---
 
-## Group 0: Setup Verification
+## Group 0: Setup & Diagnosis
 
-### 0.1 Confirm PinchTab is running
-Check that the PinchTab server is healthy and a Chrome instance is active.
+### 0.1 Server reachable
+Check that the PinchTab server is healthy.
 
-**Verify**: Server responds with `status: ok` and at least one running instance.
+**Verify**: Server responds with `status: ok`.
 
-### 0.2 Navigate to fixtures and confirm reachable
-Navigate to `http://fixtures/` and confirm the benchmark fixtures server is reachable.
+### 0.2 Auth is required
+Make a request to the server WITHOUT an auth token and confirm it is rejected.
 
-**Verify**: Page title contains "Benchmark" or "PinchTab".
+**Verify**: Response is HTTP 401 (or other auth-error status).
+
+### 0.3 Auth works with token
+Repeat the same request WITH the bearer token and confirm it succeeds.
+
+**Verify**: Response is HTTP 200.
+
+### 0.4 Instance available
+Confirm at least one Chrome instance is running. If none exist, start one.
+
+**Verify**: Health response shows `defaultInstance.status == "running"` (or after starting one, the new instance is running).
+
+### 0.5 List existing tabs
+Get the current list of open tabs.
+
+**Verify**: A list (possibly empty) is returned without error.
+
+### 0.6 Clean stale tabs
+If any tabs from previous runs are open, close them so the benchmark starts from a known state.
+
+**Verify**: After cleanup, the tab list is empty (or only contains a single about:blank tab).
+
+### 0.7 Network reach to target
+Navigate to `http://fixtures/` and confirm the fixtures server is reachable from PinchTab.
+
+**Verify**: Navigate returns successfully and the page contains benchmark content.
+
+### 0.8 Capture initial tab ID
+Save the tab ID returned by the navigate in 0.7. Use this tab ID for all subsequent tasks to avoid creating new tabs.
+
+**Verify**: A tab ID was captured and matches what `GET /tabs` reports.
 
 ---
 
@@ -111,7 +141,7 @@ After submitting, if the form is still accessible (or navigate back), verify you
 ## Group 4: SPA State Management
 
 ### 4.1 Read initial app state
-Navigate to `http://fixtures/spa.html` (always navigate fresh — do not reuse a cached page). Read the current task list — how many tasks exist, how many are active vs done?
+Navigate to `http://fixtures/spa.html?reset=1` (the `?reset=1` query param clears any previous localStorage state so the SPA starts with its default 3 tasks). Read the current task list — how many tasks exist, how many are active vs done?
 
 **Verify**: Found 3 total, 2 active, 1 done (verify `TASK_STATS_TOTAL_3_ACTIVE_2_DONE_1`).
 
@@ -219,7 +249,7 @@ In the modal, select "Dark" from the theme dropdown (`#theme-select`), then clic
 ## Group 11: State Persistence & Page Reload
 
 ### 11.1 Add an item and verify after page reload
-Navigate to `http://fixtures/spa.html`. Add a task titled exactly "Persistent Task Test". Then reload by navigating to `http://fixtures/spa.html` again.
+Navigate to `http://fixtures/spa.html?reset=1` (starts with clean state). Add a task titled exactly "Persistent Task Test". Then navigate away to `http://fixtures/` and back to `http://fixtures/spa.html` (WITHOUT the reset param) to verify localStorage persistence.
 
 **Verify**: After reload, the task still appears in the list (`TASK_PERSISTENT_TEST_FOUND_AFTER_RELOAD`).
 
@@ -291,11 +321,76 @@ Report which language has the most features and name 1 feature unique to each.
 
 ---
 
+## Group 16: Hover & Tooltips
+
+### 16.1 Hover reveals hidden content
+Navigate to `http://fixtures/hovers.html`. Hover over the first avatar to reveal its hidden info.
+
+**Verify**: After hovering, snapshot contains `HOVER_REVEALED_USER_1`.
+
+### 16.2 Hover swap
+Hover over the second avatar.
+
+**Verify**: Snapshot contains `HOVER_REVEALED_USER_2`.
+
+---
+
+## Group 17: Scrolling
+
+### 17.1 Scroll by pixels
+Navigate to `http://fixtures/scroll.html`. Scroll down approximately 1500 pixels.
+
+**Verify**: Snapshot or text contains `SCROLL_MIDDLE_MARKER` (the mid-page marker is now in view).
+
+### 17.2 Scroll to footer
+Continue scrolling until the footer is visible (or scroll directly to the footer element).
+
+**Verify**: Snapshot contains `SCROLL_REACHED_FOOTER`.
+
+---
+
+## Group 18: File Download
+
+### 18.1 Download a file
+Download `http://fixtures/download-sample.txt` to a local file.
+
+**Verify**: The downloaded file exists and its content includes `DOWNLOAD_FILE_CONTENT_VERIFIED`.
+
+---
+
+## Group 19: iFrame
+
+### 19.1 Read iframe content
+Navigate to `http://fixtures/iframe.html` and extract content from inside the embedded iframe.
+
+**Verify**: The iframe's inner content includes `IFRAME_INNER_CONTENT_LOADED`.
+
+### 19.2 Type into iframe input
+Inside the iframe, fill the input with the text "Hello World" and click the Save button.
+
+**Verify**: The iframe shows `IFRAME_INPUT_RECEIVED_HELLO_WORLD`.
+
+---
+
+## Group 20: Dialogs
+
+### 20.1 Accept alert
+Navigate to `http://fixtures/alerts.html`. Click the "Click for Alert" button and dismiss the alert.
+
+**Verify**: The page result contains `DIALOG_ALERT_DISMISSED`.
+
+### 20.2 Cancel confirm
+Click the "Click for Confirm" button and cancel the confirm dialog.
+
+**Verify**: The page result contains `DIALOG_CONFIRM_CANCELLED`.
+
+---
+
 ## Summary
 
 | Group | Tasks | Description |
 |-------|-------|-------------|
-| 0 | 2 | Setup Verification |
+| 0 | 8 | Setup & Diagnosis |
 | 1 | 6 | Reading & Extracting Content |
 | 2 | 3 | Search & Dynamic Interaction |
 | 3 | 2 | Complex Form |
@@ -311,8 +406,13 @@ Report which language has the most features and name 1 feature unique to each.
 | 13 | 2 | Form State & Multi-Step Submission |
 | 14 | 2 | Dynamic Content Loading |
 | 15 | 2 | Complex Data Extraction & Aggregation |
+| 16 | 2 | Hover & Tooltips |
+| 17 | 2 | Scrolling |
+| 18 | 1 | File Download |
+| 19 | 2 | iFrame |
+| 20 | 2 | Dialogs |
 
-**Total: 39 tasks** (expanded from 27)
+**Total: 54 tasks**
 
 ## Key Differences from Baseline
 

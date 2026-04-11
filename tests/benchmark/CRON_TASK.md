@@ -17,14 +17,14 @@ git checkout feat/benchmark && git pull --rebase origin feat/benchmark
 ```
 
 ### Step 2 — Run Baseline Benchmark
-Execute BENCHMARK_TASKS.md exactly as written.
+Execute BASELINE_TASKS.md exactly as written.
 - Token: `benchmark-token`
 - Record each step: `./record-step.sh <group> <step> <pass|fail> <in> <out> "notes"`
 - For failures: include HTTP status, expected string, actual response in notes
 
 ### Step 3 — Run Agent Benchmark
 Execute AGENT_TASKS.md using SKILL.md as your only guide.
-- **Do NOT look at BENCHMARK_TASKS.md**
+- **Do NOT look at BASELINE_TASKS.md**
 - Figure out commands from skill documentation
 - Record: `./record-agent-step.sh <group> <step> <pass|fail> <in> <out> "commands used" "result"`
 - Log every curl/command executed
@@ -46,7 +46,7 @@ Compare results and classify each agent failure:
 Priority order:
 1. **API Bug** → Fix PinchTab Go code, commit as `fix: <description>`
 2. **Skill Gap** → Improve SKILL.md with clearer guidance or example, commit as `docs(skill): <description>`
-3. **Test Ambiguity** → Fix fixture HTML or BENCHMARK_TASKS.md verification, commit as `test: <description>`
+3. **Test Ambiguity** → Fix fixture HTML or BASELINE_TASKS.md verification, commit as `test: <description>`
 4. **Agent Task Clarity** → Improve AGENT_TASKS.md phrasing, commit as `test(agent): <description>`
 5. **No Gaps Found** → Add 2-3 new test cases covering uncovered scenarios, commit as `test: add cases for <scenario>`
 

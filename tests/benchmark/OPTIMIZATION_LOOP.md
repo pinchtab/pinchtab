@@ -15,24 +15,12 @@ curl -sf -H "Authorization: Bearer benchmark-token" http://localhost:9867/health
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1a. RUN BASELINE BENCHMARK              [Sub-agent A]      │
-│      - Only runs when:                                      │
-│        • No previous baseline exists, OR                    │
-│        • Changes affect: server code, fixtures, or          │
-│          BENCHMARK_TASKS.md                                 │
-│      - Otherwise: reuse last baseline results               │
-│      - Load BENCHMARK_TASKS.md                              │
-│      - Execute 68 curl commands sequentially                │
-│      - Check pass/fail per documented conditions            │
-│      - Record via: record-step.sh --type baseline           │
-│      - Output: results/baseline_<timestamp>.json            │
-├─────────────────────────────────────────────────────────────┤
-│  1b. RUN AGENT BENCHMARK                [Sub-agent B]      │
-│      - Runs every iteration                                 │
-│      - Load AGENT_TASKS.md + skills/pinchtab/SKILL.md       │
-│      - Execute 39 tasks using only skill docs               │
-│      - Record via: record-step.sh --type agent --tokens     │
-│      - Output: results/agent_benchmark_<timestamp>.json     │
+│  1. RUN AGENT BENCHMARK                  [Sub-agent]        │
+│     - Runs every iteration                                  │
+│     - Load AGENT_TASKS.md + skills/pinchtab/SKILL.md        │
+│     - Execute tasks using only skill docs                   │
+│     - Record via: record-step.sh --type agent               │
+│     - Output: results/agent_benchmark_<timestamp>.json      │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -79,13 +67,35 @@ curl -sf -H "Authorization: Bearer benchmark-token" http://localhost:9867/health
 | Step | Who | What |
 |------|-----|------|
 | Pre-req | **Human** | Start Docker, verify health |
-| 1a Baseline | **Sub-agent A** | Execute 68 curl commands (skip if baseline exists and no server/fixture changes) |
-| 1b Agent | **Sub-agent B** | Execute 39 tasks from skill docs, record results |
+| 1 Agent | **Sub-agent** | Execute agent tasks from skill docs, record results |
 | 2 Regression | **Main agent** | Compare against best_score.txt |
 | 3 Analyze | **Main agent** | Diff baseline vs agent, find patterns |
 | 4 Propose | **Main agent → Human** | Suggest 1 fix, get approval |
 | 5 Implement | **Main agent** | Make the change, leave uncommitted |
 | 6 Log | **Main agent** | Append to optimization_log.md |
+
+## Baseline is a Prerequisite, Not Part of the Loop
+
+The baseline suite (`BASELINE_TASKS.md`) validates that the benchmark infrastructure itself works — fixtures serve correctly, PinchTab APIs behave as expected, and the test conditions are reachable. It's deterministic (no LLM involved), so once it's at 100% it stays at 100% unless something changes underneath it.
+
+**The loop does NOT re-run the baseline each iteration.** Instead, run the baseline manually when any of these change:
+
+- PinchTab server code (anything in `internal/` that affects the HTTP API)
+- Fixtures (anything in `tests/benchmark/fixtures/`)
+- `BASELINE_TASKS.md` itself (adding/modifying tests)
+- `docker-compose.yml` or the Docker image
+
+**Workflow for adding a new test case:**
+
+1. Write the new test in `BASELINE_TASKS.md` (curl commands + pass condition)
+2. Write the matching task in `AGENT_TASKS.md` (natural language)
+3. Write the summary row in `TEST_CASES.md`
+4. Add any new fixture files needed
+5. **Run the baseline** — it must reach 100% before the case is considered valid
+6. If baseline fails: fix the test/fixture/PinchTab until it passes
+7. Commit the new case — now the agent loop can use it
+
+Once baseline is green, the optimization loop only runs the agent suite.
 
 ## Regression Detection
 

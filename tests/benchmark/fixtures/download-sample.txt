@@ -1,0 +1,5 @@
+DOWNLOAD_FILE_CONTENT_VERIFIED
+This is a sample file used by the PinchTab benchmark to test file downloads.
+Line 3.
+Line 4.
+END_OF_FILE_MARKER
