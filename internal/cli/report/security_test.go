@@ -15,12 +15,12 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			Token:              "secret",
 			AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 			AttachAllowSchemes: []string{"ws", "wss"},
+			AllowedDomains:     []string{"127.0.0.1", "localhost", "::1"},
 			IDPI: config.IDPIConfig{
-				Enabled:        true,
-				AllowedDomains: []string{"127.0.0.1", "localhost", "::1"},
-				StrictMode:     true,
-				ScanContent:    true,
-				WrapContent:    true,
+				Enabled:     true,
+				StrictMode:  true,
+				ScanContent: true,
+				WrapContent: true,
 			},
 		}
 
@@ -76,13 +76,13 @@ func TestAssessSecurityWarnings(t *testing.T) {
 
 	t.Run("wildcard whitelist is warned", func(t *testing.T) {
 		cfg := &config.RuntimeConfig{
-			Bind:  "127.0.0.1",
-			Token: "secret",
+			Bind:           "127.0.0.1",
+			Token:          "secret",
+			AllowedDomains: []string{"*"},
 			IDPI: config.IDPIConfig{
-				Enabled:        true,
-				AllowedDomains: []string{"*"},
-				StrictMode:     true,
-				ScanContent:    true,
+				Enabled:     true,
+				StrictMode:  true,
+				ScanContent: true,
 			},
 		}
 
@@ -157,12 +157,12 @@ func TestAssessSecurityPosture(t *testing.T) {
 			Token:              "secret",
 			AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 			AttachAllowSchemes: []string{"ws", "wss"},
+			AllowedDomains:     []string{"127.0.0.1", "localhost", "::1"},
 			IDPI: config.IDPIConfig{
-				Enabled:        true,
-				AllowedDomains: []string{"127.0.0.1", "localhost", "::1"},
-				StrictMode:     true,
-				ScanContent:    true,
-				WrapContent:    true,
+				Enabled:     true,
+				StrictMode:  true,
+				ScanContent: true,
+				WrapContent: true,
 			},
 		}
 
@@ -181,12 +181,12 @@ func TestAssessSecurityPosture(t *testing.T) {
 			Token:              "secret",
 			AttachAllowHosts:   []string{"*"},
 			AttachAllowSchemes: []string{"http", "https"},
+			AllowedDomains:     []string{"example.com"},
 			IDPI: config.IDPIConfig{
-				Enabled:        true,
-				AllowedDomains: []string{"example.com"},
-				StrictMode:     true,
-				ScanContent:    true,
-				WrapContent:    true,
+				Enabled:     true,
+				StrictMode:  true,
+				ScanContent: true,
+				WrapContent: true,
 			},
 		}
 

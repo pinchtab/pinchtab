@@ -45,11 +45,11 @@ func TestHandleActionBlocksWhenCachedTabPolicyIsBlocked(t *testing.T) {
 		hasState: true,
 	}
 	h := New(b, &config.RuntimeConfig{
-		ActionTimeout: time.Second,
+		ActionTimeout:  time.Second,
+		AllowedDomains: []string{"example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"example.com"},
-			StrictMode:     true,
+			Enabled:    true,
+			StrictMode: true,
 		},
 	}, nil, nil, nil)
 
@@ -85,11 +85,11 @@ func TestHandleActionWarnsWhenCachedTabPolicyIsThreatOnly(t *testing.T) {
 		hasState: true,
 	}
 	h := New(b, &config.RuntimeConfig{
-		ActionTimeout: time.Second,
+		ActionTimeout:  time.Second,
+		AllowedDomains: []string{"example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"example.com"},
-			StrictMode:     false,
+			Enabled:    true,
+			StrictMode: false,
 		},
 	}, nil, nil, nil)
 
@@ -120,11 +120,11 @@ func TestHandleBackIgnoresCachedTabPolicyBlock(t *testing.T) {
 		hasState: true,
 	}
 	h := New(b, &config.RuntimeConfig{
-		ActionTimeout: time.Second,
+		ActionTimeout:  time.Second,
+		AllowedDomains: []string{"example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"example.com"},
-			StrictMode:     true,
+			Enabled:    true,
+			StrictMode: true,
 		},
 	}, nil, nil, nil)
 

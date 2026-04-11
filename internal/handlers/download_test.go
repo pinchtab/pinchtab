@@ -321,10 +321,10 @@ func TestHandleDownload_TabScopedCrossOriginBlockedForCookieAuth(t *testing.T) {
 		},
 	}
 	h := New(b, &config.RuntimeConfig{
-		AllowDownload: true,
+		AllowDownload:  true,
+		AllowedDomains: []string{"pinchtab.com", "example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"pinchtab.com"},
+			Enabled: true,
 		},
 	}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/download?tabId=tab1&url=https://example.com/file.txt", nil)
@@ -354,10 +354,10 @@ func TestHandleDownload_TabScopedCrossOriginAllowedForHeaderAuth(t *testing.T) {
 		},
 	}
 	h := New(b, &config.RuntimeConfig{
-		AllowDownload: true,
+		AllowDownload:  true,
+		AllowedDomains: []string{"pinchtab.com", "example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"pinchtab.com"},
+			Enabled: true,
 		},
 	}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/download?tabId=tab1&url=https://example.com/file.txt", nil)

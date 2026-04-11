@@ -127,12 +127,12 @@ func testRuntimeConfig() *config.RuntimeConfig {
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 		AttachAllowSchemes: []string{"ws", "wss"},
+		AllowedDomains:     []string{"127.0.0.1", "localhost", "::1"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"127.0.0.1", "localhost", "::1"},
-			StrictMode:     true,
-			ScanContent:    true,
-			WrapContent:    true,
+			Enabled:     true,
+			StrictMode:  true,
+			ScanContent: true,
+			WrapContent: true,
 		},
 	}
 }

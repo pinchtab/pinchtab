@@ -255,12 +255,11 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	maxDownloadBytes := h.Config.EffectiveDownloadMaxBytes()
 
 	// Download allowlist: prefer the explicit per-feature list, but fall
-	// back to the unified security.allowedDomains (surfaced on the runtime
-	// config as IDPI.AllowedDomains). This way operators only need to
-	// configure trusted domains once.
+	// back to the unified security.allowedDomains. This way operators only
+	// need to configure trusted domains once.
 	allowed := h.Config.DownloadAllowedDomains
 	if len(allowed) == 0 {
-		allowed = h.Config.IDPI.AllowedDomains
+		allowed = h.Config.AllowedDomains
 	}
 	validator := newDownloadURLGuard(allowed)
 	if err := validator.Validate(dlURL); err != nil {

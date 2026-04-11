@@ -18,10 +18,15 @@ type RuntimeConfig struct {
 	CookieSecure      *bool // Nil = auto-detect based on request scheme/host for backward compatibility
 
 	// Security settings
-	AllowEvaluate          bool
-	AllowMacro             bool
-	AllowScreencast        bool
-	AllowDownload          bool
+	AllowEvaluate   bool
+	AllowMacro      bool
+	AllowScreencast bool
+	AllowDownload   bool
+	// AllowedDomains is the unified per-instance allowlist sourced from
+	// security.allowedDomains in the file config. Consumers (IDPI guard,
+	// download handler, tab policy) should prefer this list over the
+	// deprecated IDPI.AllowedDomains duplicate.
+	AllowedDomains         []string
 	DownloadAllowedDomains []string
 	DownloadMaxBytes       int
 	AllowUpload            bool

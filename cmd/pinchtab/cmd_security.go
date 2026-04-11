@@ -254,7 +254,7 @@ func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck
 		}
 		return workflow.UpdateValue("security.attach.allowHosts", value)
 	case "idpi_whitelist_scoped":
-		value, err := promptInput("Set security.allowedDomains (comma-separated):", strings.Join(cfg.IDPI.AllowedDomains, ","))
+		value, err := promptInput("Set security.allowedDomains (comma-separated):", strings.Join(cfg.AllowedDomains, ","))
 		if err != nil {
 			return nil, false, err
 		}

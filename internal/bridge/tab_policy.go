@@ -34,7 +34,7 @@ func (tm *TabManager) idpiDomainPolicyActive() bool {
 	return tm != nil &&
 		tm.config != nil &&
 		tm.config.IDPI.Enabled &&
-		len(tm.config.IDPI.AllowedDomains) > 0
+		len(tm.config.AllowedDomains) > 0
 }
 
 func (tm *TabManager) startTabPolicyWatcher(tabID string, ctx context.Context) {
