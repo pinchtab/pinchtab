@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
@@ -236,6 +237,53 @@ func (b *Bridge) StartNetworkCapture(tabCtx context.Context, tabID string) error
 		return fmt.Errorf("network monitor not initialized")
 	}
 	return b.netMonitor.StartCapture(tabCtx, tabID)
+}
+
+func (b *Bridge) tabManager() (*TabManager, error) {
+	if b == nil || b.TabManager == nil {
+		return nil, fmt.Errorf("tab manager not initialized")
+	}
+	return b.TabManager, nil
+}
+
+func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return tm.CreateTab(url)
+}
+
+func (b *Bridge) TabContext(tabID string) (context.Context, string, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return nil, "", err
+	}
+	return tm.TabContext(tabID)
+}
+
+func (b *Bridge) ListTargets() ([]*target.Info, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return nil, err
+	}
+	return tm.ListTargets()
+}
+
+func (b *Bridge) CloseTab(tabID string) error {
+	tm, err := b.tabManager()
+	if err != nil {
+		return err
+	}
+	return tm.CloseTab(tabID)
+}
+
+func (b *Bridge) FocusTab(tabID string) error {
+	tm, err := b.tabManager()
+	if err != nil {
+		return err
+	}
+	return tm.FocusTab(tabID)
 }
 
 func (b *Bridge) Lock(tabID, owner string, ttl time.Duration) error {

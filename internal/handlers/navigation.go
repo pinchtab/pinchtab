@@ -146,6 +146,9 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Engine", "chrome")
 
 	// Ensure Chrome is initialized
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 
 	// Default to creating new tab (API design: /navigate always creates new tab)
 	// Unless explicitly reusing an existing tab by specifying TabID
@@ -394,6 +397,10 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if !h.ensureChromeOrRespond(w) {
+			return
+		}
+
 		// Create a blank tab first so the requested URL becomes the first
 		// real history entry.
 		newTabID, ctx, _, err := h.Bridge.CreateTab("")
@@ -440,6 +447,9 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
 			return
 		}
+		if !h.ensureChromeOrRespond(w) {
+			return
+		}
 
 		if err := h.Bridge.CloseTab(req.TabID); err != nil {
 			httpx.Error(w, 500, err)
@@ -453,6 +463,9 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 	case "focus":
 		if req.TabID == "" {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
+			return
+		}
+		if !h.ensureChromeOrRespond(w) {
 			return
 		}
 		if err := h.Bridge.FocusTab(req.TabID); err != nil {
@@ -495,6 +508,9 @@ func (h *Handlers) HandleTabReload(w http.ResponseWriter, r *http.Request) {
 
 // HandleBack navigates the current (or specified) tab back in history.
 func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {
@@ -530,6 +546,9 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 
 // HandleForward navigates the current (or specified) tab forward in history.
 func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {
@@ -598,6 +617,9 @@ func navigateErrorWithHint(w http.ResponseWriter, code int, err error, url strin
 
 // HandleReload reloads the current (or specified) tab.
 func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {

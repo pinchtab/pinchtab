@@ -25,6 +25,8 @@ type mockBridge struct {
 	lastErrorLimit   int
 	fingerprintTabs  map[string]bool
 	frameScopes      map[string]bridge.FrameScope
+	ensureChromeErr  error
+	ensureChromeCall int
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
@@ -70,8 +72,8 @@ func (m *mockBridge) FocusTab(tabID string) error {
 }
 
 func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
-	// Mock implementation - just return nil
-	return nil
+	m.ensureChromeCall++
+	return m.ensureChromeErr
 }
 
 func (m *mockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {

@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -113,6 +114,17 @@ type restartStatusProvider interface {
 // ensureChrome ensures Chrome is initialized before handling requests that need it
 func (h *Handlers) ensureChrome() error {
 	return h.Bridge.EnsureChrome(h.Config)
+}
+
+func (h *Handlers) ensureChromeOrRespond(w http.ResponseWriter) bool {
+	if err := h.ensureChrome(); err != nil {
+		if h.writeBridgeUnavailable(w, err) {
+			return false
+		}
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return false
+	}
+	return true
 }
 
 func (h *Handlers) bridgeRestartStatus() (bool, time.Duration) {

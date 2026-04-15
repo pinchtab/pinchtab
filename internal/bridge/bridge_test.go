@@ -127,6 +127,54 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 	}
 }
 
+func TestCreateTab_RejectsNilTabManager(t *testing.T) {
+	var tm *TabManager
+
+	_, _, _, err := tm.CreateTab("about:blank")
+	if err == nil {
+		t.Fatal("CreateTab should fail when tab manager is nil")
+	}
+	if err.Error() != "tab manager not initialized" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBridgeTabOperations_RejectNilTabManager(t *testing.T) {
+	b := &Bridge{}
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{name: "tab context", run: func() error {
+			_, _, err := b.TabContext("")
+			return err
+		}},
+		{name: "list targets", run: func() error {
+			_, err := b.ListTargets()
+			return err
+		}},
+		{name: "close tab", run: func() error {
+			return b.CloseTab("tab1")
+		}},
+		{name: "focus tab", run: func() error {
+			return b.FocusTab("tab1")
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if err.Error() != "tab manager not initialized" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 	// TabContext should reject tab IDs that aren't tracked
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
