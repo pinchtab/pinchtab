@@ -5,8 +5,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+var supportedAutoSolverNames = map[string]struct{}{
+	"cloudflare": {},
+	"semantic":   {},
+}
+
+var defaultAutoSolverNames = []string{"cloudflare", "semantic"}
 
 // Load returns the RuntimeConfig with precedence: env vars > config file > defaults.
 func Load() *RuntimeConfig {
@@ -123,7 +131,7 @@ func Load() *RuntimeConfig {
 		AutoSolver: AutoSolverConfig{
 			Enabled:     false,
 			MaxAttempts: 8,
-			Solvers:     []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			Solvers:     []string{"cloudflare", "semantic"},
 			LLMFallback: false,
 		},
 	}
@@ -506,6 +514,59 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.AutoSolver.CapsolverKey = fc.AutoSolver.External.CapsolverKey
 	cfg.AutoSolver.TwoCaptchaKey = fc.AutoSolver.External.TwoCaptchaKey
+	sanitizeAutoSolverRuntimeConfig(cfg)
+}
+
+func sanitizeAutoSolverRuntimeConfig(cfg *RuntimeConfig) {
+	if cfg == nil {
+		return
+	}
+
+	sanitized := normalizeAutoSolverNames(cfg.AutoSolver.Solvers)
+	if len(sanitized) == 0 {
+		sanitized = append([]string(nil), defaultAutoSolverNames...)
+	}
+	cfg.AutoSolver.Solvers = sanitized
+
+	if strings.TrimSpace(cfg.AutoSolver.LLMProvider) != "" {
+		slog.Warn("autosolver llmProvider is not implemented; ignoring configured provider",
+			"provider", cfg.AutoSolver.LLMProvider)
+		cfg.AutoSolver.LLMProvider = ""
+	}
+
+	if cfg.AutoSolver.LLMFallback {
+		slog.Warn("autosolver llmFallback is not implemented; forcing disabled")
+		cfg.AutoSolver.LLMFallback = false
+	}
+}
+
+func normalizeAutoSolverNames(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+
+	for _, name := range raw {
+		normalized := strings.ToLower(strings.TrimSpace(name))
+		if normalized == "" {
+			continue
+		}
+
+		if _, ok := supportedAutoSolverNames[normalized]; !ok {
+			slog.Warn("autosolver solver is not implemented; ignoring configured solver", "solver", name)
+			continue
+		}
+
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+
+	return out
 }
 
 // ApplyFileConfigToRuntime merges file configuration into an existing runtime

@@ -186,9 +186,18 @@ pinchtab mouse wheel --tab <tabId> 240 --dx 40
 
 ### Handoff State
 
-Human handoff is tab-scoped and API-only today.
+Human handoff is tab-scoped and available through CLI or API.
 
-Current limitation: this is not a blocking pause yet. The tab is marked as `paused_handoff`, but normal automation is not universally rejected just because that state is present. Treat it as temporary coordination metadata, not as an enforced lockout.
+```bash
+pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
+pinchtab tab handoff-status <tabId>
+pinchtab tab resume <tabId> --status completed
+```
+
+API equivalents:
+
+When a tab is marked `paused_handoff`, action execution routes reject with `409 tab_paused_handoff`
+until the tab is resumed or the optional timeout expires.
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/handoff \
@@ -202,7 +211,8 @@ curl -X POST http://localhost:9867/tabs/<tabId>/resume \
   -d '{"status":"completed","resolvedData":{"operator":"human"}}'
 ```
 
-Use this when automation must pause for a CAPTCHA, 2FA prompt, login approval, or another human-only step, but pair it with separate ownership/locking if you need hard exclusion today.
+Use this when automation must pause for a CAPTCHA, 2FA prompt, login approval, or another human-only step.
+When a timeout is provided, handoff status includes `expiresAt` and `timeoutMs`.
 
 ### Screenshot
 

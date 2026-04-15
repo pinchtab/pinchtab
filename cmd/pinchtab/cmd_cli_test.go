@@ -64,3 +64,15 @@ func TestDragCommandRegistered(t *testing.T) {
 		t.Fatal("expected drag command to be registered")
 	}
 }
+
+func TestTabHandoffCommandsRegistered(t *testing.T) {
+	tabCmd := findCommand(rootCmd, "tab [id]")
+	if tabCmd == nil {
+		t.Fatal("expected tab command to be registered")
+	}
+	for _, name := range []string{"handoff", "resume", "handoff-status"} {
+		if findCommand(tabCmd, name) == nil {
+			t.Fatalf("expected tab subcommand %q to be registered", name)
+		}
+	}
+}

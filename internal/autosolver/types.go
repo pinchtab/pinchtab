@@ -131,7 +131,7 @@ func DefaultConfig() Config {
 		Enabled:        true,
 		MaxAttempts:    8,
 		SolverTimeout:  30 * time.Second,
-		Solvers:        []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+		Solvers:        []string{"cloudflare", "semantic"},
 		LLMFallback:    false,
 		RetryBaseDelay: 500 * time.Millisecond,
 		RetryMaxDelay:  10 * time.Second,

@@ -12,9 +12,10 @@ type TabHandoffState struct {
 	Reason        string    `json:"reason,omitempty"`
 	PausedAt      time.Time `json:"pausedAt"`
 	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
+	ExpiresAt     time.Time `json:"expiresAt,omitempty"`
 }
 
-func (b *Bridge) SetTabHandoff(tabID, reason string) error {
+func (b *Bridge) SetTabHandoff(tabID, reason string, timeout time.Duration) error {
 	if b == nil {
 		return fmt.Errorf("bridge not initialized")
 	}
@@ -27,6 +28,9 @@ func (b *Bridge) SetTabHandoff(tabID, reason string) error {
 		Reason:        strings.TrimSpace(reason),
 		PausedAt:      now,
 		LastUpdatedAt: now,
+	}
+	if timeout > 0 {
+		state.ExpiresAt = now.Add(timeout)
 	}
 	if state.Reason == "" {
 		state.Reason = "manual_handoff"
@@ -56,7 +60,18 @@ func (b *Bridge) TabHandoffState(tabID string) (TabHandoffState, bool) {
 		return TabHandoffState{}, false
 	}
 	b.handoffMu.RLock()
-	defer b.handoffMu.RUnlock()
 	state, ok := b.handoffs[tabID]
+	b.handoffMu.RUnlock()
+	if !ok {
+		return TabHandoffState{}, false
+	}
+	if !state.ExpiresAt.IsZero() && time.Now().UTC().After(state.ExpiresAt) {
+		b.handoffMu.Lock()
+		if latest, stillPresent := b.handoffs[tabID]; stillPresent && latest.LastUpdatedAt.Equal(state.LastUpdatedAt) {
+			delete(b.handoffs, tabID)
+		}
+		b.handoffMu.Unlock()
+		return TabHandoffState{}, false
+	}
 	return state, ok
 }

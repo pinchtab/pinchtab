@@ -514,6 +514,103 @@ func TestValidEnumValues(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_AutoSolverUnsupportedSolver(t *testing.T) {
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			Solvers: []string{"cloudflare", "capsolver"},
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver validation error, got none")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "autoSolver.solvers") &&
+			strings.Contains(err.Error(), "not implemented") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected not implemented solver error, got %v", errs)
+	}
+}
+
+func TestValidateFileConfig_AutoSolverInvalidSolverName(t *testing.T) {
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			Solvers: []string{"cloudflare", "madeupsolver"},
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver validation error, got none")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "autoSolver.solvers") &&
+			strings.Contains(err.Error(), "invalid solver") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected invalid solver name error, got %v", errs)
+	}
+}
+
+func TestValidateFileConfig_AutoSolverLLMFallbackRejected(t *testing.T) {
+	enabled := true
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			LLMFallback: &enabled,
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver llmFallback validation error, got none")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "autoSolver.llmFallback") &&
+			strings.Contains(err.Error(), "not implemented") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected llm fallback not implemented error, got %v", errs)
+	}
+}
+
+func TestValidateFileConfig_AutoSolverLLMProviderRejected(t *testing.T) {
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			LLMProvider: "openai",
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver llmProvider validation error, got none")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "autoSolver.llmProvider") &&
+			strings.Contains(err.Error(), "not implemented") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected llm provider not implemented error, got %v", errs)
+	}
+}
+
 // --- IDPI validation tests ---
 
 // TestValidateIDPIConfig_Disabled verifies that a disabled IDPI config produces

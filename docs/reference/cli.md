@@ -115,9 +115,18 @@ Selector lookup is explicit by frame. Unscoped selectors stay in the main docume
 
 `pinchtab eval` is separate from that model and does not inherit current frame scope.
 
-Manual handoff is currently API-only:
+Manual handoff is available via the `tab` command:
 
-This is currently advisory state only. It marks the tab as `paused_handoff`, but it does not yet provide a guaranteed blocking pause for later automation.
+```bash
+pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
+pinchtab tab handoff-status <tabId>
+pinchtab tab resume <tabId> --status completed
+```
+
+API equivalents:
+
+Paused handoff state blocks action execution routes (`/action`, `/actions/batch`, `/macro`) with `409 tab_paused_handoff`
+until resumed or expired via timeout.
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/handoff \
@@ -138,6 +147,9 @@ pinchtab tab
 pinchtab tab <id>
 pinchtab tab new [url]
 pinchtab tab close <id>
+pinchtab tab handoff <id>
+pinchtab tab handoff-status <id>
+pinchtab tab resume <id>
 ```
 
 For tab-scoped actions, use the normal top-level command with `--tab`:

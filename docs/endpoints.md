@@ -104,11 +104,10 @@ Notes:
 
 - these routes are tab-scoped only
 - `POST /tabs/{id}/handoff` marks the tab as `paused_handoff` and records a reason
-- `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set
+- `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set (includes `expiresAt` and `timeoutMs` when timeout is configured)
 - `POST /tabs/{id}/resume` clears the handoff state and can carry resume metadata for the caller
-- current behavior is advisory only: handoff state is not yet a hard block on subsequent automation requests
-- treat the current implementation as temporary coordination state, not as a security boundary
-- there is currently no dedicated CLI wrapper for handoff or resume; use the HTTP API
+- action execution routes (`/action`, `/actions/batch`, `/macro`) reject paused tabs with `409 tab_paused_handoff`
+- CLI wrappers are available: `pinchtab tab handoff`, `pinchtab tab handoff-status`, and `pinchtab tab resume`
 
 ## Tab Locking
 

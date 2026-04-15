@@ -52,6 +52,24 @@ func (h *Handlers) enforceTabLease(tabID, owner string) error {
 	return nil
 }
 
+func (h *Handlers) enforceTabNotPausedForHandoff(tabID string) error {
+	if tabID == "" {
+		return nil
+	}
+	ctrl, ok := h.handoffController()
+	if !ok {
+		return nil
+	}
+	state, exists := ctrl.TabHandoffState(tabID)
+	if !exists || state.Status != "paused_handoff" {
+		return nil
+	}
+	if state.Reason != "" {
+		return fmt.Errorf("tab %s is paused for human handoff (%s)", tabID, state.Reason)
+	}
+	return fmt.Errorf("tab %s is paused for human handoff", tabID)
+}
+
 // HandleAction performs a single action on a tab (click, type, fill, etc).
 func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	var req bridge.ActionRequest
@@ -151,6 +169,10 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+			return
+		}
+		if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
+			httpx.ErrorCode(w, 409, "tab_paused_handoff", err.Error(), false, nil)
 			return
 		}
 	}
@@ -525,6 +547,13 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 				return
 			}
+			if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
+				results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
+				if req.StopOnError {
+					break
+				}
+				continue
+			}
 		}
 
 		tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
@@ -819,6 +848,13 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		if !allLiteMacro {
 			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 				return
+			}
+			if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
+				results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
+				if req.StopOnError {
+					break
+				}
+				continue
 			}
 		}
 		useLiteAction := h.shouldUseLiteAction(step.Kind)

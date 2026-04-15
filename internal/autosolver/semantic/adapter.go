@@ -5,6 +5,7 @@ package semantic
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
@@ -290,7 +291,7 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 
 			ref++
 			descs = append(descs, semantic.ElementDescriptor{
-				Ref:  strings.Repeat("e", 1) + string(rune('0'+ref)),
+				Ref:  fmt.Sprintf("e%d", ref),
 				Role: p.role,
 				Name: name,
 			})

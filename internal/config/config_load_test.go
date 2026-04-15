@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -286,16 +288,21 @@ func TestLoadConfigActivityStateDirIgnoresConfigOverride(t *testing.T) {
 	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
 	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
 
-	if err := os.WriteFile(configPath, []byte(`{
-		"server": {
-			"stateDir": "/tmp/profile-state"
+	payload := map[string]any{
+		"server": map[string]any{
+			"stateDir": "/tmp/profile-state",
 		},
-		"observability": {
-			"activity": {
-				"stateDir": "`+sharedActivityDir+`"
-			}
-		}
-	}`), 0644); err != nil {
+		"observability": map[string]any{
+			"activity": map[string]any{
+				"stateDir": sharedActivityDir,
+			},
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, raw, 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -658,6 +665,47 @@ func TestApplyFileConfigToRuntime_SanitizesChromeExtraFlags(t *testing.T) {
 
 	if cfg.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
 		t.Fatalf("ChromeExtraFlags = %q, want %q", cfg.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	}
+}
+
+func TestApplyFileConfigToRuntime_SanitizesAutoSolverUnsupportedSettings(t *testing.T) {
+	llmFallback := true
+	cfg := &RuntimeConfig{}
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			Solvers:     []string{" cloudflare ", "capsolver", "semantic", "twocaptcha", "semantic"},
+			LLMProvider: "openai",
+			LLMFallback: &llmFallback,
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.AutoSolver.LLMProvider != "" {
+		t.Fatalf("AutoSolver.LLMProvider = %q, want empty", cfg.AutoSolver.LLMProvider)
+	}
+	if cfg.AutoSolver.LLMFallback {
+		t.Fatal("AutoSolver.LLMFallback = true, want false")
+	}
+	wantSolvers := []string{"cloudflare", "semantic"}
+	if !reflect.DeepEqual(cfg.AutoSolver.Solvers, wantSolvers) {
+		t.Fatalf("AutoSolver.Solvers = %v, want %v", cfg.AutoSolver.Solvers, wantSolvers)
+	}
+}
+
+func TestApplyFileConfigToRuntime_AutoSolverFallsBackToDefaultSupportedSolvers(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			Solvers: []string{"capsolver", "twocaptcha"},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	wantSolvers := []string{"cloudflare", "semantic"}
+	if !reflect.DeepEqual(cfg.AutoSolver.Solvers, wantSolvers) {
+		t.Fatalf("AutoSolver.Solvers = %v, want %v", cfg.AutoSolver.Solvers, wantSolvers)
 	}
 }
 

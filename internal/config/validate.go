@@ -232,6 +232,41 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
+	// AutoSolver validation
+	for _, solver := range fc.AutoSolver.Solvers {
+		switch strings.ToLower(strings.TrimSpace(solver)) {
+		case "":
+			errs = append(errs, ValidationError{
+				Field:   "autoSolver.solvers",
+				Message: "solver name must not be empty",
+			})
+		case "cloudflare", "semantic":
+			// Supported.
+		case "capsolver", "twocaptcha":
+			errs = append(errs, ValidationError{
+				Field:   "autoSolver.solvers",
+				Message: fmt.Sprintf("solver %q is not implemented yet; remove it from autoSolver.solvers", solver),
+			})
+		default:
+			errs = append(errs, ValidationError{
+				Field:   "autoSolver.solvers",
+				Message: fmt.Sprintf("invalid solver %q (supported: cloudflare, semantic)", solver),
+			})
+		}
+	}
+	if fc.AutoSolver.LLMFallback != nil && *fc.AutoSolver.LLMFallback {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.llmFallback",
+			Message: "LLM fallback is not implemented yet and cannot be enabled",
+		})
+	}
+	if strings.TrimSpace(fc.AutoSolver.LLMProvider) != "" {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.llmProvider",
+			Message: "LLM provider integration is not implemented yet; leave autoSolver.llmProvider unset",
+		})
+	}
+
 	return errs
 }
 

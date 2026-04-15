@@ -159,9 +159,18 @@ pinchtab cache clear                    # Clear browser HTTP disk cache
 pinchtab cache status                   # Check if cache can be cleared
 ```
 
-Manual handoff and resume are API-only today:
+Manual handoff and resume are available via CLI and API:
 
-This is currently a temporary, non-blocking implementation. It records handoff state, but it does not yet enforce a hard stop on future automation requests by itself.
+```bash
+pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
+pinchtab tab handoff-status <tabId>
+pinchtab tab resume <tabId> --status completed
+```
+
+API equivalents:
+
+Paused handoff state blocks action execution routes (`/action`, `/actions/batch`, `/macro`) with `409 tab_paused_handoff`
+until resumed or expired via timeout.
 
 ```bash
 curl -X POST "$PINCHTAB_SERVER/tabs/<tabId>/handoff"

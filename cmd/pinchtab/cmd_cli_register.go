@@ -57,7 +57,7 @@ func registerBrowserCommands() {
 		stateCmd,
 	)
 
-	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd)
+	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
 	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
@@ -241,6 +241,9 @@ func configureBrowserFlags() {
 
 	evalCmd.Flags().Bool("await-promise", false, "Resolve a returned Promise before responding")
 	navCmd.Flags().Bool("print-tab-id", false, "Print only the tab ID on stdout (also triggered automatically when stdout is a pipe)")
+	tabHandoffCmd.Flags().String("reason", "", "Reason for human handoff (default: manual_handoff)")
+	tabHandoffCmd.Flags().Int("timeout-ms", 0, "Optional auto-resume timeout in milliseconds")
+	tabResumeCmd.Flags().String("status", "", "Optional resume status note (e.g. completed, failed)")
 
 	scrollintoviewCmd.Flags().String("css", "", "CSS selector instead of ref")
 

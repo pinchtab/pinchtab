@@ -102,3 +102,40 @@ var tabCloseCmd = &cobra.Command{
 		})
 	},
 }
+
+var tabHandoffCmd = &cobra.Command{
+	Use:   "handoff <id>",
+	Short: "Pause tab automation for human handoff",
+	Long:  "Mark a tab as paused_handoff so action routes block until resumed or timeout expires.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		reason, _ := cmd.Flags().GetString("reason")
+		timeoutMS, _ := cmd.Flags().GetInt("timeout-ms")
+		runCLI(func(rt cliRuntime) {
+			browseractions.TabHandoff(rt.client, rt.base, rt.token, args[0], reason, timeoutMS)
+		})
+	},
+}
+
+var tabResumeCmd = &cobra.Command{
+	Use:   "resume <id>",
+	Short: "Resume a paused_handoff tab",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		status, _ := cmd.Flags().GetString("status")
+		runCLI(func(rt cliRuntime) {
+			browseractions.TabResume(rt.client, rt.base, rt.token, args[0], status)
+		})
+	},
+}
+
+var tabHandoffStatusCmd = &cobra.Command{
+	Use:   "handoff-status <id>",
+	Short: "Show handoff status for a tab",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, args[0])
+		})
+	},
+}

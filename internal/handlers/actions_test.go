@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -28,6 +29,12 @@ type recordingActionBridge struct {
 	mockBridge
 	lastKind string
 	lastReq  bridge.ActionRequest
+}
+
+type handoffRecordingBridge struct {
+	mockBridge
+	state bridge.TabHandoffState
+	has   bool
 }
 
 func (m *liteActionBridge) AvailableActions() []string {
@@ -56,6 +63,30 @@ func (m *recordingActionBridge) ExecuteAction(ctx context.Context, kind string, 
 	m.lastKind = kind
 	m.lastReq = req
 	return map[string]any{"ok": true}, nil
+}
+
+func (m *handoffRecordingBridge) SetTabHandoff(tabID, reason string, timeout time.Duration) error {
+	now := time.Now().UTC()
+	m.state = bridge.TabHandoffState{
+		Status:        "paused_handoff",
+		Reason:        reason,
+		PausedAt:      now,
+		LastUpdatedAt: now,
+	}
+	if timeout > 0 {
+		m.state.ExpiresAt = now.Add(timeout)
+	}
+	m.has = true
+	return nil
+}
+
+func (m *handoffRecordingBridge) ResumeTabHandoff(tabID string) error {
+	m.has = false
+	return nil
+}
+
+func (m *handoffRecordingBridge) TabHandoffState(tabID string) (bridge.TabHandoffState, bool) {
+	return m.state, m.has
 }
 
 type fakeLiteEngine struct {
@@ -483,6 +514,29 @@ func TestHandleAction_LegacyMouseKindIsRejected(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAction_BlockedDuringHumanHandoff(t *testing.T) {
+	b := &handoffRecordingBridge{
+		state: bridge.TabHandoffState{
+			Status:        "paused_handoff",
+			Reason:        "captcha_manual",
+			PausedAt:      time.Now().UTC(),
+			LastUpdatedAt: time.Now().UTC(),
+		},
+		has: true,
+	}
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","selector":"button"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 409 {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

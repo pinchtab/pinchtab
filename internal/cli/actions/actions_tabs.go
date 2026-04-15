@@ -42,3 +42,29 @@ func TabFocus(client *http.Client, base, token string, tabID string) {
 		"tabId":  tabID,
 	})
 }
+
+// TabHandoff pauses automation on a tab for manual operator intervention.
+func TabHandoff(client *http.Client, base, token, tabID, reason string, timeoutMS int) {
+	body := map[string]any{}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	if timeoutMS > 0 {
+		body["timeoutMs"] = timeoutMS
+	}
+	apiclient.DoPost(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), body)
+}
+
+// TabResume resumes automation on a tab after manual intervention.
+func TabResume(client *http.Client, base, token, tabID, status string) {
+	body := map[string]any{}
+	if status != "" {
+		body["status"] = status
+	}
+	apiclient.DoPost(client, base, token, fmt.Sprintf("/tabs/%s/resume", tabID), body)
+}
+
+// TabHandoffStatus shows whether a tab is in paused_handoff or active state.
+func TabHandoffStatus(client *http.Client, base, token, tabID string) {
+	apiclient.DoGet(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), nil)
+}
