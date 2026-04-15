@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
@@ -32,7 +33,7 @@ import (
 // @Param maxAttempts int     body  Max solve attempts (optional, default: 3)
 // @Param timeout     float64 body  Timeout in ms (optional, default: 30000)
 //
-// @Response 200 application/json Returns {tabId, solver, solved, challengeType, attempts, title}
+// @Response 200 application/json Returns {tabId, solver, solved, challengeType, attempts, title, needsHumanHandoff, handoffReason}
 // @Response 400 application/json Invalid request body or unknown solver
 // @Response 423 application/json Tab is locked by another owner
 // @Response 500 application/json Chrome/CDP error
@@ -114,6 +115,7 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("solve: %w", err))
 		return
 	}
+	needsHumanHandoff, handoffReason := deriveHumanHandoff(result)
 
 	// Re-check domain policy after solve — the page may have redirected
 	// to a different domain once the challenge was resolved.
@@ -122,13 +124,47 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, 200, map[string]any{
-		"tabId":         resolvedTabID,
-		"solver":        result.Solver,
-		"solved":        result.Solved,
-		"challengeType": result.ChallengeType,
-		"attempts":      result.Attempts,
-		"title":         result.Title,
+		"tabId":             resolvedTabID,
+		"solver":            result.Solver,
+		"solved":            result.Solved,
+		"challengeType":     result.ChallengeType,
+		"attempts":          result.Attempts,
+		"title":             result.Title,
+		"needsHumanHandoff": needsHumanHandoff,
+		"handoffReason":     handoffReason,
 	})
+}
+
+func deriveHumanHandoff(result *solver.Result) (bool, string) {
+	if result == nil || result.Solved {
+		return false, ""
+	}
+
+	challengeType := strings.ToLower(strings.TrimSpace(result.ChallengeType))
+	title := strings.ToLower(strings.TrimSpace(result.Title))
+
+	if strings.Contains(challengeType, "login") ||
+		strings.Contains(challengeType, "auth") ||
+		strings.Contains(challengeType, "credential") ||
+		strings.Contains(challengeType, "password") ||
+		strings.Contains(title, "sign in") ||
+		strings.Contains(title, "log in") ||
+		strings.Contains(title, "password") {
+		return true, "credentials_required"
+	}
+
+	if strings.Contains(challengeType, "captcha") ||
+		strings.Contains(challengeType, "turnstile") ||
+		strings.Contains(challengeType, "recaptcha") ||
+		strings.Contains(challengeType, "hcaptcha") ||
+		strings.Contains(challengeType, "challenge") ||
+		strings.Contains(title, "verify you are human") ||
+		strings.Contains(title, "attention required") ||
+		strings.Contains(title, "just a moment") {
+		return true, "challenge_requires_manual_intervention"
+	}
+
+	return false, ""
 }
 
 // HandleTabSolve handles POST /tabs/{id}/solve and /tabs/{id}/solve/{name}.

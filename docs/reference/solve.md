@@ -77,10 +77,12 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
 {
   "tabId": "DEADBEEF",
   "solver": "cloudflare",
-  "solved": true,
+  "solved": false,
   "challengeType": "managed",
   "attempts": 1,
-  "title": "thuisbezorgd.nl"
+  "title": "Just a moment...",
+  "needsHumanHandoff": true,
+  "handoffReason": "challenge_requires_manual_intervention"
 }
 ```
 
@@ -92,6 +94,8 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
 | `challengeType` | string | Challenge variant (e.g. `managed`, `embedded`) |
 | `attempts`      | int    | Number of attempts made                        |
 | `title`         | string | Final page title                               |
+| `needsHumanHandoff` | bool | Whether manual intervention is required to continue |
+| `handoffReason` | string | Reason for handoff (`challenge_requires_manual_intervention`, `credentials_required`, or empty when not needed) |
 
 ## Error Responses
 
