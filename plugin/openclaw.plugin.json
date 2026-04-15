@@ -1,7 +1,7 @@
 {
   "id": "pinchtab",
   "name": "Pinchtab",
-  "description": "Browser control for AI agents via Pinchtab. Single tool, all actions: navigate, snapshot, click/type/press/fill/hover/scroll/select/focus, mouse-move/mouse-down/mouse-up/mouse-wheel, text, screenshot, evaluate, pdf.",
+  "description": "Browser control for AI agents via Pinchtab. Single tool, all actions: navigate, snapshot, click/type/press/fill/hover/scroll/select/focus, mousemove/mousedown/mouseup/mousewheel, text, screenshot, evaluate, pdf. Minimal context bloat.",
   "version": "0.1.0",
   "skills": ["../skills/pinchtab"],
   "configSchema": {

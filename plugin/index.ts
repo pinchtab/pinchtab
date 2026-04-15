@@ -113,7 +113,7 @@ export default function register(api: PluginApi) {
 - navigate: go to URL (url, tabId?, newTab?, blockImages?, timeout?)
 - snapshot: accessibility tree (filter?, format?, selector?, maxTokens?, depth?, diff?, tabId?)
     - click/type/press/fill/hover/scroll/select/focus: act on element (ref, text?, key?, value?, scrollY?, waitNav?, tabId?)
-    - mouse-move/mouse-down/mouse-up/mouse-wheel: low-level mouse controls (ref|selector|x+y, button?, deltaX?, deltaY?, tabId?)
+    - mousemove/mousedown/mouseup/mousewheel: low-level mouse controls (ref|selector|x+y, button?, wheelDeltaX?, wheelDeltaY?, tabId?)
 - text: extract readable text (mode?, tabId?)
 - wait: pause until condition (selector|text|url|load|fn|ms, tabId?, timeout?, state?)
 - handoff: request human intervention mid-flow (captcha/login/2FA/credentials), optionally wait for resume condition
@@ -137,10 +137,10 @@ Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=int
               "press",
               "fill",
               "hover",
-              "mouse-move",
-              "mouse-down",
-              "mouse-up",
-              "mouse-wheel",
+              "mousemove",
+              "mousedown",
+              "mouseup",
+              "mousewheel",
               "scroll",
               "select",
               "focus",
@@ -208,15 +208,15 @@ Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=int
           button: {
             type: "string",
             enum: ["left", "right", "middle"],
-            description: "Mouse button for mouse-down/mouse-up",
+            description: "Mouse button for mousedown/mouseup",
           },
-          deltaX: {
+          wheelDeltaX: {
             type: "number",
-            description: "Mouse wheel horizontal delta for mouse-wheel",
+            description: "Mouse wheel horizontal delta for mousewheel",
           },
-          deltaY: {
+          wheelDeltaY: {
             type: "number",
-            description: "Mouse wheel vertical delta for mouse-wheel",
+            description: "Mouse wheel vertical delta for mousewheel",
           },
           waitNav: {
             type: "boolean",
@@ -313,10 +313,10 @@ Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=int
           "press",
           "fill",
           "hover",
-          "mouse-move",
-          "mouse-down",
-          "mouse-up",
-          "mouse-wheel",
+          "mousemove",
+          "mousedown",
+          "mouseup",
+          "mousewheel",
           "scroll",
           "select",
           "focus",
@@ -333,8 +333,8 @@ Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=int
             "x",
             "y",
             "button",
-            "deltaX",
-            "deltaY",
+            "wheelDeltaX",
+            "wheelDeltaY",
             "tabId",
             "waitNav",
           ]) {

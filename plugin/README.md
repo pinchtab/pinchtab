@@ -56,7 +56,7 @@ One tool definition, many actions — keeps context lean:
 | `navigate` | Go to URL | — |
 | `snapshot` | Accessibility tree (refs for interactions) | ~3,600 (interactive) |
 | `click/type/press/fill/hover/scroll/select/focus` | Act on element by ref | — |
-| `mouse-move/mouse-down/mouse-up/mouse-wheel` | Low-level mouse controls by ref/selector/coordinates | — |
+| `mousemove/mousedown/mouseup/mousewheel` | Low-level mouse controls by ref/selector/coordinates | — |
 | `wait` | Wait for selector/text/url/load/fn/ms conditions | — |
 | `handoff` | Human-in-the-loop pause/resume for CAPTCHA/login/2FA | — |
 | `text` | Extract readable text (cheapest) | ~800 |
@@ -89,19 +89,19 @@ Use these calls to validate low-level mouse behavior through the plugin:
 1. pinchtab({ action: "navigate", url: "https://pinchtab.com" })
 2. pinchtab({ action: "snapshot", filter: "interactive", format: "compact" })
   → Pick a target ref like e5
-3. pinchtab({ action: "mouse-move", ref: "e5" })
-4. pinchtab({ action: "mouse-down", button: "left" })
-5. pinchtab({ action: "mouse-up", button: "left" })
-6. pinchtab({ action: "mouse-wheel", ref: "e5", deltaY: 240 })
+3. pinchtab({ action: "mousemove", ref: "e5" })
+4. pinchtab({ action: "mousedown", ref: "e5", button: "left" })
+5. pinchtab({ action: "mouseup", ref: "e5", button: "left" })
+6. pinchtab({ action: "mousewheel", ref: "e5", wheelDeltaY: 240 })
 ```
 
 Coordinate-driven test (viewport):
 
 ```
-pinchtab({ action: "mouse-move", x: 400, y: 300 })
-pinchtab({ action: "mouse-down", button: "left" })
-pinchtab({ action: "mouse-up", button: "left" })
-pinchtab({ action: "mouse-wheel", x: 400, y: 300, deltaY: -320 })
+pinchtab({ action: "mousemove", x: 400, y: 300 })
+pinchtab({ action: "mousedown", x: 400, y: 300, button: "left" })
+pinchtab({ action: "mouseup", x: 400, y: 300, button: "left" })
+pinchtab({ action: "mousewheel", x: 400, y: 300, wheelDeltaY: -320 })
 ```
 
 **Token strategy:** `text` for reading, `snapshot` with `filter=interactive&format=compact` for interactions, `diff=true` on subsequent snapshots, `screenshot` only for visual verification.
@@ -109,8 +109,6 @@ pinchtab({ action: "mouse-wheel", x: 400, y: 300, deltaY: -320 })
 ## Human Handoff (CAPTCHA / Login / 2FA)
 
 Use `handoff` when manual intervention is required, then resume with a wait condition:
-
-Current limitation: this is advisory/non-blocking right now. The plugin uses `handoff` as coordination plus waiting behavior, but it does not guarantee that later automation is blocked across the server. Treat it as a temporary workflow helper, not as an enforced pause boundary.
 
 ```
 1. pinchtab({ action: "handoff", humanReason: "captcha", humanPrompt: "Please solve CAPTCHA in headed browser" })
