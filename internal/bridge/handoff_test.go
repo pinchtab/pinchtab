@@ -21,4 +21,3 @@ func TestTabHandoffState_Expires(t *testing.T) {
 		t.Fatal("expected handoff state to expire")
 	}
 }
-
