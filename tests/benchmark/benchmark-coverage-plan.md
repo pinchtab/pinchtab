@@ -13,8 +13,6 @@ it to the bottom of the file with the loop number that closed it.
 
 | ID | Weakness | Severity | Effort | Current status |
 |----|----------|:--------:|:------:|----------------|
-| A1 | ~~**Missing CSS selector hangs for 30 s**~~ — **resolved Loop #30**. `firstNodeBySelector` now uses `chromedp.AtLeast(0)` so missing selectors return `element not found` in <100 ms. Agents that need to wait should use `pinchtab wait --selector` first. Verified via Group 8.2: 87 ms wall-clock. | 🔴 high | 🟡 medium | **closed** |
-| A2 | ~~**`text:<value>` selector intermittently fails**~~ — **resolved Loop #30**. Two underlying bugs: (1) the CLI was stripping the `text:` prefix before sending, so `click "text:Submit"` was falling through to CSS lookup for `Submit`; (2) the text resolver used `el.innerText` (O(N²) layout-forcing) instead of `el.textContent`. Fixed both; agent used `text:` aggressively in Loop #30 across 10+ cases with zero failures. | 🔴 high | 🔴 hard | **closed** |
 | A3 | **First `fill` after `nav` race** — the first `fill` action after a navigation occasionally times out; the retry works. Suggests the readiness wait in `action_pointer.go` isn't quite aligned with when the DOM is actually interactive. | 🟡 mid | 🟡 medium | open |
 | A4 | **Ref recovery picks wrong target on repeated-label siblings** — a row of `✕` delete buttons causes the recovery path to silently bind to the wrong row. **Data-loss risk.** Loop #6 caught it deleting the wrong SPA task. | 🔴 high | 🟡 medium | open |
 | A5 | **`scroll into view` fails on overlay/sticky elements** — returns `-32000 no layout object` even when the element is visible. Forces `eval`-based click workaround. | 🟡 mid | 🟡 medium | open |
@@ -25,11 +23,11 @@ it to the bottom of the file with the loop number that closed it.
 
 | ID | Missing | Impact | Effort | Status |
 |----|---------|:------:|:------:|--------|
-| B1 | **`pinchtab download --output <path>`** — `download` currently returns base64 inline; agent has to post-process. Asked every run. | 🟡 mid | 🟢 easy | open |
+| B1 | ~~**`pinchtab download --output <path>`**~~ — **Already implemented.** `-o` flag exists. | 🟡 mid | 🟢 easy | **closed** |
 | B2 | **Screenshot / PDF `-o` paths write inside container, not host.** Benchmark-wrapper issue; production installs are fine. Needs wrapper `docker cp` or `--host-path` flag. | 🟡 mid | 🟢 easy | open |
 | B3 | **`<select multiple>` not supported.** `SelectByNodeID` sets `this.value = v` which is single-select only. Real bug. | 🟡 mid | 🟡 medium | open |
 | B4 | **No viewport resize / mobile emulation.** Can't test responsive layouts or mobile-only UI. | 🟡 mid | 🟡 medium | open |
-| B5 | **No `wait --not-text` / `wait --element-gone`** — `wait` only waits for appearance. Disappearance patterns (spinner removal, toast dismiss) force polling. | 🟢 low | 🟢 easy | open |
+| B5 | ~~**No `wait --not-text`**~~ — **implemented.** `wait --not-text "Loading..."` waits for text to disappear. `wait <selector> --state hidden` already handled element disappearance. | 🟢 low | 🟢 easy | **closed** |
 | B6 | **No request interception** — `--block-images` / `--block-ads` work but no arbitrary URL pattern blocking or response mocking. | 🟡 mid | 🔴 hard | open |
 | B7 | **No mobile-gesture primitives** — pinch, long-press, two-finger scroll. Niche but will matter. | 🟢 low | 🟡 medium | open |
 
@@ -111,18 +109,16 @@ Not bugs — friction that wrapper / docs could eliminate.
 
 When picking the next continuous-loop target, sort by `(agent pain × value) / effort`. Current order:
 
-1. **A1 — fast-fail on missing CSS selectors** — biggest single agent friction
-2. **B1 — `download --output <path>`** — tiny, asked every run
-3. **C2 — cookies fixture + tasks** — critical untested capability (auth flows)
-4. **B3 — multi-select support** — real bug, fixture-driven validation already designed
-5. **A4 — ref recovery confidence tuning** — data-loss risk
-6. **D1 — shadow DOM fixture + `>>>` piercing** — biggest real-world pattern absence
-7. **A5 — scroll-into-view fallback for layout-less elements**
-8. **C1 — clipboard fixture + tasks**
-9. **C6 — file upload fixture + sandbox-path integration**
-10. **D4 — infinite-scroll fixture**
-11. **C3–C5** — storage / network / console coverage
-12. **D5–D15** — remaining real-world patterns
+1. **C2 — cookies fixture + tasks** — critical untested capability (auth flows)
+2. **B3 — multi-select support** — real bug, fixture-driven validation already designed
+3. **A4 — ref recovery confidence tuning** — data-loss risk 🔴
+4. **D1 — shadow DOM fixture + `>>>` piercing** — biggest real-world pattern absence
+5. **A5 — scroll-into-view fallback for layout-less elements**
+6. **C1 — clipboard fixture + tasks**
+7. **C6 — file upload fixture + sandbox-path integration**
+8. **D4 — infinite-scroll fixture**
+9. **C3–C5** — storage / network / console coverage
+10. **D5–D15** — remaining real-world patterns
 
 Below that threshold: everything is incremental coverage / doc polish.
 
@@ -195,5 +191,7 @@ functionality roadmap see the user's earlier survey (§1–11).
 Populated as loops close items. Each entry: `- [Loop #N] <id> — <one-line
 description>`.
 
-*(none yet — continuous-loop session paused at Loop #16; this plan seeds the
-next batch.)*
+- [Loop #30] A1 — Missing CSS selector hangs (now fast-fail <100ms via `chromedp.AtLeast(0)`)
+- [Loop #30] A2 — `text:<value>` selector reliability (fixed prefix stripping + `textContent`)
+- B1 — `download --output <path>` already implemented (`-o` flag exists)
+- B5 — `wait --not-text "..."` added; `--state hidden` already handled elements

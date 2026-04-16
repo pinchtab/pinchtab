@@ -197,6 +197,22 @@ Rules:
 - For the `scroll` action via HTTP, use `"scrollX"` / `"scrollY"` for pixel deltas, or `"selector"` to scroll an element into view. Example: `{"kind":"scroll","scrollY":1500}` or `{"kind":"scroll","selector":"#footer"}`. The `x`/`y` fields are target viewport coordinates, not scroll deltas.
 - The download HTTP endpoint (`GET /download?url=...` or `GET /tabs/TAB_ID/download?url=...`) returns JSON `{contentType, data (base64), size, url}`, not raw bytes. Decode `data` with base64 to get the file. Only `http`/`https` URLs are allowed. Private/internal hosts are blocked unless listed in `security.downloadAllowedDomains`.
 
+### Waiting
+
+Use `wait` when the DOM settles asynchronously — spinners, toasts, XHR-driven content.
+
+```bash
+pinchtab wait <selector>                            # Element to appear (default visible)
+pinchtab wait <selector> --state hidden             # Element to disappear
+pinchtab wait --text "Order confirmed"              # Text to appear
+pinchtab wait --not-text "Loading..."               # Text to disappear (spinner/toast dismiss)
+pinchtab wait --url "**/dashboard"                  # URL glob match
+pinchtab wait --load networkidle                    # Network idle
+pinchtab wait 500                                   # Fixed delay in ms (last resort)
+```
+
+Default timeout 10s, max 30s via `--timeout <ms>`. Prefer `--not-text` / `--state hidden` over polling.
+
 ### Export, debug, and verification
 
 ```bash

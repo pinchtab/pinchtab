@@ -28,6 +28,7 @@ type waitRequest struct {
 	Selector string `json:"selector,omitempty"` // CSS/XPath/text selector
 	State    string `json:"state,omitempty"`    // "visible" (default) or "hidden"
 	Text     string `json:"text,omitempty"`     // wait for text on page
+	NotText  string `json:"notText,omitempty"`  // wait for text to disappear from page
 	URL      string `json:"url,omitempty"`      // wait for URL glob match
 	Load     string `json:"load,omitempty"`     // "networkidle"
 	Fn       string `json:"fn,omitempty"`       // JS expression to poll for truthy
@@ -51,6 +52,8 @@ func (wr *waitRequest) mode() string {
 		return "selector"
 	case wr.Text != "":
 		return "text"
+	case wr.NotText != "":
+		return "notText"
 	case wr.URL != "":
 		return "url"
 	case wr.Load != "":
@@ -199,6 +202,9 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	case "text":
 		js = fmt.Sprintf(`document.body && document.body.innerText.includes(%s)`, jsonStr(req.Text))
 		matchLabel = req.Text
+	case "notText":
+		js = fmt.Sprintf(`!document.body || !document.body.innerText.includes(%s)`, jsonStr(req.NotText))
+		matchLabel = "!" + req.NotText
 	case "url":
 		js = buildURLMatchJS(req.URL)
 		matchLabel = req.URL

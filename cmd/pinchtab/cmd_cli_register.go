@@ -256,6 +256,7 @@ func configureBrowserFlags() {
 	networkCmd.Flags().Bool("stream", false, "Stream network entries in real-time (like tail -f)")
 
 	waitCmd.Flags().String("text", "", "Wait for text on page")
+	waitCmd.Flags().String("not-text", "", "Wait for text to disappear from page")
 	waitCmd.Flags().String("url", "", "Wait for URL glob match")
 	waitCmd.Flags().String("load", "", "Wait for load state (networkidle)")
 	waitCmd.Flags().String("fn", "", "Wait for JS expression to be truthy")
