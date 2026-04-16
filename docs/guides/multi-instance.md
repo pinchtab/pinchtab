@@ -33,6 +33,7 @@ pinchtab instance start --mode headed --port 9999
   "profileId": "prof_278be873",
   "profileName": "instance-1741410000000",
   "port": "9999",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }
@@ -101,6 +102,7 @@ Useful fields:
 - `id`: stable instance identifier
 - `profileId` and `profileName`: the profile backing that instance
 - `port`: the instance's HTTP port
+- `mode`: explicit `"headless"` or `"headed"` string for request/response symmetry
 - `headless`: whether Chrome was launched headless
 - `status`: usually `starting`, `running`, `stopping`, or `stopped`
 

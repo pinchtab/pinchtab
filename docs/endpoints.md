@@ -491,6 +491,7 @@ Notes:
 
 - `/instances/start` and `/instances/launch` use `mode`, not `headless`
 - `/instances/launch` is a compatibility alias over `/instances/start`
+- instance responses include both `mode` and `headless`
 - instance start surfaces accept `securityPolicy.allowedDomains` for additive instance-scoped IDPI/domain allowlist overrides
 - create profiles explicitly with `POST /profiles`; `name` is no longer supported on `/instances/launch`
 - `/profiles/{id}/start` uses `headless`

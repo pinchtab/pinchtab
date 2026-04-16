@@ -29,6 +29,7 @@ Response shape:
     "profileId": "prof_278be873",
     "profileName": "instance-1741410000000",
     "port": "9999",
+    "mode": "headed",
     "headless": false,
     "status": "running",
     "securityPolicy": {
@@ -38,7 +39,7 @@ Response shape:
 ]
 ```
 
-`GET /instances` returns a bare JSON array, not an envelope like `{"instances":[...]}`.
+`GET /instances` returns a bare JSON array, not an envelope like `{"instances":[...]}`. Each instance response includes both `mode` (`"headless"` or `"headed"`) and the legacy-compatible `headless` boolean.
 
 ## Start An Instance
 
@@ -106,6 +107,11 @@ Common status values:
 - `stopping`
 - `stopped`
 - `error`
+
+Instance responses include:
+
+- `mode`: `"headless"` or `"headed"`
+- `headless`: boolean kept for compatibility
 
 ## Get Instance Logs
 

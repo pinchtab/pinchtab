@@ -373,6 +373,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			ProfileName:    name,
 			Port:           port,
 			URL:            o.childInstanceBaseURL(port),
+			Mode:           bridge.ModeFromHeadless(headless),
 			Headless:       headless,
 			Status:         "starting",
 			StartTime:      time.Now(),
@@ -577,6 +578,7 @@ func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
 		AttachType: "cdp",
 		CdpURL:     cdpURL,
 		URL:        cdpURL,
+		Mode:       bridge.ModeFromHeadless(false),
 	}, "")
 	if err != nil {
 		return nil, err
@@ -602,6 +604,7 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 		Attached:   true,
 		AttachType: "bridge",
 		URL:        normalizedBaseURL,
+		Mode:       bridge.ModeFromHeadless(false),
 	}, token)
 	if err != nil {
 		return nil, false, err

@@ -58,6 +58,7 @@ describe("StartInstanceModal", () => {
         profileId: "prof_alpha",
         profileName: "alpha",
         port: "9988",
+        mode: "headed",
         headless: false,
         status: "running",
         startTime: "2026-03-06T10:00:00Z",

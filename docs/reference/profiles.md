@@ -136,6 +136,7 @@ curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   "profileId": "prof_278be873",
   "profileName": "work",
   "port": "9868",
+  "mode": "headless",
   "headless": true,
   "status": "starting"
 }
@@ -153,7 +154,7 @@ curl -X POST http://localhost:9867/profiles/prof_278be873/stop
 }
 ```
 
-For these orchestrator routes, the path can be a profile ID or profile name.
+For these orchestrator routes, the path can be a profile ID or profile name. The returned instance object now includes both `mode` and `headless`.
 
 ## Check Whether A Profile Has A Running Instance
 

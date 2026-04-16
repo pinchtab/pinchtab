@@ -24,6 +24,7 @@ pinchtab instance start
   "profileId": "prof_278be873",
   "profileName": "instance-1741400000000000000",
   "port": "9868",
+  "mode": "headless",
   "headless": true,
   "status": "starting"
 }

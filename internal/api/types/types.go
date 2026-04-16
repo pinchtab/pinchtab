@@ -38,6 +38,7 @@ type Instance struct {
 	ProfileName    string          `json:"profileName"`
 	Port           string          `json:"port"` // Note: string not int
 	URL            string          `json:"url,omitempty"`
+	Mode           string          `json:"mode"`
 	Headless       bool            `json:"headless"`
 	Status         string          `json:"status"` // starting/running/stopping/stopped/error
 	StartTime      time.Time       `json:"startTime"`

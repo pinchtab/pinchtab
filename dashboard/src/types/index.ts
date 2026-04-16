@@ -428,7 +428,10 @@ export function normalizeMonitoringSnapshot(
 ): MonitoringSnapshot {
   return {
     timestamp: input.timestamp ?? Date.now(),
-    instances: input.instances ?? [],
+    instances: (input.instances ?? []).map((instance) => ({
+      ...instance,
+      mode: instance.mode ?? (instance.headless ? "headless" : "headed"),
+    })),
     tabs: input.tabs ?? [],
     metrics: input.metrics ?? [],
     serverMetrics: {

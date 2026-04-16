@@ -48,6 +48,7 @@ describe("ActivityPage", () => {
           profileId: "prof_default",
           profileName: "default",
           port: "9988",
+          mode: "headless",
           headless: true,
           status: "running",
           startTime: "2026-03-16T08:00:00Z",

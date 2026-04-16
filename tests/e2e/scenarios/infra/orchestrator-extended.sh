@@ -81,6 +81,8 @@ start_test "orchestrator: launch new instance"
 
 pt_post /instances/start '{"mode":"headless"}'
 assert_ok "launch instance"
+assert_json_eq "$RESULT" '.mode' 'headless' "launch response includes mode"
+assert_json_eq "$RESULT" '.headless' 'true' "launch response keeps headless boolean"
 
 INST_ID=$(echo "$RESULT" | jq -r '.id')
 assert_json_exists "$RESULT" '.id' "has instance id"
@@ -100,6 +102,8 @@ start_test "orchestrator: get instance by id"
 pt_get "/instances/${INST_ID}"
 assert_ok "get instance"
 assert_json_eq "$RESULT" '.id' "$INST_ID"
+assert_json_eq "$RESULT" '.mode' 'headless' "instance response includes mode"
+assert_json_eq "$RESULT" '.headless' 'true' "instance response keeps headless boolean"
 
 end_test
 

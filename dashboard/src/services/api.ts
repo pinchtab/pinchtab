@@ -166,6 +166,13 @@ function withDashboardSource(options?: RequestInit): RequestInit {
   };
 }
 
+function normalizeInstance(instance: Instance): Instance {
+  return {
+    ...instance,
+    mode: instance.mode ?? (instance.headless ? "headless" : "headed"),
+  };
+}
+
 // Profiles — endpoint is /profiles (no /api prefix)
 export async function fetchProfiles(): Promise<Profile[]> {
   return request<Profile[]>("/profiles");
@@ -212,18 +219,20 @@ export async function updateProfile(
 
 // Instances — endpoint is /instances (no /api prefix)
 export async function fetchInstances(): Promise<Instance[]> {
-  return request<Instance[]>("/instances");
+  return (await request<Instance[]>("/instances")).map(normalizeInstance);
 }
 
 export async function launchInstance(
   data: LaunchInstanceRequest,
 ): Promise<Instance> {
   // Use the canonical start endpoint to avoid legacy launch alias validation edge cases.
-  return request<Instance>("/instances/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  return normalizeInstance(
+    await request<Instance>("/instances/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
 }
 
 export async function stopInstance(id: string): Promise<void> {

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -141,12 +142,29 @@ type SecurityPolicy struct {
 	AllowedDomains []string `json:"allowedDomains,omitempty"`
 }
 
+func ModeFromHeadless(headless bool) string {
+	if headless {
+		return "headless"
+	}
+	return "headed"
+}
+
+func normalizeInstanceMode(mode string, headless bool) string {
+	switch mode {
+	case "headless", "headed":
+		return mode
+	default:
+		return ModeFromHeadless(headless)
+	}
+}
+
 type Instance struct {
 	ID             string          `json:"id"`                   // Hash-based ID: inst_XXXXXXXX
 	ProfileID      string          `json:"profileId"`            // Hash-based profile ID: prof_XXXXXXXX
 	ProfileName    string          `json:"profileName"`          // Human-readable profile name (for display only)
 	Port           string          `json:"port"`                 // Internal: instance port
 	URL            string          `json:"url,omitempty"`        // Canonical base URL for bridge-backed instances
+	Mode           string          `json:"mode"`                 // API mode: "headless" or "headed"
 	Headless       bool            `json:"headless"`             // Mode: headless vs headed
 	Status         string          `json:"status"`               // Status: starting/running/stopping/stopped/error
 	StartTime      time.Time       `json:"startTime"`            // When instance was created
@@ -155,6 +173,13 @@ type Instance struct {
 	AttachType     string          `json:"attachType,omitempty"` // "cdp" or "bridge" for attached instances
 	CdpURL         string          `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
+}
+
+func (i Instance) MarshalJSON() ([]byte, error) {
+	type alias Instance
+	copy := alias(i)
+	copy.Mode = normalizeInstanceMode(copy.Mode, copy.Headless)
+	return json.Marshal(copy)
 }
 
 type InstanceTab struct {

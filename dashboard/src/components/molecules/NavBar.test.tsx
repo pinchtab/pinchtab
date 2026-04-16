@@ -28,6 +28,7 @@ describe("NavBar", () => {
           profileId: "prof_alpha",
           profileName: "alpha",
           port: "9988",
+          mode: "headed",
           headless: false,
           status: "running",
           startTime: "2026-04-09T10:00:00Z",

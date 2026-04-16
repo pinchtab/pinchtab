@@ -49,6 +49,9 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("First launch failed: %v", err)
 	}
+	if inst.Mode != "headless" {
+		t.Fatalf("Mode = %q, want %q", inst.Mode, "headless")
+	}
 	if inst.Status != "starting" {
 		t.Errorf("expected status starting, got %s", inst.Status)
 	}

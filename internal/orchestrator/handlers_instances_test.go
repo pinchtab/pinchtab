@@ -63,6 +63,9 @@ func TestHandleLaunchByNameAliasesStartSemantics(t *testing.T) {
 	if inst.ProfileName != "work" {
 		t.Fatalf("ProfileName = %q, want %q", inst.ProfileName, "work")
 	}
+	if inst.Mode != "headed" {
+		t.Fatalf("Mode = %q, want %q", inst.Mode, "headed")
+	}
 	if inst.Headless {
 		t.Fatal("Headless = true, want false for mode=headed")
 	}
@@ -127,6 +130,9 @@ func TestHandleStartInstance_AppliesSecurityPolicyOverride(t *testing.T) {
 	var inst bridge.Instance
 	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
 		t.Fatalf("decode response: %v", err)
+	}
+	if inst.Mode != "headed" {
+		t.Fatalf("Mode = %q, want %q", inst.Mode, "headed")
 	}
 	if inst.SecurityPolicy == nil {
 		t.Fatal("expected securityPolicy on instance response")

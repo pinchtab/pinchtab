@@ -43,6 +43,7 @@ export interface Instance {
   profileName: string;
   port: string; // Note: string not int
   url?: string;
+  mode: string;
   headless: boolean;
   status: string; // starting/running/stopping/stopped/error
   startTime: string;
