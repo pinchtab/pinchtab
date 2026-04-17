@@ -17,11 +17,11 @@ import (
 type PinchtabPage struct {
 	ctx   context.Context
 	tabID string
-	b     *bridge.Bridge
+	b     bridge.BridgeAPI
 }
 
 // NewPinchtabPage creates a Page backed by a Pinchtab bridge tab.
-func NewPinchtabPage(ctx context.Context, tabID string, b *bridge.Bridge) *PinchtabPage {
+func NewPinchtabPage(ctx context.Context, tabID string, b bridge.BridgeAPI) *PinchtabPage {
 	return &PinchtabPage{ctx: ctx, tabID: tabID, b: b}
 }
 
@@ -61,11 +61,11 @@ func (p *PinchtabPage) Screenshot() ([]byte, error) {
 type PinchtabExecutor struct {
 	ctx   context.Context
 	tabID string
-	b     *bridge.Bridge
+	b     bridge.BridgeAPI
 }
 
 // NewPinchtabExecutor creates an ActionExecutor backed by a Pinchtab bridge.
-func NewPinchtabExecutor(ctx context.Context, tabID string, b *bridge.Bridge) *PinchtabExecutor {
+func NewPinchtabExecutor(ctx context.Context, tabID string, b bridge.BridgeAPI) *PinchtabExecutor {
 	return &PinchtabExecutor{ctx: ctx, tabID: tabID, b: b}
 }
 
@@ -94,7 +94,7 @@ func (e *PinchtabExecutor) Navigate(ctx context.Context, url string) error {
 
 // NewFromBridge creates both a Page and ActionExecutor from a Bridge
 // and tab ID. This is the primary factory for integration with Pinchtab.
-func NewFromBridge(b *bridge.Bridge, tabID string) (autosolver.Page, autosolver.ActionExecutor, error) {
+func NewFromBridge(b bridge.BridgeAPI, tabID string) (autosolver.Page, autosolver.ActionExecutor, error) {
 	tabCtx, resolvedID, err := b.TabContext(tabID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve tab %q: %w", tabID, err)

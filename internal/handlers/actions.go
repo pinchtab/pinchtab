@@ -340,6 +340,9 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	if engineName == "" {
 		engineName = "chrome"
 	}
+	if engineName != "lite" {
+		h.maybeAutoSolve(tCtx, resolvedTabID, autoSolverTriggerAction)
+	}
 	w.Header().Set("X-Engine", engineName)
 	h.recordEngine(r, engineName)
 	resp := map[string]any{"success": true, "result": result}
@@ -715,11 +718,16 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		}
 	}
 
+	successful := countSuccessful(results)
+	if !allLite && successful > 0 {
+		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
+	}
+
 	httpx.JSON(w, 200, map[string]any{
 		"results":    results,
 		"total":      len(req.Actions),
-		"successful": countSuccessful(results),
-		"failed":     len(req.Actions) - countSuccessful(results),
+		"successful": successful,
+		"failed":     len(req.Actions) - successful,
 	})
 }
 
@@ -968,12 +976,17 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		results = append(results, actionResult{Index: i, Success: true, Result: res})
 	}
 
+	successful := countSuccessful(results)
+	if !allLiteMacro && successful > 0 {
+		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
+	}
+
 	httpx.JSON(w, 200, map[string]any{
 		"kind":       "macro",
 		"results":    results,
 		"total":      len(req.Steps),
-		"successful": countSuccessful(results),
-		"failed":     len(req.Steps) - countSuccessful(results),
+		"successful": successful,
+		"failed":     len(req.Steps) - successful,
 	})
 }
 

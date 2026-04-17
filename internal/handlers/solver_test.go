@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/solver"
 )
 
 func TestHandleListSolvers(t *testing.T) {
@@ -31,16 +30,21 @@ func TestHandleListSolvers(t *testing.T) {
 		t.Fatal("expected 'solvers' key in response")
 	}
 
-	// cloudflare solver is registered via bridge init
-	found := false
+	foundCloudflare := false
+	foundSemantic := false
 	for _, s := range solvers {
 		if s == "cloudflare" {
-			found = true
-			break
+			foundCloudflare = true
+		}
+		if s == "semantic" {
+			foundSemantic = true
 		}
 	}
-	if !found {
+	if !foundCloudflare {
 		t.Errorf("expected cloudflare in solvers list, got %v", solvers)
+	}
+	if !foundSemantic {
+		t.Errorf("expected semantic in solvers list, got %v", solvers)
 	}
 }
 
@@ -169,9 +173,10 @@ func TestHandleSolve_PathUnknownSolver(t *testing.T) {
 	}
 }
 
-// Verify solver.Names includes cloudflare (registered by bridge init).
+// Verify the HTTP-exposed solver list includes cloudflare.
 func TestCloudflareSolverRegistered(t *testing.T) {
-	names := solver.Names()
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	names := h.availableAutoSolverNames()
 	found := false
 	for _, n := range names {
 		if n == "cloudflare" {

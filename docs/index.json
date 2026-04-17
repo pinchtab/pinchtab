@@ -20,6 +20,7 @@
     "guides/memory-monitoring.md",
     "guides/data-storage.md",
     "guides/docker.md",
+    "guides/autosolver-phases-manual-test.md",
     "guides/raspberry-pi.md"
   ],
   "architecture": [

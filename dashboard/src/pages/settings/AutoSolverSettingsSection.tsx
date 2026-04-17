@@ -46,6 +46,60 @@ export function AutoSolverSettingsSection({
         </label>
       </SettingRow>
       <SettingRow
+        label="Auto trigger"
+        description="Automatically run autosolver after supported navigation and action requests."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.autoTrigger}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                autoTrigger: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.autoTrigger ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
+        label="Trigger on navigate"
+        description="Run autosolver checks after successful navigation calls."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.triggerOnNavigate}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                triggerOnNavigate: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.triggerOnNavigate ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
+        label="Trigger on action"
+        description="Run autosolver checks after successful action calls."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.triggerOnAction}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                triggerOnAction: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.triggerOnAction ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
         label="Max attempts"
         description="Maximum autosolver retries before the pipeline gives up."
       >
@@ -56,6 +110,54 @@ export function AutoSolverSettingsSection({
           onChange={(e) =>
             updateBackendSection("autoSolver", {
               maxAttempts: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Solver timeout (sec)"
+        description="Per-solver timeout for each attempt."
+      >
+        <input
+          type="number"
+          min={1}
+          value={backendConfig.autoSolver.solverTimeoutSec}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              solverTimeoutSec: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Retry base delay (ms)"
+        description="Base retry backoff delay between autosolver attempts."
+      >
+        <input
+          type="number"
+          min={0}
+          value={backendConfig.autoSolver.retryBaseDelayMs}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              retryBaseDelayMs: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Retry max delay (ms)"
+        description="Maximum retry backoff delay cap between autosolver attempts."
+      >
+        <input
+          type="number"
+          min={0}
+          value={backendConfig.autoSolver.retryMaxDelayMs}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              retryMaxDelayMs: Number(e.target.value),
             })
           }
           className={fieldClass}

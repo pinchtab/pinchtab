@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 )
 
 // AutoSolver orchestrates the challenge-detection and solving pipeline.
-// It uses a fallback chain: built-in solvers → semantic engine → external
-// solvers → LLM provider, trying each layer before moving to the next.
+// It uses a fallback chain: semantic engine (/find + self-healing) ->
+// rule-based solvers -> external solvers -> LLM provider.
 type AutoSolver struct {
 	registry *Registry
 	semantic SemanticEngine
@@ -38,9 +39,10 @@ func (as *AutoSolver) Registry() *Registry {
 // Steps:
 //  1. Detect intent via semantic engine (or title-based heuristics)
 //  2. If no challenge detected, return immediately
-//  3. Try matching solvers in priority order
-//  4. If all fail and LLM is enabled, try LLM fallback
-//  5. Return result with full attempt history
+//  3. Try semantic-first action (/find + self-healing)
+//  4. If semantic fails, try matching solvers in priority order
+//  5. If all fail and LLM is enabled, try LLM fallback
+//  6. Return result with full attempt history
 func (as *AutoSolver) Solve(ctx context.Context, page Page, executor ActionExecutor) (*Result, error) {
 	start := time.Now()
 	result := &Result{
@@ -63,7 +65,7 @@ func (as *AutoSolver) Solve(ctx context.Context, page Page, executor ActionExecu
 	}
 	result.Intent = intent.Type
 
-	// No challenge — nothing to solve.
+	// No challenge - nothing to solve.
 	if intent.Type == IntentNormal {
 		result.Solved = true
 		result.TotalDuration = time.Since(start)
@@ -105,8 +107,32 @@ func (as *AutoSolver) Solve(ctx context.Context, page Page, executor ActionExecu
 			}
 		}
 
+		// Try semantic-first action before any rule-based solver.
+		solved, entry := as.trySemantic(ctx, page, executor, intent)
+		if entry != nil {
+			result.History = append(result.History, *entry)
+		}
+		if solved {
+			result.Solved = true
+			result.SolverUsed = entry.Solver
+			result.FinalTitle = page.Title()
+			result.FinalURL = page.URL()
+			result.TotalDuration = time.Since(start)
+			slog.Info("autosolver_success",
+				"solver", entry.Solver,
+				"attempts", result.Attempts,
+				"duration_ms", result.TotalDuration.Milliseconds(),
+				"url", page.URL())
+			slog.Info("autosolver_done",
+				"solved", true,
+				"solver", entry.Solver,
+				"attempts", result.Attempts,
+				"duration_ms", result.TotalDuration.Milliseconds())
+			return result, nil
+		}
+
 		// Try registered solvers in priority order.
-		solved, entry := as.trySolvers(ctx, page, executor)
+		solved, entry = as.trySolvers(ctx, page, executor)
 		if entry != nil {
 			result.History = append(result.History, *entry)
 		}
@@ -131,7 +157,7 @@ func (as *AutoSolver) Solve(ctx context.Context, page Page, executor ActionExecu
 
 		// Try LLM fallback if enabled and all solvers failed.
 		if as.config.LLMFallback && as.llm != nil {
-			solved, entry := as.tryLLM(ctx, page, executor, result.History)
+			solved, entry = as.tryLLM(ctx, page, executor, result.History)
 			if entry != nil {
 				result.History = append(result.History, *entry)
 			}
@@ -190,7 +216,27 @@ func (as *AutoSolver) trySolvers(ctx context.Context, page Page, executor Action
 		}
 	}
 
-	for _, s := range solvers {
+	orderedSolvers := solvers
+	if len(as.config.Solvers) > 0 {
+		byName := make(map[string]Solver, len(solvers))
+		for _, s := range solvers {
+			byName[s.Name()] = s
+		}
+
+		filtered := make([]Solver, 0, len(as.config.Solvers))
+		for _, name := range as.config.Solvers {
+			if s, ok := byName[name]; ok {
+				filtered = append(filtered, s)
+			}
+		}
+
+		// If config names don't match available solvers, preserve default behavior.
+		if len(filtered) > 0 {
+			orderedSolvers = filtered
+		}
+	}
+
+	for _, s := range orderedSolvers {
 		solverCtx, cancel := context.WithTimeout(ctx, as.config.SolverTimeout)
 		solverStart := time.Now()
 
@@ -231,10 +277,423 @@ func (as *AutoSolver) trySolvers(ctx context.Context, page Page, executor Action
 	}
 
 	return false, &AttemptEntry{
-		Solver: solvers[len(solvers)-1].Name(),
+		Solver: orderedSolvers[len(orderedSolvers)-1].Name(),
 		Status: StatusFailed,
 		Error:  "all matching solvers failed",
 	}
+}
+
+// trySemantic executes semantic /find-driven action planning first.
+// For high-level intents it runs a small multi-step semantic flow.
+func (as *AutoSolver) trySemantic(ctx context.Context, page Page, executor ActionExecutor, intent *Intent) (bool, *AttemptEntry) {
+	entry := &AttemptEntry{Solver: "semantic"}
+	semanticStart := time.Now()
+
+	if as.semantic == nil {
+		entry.Status = StatusSkipped
+		entry.Error = "semantic engine not configured"
+		entry.Duration = time.Since(semanticStart)
+		return false, entry
+	}
+
+	semanticCtx, cancel := context.WithTimeout(ctx, as.config.SolverTimeout)
+	defer cancel()
+
+	initialIntentType := intentTypeOf(intent)
+	stepBudget := semanticStepBudget(initialIntentType)
+	if stepBudget < 1 {
+		stepBudget = 1
+	}
+
+	currentIntent := intent
+	actionsExecuted := 0
+
+	for step := 0; step < stepBudget; step++ {
+		if step > 0 {
+			nextIntent, detectErr := as.detectIntent(semanticCtx, page)
+			if detectErr != nil {
+				slog.Debug("autosolver: semantic step intent refresh failed",
+					"step", step+1,
+					"error", detectErr)
+			} else {
+				currentIntent = nextIntent
+			}
+		}
+
+		if intentTypeOf(currentIntent) == IntentNormal {
+			entry.Status = StatusSolved
+			entry.Duration = time.Since(semanticStart)
+			return true, entry
+		}
+
+		suggested, err := as.semantic.SuggestAction(semanticCtx, page, currentIntent)
+		if err != nil {
+			entry.Status = StatusFailed
+			entry.Error = fmt.Sprintf("semantic suggest action: %v", err)
+			entry.Duration = time.Since(semanticStart)
+			return false, entry
+		}
+
+		planned := as.planSemanticAction(currentIntent, step, suggested)
+		action, err := as.prepareSemanticAction(semanticCtx, page, currentIntent, step, planned)
+		if err != nil {
+			entry.Status = StatusFailed
+			entry.Error = fmt.Sprintf("prepare semantic action: %v", err)
+			entry.Duration = time.Since(semanticStart)
+			return false, entry
+		}
+
+		if err := executeSuggestedAction(semanticCtx, executor, action); err != nil {
+			healedAction, healErr := as.selfHealSemanticAction(semanticCtx, page, currentIntent, step, action)
+			if healErr != nil {
+				entry.Status = StatusFailed
+				entry.Error = fmt.Sprintf("execute semantic action: %v; self-heal failed: %v", err, healErr)
+				entry.Duration = time.Since(semanticStart)
+				return false, entry
+			}
+
+			if err := executeSuggestedAction(semanticCtx, executor, healedAction); err != nil {
+				entry.Status = StatusFailed
+				entry.Error = fmt.Sprintf("execute semantic self-heal action: %v", err)
+				entry.Duration = time.Since(semanticStart)
+				return false, entry
+			}
+		}
+
+		actionsExecuted++
+
+		postIntent, detectErr := as.detectIntent(semanticCtx, page)
+		if detectErr != nil {
+			slog.Debug("autosolver: semantic post-step intent detection failed",
+				"step", step+1,
+				"error", detectErr)
+		} else {
+			currentIntent = postIntent
+			if currentIntent.Type == IntentNormal {
+				entry.Status = StatusSolved
+				entry.Duration = time.Since(semanticStart)
+				return true, entry
+			}
+		}
+	}
+
+	if isHighLevelIntent(initialIntentType) && actionsExecuted > 0 {
+		entry.Status = StatusSolved
+		entry.Duration = time.Since(semanticStart)
+		return true, entry
+	}
+
+	entry.Status = StatusFailed
+	entry.Error = fmt.Sprintf("semantic flow exhausted for intent %q", initialIntentType)
+	entry.Duration = time.Since(semanticStart)
+	return false, entry
+}
+
+type semanticFlowStep struct {
+	Query   string
+	Action  ActionType
+	EnvKeys []string
+}
+
+func (as *AutoSolver) planSemanticAction(intent *Intent, step int, suggested *SuggestedAction) *SuggestedAction {
+	planned := &SuggestedAction{Action: ActionNone}
+	if suggested != nil {
+		copy := *suggested
+		planned = &copy
+	}
+
+	intentType := intentTypeOf(intent)
+	flowStep := semanticFlowStepForIntent(intentType, step)
+
+	if planned.Action == ActionNone || isHighLevelIntent(intentType) {
+		planned.Action = flowStep.Action
+	}
+
+	if planned.Text == "" && planned.Action == ActionType_ {
+		planned.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+	}
+
+	if planned.Reason == "" {
+		planned.Reason = fmt.Sprintf("semantic flow step %d", step+1)
+	}
+
+	return planned
+}
+
+func (as *AutoSolver) prepareSemanticAction(ctx context.Context, page Page, intent *Intent, step int, action *SuggestedAction) (*SuggestedAction, error) {
+	if action == nil {
+		return nil, fmt.Errorf("nil action")
+	}
+
+	resolved := *action
+	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step)
+
+	shouldResolveTarget := isHighLevelIntent(intentTypeOf(intent)) || actionNeedsTarget(&resolved)
+	if shouldResolveTarget {
+		match, err := as.semantic.FindElement(ctx, page, flowStep.Query)
+		if err != nil {
+			return nil, fmt.Errorf("semantic find element query %q: %w", flowStep.Query, err)
+		}
+		if match != nil {
+			if match.Selector != "" {
+				resolved.Selector = match.Selector
+			} else if match.Ref != "" {
+				resolved.Selector = match.Ref
+			}
+			if match.X != 0 || match.Y != 0 {
+				resolved.X = match.X
+				resolved.Y = match.Y
+			}
+		} else if actionNeedsTarget(&resolved) {
+			return nil, fmt.Errorf("semantic find returned no match for query %q", flowStep.Query)
+		}
+	}
+
+	if resolved.Action == ActionType_ && resolved.Text == "" {
+		resolved.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+		if resolved.Text == "" {
+			resolved.Action = ActionClick
+		}
+	}
+
+	if resolved.Action == ActionClick && resolved.Selector == "" && resolved.X == 0 && resolved.Y == 0 {
+		return nil, fmt.Errorf("semantic action requires selector or coordinates for query %q", flowStep.Query)
+	}
+
+	return &resolved, nil
+}
+
+func (as *AutoSolver) selfHealSemanticAction(ctx context.Context, page Page, intent *Intent, step int, original *SuggestedAction) (*SuggestedAction, error) {
+	if original == nil {
+		return nil, fmt.Errorf("nil action")
+	}
+
+	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step)
+	match, err := as.semantic.FindElement(ctx, page, flowStep.Query)
+	if err != nil {
+		return nil, fmt.Errorf("semantic self-heal find query %q: %w", flowStep.Query, err)
+	}
+	if match == nil {
+		return nil, fmt.Errorf("semantic self-heal returned no match for query %q", flowStep.Query)
+	}
+
+	healed := *original
+	if match.Selector != "" {
+		healed.Selector = match.Selector
+	} else if match.Ref != "" {
+		healed.Selector = match.Ref
+	}
+	if match.X != 0 || match.Y != 0 {
+		healed.X = match.X
+		healed.Y = match.Y
+	}
+
+	if healed.Action == ActionType_ && healed.Text == "" {
+		healed.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+		if healed.Text == "" {
+			healed.Action = ActionClick
+		}
+	}
+
+	if healed.Action == ActionClick && healed.Selector == "" && healed.X == 0 && healed.Y == 0 {
+		return nil, fmt.Errorf("semantic self-heal match for query %q had no actionable selector or coordinates", flowStep.Query)
+	}
+
+	return &healed, nil
+}
+
+func intentTypeOf(intent *Intent) IntentType {
+	if intent == nil {
+		return IntentUnknown
+	}
+	return intent.Type
+}
+
+func isHighLevelIntent(intentType IntentType) bool {
+	switch intentType {
+	case IntentLogin, IntentSignup, IntentForm, IntentOnboarding, IntentNavigation:
+		return true
+	default:
+		return false
+	}
+}
+
+func semanticStepBudget(intentType IntentType) int {
+	switch intentType {
+	case IntentLogin:
+		return 3
+	case IntentSignup:
+		return 4
+	case IntentForm:
+		return 3
+	case IntentOnboarding, IntentNavigation:
+		return 3
+	case IntentCaptcha, IntentBlocked:
+		return 2
+	default:
+		return 1
+	}
+}
+
+func semanticFlowStepForIntent(intentType IntentType, step int) semanticFlowStep {
+	steps := []semanticFlowStep{{Query: "primary continue submit button", Action: ActionClick}}
+
+	switch intentType {
+	case IntentCaptcha:
+		steps = []semanticFlowStep{
+			{Query: "captcha checkbox verify button challenge widget", Action: ActionClick},
+			{Query: "verification challenge status text", Action: ActionWait},
+		}
+	case IntentBlocked:
+		steps = []semanticFlowStep{
+			{Query: "verify continue button", Action: ActionClick},
+			{Query: "body", Action: ActionWait},
+		}
+	case IntentLogin:
+		steps = []semanticFlowStep{
+			{Query: "username email input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_LOGIN_USER", "PINCHTAB_AUTOSOLVER_LOGIN_EMAIL"}},
+			{Query: "password input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_LOGIN_PASS", "PINCHTAB_AUTOSOLVER_LOGIN_PASSWORD"}},
+			{Query: "login submit sign in button", Action: ActionClick},
+		}
+	case IntentSignup:
+		steps = []semanticFlowStep{
+			{Query: "name full name input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_NAME"}},
+			{Query: "email input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_EMAIL"}},
+			{Query: "password create password input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_PASSWORD"}},
+			{Query: "sign up register create account submit button", Action: ActionClick},
+		}
+	case IntentForm:
+		steps = []semanticFlowStep{
+			{Query: "first required input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_FORM_FIELD1"}},
+			{Query: "second required input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_FORM_FIELD2", "PINCHTAB_AUTOSOLVER_FORM_EMAIL"}},
+			{Query: "primary submit button", Action: ActionClick},
+		}
+	case IntentOnboarding:
+		steps = []semanticFlowStep{
+			{Query: "next continue button", Action: ActionClick},
+			{Query: "skip button", Action: ActionClick},
+			{Query: "done finish submit button", Action: ActionClick},
+		}
+	case IntentNavigation:
+		steps = []semanticFlowStep{
+			{Query: "primary navigation link", Action: ActionClick},
+			{Query: "continue next button", Action: ActionClick},
+			{Query: "submit confirm button", Action: ActionClick},
+		}
+	}
+
+	if step < 0 {
+		step = 0
+	}
+	if step >= len(steps) {
+		step = len(steps) - 1
+	}
+
+	return steps[step]
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func actionNeedsTarget(action *SuggestedAction) bool {
+	if action == nil {
+		return false
+	}
+
+	switch action.Action {
+	case ActionClick:
+		return action.Selector == "" && action.X == 0 && action.Y == 0
+	case ActionType_:
+		return action.Selector == "" && action.X == 0 && action.Y == 0
+	default:
+		return false
+	}
+}
+
+func executeSuggestedAction(ctx context.Context, executor ActionExecutor, action *SuggestedAction) error {
+	if action == nil {
+		return fmt.Errorf("nil action")
+	}
+
+	switch action.Action {
+	case ActionClick:
+		if action.Selector != "" {
+			x, y, err := resolveSelectorCenter(ctx, executor, action.Selector)
+			if err != nil {
+				return err
+			}
+			return executor.Click(ctx, x, y)
+		}
+		if action.X != 0 || action.Y != 0 {
+			return executor.Click(ctx, action.X, action.Y)
+		}
+		return fmt.Errorf("click action requires selector or coordinates")
+
+	case ActionType_:
+		if action.Selector != "" {
+			x, y, err := resolveSelectorCenter(ctx, executor, action.Selector)
+			if err != nil {
+				return err
+			}
+			if err := executor.Click(ctx, x, y); err != nil {
+				return err
+			}
+		} else if action.X != 0 || action.Y != 0 {
+			if err := executor.Click(ctx, action.X, action.Y); err != nil {
+				return err
+			}
+		}
+		return executor.Type(ctx, action.Text)
+
+	case ActionNavigate:
+		return executor.Navigate(ctx, action.URL)
+
+	case ActionWait:
+		selector := action.Selector
+		if selector == "" {
+			selector = "body"
+		}
+		return executor.WaitFor(ctx, selector, 5*time.Second)
+
+	case ActionEvaluate:
+		if action.Expr == "" {
+			return fmt.Errorf("evaluate action requires expr")
+		}
+		var out interface{}
+		return executor.Evaluate(ctx, action.Expr, &out)
+
+	case ActionNone:
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported action: %s", action.Action)
+	}
+}
+
+func resolveSelectorCenter(ctx context.Context, executor ActionExecutor, selector string) (float64, float64, error) {
+	var coords struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+	}
+
+	expr := fmt.Sprintf(`(() => {
+		const el = document.querySelector(%q);
+		if (!el) return null;
+		const r = el.getBoundingClientRect();
+		return {x: r.x + r.width/2, y: r.y + r.height/2};
+	})()`, selector)
+
+	if err := executor.Evaluate(ctx, expr, &coords); err != nil {
+		return 0, 0, fmt.Errorf("resolve selector %q: %w", selector, err)
+	}
+
+	return coords.X, coords.Y, nil
 }
 
 // tryLLM builds a trimmed request and asks the LLM for the next action.
@@ -291,21 +750,11 @@ func executeAction(ctx context.Context, executor ActionExecutor, resp *LLMRespon
 	switch resp.Action {
 	case ActionClick:
 		if resp.Selector != "" {
-			// Resolve selector to coordinates via evaluate.
-			var coords struct {
-				X float64 `json:"x"`
-				Y float64 `json:"y"`
+			x, y, err := resolveSelectorCenter(ctx, executor, resp.Selector)
+			if err != nil {
+				return err
 			}
-			expr := fmt.Sprintf(`(() => {
-				const el = document.querySelector(%q);
-				if (!el) return null;
-				const r = el.getBoundingClientRect();
-				return {x: r.x + r.width/2, y: r.y + r.height/2};
-			})()`, resp.Selector)
-			if err := executor.Evaluate(ctx, expr, &coords); err != nil {
-				return fmt.Errorf("resolve selector %q: %w", resp.Selector, err)
-			}
-			return executor.Click(ctx, coords.X, coords.Y)
+			return executor.Click(ctx, x, y)
 		}
 		return fmt.Errorf("click action requires selector")
 

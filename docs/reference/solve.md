@@ -2,7 +2,7 @@
 
 Detect and solve browser challenges (Cloudflare Turnstile, CAPTCHAs, interstitials, etc.) on the current page.
 
-PinchTab ships with a pluggable **solver framework**. Each solver targets a specific provider (e.g. Cloudflare). Solvers are registered at startup and can be invoked explicitly by name or discovered automatically.
+These endpoints are powered by the `internal/autosolver` pipeline. In auto mode, PinchTab runs semantic intent detection first, then tries configured solvers in order, and optionally falls back to LLM when enabled.
 
 ## Endpoints
 
@@ -22,13 +22,15 @@ curl http://localhost:9867/solvers
 
 ```json
 {
-  "solvers": ["cloudflare"]
+  "solvers": ["cloudflare", "semantic", "jschallenge"]
 }
 ```
 
+`capsolver` and `twocaptcha` are included when their API keys are configured.
+
 ## Auto-Detect Solve
 
-When no `solver` field is provided, PinchTab tries each registered solver in order. The first one whose `CanHandle` returns true is used.
+When no `solver` field is provided, PinchTab runs the autosolver chain using the configured order (`autoSolver.solvers`).
 
 ```bash
 curl -X POST http://localhost:9867/solve \
@@ -68,8 +70,8 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
 |--------------|--------|---------|------------------------------------------|
 | `tabId`      | string | —       | Tab ID (optional, uses default tab)      |
 | `solver`     | string | —       | Solver name (optional, auto-detect)      |
-| `maxAttempts`| int    | 3       | Maximum solve attempts                   |
-| `timeout`    | float  | 30000   | Overall timeout in milliseconds          |
+| `maxAttempts`| int    | config (`autoSolver.maxAttempts`, default 8) | Maximum solve attempts |
+| `timeout`    | float  | auto-estimated (minimum 30000) | Overall timeout in milliseconds |
 
 ## Response
 
@@ -78,7 +80,7 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
   "tabId": "DEADBEEF",
   "solver": "cloudflare",
   "solved": true,
-  "challengeType": "managed",
+  "challengeType": "turnstile",
   "attempts": 1,
   "title": "thuisbezorgd.nl"
 }
@@ -89,7 +91,7 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
 | `tabId`         | string | Tab the solve ran on                           |
 | `solver`        | string | Which solver handled the challenge             |
 | `solved`        | bool   | Whether the challenge was resolved             |
-| `challengeType` | string | Challenge variant (e.g. `managed`, `embedded`) |
+| `challengeType` | string | Challenge variant (`turnstile`, `recaptcha-v2`, `hcaptcha`) or broad intent (`captcha`, `blocked`) |
 | `attempts`      | int    | Number of attempts made                        |
 | `title`         | string | Final page title                               |
 
@@ -103,6 +105,14 @@ curl -X POST http://localhost:9867/tabs/{tabId}/solve \
 | 500  | CDP/Chrome error                       |
 
 ## Built-In Solvers
+
+### Semantic (`semantic`)
+
+Semantic-first solver that uses `/find`-style matching and multi-step action planning for challenge and flow resolution.
+
+### JS Challenge (`jschallenge`)
+
+Generic JavaScript anti-bot/interstitial solver that waits, probes common verification controls, and polls for challenge resolution.
 
 ### Cloudflare (`cloudflare`)
 
@@ -123,35 +133,38 @@ Handles Cloudflare Turnstile and interstitial challenges.
 
 **Stealth requirement**: The Cloudflare solver works best with `stealthLevel: "full"` in the PinchTab config. Cloudflare evaluates browser fingerprints (CDP detection, WebGL, canvas, navigator properties) before and after the checkbox interaction. Without full stealth, the solver may click correctly but the challenge can still fail fingerprint verification. Check stealth status with `GET /stealth/status`.
 
+### External Solvers
+
+- `capsolver` (requires `autoSolver.external.capsolverKey`)
+- `twocaptcha` (requires `autoSolver.external.twoCaptchaKey`)
+
 ## Writing a Custom Solver
 
-Implement the `solver.Solver` interface and register it during `init()`:
+Implement the `autosolver.Solver` interface and register it where the autosolver registry is constructed:
 
 ```go
 package mygateway
 
 import (
     "context"
-    "github.com/pinchtab/pinchtab/internal/solver"
+  "github.com/pinchtab/pinchtab/internal/autosolver"
 )
-
-func init() {
-    solver.MustRegister("mygateway", &MyGatewaySolver{})
-}
 
 type MyGatewaySolver struct{}
 
 func (s *MyGatewaySolver) Name() string { return "mygateway" }
 
-func (s *MyGatewaySolver) CanHandle(ctx context.Context) (bool, error) {
+func (s *MyGatewaySolver) Priority() int { return 150 }
+
+func (s *MyGatewaySolver) CanHandle(ctx context.Context, page autosolver.Page) (bool, error) {
     // Check page markers (title, DOM elements, etc.)
     return false, nil
 }
 
-func (s *MyGatewaySolver) Solve(ctx context.Context, opts solver.Options) (*solver.Result, error) {
+func (s *MyGatewaySolver) Solve(ctx context.Context, page autosolver.Page, exec autosolver.ActionExecutor) (*autosolver.Result, error) {
     // Detect, interact, and resolve the challenge.
-    return &solver.Result{Solver: "mygateway", Solved: true}, nil
+  return &autosolver.Result{SolverUsed: "mygateway", Solved: true}, nil
 }
 ```
 
-The solver has access to the full chromedp context for CDP operations.
+Then add it to the handler autosolver registry setup.

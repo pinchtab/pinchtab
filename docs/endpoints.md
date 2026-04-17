@@ -373,14 +373,14 @@ POST /tabs/{id}/solve
 POST /tabs/{id}/solve/{name}
 ```
 
-The solver framework auto-detects and resolves browser challenges (Cloudflare Turnstile, etc.). See [Solve reference](./reference/solve.md) for details.
+The autosolver framework auto-detects and resolves browser challenges (Cloudflare Turnstile, CAPTCHAs, interstitials, etc.). See [Solve reference](./reference/solve.md) for details.
 
 Solve body fields:
 
 - `solver` optional solver name (auto-detect when omitted)
 - `tabId` optional
-- `maxAttempts` optional (default: 3)
-- `timeout` optional in ms (default: 30000)
+- `maxAttempts` optional (defaults to `autoSolver.maxAttempts`, default `8`)
+- `timeout` optional in ms (auto-estimated when omitted, minimum `30000`)
 
 ## Profiles And Instances
 

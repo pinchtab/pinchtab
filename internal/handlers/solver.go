@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	coreautosolver "github.com/pinchtab/pinchtab/internal/autosolver"
+	"github.com/pinchtab/pinchtab/internal/autosolver/adapters"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/solver"
-
-	// Register built-in solvers via init().
-	_ "github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 // HandleSolve attempts to solve a browser challenge on the current page.
@@ -68,9 +66,9 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 
 	// Validate solver name early.
 	if req.Solver != "" {
-		if _, ok := solver.Get(req.Solver); !ok {
+		if !h.isAvailableAutoSolver(req.Solver) {
 			httpx.ErrorCode(w, 400, "unknown_solver",
-				fmt.Sprintf("unknown solver %q (available: %v)", req.Solver, solver.Names()),
+				fmt.Sprintf("unknown solver %q (available: %v)", req.Solver, h.availableAutoSolverNames()),
 				false, nil)
 			return
 		}
@@ -98,20 +96,47 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r, activity.Update{Action: action, TabID: resolvedTabID})
 
+	page, executor, err := adapters.NewFromBridge(h.Bridge, resolvedTabID)
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("resolve solve tab: %w", err))
+		return
+	}
+
+	cfg := h.normalizedAutoSolverConfig()
+	cfg.Enabled = true
+	if req.MaxAttempts > 0 {
+		cfg.MaxAttempts = req.MaxAttempts
+	}
+	if req.Solver != "" {
+		cfg.Solvers = []string{req.Solver}
+	}
+
+	// Explicit named solvers should run directly without semantic-first flow,
+	// except when the caller explicitly requested the semantic solver.
+	includeSemantic := req.Solver == "" || req.Solver == "semantic"
+	as := h.buildAutoSolver(cfg, includeSemantic)
+
 	timeout := 30 * time.Second
 	if req.Timeout > 0 {
 		timeout = time.Duration(req.Timeout) * time.Millisecond
+	} else {
+		estimated := estimateAutoSolverRunTimeout(cfg)
+		if estimated > timeout {
+			timeout = estimated
+		}
 	}
 
 	tCtx, tCancel := context.WithTimeout(ctx, timeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
-	result, err := solver.Solve(tCtx, req.Solver, solver.Options{
-		MaxAttempts: req.MaxAttempts,
-	})
+	result, err := as.Solve(tCtx, page, executor)
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("solve: %w", err))
+		return
+	}
+	if result == nil {
+		httpx.Error(w, 500, fmt.Errorf("solve: empty result"))
 		return
 	}
 
@@ -121,13 +146,23 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	solverName := result.SolverUsed
+	if solverName == "" && req.Solver != "" {
+		solverName = req.Solver
+	}
+
+	title := result.FinalTitle
+	if title == "" {
+		title = page.Title()
+	}
+
 	httpx.JSON(w, 200, map[string]any{
 		"tabId":         resolvedTabID,
-		"solver":        result.Solver,
+		"solver":        solverName,
 		"solved":        result.Solved,
-		"challengeType": result.ChallengeType,
+		"challengeType": deriveChallengeType(result, page),
 		"attempts":      result.Attempts,
-		"title":         result.Title,
+		"title":         title,
 	})
 }
 
@@ -171,6 +206,39 @@ func (h *Handlers) HandleTabSolve(w http.ResponseWriter, r *http.Request) {
 // @Response 200 application/json Returns {solvers: ["cloudflare", ...]}
 func (h *Handlers) HandleListSolvers(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{
-		"solvers": solver.Names(),
+		"solvers": h.availableAutoSolverNames(),
 	})
+}
+
+func deriveChallengeType(result *coreautosolver.Result, page coreautosolver.Page) string {
+	if result == nil {
+		return ""
+	}
+
+	finalTitle := result.FinalTitle
+	if finalTitle == "" {
+		finalTitle = page.Title()
+	}
+	finalURL := result.FinalURL
+	if finalURL == "" {
+		finalURL = page.URL()
+	}
+
+	html, err := page.HTML()
+	if err == nil {
+		if detected := coreautosolver.DetectChallengeIntent(finalTitle, finalURL, html); detected != nil {
+			if detected.ChallengeType != "" {
+				return detected.ChallengeType
+			}
+			if detected.Type != "" && detected.Type != coreautosolver.IntentNormal {
+				return string(detected.Type)
+			}
+		}
+	}
+
+	if result.Intent != "" && result.Intent != coreautosolver.IntentNormal {
+		return string(result.Intent)
+	}
+
+	return ""
 }

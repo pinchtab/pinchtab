@@ -120,10 +120,16 @@ func Load() *RuntimeConfig {
 
 		// AutoSolver defaults (disabled by default)
 		AutoSolver: AutoSolverConfig{
-			Enabled:     false,
-			MaxAttempts: 8,
-			Solvers:     []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
-			LLMFallback: false,
+			Enabled:           false,
+			AutoTrigger:       true,
+			TriggerOnNavigate: true,
+			TriggerOnAction:   true,
+			MaxAttempts:       8,
+			SolverTimeoutSec:  30,
+			RetryBaseDelayMs:  500,
+			RetryMaxDelayMs:   10000,
+			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			LLMFallback:       false,
 		},
 	}
 	finalizeProfileConfig(cfg)
@@ -459,8 +465,26 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.AutoSolver.Enabled != nil {
 		cfg.AutoSolver.Enabled = *fc.AutoSolver.Enabled
 	}
+	if fc.AutoSolver.AutoTrigger != nil {
+		cfg.AutoSolver.AutoTrigger = *fc.AutoSolver.AutoTrigger
+	}
+	if fc.AutoSolver.TriggerOnNavigate != nil {
+		cfg.AutoSolver.TriggerOnNavigate = *fc.AutoSolver.TriggerOnNavigate
+	}
+	if fc.AutoSolver.TriggerOnAction != nil {
+		cfg.AutoSolver.TriggerOnAction = *fc.AutoSolver.TriggerOnAction
+	}
 	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts > 0 {
 		cfg.AutoSolver.MaxAttempts = *fc.AutoSolver.MaxAttempts
+	}
+	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec > 0 {
+		cfg.AutoSolver.SolverTimeoutSec = *fc.AutoSolver.SolverTimeoutSec
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs >= 0 {
+		cfg.AutoSolver.RetryBaseDelayMs = *fc.AutoSolver.RetryBaseDelayMs
+	}
+	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs >= 0 {
+		cfg.AutoSolver.RetryMaxDelayMs = *fc.AutoSolver.RetryMaxDelayMs
 	}
 	if len(fc.AutoSolver.Solvers) > 0 {
 		cfg.AutoSolver.Solvers = append([]string(nil), fc.AutoSolver.Solvers...)

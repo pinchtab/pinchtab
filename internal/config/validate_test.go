@@ -701,6 +701,44 @@ func TestValidateFileConfig_TransferLimits(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_AutoSolverValidation(t *testing.T) {
+	maxAttempts := 0
+	solverTimeout := 0
+	retryBase := 2000
+	retryMax := 1000
+
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			MaxAttempts:      &maxAttempts,
+			SolverTimeoutSec: &solverTimeout,
+			RetryBaseDelayMs: &retryBase,
+			RetryMaxDelayMs:  &retryMax,
+			Solvers:          []string{"cloudflare", ""},
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver validation errors, got none")
+	}
+
+	joined := ""
+	for _, err := range errs {
+		joined += err.Error() + "\n"
+	}
+
+	for _, want := range []string{
+		"autoSolver.maxAttempts",
+		"autoSolver.solverTimeoutSec",
+		"autoSolver.retryBaseDelayMs/retryMaxDelayMs",
+		"autoSolver.solvers",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected error containing %q, got:\n%s", want, joined)
+		}
+	}
+}
+
 // TestValidateIDPIConfig_EmptyCustomPattern verifies that an empty or
 // whitespace-only custom pattern is rejected.
 func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {

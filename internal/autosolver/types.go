@@ -10,6 +10,7 @@ const (
 	IntentCaptcha    IntentType = "captcha"    // CAPTCHA challenge (Turnstile, reCAPTCHA, hCaptcha)
 	IntentLogin      IntentType = "login"      // Login form detected
 	IntentSignup     IntentType = "signup"     // Signup/registration form detected
+	IntentForm       IntentType = "form"       // Generic form-filling flow detected
 	IntentBlocked    IntentType = "blocked"    // Navigation blocked (interstitial, bot gate)
 	IntentOnboarding IntentType = "onboarding" // Multi-step onboarding flow
 	IntentNavigation IntentType = "navigation" // Multi-step navigation task

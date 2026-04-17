@@ -191,6 +191,47 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
+	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts < 1 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.maxAttempts",
+			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.AutoSolver.MaxAttempts),
+		})
+	}
+	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec <= 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.solverTimeoutSec",
+			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.AutoSolver.SolverTimeoutSec),
+		})
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryBaseDelayMs",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryBaseDelayMs),
+		})
+	}
+	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryMaxDelayMs",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryMaxDelayMs),
+		})
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && fc.AutoSolver.RetryMaxDelayMs != nil &&
+		*fc.AutoSolver.RetryBaseDelayMs > *fc.AutoSolver.RetryMaxDelayMs {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryBaseDelayMs/retryMaxDelayMs",
+			Message: fmt.Sprintf("retry base delay (%d) must be <= retry max delay (%d)", *fc.AutoSolver.RetryBaseDelayMs, *fc.AutoSolver.RetryMaxDelayMs),
+		})
+	}
+	for _, solverName := range fc.AutoSolver.Solvers {
+		if strings.TrimSpace(solverName) == "" {
+			errs = append(errs, ValidationError{
+				Field:   "autoSolver.solvers",
+				Message: "solver names must not be empty",
+			})
+			break
+		}
+	}
+
 	if fc.Observability.Activity.SessionIdleSec != nil && *fc.Observability.Activity.SessionIdleSec < 0 {
 		errs = append(errs, ValidationError{
 			Field:   "observability.activity.sessionIdleSec",

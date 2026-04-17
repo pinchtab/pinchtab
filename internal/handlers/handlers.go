@@ -36,7 +36,8 @@ type Handlers struct {
 	clipboard    clipboardStore
 
 	// Optional dependency injection (for unit testing)
-	evalJS func(ctx context.Context, expression string, out *string) error
+	evalJS           func(ctx context.Context, expression string, out *string) error
+	autoSolverRunner func(ctx context.Context, tabID string) error
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -95,6 +96,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	h.evalJS = func(ctx context.Context, expression string, out *string) error {
 		return chromedp.Run(ctx, chromedp.Evaluate(expression, out))
 	}
+	h.autoSolverRunner = h.runAutoSolver
 
 	// Clean up .tmp export files orphaned by a previous crash.
 	go CleanupStaleTmpExports(cfg.StateDir)

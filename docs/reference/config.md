@@ -230,7 +230,13 @@ Current nested file-config shape:
   },
   "autoSolver": {
     "enabled": false,
+    "autoTrigger": true,
+    "triggerOnNavigate": true,
+    "triggerOnAction": true,
     "maxAttempts": 8,
+    "solverTimeoutSec": 30,
+    "retryBaseDelayMs": 500,
+    "retryMaxDelayMs": 10000,
     "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
     "llmProvider": "",
     "llmFallback": false,
