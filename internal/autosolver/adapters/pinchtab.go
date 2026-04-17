@@ -13,6 +13,11 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
+var (
+	_ autosolver.Page           = (*PinchtabPage)(nil)
+	_ autosolver.ActionExecutor = (*PinchtabExecutor)(nil)
+)
+
 // PinchtabPage implements autosolver.Page by wrapping a chromedp tab context.
 type PinchtabPage struct {
 	ctx   context.Context

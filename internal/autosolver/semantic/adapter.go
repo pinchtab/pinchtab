@@ -164,6 +164,8 @@ func (a *Adapter) FindElement(ctx context.Context, page autosolver.Page, query s
 	}
 
 	best := result.Matches[0]
+	// Semantic refs are selector-compatible in this adapter, so keep both
+	// fields aligned for executors that prefer CSS selectors.
 	return &autosolver.ElementMatch{
 		Ref:        best.Ref,
 		Selector:   best.Ref,

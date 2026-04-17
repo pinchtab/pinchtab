@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	coreautosolver "github.com/pinchtab/pinchtab/internal/autosolver"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -45,6 +46,53 @@ func TestHandleListSolvers(t *testing.T) {
 	}
 	if !foundSemantic {
 		t.Errorf("expected semantic in solvers list, got %v", solvers)
+	}
+}
+
+func TestHandleAutoSolverConfig(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		AutoSolver: config.AutoSolverConfig{
+			Enabled:           true,
+			AutoTrigger:       true,
+			TriggerOnNavigate: false,
+			TriggerOnAction:   true,
+			MaxAttempts:       5,
+			SolverTimeoutSec:  42,
+			RetryBaseDelayMs:  200,
+			RetryMaxDelayMs:   1200,
+			Solvers:           []string{"cloudflare", "semantic", "jschallenge"},
+			LLMProvider:       "openai",
+			LLMFallback:       true,
+		},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/config/autosolver", nil)
+	w := httptest.NewRecorder()
+	h.HandleAutoSolverConfig(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if got, ok := resp["enabled"].(bool); !ok || !got {
+		t.Fatalf("enabled = %v, want true", resp["enabled"])
+	}
+	if got, ok := resp["triggerOnNavigate"].(bool); !ok || got {
+		t.Fatalf("triggerOnNavigate = %v, want false", resp["triggerOnNavigate"])
+	}
+	if got, ok := resp["solverTimeoutSec"].(float64); !ok || int(got) != 42 {
+		t.Fatalf("solverTimeoutSec = %v, want 42", resp["solverTimeoutSec"])
+	}
+	if got, ok := resp["llmProvider"].(string); !ok || got != "openai" {
+		t.Fatalf("llmProvider = %v, want openai", resp["llmProvider"])
+	}
+	if got, ok := resp["solvers"].([]any); !ok || len(got) == 0 {
+		t.Fatalf("solvers = %v, want non-empty array", resp["solvers"])
 	}
 }
 
@@ -186,5 +234,12 @@ func TestCloudflareSolverRegistered(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("cloudflare solver not registered: %v", names)
+	}
+}
+
+func TestDeriveChallengeType_NilPage(t *testing.T) {
+	result := &coreautosolver.Result{Intent: coreautosolver.IntentCaptcha}
+	if got := deriveChallengeType(result, nil); got != "" {
+		t.Fatalf("deriveChallengeType(nil page) = %q, want empty string", got)
 	}
 }

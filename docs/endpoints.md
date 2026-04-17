@@ -437,6 +437,7 @@ Console and error routes use query parameters:
 
 ```text
 GET  /solvers
+GET  /config/autosolver
 POST /solve
 POST /solve/{name}
 POST /tabs/{id}/solve
@@ -451,6 +452,31 @@ Solve body fields:
 - `tabId` optional
 - `maxAttempts` optional (defaults to `autoSolver.maxAttempts`, default `8`)
 - `timeout` optional in ms (auto-estimated when omitted, minimum `30000`)
+
+`GET /config/autosolver` returns effective autosolver runtime settings and the
+currently available solver list.
+
+Example response:
+
+```json
+{
+	"enabled": true,
+	"autoTrigger": true,
+	"triggerOnNavigate": true,
+	"triggerOnAction": true,
+	"maxAttempts": 8,
+	"solverTimeoutSec": 30,
+	"retryBaseDelayMs": 500,
+	"retryMaxDelayMs": 10000,
+	"solvers": ["cloudflare", "semantic", "jschallenge"],
+	"llmProvider": "",
+	"llmFallback": false
+}
+```
+
+Notes:
+
+- `capsolver` and `twocaptcha` appear in `solvers` only when their API keys are configured.
 
 ## Profiles And Instances
 

@@ -278,6 +278,19 @@ Current nested file-config shape:
 `autoSolver.external` is config-file-only. Capsolver and 2Captcha credentials
 are stored there.
 
+### Semantic Flow Environment Variables
+
+The semantic-first autosolver flow can consume optional environment variables
+for login/signup/form-filling steps:
+
+- `PINCHTAB_AUTOSOLVER_LOGIN_USER` or `PINCHTAB_AUTOSOLVER_LOGIN_EMAIL`: login username/email value
+- `PINCHTAB_AUTOSOLVER_LOGIN_PASS` or `PINCHTAB_AUTOSOLVER_LOGIN_PASSWORD`: login password value
+- `PINCHTAB_AUTOSOLVER_SIGNUP_NAME`: signup full-name value
+- `PINCHTAB_AUTOSOLVER_SIGNUP_EMAIL`: signup email value
+- `PINCHTAB_AUTOSOLVER_SIGNUP_PASSWORD`: signup password value
+- `PINCHTAB_AUTOSOLVER_FORM_FIELD1`: generic form field value (step 1)
+- `PINCHTAB_AUTOSOLVER_FORM_FIELD2` or `PINCHTAB_AUTOSOLVER_FORM_EMAIL`: generic form field/email value (step 2)
+
 The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the
 config file.

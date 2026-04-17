@@ -210,8 +210,43 @@ func (h *Handlers) HandleListSolvers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleAutoSolverConfig returns effective autosolver runtime settings.
+//
+// @Endpoint GET /config/autosolver
+// @Description Return effective autosolver configuration and available solver names
+// @Response 200 application/json Returns autosolver runtime config
+func (h *Handlers) HandleAutoSolverConfig(w http.ResponseWriter, r *http.Request) {
+	cfg := h.normalizedAutoSolverConfig()
+
+	autoTrigger := true
+	triggerOnNavigate := true
+	triggerOnAction := true
+	llmProvider := ""
+
+	if h != nil && h.Config != nil {
+		autoTrigger = h.Config.AutoSolver.AutoTrigger
+		triggerOnNavigate = h.Config.AutoSolver.TriggerOnNavigate
+		triggerOnAction = h.Config.AutoSolver.TriggerOnAction
+		llmProvider = h.Config.AutoSolver.LLMProvider
+	}
+
+	httpx.JSON(w, 200, map[string]any{
+		"enabled":           cfg.Enabled,
+		"autoTrigger":       autoTrigger,
+		"triggerOnNavigate": triggerOnNavigate,
+		"triggerOnAction":   triggerOnAction,
+		"maxAttempts":       cfg.MaxAttempts,
+		"solverTimeoutSec":  int(cfg.SolverTimeout / time.Second),
+		"retryBaseDelayMs":  int(cfg.RetryBaseDelay / time.Millisecond),
+		"retryMaxDelayMs":   int(cfg.RetryMaxDelay / time.Millisecond),
+		"solvers":           h.availableAutoSolverNames(),
+		"llmProvider":       llmProvider,
+		"llmFallback":       cfg.LLMFallback,
+	})
+}
+
 func deriveChallengeType(result *coreautosolver.Result, page coreautosolver.Page) string {
-	if result == nil {
+	if result == nil || page == nil {
 		return ""
 	}
 

@@ -211,6 +211,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /cookies", h.HandleGetCookies)
 	mux.HandleFunc("POST /cookies", h.HandleSetCookies)
 	mux.HandleFunc("GET /solvers", h.HandleListSolvers)
+	mux.HandleFunc("GET /config/autosolver", h.HandleAutoSolverConfig)
 	mux.HandleFunc("POST /solve", h.HandleSolve)
 	mux.HandleFunc("POST /solve/{name}", h.HandleSolve)
 	mux.HandleFunc("POST /tabs/{id}/solve", h.HandleTabSolve)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -224,15 +225,32 @@ func (as *AutoSolver) trySolvers(ctx context.Context, page Page, executor Action
 		}
 
 		filtered := make([]Solver, 0, len(as.config.Solvers))
+		missing := make([]string, 0, len(as.config.Solvers))
 		for _, name := range as.config.Solvers {
 			if s, ok := byName[name]; ok {
 				filtered = append(filtered, s)
+				continue
 			}
+			missing = append(missing, name)
 		}
 
 		// If config names don't match available solvers, preserve default behavior.
 		if len(filtered) > 0 {
+			if len(missing) > 0 {
+				slog.Debug("autosolver: some configured solvers unavailable; using matched subset",
+					"configured", as.config.Solvers,
+					"missing", missing)
+			}
 			orderedSolvers = filtered
+		} else {
+			available := make([]string, 0, len(byName))
+			for name := range byName {
+				available = append(available, name)
+			}
+			sort.Strings(available)
+			slog.Debug("autosolver: configured solver order not found, using priority order",
+				"configured", as.config.Solvers,
+				"available", available)
 		}
 	}
 
@@ -337,6 +355,10 @@ func (as *AutoSolver) trySemantic(ctx context.Context, page Page, executor Actio
 		planned := as.planSemanticAction(currentIntent, step, suggested)
 		action, err := as.prepareSemanticAction(semanticCtx, page, currentIntent, step, planned)
 		if err != nil {
+			slog.Debug("autosolver: semantic action preparation failed",
+				"step", step+1,
+				"intent", intentTypeOf(currentIntent),
+				"error", err)
 			entry.Status = StatusFailed
 			entry.Error = fmt.Sprintf("prepare semantic action: %v", err)
 			entry.Duration = time.Since(semanticStart)

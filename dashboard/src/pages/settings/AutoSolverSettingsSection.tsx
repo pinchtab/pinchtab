@@ -165,7 +165,7 @@ export function AutoSolverSettingsSection({
       </SettingRow>
       <SettingRow
         label="Solvers"
-        description="Comma-separated ordered list of solver names to try."
+        description="Comma-separated ordered list of solver names to try. Use GET /solvers or GET /config/autosolver to confirm runtime-available names."
       >
         <input
           value={listToCsv(backendConfig.autoSolver.solvers)}
@@ -211,7 +211,7 @@ export function AutoSolverSettingsSection({
       </SettingRow>
       <SettingRow
         label="External provider keys"
-        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file."
+        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file. Those providers appear in runtime solver lists only when keys are configured."
       >
         <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
           Open the config file above and set{" "}

@@ -387,6 +387,53 @@ func TestSolve_SemanticHighLevel_LoginFallbackWhenFindFails(t *testing.T) {
 	}
 }
 
+func TestSolve_SemanticSelfHealFailureFallsBackToRuleSolvers(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MaxAttempts = 1
+
+	semantic := &mockSemantic{
+		detectSeq: []*Intent{{Type: IntentCaptcha, Confidence: 0.9}},
+		action: &SuggestedAction{
+			Action:   ActionClick,
+			Selector: "#verify",
+		},
+		findMatch: &ElementMatch{Selector: "#verify"},
+	}
+
+	solver := &mockSolver{
+		name:      "rule-solver",
+		priority:  10,
+		canHandle: true,
+		solved:    true,
+	}
+
+	as := New(cfg, semantic, nil)
+	as.Registry().MustRegister(solver)
+
+	page := &mockPage{title: "Challenge Page", url: "https://example.com"}
+	executor := &mockExecutor{evaluateErr: fmt.Errorf("selector lookup failed")}
+
+	result, err := as.Solve(context.Background(), page, executor)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Solved {
+		t.Error("expected solve success via rule solver fallback")
+	}
+	if result.SolverUsed != "rule-solver" {
+		t.Errorf("expected solver 'rule-solver', got %q", result.SolverUsed)
+	}
+	if len(result.History) == 0 || result.History[0].Solver != "semantic" {
+		t.Fatalf("expected semantic attempt in history, got %+v", result.History)
+	}
+	if result.History[0].Status != StatusFailed {
+		t.Fatalf("expected semantic attempt to fail, got %q", result.History[0].Status)
+	}
+	if solver.solveCalls == 0 {
+		t.Fatal("expected rule solver to run after semantic self-heal failure")
+	}
+}
+
 func TestSolve_FallbackChain(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxAttempts = 1
@@ -608,6 +655,45 @@ func TestSolve_UsesConfiguredSolverOrder(t *testing.T) {
 	}
 	if solveOrder[0] != "third" {
 		t.Fatalf("expected configured solver order to try 'third' first, got %q", solveOrder[0])
+	}
+}
+
+func TestSolve_ConfiguredSolverOrderFallbackWhenNoConfiguredNamesMatch(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MaxAttempts = 1
+	cfg.RetryBaseDelay = time.Millisecond
+	cfg.Solvers = []string{"missing-one", "missing-two"}
+
+	var solveOrder []string
+	makeSolver := func(name string, priority int, solved bool) Solver {
+		return &trackingSolver{
+			name:      name,
+			priority:  priority,
+			canHandle: true,
+			solved:    solved,
+			order:     &solveOrder,
+		}
+	}
+
+	as := New(cfg, nil, nil)
+	as.Registry().MustRegister(makeSolver("first", 10, true))
+	as.Registry().MustRegister(makeSolver("second", 20, false))
+
+	page := &mockPage{title: "Just a moment...", url: "https://example.com"}
+	executor := &mockExecutor{}
+
+	result, err := as.Solve(context.Background(), page, executor)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Solved {
+		t.Fatal("expected solve success from priority-order fallback")
+	}
+	if len(solveOrder) != 1 {
+		t.Fatalf("expected one solver attempt, got %d (%v)", len(solveOrder), solveOrder)
+	}
+	if solveOrder[0] != "first" {
+		t.Fatalf("expected fallback to priority order starting with 'first', got %q", solveOrder[0])
 	}
 }
 
