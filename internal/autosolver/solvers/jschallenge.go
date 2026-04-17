@@ -3,7 +3,6 @@ package solvers
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
@@ -31,11 +30,6 @@ func (s *JSChallenge) CanHandle(_ context.Context, page autosolver.Page) (bool, 
 func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor autosolver.ActionExecutor) (*autosolver.Result, error) {
 	result := &autosolver.Result{SolverUsed: s.Name()}
 
-	startTitle := strings.TrimSpace(strings.ToLower(page.Title()))
-	if startTitle == "" {
-		startTitle = "about:blank"
-	}
-
 	// Step 1: wait briefly for JS anti-bot scripts to execute naturally.
 	if err := executor.WaitFor(ctx, "body", 2*time.Second); err != nil {
 		result.Error = fmt.Sprintf("wait for body: %v", err)
@@ -52,9 +46,8 @@ func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor 
 		"#challenge-stage button",
 		"form button",
 	} {
-		if err := clickIfExists(ctx, executor, selector); err != nil {
-			// Non-fatal; continue probing other controls.
-		}
+		// Non-fatal; continue probing other controls.
+		_ = clickIfExists(ctx, executor, selector)
 	}
 
 	// Step 3: poll for resolution by challenge intent re-check.
