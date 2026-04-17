@@ -13,6 +13,7 @@ import {
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
 
 type WorkspaceTab = "agents" | "activities";
+const ANONYMOUS_AGENT_ID = "anonymous";
 
 interface Props {
   initialFilters?: Partial<ActivityFilters>;
@@ -22,7 +23,6 @@ interface Props {
   requireSelectedAgent?: boolean;
   showAllAgentsOption?: boolean;
   showAgentFilter?: boolean;
-  simplifyEventRows?: boolean;
   copyTabId?: boolean;
   preferKnownAgents?: boolean;
   useAgentEventStore?: boolean;
@@ -49,7 +49,7 @@ function toDashboardActivityEvent(
   event: ActivityEvent,
 ): DashboardActivityEvent {
   const details = (event.details ?? {}) as Record<string, unknown>;
-  return {
+  return normalizeDashboardActivityEvent({
     channel: event.channel,
     message: event.message,
     progress: event.progress,
@@ -58,7 +58,6 @@ function toDashboardActivityEvent(
     source: detailString(details, "source"),
     requestId: detailString(details, "requestId") || event.id,
     sessionId: detailString(details, "sessionId"),
-    actorId: detailString(details, "actorId"),
     agentId: event.agentId || "",
     method: event.method,
     path: event.path,
@@ -72,7 +71,27 @@ function toDashboardActivityEvent(
     action: detailString(details, "action"),
     engine: detailString(details, "engine"),
     ref: detailString(details, "ref"),
+  });
+}
+
+function normalizeDashboardActivityEvent(
+  event: DashboardActivityEvent,
+): DashboardActivityEvent {
+  const source = (event.source || "").trim().toLowerCase();
+  const agentId = (event.agentId || "").trim();
+  return {
+    ...event,
+    source,
+    agentId: source === "client" && !agentId ? ANONYMOUS_AGENT_ID : agentId,
   };
+}
+
+function eventIdentity(event: DashboardActivityEvent): string {
+  const agentId = (event.agentId || "").trim();
+  if (agentId) {
+    return agentId;
+  }
+  return "";
 }
 
 function matchesVisibleEvent(
@@ -81,18 +100,15 @@ function matchesVisibleEvent(
   hiddenSources: string[],
   requireAgentIdentity: boolean,
 ): boolean {
-  if (hiddenSources.includes(event.source)) {
+  const source = (event.source || "").trim().toLowerCase();
+  const identity = eventIdentity(event);
+  if (source !== "client") {
     return false;
   }
-  // Hide API management calls (sessions, activity queries, health) from the stream
-  if (
-    event.path.startsWith("/api/") ||
-    event.path === "/health" ||
-    event.path === "/metrics"
-  ) {
+  if (hiddenSources.includes(source)) {
     return false;
   }
-  if (requireAgentIdentity && !(event.agentId || "").trim()) {
+  if (requireAgentIdentity && !identity) {
     return false;
   }
   if (filters.agentId && event.agentId !== filters.agentId) {
@@ -128,6 +144,34 @@ function matchesVisibleEvent(
   return true;
 }
 
+function withClearedSessionFilter(filters: ActivityFilters): ActivityFilters {
+  return {
+    ...filters,
+    sessionId: "",
+  };
+}
+
+function mergeDashboardActivityEvents(
+  first: DashboardActivityEvent[],
+  second: DashboardActivityEvent[],
+): DashboardActivityEvent[] {
+  const merged = new Map<string, DashboardActivityEvent>();
+
+  for (const event of first) {
+    const key = event.requestId || `${event.timestamp}:${event.path}`;
+    merged.set(key, event);
+  }
+  for (const event of second) {
+    const key = event.requestId || `${event.timestamp}:${event.path}`;
+    merged.set(key, event);
+  }
+
+  return [...merged.values()].sort(
+    (left, right) =>
+      new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime(),
+  );
+}
+
 export default function AgentActivityWorkspace({
   initialFilters,
   defaultSidebarTab = "agents",
@@ -136,7 +180,6 @@ export default function AgentActivityWorkspace({
   requireSelectedAgent = false,
   showAllAgentsOption = true,
   showAgentFilter = true,
-  simplifyEventRows = false,
   copyTabId = false,
   preferKnownAgents = false,
   useAgentEventStore = false,
@@ -158,9 +201,18 @@ export default function AgentActivityWorkspace({
 
   const [sidebarTab, setSidebarTab] = useState<WorkspaceTab>(defaultSidebarTab);
   const [filters, setFilters] = useState<ActivityFilters>(initialBaseFilters);
-  const [activityEvents, setActivityEvents] = useState<
-    DashboardActivityEvent[]
-  >([]);
+  const [activityScopedAgentId, setActivityScopedAgentId] = useState(
+    initialBaseFilters.agentId,
+  );
+  const [activityScopedSessionId, setActivityScopedSessionId] = useState(
+    initialBaseFilters.sessionId,
+  );
+  const [catalogEvents, setCatalogEvents] = useState<DashboardActivityEvent[]>(
+    [],
+  );
+  const [threadEvents, setThreadEvents] = useState<DashboardActivityEvent[]>(
+    [],
+  );
   const [tabs, setTabs] = useState<InstanceTab[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
@@ -168,13 +220,28 @@ export default function AgentActivityWorkspace({
   const [error, setError] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const deferredFilters = useDeferredValue(filters);
-  const activityQuery = useMemo(
-    () => buildActivityQuery(deferredFilters),
-    [deferredFilters],
-  );
-  const activityQueryKey = JSON.stringify(activityQuery);
   const usesAgentThreadView = useAgentEventStore && sidebarTab === "agents";
+  const deferredFilters = useDeferredValue(filters);
+  const threadAgentId = deferredFilters.agentId.trim();
+  const catalogQuery = useMemo(() => {
+    const q = buildActivityQuery(deferredFilters);
+    if (usesAgentThreadView) {
+      delete q.agentId;
+      delete q.sessionId;
+    }
+    q.source = "client";
+    return q;
+  }, [deferredFilters, usesAgentThreadView]);
+  const catalogQueryKey = JSON.stringify(catalogQuery);
+  const threadQuery = useMemo(() => {
+    if (!usesAgentThreadView || !threadAgentId) {
+      return null;
+    }
+    const q = buildActivityQuery(withClearedSessionFilter(deferredFilters));
+    q.source = "client";
+    return q;
+  }, [deferredFilters, threadAgentId, usesAgentThreadView]);
+  const threadQueryKey = JSON.stringify(threadQuery);
 
   useEffect(() => {
     setSidebarTab(defaultSidebarTab);
@@ -185,6 +252,8 @@ export default function AgentActivityWorkspace({
     setFilters((current) =>
       sameActivityFilters(current, next) ? current : next,
     );
+    setActivityScopedAgentId(next.agentId);
+    setActivityScopedSessionId(next.sessionId);
   }, [initialBaseFilters]);
 
   useEffect(() => {
@@ -220,21 +289,16 @@ export default function AgentActivityWorkspace({
   }, []);
 
   useEffect(() => {
-    if (usesAgentThreadView) {
-      setActivityLoading(false);
-      return;
-    }
-
     let cancelled = false;
     const load = async () => {
       setActivityLoading(true);
       setError("");
       try {
-        const response = await fetchActivity(activityQuery);
+        const response = await fetchActivity(catalogQuery);
         if (cancelled) {
           return;
         }
-        setActivityEvents(response.events);
+        setCatalogEvents(response.events.map(normalizeDashboardActivityEvent));
       } catch (err) {
         if (cancelled) {
           return;
@@ -253,10 +317,11 @@ export default function AgentActivityWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [activityQuery, activityQueryKey, refreshNonce, usesAgentThreadView]);
+  }, [catalogQuery, catalogQueryKey, refreshNonce]);
 
   useEffect(() => {
-    if (!usesAgentThreadView || !filters.agentId) {
+    if (!usesAgentThreadView || !threadAgentId) {
+      setThreadEvents([]);
       setAgentLoading(false);
       return;
     }
@@ -266,11 +331,17 @@ export default function AgentActivityWorkspace({
       setAgentLoading(true);
       setError("");
       try {
-        const response = await api.fetchAgent(filters.agentId, "both");
+        const [detail, response] = await Promise.all([
+          api.fetchAgent(threadAgentId),
+          threadQuery
+            ? fetchActivity(threadQuery)
+            : Promise.resolve({ count: 0, events: [] }),
+        ]);
         if (cancelled) {
           return;
         }
-        hydrateAgentEvents(filters.agentId, response.events);
+        hydrateAgentEvents(detail.agent.id, detail.events);
+        setThreadEvents(response.events.map(normalizeDashboardActivityEvent));
       } catch (err) {
         if (cancelled) {
           return;
@@ -289,7 +360,14 @@ export default function AgentActivityWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [filters.agentId, hydrateAgentEvents, refreshNonce, usesAgentThreadView]);
+  }, [
+    hydrateAgentEvents,
+    refreshNonce,
+    threadAgentId,
+    threadQuery,
+    threadQueryKey,
+    usesAgentThreadView,
+  ]);
 
   const filteredInstances = useMemo(
     () =>
@@ -309,9 +387,20 @@ export default function AgentActivityWorkspace({
     [filters.instanceId, tabs],
   );
 
+  const agentOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const event of catalogEvents) {
+      const agentId = (event.agentId || "").trim();
+      if (agentId) {
+        ids.add(agentId);
+      }
+    }
+    return Array.from(ids).sort();
+  }, [catalogEvents]);
+
   const visibleEvents = useMemo(
     () =>
-      activityEvents.filter((event) =>
+      catalogEvents.filter((event) =>
         matchesVisibleEvent(
           event,
           filters,
@@ -319,28 +408,94 @@ export default function AgentActivityWorkspace({
           requireAgentIdentity,
         ),
       ),
-    [activityEvents, filters, normalizedHiddenSources, requireAgentIdentity],
+    [catalogEvents, filters, normalizedHiddenSources, requireAgentIdentity],
   );
 
-  const agentThreadEvents = useMemo(() => {
-    if (!filters.agentId) {
-      return [] as DashboardActivityEvent[];
-    }
+  const sessionCatalogEvents = useMemo(
+    () =>
+      catalogEvents.filter((event) =>
+        matchesVisibleEvent(
+          event,
+          withClearedSessionFilter(filters),
+          normalizedHiddenSources,
+          requireAgentIdentity,
+        ),
+      ),
+    [catalogEvents, filters, normalizedHiddenSources, requireAgentIdentity],
+  );
 
-    return (agentEventsById[filters.agentId] ?? [])
-      .map(toDashboardActivityEvent)
-      .filter((event) =>
+  const agentCatalogEvents = useMemo(
+    () =>
+      catalogEvents.filter((event) =>
         matchesVisibleEvent(
           event,
           {
-            ...filters,
+            ...withClearedSessionFilter(filters),
             agentId: "",
           },
           normalizedHiddenSources,
           requireAgentIdentity,
         ),
+      ),
+    [catalogEvents, filters, normalizedHiddenSources, requireAgentIdentity],
+  );
+
+  const agentThreadBaseEvents = useMemo(() => {
+    const liveEvents = (agentEventsById[filters.agentId] ?? []).map(
+      toDashboardActivityEvent,
+    );
+    return mergeDashboardActivityEvents(threadEvents, liveEvents);
+  }, [agentEventsById, filters.agentId, threadEvents]);
+
+  const agentThreadEvents = useMemo(() => {
+    const effectiveFilters = filters;
+
+    return agentThreadBaseEvents.filter((event) => {
+      if (
+        effectiveFilters.agentId &&
+        eventIdentity(event).toLowerCase() !==
+          effectiveFilters.agentId.toLowerCase()
+      ) {
+        return false;
+      }
+      return matchesVisibleEvent(
+        event,
+        effectiveFilters,
+        normalizedHiddenSources,
+        requireAgentIdentity,
       );
-  }, [agentEventsById, filters, normalizedHiddenSources, requireAgentIdentity]);
+    });
+  }, [
+    agentThreadBaseEvents,
+    filters,
+    normalizedHiddenSources,
+    requireAgentIdentity,
+  ]);
+
+  const agentThreadSessionCatalogEvents = useMemo(() => {
+    const effectiveFilters = withClearedSessionFilter(filters);
+
+    return agentThreadBaseEvents.filter((event) => {
+      if (
+        effectiveFilters.agentId &&
+        eventIdentity(event).toLowerCase() !==
+          effectiveFilters.agentId.toLowerCase()
+      ) {
+        return false;
+      }
+      return matchesVisibleEvent(
+        event,
+        effectiveFilters,
+        normalizedHiddenSources,
+        requireAgentIdentity,
+      );
+    });
+  }, [
+    agentThreadBaseEvents,
+    filters,
+    normalizedHiddenSources,
+    requireAgentIdentity,
+  ]);
 
   const displayedEvents = usesAgentThreadView
     ? agentThreadEvents
@@ -368,17 +523,18 @@ export default function AgentActivityWorkspace({
 
     const sourceEvents =
       usesAgentThreadView && filters.agentId
-        ? (agentEventsById[filters.agentId] ?? []).map(toDashboardActivityEvent)
-        : visibleEvents;
+        ? agentThreadSessionCatalogEvents
+        : sessionCatalogEvents;
 
     for (const event of sourceEvents) {
       const sid = event.sessionId?.trim();
       if (!sid) continue;
+      const identity = eventIdentity(event);
 
       const existing = bySession.get(sid);
       if (!existing) {
         bySession.set(sid, {
-          agentId: event.agentId || "",
+          agentId: identity,
           earliest: event.timestamp,
           latest: event.timestamp,
         });
@@ -409,8 +565,8 @@ export default function AgentActivityWorkspace({
   }, [
     usesAgentThreadView,
     filters.agentId,
-    agentEventsById,
-    visibleEvents,
+    agentThreadSessionCatalogEvents,
+    sessionCatalogEvents,
     agentSessions,
   ]);
 
@@ -444,17 +600,17 @@ export default function AgentActivityWorkspace({
   const derivedAgents = useMemo<Agent[]>(() => {
     const byId = new Map<string, Agent>();
 
-    for (const event of visibleEvents) {
-      const agentId = event.agentId?.trim();
-      if (!agentId) {
+    for (const event of agentCatalogEvents) {
+      const identity = eventIdentity(event);
+      if (!identity) {
         continue;
       }
 
-      const existing = byId.get(agentId);
+      const existing = byId.get(identity);
       if (!existing) {
-        byId.set(agentId, {
-          id: agentId,
-          name: agentId,
+        byId.set(identity, {
+          id: identity,
+          name: identity,
           connectedAt: event.timestamp,
           lastActivity: event.timestamp,
           requestCount: 1,
@@ -476,23 +632,28 @@ export default function AgentActivityWorkspace({
         new Date(right.lastActivity || right.connectedAt).getTime() -
         new Date(left.lastActivity || left.connectedAt).getTime(),
     );
-  }, [visibleEvents]);
+  }, [agentCatalogEvents]);
 
   const visibleAgents = useMemo<Agent[]>(() => {
     if (!preferKnownAgents) {
       return derivedAgents;
     }
 
-    return [...agents]
-      .filter((agent) => {
-        if (requireAgentIdentity && !(agent.id || "").trim()) {
-          return false;
-        }
-        if (requireAgentIdentity && agent.id === "anonymous") {
-          return false;
-        }
-        return true;
-      })
+    const merged = new Map<string, Agent>();
+    for (const agent of derivedAgents) {
+      merged.set(agent.id, agent);
+    }
+    for (const agent of agents) {
+      merged.set(agent.id, {
+        ...merged.get(agent.id),
+        ...agent,
+      });
+    }
+
+    return [...merged.values()]
+      .filter((agent) =>
+        !requireAgentIdentity ? true : !!(agent.id || "").trim(),
+      )
       .sort(
         (left, right) =>
           new Date(right.lastActivity || right.connectedAt).getTime() -
@@ -500,21 +661,10 @@ export default function AgentActivityWorkspace({
       );
   }, [agents, derivedAgents, preferKnownAgents, requireAgentIdentity]);
 
-  const summary = useMemo(() => {
-    const agentsSeen = new Set(
-      displayedEvents.map((event) => event.agentId).filter(Boolean),
-    );
-    const tabsSeen = new Set(
-      displayedEvents.map((event) => event.tabId).filter(Boolean),
-    );
-    const instancesSeen = new Set(
-      displayedEvents.map((event) => event.instanceId).filter(Boolean),
-    );
-
-    return `${displayedEvents.length} events • ${agentsSeen.size} agents • ${tabsSeen.size} tabs • ${instancesSeen.size} instances`;
-  }, [displayedEvents]);
-
   useEffect(() => {
+    if (sidebarTab !== "agents") {
+      return;
+    }
     if (!requireSelectedAgent || visibleAgents.length === 0) {
       return;
     }
@@ -523,28 +673,31 @@ export default function AgentActivityWorkspace({
       (agent) => agent.id === filters.agentId,
     );
     const targetAgent = hasAgent ? filters.agentId : visibleAgents[0].id;
-    const agentSessionList = derivedSessions.filter(
-      (s) => s.agentId === targetAgent,
-    );
-    const latestSession =
-      agentSessionList.length > 0 ? agentSessionList[0].id : "";
-
-    if (!hasAgent || (!filters.sessionId && latestSession)) {
+    if (!hasAgent) {
       setFilters((current) => ({
         ...current,
         agentId: targetAgent,
-        sessionId: latestSession,
+        sessionId: "",
       }));
     }
-  }, [
-    filters.agentId,
-    filters.sessionId,
-    requireSelectedAgent,
-    visibleAgents,
-    derivedSessions,
-  ]);
+  }, [filters.agentId, requireSelectedAgent, sidebarTab, visibleAgents]);
 
   const updateFilter = (key: keyof ActivityFilters, value: string) => {
+    if (sidebarTab === "activities") {
+      if (key === "agentId") {
+        setActivityScopedAgentId(value);
+        setActivityScopedSessionId("");
+        setFilters((current) => ({
+          ...current,
+          agentId: value,
+          sessionId: "",
+        }));
+        return;
+      }
+      if (key === "sessionId") {
+        setActivityScopedSessionId(value);
+      }
+    }
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
@@ -576,6 +729,10 @@ export default function AgentActivityWorkspace({
     const resetBaseFilters = clearToInitialFilters
       ? initialBaseFilters
       : defaultActivityFilters;
+    if (sidebarTab === "activities") {
+      setActivityScopedAgentId(resetBaseFilters.agentId);
+      setActivityScopedSessionId(resetBaseFilters.sessionId);
+    }
     setFilters((current) => ({
       ...resetBaseFilters,
       agentId:
@@ -586,10 +743,12 @@ export default function AgentActivityWorkspace({
   };
 
   const sidebarLoading =
-    sidebarTab === "activities" ? activityLoading : agentLoading;
+    sidebarTab === "activities"
+      ? activityLoading
+      : activityLoading || agentLoading;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden xl:flex-row">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden lg:flex-row">
       <AgentWorkspaceSidebar
         sidebarTab={sidebarTab}
         visibleAgents={visibleAgents}
@@ -601,13 +760,23 @@ export default function AgentActivityWorkspace({
         profiles={profiles}
         filteredInstances={filteredInstances}
         visibleTabs={visibleTabs}
+        agentOptions={agentOptions}
         loading={sidebarLoading}
-        onSidebarTabChange={setSidebarTab}
-        onSelectAgent={(agentId, autoSessionId) => {
+        onSidebarTabChange={(nextTab) => {
+          setSidebarTab(nextTab);
+          if (nextTab === "activities") {
+            setFilters((current) => ({
+              ...current,
+              agentId: activityScopedAgentId,
+              sessionId: activityScopedSessionId,
+            }));
+          }
+        }}
+        onSelectAgent={(agentId) => {
           setFilters((current) => ({
             ...current,
             agentId,
-            sessionId: autoSessionId || "",
+            sessionId: "",
           }));
         }}
         onSelectSession={(sessionId) => {
@@ -624,17 +793,11 @@ export default function AgentActivityWorkspace({
       />
 
       <AgentStreamPanel
-        filters={filters}
         events={displayedEvents}
         sessions={derivedSessions}
-        summary={summary}
         error={error}
-        loading={usesAgentThreadView ? agentLoading : activityLoading}
+        loading={activityLoading || agentLoading}
         copyTabId={copyTabId}
-        hideAgentFilter={requireSelectedAgent}
-        hideSessionFilter={requireSelectedAgent}
-        simplifyMeta={simplifyEventRows}
-        onClearFilters={clearFilters}
         onFilterChange={updateFilter}
       />
     </div>

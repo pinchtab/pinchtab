@@ -63,23 +63,32 @@ jobs:
       ref: ${{ needs.validate.outputs.sha }}
       version: ${{ needs.validate.outputs.version }}
 
-  e2e-api-full:
+  e2e-api-extended:
     needs: validate
     uses: ./.github/workflows/reusable-e2e.yml
     with:
       ref: ${{ needs.validate.outputs.sha }}
-      suite: api-full
+      suite: api-extended
       summary_title: Release E2E (API)
       timeout_minutes: 30
 
-  e2e-cli-full:
+  e2e-cli-extended:
     needs: validate
     uses: ./.github/workflows/reusable-e2e.yml
     with:
       ref: ${{ needs.validate.outputs.sha }}
-      suite: cli-full
+      suite: cli-extended
       summary_title: Release E2E (CLI)
       timeout_minutes: 30
+
+  e2e-infra-extended:
+    needs: validate
+    uses: ./.github/workflows/reusable-e2e.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+      suite: infra-extended
+      summary_title: Release E2E (Infra)
+      timeout_minutes: 35
 
   docker-smoke:
     needs: validate
@@ -148,8 +157,9 @@ jobs:
       - dashboard-checks
       - docs-checks
       - npm-checks
-      - e2e-api-full
-      - e2e-cli-full
+      - e2e-api-extended
+      - e2e-cli-extended
+      - e2e-infra-extended
       - docker-smoke
       - publish-dry-run
     if: >-
@@ -178,11 +188,12 @@ jobs:
           echo "| npm | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Publish dry run | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docker smoke | ${{ needs.docker-smoke.result == 'success' && '✅' || '⚠️ ' }}${{ needs.docker-smoke.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| E2E API | ${{ needs.e2e-api-full.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-api-full.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| E2E CLI | ${{ needs.e2e-cli-full.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-cli-full.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| E2E API | ${{ needs.e2e-api-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-api-extended.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| E2E CLI | ${{ needs.e2e-cli-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-cli-extended.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| E2E Infra | ${{ needs.e2e-infra-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-infra-extended.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.e2e-api-full.result }}" != "success" ] || [ "${{ needs.e2e-cli-full.result }}" != "success" ] || [ "${{ needs.docker-smoke.result }}" != "success" ]; then
+          if [ "${{ needs.e2e-api-extended.result }}" != "success" ] || [ "${{ needs.e2e-cli-extended.result }}" != "success" ] || [ "${{ needs.e2e-infra-extended.result }}" != "success" ] || [ "${{ needs.docker-smoke.result }}" != "success" ]; then
             echo "⚠️ **Some checks failed — review artifacts before approving.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 

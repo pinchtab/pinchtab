@@ -74,10 +74,7 @@ func runDashboardCommand(cfgPort, cfgBind, cfgToken string, noOpen bool, portOve
 }
 
 func resolvePort(cfgPort, override string) (string, error) {
-	port := "9870"
-	if cfgPort != "" {
-		port = cfgPort
-	}
+	port := cfgPort
 	if override != "" {
 		port = override
 	}

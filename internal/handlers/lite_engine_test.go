@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 func newLiteTestPage() *httptest.Server {
@@ -133,5 +135,36 @@ func TestHandleText_LiteRespectsTabID(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "first page") {
 		t.Fatalf("expected first page text, got %q", w.Body.String())
+	}
+}
+
+func TestHandleNavigate_LiteBlocksDNSRebinding(t *testing.T) {
+	lite := engine.NewLiteEngine()
+	defer func() { _ = lite.Close() }()
+
+	h := New(&mockBridge{}, &config.RuntimeConfig{Engine: "lite"}, nil, nil, nil)
+	h.Router = engine.NewRouter(engine.ModeLite, lite)
+
+	resolveCount := 0
+	oldResolve := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(context.Context, string, string) ([]net.IP, error) {
+		resolveCount++
+		if resolveCount == 1 {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return []net.IP{net.ParseIP("10.0.0.7")}, nil
+	}
+	t.Cleanup(func() { netguard.ResolveHostIPs = oldResolve })
+
+	req := httptest.NewRequest("POST", "/navigate", strings.NewReader(`{"url":"https://safe.example/index.html"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for rebinding attempt, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "blocked remote IP") {
+		t.Fatalf("expected blocked remote IP error, got %s", w.Body.String())
 	}
 }

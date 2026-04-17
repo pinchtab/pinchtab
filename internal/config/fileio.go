@@ -31,6 +31,7 @@ func LoadFileConfig() (*FileConfig, string, error) {
 	if err := json.Unmarshal(data, fc); err != nil {
 		return nil, configPath, fmt.Errorf("failed to parse config: %w", err)
 	}
+	NormalizeFileConfigAliasesFromJSON(fc, data)
 
 	return fc, configPath, nil
 }
@@ -116,4 +117,33 @@ func loadLegacyFileConfig(data []byte) (*FileConfig, error) {
 	}
 
 	return fc, nil
+}
+
+func NormalizeFileConfigAliasesFromJSON(fc *FileConfig, data []byte) {
+	if fc == nil {
+		return
+	}
+
+	type rawIDPI struct {
+		AllowedDomains *[]string `json:"allowedDomains"`
+	}
+	type rawSecurity struct {
+		AllowedDomains *[]string `json:"allowedDomains"`
+		IDPI           *rawIDPI  `json:"idpi"`
+	}
+	type rawConfig struct {
+		Security *rawSecurity `json:"security"`
+	}
+
+	var raw rawConfig
+	if err := json.Unmarshal(data, &raw); err != nil || raw.Security == nil {
+		return
+	}
+
+	switch {
+	case raw.Security.AllowedDomains != nil:
+		fc.Security.AllowedDomains = append([]string(nil), (*raw.Security.AllowedDomains)...)
+	case raw.Security.IDPI != nil && raw.Security.IDPI.AllowedDomains != nil:
+		fc.Security.AllowedDomains = append([]string(nil), (*raw.Security.IDPI.AllowedDomains)...)
+	}
 }

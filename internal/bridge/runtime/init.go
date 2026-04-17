@@ -133,20 +133,12 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		opts = append(opts, chromedp.Flag("headless", false))
 	}
 
-	if len(cfg.ExtensionPaths) > 0 {
-		var validPaths []string
-		for _, path := range cfg.ExtensionPaths {
-			if _, err := os.Stat(path); err == nil {
-				validPaths = append(validPaths, path)
-			}
-		}
-		if len(validPaths) > 0 {
-			joined := strings.Join(validPaths, ",")
-			opts = append(opts, chromedp.Flag("disable-extensions", false))
-			opts = append(opts, chromedp.Flag("load-extension", joined))
-			opts = append(opts, chromedp.Flag("disable-extensions-except", joined))
-			slog.Info("loading extensions", "paths", joined)
-		}
+	if validPaths := existingExtensionPaths(cfg.ExtensionPaths); len(validPaths) > 0 {
+		joined := strings.Join(validPaths, ",")
+		opts = append(opts, chromedp.Flag("disable-extensions", false))
+		opts = append(opts, chromedp.Flag("load-extension", joined))
+		opts = append(opts, chromedp.Flag("disable-extensions-except", joined))
+		slog.Info("loading extensions", "paths", joined)
 	} else {
 		opts = append(opts, chromedp.Flag("disable-extensions", true))
 	}
@@ -230,8 +222,8 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 			}
 		}
 
-		if isStartupTimeout(err) && debugPort > 0 {
-			slog.Warn("chrome startup timeout (Chrome 145+ regression), trying direct-launch fallback", "port", debugPort)
+		if shouldRetryChromeStartupWithDirectLaunch(parentCtx, err) && debugPort > 0 {
+			slog.Warn("chrome startup failed via allocator, trying direct-launch fallback", "port", debugPort, "error", errMsg)
 			time.Sleep(500 * time.Millisecond)
 			return startChromeWithRemoteAllocator(parentCtx, cfg, bundle, debugPort, bundle.Script)
 		}
@@ -262,6 +254,19 @@ func isStartupTimeout(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context deadline exceeded")
+}
+
+func shouldRetryChromeStartupWithDirectLaunch(parentCtx context.Context, err error) bool {
+	if isStartupTimeout(err) {
+		return true
+	}
+	if parentCtx != nil && parentCtx.Err() != nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	return strings.Contains(err.Error(), "context canceled")
 }
 
 func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
@@ -395,13 +400,26 @@ func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 	return buildChromeArgsWithBundle(cfg, nil, port)
 }
 
+func existingExtensionPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	validPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			validPaths = append(validPaths, path)
+		}
+	}
+	return validPaths
+}
+
 func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle, port int) []string {
 	bundle = ensureStealthBundle(cfg, bundle)
 	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, BaseChromeFlagArgs()...)
 	args = append(args, bundle.Launch.Args...)
 
-	if len(cfg.ExtensionPaths) > 0 {
-		joined := strings.Join(cfg.ExtensionPaths, ",")
+	if validPaths := existingExtensionPaths(cfg.ExtensionPaths); len(validPaths) > 0 {
+		joined := strings.Join(validPaths, ",")
 		args = append(args, "--load-extension="+joined, "--disable-extensions-except="+joined)
 	} else {
 		args = append(args, "--disable-extensions")

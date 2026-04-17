@@ -38,6 +38,13 @@
     "allowDownload": true,
     "allowUpload": true,
     "allowStateExport": true,
+    "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "fixtures",
+      "httpbin.org"
+    ],
     "attach": {
       "enabled": true,
       "allowHosts": [
@@ -56,14 +63,7 @@
     "idpi": {
       "enabled": true,
       "strictMode": false,
-      "scanContent": true,
-      "allowedDomains": [
-        "localhost",
-        "127.0.0.1",
-        "::1",
-        "fixtures",
-        "httpbin.org"
-      ]
+      "scanContent": true
     }
   }
 }

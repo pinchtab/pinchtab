@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -63,6 +64,8 @@ func (h *Handlers) HandleClipboardRead(w http.ResponseWriter, r *http.Request) {
 
 	text := h.clipboard.Read()
 
+	h.recordActivity(r, activity.Update{Action: "clipboard.read"})
+
 	slog.Info("clipboard: read",
 		"textLen", len(text),
 		"remoteAddr", r.RemoteAddr,
@@ -102,6 +105,8 @@ func (h *Handlers) HandleClipboardWrite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	h.clipboard.Write(*req.Text)
+
+	h.recordActivity(r, activity.Update{Action: "clipboard.write"})
 
 	slog.Info("clipboard: write",
 		"textLen", len(*req.Text),

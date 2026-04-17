@@ -175,6 +175,7 @@ Response shape:
   "profileName": "bridge-eu-west-1",
   "port": "",
   "url": "http://10.0.12.24:9868",
+  "mode": "headed",
   "headless": false,
   "status": "running",
   "attached": true,

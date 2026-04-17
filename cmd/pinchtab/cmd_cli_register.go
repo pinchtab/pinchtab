@@ -1,6 +1,11 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"os"
+
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/spf13/cobra"
+)
 
 func init() {
 	registerBrowserCommands()
@@ -15,14 +20,17 @@ func registerBrowserCommands() {
 		forwardCmd,
 		reloadCmd,
 		snapCmd,
+		frameCmd,
 		clickCmd,
 		dblclickCmd,
+		dragCmd,
 		typeCmd,
 		screenshotCmd,
 		tabsCmd,
 		pressCmd,
 		fillCmd,
 		hoverCmd,
+		mouseCmd,
 		focusCmd,
 		scrollCmd,
 		evalCmd,
@@ -53,6 +61,7 @@ func registerBrowserCommands() {
 	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
+	mouseCmd.AddCommand(mouseMoveCmd, mouseDownCmd, mouseUpCmd, mouseWheelCmd)
 
 	configureBrowserFlags()
 
@@ -63,14 +72,17 @@ func registerBrowserCommands() {
 		forwardCmd,
 		reloadCmd,
 		snapCmd,
+		frameCmd,
 		clickCmd,
 		dblclickCmd,
+		dragCmd,
 		typeCmd,
 		screenshotCmd,
 		tabsCmd,
 		pressCmd,
 		fillCmd,
 		hoverCmd,
+		mouseCmd,
 		focusCmd,
 		scrollCmd,
 		evalCmd,
@@ -116,12 +128,34 @@ func configureBrowserFlags() {
 	clickCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(clickCmd, "click")
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
+	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
+	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
 
 	dblclickCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(dblclickCmd, "dblclick")
 
 	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(hoverCmd, "hover")
+
+	mouseMoveCmd.Flags().String("css", "", "CSS selector instead of ref")
+	addPointFlags(mouseMoveCmd, bridge.ActionMouseMove)
+
+	mouseDownCmd.Flags().String("css", "", "CSS selector instead of ref")
+	addPointFlags(mouseDownCmd, bridge.ActionMouseDown)
+	mouseDownCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
+
+	mouseUpCmd.Flags().String("css", "", "CSS selector instead of ref")
+	addPointFlags(mouseUpCmd, bridge.ActionMouseUp)
+	mouseUpCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
+
+	mouseWheelCmd.Flags().String("css", "", "CSS selector instead of ref")
+	addPointFlags(mouseWheelCmd, bridge.ActionMouseWheel)
+	mouseWheelCmd.Flags().Int("dx", 0, "Wheel delta X")
+	mouseWheelCmd.Flags().Int("dy", 0, "Wheel delta Y")
+
+	dragCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
+	dragCmd.Flags().Int("drag-x", 0, "Horizontal pixel offset for single-step drag action")
+	dragCmd.Flags().Int("drag-y", 0, "Vertical pixel offset for single-step drag action")
 
 	focusCmd.Flags().String("css", "", "CSS selector instead of ref")
 
@@ -135,6 +169,8 @@ func configureBrowserFlags() {
 
 	screenshotCmd.Flags().StringP("output", "o", "", "Save screenshot to file path")
 	screenshotCmd.Flags().StringP("quality", "q", "", "JPEG quality (0-100)")
+	screenshotCmd.Flags().StringP("selector", "s", "", "Element selector to capture (ref/CSS/XPath/text)")
+	screenshotCmd.Flags().Bool("css-1x", false, "When used with --selector, output image at CSS pixel size instead of device pixels")
 
 	pdfCmd.Flags().StringP("output", "o", "", "Save PDF to file path")
 	pdfCmd.Flags().Bool("landscape", false, "Landscape orientation")
@@ -159,7 +195,9 @@ func configureBrowserFlags() {
 	findCmd.Flags().Bool("explain", false, "Show score breakdown")
 	findCmd.Flags().Bool("ref-only", false, "Output just the element ref")
 
-	textCmd.Flags().Bool("raw", false, "Raw extraction mode")
+	textCmd.Flags().Bool("raw", false, "Raw extraction mode (alias of --full)")
+	textCmd.Flags().Bool("full", false, "Return the full page text (document.body.innerText) instead of the default Readability-filtered content")
+	textCmd.Flags().String("frame", "", "Extract text from a specific iframe by frameId. If unset, uses the tab's active frame scope (set via `pinchtab frame`) or the top-level document.")
 
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
@@ -171,6 +209,7 @@ func configureBrowserFlags() {
 		forwardCmd,
 		reloadCmd,
 		snapCmd,
+		frameCmd,
 		screenshotCmd,
 		pdfCmd,
 		findCmd,
@@ -178,6 +217,11 @@ func configureBrowserFlags() {
 		clickCmd,
 		dblclickCmd,
 		hoverCmd,
+		mouseMoveCmd,
+		mouseDownCmd,
+		mouseUpCmd,
+		mouseWheelCmd,
+		dragCmd,
 		focusCmd,
 		typeCmd,
 		pressCmd,
@@ -198,6 +242,9 @@ func configureBrowserFlags() {
 		dialogDismissCmd,
 	)
 
+	evalCmd.Flags().Bool("await-promise", false, "Resolve a returned Promise before responding")
+	navCmd.Flags().Bool("print-tab-id", false, "Print only the tab ID on stdout (also triggered automatically when stdout is a pipe)")
+
 	scrollintoviewCmd.Flags().String("css", "", "CSS selector instead of ref")
 
 	networkCmd.Flags().String("filter", "", "URL pattern filter")
@@ -211,6 +258,7 @@ func configureBrowserFlags() {
 	networkCmd.Flags().Bool("stream", false, "Stream network entries in real-time (like tail -f)")
 
 	waitCmd.Flags().String("text", "", "Wait for text on page")
+	waitCmd.Flags().String("not-text", "", "Wait for text to disappear from page")
 	waitCmd.Flags().String("url", "", "Wait for URL glob match")
 	waitCmd.Flags().String("load", "", "Wait for load state (networkidle)")
 	waitCmd.Flags().String("fn", "", "Wait for JS expression to be truthy")
@@ -230,6 +278,7 @@ func configureManagementFlags() {
 	startInstanceCmd.Flags().String("mode", "", "Instance mode")
 	startInstanceCmd.Flags().String("port", "", "Port number")
 	startInstanceCmd.Flags().StringArray("extension", nil, "Load browser extension (repeatable)")
+	startInstanceCmd.Flags().StringArray("allow-domain", nil, "Add an instance-scoped IDPI allowed domain (repeatable)")
 
 	activityCmd.PersistentFlags().Int("limit", 200, "Maximum number of events to return")
 	activityCmd.PersistentFlags().Int("age-sec", 0, "Only include events from the last N seconds")
@@ -245,9 +294,19 @@ func addRootCommands(cmds ...*cobra.Command) {
 	rootCmd.AddCommand(cmds...)
 }
 
+// addTabFlag wires a --tab flag onto the given commands and defaults its
+// value to $PINCHTAB_TAB when the env var is set. This lets agents avoid
+// threading `--tab "$TAB"` through every command:
+//
+//	export PINCHTAB_TAB=$(pinchtab nav http://example.com)
+//	pinchtab snap -i -c   # auto-targets $PINCHTAB_TAB
+//
+// Explicit --tab still wins (cobra flag precedence). If the env var isn't
+// set and no flag is passed, the server picks the active tab as before.
 func addTabFlag(cmds ...*cobra.Command) {
+	defaultTab := os.Getenv("PINCHTAB_TAB")
 	for _, cmd := range cmds {
-		cmd.Flags().String("tab", "", "Tab ID")
+		cmd.Flags().String("tab", defaultTab, "Tab ID (env: PINCHTAB_TAB)")
 	}
 }
 

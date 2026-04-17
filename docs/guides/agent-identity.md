@@ -44,7 +44,7 @@ The `X-Agent-Id` header is sent with every request. No server-side setup require
 
 ## Agent Sessions
 
-> **⚠️ Security notice:** Agent sessions are designed for **trusted environments** — local machines, private networks, or setups where all agents are under your control. Do not expose the session management API (`/api/sessions`) to the public internet. Any authenticated caller (bearer token or dashboard cookie) can create, list, rotate, and revoke sessions for any agent. There is no per-agent authorization scoping — treat session management endpoints like admin APIs.
+> **⚠️ Security notice:** Agent sessions are designed for **trusted, controlled environments** — local machines, private networks, CI, and setups where all agents are under your control. Do not expose the session management API (`/sessions`) to the public internet. Any authenticated caller (bearer token or dashboard cookie) can create, list, and inspect sessions for any agent. Session-authenticated callers are blocked from dashboard/admin endpoint families, but sessions are still not a multi-tenant isolation boundary.
 
 Sessions are the full identity solution. Each session is a revocable, server-managed token tied to a specific agent ID. Sessions provide:
 
@@ -53,7 +53,6 @@ Sessions are the full identity solution. Each session is a revocable, server-man
 - **Idle timeout** — sessions expire after 12 hours of inactivity (configurable)
 - **Max lifetime** — hard expiry after 24 hours (configurable)
 - **Revocation** — kill a session without rotating the server token
-- **Rotation** — generate a new token for an existing session
 
 ### Enable Sessions
 
@@ -81,7 +80,7 @@ Modes:
 ### Create a Session
 
 ```bash
-curl -X POST http://localhost:9867/api/sessions \
+curl -X POST http://localhost:9867/sessions \
   -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agentId": "bosch", "label": "research task"}'
@@ -125,15 +124,11 @@ No need to set `--agent-id` — the session carries the agent identity.
 
 ```bash
 # List all sessions
-curl http://localhost:9867/api/sessions \
-  -H "Authorization: Bearer $PINCHTAB_TOKEN"
-
-# Rotate token (old token invalidated, new one returned)
-curl -X POST http://localhost:9867/api/sessions/ses_e6ac8132fe7e7016/rotate \
+curl http://localhost:9867/sessions \
   -H "Authorization: Bearer $PINCHTAB_TOKEN"
 
 # Revoke
-curl -X POST http://localhost:9867/api/sessions/ses_e6ac8132fe7e7016/revoke \
+curl -X POST http://localhost:9867/sessions/ses_e6ac8132fe7e7016/revoke \
   -H "Authorization: Bearer $PINCHTAB_TOKEN"
 ```
 
@@ -146,6 +141,8 @@ curl -X POST http://localhost:9867/api/sessions/ses_e6ac8132fe7e7016/revoke \
 | `sessions.agent.idleTimeoutSec` | `43200` (12h) | Session expires after this many seconds of inactivity |
 | `sessions.agent.maxLifetimeSec` | `86400` (24h) | Hard session expiry |
 
+If a session record carries explicit grants, those grants narrow which endpoint groups the session may call. If a session has no explicit grants, it can use the normal non-admin automation API by default, while dashboard/admin routes remain blocked. That default is meant for trusted automation only.
+
 ## Choosing the Right Level
 
 | Scenario | Recommendation |
@@ -153,4 +150,4 @@ curl -X POST http://localhost:9867/api/sessions/ses_e6ac8132fe7e7016/revoke \
 | One agent, local only | Server token is enough |
 | Multiple agents, want attribution | Add `--agent-id` or `PINCHTAB_AGENT_ID` |
 | Production multi-agent, need revocation | Use agent sessions |
-| Shared server, untrusted agents | Use sessions with `mode: "required"` |
+| Shared server, untrusted agents | Run separate PinchTab instances; sessions are not sufficient isolation |

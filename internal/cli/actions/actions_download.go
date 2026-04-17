@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -39,22 +40,26 @@ func Download(client *http.Client, base, token string, args []string, output str
 
 	// If -o flag set, decode base64 and save to file
 	if output != "" {
-		b64, _ := result["data"].(string)
-		if b64 == "" {
-			cli.Fatal("No base64 data in response")
-		}
-		data, err := base64.StdEncoding.DecodeString(b64)
+		savedBytes, err := saveDownloadData(result, output)
 		if err != nil {
-			cli.Fatal("Failed to decode base64: %v", err)
+			switch {
+			case errors.Is(err, errMissingDownloadData):
+				cli.Fatal("No base64 data in response")
+			case errors.Is(err, errDecodeDownloadData):
+				cli.Fatal("Failed to decode base64: %v", err)
+			default:
+				cli.Fatal("Write failed: %v", err)
+			}
 		}
-		if err := os.WriteFile(output, data, 0600); err != nil {
-			cli.Fatal("Write failed: %v", err)
-		}
-		fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Saved %s (%d bytes)", output, len(data))))
+		fmt.Println(cli.StyleStdout(cli.SuccessStyle, formatDownloadSavedMessage(output, savedBytes)))
 	}
 }
 
 func printDownloadResult(result map[string]any) {
+	fmt.Println(formatDownloadResult(result))
+}
+
+func formatDownloadResult(result map[string]any) string {
 	view := make(map[string]any, len(result)+2)
 	for k, v := range result {
 		view[k] = v
@@ -68,8 +73,31 @@ func printDownloadResult(result map[string]any) {
 
 	formatted, err := json.MarshalIndent(view, "", "  ")
 	if err != nil {
-		fmt.Println("{}")
-		return
+		return "{}"
 	}
-	fmt.Println(string(formatted))
+	return string(formatted)
+}
+
+var (
+	errMissingDownloadData = errors.New("missing download data")
+	errDecodeDownloadData  = errors.New("decode download data")
+)
+
+func saveDownloadData(result map[string]any, output string) (int, error) {
+	b64, _ := result["data"].(string)
+	if b64 == "" {
+		return 0, errMissingDownloadData
+	}
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %v", errDecodeDownloadData, err)
+	}
+	if err := os.WriteFile(output, data, 0600); err != nil {
+		return 0, err
+	}
+	return len(data), nil
+}
+
+func formatDownloadSavedMessage(output string, size int) string {
+	return fmt.Sprintf("Saved %s (%d bytes)", output, size)
 }

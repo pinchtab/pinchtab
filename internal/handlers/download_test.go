@@ -12,7 +12,6 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/target"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/netguard"
@@ -26,11 +25,14 @@ type downloadPolicyBridge struct {
 }
 
 func (m *downloadPolicyBridge) BrowserContext() context.Context {
-	return context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
+	return ctx
 }
 
 func (m *downloadPolicyBridge) TabContext(tabID string) (context.Context, string, error) {
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 	return ctx, tabID, nil
 }
 
@@ -319,10 +321,10 @@ func TestHandleDownload_TabScopedCrossOriginBlockedForCookieAuth(t *testing.T) {
 		},
 	}
 	h := New(b, &config.RuntimeConfig{
-		AllowDownload: true,
+		AllowDownload:  true,
+		AllowedDomains: []string{"pinchtab.com", "example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"pinchtab.com"},
+			Enabled: true,
 		},
 	}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/download?tabId=tab1&url=https://example.com/file.txt", nil)
@@ -352,10 +354,10 @@ func TestHandleDownload_TabScopedCrossOriginAllowedForHeaderAuth(t *testing.T) {
 		},
 	}
 	h := New(b, &config.RuntimeConfig{
-		AllowDownload: true,
+		AllowDownload:  true,
+		AllowedDomains: []string{"pinchtab.com", "example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"pinchtab.com"},
+			Enabled: true,
 		},
 	}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/download?tabId=tab1&url=https://example.com/file.txt", nil)

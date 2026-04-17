@@ -139,6 +139,7 @@ pinchtab instance start --profile prof_278be873 --mode headed
   "profileId": "prof_278be873",
   "profileName": "work",
   "port": "9868",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }

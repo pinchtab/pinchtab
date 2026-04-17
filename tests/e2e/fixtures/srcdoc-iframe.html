@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Srcdoc Iframe Fixture</title>
+</head>
+<body>
+  <h1>Srcdoc Iframe Fixture</h1>
+  <p>The iframe below is populated with <code>srcdoc</code>.</p>
+  <iframe
+    id="srcdoc-payment-frame"
+    title="srcdoc-payment-frame"
+    name="srcdoc-payment-frame"
+    width="640"
+    height="260"
+  ></iframe>
+
+  <script>
+    document.getElementById('srcdoc-payment-frame').srcdoc = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>Srcdoc Payment</title>
+      </head>
+      <body>
+        <h2>Srcdoc Payment</h2>
+        <label for="srcdoc-code">Srcdoc code</label>
+        <input type="text" id="srcdoc-code" name="srcdocCode">
+        <label for="srcdoc-optin">
+          <input type="checkbox" id="srcdoc-optin" name="srcdocOptin">
+          Srcdoc opt-in
+        </label>
+      </body>
+      </html>
+    `;
+  </script>
+</body>
+</html>

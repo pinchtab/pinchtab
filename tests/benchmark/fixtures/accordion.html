@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Accordion</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .section { border: 1px solid #ccc; margin-bottom: 4px; border-radius: 4px; overflow: hidden; }
+    .section-header {
+      background: #f0f0f0;
+      padding: 10px 16px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+    .section-header::after { content: '▸'; }
+    .section[aria-expanded="true"] .section-header::after { transform: rotate(90deg); }
+    .section-body { padding: 0 16px; max-height: 0; overflow: hidden; }
+    .section[aria-expanded="true"] .section-body { padding: 12px 16px; max-height: 200px; }
+  </style>
+</head>
+<body>
+  <h1>Accordion — VERIFY_ACCORDION_PAGE_66666</h1>
+
+  <p>Three sections; only one is open at a time. Clicking a header toggles
+  that section open and closes any previously-open one.</p>
+
+  <div class="section" id="section-a" aria-expanded="false">
+    <div class="section-header" role="button" tabindex="0" aria-controls="body-a">Section A</div>
+    <div class="section-body" id="body-a">ACCORDION_SECTION_A_OPEN — alpha body.</div>
+  </div>
+  <div class="section" id="section-b" aria-expanded="false">
+    <div class="section-header" role="button" tabindex="0" aria-controls="body-b">Section B</div>
+    <div class="section-body" id="body-b">ACCORDION_SECTION_B_OPEN — bravo body.</div>
+  </div>
+  <div class="section" id="section-c" aria-expanded="false">
+    <div class="section-header" role="button" tabindex="0" aria-controls="body-c">Section C</div>
+    <div class="section-body" id="body-c">ACCORDION_SECTION_C_OPEN — charlie body.</div>
+  </div>
+
+  <script>
+    (function () {
+      const sections = Array.from(document.querySelectorAll('.section'));
+      sections.forEach(function (section) {
+        const header = section.querySelector('.section-header');
+        header.addEventListener('click', function () {
+          const isOpen = section.getAttribute('aria-expanded') === 'true';
+          sections.forEach(function (s) { s.setAttribute('aria-expanded', 'false'); });
+          if (!isOpen) { section.setAttribute('aria-expanded', 'true'); }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Loading</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #spinner {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border: 3px solid #ccc;
+      border-top-color: #333;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #status { font-size: 18px; }
+    #content {
+      margin-top: 20px;
+      padding: 16px;
+      background: #e8f5e9;
+      border: 1px solid #4caf50;
+      border-radius: 4px;
+      display: none;
+    }
+    #content.ready { display: block; }
+  </style>
+</head>
+<body>
+  <h1>Loading State — VERIFY_LOADING_PAGE_11111</h1>
+
+  <p>Page starts with a spinner; the payload arrives ~1.5 s later. Agents
+  should wait for the final marker rather than snapshotting immediately.</p>
+
+  <div id="status"><span id="spinner"></span>Loading...</div>
+
+  <div id="content"></div>
+
+  <script>
+    (function () {
+      const status = document.getElementById('status');
+      const content = document.getElementById('content');
+      setTimeout(function () {
+        status.textContent = 'Ready';
+        content.textContent = 'VERIFY_LOADING_COMPLETE_88888';
+        content.classList.add('ready');
+      }, 1500);
+    })();
+  </script>
+</body>
+</html>

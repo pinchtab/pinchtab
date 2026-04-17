@@ -5,7 +5,19 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 	"net/http"
+	"os"
 )
+
+// stdoutIsPipe reports whether stdout is a pipe/redirect rather than a
+// terminal. Used to switch `nav` into machine-friendly output mode so
+// `export PINCHTAB_TAB=$(pinchtab nav URL)` captures just the tab ID.
+func stdoutIsPipe() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) == 0
+}
 
 // Back navigates the current (or specified) tab back in history.
 func Back(client *http.Client, base, token string, cmd *cobra.Command) {
@@ -53,6 +65,19 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 	if tabID != "" {
 		path = fmt.Sprintf("/tabs/%s/navigate", tabID)
 	}
+
+	// Machine-friendly output: emit only the tabId when --print-tab-id is set
+	// or when stdout is a pipe/redirect. Enables:
+	//   export PINCHTAB_TAB=$(pinchtab nav http://example.com)
+	printTabID, _ := cmd.Flags().GetBool("print-tab-id")
+	if printTabID || stdoutIsPipe() {
+		result := apiclient.DoPostQuiet(client, base, token, path, body)
+		if tid, ok := result["tabId"].(string); ok && tid != "" {
+			fmt.Println(tid)
+		}
+		return
+	}
+
 	result := apiclient.DoPost(client, base, token, path, body)
 	apiclient.SuggestNextAction("navigate", result)
 }

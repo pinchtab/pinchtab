@@ -4,11 +4,11 @@ import "github.com/pinchtab/pinchtab/internal/config"
 
 // NewGuard creates the appropriate Guard implementation based on config.
 // Returns a ShieldGuard when IDPI is enabled, noopGuard otherwise.
-func NewGuard(cfg config.IDPIConfig) Guard {
+func NewGuard(cfg config.IDPIConfig, allowedDomains []string) Guard {
 	if !cfg.Enabled {
 		return noopGuard{}
 	}
-	return NewShieldGuard(cfg)
+	return NewShieldGuard(cfg, allowedDomains)
 }
 
 // noopGuard is a Guard that does nothing (IDPI disabled).

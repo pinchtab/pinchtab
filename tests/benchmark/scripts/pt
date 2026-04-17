@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# ./scripts/pt — transparent wrapper around `pinchtab` for the benchmark harness.
+#
+# It only does one thing: run the native `pinchtab` CLI inside the benchmark
+# Docker container (default `benchmark-pinchtab-1`) with the host-selected
+# environment. Every argument is forwarded as-is, so any
+# `pinchtab <subcommand> [args...]` invocation behaves exactly like the
+# installed CLI. Exit codes and stdout/stderr are preserved.
+#
+# The only abstraction this script provides is the Docker exec boundary:
+#   - container selection via $PINCHTAB_CONTAINER
+#   - auth + endpoint + tab + session env forwarded into the container
+#   - stdin forwarding so pipes, heredocs, and process substitution work
+#     (needed for e.g. uploads, piped eval expressions)
+#
+# Env inputs (all optional):
+#   PINCHTAB_CONTAINER  Docker container name       (default: benchmark-pinchtab-1)
+#   PINCHTAB_SERVER     Pinchtab server URL         (default: http://localhost:9867)
+#   PINCHTAB_TOKEN      Bearer token                (default: benchmark-token;
+#                                                    set to "" for no auth header)
+#   PINCHTAB_TAB        Tab ID to target            (default: active tab)
+#   PINCHTAB_SESSION    Agent session token         (default: unset)
+#
+# Usage examples:
+#   ./scripts/pt nav https://example.com
+#   ./scripts/pt snap -i -c
+#   TAB=$(./scripts/pt nav URL --print-tab-id)
+#   ./scripts/pt --tab "$TAB" click e5
+#   ./scripts/pt eval 'document.title'
+#
+# NOTE on shell-isolated callers (e.g. agent Bash tool calls where each
+# invocation is a fresh shell): `export PINCHTAB_TAB=$(./scripts/pt nav URL
+# --print-tab-id)` will NOT carry into the next call. Use `--tab "$TAB_ID"`
+# explicitly on every call that must pin to a specific tab, or rely on the
+# active-tab default for single-tab workflows.
+
+set -euo pipefail
+
+: "${PINCHTAB_CONTAINER:=benchmark-pinchtab-1}"
+# Use = (not :=) so PINCHTAB_TOKEN="" means "send no auth header" —
+# benchmark step 0.2 uses this to test unauthenticated access (401 expected).
+: "${PINCHTAB_TOKEN=benchmark-token}"
+: "${PINCHTAB_SERVER:=http://localhost:9867}"
+
+args=(docker exec
+  # -i keeps stdin open so pipes/heredocs/<() flow through to pinchtab.
+  # Safe for commands that don't read stdin: the child sees EOF immediately.
+  -i
+  -e "PINCHTAB_TOKEN=${PINCHTAB_TOKEN}"
+  -e "PINCHTAB_SERVER=${PINCHTAB_SERVER}"
+)
+
+# Forward optional env vars only when set, so an empty value in the host doesn't
+# clobber a default inside the container.
+if [[ -n "${PINCHTAB_TAB:-}" ]]; then
+  args+=(-e "PINCHTAB_TAB=${PINCHTAB_TAB}")
+fi
+if [[ -n "${PINCHTAB_SESSION:-}" ]]; then
+  args+=(-e "PINCHTAB_SESSION=${PINCHTAB_SESSION}")
+fi
+
+args+=("${PINCHTAB_CONTAINER}" pinchtab "$@")
+
+exec "${args[@]}"

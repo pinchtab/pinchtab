@@ -125,13 +125,11 @@ For remote CLI targeting, use the root `--server` flag instead of config.
 
 Default location by OS:
 
-- macOS: `~/Library/Application Support/pinchtab/config.json`
-- Linux: `~/.config/pinchtab/config.json` or `$XDG_CONFIG_HOME/pinchtab/config.json`
+- macOS: `~/.pinchtab/config.json`
+- Linux: `~/.pinchtab/config.json`
 - Windows: `%APPDATA%\pinchtab\config.json`
 
-Legacy fallback:
-
-- if `~/.pinchtab/config.json` exists and the newer location does not, PinchTab still uses the legacy location
+On macOS and Linux, PinchTab defaults to `~/.pinchtab` so the CLI, npm-managed binary, and config file all use the same base directory.
 
 Override the config path with:
 
@@ -153,13 +151,14 @@ Current nested file-config shape:
     "stateDir": "/path/to/state",
     "engine": "chrome",
     "networkBufferSize": 100,
-    "trustProxyHeaders": false
+    "trustProxyHeaders": false,
+    "cookieSecure": null
   },
   "browser": {
     "version": "144.0.7559.133",
     "binary": "/path/to/chrome",
     "extraFlags": "--disable-gpu",
-    "extensionPaths": []
+    "extensionPaths": ["/path/to/pinchtab/extensions"]
   },
   "instanceDefaults": {
     "mode": "headless",
@@ -181,6 +180,7 @@ Current nested file-config shape:
     "allowMacro": false,
     "allowScreencast": false,
     "allowDownload": false,
+    "allowedDomains": ["127.0.0.1", "localhost", "::1"],
     "downloadAllowedDomains": [],
     "downloadMaxBytes": 20971520,
     "allowUpload": false,
@@ -190,6 +190,8 @@ Current nested file-config shape:
     "uploadMaxFileBytes": 5242880,
     "uploadMaxTotalBytes": 10485760,
     "maxRedirects": -1,
+    "trustedProxyCIDRs": [],
+    "trustedResolveCIDRs": [],
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
@@ -197,7 +199,6 @@ Current nested file-config shape:
     },
     "idpi": {
       "enabled": true,
-      "allowedDomains": ["127.0.0.1", "localhost", "::1"],
       "strictMode": true,
       "scanContent": true,
       "wrapContent": true,
@@ -259,7 +260,16 @@ Current nested file-config shape:
     "activity": {
       "enabled": true,
       "sessionIdleSec": 1800,
-      "retentionDays": 1
+      "retentionDays": 1,
+      "events": {
+        "dashboard": false,
+        "server": false,
+        "bridge": false,
+        "orchestrator": false,
+        "scheduler": false,
+        "mcp": false,
+        "other": false
+      }
     }
   }
 }
@@ -293,6 +303,14 @@ Use the dedicated config fields instead:
 
 For Linux container compatibility, use the runtime-managed path instead of `browser.extraFlags`. PinchTab enables `--no-sandbox` automatically when needed.
 
+By default, PinchTab looks for unpacked Chrome extensions in `<server.stateDir>/extensions`. On a normal local install that means the OS-specific PinchTab config directory plus `extensions/`, for example:
+
+- macOS: `~/.pinchtab/extensions`
+- Linux: `~/.pinchtab/extensions`
+- Windows: `%APPDATA%\\pinchtab\\extensions`
+
+You can change or clear that default with `browser.extensionPaths`.
+
 ## Sections
 
 | Section | Purpose |
@@ -305,7 +323,7 @@ For Linux container compatibility, use the runtime-managed path instead of `brow
 | `multiInstance` | Orchestrator strategy, allocation, port range, and restart policy |
 | `timeouts` | Action, navigation, shutdown, and navigation wait delays |
 | `scheduler` | Optional task queue |
-| `observability` | Activity logging and retention |
+| `observability` | Activity logging, source selection, and retention |
 
 ## `config get` And `config set` Support
 
@@ -318,8 +336,9 @@ For Linux container compatibility, use the runtime-managed path instead of `brow
 - `profiles`
 - `multiInstance`
 - `timeouts`
+- `observability`
 
-They do not expose every field in those sections, and they do not support `scheduler.*` or `observability.*`.
+They do not expose every field in those sections, and they do not support `scheduler.*`.
 
 Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 
@@ -331,7 +350,7 @@ Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 - `security.idpi.scanTimeoutSec`
 - `security.idpi.shieldThreshold`
 - `scheduler.*`
-- `observability.*`
+- `observability.activity.events.*`
 
 ## Common Examples
 
@@ -354,6 +373,36 @@ pinchtab server
 ```
 
 Changing `server.bind` away from loopback is a documented, non-default, security-reducing deployment change. Use it only when remote reachability is intentional, keep a token set, and review the outer network boundary explicitly.
+
+If the dashboard is served over plain HTTP on a non-loopback bind, PinchTab
+shows an in-product warning because session cookies are no longer transport
+encrypted. Prefer HTTPS or localhost when possible.
+
+### Dashboard Cookie Transport
+
+`server.cookieSecure` controls whether the dashboard session cookie must use the
+`Secure` flag:
+
+- `null` / unset / `auto`: default behavior. Session cookies are `Secure` on
+  HTTPS and non-`Secure` on plain HTTP.
+- `true`: always require `Secure`. Dashboard login works only over HTTPS.
+- `false`: always omit `Secure`, even on HTTPS. Use only for operator-managed
+  edge cases.
+
+Examples:
+
+```bash
+pinchtab config set server.cookieSecure true
+pinchtab config set server.cookieSecure false
+pinchtab config set server.cookieSecure auto
+```
+
+When `server.cookieSecure = true`, plain-HTTP dashboard login fails explicitly
+with an HTTPS-required error instead of appearing to succeed and looping.
+
+If TLS terminates in front of PinchTab, also set `server.trustProxyHeaders=true`
+only when the proxy is trusted and rewrites `Forwarded` / `X-Forwarded-*`
+headers correctly.
 
 ### Custom Instance Port Range
 

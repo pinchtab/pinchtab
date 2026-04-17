@@ -93,9 +93,12 @@ func (s *Strategy) ensureRunning() (string, error) {
 
 	// Wait for instance to become ready.
 	deadline := time.Now().Add(30 * time.Second)
+	if launched.URL == "" {
+		return "", fmt.Errorf("auto-launched instance %q has no URL", launched.ID)
+	}
 	for time.Now().Before(deadline) {
 		time.Sleep(500 * time.Millisecond)
-		url := fmt.Sprintf("http://localhost:%s", launched.Port)
+		url := launched.URL
 		resp, healthErr := http.Get(url + "/health")
 		if healthErr == nil {
 			_ = resp.Body.Close()

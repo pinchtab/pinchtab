@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Tabs</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    [role="tablist"] { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 12px; }
+    [role="tab"] {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-bottom: none;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    [role="tab"][aria-selected="true"] {
+      background: #fff;
+      border-bottom: 2px solid #fff;
+      margin-bottom: -2px;
+      font-weight: bold;
+    }
+    [role="tabpanel"][hidden] { display: none; }
+    [role="tabpanel"] {
+      padding: 16px;
+      background: #fafafa;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tab Panels — VERIFY_TABS_PAGE_55555</h1>
+
+  <div role="tablist" aria-label="Profile sections">
+    <button role="tab" id="tab-profile"  aria-selected="true"  aria-controls="panel-profile">Profile</button>
+    <button role="tab" id="tab-settings" aria-selected="false" aria-controls="panel-settings">Settings</button>
+    <button role="tab" id="tab-billing"  aria-selected="false" aria-controls="panel-billing">Billing</button>
+  </div>
+
+  <div role="tabpanel" id="panel-profile"  aria-labelledby="tab-profile">
+    TAB_PROFILE_CONTENT — Name: Ada Lovelace; member since 1843.
+  </div>
+  <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden>
+    TAB_SETTINGS_CONTENT — Notification frequency: weekly.
+  </div>
+  <div role="tabpanel" id="panel-billing"  aria-labelledby="tab-billing"  hidden>
+    TAB_BILLING_CONTENT — Next invoice: $49.00 on the 1st.
+  </div>
+
+  <script>
+    (function () {
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.forEach(function (t) { t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+          panels.forEach(function (p) {
+            if (p.id === tab.getAttribute('aria-controls')) { p.removeAttribute('hidden'); }
+            else { p.setAttribute('hidden', ''); }
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

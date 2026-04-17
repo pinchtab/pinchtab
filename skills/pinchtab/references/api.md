@@ -6,7 +6,7 @@ Base URL for all examples: `http://localhost:9867`
 
 ## Agent Attribution
 
-If an agent is calling the HTTP API directly, include `X-Agent-Id: <agent-id>` on the requests that should show up under that agent in dashboard and activity views.
+If an agent is calling the HTTP API directly, include `X-Agent-Id: <agent-id>` on the requests that should stay attributable to that agent.
 
 Example:
 
@@ -15,15 +15,12 @@ curl -X POST /navigate \
   -H 'X-Agent-Id: agent-crawl-01' \
   -H 'Content-Type: application/json' \
   -d '{"url": "https://pinchtab.com"}'
-
-curl '/api/activity?agentId=agent-crawl-01'
 ```
 
 Notes:
 
 - CLI users should prefer `pinchtab --agent-id <agent-id> ...` instead of setting the header manually
 - scheduler-submitted tasks reuse their `agentId` as `X-Agent-Id` when the task is executed
-- bare `GET /api/activity` returns the primary activity feed; named internal sources such as `dashboard` or `orchestrator` are queried with `?source=<name>`
 
 ## Navigate
 
@@ -114,6 +111,22 @@ curl -X POST /action -H 'Content-Type: application/json' \
 curl -X POST /action -H 'Content-Type: application/json' \
   -d '{"kind": "hover", "ref": "e8"}'
 
+# Move pointer without clicking
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "mouse-move", "ref": "e8"}'
+
+# Press and release a mouse button
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "mouse-down", "button": "left"}'
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "mouse-up", "button": "left"}'
+
+# Wheel at an element or coordinates
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "mouse-wheel", "ref": "e8", "deltaY": 240}'
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "mouse-wheel", "x": 400, "y": 320, "deltaY": -320}'
+
 # Select dropdown option (by value or visible text)
 curl -X POST /action -H 'Content-Type: application/json' \
   -d '{"kind": "select", "ref": "e10", "value": "option2"}'
@@ -129,6 +142,31 @@ curl -X POST /action -H 'Content-Type: application/json' \
 # Click and wait for navigation (link clicks)
 curl -X POST /action -H 'Content-Type: application/json' \
   -d '{"kind": "click", "ref": "e5", "waitNav": true}'
+```
+
+Notes:
+
+- selector-based click and double-click paths resolve through backend node IDs before dispatching pointer events
+- low-level pointer actions accept `ref`, `selector`, `nodeId`, or `x`/`y`
+- `mouse-down` and `mouse-up` accept `button` with `left`, `right`, or `middle`
+- `mouse-wheel` accepts `deltaX` and `deltaY`; when omitted, legacy `scrollX` / `scrollY` still work
+- `mouse-down`, `mouse-up`, and `mouse-wheel` use the current pointer position when you do not pass a fresh target
+
+## Wait for page state
+
+```bash
+# CLI: pinchtab wait 'text:Done' / pinchtab wait --url '**/dashboard'
+curl -X POST /wait -H 'Content-Type: application/json' \
+  -d '{"selector":"text:Done","timeout":15000}'
+
+curl -X POST /wait -H 'Content-Type: application/json' \
+  -d '{"url":"**/dashboard","timeout":15000}'
+
+curl -X POST /wait -H 'Content-Type: application/json' \
+  -d '{"load":"networkidle","timeout":15000}'
+
+curl -X POST /wait -H 'Content-Type: application/json' \
+  -d '{"fn":"document.readyState === \"complete\"","timeout":15000}'
 ```
 
 ## Batch actions
@@ -155,6 +193,8 @@ curl "/text?mode=raw"
 ```
 
 Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
+
+Default mode picks the first **visible** `<article>` / `[role="main"]` / `<main>` (skips `display:none`) and strips nav/footer/ads. Use `mode=raw` for full `innerText`, or `/snapshot` for structured UI text like prices and button labels.
 
 ## PDF export
 
@@ -268,7 +308,13 @@ Default to read-only DOM inspection and avoid reading cookies, localStorage, or 
 # CLI: pinchtab eval "document.title"
 curl -X POST /evaluate -H 'Content-Type: application/json' \
   -d '{"expression": "document.title"}'
+
+# Resolve a returned promise before responding
+curl -X POST /evaluate -H 'Content-Type: application/json' \
+  -d '{"expression": "Promise.resolve(document.title)", "awaitPromise": true}'
 ```
+
+Set `awaitPromise: true` when the expression returns a promise and you want the resolved value. If omitted, behavior stays unchanged.
 
 ## Tab management
 
@@ -317,9 +363,27 @@ curl -X POST /tabs/TARGET_ID/action \
 curl -X POST /tabs/TARGET_ID/actions \
   -H 'Content-Type: application/json' \
   -d '{"actions": [{"kind": "click", "ref": "e3"}, {"kind": "type", "ref": "e3", "text": "hello"}]}'
+
+# Wait on a specific tab
+curl -X POST /tabs/TARGET_ID/wait \
+  -H 'Content-Type: application/json' \
+  -d '{"selector":"text:Done","timeout":15000}'
+
+# Pause automation for manual intervention
+curl -X POST /tabs/TARGET_ID/handoff \
+  -H 'Content-Type: application/json' \
+  -d '{"reason":"captcha","timeoutMs":120000}'
+
+# Inspect or resume handoff state
+curl /tabs/TARGET_ID/handoff
+curl -X POST /tabs/TARGET_ID/resume \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"completed"}'
 ```
 
 These are equivalent to using `?tabId=TARGET_ID` on top-level endpoints but follow REST conventions. The tab ID comes from `/tabs` or from the `tabId` field in navigate/tab creation responses.
+
+`GET /tabs/{id}/handoff` returns the current status for that tab. `POST /tabs/{id}/resume` clears `paused_handoff` and can carry resume metadata such as `status` or `resolvedData`.
 
 ## Tab locking (multi-agent)
 
@@ -446,21 +510,10 @@ curl -X POST /fingerprint/rotate -H 'Content-Type: application/json' \
 curl /health
 ```
 
-## Agent Sessions
+## Session Auth
+
+If the user already gives you an agent session token, send it as:
 
 ```bash
-# Create agent session (requires bearer/cookie auth)
-curl -X POST /api/sessions -d '{"agentId":"my-agent","label":"dev"}'
-
-# List sessions
-curl /api/sessions
-
-# Get current session (requires Session auth)
-curl -H "Authorization: Session ses_..." /api/sessions/me
-
-# Rotate token
-curl -X POST /api/sessions/{id}/rotate
-
-# Revoke session
-curl -X POST /api/sessions/{id}/revoke
+curl -H "Authorization: Session ses_..." /health
 ```

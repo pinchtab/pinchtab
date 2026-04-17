@@ -37,7 +37,17 @@ describe("AgentsPage", () => {
       currentTabs: {},
     });
     vi.mocked(fetchAllTabs).mockResolvedValue([]);
-    vi.mocked(fetchSessions).mockResolvedValue([]);
+    vi.mocked(fetchSessions).mockResolvedValue([
+      {
+        id: "ses_123",
+        agentId: "cli",
+        label: "Checkout flow",
+        createdAt: "2026-03-16T08:59:00Z",
+        lastSeenAt: "2026-03-16T09:05:00Z",
+        expiresAt: "",
+        status: "active",
+      },
+    ]);
     vi.mocked(fetchAgent).mockResolvedValue({
       agent: {
         id: "cli",
@@ -46,74 +56,58 @@ describe("AgentsPage", () => {
         lastActivity: "2026-03-16T08:10:00Z",
         requestCount: 3,
       },
-      events: [
-        {
-          id: "evt_1",
-          agentId: "cli",
-          channel: "tool_call",
-          type: "click",
-          method: "POST",
-          path: "/tabs/tab_123/action",
-          timestamp: "2026-03-16T09:00:00Z",
-          details: {
-            source: "bridge",
-            requestId: "req_123",
-            status: 200,
-            durationMs: 87,
-            tabId: "tab_123",
-            action: "click",
-          },
-        },
-        {
-          id: "evt_2",
-          agentId: "cli",
-          channel: "tool_call",
-          type: "text",
-          method: "GET",
-          path: "/tabs/tab_123/text",
-          timestamp: "2026-03-16T09:00:02Z",
-          details: {
-            source: "server",
-            requestId: "req_125",
-            status: 200,
-            durationMs: 11,
-            tabId: "tab_123",
-          },
-        },
-        {
-          id: "evt_hidden",
-          agentId: "cli",
-          channel: "tool_call",
-          type: "navigate",
-          method: "POST",
-          path: "/tabs/tab_123/navigate",
-          timestamp: "2026-03-16T09:00:03Z",
-          details: {
-            source: "dashboard",
-            requestId: "req_hidden",
-            status: 200,
-            durationMs: 9,
-            tabId: "tab_123",
-            url: "https://hidden.example",
-            action: "navigate",
-          },
-        },
-      ],
+      events: [],
     });
     vi.mocked(fetchActivity).mockResolvedValue({
-      count: 1,
+      count: 4,
       events: [
         {
-          timestamp: "2026-03-16T09:01:00Z",
-          source: "bridge",
-          requestId: "req_activity",
+          timestamp: "2026-03-16T09:00:00Z",
+          source: "client",
+          requestId: "req_123",
+          sessionId: "ses_123",
           agentId: "cli",
           method: "POST",
-          path: "/tabs/tab_555/navigate",
+          path: "/tabs/tab_123/action",
           status: 200,
-          durationMs: 10,
-          tabId: "tab_555",
-          url: "https://pinchtab.com",
+          durationMs: 87,
+          tabId: "tab_123",
+          action: "click",
+        },
+        {
+          timestamp: "2026-03-16T09:00:01Z",
+          source: "client",
+          requestId: "req_124",
+          agentId: "cli",
+          method: "GET",
+          path: "/text",
+          status: 200,
+          durationMs: 22,
+          tabId: "tab_123",
+          action: "text",
+        },
+        {
+          timestamp: "2026-03-16T09:00:02Z",
+          source: "server",
+          requestId: "req_125",
+          agentId: "cli",
+          method: "GET",
+          path: "/tabs/tab_123/text",
+          status: 200,
+          durationMs: 11,
+          tabId: "tab_123",
+        },
+        {
+          timestamp: "2026-03-16T09:00:03Z",
+          source: "dashboard",
+          requestId: "req_hidden",
+          agentId: "cli",
+          method: "POST",
+          path: "/tabs/tab_123/navigate",
+          status: 200,
+          durationMs: 9,
+          tabId: "tab_123",
+          url: "https://hidden.example",
           action: "navigate",
         },
       ],
@@ -128,14 +122,30 @@ describe("AgentsPage", () => {
     );
 
     await waitFor(() => {
-      expect(fetchAgent).toHaveBeenCalledWith("cli", "both");
+      expect(fetchActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "client",
+          limit: 1000,
+        }),
+      );
+    });
+    expect(vi.mocked(fetchActivity).mock.calls[0]?.[0]).not.toHaveProperty(
+      "agentId",
+    );
+    await waitFor(() => {
+      expect(fetchActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "client",
+          limit: 1000,
+          agentId: "cli",
+        }),
+      );
     });
 
     expect(screen.getByRole("button", { name: "Agents" })).toHaveClass(
       "bg-primary/8",
     );
     expect(screen.queryByText("Request timeline")).not.toBeInTheDocument();
-    expect(fetchActivity).not.toHaveBeenCalled();
   });
 
   it("switches to Activities and shows the filter stack including agent filter", async () => {
@@ -146,7 +156,7 @@ describe("AgentsPage", () => {
     );
 
     await waitFor(() => {
-      expect(fetchAgent).toHaveBeenCalled();
+      expect(fetchActivity).toHaveBeenCalled();
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Activities" }));
@@ -155,11 +165,16 @@ describe("AgentsPage", () => {
       expect(fetchActivity).toHaveBeenCalled();
     });
 
+    await waitFor(() => {
+      const lastQuery = vi.mocked(fetchActivity).mock.lastCall?.[0];
+      expect(lastQuery).not.toHaveProperty("agentId");
+    });
+
     expect(screen.getByLabelText("Profile")).toBeInTheDocument();
     expect(screen.getByLabelText("Agent")).toBeInTheDocument();
   });
 
-  it("keeps the simplified event rows and inline copyable tab ids", async () => {
+  it("keeps the simplified event rows and copyable tab ids", async () => {
     render(
       <MemoryRouter>
         <AgentsPage />
@@ -167,7 +182,7 @@ describe("AgentsPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Click on page on tab/)).toBeInTheDocument();
+      expect(screen.getByText("Click on page")).toBeInTheDocument();
     });
 
     expect(
@@ -175,12 +190,14 @@ describe("AgentsPage", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("bridge")).not.toBeInTheDocument();
     expect(screen.queryByText("POST")).not.toBeInTheDocument();
-    expect(screen.queryByText("200")).not.toBeInTheDocument();
-    expect(screen.queryByText("agent:cli")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "tab_123" }).length).toBe(3);
+    expect(screen.getAllByText("200").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Checkout flow").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle(/Copy tab ID tab_123/).length).toBeGreaterThan(
+      0,
+    );
   });
 
-  it("shows all agent activity in the thread regardless of source", async () => {
+  it("shows only client-sourced agent activity in the thread", async () => {
     render(
       <MemoryRouter>
         <AgentsPage />
@@ -188,24 +205,13 @@ describe("AgentsPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/3 events • 1 agents/)).toBeInTheDocument();
+      expect(screen.getByText("Click on page")).toBeInTheDocument();
     });
-
+    expect(screen.getByText("Extract text from page")).toBeInTheDocument();
+    expect(screen.getAllByText("anonymous").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(
-        (_content, element) =>
-          element?.textContent === "Click on page on tab tab_123",
-      ).length,
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(
-        (_content, element) =>
-          element?.textContent === "Extract text from page on tab tab_123",
-      ).length,
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(/Navigate to https:\/\/hidden\.example/).length,
-    ).toBeGreaterThan(0);
+      screen.queryByText("Navigate to https://hidden.example"),
+    ).not.toBeInTheDocument();
   });
 
   it("updates the open agent thread and sidebar list from the shared store", async () => {
@@ -216,7 +222,7 @@ describe("AgentsPage", () => {
     );
 
     await waitFor(() => {
-      expect(fetchAgent).toHaveBeenCalled();
+      expect(fetchActivity).toHaveBeenCalled();
     });
 
     act(() => {
@@ -249,6 +255,212 @@ describe("AgentsPage", () => {
     });
 
     expect(screen.getByText("worker-2")).toBeInTheDocument();
-    expect(screen.getByText("Planning next step")).toBeInTheDocument();
+    expect(screen.queryByText("Planning next step")).not.toBeInTheDocument();
+  });
+
+  it("keeps sibling sessions visible after selecting a derived session", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue([]);
+    vi.mocked(fetchActivity).mockResolvedValue({
+      count: 2,
+      events: [
+        {
+          timestamp: "2026-03-16T09:00:00Z",
+          source: "client",
+          requestId: "req_session_1",
+          sessionId: "ses_123",
+          agentId: "cli",
+          method: "POST",
+          path: "/tabs/tab_123/action",
+          status: 200,
+          durationMs: 87,
+          tabId: "tab_123",
+          action: "click",
+        },
+        {
+          timestamp: "2026-03-16T09:10:00Z",
+          source: "client",
+          requestId: "req_session_2",
+          sessionId: "ses_456",
+          agentId: "cli",
+          method: "GET",
+          path: "/text",
+          status: 200,
+          durationMs: 22,
+          tabId: "tab_123",
+          action: "text",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^Session / })).toHaveLength(
+        2,
+      );
+    });
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /^Session / })[0],
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^Session / })).toHaveLength(
+        2,
+      );
+    });
+  });
+
+  it("shows client events without agent ids as anonymous", async () => {
+    useAppStore.setState({
+      agents: [],
+      agentEventsById: {},
+      profiles: [],
+      instances: [],
+      currentTabs: {},
+    });
+    vi.mocked(fetchActivity).mockImplementation(async (query) => {
+      if (query?.agentId && query.agentId !== "anonymous") {
+        return { count: 0, events: [] };
+      }
+      return {
+        count: 1,
+        events: [
+          {
+            timestamp: "2026-04-08T18:02:26.983381Z",
+            source: "client",
+            requestId: "66f833fb1a65b720",
+            method: "POST",
+            path: "/navigate",
+            status: 200,
+            durationMs: 1066,
+            instanceId: "inst_990e5062",
+            profileId: "prof_37a8eec1",
+            profileName: "default",
+            tabId: "ACDF218287DBE662F237F064618A624D",
+            url: "https://github.com/",
+            action: "navigate",
+          },
+        ],
+      };
+    });
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Navigate to https://github.com/"),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("anonymous").length).toBeGreaterThan(0);
+  });
+
+  it("hydrates the selected agent thread from a scoped activity query", async () => {
+    vi.mocked(fetchActivity).mockImplementation(async (query) => {
+      if (query?.agentId === "cli") {
+        return {
+          count: 1,
+          events: [
+            {
+              timestamp: "2026-03-16T07:45:00Z",
+              source: "client",
+              requestId: "req_thread_only",
+              sessionId: "ses_789",
+              agentId: "cli",
+              method: "GET",
+              path: "/text",
+              status: 200,
+              durationMs: 14,
+              tabId: "tab_123",
+              action: "text",
+            },
+          ],
+        };
+      }
+      return {
+        count: 0,
+        events: [],
+      };
+    });
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(fetchAgent).toHaveBeenCalledWith("cli");
+    });
+
+    await waitFor(() => {
+      expect(fetchActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "client",
+          limit: 1000,
+          agentId: "cli",
+        }),
+      );
+    });
+
+    expect(screen.getByText("Extract text from page")).toBeInTheDocument();
+  });
+
+  it("hydrates older agent history from the agent detail endpoint", async () => {
+    vi.mocked(fetchAgent).mockResolvedValue({
+      agent: {
+        id: "cli",
+        name: "CLI",
+        connectedAt: "2026-03-16T08:00:00Z",
+        lastActivity: "2026-03-16T08:10:00Z",
+        requestCount: 3,
+      },
+      events: [
+        {
+          id: "evt_thread_history",
+          timestamp: "2026-03-16T07:45:00Z",
+          agentId: "cli",
+          channel: "tool_call",
+          type: "text",
+          method: "GET",
+          path: "/text",
+          message: "",
+          details: {
+            source: "client",
+            requestId: "req_thread_history",
+            sessionId: "ses_789",
+            status: 200,
+            durationMs: 14,
+            tabId: "tab_123",
+            action: "text",
+          },
+        },
+      ],
+    });
+    vi.mocked(fetchActivity).mockResolvedValue({
+      count: 0,
+      events: [],
+    });
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(fetchAgent).toHaveBeenCalledWith("cli");
+    });
+
+    expect(screen.getByText("Extract text from page")).toBeInTheDocument();
   });
 });

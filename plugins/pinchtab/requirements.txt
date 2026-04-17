@@ -1,3 +1,0 @@
-# PinchTab SMCP plugin — stdlib only, no dependencies for runtime.
-# Test dependencies:
-pytest>=7.0

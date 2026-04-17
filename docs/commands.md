@@ -64,7 +64,12 @@ Most element commands accept a unified selector:
 - text selector such as `text:Submit`
 - semantic selector such as `find:login button`
 
+Selector lookup is explicit by frame. Unscoped selectors search only the current frame scope, which defaults to `main`. Use `pinchtab frame ...` before selector-based iframe work. Same-origin iframe scopes are supported; cross-origin iframe descendants are not currently exposed.
+
 ```bash
+pinchtab frame                         # Show current frame scope
+pinchtab frame "#payment-frame"        # Scope selectors to an iframe
+pinchtab frame main                    # Return selector scope to the top document
 pinchtab click [selector]               # Click an element or coordinates with --x/--y
 pinchtab click --css <selector>         # Force CSS selector mode
 pinchtab click --wait-nav <selector>    # Click and wait for navigation
@@ -73,12 +78,29 @@ pinchtab type <selector> <text>         # Type via key events
 pinchtab fill <selector> <text>         # Fill directly
 pinchtab press <key>                    # Press a key
 pinchtab hover [selector]               # Hover an element
+pinchtab mouse move <x> <y>             # Move the mouse to coordinates
+pinchtab mouse move [selector]          # Or move to an element center
+pinchtab mouse down [selector]          # Press a mouse button
+pinchtab mouse up [selector]            # Release a mouse button
+pinchtab mouse wheel [dy|selector]      # Dispatch wheel deltas
+pinchtab drag <from> <to>               # Drag between targets (selector/ref or x,y)
 pinchtab focus [selector]               # Focus an element
 pinchtab scroll <selector|pixels>       # Scroll an element or the page
 pinchtab select <selector> <value>      # Select a <select> option
 pinchtab check <selector>               # Check a checkbox or radio
 pinchtab uncheck <selector>             # Uncheck a checkbox or radio
 pinchtab scrollintoview <selector>      # Scroll an element into view
+```
+
+Low-level mouse commands are useful for drag handles, canvas-like UIs, and flows where DOM-native click or hover abstractions are not enough:
+
+```bash
+pinchtab mouse move e5
+pinchtab mouse down --button left
+pinchtab mouse up --button left
+pinchtab mouse wheel 240 --dx 40
+pinchtab mouse move --x 400 --y 320
+pinchtab drag e5 400,320
 ```
 
 ## Page Analysis
@@ -92,13 +114,23 @@ pinchtab snap --max-tokens <n>          # Limit token budget
 pinchtab snap --depth <n>               # Limit tree depth
 pinchtab snap --text                    # Text output
 pinchtab text                           # Extract readable text
+pinchtab text --full                    # Full page innerText
 pinchtab text --raw                     # Raw extraction
+pinchtab text --frame <frameId>         # Read text from one iframe
 pinchtab find <query>                   # Semantic element search
 pinchtab find --threshold <0-1>         # Minimum similarity score
 pinchtab find --explain                 # Include score breakdown
 pinchtab find --ref-only                # Print only the best ref
 pinchtab eval <expression>              # Evaluate JavaScript
 ```
+
+`pinchtab eval` is intentionally not frame-scoped. Current `pinchtab frame`
+state affects selector-based commands such as `snap`, `click`, `fill`, and
+`type`, and it also affects `text` when `--frame` is not provided explicitly.
+
+Selector-based actions now fail fast when a selector does not match. If the UI
+is still loading, use `pinchtab wait` first instead of relying on action
+timeouts.
 
 ## Keyboard, Wait, And Diagnostics
 
@@ -135,12 +167,24 @@ pinchtab cache clear                    # Clear browser HTTP disk cache
 pinchtab cache status                   # Check if cache can be cleared
 ```
 
+Manual handoff and resume are API-only today:
+
+This is currently a temporary, non-blocking implementation. It records handoff state, but it does not yet enforce a hard stop on future automation requests by itself.
+
+```bash
+curl -X POST "$PINCHTAB_SERVER/tabs/<tabId>/handoff"
+curl "$PINCHTAB_SERVER/tabs/<tabId>/handoff"
+curl -X POST "$PINCHTAB_SERVER/tabs/<tabId>/resume"
+```
+
 ## Capture And Export
 
 ```bash
 pinchtab screenshot                     # Save a screenshot to a generated .jpg path
 pinchtab screenshot -o <path>           # Save screenshot to a chosen path
 pinchtab screenshot -q <0-100>          # JPEG quality
+pinchtab screenshot -s <selector>       # Capture a specific element by selector
+pinchtab screenshot -s <selector> --css-1x # Export selector screenshot at CSS pixel size
 pinchtab pdf                            # Export the active page as PDF
 pinchtab pdf -o <path>                  # Save PDF to a chosen path
 pinchtab pdf --landscape                # Landscape orientation
@@ -215,6 +259,10 @@ Commands with `--tab` currently include:
 - `click`
 - `dblclick`
 - `hover`
+- `mouse move`
+- `mouse down`
+- `mouse up`
+- `mouse wheel`
 - `focus`
 - `type`
 - `press`

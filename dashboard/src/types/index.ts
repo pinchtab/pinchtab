@@ -59,6 +59,7 @@ export interface BackendServerConfig {
   token: string;
   stateDir: string;
   trustProxyHeaders: boolean;
+  cookieSecure?: boolean;
 }
 
 export interface BackendDashboardSessionConfig {
@@ -72,6 +73,28 @@ export interface BackendDashboardSessionConfig {
 
 export interface BackendSessionsConfig {
   dashboard: BackendDashboardSessionConfig;
+}
+
+export interface BackendActivityEventsConfig {
+  dashboard: boolean;
+  server: boolean;
+  bridge: boolean;
+  orchestrator: boolean;
+  scheduler: boolean;
+  mcp: boolean;
+  other: boolean;
+}
+
+export interface BackendActivityConfig {
+  enabled: boolean;
+  sessionIdleSec: number;
+  retentionDays: number;
+  stateDir: string;
+  events: BackendActivityEventsConfig;
+}
+
+export interface BackendObservabilityConfig {
+  activity: BackendActivityConfig;
 }
 
 export interface BackendBrowserConfig {
@@ -102,6 +125,9 @@ export interface BackendSecurityConfig {
   allowScreencast: boolean;
   allowDownload: boolean;
   allowUpload: boolean;
+  allowedDomains: string[];
+  trustedProxyCIDRs: string[];
+  trustedResolveCIDRs: string[];
   attach: BackendAttachConfig;
   idpi: BackendIDPIConfig;
 }
@@ -139,7 +165,6 @@ export interface BackendAttachConfig {
 
 export interface BackendIDPIConfig {
   enabled: boolean;
-  allowedDomains: string[];
   strictMode: boolean;
   scanContent: boolean;
   wrapContent: boolean;
@@ -175,6 +200,7 @@ export interface BackendConfig {
   profiles: BackendProfilesConfig;
   multiInstance: BackendMultiInstanceConfig;
   timeouts: BackendTimeoutsConfig;
+  observability: BackendObservabilityConfig;
   sessions: BackendSessionsConfig;
   autoSolver: BackendAutoSolverConfig;
 }
@@ -194,6 +220,7 @@ export const defaultBackendConfig: BackendConfig = {
     token: "",
     stateDir: "",
     trustProxyHeaders: false,
+    cookieSecure: undefined,
   },
   browser: {
     version: "144.0.7559.133",
@@ -221,6 +248,9 @@ export const defaultBackendConfig: BackendConfig = {
     allowScreencast: false,
     allowDownload: false,
     allowUpload: false,
+    allowedDomains: ["127.0.0.1", "localhost", "::1"],
+    trustedProxyCIDRs: [],
+    trustedResolveCIDRs: [],
     attach: {
       enabled: false,
       allowHosts: ["127.0.0.1", "localhost", "::1"],
@@ -228,7 +258,6 @@ export const defaultBackendConfig: BackendConfig = {
     },
     idpi: {
       enabled: true,
-      allowedDomains: ["127.0.0.1", "localhost", "::1"],
       strictMode: true,
       scanContent: true,
       wrapContent: true,
@@ -256,6 +285,23 @@ export const defaultBackendConfig: BackendConfig = {
     navigateSec: 60,
     shutdownSec: 10,
     waitNavMs: 1000,
+  },
+  observability: {
+    activity: {
+      enabled: true,
+      sessionIdleSec: 1800,
+      retentionDays: 30,
+      stateDir: "",
+      events: {
+        dashboard: false,
+        server: false,
+        bridge: false,
+        orchestrator: false,
+        scheduler: false,
+        mcp: false,
+        other: false,
+      },
+    },
   },
   sessions: {
     dashboard: {
@@ -304,6 +350,9 @@ export function normalizeBackendConfig(
     security: {
       ...defaultBackendConfig.security,
       ...(input?.security ?? {}),
+      allowedDomains:
+        input?.security?.allowedDomains ??
+        defaultBackendConfig.security.allowedDomains,
       attach: {
         ...defaultBackendConfig.security.attach,
         ...(input?.security?.attach ?? {}),
@@ -317,9 +366,6 @@ export function normalizeBackendConfig(
       idpi: {
         ...defaultBackendConfig.security.idpi,
         ...(input?.security?.idpi ?? {}),
-        allowedDomains:
-          input?.security?.idpi?.allowedDomains ??
-          defaultBackendConfig.security.idpi.allowedDomains,
         customPatterns:
           input?.security?.idpi?.customPatterns ??
           defaultBackendConfig.security.idpi.customPatterns,
@@ -336,6 +382,18 @@ export function normalizeBackendConfig(
     timeouts: {
       ...defaultBackendConfig.timeouts,
       ...(input?.timeouts ?? {}),
+    },
+    observability: {
+      ...defaultBackendConfig.observability,
+      ...(input?.observability ?? {}),
+      activity: {
+        ...defaultBackendConfig.observability.activity,
+        ...(input?.observability?.activity ?? {}),
+        events: {
+          ...defaultBackendConfig.observability.activity.events,
+          ...(input?.observability?.activity?.events ?? {}),
+        },
+      },
     },
     sessions: {
       ...defaultBackendConfig.sessions,
@@ -382,7 +440,10 @@ export function normalizeMonitoringSnapshot(
 ): MonitoringSnapshot {
   return {
     timestamp: input.timestamp ?? Date.now(),
-    instances: input.instances ?? [],
+    instances: (input.instances ?? []).map((instance) => ({
+      ...instance,
+      mode: instance.mode ?? (instance.headless ? "headless" : "headed"),
+    })),
     tabs: input.tabs ?? [],
     metrics: input.metrics ?? [],
     serverMetrics: {

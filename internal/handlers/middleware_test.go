@@ -7,11 +7,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/agentsession"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
+
+type activityCaptureRecorder struct {
+	events []activity.Event
+}
+
+func (c *activityCaptureRecorder) Enabled() bool { return true }
+
+func (c *activityCaptureRecorder) Record(evt activity.Event) error {
+	c.events = append(c.events, evt)
+	return nil
+}
+
+func (c *activityCaptureRecorder) Query(activity.Filter) ([]activity.Event, error) {
+	return append([]activity.Event(nil), c.events...), nil
+}
 
 func resetRateLimitStateForTests() {
 	rateMu.Lock()
@@ -161,7 +178,7 @@ func TestAuthMiddleware_MissingTokenHeader(t *testing.T) {
 
 func TestAuthMiddleware_ValidCookie(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -189,7 +206,7 @@ func TestAuthMiddleware_ValidCookie(t *testing.T) {
 
 func TestAuthMiddleware_CookieRestrictedEndpointRejected(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -215,7 +232,7 @@ func TestAuthMiddleware_CookieRestrictedEndpointRejected(t *testing.T) {
 
 func TestAuthMiddleware_CookieAllowsTabCloseEndpoint(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -243,7 +260,7 @@ func TestAuthMiddleware_CookieAllowsTabCloseEndpoint(t *testing.T) {
 
 func TestAuthMiddleware_CookieAllowsActionEndpoint(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -271,7 +288,7 @@ func TestAuthMiddleware_CookieAllowsActionEndpoint(t *testing.T) {
 
 func TestAuthMiddleware_CookieCrossOriginRejected(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -299,7 +316,7 @@ func TestAuthMiddleware_CookieCrossOriginRejected(t *testing.T) {
 
 func TestAuthMiddleware_CookieRequestWithoutOriginOrRefererRejected(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -326,7 +343,7 @@ func TestAuthMiddleware_CookieRequestWithoutOriginOrRefererRejected(t *testing.T
 
 func TestAuthMiddleware_CookieSameOriginRefererAccepted(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -354,7 +371,7 @@ func TestAuthMiddleware_CookieSameOriginRefererAccepted(t *testing.T) {
 
 func TestAuthMiddleware_CookieIgnoresForwardedOriginHints(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -385,7 +402,7 @@ func TestAuthMiddleware_CookieIgnoresForwardedOriginHints(t *testing.T) {
 
 func TestAuthMiddleware_CookieWebSocketRequiresSameOrigin(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -437,7 +454,7 @@ func TestAuthMiddleware_CookieElevatedEndpointRequiresElevation(t *testing.T) {
 			},
 		},
 	}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -483,7 +500,7 @@ func TestAuthMiddleware_CookieElevatedEndpointRequiresElevation(t *testing.T) {
 
 func TestAuthMiddleware_CookieConfigEndpointDoesNotRequireElevationByDefault(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	sessionID, err := sessions.Create(cfg.Token)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -992,7 +1009,7 @@ func TestStatusWriter(t *testing.T) {
 }
 
 func TestAuthMiddleware_SessionAuth(t *testing.T) {
-	store := agentsession.NewStore(agentsession.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
 	_, token, _ := store.Create("test-agent", "test")
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
@@ -1015,8 +1032,260 @@ func TestAuthMiddleware_SessionAuth(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_SessionAuthRejectsDashboardAdminRoute(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	_, token, _ := store.Create("test-agent", "test")
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Fatal("handler should not be called for dashboard/admin route via session auth")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthWithoutGrantsAllowsNonAdminRoutes(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	_, token, _ := store.Create("test-agent", "test")
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/evaluate", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("handler should be called for non-admin route when grants are empty")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthAllowsRevokeRouteToReachHandler(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	sessionID, token, _ := store.Create("test-agent", "test")
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sessionID+"/revoke", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("handler should be called for session revoke route")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthHonorsBrowseGrant(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	sessionID, token, _ := store.Create("test-agent", "test")
+	sess, ok := store.Get(sessionID)
+	if !ok || sess == nil {
+		t.Fatal("expected session to exist")
+	}
+	sess.Grants = []string{"browse"}
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/text", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("handler should be called for route covered by browse grant")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthRejectsRouteOutsideGrant(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	sessionID, token, _ := store.Create("test-agent", "test")
+	sess, ok := store.Get(sessionID)
+	if !ok || sess == nil {
+		t.Fatal("expected session to exist")
+	}
+	sess.Grants = []string{"browse"}
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	called := false
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/clipboard/read", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Fatal("handler should not be called for route outside granted scope")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_ForbiddenSessionRequestDoesNotExtendIdleLifetime(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 100 * time.Millisecond, MaxLifetime: 24 * time.Hour})
+	sessionID, token, _ := store.Create("test-agent", "test")
+	sess, ok := store.Get(sessionID)
+	if !ok || sess == nil {
+		t.Fatal("expected session to exist")
+	}
+	sess.Grants = []string{"browse"}
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	time.Sleep(30 * time.Millisecond)
+
+	req := httptest.NewRequest(http.MethodGet, "/clipboard/read", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+
+	time.Sleep(90 * time.Millisecond)
+
+	req = httptest.NewRequest(http.MethodGet, "/text", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 after idle timeout, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_SessionAuthEnrichesActivity(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	sessionID, token, _ := store.Create("test-agent", "test")
+	rec := &activityCaptureRecorder{}
+
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	handler := activity.Middleware(rec, "server", AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/text", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if len(rec.events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(rec.events))
+	}
+	if rec.events[0].SessionID != sessionID {
+		t.Fatalf("event.SessionID = %q, want %q", rec.events[0].SessionID, sessionID)
+	}
+	if rec.events[0].AgentID != "test-agent" {
+		t.Fatalf("event.AgentID = %q, want test-agent", rec.events[0].AgentID)
+	}
+}
+
+func TestAuthMiddleware_SessionAttachesAuthenticatedSessionToContext(t *testing.T) {
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	_, token, _ := store.Create("test-agent", "test")
+
+	var (
+		called     bool
+		gotSession *session.Session
+	)
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+	handler := AuthMiddlewareWithSessions(cfg, nil, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		gotSession, _ = session.FromRequest(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/me", nil)
+	req.Header.Set("Authorization", "Session "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("handler should have been called with valid session auth")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotSession == nil {
+		t.Fatal("expected agent session on request context")
+	}
+	if gotSession.AgentID != "test-agent" {
+		t.Fatalf("AgentID = %q, want test-agent", gotSession.AgentID)
+	}
+}
+
+func TestAuthMiddleware_HeaderAuthDoesNotAttachAgentSessionToContext(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "server-token"}
+
+	var gotSession *session.Session
+	handler := AuthMiddlewareWithSessions(cfg, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSession, _ = session.FromRequest(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Authorization", "Bearer server-token")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotSession != nil {
+		t.Fatal("expected no agent session on request context for bearer auth")
+	}
+}
+
 func TestAuthMiddleware_SessionAuthInvalid(t *testing.T) {
-	store := agentsession.NewStore(agentsession.Config{Enabled: true})
+	store := session.NewStore(session.Config{Enabled: true})
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
 	called := false

@@ -2,11 +2,16 @@ package handlers
 
 import (
 	"compress/gzip"
+	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 func TestIsGzipContent(t *testing.T) {
@@ -125,5 +130,72 @@ func TestFetchDirectWithCookies_GzipDecompression(t *testing.T) {
 		}
 	} else {
 		t.Error("expected isGzipContent to return true for .gz URL with gzip content-type")
+	}
+}
+
+func TestFetchDirectWithCookies_BlocksRedirectToPrivateIP(t *testing.T) {
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	oldDial := dialDownloadAddress
+	dialDownloadAddress = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, redirector.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialDownloadAddress = oldDial })
+
+	oldResolve := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	t.Cleanup(func() { netguard.ResolveHostIPs = oldResolve })
+
+	h := New(&mockBridge{}, &config.RuntimeConfig{MaxRedirects: -1}, nil, nil, nil)
+	_, _, _, err := h.fetchDirectWithCookies(context.Background(), context.Background(), "http://safe.example/file.txt", newDownloadURLGuard(nil), 1024)
+	if err == nil {
+		t.Fatal("expected redirect to private IP to be blocked")
+	}
+	if !strings.Contains(err.Error(), "private/internal IP blocked") && !strings.Contains(err.Error(), "internal or blocked host") && !strings.Contains(err.Error(), "blocked remote IP") {
+		t.Fatalf("expected download guard error, got %v", err)
+	}
+}
+
+func TestFetchDirectWithCookies_BlocksDNSRebinding(t *testing.T) {
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer page.Close()
+
+	oldDial := dialDownloadAddress
+	dialDownloadAddress = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, page.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialDownloadAddress = oldDial })
+
+	resolveCount := 0
+	oldResolve := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(context.Context, string, string) ([]net.IP, error) {
+		resolveCount++
+		if resolveCount == 1 {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return []net.IP{net.ParseIP("10.0.0.7")}, nil
+	}
+	t.Cleanup(func() { netguard.ResolveHostIPs = oldResolve })
+
+	validator := newDownloadURLGuard(nil)
+	if err := validator.Validate("http://safe.example/file.txt"); err != nil {
+		t.Fatalf("preflight validation should pass on first resolution, got %v", err)
+	}
+
+	h := New(&mockBridge{}, &config.RuntimeConfig{MaxRedirects: -1}, nil, nil, nil)
+	_, _, _, err := h.fetchDirectWithCookies(context.Background(), context.Background(), "http://safe.example/file.txt", validator, 1024)
+	if err == nil {
+		t.Fatal("expected rebinding attempt to be blocked")
+	}
+	if !strings.Contains(err.Error(), "blocked remote IP") {
+		t.Fatalf("expected blocked remote IP error, got %v", err)
 	}
 }

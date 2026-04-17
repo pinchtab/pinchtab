@@ -54,6 +54,13 @@ if [ "$bind_addr" != "0.0.0.0" ]; then
   exit 1
 fi
 
-docker exec "$NAME" test -f /data/.config/pinchtab/config.json
+config_path="$(docker exec "$NAME" pinchtab config path | tr -d '\r')"
+if [ -z "$config_path" ]; then
+  FAILED=1
+  echo "failed to determine container config path"
+  exit 1
+fi
+
+docker exec "$NAME" test -f "$config_path"
 
 echo "Docker smoke test passed."

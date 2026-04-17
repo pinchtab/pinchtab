@@ -26,29 +26,32 @@ func (s *stubRecorder) Query(activity.Filter) ([]activity.Event, error) {
 	return nil, nil
 }
 
-func TestDashboardActivityRecorderSkipsInternalOrchestratorMonitoringEvents(t *testing.T) {
+func TestDashboardActivityRecorderSkipsNonClientEvents(t *testing.T) {
 	base := &stubRecorder{}
 	dash := dashboard.NewDashboard(nil)
 	rec := newDashboardActivityRecorder(base, dash)
 
-	err := rec.Record(activity.Event{
-		Timestamp: time.Now().UTC(),
-		Source:    "orchestrator",
-		Method:    http.MethodGet,
-		Path:      "/tabs",
-	})
-	if err != nil {
-		t.Fatalf("Record() error = %v", err)
+	for _, source := range []string{"orchestrator", "server", "bridge", "dashboard"} {
+		err := rec.Record(activity.Event{
+			Timestamp: time.Now().UTC(),
+			Source:    source,
+			Method:    http.MethodPost,
+			Path:      "/tabs/tab_1/navigate",
+			AgentID:   "agent-1",
+		})
+		if err != nil {
+			t.Fatalf("Record(source=%q) error = %v", source, err)
+		}
 	}
-	if len(base.events) != 1 {
-		t.Fatalf("base recorder events = %d, want 1", len(base.events))
+	if len(base.events) != 4 {
+		t.Fatalf("base recorder events = %d, want 4", len(base.events))
 	}
 	if len(dash.RecentEvents()) != 0 {
 		t.Fatalf("dashboard recent events = %d, want 0", len(dash.RecentEvents()))
 	}
 }
 
-func TestDashboardActivityRecorderBroadcastsNonMonitoringEvents(t *testing.T) {
+func TestDashboardActivityRecorderBroadcastsClientEvents(t *testing.T) {
 	base := &stubRecorder{}
 	dash := dashboard.NewDashboard(nil)
 	rec := newDashboardActivityRecorder(base, dash)
@@ -56,7 +59,7 @@ func TestDashboardActivityRecorderBroadcastsNonMonitoringEvents(t *testing.T) {
 	err := rec.Record(activity.Event{
 		RequestID:  "req-1",
 		Timestamp:  time.Now().UTC(),
-		Source:     "orchestrator",
+		Source:     "client",
 		Method:     http.MethodPost,
 		Path:       "/tabs/tab_1/navigate",
 		AgentID:    "agent-1",

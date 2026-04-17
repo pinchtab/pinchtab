@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -23,6 +24,8 @@ func (h *Handlers) HandleCacheClear(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("clear cache: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "cache.clear"})
 
 	httpx.JSON(w, http.StatusOK, map[string]any{"status": "cleared"})
 }

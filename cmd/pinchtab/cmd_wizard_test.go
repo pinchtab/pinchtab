@@ -12,7 +12,7 @@ func TestRunNonInteractiveSetupDoesNotPrintToken(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	cfg := config.DefaultFileConfig()
 	cfg.Server.Token = "very-secret-token-value"
-	cfg.Security.IDPI.AllowedDomains = []string{"localhost"}
+	cfg.Security.AllowedDomains = []string{"localhost"}
 
 	output := captureStdout(t, func() {
 		if !runNonInteractiveSetup(&cfg, configPath, true) {

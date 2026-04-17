@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -92,6 +93,10 @@ func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
 func TestHandleGetConfigRedactsToken(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"
+	stateKey := "state-secret"
+	fc.Security.StateEncryptionKey = &stateKey
+	fc.AutoSolver.External.CapsolverKey = "capsolver-secret"
+	fc.AutoSolver.External.TwoCaptchaKey = "twocaptcha-secret"
 
 	api := newConfigAPITestAPI(t, fc)
 
@@ -107,6 +112,15 @@ func TestHandleGetConfigRedactsToken(t *testing.T) {
 	if env.Config.Server.Token != "" {
 		t.Fatalf("config token = %q, want redacted empty string", env.Config.Server.Token)
 	}
+	if env.Config.Security.StateEncryptionKey != nil {
+		t.Fatalf("config stateEncryptionKey = %v, want nil", env.Config.Security.StateEncryptionKey)
+	}
+	if env.Config.AutoSolver.External.CapsolverKey != "" {
+		t.Fatalf("config capsolverKey = %q, want redacted empty string", env.Config.AutoSolver.External.CapsolverKey)
+	}
+	if env.Config.AutoSolver.External.TwoCaptchaKey != "" {
+		t.Fatalf("config twoCaptchaKey = %q, want redacted empty string", env.Config.AutoSolver.External.TwoCaptchaKey)
+	}
 	if !env.TokenConfigured {
 		t.Fatal("tokenConfigured = false, want true")
 	}
@@ -115,6 +129,10 @@ func TestHandleGetConfigRedactsToken(t *testing.T) {
 func TestHandlePutConfigPreservesExistingToken(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"
+	stateKey := "state-secret"
+	fc.Security.StateEncryptionKey = &stateKey
+	fc.AutoSolver.External.CapsolverKey = "capsolver-secret"
+	fc.AutoSolver.External.TwoCaptchaKey = "twocaptcha-secret"
 
 	api := newConfigAPITestAPI(t, fc)
 
@@ -149,8 +167,70 @@ func TestHandlePutConfigPreservesExistingToken(t *testing.T) {
 	if saved.Server.Token != "secret-token" {
 		t.Fatalf("saved token = %q, want existing token preserved", saved.Server.Token)
 	}
+	if saved.Security.StateEncryptionKey == nil || *saved.Security.StateEncryptionKey != stateKey {
+		t.Fatalf("saved stateEncryptionKey = %v, want existing key preserved", saved.Security.StateEncryptionKey)
+	}
+	if saved.AutoSolver.External.CapsolverKey != "capsolver-secret" {
+		t.Fatalf("saved capsolverKey = %q, want existing key preserved", saved.AutoSolver.External.CapsolverKey)
+	}
+	if saved.AutoSolver.External.TwoCaptchaKey != "twocaptcha-secret" {
+		t.Fatalf("saved twoCaptchaKey = %q, want existing key preserved", saved.AutoSolver.External.TwoCaptchaKey)
+	}
 	if saved.Server.Port != "9999" {
 		t.Fatalf("saved port = %q, want %q", saved.Server.Port, "9999")
+	}
+}
+
+func TestHandlePutConfigPreservesWriteOnlySecretsFromRedactedGetPayload(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	stateKey := "state-secret"
+	fc.Security.StateEncryptionKey = &stateKey
+	fc.AutoSolver.External.CapsolverKey = "capsolver-secret"
+	fc.AutoSolver.External.TwoCaptchaKey = "twocaptcha-secret"
+
+	api := newConfigAPITestAPI(t, fc)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	getRes := httptest.NewRecorder()
+	api.HandleGetConfig(getRes, getReq)
+	if getRes.Code != http.StatusOK {
+		t.Fatalf("HandleGetConfig() status = %d, want %d", getRes.Code, http.StatusOK)
+	}
+
+	env := decodeConfigEnvelope(t, getRes)
+	env.Config.Server.Port = "9898"
+
+	body, err := json.Marshal(env.Config)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	putReq := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	putRes := httptest.NewRecorder()
+	api.HandlePutConfig(putRes, putReq)
+	if putRes.Code != http.StatusOK {
+		t.Fatalf("HandlePutConfig() status = %d, want %d", putRes.Code, http.StatusOK)
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Server.Token != "secret-token" {
+		t.Fatalf("saved token = %q, want existing token preserved", saved.Server.Token)
+	}
+	if saved.Security.StateEncryptionKey == nil || *saved.Security.StateEncryptionKey != stateKey {
+		t.Fatalf("saved stateEncryptionKey = %v, want existing key preserved", saved.Security.StateEncryptionKey)
+	}
+	if saved.AutoSolver.External.CapsolverKey != "capsolver-secret" {
+		t.Fatalf("saved capsolverKey = %q, want existing key preserved", saved.AutoSolver.External.CapsolverKey)
+	}
+	if saved.AutoSolver.External.TwoCaptchaKey != "twocaptcha-secret" {
+		t.Fatalf("saved twoCaptchaKey = %q, want existing key preserved", saved.AutoSolver.External.TwoCaptchaKey)
+	}
+	if saved.Server.Port != "9898" {
+		t.Fatalf("saved port = %q, want %q", saved.Server.Port, "9898")
 	}
 }
 
@@ -256,4 +336,83 @@ func decodeConfigEnvelope(t *testing.T, w *httptest.ResponseRecorder) configEnve
 		t.Fatalf("Decode() error = %v", err)
 	}
 	return env
+}
+
+// TestRedactTokenCoversAllSensitiveFields uses reflection to find fields that look
+// like secrets (containing "key", "token", "secret", "password", "credential" in their
+// name) and verifies they are all redacted. This test will fail if a new sensitive
+// field is added to FileConfig without updating redactToken().
+func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
+	// Populate all known sensitive fields with non-zero values
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "test-token"
+	encKey := "test-encryption-key"
+	fc.Security.StateEncryptionKey = &encKey
+	fc.AutoSolver.External.CapsolverKey = "test-capsolver-key"
+	fc.AutoSolver.External.TwoCaptchaKey = "test-twocaptcha-key"
+
+	redacted := redactToken(fc)
+
+	// Use reflection to find any sensitive fields that weren't redacted
+	var unredacted []string
+	findSensitiveFields(reflect.ValueOf(redacted), "", &unredacted)
+
+	if len(unredacted) > 0 {
+		t.Fatalf("redactToken() did not redact sensitive fields: %v\n"+
+			"Add these to redactToken() in config_api.go", unredacted)
+	}
+}
+
+// findSensitiveFields recursively scans a struct for fields with names suggesting
+// they contain secrets, and reports any that have non-zero values.
+func findSensitiveFields(v reflect.Value, path string, unredacted *[]string) {
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	sensitivePatterns := []string{"key", "token", "secret", "password", "credential"}
+
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		fieldPath := field.Name
+		if path != "" {
+			fieldPath = path + "." + field.Name
+		}
+
+		fieldVal := v.Field(i)
+
+		// Check if field name suggests it's sensitive
+		nameLower := strings.ToLower(field.Name)
+		isSensitive := false
+		for _, pattern := range sensitivePatterns {
+			if strings.Contains(nameLower, pattern) {
+				isSensitive = true
+				break
+			}
+		}
+
+		if isSensitive && !isZeroValue(fieldVal) {
+			*unredacted = append(*unredacted, fieldPath)
+		}
+
+		// Recurse into nested structs
+		if fieldVal.Kind() == reflect.Struct || (fieldVal.Kind() == reflect.Ptr && fieldVal.Elem().Kind() == reflect.Struct) {
+			findSensitiveFields(fieldVal, fieldPath, unredacted)
+		}
+	}
+}
+
+func isZeroValue(v reflect.Value) bool {
+	if v.Kind() == reflect.Ptr {
+		return v.IsNil()
+	}
+	return v.IsZero()
 }

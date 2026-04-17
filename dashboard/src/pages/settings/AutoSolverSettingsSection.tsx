@@ -17,11 +17,11 @@ export function AutoSolverSettingsSection({
   return (
     <SectionCard
       title="AutoSolver"
-      description="These settings are saved into the PinchTab config file. External provider API keys are config-file-only and are not read from environment variables."
+      description="These settings are saved into the PinchTab config file. External provider API keys stay write-only and must be set directly in that file."
     >
       <SettingRow
         label="Config file"
-        description="Dashboard edits are written back to this file. External provider keys stay under autoSolver.external in the same config."
+        description="Dashboard edits are written back to this file. Set external provider keys under autoSolver.external in the same config file."
       >
         <div className="rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-secondary">
           <code>{backendState?.configPath || "Config path unavailable"}</code>
@@ -211,13 +211,14 @@ export function AutoSolverSettingsSection({
       </SettingRow>
       <SettingRow
         label="External provider keys"
-        description="Capsolver and 2Captcha credentials are only stored in the config file under autoSolver.external."
+        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file."
       >
         <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-          Use the config file for <code>autoSolver.external.capsolverKey</code>{" "}
-          and <code>autoSolver.external.twoCaptchaKey</code>. The dashboard does
-          not read or edit those values, and there are no
-          <code> PINCHTAB_AUTOSOLVER_*</code> environment variable overrides.
+          Open the config file above and set{" "}
+          <code>autoSolver.external.capsolverKey</code> and{" "}
+          <code>autoSolver.external.twoCaptchaKey</code> there. The dashboard
+          does not display or edit those values, and there are no environment
+          variable overrides.
         </div>
       </SettingRow>
     </SectionCard>

@@ -108,6 +108,73 @@ func TestResolveAndValidatePublicIPs(t *testing.T) {
 	}
 }
 
+func TestResolveAndValidateIPsWithTrustedCIDRs(t *testing.T) {
+	stubResolveHostIPs(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
+		switch host {
+		case "public.example":
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		case "internal.example":
+			return []net.IP{net.ParseIP("10.0.0.5")}, nil
+		case "mixed-trusted.example":
+			return []net.IP{net.ParseIP("10.0.0.5"), net.ParseIP("10.0.0.6")}, nil
+		case "mixed-untrusted.example":
+			return []net.IP{net.ParseIP("10.0.0.5"), net.ParseIP("192.168.1.1")}, nil
+		case "benchmark.example":
+			return []net.IP{net.ParseIP("198.18.0.10")}, nil
+		default:
+			return nil, errors.New("not found")
+		}
+	})
+
+	trusted := []*net.IPNet{
+		mustParseCIDR("10.0.0.0/8"),
+	}
+
+	// public IP → allowed (no trusted CIDRs needed)
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "public.example", nil); err != nil {
+		t.Fatalf("public host with no CIDRs: unexpected error %v", err)
+	}
+
+	// private IP, no trusted CIDRs → blocked
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "internal.example", nil); !errors.Is(err, ErrPrivateInternalIP) {
+		t.Fatalf("private host with no CIDRs: want ErrPrivateInternalIP, got %v", err)
+	}
+
+	// private IP, matching trusted CIDR → allowed
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "internal.example", trusted); err != nil {
+		t.Fatalf("private host with matching CIDR: unexpected error %v", err)
+	}
+
+	// all resolved IPs in trusted CIDR → allowed
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "mixed-trusted.example", trusted); err != nil {
+		t.Fatalf("all IPs in trusted CIDR: unexpected error %v", err)
+	}
+
+	// one trusted internal + one untrusted internal → blocked
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "mixed-untrusted.example", trusted); !errors.Is(err, ErrPrivateInternalIP) {
+		t.Fatalf("mixed trusted/untrusted: want ErrPrivateInternalIP, got %v", err)
+	}
+
+	// benchmark network IP, matching CIDR → allowed
+	benchTrusted := []*net.IPNet{mustParseCIDR("198.18.0.0/15")}
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "benchmark.example", benchTrusted); err != nil {
+		t.Fatalf("benchmark IP with matching CIDR: unexpected error %v", err)
+	}
+
+	// loopback is still blocked even with broad CIDR
+	if _, err := ResolveAndValidateIPsWithTrustedCIDRs(context.Background(), "127.0.0.1", trusted); !errors.Is(err, ErrPrivateInternalIP) {
+		t.Fatalf("loopback with CIDRs: want ErrPrivateInternalIP, got %v", err)
+	}
+}
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, cidr, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return cidr
+}
+
 func TestValidateRemoteIPAddress(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -9,11 +9,11 @@ import (
 
 // AdminDeps holds the components needed for dashboard admin route registration.
 type AdminDeps struct {
-	ConfigAPI       *ConfigAPI
-	AuthAPI         *AuthAPI
-	AgentSessionAPI *AgentSessionAPI
-	Activity        activity.Recorder
-	ServerMetrics   func() map[string]any
+	ConfigAPI     *ConfigAPI
+	AuthAPI       *AuthAPI
+	SessionAPI    *SessionAPI
+	Activity      activity.Recorder
+	ServerMetrics func() map[string]any
 }
 
 // RegisterAdminRoutes registers all /api/* dashboard admin endpoints.
@@ -21,8 +21,8 @@ func (d *Dashboard) RegisterAdminRoutes(mux *http.ServeMux, deps AdminDeps) {
 	d.RegisterHandlers(mux)
 	deps.ConfigAPI.RegisterHandlers(mux)
 	deps.AuthAPI.RegisterHandlers(mux)
-	if deps.AgentSessionAPI != nil {
-		deps.AgentSessionAPI.RegisterHandlers(mux)
+	if deps.SessionAPI != nil {
+		deps.SessionAPI.RegisterHandlers(mux)
 	}
 	activity.RegisterHandlers(mux, deps.Activity)
 	mux.HandleFunc("GET /api/metrics", func(w http.ResponseWriter, r *http.Request) {

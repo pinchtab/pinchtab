@@ -36,7 +36,14 @@ func DefaultFileConfig() FileConfig {
 	attachEnabled := false
 	activityEnabled := true
 	activitySessionIdleSec := 1800
-	activityRetentionDays := 1
+	activityRetentionDays := 30
+	activityDashboardEvents := false
+	activityServerEvents := false
+	activityBridgeEvents := false
+	activityOrchestratorEvents := false
+	activitySchedulerEvents := false
+	activityMCPEvents := false
+	activityOtherEvents := false
 	dashboardSessionPersist := true
 	dashboardSessionIdleSec := 7 * 24 * 60 * 60
 	dashboardSessionMaxLifetimeSec := 7 * 24 * 60 * 60
@@ -55,12 +62,13 @@ func DefaultFileConfig() FileConfig {
 	return FileConfig{
 		ConfigVersion: CurrentConfigVersion,
 		Server: ServerConfig{
-			Port:     "9867",
+			Port:     defaultPort,
 			Bind:     "127.0.0.1",
 			StateDir: userConfigDir(),
 		},
 		Browser: BrowserConfig{
-			ChromeVersion: "144.0.7559.133",
+			ChromeVersion:  "144.0.7559.133",
+			ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              "headless",
@@ -73,6 +81,7 @@ func DefaultFileConfig() FileConfig {
 			AllowMacro:             &allowMacro,
 			AllowScreencast:        &allowScreencast,
 			AllowDownload:          &allowDownload,
+			AllowedDomains:         append([]string(nil), defaultLocalAllowedDomains...),
 			DownloadAllowedDomains: []string{},
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
@@ -91,7 +100,6 @@ func DefaultFileConfig() FileConfig {
 			},
 			IDPI: IDPIConfig{
 				Enabled:        true,
-				AllowedDomains: append([]string(nil), defaultLocalAllowedDomains...),
 				StrictMode:     true,
 				ScanContent:    true,
 				WrapContent:    true,
@@ -126,6 +134,15 @@ func DefaultFileConfig() FileConfig {
 				SessionIdleSec: &activitySessionIdleSec,
 				RetentionDays:  &activityRetentionDays,
 				StateDir:       "",
+				Events: ActivityEventsFileConfig{
+					Dashboard:    &activityDashboardEvents,
+					Server:       &activityServerEvents,
+					Bridge:       &activityBridgeEvents,
+					Orchestrator: &activityOrchestratorEvents,
+					Scheduler:    &activitySchedulerEvents,
+					MCP:          &activityMCPEvents,
+					Other:        &activityOtherEvents,
+				},
 			},
 		},
 		Sessions: SessionsFileConfig{
@@ -212,11 +229,13 @@ type securityConfigJSON struct {
 	AllowMacro             *bool          `json:"allowMacro"`
 	AllowScreencast        *bool          `json:"allowScreencast"`
 	AllowDownload          *bool          `json:"allowDownload"`
+	AllowedDomains         []string       `json:"allowedDomains"`
 	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
 	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
 	AllowUpload            *bool          `json:"allowUpload"`
 	AllowClipboard         *bool          `json:"allowClipboard"`
 	AllowStateExport       *bool          `json:"allowStateExport"`
+	StateEncryptionKey     *string        `json:"stateEncryptionKey"`
 	EnableActionGuards     *bool          `json:"enableActionGuards"`
 	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
 	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
@@ -224,6 +243,7 @@ type securityConfigJSON struct {
 	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
 	MaxRedirects           *int           `json:"maxRedirects"`
 	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
+	TrustedResolveCIDRs    []string       `json:"trustedResolveCIDRs"`
 	Attach                 attachJSON     `json:"attach"`
 	IDPI                   idpiConfigJSON `json:"idpi"`
 }
@@ -236,7 +256,6 @@ type attachJSON struct {
 
 type idpiConfigJSON struct {
 	Enabled         bool     `json:"enabled"`
-	AllowedDomains  []string `json:"allowedDomains"`
 	StrictMode      bool     `json:"strictMode"`
 	ScanContent     bool     `json:"scanContent"`
 	WrapContent     bool     `json:"wrapContent"`
@@ -283,10 +302,21 @@ type observabilityFileConfigJSON struct {
 }
 
 type activityConfigJSON struct {
-	Enabled        *bool  `json:"enabled"`
-	SessionIdleSec *int   `json:"sessionIdleSec"`
-	RetentionDays  *int   `json:"retentionDays"`
-	StateDir       string `json:"stateDir"`
+	Enabled        *bool                    `json:"enabled"`
+	SessionIdleSec *int                     `json:"sessionIdleSec"`
+	RetentionDays  *int                     `json:"retentionDays"`
+	StateDir       string                   `json:"stateDir"`
+	Events         activityEventsConfigJSON `json:"events"`
+}
+
+type activityEventsConfigJSON struct {
+	Dashboard    *bool `json:"dashboard,omitempty"`
+	Server       *bool `json:"server,omitempty"`
+	Bridge       *bool `json:"bridge,omitempty"`
+	Orchestrator *bool `json:"orchestrator,omitempty"`
+	Scheduler    *bool `json:"scheduler,omitempty"`
+	MCP          *bool `json:"mcp,omitempty"`
+	Other        *bool `json:"other,omitempty"`
 }
 
 type sessionsFileConfigJSON struct {
@@ -371,11 +401,13 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			AllowMacro:             fc.Security.AllowMacro,
 			AllowScreencast:        fc.Security.AllowScreencast,
 			AllowDownload:          fc.Security.AllowDownload,
+			AllowedDomains:         effectiveSecurityAllowedDomains(fc.Security),
 			DownloadAllowedDomains: copyStringSlice(fc.Security.DownloadAllowedDomains),
 			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
 			AllowUpload:            fc.Security.AllowUpload,
 			AllowClipboard:         fc.Security.AllowClipboard,
 			AllowStateExport:       fc.Security.AllowStateExport,
+			StateEncryptionKey:     fc.Security.StateEncryptionKey,
 			EnableActionGuards:     fc.Security.EnableActionGuards,
 			UploadMaxRequestBytes:  fc.Security.UploadMaxRequestBytes,
 			UploadMaxFiles:         fc.Security.UploadMaxFiles,
@@ -383,6 +415,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			UploadMaxTotalBytes:    fc.Security.UploadMaxTotalBytes,
 			MaxRedirects:           fc.Security.MaxRedirects,
 			TrustedProxyCIDRs:      copyStringSlice(fc.Security.TrustedProxyCIDRs),
+			TrustedResolveCIDRs:    copyStringSlice(fc.Security.TrustedResolveCIDRs),
 			Attach: attachJSON{
 				Enabled:      fc.Security.Attach.Enabled,
 				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
@@ -390,7 +423,6 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			},
 			IDPI: idpiConfigJSON{
 				Enabled:         fc.Security.IDPI.Enabled,
-				AllowedDomains:  copyStringSlice(fc.Security.IDPI.AllowedDomains),
 				StrictMode:      fc.Security.IDPI.StrictMode,
 				ScanContent:     fc.Security.IDPI.ScanContent,
 				WrapContent:     fc.Security.IDPI.WrapContent,
@@ -436,6 +468,16 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 				Enabled:        fc.Observability.Activity.Enabled,
 				SessionIdleSec: fc.Observability.Activity.SessionIdleSec,
 				RetentionDays:  fc.Observability.Activity.RetentionDays,
+				StateDir:       fc.Observability.Activity.StateDir,
+				Events: activityEventsConfigJSON{
+					Dashboard:    fc.Observability.Activity.Events.Dashboard,
+					Server:       fc.Observability.Activity.Events.Server,
+					Bridge:       fc.Observability.Activity.Events.Bridge,
+					Orchestrator: fc.Observability.Activity.Events.Orchestrator,
+					Scheduler:    fc.Observability.Activity.Events.Scheduler,
+					MCP:          fc.Observability.Activity.Events.MCP,
+					Other:        fc.Observability.Activity.Events.Other,
+				},
 			},
 		},
 		Sessions: sessionsFileConfigJSON{
@@ -466,6 +508,17 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			},
 		},
 	})
+}
+
+func (fc *FileConfig) UnmarshalJSON(data []byte) error {
+	type rawFileConfig FileConfig
+	tmp := rawFileConfig(*fc)
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	*fc = FileConfig(tmp)
+	NormalizeFileConfigAliasesFromJSON(fc, data)
+	return nil
 }
 
 // FileConfigFromRuntime converts the effective runtime configuration back into a
@@ -507,6 +560,13 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	activityEnabled := cfg.Observability.Activity.Enabled
 	activitySessionIdleSec := cfg.Observability.Activity.SessionIdleSec
 	activityRetentionDays := cfg.Observability.Activity.RetentionDays
+	activityDashboardEvents := cfg.Observability.Activity.Events.Dashboard
+	activityServerEvents := cfg.Observability.Activity.Events.Server
+	activityBridgeEvents := cfg.Observability.Activity.Events.Bridge
+	activityOrchestratorEvents := cfg.Observability.Activity.Events.Orchestrator
+	activitySchedulerEvents := cfg.Observability.Activity.Events.Scheduler
+	activityMCPEvents := cfg.Observability.Activity.Events.MCP
+	activityOtherEvents := cfg.Observability.Activity.Events.Other
 	dashboardSessionPersist := cfg.Sessions.Dashboard.Persist
 	dashboardSessionIdleSec := int(cfg.Sessions.Dashboard.IdleTimeout / time.Second)
 	dashboardSessionMaxLifetimeSec := int(cfg.Sessions.Dashboard.MaxLifetime / time.Second)
@@ -571,6 +631,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			AllowMacro:             &allowMacro,
 			AllowScreencast:        &allowScreencast,
 			AllowDownload:          &allowDownload,
+			AllowedDomains:         append([]string(nil), cfg.AllowedDomains...),
 			DownloadAllowedDomains: downloadAllowedDomains,
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
@@ -583,6 +644,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			UploadMaxTotalBytes:    &uploadMaxTotalBytes,
 			MaxRedirects:           &maxRedirects,
 			TrustedProxyCIDRs:      append([]string(nil), cfg.TrustedProxyCIDRs...),
+			TrustedResolveCIDRs:    append([]string(nil), cfg.TrustedResolveCIDRs...),
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
@@ -617,6 +679,15 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				Enabled:        &activityEnabled,
 				SessionIdleSec: &activitySessionIdleSec,
 				RetentionDays:  &activityRetentionDays,
+				Events: ActivityEventsFileConfig{
+					Dashboard:    &activityDashboardEvents,
+					Server:       &activityServerEvents,
+					Bridge:       &activityBridgeEvents,
+					Orchestrator: &activityOrchestratorEvents,
+					Scheduler:    &activitySchedulerEvents,
+					MCP:          &activityMCPEvents,
+					Other:        &activityOtherEvents,
+				},
 			},
 		},
 		Sessions: SessionsFileConfig{

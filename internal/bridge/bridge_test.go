@@ -71,6 +71,42 @@ func TestRefCacheLookup(t *testing.T) {
 	}
 }
 
+func TestRefTargetsFromNodes(t *testing.T) {
+	nodes := []A11yNode{
+		{
+			Ref:            "e0",
+			NodeID:         100,
+			FrameID:        "frame-1",
+			FrameURL:       "https://example.com/embed",
+			FrameName:      "embed",
+			ChildFrameID:   "frame-1-child",
+			ChildFrameURL:  "https://example.com/embed/child",
+			ChildFrameName: "nested",
+		},
+		{
+			Ref:    "e1",
+			NodeID: 200,
+		},
+	}
+
+	targets := RefTargetsFromNodes(nodes)
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(targets))
+	}
+	if targets["e0"].BackendNodeID != 100 {
+		t.Fatalf("e0 backend node = %d", targets["e0"].BackendNodeID)
+	}
+	if targets["e0"].FrameID != "frame-1" {
+		t.Fatalf("e0 frame id = %q", targets["e0"].FrameID)
+	}
+	if targets["e0"].ChildFrameID != "frame-1-child" {
+		t.Fatalf("e0 child frame id = %q", targets["e0"].ChildFrameID)
+	}
+	if targets["e1"].BackendNodeID != 200 {
+		t.Fatalf("e1 backend node = %d", targets["e1"].BackendNodeID)
+	}
+}
+
 func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 	// Test that TabManager can be initialized without a valid browser context.
 	// This is the case for remote allocators where the browser context is
@@ -88,6 +124,54 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 	_, _, _, err := tm.CreateTab("about:blank")
 	if err == nil {
 		t.Error("CreateTab should fail when browserCtx is invalid")
+	}
+}
+
+func TestCreateTab_RejectsNilTabManager(t *testing.T) {
+	var tm *TabManager
+
+	_, _, _, err := tm.CreateTab("about:blank")
+	if err == nil {
+		t.Fatal("CreateTab should fail when tab manager is nil")
+	}
+	if err.Error() != "tab manager not initialized" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBridgeTabOperations_RejectNilTabManager(t *testing.T) {
+	b := &Bridge{}
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{name: "tab context", run: func() error {
+			_, _, err := b.TabContext("")
+			return err
+		}},
+		{name: "list targets", run: func() error {
+			_, err := b.ListTargets()
+			return err
+		}},
+		{name: "close tab", run: func() error {
+			return b.CloseTab("tab1")
+		}},
+		{name: "focus tab", run: func() error {
+			return b.FocusTab("tab1")
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if err.Error() != "tab manager not initialized" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
@@ -228,17 +312,17 @@ func TestShouldBlockPopupTarget(t *testing.T) {
 
 func TestEvaluateTabPolicy(t *testing.T) {
 	cfg := config.IDPIConfig{
-		Enabled:        true,
-		AllowedDomains: []string{"example.com"},
-		StrictMode:     true,
+		Enabled:    true,
+		StrictMode: true,
 	}
+	allowedDomains := []string{"example.com"}
 
-	allowed := EvaluateTabPolicy("https://example.com/path", cfg)
+	allowed := EvaluateTabPolicy("https://example.com/path", cfg, allowedDomains)
 	if allowed.Threat || allowed.Blocked {
 		t.Fatalf("expected allowed domain to pass, got %+v", allowed)
 	}
 
-	blocked := EvaluateTabPolicy("https://evil.example.net/path", cfg)
+	blocked := EvaluateTabPolicy("https://evil.example.net/path", cfg, allowedDomains)
 	if !blocked.Threat || !blocked.Blocked {
 		t.Fatalf("expected blocked domain to fail, got %+v", blocked)
 	}

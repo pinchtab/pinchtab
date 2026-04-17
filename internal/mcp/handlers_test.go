@@ -78,3 +78,12 @@ func resultText(t *testing.T, r *mcp.CallToolResult) string {
 	}
 	return tc.Text
 }
+
+func resultJSON(t *testing.T, r *mcp.CallToolResult) map[string]any {
+	t.Helper()
+	var v map[string]any
+	if err := json.Unmarshal([]byte(resultText(t, r)), &v); err != nil {
+		t.Fatalf("unmarshal result JSON: %v", err)
+	}
+	return v
+}

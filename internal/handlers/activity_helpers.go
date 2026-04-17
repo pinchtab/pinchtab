@@ -16,6 +16,17 @@ func (h *Handlers) tabContext(r *http.Request, tabID string) (context.Context, s
 	return ctx, resolvedID, err
 }
 
+// tabContextWithHeader resolves the tab and sets the resolved tab ID as a
+// response header so the orchestrator proxy can enrich activity events
+// even for large responses (e.g. snapshots) that exceed the body-inspection threshold.
+func (h *Handlers) tabContextWithHeader(w http.ResponseWriter, r *http.Request, tabID string) (context.Context, string, error) {
+	ctx, resolvedID, err := h.tabContext(r, tabID)
+	if err == nil {
+		w.Header().Set(activity.HeaderPTTabID, resolvedID)
+	}
+	return ctx, resolvedID, err
+}
+
 func (h *Handlers) recordActivity(r *http.Request, update activity.Update) {
 	activity.EnrichRequest(r, update)
 }

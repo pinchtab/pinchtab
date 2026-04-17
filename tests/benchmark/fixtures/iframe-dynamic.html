@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Dynamic iframe</title>
+</head>
+<body>
+  <h1>Dynamic Iframe — VERIFY_IFRAME_DYNAMIC_OUTER</h1>
+  <p>The iframe is added to the DOM ~1.2 s after load. Agents that snapshot
+  immediately will not see it; they need to wait or re-snapshot.</p>
+
+  <div id="slot">IFRAME_SLOT_EMPTY</div>
+
+  <script>
+    setTimeout(function () {
+      const slot = document.getElementById('slot');
+      slot.textContent = '';
+      const frame = document.createElement('iframe');
+      frame.id = 'late-frame';
+      frame.src = 'iframe-content.html';
+      frame.width = '500';
+      frame.height = '300';
+      slot.appendChild(frame);
+      const marker = document.createElement('div');
+      marker.id = 'late-marker';
+      marker.textContent = 'IFRAME_DYNAMIC_ATTACHED';
+      slot.appendChild(marker);
+    }, 1200);
+  </script>
+</body>
+</html>

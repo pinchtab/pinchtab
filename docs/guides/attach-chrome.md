@@ -130,6 +130,7 @@ curl -X POST http://localhost:9867/instances/attach \
   "profileId": "prof_278be873",
   "profileName": "shared-chrome",
   "port": "",
+  "mode": "headed",
   "headless": false,
   "status": "running",
   "attached": true,

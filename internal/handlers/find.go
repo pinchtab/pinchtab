@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/semantic"
@@ -192,6 +193,8 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 	if resp.Matches == nil {
 		resp.Matches = []semantic.ElementMatch{}
 	}
+
+	h.recordActivity(r, activity.Update{Action: "find"})
 
 	// Cache intent for recovery: store the query + best-match descriptor
 	// so the recovery engine can reconstruct a search if the ref goes stale.

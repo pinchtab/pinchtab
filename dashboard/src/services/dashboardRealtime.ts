@@ -1,6 +1,6 @@
 import type { Agent } from "../generated/types";
 import { useAppStore } from "../stores/useAppStore";
-import { subscribeToEvents } from "./api";
+import { isClientActivityEvent, subscribeToEvents } from "./api";
 
 interface RealtimeHandle {
   consumers: number;
@@ -69,6 +69,9 @@ function startDashboardRealtime(includeMemory: boolean) {
         console.log("System event:", event);
       },
       onActivity: (event) => {
+        if (!isClientActivityEvent(event)) {
+          return;
+        }
         const state = useAppStore.getState();
         state.upsertAgentFromEvent(event);
         state.appendAgentEvent(event);

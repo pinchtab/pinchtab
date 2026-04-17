@@ -61,7 +61,7 @@ export function BrowserSettingsSection({
       </SettingRow>
       <SettingRow
         label="Extension paths"
-        description="Comma-separated extension directories to load."
+        description="Comma-separated extension directories to load. By default, PinchTab uses the local extensions/ folder under its state/config directory. Set custom paths here to override that default, or clear the field to disable extension loading."
       >
         <input
           value={listToCsv(backendConfig.browser.extensionPaths)}

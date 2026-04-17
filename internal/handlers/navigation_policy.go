@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
+	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +21,8 @@ import (
 const maxNavigateURLLen = 8 << 10
 
 type validatedNavigateTarget struct {
-	allowInternal bool
+	allowInternal     bool
+	trustedResolvedIP []netip.Addr
 }
 
 type navigateRuntimeGuard struct {
@@ -90,7 +94,7 @@ func validateNavigateURL(raw string) error {
 	}
 }
 
-func validateNavigateTarget(raw string, allowExplicitInternal bool) (*validatedNavigateTarget, error) {
+func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResolveCIDRs []*net.IPNet) (*validatedNavigateTarget, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || strings.EqualFold(raw, "about:blank") {
 		return &validatedNavigateTarget{allowInternal: true}, nil
@@ -114,6 +118,25 @@ func validateNavigateTarget(raw string, allowExplicitInternal bool) (*validatedN
 		if errors.Is(err, netguard.ErrPrivateInternalIP) {
 			if allowExplicitInternal {
 				return &validatedNavigateTarget{allowInternal: true}, nil
+			}
+			if len(trustedResolveCIDRs) > 0 {
+				ips, err2 := netguard.ResolveAndValidateIPsWithTrustedCIDRs(ctx, host, trustedResolveCIDRs)
+				if err2 == nil {
+					cidrs := make([]string, len(trustedResolveCIDRs))
+					for i, c := range trustedResolveCIDRs {
+						cidrs[i] = c.String()
+					}
+					addrs := make([]string, len(ips))
+					for i, a := range ips {
+						addrs[i] = a.String()
+					}
+					slog.Info("navigate: trusted resolve CIDR override",
+						"host", host,
+						"resolvedIPs", addrs,
+						"trustedCIDRs", cidrs,
+					)
+					return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
+				}
 			}
 			return nil, fmt.Errorf("navigation target resolves to blocked private/internal IP")
 		}
@@ -155,12 +178,18 @@ func extractNavigateHost(raw string) (string, bool) {
 	return "", false
 }
 
-func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet) error {
+func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.Addr) error {
 	normalized := netguard.NormalizeRemoteIP(raw)
 	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
 		if ip := net.ParseIP(normalized); ip != nil {
 			for _, cidr := range trustedCIDRs {
 				if cidr.Contains(ip) {
+					return nil
+				}
+			}
+			if addr, ok := netip.AddrFromSlice(ip); ok {
+				addr = addr.Unmap()
+				if slices.Contains(trustedIPs, addr) {
 					return nil
 				}
 			}
@@ -178,7 +207,15 @@ func parseCIDRs(raw []string) []*net.IPNet {
 			continue
 		}
 		if !strings.Contains(s, "/") {
-			s += "/32"
+			if ip := net.ParseIP(s); ip != nil {
+				if ip.To4() != nil {
+					s = ip.String() + "/32"
+				} else {
+					s = ip.String() + "/128"
+				}
+			} else {
+				s += "/32"
+			}
 		}
 		if _, cidr, err := net.ParseCIDR(s); err == nil {
 			nets = append(nets, cidr)
@@ -209,7 +246,7 @@ func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFun
 			if !guard.isMainDocumentResponse(string(e.RequestID)) {
 				return
 			}
-			if err := validateNavigateRemoteIPAddress(e.Response.RemoteIPAddress, trustedCIDRs); err != nil {
+			if err := validateNavigateRemoteIPAddress(e.Response.RemoteIPAddress, trustedCIDRs, target.trustedResolvedIP); err != nil {
 				guard.setBlocked(err)
 				tCancel()
 			}

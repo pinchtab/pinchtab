@@ -29,5 +29,15 @@ jobs:
       - name: Verify bootstrap path in container
         run: bash scripts/docker-smoke.sh pinchtab-release-smoke:${{ github.run_id }}
 
+      - name: Verify headless Ubuntu Chrome for Testing startup
+        run: bash scripts/docker-chrome-cft-smoke.sh pinchtab-chrome-cft-smoke:${{ github.run_id }}
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Verify instance port conflict detection
+        run: bash scripts/docker-port-conflict-smoke.sh pinchtab-chrome-cft-smoke:${{ github.run_id }}
+        env:
+          DOCKER_BUILDKIT: 1
+
       - name: Verify MCP stdio in container
         run: bash scripts/docker-mcp-smoke.sh pinchtab-release-smoke:${{ github.run_id }}

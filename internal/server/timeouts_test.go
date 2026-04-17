@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 )
@@ -31,7 +31,7 @@ func TestServerTimeoutOrdering(t *testing.T) {
 
 func TestDashboardHandlerChainAppliesRateLimit(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret"}
-	sessions := authn.NewSessionManager(authn.SessionConfig{})
+	sessions := browsersession.NewManager(browsersession.Config{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /protected", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -36,10 +36,8 @@ export default function InstanceListItem({
   return (
     <button
       onClick={onClick}
-      className={`mb-2 flex w-full flex-col gap-1 px-3 py-2.5 text-left ${
-        selected
-          ? "dashboard-panel dashboard-panel-selected border-primary"
-          : "dashboard-panel dashboard-panel-hover"
+      className={`flex w-full flex-col gap-1 border-b border-border-subtle px-3 py-2.5 text-left transition-colors ${
+        selected ? "bg-bg-hover text-text-primary" : "hover:bg-bg-hover/50"
       }`}
     >
       <div className="flex w-full items-center gap-2">

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hovers — PinchTab Benchmark</title>
+  <style>
+    .avatar { display: inline-block; margin: 20px; }
+    .avatar-img { width: 100px; height: 100px; background: #ccc; border-radius: 50%; cursor: pointer; }
+    .info { display: none; padding: 10px; background: #f0f0f0; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Hovers — VERIFY_HOVERS_PAGE_66666</h1>
+
+  <div class="avatar" id="avatar-1" role="button" tabindex="0" aria-label="User 1 avatar" onmouseenter="showInfo(1)" onmouseleave="hideInfo(1)">
+    <div class="avatar-img"></div>
+    <div class="info" id="info-1"></div>
+  </div>
+
+  <div class="avatar" id="avatar-2" role="button" tabindex="0" aria-label="User 2 avatar" onmouseenter="showInfo(2)" onmouseleave="hideInfo(2)">
+    <div class="avatar-img"></div>
+    <div class="info" id="info-2"></div>
+  </div>
+
+  <div class="avatar" id="avatar-3" role="button" tabindex="0" aria-label="User 3 avatar" onmouseenter="showInfo(3)" onmouseleave="hideInfo(3)">
+    <div class="avatar-img"></div>
+    <div class="info" id="info-3"></div>
+  </div>
+
+  <script>
+    const users = {
+      1: { name: 'Alice Anderson', marker: 'HOVER_REVEALED_USER_1' },
+      2: { name: 'Bob Brown',      marker: 'HOVER_REVEALED_USER_2' },
+      3: { name: 'Carol Chen',     marker: 'HOVER_REVEALED_USER_3' },
+    };
+
+    function showInfo(n) {
+      const info = document.getElementById('info-' + n);
+      info.innerHTML = '<p>name: ' + users[n].name + '</p><p>' + users[n].marker + '</p>';
+      info.style.display = 'block';
+    }
+
+    function hideInfo(n) {
+      // Keep content visible after hover so snapshots and verification can read it
+      // (don't actually hide; the marker should persist for the next snapshot)
+    }
+  </script>
+</body>
+</html>

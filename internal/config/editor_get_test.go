@@ -17,6 +17,10 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"server.cookieSecure", "false", "false"},
 		{"sessions.dashboard.persist", "true", "true"},
 		{"sessions.dashboard.maxLifetimeSec", "604800", "604800"},
+		{"observability.activity.enabled", "true", "true"},
+		{"observability.activity.retentionDays", "14", "14"},
+		{"observability.activity.events.dashboard", "true", "true"},
+		{"observability.activity.events.mcp", "false", "false"},
 		{"browser.version", "120.0", "120.0"},
 		{"browser.binary", "/usr/bin/chrome", "/usr/bin/chrome"},
 		{"instanceDefaults.mode", "headed", "headed"},
@@ -53,7 +57,7 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"multiInstance.restart.stableAfterSec", "600", "600"},
 		{"security.attach.enabled", "true", "true"},
 		{"security.idpi.enabled", "true", "true"},
-		{"security.idpi.allowedDomains", "localhost,example.com", "localhost,example.com"},
+		{"security.allowedDomains", "localhost,example.com", "localhost,example.com"},
 		{"security.idpi.strictMode", "false", "false"},
 		{"security.idpi.scanContent", "true", "true"},
 		{"security.idpi.wrapContent", "true", "true"},
@@ -111,6 +115,9 @@ func TestGetConfigValue_NilPointerReturnsEmpty(t *testing.T) {
 		"server.cookieSecure",
 		"sessions.dashboard.persist",
 		"sessions.dashboard.maxLifetimeSec",
+		"observability.activity.enabled",
+		"observability.activity.retentionDays",
+		"observability.activity.events.dashboard",
 	}
 	for _, path := range ptrs {
 		t.Run(path, func(t *testing.T) {

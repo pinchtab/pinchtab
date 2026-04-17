@@ -30,10 +30,12 @@ func SetConfigValue(fc *FileConfig, path string, value string) error {
 		return setMultiInstanceField(&fc.MultiInstance, field, value)
 	case "timeouts":
 		return setTimeoutsField(&fc.Timeouts, field, value)
+	case "observability":
+		return setObservabilityField(&fc.Observability, field, value)
 	case "sessions":
 		return setSessionsField(&fc.Sessions, field, value)
 	default:
-		return fmt.Errorf("unknown section %q (valid: server, browser, instanceDefaults, security, profiles, multiInstance, timeouts, sessions)", section)
+		return fmt.Errorf("unknown section %q (valid: server, browser, instanceDefaults, security, profiles, multiInstance, timeouts, observability, sessions)", section)
 	}
 }
 
@@ -81,6 +83,72 @@ func setBrowserField(b *BrowserConfig, field, value string) error {
 		b.ChromeExtraFlags = value
 	default:
 		return fmt.Errorf("unknown field browser.%s", field)
+	}
+	return nil
+}
+
+func setObservabilityField(o *ObservabilityFileConfig, field, value string) error {
+	if strings.HasPrefix(field, "activity.") {
+		return setActivityField(&o.Activity, strings.TrimPrefix(field, "activity."), value)
+	}
+	return fmt.Errorf("unknown field observability.%s", field)
+}
+
+func setActivityField(a *ActivityFileConfig, field, value string) error {
+	if strings.HasPrefix(field, "events.") {
+		return setActivityEventField(&a.Events, strings.TrimPrefix(field, "events."), value)
+	}
+
+	switch field {
+	case "enabled":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("observability.activity.enabled: %w", err)
+		}
+		a.Enabled = &b
+	case "sessionIdleSec":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("observability.activity.sessionIdleSec must be a number: %w", err)
+		}
+		a.SessionIdleSec = &n
+	case "retentionDays":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("observability.activity.retentionDays must be a number: %w", err)
+		}
+		a.RetentionDays = &n
+	case "stateDir":
+		a.StateDir = value
+	default:
+		return fmt.Errorf("unknown field observability.activity.%s", field)
+	}
+	return nil
+}
+
+func setActivityEventField(e *ActivityEventsFileConfig, field, value string) error {
+	b, err := parseBool(value)
+	if err != nil {
+		return fmt.Errorf("observability.activity.events.%s: %w", field, err)
+	}
+
+	switch field {
+	case "dashboard":
+		e.Dashboard = &b
+	case "server":
+		e.Server = &b
+	case "bridge":
+		e.Bridge = &b
+	case "orchestrator":
+		e.Orchestrator = &b
+	case "scheduler":
+		e.Scheduler = &b
+	case "mcp":
+		e.MCP = &b
+	case "other":
+		e.Other = &b
+	default:
+		return fmt.Errorf("unknown field observability.activity.events.%s", field)
 	}
 	return nil
 }
@@ -201,7 +269,11 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		return setAttachField(&s.Attach, strings.TrimPrefix(field, "attach."), value)
 	}
 	if strings.HasPrefix(field, "idpi.") {
-		return setIDPIField(&s.IDPI, strings.TrimPrefix(field, "idpi."), value)
+		return setIDPIField(s, strings.TrimPrefix(field, "idpi."), value)
+	}
+	if field == "allowedDomains" {
+		s.AllowedDomains = parseCSVList(value)
+		return nil
 	}
 	if field == "downloadAllowedDomains" {
 		s.DownloadAllowedDomains = parseCSVList(value)
@@ -209,6 +281,10 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 	}
 	if field == "trustedProxyCIDRs" {
 		s.TrustedProxyCIDRs = parseCSVList(value)
+		return nil
+	}
+	if field == "trustedResolveCIDRs" {
+		s.TrustedResolveCIDRs = parseCSVList(value)
 		return nil
 	}
 	switch field {
@@ -382,7 +458,8 @@ func setAttachField(a *AttachConfig, field, value string) error {
 	return nil
 }
 
-func setIDPIField(i *IDPIConfig, field, value string) error {
+func setIDPIField(s *SecurityConfig, field, value string) error {
+	i := &s.IDPI
 	switch field {
 	case "enabled":
 		b, err := parseBool(value)
@@ -390,8 +467,6 @@ func setIDPIField(i *IDPIConfig, field, value string) error {
 			return fmt.Errorf("security.idpi.enabled: %w", err)
 		}
 		i.Enabled = b
-	case "allowedDomains":
-		i.AllowedDomains = parseCSVList(value)
 	case "strictMode":
 		b, err := parseBool(value)
 		if err != nil {

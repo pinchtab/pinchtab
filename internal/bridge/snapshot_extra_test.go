@@ -239,16 +239,10 @@ func TestFrameIDs_Recursive(t *testing.T) {
 	tree := rawFrameTree{}
 	tree.Frame.ID = "root"
 	tree.ChildFrames = []rawFrameTree{
-		{Frame: struct {
-			ID string `json:"id"`
-		}{ID: "child-1"}},
+		{Frame: RawFrame{ID: "child-1"}},
 		{
-			Frame: struct {
-				ID string `json:"id"`
-			}{ID: "child-2"},
-			ChildFrames: []rawFrameTree{{Frame: struct {
-				ID string `json:"id"`
-			}{ID: "grandchild"}}},
+			Frame:       RawFrame{ID: "child-2"},
+			ChildFrames: []rawFrameTree{{Frame: RawFrame{ID: "grandchild"}}},
 		},
 	}
 	got := frameIDs(tree)
@@ -260,5 +254,24 @@ func TestFrameIDs_Recursive(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("frameIDs[%d]=%q want %q (all=%v)", i, got[i], want[i], got)
 		}
+	}
+}
+
+func TestFrameMap_Recursive(t *testing.T) {
+	tree := rawFrameTree{
+		Frame: RawFrame{ID: "root", URL: "https://example.com", Name: "main"},
+		ChildFrames: []rawFrameTree{
+			{Frame: RawFrame{ID: "child-1", URL: "https://example.com/embed", Name: "embed"}},
+		},
+	}
+	got := FrameMap(tree)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 frames, got %d", len(got))
+	}
+	if got["root"].URL != "https://example.com" {
+		t.Fatalf("root frame url = %q", got["root"].URL)
+	}
+	if got["child-1"].Name != "embed" {
+		t.Fatalf("child frame name = %q", got["child-1"].Name)
 	}
 }

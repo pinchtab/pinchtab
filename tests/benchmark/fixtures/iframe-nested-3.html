@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nested Level 3</title>
+</head>
+<body>
+  <h3>Level 3 — VERIFY_IFRAME_NESTED_L3</h3>
+  <button type="button" id="deep-button">Click me</button>
+  <div id="deep-result">DEEP_CLICKED=NO</div>
+  <script>
+    document.getElementById('deep-button').addEventListener('click', function () {
+      document.getElementById('deep-result').textContent = 'DEEP_CLICKED=YES_LEVEL_3';
+    });
+  </script>
+</body>
+</html>

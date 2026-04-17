@@ -14,6 +14,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -59,6 +60,8 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 		}
 		cookies = filtered
 	}
+
+	h.recordActivity(r, activity.Update{Action: "cookies.read"})
 
 	result := make([]map[string]any, len(cookies))
 	for i, c := range cookies {
@@ -191,6 +194,8 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 			successCount++
 		}
 	}
+
+	h.recordActivity(r, activity.Update{Action: "cookies.write"})
 
 	httpx.JSON(w, 200, map[string]any{
 		"set":    successCount,

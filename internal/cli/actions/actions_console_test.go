@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"strings"
@@ -55,6 +56,14 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	os.Stdout = writer
 
+	var buf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&buf, reader)
+		_ = reader.Close()
+		done <- err
+	}()
+
 	defer func() {
 		os.Stdout = oldStdout
 	}()
@@ -62,10 +71,8 @@ func captureStdout(t *testing.T, fn func()) string {
 	fn()
 
 	_ = writer.Close()
-	out, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
+	if err := <-done; err != nil {
+		t.Fatalf("io.Copy: %v", err)
 	}
-	_ = reader.Close()
-	return string(out)
+	return buf.String()
 }

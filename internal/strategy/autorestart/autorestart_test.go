@@ -527,6 +527,61 @@ func TestStrategy_HandleCrash_RestartingEvent(t *testing.T) {
 	}
 }
 
+func TestStrategy_LaunchInitial_TracksLaunchedMode(t *testing.T) {
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	s := New(AutorestartConfig{
+		ProfileName: "headed-profile",
+		Headless:    false,
+		HeadlessSet: true,
+	})
+	s.orch = orch
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	defer s.cancel()
+
+	s.launchInitial()
+
+	s.mu.Lock()
+	instanceID := s.instanceID
+	headless := s.headless
+	s.mu.Unlock()
+
+	if instanceID == "" {
+		t.Fatal("expected launchInitial to track a managed instance")
+	}
+	if headless {
+		t.Fatal("expected launchInitial to preserve headed mode")
+	}
+}
+
+func TestStrategy_RestartInstance_UsesTrackedMode(t *testing.T) {
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	if _, _, err := orch.AttachBridge("default", "http://127.0.0.1:9999", ""); err != nil {
+		t.Fatalf("AttachBridge failed: %v", err)
+	}
+
+	s := New(AutorestartConfig{
+		ProfileName: "default",
+		Headless:    true,
+		HeadlessSet: true,
+	})
+	s.orch = orch
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	defer s.cancel()
+	s.instanceID = "inst_default_default"
+	s.headless = false
+	s.restarting = true
+
+	s.restartInstance()
+
+	instances := orch.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 managed instance after restart, got %d", len(instances))
+	}
+	if instances[0].Headless {
+		t.Fatalf("expected restarted instance to remain headed, got headless=true")
+	}
+}
+
 func TestStrategy_ContextCancellation(t *testing.T) {
 	s := New(AutorestartConfig{
 		InitBackoff: 10 * time.Second, // Long backoff
@@ -604,6 +659,6 @@ func (r *mockRunner) Run(_ context.Context, _ string, _ []string, _ []string, _,
 	return &mockCmd{}, nil
 }
 
-func (r *mockRunner) IsPortAvailable(_ string) bool {
-	return r.portAvail
+func (r *mockRunner) InspectPort(_ string) orchestrator.PortInspection {
+	return orchestrator.PortInspection{Available: r.portAvail}
 }

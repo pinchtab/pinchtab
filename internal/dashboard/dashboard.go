@@ -112,9 +112,6 @@ func activityEventToLiveEvent(evt activity.Event) apiTypes.ActivityEvent {
 	if evt.SessionID != "" {
 		details["sessionId"] = evt.SessionID
 	}
-	if evt.ActorID != "" {
-		details["actorId"] = evt.ActorID
-	}
 	if evt.InstanceID != "" {
 		details["instanceId"] = evt.InstanceID
 	}
@@ -238,8 +235,9 @@ func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since ti
 	}
 
 	events, err := rec.Query(activity.Filter{
-		Since: since,
-		Limit: persistedAgentBootstrapLimit,
+		Source: "client",
+		Since:  since,
+		Limit:  persistedAgentBootstrapLimit,
 	})
 	if err != nil {
 		return since, err
@@ -250,9 +248,6 @@ func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since ti
 	for _, evt := range events {
 		if evt.Timestamp.After(latest) {
 			latest = evt.Timestamp
-		}
-		if strings.TrimSpace(evt.AgentID) == "" {
-			continue
 		}
 		if !shouldTrackPersistedAgentActivity(evt) {
 			continue
@@ -546,7 +541,7 @@ func matchesMode(mode, channel string) bool {
 }
 
 func shouldTrackPersistedAgentActivity(evt activity.Event) bool {
-	return strings.TrimSpace(evt.AgentID) != ""
+	return evt.Source == "client"
 }
 
 func (d *Dashboard) rememberEventIDLocked(id string) {

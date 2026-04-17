@@ -1,6 +1,8 @@
 package bridge
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -84,6 +86,43 @@ func TestBuildChromeArgsSanitizesUnsafeAndReservedExtraFlags(t *testing.T) {
 		if slices.Contains(args, forbidden) {
 			t.Fatalf("did not expect forbidden extra flag %q in %v", forbidden, args)
 		}
+	}
+}
+
+func TestBuildChromeArgsSkipsMissingExtensionPaths(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{
+		ExtensionPaths: []string{filepath.Join(t.TempDir(), "missing-extension")},
+	}, 9222)
+
+	if !slices.Contains(args, "--disable-extensions") {
+		t.Fatalf("expected missing extension paths to fall back to --disable-extensions, got %v", args)
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--load-extension=") {
+			t.Fatalf("did not expect load-extension arg for missing path: %v", args)
+		}
+	}
+}
+
+func TestBuildChromeArgsIncludesExistingExtensionPaths(t *testing.T) {
+	extensionDir := filepath.Join(t.TempDir(), "extensions", "example")
+	if err := os.MkdirAll(extensionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	args := buildChromeArgs(&config.RuntimeConfig{
+		ExtensionPaths: []string{extensionDir},
+	}, 9222)
+
+	found := false
+	for _, arg := range args {
+		if arg == "--load-extension="+extensionDir {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected load-extension arg for existing path in %v", args)
 	}
 }
 

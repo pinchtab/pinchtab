@@ -24,7 +24,6 @@ export interface ActivityQuery {
   source?: string;
   requestId?: string;
   sessionId?: string;
-  actorId?: string;
   agentId?: string;
   instanceId?: string;
   profileId?: string;

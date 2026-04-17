@@ -49,6 +49,7 @@ const instances: Instance[] = [
     profileId: "prof_beta",
     profileName: "beta",
     port: "9988",
+    mode: "headed",
     headless: false,
     status: "running",
     startTime: "2026-03-06T10:00:00Z",
@@ -64,6 +65,20 @@ function renderProfilesPage() {
   );
 }
 
+function clickSidebarProfile(name: string) {
+  const profileNameEl = screen.getByText(name, {
+    selector: ".text-sm.font-semibold",
+  });
+  const button = profileNameEl.closest("button") as HTMLElement;
+  return userEvent.click(button);
+}
+
+function getDetailPanel() {
+  return document.querySelector(
+    ".dashboard-panel .min-w-0.flex-1",
+  ) as HTMLElement;
+}
+
 describe("ProfilesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,25 +92,23 @@ describe("ProfilesPage", () => {
   it("moves the running profile to the top and auto-selects it", async () => {
     renderProfilesPage();
 
-    let detailPanel: HTMLElement;
     await waitFor(() => {
-      detailPanel = screen
-        .getByRole("heading", { name: "beta" })
-        .closest(".dashboard-panel") as HTMLElement;
-      expect(detailPanel).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Profile: beta/i }),
+      ).toBeInTheDocument();
     });
 
-    const [firstProfileButton, secondProfileButton] = screen.getAllByRole(
-      "button",
-      { name: /alpha|beta/i },
+    const sidebar = document.querySelector(
+      ".bg-bg-surface\\/50",
+    ) as HTMLElement;
+    const sidebarButtons = within(sidebar).getAllByRole("button");
+    const profileButtons = sidebarButtons.filter((b) =>
+      b.classList.contains("border-b"),
     );
-    expect(firstProfileButton).toHaveTextContent("beta");
-    expect(secondProfileButton).toHaveTextContent("alpha");
+    expect(profileButtons[0]).toHaveTextContent("beta");
+    expect(profileButtons[1]).toHaveTextContent("alpha");
 
-    detailPanel = screen
-      .getByRole("heading", { name: "beta" })
-      .closest(".dashboard-panel") as HTMLElement;
-
+    const detailPanel = getDetailPanel()!;
     expect(
       within(detailPanel).getAllByText("team@example.com").length,
     ).toBeGreaterThan(0);
@@ -107,16 +120,20 @@ describe("ProfilesPage", () => {
     renderProfilesPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Profile: beta/i }),
+      ).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /alpha/i }));
+    await clickSidebarProfile("alpha");
 
-    const detailPanel = screen
-      .getByRole("heading", { name: "alpha" })
-      .closest(".dashboard-panel") as HTMLElement;
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Profile: alpha/i }),
+      ).toBeInTheDocument();
+    });
 
-    expect(detailPanel).toBeInTheDocument();
+    const detailPanel = getDetailPanel()!;
     expect(
       within(detailPanel).getAllByText("Use for personal logins").length,
     ).toBeGreaterThan(0);
@@ -129,14 +146,20 @@ describe("ProfilesPage", () => {
     renderProfilesPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Profile: beta/i }),
+      ).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /alpha/i }));
+    await clickSidebarProfile("alpha");
 
-    const detailPanel = screen
-      .getByRole("heading", { name: "alpha" })
-      .closest(".dashboard-panel") as HTMLElement;
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Profile: alpha/i }),
+      ).toBeInTheDocument();
+    });
+
+    const detailPanel = getDetailPanel()!;
     const saveButton = within(detailPanel).getByRole("button", {
       name: "Save",
     });

@@ -34,6 +34,15 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
 		RetentionDays: cfg.Observability.Activity.RetentionDays,
+		Events: activity.EventSourceConfig{
+			Dashboard:    cfg.Observability.Activity.Events.Dashboard,
+			Server:       cfg.Observability.Activity.Events.Server,
+			Bridge:       cfg.Observability.Activity.Events.Bridge,
+			Orchestrator: cfg.Observability.Activity.Events.Orchestrator,
+			Scheduler:    cfg.Observability.Activity.Events.Scheduler,
+			MCP:          cfg.Observability.Activity.Events.MCP,
+			Other:        cfg.Observability.Activity.Events.Other,
+		},
 	}, cfg.ActivityStateDir())
 	if err != nil {
 		slog.Error("activity store", "err", err)

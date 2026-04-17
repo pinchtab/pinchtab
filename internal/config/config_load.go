@@ -13,7 +13,7 @@ func Load() *RuntimeConfig {
 	cfg := &RuntimeConfig{
 		// Server defaults
 		Bind:              "127.0.0.1",
-		Port:              "9867",
+		Port:              defaultPort,
 		InstancePortStart: 9868,
 		InstancePortEnd:   9968,
 		Token:             os.Getenv("PINCHTAB_TOKEN"),
@@ -25,11 +25,13 @@ func Load() *RuntimeConfig {
 		AllowMacro:             false,
 		AllowScreencast:        false,
 		AllowDownload:          false,
+		AllowedDomains:         append([]string(nil), defaultLocalAllowedDomains...),
 		DownloadAllowedDomains: nil,
 		DownloadMaxBytes:       DefaultDownloadMaxBytes,
 		AllowUpload:            false,
 		AllowClipboard:         false,
 		AllowStateExport:       false,
+		StateEncryptionKey:     "",
 		EnableActionGuards:     true,
 		UploadMaxRequestBytes:  DefaultUploadMaxRequestBytes,
 		UploadMaxFiles:         DefaultUploadMaxFiles,
@@ -52,7 +54,7 @@ func Load() *RuntimeConfig {
 		MaxParallelTabs:   0,
 		ChromeBinary:      "", // Set via config.json only
 		ChromeExtraFlags:  "",
-		ExtensionPaths:    nil,
+		ExtensionPaths:    []string{defaultExtensionsDir(userConfigDir())},
 		UserAgent:         "",
 		NoAnimations:      false,
 		StealthLevel:      "light",
@@ -80,7 +82,6 @@ func Load() *RuntimeConfig {
 		// IDPI defaults
 		IDPI: IDPIConfig{
 			Enabled:        true,
-			AllowedDomains: append([]string(nil), defaultLocalAllowedDomains...),
 			StrictMode:     true,
 			ScanContent:    true,
 			WrapContent:    true,
@@ -95,7 +96,7 @@ func Load() *RuntimeConfig {
 			Activity: ActivityConfig{
 				Enabled:        true,
 				SessionIdleSec: 1800,
-				RetentionDays:  1,
+				RetentionDays:  30,
 				StateDir:       "",
 			},
 		},
@@ -176,6 +177,11 @@ func Load() *RuntimeConfig {
 	applyFileConfig(cfg, fc)
 	finalizeProfileConfig(cfg)
 
+	if cfg.Port == "" {
+		slog.Error("server port is not configured — set server.port in config.json")
+		os.Exit(1)
+	}
+
 	return cfg
 }
 
@@ -248,6 +254,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.AllowStateExport != nil {
 		cfg.AllowStateExport = *fc.Security.AllowStateExport
 	}
+	if fc.Security.StateEncryptionKey != nil {
+		cfg.StateEncryptionKey = *fc.Security.StateEncryptionKey
+	}
 	if fc.Security.EnableActionGuards != nil {
 		cfg.EnableActionGuards = *fc.Security.EnableActionGuards
 	}
@@ -272,8 +281,10 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
 	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	cfg.TrustedProxyCIDRs = append([]string(nil), fc.Security.TrustedProxyCIDRs...)
+	cfg.TrustedResolveCIDRs = append([]string(nil), fc.Security.TrustedResolveCIDRs...)
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
+	cfg.AllowedDomains = effectiveSecurityAllowedDomains(fc.Security)
 	if fc.Observability.Activity.Enabled != nil {
 		cfg.Observability.Activity.Enabled = *fc.Observability.Activity.Enabled
 	}
@@ -282,6 +293,27 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Observability.Activity.RetentionDays != nil {
 		cfg.Observability.Activity.RetentionDays = *fc.Observability.Activity.RetentionDays
+	}
+	if fc.Observability.Activity.Events.Dashboard != nil {
+		cfg.Observability.Activity.Events.Dashboard = *fc.Observability.Activity.Events.Dashboard
+	}
+	if fc.Observability.Activity.Events.Server != nil {
+		cfg.Observability.Activity.Events.Server = *fc.Observability.Activity.Events.Server
+	}
+	if fc.Observability.Activity.Events.Bridge != nil {
+		cfg.Observability.Activity.Events.Bridge = *fc.Observability.Activity.Events.Bridge
+	}
+	if fc.Observability.Activity.Events.Orchestrator != nil {
+		cfg.Observability.Activity.Events.Orchestrator = *fc.Observability.Activity.Events.Orchestrator
+	}
+	if fc.Observability.Activity.Events.Scheduler != nil {
+		cfg.Observability.Activity.Events.Scheduler = *fc.Observability.Activity.Events.Scheduler
+	}
+	if fc.Observability.Activity.Events.MCP != nil {
+		cfg.Observability.Activity.Events.MCP = *fc.Observability.Activity.Events.MCP
+	}
+	if fc.Observability.Activity.Events.Other != nil {
+		cfg.Observability.Activity.Events.Other = *fc.Observability.Activity.Events.Other
 	}
 	if fc.Sessions.Dashboard.Persist != nil {
 		cfg.Sessions.Dashboard.Persist = *fc.Sessions.Dashboard.Persist
@@ -329,13 +361,14 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Browser.ChromeExtraFlags != "" {
 		cfg.ChromeExtraFlags = SanitizeChromeExtraFlags(fc.Browser.ChromeExtraFlags)
 	}
-	if len(fc.Browser.ExtensionPaths) > 0 {
-		cfg.ExtensionPaths = fc.Browser.ExtensionPaths
+	if fc.Browser.ExtensionPaths != nil {
+		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
 	}
 
 	// Instance defaults
 	if fc.InstanceDefaults.Mode != "" {
 		cfg.Headless = modeToHeadless(fc.InstanceDefaults.Mode, cfg.Headless)
+		cfg.HeadlessSet = true
 	}
 	if fc.InstanceDefaults.NoRestore != nil {
 		cfg.NoRestore = *fc.InstanceDefaults.NoRestore

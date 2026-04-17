@@ -13,6 +13,10 @@ var (
 	ImageBlockPatterns  = bridgecdpops.ImageBlockPatterns
 	MediaBlockPatterns  = bridgecdpops.MediaBlockPatterns
 	ErrTooManyRedirects = bridgecdpops.ErrTooManyRedirects
+	ErrElementOccluded  = bridgecdpops.ErrElementOccluded
+	ErrElementHidden    = bridgecdpops.ErrElementHidden
+	ErrElementBlocked   = bridgecdpops.ErrElementBlocked
+	ErrElementOffscreen = bridgecdpops.ErrElementOffscreen
 )
 
 func NavigatePage(ctx context.Context, url string) error {
@@ -43,6 +47,10 @@ func ScrollIntoViewAndGetBox(ctx context.Context, nodeID int64) (map[string]any,
 	return bridgecdpops.ScrollIntoViewAndGetBox(ctx, nodeID)
 }
 
+func PointerPointForNode(ctx context.Context, nodeID int64, requireTopMost bool) (float64, float64, error) {
+	return bridgecdpops.PointerPointForNode(ctx, nodeID, requireTopMost)
+}
+
 func ClickByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.ClickByCoordinate(ctx, x, y)
 }
@@ -67,6 +75,22 @@ func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.HoverByCoordinate(ctx, x, y)
 }
 
+func MouseMoveByCoordinate(ctx context.Context, x, y float64) error {
+	return bridgecdpops.MouseMoveByCoordinate(ctx, x, y)
+}
+
+func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) error {
+	return bridgecdpops.MouseDownByCoordinate(ctx, x, y, button)
+}
+
+func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error {
+	return bridgecdpops.MouseUpByCoordinate(ctx, x, y, button)
+}
+
+func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	return bridgecdpops.MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY)
+}
+
 func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
 	return bridgecdpops.ScrollByCoordinate(ctx, x, y, deltaX, deltaY)
 }
@@ -81,6 +105,10 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 
 func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 	return bridgecdpops.SelectByNodeID(ctx, nodeID, value)
+}
+
+func ReadInputValue(ctx context.Context, nodeID int64) (string, error) {
+	return bridgecdpops.ReadInputValue(ctx, nodeID)
 }
 
 func ScrollByNodeID(ctx context.Context, nodeID int64) error {

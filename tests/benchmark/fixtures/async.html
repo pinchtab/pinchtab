@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Async</title>
+</head>
+<body>
+  <h1>Async API — VERIFY_ASYNC_PAGE_77777</h1>
+
+  <p>This page exposes promise-returning helpers on <code>window</code> for
+  benchmarking the <code>awaitPromise</code> option on
+  <code>/evaluate</code>.</p>
+
+  <pre id="log"></pre>
+
+  <script>
+    // Resolves after ~100ms with a verifiable payload.
+    window.fetchPayload = function () {
+      return new Promise((resolve) => {
+        setTimeout(() => resolve("ASYNC_PAYLOAD_READY_42"), 100);
+      });
+    };
+
+    // Resolves after ~50ms with a small object — tests non-string payloads.
+    window.fetchUser = function () {
+      return new Promise((resolve) => {
+        setTimeout(() => resolve({
+          id: 7,
+          name: "ASYNC_USER_NAME_ADA",
+          token: "ASYNC_TOKEN_ABC123",
+        }), 50);
+      });
+    };
+
+    // Rejects after ~50ms — tests error path.
+    window.fetchBroken = function () {
+      return new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("ASYNC_REJECTED_BOOM")), 50);
+      });
+    };
+  </script>
+</body>
+</html>

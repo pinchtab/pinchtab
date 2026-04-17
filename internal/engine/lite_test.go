@@ -2,10 +2,14 @@ package engine
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 func newTestServer(body string) *httptest.Server {
@@ -225,6 +229,72 @@ func TestLiteEngine_ScriptStyleSkipped(t *testing.T) {
 		if n.Tag == "script" || n.Tag == "style" {
 			t.Errorf("snapshot should skip %s elements", n.Tag)
 		}
+	}
+}
+
+func TestLiteEngine_NavigateBlocksRedirectToPrivateIP(t *testing.T) {
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	oldDial := dialLiteAddress
+	dialLiteAddress = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, redirector.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialLiteAddress = oldDial })
+
+	oldResolve := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	t.Cleanup(func() { netguard.ResolveHostIPs = oldResolve })
+
+	lite := NewLiteEngine()
+	defer func() { _ = lite.Close() }()
+
+	ctx := WithNavigateNetworkPolicy(context.Background(), &NavigateNetworkPolicy{MaxRedirects: -1})
+	_, err := lite.Navigate(ctx, "http://safe.example/index.html")
+	if err == nil {
+		t.Fatal("expected redirect to private IP to be blocked")
+	}
+	if !IsNetworkPolicyBlocked(err) {
+		t.Fatalf("expected network policy block, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "redirect to blocked") {
+		t.Fatalf("expected redirect block error, got %v", err)
+	}
+}
+
+func TestLiteEngine_NavigateAllowsTrustedResolvedPrivateIP(t *testing.T) {
+	page := newTestServer(`<html><head><title>Trusted</title></head><body>ok</body></html>`)
+	defer page.Close()
+
+	oldDial := dialLiteAddress
+	dialLiteAddress = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, page.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialLiteAddress = oldDial })
+
+	oldResolve := netguard.ResolveHostIPs
+	netguard.ResolveHostIPs = func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("10.0.0.5")}, nil
+	}
+	t.Cleanup(func() { netguard.ResolveHostIPs = oldResolve })
+
+	lite := NewLiteEngine()
+	defer func() { _ = lite.Close() }()
+
+	ctx := WithNavigateNetworkPolicy(context.Background(), &NavigateNetworkPolicy{
+		TrustedResolvedIP: []netip.Addr{netip.MustParseAddr("10.0.0.5")},
+		MaxRedirects:      -1,
+	})
+	result, err := lite.Navigate(ctx, "http://trusted.example/index.html")
+	if err != nil {
+		t.Fatalf("expected trusted resolved IP to be allowed, got %v", err)
+	}
+	if result.Title != "Trusted" {
+		t.Fatalf("title = %q, want Trusted", result.Title)
 	}
 }
 

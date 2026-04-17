@@ -66,31 +66,6 @@ export function SecurityIdpiSettingsSection({
         </SettingRow>
       ))}
       <SettingRow
-        label="Allowed websites"
-        description="Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com."
-      >
-        <div className="space-y-2">
-          <input
-            value={listToCsv(backendConfig.security.idpi.allowedDomains)}
-            onChange={(e) =>
-              updateBackendSection("security", {
-                idpi: {
-                  ...backendConfig.security.idpi,
-                  allowedDomains: csvToList(e.target.value),
-                },
-              })
-            }
-            className={fieldClass}
-            placeholder="127.0.0.1, localhost, ::1"
-          />
-          <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-            Keep this list narrow. Empty or wildcard entries weaken the main
-            IDPI boundary. Allowing non-local or non-trusted sites increases
-            browser attack surface even when IDPI is enabled.
-          </div>
-        </div>
-      </SettingRow>
-      <SettingRow
         label="Custom patterns"
         description="Optional comma-separated phrases to treat as suspicious prompt-injection content."
       >

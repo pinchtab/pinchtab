@@ -3,6 +3,7 @@ import type {
   Profile,
   Instance,
   InstanceTab,
+  InstanceMetrics,
   Agent,
   ActivityEvent,
   Settings,
@@ -45,6 +46,7 @@ interface AppState {
   serverChartData: ServerDataPoint[];
   currentTabs: Record<string, InstanceTab[]>;
   currentMemory: Record<string, number>; // instanceId -> jsHeapUsedMB
+  currentMetrics: Record<string, InstanceMetrics>; // instanceId -> full metrics
   addChartDataPoint: (point: TabDataPoint) => void;
   addMemoryDataPoint: (point: MemoryDataPoint) => void;
   addServerDataPoint: (point: ServerDataPoint) => void;
@@ -79,6 +81,14 @@ interface AppState {
   // Server info
   serverInfo: DashboardServerInfo | null;
   setServerInfo: (info: DashboardServerInfo | null) => void;
+
+  // Monitoring UI
+  monitoringSidebarCollapsed: boolean;
+  setMonitoringSidebarCollapsed: (collapsed: boolean) => void;
+  selectedMonitoringInstanceId: string | null;
+  setSelectedMonitoringInstanceId: (id: string | null) => void;
+  monitoringShowTelemetry: boolean;
+  setMonitoringShowTelemetry: (show: boolean) => void;
 }
 
 const defaultSettings: Settings = {
@@ -188,6 +198,7 @@ export const useAppStore = create<AppState>((set) => ({
   serverChartData: [],
   currentTabs: {},
   currentMemory: {},
+  currentMetrics: {},
   addChartDataPoint: (point) =>
     set((state) => ({
       tabsChartData: [...state.tabsChartData.slice(-59), point], // Keep last 60 points
@@ -211,6 +222,7 @@ export const useAppStore = create<AppState>((set) => ({
       const memDataPoint: MemoryDataPoint = { timestamp: snapshot.timestamp };
       const currentTabs: Record<string, InstanceTab[]> = {};
       const currentMemory: Record<string, number> = {};
+      const currentMetrics: Record<string, InstanceMetrics> = {};
 
       for (const instance of runningInstances) {
         const instanceTabs = snapshot.tabs.filter(
@@ -226,6 +238,7 @@ export const useAppStore = create<AppState>((set) => ({
           if (metrics) {
             memDataPoint[instance.id] = metrics.jsHeapUsedMB;
             currentMemory[instance.id] = metrics.jsHeapUsedMB;
+            currentMetrics[instance.id] = metrics;
           }
         }
       }
@@ -234,6 +247,7 @@ export const useAppStore = create<AppState>((set) => ({
         instances: snapshot.instances,
         currentTabs,
         currentMemory,
+        currentMetrics,
         tabsChartData:
           runningInstances.length > 0
             ? [...state.tabsChartData.slice(-59), tabDataPoint]
@@ -404,4 +418,15 @@ export const useAppStore = create<AppState>((set) => ({
   // Server info
   serverInfo: null,
   setServerInfo: (serverInfo) => set({ serverInfo }),
+
+  // Monitoring UI
+  monitoringSidebarCollapsed: true,
+  setMonitoringSidebarCollapsed: (monitoringSidebarCollapsed) =>
+    set({ monitoringSidebarCollapsed }),
+  selectedMonitoringInstanceId: null,
+  setSelectedMonitoringInstanceId: (selectedMonitoringInstanceId) =>
+    set({ selectedMonitoringInstanceId }),
+  monitoringShowTelemetry: true,
+  setMonitoringShowTelemetry: (monitoringShowTelemetry) =>
+    set({ monitoringShowTelemetry }),
 }));

@@ -10,7 +10,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -30,8 +32,9 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TabID      string `json:"tabId"`
-		Expression string `json:"expression"`
+		TabID        string `json:"tabId"`
+		Expression   string `json:"expression"`
+		AwaitPromise bool   `json:"awaitPromise"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -62,10 +65,18 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	)
 
 	var result any
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(req.Expression, &result)); err != nil {
+	opts := []chromedp.EvaluateOption{}
+	if req.AwaitPromise {
+		opts = append(opts, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+			return p.WithAwaitPromise(true)
+		})
+	}
+	if err := h.evalRuntime(tCtx, req.Expression, &result, opts...); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("evaluate: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "evaluate"})
 
 	httpx.JSON(w, 200, map[string]any{"result": result})
 }

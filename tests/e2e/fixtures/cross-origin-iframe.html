@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cross Origin Iframe Fixture</title>
+</head>
+<body>
+  <h1>Cross Origin Iframe Fixture</h1>
+  <p id="cross-origin-status">CROSS_ORIGIN_READY</p>
+  <iframe
+    id="cross-origin-frame"
+    title="cross-origin-frame"
+    name="cross-origin-frame"
+    src="http://pivot-target/cross-origin-iframe-content.html"
+    width="640"
+    height="260"
+  ></iframe>
+
+  <script>
+    window.addEventListener('message', function(event) {
+      const data = event.data || {};
+      if (data.type === 'cross-origin-submit') {
+        document.getElementById('cross-origin-status').textContent = 'CROSS_ORIGIN_SUBMITTED_' + data.value;
+      }
+    });
+  </script>
+</body>
+</html>

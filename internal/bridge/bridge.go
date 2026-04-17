@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
@@ -29,9 +31,67 @@ type TabEntry struct {
 	ConsoleCaptureEnabled bool
 }
 
+type RefTarget struct {
+	BackendNodeID  int64  `json:"backendNodeId"`
+	FrameID        string `json:"frameId,omitempty"`
+	FrameURL       string `json:"frameUrl,omitempty"`
+	FrameName      string `json:"frameName,omitempty"`
+	ChildFrameID   string `json:"childFrameId,omitempty"`
+	ChildFrameURL  string `json:"childFrameUrl,omitempty"`
+	ChildFrameName string `json:"childFrameName,omitempty"`
+}
+
 type RefCache struct {
-	Refs  map[string]int64
-	Nodes []A11yNode
+	Refs    map[string]int64
+	Targets map[string]RefTarget
+	Nodes   []A11yNode
+}
+
+func (c *RefCache) Lookup(ref string) (RefTarget, bool) {
+	if c == nil {
+		return RefTarget{}, false
+	}
+	if c.Targets != nil {
+		if target, ok := c.Targets[ref]; ok {
+			return target, true
+		}
+	}
+	if c.Refs != nil {
+		if nid, ok := c.Refs[ref]; ok {
+			return RefTarget{BackendNodeID: nid}, true
+		}
+	}
+	return RefTarget{}, false
+}
+
+func RefTargetsFromNodes(nodes []A11yNode) map[string]RefTarget {
+	targets := make(map[string]RefTarget, len(nodes))
+	for _, node := range nodes {
+		if node.Ref == "" || node.NodeID == 0 {
+			continue
+		}
+		targets[node.Ref] = RefTarget{
+			BackendNodeID:  node.NodeID,
+			FrameID:        node.FrameID,
+			FrameURL:       node.FrameURL,
+			FrameName:      node.FrameName,
+			ChildFrameID:   node.ChildFrameID,
+			ChildFrameURL:  node.ChildFrameURL,
+			ChildFrameName: node.ChildFrameName,
+		}
+	}
+	return targets
+}
+
+type FrameScope struct {
+	FrameID   string `json:"frameId,omitempty"`
+	FrameURL  string `json:"frameUrl,omitempty"`
+	FrameName string `json:"frameName,omitempty"`
+	OwnerRef  string `json:"ownerRef,omitempty"`
+}
+
+func (s FrameScope) Active() bool {
+	return s.FrameID != ""
 }
 
 type Bridge struct {
@@ -55,6 +115,10 @@ type Bridge struct {
 	fingerprintMu        sync.RWMutex
 	fingerprintOverlays  map[string]bool
 	workerStealthTargets sync.Map
+	handoffMu            sync.RWMutex
+	handoffs             map[string]TabHandoffState
+	pointerMu            sync.RWMutex
+	pointerByTab         map[string]pointerState
 
 	// Lazy initialization / restart coordination
 	initMu      sync.Mutex
@@ -83,10 +147,13 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		IdMgr:               idMgr,
 		netMonitor:          NewNetworkMonitor(netBufSize),
 		fingerprintOverlays: make(map[string]bool),
+		handoffs:            make(map[string]TabHandoffState),
+		pointerByTab:        make(map[string]pointerState),
 		LogStore:            logStore,
 		stealthLaunchMode:   stealth.LaunchModeUninitialized,
 	}
 	b.ensureStealthBundle()
+	b.Dialogs = NewDialogManager()
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, logStore, b.tabSetup)
@@ -97,7 +164,6 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		}
 	}
 	b.Locks = NewLockManager()
-	b.Dialogs = NewDialogManager()
 	b.InitActionRegistry()
 	return b
 }
@@ -171,6 +237,53 @@ func (b *Bridge) StartNetworkCapture(tabCtx context.Context, tabID string) error
 		return fmt.Errorf("network monitor not initialized")
 	}
 	return b.netMonitor.StartCapture(tabCtx, tabID)
+}
+
+func (b *Bridge) tabManager() (*TabManager, error) {
+	if b == nil || b.TabManager == nil {
+		return nil, fmt.Errorf("tab manager not initialized")
+	}
+	return b.TabManager, nil
+}
+
+func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return tm.CreateTab(url)
+}
+
+func (b *Bridge) TabContext(tabID string) (context.Context, string, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return nil, "", err
+	}
+	return tm.TabContext(tabID)
+}
+
+func (b *Bridge) ListTargets() ([]*target.Info, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return nil, err
+	}
+	return tm.ListTargets()
+}
+
+func (b *Bridge) CloseTab(tabID string) error {
+	tm, err := b.tabManager()
+	if err != nil {
+		return err
+	}
+	return tm.CloseTab(tabID)
+}
+
+func (b *Bridge) FocusTab(tabID string) error {
+	tm, err := b.tabManager()
+	if err != nil {
+		return err
+	}
+	return tm.FocusTab(tabID)
 }
 
 func (b *Bridge) Lock(tabID, owner string, ttl time.Duration) error {
@@ -526,6 +639,8 @@ func (b *Bridge) BrowserContext() context.Context {
 }
 
 func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionRequest) (map[string]any, error) {
+	kind = CanonicalActionKind(kind)
+	req.Kind = CanonicalActionKind(req.Kind)
 	fn, ok := b.Actions[kind]
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", kind)
@@ -616,18 +731,68 @@ type ActionRequest struct {
 	Value    string `json:"value"`
 	NodeID   int64  `json:"nodeId"`
 
-	X     float64 `json:"x"`
-	Y     float64 `json:"y"`
-	HasXY bool    `json:"hasXY,omitempty"`
+	// X/Y use omitempty so that re-marshaling an ActionRequest without
+	// explicit coordinates (e.g. when the tab-scoped handler forwards to
+	// the generic one) doesn't spuriously re-introduce "x":0, "y":0. The
+	// ActionRequest.UnmarshalJSON code infers HasXY from the presence of
+	// these keys, so preserving omission is what makes "use current
+	// pointer" work for mouse-down/up after a prior mouse-move. HasXY is
+	// still marshaled (with omitempty) when it was explicitly set, which
+	// preserves the explicit-click-at-(0,0) case through the round-trip.
+	X      float64 `json:"x,omitempty"`
+	Y      float64 `json:"y,omitempty"`
+	HasXY  bool    `json:"hasXY,omitempty"`
+	Button string  `json:"button,omitempty"`
 
 	ScrollX int `json:"scrollX"`
 	ScrollY int `json:"scrollY"`
-	DragX   int `json:"dragX"`
-	DragY   int `json:"dragY"`
+	// DeltaX/DeltaY are explicit mouse-wheel deltas for low-level
+	// mouse-wheel actions. ScrollX/ScrollY remain for backward compatibility.
+	DeltaX int `json:"deltaX,omitempty"`
+	DeltaY int `json:"deltaY,omitempty"`
+	DragX  int `json:"dragX"`
+	DragY  int `json:"dragY"`
 
 	WaitNav bool   `json:"waitNav"`
 	Fast    bool   `json:"fast"`
 	Owner   string `json:"owner"`
+
+	// DialogAction arms a one-shot dialog auto-handler before the action
+	// executes. Used when clicking a button/link that opens a JS dialog
+	// (alert/confirm/prompt). Values: "accept" or "dismiss". When set, the
+	// dialog is handled automatically without a second HTTP call.
+	DialogAction string `json:"dialogAction,omitempty"`
+	// DialogText is the optional prompt text used when DialogAction is
+	// "accept" on a prompt() dialog.
+	DialogText string `json:"dialogText,omitempty"`
+}
+
+type actionRequestAlias ActionRequest
+
+func (r *ActionRequest) UnmarshalJSON(data []byte) error {
+	var alias actionRequestAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	raw := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*r = ActionRequest(alias)
+	r.Kind = CanonicalActionKind(r.Kind)
+	r.HasXY = r.HasXY || hasJSONKey(raw, "x") || hasJSONKey(raw, "y")
+	if hasJSONKey(raw, "deltaX") {
+		if err := json.Unmarshal(raw["deltaX"], &r.DeltaX); err != nil {
+			return err
+		}
+	}
+	if hasJSONKey(raw, "deltaY") {
+		if err := json.Unmarshal(raw["deltaY"], &r.DeltaY); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NormalizeSelector merges legacy Ref and Selector (CSS) fields into the
@@ -642,6 +807,15 @@ func (r *ActionRequest) NormalizeSelector() {
 	}
 	// If Selector is already set (either from JSON or from Ref promotion),
 	// leave it as-is — Parse() will auto-detect the kind.
+}
+
+func CanonicalActionKind(kind string) string {
+	return kind
+}
+
+func hasJSONKey(raw map[string]json.RawMessage, key string) bool {
+	_, ok := raw[key]
+	return ok
 }
 
 func cryptoRandSeed() int64 {

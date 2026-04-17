@@ -11,7 +11,13 @@ import { ActivityPage, AgentsPage } from "./activities";
 import { NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
-import { AUTH_REQUIRED_EVENT, AUTH_STATE_CHANGED_EVENT } from "./services/auth";
+import {
+  AUTH_REQUIRED_EVENT,
+  AUTH_STATE_CHANGED_EVENT,
+  INSECURE_DASHBOARD_TRANSPORT_WARNING,
+  SERVER_UNREACHABLE_EVENT,
+  isInsecureDashboardTransport,
+} from "./services/auth";
 import { acquireDashboardRealtime } from "./services/dashboardRealtime";
 import { useAppStore } from "./stores/useAppStore";
 
@@ -33,6 +39,7 @@ function AppContent() {
   const [authRetryCount, setAuthRetryCount] = useState(0);
   const dashboardAccessible = authMode === "open";
   const loginRequired = authMode === "required";
+  const insecureDashboardTransport = isInsecureDashboardTransport();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-site-mode", "agent");
@@ -106,14 +113,22 @@ function AppContent() {
       setAuthMode("probing");
       setAuthRetryCount(0);
     };
+    const handleServerUnreachable = () => {
+      setAuthMode("unreachable");
+    };
 
     window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged);
+    window.addEventListener(SERVER_UNREACHABLE_EVENT, handleServerUnreachable);
     return () => {
       window.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
       window.removeEventListener(
         AUTH_STATE_CHANGED_EVENT,
         handleAuthStateChanged,
+      );
+      window.removeEventListener(
+        SERVER_UNREACHABLE_EVENT,
+        handleServerUnreachable,
       );
     };
   }, [location.pathname, navigate]);
@@ -232,6 +247,11 @@ function AppContent() {
   return (
     <div className="dashboard-shell flex h-screen flex-col bg-bg-app">
       <NavBar showLogout={authProtected} />
+      {insecureDashboardTransport && (
+        <div className="border-b border-warning/25 bg-warning/10 px-4 py-2 text-sm text-warning">
+          {INSECURE_DASHBOARD_TRANSPORT_WARNING}
+        </div>
+      )}
       <main className="dashboard-grid flex-1 overflow-hidden">
         <Routes>
           <Route

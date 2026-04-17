@@ -3,17 +3,17 @@ package dashboard
 import (
 	"path/filepath"
 
-	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 const dashboardSessionStateFile = "dashboard-auth-sessions.json"
 
-func SessionManagerConfig(runtime *config.RuntimeConfig) authn.SessionConfig {
+func BrowserSessionConfig(runtime *config.RuntimeConfig) browsersession.Config {
 	if runtime == nil {
-		return authn.SessionConfig{}
+		return browsersession.Config{}
 	}
-	return authn.SessionConfig{
+	return browsersession.Config{
 		IdleTimeout:                   runtime.Sessions.Dashboard.IdleTimeout,
 		MaxLifetime:                   runtime.Sessions.Dashboard.MaxLifetime,
 		ElevationWindow:               runtime.Sessions.Dashboard.ElevationWindow,

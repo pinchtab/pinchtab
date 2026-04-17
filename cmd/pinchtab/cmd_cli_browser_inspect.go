@@ -16,6 +16,17 @@ var snapCmd = &cobra.Command{
 	},
 }
 
+var frameCmd = &cobra.Command{
+	Use:   "frame [target|main]",
+	Short: "Show or set the current frame scope",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.Frame(rt.client, rt.base, rt.token, args, cmd)
+		})
+	},
+}
+
 var screenshotCmd = &cobra.Command{
 	Use:   "screenshot",
 	Short: "Take a screenshot",

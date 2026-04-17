@@ -2,8 +2,6 @@ package activity
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,12 +15,23 @@ import (
 const (
 	defaultQueryLimit    = 200
 	maxQueryLimit        = 1000
-	defaultRetentionDays = 1
+	defaultRetentionDays = 30
 )
 
 type Config struct {
 	Enabled       bool
 	RetentionDays int
+	Events        EventSourceConfig
+}
+
+type EventSourceConfig struct {
+	Dashboard    bool
+	Server       bool
+	Bridge       bool
+	Orchestrator bool
+	Scheduler    bool
+	MCP          bool
+	Other        bool
 }
 
 type Event struct {
@@ -30,7 +39,6 @@ type Event struct {
 	Source      string    `json:"source"`
 	RequestID   string    `json:"requestId,omitempty"`
 	SessionID   string    `json:"sessionId,omitempty"`
-	ActorID     string    `json:"actorId,omitempty"`
 	AgentID     string    `json:"agentId,omitempty"`
 	Method      string    `json:"method"`
 	Path        string    `json:"path"`
@@ -51,8 +59,8 @@ type Filter struct {
 	Source      string
 	RequestID   string
 	SessionID   string
-	ActorID     string
 	AgentID     string
+	AgentIDLike string
 	InstanceID  string
 	ProfileID   string
 	ProfileName string
@@ -74,6 +82,7 @@ type Recorder interface {
 type Store struct {
 	dir           string
 	retentionDays int
+	events        EventSourceConfig
 
 	mu sync.Mutex
 }
@@ -84,10 +93,22 @@ func NewRecorder(cfg Config, stateDir string) (Recorder, error) {
 	if !cfg.Enabled {
 		return noopRecorder{}, nil
 	}
-	return NewStore(stateDir, cfg.RetentionDays)
+	return NewStoreWithEvents(stateDir, cfg.RetentionDays, cfg.Events)
 }
 
 func NewStore(stateDir string, retentionDays int) (*Store, error) {
+	return NewStoreWithEvents(stateDir, retentionDays, EventSourceConfig{
+		Dashboard:    true,
+		Server:       true,
+		Bridge:       true,
+		Orchestrator: true,
+		Scheduler:    true,
+		MCP:          true,
+		Other:        true,
+	})
+}
+
+func NewStoreWithEvents(stateDir string, retentionDays int, events EventSourceConfig) (*Store, error) {
 	activityDir := filepath.Join(stateDir, "activity")
 	if err := os.MkdirAll(activityDir, 0750); err != nil {
 		return nil, fmt.Errorf("create activity dir: %w", err)
@@ -99,6 +120,7 @@ func NewStore(stateDir string, retentionDays int) (*Store, error) {
 	store := &Store{
 		dir:           activityDir,
 		retentionDays: retentionDays,
+		events:        events,
 	}
 	if err := store.pruneExpiredFiles(time.Now().UTC()); err != nil {
 		return nil, err
@@ -122,6 +144,9 @@ func (s *Store) Record(evt Event) error {
 		evt.Timestamp = time.Now().UTC()
 	} else {
 		evt.Timestamp = evt.Timestamp.UTC()
+	}
+	if !s.shouldRecordSource(evt.Source) {
+		return nil
 	}
 	evt.URL = sanitizeActivityURL(evt.URL)
 
@@ -207,6 +232,27 @@ func clampQueryLimit(limit int) int {
 	return limit
 }
 
+func (s *Store) shouldRecordSource(source string) bool {
+	switch normalizeSourceName(source) {
+	case "client":
+		return true
+	case "dashboard":
+		return s.events.Dashboard
+	case "server":
+		return s.events.Server
+	case "bridge":
+		return s.events.Bridge
+	case "orchestrator":
+		return s.events.Orchestrator
+	case "scheduler":
+		return s.events.Scheduler
+	case "mcp":
+		return s.events.MCP
+	default:
+		return s.events.Other
+	}
+}
+
 func (noopRecorder) Enabled() bool {
 	return false
 }
@@ -227,9 +273,6 @@ func (f Filter) matches(evt Event) bool {
 		return false
 	}
 	if f.SessionID != "" && evt.SessionID != f.SessionID {
-		return false
-	}
-	if f.ActorID != "" && evt.ActorID != f.ActorID {
 		return false
 	}
 	if f.AgentID != "" && evt.AgentID != f.AgentID {
@@ -263,15 +306,6 @@ func (f Filter) matches(evt Event) bool {
 		return false
 	}
 	return true
-}
-
-func FingerprintToken(token string) string {
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return ""
-	}
-	sum := sha256.Sum256([]byte(token))
-	return "tok_" + hex.EncodeToString(sum[:6])
 }
 
 func (s *Store) filePathFor(ts time.Time) string {
@@ -309,7 +343,7 @@ func (s *Store) queryFiles(source string) []string {
 		if !isActivityLogFile(name) {
 			continue
 		}
-		if source == "" && !isPrimaryDailyActivityLog(name) {
+		if source != "" && !isSourceLogFile(name, source) {
 			continue
 		}
 		files = append(files, filepath.Join(s.dir, name))
@@ -415,12 +449,9 @@ func isActivityLogFile(name string) bool {
 	return name != "events.jsonl" && strings.HasPrefix(name, "events-") && strings.HasSuffix(name, ".jsonl")
 }
 
-func isPrimaryDailyActivityLog(name string) bool {
-	if !isActivityLogFile(name) {
-		return false
-	}
-	middle := strings.TrimSuffix(strings.TrimPrefix(name, "events-"), ".jsonl")
-	return len(middle) == len(time.DateOnly)
+func isSourceLogFile(name, source string) bool {
+	prefix := "events-" + source + "-"
+	return strings.HasPrefix(name, prefix)
 }
 
 func activityLogDay(name string) (string, bool) {

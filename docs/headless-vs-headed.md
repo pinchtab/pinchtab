@@ -25,6 +25,7 @@ pinchtab instance start
   "profileId": "prof_278be873",
   "profileName": "instance-1741400000000000000",
   "port": "9868",
+  "mode": "headless",
   "headless": true,
   "status": "starting"
 }
@@ -60,6 +61,7 @@ pinchtab instance start --mode headed
   "profileId": "prof_278be873",
   "profileName": "instance-1741400000000000001",
   "port": "9869",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }
@@ -135,6 +137,7 @@ pinchtab instance start --profile prof_278be873 --mode headed
   "profileId": "prof_278be873",
   "profileName": "dev",
   "port": "9868",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }

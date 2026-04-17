@@ -14,6 +14,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -158,6 +159,8 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("upload: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "upload", TabID: resolvedTabID})
 
 	httpx.JSON(w, 200, map[string]any{
 		"status": "ok",

@@ -55,7 +55,9 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// Validate and sanitize URL to prevent SSRF (CodeQL go/request-forgery).
+	// Normalize the request URL for construction. SSRF enforcement happens
+	// before this call in the handler and again at redirect/dial time in
+	// clientForNavigate.
 	safeURL, err := urls.Sanitize(url)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
@@ -69,7 +71,7 @@ func (l *LiteEngine) Navigate(ctx context.Context, url string) (*NavigateResult,
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; PinchTab-Lite/1.0)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*")
 
-	resp, err := l.client.Do(req)
+	resp, err := l.clientForNavigate(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate fetch: %w", err)
 	}

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -133,6 +134,7 @@ func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, target
 				o.applyInstanceAuth(req, inst)
 			}
 		},
+		OnResponse: enrichActivityFromResponse,
 	})
 }
 
@@ -321,6 +323,29 @@ func classifyLaunchError(err error) int {
 		return 409 // Conflict - resource already exists
 	}
 	return 500 // Internal Server Error
+}
+
+// enrichActivityFromResponse extracts tabId and url from the bridge JSON
+// response and enriches the activity event on the original request so the
+// dashboard can link the event to the correct tab.
+func enrichActivityFromResponse(origReq *http.Request, body []byte) {
+	var resp struct {
+		TabID string `json:"tabId"`
+		URL   string `json:"url"`
+	}
+	if json.Unmarshal(body, &resp) != nil {
+		return
+	}
+	update := activity.Update{}
+	if resp.TabID != "" {
+		update.TabID = resp.TabID
+	}
+	if resp.URL != "" {
+		update.URL = resp.URL
+	}
+	if update.TabID != "" || update.URL != "" {
+		activity.EnrichRequest(origReq, update)
+	}
 }
 
 func (o *Orchestrator) singleRunningInstance() *InstanceInternal {

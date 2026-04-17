@@ -19,6 +19,7 @@ const mockRunningInstance: Instance = {
   profileId: "prof_123",
   profileName: "test-profile",
   port: "9868",
+  mode: "headed",
   headless: false,
   status: "running",
   startTime: new Date().toISOString(),

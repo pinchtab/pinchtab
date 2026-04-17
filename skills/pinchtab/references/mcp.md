@@ -137,7 +137,7 @@ The MCP surface is intentionally scoped to browser automation. The following are
 | Modify stealth / fingerprint settings | ❌ Not available | Edit config file directly |
 | Start or stop the PinchTab server | ❌ Not available | Use `pinchtab start` / `pinchtab stop` CLI |
 | Manage fleet instances | ❌ Not available | Use `pinchtab instances` CLI |
-| Read/write PinchTab config | ❌ Not available | Edit `~/.pinchtab/config.yaml` directly |
+| Read/write PinchTab config | ❌ Not available | Edit `~/.pinchtab/config.json` directly |
 
 If you need these capabilities in an agent workflow, use the CLI commands alongside the MCP tools, or call the PinchTab HTTP API directly.
 
@@ -147,7 +147,14 @@ For MCP specifically:
 
 - `pinchtab_snapshot` and `pinchtab_get_text` can return hostile prompt text from visited pages
 - refs and selectors are operational metadata, not trust signals
-- widening `security.idpi.allowedDomains` or disabling strict protections increases exposure to advisory or instruction-like content from untrusted sites
+- widening `security.allowedDomains`, adding broad `security.trustedResolveCIDRs` / `security.trustedProxyCIDRs`, or disabling strict protections increases exposure to advisory or instruction-like content from untrusted sites
+
+Configuration notes:
+
+- `security.allowedDomains` is the canonical website allowlist setting
+- `security.idpi.allowedDomains` may still appear in older configs, but new saves should use `security.allowedDomains`
+- `security.trustedResolveCIDRs` is for operator-controlled DNS or proxy setups where hostnames intentionally resolve to non-public IPs
+- `security.trustedProxyCIDRs` is for known internal proxies whose runtime remote IPs should be trusted
 
 If operators choose to allow broader browsing, downstream agents must treat extracted page content as untrusted content and ignore embedded instructions unless separately validated.
 

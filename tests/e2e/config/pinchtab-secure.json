@@ -22,15 +22,15 @@
     "allowEvaluate": false,
     "allowDownload": false,
     "allowUpload": false,
-    "allowStateExport": true,
+    "allowStateExport": false,
+    "allowedDomains": [
+      "internal-test.invalid",
+      "fixtures"
+    ],
     "idpi": {
       "enabled": true,
       "scanContent": true,
       "strictMode": true,
-      "allowedDomains": [
-        "internal-test.invalid",
-        "fixtures"
-      ],
       "shieldThreshold": 30
     }
   }

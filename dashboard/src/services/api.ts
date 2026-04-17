@@ -26,11 +26,23 @@ import {
   normalizeDashboardServerInfo,
   normalizeMonitoringSnapshot,
 } from "../types";
-import { dispatchAuthRequired, sameOriginUrl } from "./auth";
+import {
+  dispatchAuthRequired,
+  dispatchServerUnreachable,
+  sameOriginUrl,
+} from "./auth";
 
 const BASE = ""; // Uses proxy in dev
 const DASHBOARD_SOURCE_HEADER = "X-PinchTab-Source";
 const DASHBOARD_SOURCE = "dashboard";
+const REALTIME_AUTH_PROBE_COOLDOWN_MS = 3000;
+let realtimeAuthProbeInFlight: Promise<void> | null = null;
+let lastRealtimeAuthProbeAt = 0;
+
+export function resetRealtimeAuthProbeStateForTests(): void {
+  realtimeAuthProbeInFlight = null;
+  lastRealtimeAuthProbeAt = 0;
+}
 
 type RequestMeta = {
   suppressAuthRedirect?: boolean;
@@ -75,10 +87,16 @@ async function request<T>(
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<T> {
-  const res = await fetch(BASE + url, {
-    ...withDashboardSource(options),
-    credentials: "same-origin",
-  });
+  let res: Response;
+  try {
+    res = await fetch(BASE + url, {
+      ...withDashboardSource(options),
+      credentials: "same-origin",
+    });
+  } catch (error) {
+    dispatchServerUnreachable();
+    throw error;
+  }
   if (!res.ok) {
     const err = await parseError(res);
     if (res.status === 401) {
@@ -94,10 +112,16 @@ async function requestText(
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<string> {
-  const res = await fetch(BASE + url, {
-    ...withDashboardSource(options),
-    credentials: "same-origin",
-  });
+  let res: Response;
+  try {
+    res = await fetch(BASE + url, {
+      ...withDashboardSource(options),
+      credentials: "same-origin",
+    });
+  } catch (error) {
+    dispatchServerUnreachable();
+    throw error;
+  }
   if (!res.ok) {
     const err = await parseError(res);
     if (res.status === 401) {
@@ -113,10 +137,16 @@ async function requestBlob(
   options?: RequestInit,
   meta?: RequestMeta,
 ): Promise<Blob> {
-  const res = await fetch(BASE + url, {
-    ...withDashboardSource(options),
-    credentials: "same-origin",
-  });
+  let res: Response;
+  try {
+    res = await fetch(BASE + url, {
+      ...withDashboardSource(options),
+      credentials: "same-origin",
+    });
+  } catch (error) {
+    dispatchServerUnreachable();
+    throw error;
+  }
   if (!res.ok) {
     const err = await parseError(res);
     if (res.status === 401) {
@@ -133,6 +163,13 @@ function withDashboardSource(options?: RequestInit): RequestInit {
   return {
     ...options,
     headers,
+  };
+}
+
+function normalizeInstance(instance: Instance): Instance {
+  return {
+    ...instance,
+    mode: instance.mode ?? (instance.headless ? "headless" : "headed"),
   };
 }
 
@@ -182,17 +219,20 @@ export async function updateProfile(
 
 // Instances — endpoint is /instances (no /api prefix)
 export async function fetchInstances(): Promise<Instance[]> {
-  return request<Instance[]>("/instances");
+  return (await request<Instance[]>("/instances")).map(normalizeInstance);
 }
 
 export async function launchInstance(
   data: LaunchInstanceRequest,
 ): Promise<Instance> {
-  return request<Instance>("/instances/launch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  // Use the canonical start endpoint to avoid legacy launch alias validation edge cases.
+  return normalizeInstance(
+    await request<Instance>("/instances/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
 }
 
 export async function stopInstance(id: string): Promise<void> {
@@ -224,6 +264,39 @@ export async function fetchTabPdf(tabId: string): Promise<Blob> {
 
 export async function closeTab(tabId: string): Promise<void> {
   await request(`/tabs/${encodeURIComponent(tabId)}/close`, { method: "POST" });
+}
+
+export interface ConsoleLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  source?: string;
+}
+
+export interface ErrorLogEntry {
+  timestamp: string;
+  message: string;
+  type?: string;
+  url?: string;
+  line?: number;
+  column?: number;
+  stack?: string;
+}
+
+export async function fetchConsoleLogs(
+  tabId: string,
+): Promise<ConsoleLogEntry[]> {
+  const res = await request<{ console: ConsoleLogEntry[] }>(
+    `/console?tabId=${encodeURIComponent(tabId)}`,
+  );
+  return res.console || [];
+}
+
+export async function fetchErrorLogs(tabId: string): Promise<ErrorLogEntry[]> {
+  const res = await request<{ errors: ErrorLogEntry[] }>(
+    `/errors?tabId=${encodeURIComponent(tabId)}`,
+  );
+  return res.errors || [];
 }
 
 export async function navigateTab(
@@ -299,7 +372,7 @@ export interface Session {
 }
 
 export async function fetchSessions(): Promise<Session[]> {
-  return request<Session[]>("/api/sessions");
+  return request<Session[]>("/sessions");
 }
 
 export async function fetchAgent(
@@ -439,6 +512,15 @@ export interface SystemEvent {
   instance?: Instance;
 }
 
+export function activityEventSource(event: ActivityEvent): string {
+  const source = event.details?.source;
+  return typeof source === "string" ? source.trim().toLowerCase() : "";
+}
+
+export function isClientActivityEvent(event: ActivityEvent): boolean {
+  return activityEventSource(event) === "client";
+}
+
 export type EventHandler = {
   onSystem?: (event: SystemEvent) => void;
   onActivity?: (event: ActivityEvent) => void;
@@ -552,12 +634,27 @@ export async function postProgress(
 }
 
 export async function handleRealtimeAuthFailure(): Promise<void> {
-  try {
-    const result = await probeBackendAuth();
-    if (result.mode === "required") {
-      dispatchAuthRequired("missing_token");
-    }
-  } catch {
-    // ignore transient network failures
+  const now = Date.now();
+  if (realtimeAuthProbeInFlight) {
+    return realtimeAuthProbeInFlight;
   }
+  if (now - lastRealtimeAuthProbeAt < REALTIME_AUTH_PROBE_COOLDOWN_MS) {
+    return;
+  }
+
+  lastRealtimeAuthProbeAt = now;
+  realtimeAuthProbeInFlight = (async () => {
+    try {
+      const result = await probeBackendAuth();
+      if (result.mode === "required") {
+        dispatchAuthRequired("missing_token");
+      }
+    } catch {
+      dispatchServerUnreachable();
+    }
+  })().finally(() => {
+    realtimeAuthProbeInFlight = null;
+  });
+
+  return realtimeAuthProbeInFlight;
 }

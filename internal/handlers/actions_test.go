@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chromedp/cdproto/target"
@@ -24,6 +25,12 @@ type liteActionBridge struct {
 	ensureChromeCalled bool
 }
 
+type recordingActionBridge struct {
+	mockBridge
+	lastKind string
+	lastReq  bridge.ActionRequest
+}
+
 func (m *liteActionBridge) AvailableActions() []string {
 	return []string{bridge.ActionClick, bridge.ActionType, bridge.ActionPress}
 }
@@ -35,6 +42,21 @@ func (m *liteActionBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 
 func (m *liteActionBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	return nil
+}
+
+func (m *recordingActionBridge) AvailableActions() []string {
+	return []string{
+		bridge.ActionMouseMove,
+		bridge.ActionMouseDown,
+		bridge.ActionMouseUp,
+		bridge.ActionMouseWheel,
+	}
+}
+
+func (m *recordingActionBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
+	m.lastKind = kind
+	m.lastReq = req
+	return map[string]any{"ok": true}, nil
 }
 
 type fakeLiteEngine struct {
@@ -403,6 +425,101 @@ func TestHandleAction_InvalidJSON(t *testing.T) {
 	h.HandleAction(w, req)
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleAction_PostRejectsInvalidDialogAction(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","selector":"#btn","dialogAction":"maybe"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "dialogAction must be 'accept' or 'dismiss'") {
+		t.Fatalf("expected dialogAction validation error, got %s", w.Body.String())
+	}
+}
+
+func TestHandleAction_GetAcceptsValidDialogAction(t *testing.T) {
+	b := &recordingActionBridge{}
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/action?kind=mouse-move&x=0&y=0&dialogAction=accept&dialogText=ok", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if b.lastReq.DialogAction != "accept" {
+		t.Fatalf("dialogAction = %q, want accept", b.lastReq.DialogAction)
+	}
+	if b.lastReq.DialogText != "ok" {
+		t.Fatalf("dialogText = %q, want ok", b.lastReq.DialogText)
+	}
+}
+
+func TestHandleAction_PostCanonicalMouseFieldsAreAccepted(t *testing.T) {
+	b := &recordingActionBridge{}
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"mouse-wheel","x":0,"y":0,"deltaY":240}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if b.lastKind != bridge.ActionMouseWheel {
+		t.Fatalf("kind = %q, want %q", b.lastKind, bridge.ActionMouseWheel)
+	}
+	if !b.lastReq.HasXY || b.lastReq.X != 0 || b.lastReq.Y != 0 {
+		t.Fatalf("expected zero coordinates with HasXY=true, got %+v", b.lastReq)
+	}
+	if b.lastReq.DeltaY != 240 {
+		t.Fatalf("deltaY = %d, want 240", b.lastReq.DeltaY)
+	}
+}
+
+func TestHandleAction_GetCanonicalMouseQueryIsAccepted(t *testing.T) {
+	b := &recordingActionBridge{}
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/action?kind=mouse-move&x=0&y=0", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if b.lastKind != bridge.ActionMouseMove {
+		t.Fatalf("kind = %q, want %q", b.lastKind, bridge.ActionMouseMove)
+	}
+	if !b.lastReq.HasXY || b.lastReq.X != 0 || b.lastReq.Y != 0 {
+		t.Fatalf("expected zero coordinates with HasXY=true, got %+v", b.lastReq)
+	}
+}
+
+func TestHandleAction_LegacyMouseKindIsRejected(t *testing.T) {
+	b := &recordingActionBridge{}
+	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"mousewheel","x":0,"y":0,"deltaY":240}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cross Origin Iframe Content</title>
+</head>
+<body>
+  <h2>Cross Origin Payment</h2>
+  <label for="cross-origin-code">Cross-origin code</label>
+  <input type="text" id="cross-origin-code" name="crossOriginCode">
+  <button type="button" id="cross-origin-send">Cross-origin send</button>
+
+  <script>
+    document.getElementById('cross-origin-send').addEventListener('click', function() {
+      const value = document.getElementById('cross-origin-code').value;
+      parent.postMessage({ type: 'cross-origin-submit', value: value }, '*');
+    });
+  </script>
+</body>
+</html>

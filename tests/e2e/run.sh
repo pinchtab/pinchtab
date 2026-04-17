@@ -21,102 +21,139 @@ require_commands() {
   fi
 }
 
+# Parse arguments
+RUN_EXTENDED=false
+SCENARIO_FILTER="${E2E_SCENARIO_FILTER:-}"
+EXTRA_SCENARIOS=""
+
+for arg in "$@"; do
+  case "$arg" in
+    extended=true|all=true)
+      RUN_EXTENDED=true
+      ;;
+    extended=false|all=false)
+      RUN_EXTENDED=false
+      ;;
+    filter=*)
+      SCENARIO_FILTER="${arg#filter=}"
+      ;;
+    extra=*)
+      EXTRA_SCENARIOS="${arg#extra=}"
+      ;;
+    *)
+      echo "unknown argument: $arg" >&2
+      echo "usage: /bin/bash tests/e2e/run.sh api|cli|infra [extended=true|all=true] [filter=<substring>] [extra=<files>]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Map suite to directory and configuration
 case "$SUITE" in
-  api|scenarios-api|scenarios)
+  api|api-extended)
     source "${ROOT_DIR}/helpers/api.sh"
-    GROUP_DIR="${ROOT_DIR}/scenarios-api"
+    GROUP_DIR="${ROOT_DIR}/scenarios/api"
     SUITE_KIND="api"
-    RUN_ALL=false
-    SUITE_TITLE_BASIC="PinchTab E2E API Fast Suite"
-    SUITE_TITLE_ALL="PinchTab E2E Test Suite"
-    SUMMARY_FILE_BASIC="summary-api-fast.txt"
-    SUMMARY_FILE_ALL="summary-api-full.txt"
-    REPORT_FILE_BASIC="report-api-fast.md"
-    REPORT_FILE_ALL="report-api-full.md"
-    PROGRESS_FILE_BASIC="progress-api-fast.log"
-    PROGRESS_FILE_ALL="progress-api-full.log"
+    [ "$SUITE" = "api-extended" ] && RUN_EXTENDED=true
+    SUITE_TITLE_BASIC="PinchTab E2E API Suite"
+    SUITE_TITLE_EXTENDED="PinchTab E2E API Extended Suite"
+    SUMMARY_FILE_BASIC="summary-api.txt"
+    SUMMARY_FILE_EXTENDED="summary-api-extended.txt"
+    REPORT_FILE_BASIC="report-api.md"
+    REPORT_FILE_EXTENDED="report-api-extended.md"
+    PROGRESS_FILE_BASIC="progress-api.log"
+    PROGRESS_FILE_EXTENDED="progress-api-extended.log"
     REQUIRED_COMMANDS=(curl jq grep sed awk seq)
     ;;
-  cli|scenarios-cli)
+  cli|cli-extended)
     source "${ROOT_DIR}/helpers/cli.sh"
-    GROUP_DIR="${ROOT_DIR}/scenarios-cli"
+    GROUP_DIR="${ROOT_DIR}/scenarios/cli"
     SUITE_KIND="cli"
-    RUN_ALL=false
-    SUITE_TITLE_BASIC="  PinchTab CLI Fast E2E Suite"
-    SUITE_TITLE_ALL="  PinchTab CLI E2E Tests"
-    SUMMARY_FILE_BASIC="summary-cli-fast.txt"
-    SUMMARY_FILE_ALL="summary-cli-full.txt"
-    REPORT_FILE_BASIC="report-cli-fast.md"
-    REPORT_FILE_ALL="report-cli-full.md"
-    PROGRESS_FILE_BASIC="progress-cli-fast.log"
-    PROGRESS_FILE_ALL="progress-cli-full.log"
+    [ "$SUITE" = "cli-extended" ] && RUN_EXTENDED=true
+    SUITE_TITLE_BASIC="PinchTab E2E CLI Suite"
+    SUITE_TITLE_EXTENDED="PinchTab E2E CLI Extended Suite"
+    SUMMARY_FILE_BASIC="summary-cli.txt"
+    SUMMARY_FILE_EXTENDED="summary-cli-extended.txt"
+    REPORT_FILE_BASIC="report-cli.md"
+    REPORT_FILE_EXTENDED="report-cli-extended.md"
+    PROGRESS_FILE_BASIC="progress-cli.log"
+    PROGRESS_FILE_EXTENDED="progress-cli-extended.log"
     REQUIRED_COMMANDS=(pinchtab curl jq grep sed awk seq mktemp)
+    ;;
+  infra|infra-extended)
+    source "${ROOT_DIR}/helpers/api.sh"
+    GROUP_DIR="${ROOT_DIR}/scenarios/infra"
+    SUITE_KIND="api"
+    [ "$SUITE" = "infra-extended" ] && RUN_EXTENDED=true
+    SUITE_TITLE_BASIC="PinchTab E2E Infra Suite"
+    SUITE_TITLE_EXTENDED="PinchTab E2E Infra Extended Suite"
+    SUMMARY_FILE_BASIC="summary-infra.txt"
+    SUMMARY_FILE_EXTENDED="summary-infra-extended.txt"
+    REPORT_FILE_BASIC="report-infra.md"
+    REPORT_FILE_EXTENDED="report-infra-extended.md"
+    PROGRESS_FILE_BASIC="progress-infra.log"
+    PROGRESS_FILE_EXTENDED="progress-infra-extended.log"
+    REQUIRED_COMMANDS=(curl jq grep sed awk seq)
     ;;
   *)
     echo "unknown suite: $SUITE" >&2
-    echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false] [filter=<substring>]" >&2
+    echo "usage: /bin/bash tests/e2e/run.sh api|cli|infra [extended=true|all=true] [filter=<substring>] [extra=<files>]" >&2
     exit 1
     ;;
 esac
 
 require_commands "${REQUIRED_COMMANDS[@]}"
 
-SCENARIO_FILTER="${E2E_SCENARIO_FILTER:-}"
-
-for arg in "$@"; do
-  case "$arg" in
-    all=true)
-      RUN_ALL=true
-      ;;
-    all=false)
-      RUN_ALL=false
-      ;;
-    filter=*)
-      SCENARIO_FILTER="${arg#filter=}"
-      ;;
-    *)
-      echo "unknown argument: $arg" >&2
-      echo "usage: /bin/bash tests/e2e/run.sh api|cli [all=true|all=false] [filter=<substring>]" >&2
-      exit 1
-      ;;
-  esac
-done
-
+# Build scenario list
 SCENARIO_GROUPS=()
+
+# Always include basic scenarios
 for basic_path in "${GROUP_DIR}"/*-basic.sh; do
-  if [ ! -f "${basic_path}" ]; then
-    echo "no basic group entries found in: ${GROUP_DIR}" >&2
-    exit 1
-  fi
-
-  feature=$(basename "${basic_path}" -basic.sh)
-  basic_script="${feature}-basic.sh"
-  SCENARIO_GROUPS+=("${basic_script}")
-
-  if [ "$RUN_ALL" = "true" ]; then
-    full_script="${feature}-full.sh"
-    full_path="${GROUP_DIR}/${full_script}"
-    if [ -f "${full_path}" ]; then
-      SCENARIO_GROUPS+=("${full_script}")
-    fi
+  if [ -f "${basic_path}" ]; then
+    SCENARIO_GROUPS+=("$(basename "${basic_path}")")
   fi
 done
 
-if [ "$RUN_ALL" = "true" ]; then
-  for full_path in "${GROUP_DIR}"/*-full.sh; do
-    if [ ! -f "${full_path}" ]; then
-      echo "no full group entries found in: ${GROUP_DIR}" >&2
-      exit 1
+# Include extended if requested
+if [ "$RUN_EXTENDED" = "true" ]; then
+  for extended_path in "${GROUP_DIR}"/*-extended.sh; do
+    if [ -f "${extended_path}" ]; then
+      extended_script=$(basename "${extended_path}")
+      case " ${SCENARIO_GROUPS[*]} " in
+        *" ${extended_script} "*) ;;
+        *) SCENARIO_GROUPS+=("${extended_script}") ;;
+      esac
     fi
-
-    full_script=$(basename "${full_path}")
-    case " ${SCENARIO_GROUPS[*]} " in
-      *" ${full_script} "*) ;;
-      *) SCENARIO_GROUPS+=("${full_script}") ;;
-    esac
+  done
+  # Include standalone scripts (no -basic or -extended suffix)
+  for standalone in "${GROUP_DIR}"/*.sh; do
+    if [ -f "$standalone" ]; then
+      name=$(basename "$standalone")
+      if [[ "$name" != *-basic.sh && "$name" != *-extended.sh ]]; then
+        case " ${SCENARIO_GROUPS[*]} " in
+          *" ${name} "*) ;;
+          *) SCENARIO_GROUPS+=("$name") ;;
+        esac
+      fi
+    fi
   done
 fi
 
+# Add extra touched scenarios
+if [ -n "$EXTRA_SCENARIOS" ]; then
+  for extra in $EXTRA_SCENARIOS; do
+    name=$(basename "$extra")
+    # Only add if not already in list and file exists
+    if [ -f "${GROUP_DIR}/${name}" ]; then
+      case " ${SCENARIO_GROUPS[*]} " in
+        *" ${name} "*) ;;
+        *) SCENARIO_GROUPS+=("${name}") ;;
+      esac
+    fi
+  done
+fi
+
+# Apply filter if specified
 if [ -n "$SCENARIO_FILTER" ]; then
   FILTERED_GROUPS=()
   for script_name in "${SCENARIO_GROUPS[@]}"; do
@@ -131,11 +168,18 @@ if [ -n "$SCENARIO_FILTER" ]; then
   fi
 fi
 
-if [ "$RUN_ALL" = "true" ]; then
-  SUITE_TITLE="$SUITE_TITLE_ALL"
-  SUMMARY_FILE="$SUMMARY_FILE_ALL"
-  REPORT_FILE="$REPORT_FILE_ALL"
-  PROGRESS_FILE="$PROGRESS_FILE_ALL"
+# Check we have scenarios to run
+if [ "${#SCENARIO_GROUPS[@]}" -eq 0 ]; then
+  echo "no scenario files found in: ${GROUP_DIR}" >&2
+  exit 1
+fi
+
+# Set output file names based on mode
+if [ "$RUN_EXTENDED" = "true" ]; then
+  SUITE_TITLE="$SUITE_TITLE_EXTENDED"
+  SUMMARY_FILE="$SUMMARY_FILE_EXTENDED"
+  REPORT_FILE="$REPORT_FILE_EXTENDED"
+  PROGRESS_FILE="$PROGRESS_FILE_EXTENDED"
 else
   SUITE_TITLE="$SUITE_TITLE_BASIC"
   SUMMARY_FILE="$SUMMARY_FILE_BASIC"
@@ -149,6 +193,7 @@ export E2E_REPORT_FILE="$REPORT_FILE"
 export E2E_PROGRESS_FILE="$PROGRESS_FILE"
 export E2E_GENERATE_MARKDOWN_REPORT=1
 
+# Print header and wait for instances
 if [ "$SUITE_KIND" = "api" ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo -e "${BLUE}${SUITE_TITLE}${NC}"
@@ -158,12 +203,15 @@ if [ "$SUITE_KIND" = "api" ]; then
   if [ -n "$SCENARIO_FILTER" ]; then
     echo "FILTER: ${SCENARIO_FILTER}"
   fi
+  if [ -n "$EXTRA_SCENARIOS" ]; then
+    echo "EXTRA: ${EXTRA_SCENARIOS}"
+  fi
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
   echo "Waiting for instances to become ready..."
   wait_for_instance_ready "${E2E_SERVER}"
-  if [ "$RUN_ALL" = "true" ]; then
+  if [ "$RUN_EXTENDED" = "true" ]; then
     wait_for_instance_ready "${E2E_SECURE_SERVER}"
     if [ -n "${E2E_MEDIUM_SERVER:-}" ]; then
       wait_for_instance_ready "${E2E_MEDIUM_SERVER}"
@@ -189,6 +237,9 @@ else
   if [ -n "$SCENARIO_FILTER" ]; then
     echo "  Filter: $SCENARIO_FILTER"
   fi
+  if [ -n "$EXTRA_SCENARIOS" ]; then
+    echo "  Extra: $EXTRA_SCENARIOS"
+  fi
   echo ""
 
   wait_for_instance_ready "$E2E_SERVER"
@@ -199,14 +250,15 @@ else
   fi
 
   echo ""
-  if [ "$RUN_ALL" = "true" ]; then
-    echo "Running CLI tests..."
+  if [ "$RUN_EXTENDED" = "true" ]; then
+    echo "Running CLI extended tests..."
   else
-    echo "Running CLI fast tests..."
+    echo "Running CLI tests..."
   fi
   echo ""
 fi
 
+# Run scenarios
 for script_name in "${SCENARIO_GROUPS[@]}"; do
   script_path="${GROUP_DIR}/${script_name}"
   if [ ! -f "${script_path}" ]; then

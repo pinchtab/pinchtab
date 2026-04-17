@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Alerts — PinchTab Benchmark</title>
+</head>
+<body>
+  <h1>JavaScript Dialogs — VERIFY_ALERTS_PAGE_44441</h1>
+
+  <button id="alert-btn">Click for Alert</button>
+  <button id="confirm-btn">Click for Confirm</button>
+  <button id="prompt-btn">Click for Prompt</button>
+
+  <p id="result"></p>
+
+  <script>
+    document.getElementById('alert-btn').addEventListener('click', function() {
+      alert('This is an alert');
+      document.getElementById('result').textContent = 'DIALOG_ALERT_DISMISSED';
+    });
+
+    document.getElementById('confirm-btn').addEventListener('click', function() {
+      const ok = confirm('Are you sure?');
+      document.getElementById('result').textContent = ok ? 'DIALOG_CONFIRM_ACCEPTED' : 'DIALOG_CONFIRM_CANCELLED';
+    });
+
+    document.getElementById('prompt-btn').addEventListener('click', function() {
+      const value = prompt('Enter your name:');
+      if (value === null) {
+        document.getElementById('result').textContent = 'DIALOG_PROMPT_CANCELLED';
+      } else {
+        document.getElementById('result').textContent = 'DIALOG_PROMPT_VALUE_' + value.replace(/\s/g, '_').toUpperCase();
+      }
+    });
+  </script>
+</body>
+</html>

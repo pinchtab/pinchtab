@@ -163,6 +163,47 @@ pinchtab wait --tab <tabId> 'text:Done'
 pinchtab network --tab <tabId> --limit 20
 ```
 
+Low-level pointer control uses the same action surface:
+
+```bash
+curl -X POST http://localhost:9867/tabs/<tabId>/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"mouse-move","ref":"e5"}'
+
+curl -X POST http://localhost:9867/tabs/<tabId>/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"mouse-down","button":"left"}'
+
+curl -X POST http://localhost:9867/tabs/<tabId>/action \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"mouse-wheel","x":400,"y":320,"deltaY":240}'
+
+# CLI Alternatives
+pinchtab mouse move --tab <tabId> e5
+pinchtab mouse down --tab <tabId> --button left
+pinchtab mouse wheel --tab <tabId> 240 --dx 40
+```
+
+### Handoff State
+
+Human handoff is tab-scoped and API-only today.
+
+Current limitation: this is not a blocking pause yet. The tab is marked as `paused_handoff`, but normal automation is not universally rejected just because that state is present. Treat it as temporary coordination metadata, not as an enforced lockout.
+
+```bash
+curl -X POST http://localhost:9867/tabs/<tabId>/handoff \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"captcha","timeoutMs":120000}'
+
+curl http://localhost:9867/tabs/<tabId>/handoff
+
+curl -X POST http://localhost:9867/tabs/<tabId>/resume \
+  -H "Content-Type: application/json" \
+  -d '{"status":"completed","resolvedData":{"operator":"human"}}'
+```
+
+Use this when automation must pause for a CAPTCHA, 2FA prompt, login approval, or another human-only step, but pair it with separate ownership/locking if you need hard exclusion today.
+
 ### Screenshot
 
 ```bash
@@ -219,3 +260,4 @@ There are also active-tab forms at `POST /lock` and `POST /unlock`.
 - There is no `GET /tabs/{id}` endpoint for fetching single-tab metadata.
 - `GET /tabs` and `GET /instances/tabs` serve different purposes and are not interchangeable.
 - In the CLI, tab-scoped work happens through top-level commands with `--tab`, not through `pinchtab tab <subcommand>` variants.
+- There is no dedicated CLI `handoff` or `resume` command today.

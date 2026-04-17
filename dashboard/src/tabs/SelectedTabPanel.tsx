@@ -4,6 +4,8 @@ import type { InstanceTab } from "../generated/types";
 import { TabsLayout, EmptyView } from "../components/molecules";
 import ScreencastTile from "../components/screencast/ScreencastTile";
 import SelectedTabTitle from "./SelectedTabTitle";
+import ConsolePanel from "./ConsolePanel";
+import ErrorsPanel from "./ErrorsPanel";
 
 interface Props {
   selectedTab: InstanceTab | null;
@@ -77,11 +79,9 @@ export default function SelectedTabPanel({ selectedTab, instanceId }: Props) {
             </div>
           )}
           {activeSubTab === "console" && (
-            <EmptyView message="Console logs for this tab will appear here." />
+            <ConsolePanel tabId={selectedTab.id} />
           )}
-          {activeSubTab === "errors" && (
-            <EmptyView message="Runtime errors for this tab will appear here." />
-          )}
+          {activeSubTab === "errors" && <ErrorsPanel tabId={selectedTab.id} />}
         </TabsLayout>
       </div>
     </div>

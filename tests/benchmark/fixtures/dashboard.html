@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - PinchTab Benchmark</title>
+</head>
+<body>
+  <header>
+    <nav><a href="/">Home</a> | <a href="/dashboard.html">Dashboard</a></nav>
+  </header>
+  <main>
+    <h1>Analytics Dashboard — VERIFY_DASHBOARD_PAGE_33333</h1>
+    
+    <section id="metrics">
+      <div class="metric-card" id="metric-users">
+        <h3>Total Users</h3>
+        <span class="value">24,582</span>
+        <span class="change positive">+12.5%</span>
+      </div>
+      <div class="metric-card" id="metric-revenue">
+        <h3>Revenue</h3>
+        <span class="value">$1,284,930</span>
+        <span class="change positive">+8.2%</span>
+      </div>
+      <div class="metric-card" id="metric-profit">
+        <h3>Profit</h3>
+        <span class="value">$384,930</span>
+        <span class="change positive">+15.3%</span>
+      </div>
+      <div class="metric-card" id="metric-margin">
+        <h3>Profit Margin</h3>
+        <span class="value">29.95%</span>
+        <span class="change positive">+2.1%</span>
+      </div>
+      <div class="metric-card" id="metric-orders">
+        <h3>Orders</h3>
+        <span class="value">3,847</span>
+        <span class="change negative">-2.1%</span>
+      </div>
+      <div class="metric-card" id="metric-conversion">
+        <h3>Conversion Rate</h3>
+        <span class="value">4.28%</span>
+        <span class="change positive">+0.3%</span>
+      </div>
+    </section>
+    
+    <section id="data-table">
+      <h2>Recent Transactions</h2>
+      <table id="transactions">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Customer</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="row-1">
+            <td>TXN-001</td>
+            <td>Alice Johnson</td>
+            <td>$245.00</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-15</td>
+          </tr>
+          <tr id="row-2">
+            <td>TXN-002</td>
+            <td>Bob Smith</td>
+            <td>$189.50</td>
+            <td class="status-pending">Pending</td>
+            <td>2026-03-15</td>
+          </tr>
+          <tr id="row-3">
+            <td>TXN-003</td>
+            <td>Carol Williams</td>
+            <td>$567.25</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-14</td>
+          </tr>
+          <tr id="row-4">
+            <td>TXN-004</td>
+            <td>David Brown</td>
+            <td>$92.00</td>
+            <td class="status-failed">Failed</td>
+            <td>2026-03-14</td>
+          </tr>
+          <tr id="row-5">
+            <td>TXN-005</td>
+            <td>Eve Davis</td>
+            <td>$1,234.99</td>
+            <td class="status-completed">Completed</td>
+            <td>2026-03-13</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="table-footer">TABLE_ROW_COUNT_5</p>
+    </section>
+    
+    <section id="financial-data">
+      <h2>Financial Analysis</h2>
+      <div id="financial-metrics">
+        <p><strong>Total Revenue:</strong> $1,284,930</p>
+        <p><strong>Total Profit:</strong> $384,930</p>
+        <p><strong>Profit Margin Calculation:</strong> (384,930 / 1,284,930) × 100 = 29.95%</p>
+        <p id="profit-verification">PROFIT_MARGIN_CALCULATED</p>
+      </div>
+    </section>
+    
+    <section id="filters">
+      <h2>Filter Data</h2>
+      <div class="filter-controls">
+        <select id="status-filter">
+          <option value="all">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+        </select>
+        <input type="date" id="date-from" value="2026-03-01">
+        <input type="date" id="date-to" value="2026-03-15">
+        <button id="apply-filter">Apply Filter</button>
+      </div>
+      <div id="filter-result"></div>
+    </section>
+  </main>
+  
+  
+  <button id="settings-btn">Settings</button>
+  
+  <!-- Modal Dialog -->
+  <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div id="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 300px;">
+      <h2>Dashboard Settings</h2>
+      <div id="theme-section">
+        <label>Theme:</label>
+        <select id="theme-select">
+          <option value="light">Light Mode</option>
+          <option value="dark">Dark Mode</option>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+      <div id="notifications-section" style="margin-top: 15px;">
+        <label>
+          <input type="checkbox" id="notifications-enable" checked>
+          Enable Notifications
+        </label>
+      </div>
+      <div id="refresh-section" style="margin-top: 15px;">
+        <label>Auto-refresh (seconds):</label>
+        <input type="number" id="refresh-interval" value="30" min="5" max="300">
+      </div>
+      <div style="margin-top: 20px;">
+        <button id="modal-save">Save</button>
+        <button id="modal-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Load settings from localStorage
+    function loadSettings() {
+      const savedTheme = localStorage.getItem('dashboardTheme') || 'light';
+      document.getElementById('theme-select').value = savedTheme;
+      if (savedTheme === 'dark') {
+        document.body.style.backgroundColor = '#333';
+        document.body.style.color = '#fff';
+      }
+    }
+    
+    // Modal logic
+    document.getElementById('settings-btn').addEventListener('click', function() {
+      loadSettings();
+      document.getElementById('settings-modal').style.display = 'block';
+    });
+    
+    document.getElementById('modal-close').addEventListener('click', function() {
+      document.getElementById('settings-modal').style.display = 'none';
+    });
+    
+    document.getElementById('modal-save').addEventListener('click', function() {
+      const theme = document.getElementById('theme-select').value;
+      localStorage.setItem('dashboardTheme', theme);
+      // Create or update theme indicator in the main page (visible after modal closes)
+      let indicator = document.getElementById('theme-indicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'theme-indicator';
+        document.body.appendChild(indicator);
+      }
+      if (theme === 'dark') {
+        document.body.style.backgroundColor = '#333';
+        document.body.style.color = '#fff';
+        indicator.textContent = 'THEME_DARK_APPLIED';
+      } else if (theme === 'light') {
+        document.body.style.backgroundColor = '#fff';
+        document.body.style.color = '#000';
+        indicator.textContent = 'THEME_LIGHT_APPLIED';
+      } else {
+        indicator.textContent = 'THEME_AUTO_APPLIED';
+      }
+      document.getElementById('settings-modal').style.display = 'none';
+    });
+    
+    document.getElementById('apply-filter').addEventListener('click', function() {
+      const status = document.getElementById('status-filter').value;
+      const dateFrom = document.getElementById('date-from').value;
+      const dateTo = document.getElementById('date-to').value;
+      document.getElementById('filter-result').innerHTML = `
+        <p>FILTER_APPLIED_STATUS_${status.toUpperCase()}_FROM_${dateFrom}_TO_${dateTo}</p>
+      `;
+    });
+    
+    // Load settings on page load
+    loadSettings();
+  </script>
+</body>
+</html>

@@ -61,7 +61,7 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
 		{
 			ID:     "idpi_whitelist_scoped",
 			Label:  "website whitelist",
-			Passed: cfg.IDPI.Enabled && len(cfg.IDPI.AllowedDomains) > 0 && !allowsAllDomains(cfg.IDPI.AllowedDomains),
+			Passed: cfg.IDPI.Enabled && len(cfg.AllowedDomains) > 0 && !allowsAllDomains(cfg.AllowedDomains),
 			Detail: formatWhitelistStatus(cfg),
 		},
 		{
@@ -156,20 +156,20 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 		warnings = append(warnings, SecurityWarning{
 			ID:      "idpi_disabled",
 			Message: "IDPI disabled; website whitelist inactive",
-			Attrs:   []any{"setting", "security.idpi.enabled", "hint", "enable IDPI and keep security.idpi.allowedDomains scoped to approved websites"},
+			Attrs:   []any{"setting", "security.idpi.enabled", "hint", "enable IDPI and keep security.allowedDomains scoped to approved websites"},
 		})
 	} else {
-		if len(cfg.IDPI.AllowedDomains) == 0 {
+		if len(cfg.AllowedDomains) == 0 {
 			warnings = append(warnings, SecurityWarning{
 				ID:      "idpi_whitelist_not_set",
 				Message: "website whitelist is not set for IDPI",
-				Attrs:   []any{"setting", "security.idpi.allowedDomains", "hint", "configure allowedDomains to restrict which websites navigation may reach"},
+				Attrs:   []any{"setting", "security.allowedDomains", "hint", "configure allowedDomains to restrict which websites navigation may reach"},
 			})
-		} else if allowsAllDomains(cfg.IDPI.AllowedDomains) {
+		} else if allowsAllDomains(cfg.AllowedDomains) {
 			warnings = append(warnings, SecurityWarning{
 				ID:      "idpi_whitelist_allows_all",
 				Message: "website whitelist allows all domains",
-				Attrs:   []any{"setting", "security.idpi.allowedDomains", "hint", "remove '*' and list only approved domains"},
+				Attrs:   []any{"setting", "security.allowedDomains", "hint", "remove '*' and list only approved domains"},
 			})
 		}
 
@@ -299,13 +299,13 @@ func formatWhitelistStatus(cfg *config.RuntimeConfig) string {
 	if !cfg.IDPI.Enabled {
 		return "disabled"
 	}
-	if len(cfg.IDPI.AllowedDomains) == 0 {
+	if len(cfg.AllowedDomains) == 0 {
 		return "not set"
 	}
-	if allowsAllDomains(cfg.IDPI.AllowedDomains) {
+	if allowsAllDomains(cfg.AllowedDomains) {
 		return "wildcard"
 	}
-	return strings.Join(cfg.IDPI.AllowedDomains, ", ")
+	return strings.Join(cfg.AllowedDomains, ", ")
 }
 
 func formatStrictModeStatus(cfg *config.RuntimeConfig) string {

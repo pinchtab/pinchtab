@@ -37,7 +37,7 @@ func TestIsInstanceHealthyStatus(t *testing.T) {
 }
 
 func TestInstanceBaseURLs(t *testing.T) {
-	urls := instanceBaseURLs(1234)
+	urls := instanceBaseURLs("", 1234)
 
 	expected := []string{
 		"http://127.0.0.1:1234",
@@ -53,6 +53,40 @@ func TestInstanceBaseURLs(t *testing.T) {
 		if url != expected[i] {
 			t.Errorf("url[%d] = %q, want %q", i, url, expected[i])
 		}
+	}
+}
+
+func TestInstanceBaseURLs_IncludesConfiguredBindFirst(t *testing.T) {
+	urls := instanceBaseURLs("192.168.1.50", 1234)
+
+	expected := []string{
+		"http://192.168.1.50:1234",
+		"http://127.0.0.1:1234",
+		"http://[::1]:1234",
+		"http://localhost:1234",
+	}
+
+	if len(urls) != len(expected) {
+		t.Fatalf("expected %d URLs, got %d", len(expected), len(urls))
+	}
+
+	for i, url := range urls {
+		if url != expected[i] {
+			t.Errorf("url[%d] = %q, want %q", i, url, expected[i])
+		}
+	}
+}
+
+func TestValidatedHealthProbeBaseURL_AllowsConfiguredChildBindHost(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{Bind: "192.168.1.50"})
+
+	baseURL, err := o.validatedHealthProbeBaseURL("http://192.168.1.50:9872", "", healthProbePolicyLoopback)
+	if err != nil {
+		t.Fatalf("validatedHealthProbeBaseURL() error = %v", err)
+	}
+	if got := baseURL.String(); got != "http://192.168.1.50:9872" {
+		t.Fatalf("validatedHealthProbeBaseURL() = %q, want %q", got, "http://192.168.1.50:9872")
 	}
 }
 

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - srcdoc iframe</title>
+</head>
+<body>
+  <h1>srcdoc Iframe — VERIFY_IFRAME_SRCDOC_OUTER</h1>
+  <p>This iframe has no <code>src</code>; its content is provided inline
+  via the <code>srcdoc</code> attribute. Same-origin (considered to inherit
+  the parent's origin).</p>
+
+  <iframe id="srcdoc-frame" width="500" height="200" srcdoc='
+    <!DOCTYPE html>
+    <html>
+    <body>
+      <h2>Srcdoc Inner — IFRAME_SRCDOC_INNER_LOADED</h2>
+      <input id="inline-input" type="text">
+      <button type="button" id="inline-submit">OK</button>
+      <div id="inline-result">INLINE_RESULT_PENDING</div>
+      <script>
+        document.getElementById("inline-submit").addEventListener("click", function() {
+          const v = document.getElementById("inline-input").value;
+          document.getElementById("inline-result").textContent = "INLINE_RECEIVED_" + (v || "EMPTY").toUpperCase();
+        });
+      </script>
+    </body>
+    </html>
+  '></iframe>
+</body>
+</html>

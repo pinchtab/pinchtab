@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Iframe Rerender V2</title>
+</head>
+<body>
+  <h2>Iframe Rerender V2</h2>
+  <label for="fresh-field">Fresh field</label>
+  <input type="text" id="fresh-field" name="freshField">
+  <button type="button" id="fresh-save">Fresh save</button>
+  <p id="fresh-result"></p>
+
+  <script>
+    document.getElementById('fresh-save').addEventListener('click', function() {
+      const value = document.getElementById('fresh-field').value;
+      document.getElementById('fresh-result').textContent = 'FRESH_SAVED_' + value;
+    });
+  </script>
+</body>
+</html>

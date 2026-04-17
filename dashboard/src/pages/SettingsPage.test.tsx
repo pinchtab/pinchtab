@@ -77,9 +77,33 @@ describe("SettingsPage", () => {
 
     expect(
       screen.getByText(
-        "Dashboard edits are written back to this file. External provider keys stay under autoSolver.external in the same config.",
+        "Dashboard edits are written back to this file. Set external provider keys under autoSolver.external in the same config file.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("/tmp/config.json")).toBeInTheDocument();
+  });
+
+  it("shows navigation trust settings in the Security section", async () => {
+    renderSettingsPage();
+
+    await userEvent.click(
+      (await screen.findByText("Security")).closest("button")!,
+    );
+
+    expect(screen.getByText("Allowed websites")).toBeInTheDocument();
+    expect(screen.getByText("Trusted proxy CIDRs")).toBeInTheDocument();
+    expect(screen.getByText("Trusted resolve CIDRs")).toBeInTheDocument();
+    expect(screen.getAllByText(/single hosts/)).toHaveLength(2);
+  });
+
+  it("keeps the IDPI section focused on IDPI toggles and patterns", async () => {
+    renderSettingsPage();
+
+    await userEvent.click(
+      (await screen.findByText("Security IDPI")).closest("button")!,
+    );
+
+    expect(screen.queryByText("Allowed websites")).not.toBeInTheDocument();
+    expect(screen.getByText("Custom patterns")).toBeInTheDocument();
   });
 });

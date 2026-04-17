@@ -78,9 +78,6 @@ func (pa *PortAllocator) ReservePort(port int) error {
 	if pa.allocated[port] {
 		return fmt.Errorf("port %d already reserved", port)
 	}
-	if !portAvailableFunc(port) {
-		return fmt.Errorf("port %d is already in use", port)
-	}
 	pa.allocated[port] = true
 	slog.Debug("reserved port", "port", port)
 	return nil

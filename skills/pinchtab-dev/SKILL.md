@@ -28,8 +28,8 @@ All development commands run via `./dev`:
 | `./dev check dashboard` | Dashboard checks only |
 | `./dev test unit` | Go unit tests |
 | `./dev test dashboard` | Dashboard unit tests |
-| `./dev e2e pr` | PR suite (api-fast + cli-fast) |
-| `./dev e2e release` | Release suite (api-full + cli-full) |
+| `./dev e2e pr` | PR suite (api + cli + infra) |
+| `./dev e2e release` | Release suite (all extended) |
 | `./dev e2e docker` | Build local image and Docker smoke test |
 | `./dev doctor` | Setup dev environment |
 
@@ -117,18 +117,20 @@ go test ./internal/handlers  # Specific package
 
 ### E2E Tests (requires Docker)
 ```bash
-./dev e2e pr                    # Fast suite for PRs (api-fast + cli-fast)
-./dev e2e api-fast              # API tests only (fast)
-./dev e2e cli-fast              # CLI tests only (fast)
-./dev e2e api-full              # API tests (full, with multiple configs)
-./dev e2e cli-full              # CLI tests (full)
-./dev e2e release               # Full release suite (api-full + cli-full)
+./dev e2e pr                    # PR suite (api + cli + infra basic tests)
+./dev e2e api                   # API basic tests
+./dev e2e cli                   # CLI basic tests
+./dev e2e infra                 # Infra basic tests
+./dev e2e api-extended          # API extended tests (multi-instance)
+./dev e2e cli-extended          # CLI extended tests
+./dev e2e infra-extended        # Infra extended tests (multi-instance)
+./dev e2e release               # Full release suite (all extended tests)
 ./dev e2e docker                # Docker smoke test only
 
 # Run specific test file(s) with filter (second argument)
-./dev e2e api-fast clipboard              # Run only clipboard-basic.sh
-./dev e2e api-full "clipboard|console"    # Run clipboard and console tests
-./dev e2e cli-fast browser                # Run browser-basic.sh in CLI suite
+./dev e2e api clipboard                # Run only clipboard-basic.sh
+./dev e2e api-extended "clipboard|console"  # Run clipboard and console tests
+./dev e2e cli browser                  # Run browser-basic.sh in CLI suite
 ```
 
 The filter is a regex pattern matched against scenario filenames. Requires Docker daemon running.

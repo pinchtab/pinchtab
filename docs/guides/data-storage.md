@@ -19,8 +19,8 @@ PinchTab uses the OS config directory:
 
 | OS | Default Base Directory |
 | --- | --- |
-| Linux | `~/.config/pinchtab/` or `$XDG_CONFIG_HOME/pinchtab/` |
-| macOS | `~/Library/Application Support/pinchtab/` |
+| Linux | `~/.pinchtab/` |
+| macOS | `~/.pinchtab/` |
 | Windows | `%APPDATA%\\pinchtab\\` |
 
 Typical layout:
@@ -35,14 +35,11 @@ pinchtab/
     └── default/
 ```
 
-## Legacy Fallback
+## Platform Defaults
 
-For backward compatibility, PinchTab still uses `~/.pinchtab/` if:
+On macOS and Linux, `~/.pinchtab/` is the default base directory.
 
-- that legacy directory already exists
-- and the newer OS-native location does not exist yet
-
-That fallback applies to both config lookup and the default base storage directory.
+On Windows, PinchTab uses the OS-native config directory under `%APPDATA%\\pinchtab\\`.
 
 ## Profiles
 
@@ -119,13 +116,23 @@ By default PinchTab keeps 1 day of activity data and prunes older daily files wh
   "observability": {
     "activity": {
       "retentionDays": 1,
-      "sessionIdleSec": 1800
+      "sessionIdleSec": 1800,
+      "events": {
+        "dashboard": false,
+        "server": false,
+        "bridge": false,
+        "orchestrator": false,
+        "scheduler": false,
+        "mcp": false,
+        "other": false
+      }
     }
   }
 }
 ```
 
 `retentionDays` controls on-disk retention for activity logs. `sessionIdleSec` controls session grouping only.
+`events` controls which non-client sources are recorded. Client events are always recorded.
 
 Requests that carry `X-Agent-Id` are stored with that value as `agentId` in the activity event. This is what powers agent-scoped queries such as `GET /api/activity?agentId=<id>` and the dashboard Agents view.
 
@@ -139,7 +146,7 @@ In orchestrator mode, child instances get their own state directory under the pr
 
 PinchTab writes a child `config.json` there so the launched instance can inherit the correct profile path, state directory, and port.
 
-Managed child bridges still write activity into the shared parent activity store. That keeps `/api/activity`, `/api/agents`, and dashboard activity views unified across orchestrator-managed instances instead of splitting activity by per-instance state directory.
+Managed child bridges disable their local activity recorder. Dashboard-visible activity comes from the parent server handling client traffic, so orchestrator-managed child state directories should not accumulate their own `activity/events-*.jsonl` files for new runs.
 
 Profile `logs` and `analytics` endpoints are derived from the activity store rather than a separate analytics file.
 

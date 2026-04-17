@@ -102,9 +102,6 @@ func handleConfigOverview(cfg *config.RuntimeConfig) {
 	}
 
 	dashPort := cfg.Port
-	if dashPort == "" {
-		dashPort = "9870"
-	}
 	dashboardURL := fmt.Sprintf("http://localhost:%s", dashPort)
 	running := server.CheckPinchTabRunning(dashPort, cfg.Token)
 
@@ -131,9 +128,6 @@ func handleConfigOverview(cfg *config.RuntimeConfig) {
 
 		cfg = nextCfg
 		dashPort = cfg.Port
-		if dashPort == "" {
-			dashPort = "9870"
-		}
 		dashboardURL = fmt.Sprintf("http://localhost:%s", dashPort)
 		running = server.CheckPinchTabRunning(dashPort, cfg.Token)
 		fmt.Println()

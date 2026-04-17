@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Keyboard</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #log { margin-top: 20px; font-family: monospace; white-space: pre-wrap; }
+    .hint { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Keyboard Events — VERIFY_KEYBOARD_PAGE_22222</h1>
+
+  <p class="hint">Press Escape, 'a', or Enter to emit a verification marker.
+  The page focuses its body on load so the listener captures keypresses
+  without needing a specific input element.</p>
+
+  <input id="focus-input" aria-label="focus me to receive keys">
+
+  <div id="log"></div>
+
+  <script>
+    (function () {
+      const log = document.getElementById('log');
+      const append = function (marker) {
+        log.textContent += marker + '\n';
+      };
+      // Focus the input so keyboard events land predictably.
+      document.getElementById('focus-input').focus();
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          append('KEYBOARD_ESCAPE_PRESSED');
+        } else if (e.key === 'a' || e.key === 'A') {
+          append('KEYBOARD_KEY_A_PRESSED');
+        } else if (e.key === 'Enter') {
+          append('KEYBOARD_ENTER_PRESSED');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -52,6 +52,8 @@ var coreEndpoints = []Endpoint{
 
 	// Content extraction
 	{"GET", "/snapshot", "Accessibility snapshot", CapNone, true},
+	{"GET", "/frame", "Get current frame scope", CapNone, true},
+	{"POST", "/frame", "Set current frame scope", CapNone, true},
 	{"GET", "/screenshot", "Page screenshot", CapNone, true},
 	{"GET", "/text", "Extract page text", CapNone, true},
 	{"GET", "/pdf", "Export as PDF (GET)", CapNone, true},
@@ -113,8 +115,8 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/storage", "Set storage item", CapStateExport, true},
 	{"DELETE", "/storage", "Delete storage items", CapStateExport, true},
 
-	// State management — list is read-only summary, ungated.
-	{"GET", "/state/list", "List saved states", CapNone, false},
+	// State management
+	{"GET", "/state/list", "List saved states", CapStateExport, false},
 
 	// Capability-gated
 	{"POST", "/evaluate", "Run JavaScript in page", CapEvaluate, true},

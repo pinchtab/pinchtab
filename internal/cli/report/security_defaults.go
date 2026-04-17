@@ -34,7 +34,7 @@ func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 		"security.attach.allowHosts = 127.0.0.1,localhost,::1",
 		"security.attach.allowSchemes = ws,wss",
 		"security.idpi.enabled = true",
-		"security.idpi.allowedDomains = 127.0.0.1,localhost,::1",
+		"security.allowedDomains = 127.0.0.1,localhost,::1",
 		"security.idpi.strictMode = true",
 		"security.idpi.scanContent = true",
 		"security.idpi.wrapContent = true",
@@ -69,7 +69,7 @@ func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 		case "idpi_whitelist_scoped", "idpi_strict_mode", "idpi_content_protection":
 			for _, line := range []string{
 				"security.idpi.enabled = true",
-				"security.idpi.allowedDomains = 127.0.0.1,localhost,::1",
+				"security.allowedDomains = 127.0.0.1,localhost,::1",
 				"security.idpi.strictMode = true",
 				"security.idpi.scanContent = true",
 				"security.idpi.wrapContent = true",

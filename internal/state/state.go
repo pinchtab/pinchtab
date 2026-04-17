@@ -6,6 +6,7 @@ package state
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
@@ -16,6 +17,11 @@ import (
 	"sort"
 	"strings"
 	"time"
+)
+
+const (
+	pbkdf2Iterations = 100_000
+	pbkdf2SaltSize   = 16
 )
 
 // Version is the current state file format version.
@@ -114,7 +120,10 @@ func Save(stateDir string, sf *StateFile, encryptionKey string) (string, error) 
 
 	ext := fileExtension(encryptionKey != "")
 	filename := sanitizeFilename(sf.Name) + ext
-	path := filepath.Join(dir, filename)
+	path := filepath.Clean(filepath.Join(dir, filename))
+	if !strings.HasPrefix(path, filepath.Clean(dir)+string(os.PathSeparator)) {
+		return "", fmt.Errorf("invalid state file name: resolved path escapes state directory")
+	}
 
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return "", fmt.Errorf("write state file: %w", err)
@@ -290,14 +299,23 @@ func Clean(stateDir string, olderThan time.Duration) (int, error) {
 	return removed, nil
 }
 
-// Encrypt encrypts plaintext using AES-256-GCM. The key is derived by
-// SHA-256 hashing the passphrase to ensure a 32-byte key.
+// Encrypt encrypts plaintext using AES-256-GCM. The key is derived from the
+// passphrase using PBKDF2 with a random salt.
+// Output format: salt (16 bytes) || nonce || ciphertext.
 func Encrypt(plaintext []byte, passphrase string) ([]byte, error) {
 	if passphrase == "" {
 		return nil, fmt.Errorf("encryption key required")
 	}
 
-	key := deriveKey(passphrase)
+	salt := make([]byte, pbkdf2SaltSize)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return nil, fmt.Errorf("generate salt: %w", err)
+	}
+
+	key, err := deriveKey(passphrase, salt)
+	if err != nil {
+		return nil, fmt.Errorf("derive key: %w", err)
+	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -314,17 +332,36 @@ func Encrypt(plaintext []byte, passphrase string) ([]byte, error) {
 		return nil, fmt.Errorf("generate nonce: %w", err)
 	}
 
-	return gcm.Seal(nonce, nonce, plaintext, nil), nil
+	sealed := gcm.Seal(nonce, nonce, plaintext, nil)
+	return append(salt, sealed...), nil
 }
 
 // Decrypt decrypts ciphertext encrypted with Encrypt.
+// It tries PBKDF2-derived key first (new format), then falls back to the
+// legacy SHA-256 derivation for backward compatibility with older files.
 func Decrypt(ciphertext []byte, passphrase string) ([]byte, error) {
 	if passphrase == "" {
 		return nil, fmt.Errorf("encryption key required")
 	}
 
-	key := deriveKey(passphrase)
+	// Try PBKDF2-based decryption (new format: salt || nonce || ciphertext).
+	if len(ciphertext) > pbkdf2SaltSize {
+		salt := ciphertext[:pbkdf2SaltSize]
+		rest := ciphertext[pbkdf2SaltSize:]
+		key, err := deriveKey(passphrase, salt)
+		if err == nil {
+			if pt, err := decryptWithKey(rest, key); err == nil {
+				return pt, nil
+			}
+		}
+	}
 
+	// Fall back to legacy SHA-256 key derivation.
+	legacyHash := sha256.Sum256([]byte(passphrase))
+	return decryptWithKey(ciphertext, legacyHash[:])
+}
+
+func decryptWithKey(ciphertext, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("create cipher: %w", err)
@@ -352,15 +389,14 @@ func Decrypt(ciphertext []byte, passphrase string) ([]byte, error) {
 // ValidateEncryptionKey checks that the key is non-empty.
 func ValidateEncryptionKey(key string) error {
 	if key == "" {
-		return fmt.Errorf("PINCHTAB_STATE_KEY must be set for encrypted state operations")
+		return fmt.Errorf("security.stateEncryptionKey must be set for encrypted state operations")
 	}
 	return nil
 }
 
-// deriveKey produces a 32-byte AES-256 key from an arbitrary passphrase.
-func deriveKey(passphrase string) []byte {
-	hash := sha256.Sum256([]byte(passphrase))
-	return hash[:]
+// deriveKey produces a 32-byte AES-256 key from a passphrase using PBKDF2.
+func deriveKey(passphrase string, salt []byte) ([]byte, error) {
+	return pbkdf2.Key(sha256.New, passphrase, salt, pbkdf2Iterations, 32)
 }
 
 // sanitizeFilename strips path separators and problematic characters.

@@ -19,6 +19,10 @@ on:
         required: false
         type: string
         default: ''
+      extra_scenarios:
+        required: false
+        type: string
+        default: ''
       dump_instance_inventory:
         required: false
         type: boolean
@@ -92,7 +96,12 @@ jobs:
           mkdir -p tests/e2e/results
           rm -f tests/e2e/results/summary*.txt tests/e2e/results/report*.md e2e-output.log
 
-          ./dev e2e "${{ inputs.suite }}" 2>&1 | tee e2e-output.log
+          EXTRA="${{ inputs.extra_scenarios }}"
+          if [ -n "$EXTRA" ]; then
+            ./dev e2e "${{ inputs.suite }}" "extra=$EXTRA" 2>&1 | tee e2e-output.log
+          else
+            ./dev e2e "${{ inputs.suite }}" 2>&1 | tee e2e-output.log
+          fi
           EXIT_CODE=${PIPESTATUS[0]}
 
           if [ "$EXIT_CODE" -eq 127 ]; then

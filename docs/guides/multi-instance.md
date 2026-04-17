@@ -33,6 +33,7 @@ pinchtab instance start --mode headed --port 9999
   "profileId": "prof_278be873",
   "profileName": "instance-1741410000000",
   "port": "9999",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }
@@ -42,6 +43,7 @@ Notes:
 
 - `POST /instances/launch` still exists as a compatibility endpoint, but it now follows the same semantics as `POST /instances/start`.
 - If you omit `profileId`, PinchTab creates a managed instance with an auto-generated profile name.
+- `securityPolicy.allowedDomains` lets you widen IDPI/domain trust for just that instance. This is additive over the server baseline, so one instance can use `["*"]` while the rest stay on the default allowlist.
 - Starting an instance is only optional in workflows that use shorthand routes with auto-launch behavior, such as the `simple` strategy. In `explicit`, you should assume you need to start one yourself.
 
 ## Open A Tab In A Specific Instance
@@ -100,6 +102,7 @@ Useful fields:
 - `id`: stable instance identifier
 - `profileId` and `profileName`: the profile backing that instance
 - `port`: the instance's HTTP port
+- `mode`: explicit `"headless"` or `"headed"` string for request/response symmetry
 - `headless`: whether Chrome was launched headless
 - `status`: usually `starting`, `running`, `stopping`, or `stopped`
 

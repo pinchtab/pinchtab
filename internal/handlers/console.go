@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -64,6 +65,9 @@ func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) 
 	if logs == nil {
 		logs = make([]bridge.LogEntry, 0)
 	}
+
+	h.recordActivity(r, activity.Update{Action: "console.logs", TabID: tabID})
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"tabId":   tabID,
 		"console": logs,
@@ -78,6 +82,9 @@ func (h *Handlers) HandleClearConsoleLogs(w http.ResponseWriter, r *http.Request
 	}
 
 	h.Bridge.ClearConsoleLogs(tabID)
+
+	h.recordActivity(r, activity.Update{Action: "console.clear", TabID: tabID})
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"tabId":   tabID,
@@ -100,6 +107,9 @@ func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
 	if errors == nil {
 		errors = make([]bridge.ErrorEntry, 0)
 	}
+
+	h.recordActivity(r, activity.Update{Action: "errors.logs", TabID: tabID})
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"tabId":  tabID,
 		"errors": errors,
@@ -114,6 +124,9 @@ func (h *Handlers) HandleClearErrorLogs(w http.ResponseWriter, r *http.Request) 
 	}
 
 	h.Bridge.ClearErrorLogs(tabID)
+
+	h.recordActivity(r, activity.Update{Action: "errors.clear", TabID: tabID})
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"tabId":   tabID,

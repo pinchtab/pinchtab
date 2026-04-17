@@ -8,7 +8,7 @@ PinchTab determines the Chrome `--user-data-dir` (profile) using the following p
 
 1.  **Explicit `ProfileDir`**: If a specific path is provided in the configuration or as a flag, PinchTab uses that exact directory.
 2.  **Named Profile**: If a profile name is provided (e.g., via the dashboard or CLI), PinchTab resolves it to a subdirectory within the `ProfilesBaseDir`.
-3.  **Default Profile**: If no profile is specified, it defaults to `~/.config/pinchtab/profiles/default` (on Linux/macOS).
+3.  **Default Profile**: If no profile is specified, it defaults to `~/.pinchtab/profiles/default` (on Linux/macOS).
 
 ## The Singleton Model
 

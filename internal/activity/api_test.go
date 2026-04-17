@@ -17,6 +17,18 @@ func TestFilterFromRequest_ClampsLimit(t *testing.T) {
 	}
 }
 
+func TestFilterFromRequest_ParsesAgentID(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/activity?agentId=cli", nil)
+
+	filter, err := filterFromRequest(req)
+	if err != nil {
+		t.Fatalf("filterFromRequest: %v", err)
+	}
+	if filter.AgentID != "cli" {
+		t.Fatalf("AgentID = %q, want cli", filter.AgentID)
+	}
+}
+
 func TestFilterFromRequest_RejectsInvalidLimit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/activity?limit=0", nil)
 

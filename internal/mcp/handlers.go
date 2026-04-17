@@ -15,18 +15,20 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		// Navigation
 		"pinchtab_navigate":   handleNavigate(c),
 		"pinchtab_snapshot":   handleSnapshot(c),
+		"pinchtab_frame":      handleFrame(c),
 		"pinchtab_screenshot": handleScreenshot(c),
 		"pinchtab_get_text":   handleGetText(c),
 
 		// Interaction
-		"pinchtab_click":  handleAction(c, "click"),
-		"pinchtab_type":   handleAction(c, "type"),
-		"pinchtab_press":  handleAction(c, "press"),
-		"pinchtab_hover":  handleAction(c, "hover"),
-		"pinchtab_focus":  handleAction(c, "focus"),
-		"pinchtab_select": handleAction(c, "select"),
-		"pinchtab_scroll": handleAction(c, "scroll"),
-		"pinchtab_fill":   handleAction(c, "fill"),
+		"pinchtab_click":            handleAction(c, "click"),
+		"pinchtab_type":             handleAction(c, "type"),
+		"pinchtab_press":            handleAction(c, "press"),
+		"pinchtab_hover":            handleAction(c, "hover"),
+		"pinchtab_focus":            handleAction(c, "focus"),
+		"pinchtab_select":           handleAction(c, "select"),
+		"pinchtab_scroll":           handleAction(c, "scroll"),
+		"pinchtab_scroll_into_view": handleAction(c, "scrollintoview"),
+		"pinchtab_fill":             handleAction(c, "fill"),
 
 		// Keyboard (no selector)
 		"pinchtab_keyboard_type":       handleKeyboardText(c, "keyboard-type"),

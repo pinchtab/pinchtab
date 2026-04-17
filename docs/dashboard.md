@@ -106,6 +106,7 @@ pinchtab instance start --profile prof_278be873 --mode headed
   "profileId": "prof_278be873",
   "profileName": "work",
   "port": "9868",
+  "mode": "headed",
   "headless": false,
   "status": "starting"
 }
@@ -144,6 +145,7 @@ It includes sections for:
 - Instance Defaults
 - Orchestration
 - Security
+- Security IDPI
 - Profiles
 - Network & Attach
 - Browser Runtime
@@ -155,6 +157,20 @@ What you can do:
 - load backend config from `GET /api/config`
 - save backend config through `PUT /api/config`
 - see whether a restart is required for server-level changes
+
+The Security section now includes:
+
+- `security.allowedDomains` for the website allowlist used by IDPI domain checks
+- `security.trustedProxyCIDRs` for known internal proxies whose runtime remote IPs should be trusted
+- `security.trustedResolveCIDRs` for operator-controlled DNS or proxy setups where hostnames intentionally resolve to non-public IPs
+
+The Security IDPI section is focused on content-protection behavior:
+
+- `security.idpi.enabled`
+- `security.idpi.strictMode`
+- `security.idpi.scanContent`
+- `security.idpi.wrapContent`
+- `security.idpi.customPatterns`
 
 The health payload also surfaces summary info:
 

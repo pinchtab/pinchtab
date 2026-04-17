@@ -318,3 +318,158 @@ func TestBuildSnapshotDepthFilter(t *testing.T) {
 		t.Fatalf("expected 2 nodes at depth<=1, got %d: %+v", len(flat), flat)
 	}
 }
+
+func TestBuildSnapshotPreservesFrameMetadata(t *testing.T) {
+	nodes := []RawAXNode{
+		{
+			NodeID:           "frame-node",
+			Role:             &RawAXValue{Value: json.RawMessage(`"textbox"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Card number"`)},
+			BackendDOMNodeID: 42,
+			FrameID:          "frame-payment",
+			FrameURL:         "https://payments.example/frame",
+			FrameName:        "payment-frame",
+		},
+	}
+
+	flat, refs := BuildSnapshot(nodes, "", -1)
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(flat))
+	}
+	if refs["e0"] != 42 {
+		t.Fatalf("expected e0 to resolve to backend node 42, got %d", refs["e0"])
+	}
+	if flat[0].FrameID != "frame-payment" {
+		t.Fatalf("frame id = %q, want %q", flat[0].FrameID, "frame-payment")
+	}
+	if flat[0].FrameURL != "https://payments.example/frame" {
+		t.Fatalf("frame url = %q, want %q", flat[0].FrameURL, "https://payments.example/frame")
+	}
+	if flat[0].FrameName != "payment-frame" {
+		t.Fatalf("frame name = %q, want %q", flat[0].FrameName, "payment-frame")
+	}
+}
+
+func TestBuildSnapshotNestsFrameContentUnderOwner(t *testing.T) {
+	nodes := []RawAXNode{
+		{
+			NodeID:           "root",
+			Role:             &RawAXValue{Value: json.RawMessage(`"WebArea"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Outer"`)},
+			ChildIDs:         []string{"iframe"},
+			BackendDOMNodeID: 1,
+			FrameID:          "main",
+		},
+		{
+			NodeID:           "iframe",
+			Role:             &RawAXValue{Value: json.RawMessage(`"Iframe"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"payment-frame"`)},
+			BackendDOMNodeID: 10,
+			FrameID:          "main",
+		},
+		{
+			NodeID:           "child-root",
+			Role:             &RawAXValue{Value: json.RawMessage(`"WebArea"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Inner"`)},
+			ChildIDs:         []string{"card", "pay"},
+			BackendDOMNodeID: 11,
+			FrameID:          "child",
+			FrameURL:         "https://payments.example/frame",
+			FrameName:        "payment-frame",
+			FrameOwnerNodeID: 10,
+		},
+		{
+			NodeID:           "card",
+			Role:             &RawAXValue{Value: json.RawMessage(`"textbox"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Card number"`)},
+			BackendDOMNodeID: 12,
+			FrameID:          "child",
+			FrameURL:         "https://payments.example/frame",
+			FrameName:        "payment-frame",
+			FrameOwnerNodeID: 10,
+		},
+		{
+			NodeID:           "pay",
+			Role:             &RawAXValue{Value: json.RawMessage(`"button"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Pay"`)},
+			BackendDOMNodeID: 13,
+			FrameID:          "child",
+			FrameURL:         "https://payments.example/frame",
+			FrameName:        "payment-frame",
+			FrameOwnerNodeID: 10,
+		},
+	}
+
+	flat, _ := BuildSnapshot(nodes, "", -1)
+	if len(flat) != 4 {
+		t.Fatalf("expected 4 visible nodes, got %d: %+v", len(flat), flat)
+	}
+	if flat[1].Name != "payment-frame" {
+		t.Fatalf("second node = %q, want iframe owner", flat[1].Name)
+	}
+	if flat[1].ChildFrameID != "child" {
+		t.Fatalf("iframe child frame id = %q, want child", flat[1].ChildFrameID)
+	}
+	if flat[2].Name != "Card number" || flat[2].Depth != 2 {
+		t.Fatalf("textbox = %+v, want nested child at depth 2", flat[2])
+	}
+	if flat[3].Name != "Pay" || flat[3].Depth != 2 {
+		t.Fatalf("button = %+v, want nested child at depth 2", flat[3])
+	}
+}
+
+func TestBuildSnapshotInteractiveIncludesIframeOwnerAndChildActions(t *testing.T) {
+	nodes := []RawAXNode{
+		{
+			NodeID:           "root",
+			Role:             &RawAXValue{Value: json.RawMessage(`"WebArea"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Outer"`)},
+			ChildIDs:         []string{"iframe"},
+			BackendDOMNodeID: 1,
+			FrameID:          "main",
+		},
+		{
+			NodeID:           "iframe",
+			Role:             &RawAXValue{Value: json.RawMessage(`"Iframe"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"payment-frame"`)},
+			BackendDOMNodeID: 10,
+			FrameID:          "main",
+		},
+		{
+			NodeID:           "child-root",
+			Role:             &RawAXValue{Value: json.RawMessage(`"WebArea"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Inner"`)},
+			ChildIDs:         []string{"card", "pay"},
+			BackendDOMNodeID: 11,
+			FrameID:          "child",
+			FrameOwnerNodeID: 10,
+		},
+		{
+			NodeID:           "card",
+			Role:             &RawAXValue{Value: json.RawMessage(`"textbox"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Card number"`)},
+			BackendDOMNodeID: 12,
+			FrameID:          "child",
+			FrameOwnerNodeID: 10,
+		},
+		{
+			NodeID:           "pay",
+			Role:             &RawAXValue{Value: json.RawMessage(`"button"`)},
+			Name:             &RawAXValue{Value: json.RawMessage(`"Pay"`)},
+			BackendDOMNodeID: 13,
+			FrameID:          "child",
+			FrameOwnerNodeID: 10,
+		},
+	}
+
+	flat, _ := BuildSnapshot(nodes, FilterInteractive, -1)
+	if len(flat) != 3 {
+		t.Fatalf("expected iframe + 2 actionable children, got %d: %+v", len(flat), flat)
+	}
+	if flat[0].Role != "Iframe" {
+		t.Fatalf("expected iframe owner in interactive snapshot, got %+v", flat[0])
+	}
+	if flat[1].Name != "Card number" || flat[2].Name != "Pay" {
+		t.Fatalf("unexpected interactive descendants: %+v", flat)
+	}
+}

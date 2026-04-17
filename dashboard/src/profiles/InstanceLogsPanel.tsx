@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../services/api";
 
 interface Props {
@@ -12,6 +12,8 @@ export default function InstanceLogsPanel({
 }: Props) {
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const streamVersionRef = useRef(0);
 
   useEffect(() => {
     if (!instanceId) {
@@ -21,12 +23,13 @@ export default function InstanceLogsPanel({
     }
 
     let cancelled = false;
+    const fetchStartedAtVersion = streamVersionRef.current;
     setLoading(true);
 
     api
       .fetchInstanceLogs(instanceId)
       .then((nextLogs) => {
-        if (!cancelled) {
+        if (!cancelled && streamVersionRef.current === fetchStartedAtVersion) {
           setLogs(nextLogs);
         }
       })
@@ -53,25 +56,46 @@ export default function InstanceLogsPanel({
     }
 
     return api.subscribeToInstanceLogs(instanceId, {
-      onLogs: (nextLogs) => setLogs(nextLogs),
+      onLogs: (nextLogs) => {
+        streamVersionRef.current += 1;
+        setLogs(nextLogs);
+      },
     });
   }, [instanceId]);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  if (loading && !logs) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-text-muted">
+        Loading logs...
+      </div>
+    );
+  }
+
+  if (!logs) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-text-muted">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  const lines = logs.split("\n");
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {loading && !logs ? (
-        <div className="flex h-full items-center justify-center border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
-          Loading logs...
+    <div className="min-h-0 flex-1 overflow-auto font-mono text-xs">
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          className="border-b border-border-subtle/50 px-3 py-1.5 hover:bg-white/2"
+        >
+          <span className="break-all text-text-secondary">{line}</span>
         </div>
-      ) : logs ? (
-        <pre className="h-full overflow-auto border border-border-subtle bg-black/10 p-3 font-mono text-[10px] leading-4 text-text-secondary">
-          {logs}
-        </pre>
-      ) : (
-        <div className="flex h-full items-center justify-center border border-border-subtle bg-black/10 px-4 py-6 text-sm text-text-muted">
-          {emptyMessage}
-        </div>
-      )}
+      ))}
+      <div ref={bottomRef} />
     </div>
   );
 }

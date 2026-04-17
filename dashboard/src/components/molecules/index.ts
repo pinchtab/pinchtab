@@ -1,4 +1,7 @@
 export { default as TabsLayout } from "./TabsLayout";
+export { default as SidebarPanel } from "./SidebarPanel";
+export { default as SidebarPanelHeader } from "./SidebarPanelHeader";
+export { default as SidebarPanelFooterActions } from "./SidebarPanelFooterActions";
 export { default as EmptyView } from "./EmptyView";
 export { default as NavBar } from "./NavBar";
 export { default as CreateProfileModal } from "./CreateProfileModal";

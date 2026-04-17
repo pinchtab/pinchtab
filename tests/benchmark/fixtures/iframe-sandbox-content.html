@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sandbox Inner</title>
+</head>
+<body>
+  <h2>Sandbox Inner — IFRAME_SANDBOX_INNER_LOADED</h2>
+  <button type="button" id="sandbox-button">Tap</button>
+  <div id="sandbox-result">SANDBOX_CLICKED=NO</div>
+  <script>
+    document.getElementById('sandbox-button').addEventListener('click', function () {
+      document.getElementById('sandbox-result').textContent = 'SANDBOX_CLICKED=YES';
+    });
+  </script>
+</body>
+</html>

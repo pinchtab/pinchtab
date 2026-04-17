@@ -14,6 +14,7 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 	body := map[string]any{}
 
 	textFlag, _ := cmd.Flags().GetString("text")
+	notTextFlag, _ := cmd.Flags().GetString("not-text")
 	urlFlag, _ := cmd.Flags().GetString("url")
 	loadFlag, _ := cmd.Flags().GetString("load")
 	fnFlag, _ := cmd.Flags().GetString("fn")
@@ -24,6 +25,8 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 	switch {
 	case textFlag != "":
 		body["text"] = textFlag
+	case notTextFlag != "":
+		body["notText"] = notTextFlag
 	case urlFlag != "":
 		body["url"] = urlFlag
 	case loadFlag != "":
@@ -41,7 +44,7 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 			}
 		}
 	default:
-		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--url|--load|--fn] [--timeout ms] [--tab id]")
+		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--timeout ms] [--tab id]")
 		return
 	}
 

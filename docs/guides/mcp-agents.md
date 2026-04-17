@@ -153,11 +153,14 @@ Tool calls:
 pinchtab config set security.allowEvaluate true
 ```
 
-Or in `~/.config/pinchtab/config.yaml`:
+Or in `~/.pinchtab/config.json`:
 
-```yaml
-security:
-  allowEvaluate: true
+```json
+{
+  "security": {
+    "allowEvaluate": true
+  }
+}
 ```
 
 Restart PinchTab after changing this setting.

@@ -39,6 +39,13 @@
     "allowUpload": true,
     "allowClipboard": true,
     "allowStateExport": true,
+    "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "fixtures",
+      "httpbin.org"
+    ],
     "downloadAllowedDomains": ["fixtures", "httpbin.org"],
     "attach": {
       "enabled": true,
@@ -59,13 +66,7 @@
       "enabled": true,
       "strictMode": false,
       "scanContent": true,
-      "allowedDomains": [
-        "localhost",
-        "127.0.0.1",
-        "::1",
-        "fixtures",
-        "httpbin.org"
-      ],
+      "wrapContent": false,
       "shieldThreshold": 30
     }
   }

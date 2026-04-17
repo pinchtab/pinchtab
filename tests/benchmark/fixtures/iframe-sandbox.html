@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - sandboxed iframe</title>
+</head>
+<body>
+  <h1>Sandboxed Iframe — VERIFY_IFRAME_SANDBOX_OUTER</h1>
+  <p>This iframe has <code>sandbox="allow-scripts allow-same-origin"</code>
+  — scripts run, same-origin policy inherits, but no form submissions or
+  top-navigation. Useful to verify actions work under restrictive sandboxes.</p>
+
+  <iframe id="sandboxed" src="iframe-sandbox-content.html"
+          sandbox="allow-scripts allow-same-origin"
+          width="500" height="240"></iframe>
+</body>
+</html>

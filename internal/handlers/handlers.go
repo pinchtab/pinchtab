@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -38,6 +39,7 @@ type Handlers struct {
 	// Optional dependency injection (for unit testing)
 	evalJS           func(ctx context.Context, expression string, out *string) error
 	autoSolverRunner func(ctx context.Context, tabID string) error
+	evalRuntime      func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -53,7 +55,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		IdMgr:        ids.NewManager(),
 		Matcher:      matcher,
 		IntentCache:  intentCache,
-		IDPIGuard:    idpi.NewGuard(cfg.IDPI),
+		IDPIGuard:    idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains),
 	}
 
 	// Wire up the recovery engine with callbacks that delegate back to
@@ -73,8 +75,8 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 			if cache == nil {
 				return 0, false
 			}
-			nid, ok := cache.Refs[ref]
-			return nid, ok
+			target, ok := cache.Lookup(ref)
+			return target.BackendNodeID, ok
 		},
 		// DescriptorBuilder
 		func(tabID string) []semantic.ElementDescriptor {
@@ -97,6 +99,9 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		return chromedp.Run(ctx, chromedp.Evaluate(expression, out))
 	}
 	h.autoSolverRunner = h.runAutoSolver
+	h.evalRuntime = func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
+		return chromedp.Run(ctx, chromedp.Evaluate(expression, out, opts...))
+	}
 
 	// Clean up .tmp export files orphaned by a previous crash.
 	go CleanupStaleTmpExports(cfg.StateDir)
@@ -111,6 +116,17 @@ type restartStatusProvider interface {
 // ensureChrome ensures Chrome is initialized before handling requests that need it
 func (h *Handlers) ensureChrome() error {
 	return h.Bridge.EnsureChrome(h.Config)
+}
+
+func (h *Handlers) ensureChromeOrRespond(w http.ResponseWriter) bool {
+	if err := h.ensureChrome(); err != nil {
+		if h.writeBridgeUnavailable(w, err) {
+			return false
+		}
+		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		return false
+	}
+	return true
 }
 
 func (h *Handlers) bridgeRestartStatus() (bool, time.Duration) {
@@ -153,13 +169,20 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/forward", h.HandleTabForward)
 	mux.HandleFunc("POST /tabs/{id}/reload", h.HandleTabReload)
 	mux.HandleFunc("GET /tabs/{id}/snapshot", h.HandleTabSnapshot)
+	mux.HandleFunc("GET /tabs/{id}/frame", h.HandleTabFrame)
+	mux.HandleFunc("POST /tabs/{id}/frame", h.HandleTabFrame)
 	mux.HandleFunc("GET /tabs/{id}/screenshot", h.HandleTabScreenshot)
 	mux.HandleFunc("POST /tabs/{id}/action", h.HandleTabAction)
 	mux.HandleFunc("POST /tabs/{id}/actions", h.HandleTabActions)
+	mux.HandleFunc("POST /tabs/{id}/handoff", h.HandleTabHandoff)
+	mux.HandleFunc("POST /tabs/{id}/resume", h.HandleTabResume)
+	mux.HandleFunc("GET /tabs/{id}/handoff", h.HandleTabHandoffStatus)
 	mux.HandleFunc("GET /tabs/{id}/text", h.HandleTabText)
 	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
+	mux.HandleFunc("GET /frame", h.HandleFrame)
+	mux.HandleFunc("POST /frame", h.HandleFrame)
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)
 	mux.HandleFunc("GET /tabs/{id}/pdf", h.HandleTabPDF)
 	mux.HandleFunc("POST /tabs/{id}/pdf", h.HandleTabPDF)
@@ -234,6 +257,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /storage", h.HandleStorage)
 	mux.HandleFunc("POST /storage", h.HandleStorage)
 	mux.HandleFunc("DELETE /storage", h.HandleStorage)
+	mux.HandleFunc("GET /tabs/{id}/storage", h.HandleTabStorageGet)
+	mux.HandleFunc("POST /tabs/{id}/storage", h.HandleTabStorageSet)
+	mux.HandleFunc("DELETE /tabs/{id}/storage", h.HandleTabStorageDelete)
 
 	// State management
 	mux.HandleFunc("GET /state/list", h.HandleStateList)

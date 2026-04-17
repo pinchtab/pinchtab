@@ -248,9 +248,13 @@ go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
 ./dev e2e                                 # Run the default E2E release suite
 ./dev e2e docker                          # Build the local image and run Docker smoke
-./dev e2e pr                              # Run API fast + CLI fast
-./dev e2e api-full                        # Run the multi-instance API suite
-./dev e2e cli-full                        # Run the single-instance CLI full suite
+./dev e2e pr                              # Run API + CLI + Infra basic tests
+./dev e2e api                             # Run API basic tests
+./dev e2e cli                             # Run CLI basic tests
+./dev e2e infra                           # Run Infra basic tests
+./dev e2e api-extended                    # Run API extended (multi-instance)
+./dev e2e cli-extended                    # Run CLI extended tests
+./dev e2e infra-extended                  # Run Infra extended (multi-instance)
 ```
 
 ### Developer Toolkit (`dev`)
@@ -279,14 +283,16 @@ All dev scripts are accessible through `./dev`:
 | `test` | Run all tests |
 | `test unit` | Unit tests only |
 | `test dashboard` | Dashboard tests only |
-| `e2e` | Run the default E2E release suite (`api-full` + `cli-full`) |
+| `e2e` | Run the default E2E release suite (all extended tests) |
 | `e2e docker` | Build the local image and run the Docker smoke test |
-| `e2e pr` | Run the PR E2E suite (`api-fast` + `cli-fast`) |
-| `e2e api-fast` | Run the fast API E2E suite on the single-instance stack |
-| `e2e cli-fast` | Run the fast CLI E2E suite on the single-instance stack |
-| `e2e api-full` | Run the full API E2E suite on the multi-instance stack |
-| `e2e cli-full` | Run the full CLI E2E suite on the single-instance stack |
-| `e2e release` | Run the release E2E meta-suite |
+| `e2e pr` | Run the PR E2E suite (`api` + `cli` + `infra` basic tests) |
+| `e2e api` | Run API basic tests |
+| `e2e cli` | Run CLI basic tests |
+| `e2e infra` | Run Infra basic tests |
+| `e2e api-extended` | Run API extended tests (multi-instance) |
+| `e2e cli-extended` | Run CLI extended tests |
+| `e2e infra-extended` | Run Infra extended tests (multi-instance) |
+| `e2e release` | Run the release E2E meta-suite (all extended) |
 | `build` | Build the application |
 | `dev` | Build and run the application |
 | `run` | Run the application |

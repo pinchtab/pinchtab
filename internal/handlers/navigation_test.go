@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -32,6 +33,50 @@ func TestHandleNavigate_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestHandleNavigate_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
+	m := &mockBridge{ensureChromeErr: fmt.Errorf("bridge init failed")}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"about:blank"}`)))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != 500 {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	if m.ensureChromeCall != 1 {
+		t.Fatalf("expected EnsureChrome to be called once, got %d", m.ensureChromeCall)
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
+	}
+	if !strings.Contains(w.Body.String(), "chrome initialization") {
+		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	}
+}
+
+func TestHandleTab_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
+	m := &mockBridge{ensureChromeErr: fmt.Errorf("bridge init failed")}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(`{"action":"new","url":"about:blank"}`)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 500 {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	if m.ensureChromeCall != 1 {
+		t.Fatalf("expected EnsureChrome to be called once, got %d", m.ensureChromeCall)
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
+	}
+	if !strings.Contains(w.Body.String(), "chrome initialization") {
+		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	}
+}
+
 func TestValidateNavigateURL_RejectsUnsupportedSchemes(t *testing.T) {
 	for _, rawURL := range []string{
 		"javascript:alert(1)",
@@ -53,7 +98,7 @@ func TestValidateNavigateTarget_AllowsLocalHosts(t *testing.T) {
 		"http://foo.localhost:3000",
 		"about:blank",
 	} {
-		target, err := validateNavigateTarget(rawURL, false)
+		target, err := validateNavigateTarget(rawURL, false, nil)
 		if err != nil {
 			t.Fatalf("validateNavigateTarget(%q) error = %v", rawURL, err)
 		}
@@ -64,7 +109,7 @@ func TestValidateNavigateTarget_AllowsLocalHosts(t *testing.T) {
 }
 
 func TestValidateNavigateTarget_RejectsPrivateLiteralIP(t *testing.T) {
-	if _, err := validateNavigateTarget("http://192.168.1.10/app", false); err == nil {
+	if _, err := validateNavigateTarget("http://192.168.1.10/app", false, nil); err == nil {
 		t.Fatal("validateNavigateTarget should reject private literal IPs")
 	}
 }
@@ -74,7 +119,7 @@ func TestValidateNavigateTarget_RejectsResolvedPrivateIP(t *testing.T) {
 		return []net.IP{net.ParseIP("192.168.1.10")}, nil
 	})
 
-	if _, err := validateNavigateTarget("https://example.com/app", false); err == nil {
+	if _, err := validateNavigateTarget("https://example.com/app", false, nil); err == nil {
 		t.Fatal("validateNavigateTarget should reject hosts resolving to private IPs")
 	}
 }
@@ -84,7 +129,7 @@ func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted
 		return []net.IP{net.ParseIP("172.18.0.5")}, nil
 	})
 
-	target, err := validateNavigateTarget("http://fixtures:80/app", true)
+	target, err := validateNavigateTarget("http://fixtures:80/app", true, nil)
 	if err != nil {
 		t.Fatalf("validateNavigateTarget should allow explicitly allowlisted private targets: %v", err)
 	}
@@ -147,6 +192,86 @@ func TestHandleNavigate_RejectsUnsupportedSchemeForExistingTab(t *testing.T) {
 	}
 }
 
+func TestValidateNavigateTarget_AllowsPrivateIPWithTrustedResolveCIDR(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("10.0.0.5")}, nil
+	})
+
+	trusted := parseCIDRs([]string{"10.0.0.0/8"})
+	target, err := validateNavigateTarget("https://internal.example.com", false, trusted)
+	if err != nil {
+		t.Fatalf("expected trusted CIDR to allow private IP, got %v", err)
+	}
+	if target == nil || target.allowInternal {
+		t.Fatal("trusted CIDR override should not set allowInternal (runtime guard should still be active)")
+	}
+	if len(target.trustedResolvedIP) != 1 || target.trustedResolvedIP[0] != netip.MustParseAddr("10.0.0.5") {
+		t.Fatalf("expected exact trusted resolved IPs to be captured, got %v", target.trustedResolvedIP)
+	}
+}
+
+func TestValidateNavigateTarget_RejectsMixedUntrustedWithTrustedResolveCIDR(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("10.0.0.5"), net.ParseIP("192.168.1.1")}, nil
+	})
+
+	trusted := parseCIDRs([]string{"10.0.0.0/8"})
+	if _, err := validateNavigateTarget("https://mixed.example.com", false, trusted); err == nil {
+		t.Fatal("expected mixed trusted/untrusted private IPs to be blocked")
+	}
+}
+
+func TestHandleNavigate_AllowsPrivateIPWithTrustedResolveCIDR(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("198.18.0.10")}, nil
+	})
+
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{
+		TrustedResolveCIDRs: []string{"198.18.0.0/15"},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"https://benchmark.example.com"}`)))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code == 403 {
+		t.Fatalf("expected trusted resolve CIDR to allow navigation, got 403: %s", w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for trusted resolve CIDR navigation")
+	}
+}
+
+func TestValidateNavigateRemoteIPAddress_AllowsExactTrustedResolvedIP(t *testing.T) {
+	if err := validateNavigateRemoteIPAddress("10.1.2.3", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")}); err != nil {
+		t.Fatalf("expected exact trusted resolved IP to be allowed, got %v", err)
+	}
+}
+
+func TestValidateNavigateRemoteIPAddress_RejectsDifferentIPInSameCIDR(t *testing.T) {
+	err := validateNavigateRemoteIPAddress("10.1.2.4", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")})
+	if err == nil {
+		t.Fatal("expected different runtime IP in same CIDR to be blocked")
+	}
+	if !strings.Contains(err.Error(), "blocked remote IP") {
+		t.Fatalf("expected blocked remote IP error, got %v", err)
+	}
+}
+
+func TestParseCIDRs_TreatsBareIPsAsSingleHosts(t *testing.T) {
+	cidrs := parseCIDRs([]string{"10.1.2.3", "fd00::1234"})
+	if len(cidrs) != 2 {
+		t.Fatalf("parseCIDRs() returned %d entries, want 2", len(cidrs))
+	}
+	if got := cidrs[0].String(); got != "10.1.2.3/32" {
+		t.Fatalf("IPv4 bare IP parsed as %q, want 10.1.2.3/32", got)
+	}
+	if got := cidrs[1].String(); got != "fd00::1234/128" {
+		t.Fatalf("IPv6 bare IP parsed as %q, want fd00::1234/128", got)
+	}
+}
+
 func TestHandleNavigate_AllowsLocalhostWithoutResolver(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
@@ -193,10 +318,10 @@ func TestHandleNavigate_AllowsResolvedPrivateIPWhenIDPIAllowlisted(t *testing.T)
 
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{
+		AllowedDomains: []string{"fixtures"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			StrictMode:     true,
-			AllowedDomains: []string{"fixtures"},
+			Enabled:    true,
+			StrictMode: true,
 		},
 	}, nil, nil, nil)
 
@@ -284,6 +409,74 @@ func TestHandleTab_CloseMissingID(t *testing.T) {
 	h.HandleTab(w, req)
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleTab_RejectsUnsupportedScheme(t *testing.T) {
+	for _, scheme := range []string{"file:///etc/passwd", "javascript:alert(1)", "chrome://settings"} {
+		m := &mockBridge{}
+		h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+		body := `{"action":"new","url":"` + scheme + `"}`
+		req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		h.HandleTab(w, req)
+		if w.Code != 400 {
+			t.Errorf("scheme %q: expected 400, got %d: %s", scheme, w.Code, w.Body.String())
+		}
+		if len(m.createTabURLs) != 0 {
+			t.Errorf("scheme %q: CreateTab should not be called but was", scheme)
+		}
+	}
+}
+
+func TestHandleTab_RejectsPrivateLiteralIP(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	body := `{"action":"new","url":"http://192.168.1.1/"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+	if w.Code != 403 {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called for blocked targets")
+	}
+}
+
+func TestHandleTab_RejectsResolvedPrivateIP(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("10.0.0.5")}, nil
+	})
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	body := `{"action":"new","url":"https://example.com"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+	if w.Code != 403 {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called for blocked targets")
+	}
+}
+
+func TestHandleTab_AllowsValidURL(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	})
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	body := `{"action":"new","url":"https://example.com"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected valid URL to proceed, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for valid URL")
 	}
 }
 

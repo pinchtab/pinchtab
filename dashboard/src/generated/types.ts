@@ -30,6 +30,9 @@ export interface Profile {
   useWhen?: string;
   description?: string;
 }
+export interface SecurityPolicy {
+  allowedDomains?: string[];
+}
 /**
  * Instance represents a running browser instance.
  * Matches internal/bridge/api.go Instance
@@ -40,6 +43,7 @@ export interface Instance {
   profileName: string;
   port: string; // Note: string not int
   url?: string;
+  mode: string;
   headless: boolean;
   status: string; // starting/running/stopping/stopped/error
   startTime: string;
@@ -47,6 +51,7 @@ export interface Instance {
   attached: boolean; // True if attached rather than locally launched
   attachType?: string;
   cdpUrl?: string; // CDP WebSocket URL (for CDP-attached instances)
+  securityPolicy?: SecurityPolicy;
 }
 /**
  * Agent represents a connected AI agent.
@@ -89,7 +94,6 @@ export interface ActivityLogEvent {
   source: string;
   requestId?: string;
   sessionId?: string;
-  actorId?: string;
   agentId?: string;
   method: string;
   path: string;
@@ -203,9 +207,7 @@ export interface InstanceMetrics {
  * LaunchInstanceRequest is the request body for launching an instance.
  */
 export interface LaunchInstanceRequest {
-  profileId?: string; // profile ID (prof_XXXXXXXX)
-  name?: string; // profile name
+  profileId?: string; // profile ID (prof_XXXXXXXX) or existing profile name
   mode?: string; // "headed" or empty for headless
   port?: string; // port number as string
-  extensionPaths?: string[]; // Chrome extension paths to load
 }

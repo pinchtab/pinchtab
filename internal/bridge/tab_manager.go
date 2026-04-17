@@ -28,6 +28,7 @@ type TabManager struct {
 	tabs       map[string]*TabEntry
 	accessed   map[string]bool
 	snapshots  map[string]*RefCache
+	frameScope map[string]FrameScope
 	onTabSetup TabSetupFunc
 	dialogMgr  *DialogManager
 	logStore   *ConsoleLogStore
@@ -53,6 +54,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		tabs:       make(map[string]*TabEntry),
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
+		frameScope: make(map[string]FrameScope),
 		onTabSetup: onTabSetup,
 		logStore:   logStore,
 		executor:   NewTabExecutor(maxParallel),
@@ -107,7 +109,13 @@ func (tm *TabManager) closePopupTarget(targetID, openerID target.ID, url string)
 	defer cancel()
 	logURL := internalurls.RedactForLog(url)
 
-	if err := target.CloseTarget(targetID).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
+	execCtx, err := browserExecutorContext(closeCtx)
+	if err != nil {
+		slog.Debug("popup close skipped", "targetId", targetID, "openerId", openerID, "url", logURL, "err", err)
+		return
+	}
+
+	if err := target.CloseTarget(targetID).Do(execCtx); err != nil {
 		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", logURL, "err", err)
 		return
 	}
@@ -123,6 +131,17 @@ func (tm *TabManager) markAccessed(tabID string) {
 	}
 	tm.currentTab = tabID
 	tm.mu.Unlock()
+}
+
+func browserExecutorContext(ctx context.Context) (context.Context, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("no browser context available")
+	}
+	c := chromedp.FromContext(ctx)
+	if c == nil || c.Browser == nil {
+		return nil, fmt.Errorf("no browser executor available")
+	}
+	return cdp.WithExecutor(ctx, c.Browser), nil
 }
 
 // selectCurrentTrackedTab returns the current tab ID, falling back to the most
@@ -168,6 +187,9 @@ func (tm *TabManager) AccessedTabIDs() map[string]bool {
 }
 
 func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) {
+	if tm == nil {
+		return nil, "", fmt.Errorf("tab manager not initialized")
+	}
 	if tabID == "" {
 		// Resolve to current tracked tab
 		tm.mu.RLock()
@@ -207,6 +229,13 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 					if tm.netMonitor != nil {
 						if err := tm.netMonitor.StartCapture(ctx, tabID); err != nil {
 							slog.Warn("eager network capture failed", "tab", tabID, "err", err)
+						}
+					}
+					if tm.dialogMgr != nil {
+						autoAccept := tm.config != nil && tm.config.DialogAutoAccept
+						ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
+						if err := EnableDialogEvents(ctx); err != nil {
+							slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
 						}
 					}
 					tm.RegisterTabWithCancel(tabID, raw, ctx, cancel)
@@ -279,11 +308,14 @@ func (tm *TabManager) closeLRUTab() error {
 }
 
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	if tm == nil {
+		return "", nil, nil, fmt.Errorf("tab manager not initialized")
+	}
 	if tm.browserCtx == nil {
 		return "", nil, nil, fmt.Errorf("no browser context available")
 	}
 
-	if tm.config.MaxTabs > 0 {
+	if tm.config != nil && tm.config.MaxTabs > 0 {
 		// Count managed tabs for eviction decisions. Using Chrome's target list
 		// would include unmanaged targets (e.g. the initial about:blank tab),
 		// causing premature eviction of managed tabs.
@@ -334,13 +366,13 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 
 	var blockPatterns []string
 
-	if tm.config.BlockAds {
+	if tm.config != nil && tm.config.BlockAds {
 		blockPatterns = CombineBlockPatterns(blockPatterns, AdBlockPatterns)
 	}
 
-	if tm.config.BlockMedia {
+	if tm.config != nil && tm.config.BlockMedia {
 		blockPatterns = CombineBlockPatterns(blockPatterns, MediaBlockPatterns)
-	} else if tm.config.BlockImages {
+	} else if tm.config != nil && tm.config.BlockImages {
 		blockPatterns = CombineBlockPatterns(blockPatterns, ImageBlockPatterns)
 	}
 
@@ -363,7 +395,9 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		if err := chromedp.Run(navCtx, chromedp.Navigate(url)); err != nil {
 			navCancel()
 			cancel()
-			_ = target.CloseTarget(targetID).Do(cdp.WithExecutor(tm.browserCtx, chromedp.FromContext(tm.browserCtx).Browser))
+			if execCtx, execErr := browserExecutorContext(tm.browserCtx); execErr == nil {
+				_ = target.CloseTarget(targetID).Do(execCtx)
+			}
 			return "", nil, nil, fmt.Errorf("navigate: %w", err)
 		}
 		navCancel()
@@ -375,6 +409,11 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	if tm.dialogMgr != nil {
 		autoAccept := tm.config != nil && tm.config.DialogAutoAccept
 		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
+		// Page domain must be enabled for Page.javascriptDialogOpening events
+		// to be delivered to ListenTarget callbacks.
+		if err := EnableDialogEvents(ctx); err != nil {
+			slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
+		}
 	}
 
 	if tm.shouldEagerlyCaptureConsole() {
@@ -400,6 +439,9 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 }
 
 func (tm *TabManager) CloseTab(tabID string) error {
+	if tm == nil {
+		return fmt.Errorf("tab manager not initialized")
+	}
 	// Guard against closing the last tab to prevent Chrome from exiting
 	targets, err := tm.ListTargets()
 	if err != nil {
@@ -426,7 +468,17 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	closeCtx, closeCancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
 	defer closeCancel()
 
-	if err := target.CloseTarget(target.ID(cdpTargetID)).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
+	execCtx, execErr := browserExecutorContext(closeCtx)
+	if execErr != nil {
+		if !tracked {
+			return fmt.Errorf("tab %s not found", tabID)
+		}
+		slog.Debug("close target skipped", "tabId", tabID, "cdpId", cdpTargetID, "err", execErr)
+		tm.purgeTrackedTabState(tabID, cdpTargetID)
+		return nil
+	}
+
+	if err := target.CloseTarget(target.ID(cdpTargetID)).Do(execCtx); err != nil {
 		if !tracked {
 			return fmt.Errorf("tab %s not found", tabID)
 		}
@@ -440,6 +492,9 @@ func (tm *TabManager) CloseTab(tabID string) error {
 // FocusTab activates a tab by ID, bringing it to the foreground and setting it
 // as the current tab for subsequent operations.
 func (tm *TabManager) FocusTab(tabID string) error {
+	if tm == nil {
+		return fmt.Errorf("tab manager not initialized")
+	}
 	ctx, resolvedID, err := tm.TabContext(tabID)
 	if err != nil {
 		return err
@@ -551,6 +606,29 @@ func (tm *TabManager) DeleteRefCache(tabID string) {
 	delete(tm.snapshots, tabID)
 }
 
+func (tm *TabManager) GetFrameScope(tabID string) (FrameScope, bool) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	scope, ok := tm.frameScope[tabID]
+	return scope, ok && scope.Active()
+}
+
+func (tm *TabManager) SetFrameScope(tabID string, scope FrameScope) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if !scope.Active() {
+		delete(tm.frameScope, tabID)
+		return
+	}
+	tm.frameScope[tabID] = scope
+}
+
+func (tm *TabManager) ClearFrameScope(tabID string) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	delete(tm.frameScope, tabID)
+}
+
 func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 	now := time.Now()
 	tm.mu.Lock()
@@ -644,6 +722,7 @@ func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
 	tm.mu.Lock()
 	delete(tm.tabs, resolvedTabID)
 	delete(tm.snapshots, resolvedTabID)
+	delete(tm.frameScope, resolvedTabID)
 	delete(tm.accessed, resolvedTabID)
 	if tm.currentTab == resolvedTabID {
 		tm.currentTab = ""

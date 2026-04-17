@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
-import { Toolbar, EmptyState, Button, Badge } from "../components/atoms";
+import { EmptyState, Button, Badge } from "../components/atoms";
 import * as api from "../services/api";
 import type { Profile } from "../generated/types";
 import {
@@ -151,10 +151,6 @@ export default function ProfilesPage() {
     orderedProfiles.find(
       (profile) => getProfileKey(profile) === launchProfileKey,
     ) || null;
-  const runningProfiles = instances.filter(
-    (instance) => instance.status === "running",
-  ).length;
-
   useEffect(() => {
     if (orderedProfiles.length === 0) {
       setSelectedProfileKey(null);
@@ -176,19 +172,7 @@ export default function ProfilesPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <Toolbar
-        actions={[
-          { key: "refresh", label: "Refresh", onClick: loadProfiles },
-          {
-            key: "new",
-            label: "New Profile",
-            onClick: () => setShowCreate(true),
-            variant: "primary",
-          },
-        ]}
-      />
-
-      <div className="flex flex-1 flex-col overflow-hidden p-4 lg:p-6">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <div className="h-full">
           {profilesLoading && profiles.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-text-muted">
@@ -205,24 +189,23 @@ export default function ProfilesPage() {
               }
             />
           ) : (
-            <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row">
-              <div className="dashboard-panel flex max-h-88 w-full shrink-0 flex-col overflow-hidden lg:max-h-none lg:w-80">
-                <div className="border-b border-border-subtle px-4 py-3">
-                  <div className="dashboard-section-label mb-1">Profiles</div>
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-text-secondary">
-                      Profiles ({profiles.length})
-                    </h3>
-                    <Badge
-                      variant={runningProfiles > 0 ? "success" : "default"}
-                    >
-                      {runningProfiles} running
-                    </Badge>
-                  </div>
+            <div className="dashboard-panel flex h-full min-h-0 flex-col overflow-hidden rounded-none! border-t-0 lg:flex-row">
+              <div className="flex max-h-88 w-full shrink-0 flex-col overflow-hidden border-r border-border-subtle bg-bg-surface/50 lg:max-h-none lg:w-80">
+                <div className="flex items-center justify-between border-b border-border-subtle px-4 py-2.5">
+                  <span className="text-xs font-medium text-text-muted">
+                    Profiles
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate(true)}
+                    className="rounded bg-primary px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-primary/90"
+                  >
+                    New Profile
+                  </button>
                 </div>
 
-                <div className="flex-1 overflow-auto p-2">
-                  <div className="space-y-2">
+                <div className="flex-1 overflow-auto">
+                  <div>
                     {orderedProfiles.map((profile) => {
                       const instance = instanceByProfile.get(profile.name);
                       const isSelected =
@@ -251,10 +234,10 @@ export default function ProfilesPage() {
                           onClick={() =>
                             setSelectedProfileKey(getProfileKey(profile))
                           }
-                          className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                          className={`w-full border-b border-border-subtle px-3 py-2.5 text-left transition-colors ${
                             isSelected
-                              ? "dashboard-panel-selected border-primary"
-                              : "dashboard-panel-hover border-border-subtle bg-black/10"
+                              ? "bg-bg-hover text-text-primary"
+                              : "hover:bg-bg-hover/50"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">

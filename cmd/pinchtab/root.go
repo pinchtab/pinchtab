@@ -86,9 +86,6 @@ func maybeRunWizard() {
 
 func menuListenStatus(cfg *config.RuntimeConfig) string {
 	dashPort := cfg.Port
-	if dashPort == "" {
-		dashPort = "9870"
-	}
 	if server.CheckPinchTabRunning(dashPort, cfg.Token) {
 		return "running"
 	}
@@ -112,7 +109,7 @@ func init() {
 	rootCmd.SetVersionTemplate("pinchtab {{.Version}}\n")
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "PinchTab server URL (default: http://127.0.0.1:<instancePortStart>)")
+	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "PinchTab server URL (default: http://127.0.0.1:<server.port>)")
 	rootCmd.PersistentFlags().StringVar(&cliAgentID, "agent-id", "", "Agent identifier recorded in activity logs")
 
 	// Grouping commands

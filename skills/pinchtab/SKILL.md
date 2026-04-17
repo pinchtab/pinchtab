@@ -31,31 +31,6 @@ Preferred tool surface:
 - Use `curl` for profile-management routes or non-shell/API fallback flows.
 - Use `jq` only when you need structured parsing from JSON responses.
 
-## Agent Identity And Attribution
-
-When multiple agents share one PinchTab server, always give each agent a stable ID.
-
-- CLI flows: prefer `pinchtab --agent-id <agent-id> ...`
-- long-running shells: set `PINCHTAB_AGENT_ID=<agent-id>`
-- raw HTTP flows: send `X-Agent-Id: <agent-id>` on requests that should be attributed to that agent
-
-That identity is recorded as `agentId` in activity events and powers:
-
-- the dashboard Agents view
-- `GET /api/activity?agentId=<agent-id>`
-- scheduler task attribution when work is dispatched on behalf of an agent
-
-If you are switching between unrelated browser tasks, do not reuse the same agent ID unless you intentionally want one combined activity trail.
-
-## Safety Defaults
-
-- Default to `http://localhost` targets. Only use a remote PinchTab server when the user explicitly provides it and, if needed, a token.
-- Prefer read-only operations first: `text`, `snap -i -c`, `snap -d`, `find`, `click`, `fill`, `type`, `press`, `select`, `hover`, `scroll`.
-- Do not evaluate arbitrary JavaScript unless a simpler PinchTab command cannot answer the question.
-- Do not upload local files unless the user explicitly names the file to upload and the destination flow requires it.
-- Do not save screenshots, PDFs, or downloads to arbitrary paths. Use a user-specified path or a safe temporary/workspace path.
-- Never use PinchTab to inspect unrelated local files, browser secrets, stored credentials, or system configuration outside the task.
-
 ## Core Workflow
 
 Every PinchTab automation follows this pattern:
@@ -97,168 +72,21 @@ pinchtab fill "#email" "user@test.com"   # CSS
 pinchtab fill e3 "user@test.com"         # ref
 ```
 
-The same syntax works in the HTTP API via the `selector` field:
-
-```json
-{"kind": "click", "selector": "text:Sign In"}
-{"kind": "fill", "selector": "#email", "text": "user@test.com"}
-{"kind": "click", "selector": "e5"}
-```
-
-Legacy `ref` field is still accepted for backward compatibility.
+Same syntax in HTTP API via `selector` field. Legacy `ref` field still accepted.
 
 ## Command Chaining
 
-Use `&&` only when you do not need to inspect intermediate output before deciding the next step.
-
-Good:
-
-```bash
-pinchtab nav https://pinchtab.com && pinchtab snap -i -c
-pinchtab click --wait-nav e5 && pinchtab snap -i -c
-pinchtab nav https://pinchtab.com --block-images && pinchtab text
-```
-
-Run commands separately when you must read the snapshot output first:
-
-```bash
-pinchtab nav https://pinchtab.com
-pinchtab snap -i -c
-# Read refs, choose the correct e#
-pinchtab click e7
-pinchtab snap -i -c
-```
+Use `&&` when you don't need intermediate output: `pinchtab nav <url> && pinchtab snap -i -c`. Run separately when you must read refs before acting.
 
 ## Challenge Solving
 
-PinchTab includes a pluggable solver framework that auto-detects and resolves browser challenges (Cloudflare Turnstile, CAPTCHAs, interstitials). Use this **after navigation** when the page shows a challenge instead of the expected content.
-
-**Important:** Solvers work best with `stealthLevel: "full"` in the PinchTab config (or `instanceDefaults.stealthLevel: "full"`). Full stealth mode patches CDP detection vectors, rotates fingerprints, and masks automation signals — all of which challenge providers like Cloudflare check before and after the checkbox click. Without full stealth, the solver may click correctly but the challenge can still fail fingerprint verification.
-
-```bash
-# Auto-detect and solve any challenge on the current page
-curl -X POST http://localhost:9867/solve \
-  -H 'Content-Type: application/json' \
-  -d '{"maxAttempts": 3, "timeout": 30000}'
-
-# Use a specific solver
-curl -X POST http://localhost:9867/solve/cloudflare \
-  -H 'Content-Type: application/json' \
-  -d '{"maxAttempts": 3}'
-
-# Tab-scoped solve
-curl -X POST http://localhost:9867/tabs/TAB_ID/solve \
-  -H 'Content-Type: application/json' \
-  -d '{}'
-
-# List available solvers
-curl http://localhost:9867/solvers
-```
-
-**When to use solve:**
-
-- Page title is "Just a moment..." or similar challenge indicator
-- `pinchtab text` returns empty or challenge-page text after navigation
-- A Cloudflare Turnstile widget blocks the target content
-
-**Workflow pattern:**
-
-```bash
-pinchtab nav https://protected-site.com
-pinchtab text                    # Check if page loaded or shows challenge
-# If challenge detected:
-curl -X POST http://localhost:9867/solve \
-  -H 'Content-Type: application/json' -d '{}'
-pinchtab text                    # Verify: should now show real page content
-```
-
-**Response fields:** `solver` (which solver handled it), `solved` (bool), `challengeType` (e.g. "managed"), `attempts`, `title` (final page title).
-
-The auto-detect mode (`POST /solve` without specifying a solver) tries each registered solver in order and returns immediately with `solved: true, attempts: 0` if no challenge is present. This makes it safe to call speculatively after any navigation.
+If a page shows a challenge instead of content (e.g., "Just a moment..."), call `POST /solve` with `{"maxAttempts": 3}` to auto-detect and resolve it. Use `POST /tabs/TAB_ID/solve` for tab-scoped. Works best with `stealthLevel: "full"` in config. Safe to call speculatively — returns immediately if no challenge is present. See [api.md](./references/api.md) for full solver options.
 
 ## Handling Authentication and State
 
-Pick one of these five patterns before you start interacting with the site.
+Patterns: (1) One-off: `pinchtab instance start` → `--server http://localhost:<port>`. (2) Reuse profile: `pinchtab instance start --profile work --mode headed` → switch to headless after login. (3) HTTP: `POST /profiles`, then `POST /profiles/<name>/start`. (4) Human-assisted: headed login, then agent reuses headless.
 
-### 1. One-off public browsing
-
-Use a temporary instance for public pages, scraping, or tasks that do not need login persistence.
-
-```bash
-pinchtab instance start
-pinchtab instances
-# Point CLI commands at the instance port you want to use.
-pinchtab --server http://localhost:9868 nav https://pinchtab.com
-pinchtab --server http://localhost:9868 text
-```
-
-### 2. Reuse an existing named profile
-
-Use this for recurring tasks against the same authenticated site.
-
-```bash
-pinchtab profiles
-pinchtab instance start --profile work --mode headed
-pinchtab --server http://localhost:9868 nav https://mail.google.com
-```
-
-If the login is already stored in that profile, you can switch to headless later:
-
-```bash
-pinchtab instance stop inst_ea2e747f
-pinchtab instance start --profile work --mode headless
-```
-
-### 3. Create a dedicated auth profile over HTTP
-
-Use this when you need a durable profile and it does not exist yet.
-
-```bash
-curl -X POST http://localhost:9867/profiles \
-  -H "Content-Type: application/json" \
-  -d '{"name":"billing","description":"Billing portal automation","useWhen":"Use for billing tasks"}'
-
-curl -X POST http://localhost:9867/profiles/billing/start \
-  -H "Content-Type: application/json" \
-  -d '{"headless":false}'
-```
-
-Then target the returned port with `--server`.
-
-### 4. Human-assisted headed login, then agent reuse
-
-Use this for CAPTCHA, MFA, or first-time setup.
-
-```bash
-pinchtab instance start --profile work --mode headed
-# Human completes login in the visible Chrome window.
-pinchtab --server http://localhost:9868 nav https://app.example.com/dashboard
-pinchtab --server http://localhost:9868 snap -i -c
-```
-
-Once the session is stored, reuse the same profile for later tasks.
-
-### 5. Remote or non-shell agent with tokenized HTTP API
-
-Use this when the agent cannot call the CLI directly.
-
-```bash
-curl http://localhost:9867/health
-curl -X POST http://localhost:9867/profiles \
-  -H "Content-Type: application/json" \
-  -d '{"name":"work"}'
-curl -X POST http://localhost:9867/instances/start \
-  -H "Content-Type: application/json" \
-  -d '{"profileId":"work","mode":"headless"}'
-curl -X POST http://localhost:9868/action \
-  -H "X-Agent-Id: agent-main" \
-  -H "Content-Type: application/json" \
-  -d '{"kind":"click","selector":"e5"}'
-```
-
-If the server is exposed beyond localhost, require a token and use a dedicated automation profile. See [TRUST.md](./TRUST.md).
-
-**Agent sessions**: Instead of sharing the server bearer token, each agent can get its own revocable session token. Set `PINCHTAB_SESSION=ses_...` or send `Authorization: Session ses_...`. Create via `POST /api/sessions` with `{"agentId":"...", "label":"..."}`. Sessions have idle timeout (default 12h) and max lifetime (default 24h). Manage with rotate (`POST /api/sessions/{id}/rotate`) and revoke (`POST /api/sessions/{id}/revoke`).
+Agent sessions: `pinchtab session create --agent-id <id>` or `POST /sessions` → set `PINCHTAB_SESSION=ses_...`.
 
 ## Essential Commands
 
@@ -281,14 +109,40 @@ pinchtab nav <url> --new-tab
 pinchtab nav <url> --tab <tab-id>
 pinchtab nav <url> --block-images
 pinchtab nav <url> --block-ads
+pinchtab nav <url> --print-tab-id                   # Print only the new tabId on stdout
 pinchtab back                                       # Navigate back in history
 pinchtab forward                                    # Navigate forward
 pinchtab reload                                     # Reload current page
-pinchtab tab                                        # List tabs or focus by ID
-pinchtab tab new <url>
-pinchtab tab close <tab-id>
+pinchtab tab                                        # List tabs (no subcommand - just `tab`)
+pinchtab tab <tab-id>                               # Focus an existing tab
+pinchtab tab new <url>                              # Open a new tab
+pinchtab tab close <tab-id>                         # Close a tab — use this to clean up stale tabs between runs
 pinchtab instance navigate <instance-id> <url>
 ```
+
+**Tab workflow** — most commands target the active tab by default, so single-tab flows need no plumbing:
+```bash
+pinchtab nav http://example.com
+pinchtab snap -i -c      # active tab
+pinchtab click e5        # active tab
+pinchtab text            # active tab
+```
+
+When you need to pin to a specific tab (parallel tabs, long-running flows, or shell-isolated
+runners like agent tool calls where env vars don't persist across invocations), capture the
+tab ID with `--print-tab-id` and pass `--tab` on every subsequent command:
+```bash
+TAB_ID=$(pinchtab nav http://example.com --print-tab-id)
+pinchtab --tab "$TAB_ID" snap -i -c
+pinchtab --tab "$TAB_ID" click e5
+pinchtab --tab "$TAB_ID" text
+```
+
+Within a single shell session you can also `export PINCHTAB_TAB=$(pinchtab nav URL --print-tab-id)`
+and drop the `--tab` flag. This does **not** survive across separate shell invocations (each
+`Bash` tool call in an agent runs a fresh shell), so prefer explicit `--tab` for agent workflows.
+
+Priority: `--tab <id>` flag > `PINCHTAB_TAB` env var > active tab.
 
 ### Observation
 
@@ -300,8 +154,10 @@ pinchtab snap -d                                    # Diff from previous snapsho
 pinchtab snap --selector <css>                      # Scope to CSS selector
 pinchtab snap --max-tokens <n>                      # Token budget limit
 pinchtab snap --text                                # Text output format
-pinchtab text                                       # Page text content
-pinchtab text --raw                                 # Raw text extraction
+pinchtab text                                       # Page text content (Readability-filtered; drops nav/repeated headlines)
+pinchtab text --full                                # Full page text (document.body.innerText) — use when Readability is dropping content you need
+pinchtab text --raw                                 # Alias of --full
+# CLI returns JSON; use `| jq -r .text` for plain text
 pinchtab find <query>                               # Semantic element search
 pinchtab find --ref-only <query>                    # Return refs only
 ```
@@ -311,7 +167,12 @@ Guidance:
 - `snap -i -c` is the default for finding actionable refs.
 - `snap -d` is the default follow-up snapshot for multi-step flows.
 - `text` is the default for reading articles, dashboards, reports, or confirmation messages.
-- `find --ref-only` is useful when the page is large and you already know the semantic target.
+- **`pinchtab find <query>`** is the direct route when you already know the semantic target
+  (e.g. "login button", "email input", "accept cookies link") — skips the full snapshot and
+  returns a ranked match with its ref. Pair with `--ref-only` on large/dense pages to get just
+  the ref string for piping straight into `click` / `fill` / `type`. Prefer `find` over
+  `snap -i -c` + visual scan whenever you can describe the target in a phrase.
+- Refs from `snap -i` and full `snap` use different numbering. Do not mix them — if you snapshot with `-i`, use those refs. If you re-snapshot without `-i`, get fresh refs before acting.
 
 ### Interaction
 
@@ -321,13 +182,26 @@ All interaction commands accept unified selectors (refs, CSS, XPath, text, seman
 pinchtab click <selector>                           # Click element
 pinchtab click --wait-nav <selector>                # Click and wait for navigation
 pinchtab click --x 100 --y 200                      # Click by coordinates
+pinchtab click <selector> --dialog-action accept    # Click + auto-accept any alert/confirm the click opens
+pinchtab click <selector> --dialog-action dismiss   # Click + auto-dismiss
+pinchtab click <selector> --dialog-action accept \
+    --dialog-text "hello"                           # Click + accept a prompt() with a response
 pinchtab dblclick <selector>                        # Double-click element
+pinchtab mouse move <selector>                      # Move pointer to element center
+pinchtab mouse move <x> <y>                         # Move pointer to coordinates
+pinchtab mouse down <selector> --button left        # Press a mouse button at an explicit target
+pinchtab mouse down --button left                   # Press a mouse button at current pointer
+pinchtab mouse up <selector> --button left          # Release a mouse button at an explicit target
+pinchtab mouse up --button left                     # Release a mouse button at current pointer
+pinchtab mouse wheel 240 --dx 40                    # Dispatch wheel deltas at current pointer
+pinchtab drag <from> <to>                           # Drag between selector/ref or x,y points (synthesized mouse sequence)
+pinchtab drag <selector> --drag-x <n> --drag-y <n>  # Single-step drag by pixel offset (mirrors HTTP /action dragX/dragY)
 pinchtab type <selector> <text>                     # Type with keystrokes
 pinchtab fill <selector> <text>                     # Set value directly
 pinchtab press <key>                                # Press key (Enter, Tab, Escape...)
 pinchtab hover <selector>                           # Hover element
-pinchtab select <selector> <value>                  # Select dropdown option
-pinchtab scroll <selector|pixels>                   # Scroll element or page
+pinchtab select <selector> <value|text>             # Select dropdown option by value attr, or fall back to visible text
+pinchtab scroll <pixels|direction|selector>         # e.g. `scroll 1500`, `scroll down`, `scroll '#footer'`
 ```
 
 Rules:
@@ -335,7 +209,28 @@ Rules:
 - Prefer `fill` for deterministic form entry.
 - Prefer `type` only when the site depends on keystroke events.
 - Prefer `click --wait-nav` when a click is expected to navigate.
+- Prefer low-level `mouse` commands only when normal `click` / `hover` abstractions are insufficient, such as drag handles, canvas widgets, or sites that depend on exact pointer sequences.
 - Re-snapshot immediately after `click`, `press Enter`, `select`, or `scroll` if the UI can change.
+- `select` matches by value attr first, then visible text (case-insensitive). Error lists available options if no match.
+- For JS dialogs: use `--dialog-action accept` or `--dialog-action dismiss` on click. Add `--dialog-text` for prompt responses.
+- For the `scroll` action via HTTP, use `"scrollX"` / `"scrollY"` for pixel deltas, or `"selector"` to scroll an element into view. Example: `{"kind":"scroll","scrollY":1500}` or `{"kind":"scroll","selector":"#footer"}`. The `x`/`y` fields are target viewport coordinates, not scroll deltas.
+- The download HTTP endpoint (`GET /download?url=...` or `GET /tabs/TAB_ID/download?url=...`) returns JSON `{contentType, data (base64), size, url}`, not raw bytes. Decode `data` with base64 to get the file. Only `http`/`https` URLs are allowed. Private/internal hosts are blocked unless listed in `security.downloadAllowedDomains`.
+
+### Waiting
+
+Use `wait` when the DOM settles asynchronously — spinners, toasts, XHR-driven content.
+
+```bash
+pinchtab wait <selector>                            # Element to appear (default visible)
+pinchtab wait <selector> --state hidden             # Element to disappear
+pinchtab wait --text "Order confirmed"              # Text to appear
+pinchtab wait --not-text "Loading..."               # Text to disappear (spinner/toast dismiss)
+pinchtab wait --url "**/dashboard"                  # URL glob match
+pinchtab wait --load networkidle                    # Network idle
+pinchtab wait 500                                   # Fixed delay in ms (last resort)
+```
+
+Default timeout 10s, max 30s via `--timeout <ms>`. Prefer `--not-text` / `--state hidden` over polling.
 
 ### Export, debug, and verification
 
@@ -354,6 +249,7 @@ Use these only when the task explicitly requires them and safer commands are ins
 
 ```bash
 pinchtab eval "document.title"
+pinchtab eval --await-promise "fetch('/api/me').then(r => r.json())"
 pinchtab download <url> -o /tmp/pinchtab-download.bin
 pinchtab upload /absolute/path/provided-by-user.ext -s <css>
 ```
@@ -366,137 +262,61 @@ Rules:
 
 ### HTTP API fallback
 
-```bash
-curl -X POST http://localhost:9868/navigate \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
+Use curl when CLI unavailable. Key endpoints on instance port (e.g. 9867):
+- `POST /navigate` with `{"url":"..."}`
+- `GET /snapshot?filter=interactive&format=compact`
+- `POST /action` with `{"kind":"fill","selector":"e3","text":"..."}`
+- `POST /actions` with a batch of actions — runs them in one round-trip. Body accepts either
+  an array `[{"kind":"fill",...},{"kind":"click",...}]` or an envelope
+  `{"actions":[...],"stopOnError":true,"tabId":"..."}`. Use this for tight form flows (fill +
+  fill + click submit) to cut round-trip latency. Set `stopOnError:true` to halt on the first
+  failure; the response contains a per-step `{index, success, result?, error?}` array.
+  Tab-scoped variant: `POST /tabs/TAB_ID/actions`.
+- `GET /text`
+- `POST /solve` with `{"maxAttempts": 3}`
 
-curl "http://localhost:9868/snapshot?filter=interactive&format=compact"
+### Tab-scoped HTTP API
 
-curl -X POST http://localhost:9868/action \
-  -H "Content-Type: application/json" \
-  -d '{"kind":"fill","selector":"e3","text":"ada@example.com"}'
+Use `/tabs/TAB_ID/...` routes to target specific tabs. Get tab ID from navigate response or `GET /tabs`.
 
-curl http://localhost:9868/text
+Pattern: `curl -H "Authorization: Bearer <token>" http://localhost:9867/tabs/TAB_ID/<endpoint>`
 
-## Instance-scoped solve (instance port, not server port)
-curl -X POST http://localhost:9868/solve \
-  -H "Content-Type: application/json" \
-  -d '{"maxAttempts": 3}'
+Key endpoints: `navigate`, `snapshot`, `text`, `action`, `screenshot`, `pdf`, `back`, `forward`, `close`, `wait`, `download`, `upload`, `handoff`, `resume`.
 
-curl http://localhost:9868/solvers
-```
-
-Use the API when:
-
-- the agent cannot shell out,
-- profile creation or mutation is required,
-- or you need explicit instance- and tab-scoped routes.
+Action examples:
+- Click: `{"kind":"click","selector":"#btn"}`
+- Click with nav: `{"kind":"click","selector":"#link","waitNav":true}`
+- Drag: `{"kind":"drag","selector":"#piece","dragX":12,"dragY":-158}`
+- Scroll: `{"kind":"scroll","scrollY":1500}` or `{"kind":"scroll","selector":"#footer"}`
 
 ## Common Patterns
 
-### Open a page and inspect actions
+- **Form flow**: `nav` → `snap -i -c` → `fill` fields → `click --wait-nav` submit → `text` to verify
+- **Multi-step**: After each action, `snap -d -i -c` for diff
+- **Direct selectors**: Skip snapshot when structure is known: `pinchtab click "text:Accept Cookies"` or `fill "#search" "query"`
 
-```bash
-pinchtab nav https://pinchtab.com && pinchtab snap -i -c
-```
+**Form submission:** Always click the submit button — never use `press Enter`.
 
-### Fill and submit a form
+## Token Economy
 
-```bash
-pinchtab nav https://example.com/login
-pinchtab snap -i -c
-pinchtab fill e3 "user@example.com"
-pinchtab fill e4 "correct horse battery staple"
-pinchtab click --wait-nav e5
-pinchtab text
-```
-
-### Search, then extract the result page cheaply
-
-```bash
-pinchtab nav https://example.com
-pinchtab snap -i -c
-pinchtab fill e2 "quarterly report"
-pinchtab press Enter
-pinchtab text
-```
-
-### Use diff snapshots in a multi-step flow
-
-```bash
-pinchtab nav https://example.com/checkout
-pinchtab snap -i -c
-pinchtab click e8
-pinchtab snap -d -i -c
-```
-
-### Target elements without a snapshot
-
-When you know the page structure, skip the snapshot and use CSS or text selectors directly:
-
-```bash
-pinchtab click "text:Accept Cookies"
-pinchtab fill "#search" "quarterly report"
-pinchtab click "xpath://button[@type='submit']"
-```
-
-### Navigate through a Cloudflare-protected site
-
-```bash
-pinchtab nav https://protected-site.com
-# Page may show CF challenge ("Just a moment...")
-curl -X POST http://localhost:9867/solve \
-  -H 'Content-Type: application/json' -d '{"maxAttempts": 3}'
-# Now the real page is loaded — proceed normally
-pinchtab snap -i -c
-pinchtab text
-```
-
-### Bootstrap an authenticated profile
-
-```bash
-pinchtab profiles
-pinchtab instance start --profile work --mode headed
-# Human signs in once.
-pinchtab --server http://localhost:9868 text
-```
-
-### Run separate instances for separate sites
-
-```bash
-pinchtab instance start --profile work --mode headless
-pinchtab instance start --profile staging --mode headless
-pinchtab instances
-```
-
-Then point each command stream at its own port using `--server`.
-
-## Security and Token Economy
-
-- Use a dedicated automation profile, not a daily browsing profile.
-- If PinchTab is reachable off-machine, require a token and bind conservatively.
-- Prefer `text`, `snap -i -c`, and `snap -d` before screenshots, PDFs, eval, downloads, or uploads.
-- Use `--block-images` for read-heavy tasks that do not need visual assets.
-- Stop or isolate instances when switching between unrelated accounts or environments.
+Prefer low-token commands: `text`, `snap -i -c`, `snap -d`. Use `--block-images` for read-heavy tasks. Reserve screenshots/PDFs for visual verification.
 
 ## Diffing and Verification
 
 - Use `pinchtab snap -d` after each state-changing action in long workflows.
-- Use `pinchtab text` to confirm success messages, table updates, or navigation outcomes.
+- Use `pinchtab text` to confirm success messages, table updates, or navigation outcomes. The default mode extracts Readability-filtered content (reader view), which may drop navigation, repeated headlines, short-text nodes, or collapse lists/grids down to a single representative item. Reach for `pinchtab text --full` whenever (a) you're verifying content on a list/grid/tab/accordion page, (b) the expected marker is short, or (c) a default read came back missing content you can see in the snapshot. It returns the raw `document.body.innerText` and is almost always the safer choice once you know Readability is going to trim.
 - Use `pinchtab screenshot` only when visual regressions, CAPTCHA, or layout-specific confirmation matters.
 - If a ref disappears after a change, treat that as expected and fetch fresh refs instead of retrying the stale one.
+- Action responses like `{"clicked":true,"submitted":true}` mean the event fired on the target element — **not** that the form was accepted by the server or passed native HTML validation. Always verify the expected success marker or state change via `snap`/`text` before treating a submission as complete.
+- **Same-origin iframes** are supported natively via `pinchtab frame <target>` — a stateful scope that subsequent selector-based `/snapshot` and `/action` calls inherit. Typical flow: `pinchtab frame '#payment-frame'` → `pinchtab snap -i -c` (refs reflect iframe interior) → `pinchtab fill '#card'` / `click '#pay'` → `pinchtab frame main`. Target accepts `main`, an iframe ref, a CSS selector for the iframe element, a frame name, or a frame URL. Nested iframes need multiple hops. Refs emitted by a full `snap` (no `-i`) for iframe descendants carry frame context — ref-based actions work across the boundary without an explicit scope set. **Cross-origin iframes** are not exposed as frame scopes; fall back to `eval` against `iframe.contentDocument` (same-origin-policy permitting). `pinchtab text` (and `text --full`) honors the active frame scope and also accepts an explicit `--frame <frameId>` flag for one-shot reads — so after `pinchtab frame '#content-frame'`, a following `pinchtab text --full` extracts from the iframe's document, not the outer page. **The `--frame` argument must be a frame ID (the 32-char hex `frameId` from `pinchtab frame <target>` output), not a CSS selector.** For a one-shot read, the idiom is: `FID=$(pinchtab frame '#content-frame' | jq -r .current.frameId); pinchtab frame main; pinchtab text --full --frame "$FID"`. Passing a selector like `text --frame '#content-frame'` returns "no frame for given id found".
+- **`eval` → always IIFE.** `eval` expressions share the same realm across calls, so any top-level `const`/`let`/`class` from one call collides with the next: `SyntaxError: Identifier 'x' has already been declared`. Use an IIFE on every `eval` that introduces identifiers, not only on multi-statement ones: `pinchtab eval "(() => { const r = document.querySelector('#x').getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; })()"`. For a single expression that doesn't introduce identifiers (e.g. `document.title`, `document.getElementById('x').value`), the IIFE is optional. The IIFE pattern also fixes DOMRect serialization — `getBoundingClientRect()` returns a value whose own-enumerable fields don't survive JSON, so the explicit projection is what actually ships the numbers back.
+- **`pinchtab text` (both default and `--full`) returns content from `display:none` and `visibility:hidden` nodes** because it reads `document.body.innerText` (and Readability's input) from raw DOM — the visibility cascade is not applied. When you need to confirm that a success banner or error message is *actually visible* (not just present as a pre-seeded hidden element), verify via `pinchtab snap` (the accessibility tree respects visibility and hides non-rendered subtrees) or via `eval` against the element's `offsetHeight` / `getComputedStyle().display`. A common trap: a page ships with a hidden success `<div>` pre-rendered; `text` will report the success string before the form is ever submitted.
+- The compact snapshot shows `<option>` elements by their visible text, not their `value` attribute. You don't normally need to look up the `value`: the `select` action accepts either — it matches on `value` first and falls back to visible text (case-insensitive). Only reach for `eval` + `Array.from(select.options)` when debugging an unexpected no-match error.
+- `text:<value>` selectors are resolved by a JS-level search over visible text and can intermittently fail with `DOM Error` or `context deadline exceeded` on large/dynamic pages. If you have a fresh `snap -i -c` in hand, prefer the ref (`e12`) — refs resolve by stable backend node IDs and don't depend on page-side JS.
+- `snap -i -c` (interactive, compact) skips non-interactive descendants. For iframe interiors, either set a `frame` scope first or use a full `pinchtab snap` (no `-i`) which flattens same-origin iframe descendants into the parent snapshot.
+- ARIA expansion state (`aria-expanded="true" | "false"`) is usually placed on the **outermost container** of an accordion/menu/disclosure section, not on the header/trigger that dispatches the click. When verifying state after a click, query `document.querySelector('#section-a').getAttribute('aria-expanded')` (or the wrapper's equivalent) rather than the clicked element.
+- `click --wait-nav` can return `{"success": true}` or, immediately after the navigation fires, `Error 409: unexpected page navigation` — the latter means the server saw a navigation while mid-response and aborted its reply, not that the click failed. Treat 409 after a navigation-expected click as success and verify the resulting page with a fresh `snap` / `text`.
 
-## Privacy and Security
-
-PinchTab is a fully open-source, local-only browser automation tool:
-
-- **Runs on localhost only.** The server binds to `127.0.0.1` by default. No external network calls are made by PinchTab itself.
-- **No telemetry or analytics.** The binary makes zero outbound connections.
-- **Single Go binary (~16 MB).** Fully verifiable — anyone can build from source at [github.com/pinchtab/pinchtab](https://github.com/pinchtab/pinchtab).
-- **Local Chrome profiles.** Persistent profiles store cookies and sessions on your machine only. This enables agents to reuse authenticated sessions without re-entering credentials, similar to how a human reuses their browser profile.
-- **Token-efficient by design.** Uses the accessibility tree (structured text) instead of screenshots, keeping agent context windows small. Comparable to Playwright but purpose-built for AI agents.
-- **Multi-instance isolation.** Each browser instance runs in its own profile directory with tab-level locking for safe multi-agent use.
 
 ## References
 

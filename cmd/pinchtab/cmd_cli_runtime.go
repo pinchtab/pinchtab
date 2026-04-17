@@ -48,12 +48,10 @@ func resolveCLIBase(cfg *config.RuntimeConfig) string {
 	if envURL := os.Getenv("PINCHTAB_SERVER"); envURL != "" {
 		return strings.TrimRight(envURL, "/")
 	}
-	// Default to first instance port from config, falling back to 9868.
-	port := cfg.InstancePortStart
-	if port == 0 {
-		port = 9868
-	}
-	return fmt.Sprintf("http://127.0.0.1:%d", port)
+	// Default to the main server port so requests go through the
+	// orchestrator. This ensures activity is recorded in the shared
+	// store and visible in the dashboard.
+	return fmt.Sprintf("http://127.0.0.1:%s", cfg.Port)
 }
 
 func resolveCLIToken(cfg *config.RuntimeConfig) string {
@@ -71,17 +69,11 @@ func resolveCLIAgentID() string {
 	if trimmed := strings.TrimSpace(cliAgentID); trimmed != "" {
 		return trimmed
 	}
-	if trimmed := strings.TrimSpace(os.Getenv("PINCHTAB_AGENT_ID")); trimmed != "" {
-		return trimmed
-	}
-	return "cli"
+	return strings.TrimSpace(os.Getenv("PINCHTAB_AGENT_ID"))
 }
 
 func normalizeCLIAgentID(raw string) string {
-	if trimmed := strings.TrimSpace(raw); trimmed != "" {
-		return trimmed
-	}
-	return "cli"
+	return strings.TrimSpace(raw)
 }
 
 type agentHeaderTransport struct {
@@ -97,7 +89,10 @@ func (t agentHeaderTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 	cloned := req.Clone(req.Context())
 	cloned.Header = req.Header.Clone()
-	cloned.Header.Set(activity.HeaderAgentID, normalizeCLIAgentID(t.agentID))
+	cloned.Header.Set(activity.HeaderPTSource, "client")
+	if id := normalizeCLIAgentID(t.agentID); id != "" {
+		cloned.Header.Set(activity.HeaderAgentID, id)
+	}
 
 	return base.RoundTrip(cloned)
 }

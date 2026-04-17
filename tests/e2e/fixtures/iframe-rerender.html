@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Iframe Rerender Fixture</title>
+</head>
+<body>
+  <h1>Iframe Rerender Fixture</h1>
+  <button type="button" id="replace-frame">Replace frame</button>
+  <p id="rerender-status">RERENDER_V1</p>
+  <iframe
+    id="live-frame"
+    title="live-frame"
+    name="live-frame"
+    src="iframe-rerender-v1.html"
+    width="640"
+    height="240"
+  ></iframe>
+
+  <script>
+    window.replaceTestFrame = function() {
+      const current = document.getElementById('live-frame');
+      const next = document.createElement('iframe');
+      next.id = 'live-frame';
+      next.title = 'live-frame';
+      next.name = 'live-frame';
+      next.width = '640';
+      next.height = '240';
+      next.src = 'iframe-rerender-v2.html';
+      current.replaceWith(next);
+      document.getElementById('rerender-status').textContent = 'RERENDER_V2';
+    };
+
+    document.getElementById('replace-frame').addEventListener('click', function() {
+      window.replaceTestFrame();
+    });
+  </script>
+</body>
+</html>

@@ -40,7 +40,7 @@ flowchart LR
     R["Start Request"] --> V["Validate profile + port"]
     V --> W["Write child config"]
     W --> P["Spawn pinchtab bridge"]
-    P --> H["Poll /health on loopback addresses"]
+    P --> H["Poll /health on configured bind or loopback"]
     H --> S{"Healthy before timeout?"}
     S -->|Yes| OK["Mark running"]
     S -->|No| ER["Mark error"]
@@ -54,7 +54,8 @@ What the code does today:
 - prevents reusing a port already in use
 - writes a child config file under the profile state directory
 - launches `pinchtab bridge`
-- polls `/health` on `127.0.0.1`, `::1`, and `localhost`
+- polls `/health` on the configured child bind first when present, then falls
+  back to `127.0.0.1`, `::1`, and `localhost`
 - moves the instance from `starting` to `running` or `error`
 
 ## Attach Flow

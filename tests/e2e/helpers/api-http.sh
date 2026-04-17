@@ -221,6 +221,7 @@ assert_fixtures_accessible() {
   assert_url_accessible "${FIXTURES_URL}/form.html" "fixtures/form.html"
   assert_url_accessible "${FIXTURES_URL}/table.html" "fixtures/table.html"
   assert_url_accessible "${FIXTURES_URL}/buttons.html" "fixtures/buttons.html"
+  assert_url_accessible "${FIXTURES_URL}/mouse-events.html" "fixtures/mouse-events.html"
 }
 
 assert_ok() {

@@ -23,8 +23,10 @@ The default security posture is:
 - `security.attach.enabled = false`
 - `security.attach.allowHosts = ["127.0.0.1", "localhost", "::1"]`
 - `security.attach.allowSchemes = ["ws", "wss"]`
+- `security.allowedDomains = ["127.0.0.1", "localhost", "::1"]`
+- `security.trustedProxyCIDRs = []`
+- `security.trustedResolveCIDRs = []`
 - `security.idpi.enabled = true`
-- `security.idpi.allowedDomains = ["127.0.0.1", "localhost", "::1"]`
 - `security.idpi.strictMode = true`
 - `security.idpi.scanContent = true`
 - `security.idpi.wrapContent = true`
@@ -97,9 +99,32 @@ The browser dashboard uses a different flow:
    elevation
 
 By default, PinchTab auto-detects whether the dashboard session cookie should
-use the `Secure` flag. For reverse-proxied HTTPS this stays enabled. If you
-intentionally access the dashboard over plain HTTP on a trusted LAN, you can
-explicitly disable it:
+use the `Secure` flag. In `auto` mode, HTTPS requests get `Secure` cookies and
+plain HTTP requests do not.
+
+That means:
+
+- reverse-proxied HTTPS keeps `Secure` enabled
+- plain `http://localhost:9867` keeps working for local-only use
+- plain `http://192.168.x.x:9867` or `http://10.x.x.x:9867` works, but the
+  dashboard warns that the session is running over insecure HTTP
+
+If you want to require HTTPS for dashboard login, force `server.cookieSecure`
+to `true`:
+
+```json
+{
+  "server": {
+    "cookieSecure": true
+  }
+}
+```
+
+On plain HTTP, that now fails explicitly with an HTTPS-required login error
+instead of appearing to succeed and then looping.
+
+If you intentionally need plain HTTP on a trusted LAN, you can also force
+`cookieSecure` off explicitly:
 
 ```json
 {
@@ -108,6 +133,14 @@ explicitly disable it:
   }
 }
 ```
+
+Recommended usage:
+
+- leave `cookieSecure` unset (`auto`) unless you have a reason to override it
+- use `cookieSecure: true` when TLS is in front of PinchTab
+- only use `cookieSecure: false` on operator-controlled plain-HTTP deployments
+- if TLS terminates at a trusted reverse proxy, enable
+  `server.trustProxyHeaders` so forwarded HTTPS requests are recognized
 
 Why this matters:
 
@@ -137,6 +170,16 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:9867/health
 
 CLI commands use the configured local server settings by default, and `PINCHTAB_TOKEN` can override the token for a single shell session.
 
+## Agent Sessions
+
+Agent sessions are reduced-distribution credentials for trusted automation, not a sandbox for untrusted clients.
+
+- session-authenticated callers are blocked from dashboard/admin endpoint families such as config, session management, profile management, instance management, dashboard agent listings, and cache controls
+- session records can optionally carry explicit grants that narrow access further
+- sessions without explicit grants can still use the normal non-admin automation API by default
+
+That means agent sessions are appropriate for controlled environments where the caller is already trusted to drive browser automation but should not receive the full dashboard bearer token. They are not sufficient for hostile multi-tenant sharing or public internet exposure. For that kind of isolation, run separate PinchTab instances behind separate network and credential boundaries.
+
 ## Sensitive Endpoints
 
 Some endpoint families expose much more power than normal navigation and inspection. PinchTab keeps them disabled by default:
@@ -152,7 +195,7 @@ Why they are considered dangerous:
 - `evaluate` can execute JavaScript in page context
 - `macro` can trigger higher-level automation flows
 - `screencast` can stream live page contents
-- `download` can fetch and persist remote content
+- `download` can fetch and persist remote content. When `security.downloadAllowedDomains` is set, listed domains bypass private-IP SSRF checks (intended for internal hosts such as Docker services). `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - `upload` can push local files into browser flows
 
 These are not the same as authentication.
@@ -211,9 +254,11 @@ The default local-only IDPI config is:
 ```json
 {
   "security": {
+    "allowedDomains": ["127.0.0.1", "localhost", "::1"],
+    "trustedProxyCIDRs": [],
+    "trustedResolveCIDRs": [],
     "idpi": {
       "enabled": true,
-      "allowedDomains": ["127.0.0.1", "localhost", "::1"],
       "strictMode": true,
       "scanContent": true,
       "wrapContent": true,
@@ -227,11 +272,18 @@ Important notes:
 
 - if `allowedDomains` is empty, the main domain restriction is not doing useful work
 - if `allowedDomains` contains `"*"`, the whitelist effectively allows everything
+- `security.allowedDomains` is the canonical config path. `security.idpi.allowedDomains` is still accepted when loading older config files, but new saves are normalized to `security.allowedDomains`
 - `strictMode = true` blocks disallowed domains and suspicious content
 - `strictMode = false` allows the request but emits warnings instead
 - `scanContent` protects `/text` and `/snapshot` style extraction paths
 - `wrapContent` adds explicit untrusted-content framing for downstream consumers
 - widening navigation to non-local or non-trusted sites is still a security-reducing choice; IDPI lowers risk, but it does not make hostile pages safe or remove browser attack surface
+
+For navigation trust overrides:
+
+- `security.trustedResolveCIDRs` lets a hostname resolve to a non-public IP during navigation preflight. This is intended for operator-controlled DNS or proxy setups such as internal proxies, lab networks, or benchmark ranges
+- `security.trustedProxyCIDRs` trusts browser-reported remote IPs from known internal proxies during runtime navigation checks
+- keep both lists narrow. Broad ranges such as `10.0.0.0/8` reduce SSRF protections and should only be used when the full network segment is intentionally trusted
 
 Supported domain patterns are:
 
@@ -240,6 +292,18 @@ Supported domain patterns are:
 - full wildcard: `*`
 
 `*` is convenient, but it defeats the main allowlist defense and should be avoided unless you are deliberately disabling domain restriction.
+
+If you need to widen trust for only one managed browser, prefer an instance-scoped override instead of changing the global server policy. `POST /instances/start`, `POST /instances/launch`, and `POST /profiles/{id}/start` accept:
+
+```json
+{
+  "securityPolicy": {
+    "allowedDomains": ["*"]
+  }
+}
+```
+
+That override is additive for that instance only. For example, you can keep the server baseline local-only and start one temporary instance with `allowedDomains: ["*"]` or a narrow extra host list such as `["wikipedia.org"]` without widening the rest of the server.
 
 ## Recommended Config
 
@@ -257,6 +321,9 @@ For a secure local setup:
     "allowScreencast": false,
     "allowDownload": false,
     "allowUpload": false,
+    "allowedDomains": ["127.0.0.1", "localhost", "::1"],
+    "trustedProxyCIDRs": [],
+    "trustedResolveCIDRs": [],
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
@@ -264,7 +331,6 @@ For a secure local setup:
     },
     "idpi": {
       "enabled": true,
-      "allowedDomains": ["127.0.0.1", "localhost", "::1"],
       "strictMode": true,
       "scanContent": true,
       "wrapContent": true,
@@ -285,6 +351,6 @@ For automated agents, use **agent sessions** instead of sharing the server beare
 - Has configurable idle timeout and max lifetime
 - Never exposes the server bearer token to agents
 
-**Important:** Agent sessions are designed for trusted environments. The session management API (`/api/sessions`) has no per-agent authorization — any bearer-authenticated caller can manage all sessions. Do not expose these endpoints to untrusted networks.
+**Important:** Agent sessions are designed for trusted environments. The session management API (`/sessions`) has no per-agent authorization — any bearer-authenticated caller can manage all sessions. Do not expose these endpoints to untrusted networks.
 
 See [Reference: Agent Sessions](../reference/sessions.md) for configuration and API details.

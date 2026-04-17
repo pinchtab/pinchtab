@@ -61,9 +61,16 @@ PinchTab also provides a CLI with an interactive entry point for local setup and
 PinchTab defaults to a **local-first security posture**:
 
 - `server.bind = 127.0.0.1`
+- dashboard session cookies are `Secure` only when the dashboard is actually served over HTTPS
 - sensitive endpoint families are disabled by default
 - `attach` is disabled by default
 - IDPI is enabled with a **local-only website allowlist**
+
+If you intentionally access the dashboard over plain HTTP on a non-loopback
+address, PinchTab now warns in the UI that the session is running without
+transport encryption. Prefer HTTPS or localhost when possible. If you force
+`server.cookieSecure = true`, dashboard login requires HTTPS and will fail
+explicitly on plain HTTP instead of looping silently.
 
 > [!CAUTION]
 > By default, IDPI restricts browsing to **locally hosted websites only**.
@@ -319,12 +326,6 @@ PinchTab is a fully open-source, local-first tool. No telemetry, no analytics, a
 ## Documentation
 
 Full docs at **[pinchtab.com/docs](https://pinchtab.com/docs)**
-
-### MCP (SMCP) integration
-
-An **SMCP plugin** in this repo lets AI agents control PinchTab via the [Model Context Protocol](https://github.com/sanctumos/smcp) (SMCP). One plugin exposes 15 tools (e.g. `pinchtab__navigate`, `pinchtab__snapshot`, `pinchtab__action`). No extra runtime deps (stdlib only). See **[plugins/README.md](plugins/README.md)** for setup (env vars and paths).
-
----
 
 ## Examples
 

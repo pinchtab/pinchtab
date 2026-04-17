@@ -10,6 +10,30 @@ interface Props {
   onClose: () => void;
 }
 
+const PORT_VALIDATION_ERROR =
+  "Port must be a whole number between 1 and 65535.";
+
+function normalizeLaunchPort(rawPort: string): {
+  port?: string;
+  error?: string;
+} {
+  const trimmed = rawPort.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  if (!/^\d+$/.test(trimmed)) {
+    return { error: PORT_VALIDATION_ERROR };
+  }
+
+  const numericPort = Number(trimmed);
+  if (numericPort < 1 || numericPort > 65535) {
+    return { error: PORT_VALIDATION_ERROR };
+  }
+
+  return { port: String(numericPort) };
+}
+
 export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const { setInstances } = useAppStore();
   const [port, setPort] = useState("");
@@ -17,6 +41,10 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const [launchError, setLaunchError] = useState("");
   const [launchLoading, setLaunchLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
+  const { port: normalizedPort, error: portError } = useMemo(
+    () => normalizeLaunchPort(port),
+    [port],
+  );
 
   useEffect(() => {
     if (open) {
@@ -33,27 +61,35 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   }, [open, profile?.id, profile?.name]);
 
   const launchCommand = useMemo(() => {
-    if (!profile) return "";
+    if (!profile?.id) return "";
 
     const payload: LaunchInstanceRequest = {
-      profileId: profile.id || profile.name,
+      profileId: profile.id,
       mode: headless ? undefined : "headed",
-      port: port.trim() || undefined,
+      port: normalizedPort,
     };
 
-    return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -d '${JSON.stringify(payload)}'`;
-  }, [headless, port, profile]);
+    return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '${JSON.stringify(payload)}'`;
+  }, [headless, normalizedPort, profile]);
 
   const handleLaunch = async () => {
     if (!profile || launchLoading) return;
+    if (!profile.id) {
+      setLaunchError("Profile ID missing");
+      return;
+    }
+    if (portError) {
+      setLaunchError(portError);
+      return;
+    }
 
     setLaunchError("");
     setLaunchLoading(true);
 
     try {
       const payload: LaunchInstanceRequest = {
-        name: profile.name,
-        port: port.trim() || undefined,
+        profileId: profile.id,
+        port: normalizedPort,
         mode: headless ? undefined : "headed",
       };
 
@@ -84,7 +120,11 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        if (!launchLoading) {
+          onClose();
+        }
+      }}
       title="🖥️ Start Profile"
       actions={
         <>
@@ -99,6 +139,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
             variant="primary"
             onClick={handleLaunch}
             loading={launchLoading}
+            disabled={Boolean(portError)}
           >
             Start
           </Button>
@@ -117,10 +158,14 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           value={port}
           onChange={(e) => setPort(e.target.value)}
         />
-        <p className="-mt-2 text-xs text-text-muted">
-          Leave blank to auto-select a free port from the configured instance
-          port range.
-        </p>
+        {portError ? (
+          <p className="-mt-2 text-xs text-destructive">{portError}</p>
+        ) : (
+          <p className="-mt-2 text-xs text-text-muted">
+            Leave blank to auto-select a free port from the configured instance
+            port range.
+          </p>
+        )}
         <label className="flex items-center gap-2 text-sm text-text-secondary">
           <input
             type="checkbox"
@@ -148,6 +193,10 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
               <span className="text-xs text-success">{copyFeedback}</span>
             )}
           </div>
+          <p className="mt-2 text-xs text-text-muted">
+            Replace <code>{"<token>"}</code> with the value from{" "}
+            <code>pinchtab config token</code> when auth is enabled.
+          </p>
         </div>
       </div>
     </Modal>

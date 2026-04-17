@@ -2,6 +2,7 @@ package actions
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -13,6 +14,7 @@ func newNavigateCmd() *cobra.Command {
 	cmd.Flags().Bool("block-images", false, "")
 	cmd.Flags().Bool("block-ads", false, "")
 	cmd.Flags().String("tab", "", "")
+	cmd.Flags().Bool("print-tab-id", false, "")
 	return cmd
 }
 
@@ -67,5 +69,25 @@ func TestNavigateWithBlockAds(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["blockAds"] != true {
 		t.Error("expected blockAds=true")
+	}
+}
+
+// TestNavigatePrintTabID verifies that --print-tab-id makes `nav` emit only
+// the tab ID on stdout so agents can capture it via `$(pinchtab nav URL)`.
+func TestNavigatePrintTabID(t *testing.T) {
+	m := newMockServer()
+	m.response = `{"tabId":"ABC123","status":"ok"}`
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newNavigateCmd()
+	_ = cmd.Flags().Set("print-tab-id", "true")
+
+	out := captureStdout(t, func() {
+		Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	})
+	got := strings.TrimSpace(out)
+	if got != "ABC123" {
+		t.Errorf("expected stdout to be exactly 'ABC123', got %q", got)
 	}
 }

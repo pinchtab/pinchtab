@@ -91,12 +91,18 @@ Common commands:
 | `pinchtab nav <url>` | Open a new tab and navigate it |
 | `pinchtab quick <url>` | Navigate and snapshot |
 | `pinchtab snap` | Accessibility snapshot |
+| `pinchtab frame [target\|main]` | Show or set selector frame scope |
 | `pinchtab click <selector>` | Click an element |
+| `pinchtab mouse move <x> <y>` | Move the pointer to coordinates |
+| `pinchtab mouse down [selector]` | Press a mouse button at the current pointer or a fresh target |
+| `pinchtab mouse up [selector]` | Release a mouse button at the current pointer or a fresh target |
+| `pinchtab mouse wheel [dy\|selector]` | Dispatch wheel deltas at the current pointer or a fresh target |
+| `pinchtab drag <from> <to>` | Drag from one target to another |
 | `pinchtab type <selector> <text>` | Type via key events |
 | `pinchtab fill <selector> <text>` | Fill directly |
-| `pinchtab text` | Extract page text |
+| `pinchtab text` | Extract page text (`--full`, `--raw`, `--frame <frameId>`) |
 | `pinchtab find <query>` | Semantic element search |
-| `pinchtab screenshot` | Save a screenshot |
+| `pinchtab screenshot` | Save a screenshot (`-s/--selector` captures a specific element, `--css-1x` exports selector shots at CSS size) |
 | `pinchtab pdf` | Export the page as PDF |
 | `pinchtab network` | Inspect captured network requests |
 | `pinchtab wait ...` | Wait for selector, text, URL, JS, or time |
@@ -104,6 +110,30 @@ Common commands:
 | `pinchtab errors` | Show browser error logs |
 
 Many browser commands accept `--tab <id>` to target an existing tab instead of the active one.
+
+Selector lookup is explicit by frame. Unscoped selectors stay in the main document unless you set a frame first with `pinchtab frame`. Same-origin iframe scopes are supported; cross-origin iframe descendants are not currently exposed.
+
+`pinchtab text` follows that frame model too: it uses the active frame scope
+unless you override it with `--frame`.
+
+`pinchtab eval` is separate from that model and does not inherit current frame scope.
+
+Selector-based actions fail fast when a selector does not match. If you expect
+dynamic content to appear shortly, use `pinchtab wait` first.
+
+Manual handoff is currently API-only:
+
+This is currently advisory state only. It marks the tab as `paused_handoff`, but it does not yet provide a guaranteed blocking pause for later automation.
+
+```bash
+curl -X POST http://localhost:9867/tabs/<tabId>/handoff \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"captcha"}'
+curl http://localhost:9867/tabs/<tabId>/handoff
+curl -X POST http://localhost:9867/tabs/<tabId>/resume \
+  -H "Content-Type: application/json" \
+  -d '{"status":"completed"}'
+```
 
 ## Tab Command
 

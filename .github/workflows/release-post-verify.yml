@@ -1,0 +1,57 @@
+name: Release / Post-Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag to verify (e.g. v0.9.1)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-post-verify-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  npm-cli-macos:
+    name: Post-Release npm CLI (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Normalize release metadata
+        id: meta
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ "${TAG#v}" = "$TAG" ]; then
+            TAG="v$TAG"
+          fi
+
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for npm package availability
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          for _ in $(seq 1 30); do
+            if npm view "pinchtab@${VERSION}" version >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 20
+          done
+
+          echo "pinchtab@${VERSION} was not available on npm in time" >&2
+          exit 1
+
+      - name: Verify published npm CLI on macOS
+        run: |
+          chmod +x npm/scripts/npm-cli-e2e.sh
+          npm/scripts/npm-cli-e2e.sh "pinchtab@${{ steps.meta.outputs.version }}"

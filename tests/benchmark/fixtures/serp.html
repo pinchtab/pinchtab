@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Search Results - PinchTab Benchmark</title>
+  <style>
+    body { font-family: -apple-system, Arial, sans-serif; margin: 20px; color: #202124; max-width: 700px; }
+    header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #dadce0; }
+    #query { font-size: 24px; font-weight: 400; }
+    .result { margin-bottom: 28px; }
+    .result .url { color: #006621; font-size: 14px; }
+    .result .title { color: #1a0dab; font-size: 20px; font-weight: 400; text-decoration: none; display: block; margin: 2px 0; }
+    .result .title:visited { color: #660099; }
+    .result .snippet { color: #4d5156; font-size: 14px; line-height: 1.5; }
+    .result .meta { color: #70757a; font-size: 13px; margin-top: 4px; }
+    em { font-style: normal; font-weight: bold; }
+    #pagination { margin-top: 32px; color: #70757a; }
+  </style>
+</head>
+<body>
+  <header>
+    <div id="query">Search results for: <strong>deterministic testing</strong></div>
+    <div id="meta">SERP_PAGE_MARKER_88044 · About 184,000 results (0.29 seconds)</div>
+  </header>
+
+  <div class="result" id="r-1">
+    <div class="url">example.com/blog/deterministic-tests</div>
+    <a class="title" href="#">The Quiet Power of Deterministic Tests — RESULT_1_TITLE</a>
+    <div class="snippet">
+      There is a particular pleasure in a test suite that never flakes. Not the
+      dopamine of a green CI run — that is cheap — but the deeper relief of
+      being able to trust the signal. RESULT_1_SNIPPET_MARKER
+    </div>
+    <div class="meta">Ada Lovelace · Apr 15, 2026 · 7 min read</div>
+  </div>
+
+  <div class="result" id="r-2">
+    <div class="url">reliability.io/articles/flake-hunting</div>
+    <a class="title" href="#">Hunting Flakes in a Large Monorepo — RESULT_2_TITLE</a>
+    <div class="snippet">
+      We instrumented our CI pipeline to catalogue every re-run and found that
+      four underlying races explained 80% of the noise. Here's the taxonomy we
+      ended up with. RESULT_2_SNIPPET_MARKER
+    </div>
+    <div class="meta">Grace Hopper · Mar 02, 2026 · 11 min read</div>
+  </div>
+
+  <div class="result" id="r-3">
+    <div class="url">testguide.dev/patterns/seeded-rng</div>
+    <a class="title" href="#">Seeded RNGs: The First Quick Win — RESULT_3_TITLE</a>
+    <div class="snippet">
+      Of all the mitigations for non-determinism, replacing <em>Math.random</em>
+      with a seeded PRNG is the cheapest and most immediately satisfying. A
+      walkthrough in three frameworks. RESULT_3_SNIPPET_MARKER
+    </div>
+    <div class="meta">Alan Turing · Feb 19, 2026 · 5 min read</div>
+  </div>
+
+  <div class="result" id="r-4">
+    <div class="url">news.example/2026/mocks-were-a-mistake</div>
+    <a class="title" href="#">Mocks Were a Mistake — RESULT_4_TITLE</a>
+    <div class="snippet">
+      A contrarian take. After five years of integration-first testing, we
+      rolled back 90% of our unit-level mocks and found the suite actually
+      got faster — and truer. RESULT_4_SNIPPET_MARKER
+    </div>
+    <div class="meta">Katherine Johnson · Jan 28, 2026 · 9 min read</div>
+  </div>
+
+  <div class="result" id="r-5">
+    <div class="url">ops.example.com/docs/test-isolation</div>
+    <a class="title" href="#">Test Isolation at Scale — RESULT_5_TITLE</a>
+    <div class="snippet">
+      Isolation is cheap in the small and expensive in the large. The transition
+      happens around a few hundred tests. This post describes the signs and
+      four transition strategies. RESULT_5_SNIPPET_MARKER
+    </div>
+    <div class="meta">Margaret Hamilton · Jan 11, 2026 · 14 min read</div>
+  </div>
+
+  <div class="result" id="r-6">
+    <div class="url">seam.blog/frozen-clocks</div>
+    <a class="title" href="#">On Frozen Clocks and Libraries That Lie — RESULT_6_TITLE</a>
+    <div class="snippet">
+      Not every clock library is honest about what "now" means under test. A
+      short catalogue of the three most common traps and the simple pattern
+      that defuses them. RESULT_6_SNIPPET_MARKER
+    </div>
+    <div class="meta">Hedy Lamarr · Dec 04, 2025 · 6 min read</div>
+  </div>
+
+  <div id="pagination">SERP_RESULT_COUNT_6 — Page 1 of 21</div>
+</body>
+</html>

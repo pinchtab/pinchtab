@@ -16,18 +16,23 @@ export default defineConfig(() => {
       ws: true,
     }
 
-    if (authHeader !== '') {
-      options.headers = {
-        Authorization: authHeader,
-      }
-      options.configure = (proxy) => {
-        proxy.on('proxyReq', (proxyReq) => {
+    options.configure = (proxy) => {
+      proxy.on('proxyReq', (proxyReq) => {
+        if (authHeader !== '') {
           proxyReq.setHeader('Authorization', authHeader)
-        })
-        proxy.on('proxyReqWs', (proxyReq) => {
+        }
+        if (!proxyReq.getHeader('X-PinchTab-Source')) {
+          proxyReq.setHeader('X-PinchTab-Source', 'dashboard')
+        }
+      })
+      proxy.on('proxyReqWs', (proxyReq) => {
+        if (authHeader !== '') {
           proxyReq.setHeader('Authorization', authHeader)
-        })
-      }
+        }
+        if (!proxyReq.getHeader('X-PinchTab-Source')) {
+          proxyReq.setHeader('X-PinchTab-Source', 'dashboard')
+        }
+      })
     }
 
     return options
@@ -39,6 +44,7 @@ export default defineConfig(() => {
     '/api', '/health', '/metrics', '/instances', '/profiles', '/tabs',
     '/navigate', '/action', '/screenshot', '/evaluate', '/find', '/text',
     '/snapshot', '/download', '/upload', '/cookies', '/fingerprint', '/scheduler',
+    '/console', '/errors',
   ]
   const proxy: Record<string, ProxyOptions> = {}
   for (const path of apiPaths) {

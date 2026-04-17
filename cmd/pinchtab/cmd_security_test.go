@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
@@ -90,6 +91,15 @@ func captureStdout(t *testing.T, fn func()) string {
 		t.Fatalf("os.Pipe() error = %v", err)
 	}
 	os.Stdout = w
+
+	var buf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&buf, r)
+		_ = r.Close()
+		done <- err
+	}()
+
 	defer func() {
 		os.Stdout = orig
 	}()
@@ -99,14 +109,10 @@ func captureStdout(t *testing.T, fn func()) string {
 	if err := w.Close(); err != nil {
 		t.Fatalf("close writer error = %v", err)
 	}
-	data, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll() error = %v", err)
+	if err := <-done; err != nil {
+		t.Fatalf("io.Copy() error = %v", err)
 	}
-	if err := r.Close(); err != nil {
-		t.Fatalf("close reader error = %v", err)
-	}
-	return string(data)
+	return buf.String()
 }
 
 func testRuntimeConfig() *config.RuntimeConfig {
@@ -121,12 +127,12 @@ func testRuntimeConfig() *config.RuntimeConfig {
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 		AttachAllowSchemes: []string{"ws", "wss"},
+		AllowedDomains:     []string{"127.0.0.1", "localhost", "::1"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"127.0.0.1", "localhost", "::1"},
-			StrictMode:     true,
-			ScanContent:    true,
-			WrapContent:    true,
+			Enabled:     true,
+			StrictMode:  true,
+			ScanContent: true,
+			WrapContent: true,
 		},
 	}
 }

@@ -5,6 +5,38 @@ import (
 	"testing"
 )
 
+func TestFrameEndpointsAreShorthandAndTabScoped(t *testing.T) {
+	found := map[string]bool{
+		"GET /frame":  false,
+		"POST /frame": false,
+	}
+	for _, route := range ShorthandRoutes() {
+		if _, ok := found[route]; ok {
+			found[route] = true
+		}
+	}
+	for route, ok := range found {
+		if !ok {
+			t.Fatalf("ShorthandRoutes() missing %s", route)
+		}
+	}
+
+	wantTabRoutes := map[string]bool{
+		"GET /tabs/{id}/frame":  false,
+		"POST /tabs/{id}/frame": false,
+	}
+	for _, route := range TabScopedRoutes() {
+		if _, ok := wantTabRoutes[route]; ok {
+			wantTabRoutes[route] = true
+		}
+	}
+	for route, ok := range wantTabRoutes {
+		if !ok {
+			t.Fatalf("TabScopedRoutes() missing %s", route)
+		}
+	}
+}
+
 func TestNoDuplicateRoutes(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, ep := range Core() {

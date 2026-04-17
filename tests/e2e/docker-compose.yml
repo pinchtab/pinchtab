@@ -21,12 +21,32 @@ services:
       start_period: 15s
 
   fixtures:
-    image: nginx:alpine
+    # Custom image: nginx + baked-in default.conf with httpbin-compatible
+    # /redirect/N, /redirect-to, and /get endpoints. Baking the config in
+    # avoids bind-mount races where the new conf doesn't get picked up on
+    # `docker compose up` without a forced recreate.
+    build:
+      context: ./nginx
     volumes:
       # Serves static test assets for deterministic, offline-safe E2E downloads.
       - ./fixtures:/usr/share/nginx/html:ro
+    networks:
+      default:
+        # Second hostname that points at the same nginx. Used by IDPI
+        # same-tab pivot tests: the page navigates from `fixtures` (in the
+        # IDPI allowlist) to `pivot-target` (not in the allowlist) to
+        # simulate a cross-domain pivot while staying fully offline.
+        aliases:
+          - fixtures
+          - pivot-target
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/"]
+      # Verify BOTH that nginx is up AND that the custom config is the one
+      # actually loaded. /get is a synthetic endpoint defined only in
+      # tests/e2e/nginx/default.conf — if it returns 200 we know the baked
+      # config is live; if it 404s the container stays unhealthy and the
+      # test runner refuses to start, which surfaces "stale image / config
+      # not loaded" failures up front instead of as opaque test errors.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/ && wget -q -O /dev/null http://localhost:80/get"]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -44,11 +64,12 @@ services:
       - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
       - E2E_SCENARIO_FILTER
+      - E2E_SUITE
       - STEALTH_MATRIX
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh api \"filter=${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh api; fi"]
+    command: ["/bin/bash", "-lc", "SUITE=$${E2E_SUITE:-api}; if [ -n \"$${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh $$SUITE \"filter=$${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh $$SUITE; fi"]
 
   runner-cli:
     build:
@@ -64,7 +85,9 @@ services:
       - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
       - E2E_SCENARIO_FILTER
+      - E2E_SUITE
+      - E2E_EXTENDED
     volumes:
       - ./:/e2e:ro
       - ./results:/results
-    command: ["/bin/bash", "-lc", "if [ -n \"${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh cli all=true \"filter=${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh cli all=true; fi"]
+    command: ["/bin/bash", "-lc", "SUITE=$${E2E_SUITE:-cli}; EXTENDED=$${E2E_EXTENDED:-false}; ARGS=\"\"; [ \"$$EXTENDED\" = \"true\" ] && ARGS=\"extended=true\"; if [ -n \"$${E2E_SCENARIO_FILTER:-}\" ]; then exec /bin/bash /e2e/run.sh $$SUITE $$ARGS \"filter=$${E2E_SCENARIO_FILTER:-}\"; else exec /bin/bash /e2e/run.sh $$SUITE $$ARGS; fi"]

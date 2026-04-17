@@ -4,8 +4,6 @@ import (
 	"context"
 	"math/rand"
 	"testing"
-
-	"github.com/chromedp/chromedp"
 )
 
 func TestSetHumanRandSeed(t *testing.T) {
@@ -42,8 +40,8 @@ func TestTypeWithCorrections(t *testing.T) {
 }
 
 func TestMouseMove(t *testing.T) {
-	// Create a context that chromedp.Run won't immediately reject
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 
 	// MouseMove will try to call chromedp.Run.
 	// Without a real browser it will return an error, but we cover the code path.
@@ -51,7 +49,8 @@ func TestMouseMove(t *testing.T) {
 }
 
 func TestClick(t *testing.T) {
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 	_ = Click(ctx, 50, 50)
 }
 
@@ -83,7 +82,8 @@ func TestClickElement_RequiresMinContentLength(t *testing.T) {
 	// CDP BoxModel Content has 8 float64 values (4 x/y pairs)
 	// The guard must check len(box.Content) < 8
 	// Without a browser, GetBoxModel will fail
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 	err := ClickElement(ctx, 0)
 	if err == nil {
 		t.Error("expected error without browser connection")

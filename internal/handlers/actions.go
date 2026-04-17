@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -28,6 +29,10 @@ func resolveOwner(r *http.Request, fallback string) string {
 		return o
 	}
 	return strings.TrimSpace(fallback)
+}
+
+func frameScopedSelectorError(kind string, err error) error {
+	return fmt.Errorf("%s in current frame: %w", kind, err)
 }
 
 func (h *Handlers) enforceTabLease(tabID, owner string) error {
@@ -52,7 +57,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	var req bridge.ActionRequest
 	if r.Method == http.MethodGet {
 		q := r.URL.Query()
-		req.Kind = q.Get("kind")
+		req.Kind = bridge.CanonicalActionKind(q.Get("kind"))
 		req.TabID = q.Get("tabId")
 		req.Owner = q.Get("owner")
 		req.Ref = q.Get("ref")
@@ -60,6 +65,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		req.Text = q.Get("text")
 		req.Value = q.Get("value")
 		req.Key = q.Get("key")
+		req.DialogAction = strings.ToLower(strings.TrimSpace(q.Get("dialogAction")))
+		req.DialogText = q.Get("dialogText")
 		if v := q.Get("nodeId"); v != "" {
 			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 				req.NodeID = n
@@ -79,7 +86,18 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		if v := q.Get("hasXY"); v != "" {
 			if b, err := strconv.ParseBool(v); err == nil {
-				req.HasXY = b
+				req.HasXY = req.HasXY || b
+			}
+		}
+		req.Button = q.Get("button")
+		if vals, ok := q["deltaX"]; ok && len(vals) > 0 {
+			if n, err := strconv.Atoi(vals[0]); err == nil {
+				req.DeltaX = n
+			}
+		}
+		if vals, ok := q["deltaY"]; ok && len(vals) > 0 {
+			if n, err := strconv.Atoi(vals[0]); err == nil {
+				req.DeltaY = n
 			}
 		}
 	} else {
@@ -87,11 +105,17 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 			return
 		}
+		req.Kind = bridge.CanonicalActionKind(req.Kind)
+		req.DialogAction = strings.ToLower(strings.TrimSpace(req.DialogAction))
 	}
 
 	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
 	if req.Kind == "" {
 		httpx.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
+		return
+	}
+	if req.DialogAction != "" && req.DialogAction != "accept" && req.DialogAction != "dismiss" {
+		httpx.Error(w, 400, fmt.Errorf("dialogAction must be 'accept' or 'dismiss'"))
 		return
 	}
 	h.recordActionRequest(r, req)
@@ -138,6 +162,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.recordResolvedTab(r, resolvedTabID)
+	w.Header().Set(activity.HeaderPTTabID, resolvedTabID)
 
 	// Allow custom timeout via query param (1-60 seconds)
 	actionTimeout := h.Config.ActionTimeout
@@ -170,33 +195,35 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			req.Selector = ""
 			cache := h.Bridge.GetRefCache(resolvedTabID)
 			if cache != nil {
-				if nid, ok := cache.Refs[sel.Value]; ok {
-					req.NodeID = nid
+				if target, ok := cache.Lookup(sel.Value); ok {
+					req.NodeID = target.BackendNodeID
 				}
 			}
 			if req.NodeID == 0 {
 				refMissing = true
 			}
 		case selector.KindCSS:
-			// CSS selectors are resolved by the bridge action handlers directly
-			// via chromedp, so we keep req.Selector as-is (the bridge checks
-			// req.Selector before req.NodeID). Clear Ref so the bridge doesn't
-			// confuse it with a snapshot ref.
 			req.Ref = ""
-			req.Selector = sel.Value
-		case selector.KindXPath:
-			nid, err := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+			nid, err := bridge.ResolveCSSToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("xpath selector: %w", err))
+				httpx.Error(w, 400, frameScopedSelectorError("css selector", err))
+				return
+			}
+			req.NodeID = nid
+			req.Selector = ""
+		case selector.KindXPath:
+			nid, err := bridge.ResolveXPathToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
+			if err != nil {
+				httpx.Error(w, 400, frameScopedSelectorError("xpath selector", err))
 				return
 			}
 			req.NodeID = nid
 			req.Selector = ""
 			req.Ref = ""
 		case selector.KindText:
-			nid, err := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+			nid, err := bridge.ResolveTextToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("text selector: %w", err))
+				httpx.Error(w, 400, frameScopedSelectorError("text selector", err))
 				return
 			}
 			req.NodeID = nid
@@ -228,8 +255,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 						req.Ref = result.BestRef
 						cache := h.Bridge.GetRefCache(resolvedTabID)
 						if cache != nil {
-							if nid, ok := cache.Refs[result.BestRef]; ok {
-								req.NodeID = nid
+							if target, ok := cache.Lookup(result.BestRef); ok {
+								req.NodeID = target.BackendNodeID
 							}
 						}
 					}
@@ -284,15 +311,19 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		result, engineName, actionErr = h.executeAction(tCtx, req)
-		if actionErr != nil && req.Ref != "" && shouldRetryStaleRef(actionErr) {
-			recordStaleRefRetry()
-			h.refreshRefCache(tCtx, resolvedTabID)
-			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-				if nid, ok := cache.Refs[req.Ref]; ok {
-					req.NodeID = nid
-					result, engineName, actionErr = h.executeAction(tCtx, req)
+		if actionErr != nil && shouldRetryPointerAction(req, actionErr) {
+			if req.Ref != "" && shouldRetryStaleRef(actionErr) {
+				recordStaleRefRetry()
+				h.refreshRefCache(tCtx, resolvedTabID)
+				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+					if target, ok := cache.Lookup(req.Ref); ok {
+						req.NodeID = target.BackendNodeID
+					}
 				}
 			}
+			h.refreshActionNodeIDFromSelector(tCtx, &req)
+			time.Sleep(pointerRetryDelay)
+			result, engineName, actionErr = h.executeAction(tCtx, req)
 		}
 		// Semantic self-healing: if stale-ref retry still failed, attempt
 		// recovery via the semantic matcher.
@@ -520,8 +551,8 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				action.Selector = ""
 				cache := h.Bridge.GetRefCache(resolvedTabID)
 				if cache != nil {
-					if nid, ok := cache.Refs[sel.Value]; ok {
-						action.NodeID = nid
+					if target, ok := cache.Lookup(sel.Value); ok {
+						action.NodeID = target.BackendNodeID
 					}
 				}
 				if action.NodeID == 0 {
@@ -529,14 +560,27 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				}
 			case selector.KindCSS:
 				action.Ref = ""
-				action.Selector = sel.Value
-			case selector.KindXPath:
-				nid, resolveErr := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+				nid, resolveErr := bridge.ResolveCSSToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 				if resolveErr != nil {
 					tCancel()
 					results = append(results, actionResult{
 						Index: i, Success: false,
-						Error: fmt.Sprintf("xpath selector: %v", resolveErr),
+						Error: frameScopedSelectorError("css selector", resolveErr).Error(),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				action.NodeID = nid
+				action.Selector = ""
+			case selector.KindXPath:
+				nid, resolveErr := bridge.ResolveXPathToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
+				if resolveErr != nil {
+					tCancel()
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: frameScopedSelectorError("xpath selector", resolveErr).Error(),
 					})
 					if req.StopOnError {
 						break
@@ -547,12 +591,12 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				action.Selector = ""
 				action.Ref = ""
 			case selector.KindText:
-				nid, resolveErr := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+				nid, resolveErr := bridge.ResolveTextToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 				if resolveErr != nil {
 					tCancel()
 					results = append(results, actionResult{
 						Index: i, Success: false,
-						Error: fmt.Sprintf("text selector: %v", resolveErr),
+						Error: frameScopedSelectorError("text selector", resolveErr).Error(),
 					})
 					if req.StopOnError {
 						break
@@ -583,8 +627,8 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 							action.Ref = findResult.BestRef
 							cache := h.Bridge.GetRefCache(resolvedTabID)
 							if cache != nil {
-								if nid, ok := cache.Refs[findResult.BestRef]; ok {
-									action.NodeID = nid
+								if target, ok := cache.Lookup(findResult.BestRef); ok {
+									action.NodeID = target.BackendNodeID
 								}
 							}
 						}
@@ -669,15 +713,19 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			continue
 		} else {
 			actionRes, _, err = h.executeAction(tCtx, action)
-			if err != nil && action.Ref != "" && shouldRetryStaleRef(err) {
-				recordStaleRefRetry()
-				h.refreshRefCache(tCtx, resolvedTabID)
-				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-					if nid, ok := cache.Refs[action.Ref]; ok {
-						action.NodeID = nid
-						actionRes, _, err = h.executeAction(tCtx, action)
+			if err != nil && shouldRetryPointerAction(action, err) {
+				if action.Ref != "" && shouldRetryStaleRef(err) {
+					recordStaleRefRetry()
+					h.refreshRefCache(tCtx, resolvedTabID)
+					if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+						if target, ok := cache.Lookup(action.Ref); ok {
+							action.NodeID = target.BackendNodeID
+						}
 					}
 				}
+				h.refreshActionNodeIDFromSelector(tCtx, &action)
+				time.Sleep(pointerRetryDelay)
+				actionRes, _, err = h.executeAction(tCtx, action)
 			}
 			// Semantic self-healing for batched actions.
 			if err != nil && action.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, action.Ref) {
@@ -800,8 +848,8 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				step.Selector = ""
 				cache := h.Bridge.GetRefCache(resolvedTabID)
 				if cache != nil {
-					if nid, ok := cache.Refs[sel.Value]; ok {
-						step.NodeID = nid
+					if target, ok := cache.Lookup(sel.Value); ok {
+						step.NodeID = target.BackendNodeID
 					}
 				}
 				if step.NodeID == 0 {
@@ -809,15 +857,29 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				}
 			case selector.KindCSS:
 				step.Ref = ""
-				step.Selector = sel.Value
-			case selector.KindXPath:
 				tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
-				nid, resolveErr := bridge.ResolveXPathToNodeID(tCtx, sel.Value)
+				nid, resolveErr := bridge.ResolveCSSToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 				cancel()
 				if resolveErr != nil {
 					results = append(results, actionResult{
 						Index: i, Success: false,
-						Error: fmt.Sprintf("xpath selector: %v", resolveErr),
+						Error: frameScopedSelectorError("css selector", resolveErr).Error(),
+					})
+					if req.StopOnError {
+						break
+					}
+					continue
+				}
+				step.NodeID = nid
+				step.Selector = ""
+			case selector.KindXPath:
+				tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
+				nid, resolveErr := bridge.ResolveXPathToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
+				cancel()
+				if resolveErr != nil {
+					results = append(results, actionResult{
+						Index: i, Success: false,
+						Error: frameScopedSelectorError("xpath selector", resolveErr).Error(),
 					})
 					if req.StopOnError {
 						break
@@ -829,12 +891,12 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				step.Ref = ""
 			case selector.KindText:
 				tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
-				nid, resolveErr := bridge.ResolveTextToNodeID(tCtx, sel.Value)
+				nid, resolveErr := bridge.ResolveTextToNodeIDInFrame(tCtx, h.selectorFrameID(resolvedTabID), sel.Value)
 				cancel()
 				if resolveErr != nil {
 					results = append(results, actionResult{
 						Index: i, Success: false,
-						Error: fmt.Sprintf("text selector: %v", resolveErr),
+						Error: frameScopedSelectorError("text selector", resolveErr).Error(),
 					})
 					if req.StopOnError {
 						break
@@ -866,8 +928,8 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 							step.Ref = findResult.BestRef
 							cache := h.Bridge.GetRefCache(resolvedTabID)
 							if cache != nil {
-								if nid, ok := cache.Refs[findResult.BestRef]; ok {
-									step.NodeID = nid
+								if target, ok := cache.Lookup(findResult.BestRef); ok {
+									step.NodeID = target.BackendNodeID
 								}
 							}
 						}
@@ -937,15 +999,19 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			continue
 		} else {
 			res, _, err = h.executeAction(tCtx, step)
-			if err != nil && step.Ref != "" && shouldRetryStaleRef(err) {
-				recordStaleRefRetry()
-				h.refreshRefCache(tCtx, resolvedTabID)
-				if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
-					if nid, ok := cache.Refs[step.Ref]; ok {
-						step.NodeID = nid
-						res, _, err = h.executeAction(tCtx, step)
+			if err != nil && shouldRetryPointerAction(step, err) {
+				if step.Ref != "" && shouldRetryStaleRef(err) {
+					recordStaleRefRetry()
+					h.refreshRefCache(tCtx, resolvedTabID)
+					if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+						if target, ok := cache.Lookup(step.Ref); ok {
+							step.NodeID = target.BackendNodeID
+						}
 					}
 				}
+				h.refreshActionNodeIDFromSelector(tCtx, &step)
+				time.Sleep(pointerRetryDelay)
+				res, _, err = h.executeAction(tCtx, step)
 			}
 			// Semantic self-healing for macro steps.
 			if err != nil && step.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, step.Ref) {
@@ -1031,6 +1097,7 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 }
 
 func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
+	req.Kind = bridge.CanonicalActionKind(req.Kind)
 	if h.shouldUseLiteAction(req.Kind) {
 		return h.executeLiteAction(ctx, req)
 	}
@@ -1043,6 +1110,7 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) 
 }
 
 func (h *Handlers) shouldUseLiteAction(kind string) bool {
+	kind = bridge.CanonicalActionKind(kind)
 	capability, ok := actionCapability(kind)
 	if !ok {
 		return h.Router != nil && h.Router.Mode() == engine.ModeLite
@@ -1054,7 +1122,7 @@ func (h *Handlers) executeLiteAction(ctx context.Context, req bridge.ActionReque
 	if h.Router == nil || h.Router.Lite() == nil {
 		return nil, "", fmt.Errorf("lite engine unavailable")
 	}
-	switch strings.ToLower(strings.TrimSpace(req.Kind)) {
+	switch bridge.CanonicalActionKind(req.Kind) {
 	case bridge.ActionClick:
 		if req.Ref == "" {
 			return nil, "lite", fmt.Errorf("lite mode actions require ref from /snapshot")
@@ -1084,7 +1152,7 @@ func (h *Handlers) executeLiteAction(ctx context.Context, req bridge.ActionReque
 }
 
 func actionCapability(kind string) (engine.Capability, bool) {
-	switch strings.ToLower(strings.TrimSpace(kind)) {
+	switch bridge.CanonicalActionKind(kind) {
 	case bridge.ActionClick:
 		return engine.CapClick, true
 	case bridge.ActionType, bridge.ActionFill:
@@ -1092,6 +1160,41 @@ func actionCapability(kind string) (engine.Capability, bool) {
 	default:
 		return "", false
 	}
+}
+
+const pointerRetryDelay = 50 * time.Millisecond
+
+func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
+	if err == nil {
+		return false
+	}
+	kind := strings.ToLower(strings.TrimSpace(req.Kind))
+	switch kind {
+	case bridge.ActionClick, bridge.ActionDoubleClick, bridge.ActionHover, bridge.ActionDrag,
+		bridge.ActionMouseDown, bridge.ActionMouseUp, bridge.ActionMouseWheel:
+		// pointer action kinds
+	default:
+		return false
+	}
+
+	if errors.Is(err, bridge.ErrElementOccluded) ||
+		errors.Is(err, bridge.ErrElementBlocked) ||
+		errors.Is(err, bridge.ErrElementOffscreen) {
+		return true
+	}
+
+	return shouldRetryStaleRef(err)
+}
+
+func (h *Handlers) refreshActionNodeIDFromSelector(ctx context.Context, req *bridge.ActionRequest) {
+	if req == nil || req.NodeID > 0 || strings.TrimSpace(req.Selector) == "" {
+		return
+	}
+	nid, err := bridge.ResolveCSSToNodeID(ctx, req.Selector)
+	if err != nil {
+		return
+	}
+	req.NodeID = nid
 }
 
 func shouldRetryStaleRef(err error) bool {
@@ -1114,5 +1217,9 @@ func (h *Handlers) refreshRefCache(ctx context.Context, tabID string) {
 		return
 	}
 	flat, refs := bridge.BuildSnapshot(nodes, bridge.FilterInteractive, -1)
-	h.Bridge.SetRefCache(tabID, &bridge.RefCache{Refs: refs, Nodes: flat})
+	h.Bridge.SetRefCache(tabID, &bridge.RefCache{
+		Refs:    refs,
+		Targets: bridge.RefTargetsFromNodes(flat),
+		Nodes:   flat,
+	})
 }

@@ -153,14 +153,11 @@ pre {
   }
 
   .dashboard-panel {
-    border: 1px solid rgb(var(--brand-border-subtle-rgb) / 0.1);
-    border-radius: 16px;
     background: linear-gradient(
       180deg,
       rgb(var(--brand-surface-rgb) / 0.98),
       rgb(var(--brand-surface-rgb) / 0.9)
     );
-    box-shadow: var(--panel-shadow);
   }
 
   .dashboard-panel-hover {

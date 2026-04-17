@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Dropdown</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .dropdown { display: inline-block; position: relative; }
+    .dropdown-button {
+      padding: 8px 16px;
+      background: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin: 4px 0 0;
+      padding: 4px 0;
+      list-style: none;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      min-width: 160px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .dropdown[data-open="true"] .dropdown-menu { display: block; }
+    .dropdown-menu li {
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    .dropdown-menu li:hover { background: #f0f0f0; }
+    #selection { margin-top: 16px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Custom Dropdown — VERIFY_DROPDOWN_PAGE_77777</h1>
+
+  <p>A non-native dropdown — a button toggles a menu, and clicking outside
+  dismisses it. Common SPA pattern.</p>
+
+  <div class="dropdown" id="dropdown" data-open="false">
+    <button class="dropdown-button" id="dropdown-toggle"
+            aria-haspopup="menu" aria-expanded="false"
+            aria-controls="dropdown-menu">
+      Choose option ▾
+    </button>
+    <ul class="dropdown-menu" id="dropdown-menu" role="menu">
+      <li role="menuitem" data-value="alpha" tabindex="0">Alpha</li>
+      <li role="menuitem" data-value="beta"  tabindex="0">Beta</li>
+      <li role="menuitem" data-value="gamma" tabindex="0">Gamma</li>
+    </ul>
+  </div>
+
+  <div id="selection">DROPDOWN_SELECTED=NONE</div>
+
+  <script>
+    (function () {
+      const dropdown = document.getElementById('dropdown');
+      const toggle = document.getElementById('dropdown-toggle');
+      const menu = document.getElementById('dropdown-menu');
+      const sel = document.getElementById('selection');
+
+      const setOpen = function (open) {
+        dropdown.setAttribute('data-open', open ? 'true' : 'false');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      };
+
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setOpen(dropdown.getAttribute('data-open') !== 'true');
+      });
+
+      menu.addEventListener('click', function (e) {
+        const item = e.target.closest('[role="menuitem"]');
+        if (!item) return;
+        const value = item.getAttribute('data-value') || '';
+        sel.textContent = 'DROPDOWN_SELECTED=' + value.toUpperCase();
+        setOpen(false);
+      });
+
+      document.addEventListener('click', function () {
+        setOpen(false);
+      });
+    })();
+  </script>
+</body>
+</html>

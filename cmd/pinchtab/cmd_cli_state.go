@@ -82,7 +82,7 @@ func init() {
 
 	// save flags
 	stateSaveCmd.Flags().String("name", "", "Name for the saved state (auto-generated if omitted)")
-	stateSaveCmd.Flags().Bool("encrypt", false, "Encrypt the state file using PINCHTAB_STATE_KEY")
+	stateSaveCmd.Flags().Bool("encrypt", false, "Encrypt the state file (requires security.stateEncryptionKey in config)")
 	addTabFlag(stateSaveCmd)
 
 	// load flags

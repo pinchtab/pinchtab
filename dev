@@ -25,13 +25,15 @@ COMMANDS=(
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "e2e:🐳:E2E suites"
-  "  pr:🐳:PR suite (api-fast + cli-fast)"
-  "  release:🐳:Release suite (api-full + cli-full)"
+  "  pr:🐳:PR suite (api + cli + infra)"
+  "  release:🐳:Release suite (all extended)"
   "  docker:🐳:Build local image and run Docker smoke test"
-  "  api-fast:🐳:API fast (single-instance)"
-  "  cli-fast:🐳:CLI fast (single-instance)"
-  "  api-full:🐳:API full (multi-instance)"
-  "  cli-full:🐳:CLI full (single-instance)"
+  "  api:🐳:API basic tests"
+  "  cli:🐳:CLI basic tests"
+  "  infra:🐳:Infra basic tests"
+  "  api-extended:🐳:API extended (multi-instance)"
+  "  cli-extended:🐳:CLI extended tests"
+  "  infra-extended:🐳:Infra extended (multi-instance)"
   "doctor:🩺:Setup dev environment"
   "check go:🧪:Go only"
   "check dashboard:🧪:Dashboard only"
@@ -168,9 +170,9 @@ run_command() {
         fi
       fi
       if [ -n "$filter" ]; then
-        exec bash scripts/e2e.sh "$suite" "$filter"
+        exec env E2E_LOGS="${E2E_LOGS:-hide}" bash scripts/e2e.sh "$suite" "$filter"
       fi
-      exec bash scripts/e2e.sh "$suite"
+      exec env E2E_LOGS="${E2E_LOGS:-hide}" bash scripts/e2e.sh "$suite"
       ;;
     "dev")          exec bash scripts/dev.sh ;;
     "dashboard")    exec bash scripts/dev-dashboard.sh ;;
@@ -292,11 +294,10 @@ if [ $# -gt 0 ]; then
       fi
       ;;
     e2e)
-      if [ $# -gt 1 ]; then
-        run_command "e2e ${*:2}"
-      else
-        run_command "e2e"
+      if [ $# -eq 1 ] || [[ "${2:-}" == *=* ]]; then
+        exec env E2E_LOGS="${E2E_LOGS:-hide}" bash scripts/e2e.sh release "${@:2}"
       fi
+      exec env E2E_LOGS="${E2E_LOGS:-hide}" bash scripts/e2e.sh "${@:2}"
       ;;
     binary)
       if [ $# -gt 1 ]; then

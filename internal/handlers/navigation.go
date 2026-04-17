@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -102,7 +104,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
 	}
 
-	target, err := validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL))
+	trustedResolveCIDRs := parseCIDRs(h.Config.TrustedResolveCIDRs)
+	target, err := validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL), trustedResolveCIDRs)
 	if err != nil {
 		httpx.Error(w, http.StatusForbidden, err)
 		return
@@ -113,9 +116,21 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	// --- Lite engine fast path ---
 	if h.useLite(engine.CapNavigate, req.URL) {
 		h.recordEngine(r, "lite")
-		result, err := h.Router.Lite().Navigate(r.Context(), req.URL)
+		var trustedResolvedIP []netip.Addr
+		allowInternal := false
+		if target != nil {
+			trustedResolvedIP = target.trustedResolvedIP
+			allowInternal = target.allowInternal
+		}
+		liteCtx := engine.WithNavigateNetworkPolicy(r.Context(), &engine.NavigateNetworkPolicy{
+			AllowInternal:     allowInternal,
+			TrustedProxyCIDRs: trustedCIDRs,
+			TrustedResolvedIP: trustedResolvedIP,
+			MaxRedirects:      h.Config.MaxRedirects,
+		})
+		result, err := h.Router.Lite().Navigate(liteCtx, req.URL)
 		if err != nil {
-			if engine.IsIDPIBlocked(err) {
+			if engine.IsIDPIBlocked(err) || engine.IsNetworkPolicyBlocked(err) {
 				httpx.Error(w, http.StatusForbidden, err)
 			} else {
 				httpx.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
@@ -131,6 +146,9 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Engine", "chrome")
 
 	// Ensure Chrome is initialized
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 
 	// Default to creating new tab (API design: /navigate always creates new tab)
 	// Unless explicitly reusing an existing tab by specifying TabID
@@ -359,6 +377,34 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case tabActionNew:
+		var target *validatedNavigateTarget
+		trustedResolveCIDRs := parseCIDRs(h.Config.TrustedResolveCIDRs)
+		trustedCIDRs := parseCIDRs(h.Config.TrustedProxyCIDRs)
+		if req.URL != "" && req.URL != "about:blank" {
+			if err := validateNavigateURL(req.URL); err != nil {
+				httpx.Error(w, 400, err)
+				return
+			}
+			domainResult := h.IDPIGuard.CheckDomain(req.URL)
+			if domainResult.Blocked {
+				httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
+				return
+			}
+			if domainResult.Threat {
+				w.Header().Set("X-IDPI-Warning", domainResult.Reason)
+			}
+			var err error
+			target, err = validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL), trustedResolveCIDRs)
+			if err != nil {
+				httpx.Error(w, http.StatusForbidden, err)
+				return
+			}
+		}
+
+		if !h.ensureChromeOrRespond(w) {
+			return
+		}
+
 		// Create a blank tab first so the requested URL becomes the first
 		// real history entry.
 		newTabID, ctx, _, err := h.Bridge.CreateTab("")
@@ -370,7 +416,21 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		if req.URL != "" && req.URL != "about:blank" {
 			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
 			defer tCancel()
+			go httpx.CancelOnClientDone(r.Context(), tCancel)
+			navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
+			if err != nil {
+				_ = h.Bridge.CloseTab(newTabID)
+				httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
+				return
+			}
 			if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
+				if navGuard != nil {
+					if blockedErr := navGuard.blocked(); blockedErr != nil {
+						_ = h.Bridge.CloseTab(newTabID)
+						httpx.Error(w, http.StatusForbidden, blockedErr)
+						return
+					}
+				}
 				_ = h.Bridge.CloseTab(newTabID)
 				code := 500
 				if errors.Is(err, bridge.ErrTooManyRedirects) {
@@ -391,11 +451,17 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
 			return
 		}
+		if !h.ensureChromeOrRespond(w) {
+			return
+		}
 
 		if err := h.Bridge.CloseTab(req.TabID); err != nil {
 			httpx.Error(w, 500, err)
 			return
 		}
+
+		h.recordActivity(r, activity.Update{Action: "tab.close", TabID: req.TabID})
+
 		httpx.JSON(w, 200, map[string]any{"closed": true})
 
 	case "focus":
@@ -403,10 +469,16 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
 			return
 		}
+		if !h.ensureChromeOrRespond(w) {
+			return
+		}
 		if err := h.Bridge.FocusTab(req.TabID); err != nil {
 			httpx.Error(w, 404, err)
 			return
 		}
+
+		h.recordActivity(r, activity.Update{Action: "tab.focus", TabID: req.TabID})
+
 		httpx.JSON(w, 200, map[string]any{"focused": true, "tabId": req.TabID})
 
 	default:
@@ -440,6 +512,9 @@ func (h *Handlers) HandleTabReload(w http.ResponseWriter, r *http.Request) {
 
 // HandleBack navigates the current (or specified) tab back in history.
 func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {
@@ -475,6 +550,9 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 
 // HandleForward navigates the current (or specified) tab forward in history.
 func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {
@@ -543,6 +621,9 @@ func navigateErrorWithHint(w http.ResponseWriter, code int, err error, url strin
 
 // HandleReload reloads the current (or specified) tab.
 func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureChromeOrRespond(w) {
+		return
+	}
 	tabID := r.URL.Query().Get("tabId")
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil {

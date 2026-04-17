@@ -3,7 +3,7 @@ import InstanceLogsPanel from "./InstanceLogsPanel";
 import ProfileMetaInfoPanel from "./ProfileMetaInfoPanel";
 import ProfileBasicInfoPanel from "./ProfileBasicInfoPanel";
 import ProfileLiveViewPanel from "./ProfileLiveViewPanel";
-import ProfileToolbar from "./ProfileToolbar";
+import ProfileToolbarButtons from "./ProfileToolbarButtons";
 import { InstanceTabsPanel } from "../tabs";
 import { TabsLayout, EmptyView } from "../components/molecules";
 import type { Profile, Instance, InstanceTab } from "../generated/types";
@@ -75,7 +75,7 @@ export default function ProfileDetailsPanel({
 
   if (!profile) {
     return (
-      <div className="dashboard-panel h-full min-h-112">
+      <div className="h-full min-h-112">
         <EmptyView message="Select a profile to inspect its instance, live tabs, and logs." />
       </div>
     );
@@ -86,31 +86,30 @@ export default function ProfileDetailsPanel({
     formValues.useWhen !== (profile.useWhen || "");
 
   const profileTabs: { id: TabId; label: string; badge?: string | number }[] = [
-    { id: "profile", label: "Profile" },
+    { id: "profile", label: `Profile: ${profile.name}` },
     { id: "live", label: "Live" },
     { id: "tabs", label: "Tabs", badge: tabs.length },
     { id: "logs", label: "Logs" },
   ];
 
   return (
-    <div className="dashboard-panel flex h-full min-h-112 flex-col overflow-hidden">
-      <div className="border-b border-border-subtle px-4 py-3 lg:px-5">
-        <ProfileToolbar
-          profile={profile}
-          instance={instance}
-          onLaunch={onLaunch}
-          onStop={onStop || (() => {})}
-          onSave={handleSave}
-          onDelete={onDelete || (() => {})}
-          isSaveDisabled={!formValues.name.trim() || !hasChanges}
-        />
-      </div>
-
+    <div className="flex h-full min-h-112 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-hidden">
         <TabsLayout
           tabs={profileTabs}
           activeTab={activeTab}
           onChange={(id) => setActiveTab(id)}
+          rightSlot={
+            <ProfileToolbarButtons
+              profile={profile}
+              instance={instance}
+              onLaunch={onLaunch}
+              onStop={onStop || (() => {})}
+              onSave={handleSave}
+              onDelete={onDelete || (() => {})}
+              isSaveDisabled={!formValues.name.trim() || !hasChanges}
+            />
+          }
         >
           {activeTab === "profile" && (
             <div className="h-full overflow-auto p-4">

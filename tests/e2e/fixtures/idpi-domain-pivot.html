@@ -9,7 +9,12 @@
   <p>This page starts on the fixtures origin, then pivots the tab to a blocked domain.</p>
   <script>
     setTimeout(function () {
-      window.location.href = "https://example.com/";
+      // Pivots to a second hostname served by the same nginx container via
+      // a docker-compose network alias (see tests/e2e/docker-compose.yml).
+      // `pivot-target` is intentionally NOT in the IDPI allowedDomains list,
+      // so the policy fires, while the page still actually loads (unlike
+      // example.com which is unreachable from inside the e2e network).
+      window.location.href = "http://pivot-target/index.html";
     }, 250);
   </script>
 </body>

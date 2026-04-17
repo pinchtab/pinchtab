@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Thin wrapper around `agent-browser` for the benchmark harness.
+#
+# It executes commands inside the benchmark Docker service so the browser,
+# daemon, and session state persist across calls. Every invocation is appended
+# to results/agent_browser_commands.ndjson so record-step.sh can derive per-step
+# tool-call counts automatically.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BENCH_DIR="${SCRIPT_DIR}/.."
+RESULTS_DIR="${BENCH_DIR}/results"
+LOG_FILE="${RESULTS_DIR}/agent_browser_commands.ndjson"
+
+: "${AGENT_BROWSER_SERVICE:=agent-browser}"
+: "${AGENT_BROWSER_SESSION:=benchmark}"
+
+mkdir -p "${RESULTS_DIR}"
+
+cd "${BENCH_DIR}"
+
+seq=1
+if [[ -f "${LOG_FILE}" ]]; then
+  seq=$(( $(wc -l < "${LOG_FILE}") + 1 ))
+fi
+
+set +e
+docker compose exec -T \
+  -e "AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION}" \
+  "${AGENT_BROWSER_SERVICE}" \
+  agent-browser "$@"
+rc=$?
+set -e
+
+ARGS_JSON="$(printf '%s\n' "$@" | jq -R . | jq -cs .)"
+
+SEQ="${seq}" jq -nc \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg session "${AGENT_BROWSER_SESSION}" \
+  --arg service "${AGENT_BROWSER_SERVICE}" \
+  --arg cwd "${BENCH_DIR}" \
+  --argjson args "${ARGS_JSON}" \
+  --argjson exit_code "${rc}" \
+  '{
+    seq: (env.SEQ | tonumber),
+    timestamp: $ts,
+    session: $session,
+    service: $service,
+    cwd: $cwd,
+    exit_code: $exit_code,
+    args: $args,
+    command: ($args | join(" "))
+  }' >> "${LOG_FILE}"
+
+exit "${rc}"

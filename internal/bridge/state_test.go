@@ -127,6 +127,8 @@ func TestWasUncleanExit_Normal(t *testing.T) {
 }
 
 func TestIsTransientURL(t *testing.T) {
+	const serverPort = "9867"
+
 	transient := []string{
 		"about:blank",
 		"chrome://newtab/",
@@ -136,10 +138,9 @@ func TestIsTransientURL(t *testing.T) {
 		"devtools://devtools/inspector.html",
 		"file:///tmp/test.html",
 		"http://localhost:9867/welcome",
-		"http://localhost:3000/dashboard",
 	}
 	for _, u := range transient {
-		if !IsTransientURL(u) {
+		if !IsTransientURL(u, serverPort) {
 			t.Errorf("expected transient: %s", u)
 		}
 	}
@@ -149,9 +150,11 @@ func TestIsTransientURL(t *testing.T) {
 		"https://github.com/pinchtab/pinchtab",
 		"https://www.google.com/search?q=test",
 		"https://httpbin.org/get",
+		"http://localhost:3000/dashboard",
+		"http://localhost:3001/en/access",
 	}
 	for _, u := range persistent {
-		if IsTransientURL(u) {
+		if IsTransientURL(u, serverPort) {
 			t.Errorf("expected persistent: %s", u)
 		}
 	}

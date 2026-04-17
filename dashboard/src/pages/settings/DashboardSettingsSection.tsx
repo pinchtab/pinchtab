@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
+import { Select } from "../../components/atoms";
 import type { LocalDashboardSettings } from "../../types";
-import { selectClass } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
 
 interface DashboardSettingsSectionProps {
@@ -73,7 +73,7 @@ export function DashboardSettingsSection({
         label="Screencast width"
         description="Maximum preview width for live tiles."
       >
-        <select
+        <Select
           value={localSettings.screencast.maxWidth}
           onChange={(e) =>
             setLocalSettings((current) => ({
@@ -84,14 +84,13 @@ export function DashboardSettingsSection({
               },
             }))
           }
-          className={selectClass}
         >
           {[400, 600, 800, 1024, 1280].map((width) => (
             <option key={width} value={width}>
               {width}px
             </option>
           ))}
-        </select>
+        </Select>
       </SettingRow>
       <SettingRow
         label="Memory metrics"
@@ -146,7 +145,7 @@ export function DashboardSettingsSection({
         label="Reasoning output"
         description="Choose whether the live agent feed shows tool calls, progress updates, or both."
       >
-        <select
+        <Select
           value={localSettings.agents.reasoningMode}
           onChange={(e) =>
             setLocalSettings((current) => ({
@@ -160,12 +159,11 @@ export function DashboardSettingsSection({
               },
             }))
           }
-          className={selectClass}
         >
           <option value="tool_calls">Tool calls only</option>
           <option value="progress">Progress only</option>
           <option value="both">Both</option>
-        </select>
+        </Select>
       </SettingRow>
     </SectionCard>
   );

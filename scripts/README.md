@@ -23,6 +23,7 @@ Development and CI scripts for PinchTab.
 | `build.sh` | Full build (dashboard + Go) without starting the server |
 | `binary.sh` | Release-style stripped binary build into `dist/` for the current platform, or the full matrix with `all` |
 | `build-dashboard.sh` | Generate TS types (tygo) + build React dashboard + copy to Go embed |
+| `autosolver-realworld-smoke.sh` | Smoke-test real-world autosolver flow against an external detection page |
 | `dev.sh` | Full build (dashboard + Go) and run |
 | `docker-smoke.sh` | Smoke-test a Docker image bootstrap path (defaults to `pinchtab-local:test`) |
 | `npm-dev-binary.sh` | Build the canonical `./pinchtab-dev` binary for source-checkout npm-package testing |

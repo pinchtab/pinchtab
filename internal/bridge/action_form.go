@@ -26,13 +26,18 @@ func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[strin
 	if val == "" {
 		return nil, fmt.Errorf("value required for select")
 	}
+	// Both paths route through SelectByNodeID so they share its
+	// value-then-text match fallback. This lets callers pass either the
+	// `<option value="...">` attribute or the option's visible text.
 	if req.NodeID > 0 {
 		return map[string]any{"selected": val}, SelectByNodeID(ctx, req.NodeID, val)
 	}
 	if req.Selector != "" {
-		return map[string]any{"selected": val}, chromedp.Run(ctx,
-			chromedp.SetValue(req.Selector, val, chromedp.ByQuery),
-		)
+		node, err := firstNodeBySelector(ctx, req.Selector)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"selected": val}, SelectByNodeID(ctx, int64(node.BackendNodeID), val)
 	}
 	return nil, fmt.Errorf("need selector or ref")
 }

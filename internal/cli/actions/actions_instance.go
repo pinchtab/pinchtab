@@ -22,6 +22,11 @@ func InstanceStart(client *http.Client, base, token string, cmd *cobra.Command) 
 	if exts, _ := cmd.Flags().GetStringArray("extension"); len(exts) > 0 {
 		body["extensionPaths"] = exts
 	}
+	if domains, _ := cmd.Flags().GetStringArray("allow-domain"); len(domains) > 0 {
+		body["securityPolicy"] = map[string]any{
+			"allowedDomains": domains,
+		}
+	}
 	apiclient.DoPost(client, base, token, "/instances/start", body)
 }
 

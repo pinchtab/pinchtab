@@ -24,6 +24,7 @@ import (
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -40,6 +41,31 @@ type downloadURLGuard struct {
 
 func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
+}
+
+func (g *downloadURLGuard) isHostAllowed(host string) bool {
+	if len(g.allowedDomains) == 0 {
+		return false
+	}
+	host = netguard.NormalizeHost(host)
+	if host == "" {
+		return false
+	}
+	return g.isDomainAllowed("https://" + host)
+}
+
+// isDomainAllowed reports whether rawURL's domain is on the configured
+// allowlist. Allowlisted domains bypass private-IP checks because they
+// are explicitly trusted by the operator (e.g. internal docker hosts).
+func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
+	if len(g.allowedDomains) == 0 {
+		return false
+	}
+	result := idpi.CheckDomain(rawURL, config.IDPIConfig{
+		Enabled:    true,
+		StrictMode: true,
+	}, g.allowedDomains)
+	return !result.Blocked
 }
 
 func (g *downloadURLGuard) Validate(rawURL string) error {
@@ -60,10 +86,9 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 	// Allowlisted domains bypass IP validation (e.g. internal docker hosts).
 	if len(g.allowedDomains) > 0 {
 		result := idpi.CheckDomain(rawURL, config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: append([]string(nil), g.allowedDomains...),
-			StrictMode:     true,
-		})
+			Enabled:    true,
+			StrictMode: true,
+		}, g.allowedDomains)
 		if result.Blocked {
 			return fmt.Errorf("domain not allowed by security.downloadAllowedDomains")
 		}
@@ -239,7 +264,14 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	maxDownloadBytes := h.Config.EffectiveDownloadMaxBytes()
 
-	validator := newDownloadURLGuard(h.Config.DownloadAllowedDomains)
+	// Download allowlist: prefer the explicit per-feature list, but fall
+	// back to the unified security.allowedDomains. This way operators only
+	// need to configure trusted domains once.
+	allowed := h.Config.DownloadAllowedDomains
+	if len(allowed) == 0 {
+		allowed = h.Config.AllowedDomains
+	}
+	validator := newDownloadURLGuard(allowed)
 	if err := validator.Validate(dlURL); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("unsafe URL: %w", err))
 		return
@@ -355,14 +387,16 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 				requestID = e.RequestID
 				responseMIME = e.Response.MimeType
 				responseStatus = int(e.Response.Status)
-				if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
-					requestGuard.NoteBlocked(err)
-					select {
-					case done <- struct{}{}:
-					default:
+				if !validator.isDomainAllowed(e.Response.URL) {
+					if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
+						requestGuard.NoteBlocked(err)
+						select {
+						case done <- struct{}{}:
+						default:
+						}
+						tCancel()
+						return
 					}
-					tCancel()
-					return
 				}
 				if contentLength, ok := parseContentLengthHeader(e.Response.Headers); ok && contentLength > int64(maxDownloadBytes) {
 					requestGuard.NoteBlocked(downloadTooLargeError(contentLength, maxDownloadBytes))
@@ -428,7 +462,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		// Fall back to a direct Go HTTP fetch using the browser's cookies.
 		if isNavigationAborted(err) {
 			slog.Info("download: Chrome navigation aborted, falling back to direct fetch", "url", dlURL)
-			body, mime, status, fetchErr := h.fetchDirectWithCookies(tCtx, browserCtx, dlURL, maxDownloadBytes)
+			body, mime, status, fetchErr := h.fetchDirectWithCookies(tCtx, browserCtx, dlURL, validator, maxDownloadBytes)
 			if fetchErr != nil {
 				// Return 400 for redirect-blocked errors (SSRF protection)
 				errMsg := fetchErr.Error()
@@ -444,6 +478,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			responseMIME = mime
+			h.recordActivity(r, activity.Update{Action: "download", URL: dlURL})
 			h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
 			return
 		}
@@ -490,6 +525,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("get response body: %w", err))
 		return
 	}
+	h.recordActivity(r, activity.Update{Action: "download", URL: dlURL})
 	h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
 }
 
@@ -558,7 +594,7 @@ func (h *Handlers) writeDownloadResponse(w http.ResponseWriter, body []byte, mim
 
 // fetchDirectWithCookies performs a Go HTTP fetch with browser cookies.
 // Fallback for when Chrome navigation aborts (e.g. .gz files).
-func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx context.Context, dlURL string, maxBytes int) (body []byte, contentType string, statusCode int, err error) {
+func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx context.Context, dlURL string, validator *downloadURLGuard, maxBytes int) (body []byte, contentType string, statusCode int, err error) {
 	var browserCookies []*network.Cookie
 	if fetchErr := chromedp.Run(browserCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -583,22 +619,7 @@ func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx contex
 		req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			host := req.URL.Hostname()
-			if netguard.IsLocalHost(host) {
-				return fmt.Errorf("redirect to local network blocked: %s", host)
-			}
-			if _, err := netguard.ResolveAndValidatePublicIPs(req.Context(), host); err != nil {
-				return fmt.Errorf("redirect to private network blocked: %s", host)
-			}
-			return nil
-		},
-	}
+	client := newGuardedDownloadClient(validator, h.Config.MaxRedirects, 30)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", 0, err

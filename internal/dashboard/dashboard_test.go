@@ -305,7 +305,7 @@ func TestDashboardLoadPersistedAgentActivityRestoresAgentsAndEvents(t *testing.T
 		events: []activity.Event{
 			{
 				Timestamp:  now.Add(-2 * time.Minute),
-				Source:     "bridge",
+				Source:     "client",
 				RequestID:  "req-1",
 				AgentID:    "agent-1",
 				Method:     http.MethodPost,
@@ -317,7 +317,7 @@ func TestDashboardLoadPersistedAgentActivityRestoresAgentsAndEvents(t *testing.T
 			},
 			{
 				Timestamp:  now.Add(-1 * time.Minute),
-				Source:     "bridge",
+				Source:     "client",
 				RequestID:  "req-2",
 				Method:     http.MethodGet,
 				Path:       "/health",
@@ -326,7 +326,7 @@ func TestDashboardLoadPersistedAgentActivityRestoresAgentsAndEvents(t *testing.T
 			},
 			{
 				Timestamp:  now,
-				Source:     "server",
+				Source:     "client",
 				RequestID:  "req-3",
 				AgentID:    "agent-2",
 				Method:     http.MethodGet,
@@ -342,16 +342,16 @@ func TestDashboardLoadPersistedAgentActivityRestoresAgentsAndEvents(t *testing.T
 	}
 
 	agents := d.Agents()
-	if len(agents) != 2 {
-		t.Fatalf("Agents() len = %d, want 2", len(agents))
+	if len(agents) != 3 {
+		t.Fatalf("Agents() len = %d, want 3", len(agents))
 	}
 
 	events := d.RecentEvents()
-	if len(events) != 2 {
-		t.Fatalf("RecentEvents() len = %d, want 2", len(events))
+	if len(events) != 3 {
+		t.Fatalf("RecentEvents() len = %d, want 3", len(events))
 	}
-	if events[0].ID != "req-1" || events[1].ID != "req-3" {
-		t.Fatalf("RecentEvents() IDs = [%s, %s], want [req-1, req-3]", events[0].ID, events[1].ID)
+	if events[0].ID != "req-1" || events[1].ID != "req-2" || events[2].ID != "req-3" {
+		t.Fatalf("RecentEvents() IDs = [%s, %s, %s], want [req-1, req-2, req-3]", events[0].ID, events[1].ID, events[2].ID)
 	}
 }
 
@@ -361,7 +361,7 @@ func TestDashboardIngestPersistedAgentActivityAddsNewEventsWithoutDuplicatingLiv
 
 	d.RecordActivityEvent(activity.Event{
 		Timestamp:  now.Add(-2 * time.Second),
-		Source:     "bridge",
+		Source:     "client",
 		RequestID:  "req-live",
 		AgentID:    "agent-1",
 		Method:     http.MethodPost,
@@ -376,7 +376,7 @@ func TestDashboardIngestPersistedAgentActivityAddsNewEventsWithoutDuplicatingLiv
 		events: []activity.Event{
 			{
 				Timestamp:  now.Add(-2 * time.Second),
-				Source:     "bridge",
+				Source:     "client",
 				RequestID:  "req-live",
 				AgentID:    "agent-1",
 				Method:     http.MethodPost,
@@ -388,7 +388,7 @@ func TestDashboardIngestPersistedAgentActivityAddsNewEventsWithoutDuplicatingLiv
 			},
 			{
 				Timestamp:  now,
-				Source:     "bridge",
+				Source:     "client",
 				RequestID:  "req-new",
 				AgentID:    "agent-2",
 				Method:     http.MethodGet,
@@ -417,6 +417,48 @@ func TestDashboardIngestPersistedAgentActivityAddsNewEventsWithoutDuplicatingLiv
 	agents := d.Agents()
 	if len(agents) != 2 {
 		t.Fatalf("Agents() len = %d, want 2", len(agents))
+	}
+}
+
+func TestDashboardLoadPersistedAgentActivityNormalizesBlankAgentIDToAnonymous(t *testing.T) {
+	d := NewDashboard(nil)
+	now := time.Now().UTC()
+
+	err := d.LoadPersistedAgentActivity(stubActivityRecorder{
+		events: []activity.Event{
+			{
+				Timestamp:  now,
+				Source:     "client",
+				RequestID:  "req-anon",
+				Method:     http.MethodGet,
+				Path:       "/text",
+				Status:     http.StatusOK,
+				DurationMs: 6,
+				SessionID:  "ses_publicid123",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoadPersistedAgentActivity() error = %v", err)
+	}
+
+	agents := d.Agents()
+	if len(agents) != 1 {
+		t.Fatalf("Agents() len = %d, want 1", len(agents))
+	}
+	if agents[0].ID != "anonymous" {
+		t.Fatalf("Agents()[0].ID = %q, want anonymous", agents[0].ID)
+	}
+
+	events := d.RecentEvents()
+	if len(events) != 1 {
+		t.Fatalf("RecentEvents() len = %d, want 1", len(events))
+	}
+	if events[0].AgentID != "anonymous" {
+		t.Fatalf("RecentEvents()[0].AgentID = %q, want anonymous", events[0].AgentID)
+	}
+	if got := events[0].Details["sessionId"]; got != "ses_publicid123" {
+		t.Fatalf("RecentEvents()[0].Details[sessionId] = %#v, want ses_publicid123", got)
 	}
 }
 

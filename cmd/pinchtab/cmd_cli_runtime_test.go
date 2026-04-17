@@ -37,8 +37,8 @@ func TestResolveCLIBase(t *testing.T) {
 			expected: "http://env:5678",
 		},
 		{
-			name:     "default fallback uses 127.0.0.1 and instancePortStart",
-			expected: "http://127.0.0.1:9868",
+			name:     "default fallback uses 127.0.0.1 and server port",
+			expected: "http://127.0.0.1:9867",
 		},
 	}
 
@@ -55,7 +55,7 @@ func TestResolveCLIBase(t *testing.T) {
 				t.Setenv("PINCHTAB_SERVER", "")
 			}
 
-			cfg := &config.RuntimeConfig{}
+			cfg := &config.RuntimeConfig{Port: "9867"}
 
 			actual := resolveCLIBase(cfg)
 			if actual != tt.expected {
@@ -100,14 +100,14 @@ func TestResolveCLIAgentID(t *testing.T) {
 			expected: "agent-env",
 		},
 		{
-			name:      "blank values fall back to cli",
+			name:      "blank values fall back to empty (anonymous)",
 			flagValue: "   ",
 			envValue:  "   ",
-			expected:  "cli",
+			expected:  "",
 		},
 		{
-			name:     "default fallback is cli",
-			expected: "cli",
+			name:     "default fallback is empty (anonymous)",
+			expected: "",
 		},
 	}
 

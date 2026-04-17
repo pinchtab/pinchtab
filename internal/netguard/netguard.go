@@ -131,6 +131,58 @@ func ValidateRemoteIPAddress(raw string) error {
 	return ValidatePublicIP(ip)
 }
 
+func ResolveAndValidateIPsWithTrustedCIDRs(ctx context.Context, host string, trusted []*net.IPNet) ([]netip.Addr, error) {
+	host = NormalizeHost(host)
+	if host == "" {
+		return nil, ErrResolveHost
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if err := ValidatePublicIP(ip); err != nil {
+			if !ipInCIDRs(ip, trusted) {
+				return nil, err
+			}
+		}
+		addr, _ := netip.AddrFromSlice(ip)
+		return []netip.Addr{addr.Unmap()}, nil
+	}
+
+	ips, err := ResolveHostIPs(ctx, "ip", host)
+	if err != nil || len(ips) == 0 {
+		return nil, ErrResolveHost
+	}
+
+	seen := make(map[netip.Addr]struct{}, len(ips))
+	out := make([]netip.Addr, 0, len(ips))
+	for _, ip := range ips {
+		if err := ValidatePublicIP(ip); err != nil {
+			if !ipInCIDRs(ip, trusted) {
+				return nil, err
+			}
+		}
+		addr, _ := netip.AddrFromSlice(ip)
+		addr = addr.Unmap()
+		if _, ok := seen[addr]; ok {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, addr)
+	}
+	if len(out) == 0 {
+		return nil, ErrResolveHost
+	}
+	return out, nil
+}
+
+func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func publicAddr(ip net.IP) (netip.Addr, error) {
 	if err := ValidatePublicIP(ip); err != nil {
 		return netip.Addr{}, err

@@ -49,6 +49,9 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("First launch failed: %v", err)
 	}
+	if inst.Mode != "headless" {
+		t.Fatalf("Mode = %q, want %q", inst.Mode, "headless")
+	}
 	if inst.Status != "starting" {
 		t.Errorf("expected status starting, got %s", inst.Status)
 	}
@@ -90,6 +93,25 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 	instances := o.List()
 	if len(instances) != 0 {
 		t.Errorf("expected 0 instances after stop, got %d", len(instances))
+	}
+}
+
+func TestOrchestrator_Launch_UsesConfiguredBindInInstanceURL(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{Bind: "192.168.1.50"})
+
+	inst, err := o.Launch("profile1", "9001", true, nil)
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+	if inst.URL != "http://192.168.1.50:9001" {
+		t.Fatalf("URL = %q, want %q", inst.URL, "http://192.168.1.50:9001")
 	}
 }
 
@@ -351,6 +373,9 @@ func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
 	}
 	if fc.Observability.Activity.StateDir != "" {
 		t.Fatalf("child Observability.Activity.StateDir = %q, want empty", fc.Observability.Activity.StateDir)
+	}
+	if fc.Observability.Activity.Enabled == nil || *fc.Observability.Activity.Enabled {
+		t.Fatalf("child Observability.Activity.Enabled = %v, want explicit false", fc.Observability.Activity.Enabled)
 	}
 	if got := envMap(runner.env)["PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR"]; got != "" {
 		t.Fatalf("PINCHTAB_INTERNAL_ACTIVITY_STATE_DIR = %q, want empty", got)

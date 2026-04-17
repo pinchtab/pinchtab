@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -25,15 +24,17 @@ type mockBridge struct {
 	lastConsoleLimit int
 	lastErrorLimit   int
 	fingerprintTabs  map[string]bool
+	frameScopes      map[string]bridge.FrameScope
+	ensureChromeErr  error
+	ensureChromeCall int
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
 	if m.failTab {
 		return nil, "", fmt.Errorf("tab not found")
 	}
-	// We need a context that chromedp.Run won't complain about,
-	// even if it's not fully functional for real CDP commands.
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	return ctx, "tab1", nil
 }
 
@@ -51,7 +52,8 @@ func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.
 
 func (m *mockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
 	m.createTabURLs = append(m.createTabURLs, url)
-	ctx, cancel := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 	return "tab_abc12345", ctx, cancel, nil
 }
 
@@ -70,8 +72,8 @@ func (m *mockBridge) FocusTab(tabID string) error {
 }
 
 func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
-	// Mock implementation - just return nil
-	return nil
+	m.ensureChromeCall++
+	return m.ensureChromeErr
 }
 
 func (m *mockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
@@ -122,6 +124,25 @@ func (m *mockBridge) ClearErrorLogs(tabID string) {}
 
 func (m *mockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
+}
+
+func (m *mockBridge) GetFrameScope(tabID string) (bridge.FrameScope, bool) {
+	if m.frameScopes == nil {
+		return bridge.FrameScope{}, false
+	}
+	scope, ok := m.frameScopes[tabID]
+	return scope, ok && scope.Active()
+}
+
+func (m *mockBridge) SetFrameScope(tabID string, scope bridge.FrameScope) {
+	if m.frameScopes == nil {
+		m.frameScopes = make(map[string]bridge.FrameScope)
+	}
+	m.frameScopes[tabID] = scope
+}
+
+func (m *mockBridge) ClearFrameScope(tabID string) {
+	delete(m.frameScopes, tabID)
 }
 
 func (m *mockBridge) SetFingerprintRotateActive(tabID string, active bool) {
@@ -207,6 +228,68 @@ func TestOpenAPIIncludesSensitiveEndpointStatus(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "\"x-pinchtab-enabled\":true") {
 		t.Fatalf("expected /openapi.json response to mark enabled sensitive endpoints")
+	}
+}
+
+func TestOpenAPIIncludesEvaluateAwaitPromiseSchema(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/openapi.json", nil)
+	w := httptest.NewRecorder()
+	h.HandleOpenAPI(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200 from /openapi.json, got %d", w.Code)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	paths, ok := doc["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected paths object, got %T", doc["paths"])
+	}
+	evaluatePath, ok := paths["/evaluate"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected /evaluate path, got %T", paths["/evaluate"])
+	}
+	post, ok := evaluatePath["post"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected /evaluate POST operation, got %T", evaluatePath["post"])
+	}
+	requestBody, ok := post["requestBody"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected requestBody, got %T", post["requestBody"])
+	}
+	content := requestBody["content"].(map[string]any)
+	appJSON := content["application/json"].(map[string]any)
+	schema := appJSON["schema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	awaitPromise, ok := properties["awaitPromise"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected awaitPromise property, got %T", properties["awaitPromise"])
+	}
+	if awaitPromise["type"] != "boolean" {
+		t.Fatalf("expected awaitPromise type boolean, got %#v", awaitPromise["type"])
+	}
+}
+
+func TestHandleTabMetricsReturns404ForUnknownTab(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest("GET", "/tabs/invalid_tab_id/metrics", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 from /tabs/{id}/metrics for unknown tab, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "tab not found") {
+		t.Fatalf("expected not-found response body, got %q", w.Body.String())
 	}
 }
 
@@ -355,10 +438,10 @@ func TestHandleGetConsoleLogs_BlocksWhenCachedTabPolicyIsBlocked(t *testing.T) {
 		hasState: true,
 	}
 	h := New(b, &config.RuntimeConfig{
+		AllowedDomains: []string{"example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"example.com"},
-			StrictMode:     true,
+			Enabled:    true,
+			StrictMode: true,
 		},
 	}, nil, nil, nil)
 
@@ -383,10 +466,10 @@ func TestHandleGetErrorLogs_BlocksWhenCachedTabPolicyIsBlocked(t *testing.T) {
 		hasState: true,
 	}
 	h := New(b, &config.RuntimeConfig{
+		AllowedDomains: []string{"example.com"},
 		IDPI: config.IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{"example.com"},
-			StrictMode:     true,
+			Enabled:    true,
+			StrictMode: true,
 		},
 	}, nil, nil, nil)
 

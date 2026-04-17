@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -96,6 +97,8 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 	if tracker, ok := h.Bridge.(interface{ SetFingerprintRotateActive(string, bool) }); ok {
 		tracker.SetFingerprintRotateActive(resolvedTabID, true)
 	}
+
+	h.recordActivity(r, activity.Update{Action: "fingerprint.rotate", TabID: resolvedTabID})
 
 	httpx.JSON(w, 200, map[string]any{
 		"fingerprint": fp,

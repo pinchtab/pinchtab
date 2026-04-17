@@ -31,10 +31,12 @@ func GetConfigValue(fc *FileConfig, path string) (string, error) {
 		return getMultiInstanceField(&fc.MultiInstance, field)
 	case "timeouts":
 		return getTimeoutsField(&fc.Timeouts, field)
+	case "observability":
+		return getObservabilityField(&fc.Observability, field)
 	case "sessions":
 		return getSessionsField(&fc.Sessions, field)
 	default:
-		return "", fmt.Errorf("unknown section %q (valid: server, browser, instanceDefaults, security, profiles, multiInstance, timeouts, sessions)", section)
+		return "", fmt.Errorf("unknown section %q (valid: server, browser, instanceDefaults, security, profiles, multiInstance, timeouts, observability, sessions)", section)
 	}
 }
 
@@ -67,6 +69,53 @@ func getBrowserField(b *BrowserConfig, field string) (string, error) {
 		return b.ChromeExtraFlags, nil
 	default:
 		return "", fmt.Errorf("unknown field browser.%s", field)
+	}
+}
+
+func getObservabilityField(o *ObservabilityFileConfig, field string) (string, error) {
+	if strings.HasPrefix(field, "activity.") {
+		return getActivityField(&o.Activity, strings.TrimPrefix(field, "activity."))
+	}
+	return "", fmt.Errorf("unknown field observability.%s", field)
+}
+
+func getActivityField(a *ActivityFileConfig, field string) (string, error) {
+	if strings.HasPrefix(field, "events.") {
+		return getActivityEventField(&a.Events, strings.TrimPrefix(field, "events."))
+	}
+
+	switch field {
+	case "enabled":
+		return formatBoolPtr(a.Enabled), nil
+	case "sessionIdleSec":
+		return formatIntPtr(a.SessionIdleSec), nil
+	case "retentionDays":
+		return formatIntPtr(a.RetentionDays), nil
+	case "stateDir":
+		return a.StateDir, nil
+	default:
+		return "", fmt.Errorf("unknown field observability.activity.%s", field)
+	}
+}
+
+func getActivityEventField(e *ActivityEventsFileConfig, field string) (string, error) {
+	switch field {
+	case "dashboard":
+		return formatBoolPtr(e.Dashboard), nil
+	case "server":
+		return formatBoolPtr(e.Server), nil
+	case "bridge":
+		return formatBoolPtr(e.Bridge), nil
+	case "orchestrator":
+		return formatBoolPtr(e.Orchestrator), nil
+	case "scheduler":
+		return formatBoolPtr(e.Scheduler), nil
+	case "mcp":
+		return formatBoolPtr(e.MCP), nil
+	case "other":
+		return formatBoolPtr(e.Other), nil
+	default:
+		return "", fmt.Errorf("unknown field observability.activity.events.%s", field)
 	}
 }
 
@@ -146,6 +195,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatBoolPtr(s.AllowScreencast), nil
 	case "allowDownload":
 		return formatBoolPtr(s.AllowDownload), nil
+	case "allowedDomains":
+		return strings.Join(s.AllowedDomains, ","), nil
 	case "downloadAllowedDomains":
 		return strings.Join(s.DownloadAllowedDomains, ","), nil
 	case "downloadMaxBytes":
@@ -166,6 +217,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatIntPtr(s.MaxRedirects), nil
 	case "trustedProxyCIDRs":
 		return strings.Join(s.TrustedProxyCIDRs, ","), nil
+	case "trustedResolveCIDRs":
+		return strings.Join(s.TrustedResolveCIDRs, ","), nil
 	default:
 		return "", fmt.Errorf("unknown field security.%s", field)
 	}
@@ -233,8 +286,6 @@ func getIDPIField(i *IDPIConfig, field string) (string, error) {
 	switch field {
 	case "enabled":
 		return strconv.FormatBool(i.Enabled), nil
-	case "allowedDomains":
-		return strings.Join(i.AllowedDomains, ","), nil
 	case "strictMode":
 		return strconv.FormatBool(i.StrictMode), nil
 	case "scanContent":

@@ -50,6 +50,10 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.CookieSecure != nil {
 		t.Errorf("default CookieSecure = %v, want nil for auto-detect", *cfg.CookieSecure)
 	}
+	wantExtensionsDir := defaultExtensionsDir(userConfigDir())
+	if len(cfg.ExtensionPaths) != 1 || cfg.ExtensionPaths[0] != wantExtensionsDir {
+		t.Errorf("default ExtensionPaths = %v, want [%q]", cfg.ExtensionPaths, wantExtensionsDir)
+	}
 	if len(cfg.DownloadAllowedDomains) != 0 {
 		t.Errorf("default DownloadAllowedDomains = %v, want empty list", cfg.DownloadAllowedDomains)
 	}
@@ -86,8 +90,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.IDPI.Enabled {
 		t.Errorf("default IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
 	}
-	if len(cfg.IDPI.AllowedDomains) != 3 || cfg.IDPI.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("default IDPI.AllowedDomains = %v, want local-only allowlist", cfg.IDPI.AllowedDomains)
+	if len(cfg.AllowedDomains) != 3 || cfg.AllowedDomains[0] != "127.0.0.1" {
+		t.Errorf("default AllowedDomains = %v, want local-only allowlist", cfg.AllowedDomains)
 	}
 	if !cfg.IDPI.StrictMode {
 		t.Errorf("default IDPI.StrictMode = %v, want true", cfg.IDPI.StrictMode)
@@ -101,8 +105,29 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.Observability.Activity.Enabled {
 		t.Errorf("default Observability.Activity.Enabled = %v, want true", cfg.Observability.Activity.Enabled)
 	}
-	if cfg.Observability.Activity.RetentionDays != 1 {
-		t.Errorf("default Observability.Activity.RetentionDays = %d, want 1", cfg.Observability.Activity.RetentionDays)
+	if cfg.Observability.Activity.RetentionDays != 30 {
+		t.Errorf("default Observability.Activity.RetentionDays = %d, want 30", cfg.Observability.Activity.RetentionDays)
+	}
+	if cfg.Observability.Activity.Events.Dashboard {
+		t.Errorf("default Observability.Activity.Events.Dashboard = %v, want false", cfg.Observability.Activity.Events.Dashboard)
+	}
+	if cfg.Observability.Activity.Events.Server {
+		t.Errorf("default Observability.Activity.Events.Server = %v, want false", cfg.Observability.Activity.Events.Server)
+	}
+	if cfg.Observability.Activity.Events.Bridge {
+		t.Errorf("default Observability.Activity.Events.Bridge = %v, want false", cfg.Observability.Activity.Events.Bridge)
+	}
+	if cfg.Observability.Activity.Events.Orchestrator {
+		t.Errorf("default Observability.Activity.Events.Orchestrator = %v, want false", cfg.Observability.Activity.Events.Orchestrator)
+	}
+	if cfg.Observability.Activity.Events.Scheduler {
+		t.Errorf("default Observability.Activity.Events.Scheduler = %v, want false", cfg.Observability.Activity.Events.Scheduler)
+	}
+	if cfg.Observability.Activity.Events.MCP {
+		t.Errorf("default Observability.Activity.Events.MCP = %v, want false", cfg.Observability.Activity.Events.MCP)
+	}
+	if cfg.Observability.Activity.Events.Other {
+		t.Errorf("default Observability.Activity.Events.Other = %v, want false", cfg.Observability.Activity.Events.Other)
 	}
 	if !cfg.Sessions.Dashboard.Persist {
 		t.Errorf("default Sessions.Dashboard.Persist = %v, want true", cfg.Sessions.Dashboard.Persist)
@@ -216,6 +241,58 @@ func TestConfigFileWithNestedValues(t *testing.T) {
 	}
 	if cfg.Strategy != "explicit" {
 		t.Errorf("config file Strategy = %v, want explicit", cfg.Strategy)
+	}
+}
+
+func TestLoadConfigActivityEvents(t *testing.T) {
+	clearConfigEnvVars(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
+	defer func() {
+		_ = os.Unsetenv("PINCHTAB_CONFIG")
+	}()
+
+	if err := os.WriteFile(configPath, []byte(`{
+		"observability": {
+			"activity": {
+				"events": {
+					"dashboard": true,
+					"server": true,
+					"bridge": false,
+					"orchestrator": true,
+					"scheduler": true,
+					"mcp": false,
+					"other": true
+				}
+			}
+		}
+	}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Load()
+	if !cfg.Observability.Activity.Events.Dashboard {
+		t.Error("dashboard events should load as enabled")
+	}
+	if !cfg.Observability.Activity.Events.Server {
+		t.Error("server events should load as enabled")
+	}
+	if cfg.Observability.Activity.Events.Bridge {
+		t.Error("bridge events should load as disabled")
+	}
+	if !cfg.Observability.Activity.Events.Orchestrator {
+		t.Error("orchestrator events should load as enabled")
+	}
+	if !cfg.Observability.Activity.Events.Scheduler {
+		t.Error("scheduler events should load as enabled")
+	}
+	if cfg.Observability.Activity.Events.MCP {
+		t.Error("mcp events should load as disabled")
+	}
+	if !cfg.Observability.Activity.Events.Other {
+		t.Error("other events should load as enabled")
 	}
 }
 
@@ -338,8 +415,8 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	if !cfg.IDPI.Enabled {
 		t.Errorf("ApplyFileConfigToRuntime IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
 	}
-	if len(cfg.IDPI.AllowedDomains) != 3 || cfg.IDPI.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("ApplyFileConfigToRuntime IDPI.AllowedDomains = %v, want local-only allowlist", cfg.IDPI.AllowedDomains)
+	if len(cfg.AllowedDomains) != 3 || cfg.AllowedDomains[0] != "127.0.0.1" {
+		t.Errorf("ApplyFileConfigToRuntime AllowedDomains = %v, want local-only allowlist", cfg.AllowedDomains)
 	}
 	if !cfg.IDPI.StrictMode || !cfg.IDPI.ScanContent || !cfg.IDPI.WrapContent {
 		t.Errorf("ApplyFileConfigToRuntime IDPI = %+v, want strict+scan+wrap enabled", cfg.IDPI)
@@ -419,6 +496,24 @@ func TestApplyFileConfigToRuntime_CopiesDownloadAllowedDomains(t *testing.T) {
 	}
 	if cfg.DownloadAllowedDomains[0] != "pinchtab.com" {
 		t.Fatalf("ApplyFileConfigToRuntime copied list = %v, want original values", cfg.DownloadAllowedDomains)
+	}
+}
+
+func TestApplyFileConfigToRuntime_AllowsExplicitEmptyExtensionPaths(t *testing.T) {
+	cfg := &RuntimeConfig{
+		StateDir:       userConfigDir(),
+		ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
+	}
+	fc := &FileConfig{
+		Browser: BrowserConfig{
+			ExtensionPaths: []string{},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if len(cfg.ExtensionPaths) != 0 {
+		t.Fatalf("ApplyFileConfigToRuntime ExtensionPaths = %v, want explicit empty list", cfg.ExtensionPaths)
 	}
 }
 

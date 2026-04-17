@@ -10,16 +10,16 @@
     "allowDownload": false,
     "allowUpload": false,
     "allowStateExport": true,
+    "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "fixtures"
+    ],
     "idpi": {
       "enabled": true,
       "strictMode": false,
-      "scanContent": true,
-      "allowedDomains": [
-        "localhost",
-        "127.0.0.1",
-        "::1",
-        "fixtures"
-      ]
+      "scanContent": true
     }
   }
 }

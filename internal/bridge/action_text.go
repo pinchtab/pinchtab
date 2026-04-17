@@ -28,7 +28,14 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 		return map[string]any{"filled": req.Text}, chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
 	}
 	if req.NodeID > 0 {
-		return map[string]any{"filled": req.Text}, FillByNodeID(ctx, req.NodeID, req.Text)
+		if err := FillByNodeID(ctx, req.NodeID, req.Text); err != nil {
+			return nil, err
+		}
+		result := map[string]any{"filled": req.Text}
+		if actual, err := ReadInputValue(ctx, req.NodeID); err == nil && req.Text != "" && actual != req.Text {
+			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
+		}
+		return result, nil
 	}
 	return nil, fmt.Errorf("need selector or ref")
 }

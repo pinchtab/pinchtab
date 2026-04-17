@@ -140,6 +140,7 @@ func TestWaitRequest_Mode(t *testing.T) {
 		{"empty", waitRequest{}, ""},
 		{"selector", waitRequest{Selector: "#foo"}, "selector"},
 		{"text", waitRequest{Text: "hello"}, "text"},
+		{"notText", waitRequest{NotText: "Loading..."}, "notText"},
 		{"url", waitRequest{URL: "**/dash"}, "url"},
 		{"load", waitRequest{Load: "networkidle"}, "load"},
 		{"fn", waitRequest{Fn: "true"}, "fn"},
@@ -169,6 +170,16 @@ func TestHandleWait_SelectorNoTab(t *testing.T) {
 func TestHandleWait_TextNoTab(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"text":"Order confirmed"}`)))
+	w := httptest.NewRecorder()
+	h.HandleWait(w, req)
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleWait_NotTextNoTab(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"notText":"Loading..."}`)))
 	w := httptest.NewRecorder()
 	h.HandleWait(w, req)
 	if w.Code != 404 {

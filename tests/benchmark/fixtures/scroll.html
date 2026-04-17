@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scroll — PinchTab Benchmark</title>
+  <style>
+    .block { padding: 100px; margin: 50px 0; background: #eef; }
+    #footer { padding: 50px; background: #cce; margin-top: 200px; }
+  </style>
+</head>
+<body>
+  <h1>Scroll — VERIFY_SCROLL_PAGE_22221</h1>
+  <p>SCROLL_TOP_MARKER</p>
+
+  <div class="block">Block 1 — content</div>
+  <div class="block">Block 2 — content</div>
+  <div style="height: 800px;"></div>
+  <div class="block" id="middle-block">
+    <p>SCROLL_MIDDLE_MARKER</p>
+  </div>
+  <div style="height: 1500px;"></div>
+  <div class="block">Block 4 — content</div>
+  <div style="height: 800px;"></div>
+
+  <footer id="footer">
+    <h2>Page Footer</h2>
+    <p>SCROLL_REACHED_FOOTER</p>
+  </footer>
+</body>
+</html>

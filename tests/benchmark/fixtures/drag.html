@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Drag</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #board {
+      position: relative;
+      width: 640px;
+      height: 360px;
+      border: 2px solid #333;
+      background: #fafafa;
+    }
+    .zone {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border: 2px dashed #888;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #444;
+    }
+    #zone-a { left: 20px;  top: 20px;  background: #ffe4e1; }
+    #zone-b { left: 260px; top: 20px;  background: #e1f0ff; }
+    #zone-c { left: 500px; top: 220px; background: #e1ffe4; }
+    #piece {
+      position: absolute;
+      left: 40px; top: 210px;
+      width: 60px; height: 60px;
+      background: #333;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      user-select: none;
+      border-radius: 6px;
+    }
+    #piece.dragging { cursor: grabbing; opacity: 0.7; }
+    #result { margin-top: 16px; font-family: monospace; }
+    .summary { margin-top: 8px; font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Drag & Drop — VERIFY_DRAG_PAGE_33333</h1>
+
+  <p>Drag the piece into one of the three zones. Use the low-level pointer
+  action sequence (mouse-down → mouse-move → mouse-up) or the <code>drag</code>
+  helper. Each successful drop emits a distinct marker.</p>
+
+  <div id="board">
+    <div class="zone" id="zone-a">Zone A</div>
+    <div class="zone" id="zone-b">Zone B</div>
+    <div class="zone" id="zone-c">Zone C</div>
+    <div id="piece">P</div>
+  </div>
+
+  <div id="result"></div>
+  <div class="summary" id="summary"></div>
+
+  <script>
+    (function () {
+      const piece = document.getElementById('piece');
+      const board = document.getElementById('board');
+      const result = document.getElementById('result');
+      const summary = document.getElementById('summary');
+      const zones = [
+        { id: 'zone-a', marker: 'DROP_ZONE_A_OK' },
+        { id: 'zone-b', marker: 'DROP_ZONE_B_OK' },
+        { id: 'zone-c', marker: 'DROP_ZONE_C_OK' },
+      ];
+      const drops = [];
+
+      let dragging = false;
+      let offsetX = 0, offsetY = 0;
+
+      piece.addEventListener('mousedown', function (e) {
+        dragging = true;
+        piece.classList.add('dragging');
+        const r = piece.getBoundingClientRect();
+        offsetX = e.clientX - r.left;
+        offsetY = e.clientY - r.top;
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        const b = board.getBoundingClientRect();
+        let x = e.clientX - b.left - offsetX;
+        let y = e.clientY - b.top - offsetY;
+        x = Math.max(0, Math.min(x, b.width - piece.offsetWidth));
+        y = Math.max(0, Math.min(y, b.height - piece.offsetHeight));
+        piece.style.left = x + 'px';
+        piece.style.top = y + 'px';
+      });
+
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        piece.classList.remove('dragging');
+        const pr = piece.getBoundingClientRect();
+        const cx = pr.left + pr.width / 2;
+        const cy = pr.top + pr.height / 2;
+        for (const z of zones) {
+          const el = document.getElementById(z.id);
+          const zr = el.getBoundingClientRect();
+          if (cx >= zr.left && cx <= zr.right && cy >= zr.top && cy <= zr.bottom) {
+            drops.push(z.marker);
+            result.textContent = 'LAST_DROP=' + z.marker;
+            summary.textContent = 'DROP_SEQUENCE=' + drops.join(',');
+            return;
+          }
+        }
+        result.textContent = 'LAST_DROP=DROP_OUTSIDE';
+        summary.textContent = 'DROP_SEQUENCE=' + drops.join(',');
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -11,6 +11,10 @@ var serverCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		maybeRunWizard()
 		cfg := loadConfig()
+		if headed, _ := cmd.Flags().GetBool("headed"); headed {
+			cfg.Headless = false
+			cfg.HeadlessSet = true
+		}
 		if exts, _ := cmd.Flags().GetStringArray("extension"); len(exts) > 0 {
 			cfg.ExtensionPaths = append(cfg.ExtensionPaths, exts...)
 		}
@@ -21,5 +25,6 @@ var serverCmd = &cobra.Command{
 func init() {
 	serverCmd.GroupID = "primary"
 	serverCmd.Flags().StringArray("extension", nil, "Load browser extension (repeatable)")
+	serverCmd.Flags().Bool("headed", false, "Start default instance in headed mode")
 	rootCmd.AddCommand(serverCmd)
 }

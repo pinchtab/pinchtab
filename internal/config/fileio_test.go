@@ -56,7 +56,7 @@ func TestLoadAndSaveFileConfigPreservesExplicitZeroValues(t *testing.T) {
 	fc.Browser.ExtensionPaths = []string{}
 	fc.InstanceDefaults.UserAgent = ""
 	fc.Security.IDPI.StrictMode = false
-	fc.Security.IDPI.AllowedDomains = []string{}
+	fc.Security.AllowedDomains = []string{}
 	fc.Security.IDPI.CustomPatterns = []string{}
 	fc.Security.IDPI.ShieldThreshold = 30
 
@@ -75,13 +75,40 @@ func TestLoadAndSaveFileConfigPreservesExplicitZeroValues(t *testing.T) {
 	if loaded.Security.IDPI.StrictMode {
 		t.Errorf("loaded strictMode = %v, want false", loaded.Security.IDPI.StrictMode)
 	}
-	if len(loaded.Security.IDPI.AllowedDomains) != 0 {
-		t.Errorf("loaded allowedDomains = %v, want empty list", loaded.Security.IDPI.AllowedDomains)
+	if len(loaded.Security.AllowedDomains) != 0 {
+		t.Errorf("loaded security.allowedDomains = %v, want empty list", loaded.Security.AllowedDomains)
 	}
 	if loaded.Security.IDPI.ShieldThreshold != 30 {
 		t.Errorf("loaded shieldThreshold = %d, want 30", loaded.Security.IDPI.ShieldThreshold)
 	}
 	if len(loaded.Browser.ExtensionPaths) != 0 {
 		t.Errorf("loaded extensionPaths = %v, want empty list", loaded.Browser.ExtensionPaths)
+	}
+}
+
+func TestLoadFileConfig_PromotesLegacyIDPIAllowedDomains(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
+	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
+
+	data := []byte(`{
+  "security": {
+    "idpi": {
+      "enabled": true,
+      "allowedDomains": ["fixtures", "*.example.com"]
+    }
+  }
+}`)
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, _, err := LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if got := loaded.Security.AllowedDomains; len(got) != 2 || got[0] != "fixtures" || got[1] != "*.example.com" {
+		t.Fatalf("security.allowedDomains = %v, want promoted legacy values", got)
 	}
 }

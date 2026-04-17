@@ -119,7 +119,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := h.tabContext(r, tabID)
+	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
 	if err != nil {
 		httpx.Error(w, 404, err)
 		return
@@ -143,32 +143,15 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("a11y tree: %w", err))
 		return
 	}
+	nodes = h.scopeSnapshotNodesByFrame(nodes, h.selectorFrameID(resolvedTabID))
 	treeResp := struct {
 		Nodes []bridge.RawAXNode `json:"nodes"`
 	}{Nodes: nodes}
 
 	if selector != "" {
-		// Unified selector: resolve to a backend node ID for subtree scoping.
-		// Supports CSS (default), XPath, and text selectors.
-		var scopeNodeID int64
-		var scopeErr error
-
-		switch {
-		case strings.HasPrefix(selector, "xpath:"):
-			scopeNodeID, scopeErr = bridge.ResolveXPathToNodeID(tCtx, selector[len("xpath:"):])
-		case strings.HasPrefix(selector, "//") || strings.HasPrefix(selector, "(//"):
-			scopeNodeID, scopeErr = bridge.ResolveXPathToNodeID(tCtx, selector)
-		case strings.HasPrefix(selector, "text:"):
-			scopeNodeID, scopeErr = bridge.ResolveTextToNodeID(tCtx, selector[len("text:"):])
-		case strings.HasPrefix(selector, "css:"):
-			scopeNodeID, scopeErr = bridge.ResolveCSSToNodeID(tCtx, selector[len("css:"):])
-		default:
-			// Bare selector — treat as CSS (backward compatible)
-			scopeNodeID, scopeErr = bridge.ResolveCSSToNodeID(tCtx, selector)
-		}
-
+		scopeNodeID, scopeErr := h.resolveSelectorNodeID(tCtx, resolvedTabID, selector)
 		if scopeErr != nil {
-			httpx.Error(w, 400, fmt.Errorf("selector: %w", scopeErr))
+			httpx.Error(w, 400, frameScopedSelectorError("selector", scopeErr))
 			return
 		}
 
@@ -189,7 +172,11 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.Bridge.SetRefCache(resolvedTabID, &bridge.RefCache{Refs: refs, Nodes: flat})
+	h.Bridge.SetRefCache(resolvedTabID, &bridge.RefCache{
+		Refs:    refs,
+		Targets: bridge.RefTargetsFromNodes(flat),
+		Nodes:   flat,
+	})
 
 	var url, title string
 	_ = chromedp.Run(tCtx,

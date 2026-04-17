@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Pagination</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #items { list-style: decimal; padding-left: 24px; }
+    #controls { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+    button { padding: 6px 12px; cursor: pointer; }
+    button[disabled] { opacity: 0.5; cursor: not-allowed; }
+    #page-info { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Pagination — VERIFY_PAGINATION_PAGE_88888</h1>
+
+  <p>3 pages of 5 items each. Use Prev / Next to navigate. The first item
+  on each page emits a verification marker.</p>
+
+  <ol id="items"></ol>
+
+  <div id="controls">
+    <button id="prev-btn" disabled>Prev</button>
+    <button id="next-btn">Next</button>
+    <span id="page-info">PAGE_1_OF_3</span>
+  </div>
+
+  <script>
+    (function () {
+      const PER_PAGE = 5;
+      const TOTAL = 15;
+      const list = document.getElementById('items');
+      const prev = document.getElementById('prev-btn');
+      const next = document.getElementById('next-btn');
+      const info = document.getElementById('page-info');
+      let page = 1;
+      const pages = Math.ceil(TOTAL / PER_PAGE);
+
+      function render() {
+        list.innerHTML = '';
+        const start = (page - 1) * PER_PAGE;
+        for (let i = 0; i < PER_PAGE; i++) {
+          const li = document.createElement('li');
+          const idx = start + i + 1;
+          if (idx > TOTAL) break;
+          // First item on each page carries a verification marker so tests
+          // can confirm the right slice rendered without parsing all 5.
+          if (i === 0) {
+            li.textContent = 'PAGE_' + page + '_FIRST_ITEM (item ' + idx + ' of ' + TOTAL + ')';
+          } else {
+            li.textContent = 'item ' + idx;
+          }
+          list.appendChild(li);
+        }
+        info.textContent = 'PAGE_' + page + '_OF_' + pages;
+        prev.disabled = page === 1;
+        next.disabled = page === pages;
+      }
+
+      prev.addEventListener('click', function () { if (page > 1) { page--; render(); } });
+      next.addEventListener('click', function () { if (page < pages) { page++; render(); } });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -22,8 +22,8 @@ func (m *mockRunner) Run(context.Context, string, []string, []string, io.Writer,
 	return nil, nil
 }
 
-func (m *mockRunner) IsPortAvailable(string) bool {
-	return m.portAvail
+func (m *mockRunner) InspectPort(string) orchestrator.PortInspection {
+	return orchestrator.PortInspection{Available: m.portAvail}
 }
 
 // fakeBridge creates a test server that mimics a bridge instance.
@@ -152,6 +152,34 @@ func TestStrategy_RegisterRoutes_RegistersConsoleAndErrorShorthands(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
+			_, pattern := mux.Handler(req)
+			if pattern != tt.route {
+				t.Fatalf("expected route %q, got %q", tt.route, pattern)
+			}
+		})
+	}
+}
+
+func TestStrategy_RegisterRoutes_RegistersFrameShorthands(t *testing.T) {
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	orch.ApplyRuntimeConfig(&config.RuntimeConfig{})
+
+	s := &Strategy{orch: orch}
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+
+	tests := []struct {
+		method string
+		path   string
+		route  string
+	}{
+		{method: http.MethodGet, path: "/frame", route: "GET /frame"},
+		{method: http.MethodPost, path: "/frame", route: "POST /frame"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(`{"target":"main"}`))
 			_, pattern := mux.Handler(req)
 			if pattern != tt.route {
 				t.Fatalf("expected route %q, got %q", tt.route, pattern)

@@ -1,19 +1,20 @@
 package authn
 
 import (
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
 
+const defaultSessionCookieLifetime = 7 * 24 * time.Hour
+
 // SetSessionCookie stores the opaque dashboard session id in an HttpOnly
 // same-site cookie so browser APIs can authenticate without exposing the
 // underlying bearer token to JavaScript.
 func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, maxLifetime time.Duration, trustProxy bool, cookieSecure *bool) {
 	if maxLifetime <= 0 {
-		maxLifetime = DefaultSessionMaxLifetime
+		maxLifetime = defaultSessionCookieLifetime
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
@@ -45,10 +46,11 @@ func sessionCookieSecure(r *http.Request, trustProxy bool, cookieSecure *bool) b
 	if cookieSecure != nil {
 		return *cookieSecure
 	}
-	if requestScheme(r, trustProxy) == "https" {
-		return true
-	}
-	return !isLoopbackHost(requestHost(r, trustProxy))
+	return RequestIsHTTPS(r, trustProxy)
+}
+
+func RequestIsHTTPS(r *http.Request, trustProxy bool) bool {
+	return requestScheme(r, trustProxy) == "https"
 }
 
 func requestScheme(r *http.Request, trustProxy bool) string {
@@ -73,56 +75,4 @@ func requestScheme(r *http.Request, trustProxy bool) string {
 		return "https"
 	}
 	return "http"
-}
-
-func requestHost(r *http.Request, trustProxy bool) string {
-	if r == nil {
-		return ""
-	}
-	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwarded != "" {
-			return strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		}
-		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
-			for _, part := range strings.Split(forwarded, ";") {
-				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-				if !ok || !strings.EqualFold(key, "host") {
-					continue
-				}
-				return strings.Trim(value, `"`)
-			}
-		}
-	}
-	return strings.TrimSpace(r.Host)
-}
-
-func isLoopbackHost(host string) bool {
-	host = hostOnly(host)
-	if host == "" {
-		return false
-	}
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-func hostOnly(hostport string) string {
-	hostport = strings.TrimSpace(hostport)
-	if hostport == "" {
-		return ""
-	}
-	if host, port, err := net.SplitHostPort(hostport); err == nil {
-		if port != "" {
-			return strings.Trim(host, "[]")
-		}
-	}
-	if strings.HasPrefix(hostport, "[") && strings.HasSuffix(hostport, "]") {
-		return strings.Trim(hostport, "[]")
-	}
-	if strings.Count(hostport, ":") > 1 {
-		return strings.Trim(hostport, "[]")
-	}
-	return hostport
 }

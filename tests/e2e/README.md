@@ -7,18 +7,23 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ### With Docker (recommended)
 
 ```bash
-./dev e2e          # Run the release suite
-./dev e2e pr       # Run the PR suite
-./dev e2e api-fast # Run API fast on the single-instance stack
-./dev e2e cli-fast # Run CLI fast on the single-instance stack
-./dev e2e api-full # Run API full on the multi-instance stack
-./dev e2e cli-full # Run CLI full on the single-instance stack
+./dev e2e          # Run the release suite quietly by default
+./dev e2e pr       # Run the PR suite (api + cli + infra basic tests)
+./dev e2e api      # Run API basic tests
+./dev e2e cli      # Run CLI basic tests
+./dev e2e infra    # Run infra basic tests
+./dev e2e api-extended   # Run API extended tests
+./dev e2e cli-extended   # Run CLI extended tests
+./dev e2e infra-extended # Run infra extended tests
+./dev e2e api logs=show  # Opt back into full streaming logs
 
 # Manual grouped runners
 /bin/bash tests/e2e/run.sh api
-/bin/bash tests/e2e/run.sh api all=true
+/bin/bash tests/e2e/run.sh api extended=true
 /bin/bash tests/e2e/run.sh cli
-/bin/bash tests/e2e/run.sh cli all=true
+/bin/bash tests/e2e/run.sh cli extended=true
+/bin/bash tests/e2e/run.sh infra
+/bin/bash tests/e2e/run.sh infra extended=true
 ```
 
 Or directly:
@@ -32,8 +37,8 @@ docker compose -f tests/e2e/docker-compose-multi.yml up --build runner-api
 
 ```
 tests/e2e/
-├── docker-compose.yml      # Single-instance stack for api-fast and cli suites
-├── docker-compose-multi.yml # Multi-instance API full stack
+├── docker-compose.yml      # Single-instance stack for basic suites
+├── docker-compose-multi.yml # Multi-instance extended stack
 ├── config/                 # E2E-specific PinchTab configs
 │   ├── pinchtab.json
 │   ├── pinchtab-medium-permissive.json
@@ -53,19 +58,36 @@ tests/e2e/
 │   ├── api-snapshot.sh
 │   ├── cli.sh
 │   └── base.sh
-├── scenarios-api/          # Grouped API entrypoints
-│   ├── browser-basic.sh
-│   ├── browser-full.sh
-│   ├── tabs-basic.sh
-│   ├── tabs-full.sh
-│   ├── orchestrator-full.sh
-│   ├── stealth-basic.sh
-│   └── stealth-full.sh
-├── scenarios-cli/          # Grouped CLI entrypoints
-│   ├── browser-basic.sh
-│   ├── browser-full.sh
-│   ├── tabs-basic.sh
-│   └── tabs-full.sh
+├── scenarios/              # Test scenarios organized by type
+│   ├── api/                # Browser control and page interaction
+│   │   ├── browser-basic.sh
+│   │   ├── browser-extended.sh
+│   │   ├── tabs-basic.sh
+│   │   ├── tabs-extended.sh
+│   │   ├── actions-basic.sh
+│   │   ├── actions-extended.sh
+│   │   ├── files-basic.sh
+│   │   ├── files-extended.sh
+│   │   ├── clipboard-basic.sh
+│   │   └── console-basic.sh
+│   ├── cli/                # CLI command tests
+│   │   ├── browser-basic.sh
+│   │   ├── browser-extended.sh
+│   │   ├── tabs-basic.sh
+│   │   ├── tabs-extended.sh
+│   │   └── ...
+│   └── infra/              # System, network, security, stealth
+│       ├── system-basic.sh
+│       ├── system-extended.sh
+│       ├── network-basic.sh
+│       ├── network-extended.sh
+│       ├── security-basic.sh
+│       ├── security-extended.sh
+│       ├── stealth-basic.sh
+│       ├── stealth-extended.sh
+│       ├── orchestrator-extended.sh
+│       ├── auth-extended.sh
+│       └── ...
 ├── runner-api/             # API test runner container
 │   └── Dockerfile
 ├── runner-cli/             # CLI test runner container
@@ -77,37 +99,56 @@ The Docker stacks reuse the repository root `Dockerfile` and mount explicit conf
 
 ## Test Groups
 
-The API and CLI suites are grouped by feature area:
+Tests are organized into three parallel groups:
 
-- `browser-basic` / `browser-full`
-- `tabs-basic` / `tabs-full`
-- `actions-basic` / `actions-full`
-- `files-basic` / `files-full`
-- `security-basic`
-- `orchestrator-full` on API
-- `system-basic` / `system-full`
-- `stealth-basic` / `stealth-full` on API
+### API Group (`scenarios/api/`)
+Browser control and page interaction tests:
+- `browser-basic` / `browser-extended`
+- `tabs-basic` / `tabs-extended`
+- `actions-basic` / `actions-extended`
+- `files-basic` / `files-extended`
+- `clipboard-basic`
+- `console-basic`
 
-Manual real-world scenario:
-- `autosolver-realworld.sh` on API (opt-in, not CI): runs AutoSolver against Pixelscan/Sannysoft/BrowserScan and logs before/after detection text signals.
+### CLI Group (`scenarios/cli/`)
+CLI command tests:
+- `browser-basic` / `browser-extended`
+- `tabs-basic` / `tabs-extended`
+- `actions-basic` / `actions-extended`
+- `files-basic` / `files-extended`
+- `system-basic` / `system-extended`
+- And more...
 
-The `basic` entrypoints are the PR-fast happy path. The `full` entrypoints add extra and edge-case coverage for the same feature. The top-level runner defaults to the basic layer; pass `all=true` to run both basic and full.
+### Infra Group (`scenarios/infra/`)
+System, networking, security, and stealth tests:
+- `system-basic` / `system-extended`
+- `network-basic` / `network-extended`
+- `security-basic` / `security-extended`
+- `stealth-basic` / `stealth-extended`
+- `orchestrator-extended`
+- `auth-extended`
+- `autosolver-extended`
+- manual autosolver check lives at `tests/manual/autosolver-check.sh`
+- real-world autosolver smoke lives at `scripts/autosolver-realworld-smoke.sh`
+- `idpi-extended`
+
+The `basic` entrypoints are the PR happy path. The `extended` entrypoints add extra and edge-case coverage. The top-level runner defaults to the basic layer; pass `extended=true` to run both.
 
 Compose usage:
-- `docker-compose.yml` powers `api-fast`, `cli-fast`, and `cli-full`
-- `docker-compose-multi.yml` powers `api-full`
+- `docker-compose.yml` powers `api`, `cli`, `infra`, and `cli-extended`
+- `docker-compose-multi.yml` powers `api-extended` and `infra-extended`
 
 ## Adding Tests
 
-1. Add or update a grouped entrypoint such as `tabs-basic.sh` or `tabs-full.sh`
-2. Source `../helpers/api.sh` or `../helpers/cli.sh`
-3. Put the happy path in `*-basic.sh` and the extra/edge cases in `*-full.sh`
+1. Add or update a grouped entrypoint such as `tabs-basic.sh` or `tabs-extended.sh`
+2. Source `../../helpers/api.sh` or `../../helpers/cli.sh`
+3. Put the happy path in `*-basic.sh` and the extra/edge cases in `*-extended.sh`
 4. Use the assertion helpers:
 
 ```bash
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../helpers/api.sh"
+GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${GROUP_DIR}/../../helpers/api.sh"
 
 start_test "My test name"
 
@@ -128,8 +169,8 @@ end_test
 ```
 
 The action scenarios already cover common interaction regressions against the bundled fixtures:
-- `tests/e2e/scenarios-api/actions-basic.sh` groups the API happy-path actions
-- `tests/e2e/scenarios-cli/actions-basic.sh` groups the matching CLI commands
+- `tests/e2e/scenarios/api/actions-basic.sh` groups the API happy-path actions
+- `tests/e2e/scenarios/cli/actions-basic.sh` groups the matching CLI commands
 
 ## Adding Fixtures
 
@@ -144,19 +185,25 @@ Add HTML files to `fixtures/` for testing specific scenarios:
 ## CI Integration
 
 The E2E tests run automatically:
-- On PRs and pushes to `main`: `api-fast` and `cli-fast`
-- Manually via workflow dispatch: `api-full` and `cli-full`
+- On PRs: `api`, `cli`, and `infra` basic tests always run
+- On PRs: touching any non-basic scenario also triggers the matching extended suite on its native compose stack
+- Manually via workflow dispatch: Extended tests for all groups
 
 ## Result Files
 
 Each suite writes its own result files in `tests/e2e/results/`:
 
-- `summary-api-fast.txt` / `report-api-fast.md`
-- `summary-api-full.txt` / `report-api-full.md`
-- `summary-cli-fast.txt` / `report-cli-fast.md`
-- `summary-cli-full.txt` / `report-cli-full.md`
+- `summary-api.txt` / `report-api.md`
+- `summary-api-extended.txt` / `report-api-extended.md`
+- `summary-cli.txt` / `report-cli.md`
+- `summary-cli-extended.txt` / `report-cli-extended.md`
+- `summary-infra.txt` / `report-infra.md`
+- `summary-infra-extended.txt` / `report-infra-extended.md`
 
 The launcher deletes the target suite files before each run to avoid stale output.
+Saved summaries include total test time and suite wall time.
+
+When `logs=hide` is used and a suite fails, the runner prints the full captured suite log and also saves it under `output-*.log`.
 
 ## Debugging
 
@@ -174,9 +221,9 @@ docker compose -f tests/e2e/docker-compose.yml run runner-cli bash
 
 ### Run specific scenario
 ```bash
-docker compose -f tests/e2e/docker-compose.yml run runner-api /bin/bash /e2e/scenarios-api/tabs-basic.sh
-docker compose -f tests/e2e/docker-compose-multi.yml run runner-api /bin/bash /e2e/scenarios-api/tabs-full.sh
+docker compose -f tests/e2e/docker-compose.yml run runner-api /bin/bash /e2e/scenarios/api/tabs-basic.sh
+docker compose -f tests/e2e/docker-compose-multi.yml run runner-api /bin/bash /e2e/scenarios/api/tabs-extended.sh
 ```
 
 ### Orchestrator Coverage
-`api-full` uses `docker-compose-multi.yml` and includes the multi-instance and remote-bridge orchestrator scenarios through `orchestrator-full.sh`.
+`infra-extended` uses `docker-compose-multi.yml` and includes the multi-instance and remote-bridge orchestrator scenarios through `orchestrator-extended.sh`.

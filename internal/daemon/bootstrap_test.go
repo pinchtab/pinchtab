@@ -11,7 +11,6 @@ func TestEnsureConfigCreatesDefaultConfig(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
 	t.Setenv("PINCHTAB_CONFIG", configPath)
 	t.Setenv("PINCHTAB_TOKEN", "")
-	t.Setenv("PINCHTAB_BIND", "")
 
 	gotPath, cfg, status, err := EnsureConfig(false)
 	if err != nil {

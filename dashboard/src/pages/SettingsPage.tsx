@@ -1,6 +1,7 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Modal } from "../components/atoms";
+import { SidebarPanel, SidebarPanelHeader } from "../components/molecules";
 import * as api from "../services/api";
 import { useAppStore } from "../stores/useAppStore";
 import type {
@@ -17,6 +18,7 @@ import { ProfilesSettingsSection } from "./settings/ProfilesSettingsSection";
 import { SecurityIdpiSettingsSection } from "./settings/SecurityIdpiSettingsSection";
 import { SecuritySettingsSection } from "./settings/SecuritySettingsSection";
 import { AutoSolverSettingsSection } from "./settings/AutoSolverSettingsSection";
+import { ObservabilitySettingsSection } from "./settings/ObservabilitySettingsSection";
 import {
   backendSaveNotice,
   sections,
@@ -124,6 +126,13 @@ function renderActiveSection(
           updateBackendSection={options.updateBackendSection}
         />
       );
+    case "observability":
+      return (
+        <ObservabilitySettingsSection
+          backendConfig={options.backendConfig}
+          updateBackendSection={options.updateBackendSection}
+        />
+      );
   }
 }
 
@@ -211,7 +220,7 @@ export default function SettingsPage() {
     ? backendConfig.security.idpi.enabled
     : false;
   const idpiAllowedDomains = backendConfig
-    ? backendConfig.security.idpi.allowedDomains
+    ? backendConfig.security.allowedDomains
     : [];
   const idpiWildcard = idpiAllowedDomains.includes("*");
   const idpiDomainsConfigured = idpiAllowedDomains.length > 0 && !idpiWildcard;
@@ -331,56 +340,6 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="sticky top-0 z-10 border-b border-border-subtle bg-bg-surface/95 px-4 py-3 backdrop-blur">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="dashboard-mono text-sm text-text-secondary">
-              Server Version: {serverInfo?.version || "Unknown version"}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {restartRequired && (
-              <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-warning">
-                Restart required
-              </div>
-            )}
-            <Button
-              variant="secondary"
-              onClick={handleReset}
-              disabled={!hasChanges || saving}
-            >
-              Reset
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={!hasChanges || saving || !backendConfig}
-            >
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
-        {(error || notice || restartReasons.length > 0) && (
-          <div className="mt-3 flex flex-col gap-2">
-            {error && (
-              <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            {notice && (
-              <div className="rounded-sm border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
-                {notice}
-              </div>
-            )}
-            {restartRequired && restartReasons.length > 0 && (
-              <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning">
-                Restart needed for: {restartReasons.join(", ")}.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       <Modal
         open={pendingElevatedAction !== null}
         onClose={closeElevationPrompt}
@@ -436,33 +395,85 @@ export default function SettingsPage() {
         </form>
       </Modal>
 
-      <div className="flex flex-1 flex-col gap-6 overflow-hidden p-4 lg:flex-row lg:p-6">
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto lg:w-72">
-          <Card className="p-3">
-            <div className="dashboard-section-label mb-3">Sections</div>
-            <div className="flex flex-col gap-1.5">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  className={`rounded-sm border px-3 py-2.5 text-left transition-all ${
-                    activeSection === section.id
-                      ? "border-primary/30 bg-primary/10 text-text-primary"
-                      : "border-transparent text-text-secondary hover:border-border-subtle hover:bg-bg-elevated hover:text-text-primary"
-                  }`}
-                  onClick={() => setActiveSection(section.id)}
-                >
-                  <div className="text-sm font-medium">{section.label}</div>
-                  <div className="mt-1 text-xs leading-5 text-text-muted">
-                    {section.description}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </Card>
-        </aside>
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <SidebarPanel
+          as="aside"
+          chrome="sidebar"
+          contentPadding="sm"
+          headerPadding="sm"
+          surface="panel"
+          width="narrow"
+          header={
+            <SidebarPanelHeader
+              eyebrow="Settings"
+              description={`Version: ${serverInfo?.version || "dev"}`}
+              descriptionClassName="dashboard-mono"
+            />
+          }
+        >
+          <div className="flex flex-col gap-1.5">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className={`rounded-sm border px-3 py-2.5 text-left transition-all ${
+                  activeSection === section.id
+                    ? "border-primary/30 bg-primary/10 text-text-primary"
+                    : "border-transparent text-text-secondary hover:border-border-subtle hover:bg-bg-elevated hover:text-text-primary"
+                }`}
+                onClick={() => setActiveSection(section.id)}
+              >
+                <div className="text-sm font-medium">{section.label}</div>
+                <div className="mt-1 text-xs leading-5 text-text-muted">
+                  {section.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </SidebarPanel>
 
         <div className="flex-1 overflow-y-auto pr-1">
+          <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border-subtle bg-bg-surface/95 p-3 backdrop-blur">
+            {restartRequired && (
+              <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-warning">
+                Restart required
+              </div>
+            )}
+            <div className="flex-1" />
+            <Button
+              variant="secondary"
+              onClick={handleReset}
+              disabled={!hasChanges || saving}
+            >
+              Reset
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={!hasChanges || saving || !backendConfig}
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          {(error || notice || restartReasons.length > 0) && (
+            <div className="flex flex-col gap-2 px-3 pb-3">
+              {error && (
+                <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+              {notice && (
+                <div className="rounded-sm border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                  {notice}
+                </div>
+              )}
+              {restartRequired && restartReasons.length > 0 && (
+                <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning">
+                  Restart needed for: {restartReasons.join(", ")}.
+                </div>
+              )}
+            </div>
+          )}
           {loading || !backendConfig ? (
             <Card className="p-6">
               <div className="text-sm text-text-muted">Loading settings…</div>

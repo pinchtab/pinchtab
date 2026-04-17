@@ -20,10 +20,10 @@ func TestSessionCookieSecure_AutoDetect(t *testing.T) {
 		}
 	})
 
-	t.Run("lan host over http remains secure for backward compatibility", func(t *testing.T) {
+	t.Run("lan host over http is not secure", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "http://192.168.1.50:9867/dashboard", nil)
-		if !sessionCookieSecure(req, false, nil) {
-			t.Fatal("expected lan http request to keep Secure cookie in auto-detect mode")
+		if sessionCookieSecure(req, false, nil) {
+			t.Fatal("expected lan http request to omit Secure so browser sessions work over plain HTTP")
 		}
 	})
 }

@@ -19,8 +19,8 @@ type TabPolicyState struct {
 	UpdatedAt  time.Time
 }
 
-func EvaluateTabPolicy(rawURL string, cfg config.IDPIConfig) TabPolicyState {
-	result := idpi.CheckDomain(rawURL, cfg)
+func EvaluateTabPolicy(rawURL string, cfg config.IDPIConfig, allowedDomains []string) TabPolicyState {
+	result := idpi.CheckDomain(rawURL, cfg, allowedDomains)
 	return TabPolicyState{
 		CurrentURL: rawURL,
 		Threat:     result.Threat,
@@ -34,7 +34,7 @@ func (tm *TabManager) idpiDomainPolicyActive() bool {
 	return tm != nil &&
 		tm.config != nil &&
 		tm.config.IDPI.Enabled &&
-		len(tm.config.IDPI.AllowedDomains) > 0
+		len(tm.config.AllowedDomains) > 0
 }
 
 func (tm *TabManager) startTabPolicyWatcher(tabID string, ctx context.Context) {
@@ -84,7 +84,7 @@ func (tm *TabManager) refreshTabPolicyFromContext(tabID string, ctx context.Cont
 }
 
 func (tm *TabManager) updateTabPolicy(tabID, rawURL string) TabPolicyState {
-	state := EvaluateTabPolicy(rawURL, tm.config.IDPI)
+	state := EvaluateTabPolicy(rawURL, tm.config.IDPI, tm.config.AllowedDomains)
 
 	tm.mu.Lock()
 	if entry := tm.tabs[tabID]; entry != nil {

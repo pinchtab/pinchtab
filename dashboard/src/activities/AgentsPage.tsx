@@ -11,7 +11,6 @@ export default function AgentsPage() {
       requireSelectedAgent
       showAllAgentsOption={false}
       showAgentFilter
-      simplifyEventRows
       copyTabId
       preferKnownAgents
       useAgentEventStore

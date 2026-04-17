@@ -3,7 +3,11 @@ import type { ComponentProps } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Card } from "../components/atoms";
 import * as api from "../services/api";
-import { dispatchAuthStateChanged } from "../services/auth";
+import {
+  dispatchAuthStateChanged,
+  INSECURE_DASHBOARD_TRANSPORT_WARNING,
+  isInsecureDashboardTransport,
+} from "../services/auth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -11,6 +15,7 @@ export default function LoginPage() {
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const insecureDashboardTransport = isInsecureDashboardTransport();
 
   const from =
     (location.state as { from?: string } | null)?.from ||
@@ -52,6 +57,11 @@ export default function LoginPage() {
             </code>{" "}
             to copy the token to your clipboard.
           </p>
+          {insecureDashboardTransport && (
+            <div className="mt-3 rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
+              {INSECURE_DASHBOARD_TRANSPORT_WARNING}
+            </div>
+          )}
         </div>
 
         <form

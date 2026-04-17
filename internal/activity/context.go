@@ -16,7 +16,6 @@ import (
 
 const (
 	HeaderAgentID     = "X-Agent-Id"
-	HeaderPTActorID   = "X-PinchTab-Actor-Id"
 	HeaderPTSessionID = "X-PinchTab-Session-Id"
 	HeaderPTSource    = "X-PinchTab-Source"
 	HeaderPTInstance  = "X-PinchTab-Instance-Id"
@@ -35,7 +34,6 @@ type requestState struct {
 type Update struct {
 	RequestID   string
 	SessionID   string
-	ActorID     string
 	AgentID     string
 	InstanceID  string
 	ProfileID   string
@@ -60,7 +58,6 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 				Timestamp:  start.UTC(),
 				Source:     sourceFor(r, source),
 				RequestID:  requestIDFor(r, w),
-				ActorID:    actorIDFor(r),
 				AgentID:    agentIDFor(r),
 				SessionID:  strings.TrimSpace(r.Header.Get(HeaderPTSessionID)),
 				Method:     r.Method,
@@ -88,9 +85,6 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 		if evt.AgentID == "" {
 			evt.AgentID = agentIDFor(r)
 		}
-		if evt.ActorID == "" {
-			evt.ActorID = actorIDFor(r)
-		}
 		if evt.Path == "" {
 			evt.Path = r.URL.Path
 		}
@@ -105,8 +99,12 @@ func sourceFor(r *http.Request, fallback string) string {
 	if source := strings.TrimSpace(r.Header.Get(HeaderPTSource)); source != "" {
 		return source
 	}
-	if authn.CredentialsFromRequest(r).Method == authn.MethodCookie {
+	creds := authn.CredentialsFromRequest(r)
+	if creds.Method == authn.MethodCookie {
 		return "dashboard"
+	}
+	if creds.Method == authn.MethodHeader || creds.Method == authn.MethodSession {
+		return "client"
 	}
 	return fallback
 }
@@ -128,9 +126,6 @@ func EnrichRequest(r *http.Request, update Update) {
 	}
 	if update.SessionID != "" {
 		state.event.SessionID = update.SessionID
-	}
-	if update.ActorID != "" {
-		state.event.ActorID = update.ActorID
 	}
 	if update.AgentID != "" {
 		state.event.AgentID = update.AgentID
@@ -174,9 +169,6 @@ func PropagateHeaders(ctx context.Context, req *http.Request) {
 	if evt.RequestID != "" {
 		req.Header.Set("X-Request-Id", evt.RequestID)
 	}
-	if evt.ActorID != "" {
-		req.Header.Set(HeaderPTActorID, evt.ActorID)
-	}
 	if evt.AgentID != "" {
 		req.Header.Set(HeaderAgentID, evt.AgentID)
 	}
@@ -207,13 +199,6 @@ func requestIDFor(r *http.Request, w http.ResponseWriter) string {
 		}
 	}
 	return strings.TrimSpace(r.Header.Get("X-Request-Id"))
-}
-
-func actorIDFor(r *http.Request) string {
-	if actorID := strings.TrimSpace(r.Header.Get(HeaderPTActorID)); actorID != "" {
-		return actorID
-	}
-	return FingerprintToken(authn.TokenFromRequest(r))
 }
 
 func agentIDFor(r *http.Request) string {

@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/chromedp/chromedp"
 )
 
 func TestWaitForTitle_ContextCancelled(t *testing.T) {
@@ -19,7 +17,8 @@ func TestWaitForTitle_ContextCancelled(t *testing.T) {
 }
 
 func TestWaitForTitle_NoTimeout(t *testing.T) {
-	ctx, _ := chromedp.NewContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately - no browser spawned
 
 	// With timeout <= 0, should return immediately
 	title, _ := WaitForTitle(ctx, 0)

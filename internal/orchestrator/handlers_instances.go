@@ -9,14 +9,17 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 type startInstanceRequest struct {
-	ProfileID      string   `json:"profileId,omitempty"`
-	Mode           string   `json:"mode,omitempty"`
-	Port           string   `json:"port,omitempty"`
-	ExtensionPaths []string `json:"extensionPaths,omitempty"`
+	ProfileID      string                 `json:"profileId,omitempty"`
+	Mode           string                 `json:"mode,omitempty"`
+	Port           string                 `json:"port,omitempty"`
+	ExtensionPaths []string               `json:"extensionPaths,omitempty"`
+	SecurityPolicy *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
 }
 
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +137,9 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	started, err := o.Launch(profileName, port, headless, nil)
+	started, err := o.LaunchWithOptions(profileName, port, headless, LaunchOptions{
+		SecurityPolicy: inst.requestedSecurityPolicy,
+	})
 	if err != nil {
 		statusCode := classifyLaunchError(err)
 		httpx.Error(w, statusCode, err)
@@ -237,6 +242,15 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 }
 
 func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.Request, req startInstanceRequest, auditEvent string) {
+	if len(req.ExtensionPaths) > 0 {
+		httpx.Error(w, 400, fmt.Errorf("extensionPaths are not supported on instance start requests; configure browser.extensionPaths on the server instead"))
+		return
+	}
+	if err := validateStartInstanceSecurityPolicy(req.SecurityPolicy); err != nil {
+		httpx.Error(w, 400, err)
+		return
+	}
+
 	var profileName string
 	var err error
 
@@ -252,7 +266,10 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 	headless := req.Mode != "headed"
 
-	inst, err := o.Launch(profileName, req.Port, headless, req.ExtensionPaths)
+	inst, err := o.LaunchWithOptions(profileName, req.Port, headless, LaunchOptions{
+		ExtensionPaths: req.ExtensionPaths,
+		SecurityPolicy: req.SecurityPolicy,
+	})
 	if err != nil {
 		statusCode := classifyLaunchError(err)
 		httpx.Error(w, statusCode, err)
@@ -261,6 +278,24 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 	authn.AuditLog(r, auditEvent, "instanceId", inst.ID, "profileName", profileName)
 	httpx.JSON(w, 201, inst)
+}
+
+func validateStartInstanceSecurityPolicy(policy *bridge.SecurityPolicy) error {
+	if policy == nil {
+		return nil
+	}
+	errs := config.ValidateFileConfig(&config.FileConfig{
+		Security: config.SecurityConfig{
+			AllowedDomains: append([]string(nil), policy.AllowedDomains...),
+			IDPI: config.IDPIConfig{
+				Enabled: true,
+			},
+		},
+	})
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid securityPolicy.allowedDomains: %w", errs[0])
 }
 
 func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request) {

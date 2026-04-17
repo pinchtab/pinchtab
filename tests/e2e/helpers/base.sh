@@ -50,6 +50,7 @@ TESTS_PASSED="${TESTS_PASSED:-0}"
 TESTS_FAILED="${TESTS_FAILED:-0}"
 ASSERTIONS_PASSED="${ASSERTIONS_PASSED:-0}"
 ASSERTIONS_FAILED="${ASSERTIONS_FAILED:-0}"
+ASSERTIONS_SKIPPED="${ASSERTIONS_SKIPPED:-0}"
 TEST_START_TIME="${TEST_START_TIME:-0}"
 TEST_START_NS="${TEST_START_NS:-0}"
 if [ -z "${TEST_RESULTS_INIT:-}" ]; then
@@ -158,6 +159,13 @@ find_ref_by_name() {
   local name="$1"
   local json="${2:-$(_e2e_default_ref_json)}"
   echo "$json" | safe_jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty"
+}
+
+find_ref_by_role_and_name() {
+  local role="$1"
+  local name="$2"
+  local json="${3:-$(_e2e_default_ref_json)}"
+  echo "$json" | safe_jq -r "[.nodes[] | select(.role == \"$role\" and .name == \"$name\") | .ref] | first // empty"
 }
 
 assert_ref_found() {

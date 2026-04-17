@@ -1,6 +1,6 @@
 # Profile Management
 
-When running `pinchtab`, profiles are managed via the dashboard API on port 9867.
+When running `pinchtab`, profiles are managed via the HTTP API on port 9867.
 
 ## List profiles
 
@@ -102,7 +102,7 @@ Headed mode = real visible Chrome window managed by Pinchtab.
 Recommended human + agent flow:
 
 ```bash
-# Human starts dashboard and sets up profile
+# Human starts PinchTab and sets up profile
 pinchtab
 
 # Agent resolves the profile endpoint

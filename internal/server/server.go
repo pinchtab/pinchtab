@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/agentsession"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
@@ -24,6 +24,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 	"github.com/pinchtab/pinchtab/internal/scheduler"
+	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 
 	// Register strategies
@@ -39,9 +40,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
 
 	dashPort := cfg.Port
-	if dashPort == "" {
-		dashPort = "9870"
-	}
 	startedAt := time.Now()
 
 	profilesDir := cfg.ProfilesBaseDir
@@ -66,19 +64,22 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		}
 	})
 	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, dash, version, startedAt)
-	sessions := authn.NewSessionManager(dashboard.SessionManagerConfig(cfg))
+	sessions := browsersession.NewManager(dashboard.BrowserSessionConfig(cfg))
 	configAPI.SetSessionManager(sessions)
 	authAPI := dashboard.NewAuthAPI(cfg, sessions)
 
-	// Agent sessions
-	agentSessionStore := agentsession.NewStore(agentsession.Config{
+	// API sessions
+	sessionStore := session.NewStore(session.Config{
 		Enabled:     cfg.Sessions.Agent.Enabled,
 		Mode:        cfg.Sessions.Agent.Mode,
 		IdleTimeout: cfg.Sessions.Agent.IdleTimeout,
 		MaxLifetime: cfg.Sessions.Agent.MaxLifetime,
 		PersistPath: filepath.Join(cfg.StateDir, "sessions.json"),
 	})
-	agentSessionAPI := dashboard.NewAgentSessionAPI(agentSessionStore)
+	var sessionAPI *dashboard.SessionAPI
+	if sessionStore.Enabled() {
+		sessionAPI = dashboard.NewSessionAPI(sessionStore)
+	}
 
 	// Wire up instance events to SSE broadcast
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
@@ -90,6 +91,15 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
 		RetentionDays: cfg.Observability.Activity.RetentionDays,
+		Events: activity.EventSourceConfig{
+			Dashboard:    cfg.Observability.Activity.Events.Dashboard,
+			Server:       cfg.Observability.Activity.Events.Server,
+			Bridge:       cfg.Observability.Activity.Events.Bridge,
+			Orchestrator: cfg.Observability.Activity.Events.Orchestrator,
+			Scheduler:    cfg.Observability.Activity.Events.Scheduler,
+			MCP:          cfg.Observability.Activity.Events.MCP,
+			Other:        cfg.Observability.Activity.Events.Other,
+		},
 	}, cfg.ActivityStateDir())
 	if err != nil {
 		slog.Error("activity store", "err", err)
@@ -105,11 +115,11 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	liveActivity := newDashboardActivityRecorder(actStore, dash)
 	dash.RegisterAdminRoutes(mux, dashboard.AdminDeps{
-		ConfigAPI:       configAPI,
-		AuthAPI:         authAPI,
-		AgentSessionAPI: agentSessionAPI,
-		Activity:        liveActivity,
-		ServerMetrics:   handlers.SnapshotMetrics,
+		ConfigAPI:     configAPI,
+		AuthAPI:       authAPI,
+		SessionAPI:    sessionAPI,
+		Activity:      liveActivity,
+		ServerMetrics: handlers.SnapshotMetrics,
 	})
 	profMgr.RegisterHandlers(mux)
 
@@ -226,7 +236,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			liveActivity,
 			"server",
 			handlers.SecurityHeadersMiddleware(cfg,
-				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, agentSessionStore, mux)))),
+				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, sessionStore, mux)))),
 			),
 		),
 	)

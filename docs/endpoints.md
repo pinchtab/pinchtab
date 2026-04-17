@@ -1,12 +1,13 @@
 # Endpoints Reference
 
-This page lists the live HTTP surface exposed by PinchTab. Some routes are only available in bridge mode, some only in full server mode, and some are gated by security settings.
+This page summarizes the live HTTP surface exposed by PinchTab. Some routes are only available in bridge mode, some only in full server mode, and some are gated by security settings.
 
 ## Health And Server Metadata
 
 ```text
 GET  /health
 POST /ensure-chrome
+POST /browser/restart
 GET  /openapi.json
 GET  /help          (alias for /openapi.json)
 GET  /metrics
@@ -37,6 +38,22 @@ Notes:
 - `server.token` is treated as write-only by `PUT /api/config`
 - auth routes are for the dashboard session flow
 
+## Dashboard Events And Agents
+
+```text
+GET  /api/events
+GET  /api/agents
+GET  /api/agents/{id}
+GET  /api/agents/{id}/events
+POST /api/agents/{id}/events
+```
+
+Notes:
+
+- `/api/events` is the dashboard SSE stream
+- `/api/agents/{id}/events` streams one agent's recent events
+- `POST /api/agents/{id}/events` ingests agent activity into the dashboard feed
+
 ## Navigation And Tabs
 
 ```text
@@ -56,6 +73,9 @@ GET  /tabs
 POST /tab
 POST /tabs/{id}/close
 GET  /tabs/{id}/metrics
+POST /tabs/{id}/handoff
+GET  /tabs/{id}/handoff
+POST /tabs/{id}/resume
 ```
 
 Navigation request fields:
@@ -71,6 +91,24 @@ Important behavior:
 
 - `POST /navigate` creates a new tab when `tabId` is omitted
 - `POST /tab` supports `new`, `close`, and `focus`
+
+## Handoff And Manual Intervention
+
+```text
+POST /tabs/{id}/handoff
+GET  /tabs/{id}/handoff
+POST /tabs/{id}/resume
+```
+
+Notes:
+
+- these routes are tab-scoped only
+- `POST /tabs/{id}/handoff` marks the tab as `paused_handoff` and records a reason
+- `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set
+- `POST /tabs/{id}/resume` clears the handoff state and can carry resume metadata for the caller
+- current behavior is advisory only: handoff state is not yet a hard block on subsequent automation requests
+- treat the current implementation as temporary coordination state, not as a security boundary
+- there is currently no dedicated CLI wrapper for handoff or resume; use the HTTP API
 
 ## Tab Locking
 
@@ -90,6 +128,12 @@ POST /actions
 POST /macro
 POST /tabs/{id}/action
 POST /tabs/{id}/actions
+POST /wait
+POST /tabs/{id}/wait
+GET  /frame
+POST /frame
+GET  /tabs/{id}/frame
+POST /tabs/{id}/frame
 GET  /snapshot
 GET  /tabs/{id}/snapshot
 GET  /text
@@ -100,6 +144,8 @@ POST /evaluate
 POST /tabs/{id}/evaluate
 ```
 
+`/evaluate` is intentionally separate from selector frame scope. `GET/POST /frame` only affects selector-based `/snapshot` and `/action` calls, not arbitrary JavaScript evaluation.
+
 Action kinds currently include:
 
 - `click`
@@ -108,6 +154,10 @@ Action kinds currently include:
 - `fill`
 - `press`
 - `hover`
+- `mouse-move`
+- `mouse-down`
+- `mouse-up`
+- `mouse-wheel`
 - `focus`
 - `select`
 - `scroll`
@@ -126,6 +176,12 @@ Action targeting fields:
 - `selector`
 - `nodeId`
 - `x` and `y`
+- `button`
+- `deltaX` and `deltaY`
+- `waitNav`
+- `dialogAction` and `dialogText`
+
+Selector lookup is limited to the current frame scope. The default scope is `main`. Use `/frame` or `/tabs/{id}/frame` before selector-based iframe actions. Same-origin iframe scopes are supported; cross-origin iframe descendants are not currently exposed.
 
 Snapshot query parameters:
 
@@ -139,10 +195,22 @@ Snapshot query parameters:
 - `noAnimations`
 - `output`
 
+`selector` on `/snapshot` follows the same rule: it only searches the current frame scope. It does not automatically pierce into iframes, and cross-origin iframe descendants are not inlined.
+
 Text query parameters:
 
 - `mode=raw`
 - `format`
+- `maxChars`
+- `frameId`
+
+`/text` default mode picks the first **visible** `<article>` / `[role="main"]` /
+`<main>` (skips `display:none`) and strips nav/footer/ads. Use `mode=raw` for
+full `innerText`, or `/snapshot` for structured UI text like prices and button
+labels.
+
+`/text` is also frame-aware. `frameId` targets a specific iframe for a one-shot
+read; otherwise the endpoint inherits the tab's current `/frame` scope.
 
 Find body fields:
 
@@ -223,7 +291,7 @@ Notes:
 
 - download and upload endpoints are gated by `security.allowDownload` and `security.allowUpload`
 - download automatically decompresses `.gz` files and returns the decompressed content
-- `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains)
+- `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains). Setting `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - clipboard endpoints are gated by `security.allowClipboard`
 - upload uses a JSON body with `selector` and `files`
 
@@ -239,6 +307,8 @@ DELETE /tabs/{id}/storage
 ```
 
 Storage is captured only for the current origin (active tab). Multi-origin storage is not supported.
+
+All storage routes are gated by `security.allowStateExport`.
 
 GET query parameters:
 
@@ -274,9 +344,9 @@ State management saves and restores browser state (cookies, localStorage, sessio
 
 Notes:
 
-- `POST /state/save` and `GET /state/show` are gated by `security.allowStateExport`
+- All state and storage endpoints are gated by `security.allowStateExport`: `/storage`, `/tabs/{id}/storage`, `GET /state/list`, `GET /state/show`, `POST /state/save`, `POST /state/load`, `DELETE /state`, and `POST /state/clean`
 - state files are stored in `{stateDir}/sessions/` with `0600` permissions
-- optional AES-256-GCM encryption via `PINCHTAB_STATE_KEY` environment variable
+- optional AES-256-GCM encryption via `security.stateEncryptionKey` config setting
 - storage is captured only for the current origin (active tab)
 
 `POST /state/save` body fields:
@@ -408,6 +478,7 @@ POST /instances/launch
 POST /instances/attach
 POST /instances/attach-bridge
 POST /instances/{id}/start
+POST /instances/{id}/restart
 POST /instances/{id}/stop
 GET  /instances/{id}/logs
 GET  /instances/{id}/logs/stream
@@ -420,6 +491,8 @@ Notes:
 
 - `/instances/start` and `/instances/launch` use `mode`, not `headless`
 - `/instances/launch` is a compatibility alias over `/instances/start`
+- instance responses include both `mode` and `headless`
+- instance start surfaces accept `securityPolicy.allowedDomains` for additive instance-scoped IDPI/domain allowlist overrides
 - create profiles explicitly with `POST /profiles`; `name` is no longer supported on `/instances/launch`
 - `/profiles/{id}/start` uses `headless`
 - attach routes are gated by `security.attach`
@@ -445,7 +518,6 @@ Activity query parameters include:
 - `source`
 - `requestId`
 - `sessionId`
-- `actorId`
 - `agentId`
 - `instanceId`
 - `profileId`
@@ -459,7 +531,7 @@ Activity attribution and source behavior:
 
 - requests tagged with `X-Agent-Id` are recorded as `agentId` and can be filtered with `GET /api/activity?agentId=<id>`
 - unfiltered `GET /api/activity` returns the primary activity feed
-- named internal sources such as `dashboard` or `orchestrator` are stored in source-specific daily files and can be queried with `?source=<name>`
+- named non-client sources such as `dashboard` or `orchestrator` are stored in source-specific daily files only when enabled under `observability.activity.events`, and can then be queried with `?source=<name>`
 
 Scheduler routes are only present when `scheduler.enabled` is true.
 
@@ -467,16 +539,17 @@ Scheduler routes are only present when `scheduler.enabled` is true.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/agent-sessions` | Create a new agent session (body: `{agentId, label?}`) |
-| `GET` | `/api/agent-sessions` | List all agent sessions |
-| `GET` | `/api/agent-sessions/me` | Get current session (requires `Authorization: Session` auth) |
-| `GET` | `/api/agent-sessions/{id}` | Get session details by ID |
-| `POST` | `/api/agent-sessions/{id}/rotate` | Rotate session token |
-| `POST` | `/api/agent-sessions/{id}/revoke` | Revoke session |
+| `POST` | `/sessions` | Create a new agent session (body: `{agentId, label?}`) |
+| `GET` | `/sessions` | List all agent sessions |
+| `GET` | `/sessions/me` | Get current session (requires `Authorization: Session` auth) |
+| `GET` | `/sessions/{id}` | Get session details by ID |
+| `POST` | `/sessions/{id}/revoke` | Revoke session |
 
-All endpoints except `/me` require dashboard auth (bearer or cookie). The `/me` endpoint requires session auth.
+`POST /sessions`, `GET /sessions`, and `GET /sessions/{id}` require dashboard auth (bearer or cookie). The `/me` endpoint requires session auth. `POST /sessions/{id}/revoke` allows dashboard auth or the owning session.
 
-Create and rotate return `sessionToken` — the plaintext token shown only once.
+Create returns `sessionToken` — the plaintext token shown only once.
+
+Session-authenticated callers cannot reach dashboard/admin endpoint families such as config, dashboard agent listings, dashboard event streams, session management, profile management, instance management, or cache controls. They are intended for trusted automation in controlled environments, not for untrusted multi-tenant isolation.
 
 ## Feature Gates
 
@@ -490,7 +563,7 @@ These gates are not ordinary feature toggles. Enabling them is a documented, non
 - clipboard routes -> `security.allowClipboard`
 - attach routes -> `security.attach`
 - screencast routes -> `security.allowScreencast`
-- `/state/save` and `/state/show` -> `security.allowStateExport`
+- storage routes (`/storage`, `/tabs/{id}/storage`) and the full state-management family (`/state/list`, `/state/show`, `/state/save`, `/state/load`, `DELETE /state`, `POST /state/clean`) -> `security.allowStateExport`
 
 ## Error Response Format
 

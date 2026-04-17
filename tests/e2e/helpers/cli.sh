@@ -38,7 +38,7 @@ pt() {
   rm -f "$tmpout" "$tmperr"
 
   if [ -n "$PT_OUT" ]; then
-    echo "$PT_OUT" | head -5
+    head -5 <<< "$PT_OUT" || true
   fi
 }
 
@@ -192,6 +192,24 @@ assert_config_version_one_of() {
   echo -e "  ${RED}✗${NC} unexpected configVersion: $actual"
   ((ASSERTIONS_FAILED++)) || true
   return 1
+}
+
+# Assert PT_OUT is a bare tab ID. When stdout is redirected to a file (as
+# in this harness), `pinchtab nav|goto|navigate` auto-switches to
+# machine-friendly output: just the tab ID on stdout (no JSON envelope).
+# See stdoutIsPipe() in internal/cli/actions/actions_navigate.go.
+assert_tab_id() {
+  local desc="${1:-returns tab ID}"
+  local trimmed
+  trimmed=$(echo "$PT_OUT" | tr -d '[:space:]')
+  if [[ "$trimmed" =~ ^[A-Fa-f0-9]{16,64}$ ]]; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc"
+    echo -e "  ${RED}  output was: $PT_OUT${NC}"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
 }
 
 assert_output_not_contains() {

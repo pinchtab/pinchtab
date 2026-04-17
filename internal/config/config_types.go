@@ -2,6 +2,8 @@ package config
 
 import "time"
 
+const defaultPort = "9867"
+
 // RuntimeConfig holds all runtime settings used throughout the application.
 // This is the single source of truth for configuration at runtime.
 type RuntimeConfig struct {
@@ -16,25 +18,31 @@ type RuntimeConfig struct {
 	CookieSecure      *bool // Nil = auto-detect based on request scheme/host for backward compatibility
 
 	// Security settings
-	AllowEvaluate          bool
-	AllowMacro             bool
-	AllowScreencast        bool
-	AllowDownload          bool
+	AllowEvaluate   bool
+	AllowMacro      bool
+	AllowScreencast bool
+	AllowDownload   bool
+	// AllowedDomains is the unified per-instance allowlist sourced from
+	// security.allowedDomains in the file config.
+	AllowedDomains         []string
 	DownloadAllowedDomains []string
 	DownloadMaxBytes       int
 	AllowUpload            bool
 	AllowClipboard         bool
 	AllowStateExport       bool
-	EnableActionGuards     bool // Enable bridge-level stale/navigation guard checks around actions
+	StateEncryptionKey     string // Key for encrypting state files (AES-256-GCM)
+	EnableActionGuards     bool   // Enable bridge-level stale/navigation guard checks around actions
 	UploadMaxRequestBytes  int
 	UploadMaxFiles         int
 	UploadMaxFileBytes     int
 	UploadMaxTotalBytes    int
 	MaxRedirects           int      // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
 	TrustedProxyCIDRs      []string // CIDRs/IPs whose RemoteIPAddress is trusted in navigation responses (e.g. internal proxy)
+	TrustedResolveCIDRs    []string // CIDRs/IPs allowed when a navigation target resolves to non-public addresses
 
 	// Browser/instance settings
 	Headless          bool
+	HeadlessSet       bool // true when explicitly set via config or flag
 	NoRestore         bool
 	ProfileDir        string
 	ProfilesBaseDir   string
@@ -124,7 +132,6 @@ type DashboardSessionRuntimeConfig struct {
 // defense layer.
 type IDPIConfig struct {
 	Enabled        bool     `json:"enabled,omitempty"`
-	AllowedDomains []string `json:"allowedDomains,omitempty"`
 	StrictMode     bool     `json:"strictMode,omitempty"`
 	ScanContent    bool     `json:"scanContent,omitempty"`
 	WrapContent    bool     `json:"wrapContent,omitempty"`
@@ -170,10 +177,21 @@ type ObservabilityConfig struct {
 }
 
 type ActivityConfig struct {
-	Enabled        bool   `json:"enabled,omitempty"`
-	SessionIdleSec int    `json:"sessionIdleSec,omitempty"`
-	RetentionDays  int    `json:"retentionDays,omitempty"`
-	StateDir       string `json:"stateDir,omitempty"`
+	Enabled        bool                 `json:"enabled,omitempty"`
+	SessionIdleSec int                  `json:"sessionIdleSec,omitempty"`
+	RetentionDays  int                  `json:"retentionDays,omitempty"`
+	StateDir       string               `json:"stateDir,omitempty"`
+	Events         ActivityEventsConfig `json:"events,omitempty"`
+}
+
+type ActivityEventsConfig struct {
+	Dashboard    bool `json:"dashboard,omitempty"`
+	Server       bool `json:"server,omitempty"`
+	Bridge       bool `json:"bridge,omitempty"`
+	Orchestrator bool `json:"orchestrator,omitempty"`
+	Scheduler    bool `json:"scheduler,omitempty"`
+	MCP          bool `json:"mcp,omitempty"`
+	Other        bool `json:"other,omitempty"`
 }
 
 // FileConfig is the persistent configuration written to disk.
@@ -258,11 +276,13 @@ type SecurityConfig struct {
 	AllowMacro             *bool        `json:"allowMacro,omitempty"`
 	AllowScreencast        *bool        `json:"allowScreencast,omitempty"`
 	AllowDownload          *bool        `json:"allowDownload,omitempty"`
+	AllowedDomains         []string     `json:"allowedDomains,omitempty"`
 	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
 	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
 	AllowUpload            *bool        `json:"allowUpload,omitempty"`
 	AllowClipboard         *bool        `json:"allowClipboard,omitempty"`
 	AllowStateExport       *bool        `json:"allowStateExport,omitempty"`
+	StateEncryptionKey     *string      `json:"stateEncryptionKey,omitempty"`
 	EnableActionGuards     *bool        `json:"enableActionGuards,omitempty"`
 	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
 	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
@@ -270,6 +290,7 @@ type SecurityConfig struct {
 	UploadMaxTotalBytes    *int         `json:"uploadMaxTotalBytes,omitempty"`
 	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
 	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
+	TrustedResolveCIDRs    []string     `json:"trustedResolveCIDRs,omitempty"`
 	Attach                 AttachConfig `json:"attach,omitempty"`
 	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
 }
@@ -319,10 +340,21 @@ type ObservabilityFileConfig struct {
 }
 
 type ActivityFileConfig struct {
-	Enabled        *bool  `json:"enabled,omitempty"`
-	SessionIdleSec *int   `json:"sessionIdleSec,omitempty"`
-	RetentionDays  *int   `json:"retentionDays,omitempty"`
-	StateDir       string `json:"stateDir,omitempty"`
+	Enabled        *bool                    `json:"enabled,omitempty"`
+	SessionIdleSec *int                     `json:"sessionIdleSec,omitempty"`
+	RetentionDays  *int                     `json:"retentionDays,omitempty"`
+	StateDir       string                   `json:"stateDir,omitempty"`
+	Events         ActivityEventsFileConfig `json:"events,omitempty"`
+}
+
+type ActivityEventsFileConfig struct {
+	Dashboard    *bool `json:"dashboard,omitempty"`
+	Server       *bool `json:"server,omitempty"`
+	Bridge       *bool `json:"bridge,omitempty"`
+	Orchestrator *bool `json:"orchestrator,omitempty"`
+	Scheduler    *bool `json:"scheduler,omitempty"`
+	MCP          *bool `json:"mcp,omitempty"`
+	Other        *bool `json:"other,omitempty"`
 }
 
 // AutoSolverFileConfig is the persistent configuration for the autosolver system.

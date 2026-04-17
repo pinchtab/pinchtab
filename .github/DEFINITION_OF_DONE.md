@@ -20,7 +20,7 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 
 ## Manual — Testing (Required)
 - [ ] **New/changed functionality has tests** — Same-package unit tests preferred
-- [ ] **Docker E2E tests run locally** — If you modified handlers/bridge/tabs, run: `./dev e2e` and/or the narrower suite you changed, for example `./dev e2e api-fast`, `./dev e2e api-full`, or `./dev e2e cli-full`
+- [ ] **Docker E2E tests run locally** — If you modified handlers/bridge/tabs, run: `./dev e2e pr` and/or the narrower suite you changed, for example `./dev e2e api`, `./dev e2e cli`, or `./dev e2e infra`
 - [ ] **npm commands work** (if npm wrapper touched):
   - `npm pack` in `/npm/` produces valid tarball
   - `npm install -g pinchtab` (or from local tarball) succeeds

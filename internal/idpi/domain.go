@@ -20,8 +20,8 @@ import (
 //   - "*.example.com" – matches any single subdomain of example.com but NOT
 //     example.com itself
 //   - "*"            – matches any host (effectively disables the whitelist)
-func CheckDomain(rawURL string, cfg config.IDPIConfig) CheckResult {
-	if !cfg.Enabled || len(cfg.AllowedDomains) == 0 {
+func CheckDomain(rawURL string, cfg config.IDPIConfig, allowedDomains []string) CheckResult {
+	if !cfg.Enabled || len(allowedDomains) == 0 {
 		return CheckResult{}
 	}
 	if isAllowedSpecialURL(rawURL) {
@@ -37,25 +37,25 @@ func CheckDomain(rawURL string, cfg config.IDPIConfig) CheckResult {
 			"URL has no domain component and cannot be verified against allowedDomains")
 	}
 
-	if domainAllowed(host, cfg.AllowedDomains) {
+	if domainAllowed(host, allowedDomains) {
 		return CheckResult{}
 	}
 
 	return makeResult(cfg.StrictMode,
-		fmt.Sprintf("domain %q is not in the allowed list (security.idpi.allowedDomains)", host))
+		fmt.Sprintf("domain %q is not in the allowed list (security.allowedDomains)", host))
 }
 
 // DomainAllowed reports whether rawURL's host matches an explicit allowedDomains
 // entry under an active IDPI domain allowlist.
-func DomainAllowed(rawURL string, cfg config.IDPIConfig) bool {
-	if !cfg.Enabled || len(cfg.AllowedDomains) == 0 || isAllowedSpecialURL(rawURL) {
+func DomainAllowed(rawURL string, cfg config.IDPIConfig, allowedDomains []string) bool {
+	if !cfg.Enabled || len(allowedDomains) == 0 || isAllowedSpecialURL(rawURL) {
 		return false
 	}
 	host := extractHost(rawURL)
 	if host == "" {
 		return false
 	}
-	return domainAllowed(host, cfg.AllowedDomains)
+	return domainAllowed(host, allowedDomains)
 }
 
 func isAllowedSpecialURL(rawURL string) bool {

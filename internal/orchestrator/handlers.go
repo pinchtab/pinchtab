@@ -85,6 +85,9 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 		case routes.CapMacro:
 			enabled = o.AllowsMacro()
 			feature, setting, code = "macro", "security.allowMacro", "macro_disabled"
+		case routes.CapStateExport:
+			enabled = o.AllowsStateExport()
+			feature, setting, code = "stateExport", "security.allowStateExport", "state_export_disabled"
 		}
 		for _, ep := range eps {
 			registerCapabilityRoute(mux, ep.TabRoute(), enabled, feature, setting, code, o.proxyTabRequest)

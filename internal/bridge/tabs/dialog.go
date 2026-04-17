@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/chromedp/cdproto/page"
@@ -12,6 +13,8 @@ import (
 )
 
 const maxDialogTextBytes = 8 * 1024
+
+var handleDialogAction = HandleDialog
 
 // DialogState represents a pending JavaScript dialog.
 type DialogState struct {
@@ -25,12 +28,46 @@ type DialogState struct {
 type DialogManager struct {
 	mu      sync.RWMutex
 	pending map[string]*DialogState
+	armed   map[string]*ArmedDialogHandler
+}
+
+// ArmedDialogHandler is a one-shot auto-handler for the next dialog on a tab.
+type ArmedDialogHandler struct {
+	Action string // "accept" or "dismiss"
+	Text   string // optional prompt text
 }
 
 func NewDialogManager() *DialogManager {
 	return &DialogManager{
 		pending: make(map[string]*DialogState),
+		armed:   make(map[string]*ArmedDialogHandler),
 	}
+}
+
+// ArmAutoHandler sets a one-shot auto-handler for the next dialog on the
+// given tab. The handler is consumed when the dialog fires, or remains armed
+// if no dialog appears.
+func (dm *DialogManager) ArmAutoHandler(tabID, action, text string) {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+	dm.armed[tabID] = &ArmedDialogHandler{Action: action, Text: text}
+}
+
+// TakeAutoHandler retrieves and removes the armed auto-handler for a tab.
+func (dm *DialogManager) TakeAutoHandler(tabID string) *ArmedDialogHandler {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+	h := dm.armed[tabID]
+	delete(dm.armed, tabID)
+	return h
+}
+
+// HasAutoHandler reports whether a one-shot auto-handler is armed for the tab.
+func (dm *DialogManager) HasAutoHandler(tabID string) bool {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	_, ok := dm.armed[tabID]
+	return ok
 }
 
 func (dm *DialogManager) SetPending(tabID string, state *DialogState) {
@@ -76,14 +113,40 @@ func ListenDialogEvents(ctx context.Context, tabID string, dm *DialogManager, au
 			})
 			slog.Debug("dialog opened", "tabId", tabID, "type", e.Type)
 
+			// Check for a one-shot armed handler first (set via ArmAutoHandler
+			// before a click that is expected to open a dialog).
+			if armed := dm.TakeAutoHandler(tabID); armed != nil {
+				accept := armed.Action == "accept"
+				promptText := armed.Text
+				if promptText == "" {
+					promptText = e.DefaultPrompt
+				}
+				state.HasBrowserHandler = true
+				// Dispatch in a goroutine because HandleDialog sends a CDP
+				// command, and the enclosing ListenTarget callback runs on
+				// the CDP event loop — doing CDP work here would deadlock.
+				go func() {
+					if err := handleDialogAction(ctx, accept, promptText); err != nil {
+						slog.Warn("armed dialog handler failed", "tabId", tabID, "err", err)
+						dm.SetPending(tabID, state)
+					} else {
+						slog.Debug("dialog auto-handled", "tabId", tabID, "type", e.Type, "action", armed.Action)
+					}
+				}()
+				return
+			}
+
 			if autoAccept {
 				state.HasBrowserHandler = true
-				if err := HandleDialog(ctx, true, e.DefaultPrompt); err != nil {
-					slog.Warn("auto-accept dialog failed", "tabId", tabID, "err", err)
-					dm.SetPending(tabID, state)
-				} else {
-					slog.Debug("dialog auto-accepted", "tabId", tabID, "type", e.Type)
-				}
+				// Same reasoning as above — dispatch in a goroutine.
+				go func() {
+					if err := handleDialogAction(ctx, true, e.DefaultPrompt); err != nil {
+						slog.Warn("auto-accept dialog failed", "tabId", tabID, "err", err)
+						dm.SetPending(tabID, state)
+					} else {
+						slog.Debug("dialog auto-accepted", "tabId", tabID, "type", e.Type)
+					}
+				}()
 			} else {
 				dm.SetPending(tabID, state)
 			}
@@ -110,10 +173,21 @@ type DialogResult struct {
 func HandlePendingDialog(ctx context.Context, tabID string, dm *DialogManager, accept bool, promptText string) (*DialogResult, error) {
 	state := dm.GetAndClear(tabID)
 	if state == nil {
-		return nil, fmt.Errorf("no dialog open on tab %s", tabID)
+		// Best-effort fallback when dialog-open events were missed.
+		if err := handleDialogAction(ctx, accept, promptText); err != nil {
+			if isNoDialogOpenError(err) || isDialogContextUnavailableError(err) {
+				return nil, fmt.Errorf("no dialog open on tab %s", tabID)
+			}
+			return nil, fmt.Errorf("handle dialog: %w", err)
+		}
+		return &DialogResult{Type: "unknown", Message: "", Handled: true}, nil
 	}
 
-	if err := HandleDialog(ctx, accept, promptText); err != nil {
+	if err := handleDialogAction(ctx, accept, promptText); err != nil {
+		if isNoDialogOpenError(err) {
+			// Dialog may already be handled/closed by browser auto-handler.
+			return &DialogResult{Type: state.Type, Message: state.Message, Handled: true}, nil
+		}
 		dm.SetPending(tabID, state)
 		return nil, fmt.Errorf("handle dialog: %w", err)
 	}
@@ -123,6 +197,24 @@ func HandlePendingDialog(ctx context.Context, tabID string, dm *DialogManager, a
 		Message: state.Message,
 		Handled: true,
 	}, nil
+}
+
+func isNoDialogOpenError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no dialog open") ||
+		strings.Contains(msg, "no dialog is showing") ||
+		strings.Contains(msg, "not showing a dialog")
+}
+
+func isDialogContextUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "invalid context")
 }
 
 func normalizeDialogState(state *DialogState) *DialogState {

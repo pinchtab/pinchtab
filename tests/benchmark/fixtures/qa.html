@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Q&A - How do I make my browser tests deterministic?</title>
+  <style>
+    body { font-family: -apple-system, Arial, sans-serif; margin: 20px; max-width: 780px; color: #232629; }
+    .question, .answer { border-bottom: 1px solid #d6d9dc; padding: 16px 0; display: flex; gap: 16px; }
+    .votes { text-align: center; min-width: 50px; color: #6a737c; font-size: 17px; }
+    .votes .score { font-size: 20px; font-weight: bold; color: #232629; }
+    .body { flex: 1; }
+    .body h2 { margin: 0 0 10px; font-size: 22px; }
+    .meta { color: #6a737c; font-size: 13px; margin-top: 12px; }
+    .tag { background: #e1ecf4; color: #39739d; padding: 3px 6px; border-radius: 3px; font-size: 12px; text-decoration: none; margin-right: 4px; }
+    .accepted-mark { color: #5eba7d; font-size: 24px; vertical-align: middle; }
+    #answer-list h3 { margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Q&amp;A — VERIFY_QA_PAGE_72000</h1>
+
+  <div class="question">
+    <div class="votes">
+      <div class="score">47</div>
+      <div>votes</div>
+    </div>
+    <div class="body">
+      <h2>How do I make my browser-based tests deterministic? — QUESTION_TITLE_MARKER</h2>
+      <p>I have a Playwright suite of about 800 tests. Roughly 1-2% fail on any
+      given CI run, but the same tests rarely fail twice. My team is exhausted
+      from re-running. What are the highest-leverage things I can do to
+      convert the suite from "mostly passes" to "always passes or really
+      failing"?</p>
+      <div class="meta">
+        Asked 3 hours ago by <span>alex</span> ·
+        <a class="tag" href="#">testing</a>
+        <a class="tag" href="#">playwright</a>
+        <a class="tag" href="#">ci</a>
+      </div>
+    </div>
+  </div>
+
+  <section id="answer-list">
+    <h3>3 Answers</h3>
+
+    <div class="answer" id="a-1">
+      <div class="votes">
+        <div class="score">8</div>
+        <div>votes</div>
+      </div>
+      <div class="body">
+        <p>Quick wins: freeze the clock with <code>sinon.useFakeTimers()</code>
+        or the Playwright clock API, seed any RNG, and pin timezone to UTC in
+        your test runner's env. That typically knocks out half of the
+        incidental flakes. ANSWER_1_BODY_MARKER</p>
+        <div class="meta">
+          Answered 2 hours ago by <span>mike</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="answer" id="a-2" data-accepted="true">
+      <div class="votes">
+        <span class="accepted-mark" title="Accepted answer">✓</span>
+        <div class="score">123</div>
+        <div>votes</div>
+        <div>ACCEPTED_ANSWER_ID_A2</div>
+      </div>
+      <div class="body">
+        <p>The tactical mitigations matter, but the structural issue is almost
+        always <strong>test isolation</strong>. Before you fix the clock or
+        the RNG, audit how much state leaks between tests — cookies,
+        localStorage, in-memory caches in your test server, shared user rows
+        in the database. Most "flaky" suites are actually order-dependent
+        suites that happen to pass in the common ordering.</p>
+        <p>Concretely: run your suite with <code>--shuffle</code> or
+        equivalent and watch what happens. If the failure rate goes up,
+        that's your work list, in priority order. If it stays flat, you have
+        a non-determinism problem (clock, RNG, network), which is the easier
+        fix. ANSWER_2_BODY_MARKER</p>
+        <div class="meta">
+          Answered 2 hours ago by <span>grace</span> ·
+          <strong>accepted</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="answer" id="a-3">
+      <div class="votes">
+        <div class="score">3</div>
+        <div>votes</div>
+      </div>
+      <div class="body">
+        <p>Retry the failures in CI. You will be happier. (This is facetious
+        but I have seen teams survive on it.) ANSWER_3_BODY_MARKER</p>
+        <div class="meta">
+          Answered 1 hour ago by <span>kent</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

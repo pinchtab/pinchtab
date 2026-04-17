@@ -66,7 +66,7 @@ Example:
     "blockAds": true
   },
   "profiles": {
-    "baseDir": "/home/pi/.config/pinchtab/profiles",
+    "baseDir": "/home/pi/.pinchtab/profiles",
     "defaultProfile": "default"
   }
 }
@@ -75,7 +75,7 @@ Example:
 Run with it:
 
 ```bash
-PINCHTAB_CONFIG=/home/pi/.config/pinchtab/config.json ./pinchtab
+PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json ./pinchtab
 ```
 
 ## Headless Vs Headed
@@ -134,7 +134,7 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi
 ExecStart=/home/pi/pinchtab
-Environment=PINCHTAB_CONFIG=/home/pi/.config/pinchtab/config.json
+Environment=PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json
 Restart=always
 RestartSec=10
 

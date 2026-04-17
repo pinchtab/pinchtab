@@ -11,6 +11,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -33,7 +34,7 @@ type ConfigAPI struct {
 	profiles  profileLister
 	applier   runtimeConfigApplier
 	agents    agentCounter
-	sessions  *authn.SessionManager
+	sessions  *browsersession.Manager
 	version   string
 	startedAt time.Time
 	boot      config.FileConfig
@@ -94,7 +95,7 @@ func NewConfigAPI(
 	}
 }
 
-func (c *ConfigAPI) SetSessionManager(sessions *authn.SessionManager) {
+func (c *ConfigAPI) SetSessionManager(sessions *browsersession.Manager) {
 	if c == nil {
 		return
 	}
@@ -159,6 +160,7 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
 		return
 	}
+	config.NormalizeFileConfigAliasesFromJSON(&normalized, body)
 
 	if errs := config.ValidateFileConfig(&normalized); len(errs) > 0 {
 		messages := make([]string, 0, len(errs))
@@ -170,7 +172,7 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	normalized.Server.Token = current.Server.Token
+	preserveWriteOnlyConfigFields(&normalized, current)
 	if err := config.SaveFileConfig(&normalized, path); err != nil {
 		httpx.Error(w, 500, err)
 		return
@@ -178,7 +180,7 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 
 	config.ApplyFileConfigToRuntime(c.runtime, &normalized)
 	if c.sessions != nil {
-		c.sessions.UpdateConfig(SessionManagerConfig(c.runtime))
+		c.sessions.UpdateConfig(BrowserSessionConfig(c.runtime))
 	}
 	if c.applier != nil {
 		c.applier.ApplyRuntimeConfig(c.runtime)
@@ -268,7 +270,20 @@ func (c *ConfigAPI) tokenConfigured(cfg config.FileConfig) bool {
 
 func redactToken(cfg config.FileConfig) config.FileConfig {
 	cfg.Server.Token = ""
+	cfg.Security.StateEncryptionKey = nil
+	cfg.AutoSolver.External.CapsolverKey = ""
+	cfg.AutoSolver.External.TwoCaptchaKey = ""
 	return cfg
+}
+
+func preserveWriteOnlyConfigFields(dst, src *config.FileConfig) {
+	if dst == nil || src == nil {
+		return
+	}
+	dst.Server.Token = src.Server.Token
+	dst.Security.StateEncryptionKey = src.Security.StateEncryptionKey
+	dst.AutoSolver.External.CapsolverKey = src.AutoSolver.External.CapsolverKey
+	dst.AutoSolver.External.TwoCaptchaKey = src.AutoSolver.External.TwoCaptchaKey
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/state"
 )
@@ -21,14 +22,24 @@ func (h *Handlers) stateExportEnabled() bool {
 }
 
 // HandleStateList lists all saved state files.
+// Gated behind CapStateExport (security.allowStateExport).
 //
 // @Endpoint GET /state/list
 func (h *Handlers) HandleStateList(w http.ResponseWriter, r *http.Request) {
+	if !h.stateExportEnabled() {
+		httpx.ErrorCode(w, 403, "state_export_disabled", httpx.DisabledEndpointMessage("stateExport", "security.allowStateExport"), false, map[string]any{
+			"setting": "security.allowStateExport",
+		})
+		return
+	}
+
 	entries, err := state.List(h.Config.StateDir)
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("list states: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "state.list"})
 
 	httpx.JSON(w, 200, map[string]any{
 		"states": entries,
@@ -54,7 +65,7 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryptionKey := os.Getenv("PINCHTAB_STATE_KEY")
+	encryptionKey := h.Config.StateEncryptionKey
 	path := state.ResolvePath(h.Config.StateDir, name)
 
 	sf, err := state.Load(path, encryptionKey)
@@ -62,6 +73,8 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("load state: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "state.show"})
 
 	httpx.JSON(w, 200, sf)
 }
@@ -94,9 +107,9 @@ func (h *Handlers) HandleStateSave(w http.ResponseWriter, r *http.Request) {
 
 	encryptionKey := ""
 	if req.Encrypt {
-		encryptionKey = os.Getenv("PINCHTAB_STATE_KEY")
+		encryptionKey = h.Config.StateEncryptionKey
 		if err := state.ValidateEncryptionKey(encryptionKey); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("encryption key required: set PINCHTAB_STATE_KEY environment variable"))
+			httpx.Error(w, 400, fmt.Errorf("encryption key required: set security.stateEncryptionKey in config"))
 			return
 		}
 	}
@@ -232,6 +245,8 @@ func (h *Handlers) HandleStateSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordActivity(r, activity.Update{Action: "state.save"})
+
 	slog.Info("state saved",
 		"name", sf.Name,
 		"path", path,
@@ -279,7 +294,7 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryptionKey := os.Getenv("PINCHTAB_STATE_KEY")
+	encryptionKey := h.Config.StateEncryptionKey
 	path := state.ResolvePath(h.Config.StateDir, req.Name)
 
 	// ResolvePath returns a constructed path even when the file doesn't exist
@@ -405,6 +420,8 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.recordActivity(r, activity.Update{Action: "state.load"})
+
 	slog.Info("state loaded",
 		"name", req.Name,
 		"path", path,
@@ -443,6 +460,8 @@ func (h *Handlers) HandleStateDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("delete state: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "state.delete"})
 
 	slog.Info("state deleted",
 		"name", name,
@@ -483,6 +502,8 @@ func (h *Handlers) HandleStateClean(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("clean states: %w", err))
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "state.clean"})
 
 	slog.Info("state clean",
 		"olderThanHours", req.OlderThanHours,

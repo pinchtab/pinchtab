@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Editor</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #editor {
+      border: 1px solid #ccc;
+      min-height: 80px;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    #editor:focus { outline: 2px solid #2196f3; }
+    #char-count { font-family: monospace; color: #666; margin-bottom: 8px; }
+    #mirror {
+      font-family: monospace;
+      background: #fafafa;
+      padding: 8px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rich Text — VERIFY_EDITOR_PAGE_44444</h1>
+
+  <p>A <code>contenteditable</code> surface. As you type, the page mirrors
+  its content under the editor so automation can verify what was typed.
+  Press Enter in the editor to commit the current value to
+  <code>#final-text</code>.</p>
+
+  <div id="editor" contenteditable="true" aria-label="Rich text editor"></div>
+  <div id="char-count">EDITOR_CHARS=0</div>
+  <div id="mirror">(empty)</div>
+  <div id="final-text">(no commit yet)</div>
+
+  <script>
+    (function () {
+      const editor = document.getElementById('editor');
+      const count = document.getElementById('char-count');
+      const mirror = document.getElementById('mirror');
+      const finalText = document.getElementById('final-text');
+
+      editor.addEventListener('input', function () {
+        const text = editor.innerText || '';
+        count.textContent = 'EDITOR_CHARS=' + text.length;
+        mirror.textContent = text || '(empty)';
+      });
+
+      editor.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const text = editor.innerText || '';
+          finalText.textContent = 'EDITOR_COMMITTED=' + text;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

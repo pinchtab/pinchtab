@@ -6,9 +6,15 @@ import (
 	"os/exec"
 )
 
+type PortInspection struct {
+	Available bool
+	PID       int
+	Command   string
+}
+
 type HostRunner interface {
 	Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error)
-	IsPortAvailable(port string) bool
+	InspectPort(port string) PortInspection
 }
 
 type Cmd interface {
@@ -40,8 +46,8 @@ func (r *LocalRunner) Run(ctx context.Context, binary string, args []string, env
 	return &localCmd{execCmd: cmd, cancel: cancel}, nil
 }
 
-func (r *LocalRunner) IsPortAvailable(port string) bool {
-	return isPortAvailable(port)
+func (r *LocalRunner) InspectPort(port string) PortInspection {
+	return inspectPort(port)
 }
 
 func (c *localCmd) Wait() error {

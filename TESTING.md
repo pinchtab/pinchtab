@@ -8,19 +8,22 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev                    # Interactive picker
 ./dev test               # All tests (unit + E2E)
 ./dev test unit          # Unit tests only
-./dev e2e                # Release suite (api-full + cli-full)
-./dev e2e pr             # PR suite (api-fast + cli-fast)
-./dev e2e api-fast       # API fast, single-instance
-./dev e2e cli-fast       # CLI fast, single-instance
-./dev e2e api-full       # API full, multi-instance
-./dev e2e cli-full       # CLI full, single-instance
-./dev e2e full-api auth  # Full API suite filtered to scenario filenames containing "auth"
+./dev e2e                # Release suite (all extended tests)
+./dev e2e pr             # PR suite (api + cli + infra basic)
+./dev e2e api            # API basic tests
+./dev e2e cli            # CLI basic tests
+./dev e2e infra          # Infra basic tests
+./dev e2e api-extended   # API extended, multi-instance
+./dev e2e cli-extended   # CLI extended tests
+./dev e2e infra-extended # Infra extended, multi-instance
+./dev e2e api-extended auth  # Extended API suite filtered to "auth"
 
 /bin/bash tests/e2e/run.sh api
-/bin/bash tests/e2e/run.sh api all=true
-/bin/bash tests/e2e/run.sh api all=true filter=auth
+/bin/bash tests/e2e/run.sh api extended=true
+/bin/bash tests/e2e/run.sh api extended=true filter=auth
 /bin/bash tests/e2e/run.sh cli
-/bin/bash tests/e2e/run.sh cli all=true
+/bin/bash tests/e2e/run.sh cli extended=true
+/bin/bash tests/e2e/run.sh infra
 ./dev check              # All checks (format, vet, build, lint)
 ./dev check go           # Go checks only
 ./dev check security     # Gosec security scan
@@ -28,7 +31,7 @@ The `dev` developer toolkit is the easiest way to run checks and tests:
 ./dev doctor             # Setup dev environment
 ```
 
-E2E summaries and markdown reports prefix each test with its scenario filename, for example `[auth-full] auth: login sets session cookie`, so it is easy to see which filename filter to use.
+E2E summaries and markdown reports prefix each test with its scenario filename, for example `[auth-extended] auth: login sets session cookie`, so it is easy to see which filename filter to use.
 
 ## Unit Tests
 
@@ -42,45 +45,46 @@ Unit tests are standard Go tests that validate individual packages and functions
 
 ## E2E Tests
 
-End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tests against it.
+End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tests against it. Tests are organized into three parallel groups:
+
+- **api** — Browser control and page interaction (tabs, actions, files)
+- **cli** — CLI command tests
+- **infra** — System, network, security, stealth, orchestration
 
 ### PR Suites
 
 ```bash
 ./dev e2e pr
-./dev e2e api-fast
-./dev e2e cli-fast
+./dev e2e api
+./dev e2e cli
+./dev e2e infra
 ```
 
 Use these on pull requests and during normal development:
 
-- `pr` runs the same E2E suite composition as the PR workflow
-- `api-fast` runs the API `*-basic.sh` groups on the single-instance stack
-- `cli-fast` runs the CLI `*-basic.sh` groups on the single-instance stack
+- `pr` runs all three basic suites (same as CI PR workflow)
+- `api` runs the API `*-basic.sh` groups on the single-instance stack
+- `cli` runs the CLI `*-basic.sh` groups on the single-instance stack
+- `infra` runs the Infra `*-basic.sh` groups on the single-instance stack
 
-### Full API Suite
-
-```bash
-./dev e2e api-full
-```
-
-Runs the grouped API `basic` and `full` scenarios on the multi-instance stack. `api-fast` is the `basic` layer only on the single-instance stack; `api-full` adds the extra and edge-case groups plus the multi-instance-only coverage.
-
-### Full CLI Suite
+### Extended Suites
 
 ```bash
-./dev e2e cli-full
+./dev e2e api-extended
+./dev e2e cli-extended
+./dev e2e infra-extended
 ```
 
-Runs the grouped CLI `basic` and `full` scenarios on the single-instance stack. `cli-fast` is the `basic` layer only; `cli-full` adds the extra and edge-case groups.
+Extended suites run both `*-basic.sh` and `*-extended.sh` scenarios plus standalone scripts. `api-extended` and `infra-extended` use the multi-instance stack for orchestration coverage.
 
 ### Release Meta-Suite
 
 ```bash
 ./dev e2e
+./dev e2e release
 ```
 
-Runs `api-full` and `cli-full` in sequence.
+Runs `api-extended`, `cli-extended`, and `infra-extended` in sequence.
 
 ## Environment Variables
 
@@ -103,40 +107,60 @@ Everything is cleaned up automatically when tests finish.
 
 ## Test File Structure
 
-E2E tests are organized by surface and feature group:
+E2E tests are organized by group and feature:
 
-- **`tests/e2e/scenarios-api/*.sh`** — grouped API entrypoints such as `tabs-basic.sh` and `tabs-full.sh`
-  - `*-basic.sh` is the PR-fast happy-path layer
-  - `*-full.sh` adds the extra and edge-case coverage for the same feature
-  - Use Docker Compose: `tests/e2e/docker-compose.yml` for `api-fast`, `tests/e2e/docker-compose-multi.yml` for `api-full`
+```
+tests/e2e/scenarios/
+├── api/           # Browser control, tabs, actions, files
+│   ├── browser-basic.sh
+│   ├── browser-extended.sh
+│   ├── tabs-basic.sh
+│   └── ...
+├── cli/           # CLI command tests
+│   ├── browser-basic.sh
+│   ├── browser-extended.sh
+│   └── ...
+└── infra/         # System, network, security, stealth
+    ├── system-basic.sh
+    ├── system-extended.sh
+    ├── stealth-basic.sh
+    ├── orchestrator-extended.sh
+    └── ...
+```
 
-- **`tests/e2e/scenarios-cli/*.sh`** — grouped CLI entrypoints such as `tabs-basic.sh` and `tabs-full.sh`
-  - Follows the same `basic` vs `full` split as the API side
-  - Use Docker Compose: `tests/e2e/docker-compose.yml` for both `cli-fast` and `cli-full`
+- `*-basic.sh` is the PR happy-path layer
+- `*-extended.sh` adds extra and edge-case coverage
+- Standalone scripts (no suffix) run only in extended mode
+
+Docker Compose files:
+- `tests/e2e/docker-compose.yml` — single-instance stack for basic tests
+- `tests/e2e/docker-compose-multi.yml` — multi-instance stack for extended tests
 
 ## E2E Results
 
 Each suite writes its own summary and markdown report under `tests/e2e/results/`:
 
-- `summary-api-fast.txt` / `report-api-fast.md`
-- `summary-api-full.txt` / `report-api-full.md`
-- `summary-cli-fast.txt` / `report-cli-fast.md`
-- `summary-cli-full.txt` / `report-cli-full.md`
+- `summary-api.txt` / `report-api.md`
+- `summary-api-extended.txt` / `report-api-extended.md`
+- `summary-cli.txt` / `report-cli.md`
+- `summary-cli-extended.txt` / `report-cli-extended.md`
+- `summary-infra.txt` / `report-infra.md`
+- `summary-infra-extended.txt` / `report-infra-extended.md`
 
 The runner clears the target suite files before each run so stale results do not survive into the next suite.
 
 ## Writing New E2E Tests
 
-Add new coverage directly to a grouped entrypoint in `tests/e2e/scenarios-api/` or `tests/e2e/scenarios-cli/`. Keep `*-basic.sh` focused on the happy path and put the extra and edge-case coverage in the matching `*-full.sh`.
+Add new coverage directly to a grouped entrypoint in `tests/e2e/scenarios/api/`, `tests/e2e/scenarios/cli/`, or `tests/e2e/scenarios/infra/`. Keep `*-basic.sh` focused on the happy path and put the extra and edge-case coverage in the matching `*-extended.sh`.
 
 ### Example: Grouped API Entrypoint
 
 ```bash
 #!/bin/bash
 
-# tests/e2e/scenarios-api/tabs-basic.sh
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../helpers/api.sh"
+# tests/e2e/scenarios/api/tabs-basic.sh
+GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${GROUP_DIR}/../../helpers/api.sh"
 
 start_test "tab-scoped snapshot"
 # ...

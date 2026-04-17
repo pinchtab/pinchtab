@@ -521,9 +521,8 @@ func TestValidEnumValues(t *testing.T) {
 func TestValidateIDPIConfig_Disabled(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
 		Enabled:        false,
-		AllowedDomains: []string{"", "  ", "file:///etc/passwd"},
 		CustomPatterns: []string{"", "  "},
-	})
+	}, []string{"", "  ", "file:///etc/passwd"})
 	if len(errs) != 0 {
 		t.Errorf("expected no errors when IDPI disabled, got: %v", errs)
 	}
@@ -534,9 +533,8 @@ func TestValidateIDPIConfig_Disabled(t *testing.T) {
 func TestValidateIDPIConfig_ValidConfig(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
 		Enabled:        true,
-		AllowedDomains: []string{"example.com", "*.example.com", "*"},
 		CustomPatterns: []string{"exfiltrate this", "data leak"},
-	})
+	}, []string{"example.com", "*.example.com", "*"})
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid IDPI config, got: %v", errs)
 	}
@@ -556,13 +554,12 @@ func TestValidateIDPIConfig_EmptyDomain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			errs := validateIDPIConfig(IDPIConfig{
-				Enabled:        true,
-				AllowedDomains: []string{tc.domain},
-			})
+				Enabled: true,
+			}, []string{tc.domain})
 			if len(errs) == 0 {
 				t.Errorf("expected error for empty domain %q, got none", tc.domain)
 			}
-			if len(errs) > 0 && !strings.Contains(errs[0].Error(), "security.idpi.allowedDomains") {
+			if len(errs) > 0 && !strings.Contains(errs[0].Error(), "security.allowedDomains") {
 				t.Errorf("expected field name in error, got: %v", errs[0])
 			}
 		})
@@ -573,9 +570,8 @@ func TestValidateIDPIConfig_EmptyDomain(t *testing.T) {
 // pattern containing internal spaces is rejected.
 func TestValidateIDPIConfig_DomainWithInternalWhitespace(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
-		Enabled:        true,
-		AllowedDomains: []string{"example .com"},
-	})
+		Enabled: true,
+	}, []string{"example .com"})
 	if len(errs) == 0 {
 		t.Error("expected error for domain with internal whitespace, got none")
 	}
@@ -589,9 +585,8 @@ func TestValidateIDPIConfig_FileSchemeBlocked(t *testing.T) {
 		"file://localhost/etc/passwd",
 	} {
 		errs := validateIDPIConfig(IDPIConfig{
-			Enabled:        true,
-			AllowedDomains: []string{pattern},
-		})
+			Enabled: true,
+		}, []string{pattern})
 		if len(errs) == 0 {
 			t.Errorf("expected error for file:// pattern %q, got none", pattern)
 		}
@@ -628,6 +623,60 @@ func TestValidateFileConfig_DownloadAllowedDomains(t *testing.T) {
 			}
 			if tt.wantErr && !strings.Contains(errs[0].Error(), "security.downloadAllowedDomains") {
 				t.Fatalf("expected security.downloadAllowedDomains error, got %v", errs[0])
+			}
+		})
+	}
+}
+
+func TestValidateFileConfig_TrustedCIDRs(t *testing.T) {
+	tests := []struct {
+		name    string
+		proxy   []string
+		resolve []string
+		wantErr bool
+		field   string
+	}{
+		{
+			name:    "valid IPv4 CIDR and IP",
+			proxy:   []string{"10.0.0.0/8", "10.1.2.3"},
+			resolve: []string{"198.18.0.0/15"},
+			wantErr: false,
+		},
+		{
+			name:    "valid IPv6 host and prefix",
+			proxy:   []string{"fd00::1234", "fd00::/64"},
+			resolve: []string{"2001:db8::1/128"},
+			wantErr: false,
+		},
+		{
+			name:    "invalid trusted proxy entry",
+			proxy:   []string{"not-a-cidr"},
+			wantErr: true,
+			field:   "security.trustedProxyCIDRs",
+		},
+		{
+			name:    "invalid trusted resolve entry",
+			resolve: []string{"10.0.0.0/99"},
+			wantErr: true,
+			field:   "security.trustedResolveCIDRs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				Security: SecurityConfig{
+					TrustedProxyCIDRs:   tt.proxy,
+					TrustedResolveCIDRs: tt.resolve,
+				},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Fatalf("ValidateFileConfig(proxy=%v, resolve=%v) error=%v, want %v (errs: %v)", tt.proxy, tt.resolve, hasErr, tt.wantErr, errs)
+			}
+			if tt.field != "" && len(errs) > 0 && !strings.Contains(errs[0].Error(), tt.field) {
+				t.Fatalf("expected error to mention %s, got %v", tt.field, errs[0])
 			}
 		})
 	}
@@ -747,7 +796,7 @@ func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {
 		errs := validateIDPIConfig(IDPIConfig{
 			Enabled:        true,
 			CustomPatterns: []string{p},
-		})
+		}, nil)
 		if len(errs) == 0 {
 			t.Errorf("expected error for empty custom pattern %q, got none", p)
 		}
@@ -762,9 +811,8 @@ func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {
 func TestValidateIDPIConfig_MultipleErrors(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
 		Enabled:        true,
-		AllowedDomains: []string{"", "file:///bad"},
 		CustomPatterns: []string{"", "   "},
-	})
+	}, []string{"", "file:///bad"})
 	if len(errs) < 4 {
 		t.Errorf("expected at least 4 IDPI errors, got %d: %v", len(errs), errs)
 	}
@@ -775,9 +823,9 @@ func TestValidateIDPIConfig_MultipleErrors(t *testing.T) {
 func TestValidateFileConfig_IDPIPassthrough(t *testing.T) {
 	fc := &FileConfig{
 		Security: SecurityConfig{
+			AllowedDomains: []string{""}, // invalid
 			IDPI: IDPIConfig{
 				Enabled:        true,
-				AllowedDomains: []string{""},   // invalid
 				CustomPatterns: []string{"  "}, // invalid
 			},
 		},
@@ -795,7 +843,7 @@ func TestValidateIDPIConfig_ScanTimeoutSec(t *testing.T) {
 		errs := validateIDPIConfig(IDPIConfig{
 			Enabled:        true,
 			ScanTimeoutSec: -1,
-		})
+		}, nil)
 		if len(errs) == 0 {
 			t.Error("expected error for negative scanTimeoutSec, got none")
 		}
@@ -808,7 +856,7 @@ func TestValidateIDPIConfig_ScanTimeoutSec(t *testing.T) {
 		errs := validateIDPIConfig(IDPIConfig{
 			Enabled:        true,
 			ScanTimeoutSec: 0, // zero → use built-in default of 5s
-		})
+		}, nil)
 		if len(errs) != 0 {
 			t.Errorf("expected no error for scanTimeoutSec=0, got: %v", errs)
 		}
@@ -818,7 +866,7 @@ func TestValidateIDPIConfig_ScanTimeoutSec(t *testing.T) {
 		errs := validateIDPIConfig(IDPIConfig{
 			Enabled:        true,
 			ScanTimeoutSec: 10,
-		})
+		}, nil)
 		if len(errs) != 0 {
 			t.Errorf("expected no error for scanTimeoutSec=10, got: %v", errs)
 		}

@@ -26,21 +26,27 @@ type Profile struct {
 	Description       string    `json:"description,omitempty"`
 }
 
+type SecurityPolicy struct {
+	AllowedDomains []string `json:"allowedDomains,omitempty"`
+}
+
 // Instance represents a running browser instance.
 // Matches internal/bridge/api.go Instance
 type Instance struct {
-	ID          string    `json:"id"`
-	ProfileID   string    `json:"profileId"`
-	ProfileName string    `json:"profileName"`
-	Port        string    `json:"port"` // Note: string not int
-	URL         string    `json:"url,omitempty"`
-	Headless    bool      `json:"headless"`
-	Status      string    `json:"status"` // starting/running/stopping/stopped/error
-	StartTime   time.Time `json:"startTime"`
-	Error       string    `json:"error,omitempty"`
-	Attached    bool      `json:"attached"` // True if attached rather than locally launched
-	AttachType  string    `json:"attachType,omitempty"`
-	CdpURL      string    `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
+	ID             string          `json:"id"`
+	ProfileID      string          `json:"profileId"`
+	ProfileName    string          `json:"profileName"`
+	Port           string          `json:"port"` // Note: string not int
+	URL            string          `json:"url,omitempty"`
+	Mode           string          `json:"mode"`
+	Headless       bool            `json:"headless"`
+	Status         string          `json:"status"` // starting/running/stopping/stopped/error
+	StartTime      time.Time       `json:"startTime"`
+	Error          string          `json:"error,omitempty"`
+	Attached       bool            `json:"attached"` // True if attached rather than locally launched
+	AttachType     string          `json:"attachType,omitempty"`
+	CdpURL         string          `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
+	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
 }
 
 // Agent represents a connected AI agent.
@@ -79,7 +85,6 @@ type ActivityLogEvent struct {
 	Source      string    `json:"source"`
 	RequestID   string    `json:"requestId,omitempty"`
 	SessionID   string    `json:"sessionId,omitempty"`
-	ActorID     string    `json:"actorId,omitempty"`
 	AgentID     string    `json:"agentId,omitempty"`
 	Method      string    `json:"method"`
 	Path        string    `json:"path"`
@@ -181,9 +186,7 @@ type InstanceMetrics struct {
 
 // LaunchInstanceRequest is the request body for launching an instance.
 type LaunchInstanceRequest struct {
-	ProfileID      string   `json:"profileId,omitempty"`      // profile ID (prof_XXXXXXXX)
-	Name           string   `json:"name,omitempty"`           // profile name
-	Mode           string   `json:"mode,omitempty"`           // "headed" or empty for headless
-	Port           string   `json:"port,omitempty"`           // port number as string
-	ExtensionPaths []string `json:"extensionPaths,omitempty"` // Chrome extension paths to load
+	ProfileID string `json:"profileId,omitempty"` // profile ID (prof_XXXXXXXX) or existing profile name
+	Mode      string `json:"mode,omitempty"`      // "headed" or empty for headless
+	Port      string `json:"port,omitempty"`      // port number as string
 }

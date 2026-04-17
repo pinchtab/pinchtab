@@ -7,10 +7,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 const (
@@ -58,7 +60,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 
 		// monitor only probes child bridge processes started by Launch.
 		// Attached remote bridges are validated and probed during attach.
-		for _, baseURL := range instanceBaseURLs(probePort) {
+		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.runtimeCfg), probePort) {
 			targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", healthProbePolicyLoopback)
 			if err != nil {
 				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
@@ -197,7 +199,7 @@ func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string
 		if err != nil {
 			return false, "", err.Error()
 		}
-		baseURLs = instanceBaseURLs(probePort)
+		baseURLs = instanceBaseURLs("", probePort)
 	}
 
 	policy := healthProbePolicyLoopback
@@ -339,7 +341,7 @@ func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy h
 			return nil, fmt.Errorf("blocked: host not allowed")
 		}
 	default:
-		if !isAllowedProbeHost(host) {
+		if !isAllowedChildProbeHost(host, configuredChildBind(o.runtimeCfg)) {
 			slog.Warn("health probe blocked: non-loopback host", "url", rawURL, "host", host)
 			return nil, fmt.Errorf("blocked: non-loopback host")
 		}
@@ -366,7 +368,7 @@ func healthProbeURL(baseURL *url.URL) string {
 	}).String()
 }
 
-// isAllowedProbeHost restricts health probes to loopback addresses to
+// isAllowedProbeHost restricts generic health probes to loopback addresses to
 // prevent SSRF when inst.URL is attacker-controlled.
 func isAllowedProbeHost(host string) bool {
 	if strings.EqualFold(host, "localhost") {
@@ -376,10 +378,56 @@ func isAllowedProbeHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func instanceBaseURLs(port int) []string {
-	return []string{
-		fmt.Sprintf("http://127.0.0.1:%d", port),
-		fmt.Sprintf("http://[::1]:%d", port),
-		fmt.Sprintf("http://localhost:%d", port),
+func isAllowedChildProbeHost(host, bind string) bool {
+	if isAllowedProbeHost(host) {
+		return true
 	}
+	return strings.EqualFold(host, configuredChildInstanceHost(bind))
+}
+
+func configuredChildBind(cfg *config.RuntimeConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Bind)
+}
+
+func configuredChildInstanceHost(bind string) string {
+	bind = strings.TrimSpace(bind)
+	switch bind {
+	case "", "0.0.0.0", "::":
+		return "localhost"
+	default:
+		return bind
+	}
+}
+
+func httpBaseURL(host, port string) string {
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, port),
+	}).String()
+}
+
+func instanceBaseURLs(bind string, port int) []string {
+	portStr := strconv.Itoa(port)
+	candidates := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	appendURL := func(host string) {
+		baseURL := httpBaseURL(host, portStr)
+		if _, ok := seen[baseURL]; ok {
+			return
+		}
+		seen[baseURL] = struct{}{}
+		candidates = append(candidates, baseURL)
+	}
+
+	bind = strings.TrimSpace(bind)
+	if bind != "" && bind != "0.0.0.0" && bind != "::" {
+		appendURL(bind)
+	}
+	appendURL("127.0.0.1")
+	appendURL("::1")
+	appendURL("localhost")
+	return candidates
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
+type tabHandoffReader interface {
+	TabHandoffState(tabID string) (bridge.TabHandoffState, bool)
+}
+
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if h.Router != nil && h.Router.Mode() == engine.ModeLite {
 		resp := map[string]any{
@@ -128,6 +132,11 @@ func (h *Handlers) HandleTabMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, _, err := h.Bridge.TabContext(tabID); err != nil {
+		httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
+		return
+	}
+
 	mem, err := h.Bridge.GetMemoryMetrics(tabID)
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("failed to get metrics: %w", err))
@@ -167,7 +176,7 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	tabs := make([]map[string]any, 0, len(targets))
 	appendTab := func(t *target.Info) {
 		// Skip the initial about:blank tab that Chrome creates on launch
-		if bridge.IsTransientURL(t.URL) {
+		if bridge.IsTransientURL(t.URL, h.Config.Port) {
 			return
 		}
 		tabID := string(t.TargetID)
@@ -176,6 +185,15 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 			"url":   t.URL,
 			"title": t.Title,
 			"type":  t.Type,
+		}
+		if hr, ok := h.Bridge.(tabHandoffReader); ok {
+			if hs, ok := hr.TabHandoffState(tabID); ok {
+				entry["status"] = hs.Status
+				entry["handoffReason"] = hs.Reason
+				entry["pausedAt"] = hs.PausedAt.Format(time.RFC3339)
+			} else {
+				entry["status"] = "active"
+			}
 		}
 		if lock := h.Bridge.TabLockInfo(tabID); lock != nil {
 			entry["owner"] = lock.Owner

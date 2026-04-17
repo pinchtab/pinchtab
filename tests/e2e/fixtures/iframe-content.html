@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Iframe Payment Content</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      min-height: 1600px;
+      margin: 0;
+      padding: 16px;
+    }
+
+    form,
+    .section {
+      margin-bottom: 20px;
+    }
+
+    label,
+    select,
+    input,
+    button {
+      display: block;
+      margin: 8px 0;
+    }
+
+    #hover-target {
+      width: 220px;
+      padding: 12px;
+      border: 1px solid #999;
+      background: #f5f5f5;
+    }
+
+    #spacer {
+      height: 900px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Payment</h2>
+  <form id="payment-form">
+    <label for="card-number">Card number</label>
+    <input type="text" id="card-number" name="cardNumber">
+
+    <label for="billing-country">Billing country</label>
+    <select id="billing-country" name="billingCountry">
+      <option value="">Select country</option>
+      <option value="us">United States</option>
+      <option value="uk">United Kingdom</option>
+      <option value="de">Germany</option>
+    </select>
+
+    <label for="save-card">
+      <input type="checkbox" id="save-card" name="saveCard">
+      Save card for later
+    </label>
+
+    <button type="button" id="pay-button">Pay</button>
+  </form>
+
+  <div class="section">
+    <button type="button" id="hover-target">Hover target</button>
+    <p id="hover-result"></p>
+    <p id="focus-result"></p>
+  </div>
+
+  <div id="spacer"></div>
+  <button type="button" id="deep-target">Deep target</button>
+  <p id="scroll-result"></p>
+
+  <p id="payment-result"></p>
+
+  <script>
+    window.iframeFixtureState = {
+      hoverCount: 0
+    };
+
+    document.addEventListener('focusin', function(event) {
+      document.getElementById('focus-result').textContent = 'FOCUSED_' + event.target.id;
+    });
+
+    document.getElementById('hover-target').addEventListener('mouseenter', function() {
+      window.iframeFixtureState.hoverCount += 1;
+      document.getElementById('hover-result').textContent = 'HOVERED_' + window.iframeFixtureState.hoverCount;
+    });
+
+    document.getElementById('deep-target').addEventListener('click', function() {
+      document.getElementById('scroll-result').textContent = 'DEEP_TARGET_CLICKED';
+    });
+
+    document.getElementById('pay-button').addEventListener('click', function() {
+      const value = document.getElementById('card-number').value;
+      document.getElementById('payment-result').textContent = 'PAYMENT_SUBMITTED_' + value;
+    });
+  </script>
+</body>
+</html>

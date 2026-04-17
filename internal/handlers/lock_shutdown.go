@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -40,6 +41,8 @@ func (h *Handlers) HandleTabLock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordActivity(r, activity.Update{Action: "tab.lock", TabID: req.TabID})
+
 	lock := h.Bridge.TabLockInfo(req.TabID)
 	httpx.JSON(w, 200, map[string]any{
 		"locked":    true,
@@ -66,6 +69,8 @@ func (h *Handlers) HandleTabUnlock(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 409, err)
 		return
 	}
+
+	h.recordActivity(r, activity.Update{Action: "tab.unlock", TabID: req.TabID})
 
 	httpx.JSON(w, 200, map[string]any{"unlocked": true})
 }

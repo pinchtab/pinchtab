@@ -36,10 +36,9 @@ In `config.json`:
 
 ## Lifecycle
 
-1. **Create** — via dashboard API: `POST /api/sessions`
+1. **Create** — via dashboard API: `POST /sessions`
 2. **Use** — agent sends `Authorization: Session ses_...` with each request
-3. **Rotate** — generate a new token, old one invalidated: `POST /api/sessions/{id}/rotate`
-4. **Revoke** — permanently disable: `POST /api/sessions/{id}/revoke`
+3. **Revoke** — permanently disable: `POST /sessions/{id}/revoke`
 
 ## Security
 
@@ -49,9 +48,19 @@ In `config.json`:
 - Sessions persisted to `agent-sessions.json` (atomic writes)
 - Each session bound to a specific agentId for activity tracking
 
-> **⚠️ Trusted environment only.** The session management API (`/api/sessions`) has no per-agent authorization scoping. Any caller authenticated with the server bearer token or a valid dashboard cookie can create, list, rotate, and revoke sessions for any agent. Do not expose these endpoints to untrusted networks or the public internet. If you need multi-tenant isolation, run separate PinchTab instances per tenant.
+> **⚠️ Trusted, controlled environments only.** Agent sessions are meant for operators and automation you already trust: local machines, private networks, CI, or other controlled systems. They are not a multi-tenant isolation boundary and should not be treated as safe for untrusted users, untrusted agents, or public internet exposure.
+>
+> The session management API (`/sessions`) still has admin-style authority for create, list, and inspect operations. Any caller authenticated with the server bearer token or a valid dashboard cookie can manage sessions for any agent. Session-authenticated callers are blocked from dashboard/admin endpoint families, but a session without explicit grants can still access the normal non-admin automation surface by default.
 >
 > In untrusted or shared environments where agent sessions are not needed, disable them entirely by setting `"enabled": false` or `"mode": "off"` in your config to reduce the auth surface.
+
+### Session Grants
+
+When a session record contains explicit `grants`, PinchTab enforces them in middleware and only allows routes covered by those grant groups. When a session has no explicit grants, PinchTab allows the normal non-admin automation routes by default but still blocks dashboard/admin endpoint families such as config, dashboard event streams, session management, profile management, instance management, and cache management.
+
+The built-in grant groups are: `browse`, `network`, `media`, `cookies`, `clipboard`, `evaluate`, `storage`, `console`, `solve`, `tasks`, and `activity`.
+
+That default is a convenience for trusted automation, not a sandbox. If you need hard isolation between agents or tenants, use separate PinchTab instances.
 
 ## CLI Usage
 

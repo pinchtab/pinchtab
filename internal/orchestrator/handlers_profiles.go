@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -30,8 +31,9 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Port     string `json:"port,omitempty"`
-		Headless bool   `json:"headless"`
+		Port           string                 `json:"port,omitempty"`
+		Headless       bool                   `json:"headless"`
+		SecurityPolicy *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
 	}
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -39,8 +41,14 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := validateStartInstanceSecurityPolicy(req.SecurityPolicy); err != nil {
+		httpx.Error(w, 400, err)
+		return
+	}
 
-	inst, err := o.Launch(name, req.Port, req.Headless, nil)
+	inst, err := o.LaunchWithOptions(name, req.Port, req.Headless, LaunchOptions{
+		SecurityPolicy: req.SecurityPolicy,
+	})
 	if err != nil {
 		statusCode := classifyLaunchError(err)
 		httpx.Error(w, statusCode, err)

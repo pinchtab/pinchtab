@@ -91,7 +91,9 @@ type mockRunner struct{}
 func (m *mockRunner) Run(_ context.Context, _ string, _ []string, _ []string, _ io.Writer, _ io.Writer) (orchestrator.Cmd, error) {
 	return nil, nil
 }
-func (m *mockRunner) IsPortAvailable(_ string) bool { return true }
+func (m *mockRunner) InspectPort(_ string) orchestrator.PortInspection {
+	return orchestrator.PortInspection{Available: true}
+}
 
 func TestCacheRoutes_RegisteredAcrossStrategies(t *testing.T) {
 	strategies := []string{"simple", "explicit", "no-instance", "simple-autorestart"}

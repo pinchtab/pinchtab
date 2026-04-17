@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pricing - PinchTab Benchmark</title>
+  <style>
+    body { font-family: -apple-system, Arial, sans-serif; margin: 20px; color: #1a1a1a; max-width: 980px; }
+    h1 { margin-bottom: 8px; }
+    .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+    .plan { border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; display: flex; flex-direction: column; }
+    .plan.featured { border-color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
+    .plan h2 { margin: 0 0 8px; font-size: 20px; }
+    .plan .price { font-size: 36px; font-weight: bold; margin: 8px 0; }
+    .plan .price small { font-size: 14px; font-weight: normal; color: #666; }
+    .plan ul { list-style: none; padding: 0; margin: 16px 0; flex: 1; }
+    .plan li { padding: 6px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+    .plan li.no { color: #999; text-decoration: line-through; }
+    button { padding: 10px; background: #2563eb; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    .plan.featured .tag { display: inline-block; background: #2563eb; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Pricing — VERIFY_PRICING_PAGE_30303</h1>
+  <p>Simple, transparent pricing. Switch plans or cancel any time.</p>
+
+  <div class="plans">
+    <div class="plan" id="plan-free">
+      <h2>Free</h2>
+      <div class="price">
+        <span>PLAN_FREE_PRICE_0</span>
+        <small>/month</small>
+      </div>
+      <ul>
+        <li>PLAN_FREE_LIMIT_50_requests per day</li>
+        <li>1 project</li>
+        <li>Community support</li>
+        <li class="no">Custom domains</li>
+        <li class="no">Priority queue</li>
+        <li class="no">SSO</li>
+      </ul>
+      <button type="button">Get started</button>
+    </div>
+
+    <div class="plan featured" id="plan-pro">
+      <span class="tag">Most popular</span>
+      <h2>Pro</h2>
+      <div class="price">
+        <span>PLAN_PRO_PRICE_29</span>
+        <small>/month</small>
+      </div>
+      <ul>
+        <li>PLAN_PRO_LIMIT_5000_requests per day</li>
+        <li>10 projects</li>
+        <li>Email support, 24h SLA</li>
+        <li>Custom domains</li>
+        <li>Priority queue</li>
+        <li class="no">SSO</li>
+      </ul>
+      <button type="button">Upgrade to Pro</button>
+    </div>
+
+    <div class="plan" id="plan-enterprise">
+      <h2>Enterprise</h2>
+      <div class="price">
+        <span>PLAN_ENTERPRISE_PRICE_CUSTOM</span>
+        <small>/month</small>
+      </div>
+      <ul>
+        <li>PLAN_ENTERPRISE_LIMIT_UNLIMITED</li>
+        <li>Unlimited projects</li>
+        <li>Dedicated CSM, 1h SLA</li>
+        <li>Custom domains</li>
+        <li>Priority queue</li>
+        <li>SSO (SAML, OIDC)</li>
+      </ul>
+      <button type="button">Contact sales</button>
+    </div>
+  </div>
+
+  <footer style="margin-top: 48px; color: #666; font-size: 14px;">
+    All prices in USD. Annual billing saves 20%. PRICING_FOOTER_MARKER.
+  </footer>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Quiet Power of Deterministic Tests</title>
+  <style>
+    body { font-family: Georgia, serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }
+    header, footer { font-family: sans-serif; color: #666; }
+    .byline { font-size: 14px; margin: 12px 0 24px; }
+    .tags { margin-top: 24px; }
+    .tags a { display: inline-block; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; margin-right: 6px; text-decoration: none; color: #333; font-size: 13px; }
+    article h1 { font-size: 32px; line-height: 1.2; margin-bottom: 4px; }
+    article h2 { font-size: 22px; margin-top: 32px; }
+    .related { margin-top: 48px; border-top: 1px solid #ddd; padding-top: 24px; }
+    .related a { display: block; margin: 4px 0; }
+    nav a { margin-right: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/archive">Archive</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+
+  <article>
+    <h1>The Quiet Power of Deterministic Tests — VERIFY_ARTICLE_PAGE_41414</h1>
+    <div class="byline">
+      By <span class="author">Ada Lovelace</span> ·
+      <time datetime="2026-04-15">ARTICLE_PUBLISHED_2026_04_15</time> ·
+      <span>ARTICLE_READ_TIME_7_MIN</span>
+    </div>
+
+    <h2>Why we keep coming back to them</h2>
+    <p>There is a particular pleasure in a test suite that never flakes. Not the
+    dopamine of a green CI run — that is cheap — but the deeper relief of being
+    able to trust the signal. A flake reprograms you to disbelieve your tools.
+    A deterministic suite does the opposite: it rewires you to act on failures
+    immediately, because the only way to get a red is to actually be wrong.</p>
+
+    <p>The hard part is not making a single test deterministic; it is keeping a
+    thousand of them deterministic while the system underneath grows teeth.
+    Time of day leaks in. A remote rate limit fluctuates. A new collaborator
+    commits a timezone assumption. Entropy is patient.</p>
+
+    <h2>What it costs to stay deterministic</h2>
+    <p>The obvious cost is mechanical: mock the clock, seed the RNG, fix the
+    locale, control the DNS, pin every dependency. Each of these has a known
+    pattern and a library or two that usually applies. The less obvious cost
+    is social. Every feature landed near a fragile seam threatens to tighten
+    the seam a little further, and each tightening is visible only later,
+    after the damage.</p>
+
+    <p>Teams that succeed here treat test stability as a first-class product
+    axis. It has owners, budgets, a backlog, and — crucially — a champion who
+    will lie in front of a release to defend it. Teams that do not end up
+    with suites that "mostly pass"; and "mostly pass" is an oxymoron, because
+    a flaky test is already failing.</p>
+
+    <h2>Three habits that help</h2>
+    <p>First, refuse the retry. Retrying a failed test turns a bug signal
+    into a CI convenience. The right move is to fix the underlying race, not
+    to paper over it with three attempts.</p>
+
+    <p>Second, keep the fast suite fast. When the feedback loop gets slow,
+    people stop running it locally; when they stop running it locally, the
+    only place the suite runs is CI, which is exactly where flaky tests are
+    hardest to reproduce.</p>
+
+    <p>Third, write fewer tests, and write them at the right layer. A deep
+    integration test is worth twenty shallow unit tests whose mocks all
+    agree with each other. The mocks are not the system.</p>
+
+    <h2>Closing</h2>
+    <p>A deterministic suite is not a trophy. It is infrastructure. You keep
+    paying to maintain it, and the return is proportional to how much you
+    trust its silence. ARTICLE_WORD_COUNT_MARKER_323</p>
+
+    <div class="tags">
+      <a href="/tag/testing">testing</a>
+      <a href="/tag/engineering">engineering</a>
+      <a href="/tag/culture">culture</a>
+    </div>
+
+    <div class="related">
+      <h3>Related reading</h3>
+      <a href="/posts/the-cost-of-mocks">The Cost of Mocks</a>
+      <a href="/posts/shipping-on-fridays">Shipping on Fridays</a>
+      <a href="/posts/what-continuous-means">What "Continuous" Means</a>
+    </div>
+  </article>
+
+  <footer>
+    © 2026 Ada Lovelace. All rights reserved.
+    <span>FOOTER_COPYRIGHT_MARKER</span>
+  </footer>
+</body>
+</html>

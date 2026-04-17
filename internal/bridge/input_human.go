@@ -51,7 +51,9 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 	cp2Y := fromY + (toY-fromY)*0.75 + (humanRand.Float64()-0.5)*50
 
 	for i := 0; i <= steps; i++ {
-		t := float64(i) / float64(steps)
+		rawT := float64(i) / float64(steps)
+		// Ease-in-out velocity curve to avoid perfectly linear timing.
+		t := 0.5 - (math.Cos(math.Pi*rawT) / 2.0)
 
 		oneMinusT := 1 - t
 		x := oneMinusT*oneMinusT*oneMinusT*fromX +
@@ -77,6 +79,20 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 
 		delay := time.Duration(16+humanRand.Intn(8)) * time.Millisecond
 		time.Sleep(delay)
+	}
+
+	// End-frame micro-jitter near target to emulate tiny hand stabilization.
+	for i := 0; i < 2; i++ {
+		jx := toX + (humanRand.Float64()-0.5)*1.2
+		jy := toY + (humanRand.Float64()-0.5)*1.2
+		if err := chromedp.Run(ctx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				return input.DispatchMouseEvent(input.MouseMoved, jx, jy).Do(ctx)
+			}),
+		); err != nil {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	return nil

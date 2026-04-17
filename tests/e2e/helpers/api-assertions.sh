@@ -91,6 +91,20 @@ assert_json_exists() {
   fi
 }
 
+assert_json_not_exists() {
+  local json="$1"
+  local path="$2"
+  local desc="${3:-$path does not exist}"
+
+  if echo "$json" | jq -e "$path" >/dev/null 2>&1; then
+    echo -e "  ${RED}✗${NC} $desc (unexpected field found)"
+    ((ASSERTIONS_FAILED++)) || true
+  else
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  fi
+}
+
 assert_contains() {
   local haystack="$1"
   local needle="$2"

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PinchTab Benchmark - Range</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    label { display: block; margin-bottom: 8px; }
+    input[type="range"] { width: 400px; }
+    #value-display { font-family: monospace; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Range Slider — VERIFY_RANGE_PAGE_99999</h1>
+
+  <p>Native <code>&lt;input type="range"&gt;</code>. Automation can set its
+  value via <code>fill</code> and the page echoes the current value plus a
+  discrete bucket marker.</p>
+
+  <label for="volume">Volume: <span id="volume-out">50</span>/100</label>
+  <input type="range" id="volume" min="0" max="100" step="1" value="50">
+
+  <div id="value-display">RANGE_VALUE_50 — BUCKET_MEDIUM</div>
+
+  <script>
+    (function () {
+      const slider = document.getElementById('volume');
+      const out = document.getElementById('volume-out');
+      const display = document.getElementById('value-display');
+      const update = function () {
+        const v = Number(slider.value);
+        out.textContent = v;
+        let bucket = 'MEDIUM';
+        if (v <= 25) bucket = 'LOW';
+        else if (v >= 75) bucket = 'HIGH';
+        display.textContent = 'RANGE_VALUE_' + v + ' — BUCKET_' + bucket;
+      };
+      slider.addEventListener('input', update);
+      slider.addEventListener('change', update);
+    })();
+  </script>
+</body>
+</html>

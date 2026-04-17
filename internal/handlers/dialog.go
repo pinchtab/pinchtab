@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -89,6 +90,12 @@ func (h *Handlers) HandleTabDialog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) handleDialogAction(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, accept bool, promptText string) {
+	action := "dialog.dismiss"
+	if accept {
+		action = "dialog.accept"
+	}
+	h.recordActivity(r, activity.Update{Action: action, TabID: tabID})
+
 	dm := h.Bridge.GetDialogManager()
 	if dm == nil {
 		httpx.Error(w, 500, fmt.Errorf("dialog manager not available"))

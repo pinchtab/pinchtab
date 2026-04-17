@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -58,7 +60,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := h.tabContext(r, tabID)
+	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
 	if err != nil {
 		httpx.Error(w, 404, err)
 		return
@@ -71,21 +73,65 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
+	// Resolve the target frame. Explicit ?frameId= wins; otherwise fall back
+	// to the currently-scoped frame on this tab (as set by /frame). Empty
+	// means "top-level document" and preserves the prior behaviour.
+	targetFrameID := r.URL.Query().Get("frameId")
+	if targetFrameID == "" {
+		if scope, ok := h.currentFrameScope(resolvedTabID); ok {
+			targetFrameID = scope.FrameID
+		}
+	}
+
+	script := `document.body.innerText`
+	if mode != "raw" {
+		script = assets.ReadabilityJS
+	}
+
 	var text string
-	if mode == "raw" {
-		if err := chromedp.Run(tCtx,
-			chromedp.Evaluate(`document.body.innerText`, &text),
-		); err != nil {
+	if targetFrameID == "" {
+		// Top-frame path — keep the ergonomic chromedp.Evaluate helper.
+		if err := chromedp.Run(tCtx, chromedp.Evaluate(script, &text)); err != nil {
 			httpx.Error(w, 500, fmt.Errorf("text extract: %w", err))
 			return
 		}
 	} else {
-		if err := chromedp.Run(tCtx,
-			chromedp.Evaluate(assets.ReadabilityJS, &text),
-		); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("text extract: %w", err))
+		// Frame-scoped path — evaluate in the frame's isolated world so the
+		// expression sees the iframe's `document`, not the parent's.
+		execID, err := bridge.FrameExecutionContextID(tCtx, targetFrameID)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("resolve frame context: %w", err))
 			return
 		}
+		var raw json.RawMessage
+		err = chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
+				"expression":    script,
+				"returnByValue": true,
+				"contextId":     execID,
+			}, &raw)
+		}))
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("text extract (frame %s): %w", targetFrameID, err))
+			return
+		}
+		var er struct {
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
+			ExceptionDetails *struct {
+				Text string `json:"text"`
+			} `json:"exceptionDetails,omitempty"`
+		}
+		if err := json.Unmarshal(raw, &er); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("text extract parse: %w", err))
+			return
+		}
+		if er.ExceptionDetails != nil && er.ExceptionDetails.Text != "" {
+			httpx.Error(w, 500, fmt.Errorf("text extract (frame %s): %s", targetFrameID, er.ExceptionDetails.Text))
+			return
+		}
+		text = er.Result.Value
 	}
 
 	truncated := false

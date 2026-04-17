@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Inner Nested Frame</title>
+</head>
+<body>
+  <h3>Inner Frame</h3>
+  <label for="nested-code">Nested code</label>
+  <input type="text" id="nested-code" name="nestedCode">
+
+  <label for="nested-consent">
+    <input type="checkbox" id="nested-consent" name="nestedConsent">
+    Nested consent
+  </label>
+
+  <button type="button" id="nested-save">Nested save</button>
+  <p id="nested-result"></p>
+
+  <script>
+    document.getElementById('nested-save').addEventListener('click', function() {
+      const value = document.getElementById('nested-code').value;
+      const checked = document.getElementById('nested-consent').checked;
+      document.getElementById('nested-result').textContent = 'NESTED_SAVED_' + value + '_' + checked;
+    });
+  </script>
+</body>
+</html>

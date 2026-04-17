@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import * as api from "../../services/api";
 import { dispatchAuthRequired } from "../../services/auth";
 import { useAppStore } from "../../stores/useAppStore";
+import ServerStatusBadge from "./ServerStatusBadge";
 import "./NavBar.css";
 
 interface Tab {
@@ -24,12 +25,30 @@ interface NavBarProps {
 }
 
 export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
-  const { serverInfo } = useAppStore();
+  const {
+    serverInfo,
+    instances,
+    currentTabs,
+    monitoringSidebarCollapsed,
+    setMonitoringSidebarCollapsed,
+    selectedMonitoringInstanceId,
+  } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const tabsRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isMonitoringPage = location.pathname.startsWith(
+    "/dashboard/monitoring",
+  );
+  const selectedInstance =
+    instances.find((i) => i.id === selectedMonitoringInstanceId) ??
+    instances[0] ??
+    null;
+  const hasRunningInstance = instances.some(
+    (instance) => instance.status === "running",
+  );
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -73,7 +92,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-app/95 backdrop-blur">
-      <div className="flex h-[60px] items-center gap-0 px-4 sm:px-5">
+      <div className="flex h-15 items-center gap-0 px-4 sm:px-5">
         <span className="min-w-32 text-sm font-semibold tracking-[0.2em] text-text-primary uppercase">
           PinchTab
         </span>
@@ -99,35 +118,21 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
-          {serverInfo && (
-            <div
-              className={`mr-2 flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
-                serverInfo.restartRequired
-                  ? "border border-warning/25 bg-warning/10"
-                  : "border border-success/20 bg-success/10"
-              }`}
-              title={
-                serverInfo.restartRequired
-                  ? serverInfo.restartReasons?.join(", ") || "Restart required"
-                  : "Server running"
-              }
-            >
-              <div
-                className={`h-1.5 w-1.5 rounded-full ${
-                  serverInfo.restartRequired
-                    ? "bg-warning"
-                    : "bg-success animate-pulse"
-                }`}
-              />
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  serverInfo.restartRequired ? "text-warning" : "text-success"
-                }`}
-              >
-                {serverInfo.restartRequired ? "Restart Required" : "Running"}
-              </span>
-            </div>
-          )}
+          <ServerStatusBadge
+            serverInfo={serverInfo}
+            instance={selectedInstance}
+            compact={!isMonitoringPage}
+            sidebarCollapsed={monitoringSidebarCollapsed}
+            hasRunningInstance={hasRunningInstance}
+            tabCount={
+              selectedInstance
+                ? (currentTabs[selectedInstance.id]?.length ?? 0)
+                : 0
+            }
+            onToggleSidebar={() =>
+              setMonitoringSidebarCollapsed(!monitoringSidebarCollapsed)
+            }
+          />
           {showLogout && (
             <button
               type="button"

@@ -7,7 +7,7 @@ interface Props {
   selected: boolean;
   sessions: Session[];
   activeSessionId?: string;
-  onClick: (autoSessionId?: string) => void;
+  onClick: () => void;
   onSelectSession: (sessionId: string) => void;
 }
 
@@ -43,11 +43,6 @@ export default function AgentItem({
   onClick,
   onSelectSession,
 }: Props) {
-  const handleAgentClick = () => {
-    const latestSession = sessions.length > 0 ? sessions[0].id : undefined;
-    onClick(latestSession);
-  };
-
   return (
     <div>
       <button
@@ -56,7 +51,7 @@ export default function AgentItem({
             ? "bg-primary/8 text-text-primary"
             : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary"
         }`}
-        onClick={handleAgentClick}
+        onClick={onClick}
       >
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-primary">
           <IconRobot />

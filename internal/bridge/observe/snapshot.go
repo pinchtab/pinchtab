@@ -6,19 +6,27 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/chromedp"
 )
 
 type A11yNode struct {
-	Ref      string `json:"ref"`
-	Role     string `json:"role"`
-	Name     string `json:"name"`
-	Depth    int    `json:"depth"`
-	Value    string `json:"value,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
-	Focused  bool   `json:"focused,omitempty"`
-	Hidden   bool   `json:"hidden,omitempty"`
-	NodeID   int64  `json:"nodeId,omitempty"`
+	Ref            string `json:"ref"`
+	Role           string `json:"role"`
+	Name           string `json:"name"`
+	Depth          int    `json:"depth"`
+	Value          string `json:"value,omitempty"`
+	Disabled       bool   `json:"disabled,omitempty"`
+	Focused        bool   `json:"focused,omitempty"`
+	Hidden         bool   `json:"hidden,omitempty"`
+	NodeID         int64  `json:"nodeId,omitempty"`
+	FrameID        string `json:"frameId,omitempty"`
+	FrameURL       string `json:"frameUrl,omitempty"`
+	FrameName      string `json:"frameName,omitempty"`
+	ChildFrameID   string `json:"childFrameId,omitempty"`
+	ChildFrameURL  string `json:"childFrameUrl,omitempty"`
+	ChildFrameName string `json:"childFrameName,omitempty"`
 }
 
 type RawAXNode struct {
@@ -30,16 +38,24 @@ type RawAXNode struct {
 	Properties       []RawAXProp `json:"properties"`
 	ChildIDs         []string    `json:"childIds"`
 	BackendDOMNodeID int64       `json:"backendDOMNodeId"`
+	FrameID          string      `json:"-"`
+	FrameURL         string      `json:"-"`
+	FrameName        string      `json:"-"`
+	FrameOwnerNodeID int64       `json:"-"`
 }
 
 type RawAXTreeResponse struct {
 	Nodes []RawAXNode `json:"nodes"`
 }
 
+type RawFrame struct {
+	ID   string `json:"id"`
+	URL  string `json:"url,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
 type RawFrameTree struct {
-	Frame struct {
-		ID string `json:"id"`
-	} `json:"frame"`
+	Frame       RawFrame       `json:"frame"`
 	ChildFrames []RawFrameTree `json:"childFrames"`
 }
 
@@ -59,23 +75,68 @@ func FrameIDs(tree RawFrameTree) []string {
 	return ids
 }
 
-// FetchAXTree returns the merged accessibility tree for the current page and any child frames.
-func FetchAXTree(ctx context.Context) ([]RawAXNode, error) {
+// FrameMap returns frame metadata keyed by frame id.
+func FrameMap(tree RawFrameTree) map[string]RawFrame {
+	frames := make(map[string]RawFrame, 1+len(tree.ChildFrames))
+	var walk func(RawFrameTree)
+	walk = func(t RawFrameTree) {
+		if t.Frame.ID != "" {
+			frames[t.Frame.ID] = t.Frame
+		}
+		for _, child := range t.ChildFrames {
+			walk(child)
+		}
+	}
+	walk(tree)
+	return frames
+}
+
+// FrameOwnerMap returns iframe owner backend node IDs keyed by child frame id.
+func FrameOwnerMap(ctx context.Context, tree RawFrameTree) map[string]int64 {
+	owners := make(map[string]int64, len(tree.ChildFrames))
+	var walk func(RawFrameTree)
+	walk = func(t RawFrameTree) {
+		for _, child := range t.ChildFrames {
+			if child.Frame.ID != "" {
+				backendNodeID, _, err := dom.GetFrameOwner(cdp.FrameID(child.Frame.ID)).Do(ctx)
+				if err == nil && backendNodeID != 0 {
+					owners[child.Frame.ID] = int64(backendNodeID)
+				}
+			}
+			walk(child)
+		}
+	}
+	walk(tree)
+	return owners
+}
+
+func FetchFrameTree(ctx context.Context) (RawFrameTree, error) {
 	var frameTreeResult json.RawMessage
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Page.getFrameTree", nil, &frameTreeResult)
 	})); err != nil {
-		return fetchAXTreeForFrame(ctx, "")
+		return RawFrameTree{}, err
 	}
 
 	var frameResp struct {
 		FrameTree RawFrameTree `json:"frameTree"`
 	}
 	if err := json.Unmarshal(frameTreeResult, &frameResp); err != nil {
+		return RawFrameTree{}, err
+	}
+	return frameResp.FrameTree, nil
+}
+
+// FetchAXTree returns the merged accessibility tree for the current page and any child frames.
+func FetchAXTree(ctx context.Context) ([]RawAXNode, error) {
+	frameTree, err := FetchFrameTree(ctx)
+	if err != nil {
 		return fetchAXTreeForFrame(ctx, "")
 	}
 
-	ids := FrameIDs(frameResp.FrameTree)
+	frameMap := FrameMap(frameTree)
+	ownerMap := FrameOwnerMap(ctx, frameTree)
+	ids := FrameIDs(frameTree)
 	if len(ids) == 0 {
 		return fetchAXTreeForFrame(ctx, "")
 	}
@@ -87,7 +148,12 @@ func FetchAXTree(ctx context.Context) ([]RawAXNode, error) {
 		if err != nil {
 			continue
 		}
+		frameMeta := frameMap[id]
 		for _, n := range nodes {
+			n.FrameID = id
+			n.FrameURL = frameMeta.URL
+			n.FrameName = frameMeta.Name
+			n.FrameOwnerNodeID = ownerMap[id]
 			key := n.NodeID
 			if key == "" {
 				key = fmt.Sprintf("backend:%d:%s:%s", n.BackendDOMNodeID, n.Role.String(), n.Name.String())
@@ -153,7 +219,7 @@ var InteractiveRoles = map[string]bool{
 	"combobox": true, "listbox": true, "option": true, "checkbox": true,
 	"radio": true, "switch": true, "slider": true, "spinbutton": true,
 	"menuitem": true, "menuitemcheckbox": true, "menuitemradio": true,
-	"tab": true, "treeitem": true,
+	"tab": true, "treeitem": true, "iframe": true, "Iframe": true,
 }
 
 const FilterInteractive = "interactive"
@@ -171,26 +237,39 @@ func isAXNodeHidden(n RawAXNode) bool {
 }
 
 func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, map[string]int64) {
+	nodeByID := make(map[string]RawAXNode, len(nodes))
 	parentMap := make(map[string]string)
+	childMap := make(map[string][]string, len(nodes))
+	backendToAX := make(map[int64]string, len(nodes))
+	frameRoots := make(map[string][]string, 4)
+	frameOwners := make(map[string]int64, 4)
+	ownerToChildFrame := make(map[int64]RawFrame, 4)
+	frameOrder := make([]string, 0, 4)
+	seenFrames := make(map[string]bool, 4)
+
 	for _, n := range nodes {
+		nodeByID[n.NodeID] = n
+		childMap[n.NodeID] = append(childMap[n.NodeID], n.ChildIDs...)
+		if n.BackendDOMNodeID != 0 {
+			backendToAX[n.BackendDOMNodeID] = n.NodeID
+		}
+		if !seenFrames[n.FrameID] {
+			frameOrder = append(frameOrder, n.FrameID)
+			seenFrames[n.FrameID] = true
+		}
+		if n.FrameOwnerNodeID != 0 && frameOwners[n.FrameID] == 0 {
+			frameOwners[n.FrameID] = n.FrameOwnerNodeID
+			ownerToChildFrame[n.FrameOwnerNodeID] = RawFrame{
+				ID:   n.FrameID,
+				URL:  n.FrameURL,
+				Name: n.FrameName,
+			}
+		}
 		for _, childID := range n.ChildIDs {
 			parentMap[childID] = n.NodeID
 		}
 	}
 	maxAncestorWalk := max(len(parentMap)+1, 1)
-	depthOf := func(nodeID string) int {
-		d := 0
-		cur := nodeID
-		for range maxAncestorWalk {
-			p, ok := parentMap[cur]
-			if !ok {
-				break
-			}
-			d++
-			cur = p
-		}
-		return d
-	}
 
 	// Build a set of AX node IDs that are hidden, including inherited hidden
 	// status from ancestors. A child of a hidden node is also hidden.
@@ -216,39 +295,70 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 		return false
 	}
 
+	for _, n := range nodes {
+		parentID, ok := parentMap[n.NodeID]
+		if !ok {
+			frameRoots[n.FrameID] = append(frameRoots[n.FrameID], n.NodeID)
+			continue
+		}
+		parentNode, ok := nodeByID[parentID]
+		if !ok || parentNode.FrameID != n.FrameID {
+			frameRoots[n.FrameID] = append(frameRoots[n.FrameID], n.NodeID)
+		}
+	}
+
+	rootFrameID := ""
+	for _, frameID := range frameOrder {
+		if frameOwners[frameID] == 0 {
+			rootFrameID = frameID
+			break
+		}
+	}
+	if rootFrameID == "" && len(frameOrder) > 0 {
+		rootFrameID = frameOrder[0]
+	}
+
+	topRoots := make([]string, 0, len(nodes))
+	frameChildRoots := make(map[string][]string)
+	for _, frameID := range frameOrder {
+		roots := frameRoots[frameID]
+		if len(roots) == 0 {
+			continue
+		}
+		ownerBackendID := frameOwners[frameID]
+		ownerAXID := backendToAX[ownerBackendID]
+		if frameID == rootFrameID || ownerAXID == "" {
+			topRoots = append(topRoots, roots...)
+			continue
+		}
+		frameChildRoots[ownerAXID] = append(frameChildRoots[ownerAXID], roots...)
+	}
+	if len(topRoots) == 0 {
+		for _, n := range nodes {
+			topRoots = append(topRoots, n.NodeID)
+		}
+	}
+
 	flat := make([]A11yNode, 0)
 	refs := make(map[string]int64)
 	refID := 0
-
-	for _, n := range nodes {
-		if n.Ignored {
-			continue
-		}
-
+	appendNode := func(n RawAXNode, depth int) {
 		role := n.Role.String()
 		name := n.Name.String()
-
-		if role == "none" || role == "generic" || role == "InlineTextBox" {
-			continue
-		}
-		if name == "" && role == "StaticText" {
-			continue
-		}
-
-		depth := depthOf(n.NodeID)
-		if maxDepth >= 0 && depth > maxDepth {
-			continue
-		}
-		if filter == FilterInteractive && !InteractiveRoles[role] {
-			continue
-		}
-
 		ref := fmt.Sprintf("e%d", refID)
 		entry := A11yNode{
-			Ref:   ref,
-			Role:  role,
-			Name:  name,
-			Depth: depth,
+			Ref:       ref,
+			Role:      role,
+			Name:      name,
+			Depth:     depth,
+			FrameID:   n.FrameID,
+			FrameURL:  n.FrameURL,
+			FrameName: n.FrameName,
+		}
+		if childFrame, ok := ownerToChildFrame[n.BackendDOMNodeID]; ok {
+			entry.ChildFrameID = childFrame.ID
+			entry.ChildFrameURL = childFrame.URL
+			entry.ChildFrameName = childFrame.Name
 		}
 
 		if v := n.Value.String(); v != "" {
@@ -277,6 +387,73 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 
 		flat = append(flat, entry)
 		refID++
+	}
+
+	isSkippableNode := func(n RawAXNode) bool {
+		role := n.Role.String()
+		name := n.Name.String()
+		if n.Ignored {
+			return true
+		}
+		if role == "none" || role == "generic" || role == "InlineTextBox" {
+			return true
+		}
+		if name == "" && role == "StaticText" {
+			return true
+		}
+		return false
+	}
+
+	isFlattenableFrameRoot := func(n RawAXNode) bool {
+		role := n.Role.String()
+		return n.FrameOwnerNodeID != 0 && (role == "WebArea" || role == "RootWebArea")
+	}
+
+	visited := make(map[string]bool, len(nodes))
+	var visitFrameRoot func(string, int)
+	var visit func(string, int)
+
+	visit = func(nodeID string, depth int) {
+		if nodeID == "" || visited[nodeID] {
+			return
+		}
+		n, ok := nodeByID[nodeID]
+		if !ok {
+			return
+		}
+		visited[nodeID] = true
+		if maxDepth >= 0 && depth > maxDepth {
+			return
+		}
+
+		if !isSkippableNode(n) && (filter != FilterInteractive || InteractiveRoles[n.Role.String()]) {
+			appendNode(n, depth)
+		}
+
+		for _, childID := range childMap[nodeID] {
+			visit(childID, depth+1)
+		}
+		for _, frameRootID := range frameChildRoots[nodeID] {
+			visitFrameRoot(frameRootID, depth+1)
+		}
+	}
+
+	visitFrameRoot = func(nodeID string, depth int) {
+		n, ok := nodeByID[nodeID]
+		if !ok {
+			return
+		}
+		if isFlattenableFrameRoot(n) {
+			for _, childID := range childMap[nodeID] {
+				visit(childID, depth)
+			}
+			return
+		}
+		visit(nodeID, depth)
+	}
+
+	for _, rootID := range topRoots {
+		visit(rootID, 0)
 	}
 
 	return flat, refs

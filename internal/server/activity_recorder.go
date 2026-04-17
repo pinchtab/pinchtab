@@ -1,9 +1,6 @@
 package server
 
 import (
-	"net/http"
-	"strings"
-
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 )
@@ -44,16 +41,5 @@ func (r dashboardActivityRecorder) Query(filter activity.Filter) ([]activity.Eve
 }
 
 func shouldBroadcastDashboardActivity(evt activity.Event) bool {
-	if !strings.EqualFold(strings.TrimSpace(evt.Source), "orchestrator") {
-		return true
-	}
-	if evt.Method != http.MethodGet {
-		return true
-	}
-	switch evt.Path {
-	case "/health", "/tabs", "/metrics", "/api/metrics":
-		return false
-	default:
-		return true
-	}
+	return evt.Source == "client"
 }

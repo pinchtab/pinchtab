@@ -10,7 +10,7 @@ func TestResolvePort(t *testing.T) {
 		want     string
 		wantErr  bool
 	}{
-		{"default when empty", "", "", "9870", false},
+		{"rejects empty", "", "", "", true},
 		{"uses config port", "8080", "", "8080", false},
 		{"override wins", "8080", "7777", "7777", false},
 		{"override wins over empty config", "", "7777", "7777", false},

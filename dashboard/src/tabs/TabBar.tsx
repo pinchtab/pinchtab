@@ -5,9 +5,13 @@ interface Props {
   tabs: InstanceTab[];
   selectedTabId: string | null;
   pinnedTabId?: string | null;
+  telemetryActive?: boolean;
+  newTabsCount?: number;
   onSelect: (id: string) => void;
   onTogglePinned?: (id: string) => void;
   onTabClosed?: () => void;
+  onToggleTelemetry?: () => void;
+  onSetTelemetry?: (active: boolean) => void;
 }
 
 function PinIcon({ pinned }: { pinned: boolean }) {
@@ -33,10 +37,16 @@ export default function TabBar({
   tabs,
   selectedTabId,
   pinnedTabId,
+  telemetryActive,
+  newTabsCount = 0,
   onSelect,
   onTogglePinned,
   onTabClosed,
+  onToggleTelemetry,
+  onSetTelemetry,
 }: Props) {
+  const showTabsAttention = newTabsCount > 0;
+
   const handleClose = async (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     try {
@@ -46,19 +56,17 @@ export default function TabBar({
       console.error("Failed to close tab", err);
     }
   };
-  if (tabs.length === 0) return null;
-
   return (
-    <div className="flex min-h-0 items-end gap-px overflow-x-auto border-b border-border-subtle bg-black/10 px-1 pt-1">
+    <div className="flex h-9 items-end gap-px overflow-x-auto border-b border-border-subtle bg-black/10">
       {tabs.map((tab) => {
-        const isSelected = tab.id === selectedTabId;
+        const isSelected = tab.id === selectedTabId && !telemetryActive;
         const isPinned = tab.id === pinnedTabId;
         const title = tab.title || "Untitled";
 
         return (
           <div
             key={tab.id}
-            className={`group relative flex max-w-52 min-w-0 items-center gap-1 rounded-t-md pl-3 pr-1.5 py-1.5 text-left transition-colors ${
+            className={`group relative flex max-w-52 min-w-0 items-center gap-1 pl-3 pr-1.5 py-1.5 text-left transition-colors ${
               isSelected
                 ? "bg-bg-surface text-text-primary border-x border-t border-border-subtle"
                 : "text-text-muted hover:bg-white/5 hover:text-text-secondary"
@@ -107,6 +115,71 @@ export default function TabBar({
           </div>
         );
       })}
+      {(onSetTelemetry || onToggleTelemetry) && (
+        <div className="ml-auto mb-0.5 flex shrink-0 items-center gap-0.5 self-center">
+          <button
+            type="button"
+            onClick={() =>
+              onSetTelemetry ? onSetTelemetry(false) : onToggleTelemetry?.()
+            }
+            title="Tabs"
+            aria-label={
+              showTabsAttention ? `Tabs (${newTabsCount} new)` : "Tabs"
+            }
+            className={`relative shrink-0 rounded p-1.5 transition-colors ${
+              !telemetryActive
+                ? "bg-bg-hover text-text-primary"
+                : "text-text-muted hover:bg-white/10 hover:text-text-secondary"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M9 3v6" />
+            </svg>
+            {showTabsAttention && (
+              <span
+                aria-hidden="true"
+                className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-bg-surface"
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onSetTelemetry ? onSetTelemetry(true) : onToggleTelemetry?.()
+            }
+            title="Monitoring"
+            className={`mr-1 shrink-0 rounded p-1.5 transition-colors ${
+              telemetryActive
+                ? "bg-bg-hover text-text-primary"
+                : "text-text-muted hover:bg-white/10 hover:text-text-secondary"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12h4l3 -9l4 18l3 -9h4" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
