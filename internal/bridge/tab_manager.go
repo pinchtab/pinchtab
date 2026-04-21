@@ -539,18 +539,21 @@ func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	if tm.browserCtx == nil {
 		return nil, fmt.Errorf("no browser connection")
 	}
-	var targets []*target.Info
-	if err := chromedp.Run(tm.browserCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			targets, err = target.GetTargets().Do(ctx)
-			return err
-		}),
-	); err != nil {
+
+	execCtx, err := browserExecutorContext(tm.browserCtx)
+	if err != nil {
+		return nil, fmt.Errorf("browser executor: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(execCtx, 5*time.Second)
+	defer cancel()
+
+	targets, err := target.GetTargets().Do(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("get targets: %w", err)
 	}
 
-	pages := make([]*target.Info, 0)
+	pages := make([]*target.Info, 0, len(targets))
 	for _, t := range targets {
 		if t.Type == TargetTypePage {
 			pages = append(pages, t)
@@ -559,8 +562,7 @@ func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	return pages, nil
 }
 
-// ListTargetsWithContext is like ListTargets but uses a custom context
-// Useful for short-timeout checks during tab creation
+// ListTargetsWithContext is like ListTargets but uses a custom context for timeout control.
 func (tm *TabManager) ListTargetsWithContext(ctx context.Context) ([]*target.Info, error) {
 	if tm == nil {
 		return nil, fmt.Errorf("tab manager not initialized")
@@ -568,18 +570,29 @@ func (tm *TabManager) ListTargetsWithContext(ctx context.Context) ([]*target.Inf
 	if tm.browserCtx == nil {
 		return nil, fmt.Errorf("no browser connection")
 	}
-	var targets []*target.Info
-	if err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(chromeCtx context.Context) error {
-			var err error
-			targets, err = target.GetTargets().Do(chromeCtx)
-			return err
-		}),
-	); err != nil {
+
+	execCtx, err := browserExecutorContext(tm.browserCtx)
+	if err != nil {
+		return nil, fmt.Errorf("browser executor: %w", err)
+	}
+
+	mergedCtx, cancel := context.WithCancel(execCtx)
+	defer cancel()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			cancel()
+		case <-mergedCtx.Done():
+		}
+	}()
+
+	targets, err := target.GetTargets().Do(mergedCtx)
+	if err != nil {
 		return nil, fmt.Errorf("get targets: %w", err)
 	}
 
-	pages := make([]*target.Info, 0)
+	pages := make([]*target.Info, 0, len(targets))
 	for _, t := range targets {
 		if t.Type == TargetTypePage {
 			pages = append(pages, t)
