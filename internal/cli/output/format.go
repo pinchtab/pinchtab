@@ -47,10 +47,10 @@ func JSON(v any) {
 
 // Exit codes per the spec.
 const (
-	ExitSuccess      = 0
-	ExitUsage        = 1 // bad flags, missing arg
-	ExitRuntime      = 2 // server returned non-2xx
-	ExitNotFound     = 3 // ref/selector didn't resolve
-	ExitTimeout      = 4 // wait/nav exceeded budget
-	ExitIDPIBlocked  = 5 // blocked by IDPI
+	ExitSuccess     = 0
+	ExitUsage       = 1 // bad flags, missing arg
+	ExitRuntime     = 2 // server returned non-2xx
+	ExitNotFound    = 3 // ref/selector didn't resolve
+	ExitTimeout     = 4 // wait/nav exceeded budget
+	ExitIDPIBlocked = 5 // blocked by IDPI
 )

@@ -47,7 +47,7 @@ end_test
 start_test "pinchtab tab (list)"
 
 pt_ok nav "${FIXTURES_URL}/form.html"
-pt_ok tab
+pt_ok tab --json
 assert_output_json
 
 end_test
@@ -55,7 +55,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab tab returns valid JSON array"
 
-pt_ok tab
+pt_ok tab --json
 assert_output_json "tabs output is valid JSON"
 assert_output_contains "tabs" "response contains tabs field"
 

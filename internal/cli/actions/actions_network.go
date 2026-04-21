@@ -2,6 +2,7 @@ package actions
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -54,7 +55,37 @@ func Network(client *http.Client, base, token string, cmd *cobra.Command, args [
 	if v, _ := cmd.Flags().GetString("buffer-size"); v != "" {
 		params.Set("bufferSize", v)
 	}
-	apiclient.DoGet(client, base, token, "/network", params)
+
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		apiclient.DoGet(client, base, token, "/network", params)
+		return
+	}
+
+	body := apiclient.DoGetRaw(client, base, token, "/network", params)
+	var resp struct {
+		Count   int `json:"count"`
+		Entries []struct {
+			Method string `json:"method"`
+			Status int    `json:"status"`
+			URL    string `json:"url"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		fmt.Println(string(body))
+		return
+	}
+	if resp.Count == 0 {
+		fmt.Println("No requests captured")
+		return
+	}
+	for _, e := range resp.Entries {
+		truncURL := e.URL
+		if len(truncURL) > 80 {
+			truncURL = truncURL[:77] + "..."
+		}
+		fmt.Printf("%-6s %3d  %s\n", e.Method, e.Status, truncURL)
+	}
 }
 
 // NetworkDetail shows full details for a specific request.

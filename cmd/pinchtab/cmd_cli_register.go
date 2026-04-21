@@ -307,6 +307,8 @@ func configureBrowserFlags() {
 		healthCmd,
 		cacheClearCmd,
 		cacheStatusCmd,
+		frameCmd,
+		networkCmd,
 	)
 
 	scrollintoviewCmd.Flags().String("css", "", "CSS selector instead of ref")
