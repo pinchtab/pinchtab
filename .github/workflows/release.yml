@@ -63,6 +63,12 @@ jobs:
       ref: ${{ needs.validate.outputs.sha }}
       version: ${{ needs.validate.outputs.version }}
 
+  plugin-checks:
+    needs: validate
+    uses: ./.github/workflows/reusable-plugin.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
   e2e-api-extended:
     needs: validate
     uses: ./.github/workflows/reusable-e2e.yml
@@ -157,6 +163,7 @@ jobs:
       - dashboard-checks
       - docs-checks
       - npm-checks
+      - plugin-checks
       - e2e-api-extended
       - e2e-cli-extended
       - e2e-infra-extended
@@ -170,6 +177,7 @@ jobs:
       && needs.dashboard-checks.result == 'success'
       && needs.docs-checks.result == 'success'
       && needs.npm-checks.result == 'success'
+      && needs.plugin-checks.result == 'success'
       && needs.publish-dry-run.result == 'success'
     runs-on: ubuntu-latest
     environment:
@@ -186,6 +194,7 @@ jobs:
           echo "| Dashboard | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docs | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| npm | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Plugin | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Publish dry run | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docker smoke | ${{ needs.docker-smoke.result == 'success' && '✅' || '⚠️ ' }}${{ needs.docker-smoke.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| E2E API | ${{ needs.e2e-api-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-api-extended.result }} |" >> "$GITHUB_STEP_SUMMARY"

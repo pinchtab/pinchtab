@@ -166,3 +166,14 @@ jobs:
       version: ${{ inputs.tag }}
     secrets:
       CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
+  plugin:
+    name: Publish Plugin
+    needs:
+      - release
+      - npm
+    uses: ./.github/workflows/reusable-publish-plugin.yml
+    with:
+      version: ${{ inputs.tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

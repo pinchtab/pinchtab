@@ -2,7 +2,7 @@
   "id": "pinchtab",
   "name": "Pinchtab",
   "description": "Browser control for AI agents via Pinchtab. Single tool, all actions: navigate, snapshot, click/type/press/fill/hover/scroll/select/focus, mouse-move/mouse-down/mouse-up/mouse-wheel, text, screenshot, evaluate, pdf.",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "skills": ["../skills/pinchtab"],
   "configSchema": {
     "type": "object",
@@ -17,16 +17,114 @@
         "type": "string",
         "description": "Bearer auth token (PINCHTAB_TOKEN)"
       },
-      "timeout": {
+      "timeoutMs": {
         "type": "number",
         "description": "Default request timeout in milliseconds",
         "default": 30000
+      },
+      "autoStart": {
+        "type": "boolean",
+        "description": "Auto-start local Pinchtab server if not running",
+        "default": true
+      },
+      "binaryPath": {
+        "type": "string",
+        "description": "Path to pinchtab binary (default: search PATH)"
+      },
+      "startupTimeoutMs": {
+        "type": "number",
+        "description": "Max time to wait for server startup",
+        "default": 30000
+      },
+      "allowEvaluate": {
+        "type": "boolean",
+        "description": "Allow evaluate action (JS execution)",
+        "default": false
+      },
+      "allowedDomains": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Domain allowlist for navigation (empty = allow all)"
+      },
+      "allowDownloads": {
+        "type": "boolean",
+        "description": "Allow file downloads",
+        "default": false
+      },
+      "allowUploads": {
+        "type": "boolean",
+        "description": "Allow file uploads",
+        "default": false
+      },
+      "defaultSnapshotFormat": {
+        "type": "string",
+        "enum": ["compact", "json", "text", "yaml"],
+        "description": "Default snapshot format",
+        "default": "compact"
+      },
+      "defaultSnapshotFilter": {
+        "type": "string",
+        "enum": ["interactive", "all"],
+        "description": "Default snapshot filter",
+        "default": "interactive"
+      },
+      "screenshotFormat": {
+        "type": "string",
+        "enum": ["jpeg", "png"],
+        "description": "Screenshot image format",
+        "default": "jpeg"
+      },
+      "screenshotQuality": {
+        "type": "number",
+        "description": "JPEG quality (1-100)",
+        "default": 80
+      },
+      "persistSessionTabs": {
+        "type": "boolean",
+        "description": "Remember last active tab across calls",
+        "default": true
+      },
+      "registerBrowserTool": {
+        "type": "boolean",
+        "description": "Register OpenClaw-compatible 'browser' tool",
+        "default": true
+      },
+      "defaultProfile": {
+        "type": "string",
+        "description": "Default profile name",
+        "default": "openclaw"
+      },
+      "profiles": {
+        "type": "object",
+        "description": "Profile name to Pinchtab instance/profile mapping",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "instanceId": { "type": "string" },
+            "attach": { "type": "boolean" }
+          }
+        }
       }
     }
   },
   "uiHints": {
     "baseUrl": { "label": "Base URL", "placeholder": "http://localhost:9867" },
     "token": { "label": "Auth Token", "sensitive": true },
-    "timeout": { "label": "Timeout (ms)", "placeholder": "30000" }
+    "timeoutMs": { "label": "Timeout (ms)", "placeholder": "30000" },
+    "autoStart": { "label": "Auto-start Server" },
+    "binaryPath": { "label": "Binary Path", "placeholder": "pinchtab" },
+    "startupTimeoutMs": { "label": "Startup Timeout (ms)", "placeholder": "30000" },
+    "allowEvaluate": { "label": "Allow JS Evaluate" },
+    "allowedDomains": { "label": "Allowed Domains" },
+    "allowDownloads": { "label": "Allow Downloads" },
+    "allowUploads": { "label": "Allow Uploads" },
+    "defaultSnapshotFormat": { "label": "Snapshot Format" },
+    "defaultSnapshotFilter": { "label": "Snapshot Filter" },
+    "screenshotFormat": { "label": "Screenshot Format" },
+    "screenshotQuality": { "label": "Screenshot Quality" },
+    "persistSessionTabs": { "label": "Persist Tab Context" },
+    "registerBrowserTool": { "label": "Register 'browser' Tool" },
+    "defaultProfile": { "label": "Default Profile" },
+    "profiles": { "label": "Profile Mappings" }
   }
 }

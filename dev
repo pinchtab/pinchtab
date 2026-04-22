@@ -24,6 +24,7 @@ COMMANDS=(
   "check:🧪:All checks"
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
+  "test plugin:🔬:Plugin unit tests"
   "e2e:🐳:E2E suites"
   "  pr:🐳:PR suite (api + cli + infra)"
   "  release:🐳:Release suite (all extended)"
@@ -31,6 +32,7 @@ COMMANDS=(
   "  api:🐳:API basic tests"
   "  cli:🐳:CLI basic tests"
   "  infra:🐳:Infra basic tests"
+  "  plugin:🐳:Plugin smoke tests"
   "  api-extended:🐳:API extended (multi-instance)"
   "  cli-extended:🐳:CLI extended tests"
   "  infra-extended:🐳:Infra extended (multi-instance)"
@@ -43,6 +45,7 @@ COMMANDS=(
   "check go:🧪:Go only"
   "check dashboard:🧪:Dashboard only"
   "check npm:🧪:npm package only"
+  "check plugin:🧪:Plugin only"
   "check security:🧪:Gosec security scan"
   "check docs:🧪:Validate docs JSON"
   "binary:📦:Build release-style binary into dist/"
@@ -77,7 +80,7 @@ run_command() {
 
   case "$target" in
     "check")
-      echo "  ${ACCENT}${BOLD}🧪 Running all checks (Go + Dashboard)${NC}"
+      echo "  ${ACCENT}${BOLD}🧪 Running all checks (Go + Dashboard + Plugin)${NC}"
       echo ""
       bash scripts/check.sh
       local go_exit=$?
@@ -86,7 +89,12 @@ run_command() {
       echo ""
       bash scripts/check-dashboard.sh
       local dash_exit=$?
-      if [ $go_exit -ne 0 ] || [ $dash_exit -ne 0 ]; then exit 1; fi
+      echo ""
+      echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
+      echo ""
+      bash scripts/check-plugin.sh
+      local plugin_exit=$?
+      if [ $go_exit -ne 0 ] || [ $dash_exit -ne 0 ] || [ $plugin_exit -ne 0 ]; then exit 1; fi
       exit 0
       ;;
     "check go")
@@ -103,6 +111,11 @@ run_command() {
       echo "  ${ACCENT}${BOLD}🧪 npm package checks${NC}"
       echo ""
       exec bash scripts/check-npm.sh
+      ;;
+    "check plugin")
+      echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
+      echo ""
+      exec bash scripts/check-plugin.sh
       ;;
     "check security")
       echo "  ${ACCENT}${BOLD}🔒 Security scan${NC}"
@@ -133,6 +146,11 @@ run_command() {
       echo "  ${ACCENT}${BOLD}🔬 Dashboard tests${NC}"
       echo ""
       exec bash scripts/test.sh dashboard
+      ;;
+    "test plugin")
+      echo "  ${ACCENT}${BOLD}🔬 Plugin tests${NC}"
+      echo ""
+      cd plugin && exec npx tsx --test *.test.ts
       ;;
     "unit")
       echo "  ${ACCENT}${BOLD}🔬 Unit tests${NC}"

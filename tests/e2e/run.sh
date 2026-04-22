@@ -95,9 +95,24 @@ case "$SUITE" in
     PROGRESS_FILE_EXTENDED="progress-infra-extended.log"
     REQUIRED_COMMANDS=(curl jq grep sed awk seq)
     ;;
+  plugin)
+    source "${ROOT_DIR}/helpers/api.sh"
+    GROUP_DIR="${ROOT_DIR}/scenarios/plugin"
+    SUITE_KIND="api"
+    RUN_EXTENDED=false
+    SUITE_TITLE_BASIC="PinchTab E2E Plugin Suite"
+    SUITE_TITLE_EXTENDED="PinchTab E2E Plugin Suite"
+    SUMMARY_FILE_BASIC="summary-plugin.txt"
+    SUMMARY_FILE_EXTENDED="summary-plugin.txt"
+    REPORT_FILE_BASIC="report-plugin.md"
+    REPORT_FILE_EXTENDED="report-plugin.md"
+    PROGRESS_FILE_BASIC="progress-plugin.log"
+    PROGRESS_FILE_EXTENDED="progress-plugin.log"
+    REQUIRED_COMMANDS=(curl jq grep sed awk seq)
+    ;;
   *)
     echo "unknown suite: $SUITE" >&2
-    echo "usage: /bin/bash tests/e2e/run.sh api|cli|infra [extended=true|all=true] [filter=<substring>] [extra=<files>]" >&2
+    echo "usage: /bin/bash tests/e2e/run.sh api|cli|infra|plugin [extended=true|all=true] [filter=<substring>] [extra=<files>]" >&2
     exit 1
     ;;
 esac

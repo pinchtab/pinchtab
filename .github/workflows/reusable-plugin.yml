@@ -1,0 +1,54 @@
+name: Reusable / Plugin
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Verify JSON schemas
+        working-directory: plugin
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('openclaw.plugin.json', 'utf8'))"
+          echo "✅ All JSON files are valid"
+
+      - name: Verify package contents
+        working-directory: plugin
+        run: |
+          echo "📦 Package will contain:"
+          npm pack --dry-run 2>&1 | grep -E "^npm notice [0-9]" | awk '{print "  " $4 " (" $3 ")"}'
+
+  test:
+    name: Test Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Run tests
+        working-directory: plugin
+        run: npx tsx --test *.test.ts

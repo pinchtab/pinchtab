@@ -1,0 +1,21 @@
+name: CI / Plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugin/**'
+      - '.github/workflows/*plugin*'
+  pull_request:
+    paths:
+      - 'plugin/**'
+      - '.github/workflows/*plugin*'
+
+permissions:
+  contents: read
+
+jobs:
+  plugin:
+    uses: ./.github/workflows/reusable-plugin.yml
+    with:
+      ref: ${{ github.sha }}

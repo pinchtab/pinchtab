@@ -627,10 +627,46 @@ run_pr() {
   return 0
 }
 
+run_plugin() {
+  local compose_file="tests/e2e/docker-compose.yml"
+  local summary_file="tests/e2e/results/summary-plugin.txt"
+  local report_file="tests/e2e/results/report-plugin.md"
+  local progress_file="tests/e2e/results/progress-plugin.log"
+  local log_prefix="logs-plugin"
+  local output_file="tests/e2e/results/output-plugin.log"
+  echo "  ${ACCENT}${BOLD}E2E Plugin tests (Docker)${NC}"
+  show_filter_status
+  show_logs_status
+  echo ""
+  prepare_suite_results "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}" "${output_file}"
+  local suite_started_at
+  suite_started_at=$(now_ms)
+  set +e
+  run_logged_command "${output_file}" "" "building support images" build_support_images "${compose_file}"
+  local plugin_exit=$?
+  local -a args=()
+  [ -n "${E2E_FILTER}" ] && args+=("filter=${E2E_FILTER}")
+  if [ "${plugin_exit}" -eq 0 ]; then
+    run_logged_command "${output_file}" "${progress_file}" "running plugin suite" compose -f "${compose_file}" run --build --rm runner-api /bin/bash /e2e/run.sh plugin "${args[@]}"
+    plugin_exit=$?
+  fi
+  set -e
+  local suite_duration_ms=$(( $(now_ms) - suite_started_at ))
+  record_suite_duration "${summary_file}" "${report_file}" "${suite_duration_ms}"
+  if [ "${plugin_exit}" -ne 0 ]; then
+    dump_compose_failure "${compose_file}" "${log_prefix}" runner-api pinchtab
+    show_failure_summary "${report_file}" "${output_file}"
+    show_suite_artifacts "${summary_file}" "${report_file}" "${progress_file}" "${log_prefix}" "${output_file}" "${suite_duration_ms}" runner-api pinchtab
+  fi
+  compose_down "${compose_file}"
+  return "${plugin_exit}"
+}
+
 run_release() {
   local api_exit=0
   local cli_exit=0
   local infra_exit=0
+  local plugin_exit=0
   local ran_any=0
 
   if suite_filter_matches "tests/e2e/scenarios/api" true; then
@@ -659,13 +695,19 @@ run_release() {
   fi
 
   echo ""
+
+  # Plugin smoke tests (always run in release suite)
+  ran_any=1
+  run_plugin || plugin_exit=$?
+
+  echo ""
   if [ "${ran_any}" -eq 0 ]; then
     echo "  ${ERROR}No E2E suites matched filter '${E2E_FILTER}'${NC}"
     return 1
   fi
-  if [ "${api_exit}" -ne 0 ] || [ "${cli_exit}" -ne 0 ] || [ "${infra_exit}" -ne 0 ]; then
+  if [ "${api_exit}" -ne 0 ] || [ "${cli_exit}" -ne 0 ] || [ "${infra_exit}" -ne 0 ] || [ "${plugin_exit}" -ne 0 ]; then
     echo "  ${ERROR}Some E2E suites failed${NC}"
-    echo "  ${MUTED}exit codes: api-extended=${api_exit}, cli-extended=${cli_exit}, infra-extended=${infra_exit}${NC}"
+    echo "  ${MUTED}exit codes: api-extended=${api_exit}, cli-extended=${cli_exit}, infra-extended=${infra_exit}, plugin=${plugin_exit}${NC}"
     return 1
   fi
   echo "  ${SUCCESS}All E2E suites passed${NC}"
@@ -698,6 +740,9 @@ case "${suite}" in
   infra-extended)
     run_infra_extended
     ;;
+  plugin)
+    run_plugin
+    ;;
   release|all)
     run_release
     ;;
@@ -716,7 +761,7 @@ case "${suite}" in
     ;;
   *)
     echo "Unknown E2E suite: ${suite}" >&2
-    echo "Available suites: pr, api, cli, infra, api-extended, cli-extended, infra-extended, release" >&2
+    echo "Available suites: pr, api, cli, infra, plugin, api-extended, cli-extended, infra-extended, release" >&2
     exit 1
     ;;
 esac

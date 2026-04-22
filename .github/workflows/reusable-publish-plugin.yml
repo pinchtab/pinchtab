@@ -1,0 +1,82 @@
+name: Reusable / Publish Plugin
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Plugin version (e.g. 0.3.0, without v prefix)'
+        required: true
+
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [ -n "$DISPATCH_VERSION" ]; then
+            VERSION="$DISPATCH_VERSION"
+          else
+            VERSION=${GITHUB_REF_NAME#v}
+          fi
+          VERSION=${VERSION#v}
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update plugin version
+        working-directory: plugin
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          CURRENT=$(node -pe "require('./package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version
+            # Also update openclaw.plugin.json version
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('openclaw.plugin.json', 'utf8'));
+              p.version = '$VERSION';
+              fs.writeFileSync('openclaw.plugin.json', JSON.stringify(p, null, 2) + '\n');
+            "
+          else
+            echo "Version already correct: $CURRENT"
+          fi
+
+      - name: Publish to npm
+        working-directory: plugin
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          echo "## Plugin Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Package: @pinchtab/pinchtab" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Install: \`openclaw plugins install @pinchtab/pinchtab\`" >> "$GITHUB_STEP_SUMMARY"
