@@ -1,10 +1,8 @@
 #!/bin/bash
 # idpi-wrap-bypass-extended.sh — Regression test for GHSA-r4f2-qghj-v4hf fix
 #
-# Tests that WrapContent() trust boundary can be bypassed by injecting
-# </untrusted_web_content> delimiter in a textarea element.
-#
-# This test SHOULD FAIL until the vulnerability is fixed.
+# Tests that WrapContent() sanitizes injected delimiters to prevent
+# trust boundary bypass via </untrusted_web_content> in page content.
 
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/api.sh"
