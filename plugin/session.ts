@@ -97,8 +97,8 @@ async function resolveBinaryPath(binary: string): Promise<string> {
     return binary;
   }
   try {
-    const { execSync } = await import("child_process");
-    const resolved = execSync(`which ${binary}`, { encoding: "utf8" }).trim();
+    const { execFileSync } = await import("child_process");
+    const resolved = execFileSync("which", [binary], { encoding: "utf8" }).trim();
     return resolved || binary;
   } catch {
     return binary;

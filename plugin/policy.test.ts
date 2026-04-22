@@ -47,7 +47,9 @@ describe("checkNavigationPolicy", () => {
     const cfg = { allowedDomains: ["example.com"] };
     const result = checkNavigationPolicy(cfg, "https://blocked.com");
     assert.strictEqual(result.allowed, false);
-    assert.ok(result.error?.includes("blocked.com"));
+    assert.ok(result.error);
+    const blockedUrl = new URL("https://blocked.com");
+    assert.ok(result.error.includes(blockedUrl.hostname));
   });
 
   it("allows when no URL provided", () => {
