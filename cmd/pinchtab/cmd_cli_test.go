@@ -66,11 +66,17 @@ func TestDragCommandRegistered(t *testing.T) {
 }
 
 func TestTabHandoffCommandsRegistered(t *testing.T) {
+	for _, name := range []string{"handoff [id]", "resume [id]", "handoff-status [id]"} {
+		if findCommand(rootCmd, name) == nil {
+			t.Fatalf("expected top-level command %q to be registered", name)
+		}
+	}
+
 	tabCmd := findCommand(rootCmd, "tab [id]")
 	if tabCmd == nil {
 		t.Fatal("expected tab command to be registered")
 	}
-	for _, name := range []string{"handoff", "resume", "handoff-status"} {
+	for _, name := range []string{"handoff [id]", "resume [id]", "handoff-status [id]"} {
 		if findCommand(tabCmd, name) == nil {
 			t.Fatalf("expected tab subcommand %q to be registered", name)
 		}

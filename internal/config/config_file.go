@@ -50,6 +50,15 @@ func DefaultFileConfig() FileConfig {
 	dashboardSessionElevationWindowSec := 15 * 60
 	dashboardSessionPersistElevationAcrossRestart := false
 	dashboardSessionRequireElevation := false
+	autoSolverEnabled := false
+	autoSolverAutoTrigger := true
+	autoSolverTriggerOnNavigate := true
+	autoSolverTriggerOnAction := true
+	autoSolverMaxAttempts := 8
+	autoSolverSolverTimeoutSec := 30
+	autoSolverRetryBaseDelayMs := 500
+	autoSolverRetryMaxDelayMs := 10000
+	autoSolverLLMFallback := false
 	return FileConfig{
 		ConfigVersion: CurrentConfigVersion,
 		Server: ServerConfig{
@@ -145,6 +154,18 @@ func DefaultFileConfig() FileConfig {
 				PersistElevationAcrossRestart: &dashboardSessionPersistElevationAcrossRestart,
 				RequireElevation:              &dashboardSessionRequireElevation,
 			},
+		},
+		AutoSolver: AutoSolverFileConfig{
+			Enabled:           &autoSolverEnabled,
+			AutoTrigger:       &autoSolverAutoTrigger,
+			TriggerOnNavigate: &autoSolverTriggerOnNavigate,
+			TriggerOnAction:   &autoSolverTriggerOnAction,
+			MaxAttempts:       &autoSolverMaxAttempts,
+			SolverTimeoutSec:  &autoSolverSolverTimeoutSec,
+			RetryBaseDelayMs:  &autoSolverRetryBaseDelayMs,
+			RetryMaxDelayMs:   &autoSolverRetryMaxDelayMs,
+			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			LLMFallback:       &autoSolverLLMFallback,
 		},
 	}
 }
@@ -312,12 +333,18 @@ type dashboardSessionConfigJSON struct {
 }
 
 type autoSolverFileConfigJSON struct {
-	Enabled     *bool                   `json:"enabled,omitempty"`
-	MaxAttempts *int                    `json:"maxAttempts,omitempty"`
-	Solvers     []string                `json:"solvers,omitempty"`
-	LLMProvider string                  `json:"llmProvider,omitempty"`
-	LLMFallback *bool                   `json:"llmFallback,omitempty"`
-	External    autoSolverExtConfigJSON `json:"external,omitempty"`
+	Enabled           *bool                   `json:"enabled,omitempty"`
+	AutoTrigger       *bool                   `json:"autoTrigger,omitempty"`
+	TriggerOnNavigate *bool                   `json:"triggerOnNavigate,omitempty"`
+	TriggerOnAction   *bool                   `json:"triggerOnAction,omitempty"`
+	MaxAttempts       *int                    `json:"maxAttempts,omitempty"`
+	SolverTimeoutSec  *int                    `json:"solverTimeoutSec,omitempty"`
+	RetryBaseDelayMs  *int                    `json:"retryBaseDelayMs,omitempty"`
+	RetryMaxDelayMs   *int                    `json:"retryMaxDelayMs,omitempty"`
+	Solvers           []string                `json:"solvers,omitempty"`
+	LLMProvider       string                  `json:"llmProvider,omitempty"`
+	LLMFallback       *bool                   `json:"llmFallback,omitempty"`
+	External          autoSolverExtConfigJSON `json:"external,omitempty"`
 }
 
 type autoSolverExtConfigJSON struct {
@@ -464,11 +491,17 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			},
 		},
 		AutoSolver: autoSolverFileConfigJSON{
-			Enabled:     fc.AutoSolver.Enabled,
-			MaxAttempts: fc.AutoSolver.MaxAttempts,
-			Solvers:     copyStringSlice(fc.AutoSolver.Solvers),
-			LLMProvider: fc.AutoSolver.LLMProvider,
-			LLMFallback: fc.AutoSolver.LLMFallback,
+			Enabled:           fc.AutoSolver.Enabled,
+			AutoTrigger:       fc.AutoSolver.AutoTrigger,
+			TriggerOnNavigate: fc.AutoSolver.TriggerOnNavigate,
+			TriggerOnAction:   fc.AutoSolver.TriggerOnAction,
+			MaxAttempts:       fc.AutoSolver.MaxAttempts,
+			SolverTimeoutSec:  fc.AutoSolver.SolverTimeoutSec,
+			RetryBaseDelayMs:  fc.AutoSolver.RetryBaseDelayMs,
+			RetryMaxDelayMs:   fc.AutoSolver.RetryMaxDelayMs,
+			Solvers:           copyStringSlice(fc.AutoSolver.Solvers),
+			LLMProvider:       fc.AutoSolver.LLMProvider,
+			LLMFallback:       fc.AutoSolver.LLMFallback,
 			External: autoSolverExtConfigJSON{
 				CapsolverKey:  fc.AutoSolver.External.CapsolverKey,
 				TwoCaptchaKey: fc.AutoSolver.External.TwoCaptchaKey,
@@ -540,6 +573,15 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	dashboardSessionElevationWindowSec := int(cfg.Sessions.Dashboard.ElevationWindow / time.Second)
 	dashboardSessionPersistElevationAcrossRestart := cfg.Sessions.Dashboard.PersistElevationAcrossRestart
 	dashboardSessionRequireElevation := cfg.Sessions.Dashboard.RequireElevation
+	autoSolverEnabled := cfg.AutoSolver.Enabled
+	autoSolverAutoTrigger := cfg.AutoSolver.AutoTrigger
+	autoSolverTriggerOnNavigate := cfg.AutoSolver.TriggerOnNavigate
+	autoSolverTriggerOnAction := cfg.AutoSolver.TriggerOnAction
+	autoSolverMaxAttempts := cfg.AutoSolver.MaxAttempts
+	autoSolverSolverTimeoutSec := cfg.AutoSolver.SolverTimeoutSec
+	autoSolverRetryBaseDelayMs := cfg.AutoSolver.RetryBaseDelayMs
+	autoSolverRetryMaxDelayMs := cfg.AutoSolver.RetryMaxDelayMs
+	autoSolverLLMFallback := cfg.AutoSolver.LLMFallback
 
 	mode := "headless"
 	if !cfg.Headless {
@@ -656,6 +698,23 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				ElevationWindowSec:            &dashboardSessionElevationWindowSec,
 				PersistElevationAcrossRestart: &dashboardSessionPersistElevationAcrossRestart,
 				RequireElevation:              &dashboardSessionRequireElevation,
+			},
+		},
+		AutoSolver: AutoSolverFileConfig{
+			Enabled:           &autoSolverEnabled,
+			AutoTrigger:       &autoSolverAutoTrigger,
+			TriggerOnNavigate: &autoSolverTriggerOnNavigate,
+			TriggerOnAction:   &autoSolverTriggerOnAction,
+			MaxAttempts:       &autoSolverMaxAttempts,
+			SolverTimeoutSec:  &autoSolverSolverTimeoutSec,
+			RetryBaseDelayMs:  &autoSolverRetryBaseDelayMs,
+			RetryMaxDelayMs:   &autoSolverRetryMaxDelayMs,
+			Solvers:           copyStringSlice(cfg.AutoSolver.Solvers),
+			LLMProvider:       cfg.AutoSolver.LLMProvider,
+			LLMFallback:       &autoSolverLLMFallback,
+			External: AutoSolverExtConf{
+				CapsolverKey:  cfg.AutoSolver.CapsolverKey,
+				TwoCaptchaKey: cfg.AutoSolver.TwoCaptchaKey,
 			},
 		},
 	}

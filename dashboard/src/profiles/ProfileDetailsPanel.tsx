@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import InstanceLogsPanel from "./InstanceLogsPanel";
 import ProfileMetaInfoPanel from "./ProfileMetaInfoPanel";
 import ProfileBasicInfoPanel from "./ProfileBasicInfoPanel";
@@ -8,6 +8,7 @@ import { InstanceTabsPanel } from "../tabs";
 import { TabsLayout, EmptyView } from "../components/molecules";
 import type { Profile, Instance, InstanceTab } from "../generated/types";
 import * as api from "../services/api";
+import { useAppStore } from "../stores/useAppStore";
 
 interface Props {
   profile: Profile | null;
@@ -31,6 +32,12 @@ export default function ProfileDetailsPanel({
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [tabs, setTabs] = useState<InstanceTab[]>([]);
   const [formValues, setFormValues] = useState({ name: "", useWhen: "" });
+  const { handoffNotifications } = useAppStore();
+
+  const handoffTabs = useMemo(
+    () => new Set(handoffNotifications.map((n) => n.tabId)),
+    [handoffNotifications],
+  );
 
   const isRunning = instance?.status === "running";
 
@@ -137,6 +144,7 @@ export default function ProfileDetailsPanel({
               <InstanceTabsPanel
                 tabs={tabs}
                 instanceId={instance?.id}
+                handoffTabs={handoffTabs}
                 emptyMessage={
                   isRunning ? "No tabs open." : "Instance not running."
                 }

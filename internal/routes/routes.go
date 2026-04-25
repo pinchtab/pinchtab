@@ -109,6 +109,7 @@ var coreEndpoints = []Endpoint{
 
 	// Solvers
 	{"GET", "/solvers", "List available solvers", CapNone, false},
+	{"GET", "/config/autosolver", "Get autosolver runtime config", CapNone, false},
 	{"POST", "/solve", "Run default solver", CapNone, true},
 	{"POST", "/solve/{name}", "Run named solver", CapNone, true},
 

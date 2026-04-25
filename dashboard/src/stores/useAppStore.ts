@@ -27,6 +27,16 @@ export interface ServerDataPoint {
   rateBucketHosts: number;
 }
 
+export interface HandoffNotification {
+  tabId: string;
+  reason: string;
+  hint?: string;
+  source?: string;
+  url?: string;
+  title?: string;
+  receivedAt: number;
+}
+
 interface AppState {
   // Profiles
   profiles: Profile[];
@@ -81,6 +91,12 @@ interface AppState {
   // Server info
   serverInfo: DashboardServerInfo | null;
   setServerInfo: (info: DashboardServerInfo | null) => void;
+
+  // Handoff notifications (tabs paused for human-in-the-loop)
+  handoffNotifications: HandoffNotification[];
+  addHandoffNotification: (notification: HandoffNotification) => void;
+  dismissHandoffNotification: (tabId: string) => void;
+  clearHandoffNotifications: () => void;
 
   // Monitoring UI
   monitoringSidebarCollapsed: boolean;
@@ -418,6 +434,23 @@ export const useAppStore = create<AppState>((set) => ({
   // Server info
   serverInfo: null,
   setServerInfo: (serverInfo) => set({ serverInfo }),
+
+  // Handoff notifications
+  handoffNotifications: [],
+  addHandoffNotification: (notification) =>
+    set((state) => {
+      const filtered = state.handoffNotifications.filter(
+        (n) => n.tabId !== notification.tabId,
+      );
+      return { handoffNotifications: [...filtered, notification] };
+    }),
+  dismissHandoffNotification: (tabId) =>
+    set((state) => ({
+      handoffNotifications: state.handoffNotifications.filter(
+        (n) => n.tabId !== tabId,
+      ),
+    })),
+  clearHandoffNotifications: () => set({ handoffNotifications: [] }),
 
   // Monitoring UI
   monitoringSidebarCollapsed: true,

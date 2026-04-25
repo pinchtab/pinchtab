@@ -10,6 +10,7 @@ import {
   defaultActivityFilters,
   sameActivityFilters,
 } from "./helpers";
+import { computeHandoffTabs, deriveHandoffIndex } from "./handoffState";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
 
 type WorkspaceTab = "agents" | "activities";
@@ -185,8 +186,14 @@ export default function AgentActivityWorkspace({
   useAgentEventStore = false,
   clearToInitialFilters = false,
 }: Props) {
-  const { instances, profiles, agents, agentEventsById, hydrateAgentEvents } =
-    useAppStore();
+  const {
+    instances,
+    profiles,
+    agents,
+    agentEventsById,
+    hydrateAgentEvents,
+    events: liveEvents,
+  } = useAppStore();
   const normalizedHiddenSources = useMemo(
     () => [...hiddenSources],
     [hiddenSources],
@@ -397,6 +404,26 @@ export default function AgentActivityWorkspace({
     }
     return Array.from(ids).sort();
   }, [catalogEvents]);
+
+  // Handoff detection runs against the union of polled catalog events and the
+  // live SSE-driven store events so the sidebar dots update in real time, not
+  // only when filters change and catalogEvents re-fetches.
+  const handoffEventPool = useMemo(() => {
+    const combined: DashboardActivityEvent[] = [...catalogEvents];
+    for (const live of liveEvents) {
+      combined.push(toDashboardActivityEvent(live));
+    }
+    return combined;
+  }, [catalogEvents, liveEvents]);
+
+  const handoffTabs = useMemo(
+    () => computeHandoffTabs(handoffEventPool),
+    [handoffEventPool],
+  );
+  const { sessionsWithHandoff, agentsWithHandoff } = useMemo(
+    () => deriveHandoffIndex(handoffEventPool, handoffTabs),
+    [handoffEventPool, handoffTabs],
+  );
 
   const visibleEvents = useMemo(
     () =>
@@ -755,6 +782,8 @@ export default function AgentActivityWorkspace({
         activeAgentId={filters.agentId}
         filters={filters}
         sessions={derivedSessions}
+        sessionsWithHandoff={sessionsWithHandoff}
+        agentsWithHandoff={agentsWithHandoff}
         showAllAgentsOption={showAllAgentsOption}
         showAgentFilter={showAgentFilter}
         profiles={profiles}
@@ -798,6 +827,8 @@ export default function AgentActivityWorkspace({
         error={error}
         loading={activityLoading || agentLoading}
         copyTabId={copyTabId}
+        handoffTabs={handoffTabs}
+        activeSessionId={filters.sessionId}
         onFilterChange={updateFilter}
       />
     </div>

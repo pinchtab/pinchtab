@@ -20,7 +20,13 @@ export default function MonitoringPage() {
     selectedMonitoringInstanceId,
     setSelectedMonitoringInstanceId,
     setInstances,
+    handoffNotifications,
   } = useAppStore();
+
+  const handoffTabs = useMemo(
+    () => new Set(handoffNotifications.map((n) => n.tabId)),
+    [handoffNotifications],
+  );
   const navigate = useNavigate();
   const selectedId = selectedMonitoringInstanceId;
   const setSelectedId = setSelectedMonitoringInstanceId;
@@ -308,6 +314,7 @@ export default function MonitoringPage() {
                     <InstanceTabsPanel
                       tabs={selectedTabs}
                       instanceId={selectedId || undefined}
+                      handoffTabs={handoffTabs}
                     />
                   ) : (
                     <div className="flex flex-1 items-center justify-center px-6">

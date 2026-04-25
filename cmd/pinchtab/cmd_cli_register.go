@@ -57,8 +57,17 @@ func registerBrowserCommands() {
 		cacheCmd,
 		storageCmd,
 		stateCmd,
+		tabHandoffCmd,
+		tabResumeCmd,
+		tabHandoffStatusCmd,
 	)
 
+	// Register handoff/resume/handoff-status as subcommands of `tab` too so
+	// `pinchtab tab handoff <id>` keeps working alongside the top-level
+	// `pinchtab handoff`. The commands carry GroupID="browser" (set by
+	// setCommandGroup above) — add the same group to tabsCmd so cobra
+	// accepts them without panicking.
+	tabsCmd.AddGroup(&cobra.Group{ID: "browser", Title: "Browser"})
 	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
 	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
@@ -109,6 +118,9 @@ func registerBrowserCommands() {
 		cacheCmd,
 		storageCmd,
 		stateCmd,
+		tabHandoffCmd,
+		tabResumeCmd,
+		tabHandoffStatusCmd,
 	)
 }
 
@@ -379,6 +391,18 @@ func addRootCommands(cmds ...*cobra.Command) {
 //
 // Explicit --tab still wins (cobra flag precedence). If neither env var nor
 // state file is set, the server picks the active tab as before.
+// resolveTabArg returns the tab ID from args[0] when present, otherwise falls
+// back to $PINCHTAB_TAB then the persisted state file written by `nav`.
+func resolveTabArg(args []string) string {
+	if len(args) > 0 && args[0] != "" {
+		return args[0]
+	}
+	if env := os.Getenv("PINCHTAB_TAB"); env != "" {
+		return env
+	}
+	return readTabStateFile()
+}
+
 func addTabFlag(cmds ...*cobra.Command) {
 	defaultTab := os.Getenv("PINCHTAB_TAB")
 	if defaultTab == "" {

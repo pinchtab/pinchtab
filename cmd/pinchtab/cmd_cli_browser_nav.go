@@ -105,38 +105,43 @@ var tabCloseCmd = &cobra.Command{
 }
 
 var tabHandoffCmd = &cobra.Command{
-	Use:   "handoff <id>",
+	Use:   "handoff [id]",
 	Short: "Pause tab automation for human handoff",
-	Long:  "Mark a tab as paused_handoff so action routes block until resumed or timeout expires.",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Mark a tab as paused_handoff so action routes block until resumed or timeout expires. Defaults to the current tab (PINCHTAB_TAB or state file).",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		reason, _ := cmd.Flags().GetString("reason")
 		timeoutMS, _ := cmd.Flags().GetInt("timeout-ms")
+		tabID := resolveTabArg(args)
 		runCLI(func(rt cliRuntime) {
-			browseractions.TabHandoff(rt.client, rt.base, rt.token, args[0], reason, timeoutMS, cmd)
+			browseractions.TabHandoff(rt.client, rt.base, rt.token, tabID, reason, timeoutMS, cmd)
 		})
 	},
 }
 
 var tabResumeCmd = &cobra.Command{
-	Use:   "resume <id>",
+	Use:   "resume [id]",
 	Short: "Resume a paused_handoff tab",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Resume automation on a paused tab. Defaults to the current tab (PINCHTAB_TAB or state file).",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		status, _ := cmd.Flags().GetString("status")
+		tabID := resolveTabArg(args)
 		runCLI(func(rt cliRuntime) {
-			browseractions.TabResume(rt.client, rt.base, rt.token, args[0], status, cmd)
+			browseractions.TabResume(rt.client, rt.base, rt.token, tabID, status, cmd)
 		})
 	},
 }
 
 var tabHandoffStatusCmd = &cobra.Command{
-	Use:   "handoff-status <id>",
+	Use:   "handoff-status [id]",
 	Short: "Show handoff status for a tab",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Show handoff status. Defaults to the current tab (PINCHTAB_TAB or state file).",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		tabID := resolveTabArg(args)
 		runCLI(func(rt cliRuntime) {
-			browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, args[0], cmd)
+			browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, tabID, cmd)
 		})
 	},
 }

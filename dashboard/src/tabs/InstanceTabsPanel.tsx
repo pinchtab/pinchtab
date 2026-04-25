@@ -11,6 +11,7 @@ interface Props {
   tabs: InstanceTab[];
   emptyMessage?: string;
   instanceId?: string;
+  handoffTabs?: Set<string>;
 }
 
 function sameIds(left: string[], right: string[]): boolean {
@@ -24,6 +25,7 @@ export default function InstanceTabsPanel({
   tabs,
   emptyMessage = "No tabs open",
   instanceId,
+  handoffTabs,
 }: Props) {
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [selectionPinned, setSelectionPinned] = useState(false);
@@ -130,6 +132,7 @@ export default function InstanceTabsPanel({
           pinnedTabId={selectionPinned ? selectedTabId : null}
           telemetryActive={showTelemetry}
           newTabsCount={newTabsCount}
+          handoffTabs={handoffTabs}
           onSelect={(id) => {
             setAcknowledgedTabIds(currentTabIds);
             setSelectedTabId(id);

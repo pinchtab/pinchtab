@@ -447,7 +447,7 @@ func sessionConsoleGrantAllows(method, path string) bool {
 func sessionSolveGrantAllows(method, path string) bool {
 	switch method {
 	case http.MethodGet:
-		return path == "/solvers"
+		return path == "/solvers" || path == "/config/autosolver"
 	case http.MethodPost:
 		switch {
 		case path == "/solve" || strings.HasPrefix(path, "/solve/"):

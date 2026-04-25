@@ -8,6 +8,8 @@ import {
   IconPointer,
   IconScreenShare,
 } from "../components/atoms/Icon";
+import { useState } from "react";
+import { resumeTab } from "../services/api";
 import { activityStatusVariant } from "./helpers";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
 import CopyIdPill from "./CopyIdPill";
@@ -106,6 +108,7 @@ interface Props {
   showTab?: boolean;
   copyTabId?: boolean;
   sessionLabel?: string;
+  inHandoff?: boolean;
   onFilterChange?: (key: keyof ActivityFilters, value: string) => void;
 }
 
@@ -114,9 +117,25 @@ export default function ActivityItemLine({
   showTab = true,
   copyTabId = false,
   sessionLabel,
+  inHandoff = false,
   onFilterChange,
 }: Props) {
   const variant = activityStatusVariant(event.status);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState("");
+
+  const showResumeButton = inHandoff && Boolean(event.tabId);
+  const handleResume = async () => {
+    if (!event.tabId || resuming) return;
+    setResuming(true);
+    setResumeError("");
+    try {
+      await resumeTab(event.tabId);
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : "Resume failed");
+      setResuming(false);
+    }
+  };
 
   return (
     <div className="flex items-center gap-2.5 px-4 py-2 text-sm transition-colors hover:bg-white/2">
@@ -128,9 +147,31 @@ export default function ActivityItemLine({
         {formatTime(event.timestamp)}
       </span>
 
+      {inHandoff && (
+        <span
+          aria-label="tab paused for human handoff"
+          title="Tab is paused for human handoff"
+          className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
+        />
+      )}
+
       <span className="min-w-0 flex-1 truncate text-text-primary">
         {eventDescription(event)}
       </span>
+
+      {showResumeButton && (
+        <button
+          type="button"
+          onClick={handleResume}
+          disabled={resuming}
+          title={
+            resumeError || "Resume automation after manual challenge solve"
+          }
+          className="shrink-0 rounded-sm border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] text-warning transition-colors hover:bg-warning/20 disabled:opacity-50"
+        >
+          {resuming ? "Resuming…" : "Resolve challenge"}
+        </button>
+      )}
 
       {sessionLabel && (
         <span className="truncate rounded-sm border border-border-subtle bg-white/3 px-1.5 py-0.5 text-[0.68rem] text-text-muted">

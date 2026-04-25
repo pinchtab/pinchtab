@@ -119,6 +119,20 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local desc="${3:-does not contain '$needle'}"
+
+  if echo "$haystack" | grep -q "$needle"; then
+    echo -e "  ${RED}✗${NC} $desc (found when should be absent)"
+    ((ASSERTIONS_FAILED++)) || true
+  else
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  fi
+}
+
 assert_result_eq() {
   local path="$1"
   local expected="$2"

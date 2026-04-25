@@ -93,6 +93,29 @@ pinchtab network              # GET  200  https://...
 | `pinchtab security` | Open the interactive security overview |
 | `pinchtab completion <shell>` | Generate shell completion scripts |
 
+### Server Flags
+
+```bash
+pinchtab server [flags]
+```
+
+| Flag | Short | Purpose |
+| --- | --- | --- |
+| `--yolo` | `-y` | Apply guards down preset (enables evaluate, macro, download) |
+| `--headed` | `-H` | Start browser instances in headed (visible) mode |
+| `--extension <path>` | `-e` | Load browser extension (repeatable) |
+
+Examples:
+
+```bash
+pinchtab server -y                  # guards down for local dev
+pinchtab server -H                  # visible browser for debugging
+pinchtab server -yH                 # both combined
+pinchtab server -e ./my-extension   # load extension
+```
+
+**Note:** Use `--headed` only when you need visual feedback (debugging, manual testing). Headless mode is more resource-efficient for automation.
+
 ## Browser Commands
 
 The browser control surface is top-level. `tab` is only for list/focus/new/close.

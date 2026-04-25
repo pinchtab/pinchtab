@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { ActivityPage, AgentsPage } from "./activities";
-import { NavBar } from "./components/molecules";
+import { HandoffNotifications, NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
 import {
@@ -252,6 +252,7 @@ function AppContent() {
           {INSECURE_DASHBOARD_TRANSPORT_WARNING}
         </div>
       )}
+      <HandoffNotifications />
       <main className="dashboard-grid flex-1 overflow-hidden">
         <Routes>
           <Route

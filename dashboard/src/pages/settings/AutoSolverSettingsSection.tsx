@@ -46,6 +46,60 @@ export function AutoSolverSettingsSection({
         </label>
       </SettingRow>
       <SettingRow
+        label="Auto trigger"
+        description="Automatically run autosolver after supported navigation and action requests."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.autoTrigger}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                autoTrigger: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.autoTrigger ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
+        label="Trigger on navigate"
+        description="Run autosolver checks after successful navigation calls."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.triggerOnNavigate}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                triggerOnNavigate: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.triggerOnNavigate ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
+        label="Trigger on action"
+        description="Run autosolver checks after successful action calls."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.autoSolver.triggerOnAction}
+            onChange={(e) =>
+              updateBackendSection("autoSolver", {
+                triggerOnAction: e.target.checked,
+              })
+            }
+            className="h-4 w-4"
+          />
+          {backendConfig.autoSolver.triggerOnAction ? "Enabled" : "Disabled"}
+        </label>
+      </SettingRow>
+      <SettingRow
         label="Max attempts"
         description="Maximum autosolver retries before the pipeline gives up."
       >
@@ -62,8 +116,56 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
+        label="Solver timeout (sec)"
+        description="Per-solver timeout for each attempt."
+      >
+        <input
+          type="number"
+          min={1}
+          value={backendConfig.autoSolver.solverTimeoutSec}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              solverTimeoutSec: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Retry base delay (ms)"
+        description="Base retry backoff delay between autosolver attempts."
+      >
+        <input
+          type="number"
+          min={0}
+          value={backendConfig.autoSolver.retryBaseDelayMs}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              retryBaseDelayMs: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Retry max delay (ms)"
+        description="Maximum retry backoff delay cap between autosolver attempts."
+      >
+        <input
+          type="number"
+          min={0}
+          value={backendConfig.autoSolver.retryMaxDelayMs}
+          onChange={(e) =>
+            updateBackendSection("autoSolver", {
+              retryMaxDelayMs: Number(e.target.value),
+            })
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
         label="Solvers"
-        description="Comma-separated ordered list of solver names to try."
+        description="Comma-separated ordered list of solver names to try. Use GET /solvers or GET /config/autosolver to confirm runtime-available names."
       >
         <input
           value={listToCsv(backendConfig.autoSolver.solvers)}
@@ -109,7 +211,7 @@ export function AutoSolverSettingsSection({
       </SettingRow>
       <SettingRow
         label="External provider keys"
-        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file."
+        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file. Those providers appear in runtime solver lists only when keys are configured."
       >
         <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
           Open the config file above and set{" "}

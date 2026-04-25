@@ -104,10 +104,11 @@ Notes:
 
 - these routes are tab-scoped only
 - `POST /tabs/{id}/handoff` marks the tab as `paused_handoff` and records a reason
-- `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set (includes `expiresAt` and `timeoutMs` when timeout is configured)
+- `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set
 - `POST /tabs/{id}/resume` clears the handoff state and can carry resume metadata for the caller
-- action execution routes (`/action`, `/actions`, `/macro`) reject paused tabs with `409 tab_paused_handoff`
-- CLI wrappers are available: `pinchtab tab handoff`, `pinchtab tab handoff-status`, and `pinchtab tab resume`
+- current behavior is advisory only: handoff state is not yet a hard block on subsequent automation requests
+- treat the current implementation as temporary coordination state, not as a security boundary
+- there is currently no dedicated CLI wrapper for handoff or resume; use the HTTP API
 
 ## Tab Locking
 
@@ -436,20 +437,46 @@ Console and error routes use query parameters:
 
 ```text
 GET  /solvers
+GET  /config/autosolver
 POST /solve
 POST /solve/{name}
 POST /tabs/{id}/solve
 POST /tabs/{id}/solve/{name}
 ```
 
-The solver framework auto-detects and resolves browser challenges (Cloudflare Turnstile, etc.). See [Solve reference](./reference/solve.md) for details.
+The autosolver framework auto-detects and resolves browser challenges (Cloudflare Turnstile, CAPTCHAs, interstitials, etc.). See [Solve reference](./reference/solve.md) for details.
 
 Solve body fields:
 
 - `solver` optional solver name (auto-detect when omitted)
 - `tabId` optional
-- `maxAttempts` optional (default: 3)
-- `timeout` optional in ms (default: 30000)
+- `maxAttempts` optional (defaults to `autoSolver.maxAttempts`, default `8`)
+- `timeout` optional in ms (auto-estimated when omitted, minimum `30000`)
+
+`GET /config/autosolver` returns effective autosolver runtime settings and the
+currently available solver list.
+
+Example response:
+
+```json
+{
+	"enabled": true,
+	"autoTrigger": true,
+	"triggerOnNavigate": true,
+	"triggerOnAction": true,
+	"maxAttempts": 8,
+	"solverTimeoutSec": 30,
+	"retryBaseDelayMs": 500,
+	"retryMaxDelayMs": 10000,
+	"solvers": ["cloudflare", "semantic", "jschallenge"],
+	"llmProvider": "",
+	"llmFallback": false
+}
+```
+
+Notes:
+
+- `capsolver` and `twocaptcha` appear in `solvers` only when their API keys are configured.
 
 ## Profiles And Instances
 

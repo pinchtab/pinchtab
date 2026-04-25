@@ -157,13 +157,19 @@ type SchedulerConfig struct {
 
 // AutoSolverConfig holds autosolver runtime settings.
 type AutoSolverConfig struct {
-	Enabled       bool     `json:"enabled,omitempty"`
-	MaxAttempts   int      `json:"maxAttempts,omitempty"`
-	Solvers       []string `json:"solvers,omitempty"`     // Ordered solver names
-	LLMProvider   string   `json:"llmProvider,omitempty"` // "openai", "anthropic", etc.
-	LLMFallback   bool     `json:"llmFallback,omitempty"` // Enable LLM as last resort
-	CapsolverKey  string   `json:"capsolverKey,omitempty"`
-	TwoCaptchaKey string   `json:"twoCaptchaKey,omitempty"`
+	Enabled           bool     `json:"enabled,omitempty"`
+	AutoTrigger       bool     `json:"autoTrigger,omitempty"`
+	TriggerOnNavigate bool     `json:"triggerOnNavigate,omitempty"`
+	TriggerOnAction   bool     `json:"triggerOnAction,omitempty"`
+	MaxAttempts       int      `json:"maxAttempts,omitempty"`
+	SolverTimeoutSec  int      `json:"solverTimeoutSec,omitempty"`
+	RetryBaseDelayMs  int      `json:"retryBaseDelayMs,omitempty"`
+	RetryMaxDelayMs   int      `json:"retryMaxDelayMs,omitempty"`
+	Solvers           []string `json:"solvers,omitempty"`     // Ordered solver names
+	LLMProvider       string   `json:"llmProvider,omitempty"` // "openai", "anthropic", etc.
+	LLMFallback       bool     `json:"llmFallback,omitempty"` // Enable LLM as last resort
+	CapsolverKey      string   `json:"capsolverKey,omitempty"`
+	TwoCaptchaKey     string   `json:"twoCaptchaKey,omitempty"`
 }
 
 type ObservabilityConfig struct {
@@ -353,12 +359,18 @@ type ActivityEventsFileConfig struct {
 
 // AutoSolverFileConfig is the persistent configuration for the autosolver system.
 type AutoSolverFileConfig struct {
-	Enabled     *bool             `json:"enabled,omitempty"`
-	MaxAttempts *int              `json:"maxAttempts,omitempty"`
-	Solvers     []string          `json:"solvers,omitempty"`
-	LLMProvider string            `json:"llmProvider,omitempty"`
-	LLMFallback *bool             `json:"llmFallback,omitempty"`
-	External    AutoSolverExtConf `json:"external,omitempty"`
+	Enabled           *bool             `json:"enabled,omitempty"`
+	AutoTrigger       *bool             `json:"autoTrigger,omitempty"`
+	TriggerOnNavigate *bool             `json:"triggerOnNavigate,omitempty"`
+	TriggerOnAction   *bool             `json:"triggerOnAction,omitempty"`
+	MaxAttempts       *int              `json:"maxAttempts,omitempty"`
+	SolverTimeoutSec  *int              `json:"solverTimeoutSec,omitempty"`
+	RetryBaseDelayMs  *int              `json:"retryBaseDelayMs,omitempty"`
+	RetryMaxDelayMs   *int              `json:"retryMaxDelayMs,omitempty"`
+	Solvers           []string          `json:"solvers,omitempty"`
+	LLMProvider       string            `json:"llmProvider,omitempty"`
+	LLMFallback       *bool             `json:"llmFallback,omitempty"`
+	External          AutoSolverExtConf `json:"external,omitempty"`
 }
 
 // AutoSolverExtConf holds external solver API keys.

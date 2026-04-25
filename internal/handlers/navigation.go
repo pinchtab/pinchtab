@@ -244,6 +244,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		h.maybeAutoSolve(tCtx, newTabID, autoSolverTriggerNavigate)
+
 		var navURL string
 		_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
 		title, _ := bridge.WaitForTitle(tCtx, titleWait)
@@ -299,6 +301,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
 		return
 	}
+
+	h.maybeAutoSolve(tCtx, resolvedTabID, autoSolverTriggerNavigate)
 
 	var navURL string
 	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))

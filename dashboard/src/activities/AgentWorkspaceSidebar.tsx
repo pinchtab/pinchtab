@@ -16,6 +16,8 @@ interface AgentWorkspaceSidebarProps {
   activeAgentId: string;
   filters: ActivityFilters;
   sessions: Session[];
+  sessionsWithHandoff?: Set<string>;
+  agentsWithHandoff?: Set<string>;
   showAllAgentsOption?: boolean;
   showAgentFilter?: boolean;
   profiles: Profile[];
@@ -39,6 +41,8 @@ export default function AgentWorkspaceSidebar({
   activeAgentId,
   filters,
   sessions,
+  sessionsWithHandoff,
+  agentsWithHandoff,
   showAllAgentsOption = true,
   showAgentFilter = true,
   profiles,
@@ -140,6 +144,8 @@ export default function AgentWorkspaceSidebar({
                 selected={activeAgentId === agent.id}
                 sessions={sessionsByAgent.get(agent.id) || []}
                 activeSessionId={filters.sessionId}
+                hasHandoff={agentsWithHandoff?.has(agent.id) ?? false}
+                sessionsWithHandoff={sessionsWithHandoff}
                 onClick={() => onSelectAgent(agent.id)}
                 onSelectSession={onSelectSession}
               />

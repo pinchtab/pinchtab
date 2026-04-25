@@ -37,8 +37,9 @@ type Handlers struct {
 	clipboard    clipboardStore
 
 	// Optional dependency injection (for unit testing)
-	evalJS      func(ctx context.Context, expression string, out *string) error
-	evalRuntime func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error
+	evalJS           func(ctx context.Context, expression string, out *string) error
+	autoSolverRunner func(ctx context.Context, tabID string) error
+	evalRuntime      func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -97,6 +98,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	h.evalJS = func(ctx context.Context, expression string, out *string) error {
 		return chromedp.Run(ctx, chromedp.Evaluate(expression, out))
 	}
+	h.autoSolverRunner = h.runAutoSolver
 	h.evalRuntime = func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
 		return chromedp.Run(ctx, chromedp.Evaluate(expression, out, opts...))
 	}
@@ -209,6 +211,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /cookies", h.HandleGetCookies)
 	mux.HandleFunc("POST /cookies", h.HandleSetCookies)
 	mux.HandleFunc("GET /solvers", h.HandleListSolvers)
+	mux.HandleFunc("GET /config/autosolver", h.HandleAutoSolverConfig)
 	mux.HandleFunc("POST /solve", h.HandleSolve)
 	mux.HandleFunc("POST /solve/{name}", h.HandleSolve)
 	mux.HandleFunc("POST /tabs/{id}/solve", h.HandleTabSolve)

@@ -180,7 +180,13 @@ export interface BackendTimeoutsConfig {
 
 export interface BackendAutoSolverConfig {
   enabled: boolean;
+  autoTrigger: boolean;
+  triggerOnNavigate: boolean;
+  triggerOnAction: boolean;
   maxAttempts: number;
+  solverTimeoutSec: number;
+  retryBaseDelayMs: number;
+  retryMaxDelayMs: number;
   solvers: string[];
   llmProvider: string;
   llmFallback: boolean;
@@ -309,8 +315,14 @@ export const defaultBackendConfig: BackendConfig = {
   },
   autoSolver: {
     enabled: false,
+    autoTrigger: true,
+    triggerOnNavigate: true,
+    triggerOnAction: true,
     maxAttempts: 8,
-    solvers: ["cloudflare", "semantic"],
+    solverTimeoutSec: 30,
+    retryBaseDelayMs: 500,
+    retryMaxDelayMs: 10000,
+    solvers: ["cloudflare", "semantic", "capsolver", "twocaptcha"],
     llmProvider: "",
     llmFallback: false,
   },

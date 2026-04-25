@@ -7,8 +7,19 @@ interface Props {
   selected: boolean;
   sessions: Session[];
   activeSessionId?: string;
+  hasHandoff?: boolean;
+  sessionsWithHandoff?: Set<string>;
   onClick: () => void;
   onSelectSession: (sessionId: string) => void;
+}
+
+function HandoffDot() {
+  return (
+    <span
+      aria-label="tab paused for human handoff"
+      className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
+    />
+  );
 }
 
 function timeAgo(date: string): string {
@@ -40,6 +51,8 @@ export default function AgentItem({
   selected,
   sessions,
   activeSessionId,
+  hasHandoff = false,
+  sessionsWithHandoff,
   onClick,
   onSelectSession,
 }: Props) {
@@ -56,10 +69,11 @@ export default function AgentItem({
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-primary">
           <IconRobot />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 flex items-center gap-2">
           <span className="truncate text-sm font-medium">
             {agent.name || agent.id}
           </span>
+          {hasHandoff && <HandoffDot />}
         </div>
         <span className="dashboard-mono text-[0.65rem] text-text-muted">
           {timeAgo(agent.lastActivity || agent.connectedAt)}
@@ -70,6 +84,8 @@ export default function AgentItem({
         <div className="ml-5 border-l border-border-subtle">
           {sessions.map((session) => {
             const isActive = activeSessionId === session.id;
+            const sessionHasHandoff =
+              sessionsWithHandoff?.has(session.id) ?? false;
             return (
               <button
                 key={session.id}
@@ -84,6 +100,7 @@ export default function AgentItem({
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">
                   {sessionDisplayName(session)}
                 </span>
+                {sessionHasHandoff && <HandoffDot />}
               </button>
             );
           })}

@@ -29,6 +29,10 @@ func NewAdapter(m semantic.ElementMatcher) *Adapter {
 func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*autosolver.Intent, error) {
 	title := strings.ToLower(page.Title())
 	url := page.URL()
+	html, _ := page.HTML()
+	if challenge := autosolver.DetectChallengeIntent(title, url, html); challenge != nil {
+		return challenge, nil
+	}
 
 	// Cloudflare challenge indicators
 	cfIndicators := []string{"just a moment", "attention required", "checking your browser"}
@@ -86,6 +90,39 @@ func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*auto
 		}
 	}
 
+	onboardingPatterns := []string{"getting started", "welcome", "onboarding", "complete your profile", "step 1"}
+	for _, p := range onboardingPatterns {
+		if strings.Contains(title, p) {
+			return &autosolver.Intent{
+				Type:       autosolver.IntentOnboarding,
+				Confidence: 0.65,
+				Details:    "onboarding flow detected via semantic title analysis",
+			}, nil
+		}
+	}
+
+	navigationPatterns := []string{"continue", "next step", "choose option", "select plan", "wizard"}
+	for _, p := range navigationPatterns {
+		if strings.Contains(title, p) {
+			return &autosolver.Intent{
+				Type:       autosolver.IntentNavigation,
+				Confidence: 0.6,
+				Details:    "navigation flow detected via semantic title analysis",
+			}, nil
+		}
+	}
+
+	formPatterns := []string{"application form", "contact form", "checkout", "survey", "questionnaire"}
+	for _, p := range formPatterns {
+		if strings.Contains(title, p) {
+			return &autosolver.Intent{
+				Type:       autosolver.IntentForm,
+				Confidence: 0.6,
+				Details:    "form flow detected via semantic title analysis",
+			}, nil
+		}
+	}
+
 	return &autosolver.Intent{
 		Type:       autosolver.IntentNormal,
 		Confidence: 0.6,
@@ -127,8 +164,11 @@ func (a *Adapter) FindElement(ctx context.Context, page autosolver.Page, query s
 	}
 
 	best := result.Matches[0]
+	// Semantic refs are selector-compatible in this adapter, so keep both
+	// fields aligned for executors that prefer CSS selectors.
 	return &autosolver.ElementMatch{
 		Ref:        best.Ref,
+		Selector:   best.Ref,
 		Role:       best.Role,
 		Name:       best.Name,
 		Score:      best.Score,
@@ -153,6 +193,12 @@ func (a *Adapter) SuggestAction(ctx context.Context, page autosolver.Page, inten
 		return a.suggestLoginAction(ctx, page)
 	case autosolver.IntentSignup:
 		return a.suggestSignupAction(ctx, page)
+	case autosolver.IntentOnboarding:
+		return a.suggestOnboardingAction(ctx, page)
+	case autosolver.IntentNavigation:
+		return a.suggestNavigationAction(ctx, page)
+	case autosolver.IntentForm:
+		return a.suggestFormAction(ctx, page)
 	case autosolver.IntentBlocked:
 		return &autosolver.SuggestedAction{
 			Action: autosolver.ActionWait,
@@ -219,6 +265,54 @@ func (a *Adapter) suggestSignupAction(ctx context.Context, page autosolver.Page)
 	}, nil
 }
 
+func (a *Adapter) suggestOnboardingAction(ctx context.Context, page autosolver.Page) (*autosolver.SuggestedAction, error) {
+	match, err := a.FindElement(ctx, page, "next continue skip done button")
+	if err != nil || match == nil {
+		return &autosolver.SuggestedAction{
+			Action: autosolver.ActionWait,
+			Reason: "onboarding controls not found yet",
+		}, nil
+	}
+
+	return &autosolver.SuggestedAction{
+		Action:   autosolver.ActionClick,
+		Selector: match.Selector,
+		Reason:   "advancing onboarding flow",
+	}, nil
+}
+
+func (a *Adapter) suggestNavigationAction(ctx context.Context, page autosolver.Page) (*autosolver.SuggestedAction, error) {
+	match, err := a.FindElement(ctx, page, "primary navigation button next continue link")
+	if err != nil || match == nil {
+		return &autosolver.SuggestedAction{
+			Action: autosolver.ActionNone,
+			Reason: "navigation controls not found",
+		}, nil
+	}
+
+	return &autosolver.SuggestedAction{
+		Action:   autosolver.ActionClick,
+		Selector: match.Selector,
+		Reason:   "advancing navigation flow",
+	}, nil
+}
+
+func (a *Adapter) suggestFormAction(ctx context.Context, page autosolver.Page) (*autosolver.SuggestedAction, error) {
+	match, err := a.FindElement(ctx, page, "required input field form control")
+	if err != nil || match == nil {
+		return &autosolver.SuggestedAction{
+			Action: autosolver.ActionNone,
+			Reason: "form fields not found",
+		}, nil
+	}
+
+	return &autosolver.SuggestedAction{
+		Action:   autosolver.ActionClick,
+		Selector: match.Selector,
+		Reason:   "focusing a required form field",
+	}, nil
+}
+
 // detectViaSemanticMatch uses the semantic matcher to classify page
 // elements and infer the page intent.
 func (a *Adapter) detectViaSemanticMatch(ctx context.Context, page autosolver.Page) (*autosolver.Intent, error) {
@@ -242,6 +336,33 @@ func (a *Adapter) detectViaSemanticMatch(ctx context.Context, page autosolver.Pa
 		}, nil
 	}
 
+	match, err = a.FindElement(ctx, page, "next continue done button")
+	if err == nil && match != nil && match.Score > 0.6 {
+		return &autosolver.Intent{
+			Type:       autosolver.IntentOnboarding,
+			Confidence: match.Score,
+			Details:    "onboarding flow detected via semantic element matching",
+		}, nil
+	}
+
+	match, err = a.FindElement(ctx, page, "primary navigation button link")
+	if err == nil && match != nil && match.Score > 0.6 {
+		return &autosolver.Intent{
+			Type:       autosolver.IntentNavigation,
+			Confidence: match.Score,
+			Details:    "navigation flow detected via semantic element matching",
+		}, nil
+	}
+
+	match, err = a.FindElement(ctx, page, "required input field submit button")
+	if err == nil && match != nil && match.Score > 0.6 {
+		return &autosolver.Intent{
+			Type:       autosolver.IntentForm,
+			Confidence: match.Score,
+			Details:    "form flow detected via semantic element matching",
+		}, nil
+	}
+
 	return nil, nil
 }
 
@@ -254,14 +375,15 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 	// Extract interactive elements by scanning for common patterns.
 	// A full implementation would use the a11y tree from the bridge.
 	patterns := []struct {
-		tag  string
-		role string
+		searchTag string
+		selTag    string
+		role      string
 	}{
-		{"<input", "textbox"},
-		{"<button", "button"},
-		{"<a ", "link"},
-		{"<select", "combobox"},
-		{"<textarea", "textbox"},
+		{"<input", "input", "textbox"},
+		{"<button", "button", "button"},
+		{"<a ", "a", "link"},
+		{"<select", "select", "combobox"},
+		{"<textarea", "textarea", "textbox"},
 	}
 
 	lower := strings.ToLower(html)
@@ -269,11 +391,11 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 	for _, p := range patterns {
 		idx := 0
 		for {
-			pos := strings.Index(lower[idx:], p.tag)
+			pos := strings.Index(lower[idx:], p.searchTag)
 			if pos == -1 {
 				break
 			}
-			idx += pos + len(p.tag)
+			idx += pos + len(p.searchTag)
 
 			// Extract a rough name from surrounding text.
 			end := strings.Index(lower[idx:], ">")
@@ -281,6 +403,8 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 				break
 			}
 			snippet := html[idx : idx+end]
+			selector := buildSelector(p.selTag, snippet)
+
 			name := extractAttr(snippet, "placeholder")
 			if name == "" {
 				name = extractAttr(snippet, "aria-label")
@@ -288,10 +412,13 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 			if name == "" {
 				name = extractAttr(snippet, "name")
 			}
+			if name == "" {
+				name = selector
+			}
 
 			ref++
 			descs = append(descs, semantic.ElementDescriptor{
-				Ref:  fmt.Sprintf("e%d", ref),
+				Ref:  selector,
 				Role: p.role,
 				Name: name,
 			})
@@ -302,6 +429,36 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 		}
 	}
 	return descs
+}
+
+func buildSelector(tag, snippet string) string {
+	id := extractAttr(snippet, "id")
+	if id != "" {
+		return fmt.Sprintf("#%s", id)
+	}
+
+	name := extractAttr(snippet, "name")
+	if name != "" {
+		return fmt.Sprintf(`%s[name="%s"]`, tag, escapeAttrValue(name))
+	}
+
+	placeholder := extractAttr(snippet, "placeholder")
+	if placeholder != "" {
+		return fmt.Sprintf(`%s[placeholder="%s"]`, tag, escapeAttrValue(placeholder))
+	}
+
+	aria := extractAttr(snippet, "aria-label")
+	if aria != "" {
+		return fmt.Sprintf(`%s[aria-label="%s"]`, tag, escapeAttrValue(aria))
+	}
+
+	return tag
+}
+
+func escapeAttrValue(v string) string {
+	v = strings.ReplaceAll(v, `\\`, `\\\\`)
+	v = strings.ReplaceAll(v, `"`, `\\"`)
+	return v
 }
 
 // extractAttr extracts an HTML attribute value from a tag snippet.

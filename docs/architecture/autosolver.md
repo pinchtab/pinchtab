@@ -27,8 +27,8 @@ The AutoSolver system provides modular, semantic-first browser automation for Pi
 │  ┌──────────┐    ┌──────────┐    ┌──────────────┐   │
 │  │ Registry │───▶│Core Loop │───▶│ Fallback     │   │
 │  │ (solvers)│    │(detect + │    │ Chain:       │   │
-│  └──────────┘    │ dispatch)│    │ built-in →   │   │
-│                  └────┬─────┘    │ semantic →   │   │
+│  └──────────┘    │ dispatch)│    │ semantic →   │   │
+│                  └────┬─────┘    │ rule-based → │   │
 │                       │          │ external →   │   │
 │                       ▼          │ LLM          │   │
 │              ┌────────────────┐  └──────────────┘   │
@@ -56,10 +56,12 @@ internal/autosolver/
 ├── interfaces.go          # Page, ActionExecutor, Solver, SemanticEngine, LLMProvider
 ├── types.go               # Result, Intent, Config, enums
 ├── autosolver.go          # Core orchestrator with fallback chain
+├── challenge_detection.go # Shared challenge classification (title/URL/HTML)
 ├── heuristics.go          # Title-based intent detection fallback
 ├── registry.go            # Instance-level solver registry with priority ordering
-├── autosolver_test.go     # Core loop tests (7 test cases)
-├── registry_test.go       # Registry tests (8 test cases)
+├── autosolver_test.go     # Core loop tests
+├── challenge_detection_test.go
+├── registry_test.go
 ├── adapters/
 │   └── pinchtab.go        # Bridge adapter (ONLY chromedp import)
 ├── semantic/
@@ -72,6 +74,8 @@ internal/autosolver/
 │   └── trim.go            # HTML trimming for token efficiency
 └── solvers/
     ├── cloudflare.go      # Cloudflare Turnstile (new interface, no chromedp)
+    ├── jschallenge.go     # Generic JavaScript challenge/interstitial solver
+    ├── jschallenge_test.go
     └── legacy.go          # Compatibility shim for existing solver.Solver
 ```
 
@@ -132,16 +136,16 @@ The core loop executes this chain per attempt:
 ```
 1. Detect intent (semantic engine → title heuristics)
 2. If intent = normal → return solved
-3. Find matching solvers (CanHandle = true, sorted by priority)
-4. Try each solver:
-   a. Built-in (cloudflare, priority 10)
-   b. External (capsolver priority 200, twocaptcha priority 210)
-5. If all fail AND LLM enabled:
+3. Try semantic-first action planning (`/find` + self-healing)
+4. If still unresolved, find matching solvers (CanHandle = true)
+5. Execute solvers in configured order (`autoSolver.solvers`), falling back to
+    priority order when configuration does not match available solvers
+6. If all fail AND LLM enabled:
    a. Trim HTML to ~4KB
    b. Build structured prompt with attempt history
    c. Execute LLM-suggested action
-6. Retry with exponential backoff (500ms → 10s cap)
-7. Stop after MaxAttempts (default: 8)
+7. Retry with exponential backoff (500ms → 10s cap)
+8. Stop after MaxAttempts (default: 8)
 ```
 
 ## Configuration
@@ -152,7 +156,13 @@ The core loop executes this chain per attempt:
 {
   "autoSolver": {
     "enabled": true,
+    "autoTrigger": true,
+    "triggerOnNavigate": true,
+    "triggerOnAction": true,
     "maxAttempts": 8,
+    "solverTimeoutSec": 30,
+    "retryBaseDelayMs": 500,
+    "retryMaxDelayMs": 10000,
     "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
     "llmProvider": "openai",
     "llmFallback": false,
@@ -230,4 +240,4 @@ if result.Solved {
 
 ## Backward Compatibility
 
-The existing `internal/solver` package (PR #395) is **not modified**. The `CloudflareSolver` in `bridge/cloudflare.go` continues to work as-is. A `LegacyAdapter` shim (`solvers/legacy.go`) wraps old `solver.Solver` implementations to work with the new `autosolver.Solver` interface.
+The existing `internal/solver` package (PR #395) is still present for compatibility, but challenge APIs are now backed by `internal/autosolver`. The `CloudflareSolver` in `bridge/cloudflare.go` remains available, and a `LegacyAdapter` shim (`solvers/legacy.go`) can wrap legacy `solver.Solver` implementations into the new `autosolver.Solver` interface.

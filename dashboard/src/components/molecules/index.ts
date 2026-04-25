@@ -11,3 +11,4 @@ export { default as AgentItem } from "./AgentItem";
 export { default as ActivityLine } from "../../activities/ActivityLine";
 export { default as TabsChart } from "./TabsChart";
 export { default as ServerSummary } from "./ServerSummary";
+export { default as HandoffNotifications } from "./HandoffNotifications";

@@ -7,11 +7,22 @@ interface Props {
   pinnedTabId?: string | null;
   telemetryActive?: boolean;
   newTabsCount?: number;
+  handoffTabs?: Set<string>;
   onSelect: (id: string) => void;
   onTogglePinned?: (id: string) => void;
   onTabClosed?: () => void;
   onToggleTelemetry?: () => void;
   onSetTelemetry?: (active: boolean) => void;
+}
+
+function HandoffDot() {
+  return (
+    <span
+      aria-label="tab paused for human handoff"
+      title="Tab is paused for human handoff"
+      className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
+    />
+  );
 }
 
 function PinIcon({ pinned }: { pinned: boolean }) {
@@ -39,6 +50,7 @@ export default function TabBar({
   pinnedTabId,
   telemetryActive,
   newTabsCount = 0,
+  handoffTabs,
   onSelect,
   onTogglePinned,
   onTabClosed,
@@ -61,6 +73,7 @@ export default function TabBar({
       {tabs.map((tab) => {
         const isSelected = tab.id === selectedTabId && !telemetryActive;
         const isPinned = tab.id === pinnedTabId;
+        const isInHandoff = handoffTabs?.has(tab.id) ?? false;
         const title = tab.title || "Untitled";
 
         return (
@@ -76,9 +89,10 @@ export default function TabBar({
               type="button"
               onClick={() => onSelect(tab.id)}
               title={`${title}\n${tab.url}`}
-              className="min-w-0 flex-1 truncate text-left"
+              className="min-w-0 flex-1 truncate text-left flex items-center gap-1.5"
             >
               <span className="truncate text-xs font-medium">{title}</span>
+              {isInHandoff && <HandoffDot />}
             </button>
             {onTogglePinned && (
               <button

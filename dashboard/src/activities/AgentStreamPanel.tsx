@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { EmptyState } from "../components/atoms";
 import type { Session } from "../services/api";
 import ActivityItemLine from "./ActivityItemLine";
+import { isHandoffEvent } from "./handoffState";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
 
 interface AgentStreamPanelProps {
@@ -10,6 +11,8 @@ interface AgentStreamPanelProps {
   error: string;
   loading: boolean;
   copyTabId?: boolean;
+  handoffTabs?: Set<string>;
+  activeSessionId?: string;
   onFilterChange: (key: keyof ActivityFilters, value: string) => void;
 }
 
@@ -19,6 +22,8 @@ export default function AgentStreamPanel({
   error,
   loading,
   copyTabId = false,
+  handoffTabs,
+  activeSessionId,
   onFilterChange,
 }: AgentStreamPanelProps) {
   const sessionLabels = new Map(
@@ -76,20 +81,53 @@ export default function AgentStreamPanel({
           />
         ) : (
           <div className="divide-y divide-border-subtle/70">
-            {events.map((event, index) => (
-              <ActivityItemLine
-                key={`${event.requestId || event.timestamp}-${index}`}
-                event={event}
-                showTab
-                copyTabId={copyTabId}
-                sessionLabel={
-                  event.sessionId
-                    ? sessionLabels.get(event.sessionId)
-                    : "anonymous"
+            {(() => {
+              // Find the most recent handoff event per tab (by timestamp desc)
+              const mostRecentHandoffByTab = new Map<string, string>();
+              for (let i = events.length - 1; i >= 0; i--) {
+                const ev = events[i];
+                if (
+                  isHandoffEvent(ev) &&
+                  ev.tabId &&
+                  handoffTabs?.has(ev.tabId) &&
+                  !mostRecentHandoffByTab.has(ev.tabId)
+                ) {
+                  mostRecentHandoffByTab.set(
+                    ev.tabId,
+                    ev.requestId || ev.timestamp,
+                  );
                 }
-                onFilterChange={onFilterChange}
-              />
-            ))}
+              }
+
+              return events.map((event, index) => {
+                const suppressSessionLabel =
+                  Boolean(activeSessionId) &&
+                  event.sessionId === activeSessionId;
+                // Only show badge on the MOST RECENT handoff event per tab
+                const eventKey = event.requestId || event.timestamp;
+                const inHandoff =
+                  isHandoffEvent(event) &&
+                  Boolean(event.tabId && handoffTabs?.has(event.tabId)) &&
+                  mostRecentHandoffByTab.get(event.tabId!) === eventKey;
+                return (
+                  <ActivityItemLine
+                    key={`${eventKey}-${index}`}
+                    event={event}
+                    showTab
+                    copyTabId={copyTabId}
+                    sessionLabel={
+                      suppressSessionLabel
+                        ? undefined
+                        : event.sessionId
+                          ? sessionLabels.get(event.sessionId)
+                          : "anonymous"
+                    }
+                    inHandoff={inHandoff}
+                    onFilterChange={onFilterChange}
+                  />
+                );
+              });
+            })()}
           </div>
         )}
       </div>

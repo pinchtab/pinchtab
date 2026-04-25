@@ -5,16 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
-
-var supportedAutoSolverNames = map[string]struct{}{
-	"cloudflare": {},
-	"semantic":   {},
-}
-
-var defaultAutoSolverNames = []string{"cloudflare", "semantic"}
 
 // Load returns the RuntimeConfig with precedence: env vars > config file > defaults.
 func Load() *RuntimeConfig {
@@ -129,10 +121,16 @@ func Load() *RuntimeConfig {
 
 		// AutoSolver defaults (disabled by default)
 		AutoSolver: AutoSolverConfig{
-			Enabled:     false,
-			MaxAttempts: 8,
-			Solvers:     []string{"cloudflare", "semantic"},
-			LLMFallback: false,
+			Enabled:           false,
+			AutoTrigger:       true,
+			TriggerOnNavigate: true,
+			TriggerOnAction:   true,
+			MaxAttempts:       8,
+			SolverTimeoutSec:  30,
+			RetryBaseDelayMs:  500,
+			RetryMaxDelayMs:   10000,
+			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			LLMFallback:       false,
 		},
 	}
 	finalizeProfileConfig(cfg)
@@ -500,8 +498,26 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.AutoSolver.Enabled != nil {
 		cfg.AutoSolver.Enabled = *fc.AutoSolver.Enabled
 	}
+	if fc.AutoSolver.AutoTrigger != nil {
+		cfg.AutoSolver.AutoTrigger = *fc.AutoSolver.AutoTrigger
+	}
+	if fc.AutoSolver.TriggerOnNavigate != nil {
+		cfg.AutoSolver.TriggerOnNavigate = *fc.AutoSolver.TriggerOnNavigate
+	}
+	if fc.AutoSolver.TriggerOnAction != nil {
+		cfg.AutoSolver.TriggerOnAction = *fc.AutoSolver.TriggerOnAction
+	}
 	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts > 0 {
 		cfg.AutoSolver.MaxAttempts = *fc.AutoSolver.MaxAttempts
+	}
+	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec > 0 {
+		cfg.AutoSolver.SolverTimeoutSec = *fc.AutoSolver.SolverTimeoutSec
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs >= 0 {
+		cfg.AutoSolver.RetryBaseDelayMs = *fc.AutoSolver.RetryBaseDelayMs
+	}
+	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs >= 0 {
+		cfg.AutoSolver.RetryMaxDelayMs = *fc.AutoSolver.RetryMaxDelayMs
 	}
 	if len(fc.AutoSolver.Solvers) > 0 {
 		cfg.AutoSolver.Solvers = append([]string(nil), fc.AutoSolver.Solvers...)
@@ -514,59 +530,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.AutoSolver.CapsolverKey = fc.AutoSolver.External.CapsolverKey
 	cfg.AutoSolver.TwoCaptchaKey = fc.AutoSolver.External.TwoCaptchaKey
-	sanitizeAutoSolverRuntimeConfig(cfg)
-}
-
-func sanitizeAutoSolverRuntimeConfig(cfg *RuntimeConfig) {
-	if cfg == nil {
-		return
-	}
-
-	sanitized := normalizeAutoSolverNames(cfg.AutoSolver.Solvers)
-	if len(sanitized) == 0 {
-		sanitized = append([]string(nil), defaultAutoSolverNames...)
-	}
-	cfg.AutoSolver.Solvers = sanitized
-
-	if strings.TrimSpace(cfg.AutoSolver.LLMProvider) != "" {
-		slog.Warn("autosolver llmProvider is not implemented; ignoring configured provider",
-			"provider", cfg.AutoSolver.LLMProvider)
-		cfg.AutoSolver.LLMProvider = ""
-	}
-
-	if cfg.AutoSolver.LLMFallback {
-		slog.Warn("autosolver llmFallback is not implemented; forcing disabled")
-		cfg.AutoSolver.LLMFallback = false
-	}
-}
-
-func normalizeAutoSolverNames(raw []string) []string {
-	if len(raw) == 0 {
-		return nil
-	}
-
-	out := make([]string, 0, len(raw))
-	seen := make(map[string]struct{}, len(raw))
-
-	for _, name := range raw {
-		normalized := strings.ToLower(strings.TrimSpace(name))
-		if normalized == "" {
-			continue
-		}
-
-		if _, ok := supportedAutoSolverNames[normalized]; !ok {
-			slog.Warn("autosolver solver is not implemented; ignoring configured solver", "solver", name)
-			continue
-		}
-
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		out = append(out, normalized)
-	}
-
-	return out
 }
 
 // ApplyFileConfigToRuntime merges file configuration into an existing runtime

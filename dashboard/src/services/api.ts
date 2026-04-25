@@ -266,6 +266,17 @@ export async function closeTab(tabId: string): Promise<void> {
   await request(`/tabs/${encodeURIComponent(tabId)}/close`, { method: "POST" });
 }
 
+export async function resumeTab(
+  tabId: string,
+  status = "human_completed",
+): Promise<void> {
+  await request(`/tabs/${encodeURIComponent(tabId)}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
 export interface ConsoleLogEntry {
   timestamp: string;
   level: string;
@@ -507,9 +518,27 @@ export async function saveBackendConfig(
 }
 
 // SSE Events — endpoint is /api/events
+export interface HandoffPayload {
+  tabId?: string;
+  status?: string;
+  reason?: string;
+  source?: string;
+  hint?: string;
+  requestedAt?: string;
+  resumedAt?: string;
+  timeoutMs?: number;
+  url?: string;
+  title?: string;
+}
+
 export interface SystemEvent {
-  type: "instance.started" | "instance.stopped" | "instance.error";
-  instance?: Instance;
+  type:
+    | "instance.started"
+    | "instance.stopped"
+    | "instance.error"
+    | "tab.handoff"
+    | "tab.resume";
+  instance?: Instance | HandoffPayload;
 }
 
 export function activityEventSource(event: ActivityEvent): string {

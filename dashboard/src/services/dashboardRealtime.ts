@@ -66,7 +66,37 @@ function startDashboardRealtime(includeMemory: boolean) {
         state.setAgents(mergeAgents(state.agents, agents));
       },
       onSystem: (event) => {
-        console.log("System event:", event);
+        const state = useAppStore.getState();
+        if (event.type === "tab.handoff") {
+          const payload = (event.instance ?? {}) as Record<string, unknown>;
+          const tabId =
+            typeof payload.tabId === "string" ? payload.tabId : null;
+          if (!tabId) {
+            return;
+          }
+          state.addHandoffNotification({
+            tabId,
+            reason:
+              typeof payload.reason === "string"
+                ? payload.reason
+                : "manual_handoff",
+            hint: typeof payload.hint === "string" ? payload.hint : undefined,
+            source:
+              typeof payload.source === "string" ? payload.source : undefined,
+            url: typeof payload.url === "string" ? payload.url : undefined,
+            title:
+              typeof payload.title === "string" ? payload.title : undefined,
+            receivedAt: Date.now(),
+          });
+          return;
+        }
+        if (event.type === "tab.resume") {
+          const payload = (event.instance ?? {}) as Record<string, unknown>;
+          if (typeof payload.tabId === "string") {
+            state.dismissHandoffNotification(payload.tabId);
+          }
+          return;
+        }
       },
       onActivity: (event) => {
         if (!isClientActivityEvent(event)) {

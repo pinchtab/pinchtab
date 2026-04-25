@@ -7,6 +7,9 @@ import "strings"
 // well-known page-title patterns to classify the page.
 func detectIntentByTitle(title string) *Intent {
 	lower := strings.ToLower(title)
+	if challenge := DetectChallengeIntent(title, "", ""); challenge != nil {
+		return challenge
+	}
 
 	// Cloudflare challenge patterns
 	cfPatterns := []string{"just a moment", "attention required", "checking your browser"}
@@ -53,6 +56,42 @@ func detectIntentByTitle(title string) *Intent {
 				Type:       IntentSignup,
 				Confidence: 0.6,
 				Details:    "signup page detected via title",
+			}
+		}
+	}
+
+	// Onboarding patterns
+	onboardingPatterns := []string{"getting started", "welcome", "onboarding", "complete your profile", "step 1"}
+	for _, p := range onboardingPatterns {
+		if strings.Contains(lower, p) {
+			return &Intent{
+				Type:       IntentOnboarding,
+				Confidence: 0.65,
+				Details:    "onboarding flow detected via title",
+			}
+		}
+	}
+
+	// Navigation/task-flow patterns
+	navigationPatterns := []string{"continue", "next step", "choose option", "select plan", "wizard"}
+	for _, p := range navigationPatterns {
+		if strings.Contains(lower, p) {
+			return &Intent{
+				Type:       IntentNavigation,
+				Confidence: 0.6,
+				Details:    "navigation flow detected via title",
+			}
+		}
+	}
+
+	// Generic form-filling patterns
+	formPatterns := []string{"application form", "contact form", "checkout", "survey", "questionnaire"}
+	for _, p := range formPatterns {
+		if strings.Contains(lower, p) {
+			return &Intent{
+				Type:       IntentForm,
+				Confidence: 0.6,
+				Details:    "form flow detected via title",
 			}
 		}
 	}

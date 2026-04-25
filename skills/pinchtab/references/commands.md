@@ -6,14 +6,24 @@
 
 ## Control Plane
 
-### `pinchtab start`
+### `pinchtab server`
 Start the PinchTab server (default port 9867).
 
 ```bash
-pinchtab start
-pinchtab start --port 9868
-pinchtab start --profile work --headless
+pinchtab server
+pinchtab server -y              # guards down (enables evaluate, macro, download)
+pinchtab server -H              # visible browser for debugging
+pinchtab server -yH             # both combined
+pinchtab server -e ./ext        # load browser extension
 ```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--yolo` | `-y` | Apply guards down preset (enables evaluate, macro, download) |
+| `--headed` | `-H` | Start browser in headed (visible) mode |
+| `--extension <path>` | `-e` | Load browser extension (repeatable) |
+
+> **Note:** Use `--headed` only when you need visual feedback (debugging, watching automation). Headless mode is more resource-efficient.
 
 ### `pinchtab stop`
 Stop the running server.
