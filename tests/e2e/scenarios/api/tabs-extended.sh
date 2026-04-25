@@ -195,16 +195,21 @@ pt_post /tab "{\"action\":\"new\",\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "new tab"
 NEW_TAB=$(echo "$RESULT" | jq -r '.tabId')
 
-pt_post /tab "{\"action\":\"close\",\"tabId\":\"${NEW_TAB}\"}"
+pt_post /close "{\"tabId\":\"${NEW_TAB}\"}"
 assert_ok "close tab"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "tabs: close without tabId → 400"
+start_test "tabs: close without tabId closes default tab"
 
-pt_post /tab '{"action":"close"}'
-assert_http_status "400" "rejects close without tabId"
+pt_post /tab "{\"action\":\"new\",\"url\":\"${FIXTURES_URL}/index.html\"}"
+assert_ok "new default tab"
+DEFAULT_CLOSE_TAB=$(echo "$RESULT" | jq -r '.tabId')
+
+pt_post /close '{}'
+assert_ok "close default tab"
+assert_result_eq '.tabId' "$DEFAULT_CLOSE_TAB" "default close returned the created tabId"
 
 end_test
 
@@ -223,7 +228,7 @@ pt_post /tab '{"action":"new","url":"about:blank"}'
 assert_ok "new tab"
 assert_tab_id "new tab returns tabId"
 
-pt_post /tab "{\"action\":\"close\",\"tabId\":\"${TAB_ID}\"}"
+pt_post /close "{\"tabId\":\"${TAB_ID}\"}"
 
 end_test
 

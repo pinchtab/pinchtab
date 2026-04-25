@@ -13,21 +13,25 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 type mockBridge struct {
 	bridge.BridgeAPI
-	failTab          bool
-	createTabURLs    []string
-	lastConsoleLimit int
-	lastErrorLimit   int
-	fingerprintTabs  map[string]bool
-	frameScopes      map[string]bridge.FrameScope
-	ensureChromeErr  error
-	ensureChromeCall int
-	dialogManager    *bridge.DialogManager
+	failTab           bool
+	createTabURLs     []string
+	lastConsoleLimit  int
+	lastErrorLimit    int
+	fingerprintTabs   map[string]bool
+	frameScopes       map[string]bridge.FrameScope
+	ensureChromeErr   error
+	ensureChromeCall  int
+	dialogManager     *bridge.DialogManager
+	executeActionErr  error
+	autoCloseArmed    []string
+	autoCloseCanceled []string
 }
 
 func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
@@ -48,6 +52,9 @@ func (m *mockBridge) AvailableActions() []string {
 }
 
 func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
+	if m.executeActionErr != nil {
+		return nil, m.executeActionErr
+	}
 	return map[string]any{"success": true}, nil
 }
 
@@ -70,6 +77,13 @@ func (m *mockBridge) FocusTab(tabID string) error {
 		return fmt.Errorf("tab not found")
 	}
 	return nil
+}
+
+func (m *mockBridge) ScheduleAutoClose(tabID string) {
+	m.autoCloseArmed = append(m.autoCloseArmed, tabID)
+}
+func (m *mockBridge) CancelAutoClose(tabID string) {
+	m.autoCloseCanceled = append(m.autoCloseCanceled, tabID)
 }
 
 func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
@@ -359,14 +373,110 @@ func TestHandleTab(t *testing.T) {
 	if m.createTabURLs[0] != "" {
 		t.Fatalf("expected HandleTab to create a blank tab first, got %q", m.createTabURLs[0])
 	}
+}
 
-	// Close Tab
-	body = `{"action": "close", "tabId": "tab1"}`
-	req = httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
-	w = httptest.NewRecorder()
-	h.HandleTab(w, req)
-	if w.Code != 200 {
-		t.Errorf("expected 200, got %d", w.Code)
+func TestHandleTabCloseByID(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/tabs/tab1/close", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab1" {
+		t.Fatalf("expected %s=tab1, got %q", activity.HeaderPTTabID, got)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["closed"] != true || resp["tabId"] != "tab1" {
+		t.Fatalf("unexpected response: %#v", resp)
+	}
+}
+
+func TestHandleClose(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/close", bytes.NewReader([]byte(`{"tabId":"tab1"}`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab1" {
+		t.Fatalf("expected %s=tab1, got %q", activity.HeaderPTTabID, got)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["closed"] != true || resp["tabId"] != "tab1" {
+		t.Fatalf("unexpected response: %#v", resp)
+	}
+}
+
+func TestHandleCloseUsesDefaultTabWhenTabIDIsMissing(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/close", bytes.NewReader([]byte(`{}`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab1" {
+		t.Fatalf("expected %s=tab1, got %q", activity.HeaderPTTabID, got)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["closed"] != true || resp["tabId"] != "tab1" {
+		t.Fatalf("unexpected response: %#v", resp)
+	}
+}
+
+func TestHandleCloseUsesDefaultTabWithEmptyBody(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/close", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab1" {
+		t.Fatalf("expected %s=tab1, got %q", activity.HeaderPTTabID, got)
+	}
+}
+
+func TestHandleTabCloseByIDRejectsMismatchedBodyTabID(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/tabs/tab1/close", bytes.NewReader([]byte(`{"tabId":"tab2"}`)))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

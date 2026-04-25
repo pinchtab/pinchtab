@@ -47,6 +47,22 @@ assert_tab_closed "$AFTER_CREATE"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab close shorthand"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+TAB_ID=$(get_tab_id)
+AFTER_CREATE=$(get_tab_count)
+
+pt_post /close -d "{\"tabId\":\"${TAB_ID}\"}"
+assert_ok "shorthand close"
+assert_json_contains "$RESULT" ".tabId" "$TAB_ID" "close response contains tabId"
+
+sleep 1
+assert_tab_closed "$AFTER_CREATE"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "Focus tab by ID"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"

@@ -228,6 +228,9 @@ if [ "$SUITE_KIND" = "api" ]; then
   wait_for_instance_ready "${E2E_SERVER}"
   if [ "$RUN_EXTENDED" = "true" ]; then
     wait_for_instance_ready "${E2E_SECURE_SERVER}"
+    if [ -n "${E2E_AUTOCLOSE_SERVER:-}" ]; then
+      wait_for_instance_ready "${E2E_AUTOCLOSE_SERVER}"
+    fi
     if [ -n "${E2E_MEDIUM_SERVER:-}" ]; then
       wait_for_instance_ready "${E2E_MEDIUM_SERVER}"
     fi

@@ -205,6 +205,12 @@ func setDashboardSessionField(s *DashboardSessionFileConfig, field, value string
 }
 
 func setInstanceDefaultsField(c *InstanceDefaultsConfig, field, value string) error {
+	if strings.HasPrefix(field, "tabPolicy.") {
+		if c.TabPolicy == nil {
+			c.TabPolicy = &TabPolicyDefaults{}
+		}
+		return setTabPolicyField(c.TabPolicy, strings.TrimPrefix(field, "tabPolicy."), value)
+	}
 	switch field {
 	case "mode":
 		c.Mode = value
@@ -260,6 +266,24 @@ func setInstanceDefaultsField(c *InstanceDefaultsConfig, field, value string) er
 		c.TabEvictionPolicy = value
 	default:
 		return fmt.Errorf("unknown field instanceDefaults.%s", field)
+	}
+	return nil
+}
+
+func setTabPolicyField(tp *TabPolicyDefaults, field, value string) error {
+	switch field {
+	case "eviction":
+		tp.Eviction = value
+	case "lifecycle":
+		tp.Lifecycle = value
+	case "closeDelaySec":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("instanceDefaults.tabPolicy.closeDelaySec must be a number: %w", err)
+		}
+		tp.CloseDelaySec = &n
+	default:
+		return fmt.Errorf("unknown field instanceDefaults.tabPolicy.%s", field)
 	}
 	return nil
 }

@@ -57,11 +57,8 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.handleProxyScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.proxyToInstance)
 
-	// Tab operations - custom handlers
-	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
-
 	// Tab operations - generic proxy (all route to the appropriate instance).
-	// Sourced from routes.Core() catalogue to stay in sync with bridge and strategy.
+	// Sourced from the shared route catalogue to stay in sync with bridge and strategy.
 	for _, route := range routes.TabScopedRoutes() {
 		mux.HandleFunc(route, o.proxyTabRequest)
 	}

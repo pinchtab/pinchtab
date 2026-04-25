@@ -6,58 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
-
-// handleTabClose closes a tab by finding its instance and sending a close request.
-// This has custom logic (constructs a different request body) so it's not genericized.
-func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	inst, err := o.findRunningInstanceByTabID(tabID)
-	if err != nil {
-		httpx.Error(w, 404, err)
-		return
-	}
-
-	// Construct request body for the bridge's /tab endpoint
-	reqBody, _ := json.Marshal(map[string]string{
-		"action": "close",
-		"tabId":  tabID,
-	})
-
-	targetURL, err := o.instancePathURL(inst, "/tab", "")
-	if err != nil {
-		httpx.Error(w, 502, err)
-		return
-	}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", targetURL.String(), bytes.NewReader(reqBody))
-	if err != nil {
-		httpx.Error(w, 500, err)
-		return
-	}
-	proxyReq.Header.Set("Content-Type", "application/json")
-	o.applyInstanceAuth(proxyReq, inst)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		httpx.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	_, _ = w.Write(body)
-}
 
 // handleInstanceTabOpen opens a new tab in a specific instance.
 // This has custom logic so it's not genericized.

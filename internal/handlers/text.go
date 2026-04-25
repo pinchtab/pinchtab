@@ -68,6 +68,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 		return
 	}
+	defer h.armAutoCloseIfEnabled(resolvedTabID)
 
 	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
 	defer tCancel()

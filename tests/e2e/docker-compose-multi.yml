@@ -39,6 +39,24 @@ services:
       retries: 20
       start_period: 15s
 
+  pinchtab-autoclose:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /data/e2e-config/pinchtab-autoclose.json
+    volumes:
+      - ./config/pinchtab-autoclose.json:/fixture-config/pinchtab-autoclose.json:ro
+      - ./fixtures/test-extension:/extensions/test-extension
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-autoclose.json /data/e2e-config/pinchtab-autoclose.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
   pinchtab-medium:
     build:
       context: ../..
@@ -154,6 +172,8 @@ services:
         condition: service_healthy
       pinchtab-secure:
         condition: service_healthy
+      pinchtab-autoclose:
+        condition: service_healthy
       pinchtab-medium:
         condition: service_healthy
       pinchtab-full:
@@ -167,6 +187,7 @@ services:
     environment:
       - E2E_SERVER=http://pinchtab:9999
       - E2E_SECURE_SERVER=http://pinchtab-secure:9999
+      - E2E_AUTOCLOSE_SERVER=http://pinchtab-autoclose:9999
       - E2E_MEDIUM_SERVER=http://pinchtab-medium:9999
       - E2E_FULL_SERVER=http://pinchtab-full:9999
       - E2E_LITE_SERVER=http://pinchtab-lite:9999

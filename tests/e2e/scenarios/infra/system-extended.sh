@@ -193,9 +193,9 @@ idpi_setup() {
 
 idpi_cleanup() {
   local base_url="$1" tab_id="$2"
-  e2e_curl -sf -X POST "${base_url}/tab" \
+  e2e_curl -sf -X POST "${base_url}/close" \
     -H "Content-Type: application/json" \
-    -d "{\"tabId\":\"$tab_id\",\"action\":\"close\"}" >/dev/null 2>&1 || true
+    -d "{\"tabId\":\"$tab_id\"}" >/dev/null 2>&1 || true
 }
 
 # Usage: idpi_request POST <base_url> <path> <body> <header_name>

@@ -1,0 +1,41 @@
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9999",
+    "token": "e2e-token"
+  },
+  "browser": {
+    "extensionPaths": [
+      "/extensions/test-extension"
+    ]
+  },
+  "instanceDefaults": {
+    "maxTabs": 10,
+    "stealthLevel": "light",
+    "tabPolicy": {
+      "lifecycle": "close_idle",
+      "closeDelaySec": 1
+    }
+  },
+  "multiInstance": {
+    "strategy": "always-on",
+    "allocationPolicy": "fcfs"
+  },
+  "security": {
+    "allowEvaluate": true,
+    "allowDownload": true,
+    "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "fixtures"
+    ],
+    "idpi": {
+      "enabled": true,
+      "strictMode": false,
+      "scanContent": true,
+      "wrapContent": false,
+      "shieldThreshold": 30
+    }
+  }
+}

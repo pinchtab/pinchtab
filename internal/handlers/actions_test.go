@@ -459,6 +459,25 @@ func TestHandleAction_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestHandleAction_AutoCloseArmedAfterActionError(t *testing.T) {
+	mb := &mockBridge{executeActionErr: fmt.Errorf("boom")}
+	h := New(mb, &config.RuntimeConfig{
+		ActionTimeout:      time.Second,
+		TabLifecyclePolicy: "close_idle",
+	}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click"}`)))
+	w := httptest.NewRecorder()
+
+	h.HandleAction(w, req)
+
+	if w.Code != 500 {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := mb.autoCloseArmed; len(got) != 1 || got[0] != "tab1" {
+		t.Fatalf("autoCloseArmed = %#v, want [tab1]", got)
+	}
+}
+
 func TestHandleAction_PostRejectsInvalidDialogAction(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","selector":"#btn","dialogAction":"maybe"}`)))

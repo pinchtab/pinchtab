@@ -37,6 +37,30 @@ func TestFrameEndpointsAreShorthandAndTabScoped(t *testing.T) {
 	}
 }
 
+func TestCloseRoutesAreShorthandAndTabScoped(t *testing.T) {
+	found := false
+	for _, route := range TabScopedRoutes() {
+		if route == "POST /tabs/{id}/close" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("TabScopedRoutes() missing POST /tabs/{id}/close")
+	}
+
+	found = false
+	for _, route := range ShorthandRoutes() {
+		if route == "POST /close" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("ShorthandRoutes() missing POST /close")
+	}
+}
+
 func TestNoDuplicateRoutes(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, ep := range Core() {

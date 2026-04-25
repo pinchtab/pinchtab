@@ -178,7 +178,7 @@ func allTools() []mcp.Tool {
 		),
 		mcp.NewTool("pinchtab_close_tab",
 			mcp.WithDescription("Close a browser tab"),
-			mcp.WithString("tabId", mcp.Description("ID of the tab to close")),
+			mcp.WithString("tabId", mcp.Description("ID of the tab to close; uses the current/default tab when omitted")),
 		),
 		mcp.NewTool("pinchtab_health",
 			mcp.WithDescription("Check PinchTab server health status"),

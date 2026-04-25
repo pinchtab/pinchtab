@@ -872,3 +872,38 @@ func TestValidateIDPIConfig_ScanTimeoutSec(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateFileConfig_TabPolicyBlock(t *testing.T) {
+	negative := -1
+	zero := 0
+	positive := 100
+	tests := []struct {
+		name    string
+		tp      TabPolicyDefaults
+		wantErr bool
+	}{
+		{"all empty", TabPolicyDefaults{}, false},
+		{"valid lifecycle", TabPolicyDefaults{Lifecycle: "close_idle"}, false},
+		{"keep lifecycle", TabPolicyDefaults{Lifecycle: "keep"}, false},
+		{"valid eviction", TabPolicyDefaults{Eviction: "reject"}, false},
+		{"bad lifecycle", TabPolicyDefaults{Lifecycle: "burn"}, true},
+		{"bad eviction", TabPolicyDefaults{Eviction: "drop"}, true},
+		{"negative delay", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &negative}, true},
+		{"zero delay ok", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &zero}, false},
+		{"positive delay ok", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &positive}, false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				InstanceDefaults: InstanceDefaultsConfig{TabPolicy: &tt.tp},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Errorf("got errs=%v, want error=%v", errs, tt.wantErr)
+			}
+		})
+	}
+}

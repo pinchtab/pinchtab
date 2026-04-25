@@ -25,7 +25,7 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-pt_post /tab "{\"tabId\":\"$TAB_ID\",\"action\":\"close\"}" >/dev/null 2>&1
+pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 
 end_test
 
@@ -66,7 +66,7 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-pt_post /tab "{\"tabId\":\"$TAB_ID\",\"action\":\"close\"}" >/dev/null 2>&1
+pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 
 end_test
 
@@ -82,7 +82,7 @@ pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"document.title\"}"
 assert_ok "evaluate"
 assert_json_exists "$RESULT" ".result" "got title result"
 
-pt_post /tab "{\"tabId\":\"$TAB_ID\",\"action\":\"close\"}" >/dev/null 2>&1
+pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 
 end_test
 
@@ -100,7 +100,7 @@ pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"window.location.href\
 assert_ok "evaluate"
 assert_json_exists "$RESULT" ".result" "got location result"
 
-pt_post /tab "{\"tabId\":\"$TAB_ID\",\"action\":\"close\"}" >/dev/null 2>&1
+pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 
 end_test
 

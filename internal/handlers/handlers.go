@@ -129,6 +129,31 @@ func (h *Handlers) ensureChromeOrRespond(w http.ResponseWriter) bool {
 	return true
 }
 
+// armAutoCloseIfEnabled (re)arms the per-tab idle close timer when the
+// instance has lifecycle policy "close_idle". Call when an authorized
+// read/action request has finished using the tab.
+func (h *Handlers) armAutoCloseIfEnabled(tabID string) {
+	if h == nil || h.Bridge == nil || tabID == "" {
+		return
+	}
+	if h.Config == nil || h.Config.TabLifecyclePolicy != "close_idle" {
+		return
+	}
+	h.Bridge.ScheduleAutoClose(tabID)
+}
+
+// cancelAutoCloseIfEnabled stops a pending auto-close timer. Call from
+// /navigate to indicate fresh work on the tab.
+func (h *Handlers) cancelAutoCloseIfEnabled(tabID string) {
+	if h == nil || h.Bridge == nil || tabID == "" {
+		return
+	}
+	if h.Config == nil || h.Config.TabLifecyclePolicy != "close_idle" {
+		return
+	}
+	h.Bridge.CancelAutoClose(tabID)
+}
+
 func (h *Handlers) bridgeRestartStatus() (bool, time.Duration) {
 	provider, ok := h.Bridge.(restartStatusProvider)
 	if !ok {
@@ -202,6 +227,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /actions", h.HandleActions)
 	mux.HandleFunc("POST /macro", h.HandleMacro)
 	mux.HandleFunc("POST /tab", h.HandleTab)
+	mux.HandleFunc("POST /close", h.HandleClose)
+	mux.HandleFunc("POST /tabs/{id}/close", h.HandleTabClose)
 	mux.HandleFunc("POST /lock", h.HandleTabLock)
 	mux.HandleFunc("POST /unlock", h.HandleTabUnlock)
 	mux.HandleFunc("POST /tabs/{id}/lock", h.HandleTabLockByID)

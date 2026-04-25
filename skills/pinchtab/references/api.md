@@ -328,8 +328,13 @@ curl -X POST /tab -H 'Content-Type: application/json' \
   -d '{"action": "new", "url": "https://pinchtab.com"}'
 
 # Close tab
-curl -X POST /tab -H 'Content-Type: application/json' \
-  -d '{"action": "close", "tabId": "TARGET_ID"}'
+curl -X POST /close -H 'Content-Type: application/json' \
+  -d '{"tabId": "TARGET_ID"}'
+# Omit tabId to close the current/default tab.
+curl -X POST /close -H 'Content-Type: application/json' -d '{}'
+
+# Or use the tab-scoped route
+curl -X POST /tabs/TARGET_ID/close
 ```
 
 Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in POST body.

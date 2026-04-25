@@ -41,27 +41,30 @@ type RuntimeConfig struct {
 	TrustedResolveCIDRs    []string // CIDRs/IPs allowed when a navigation target resolves to non-public addresses
 
 	// Browser/instance settings
-	Headless          bool
-	HeadlessSet       bool // true when explicitly set via config or flag
-	NoRestore         bool
-	ProfileDir        string
-	ProfilesBaseDir   string
-	DefaultProfile    string
-	ChromeVersion     string
-	Timezone          string
-	BlockImages       bool
-	BlockMedia        bool
-	BlockAds          bool
-	MaxTabs           int
-	MaxParallelTabs   int // 0 = auto-detect from runtime.NumCPU
-	ChromeBinary      string
-	ChromeDebugPort   int
-	ChromeExtraFlags  string
-	ExtensionPaths    []string
-	UserAgent         string
-	NoAnimations      bool
-	StealthLevel      string
-	TabEvictionPolicy string // "close_lru" (default), "reject", "close_oldest"
+	Headless           bool
+	HeadlessSet        bool // true when explicitly set via config or flag
+	NoRestore          bool
+	ProfileDir         string
+	ProfilesBaseDir    string
+	DefaultProfile     string
+	ChromeVersion      string
+	Timezone           string
+	BlockImages        bool
+	BlockMedia         bool
+	BlockAds           bool
+	MaxTabs            int
+	MaxParallelTabs    int // 0 = auto-detect from runtime.NumCPU
+	ChromeBinary       string
+	ChromeDebugPort    int
+	ChromeExtraFlags   string
+	ExtensionPaths     []string
+	UserAgent          string
+	NoAnimations       bool
+	StealthLevel       string
+	TabEvictionPolicy  string        // "close_lru" (default), "reject", "close_oldest" — fires on MaxTabs pressure
+	TabLifecyclePolicy string        // "close_idle" (default), "keep" — fires on idle after read/action
+	TabCloseDelay      time.Duration // applies when TabLifecyclePolicy == "close_idle" (default 5m)
+	TabRestore         bool          // restore previously open tabs from sessions.json on startup (default false)
 
 	// Timeout settings
 	ActionTimeout   time.Duration
@@ -278,19 +281,29 @@ type BrowserConfig struct {
 }
 
 type InstanceDefaultsConfig struct {
-	Mode              string `json:"mode,omitempty"`
-	NoRestore         *bool  `json:"noRestore,omitempty"`
-	Timezone          string `json:"timezone,omitempty"`
-	BlockImages       *bool  `json:"blockImages,omitempty"`
-	BlockMedia        *bool  `json:"blockMedia,omitempty"`
-	BlockAds          *bool  `json:"blockAds,omitempty"`
-	MaxTabs           *int   `json:"maxTabs,omitempty"`
-	MaxParallelTabs   *int   `json:"maxParallelTabs,omitempty"`
-	UserAgent         string `json:"userAgent,omitempty"`
-	NoAnimations      *bool  `json:"noAnimations,omitempty"`
-	StealthLevel      string `json:"stealthLevel,omitempty"`
-	TabEvictionPolicy string `json:"tabEvictionPolicy,omitempty"`
-	DialogAutoAccept  *bool  `json:"dialogAutoAccept,omitempty"`
+	Mode              string             `json:"mode,omitempty"`
+	NoRestore         *bool              `json:"noRestore,omitempty"`
+	Timezone          string             `json:"timezone,omitempty"`
+	BlockImages       *bool              `json:"blockImages,omitempty"`
+	BlockMedia        *bool              `json:"blockMedia,omitempty"`
+	BlockAds          *bool              `json:"blockAds,omitempty"`
+	MaxTabs           *int               `json:"maxTabs,omitempty"`
+	MaxParallelTabs   *int               `json:"maxParallelTabs,omitempty"`
+	UserAgent         string             `json:"userAgent,omitempty"`
+	NoAnimations      *bool              `json:"noAnimations,omitempty"`
+	StealthLevel      string             `json:"stealthLevel,omitempty"`
+	TabEvictionPolicy string             `json:"tabEvictionPolicy,omitempty"` // Deprecated: use TabPolicy.Eviction
+	TabPolicy         *TabPolicyDefaults `json:"tabPolicy,omitempty"`
+	DialogAutoAccept  *bool              `json:"dialogAutoAccept,omitempty"`
+}
+
+// TabPolicyDefaults groups eviction (cap pressure) and lifecycle (idle) policies
+// in instance-defaults configs. Either sub-field may be omitted.
+type TabPolicyDefaults struct {
+	Eviction      string `json:"eviction,omitempty"`      // "close_lru" | "reject" | "close_oldest"
+	Lifecycle     string `json:"lifecycle,omitempty"`     // "keep" | "close_idle"
+	CloseDelaySec *int   `json:"closeDelaySec,omitempty"` // applies to close_idle; default 300
+	Restore       *bool  `json:"restore,omitempty"`       // restore tabs from sessions.json on startup; default false
 }
 
 type ProfilesConfig struct {

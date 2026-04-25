@@ -87,7 +87,7 @@ All tool names are prefixed with `pinchtab_`.
 | Tool | Description |
 |------|-------------|
 | `pinchtab_list_tabs` | List all open tabs. No params. |
-| `pinchtab_close_tab` | Close a tab. Optional: `tabId` (closes current if omitted). |
+| `pinchtab_close_tab` | Close a tab. Optional: `tabId` (uses current/default tab when omitted). |
 | `pinchtab_health` | Check server health. No params. |
 | `pinchtab_cookies` | Get cookies for current page. Optional: `tabId`. |
 | `pinchtab_connect_profile` | Return connect status for a profile. Required: `profile`. |

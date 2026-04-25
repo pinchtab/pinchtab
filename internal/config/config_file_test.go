@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestDefaultFileConfig(t *testing.T) {
@@ -213,6 +214,31 @@ func TestConvertLegacyConfig(t *testing.T) {
 	}
 	if fc.Timeouts.NavigateSec != 90 {
 		t.Errorf("converted Timeouts.NavigateSec = %v, want 90", fc.Timeouts.NavigateSec)
+	}
+}
+
+func TestTabPolicyDefaultsFromRuntime(t *testing.T) {
+	if got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      5 * time.Minute,
+	}); got != nil {
+		t.Fatalf("default close_idle/5m policy should not be emitted; got %#v", got)
+	}
+
+	got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "keep",
+		TabCloseDelay:      5 * time.Minute,
+	})
+	if got == nil || got.Lifecycle != "keep" || got.CloseDelaySec != nil {
+		t.Fatalf("keep policy = %#v, want lifecycle=keep without delay", got)
+	}
+
+	got = tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      90 * time.Second,
+	})
+	if got == nil || got.Lifecycle != "close_idle" || got.CloseDelaySec == nil || *got.CloseDelaySec != 90 {
+		t.Fatalf("custom close_idle policy = %#v, want lifecycle=close_idle closeDelaySec=90", got)
 	}
 }
 

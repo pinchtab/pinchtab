@@ -29,6 +29,11 @@ type TabEntry struct {
 	Policy                TabPolicyState
 	Watching              bool
 	ConsoleCaptureEnabled bool
+
+	// Lifecycle auto-close timer. autoCloseGen is bumped on every (re)schedule
+	// so a fire that races with a reset/cancel can detect itself and bail.
+	autoCloseTimer *time.Timer
+	autoCloseGen   uint64
 }
 
 type RefTarget struct {
@@ -157,6 +162,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 	// Only initialize TabManager if browserCtx is provided (not lazy-init case)
 	if cfg != nil && browserCtx != nil {
 		b.TabManager = NewTabManager(browserCtx, cfg, idMgr, logStore, b.tabSetup)
+		b.SetOnAfterClose(func() { go b.SaveState() })
 		b.SetDialogManager(b.Dialogs)
 		b.SetNetworkMonitor(b.netMonitor)
 		if !b.quietStealthObservers() {
@@ -251,7 +257,11 @@ func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelF
 	if err != nil {
 		return "", nil, nil, err
 	}
-	return tm.CreateTab(url)
+	tabID, ctx, cancel, err := tm.CreateTab(url)
+	if err == nil {
+		go b.SaveState()
+	}
+	return tabID, ctx, cancel, err
 }
 
 func (b *Bridge) TabContext(tabID string) (context.Context, string, error) {
@@ -275,6 +285,7 @@ func (b *Bridge) CloseTab(tabID string) error {
 	if err != nil {
 		return err
 	}
+	// SaveState is triggered via TabManager.onAfterClose, set during construction.
 	return tm.CloseTab(tabID)
 }
 
@@ -284,6 +295,22 @@ func (b *Bridge) FocusTab(tabID string) error {
 		return err
 	}
 	return tm.FocusTab(tabID)
+}
+
+func (b *Bridge) ScheduleAutoClose(tabID string) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return
+	}
+	tm.ScheduleAutoClose(tabID)
+}
+
+func (b *Bridge) CancelAutoClose(tabID string) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return
+	}
+	tm.CancelAutoClose(tabID)
 }
 
 func (b *Bridge) Lock(tabID, owner string, ttl time.Duration) error {
@@ -413,6 +440,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 			b.LogStore = NewConsoleLogStore(1000)
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
+		b.SetOnAfterClose(func() { go b.SaveState() })
 		b.SetDialogManager(b.Dialogs)
 		b.SetNetworkMonitor(b.netMonitor)
 		if !b.quietStealthObservers() {
@@ -425,8 +453,10 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		b.InitActionRegistry()
 	}
 
-	// Restore tabs from previous session (if any saved state exists)
-	if b.tempProfileDir == "" {
+	// Restore tabs from previous session (if any saved state exists). Opt-in
+	// via instanceDefaults.tabPolicy.restore=true; otherwise tabs closed
+	// before shutdown stay closed.
+	if b.tempProfileDir == "" && b.Config != nil && b.Config.TabRestore {
 		b.RestoreState()
 	}
 
@@ -599,6 +629,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 			b.LogStore = NewConsoleLogStore(1000)
 		}
 		b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
+		b.SetOnAfterClose(func() { go b.SaveState() })
 		b.SetDialogManager(b.Dialogs)
 		b.SetNetworkMonitor(b.netMonitor)
 	}

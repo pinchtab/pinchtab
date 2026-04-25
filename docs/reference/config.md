@@ -16,6 +16,7 @@ It currently exposes these high-signal settings directly:
 - `multiInstance.allocationPolicy`
 - `instanceDefaults.stealthLevel`
 - `instanceDefaults.tabEvictionPolicy`
+- `instanceDefaults.tabPolicy.lifecycle`
 
 It also shows:
 
@@ -173,6 +174,11 @@ Current nested file-config shape:
     "noAnimations": false,
     "stealthLevel": "light",
     "tabEvictionPolicy": "close_lru",
+    "tabPolicy": {
+      "lifecycle": "close_idle",
+      "closeDelaySec": 300,
+      "restore": false
+    },
     "dialogAutoAccept": false
   },
   "security": {
@@ -338,6 +344,30 @@ By default, PinchTab looks for unpacked Chrome extensions in `<server.stateDir>/
 
 You can change or clear that default with `browser.extensionPaths`.
 
+### Tab Policy
+
+`instanceDefaults.tabPolicy` groups tab lifecycle behavior:
+
+```json
+{
+  "instanceDefaults": {
+    "tabPolicy": {
+      "eviction": "close_lru",
+      "lifecycle": "close_idle",
+      "closeDelaySec": 300,
+      "restore": false
+    }
+  }
+}
+```
+
+- `eviction` controls what happens when `maxTabs` is reached: `close_lru`, `close_oldest`, or `reject`.
+- `lifecycle` controls idle lifecycle behavior: `close_idle` auto-closes a tab after it handles an authorized `/text`, `/snapshot`, or `/action` request; `keep` disables lifecycle auto-close.
+- `closeDelaySec` is the idle delay for `close_idle`. The default is `300` seconds.
+- `restore` controls whether session tabs are restored on startup. The default is `false`.
+
+`instanceDefaults.tabEvictionPolicy` is still accepted for compatibility. New configs should use `instanceDefaults.tabPolicy.eviction`.
+
 ## Sections
 
 | Section | Purpose |
@@ -373,6 +403,7 @@ Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 - `server.networkBufferSize`
 - `browser.extensionPaths`
 - `instanceDefaults.dialogAutoAccept`
+- `instanceDefaults.tabPolicy.*`
 - `security.allowClipboard`
 - `security.idpi.scanTimeoutSec`
 - `security.idpi.shieldThreshold`
@@ -497,6 +528,9 @@ Use `pinchtab config init` to create the current nested format.
 - valid `instanceDefaults.mode`
 - valid `instanceDefaults.stealthLevel`
 - valid `instanceDefaults.tabEvictionPolicy`
+- valid `instanceDefaults.tabPolicy.eviction`
+- valid `instanceDefaults.tabPolicy.lifecycle`
+- non-negative `instanceDefaults.tabPolicy.closeDelaySec`
 - `instanceDefaults.maxTabs >= 1`
 - `instanceDefaults.maxParallelTabs >= 0`
 - valid `multiInstance.strategy`
@@ -517,6 +551,8 @@ Valid enum values:
 | `instanceDefaults.mode` | `headless`, `headed` |
 | `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
 | `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` |
+| `instanceDefaults.tabPolicy.eviction` | `reject`, `close_oldest`, `close_lru` |
+| `instanceDefaults.tabPolicy.lifecycle` | `keep`, `close_idle` |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |

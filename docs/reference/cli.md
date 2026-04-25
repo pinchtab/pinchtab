@@ -209,6 +209,7 @@ pinchtab pdf --tab <id> -o page.pdf
 - `multiInstance.allocationPolicy`
 - `instanceDefaults.stealthLevel`
 - `instanceDefaults.tabEvictionPolicy`
+- `instanceDefaults.tabPolicy.lifecycle`
 - the active config file path
 - the dashboard URL when the server is running
 - the masked server token

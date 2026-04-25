@@ -68,6 +68,7 @@ var coreEndpoints = []Endpoint{
 
 	// Tab management
 	{"POST", "/tab", "Open or switch tab", CapNone, false},
+	{"POST", "/close", "Close tab", CapNone, true},
 	{"POST", "/lock", "Lock tab", CapNone, true},
 	{"POST", "/unlock", "Unlock tab", CapNone, true},
 

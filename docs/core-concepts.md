@@ -184,7 +184,18 @@ curl -X POST http://localhost:9867/tabs/$TAB/action \
   -d '{"kind":"click","ref":"e5"}'
 
 curl -X POST http://localhost:9867/tabs/$TAB/close
+
+curl -X POST http://localhost:9867/close \
+  -H "Content-Type: application/json" \
+  -d "{\"tabId\":\"$TAB\"}"
 ```
+
+By default, tabs also use the `close_idle` lifecycle policy: after an authorized
+`/text`, `/snapshot`, or `/action` request finishes, the tab is auto-closed
+after 300 seconds unless it is touched again first. Set
+`instanceDefaults.tabPolicy.lifecycle` to `keep` to disable lifecycle
+auto-close, or change `instanceDefaults.tabPolicy.closeDelaySec` to adjust the
+delay.
 
 ### Are tabs persistent?
 

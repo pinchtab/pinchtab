@@ -68,17 +68,11 @@ func TabNew(client *http.Client, base, token string, body map[string]any, cmd *c
 func TabClose(client *http.Client, base, token string, tabID string, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, "/tab", map[string]any{
-			"action": "close",
-			"tabId":  tabID,
-		})
+		apiclient.DoPost(client, base, token, "/close", map[string]any{"tabId": tabID})
 		return
 	}
 
-	apiclient.DoPostQuiet(client, base, token, "/tab", map[string]any{
-		"action": "close",
-		"tabId":  tabID,
-	})
+	apiclient.DoPostQuiet(client, base, token, "/close", map[string]any{"tabId": tabID})
 	output.Success()
 }
 

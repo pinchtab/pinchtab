@@ -235,6 +235,13 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
       const instanceTabs = await pinchtabFetch(cfg, `/instances/${running.id}/tabs`);
       return textResult({ source: "instance-fallback", instanceId: running.id, tabs: instanceTabs?.tabs ?? instanceTabs });
     }
+    if (tabAction === "close") {
+      const body: any = {};
+      if (normalized.tabId) body.tabId = normalized.tabId;
+      const result = await pinchtabFetch(cfg, "/close", { body });
+      if (normalized.tabId && normalized.tabId === getLastTabId()) setLastTabId(undefined);
+      return textResult(result);
+    }
     const body: any = { action: tabAction };
     if (normalized.url) body.url = normalized.url;
     if (normalized.tabId) body.tabId = normalized.tabId;

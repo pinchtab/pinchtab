@@ -58,7 +58,7 @@ Selector forms include:
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
 | `pinchtab_list_tabs` | none | Lists open tabs |
-| `pinchtab_close_tab` | `tabId` | Closes the given tab |
+| `pinchtab_close_tab` | `tabId` optional | Closes the given tab, or the current/default tab when omitted |
 | `pinchtab_health` | none | Checks server health |
 | `pinchtab_cookies` | `tabId` | Reads cookies for a tab |
 | `pinchtab_connect_profile` | `profile` required | Returns the connect URL and instance status for a profile |

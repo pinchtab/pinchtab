@@ -134,7 +134,8 @@ func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, target
 				o.applyInstanceAuth(req, inst)
 			}
 		},
-		OnResponse: enrichActivityFromResponse,
+		OnResponseHeaders: o.handleProxyResponseHeaders,
+		OnResponse:        enrichActivityFromResponse,
 	})
 }
 
@@ -346,6 +347,34 @@ func enrichActivityFromResponse(origReq *http.Request, body []byte) {
 	if update.TabID != "" || update.URL != "" {
 		activity.EnrichRequest(origReq, update)
 	}
+}
+
+func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *http.Response) {
+	if o == nil || o.instanceMgr == nil || origReq == nil || resp == nil {
+		return
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return
+	}
+	if tabID := tabClosePathID(origReq); tabID != "" {
+		o.instanceMgr.InvalidateTab(tabID)
+		return
+	}
+	if origReq.Method == http.MethodPost && strings.TrimSpace(origReq.URL.Path) == "/close" {
+		if tabID := strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)); tabID != "" {
+			o.instanceMgr.InvalidateTab(tabID)
+		}
+	}
+}
+
+func tabClosePathID(r *http.Request) string {
+	if r == nil || r.Method != http.MethodPost {
+		return ""
+	}
+	if !strings.HasPrefix(r.URL.Path, "/tabs/") || !strings.HasSuffix(r.URL.Path, "/close") {
+		return ""
+	}
+	return strings.TrimSpace(r.PathValue("id"))
 }
 
 func (o *Orchestrator) singleRunningInstance() *InstanceInternal {

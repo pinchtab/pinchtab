@@ -104,6 +104,13 @@ export interface BackendBrowserConfig {
   extensionPaths: string[];
 }
 
+export interface BackendTabPolicy {
+  eviction?: "reject" | "close_oldest" | "close_lru";
+  lifecycle?: "keep" | "close_idle";
+  closeDelaySec?: number;
+  restore?: boolean;
+}
+
 export interface BackendInstanceDefaultsConfig {
   mode: "headless" | "headed";
   noRestore: boolean;
@@ -117,6 +124,7 @@ export interface BackendInstanceDefaultsConfig {
   noAnimations: boolean;
   stealthLevel: "light" | "medium" | "full";
   tabEvictionPolicy: "reject" | "close_oldest" | "close_lru";
+  tabPolicy?: BackendTabPolicy;
 }
 
 export interface BackendSecurityConfig {
@@ -241,6 +249,11 @@ export const defaultBackendConfig: BackendConfig = {
     noAnimations: false,
     stealthLevel: "light",
     tabEvictionPolicy: "close_lru",
+    tabPolicy: {
+      lifecycle: "close_idle",
+      closeDelaySec: 300,
+      restore: false,
+    },
   },
   security: {
     allowEvaluate: false,

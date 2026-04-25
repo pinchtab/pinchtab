@@ -59,7 +59,7 @@ func NewPersistentShell(workDir string) (*PersistentShell, error) {
 		errChan: make(chan error, 1),
 	}
 
-	go ps.readLoop()
+	go ps.readLoop(stdout, ps.outChan, ps.errChan)
 
 	// Wait for shell to be ready
 	time.Sleep(100 * time.Millisecond)
@@ -67,15 +67,15 @@ func NewPersistentShell(workDir string) (*PersistentShell, error) {
 	return ps, nil
 }
 
-func (ps *PersistentShell) readLoop() {
+func (ps *PersistentShell) readLoop(stdout io.Reader, outChan chan<- string, errChan chan<- error) {
 	buf := make([]byte, 4096)
 	for {
-		n, err := ps.stdout.Read(buf)
+		n, err := stdout.Read(buf)
 		if n > 0 {
-			ps.outChan <- string(buf[:n])
+			outChan <- string(buf[:n])
 		}
 		if err != nil {
-			ps.errChan <- err
+			errChan <- err
 			return
 		}
 	}
@@ -199,7 +199,7 @@ func (ps *PersistentShell) resetLocked() error {
 	ps.outChan = make(chan string, 100)
 	ps.errChan = make(chan error, 1)
 
-	go ps.readLoop()
+	go ps.readLoop(stdout, ps.outChan, ps.errChan)
 	time.Sleep(100 * time.Millisecond)
 
 	return nil

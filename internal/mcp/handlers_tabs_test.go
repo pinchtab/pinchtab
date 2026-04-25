@@ -35,6 +35,37 @@ func TestHandleCloseTab(t *testing.T) {
 	if !strings.Contains(text, "close") {
 		t.Errorf("expected close, got %s", text)
 	}
+	if !strings.Contains(text, `"/close"`) {
+		t.Errorf("expected /close path, got %s", text)
+	}
+}
+
+func TestHandleCloseTabAllowsMissingTabID(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_close_tab", map[string]any{}, srv)
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	resp := resultJSON(t, r)
+	if resp["path"] != "/close" {
+		t.Fatalf("path = %v, want /close", resp["path"])
+	}
+}
+
+func TestHandleCloseTabTreatsBlankTabIDAsDefault(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_close_tab", map[string]any{"tabId": " "}, srv)
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	resp := resultJSON(t, r)
+	if resp["path"] != "/close" {
+		t.Fatalf("path = %v, want /close", resp["path"])
+	}
 }
 
 func TestHandleHealth(t *testing.T) {

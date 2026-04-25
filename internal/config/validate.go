@@ -105,6 +105,26 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
+	if tp := fc.InstanceDefaults.TabPolicy; tp != nil {
+		if tp.Eviction != "" && !isValidEvictionPolicy(tp.Eviction) {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.eviction",
+				Message: fmt.Sprintf("invalid value %q (must be reject, close_oldest, or close_lru)", tp.Eviction),
+			})
+		}
+		if tp.Lifecycle != "" && !isValidLifecyclePolicy(tp.Lifecycle) {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.lifecycle",
+				Message: fmt.Sprintf("invalid value %q (must be keep or close_idle)", tp.Lifecycle),
+			})
+		}
+		if tp.CloseDelaySec != nil && *tp.CloseDelaySec < 0 {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.closeDelaySec",
+				Message: fmt.Sprintf("must be >= 0 (got %d)", *tp.CloseDelaySec),
+			})
+		}
+	}
 	if fc.InstanceDefaults.MaxTabs != nil && *fc.InstanceDefaults.MaxTabs < 1 {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.maxTabs",
@@ -328,6 +348,19 @@ func isValidEvictionPolicy(policy string) bool {
 	default:
 		return false
 	}
+}
+
+func isValidLifecyclePolicy(policy string) bool {
+	switch policy {
+	case "keep", "close_idle":
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidLifecyclePolicies() []string {
+	return []string{"keep", "close_idle"}
 }
 
 func isValidStrategy(strategy string) bool {

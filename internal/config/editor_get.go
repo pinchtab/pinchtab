@@ -146,6 +146,9 @@ func getDashboardSessionField(s *DashboardSessionFileConfig, field string) (stri
 }
 
 func getInstanceDefaultsField(c *InstanceDefaultsConfig, field string) (string, error) {
+	if after, ok := strings.CutPrefix(field, "tabPolicy."); ok {
+		return getTabPolicyField(c.TabPolicy, after)
+	}
 	switch field {
 	case "mode":
 		return c.Mode, nil
@@ -173,6 +176,22 @@ func getInstanceDefaultsField(c *InstanceDefaultsConfig, field string) (string, 
 		return c.TabEvictionPolicy, nil
 	default:
 		return "", fmt.Errorf("unknown field instanceDefaults.%s", field)
+	}
+}
+
+func getTabPolicyField(tp *TabPolicyDefaults, field string) (string, error) {
+	if tp == nil {
+		tp = &TabPolicyDefaults{}
+	}
+	switch field {
+	case "eviction":
+		return tp.Eviction, nil
+	case "lifecycle":
+		return tp.Lifecycle, nil
+	case "closeDelaySec":
+		return formatIntPtr(tp.CloseDelaySec), nil
+	default:
+		return "", fmt.Errorf("unknown field instanceDefaults.tabPolicy.%s", field)
 	}
 }
 

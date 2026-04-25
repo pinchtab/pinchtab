@@ -111,8 +111,8 @@ func (bc *BridgeClient) NavigateTab(ctx context.Context, port, tabID, url string
 
 // CloseTab closes a tab on a bridge instance.
 func (bc *BridgeClient) CloseTab(ctx context.Context, port, tabID string) error {
-	body := fmt.Sprintf(`{"action":"close","tabId":%q}`, tabID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/tab"), strings.NewReader(body))
+	body := fmt.Sprintf(`{"tabId":%q}`, tabID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/close"), strings.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("close tab request: %w", err)
 	}

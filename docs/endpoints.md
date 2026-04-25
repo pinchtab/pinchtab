@@ -71,6 +71,7 @@ POST /reload?tabId=<id>
 POST /tabs/{id}/reload
 GET  /tabs
 POST /tab
+POST /close
 POST /tabs/{id}/close
 GET  /tabs/{id}/metrics
 POST /tabs/{id}/handoff
@@ -90,7 +91,8 @@ Navigation request fields:
 Important behavior:
 
 - `POST /navigate` creates a new tab when `tabId` is omitted
-- `POST /tab` supports `new`, `close`, and `focus`
+- `POST /tab` supports `new` and `focus`
+- `POST /close` closes the `tabId` supplied in the JSON body, or the current/default tab when `tabId` is omitted
 
 ## Handoff And Manual Intervention
 

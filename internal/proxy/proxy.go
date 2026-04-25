@@ -23,9 +23,10 @@ import (
 var DefaultClient = &http.Client{Timeout: 60 * time.Second}
 
 type Options struct {
-	Client         *http.Client
-	AllowedURL     func(*url.URL) bool
-	RewriteRequest func(*http.Request)
+	Client            *http.Client
+	AllowedURL        func(*url.URL) bool
+	RewriteRequest    func(*http.Request)
+	OnResponseHeaders func(origReq *http.Request, resp *http.Response)
 	// OnResponse is called with the upstream response body for non-streaming
 	// responses (Content-Type application/json, body ≤ 64 KB). The original
 	// request is passed so callers can enrich activity context.
@@ -101,6 +102,9 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 
 	// Enrich activity from response headers (always available, regardless of body size).
 	enrichActivityFromHeaders(r, resp.Header)
+	if opts.OnResponseHeaders != nil {
+		opts.OnResponseHeaders(r, resp)
+	}
 
 	// For small JSON responses, buffer to allow OnResponse to inspect the body.
 	if opts.OnResponse != nil && isSmallJSON(resp) {

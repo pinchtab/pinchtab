@@ -134,6 +134,17 @@ func handleConfigOverview(cfg *config.RuntimeConfig) {
 	}
 }
 
+func formatTabLifecycle(cfg *config.RuntimeConfig) string {
+	policy := cfg.TabLifecyclePolicy
+	if policy == "" {
+		policy = "keep"
+	}
+	if policy == "close_idle" && cfg.TabCloseDelay > 0 {
+		return fmt.Sprintf("%s (%s)", policy, cfg.TabCloseDelay)
+	}
+	return policy
+}
+
 func renderConfigOverview(cfg *config.RuntimeConfig, configPath, dashboardURL string, running bool) string {
 	out := ""
 	out += cli.StyleStdout(cli.HeadingStyle, "Config") + "\n\n"
@@ -141,7 +152,8 @@ func renderConfigOverview(cfg *config.RuntimeConfig, configPath, dashboardURL st
 	out += fmt.Sprintf("  2. %-18s %s\n", "Allocation policy", cli.StyleStdout(cli.ValueStyle, cfg.AllocationPolicy))
 	out += fmt.Sprintf("  3. %-18s %s\n", "Stealth level", cli.StyleStdout(cli.ValueStyle, cfg.StealthLevel))
 	out += fmt.Sprintf("  4. %-18s %s\n", "Tab eviction", cli.StyleStdout(cli.ValueStyle, cfg.TabEvictionPolicy))
-	out += fmt.Sprintf("  5. %-18s %s\n", "Copy token", cli.StyleStdout(cli.MutedStyle, "clipboard"))
+	out += fmt.Sprintf("  5. %-18s %s\n", "Tab lifecycle", cli.StyleStdout(cli.ValueStyle, formatTabLifecycle(cfg)))
+	out += fmt.Sprintf("  6. %-18s %s\n", "Copy token", cli.StyleStdout(cli.MutedStyle, "clipboard"))
 	out += "\n"
 	out += cli.StyleStdout(cli.HeadingStyle, "More") + "\n\n"
 	out += fmt.Sprintf("  %s %s\n", cli.StyleStdout(cli.MutedStyle, "File:"), cli.StyleStdout(cli.ValueStyle, configPath))
@@ -153,7 +165,7 @@ func renderConfigOverview(cfg *config.RuntimeConfig, configPath, dashboardURL st
 	}
 	if isInteractiveTerminal() {
 		out += "\n"
-		out += cli.StyleStdout(cli.MutedStyle, "Edit item (1-5, blank to exit):") + " "
+		out += cli.StyleStdout(cli.MutedStyle, "Edit item (1-6, blank to exit):") + " "
 	}
 	out += "\n"
 	return out
@@ -183,6 +195,9 @@ func promptConfigEdit(cfg *config.RuntimeConfig) (*config.RuntimeConfig, bool, b
 		nextCfg, changed, err := editConfigSelection("Default tab eviction", "instanceDefaults.tabEvictionPolicy", cfg.TabEvictionPolicy, config.ValidEvictionPolicies())
 		return nextCfg, changed, false, err
 	case "5":
+		nextCfg, changed, err := editConfigSelection("Default tab lifecycle", "instanceDefaults.tabPolicy.lifecycle", cfg.TabLifecyclePolicy, config.ValidLifecyclePolicies())
+		return nextCfg, changed, false, err
+	case "6":
 		if err := copyConfigToken(cfg.Token); err != nil {
 			return nil, false, false, err
 		}

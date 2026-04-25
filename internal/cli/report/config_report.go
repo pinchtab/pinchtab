@@ -31,6 +31,11 @@ func HandleConfigShow(cfg *config.RuntimeConfig) {
 	fmt.Printf("  Max Tabs:       %d\n", cfg.MaxTabs)
 	fmt.Printf("  Stealth:        %s\n", cfg.StealthLevel)
 	fmt.Printf("  Tab Eviction:   %s\n", cfg.TabEvictionPolicy)
+	if cfg.TabLifecyclePolicy == "close_idle" {
+		fmt.Printf("  Tab Lifecycle:  %s (%s)\n", cfg.TabLifecyclePolicy, cfg.TabCloseDelay)
+	} else {
+		fmt.Printf("  Tab Lifecycle:  %s\n", cfg.TabLifecyclePolicy)
+	}
 	fmt.Printf("  Extensions:     %v\n", cfg.ExtensionPaths)
 	fmt.Println()
 	fmt.Println(styleStdout(headingStyle, "Multi-Instance"))

@@ -40,25 +40,28 @@ func Load() *RuntimeConfig {
 		MaxRedirects:           -1, // Unlimited by default; set to N to limit redirect hops
 
 		// Browser / instance defaults
-		Headless:          true,
-		NoRestore:         false,
-		ProfileDir:        "",
-		ProfilesBaseDir:   "",
-		DefaultProfile:    "default",
-		ChromeVersion:     "144.0.7559.133",
-		Timezone:          "",
-		BlockImages:       false,
-		BlockMedia:        false,
-		BlockAds:          false,
-		MaxTabs:           20,
-		MaxParallelTabs:   0,
-		ChromeBinary:      "", // Set via config.json only
-		ChromeExtraFlags:  "",
-		ExtensionPaths:    []string{defaultExtensionsDir(userConfigDir())},
-		UserAgent:         "",
-		NoAnimations:      false,
-		StealthLevel:      "light",
-		TabEvictionPolicy: "close_lru",
+		Headless:           true,
+		NoRestore:          false,
+		ProfileDir:         "",
+		ProfilesBaseDir:    "",
+		DefaultProfile:     "default",
+		ChromeVersion:      "144.0.7559.133",
+		Timezone:           "",
+		BlockImages:        false,
+		BlockMedia:         false,
+		BlockAds:           false,
+		MaxTabs:            20,
+		MaxParallelTabs:    0,
+		ChromeBinary:       "", // Set via config.json only
+		ChromeExtraFlags:   "",
+		ExtensionPaths:     []string{defaultExtensionsDir(userConfigDir())},
+		UserAgent:          "",
+		NoAnimations:       false,
+		StealthLevel:       "light",
+		TabEvictionPolicy:  "close_lru",
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      5 * time.Minute,
+		TabRestore:         false,
 
 		// Timeout defaults
 		ActionTimeout:   30 * time.Second,
@@ -402,6 +405,24 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.InstanceDefaults.TabEvictionPolicy != "" {
 		cfg.TabEvictionPolicy = fc.InstanceDefaults.TabEvictionPolicy
+	}
+	if tp := fc.InstanceDefaults.TabPolicy; tp != nil {
+		if tp.Eviction != "" {
+			cfg.TabEvictionPolicy = tp.Eviction
+		}
+		if tp.Lifecycle != "" {
+			cfg.TabLifecyclePolicy = tp.Lifecycle
+		}
+		if tp.CloseDelaySec != nil && *tp.CloseDelaySec > 0 {
+			cfg.TabCloseDelay = time.Duration(*tp.CloseDelaySec) * time.Second
+		}
+		if tp.Restore != nil {
+			cfg.TabRestore = *tp.Restore
+		}
+	}
+	// Clamp to a sane minimum to avoid races between handler return and timer fire.
+	if cfg.TabLifecyclePolicy == "close_idle" && cfg.TabCloseDelay < time.Second {
+		cfg.TabCloseDelay = time.Second
 	}
 	if fc.InstanceDefaults.DialogAutoAccept != nil {
 		cfg.DialogAutoAccept = *fc.InstanceDefaults.DialogAutoAccept

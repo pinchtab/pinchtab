@@ -151,9 +151,7 @@ func TestShellAutoReset(t *testing.T) {
 		t.Errorf("first command: code=%d output=%q", code1, out1)
 	}
 
-	ps.mu.Lock()
-	ps.closed = true
-	ps.mu.Unlock()
+	ps.Close(true)
 
 	out2, code2, err := ps.Run("echo after", 5*time.Second)
 	if err != nil {

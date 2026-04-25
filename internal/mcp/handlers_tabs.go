@@ -21,11 +21,11 @@ func handleListTabs(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 
 func handleCloseTab(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		payload := map[string]any{"action": "close"}
-		if tabID := optString(r, "tabId"); tabID != "" {
+		payload := map[string]any{}
+		if tabID := optTrimmedString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/tab", payload)
+		body, code, err := c.Post(ctx, "/close", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

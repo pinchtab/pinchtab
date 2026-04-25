@@ -401,7 +401,7 @@ func TestHandleTab_InvalidAction(t *testing.T) {
 	}
 }
 
-func TestHandleTab_CloseMissingID(t *testing.T) {
+func TestHandleTab_CloseActionUnsupported(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	body := `{"action":"close"}`
 	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
@@ -409,6 +409,9 @@ func TestHandleTab_CloseMissingID(t *testing.T) {
 	h.HandleTab(w, req)
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "/close") {
+		t.Fatalf("expected /close hint, got %s", w.Body.String())
 	}
 }
 

@@ -125,6 +125,13 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     if (tabAction === "list") {
       return textResult(await pinchtabFetch(cfg, "/tabs"));
     }
+    if (tabAction === "close") {
+      const body: any = {};
+      if (params.tabId) body.tabId = params.tabId;
+      const result = await pinchtabFetch(cfg, "/close", { body });
+      if (params.tabId && params.tabId === getLastTabId()) setLastTabId(undefined);
+      return textResult(result);
+    }
     const body: any = { action: tabAction };
     if (params.url) body.url = params.url;
     if (params.tabId) body.tabId = params.tabId;

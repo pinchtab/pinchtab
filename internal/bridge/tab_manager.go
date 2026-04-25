@@ -22,21 +22,22 @@ import (
 type TabSetupFunc func(ctx context.Context)
 
 type TabManager struct {
-	browserCtx context.Context
-	config     *config.RuntimeConfig
-	idMgr      *ids.Manager
-	tabs       map[string]*TabEntry
-	accessed   map[string]bool
-	snapshots  map[string]*RefCache
-	frameScope map[string]FrameScope
-	onTabSetup TabSetupFunc
-	dialogMgr  *DialogManager
-	logStore   *ConsoleLogStore
-	netMonitor *NetworkMonitor
-	currentTab string // ID of the most recently used tab
-	executor   *TabExecutor
-	guardOnce  sync.Once
-	mu         sync.RWMutex
+	browserCtx   context.Context
+	config       *config.RuntimeConfig
+	idMgr        *ids.Manager
+	tabs         map[string]*TabEntry
+	accessed     map[string]bool
+	snapshots    map[string]*RefCache
+	frameScope   map[string]FrameScope
+	onTabSetup   TabSetupFunc
+	onAfterClose func() // optional: invoked after any successful CloseTab
+	dialogMgr    *DialogManager
+	logStore     *ConsoleLogStore
+	netMonitor   *NetworkMonitor
+	currentTab   string // ID of the most recently used tab
+	executor     *TabExecutor
+	guardOnce    sync.Once
+	mu           sync.RWMutex
 }
 
 func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
@@ -64,6 +65,15 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 // SetDialogManager sets the dialog manager for dialog event tracking on new tabs.
 func (tm *TabManager) SetDialogManager(dm *DialogManager) {
 	tm.dialogMgr = dm
+}
+
+// SetOnAfterClose registers a callback fired whenever a tracked tab is removed
+// from the manager — manual /close, eviction, auto-close lifecycle timer, or
+// Chrome reporting the target gone (e.g. user closing it in a headed window).
+// Used by the parent Bridge to persist session state immediately rather than
+// waiting for graceful shutdown.
+func (tm *TabManager) SetOnAfterClose(fn func()) {
+	tm.onAfterClose = fn
 }
 
 // SetNetworkMonitor sets the network monitor for eager network capture on new tabs.
@@ -485,7 +495,6 @@ func (tm *TabManager) CloseTab(tabID string) error {
 		slog.Debug("close target CDP", "tabId", tabID, "cdpId", cdpTargetID, "err", err)
 	}
 	tm.purgeTrackedTabState(tabID, cdpTargetID)
-
 	return nil
 }
 
@@ -733,6 +742,11 @@ func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
 	}
 
 	tm.mu.Lock()
+	if entry, ok := tm.tabs[resolvedTabID]; ok && entry.autoCloseTimer != nil {
+		entry.autoCloseTimer.Stop()
+		entry.autoCloseTimer = nil
+		entry.autoCloseGen++
+	}
 	delete(tm.tabs, resolvedTabID)
 	delete(tm.snapshots, resolvedTabID)
 	delete(tm.frameScope, resolvedTabID)
@@ -750,6 +764,13 @@ func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
 	}
 	if tm.logStore != nil {
 		tm.logStore.RemoveTab(resolvedCDPID)
+	}
+	// Notify listeners (e.g. session persistence) that a tab disappeared,
+	// regardless of whether the trigger was a deliberate CloseTab, an eviction,
+	// the auto-close lifecycle timer, or Chrome reporting the target gone
+	// (CleanStaleTabs / user closing the tab in headed Chrome directly).
+	if tm.onAfterClose != nil {
+		tm.onAfterClose()
 	}
 	return true
 }

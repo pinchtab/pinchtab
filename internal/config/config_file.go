@@ -205,18 +205,19 @@ type browserConfigJSON struct {
 }
 
 type instanceDefaultsConfigJSON struct {
-	Mode              string `json:"mode"`
-	NoRestore         *bool  `json:"noRestore"`
-	Timezone          string `json:"timezone"`
-	BlockImages       *bool  `json:"blockImages"`
-	BlockMedia        *bool  `json:"blockMedia"`
-	BlockAds          *bool  `json:"blockAds"`
-	MaxTabs           *int   `json:"maxTabs"`
-	MaxParallelTabs   *int   `json:"maxParallelTabs"`
-	UserAgent         string `json:"userAgent"`
-	NoAnimations      *bool  `json:"noAnimations"`
-	StealthLevel      string `json:"stealthLevel"`
-	TabEvictionPolicy string `json:"tabEvictionPolicy"`
+	Mode              string             `json:"mode"`
+	NoRestore         *bool              `json:"noRestore"`
+	Timezone          string             `json:"timezone"`
+	BlockImages       *bool              `json:"blockImages"`
+	BlockMedia        *bool              `json:"blockMedia"`
+	BlockAds          *bool              `json:"blockAds"`
+	MaxTabs           *int               `json:"maxTabs"`
+	MaxParallelTabs   *int               `json:"maxParallelTabs"`
+	UserAgent         string             `json:"userAgent"`
+	NoAnimations      *bool              `json:"noAnimations"`
+	StealthLevel      string             `json:"stealthLevel"`
+	TabEvictionPolicy string             `json:"tabEvictionPolicy"`
+	TabPolicy         *TabPolicyDefaults `json:"tabPolicy,omitempty"`
 }
 
 type profilesConfigJSON struct {
@@ -419,6 +420,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			NoAnimations:      fc.InstanceDefaults.NoAnimations,
 			StealthLevel:      fc.InstanceDefaults.StealthLevel,
 			TabEvictionPolicy: fc.InstanceDefaults.TabEvictionPolicy,
+			TabPolicy:         fc.InstanceDefaults.TabPolicy,
 		},
 		Security: securityConfigJSON{
 			AllowEvaluate:          fc.Security.AllowEvaluate,
@@ -665,6 +667,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			NoAnimations:      &noAnimations,
 			StealthLevel:      cfg.StealthLevel,
 			TabEvictionPolicy: cfg.TabEvictionPolicy,
+			TabPolicy:         tabPolicyDefaultsFromRuntime(cfg),
 		},
 		Security: SecurityConfig{
 			AllowEvaluate:          &allowEvaluate,
@@ -892,4 +895,33 @@ func modeToHeadless(mode string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// tabPolicyDefaultsFromRuntime emits a TabPolicyDefaults block when the runtime
+// config carries any non-default tab-policy setting (lifecycle, close delay, or
+// restore). Returns nil for a fully vanilla config so round-tripping doesn't
+// introduce a noisy tabPolicy block.
+func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
+	if cfg == nil {
+		return nil
+	}
+	hasLifecycle := cfg.TabLifecyclePolicy != "" &&
+		(cfg.TabLifecyclePolicy != "close_idle" || cfg.TabCloseDelay != 5*time.Minute)
+	hasRestore := cfg.TabRestore
+	if !hasLifecycle && !hasRestore {
+		return nil
+	}
+	out := &TabPolicyDefaults{}
+	if hasLifecycle {
+		out.Lifecycle = cfg.TabLifecyclePolicy
+		if cfg.TabLifecyclePolicy == "close_idle" && cfg.TabCloseDelay > 0 {
+			sec := int(cfg.TabCloseDelay / time.Second)
+			out.CloseDelaySec = &sec
+		}
+	}
+	if hasRestore {
+		v := cfg.TabRestore
+		out.Restore = &v
+	}
+	return out
 }

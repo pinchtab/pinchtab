@@ -770,3 +770,103 @@ func clearConfigEnvVars(t *testing.T) {
 		_ = os.Unsetenv(v)
 	}
 }
+
+func writeTestConfig(t *testing.T, body string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.json")
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Setenv("PINCHTAB_CONFIG", path)
+	t.Cleanup(func() { _ = os.Unsetenv("PINCHTAB_CONFIG") })
+}
+
+func TestLoadConfig_TabLifecycleDefaults(t *testing.T) {
+	clearConfigEnvVars(t)
+	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
+	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
+
+	cfg := Load()
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("default TabLifecyclePolicy = %q, want close_idle", cfg.TabLifecyclePolicy)
+	}
+	if cfg.TabCloseDelay != 5*time.Minute {
+		t.Errorf("default TabCloseDelay = %v, want 5m", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_TabPolicyBlockPopulatesFields(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabPolicy": {
+				"eviction": "reject",
+				"lifecycle": "close_idle",
+				"closeDelaySec": 30
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "reject" {
+		t.Errorf("TabEvictionPolicy = %q, want reject", cfg.TabEvictionPolicy)
+	}
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("TabLifecyclePolicy = %q, want close_idle", cfg.TabLifecyclePolicy)
+	}
+	if cfg.TabCloseDelay != 30*time.Second {
+		t.Errorf("TabCloseDelay = %v, want 30s", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_LegacyTabEvictionPolicyStillHonored(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabEvictionPolicy": "close_oldest"
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "close_oldest" {
+		t.Errorf("legacy tabEvictionPolicy not honored; got %q", cfg.TabEvictionPolicy)
+	}
+	// Lifecycle defaults preserved (default is close_idle).
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("legacy-only config should leave lifecycle at default close_idle; got %q", cfg.TabLifecyclePolicy)
+	}
+}
+
+func TestLoadConfig_TabPolicyWinsOverLegacyEviction(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabEvictionPolicy": "close_oldest",
+			"tabPolicy": {
+				"eviction": "reject"
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "reject" {
+		t.Errorf("tabPolicy.eviction should override legacy field; got %q", cfg.TabEvictionPolicy)
+	}
+}
+
+func TestLoadConfig_TabCloseDelayPreservesDefaultWhenAbsent(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabPolicy": {
+				"lifecycle": "close_idle"
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabCloseDelay != 5*time.Minute {
+		t.Errorf("TabCloseDelay = %v, want 5m default", cfg.TabCloseDelay)
+	}
+}

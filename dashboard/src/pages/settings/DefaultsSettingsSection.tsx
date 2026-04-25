@@ -141,6 +141,73 @@ export function DefaultsSettingsSection({
         </Select>
       </SettingRow>
       <SettingRow
+        label="Tab lifecycle"
+        description="Auto-close idle tabs after a /text, /snapshot, or /action response. The timer resets on each subsequent request and is cancelled by /navigate."
+      >
+        <Select
+          value={
+            backendConfig.instanceDefaults.tabPolicy?.lifecycle ?? "close_idle"
+          }
+          onChange={(e) =>
+            updateBackendSection("instanceDefaults", {
+              tabPolicy: {
+                ...(backendConfig.instanceDefaults.tabPolicy ?? {}),
+                lifecycle: e.target.value as NonNullable<
+                  BackendConfig["instanceDefaults"]["tabPolicy"]
+                >["lifecycle"],
+              },
+            })
+          }
+        >
+          <option value="keep">Keep (never auto-close)</option>
+          <option value="close_idle">Close idle</option>
+        </Select>
+      </SettingRow>
+      <SettingRow
+        label="Auto-close delay"
+        description="Seconds of idleness before an auto-close fires. Only applies when lifecycle is 'Close idle'."
+      >
+        <input
+          type="number"
+          min={1}
+          value={backendConfig.instanceDefaults.tabPolicy?.closeDelaySec ?? 300}
+          onChange={(e) =>
+            updateBackendSection("instanceDefaults", {
+              tabPolicy: {
+                ...(backendConfig.instanceDefaults.tabPolicy ?? {}),
+                closeDelaySec: Number(e.target.value),
+              },
+            })
+          }
+          disabled={
+            (backendConfig.instanceDefaults.tabPolicy?.lifecycle ??
+              "close_idle") !== "close_idle"
+          }
+          className={fieldClass}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Restore tabs on startup"
+        description="When enabled, tabs open at shutdown are reopened on the next start. Off by default — closed tabs stay closed across restarts."
+      >
+        <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={backendConfig.instanceDefaults.tabPolicy?.restore ?? false}
+            onChange={(e) =>
+              updateBackendSection("instanceDefaults", {
+                tabPolicy: {
+                  ...(backendConfig.instanceDefaults.tabPolicy ?? {}),
+                  restore: e.target.checked,
+                },
+              })
+            }
+            className="h-4 w-4"
+          />
+          Enable
+        </label>
+      </SettingRow>
+      <SettingRow
         label="Max tabs"
         description="Maximum number of tabs per managed instance."
       >

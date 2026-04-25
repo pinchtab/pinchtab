@@ -182,6 +182,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			httpx.ErrorCode(w, 409, "tab_paused_handoff", err.Error(), false, h.handoffErrorDetails(resolvedTabID))
 			return
 		}
+		defer h.armAutoCloseIfEnabled(resolvedTabID)
 	}
 	h.recordResolvedTab(r, resolvedTabID)
 	w.Header().Set(activity.HeaderPTTabID, resolvedTabID)

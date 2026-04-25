@@ -132,7 +132,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "plugin: tab close"
 
-pt_post /tab -d "{\"action\":\"close\",\"tabId\":\"${NEW_TAB}\"}"
+pt_post /close -d "{\"tabId\":\"${NEW_TAB}\"}"
 assert_ok "close tab"
 
 end_test
