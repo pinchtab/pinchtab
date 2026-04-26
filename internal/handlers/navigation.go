@@ -13,9 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -145,7 +143,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	h.recordEngine(r, "chrome")
 	w.Header().Set("X-Engine", "chrome")
 
-	// Ensure Chrome is initialized
 	if !h.ensureChromeOrRespond(w) {
 		return
 	}
@@ -276,7 +273,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	if len(blockPatterns) > 0 {
 		_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
 	} else {
-		// Clear any existing blocking patterns
 		_ = bridge.SetResourceBlocking(tCtx, nil)
 	}
 
@@ -362,277 +358,6 @@ func (h *Handlers) HandleTabNavigate(w http.ResponseWriter, r *http.Request) {
 	h.HandleNavigate(w, req)
 }
 
-const tabActionNew = "new"
-
-func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Action string `json:"action"`
-		TabID  string `json:"tabId"`
-		URL    string `json:"url"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	switch req.Action {
-	case tabActionNew:
-		var target *validatedNavigateTarget
-		trustedResolveCIDRs := parseCIDRs(h.Config.TrustedResolveCIDRs)
-		trustedCIDRs := parseCIDRs(h.Config.TrustedProxyCIDRs)
-		if req.URL != "" && req.URL != "about:blank" {
-			if err := validateNavigateURL(req.URL); err != nil {
-				httpx.Error(w, 400, err)
-				return
-			}
-			domainResult := h.IDPIGuard.CheckDomain(req.URL)
-			if domainResult.Blocked {
-				httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
-				return
-			}
-			if domainResult.Threat {
-				w.Header().Set("X-IDPI-Warning", domainResult.Reason)
-			}
-			var err error
-			target, err = validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL), trustedResolveCIDRs)
-			if err != nil {
-				httpx.Error(w, http.StatusForbidden, err)
-				return
-			}
-		}
-
-		if !h.ensureChromeOrRespond(w) {
-			return
-		}
-
-		// Create a blank tab first so the requested URL becomes the first
-		// real history entry.
-		newTabID, ctx, _, err := h.Bridge.CreateTab("")
-		if err != nil {
-			httpx.Error(w, 500, err)
-			return
-		}
-
-		if req.URL != "" && req.URL != "about:blank" {
-			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
-			defer tCancel()
-			go httpx.CancelOnClientDone(r.Context(), tCancel)
-			navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
-			if err != nil {
-				_ = h.Bridge.CloseTab(newTabID)
-				httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
-				return
-			}
-			if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
-				if navGuard != nil {
-					if blockedErr := navGuard.blocked(); blockedErr != nil {
-						_ = h.Bridge.CloseTab(newTabID)
-						httpx.Error(w, http.StatusForbidden, blockedErr)
-						return
-					}
-				}
-				_ = h.Bridge.CloseTab(newTabID)
-				code := 500
-				if errors.Is(err, bridge.ErrTooManyRedirects) {
-					code = 422
-				}
-				navigateErrorWithHint(w, code, err, req.URL)
-				return
-			}
-		}
-
-		var curURL, title string
-		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
-
-		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
-
-	case "focus":
-		if req.TabID == "" {
-			httpx.Error(w, 400, fmt.Errorf("tabId required"))
-			return
-		}
-		if !h.ensureChromeOrRespond(w) {
-			return
-		}
-		if err := h.Bridge.FocusTab(req.TabID); err != nil {
-			httpx.Error(w, 404, err)
-			return
-		}
-
-		h.recordActivity(r, activity.Update{Action: "tab.focus", TabID: req.TabID})
-
-		httpx.JSON(w, 200, map[string]any{"focused": true, "tabId": req.TabID})
-
-	default:
-		httpx.Error(w, 400, fmt.Errorf("action must be 'new' or 'focus'; use /close to close a tab"))
-	}
-}
-
-// HandleTabClose closes the tab identified by the path. It is the tab-scoped
-// equivalent of POST /close and exists so orchestrator dashboard commands can
-// use the common /tabs/{id}/... proxy path.
-func (h *Handlers) HandleTabClose(w http.ResponseWriter, r *http.Request) {
-	tabID := strings.TrimSpace(r.PathValue("id"))
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
-		var req struct {
-			TabID string `json:"tabId"`
-		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-			return
-		}
-		if req.TabID != "" && req.TabID != tabID {
-			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
-			return
-		}
-	}
-
-	h.closeTab(w, r, tabID)
-}
-
-// HandleClose closes the tab identified by the JSON body, or the current/default
-// tab when tabId is omitted. It is the shorthand form of POST /tabs/{id}/close.
-func (h *Handlers) HandleClose(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TabID string `json:"tabId"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	h.closeTab(w, r, strings.TrimSpace(req.TabID))
-}
-
-func (h *Handlers) closeTab(w http.ResponseWriter, r *http.Request, tabID string) {
-	if !h.ensureChromeOrRespond(w) {
-		return
-	}
-	if tabID == "" {
-		_, resolvedTabID, err := h.tabContext(r, "")
-		if err != nil {
-			httpx.Error(w, 404, err)
-			return
-		}
-		tabID = resolvedTabID
-	}
-
-	if err := h.Bridge.CloseTab(tabID); err != nil {
-		httpx.Error(w, 500, err)
-		return
-	}
-
-	h.recordActivity(r, activity.Update{Action: "tab.close", TabID: tabID})
-	w.Header().Set(activity.HeaderPTTabID, tabID)
-
-	httpx.JSON(w, 200, map[string]any{"closed": true, "tabId": tabID})
-}
-
-// HandleTabBack navigates a specific tab back in history.
-func (h *Handlers) HandleTabBack(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	q.Set("tabId", r.PathValue("id"))
-	r.URL.RawQuery = q.Encode()
-	h.HandleBack(w, r)
-}
-
-// HandleTabForward navigates a specific tab forward in history.
-func (h *Handlers) HandleTabForward(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	q.Set("tabId", r.PathValue("id"))
-	r.URL.RawQuery = q.Encode()
-	h.HandleForward(w, r)
-}
-
-// HandleTabReload reloads a specific tab.
-func (h *Handlers) HandleTabReload(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	q.Set("tabId", r.PathValue("id"))
-	r.URL.RawQuery = q.Encode()
-	h.HandleReload(w, r)
-}
-
-// HandleBack navigates the current (or specified) tab back in history.
-func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
-		return
-	}
-	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
-	if err != nil {
-		httpx.Error(w, 404, err)
-		return
-	}
-
-	// Use CDP directly instead of chromedp.NavigateBack() which wraps in
-	// responseAction() and waits for Page.loadEventFired — hangs indefinitely.
-	var noHistory bool
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		cur, entries, err := page.GetNavigationHistory().Do(ctx)
-		if err != nil {
-			return fmt.Errorf("get history: %w", err)
-		}
-		if cur <= 0 || cur > int64(len(entries)-1) {
-			noHistory = true
-			return nil
-		}
-		return page.NavigateToHistoryEntry(entries[cur-1].ID).Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("back: %w", err))
-		return
-	}
-	if !noHistory {
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
-}
-
-// HandleForward navigates the current (or specified) tab forward in history.
-func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
-		return
-	}
-	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
-	if err != nil {
-		httpx.Error(w, 404, err)
-		return
-	}
-
-	// Use CDP directly instead of chromedp.NavigateForward() which wraps in
-	// responseAction() and waits for Page.loadEventFired — hangs indefinitely.
-	var noHistory bool
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		cur, entries, err := page.GetNavigationHistory().Do(ctx)
-		if err != nil {
-			return fmt.Errorf("get history: %w", err)
-		}
-		if cur < 0 || cur >= int64(len(entries)-1) {
-			noHistory = true
-			return nil
-		}
-		return page.NavigateToHistoryEntry(entries[cur+1].ID).Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("forward: %w", err))
-		return
-	}
-	if !noHistory {
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
-}
-
 // binaryFileExtensions are extensions that Chrome cannot render and will abort on
 var binaryFileExtensions = []string{".gz", ".zip", ".tar", ".rar", ".7z", ".bz2", ".xz", ".pdf", ".exe", ".bin", ".dmg", ".iso"}
 
@@ -664,29 +389,4 @@ func navigateErrorWithHint(w http.ResponseWriter, code int, err error, url strin
 		return
 	}
 	httpx.Error(w, code, fmt.Errorf("navigate: %w", err))
-}
-
-// HandleReload reloads the current (or specified) tab.
-func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
-		return
-	}
-	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
-	if err != nil {
-		httpx.Error(w, 404, err)
-		return
-	}
-
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return page.Reload().Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("reload: %w", err))
-		return
-	}
-
-	// Wait briefly for page to start loading
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
 }

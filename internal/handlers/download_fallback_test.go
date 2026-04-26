@@ -195,7 +195,8 @@ func TestFetchDirectWithCookies_BlocksDNSRebinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected rebinding attempt to be blocked")
 	}
-	if !strings.Contains(err.Error(), "blocked remote IP") {
-		t.Fatalf("expected blocked remote IP error, got %v", err)
+	msg := err.Error()
+	if !strings.Contains(msg, "blocked remote IP") && !strings.Contains(msg, "private/internal IP blocked") {
+		t.Fatalf("expected rebinding to be blocked at dial or revalidation, got %v", err)
 	}
 }

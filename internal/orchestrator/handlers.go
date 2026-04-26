@@ -7,6 +7,28 @@ import (
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
+// Allows reports whether the given capability is permitted by the orchestrator's
+// current security settings. Centralises the per-capability dispatch so callers
+// don't need their own switch over routes.Capability.
+func (o *Orchestrator) Allows(cap routes.Capability) bool {
+	switch cap {
+	case routes.CapEvaluate:
+		return o.AllowsEvaluate()
+	case routes.CapMacro:
+		return o.AllowsMacro()
+	case routes.CapScreencast:
+		return o.AllowsScreencast()
+	case routes.CapDownload:
+		return o.AllowsDownload()
+	case routes.CapUpload:
+		return o.AllowsUpload()
+	case routes.CapStateExport:
+		return o.AllowsStateExport()
+	default:
+		return false
+	}
+}
+
 func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
 	if enabled {
 		mux.HandleFunc(route, next)
