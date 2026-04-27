@@ -38,6 +38,10 @@ func registerBrowserCommands() {
 		evalCmd,
 		pdfCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		cssCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -99,6 +103,10 @@ func registerBrowserCommands() {
 		evalCmd,
 		pdfCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		cssCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -227,6 +235,18 @@ func configureBrowserFlags() {
 	textCmd.Flags().String("frame", "", "Extract text from a specific iframe by frameId. If unset, uses the tab's active frame scope (set via `pinchtab frame`) or the top-level document.")
 	textCmd.Flags().StringP("selector", "s", "", "Element selector to extract text from (ref/CSS/XPath/text)")
 	textCmd.Flags().Bool("json", false, "Output full JSON response instead of just text content")
+	titleCmd.Flags().String("frame", "", "Read title from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	titleCmd.Flags().Bool("json", false, "Output full JSON response instead of just title")
+	urlCmd.Flags().String("frame", "", "Read URL from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	urlCmd.Flags().Bool("json", false, "Output full JSON response instead of just URL")
+	htmlCmd.Flags().String("frame", "", "Read HTML from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	htmlCmd.Flags().StringP("selector", "s", "", "Element selector to extract HTML from (ref/CSS/XPath/text)")
+	htmlCmd.Flags().String("max-chars", "", "Maximum number of HTML characters to return")
+	htmlCmd.Flags().Bool("json", false, "Output full JSON response instead of just HTML")
+	cssCmd.Flags().String("frame", "", "Read computed CSS from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	cssCmd.Flags().StringP("selector", "s", "", "Element selector to extract CSS from (ref/CSS/XPath/text). If omitted, returns computed CSS for the root element.")
+	cssCmd.Flags().String("prop", "", "Return only a single computed CSS property")
+	cssCmd.Flags().Bool("json", false, "Output full JSON response instead of just CSS")
 
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
@@ -263,6 +283,10 @@ func configureBrowserFlags() {
 		pdfCmd,
 		findCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		cssCmd,
 		clickCmd,
 		dblclickCmd,
 		hoverCmd,

@@ -25,4 +25,14 @@ Use browser back navigation to return to a previous page.
 
 **Verify**: Previous page content is displayed.
 
+### 1.6 Extract HTML from a content block
+Navigate to `http://fixtures/article.html` and extract the HTML for the main `article` element.
+
+**Verify**: Returned HTML contains `VERIFY_ARTICLE_PAGE_41414`.
+
+### 1.7 Inspect computed CSS of a featured card
+Navigate to `http://fixtures/pricing.html` and inspect the computed CSS for `#plan-pro`, then report the `display` property.
+
+**Verify**: The computed `display` value is `flex`.
+
 ---

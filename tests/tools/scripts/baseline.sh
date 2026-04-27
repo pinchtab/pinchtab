@@ -224,6 +224,12 @@ NAV "http://fixtures/wiki-go.html"; G=$(SNAP "" 1000)
 NAV "http://fixtures/wiki-python.html"; P=$(SNAP "" 1000)
 NAV "http://fixtures/wiki-rust.html"; R=$(SNAP "" 1000)
 echo "$G" | grep -q "FEATURE_COUNT_6" && echo "$P" | grep -q "FEATURE_COUNT_7" && echo "$R" | grep -q "FEATURE_COUNT_5" && REC 15 2 pass "m" || REC 15 2 fail "miss"
+NAV "http://fixtures/article.html"
+HTML=$(curl -sf "$BASE/html?tabId=$T&selector=article" -H "$AUTH")
+echo "$HTML" | grep -q "VERIFY_ARTICLE_PAGE_41414" && REC 15 3 pass "html article marker" || REC 15 3 fail "missing article html marker"
+NAV "http://fixtures/pricing.html"
+CSS_DISPLAY=$(curl -sf "$BASE/css?tabId=$T&selector=%23plan-pro&prop=display" -H "$AUTH" | jq -r '.css.display // empty' 2>/dev/null)
+[ "$CSS_DISPLAY" = "flex" ] && REC 15 4 pass "display=flex" || REC 15 4 fail "display=$CSS_DISPLAY"
 
 # Group 16
 NAV "http://fixtures/hovers.html"; ACT '{"kind":"hover","selector":"#avatar-1"}' > /dev/null

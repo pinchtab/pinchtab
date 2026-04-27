@@ -15,5 +15,15 @@ Report which language has the most features and name 1 feature unique to each.
 
 **Verify**: Response is factually correct AND wiki-python.html contains `COMPARISON_TABLE_BUILT`.
 
+### 15.3 Extract raw HTML from a target element
+Navigate to `http://fixtures/article.html` and extract the HTML of the main `article` element.
+
+**Verify**: Extracted HTML contains `VERIFY_ARTICLE_PAGE_41414`.
+
+### 15.4 Inspect a stable computed CSS property
+Navigate to `http://fixtures/pricing.html` and inspect the computed CSS for `#plan-pro`. Report the computed `display` value.
+
+**Verify**: The computed value is `flex`.
+
 ---
 
