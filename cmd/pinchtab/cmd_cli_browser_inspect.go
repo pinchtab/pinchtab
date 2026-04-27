@@ -100,13 +100,13 @@ var htmlCmd = &cobra.Command{
 	},
 }
 
-var cssCmd = &cobra.Command{
-	Use:   "css [selector]",
-	Short: "Get computed CSS for the root element or a matched element",
+var stylesCmd = &cobra.Command{
+	Use:   "styles [selector]",
+	Short: "Get computed styles for the root element or a matched element",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CSS(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Styles(rt.client, rt.base, rt.token, cmd, args)
 		})
 	},
 }

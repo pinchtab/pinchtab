@@ -161,6 +161,27 @@ assert_output_contains "Welcome" "extracts text from element"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab title url html styles"
+
+pt_ok nav "${FIXTURES_URL}/table.html"
+TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
+
+pt_ok title --tab "$TAB_ID"
+assert_output_contains "E2E Test - Table" "returns page title"
+
+pt_ok url --tab "$TAB_ID"
+assert_output_contains "table.html" "returns page url"
+
+pt_ok html "#data-table" --tab "$TAB_ID"
+assert_output_contains "<table id=\"data-table\">" "returns selected table html"
+assert_output_contains "Alice Johnson" "html contains table row content"
+
+pt_ok styles ".status-active" --prop display --tab "$TAB_ID"
+assert_output_contains "inline-block" "returns computed display property"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab text <ref>"
 
 pt_ok nav "${FIXTURES_URL}/index.html"

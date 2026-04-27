@@ -51,26 +51,26 @@ func HTML(client *http.Client, base, token string, cmd *cobra.Command, args []st
 	})
 }
 
-func CSS(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
-	inspectGet(client, base, token, "/css", cmd, args, func(body []byte) {
+func Styles(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+	inspectGet(client, base, token, "/styles", cmd, args, func(body []byte) {
 		var result struct {
-			CSS map[string]any `json:"css"`
+			Styles map[string]any `json:"styles"`
 		}
 		if err := json.Unmarshal(body, &result); err != nil {
 			output.Value(string(body))
 			return
 		}
 		if prop, _ := cmd.Flags().GetString("prop"); prop != "" {
-			if v, ok := result.CSS[prop]; ok {
+			if v, ok := result.Styles[prop]; ok {
 				output.Value(fmt.Sprint(v))
 				return
 			}
 			output.Value("")
 			return
 		}
-		pretty, err := json.MarshalIndent(result.CSS, "", "  ")
+		pretty, err := json.MarshalIndent(result.Styles, "", "  ")
 		if err != nil {
-			output.Value(fmt.Sprint(result.CSS))
+			output.Value(fmt.Sprint(result.Styles))
 			return
 		}
 		output.Value(string(pretty))

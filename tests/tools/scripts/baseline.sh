@@ -228,7 +228,7 @@ NAV "http://fixtures/article.html"
 HTML=$(curl -sf "$BASE/html?tabId=$T&selector=article" -H "$AUTH")
 echo "$HTML" | grep -q "VERIFY_ARTICLE_PAGE_41414" && REC 15 3 pass "html article marker" || REC 15 3 fail "missing article html marker"
 NAV "http://fixtures/pricing.html"
-CSS_DISPLAY=$(curl -sf "$BASE/css?tabId=$T&selector=%23plan-pro&prop=display" -H "$AUTH" | jq -r '.css.display // empty' 2>/dev/null)
+CSS_DISPLAY=$(curl -sf "$BASE/styles?tabId=$T&selector=%23plan-pro&prop=display" -H "$AUTH" | jq -r '.styles.display // empty' 2>/dev/null)
 [ "$CSS_DISPLAY" = "flex" ] && REC 15 4 pass "display=flex" || REC 15 4 fail "display=$CSS_DISPLAY"
 
 # Group 16

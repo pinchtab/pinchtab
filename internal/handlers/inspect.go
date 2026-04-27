@@ -20,15 +20,15 @@ type inspectResponse struct {
 	URL       string         `json:"url,omitempty"`
 	Title     string         `json:"title,omitempty"`
 	HTML      string         `json:"html,omitempty"`
-	CSS       map[string]any `json:"css,omitempty"`
+	Styles    map[string]any `json:"styles,omitempty"`
 	Truncated bool           `json:"truncated,omitempty"`
 }
 
 type inspectPayload struct {
-	Title string         `json:"title"`
-	URL   string         `json:"url"`
-	HTML  string         `json:"html,omitempty"`
-	CSS   map[string]any `json:"css,omitempty"`
+	Title  string         `json:"title"`
+	URL    string         `json:"url"`
+	HTML   string         `json:"html,omitempty"`
+	Styles map[string]any `json:"styles,omitempty"`
 }
 
 type inspectKind string
@@ -37,7 +37,7 @@ const (
 	inspectKindTitle inspectKind = "title"
 	inspectKindURL   inspectKind = "url"
 	inspectKindHTML  inspectKind = "html"
-	inspectKindCSS   inspectKind = "css"
+	inspectKindStyles inspectKind = "styles"
 )
 
 func (h *Handlers) HandleTitle(w http.ResponseWriter, r *http.Request) {
@@ -64,12 +64,12 @@ func (h *Handlers) HandleTabHTML(w http.ResponseWriter, r *http.Request) {
 	h.forwardInspectTabRoute(w, r, h.HandleHTML)
 }
 
-func (h *Handlers) HandleCSS(w http.ResponseWriter, r *http.Request) {
-	h.handleInspect(w, r, inspectKindCSS)
+func (h *Handlers) HandleStyles(w http.ResponseWriter, r *http.Request) {
+	h.handleInspect(w, r, inspectKindStyles)
 }
 
-func (h *Handlers) HandleTabCSS(w http.ResponseWriter, r *http.Request) {
-	h.forwardInspectTabRoute(w, r, h.HandleCSS)
+func (h *Handlers) HandleTabStyles(w http.ResponseWriter, r *http.Request) {
+	h.forwardInspectTabRoute(w, r, h.HandleStyles)
 }
 
 func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind inspectKind) {
@@ -124,12 +124,12 @@ func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind in
 			resp.Truncated = true
 		}
 	}
-	if kind == inspectKindCSS {
-		css := payload.CSS
+	if kind == inspectKindStyles {
+		styles := payload.Styles
 		if prop := strings.TrimSpace(r.URL.Query().Get("prop")); prop != "" {
-			resp.CSS = map[string]any{prop: css[prop]}
+			resp.Styles = map[string]any{prop: styles[prop]}
 		} else {
-			resp.CSS = sortCSSMap(css)
+			resp.Styles = sortCSSMap(styles)
 		}
 	}
 
@@ -158,21 +158,21 @@ func (h *Handlers) inspectDocument(ctx context.Context, frameID string, kind ins
 
 func inspectDocumentExpression(kind inspectKind) string {
 	switch kind {
-	case inspectKindCSS:
+	case inspectKindStyles:
 		return `(() => {
 			const doc = document;
 			const win = doc.defaultView || window;
 			const root = doc.documentElement || doc.body;
 			const style = root ? win.getComputedStyle(root) : null;
-			const css = {};
+			const styles = {};
 			if (style) {
-				for (const name of style) css[name] = style.getPropertyValue(name);
+				for (const name of style) styles[name] = style.getPropertyValue(name);
 			}
 			return {
 				title: doc.title || "",
 				url: String(doc.location ? doc.location.href : win.location.href),
 				html: doc.documentElement ? doc.documentElement.outerHTML : "",
-				css
+				styles
 			};
 		})()`
 	default:
@@ -183,7 +183,7 @@ func inspectDocumentExpression(kind inspectKind) string {
 				title: doc.title || "",
 				url: String(doc.location ? doc.location.href : win.location.href),
 				html: doc.documentElement ? doc.documentElement.outerHTML : "",
-				css: {}
+				styles: {}
 			};
 		})()`
 	}
@@ -268,18 +268,18 @@ func inspectByBackendNodeID(ctx context.Context, nodeID int64, kind inspectKind)
 
 func inspectFunctionDeclaration(kind inspectKind) string {
 	switch kind {
-	case inspectKindCSS:
+	case inspectKindStyles:
 		return `function() {
 			const el = this;
 			const doc = el.ownerDocument || document;
 			const win = doc.defaultView || window;
 			const style = win.getComputedStyle(el);
-			const css = {};
-			for (const name of style) css[name] = style.getPropertyValue(name);
+			const styles = {};
+			for (const name of style) styles[name] = style.getPropertyValue(name);
 			return {
 				title: doc.title || '',
 				url: String(doc.location ? doc.location.href : win.location.href),
-				css,
+				styles,
 			};
 		}`
 	default:

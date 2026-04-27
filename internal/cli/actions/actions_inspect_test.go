@@ -82,18 +82,18 @@ func TestHTML_UsesRefForRefSelector(t *testing.T) {
 	}
 }
 
-func TestCSS_WithPropAndTab(t *testing.T) {
+func TestStyles_WithPropAndTab(t *testing.T) {
 	m := newMockServer()
-	m.response = `{"css":{"display":"block"}}`
+	m.response = `{"styles":{"display":"block"}}`
 	defer m.close()
 
 	cmd := newInspectCmd()
 	_ = cmd.Flags().Set("tab", "TAB1")
 	_ = cmd.Flags().Set("prop", "display")
-	CSS(m.server.Client(), m.base(), "", cmd, []string{"button.primary"})
+	Styles(m.server.Client(), m.base(), "", cmd, []string{"button.primary"})
 
-	if m.lastPath != "/css" {
-		t.Fatalf("expected /css, got %s", m.lastPath)
+	if m.lastPath != "/styles" {
+		t.Fatalf("expected /styles, got %s", m.lastPath)
 	}
 	if !strings.Contains(m.lastQuery, "tabId=TAB1") {
 		t.Fatalf("expected tabId query, got %s", m.lastQuery)
@@ -106,16 +106,16 @@ func TestCSS_WithPropAndTab(t *testing.T) {
 	}
 }
 
-func TestCSS_WithoutSelectorHitsDocumentCSS(t *testing.T) {
+func TestStyles_WithoutSelectorHitsDocumentStyles(t *testing.T) {
 	m := newMockServer()
-	m.response = `{"css":{"display":"block"}}`
+	m.response = `{"styles":{"display":"block"}}`
 	defer m.close()
 
 	cmd := newInspectCmd()
-	CSS(m.server.Client(), m.base(), "", cmd, nil)
+	Styles(m.server.Client(), m.base(), "", cmd, nil)
 
-	if m.lastPath != "/css" {
-		t.Fatalf("expected /css, got %s", m.lastPath)
+	if m.lastPath != "/styles" {
+		t.Fatalf("expected /styles, got %s", m.lastPath)
 	}
 	if strings.Contains(m.lastQuery, "selector=") || strings.Contains(m.lastQuery, "ref=") {
 		t.Fatalf("did not expect selector/ref query, got %s", m.lastQuery)

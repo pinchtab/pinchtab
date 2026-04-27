@@ -206,7 +206,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /tabs/{id}/title", h.HandleTabTitle)
 	mux.HandleFunc("GET /tabs/{id}/url", h.HandleTabURL)
 	mux.HandleFunc("GET /tabs/{id}/html", h.HandleTabHTML)
-	mux.HandleFunc("GET /tabs/{id}/css", h.HandleTabCSS)
+	mux.HandleFunc("GET /tabs/{id}/styles", h.HandleTabStyles)
 	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
@@ -221,7 +221,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /title", h.HandleTitle)
 	mux.HandleFunc("GET /url", h.HandleURL)
 	mux.HandleFunc("GET /html", h.HandleHTML)
-	mux.HandleFunc("GET /css", h.HandleCSS)
+	mux.HandleFunc("GET /styles", h.HandleStyles)
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)
 	mux.HandleFunc("GET /help", h.HandleOpenAPI) // alias
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)

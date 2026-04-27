@@ -139,6 +139,24 @@ assert_table_page "$TEXT_RESULT"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "inspect html/css: GET /tabs/{id}/html and /tabs/{id}/styles"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
+assert_ok "navigate to table page"
+TAB_ID=$(get_tab_id)
+
+pt_get "/tabs/${TAB_ID}/html?selector=%23data-table"
+assert_ok "get selected table html"
+assert_json_contains "$RESULT" '.html' '<table id="data-table">'
+assert_json_contains "$RESULT" '.html' 'Alice Johnson'
+
+pt_get "/tabs/${TAB_ID}/styles?selector=%23data-table&prop=display"
+assert_ok "get selected table styles"
+assert_json_eq "$RESULT" '.styles.display' 'table'
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "snapshot: diff mode"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"

@@ -39,21 +39,21 @@ func TestHandleHTML_WithFrame_NoTab(t *testing.T) {
 	}
 }
 
-func TestHandleCSS_WithSelector_NoTab(t *testing.T) {
+func TestHandleStyles_WithSelector_NoTab(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
-	req := httptest.NewRequest("GET", "/css?selector=button&prop=display", nil)
+	req := httptest.NewRequest("GET", "/styles?selector=button&prop=display", nil)
 	w := httptest.NewRecorder()
-	h.HandleCSS(w, req)
+	h.HandleStyles(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 
-func TestHandleCSS_WithoutSelector_NoTab(t *testing.T) {
+func TestHandleStyles_WithoutSelector_NoTab(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
-	req := httptest.NewRequest("GET", "/css?prop=display", nil)
+	req := httptest.NewRequest("GET", "/styles?prop=display", nil)
 	w := httptest.NewRecorder()
-	h.HandleCSS(w, req)
+	h.HandleStyles(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
@@ -69,7 +69,7 @@ func TestHandleTabInspect_MissingTabID(t *testing.T) {
 		{name: "title", fn: h.HandleTabTitle},
 		{name: "url", fn: h.HandleTabURL},
 		{name: "html", fn: h.HandleTabHTML},
-		{name: "css", fn: h.HandleTabCSS},
+		{name: "styles", fn: h.HandleTabStyles},
 	}
 
 	for _, tc := range cases {
@@ -94,7 +94,7 @@ func TestHandleTabInspect_ForwardsTabID(t *testing.T) {
 		{name: "title", fn: h.HandleTabTitle},
 		{name: "url", fn: h.HandleTabURL},
 		{name: "html", fn: h.HandleTabHTML},
-		{name: "css", fn: h.HandleTabCSS},
+		{name: "styles", fn: h.HandleTabStyles},
 	}
 
 	for _, tc := range cases {
@@ -115,7 +115,7 @@ func TestInspectRoutesRegistered(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, nil)
 
-	paths := []string{"/title", "/url", "/html", "/css", "/tabs/tab1/title", "/tabs/tab1/url", "/tabs/tab1/html", "/tabs/tab1/css"}
+	paths := []string{"/title", "/url", "/html", "/styles", "/tabs/tab1/title", "/tabs/tab1/url", "/tabs/tab1/html", "/tabs/tab1/styles"}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest("GET", path, nil)
