@@ -8,10 +8,10 @@ x-pinchtab-base: &pinchtab-base
 
 x-pinchtab-healthcheck: &pinchtab-healthcheck
   test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
-  interval: 3s
+  interval: 1s
   timeout: 10s
-  retries: 20
-  start_period: 15s
+  retries: 30
+  start_period: 5s
 
 services:
   pinchtab:
@@ -96,12 +96,13 @@ services:
       - "9996:9999"
     command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-bridge.json /data/e2e-config/pinchtab-bridge.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab bridge"]
     healthcheck:
-      # Bridge-mode pinchtab uses a different auth token.
+      # Bridge-mode pinchtab uses a different auth token. Same tightened
+      # cadence as the shared healthcheck anchor above.
       test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-bridge-token' -q -O /dev/null http://localhost:9999/health"]
-      interval: 3s
+      interval: 1s
       timeout: 10s
-      retries: 20
-      start_period: 15s
+      retries: 30
+      start_period: 5s
 
   fixtures:
     # Custom image: nginx + baked-in default.conf with httpbin-compatible
@@ -129,9 +130,9 @@ services:
       # test runner refuses to start, which surfaces "stale image / config
       # not loaded" failures up front instead of as opaque test errors.
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/ && wget -q -O /dev/null http://localhost:80/get"]
-      interval: 2s
+      interval: 1s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   runner-api:
     build:

@@ -15,10 +15,10 @@ services:
     shm_size: '2gb'
     healthcheck:
       test: ["CMD-SHELL", "wget --header='Authorization: Bearer e2e-token' -q -O /dev/null http://localhost:9999/health"]
-      interval: 3s
+      interval: 1s
       timeout: 10s
-      retries: 20
-      start_period: 15s
+      retries: 30
+      start_period: 5s
 
   fixtures:
     # Custom image: nginx + baked-in default.conf with httpbin-compatible
@@ -47,9 +47,9 @@ services:
       # test runner refuses to start, which surfaces "stale image / config
       # not loaded" failures up front instead of as opaque test errors.
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/ && wget -q -O /dev/null http://localhost:80/get"]
-      interval: 2s
+      interval: 1s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   runner-api:
     build:
