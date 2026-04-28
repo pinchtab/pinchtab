@@ -58,9 +58,16 @@ func (h *Handlers) scopeSnapshotNodesByFrame(nodes []bridge.RawAXNode, frameID s
 }
 
 func (h *Handlers) resolveSelectorNodeID(ctx context.Context, tabID, raw string) (int64, error) {
+	return h.resolveSelectorNodeIDInFrame(ctx, tabID, raw, "")
+}
+
+func (h *Handlers) resolveSelectorNodeIDInFrame(ctx context.Context, tabID, raw, frameID string) (int64, error) {
 	sel := selector.Parse(raw)
 	cache := h.Bridge.GetRefCache(tabID)
-	return bridge.ResolveUnifiedSelectorInFrame(ctx, sel, cache, h.selectorFrameID(tabID))
+	if frameID == "" {
+		frameID = h.selectorFrameID(tabID)
+	}
+	return bridge.ResolveUnifiedSelectorInFrame(ctx, sel, cache, frameID)
 }
 
 func ownerRefForFrame(cache *bridge.RefCache, frameID string) string {

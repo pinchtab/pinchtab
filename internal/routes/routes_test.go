@@ -61,6 +61,42 @@ func TestCloseRoutesAreShorthandAndTabScoped(t *testing.T) {
 	}
 }
 
+func TestInspectRoutesAreShorthandAndTabScoped(t *testing.T) {
+	wantShorthand := map[string]bool{
+		"GET /title":  false,
+		"GET /url":    false,
+		"GET /html":   false,
+		"GET /styles": false,
+	}
+	for _, route := range ShorthandRoutes() {
+		if _, ok := wantShorthand[route]; ok {
+			wantShorthand[route] = true
+		}
+	}
+	for route, ok := range wantShorthand {
+		if !ok {
+			t.Fatalf("ShorthandRoutes() missing %s", route)
+		}
+	}
+
+	wantTabScoped := map[string]bool{
+		"GET /tabs/{id}/title":  false,
+		"GET /tabs/{id}/url":    false,
+		"GET /tabs/{id}/html":   false,
+		"GET /tabs/{id}/styles": false,
+	}
+	for _, route := range TabScopedRoutes() {
+		if _, ok := wantTabScoped[route]; ok {
+			wantTabScoped[route] = true
+		}
+	}
+	for route, ok := range wantTabScoped {
+		if !ok {
+			t.Fatalf("TabScopedRoutes() missing %s", route)
+		}
+	}
+}
+
 func TestNoDuplicateRoutes(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, ep := range Core() {

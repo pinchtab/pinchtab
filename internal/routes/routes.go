@@ -56,6 +56,10 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/frame", "Set current frame scope", CapNone, true},
 	{"GET", "/screenshot", "Page screenshot", CapNone, true},
 	{"GET", "/text", "Extract page text", CapNone, true},
+	{"GET", "/title", "Read page title", CapNone, true},
+	{"GET", "/url", "Read page URL", CapNone, true},
+	{"GET", "/html", "Read page HTML", CapNone, true},
+	{"GET", "/styles", "Read computed styles", CapNone, true},
 	{"GET", "/pdf", "Export as PDF (GET)", CapNone, true},
 	{"POST", "/pdf", "Export as PDF (POST)", CapNone, true},
 

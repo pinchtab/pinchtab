@@ -34,9 +34,9 @@ type inspectPayload struct {
 type inspectKind string
 
 const (
-	inspectKindTitle inspectKind = "title"
-	inspectKindURL   inspectKind = "url"
-	inspectKindHTML  inspectKind = "html"
+	inspectKindTitle  inspectKind = "title"
+	inspectKindURL    inspectKind = "url"
+	inspectKindHTML   inspectKind = "html"
 	inspectKindStyles inspectKind = "styles"
 )
 
@@ -202,11 +202,10 @@ func (h *Handlers) inspectByRef(ctx context.Context, tabID, ref string, kind ins
 }
 
 func (h *Handlers) inspectBySelector(ctx context.Context, tabID, rawSelector, frameID string, kind inspectKind) (inspectPayload, error) {
-	nodeID, err := h.resolveSelectorNodeID(ctx, tabID, rawSelector)
+	nodeID, err := h.resolveSelectorNodeIDInFrame(ctx, tabID, rawSelector, frameID)
 	if err != nil {
 		return inspectPayload{}, frameScopedSelectorError("selector", err)
 	}
-	_ = frameID
 	return inspectByBackendNodeID(ctx, nodeID, kind)
 }
 

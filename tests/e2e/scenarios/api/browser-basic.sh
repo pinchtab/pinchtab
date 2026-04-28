@@ -139,7 +139,7 @@ assert_table_page "$TEXT_RESULT"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "inspect html/css: GET /tabs/{id}/html and /tabs/{id}/styles"
+start_test "inspect html/styles: GET /tabs/{id}/html and /tabs/{id}/styles"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 assert_ok "navigate to table page"
