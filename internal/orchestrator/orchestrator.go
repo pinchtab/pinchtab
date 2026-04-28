@@ -340,8 +340,11 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("create profile dir: %w", err)
 	}
 	instanceStateDir := filepath.Join(profilePath, ".pinchtab-state")
-	if err := os.MkdirAll(instanceStateDir, 0755); err != nil {
+	if err := os.MkdirAll(instanceStateDir, 0700); err != nil {
 		return nil, fmt.Errorf("create state dir: %w", err)
+	}
+	if err := os.Chmod(instanceStateDir, 0700); err != nil {
+		return nil, fmt.Errorf("set state dir permissions: %w", err)
 	}
 
 	requestedPolicy := cloneSecurityPolicy(opts.SecurityPolicy)
@@ -460,7 +463,10 @@ func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, i
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(configPath, 0600); err != nil {
 		return "", err
 	}
 	return configPath, nil
