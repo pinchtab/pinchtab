@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -110,5 +111,91 @@ func TestLoadFileConfig_PromotesLegacyIDPIAllowedDomains(t *testing.T) {
 	}
 	if got := loaded.Security.AllowedDomains; len(got) != 2 || got[0] != "fixtures" || got[1] != "*.example.com" {
 		t.Fatalf("security.allowedDomains = %v, want promoted legacy values", got)
+	}
+}
+
+func TestSaveFileConfigSetsOwnerOnlyPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix-only file mode semantics")
+	}
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "sub", "config.json")
+
+	fc := DefaultFileConfig()
+	if err := SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	if fi, err := os.Stat(configPath); err != nil {
+		t.Fatalf("stat config: %v", err)
+	} else if got := fi.Mode().Perm(); got != 0600 {
+		t.Errorf("config.json mode = %o, want 0600", got)
+	}
+	if fi, err := os.Stat(filepath.Dir(configPath)); err != nil {
+		t.Fatalf("stat dir: %v", err)
+	} else if got := fi.Mode().Perm(); got != 0700 {
+		t.Errorf("config dir mode = %o, want 0700", got)
+	}
+}
+
+func TestSaveFileConfigTightensExistingLoosePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix-only file mode semantics")
+	}
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "loose")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fc := DefaultFileConfig()
+	if err := SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	if fi, err := os.Stat(configPath); err != nil {
+		t.Fatal(err)
+	} else if got := fi.Mode().Perm(); got != 0600 {
+		t.Errorf("config.json mode = %o, want 0600 after tightening", got)
+	}
+	if fi, err := os.Stat(dir); err != nil {
+		t.Fatal(err)
+	} else if got := fi.Mode().Perm(); got != 0700 {
+		t.Errorf("config dir mode = %o, want 0700 after tightening", got)
+	}
+}
+
+func TestLoadFileConfigTightensExistingLoosePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix-only file mode semantics")
+	}
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "loose")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if _, _, err := LoadFileConfig(); err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+
+	if fi, err := os.Stat(configPath); err != nil {
+		t.Fatal(err)
+	} else if got := fi.Mode().Perm(); got != 0600 {
+		t.Errorf("config.json mode after load = %o, want 0600", got)
+	}
+	if fi, err := os.Stat(dir); err != nil {
+		t.Fatal(err)
+	} else if got := fi.Mode().Perm(); got != 0700 {
+		t.Errorf("config dir mode after load = %o, want 0700", got)
 	}
 }

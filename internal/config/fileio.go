@@ -5,7 +5,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
+
+// tightenConfigPerms best-effort enforces 0700 on the config directory and
+// 0600 on the config file. It is invoked from both the save path (to handle
+// pre-existing loose perms left by older versions) and the load path (to
+// proactively recover regardless of whether the user mutates anything).
+// Failures are intentionally swallowed: chmod can fail on read-only FS,
+// foreign-owned files, or filesystems that don't honor unix perms, none of
+// which should block reading config.
+func tightenConfigPerms(path string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm() != 0600 {
+		_ = os.Chmod(path, 0600)
+	}
+	dir := filepath.Dir(path)
+	if fi, err := os.Stat(dir); err == nil && fi.Mode().Perm() != 0700 {
+		_ = os.Chmod(dir, 0700)
+	}
+}
 
 // LoadFileConfig loads a FileConfig from the default or specified path.
 // Returns the config and the path it was loaded from.
@@ -19,6 +40,8 @@ func LoadFileConfig() (*FileConfig, string, error) {
 		}
 		return nil, configPath, fmt.Errorf("failed to read config file: %w", err)
 	}
+
+	tightenConfigPerms(configPath)
 
 	if isLegacyConfig(data) {
 		fc, err := loadLegacyFileConfig(data)
