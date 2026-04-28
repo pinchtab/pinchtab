@@ -22,6 +22,7 @@ COMMANDS=(
   "dashboard:🔥:Hot-reload dashboard development"
   "run:🏃:Run the application"
   "check:🧪:All checks"
+  "all:✅:check + test + e2e"
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "test plugin:🔬:Plugin unit tests"
@@ -272,7 +273,16 @@ run_command() {
     "dashboard")    exec bash scripts/dev-dashboard.sh ;;
     "build")        exec bash scripts/build.sh ;;
     "binary")       exec bash scripts/binary.sh ;;
-    "binary all"|"all") exec bash scripts/binary.sh all ;;
+    "binary all"|"binaries") exec bash scripts/binary.sh all ;;
+    "all")
+      echo "  ${ACCENT}${BOLD}✅ all: check + test + e2e${NC}"
+      echo ""
+      bash scripts/check.sh || exit 1
+      bash scripts/check-dashboard.sh || exit 1
+      bash scripts/check-plugin.sh || exit 1
+      bash scripts/test.sh all || exit 1
+      exec env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e --suite extended
+      ;;
     "run")          exec bash scripts/run.sh ;;
     "doctor")       exec bash scripts/doctor.sh ;;
     "hooks")        exec bash scripts/install-hooks.sh ;;

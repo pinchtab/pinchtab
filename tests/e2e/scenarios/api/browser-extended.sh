@@ -302,6 +302,51 @@ assert_json_eq "$RESULT" '.waited' 'false' "waited=false on timeout"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: load states (ready-state, content-loaded, network-idle)"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate before load-state checks"
+
+# Navigation has settled, so all three should resolve quickly.
+# network-idle uses a short idleFor so the test stays fast.
+for state in ready-state content-loaded network-idle; do
+  pt_post /wait "{\"load\":\"${state}\",\"timeout\":8000,\"idleFor\":200}"
+  assert_ok "wait --load ${state}"
+  assert_json_eq "$RESULT" '.waited' 'true' "waited=true for ${state}"
+  assert_json_eq "$RESULT" '.match' "${state}" "match label echoes ${state}"
+done
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: legacy 'networkidle' alias still accepted"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate"
+
+pt_post /wait '{"load":"networkidle","timeout":8000,"idleFor":200}'
+assert_ok "legacy alias accepted"
+assert_json_eq "$RESULT" '.waited' 'true' "waited=true via legacy alias"
+assert_json_eq "$RESULT" '.match' 'network-idle' "alias canonicalised to network-idle"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: rejects unknown load state"
+
+pt_post /wait '{"load":"bogus"}'
+assert_http_status "400" "rejects unknown load state"
+
+# Pre-rename names should now also be rejected.
+pt_post /wait '{"load":"load"}'
+assert_http_status "400" "rejects pre-rename 'load'"
+
+pt_post /wait '{"load":"domcontentloaded"}'
+assert_http_status "400" "rejects pre-rename 'domcontentloaded'"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "POST /wait: invalid request (empty body)"
 
 pt_post /wait '{}'

@@ -23,15 +23,18 @@ All development commands run via `./dev`:
 | `./dev dev` | Build & run |
 | `./dev dashboard` | Hot-reload dashboard development (Vite + Go) |
 | `./dev run` | Run the application |
-| `./dev check` | All checks (Go + Dashboard) |
+| `./dev check` | All checks (Go + Dashboard + Plugin) |
 | `./dev check go` | Go checks only |
 | `./dev check dashboard` | Dashboard checks only |
 | `./dev test unit` | Go unit tests |
 | `./dev test dashboard` | Dashboard unit tests |
-| `./dev e2e pr` | PR suite (api + cli + infra) |
-| `./dev e2e release` | Release suite (all extended) |
-| `./dev e2e docker` | Build local image and Docker smoke test |
+| `./dev e2e basic` | Basic suite (api + cli + infra) |
+| `./dev e2e extended` | Extended suite (all extended) |
+| `./dev e2e smoke` | Smoke suite |
+| `./dev e2e smoke-docker` | Host Docker smoke checks only |
 | `./dev e2e test "<name>"` | Run a single E2E test by `start_test` name |
+| `./dev all` | check + test + e2e (pre-push gate) |
+| `./dev binaries` | Build the full release binary matrix into dist/ |
 | `./dev doctor` | Setup dev environment |
 
 ## Architecture
@@ -61,9 +64,11 @@ tests/e2e/        E2E test suites
 
 3. **Run checks locally**:
    ```bash
+   ./dev all          # check + test + e2e (one-shot pre-push gate)
+   # …or individually:
    ./dev check        # Lint + format + typecheck
    ./dev test unit    # Go unit tests
-   ./dev e2e pr       # E2E tests (Docker required)
+   ./dev e2e basic    # E2E tests (Docker required)
    ```
 
 4. **Commit** with conventional commits:
@@ -86,7 +91,7 @@ tests/e2e/        E2E test suites
 
 ### Required — Testing
 - New/changed functionality has tests
-- Docker E2E tests pass locally: `./dev e2e pr`
+- Docker E2E tests pass locally: `./dev e2e basic` (or `./dev all` for the full chain)
 - If npm wrapper touched: `npm pack` and `npm install` work
 
 ### Required — Documentation
@@ -118,15 +123,15 @@ go test ./internal/handlers  # Specific package
 
 ### E2E Tests (requires Docker)
 ```bash
-./dev e2e pr                    # PR suite (api + cli + infra basic tests)
+./dev e2e basic                 # Basic suite (api + cli + infra)
 ./dev e2e api                   # API basic tests
 ./dev e2e cli                   # CLI basic tests
 ./dev e2e infra                 # Infra basic tests
 ./dev e2e api-extended          # API extended tests (multi-instance)
 ./dev e2e cli-extended          # CLI extended tests
 ./dev e2e infra-extended        # Infra extended tests (multi-instance)
-./dev e2e release               # Full release suite (all extended tests)
-./dev e2e docker                # Docker smoke test only
+./dev e2e extended              # Full extended suite (all extended tests)
+./dev e2e smoke-docker          # Host Docker smoke checks only
 
 # Run specific test file(s) with filter (second argument)
 ./dev e2e api clipboard                # Run only clipboard-basic.sh

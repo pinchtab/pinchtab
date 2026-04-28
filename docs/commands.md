@@ -144,11 +144,18 @@ pinchtab keyboard type <text>           # Type at the focused element
 pinchtab keyboard inserttext <text>     # Insert text without key events
 pinchtab keydown <key>                  # Hold a key down
 pinchtab keyup <key>                    # Release a key
-pinchtab wait <selector|ms>             # Wait for selector or fixed duration
-pinchtab wait --text <text>             # Wait for page text
-pinchtab wait --url <glob>              # Wait for URL match
-pinchtab wait --load networkidle        # Wait for load state
+pinchtab wait <selector>                # Wait for selector to be visible
+pinchtab wait <selector> --state hidden # Wait for selector to disappear
+pinchtab wait <ms>                      # Fixed duration sleep (escape hatch; max 30000ms — prefer condition-based waits)
+pinchtab wait --text <text>             # Wait for page text to appear
+pinchtab wait --not-text <text>         # Wait for page text to disappear
+pinchtab wait --url <glob>              # Wait for URL match (glob: **, *, ?)
+pinchtab wait --load <state>            # state: ready-state | content-loaded | network-idle
+                                        #   ready-state    → document.readyState === 'complete'
+                                        #   content-loaded → readyState in {interactive, complete}
+                                        #   network-idle   → 0 in-flight requests for 500ms (override with --idle-for)
 pinchtab wait --fn <expression>         # Wait for JS to become truthy
+pinchtab wait ... --timeout <ms>        # Override timeout (default 10000, max 30000)
 pinchtab network                        # List captured network requests
 pinchtab network <requestId>            # Show one request in detail
 pinchtab network --stream               # Stream network entries

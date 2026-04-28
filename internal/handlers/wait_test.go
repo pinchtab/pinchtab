@@ -3,8 +3,10 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -231,12 +233,65 @@ func TestHandleWait_SelectorNotBlockedByEvaluateSetting(t *testing.T) {
 }
 
 func TestHandleWait_LoadNoTab(t *testing.T) {
-	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
-	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"load":"networkidle"}`)))
-	w := httptest.NewRecorder()
-	h.HandleWait(w, req)
-	if w.Code != 404 {
-		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	for _, state := range []string{"ready-state", "content-loaded", "network-idle", "networkidle"} {
+		t.Run(state, func(t *testing.T) {
+			h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+			body := fmt.Sprintf(`{"load":%q}`, state)
+			req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(body)))
+			w := httptest.NewRecorder()
+			h.HandleWait(w, req)
+			if w.Code != 404 {
+				t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestCanonicalLoadState(t *testing.T) {
+	cases := []struct {
+		in     string
+		want   string
+		wantOK bool
+	}{
+		{"ready-state", "ready-state", true},
+		{"content-loaded", "content-loaded", true},
+		{"network-idle", "network-idle", true},
+		{"networkidle", "network-idle", true}, // legacy alias
+		{"load", "", false},
+		{"domcontentloaded", "", false},
+		{"", "", false},
+		{"bogus", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			got, ok := canonicalLoadState(c.in)
+			if ok != c.wantOK || got != c.want {
+				t.Errorf("canonicalLoadState(%q) = (%q, %v), want (%q, %v)", c.in, got, ok, c.want, c.wantOK)
+			}
+		})
+	}
+}
+
+func TestWaitRequest_IdleForClamping(t *testing.T) {
+	mk := func(ms *int) waitRequest { return waitRequest{IdleFor: ms} }
+	ptr := func(i int) *int { return &i }
+
+	cases := []struct {
+		name string
+		req  waitRequest
+		want time.Duration
+	}{
+		{"default when nil", mk(nil), 500 * time.Millisecond},
+		{"explicit value", mk(ptr(1000)), 1000 * time.Millisecond},
+		{"clamps negative to 0", mk(ptr(-100)), 0},
+		{"clamps above max", mk(ptr(20000)), 10000 * time.Millisecond},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.req.resolvedIdleFor(); got != c.want {
+				t.Errorf("got %v, want %v", got, c.want)
+			}
+		})
 	}
 }
 

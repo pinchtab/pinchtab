@@ -60,6 +60,13 @@ type NetworkBuffer struct {
 	index   map[string]int
 	maxSize int
 
+	// Inflight tracking is independent of the ring buffer so eviction
+	// doesn't corrupt the count. inflightIDs holds request IDs currently
+	// in flight; lastChange records the most recent in-flight transition
+	// (request started or completed). Both are guarded by mu.
+	inflightIDs map[string]struct{}
+	lastChange  time.Time
+
 	subMu       sync.Mutex
 	subscribers map[int]chan NetworkEntry
 	nextSubID   int
@@ -75,8 +82,48 @@ func NewNetworkBuffer(size int) *NetworkBuffer {
 		entries:     make([]NetworkEntry, 0, size),
 		index:       make(map[string]int),
 		maxSize:     size,
+		inflightIDs: make(map[string]struct{}),
+		lastChange:  time.Now(),
 		subscribers: make(map[int]chan NetworkEntry),
 	}
+}
+
+// MarkRequestStart records that a request is in flight. Idempotent per
+// request ID. Updates lastChange so wait callers can detect activity.
+func (nb *NetworkBuffer) MarkRequestStart(requestID string) {
+	if requestID == "" {
+		return
+	}
+	nb.mu.Lock()
+	defer nb.mu.Unlock()
+	if _, ok := nb.inflightIDs[requestID]; ok {
+		return
+	}
+	nb.inflightIDs[requestID] = struct{}{}
+	nb.lastChange = time.Now()
+}
+
+// MarkRequestEnd records that an in-flight request finished or failed.
+// No-op if the request was never registered.
+func (nb *NetworkBuffer) MarkRequestEnd(requestID string) {
+	if requestID == "" {
+		return
+	}
+	nb.mu.Lock()
+	defer nb.mu.Unlock()
+	if _, ok := nb.inflightIDs[requestID]; !ok {
+		return
+	}
+	delete(nb.inflightIDs, requestID)
+	nb.lastChange = time.Now()
+}
+
+// InflightStatus returns the current in-flight request count and the
+// timestamp of the most recent in-flight transition.
+func (nb *NetworkBuffer) InflightStatus() (count int, lastChange time.Time) {
+	nb.mu.RLock()
+	defer nb.mu.RUnlock()
+	return len(nb.inflightIDs), nb.lastChange
 }
 
 // Add inserts or updates a network entry.
@@ -172,7 +219,8 @@ func (nb *NetworkBuffer) List(filter NetworkFilter) []NetworkEntry {
 	return result
 }
 
-// Clear removes all entries.
+// Clear removes all entries. Inflight tracking is preserved because
+// active requests are not affected by a buffer clear.
 func (nb *NetworkBuffer) Clear() {
 	nb.mu.Lock()
 	defer nb.mu.Unlock()
@@ -343,6 +391,7 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 				StartTime:      time.Now(),
 			}
 			buf.Add(entry)
+			buf.MarkRequestStart(string(e.RequestID))
 
 		case *network.EventResponseReceived:
 			buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
@@ -374,6 +423,7 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 					entry.Size = int64(e.EncodedDataLength)
 				}
 			})
+			buf.MarkRequestEnd(string(e.RequestID))
 
 		case *network.EventLoadingFailed:
 			buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
@@ -385,6 +435,7 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 				}
 				entry.Error = e.ErrorText
 			})
+			buf.MarkRequestEnd(string(e.RequestID))
 		}
 	})
 

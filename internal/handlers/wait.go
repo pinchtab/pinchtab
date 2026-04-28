@@ -12,14 +12,18 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 const (
-	maxWaitTimeout = 30_000 // 30s max
-	defaultTimeout = 10_000 // 10s default
-	pollInterval   = 250 * time.Millisecond
-	maxFixedWaitMS = 30_000
+	maxWaitTimeout   = 30_000 // 30s max
+	defaultTimeout   = 10_000 // 10s default
+	pollInterval     = 250 * time.Millisecond
+	maxFixedWaitMS   = 30_000
+	defaultIdleForMS = 500
+	maxIdleForMS     = 10_000
+	networkIdlePoll  = 100 * time.Millisecond
 )
 
 // waitRequest is the JSON body for POST /wait and POST /tabs/{id}/wait.
@@ -30,10 +34,11 @@ type waitRequest struct {
 	Text     string `json:"text,omitempty"`     // wait for text on page
 	NotText  string `json:"notText,omitempty"`  // wait for text to disappear from page
 	URL      string `json:"url,omitempty"`      // wait for URL glob match
-	Load     string `json:"load,omitempty"`     // "networkidle"
+	Load     string `json:"load,omitempty"`     // "ready-state" | "content-loaded" | "network-idle" (alias: networkidle)
 	Fn       string `json:"fn,omitempty"`       // JS expression to poll for truthy
 	Ms       *int   `json:"ms,omitempty"`       // fixed duration wait
 	Timeout  *int   `json:"timeout,omitempty"`  // timeout in ms
+	IdleFor  *int   `json:"idleFor,omitempty"`  // network-idle quiet period in ms (default 500, max 10000)
 }
 
 // waitResponse is the JSON response for wait endpoints.
@@ -77,6 +82,34 @@ func (wr *waitRequest) resolvedTimeout() time.Duration {
 		ms = maxWaitTimeout
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+func (wr *waitRequest) resolvedIdleFor() time.Duration {
+	ms := defaultIdleForMS
+	if wr.IdleFor != nil {
+		ms = *wr.IdleFor
+	}
+	if ms < 0 {
+		ms = 0
+	}
+	if ms > maxIdleForMS {
+		ms = maxIdleForMS
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+// canonicalLoadState maps the user-supplied --load value to a canonical
+// state name and returns false if the value is not recognised. Accepts
+// the legacy "networkidle" spelling as an alias for "network-idle".
+func canonicalLoadState(s string) (string, bool) {
+	switch s {
+	case "ready-state", "content-loaded", "network-idle":
+		return s, true
+	case "networkidle":
+		return "network-idle", true
+	default:
+		return "", false
+	}
 }
 
 // HandleWait handles POST /wait.
@@ -209,11 +242,19 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		js = buildURLMatchJS(req.URL)
 		matchLabel = req.URL
 	case "load":
-		if req.Load == "networkidle" {
+		canonical, ok := canonicalLoadState(req.Load)
+		if !ok {
+			httpx.Error(w, 400, fmt.Errorf("unsupported load state: %s (supported: ready-state, content-loaded, network-idle)", req.Load))
+			return
+		}
+		matchLabel = canonical
+		switch canonical {
+		case "ready-state":
 			js = `document.readyState === 'complete'`
-			matchLabel = "networkidle"
-		} else {
-			httpx.Error(w, 400, fmt.Errorf("unsupported load state: %s (supported: networkidle)", req.Load))
+		case "content-loaded":
+			js = `document.readyState === 'interactive' || document.readyState === 'complete'`
+		case "network-idle":
+			h.handleNetworkIdleWait(w, tCtx, start, resolvedTabID, req.resolvedIdleFor())
 			return
 		}
 	case "fn":
@@ -245,6 +286,53 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 			return
 		case <-time.After(pollInterval):
 			// continue polling
+		}
+	}
+}
+
+// handleNetworkIdleWait polls the per-tab network monitor until in-flight
+// requests have stayed at zero for idleFor, or the context is cancelled.
+// Falls back to a readyState=='complete' check if the monitor is unavailable
+// (e.g. tab created without network capture).
+func (h *Handlers) handleNetworkIdleWait(w http.ResponseWriter, ctx context.Context, start time.Time, tabID string, idleFor time.Duration) {
+	mon := h.Bridge.NetworkMonitor()
+	var buf *bridge.NetworkBuffer
+	if mon != nil {
+		buf = mon.GetBuffer(tabID)
+	}
+	if buf == nil {
+		httpx.JSON(w, 200, waitResponse{
+			Waited:  false,
+			Elapsed: time.Since(start).Milliseconds(),
+			Error:   "network monitor unavailable for tab",
+		})
+		return
+	}
+
+	ticker := time.NewTicker(networkIdlePoll)
+	defer ticker.Stop()
+
+	for {
+		count, lastChange := buf.InflightStatus()
+		if count == 0 && time.Since(lastChange) >= idleFor {
+			httpx.JSON(w, 200, waitResponse{
+				Waited:  true,
+				Elapsed: time.Since(start).Milliseconds(),
+				Match:   "network-idle",
+			})
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			elapsed := time.Since(start).Milliseconds()
+			httpx.JSON(w, 200, waitResponse{
+				Waited:  false,
+				Elapsed: elapsed,
+				Error:   fmt.Sprintf("timeout after %dms waiting for network-idle (inflight=%d)", elapsed, count),
+			})
+			return
+		case <-ticker.C:
 		}
 	}
 }
