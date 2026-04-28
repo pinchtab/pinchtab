@@ -38,8 +38,12 @@ func LoadFileConfig() (*FileConfig, string, error) {
 
 // SaveFileConfig saves a FileConfig to the specified path.
 func SaveFileConfig(fc *FileConfig, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		return fmt.Errorf("failed to set config directory permissions: %w", err)
 	}
 
 	data, err := json.MarshalIndent(fc, "", "  ")
@@ -48,8 +52,11 @@ func SaveFileConfig(fc *FileConfig, path string) error {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("failed to set config file permissions: %w", err)
 	}
 
 	return nil

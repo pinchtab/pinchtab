@@ -87,7 +87,7 @@ func UpdateValue(path, value string) (*config.RuntimeConfig, bool, error) {
 }
 
 func InitDefaultConfig(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
