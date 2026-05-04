@@ -53,28 +53,6 @@ func promptSelect(title string, options []menuOption) (string, error) {
 	return "", fmt.Errorf("invalid selection %q", choice)
 }
 
-func promptInput(prompt, defaultValue string) (string, error) {
-	if prompt == "" {
-		// The caller already rendered the prompt.
-	} else if defaultValue != "" {
-		fmt.Printf("%s %s ", prompt, cli.StyleStdout(cli.MutedStyle, "["+defaultValue+"]"))
-	} else {
-		fmt.Print(prompt + " ")
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil && strings.TrimSpace(input) == "" {
-		return "", err
-	}
-
-	value := strings.TrimSpace(input)
-	if value == "" {
-		return defaultValue, nil
-	}
-	return value, nil
-}
-
 func promptInputHiddenDefault(prompt, defaultValue string) (string, error) {
 	if prompt != "" {
 		fmt.Print(prompt + " ")

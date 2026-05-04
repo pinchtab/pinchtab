@@ -15,7 +15,7 @@ func TestHandleSecurityCommandDefaultConfigSkipsEmptySections(t *testing.T) {
 	cfg := testRuntimeConfig()
 
 	output := captureStdout(t, func() {
-		handleSecurityCommand(cfg)
+		printSecurityOverview(cfg)
 	})
 
 	required := []string{
@@ -40,6 +40,22 @@ func TestHandleSecurityCommandDefaultConfigSkipsEmptySections(t *testing.T) {
 		if strings.Contains(output, needle) {
 			t.Fatalf("expected output to skip %q\n%s", needle, output)
 		}
+	}
+}
+
+func TestPrintSecurityOverviewDoesNotCallAuthDisabledSafe(t *testing.T) {
+	cfg := testRuntimeConfig()
+	cfg.Token = ""
+
+	output := captureStdout(t, func() {
+		printSecurityOverview(cfg)
+	})
+
+	if strings.Contains(output, "All recommended security defaults are active.") {
+		t.Fatalf("auth-disabled config should not be reported as fully recommended\n%s", output)
+	}
+	if !strings.Contains(output, "security warning") {
+		t.Fatalf("expected security warning summary for auth-disabled config\n%s", output)
 	}
 }
 
@@ -83,14 +99,22 @@ func TestApplySecurityDownPrintsExplicitRiskFraming(t *testing.T) {
 }
 
 func captureStdout(t *testing.T, fn func()) string {
+	return captureStream(t, &os.Stdout, fn)
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	return captureStream(t, &os.Stderr, fn)
+}
+
+func captureStream(t *testing.T, target **os.File, fn func()) string {
 	t.Helper()
 
-	orig := os.Stdout
+	orig := *target
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe() error = %v", err)
 	}
-	os.Stdout = w
+	*target = w
 
 	var buf bytes.Buffer
 	done := make(chan error, 1)
@@ -101,7 +125,7 @@ func captureStdout(t *testing.T, fn func()) string {
 	}()
 
 	defer func() {
-		os.Stdout = orig
+		*target = orig
 	}()
 
 	fn()

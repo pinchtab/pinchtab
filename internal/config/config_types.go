@@ -17,6 +17,7 @@ type RuntimeConfig struct {
 	TrustProxyHeaders bool  // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy
 	CookieSecure      *bool // Nil = auto-detect based on request scheme/host for backward compatibility
 	VerboseStartup    bool  // Show full banner and slog output on server start
+	BackgroundMarker  string
 
 	// Security settings
 	AllowEvaluate         bool

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -69,8 +70,13 @@ func autoStartServer() error {
 	if err != nil {
 		return fmt.Errorf("resolve executable: %w", err)
 	}
+	marker, err := newBackgroundMarker()
+	if err != nil {
+		return fmt.Errorf("generate background marker: %w", err)
+	}
 
-	cmd := exec.Command(binary, autoStartServerArgs()...) // #nosec G204 -- binary is our own executable from os.Executable(), args are hardcoded subcommands
+	args := autoStartServerArgs(marker)
+	cmd := exec.Command(binary, args...) // #nosec G204 -- binary is our own executable from os.Executable(), args are hardcoded subcommands
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -80,15 +86,32 @@ func autoStartServer() error {
 		return fmt.Errorf("spawn server: %w", err)
 	}
 
+	pid := cmd.Process.Pid
 	if err := cmd.Process.Release(); err != nil {
 		slog.Warn("failed to release server process", "err", err)
+	}
+
+	// Track the auto-started server's PID so `pinchtab server stop` can reap
+	// it. Best-effort: failing to write the PID file is logged but not fatal.
+	if err := writeServerPID(serverPIDInfo{
+		PID:        pid,
+		Executable: binary,
+		Args:       append([]string(nil), args...),
+		Marker:     marker,
+		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		slog.Warn("failed to write server pid file", "err", err)
 	}
 
 	return nil
 }
 
-func autoStartServerArgs() []string {
-	return []string{"server"}
+func autoStartServerArgs(marker ...string) []string {
+	args := []string{"server"}
+	if len(marker) > 0 && strings.TrimSpace(marker[0]) != "" {
+		args = append(args, "--background-child", marker[0])
+	}
+	return args
 }
 
 func waitForServer(baseURL, token string, timeout time.Duration) bool {

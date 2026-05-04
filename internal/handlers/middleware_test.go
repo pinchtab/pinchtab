@@ -133,6 +133,50 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_AllowsBackgroundHealthProbeMarker(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "secret123", BackgroundMarker: "marker-123"}
+
+	called := false
+	handler := StripInternalHeadersMiddleware(AuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, backgroundHealthPath, nil)
+	req.Header.Set(backgroundHealthHeader, "marker-123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !called {
+		t.Fatal("handler should have been called with the background marker")
+	}
+}
+
+func TestAuthMiddleware_RejectsWrongBackgroundHealthProbeMarker(t *testing.T) {
+	cfg := &config.RuntimeConfig{Token: "secret123", BackgroundMarker: "marker-123"}
+
+	called := false
+	handler := StripInternalHeadersMiddleware(AuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, backgroundHealthPath, nil)
+	req.Header.Set(backgroundHealthHeader, "other")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+	if called {
+		t.Fatal("handler should not have been called with the wrong background marker")
+	}
+}
+
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	cfg := &config.RuntimeConfig{Token: "secret123"}
 

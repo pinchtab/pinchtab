@@ -9,7 +9,7 @@ services:
       - ./config/pinchtab.json:/fixture-config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension:ro
       - ./fixtures/test-extension-api:/extensions/test-extension-api:ro
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab.json /data/e2e-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab.json /data/e2e-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     ports:
       - "127.0.0.1:9999:9999"
     shm_size: '2gb'

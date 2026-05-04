@@ -25,7 +25,7 @@ services:
       - ./config/pinchtab.json:/fixture-config/pinchtab.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
       - ./fixtures/test-extension-api:/extensions/test-extension-api
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab.json /data/e2e-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab.json /data/e2e-config/pinchtab.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     ports:
       - "127.0.0.1:9999:9999"
     healthcheck: *pinchtab-healthcheck
@@ -36,7 +36,7 @@ services:
       PINCHTAB_CONFIG: /data/e2e-config/pinchtab-secure.json
     volumes:
       - ./config/pinchtab-secure.json:/fixture-config/pinchtab-secure.json:ro
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-secure.json /data/e2e-config/pinchtab-secure.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-secure.json /data/e2e-config/pinchtab-secure.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     ports:
       - "127.0.0.1:9998:9999"
     healthcheck: *pinchtab-healthcheck
@@ -48,7 +48,7 @@ services:
     volumes:
       - ./config/pinchtab-autoclose.json:/fixture-config/pinchtab-autoclose.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-autoclose.json /data/e2e-config/pinchtab-autoclose.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-autoclose.json /data/e2e-config/pinchtab-autoclose.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     healthcheck: *pinchtab-healthcheck
 
   pinchtab-medium:
@@ -58,7 +58,7 @@ services:
     volumes:
       - ./config/pinchtab-medium-permissive.json:/fixture-config/pinchtab-medium-permissive.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-medium-permissive.json /data/e2e-config/pinchtab-medium-permissive.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-medium-permissive.json /data/e2e-config/pinchtab-medium-permissive.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     ports:
       - "127.0.0.1:9994:9999"
     healthcheck: *pinchtab-healthcheck
@@ -70,7 +70,7 @@ services:
     volumes:
       - ./config/pinchtab-full-permissive.json:/fixture-config/pinchtab-full-permissive.json:ro
       - ./fixtures/test-extension:/extensions/test-extension
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-full-permissive.json /data/e2e-config/pinchtab-full-permissive.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-full-permissive.json /data/e2e-config/pinchtab-full-permissive.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab server"]
     ports:
       - "127.0.0.1:9995:9999"
     healthcheck: *pinchtab-healthcheck

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -127,9 +126,9 @@ func doPostQuietWithStatus(client *http.Client, base, token, path string, body m
 
 	var result map[string]any
 	if resp.StatusCode < 400 {
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			log.Printf("warning: error unmarshaling response: %v", err)
-		}
+		// Object responses populate result; array/scalar responses leave it nil.
+		// Callers that need a map should branch on result == nil.
+		_ = json.Unmarshal(respBody, &result)
 	}
 	return resp.StatusCode, respBody, result
 }
@@ -222,13 +221,16 @@ func printAndDecode(body []byte) map[string]any {
 	} else {
 		fmt.Println(string(body))
 	}
-	var result map[string]any
-	if isJSON {
-		if err := json.Unmarshal(body, &result); err != nil {
-			log.Printf("warning: error unmarshaling response: %v", err)
-		}
+	if !isJSON {
+		return nil
 	}
-	return result
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err == nil {
+		return result
+	}
+	// Body is valid JSON but not an object (array, string, number, etc.).
+	// That's fine — many endpoints return arrays. Don't warn.
+	return nil
 }
 
 // ResolveInstanceBase fetches the named instance from the orchestrator and returns

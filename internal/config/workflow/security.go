@@ -98,27 +98,28 @@ func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
 	return config.Load(), true, nil
 }
 
-func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return nil, "", false, fmt.Errorf("load config: %w", err)
+// BuildGuardsDownConfig mutates fc in memory to apply the guards-down preset.
+// It does not persist anything. Returns whether fc was modified.
+func BuildGuardsDownConfig(fc *config.FileConfig) (bool, error) {
+	if fc == nil {
+		return false, fmt.Errorf("nil file config")
 	}
 	originalJSON, err := formatFileConfigJSON(fc)
 	if err != nil {
-		return nil, "", false, err
+		return false, err
 	}
 
 	original, err := config.GetConfigValue(fc, "server.token")
 	if err != nil {
-		return nil, "", false, fmt.Errorf("read server.token: %w", err)
+		return false, fmt.Errorf("read server.token: %w", err)
 	}
 	if strings.TrimSpace(original) == "" {
 		token, err := config.GenerateAuthToken()
 		if err != nil {
-			return nil, "", false, fmt.Errorf("generate token: %w", err)
+			return false, fmt.Errorf("generate token: %w", err)
 		}
 		if err := config.SetConfigValue(fc, "server.token", token); err != nil {
-			return nil, "", false, fmt.Errorf("set server.token: %w", err)
+			return false, fmt.Errorf("set server.token: %w", err)
 		}
 	}
 
@@ -142,23 +143,33 @@ func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
 		{path: "security.idpi.wrapContent", value: "false"},
 	} {
 		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
-			return nil, "", false, fmt.Errorf("set %s: %w", item.path, err)
+			return false, fmt.Errorf("set %s: %w", item.path, err)
 		}
 	}
 
 	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return nil, "", false, errs[0]
+		return false, errs[0]
 	}
 
 	nextJSON, err := formatFileConfigJSON(fc)
 	if err != nil {
+		return false, err
+	}
+	return originalJSON != nextJSON, nil
+}
+
+func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
+	fc, configPath, err := config.LoadFileConfig()
+	if err != nil {
+		return nil, "", false, fmt.Errorf("load config: %w", err)
+	}
+	changed, err := BuildGuardsDownConfig(fc)
+	if err != nil {
 		return nil, "", false, err
 	}
-	changed := originalJSON != nextJSON
 	if !changed {
 		return config.Load(), configPath, false, nil
 	}
-
 	if err := config.SaveFileConfig(fc, configPath); err != nil {
 		return nil, "", false, fmt.Errorf("save config: %w", err)
 	}

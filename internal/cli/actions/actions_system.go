@@ -20,24 +20,40 @@ func Health(client *http.Client, base, token string, cmd *cobra.Command) {
 		return
 	}
 
-	// Terse: "ok" or "degraded: <reason>"
 	body := apiclient.DoGetRaw(client, base, token, "/health", nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		output.Value("ok")
+		printHealthHints(true)
 		return
 	}
 	status, _ := result["status"].(string)
 	if status == "ok" {
 		output.Value("ok")
-	} else {
-		reason, _ := result["reason"].(string)
-		if reason != "" {
-			output.Value("degraded: " + reason)
-		} else {
-			output.Value(status)
-		}
+		printHealthHints(true)
+		return
 	}
+	reason, _ := result["reason"].(string)
+	if reason != "" {
+		output.Value("degraded: " + reason)
+	} else {
+		output.Value(status)
+	}
+	printHealthHints(false)
+}
+
+func printHealthHints(ok bool) {
+	_, _ = fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout, "Next steps:")
+	if ok {
+		_, _ = fmt.Fprintf(os.Stdout, "  %-64s %s\n", "export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id>)", "# start a dedicated session")
+		_, _ = fmt.Fprintf(os.Stdout, "  %-64s %s\n", "pinchtab nav <url>", "# open a page in the current tab")
+		_, _ = fmt.Fprintf(os.Stdout, "  %-64s %s\n", "pinchtab snap", "# inspect interactive elements")
+		return
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "  %-44s %s\n", "pinchtab daemon", "# check service status and logs")
+	_, _ = fmt.Fprintf(os.Stdout, "  %-44s %s\n", "pinchtab security", "# review security posture")
+	_, _ = fmt.Fprintf(os.Stdout, "  %-44s %s\n", "pinchtab health --json", "# full health payload")
 }
 
 func Instances(client *http.Client, base, token string, cmd *cobra.Command) {

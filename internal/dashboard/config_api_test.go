@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -313,6 +314,48 @@ func TestHandleHealthIncludesAgentCount(t *testing.T) {
 	}
 	if health.Agents != 3 {
 		t.Fatalf("health agents = %d, want 3", health.Agents)
+	}
+}
+
+func TestHandleHealthSecurityVisibilityByAuthMethod(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	api := newConfigAPITestAPI(t, fc)
+
+	tests := []struct {
+		name         string
+		authHeader   string
+		cookie       bool
+		wantSecurity bool
+	}{
+		{name: "bearer", authHeader: "Bearer secret-token", wantSecurity: true},
+		{name: "dashboard cookie", cookie: true, wantSecurity: true},
+		{name: "agent session", authHeader: "Session ses_test", wantSecurity: false},
+		{name: "no auth context", wantSecurity: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			if tt.cookie {
+				req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: "dashboard-session"})
+			}
+			w := httptest.NewRecorder()
+			api.HandleHealth(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("HandleHealth() status = %d, want %d", w.Code, http.StatusOK)
+			}
+			var health healthEnvelope
+			if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
+				t.Fatalf("Decode() error = %v", err)
+			}
+			if got := health.Security != nil; got != tt.wantSecurity {
+				t.Fatalf("health.Security present = %v, want %v", got, tt.wantSecurity)
+			}
+		})
 	}
 }
 

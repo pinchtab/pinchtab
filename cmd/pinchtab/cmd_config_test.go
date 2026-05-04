@@ -10,28 +10,34 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-func TestRenderConfigOverview(t *testing.T) {
-	cfg := &config.RuntimeConfig{
-		Port:              "9867",
-		Strategy:          "simple",
-		AllocationPolicy:  "fcfs",
-		StealthLevel:      "light",
-		TabEvictionPolicy: "close_lru",
-		Token:             "very-long-token-secret",
+func TestPrintConfigOverview(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "very-long-token-secret"
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
-	output := renderConfigOverview(cfg, "/tmp/pinchtab/config.json", "http://localhost:9867", false)
+
+	cfg := config.Load()
+	output := captureStdout(t, func() {
+		printConfigOverview(cfg)
+	})
 
 	required := []string{
 		"Config",
-		"Strategy",
-		"Allocation policy",
-		"Stealth level",
-		"Tab eviction",
-		"Copy token",
-		"More",
-		"/tmp/pinchtab/config.json",
+		"strategy",
+		"allocation policy",
+		"stealth level",
+		"tab eviction",
+		"file",
+		"token",
+		"dashboard",
+		configPath,
 		"very...cret",
-		"Dashboard:",
+		"Change config:",
+		"pinchtab config set",
 	}
 	for _, needle := range required {
 		if !strings.Contains(output, needle) {
@@ -115,15 +121,17 @@ func TestConfigSetRejectsUnsafeChromeExtraFlags(t *testing.T) {
 		rootCmd.SetArgs(nil)
 	})
 
-	output := captureStdout(t, func() {
+	var execErr error
+	stderr := captureStderr(t, func() {
 		rootCmd.SetArgs([]string{"config", "set", "browser.extraFlags", "--no-sandbox --disable-gpu"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
+		execErr = rootCmd.Execute()
 	})
 
-	if !strings.Contains(output, "browser.extraFlags") || !strings.Contains(output, "runtime compatibility") {
-		t.Fatalf("expected unsafe flag warning, got %q", output)
+	if execErr == nil {
+		t.Fatalf("expected Execute() to return error for declined unsafe save")
+	}
+	if !strings.Contains(stderr, "browser.extraFlags") || !strings.Contains(stderr, "runtime compatibility") {
+		t.Fatalf("expected unsafe flag warning on stderr, got %q", stderr)
 	}
 
 	saved, _, err := config.LoadFileConfig()

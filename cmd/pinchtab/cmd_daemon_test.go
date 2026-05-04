@@ -1,45 +1,41 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
-func TestDaemonMenuOptions(t *testing.T) {
-	tests := []struct {
-		name      string
-		installed bool
-		running   bool
-		want      []string
-	}{
-		{
-			name:      "not installed",
-			installed: false,
-			running:   false,
-			want:      []string{"install", "exit"},
-		},
-		{
-			name:      "installed stopped",
-			installed: true,
-			running:   false,
-			want:      []string{"start", "uninstall", "exit"},
-		},
-		{
-			name:      "installed running",
-			installed: true,
-			running:   true,
-			want:      []string{"stop", "restart", "uninstall", "exit"},
-		},
+func TestPrintDaemonStatusJSONShape(t *testing.T) {
+	output := captureStdout(t, func() {
+		printDaemonStatusJSON()
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(output), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, output)
 	}
+	for _, key := range []string{"installed", "running"} {
+		if _, ok := got[key]; !ok {
+			t.Fatalf("expected key %q in JSON output, got %s", key, output)
+		}
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := daemonMenuOptions(tt.installed, tt.running)
-			if len(got) != len(tt.want) {
-				t.Fatalf("len(daemonMenuOptions()) = %d, want %d", len(got), len(tt.want))
-			}
-			for i, want := range tt.want {
-				if got[i].value != want {
-					t.Fatalf("daemonMenuOptions()[%d] = %q, want %q", i, got[i].value, want)
-				}
-			}
-		})
+func TestPrintDaemonOverviewIncludesStatusAndHints(t *testing.T) {
+	output := captureStdout(t, func() {
+		printDaemonOverview()
+	})
+
+	for _, needle := range []string{
+		"Daemon",
+		"service",
+		"state",
+		"Manage daemon:",
+		"pinchtab daemon --json",
+	} {
+		if !strings.Contains(output, needle) {
+			t.Fatalf("expected output to contain %q\n%s", needle, output)
+		}
 	}
 }

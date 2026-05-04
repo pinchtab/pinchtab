@@ -12,8 +12,9 @@ import (
 
 func init() {
 	sessionCmd := &cobra.Command{
-		Use:   "session",
-		Short: "Agent session management",
+		Use:     "session",
+		Short:   "Agent session management",
+		GroupID: "primary",
 	}
 
 	infoCmd := &cobra.Command{

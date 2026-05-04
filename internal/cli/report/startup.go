@@ -34,7 +34,7 @@ func PrintStartupBanner(cfg *config.RuntimeConfig, opts StartupBannerOptions) {
 		}
 	}
 
-	writeBannerLine(renderStartupLogo(blankIfEmpty(opts.Mode, "server")))
+	writeBannerLine(renderStartupHeading(blankIfEmpty(opts.Mode, "server")))
 	writeBannerf("  %s  %s\n", styleLabel("listen"), formatListenValue(blankIfEmpty(opts.ListenAddr, cfg.ListenAddr()), defaultListenStatus(opts.Mode, opts.ListenStatus)))
 	if opts.PublicURL != "" {
 		writeBannerf("  %s  %s\n", styleLabel("url"), styleValue(opts.PublicURL))
@@ -50,7 +50,7 @@ func PrintStartupBanner(cfg *config.RuntimeConfig, opts StartupBannerOptions) {
 	writeBannerf("  %s  %s\n", styleLabel("daemon"), daemonStatus)
 
 	posture := AssessSecurityPosture(cfg)
-	writeBannerf("  %s  %s  %s\n", styleLabel("security"), styleSecurityBar(posture.Level, posture.Bar), styleSecurityLevel(posture.Level))
+	writeBannerf("  %s  %s\n", styleLabel("security"), styleSecurityLevel(posture.Level))
 
 	if opts.ProfileDir != "" {
 		writeBannerf("  %s  %s\n", styleLabel("profile"), styleValue(opts.ProfileDir))
@@ -61,12 +61,12 @@ func PrintStartupBanner(cfg *config.RuntimeConfig, opts StartupBannerOptions) {
 func PrintSecuritySummary(w io.Writer, cfg *config.RuntimeConfig, prefix string, detailed bool) {
 	posture := AssessSecurityPosture(cfg)
 	if detailed {
-		writeSummaryf(w, "%s%s %s  %s\n", prefix, styleHeading("Security"), styleSecurityBar(posture.Level, posture.Bar), styleSecurityLevel(posture.Level))
+		writeSummaryf(w, "%s%s  %s\n", prefix, styleHeading("Security"), styleSecurityLevel(posture.Level))
 		for _, check := range posture.Checks {
 			writeSummaryf(w, "%s  %s %s %s\n", prefix, styleMarker(check.Passed), styleCheckLabel(check.Label), styleCheckDetail(check.Passed, check.Detail))
 		}
 	} else {
-		writeSummaryf(w, "%s%s  %s  %s\n", prefix, styleLabel("security"), styleSecurityBar(posture.Level, posture.Bar), styleSecurityLevel(posture.Level))
+		writeSummaryf(w, "%s%s  %s\n", prefix, styleLabel("security"), styleSecurityLevel(posture.Level))
 	}
 }
 
@@ -77,11 +77,12 @@ func blankIfEmpty(value, fallback string) string {
 	return value
 }
 
-func renderStartupLogo(mode string) string {
+func renderStartupHeading(mode string) string {
+	heading := styleHeading("PinchTab")
 	if mode == "menu" || mode == "" {
-		return styleLogo(startupLogo)
+		return heading
 	}
-	return styleLogo(startupLogo) + "  " + styleMode(mode)
+	return heading + "  " + styleMode(mode)
 }
 
 func writeBannerLine(line string) {
@@ -97,10 +98,6 @@ func writeSummaryf(w io.Writer, format string, args ...any) {
 }
 
 func styleHeading(text string) string {
-	return applyStyle(text, headingStyle)
-}
-
-func styleLogo(text string) string {
 	return applyStyle(text, headingStyle)
 }
 
@@ -151,10 +148,6 @@ func styleSecurityLevel(level string) string {
 	return applyStyle(level, termstyle.NewStyle().Foreground(termstyle.Color(SecurityLevelColor(level))).Bold(true))
 }
 
-func styleSecurityBar(level, bar string) string {
-	return applyStyle(bar, termstyle.NewStyle().Foreground(termstyle.Color(SecurityLevelColor(level))).Bold(true))
-}
-
 func SecurityLevelColor(level string) string {
 	switch level {
 	case "LOCKED":
@@ -193,9 +186,3 @@ func defaultListenStatus(mode, explicit string) string {
 		return ""
 	}
 }
-
-const startupLogo = `   ____  _            _     _____     _
-  |  _ \(_)_ __   ___| |__ |_   _|_ _| |__
-  | |_) | | '_ \ / __| '_ \  | |/ _  | '_ \
-  |  __/| | | | | (__| | | | | | (_| | |_) |
-  |_|   |_|_| |_|\___|_| |_| |_|\__,_|_.__/`

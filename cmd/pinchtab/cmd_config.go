@@ -21,7 +21,7 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		handleConfigOverview(loadLocalConfig())
+		printConfigOverview(loadLocalConfig())
 	},
 }
 
@@ -86,9 +86,11 @@ func init() {
 		Use:   "set <path> <val>",
 		Short: "Set a config value (e.g., server.port 8080)",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
-			handleConfigSet(args[0], args[1])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handleConfigSet(args[0], args[1])
 		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	// Allow values like "--no-sandbox --disable-gpu" after the config path.
 	configSetCmd.Flags().SetInterspersed(false)
@@ -97,15 +99,17 @@ func init() {
 		Use:   "patch <json>",
 		Short: "Merge JSON into config",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			handleConfigPatch(args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handleConfigPatch(args[0])
 		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	})
 
 	rootCmd.AddCommand(configCmd)
 }
 
-func handleConfigOverview(cfg *config.RuntimeConfig) {
+func printConfigOverview(cfg *config.RuntimeConfig) {
 	_, configPath, err := config.LoadFileConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("Error loading config path: %v", err)))
@@ -116,33 +120,30 @@ func handleConfigOverview(cfg *config.RuntimeConfig) {
 	dashboardURL := fmt.Sprintf("http://localhost:%s", dashPort)
 	running := server.CheckPinchTabRunning(dashPort, cfg.Token)
 
-	for {
-		fmt.Print(renderConfigOverview(cfg, configPath, dashboardURL, running))
-
-		if !isInteractiveTerminal() {
-			return
-		}
-
-		nextCfg, changed, done, err := promptConfigEdit(cfg)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
-			fmt.Println()
-			continue
-		}
-		if done {
-			return
-		}
-		if !changed {
-			fmt.Println()
-			continue
-		}
-
-		cfg = nextCfg
-		dashPort = cfg.Port
-		dashboardURL = fmt.Sprintf("http://localhost:%s", dashPort)
-		running = server.CheckPinchTabRunning(dashPort, cfg.Token)
-		fmt.Println()
+	out := os.Stdout
+	_, _ = fmt.Fprintln(out, cli.StyleStdout(cli.HeadingStyle, "Config"))
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "strategy", cli.StyleStdout(cli.ValueStyle, cfg.Strategy))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "allocation policy", cli.StyleStdout(cli.ValueStyle, cfg.AllocationPolicy))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "stealth level", cli.StyleStdout(cli.ValueStyle, cfg.StealthLevel))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "tab eviction", cli.StyleStdout(cli.ValueStyle, cfg.TabEvictionPolicy))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "tab lifecycle", cli.StyleStdout(cli.ValueStyle, formatTabLifecycle(cfg)))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "file", cli.StyleStdout(cli.ValueStyle, configPath))
+	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "token", cli.StyleStdout(cli.ValueStyle, config.MaskToken(cfg.Token)))
+	if running {
+		_, _ = fmt.Fprintf(out, "  %-20s %s\n", "dashboard", cli.StyleStdout(cli.ValueStyle, dashboardURL))
+	} else {
+		_, _ = fmt.Fprintf(out, "  %-20s %s\n", "dashboard", cli.StyleStdout(cli.MutedStyle, "not running"))
 	}
+	_, _ = fmt.Fprintln(out)
+
+	_, _ = fmt.Fprintln(out, cli.StyleStdout(cli.HeadingStyle, "Change config:"))
+	_, _ = fmt.Fprintf(out, "  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config get <path>"), cli.StyleStdout(cli.MutedStyle, "# read a value (e.g. server.port)"))
+	_, _ = fmt.Fprintf(out, "  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config set <path> <value>"), cli.StyleStdout(cli.MutedStyle, "# update a value"))
+	_, _ = fmt.Fprintf(out, "  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config show"), cli.StyleStdout(cli.MutedStyle, "# print labelled config summary"))
+	_, _ = fmt.Fprintf(out, "  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config token"), cli.StyleStdout(cli.MutedStyle, "# copy API token to clipboard"))
+	_, _ = fmt.Fprintf(out, "  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab security"), cli.StyleStdout(cli.MutedStyle, "# review security posture"))
+	_, _ = fmt.Fprintf(out, "  %s %s\n", cli.StyleStdout(cli.MutedStyle, "Or edit the file directly:"), cli.StyleStdout(cli.ValueStyle, configPath))
 }
 
 func formatTabLifecycle(cfg *config.RuntimeConfig) string {
@@ -154,98 +155,6 @@ func formatTabLifecycle(cfg *config.RuntimeConfig) string {
 		return fmt.Sprintf("%s (%s)", policy, cfg.TabCloseDelay)
 	}
 	return policy
-}
-
-func renderConfigOverview(cfg *config.RuntimeConfig, configPath, dashboardURL string, running bool) string {
-	out := ""
-	out += cli.StyleStdout(cli.HeadingStyle, "Config") + "\n\n"
-	out += fmt.Sprintf("  1. %-18s %s\n", "Strategy", cli.StyleStdout(cli.ValueStyle, cfg.Strategy))
-	out += fmt.Sprintf("  2. %-18s %s\n", "Allocation policy", cli.StyleStdout(cli.ValueStyle, cfg.AllocationPolicy))
-	out += fmt.Sprintf("  3. %-18s %s\n", "Stealth level", cli.StyleStdout(cli.ValueStyle, cfg.StealthLevel))
-	out += fmt.Sprintf("  4. %-18s %s\n", "Tab eviction", cli.StyleStdout(cli.ValueStyle, cfg.TabEvictionPolicy))
-	out += fmt.Sprintf("  5. %-18s %s\n", "Tab lifecycle", cli.StyleStdout(cli.ValueStyle, formatTabLifecycle(cfg)))
-	out += fmt.Sprintf("  6. %-18s %s\n", "Copy token", cli.StyleStdout(cli.MutedStyle, "clipboard"))
-	out += "\n"
-	out += cli.StyleStdout(cli.HeadingStyle, "More") + "\n\n"
-	out += fmt.Sprintf("  %s %s\n", cli.StyleStdout(cli.MutedStyle, "File:"), cli.StyleStdout(cli.ValueStyle, configPath))
-	out += fmt.Sprintf("  %s %s\n", cli.StyleStdout(cli.MutedStyle, "Token:"), cli.StyleStdout(cli.ValueStyle, config.MaskToken(cfg.Token)))
-	if running {
-		out += fmt.Sprintf("  %s %s\n", cli.StyleStdout(cli.MutedStyle, "Dashboard:"), cli.StyleStdout(cli.ValueStyle, dashboardURL))
-	} else {
-		out += fmt.Sprintf("  %s %s\n", cli.StyleStdout(cli.MutedStyle, "Dashboard:"), cli.StyleStdout(cli.MutedStyle, "not running"))
-	}
-	if isInteractiveTerminal() {
-		out += "\n"
-		out += cli.StyleStdout(cli.MutedStyle, "Edit item (1-6, blank to exit):") + " "
-	}
-	out += "\n"
-	return out
-}
-
-func promptConfigEdit(cfg *config.RuntimeConfig) (*config.RuntimeConfig, bool, bool, error) {
-	choice, err := promptInput("", "")
-	if err != nil {
-		return nil, false, false, err
-	}
-	choice = strings.TrimSpace(choice)
-	if choice == "" {
-		return nil, false, true, nil
-	}
-
-	switch choice {
-	case "1":
-		nextCfg, changed, err := editConfigSelection("Instance strategy", "multiInstance.strategy", cfg.Strategy, config.ValidStrategies())
-		return nextCfg, changed, false, err
-	case "2":
-		nextCfg, changed, err := editConfigSelection("Allocation policy", "multiInstance.allocationPolicy", cfg.AllocationPolicy, config.ValidAllocationPolicies())
-		return nextCfg, changed, false, err
-	case "3":
-		nextCfg, changed, err := editConfigSelection("Default stealth level", "instanceDefaults.stealthLevel", cfg.StealthLevel, config.ValidStealthLevels())
-		return nextCfg, changed, false, err
-	case "4":
-		nextCfg, changed, err := editConfigSelection("Default tab eviction", "instanceDefaults.tabEvictionPolicy", cfg.TabEvictionPolicy, config.ValidEvictionPolicies())
-		return nextCfg, changed, false, err
-	case "5":
-		nextCfg, changed, err := editConfigSelection("Default tab lifecycle", "instanceDefaults.tabPolicy.lifecycle", cfg.TabLifecyclePolicy, config.ValidLifecyclePolicies())
-		return nextCfg, changed, false, err
-	case "6":
-		if err := copyConfigToken(cfg.Token); err != nil {
-			return nil, false, false, err
-		}
-		return nil, false, false, nil
-	default:
-		return nil, false, false, fmt.Errorf("invalid selection %q", choice)
-	}
-}
-
-func editConfigSelection(title, path, current string, values []string) (*config.RuntimeConfig, bool, error) {
-	options := make([]menuOption, 0, len(values)+1)
-	for _, value := range values {
-		label := value
-		if value == current {
-			label += " (current)"
-		}
-		options = append(options, menuOption{label: label, value: value})
-	}
-	options = append(options, menuOption{label: "Cancel", value: "cancel"})
-
-	picked, err := promptSelect(title, options)
-	if err != nil {
-		return nil, false, err
-	}
-	if picked == "" || picked == "cancel" {
-		return nil, false, nil
-	}
-
-	nextCfg, changed, err := workflow.UpdateValue(path, picked)
-	if err != nil {
-		return nil, false, err
-	}
-	if changed {
-		fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Updated %s to %s", path, picked)))
-		fmt.Println(cli.StyleStdout(cli.MutedStyle, "Restart PinchTab to apply file-based changes."))
-	}
-	return nextCfg, changed, nil
 }
 
 func copyConfigToken(token string) error {
@@ -346,39 +255,47 @@ func handleConfigPath() {
 func handleConfigGet(path string) {
 	value, err := workflow.GetValue(path)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println(displayConfigValue(path, value))
 }
 
-func handleConfigSet(path, value string) {
+func handleConfigSet(path, value string) error {
 	change, err := workflow.PrepareSetValue(path, value)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	if errs := change.ValidationErrors; len(errs) > 0 {
-		fmt.Printf("Warning: new value causes validation error(s):\n")
+		fmt.Fprintf(os.Stderr, "Warning: new value causes validation error(s):\n")
 		for _, err := range errs {
-			fmt.Printf("  - %v\n", err)
+			fmt.Fprintf(os.Stderr, "  - %v\n", err)
 		}
-		fmt.Print("Save anyway? (y/N): ")
-		var response string
-		_, _ = fmt.Scanln(&response)
-		if response != "y" && response != "Y" {
-			return
+		if !confirmSaveAnyway() {
+			return fmt.Errorf("aborted: value not saved")
 		}
 	}
 
 	if err := workflow.SavePreparedChange(change); err != nil {
-		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("save config: %w", err)
 	}
 
 	fmt.Printf("Set %s = %s\n", path, displayConfigValue(path, value))
+	return nil
+}
+
+// confirmSaveAnyway prompts on a TTY; on non-TTY (agent / pipe) it returns
+// false so the validation warning blocks the save by default.
+func confirmSaveAnyway() bool {
+	if !isInteractiveTerminal() {
+		return false
+	}
+	fmt.Print("Save anyway? (y/N): ")
+	var response string
+	_, _ = fmt.Scanln(&response)
+	return response == "y" || response == "Y"
 }
 
 func displayConfigValue(path, value string) string {
@@ -388,32 +305,28 @@ func displayConfigValue(path, value string) string {
 	return value
 }
 
-func handleConfigPatch(jsonPatch string) {
+func handleConfigPatch(jsonPatch string) error {
 	change, err := workflow.PreparePatch(jsonPatch)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	if errs := change.ValidationErrors; len(errs) > 0 {
-		fmt.Printf("Warning: patch causes validation error(s):\n")
+		fmt.Fprintf(os.Stderr, "Warning: patch causes validation error(s):\n")
 		for _, err := range errs {
-			fmt.Printf("  - %v\n", err)
+			fmt.Fprintf(os.Stderr, "  - %v\n", err)
 		}
-		fmt.Print("Save anyway? (y/N): ")
-		var response string
-		_, _ = fmt.Scanln(&response)
-		if response != "y" && response != "Y" {
-			return
+		if !confirmSaveAnyway() {
+			return fmt.Errorf("aborted: patch not saved")
 		}
 	}
 
 	if err := workflow.SavePreparedChange(change); err != nil {
-		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("save config: %w", err)
 	}
 
 	fmt.Println("Config patched successfully")
+	return nil
 }
 
 func handleConfigValidate() {

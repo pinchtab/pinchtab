@@ -29,6 +29,8 @@ var (
 const (
 	defaultCSP              = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
 	strictTransportSecurity = "max-age=31536000"
+	backgroundHealthPath    = "/health/background"
+	backgroundHealthHeader  = "PinchTab-Background-Marker"
 )
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -80,6 +82,10 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *browsersession.Manager, agentSessions *session.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isPublicDashboardPath(r.URL.Path) || isPublicAuthPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if backgroundHealthProbeAllowed(cfg, r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -166,6 +172,18 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *browsersess
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func backgroundHealthProbeAllowed(cfg *config.RuntimeConfig, r *http.Request) bool {
+	if cfg == nil || r.Method != http.MethodGet || r.URL.Path != backgroundHealthPath {
+		return false
+	}
+	marker := strings.TrimSpace(cfg.BackgroundMarker)
+	got := strings.TrimSpace(r.Header.Get(backgroundHealthHeader))
+	if marker == "" || got == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(marker)) == 1
 }
 
 // StripInternalHeadersMiddleware removes any X-PinchTab-* headers that arrived

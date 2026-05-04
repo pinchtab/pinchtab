@@ -288,6 +288,14 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	}
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
+	mux.HandleFunc("GET /health/background", func(w http.ResponseWriter, r *http.Request) {
+		httpx.JSON(w, http.StatusOK, map[string]string{
+			"status":  "ok",
+			"mode":    "dashboard",
+			"version": version,
+			"marker":  cfg.BackgroundMarker,
+		})
+	})
 
 	handler := handlers.StripInternalHeadersMiddleware(
 		handlers.RequestIDMiddleware(

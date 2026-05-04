@@ -4,11 +4,33 @@
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/cli.sh"
 
+open_capture_tab() {
+  CAPTURE_TAB_ID=""
+  pt_ok nav --new-tab "${FIXTURES_URL}/index.html"
+  CAPTURE_TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
+  if [ -n "$CAPTURE_TAB_ID" ]; then
+    pt_ok tab "$CAPTURE_TAB_ID"
+    pt_ok wait "body" --tab "$CAPTURE_TAB_ID" --timeout 5000
+  else
+    fail_assert "capture tab id available"
+  fi
+}
+
+close_capture_tab() {
+  if [ -n "${CAPTURE_TAB_ID:-}" ]; then
+    pt tab close "$CAPTURE_TAB_ID" > /dev/null 2>&1 || true
+    CAPTURE_TAB_ID=""
+  fi
+}
+
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab screenshot -o custom.jpg"
 
-pt_ok nav "${FIXTURES_URL}/index.html"
-pt_ok screenshot -o /tmp/e2e-custom-screenshot.jpg
+rm -f /tmp/e2e-custom-screenshot.jpg
+open_capture_tab
+if [ -n "${CAPTURE_TAB_ID:-}" ]; then
+  pt_ok screenshot --tab "$CAPTURE_TAB_ID" -o /tmp/e2e-custom-screenshot.jpg
+fi
 
 if [ -f /tmp/e2e-custom-screenshot.jpg ]; then
   echo -e "  ${GREEN}✓${NC} file created"
@@ -18,15 +40,21 @@ else
   echo -e "  ${RED}✗${NC} file not created"
   ((ASSERTIONS_FAILED++)) || true
 fi
+close_capture_tab
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab screenshot -q 10"
 
-pt_ok nav "${FIXTURES_URL}/index.html"
-pt_ok screenshot -q 10 -o /tmp/e2e-lowq.jpg
 rm -f /tmp/e2e-lowq.jpg
+open_capture_tab
+if [ -n "${CAPTURE_TAB_ID:-}" ]; then
+  pt_ok screenshot --tab "$CAPTURE_TAB_ID" -q 10 -o /tmp/e2e-lowq.jpg
+fi
+assert_file_exists /tmp/e2e-lowq.jpg "low quality screenshot file created"
+rm -f /tmp/e2e-lowq.jpg
+close_capture_tab
 
 end_test
 

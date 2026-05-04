@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -16,36 +17,29 @@ var daemonCmd = &cobra.Command{
 	Short: "Manage the background service",
 	Long:  "Start, stop, install, or check the status of the PinchTab background service.",
 	Run: func(cmd *cobra.Command, args []string) {
+		jsonOut, _ := cmd.Flags().GetBool("json")
 		sub := ""
 		if len(args) > 0 {
 			sub = args[0]
 		}
-		handleDaemonCommand(sub)
+		handleDaemonCommand(sub, jsonOut)
 	},
 }
 
 func init() {
 	daemonCmd.GroupID = "primary"
+	daemonCmd.Flags().Bool("json", false, "Print daemon status as JSON (status only, no actions)")
 	rootCmd.AddCommand(daemonCmd)
 }
 
-func handleDaemonCommand(subcommand string) {
+func handleDaemonCommand(subcommand string, jsonOut bool) {
 	if subcommand == "" || subcommand == "help" || subcommand == "--help" || subcommand == "-h" {
-		printDaemonStatusSummary()
-
-		if subcommand == "" && isInteractiveTerminal() {
-			picked, err := promptSelect("Daemon Actions", daemonMenuOptions(daemon.IsInstalled(), daemon.IsRunning()))
-			if err != nil || picked == "exit" || picked == "" {
-				os.Exit(0)
-			}
-			subcommand = picked
-		} else {
-			daemonUsage()
-			if subcommand == "" {
-				os.Exit(0)
-			}
+		if jsonOut {
+			printDaemonStatusJSON()
 			return
 		}
+		printDaemonOverview()
+		return
 	}
 
 	manager, err := daemon.CurrentManager()
@@ -95,91 +89,123 @@ func handleDaemonCommand(subcommand string) {
 		fmt.Println(cli.StyleStdout(cli.SuccessStyle, "  [ok] ") + message)
 	default:
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("unknown daemon command: %s", subcommand)))
-		daemonUsage()
+		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.MutedStyle, "Usage: pinchtab daemon <install|start|restart|stop|uninstall>"))
 		os.Exit(2)
 	}
 }
 
-func daemonUsage() {
-	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Usage:") + " " + cli.StyleStdout(cli.CommandStyle, "pinchtab daemon <install|start|restart|stop|uninstall>"))
-	fmt.Println()
-	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Manage the PinchTab user-level background service."))
-	fmt.Println()
+type daemonStatus struct {
+	Installed      bool   `json:"installed"`
+	Running        bool   `json:"running"`
+	PID            string `json:"pid,omitempty"`
+	ServicePath    string `json:"servicePath,omitempty"`
+	PreflightError string `json:"preflightError,omitempty"`
+	ManagerError   string `json:"managerError,omitempty"`
 }
 
-func daemonMenuOptions(installed, running bool) []menuOption {
-	options := make([]menuOption, 0, 4)
-	switch {
-	case !installed:
-		options = append(options, menuOption{label: "Install service", value: "install"})
-	case running:
-		options = append(options,
-			menuOption{label: "Stop service", value: "stop"},
-			menuOption{label: "Restart service", value: "restart"},
-			menuOption{label: "Uninstall service", value: "uninstall"},
-		)
-	default:
-		options = append(options,
-			menuOption{label: "Start service", value: "start"},
-			menuOption{label: "Uninstall service", value: "uninstall"},
-		)
+func collectDaemonStatus() daemonStatus {
+	st := daemonStatus{
+		Installed: daemon.IsInstalled(),
+		Running:   daemon.IsRunning(),
 	}
-	options = append(options, menuOption{label: "Exit", value: "exit"})
-	return options
-}
-
-func printDaemonStatusSummary() {
 	manager, err := daemon.CurrentManager()
 	if err != nil {
-		fmt.Println(cli.StyleStdout(cli.ErrorStyle, "  Error: ") + err.Error())
+		st.ManagerError = err.Error()
+		return st
+	}
+	if st.Running {
+		if pid, err := manager.Pid(); err == nil {
+			st.PID = pid
+		}
+	}
+	if st.Installed {
+		st.ServicePath = manager.ServicePath()
+	}
+	if err := manager.Preflight(); err != nil {
+		st.PreflightError = err.Error()
+	}
+	return st
+}
+
+func printDaemonStatusJSON() {
+	st := collectDaemonStatus()
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(st)
+}
+
+func printDaemonOverview() {
+	st := collectDaemonStatus()
+
+	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Daemon"))
+	fmt.Println()
+
+	if st.ManagerError != "" {
+		fmt.Printf("  %-20s %s\n", "manager", cli.StyleStdout(cli.ErrorStyle, st.ManagerError))
+		fmt.Println()
 		return
 	}
 
-	installed := daemon.IsInstalled()
-	running := daemon.IsRunning()
-
-	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Daemon status:"))
-
-	status := cli.StyleStdout(cli.WarningStyle, "not installed")
-	if installed {
-		status = cli.StyleStdout(cli.SuccessStyle, "installed")
+	serviceVal, serviceStyle := "not installed", cli.WarningStyle
+	if st.Installed {
+		serviceVal, serviceStyle = "installed", cli.SuccessStyle
 	}
-	fmt.Printf("  %-12s %s\n", cli.StyleStdout(cli.MutedStyle, "Service:"), status)
+	fmt.Printf("  %-20s %s\n", "service", cli.StyleStdout(serviceStyle, serviceVal))
 
-	state := cli.StyleStdout(cli.MutedStyle, "stopped")
-	if running {
-		state = cli.StyleStdout(cli.SuccessStyle, "active (running)")
+	stateVal, stateStyle := "stopped", cli.WarningStyle
+	if st.Running {
+		stateVal, stateStyle = "running", cli.SuccessStyle
 	}
-	fmt.Printf("  %-12s %s\n", cli.StyleStdout(cli.MutedStyle, "State:"), state)
+	fmt.Printf("  %-20s %s\n", "state", cli.StyleStdout(stateStyle, stateVal))
 
-	if running {
-		pid, _ := manager.Pid()
-		if pid != "" {
-			fmt.Printf("  %-12s %s\n", cli.StyleStdout(cli.MutedStyle, "PID:"), cli.StyleStdout(cli.ValueStyle, pid))
-		}
+	if st.PID != "" {
+		fmt.Printf("  %-20s %s\n", "pid", cli.StyleStdout(cli.ValueStyle, st.PID))
 	}
+	if st.ServicePath != "" {
+		fmt.Printf("  %-20s %s\n", "path", cli.StyleStdout(cli.ValueStyle, st.ServicePath))
+	}
+	if st.PreflightError != "" {
+		fmt.Printf("  %-20s %s\n", "environment", cli.StyleStdout(cli.WarningStyle, st.PreflightError))
+	}
+	fmt.Println()
 
-	if installed {
-		fmt.Printf("  %-12s %s\n", cli.StyleStdout(cli.MutedStyle, "Path:"), cli.StyleStdout(cli.ValueStyle, manager.ServicePath()))
+	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Manage daemon:"))
+	switch {
+	case !st.Installed:
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon install"), cli.StyleStdout(cli.MutedStyle, "# install background service"))
+	case st.Running:
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon stop"), cli.StyleStdout(cli.MutedStyle, "# stop the service"))
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon restart"), cli.StyleStdout(cli.MutedStyle, "# restart (apply config changes)"))
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon uninstall"), cli.StyleStdout(cli.MutedStyle, "# remove service file"))
+	default:
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon start"), cli.StyleStdout(cli.MutedStyle, "# start the service"))
+		fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon uninstall"), cli.StyleStdout(cli.MutedStyle, "# remove service file"))
 	}
-	if err := manager.Preflight(); err != nil {
-		fmt.Printf("  %-12s %s\n", cli.StyleStdout(cli.MutedStyle, "Environment:"), cli.StyleStdout(cli.WarningStyle, err.Error()))
-	}
+	fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab daemon --json"), cli.StyleStdout(cli.MutedStyle, "# status as JSON"))
 
-	if installed {
-		logs, err := manager.Logs(5)
-		if err == nil && strings.TrimSpace(logs) != "" {
+	if st.Installed {
+		if logs := tailDaemonLogs(); logs != "" {
 			fmt.Println()
 			fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Recent logs:"))
-			lines := strings.Split(logs, "\n")
-			for _, line := range lines {
+			for _, line := range strings.Split(logs, "\n") {
 				if strings.TrimSpace(line) != "" {
 					fmt.Printf("  %s\n", cli.StyleStdout(cli.MutedStyle, line))
 				}
 			}
 		}
 	}
-	fmt.Println()
+}
+
+func tailDaemonLogs() string {
+	manager, err := daemon.CurrentManager()
+	if err != nil {
+		return ""
+	}
+	logs, err := manager.Logs(5)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(logs)
 }
 
 func printDaemonManagerResult(message string, err error) {
