@@ -65,6 +65,13 @@ type ActionRequest struct {
 	Fast    bool   `json:"fast"`
 	Owner   string `json:"owner"`
 
+	// DismissBanners, when true and combined with WaitNav, runs a best-effort
+	// cookie/consent-banner dismissal pass after a click that triggered a
+	// navigation. Bridge layer ignores this field; the handler reads it and
+	// invokes the dismissal helper post-action. No effect on actions that
+	// don't trigger navigation.
+	DismissBanners bool `json:"dismissBanners,omitempty"`
+
 	// Humanize, when set, overrides the per-instance `humanize` default for
 	// this action only. nil = use the configured default. true forces the
 	// bezier/jitter/pre-press-sleep code path; false forces the raw

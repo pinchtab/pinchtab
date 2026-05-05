@@ -42,8 +42,16 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 	}
 
 	if kind == "click" {
-		if v, _ := cmd.Flags().GetBool("wait-nav"); v {
+		waitNav, _ := cmd.Flags().GetBool("wait-nav")
+		if waitNav {
 			body["waitNav"] = true
+		}
+		// --dismiss-banners only fires when --wait-nav is set; without nav,
+		// banners haven't changed and the dismissal pass would be wasted.
+		if waitNav {
+			if v, _ := cmd.Flags().GetBool("dismiss-banners"); v {
+				body["dismissBanners"] = true
+			}
 		}
 		// --dialog-action arms a one-shot JS dialog handler before the click.
 		// Mirrors the HTTP action body field {"dialogAction":"accept"|"dismiss"}.

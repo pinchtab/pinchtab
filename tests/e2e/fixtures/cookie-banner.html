@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Cookie Banner Fixture</title>
+  <style>
+    body { margin: 0; padding: 24px; font-family: system-ui, sans-serif; }
+    h1 { color: #222; }
+    a { color: #06c; }
+
+    /* A realistic cookie banner: fixed-position overlay covering the bottom
+       of the viewport. Set wide+tall so the dismissal heuristic's
+       overlay-detection branch (looksOverlay || covers half the viewport)
+       matches reliably even if the labelled-button click is somehow missed. */
+    #cookie-banner {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 200px;
+      background: #fff8e1;
+      border-top: 2px solid #f0ad4e;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-sizing: border-box;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 9999;
+    }
+    #cookie-banner.dismissed { display: none; }
+    #cookie-banner button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #06c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Page with cookie banner</h1>
+  <p>Static fixture for testing <code>--dismiss-banners</code>.</p>
+  <p><a id="link-to-form" href="/form.html">Go to form</a></p>
+
+  <div id="cookie-banner" role="dialog" aria-label="Cookie consent">
+    <span>This site uses cookies for marketing and analytics.</span>
+    <button id="cookie-accept" type="button" onclick="dismissBanner()">Accept all</button>
+  </div>
+
+  <script>
+    function dismissBanner() {
+      var b = document.getElementById('cookie-banner');
+      if (b) b.classList.add('dismissed');
+      document.body.dataset.cookieDismissed = 'true';
+    }
+  </script>
+</body>
+</html>

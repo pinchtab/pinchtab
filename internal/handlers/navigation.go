@@ -52,16 +52,17 @@ import (
 //	pinchtab nav https://pinchtab.com
 func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		TabID        string  `json:"tabId"`
-		URL          string  `json:"url"`
-		NewTab       bool    `json:"newTab"`
-		WaitTitle    float64 `json:"waitTitle"`
-		Timeout      float64 `json:"timeout"`
-		BlockImages  *bool   `json:"blockImages"`
-		BlockMedia   *bool   `json:"blockMedia"`
-		BlockAds     *bool   `json:"blockAds"`
-		WaitFor      string  `json:"waitFor"`
-		WaitSelector string  `json:"waitSelector"`
+		TabID          string  `json:"tabId"`
+		URL            string  `json:"url"`
+		NewTab         bool    `json:"newTab"`
+		WaitTitle      float64 `json:"waitTitle"`
+		Timeout        float64 `json:"timeout"`
+		BlockImages    *bool   `json:"blockImages"`
+		BlockMedia     *bool   `json:"blockMedia"`
+		BlockAds       *bool   `json:"blockAds"`
+		WaitFor        string  `json:"waitFor"`
+		WaitSelector   string  `json:"waitSelector"`
+		DismissBanners bool    `json:"dismissBanners"`
 	}
 
 	if r.Method == http.MethodGet {
@@ -71,6 +72,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		req.NewTab = strings.EqualFold(q.Get("newTab"), "true") || q.Get("newTab") == "1"
 		req.WaitFor = q.Get("waitFor")
 		req.WaitSelector = q.Get("waitSelector")
+		req.DismissBanners = strings.EqualFold(q.Get("dismissBanners"), "true") || q.Get("dismissBanners") == "1"
 		if v := q.Get("waitTitle"); v != "" {
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
 				req.WaitTitle = n
@@ -217,14 +219,15 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	if req.NewTab {
 		h.navigateNewTabChrome(w, r, navigateChromeOptions{
-			URL:           req.URL,
-			WaitFor:       req.WaitFor,
-			WaitSelector:  req.WaitSelector,
-			NavTimeout:    navTimeout,
-			TitleWait:     titleWait,
-			Target:        target,
-			TrustedCIDRs:  trustedCIDRs,
-			BlockPatterns: blockPatterns,
+			URL:            req.URL,
+			WaitFor:        req.WaitFor,
+			WaitSelector:   req.WaitSelector,
+			NavTimeout:     navTimeout,
+			TitleWait:      titleWait,
+			Target:         target,
+			TrustedCIDRs:   trustedCIDRs,
+			BlockPatterns:  blockPatterns,
+			DismissBanners: req.DismissBanners,
 		})
 		return
 	}
@@ -233,14 +236,15 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if scopedCurrentForNavigate {
 			h.navigateNewTabChrome(w, r, navigateChromeOptions{
-				URL:           req.URL,
-				WaitFor:       req.WaitFor,
-				WaitSelector:  req.WaitSelector,
-				NavTimeout:    navTimeout,
-				TitleWait:     titleWait,
-				Target:        target,
-				TrustedCIDRs:  trustedCIDRs,
-				BlockPatterns: blockPatterns,
+				URL:            req.URL,
+				WaitFor:        req.WaitFor,
+				WaitSelector:   req.WaitSelector,
+				NavTimeout:     navTimeout,
+				TitleWait:      titleWait,
+				Target:         target,
+				TrustedCIDRs:   trustedCIDRs,
+				BlockPatterns:  blockPatterns,
+				DismissBanners: req.DismissBanners,
 			})
 			return
 		}
@@ -291,6 +295,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.maybeAutoSolve(tCtx, resolvedTabID, autoSolverTriggerNavigate)
+	h.dismissBanners(tCtx, resolvedTabID, req.DismissBanners)
 
 	var navURL string
 	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
@@ -302,14 +307,15 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 }
 
 type navigateChromeOptions struct {
-	URL           string
-	WaitFor       string
-	WaitSelector  string
-	NavTimeout    time.Duration
-	TitleWait     time.Duration
-	Target        *validatedNavigateTarget
-	TrustedCIDRs  []*net.IPNet
-	BlockPatterns []string
+	URL            string
+	WaitFor        string
+	WaitSelector   string
+	NavTimeout     time.Duration
+	TitleWait      time.Duration
+	Target         *validatedNavigateTarget
+	TrustedCIDRs   []*net.IPNet
+	BlockPatterns  []string
+	DismissBanners bool
 }
 
 func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, opts navigateChromeOptions) {
@@ -358,6 +364,7 @@ func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, 
 	}
 
 	h.maybeAutoSolve(tCtx, newTabID, autoSolverTriggerNavigate)
+	h.dismissBanners(tCtx, newTabID, opts.DismissBanners)
 
 	var navURL string
 	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))

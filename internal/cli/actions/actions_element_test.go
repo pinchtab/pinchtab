@@ -11,6 +11,7 @@ func newActionCmd() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("css", "", "")
 	cmd.Flags().Bool("wait-nav", false, "")
+	cmd.Flags().Bool("dismiss-banners", false, "")
 	cmd.Flags().String("tab", "", "")
 	cmd.Flags().Float64("x", 0, "")
 	cmd.Flags().Float64("y", 0, "")
@@ -25,6 +26,9 @@ func newActionCmd() *cobra.Command {
 func newSimpleCmd() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("tab", "", "")
+	cmd.Flags().Bool("snap", false, "")
+	cmd.Flags().Bool("snap-diff", false, "")
+	cmd.Flags().Bool("text", false, "")
 	return cmd
 }
 
@@ -60,6 +64,40 @@ func TestClickWaitNav(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["waitNav"] != true {
 		t.Error("expected waitNav=true")
+	}
+}
+
+func TestClickDismissBannersWithWaitNav(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("wait-nav", "true")
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Action(client, m.base(), "", "click", "e5", cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["waitNav"] != true {
+		t.Error("expected waitNav=true")
+	}
+	if body["dismissBanners"] != true {
+		t.Errorf("expected dismissBanners=true, got %v", body["dismissBanners"])
+	}
+}
+
+func TestClickDismissBannersWithoutWaitNavIsNoop(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Action(client, m.base(), "", "click", "e5", cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if _, ok := body["dismissBanners"]; ok {
+		t.Errorf("expected dismissBanners not sent without --wait-nav, got %v", body["dismissBanners"])
 	}
 }
 
@@ -130,6 +168,27 @@ func TestPress(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["key"] != "Enter" {
 		t.Errorf("expected key=Enter, got %v", body["key"])
+	}
+}
+
+func TestPressWithSnapDiffFetchesSnapshot(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+	m.setResponse("GET", "/snapshot", 200, "snapshot")
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("snap-diff", "true")
+	ActionSimple(client, m.base(), "", "press", []string{"Enter"}, cmd)
+
+	if len(m.requests) != 2 {
+		t.Fatalf("expected 2 requests (action + snapshot), got %d", len(m.requests))
+	}
+	if m.requests[1].Path != "/snapshot" {
+		t.Fatalf("snapshot path = %q, want /snapshot", m.requests[1].Path)
+	}
+	if m.requests[1].Query != "filter=interactive&format=compact&diff=true" {
+		t.Fatalf("snapshot query = %q", m.requests[1].Query)
 	}
 }
 

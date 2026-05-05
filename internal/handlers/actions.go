@@ -102,6 +102,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		req.Button = q.Get("button")
+		if v := q.Get("dismissBanners"); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				req.DismissBanners = b
+			}
+		}
 		if vals, ok := q["deltaX"]; ok && len(vals) > 0 {
 			if n, err := strconv.Atoi(vals[0]); err == nil {
 				req.DeltaX = n
@@ -324,6 +329,13 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if engineName != "lite" {
 		h.maybeAutoSolve(tCtx, resolvedTabID, autoSolverTriggerAction)
+		// Banner dismissal only makes sense when the click triggered a
+		// navigation (waitNav settles us on a fresh page). Without waitNav we
+		// skip — the caller is interacting within the current document and
+		// any banner has either been dismissed already or is irrelevant.
+		if req.WaitNav && req.DismissBanners {
+			h.dismissBanners(tCtx, resolvedTabID, true)
+		}
 	}
 	w.Header().Set("X-Engine", engineName)
 	h.recordEngine(r, engineName)

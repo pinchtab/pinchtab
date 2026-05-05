@@ -18,6 +18,7 @@ func Back(client *http.Client, base, token string, cmd *cobra.Command) {
 	if tabID != "" {
 		path = "/tabs/" + tabID + "/back"
 	}
+	path = appendDismissBannersQuery(path, cmd)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -50,6 +51,7 @@ func Forward(client *http.Client, base, token string, cmd *cobra.Command) {
 	if tabID != "" {
 		path = "/tabs/" + tabID + "/forward"
 	}
+	path = appendDismissBannersQuery(path, cmd)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -82,6 +84,7 @@ func Reload(client *http.Client, base, token string, cmd *cobra.Command) {
 	if tabID != "" {
 		path = "/tabs/" + tabID + "/reload"
 	}
+	path = appendDismissBannersQuery(path, cmd)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -152,6 +155,9 @@ func buildNavigateRequest(url string, cmd *cobra.Command) navigateRequest {
 	if v, _ := cmd.Flags().GetBool("block-ads"); v {
 		body["blockAds"] = true
 	}
+	if v, _ := cmd.Flags().GetBool("dismiss-banners"); v {
+		body["dismissBanners"] = true
+	}
 	tabID, _ := cmd.Flags().GetString("tab")
 	path := "/navigate"
 	explicitTab := cmd.Flags().Changed("tab")
@@ -196,4 +202,19 @@ func tabIDFromNavigateResult(result map[string]any) string {
 		return tid
 	}
 	return ""
+}
+
+// appendDismissBannersQuery appends ?dismissBanners=true (or &dismissBanners=true)
+// to the given path when the cobra command's --dismiss-banners flag is set.
+// Used by /back, /forward, /reload which don't carry a JSON body.
+func appendDismissBannersQuery(path string, cmd *cobra.Command) string {
+	v, _ := cmd.Flags().GetBool("dismiss-banners")
+	if !v {
+		return path
+	}
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "dismissBanners=true"
 }

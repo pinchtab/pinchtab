@@ -14,8 +14,20 @@ func newNavigateCmd() *cobra.Command {
 	cmd.Flags().Bool("new-tab", false, "")
 	cmd.Flags().Bool("block-images", false, "")
 	cmd.Flags().Bool("block-ads", false, "")
+	cmd.Flags().Bool("dismiss-banners", false, "")
 	cmd.Flags().String("tab", "", "")
 	cmd.Flags().Bool("print-tab-id", false, "")
+	return cmd
+}
+
+func newHistoryCmd() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("tab", "", "")
+	cmd.Flags().Bool("snap", false, "")
+	cmd.Flags().Bool("snap-diff", false, "")
+	cmd.Flags().Bool("text", false, "")
+	cmd.Flags().Bool("dismiss-banners", false, "")
+	cmd.Flags().Bool("json", false, "")
 	return cmd
 }
 
@@ -130,6 +142,82 @@ func TestNavigateWithBlockAds(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["blockAds"] != true {
 		t.Error("expected blockAds=true")
+	}
+}
+
+func TestNavigateDismissBanners(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newNavigateCmd()
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["dismissBanners"] != true {
+		t.Errorf("expected dismissBanners=true in body, got %v", body["dismissBanners"])
+	}
+}
+
+func TestReloadDismissBannersAppendsQuery(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newHistoryCmd()
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Reload(client, m.base(), "", cmd)
+	if m.lastPath != "/reload" {
+		t.Errorf("expected /reload path, got %q", m.lastPath)
+	}
+	if !strings.Contains(m.lastQuery, "dismissBanners=true") {
+		t.Errorf("expected dismissBanners=true in query, got %q", m.lastQuery)
+	}
+}
+
+func TestBackDismissBannersAppendsQuery(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newHistoryCmd()
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Back(client, m.base(), "", cmd)
+	if m.lastPath != "/back" {
+		t.Errorf("expected /back path, got %q", m.lastPath)
+	}
+	if !strings.Contains(m.lastQuery, "dismissBanners=true") {
+		t.Errorf("expected dismissBanners=true in query, got %q", m.lastQuery)
+	}
+}
+
+func TestForwardDismissBannersAppendsQueryWithTab(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newHistoryCmd()
+	_ = cmd.Flags().Set("tab", "TAB1")
+	_ = cmd.Flags().Set("dismiss-banners", "true")
+	Forward(client, m.base(), "", cmd)
+	if m.lastPath != "/tabs/TAB1/forward" {
+		t.Errorf("expected /tabs/TAB1/forward, got %q", m.lastPath)
+	}
+	if !strings.Contains(m.lastQuery, "dismissBanners=true") {
+		t.Errorf("expected dismissBanners=true in query, got %q", m.lastQuery)
+	}
+}
+
+func TestReloadWithoutDismissBannersOmitsQuery(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newHistoryCmd()
+	Reload(client, m.base(), "", cmd)
+	if m.lastQuery != "" {
+		t.Errorf("expected empty query, got %q", m.lastQuery)
 	}
 }
 
