@@ -51,6 +51,7 @@ pinchtab-dev
 pinchtab-small
 pinchtab.exe
 plugins/*/.venv/
+plugin/skills/pinchtab/
 tests/e2e/results/*
 tests/tools/browserbench/results/
 /runner

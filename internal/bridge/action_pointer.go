@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,6 +16,44 @@ var scrollByCoordinateAction = ScrollByCoordinate
 var mouseMoveByCoordinateAction = MouseMoveByCoordinate
 var mouseDownByCoordinateAction = MouseDownByCoordinate
 var mouseUpByCoordinateAction = MouseUpByCoordinate
+var clickByNodeIDAction = ClickByNodeID
+var jsClickByBackendNodeAction = JSClickByBackendNode
+var doubleClickByNodeIDAction = DoubleClickByNodeID
+var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
+
+const trustedNodeClickTimeout = 100 * time.Millisecond
+
+func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
+	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+	err := clickByNodeIDAction(trustedCtx, nodeID)
+	cancel()
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return jsClickByBackendNodeAction(ctx, nodeID)
+	}
+	return err
+}
+
+func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
+	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+	err := doubleClickByNodeIDAction(trustedCtx, nodeID)
+	cancel()
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return jsDoubleClickByBackendNodeAction(ctx, nodeID)
+	}
+	return err
+}
 
 // effectiveHumanize resolves whether an action should use the humanized
 // (bezier + per-event jitter + pre-press sleeps) input path. Precedence:
@@ -145,7 +184,7 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 			// JS submit handlers, and actual submission in one shot (issue #411).
 			submitted, subErr := submitFormIfButton(clickCtx, req.Selector)
 			if subErr != nil {
-				slog.Debug("submitFormIfButton failed, falling back to CDP click",
+				slog.Debug("submitFormIfButton failed, falling back to JS click",
 					"selector", req.Selector, "error", subErr)
 			} else if submitted {
 				resultCh <- clickResult{err: nil}
@@ -156,9 +195,9 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 				resultCh <- clickResult{err: nodeErr}
 				return
 			}
-			err = ClickByNodeID(clickCtx, int64(node.BackendNodeID))
+			err = clickByNodeIDWithJSFallback(clickCtx, int64(node.BackendNodeID))
 		} else if req.NodeID > 0 {
-			err = ClickByNodeID(clickCtx, req.NodeID)
+			err = clickByNodeIDWithJSFallback(clickCtx, req.NodeID)
 		} else if req.HasXY {
 			err = ClickByCoordinate(clickCtx, req.X, req.Y)
 		} else {
@@ -240,9 +279,9 @@ func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (map[
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		err = DoubleClickByNodeID(ctx, int64(node.BackendNodeID))
+		err = doubleClickByNodeIDWithJSFallback(ctx, int64(node.BackendNodeID))
 	} else if req.NodeID > 0 {
-		err = DoubleClickByNodeID(ctx, req.NodeID)
+		err = doubleClickByNodeIDWithJSFallback(ctx, req.NodeID)
 	} else if req.HasXY {
 		err = DoubleClickByCoordinate(ctx, req.X, req.Y)
 	} else {

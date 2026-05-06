@@ -1,7 +1,7 @@
-import type { PluginConfig } from "../types.js";
+import type { PluginConfig, PluginRuntimeContext } from "../types.js";
 import { pinchtabFetch, textResult, imageResult, resourceResult } from "../client.js";
 import { checkNavigationPolicy, enforcePolicyOrReturn } from "../policy.js";
-import { ensureServerRunning, getEnhancedHealth, resolveProfile, getLastTabId, setLastTabId } from "../session.js";
+import { ensureServerRunning, waitForInstanceReady, getEnhancedHealth, resolveEffectiveConfig, resolveProfile, getLastTabId, rememberRuntimeContext, setLastTabId } from "../session.js";
 
 export const browserToolSchema = {
   type: "object",
@@ -43,23 +43,30 @@ Actions:
 
 Profiles: "openclaw" (default isolated), "user" (attach to existing session)`;
 
-export async function executeBrowserAction(cfg: PluginConfig, params: any): Promise<any> {
+export async function executeBrowserAction(rawCfg: PluginConfig, rawParams: any, context?: PluginRuntimeContext): Promise<any> {
+  rememberRuntimeContext(context);
+  const cfg = await resolveEffectiveConfig(rawCfg);
+  const params = { ...rawParams };
   const { action, profile } = params;
 
   // Resolve profile to instance
-  const profileConfig = resolveProfile(cfg, profile);
+  const profileConfig = resolveProfile(cfg, profile, context);
 
   // Auto-start server if needed
   if (action !== "status") {
-    const serverCheck = await ensureServerRunning(cfg);
+    const serverCheck = await ensureServerRunning(cfg, context);
     if (!serverCheck.ok) {
       return textResult({ error: serverCheck.error });
+    }
+    const readyCheck = await waitForInstanceReady(cfg, profileConfig.instanceId, context);
+    if (!readyCheck.ok) {
+      return textResult({ error: readyCheck.error });
     }
   }
 
   // Session tab persistence
-  if (cfg.persistSessionTabs !== false && !params.tabId && getLastTabId()) {
-    params.tabId = getLastTabId();
+  if (cfg.persistSessionTabs !== false && !params.tabId && getLastTabId(context)) {
+    params.tabId = getLastTabId(context);
   }
 
   // --- navigate ---
@@ -67,12 +74,21 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     const navPolicy = enforcePolicyOrReturn(checkNavigationPolicy(cfg, params.url));
     if (navPolicy) return navPolicy;
 
-    const body: any = { url: params.url };
-    if (params.tabId) body.tabId = params.tabId;
-    if (params.newTab) body.newTab = true;
-    if (profileConfig.instanceId) body.instanceId = profileConfig.instanceId;
-    const result = await pinchtabFetch(cfg, "/navigate", { body });
-    if (result?.tabId) setLastTabId(result.tabId);
+    let result;
+    if (params.newTab) {
+      const body: any = { action: "new", url: params.url };
+      if (profileConfig.instanceId) body.instanceId = profileConfig.instanceId;
+      result = await pinchtabFetch(cfg, "/tab", { body }, context);
+    } else if (params.tabId) {
+      const body: any = { url: params.url };
+      if (profileConfig.instanceId) body.instanceId = profileConfig.instanceId;
+      result = await pinchtabFetch(cfg, `/tabs/${encodeURIComponent(params.tabId)}/navigate`, { body }, context);
+    } else {
+      const body: any = { url: params.url };
+      if (profileConfig.instanceId) body.instanceId = profileConfig.instanceId;
+      result = await pinchtabFetch(cfg, "/navigate", { body }, context);
+    }
+    if (result?.tabId) setLastTabId(result.tabId, context);
     return textResult(result);
   }
 
@@ -84,7 +100,7 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     query.set("format", params.format || cfg.defaultSnapshotFormat || "compact");
     if (params.selector) query.set("selector", params.selector);
     if (params.maxTokens) query.set("maxTokens", String(params.maxTokens));
-    return textResult(await pinchtabFetch(cfg, `/snapshot?${query.toString()}`));
+    return textResult(await pinchtabFetch(cfg, `/snapshot?${query.toString()}`, {}, context));
   }
 
   // --- screenshot ---
@@ -95,7 +111,7 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     if (fmt === "png") query.set("format", "png");
     query.set("quality", String(params.quality || cfg.screenshotQuality || 80));
     try {
-      const res = await pinchtabFetch(cfg, `/screenshot?${query.toString()}`, { rawResponse: true });
+      const res = await pinchtabFetch(cfg, `/screenshot?${query.toString()}`, { rawResponse: true }, context);
       if (res instanceof Response) {
         if (!res.ok) return textResult({ error: `Screenshot failed: ${res.status}` });
         const buf = await res.arrayBuffer();
@@ -116,27 +132,27 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     if (params.key) body.key = params.key;
     if (params.value) body.value = params.value;
     if (params.tabId) body.tabId = params.tabId;
-    return textResult(await pinchtabFetch(cfg, "/action", { body }));
+    return textResult(await pinchtabFetch(cfg, "/action", { body }, context));
   }
 
   // --- tabs ---
   if (action === "tabs") {
     const tabAction = params.tabAction || "list";
     if (tabAction === "list") {
-      return textResult(await pinchtabFetch(cfg, "/tabs"));
+      return textResult(await pinchtabFetch(cfg, "/tabs", {}, context));
     }
     if (tabAction === "close") {
       const body: any = {};
       if (params.tabId) body.tabId = params.tabId;
-      const result = await pinchtabFetch(cfg, "/close", { body });
-      if (params.tabId && params.tabId === getLastTabId()) setLastTabId(undefined);
+      const result = await pinchtabFetch(cfg, "/close", { body }, context);
+      if (params.tabId && params.tabId === getLastTabId(context)) setLastTabId(undefined, context);
       return textResult(result);
     }
     const body: any = { action: tabAction };
     if (params.url) body.url = params.url;
     if (params.tabId) body.tabId = params.tabId;
-    const result = await pinchtabFetch(cfg, "/tab", { body });
-    if (tabAction === "new" && result?.tabId) setLastTabId(result.tabId);
+    const result = await pinchtabFetch(cfg, "/tab", { body }, context);
+    if (tabAction === "new" && result?.tabId) setLastTabId(result.tabId, context);
     return textResult(result);
   }
 
@@ -148,7 +164,7 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
     if (params.landscape) query.set("landscape", "true");
     if (params.scale) query.set("scale", String(params.scale));
     try {
-      const res = await pinchtabFetch(cfg, `/pdf?${query.toString()}`, { rawResponse: true });
+      const res = await pinchtabFetch(cfg, `/pdf?${query.toString()}`, { rawResponse: true }, context);
       if (res instanceof Response) {
         if (!res.ok) return textResult({ error: `PDF failed: ${res.status}` });
         const buf = await res.arrayBuffer();
@@ -163,7 +179,7 @@ export async function executeBrowserAction(cfg: PluginConfig, params: any): Prom
 
   // --- status ---
   if (action === "status") {
-    return textResult(await getEnhancedHealth(cfg));
+    return textResult(await getEnhancedHealth(cfg, context));
   }
 
   return textResult({ error: `Unknown browser action: ${action}` });

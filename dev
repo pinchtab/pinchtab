@@ -31,6 +31,7 @@ COMMANDS=(
   "  extended:🐳:Extended suite (all extended)"
   "  smoke:🐳:Smoke suite"
   "  smoke-docker:🐳:Host Docker smoke checks only"
+  "  smoke-plugin:🐳:OpenClaw plugin Docker smoke"
   "  api:🐳:API basic tests"
   "  cli:🐳:CLI basic tests"
   "  infra:🐳:Infra basic tests"
@@ -263,6 +264,15 @@ run_command() {
       echo ""
       exec env E2E_LOGS="${E2E_LOGS:-show}" bash scripts/dev-e2e.sh "$test_name"
       ;;
+    "e2e smoke-plugin"|"e2e smoke-plugin "*)
+      echo "  ${ACCENT}${BOLD}🐳 OpenClaw plugin smoke${NC}"
+      echo ""
+      local -a smoke_args=()
+      if [ "$target" != "e2e smoke-plugin" ]; then
+        read -r -a smoke_args <<< "${target#e2e smoke-plugin }"
+      fi
+      exec bash tests/manual/openclaw-plugin-smoke/run.sh "${smoke_args[@]}"
+      ;;
     "e2e"*)
       local -a e2e_args=()
       if [ "$target" != "e2e" ]; then
@@ -408,6 +418,12 @@ if [ $# -gt 0 ]; then
         echo "  ${ACCENT}${BOLD}🎯 Single E2E test${NC}"
         echo ""
         exec env E2E_LOGS="${E2E_LOGS:-show}" bash scripts/dev-e2e.sh "$3"
+      fi
+      if [ "${2:-}" = "smoke-plugin" ]; then
+        echo ""
+        echo "  ${ACCENT}${BOLD}🐳 OpenClaw plugin smoke${NC}"
+        echo ""
+        exec bash tests/manual/openclaw-plugin-smoke/run.sh "${@:3}"
       fi
       run_e2e_runner "${@:2}"
       ;;

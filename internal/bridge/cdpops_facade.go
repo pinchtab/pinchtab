@@ -59,12 +59,20 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 	return bridgecdpops.ClickByNodeID(ctx, nodeID)
 }
 
+func JSClickByBackendNode(ctx context.Context, nodeID int64) error {
+	return bridgecdpops.JSClickByBackendNode(ctx, nodeID)
+}
+
 func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.DoubleClickByCoordinate(ctx, x, y)
 }
 
 func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 	return bridgecdpops.DoubleClickByNodeID(ctx, nodeID)
+}
+
+func JSDoubleClickByBackendNode(ctx context.Context, nodeID int64) error {
+	return bridgecdpops.JSDoubleClickByBackendNode(ctx, nodeID)
 }
 
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int) error {

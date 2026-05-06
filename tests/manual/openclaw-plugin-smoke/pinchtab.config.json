@@ -1,0 +1,14 @@
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9999",
+    "token": "smoke-token"
+  },
+  "security": {
+    "allowEvaluate": false,
+    "allowDownload": false,
+    "allowUpload": false,
+    "allowStateExport": true,
+    "allowedDomains": ["fixtures"]
+  }
+}

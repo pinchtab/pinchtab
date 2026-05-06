@@ -1,6 +1,6 @@
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert";
-import { isRefToken, normalizeActionParams, looksLikeStaleRef, textResult, imageResult, resourceResult } from "./client.ts";
+import { isRefToken, normalizeActionParams, looksLikeStaleRef, pinchtabFetch, textResult, imageResult, resourceResult, clearPinchtabSessionCache } from "./client.ts";
 
 describe("isRefToken", () => {
   it("returns true for valid ref tokens", () => {
@@ -73,13 +73,260 @@ describe("looksLikeStaleRef", () => {
     assert.strictEqual(looksLikeStaleRef({ error: "context canceled" }), true);
   });
 
+  it("matches Pinchtab backend-node failures", () => {
+    assert.strictEqual(
+      looksLikeStaleRef({ error: "element not found in DOM (backendNodeId=42)" }),
+      true,
+    );
+    assert.strictEqual(looksLikeStaleRef({ error: "backend-node-not-found" }), true);
+    assert.strictEqual(looksLikeStaleRef({ error: "backend node detached" }), true);
+    assert.strictEqual(looksLikeStaleRef({ error: "element no longer in DOM" }), true);
+    assert.strictEqual(looksLikeStaleRef({ error: "element no longer attached" }), true);
+  });
+
   it("returns false for other errors", () => {
     assert.strictEqual(looksLikeStaleRef({ error: "network timeout" }), false);
     assert.strictEqual(looksLikeStaleRef({ error: "server error" }), false);
   });
 
+  it("does not match unrelated substrings containing 'ref'", () => {
+    assert.strictEqual(looksLikeStaleRef({ error: "referrer policy violation" }), false);
+    assert.strictEqual(looksLikeStaleRef({ error: "unsupported preferences" }), false);
+    assert.strictEqual(looksLikeStaleRef({ error: "page not found" }), false);
+  });
+
   it("checks body as well as error", () => {
     assert.strictEqual(looksLikeStaleRef({ error: "failed", body: "stale ref" }), true);
+  });
+});
+
+describe("pinchtabFetch", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      return new Response(JSON.stringify({ headers: init?.headers ?? {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("forwards OpenClaw agent and session headers", async () => {
+    const result = await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "secret" },
+      "/health",
+      {},
+      { agentId: "writer", sessionId: "session-123", sessionKey: "chat:writer" },
+    );
+    assert.deepStrictEqual(result.headers, {
+      Authorization: "Bearer secret",
+      "X-OpenClaw-Agent-Id": "writer",
+      "X-OpenClaw-Session-Id": "session-123",
+      "X-OpenClaw-Session-Key": "chat:writer",
+    });
+  });
+});
+
+describe("pinchtabFetch per-agent session token", () => {
+  const originalFetch = globalThis.fetch;
+  let calls: Array<{ url: string; method: string; headers: Record<string, string>; body?: string }>;
+
+  beforeEach(() => {
+    clearPinchtabSessionCache();
+    calls = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, headers, body });
+      if (url.endsWith("/sessions") && method === "POST") {
+        return new Response(JSON.stringify({ id: "ses_abc", sessionToken: "ses_token_xyz" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, headers }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    clearPinchtabSessionCache();
+  });
+
+  it("creates a Pinchtab session lazily and uses its token for browser actions", async () => {
+    await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "server-token" },
+      "/snapshot",
+      {},
+      { agentId: "alpha" },
+    );
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(calls[0].url, "http://localhost:9867/sessions");
+    assert.strictEqual(calls[0].method, "POST");
+    assert.strictEqual(calls[0].headers.Authorization, "Bearer server-token");
+    assert.deepStrictEqual(JSON.parse(calls[0].body!), { agentId: "alpha", label: "openclaw" });
+    assert.strictEqual(calls[1].url, "http://localhost:9867/snapshot");
+    assert.strictEqual(calls[1].headers.Authorization, "Session ses_token_xyz");
+  });
+
+  it("reuses the cached session token across calls for the same agent", async () => {
+    const cfg = { baseUrl: "http://localhost:9867", token: "server-token" };
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "alpha" });
+    await pinchtabFetch(cfg, "/tabs", {}, { agentId: "alpha" });
+    const sessionPosts = calls.filter((c) => c.url.endsWith("/sessions") && c.method === "POST");
+    assert.strictEqual(sessionPosts.length, 1);
+    const tabsCall = calls.find((c) => c.url.endsWith("/tabs"));
+    assert.strictEqual(tabsCall?.headers.Authorization, "Session ses_token_xyz");
+  });
+
+  it("creates separate sessions for distinct agents", async () => {
+    const cfg = { baseUrl: "http://localhost:9867", token: "server-token" };
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "alpha" });
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "beta" });
+    const sessionPosts = calls.filter((c) => c.url.endsWith("/sessions") && c.method === "POST");
+    assert.strictEqual(sessionPosts.length, 2);
+    const agentIds = sessionPosts.map((c) => JSON.parse(c.body!).agentId).sort();
+    assert.deepStrictEqual(agentIds, ["alpha", "beta"]);
+  });
+
+  it("uses the server token for /health, /sessions, /instances, /profiles", async () => {
+    const cfg = { baseUrl: "http://localhost:9867", token: "server-token" };
+    await pinchtabFetch(cfg, "/health", {}, { agentId: "alpha" });
+    await pinchtabFetch(cfg, "/instances", {}, { agentId: "alpha" });
+    await pinchtabFetch(cfg, "/profiles", {}, { agentId: "alpha" });
+    for (const call of calls) {
+      assert.strictEqual(call.headers.Authorization, "Bearer server-token");
+    }
+  });
+
+  it("falls back to server token when context has no agentId", async () => {
+    await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "server-token" },
+      "/snapshot",
+      {},
+    );
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].headers.Authorization, "Bearer server-token");
+  });
+});
+
+describe("pinchtabFetch session failure modes", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    clearPinchtabSessionCache();
+  });
+
+  it("fails closed (no bearer fallback) when /sessions creation fails for an agent", async () => {
+    clearPinchtabSessionCache();
+    const calls: Array<{ url: string; method: string }> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method || "GET").toUpperCase();
+      calls.push({ url, method });
+      if (url.endsWith("/sessions") && method === "POST") {
+        return new Response("upstream timeout", { status: 503 });
+      }
+      throw new Error("must not fall back to bearer for the snapshot path");
+    }) as typeof fetch;
+
+    const result = await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "server-token" },
+      "/snapshot",
+      {},
+      { agentId: "alpha" },
+    );
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].url, "http://localhost:9867/sessions");
+    assert.match(result.error, /Pinchtab session creation failed for agent alpha/);
+    assert.match(result.error, /503/);
+  });
+
+  it("evicts cached token and retries once on 401 from a Session-scheme call", async () => {
+    clearPinchtabSessionCache();
+    const calls: Array<{ url: string; method: string; headers: Record<string, string> }> = [];
+    let sessionTokenCounter = 0;
+    let firstSnapshot = true;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method || "GET").toUpperCase();
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      calls.push({ url, method, headers });
+      if (url.endsWith("/sessions") && method === "POST") {
+        sessionTokenCounter += 1;
+        return new Response(
+          JSON.stringify({ id: `ses_${sessionTokenCounter}`, sessionToken: `ses_token_${sessionTokenCounter}` }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/snapshot")) {
+        if (firstSnapshot) {
+          firstSnapshot = false;
+          return new Response(JSON.stringify({ error: "bad_session" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("", { status: 200 });
+    }) as typeof fetch;
+
+    const result = await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "server-token" },
+      "/snapshot",
+      {},
+      { agentId: "alpha" },
+    );
+    assert.deepStrictEqual(result, { ok: true });
+    const sessionPosts = calls.filter((c) => c.url.endsWith("/sessions") && c.method === "POST");
+    assert.strictEqual(sessionPosts.length, 2, "should re-create session after 401");
+    const snapshotCalls = calls.filter((c) => c.url.endsWith("/snapshot"));
+    assert.strictEqual(snapshotCalls.length, 2);
+    assert.strictEqual(snapshotCalls[0].headers.Authorization, "Session ses_token_1");
+    assert.strictEqual(snapshotCalls[1].headers.Authorization, "Session ses_token_2");
+  });
+
+  it("does not loop indefinitely if 401s keep coming after retry", async () => {
+    clearPinchtabSessionCache();
+    let sessionPosts = 0;
+    let snapshotCalls = 0;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.endsWith("/sessions") && method === "POST") {
+        sessionPosts += 1;
+        return new Response(JSON.stringify({ sessionToken: `ses_${sessionPosts}` }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      snapshotCalls += 1;
+      return new Response("bad_session", { status: 401 });
+    }) as typeof fetch;
+
+    const result = await pinchtabFetch(
+      { baseUrl: "http://localhost:9867", token: "server-token" },
+      "/snapshot",
+      {},
+      { agentId: "alpha" },
+    );
+    assert.strictEqual(snapshotCalls, 2, "exactly one retry, no infinite loop");
+    assert.strictEqual(result.error, "401 ");
   });
 });
 

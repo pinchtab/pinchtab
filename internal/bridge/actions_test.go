@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -381,6 +382,91 @@ func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "need selector") {
 		t.Fatalf("humanized click should require selector/ref/nodeId, got: %v", err)
+	}
+}
+
+func TestClickByNodeIDWithJSFallback_UsesTrustedPathFirst(t *testing.T) {
+	origTrusted := clickByNodeIDAction
+	origFallback := jsClickByBackendNodeAction
+	t.Cleanup(func() {
+		clickByNodeIDAction = origTrusted
+		jsClickByBackendNodeAction = origFallback
+	})
+
+	var trustedCalled bool
+	var fallbackCalled bool
+	clickByNodeIDAction = func(ctx context.Context, nodeID int64) error {
+		trustedCalled = true
+		if nodeID != 42 {
+			t.Fatalf("nodeID = %d, want 42", nodeID)
+		}
+		return nil
+	}
+	jsClickByBackendNodeAction = func(context.Context, int64) error {
+		fallbackCalled = true
+		return nil
+	}
+
+	if err := clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
+		t.Fatalf("clickByNodeIDWithJSFallback error = %v", err)
+	}
+	if !trustedCalled {
+		t.Fatal("trusted CDP click path was not called")
+	}
+	if fallbackCalled {
+		t.Fatal("JS fallback should not run when trusted click succeeds")
+	}
+}
+
+func TestClickByNodeIDWithJSFallback_FallsBackOnlyOnTimeout(t *testing.T) {
+	origTrusted := clickByNodeIDAction
+	origFallback := jsClickByBackendNodeAction
+	t.Cleanup(func() {
+		clickByNodeIDAction = origTrusted
+		jsClickByBackendNodeAction = origFallback
+	})
+
+	var fallbackCalled bool
+	clickByNodeIDAction = func(context.Context, int64) error {
+		return context.DeadlineExceeded
+	}
+	jsClickByBackendNodeAction = func(context.Context, int64) error {
+		fallbackCalled = true
+		return nil
+	}
+
+	if err := clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
+		t.Fatalf("clickByNodeIDWithJSFallback error = %v", err)
+	}
+	if !fallbackCalled {
+		t.Fatal("JS fallback should run after trusted click timeout")
+	}
+}
+
+func TestClickByNodeIDWithJSFallback_DoesNotFallbackOnOtherErrors(t *testing.T) {
+	origTrusted := clickByNodeIDAction
+	origFallback := jsClickByBackendNodeAction
+	t.Cleanup(func() {
+		clickByNodeIDAction = origTrusted
+		jsClickByBackendNodeAction = origFallback
+	})
+
+	boom := errors.New("boom")
+	var fallbackCalled bool
+	clickByNodeIDAction = func(context.Context, int64) error {
+		return boom
+	}
+	jsClickByBackendNodeAction = func(context.Context, int64) error {
+		fallbackCalled = true
+		return nil
+	}
+
+	err := clickByNodeIDWithJSFallback(context.Background(), 42)
+	if !errors.Is(err, boom) {
+		t.Fatalf("error = %v, want boom", err)
+	}
+	if fallbackCalled {
+		t.Fatal("JS fallback should not run for non-timeout trusted click errors")
 	}
 }
 

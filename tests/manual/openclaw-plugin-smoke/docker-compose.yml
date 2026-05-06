@@ -1,0 +1,63 @@
+services:
+  fixtures:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: ["node", "/app/fixtures/server.mjs"]
+    environment:
+      PORT: "8080"
+      LOG_FILE: /artifacts/fixtures-access.log
+    volumes:
+      - ./fixtures:/app/fixtures:ro
+      - ${ARTIFACTS_DIR}:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 1s
+      timeout: 5s
+      retries: 20
+
+  pinchtab:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      PINCHTAB_CONFIG: /data/pinchtab.json
+    command:
+      [
+        "/bin/sh",
+        "-lc",
+        "cp /fixture-config/pinchtab.json /data/pinchtab.json && /usr/local/bin/docker-entrypoint.sh pinchtab server 2>&1 | tee /artifacts/pinchtab.log",
+      ]
+    volumes:
+      - ./pinchtab.config.json:/fixture-config/pinchtab.json:ro
+      - ${ARTIFACTS_DIR}:/artifacts
+    shm_size: 2gb
+    healthcheck:
+      test: ["CMD-SHELL", "wget --header='Authorization: Bearer smoke-token' -q -O /dev/null http://127.0.0.1:9999/health"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  openclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION}
+    depends_on:
+      fixtures:
+        condition: service_healthy
+      pinchtab:
+        condition: service_healthy
+    working_dir: /workspace
+    environment:
+      PINCHTAB_BASE_URL: http://pinchtab:9999
+      PINCHTAB_TOKEN: smoke-token
+      FIXTURES_URL: http://fixtures:8080
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ${OPENCLAW_STATE_DIR}:/root/.openclaw
+      - ../../../:/workspace
+      - ./openclaw-runner.sh:/usr/local/bin/openclaw-runner.sh:ro
+      - ${ARTIFACTS_DIR}:/artifacts
+    command: ["bash", "/usr/local/bin/openclaw-runner.sh"]

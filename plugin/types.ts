@@ -1,4 +1,4 @@
-import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { AnyAgentTool, OpenClawPluginApi, OpenClawPluginToolContext } from "openclaw/plugin-sdk/plugin-entry";
 
 export interface PluginConfig {
   baseUrl?: string;
@@ -6,9 +6,6 @@ export interface PluginConfig {
   timeoutMs?: number;
   /** @deprecated Use timeoutMs instead */
   timeout?: number;
-  autoStart?: boolean;
-  binaryPath?: string;
-  startupTimeoutMs?: number;
   allowEvaluate?: boolean;
   allowedDomains?: string[];
   allowDownloads?: boolean;
@@ -24,8 +21,21 @@ export interface PluginConfig {
   profiles?: Record<string, { instanceId?: string; attach?: boolean }>;
 }
 
+export interface PluginRuntimeContext {
+  agentId?: string;
+  sessionId?: string;
+  sessionKey?: string;
+}
+
+export interface AgentSessionState extends PluginRuntimeContext {
+  key: string;
+  lastTabId?: string;
+  updatedAt?: number;
+}
+
 export type PluginApi = OpenClawPluginApi;
 export type PluginTool = AnyAgentTool;
+export type PluginToolContext = OpenClawPluginToolContext;
 
 export interface ToolResult {
   content: Array<

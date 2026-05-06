@@ -4,6 +4,9 @@
   "description": "OpenClaw plugin for PinchTab browser control",
   "type": "module",
   "scripts": {
+    "sync:skills": "node ./scripts/sync-skills.mjs",
+    "pretest": "npm run sync:skills",
+    "prepack": "npm run sync:skills",
     "test": "tsx --test *.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "npm run typecheck && npm test"
@@ -24,6 +27,8 @@
     "policy.ts",
     "session.ts",
     "tools/",
+    "skills/",
+    "scripts/",
     "openclaw.plugin.json"
   ],
   "license": "MIT",

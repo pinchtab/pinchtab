@@ -1,10 +1,12 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import { getLastTabId, setLastTabId, resolveProfile, isLocalHost } from "./session.ts";
+import { getLastTabId, setLastTabId, resolveProfile, isLocalHost, formatDiscoveredBaseUrl } from "./session.ts";
 
 describe("tab session state", () => {
   beforeEach(() => {
     setLastTabId(undefined);
+    setLastTabId(undefined, { agentId: "main" });
+    setLastTabId(undefined, { agentId: "writer" });
   });
 
   it("starts with undefined tabId", () => {
@@ -14,6 +16,14 @@ describe("tab session state", () => {
   it("stores and retrieves tabId", () => {
     setLastTabId("tab123");
     assert.strictEqual(getLastTabId(), "tab123");
+  });
+
+  it("keeps tab state isolated per agent", () => {
+    setLastTabId("main-tab", { agentId: "main", sessionId: "s1" });
+    setLastTabId("writer-tab", { agentId: "writer", sessionId: "s2" });
+    assert.strictEqual(getLastTabId({ agentId: "main" }), "main-tab");
+    assert.strictEqual(getLastTabId({ agentId: "writer" }), "writer-tab");
+    assert.strictEqual(getLastTabId(), undefined);
   });
 
   it("can clear tabId", () => {
@@ -91,5 +101,17 @@ describe("isLocalHost", () => {
   it("returns false for invalid URLs", () => {
     assert.strictEqual(isLocalHost("not-a-url"), false);
     assert.strictEqual(isLocalHost(""), false);
+  });
+});
+
+
+describe("formatDiscoveredBaseUrl", () => {
+  it("brackets IPv6 loopback binds", () => {
+    assert.strictEqual(formatDiscoveredBaseUrl("::1", 9867), "http://[::1]:9867");
+  });
+
+  it("normalizes wildcard binds to local loopback", () => {
+    assert.strictEqual(formatDiscoveredBaseUrl("0.0.0.0", 9867), "http://127.0.0.1:9867");
+    assert.strictEqual(formatDiscoveredBaseUrl("::", 9867), "http://[::1]:9867");
   });
 });

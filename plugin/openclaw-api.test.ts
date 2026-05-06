@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import type { AnyAgentTool, OpenClawPluginApi, PluginLogger, PluginRuntime } from "openclaw/plugin-sdk";
-import register from "./index.ts";
+import type { AnyAgentTool, OpenClawPluginApi, OpenClawPluginToolContext, PluginLogger } from "openclaw/plugin-sdk/plugin-entry";
+import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
+import pluginEntry from "./index.ts";
 
 type RegisteredToolOptions = Parameters<OpenClawPluginApi["registerTool"]>[1];
 type TestPluginApiInput = Partial<OpenClawPluginApi>;
@@ -87,6 +88,12 @@ function createTestPluginApi(api: TestPluginApiInput): OpenClawPluginApi {
   };
 }
 
+const testToolContext: OpenClawPluginToolContext = {
+  agentId: "main",
+  sessionId: "session-1",
+  sessionKey: "chat:main",
+};
+
 describe("OpenClaw plugin API contract", () => {
   it("registers tools through the official OpenClaw plugin API", () => {
     const registered: Array<{ tool: AnyAgentTool; opts?: RegisteredToolOptions }> = [];
@@ -102,12 +109,13 @@ describe("OpenClaw plugin API contract", () => {
         },
       },
       registerTool(tool, opts) {
-        assert.strictEqual(typeof tool, "object");
-        registered.push({ tool: tool as AnyAgentTool, opts });
+        const resolved = typeof tool === "function" ? tool(testToolContext) : tool;
+        assert.ok(resolved);
+        registered.push({ tool: resolved as AnyAgentTool, opts });
       },
     });
 
-    register(api);
+    pluginEntry.register(api);
 
     assert.deepStrictEqual(
       registered.map(({ tool }) => tool.name).sort(),
@@ -118,7 +126,7 @@ describe("OpenClaw plugin API contract", () => {
       assert.strictEqual(typeof tool.description, "string");
       assert.strictEqual(typeof tool.execute, "function");
       assert.strictEqual((tool.parameters as { type?: string }).type, "object");
-      assert.strictEqual(opts?.optional, true);
+      assert.deepStrictEqual(opts, { optional: true });
     }
   });
 
@@ -129,12 +137,13 @@ describe("OpenClaw plugin API contract", () => {
       name: "Pinchtab",
       pluginConfig: { registerBrowserTool: false },
       registerTool(tool) {
-        assert.strictEqual(typeof tool, "object");
-        names.push((tool as AnyAgentTool).name);
+        const resolved = typeof tool === "function" ? tool(testToolContext) : tool;
+        assert.ok(resolved);
+        names.push((resolved as AnyAgentTool).name);
       },
     });
 
-    register(api);
+    pluginEntry.register(api);
 
     assert.deepStrictEqual(names, ["pinchtab"]);
   });

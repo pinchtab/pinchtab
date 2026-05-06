@@ -156,14 +156,19 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 		return nil, err
 	}
 
-	// Click only if state needs to change.
+	// Click only if state needs to change. Use the JS-dispatch path so the
+	// toggle isn't gated on the headless=new CDP renderer ack chain.
 	if isChecked != wantChecked {
 		if req.NodeID > 0 {
-			if err := ClickByNodeID(ctx, req.NodeID); err != nil {
+			if err := JSClickByBackendNode(ctx, req.NodeID); err != nil {
 				return nil, err
 			}
 		} else {
-			if err := chromedp.Run(ctx, chromedp.Click(req.Selector, chromedp.ByQuery)); err != nil {
+			node, err := firstNodeBySelector(ctx, req.Selector)
+			if err != nil {
+				return nil, err
+			}
+			if err := JSClickByBackendNode(ctx, int64(node.BackendNodeID)); err != nil {
 				return nil, err
 			}
 		}

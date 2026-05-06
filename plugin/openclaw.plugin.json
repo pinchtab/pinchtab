@@ -3,7 +3,13 @@
   "name": "Pinchtab",
   "description": "Browser control for AI agents via Pinchtab. Single tool, all actions: navigate, snapshot, click/type/press/fill/hover/scroll/select/focus, mouse-move/mouse-down/mouse-up/mouse-wheel, text, screenshot, evaluate, pdf.",
   "version": "0.3.0",
-  "skills": ["../skills/pinchtab"],
+  "contracts": {
+    "tools": ["pinchtab", "browser"]
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "skills": ["./skills/pinchtab"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -20,20 +26,6 @@
       "timeoutMs": {
         "type": "number",
         "description": "Default request timeout in milliseconds",
-        "default": 30000
-      },
-      "autoStart": {
-        "type": "boolean",
-        "description": "Auto-start local Pinchtab server if not running",
-        "default": true
-      },
-      "binaryPath": {
-        "type": "string",
-        "description": "Path to pinchtab binary (default: search PATH)"
-      },
-      "startupTimeoutMs": {
-        "type": "number",
-        "description": "Max time to wait for server startup",
         "default": 30000
       },
       "allowEvaluate": {
@@ -111,9 +103,6 @@
     "baseUrl": { "label": "Base URL", "placeholder": "http://localhost:9867" },
     "token": { "label": "Auth Token", "sensitive": true },
     "timeoutMs": { "label": "Timeout (ms)", "placeholder": "30000" },
-    "autoStart": { "label": "Auto-start Server" },
-    "binaryPath": { "label": "Binary Path", "placeholder": "pinchtab" },
-    "startupTimeoutMs": { "label": "Startup Timeout (ms)", "placeholder": "30000" },
     "allowEvaluate": { "label": "Allow JS Evaluate" },
     "allowedDomains": { "label": "Allowed Domains" },
     "allowDownloads": { "label": "Allow Downloads" },

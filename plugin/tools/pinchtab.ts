@@ -1,7 +1,7 @@
-import type { PluginConfig } from "../types.js";
+import type { PluginConfig, PluginRuntimeContext } from "../types.js";
 import { pinchtabFetch, textResult, imageResult, resourceResult, normalizeActionParams, looksLikeStaleRef } from "../client.js";
 import { checkNavigationPolicy, checkEvaluatePolicy, checkDownloadPolicy, checkUploadPolicy, checkNetworkInterceptPolicy, enforcePolicyOrReturn } from "../policy.js";
-import { ensureServerRunning, getEnhancedHealth, getLastTabId, setLastTabId } from "../session.js";
+import { ensureServerRunning, waitForInstanceReady, getEnhancedHealth, getLastTabId, rememberRuntimeContext, resolveEffectiveConfig, setLastTabId } from "../session.js";
 
 export const pinchtabToolSchema = {
   type: "object",
@@ -90,21 +90,27 @@ export const pinchtabToolDescription = `Browser control via Pinchtab. Actions:
 
 Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=interactive&format=compact for interactions (~3,600), diff=true on subsequent snapshots.`;
 
-export async function executePinchtabAction(cfg: PluginConfig, params: any): Promise<any> {
+export async function executePinchtabAction(rawCfg: PluginConfig, params: any, context?: PluginRuntimeContext): Promise<any> {
+  rememberRuntimeContext(context);
+  const cfg = await resolveEffectiveConfig(rawCfg);
   const normalized = normalizeActionParams(params);
   const { action } = normalized;
 
   // Auto-start server if needed
   if (action !== "health") {
-    const serverCheck = await ensureServerRunning(cfg);
+    const serverCheck = await ensureServerRunning(cfg, context);
     if (!serverCheck.ok) {
       return textResult({ error: serverCheck.error });
+    }
+    const readyCheck = await waitForInstanceReady(cfg, undefined, context);
+    if (!readyCheck.ok) {
+      return textResult({ error: readyCheck.error });
     }
   }
 
   // Session tab persistence
-  if (cfg.persistSessionTabs !== false && !normalized.tabId && getLastTabId()) {
-    normalized.tabId = getLastTabId();
+  if (cfg.persistSessionTabs !== false && !normalized.tabId && getLastTabId(context)) {
+    normalized.tabId = getLastTabId(context);
   }
 
   // Policy: block evaluate if not allowed
@@ -118,13 +124,24 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     const navPolicy = enforcePolicyOrReturn(checkNavigationPolicy(cfg, normalized.url));
     if (navPolicy) return navPolicy;
 
-    const body: any = { url: normalized.url };
-    if (normalized.tabId) body.tabId = normalized.tabId;
-    if (normalized.newTab) body.newTab = true;
-    if (normalized.blockImages) body.blockImages = true;
-    if (normalized.timeout) body.timeout = normalized.timeout;
-    const result = await pinchtabFetch(cfg, "/navigate", { body });
-    if (result?.tabId) setLastTabId(result.tabId);
+    let result;
+    if (normalized.newTab) {
+      const body: any = { action: "new", url: normalized.url };
+      if (normalized.blockImages) body.blockImages = true;
+      if (normalized.timeout) body.timeout = normalized.timeout;
+      result = await pinchtabFetch(cfg, "/tab", { body }, context);
+    } else if (normalized.tabId) {
+      const body: any = { url: normalized.url };
+      if (normalized.blockImages) body.blockImages = true;
+      if (normalized.timeout) body.timeout = normalized.timeout;
+      result = await pinchtabFetch(cfg, `/tabs/${encodeURIComponent(normalized.tabId)}/navigate`, { body }, context);
+    } else {
+      const body: any = { url: normalized.url };
+      if (normalized.blockImages) body.blockImages = true;
+      if (normalized.timeout) body.timeout = normalized.timeout;
+      result = await pinchtabFetch(cfg, "/navigate", { body }, context);
+    }
+    if (result?.tabId) setLastTabId(result.tabId, context);
     return textResult(result);
   }
 
@@ -140,7 +157,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (normalized.maxTokens) query.set("maxTokens", String(normalized.maxTokens));
     if (normalized.depth) query.set("depth", String(normalized.depth));
     if (normalized.diff) query.set("diff", "true");
-    return textResult(await pinchtabFetch(cfg, `/snapshot?${query.toString()}`));
+    return textResult(await pinchtabFetch(cfg, `/snapshot?${query.toString()}`, {}, context));
   }
 
   // --- element actions ---
@@ -154,7 +171,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
       if (normalized[k] !== undefined) body[k] = normalized[k];
     }
 
-    let result = await pinchtabFetch(cfg, "/action", { body });
+    let result = await pinchtabFetch(cfg, "/action", { body }, context);
 
     // Stale ref recovery
     if (body.ref && looksLikeStaleRef(result)) {
@@ -162,8 +179,8 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
       q.set("filter", "interactive");
       q.set("format", "compact");
       if (body.tabId) q.set("tabId", body.tabId);
-      await pinchtabFetch(cfg, `/snapshot?${q.toString()}`);
-      const retried = await pinchtabFetch(cfg, "/action", { body });
+      await pinchtabFetch(cfg, `/snapshot?${q.toString()}`, {}, context);
+      const retried = await pinchtabFetch(cfg, "/action", { body }, context);
       result = retried?.error
         ? { ...retried, warning: "Action retried once after snapshot refresh but still failed." }
         : { ...retried, warning: "Action succeeded after automatic snapshot refresh (stale ref recovery)." };
@@ -176,7 +193,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
         typeBody.text = typeBody.value;
       }
       delete typeBody.value;
-      const typed = await pinchtabFetch(cfg, "/action", { body: typeBody });
+      const typed = await pinchtabFetch(cfg, "/action", { body: typeBody }, context);
       if (!typed?.error) {
         result = { ...typed, warning: "Fill failed; type fallback succeeded." };
       }
@@ -190,7 +207,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     const query = new URLSearchParams();
     if (normalized.tabId) query.set("tabId", normalized.tabId);
     if (normalized.mode) query.set("mode", normalized.mode);
-    return textResult(await pinchtabFetch(cfg, `/text?${query.toString()}`));
+    return textResult(await pinchtabFetch(cfg, `/text?${query.toString()}`, {}, context));
   }
 
   // --- wait ---
@@ -199,7 +216,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     for (const k of ["selector", "text", "url", "load", "fn", "ms", "tabId", "timeout", "state"]) {
       if (normalized[k] !== undefined) body[k] = normalized[k];
     }
-    return textResult(await pinchtabFetch(cfg, "/wait", { body }));
+    return textResult(await pinchtabFetch(cfg, "/wait", { body }, context));
   }
 
   // --- handoff ---
@@ -219,7 +236,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     for (const k of ["selector", "text", "url", "load", "fn", "ms", "tabId", "timeout", "state"]) {
       if (normalized[k] !== undefined) waitBody[k] = normalized[k];
     }
-    const waitResult = await pinchtabFetch(cfg, "/wait", { body: waitBody });
+    const waitResult = await pinchtabFetch(cfg, "/wait", { body: waitBody }, context);
     return textResult({ ...handoffMeta, resumed: !waitResult?.error, waitResult });
   }
 
@@ -227,31 +244,31 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
   if (action === "tabs") {
     const tabAction = normalized.tabAction || "list";
     if (tabAction === "list") {
-      const listed = await pinchtabFetch(cfg, "/tabs");
+      const listed = await pinchtabFetch(cfg, "/tabs", {}, context);
       const tabs = Array.isArray(listed?.tabs) ? listed.tabs : Array.isArray(listed) ? listed : [];
       if (tabs.length > 0) return textResult(listed);
 
-      const instances = await pinchtabFetch(cfg, "/instances");
+      const instances = await pinchtabFetch(cfg, "/instances", {}, context);
       const list = Array.isArray(instances?.value) ? instances.value : Array.isArray(instances) ? instances : [];
       const running = list.find((i: any) => i?.status === "running" && i?.id);
       if (!running) {
         return textResult({ ...listed, warning: "No tabs returned and no running instance found." });
       }
-      const instanceTabs = await pinchtabFetch(cfg, `/instances/${running.id}/tabs`);
+      const instanceTabs = await pinchtabFetch(cfg, `/instances/${encodeURIComponent(running.id)}/tabs`, {}, context);
       return textResult({ source: "instance-fallback", instanceId: running.id, tabs: instanceTabs?.tabs ?? instanceTabs });
     }
     if (tabAction === "close") {
       const body: any = {};
       if (normalized.tabId) body.tabId = normalized.tabId;
-      const result = await pinchtabFetch(cfg, "/close", { body });
-      if (normalized.tabId && normalized.tabId === getLastTabId()) setLastTabId(undefined);
+      const result = await pinchtabFetch(cfg, "/close", { body }, context);
+      if (normalized.tabId && normalized.tabId === getLastTabId(context)) setLastTabId(undefined, context);
       return textResult(result);
     }
     const body: any = { action: tabAction };
     if (normalized.url) body.url = normalized.url;
     if (normalized.tabId) body.tabId = normalized.tabId;
-    const result = await pinchtabFetch(cfg, "/tab", { body });
-    if (tabAction === "new" && result?.tabId) setLastTabId(result.tabId);
+    const result = await pinchtabFetch(cfg, "/tab", { body }, context);
+    if (tabAction === "new" && result?.tabId) setLastTabId(result.tabId, context);
     return textResult(result);
   }
 
@@ -264,7 +281,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (format === "png") query.set("format", "png");
     query.set("quality", String(quality));
     try {
-      const res = await pinchtabFetch(cfg, `/screenshot?${query.toString()}`, { rawResponse: true });
+      const res = await pinchtabFetch(cfg, `/screenshot?${query.toString()}`, { rawResponse: true }, context);
       if (res instanceof Response) {
         if (!res.ok) return textResult({ error: `Screenshot failed: ${res.status} ${await res.text()}` });
         const buf = await res.arrayBuffer();
@@ -281,7 +298,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
   if (action === "evaluate") {
     const body: any = { expression: normalized.expression };
     if (normalized.tabId) body.tabId = normalized.tabId;
-    return textResult(await pinchtabFetch(cfg, "/evaluate", { body }));
+    return textResult(await pinchtabFetch(cfg, "/evaluate", { body }, context));
   }
 
   // --- pdf ---
@@ -292,7 +309,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (normalized.landscape) query.set("landscape", "true");
     if (normalized.scale) query.set("scale", String(normalized.scale));
     try {
-      const res = await pinchtabFetch(cfg, `/pdf?${query.toString()}`, { rawResponse: true });
+      const res = await pinchtabFetch(cfg, `/pdf?${query.toString()}`, { rawResponse: true }, context);
       if (res instanceof Response) {
         if (!res.ok) return textResult({ error: `PDF failed: ${res.status} ${await res.text()}` });
         const buf = await res.arrayBuffer();
@@ -312,18 +329,18 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (networkAction === "clear") {
       const query = new URLSearchParams();
       if (normalized.tabId) query.set("tabId", normalized.tabId);
-      return textResult(await pinchtabFetch(cfg, `/network/clear?${query.toString()}`, { method: "POST" }));
+      return textResult(await pinchtabFetch(cfg, `/network/clear?${query.toString()}`, { method: "POST" }, context));
     }
 
     if (networkAction === "get" && normalized.requestId) {
-      return textResult(await pinchtabFetch(cfg, `/network/${normalized.requestId}`));
+      return textResult(await pinchtabFetch(cfg, `/network/${encodeURIComponent(normalized.requestId)}`, {}, context));
     }
 
     if (networkAction === "export") {
       const query = new URLSearchParams();
       if (normalized.tabId) query.set("tabId", normalized.tabId);
       if (normalized.exportFormat === "json") query.set("format", "json");
-      const result = await pinchtabFetch(cfg, `/network/export?${query.toString()}`);
+      const result = await pinchtabFetch(cfg, `/network/export?${query.toString()}`, {}, context);
       if (normalized.exportFormat === "har" || !normalized.exportFormat) {
         return resourceResult("har://export", "application/json", Buffer.from(JSON.stringify(result)).toString("base64"));
       }
@@ -347,7 +364,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
       return textResult(await pinchtabFetch(cfg, `/tabs/${encodeURIComponent(normalized.tabId)}/network/route`, {
         method: "POST",
         body: payload,
-      }));
+      }, context));
     }
 
     if (networkAction === "unroute") {
@@ -358,7 +375,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
       if (normalized.pattern) query.set("pattern", normalized.pattern);
       const qs = query.toString();
       const path = `/tabs/${encodeURIComponent(normalized.tabId)}/network/route${qs ? `?${qs}` : ""}`;
-      return textResult(await pinchtabFetch(cfg, path, { method: "DELETE" }));
+      return textResult(await pinchtabFetch(cfg, path, { method: "DELETE" }, context));
     }
 
     // list
@@ -368,7 +385,7 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (normalized.status) query.set("status", normalized.status);
     if (normalized.resourceType) query.set("type", normalized.resourceType);
     if (normalized.limit) query.set("limit", String(normalized.limit));
-    return textResult(await pinchtabFetch(cfg, `/network?${query.toString()}`));
+    return textResult(await pinchtabFetch(cfg, `/network?${query.toString()}`, {}, context));
   }
 
   // --- download ---
@@ -382,11 +399,11 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (normalized.savePath) {
       query.set("output", "file");
       query.set("path", normalized.savePath);
-      return textResult(await pinchtabFetch(cfg, `/download?${query.toString()}`));
+      return textResult(await pinchtabFetch(cfg, `/download?${query.toString()}`, {}, context));
     }
     query.set("raw", "true");
     try {
-      const res = await pinchtabFetch(cfg, `/download?${query.toString()}`, { rawResponse: true });
+      const res = await pinchtabFetch(cfg, `/download?${query.toString()}`, { rawResponse: true }, context);
       if (res instanceof Response) {
         if (!res.ok) return textResult({ error: `download failed: ${res.status} ${await res.text()}` });
         const buf = await res.arrayBuffer();
@@ -410,12 +427,12 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
     if (normalized.selector) body.selector = normalized.selector;
     if (normalized.files) body.files = normalized.files;
     if (normalized.paths) body.paths = normalized.paths;
-    return textResult(await pinchtabFetch(cfg, "/upload", { body }));
+    return textResult(await pinchtabFetch(cfg, "/upload", { body }, context));
   }
 
   // --- health ---
   if (action === "health") {
-    return textResult(await getEnhancedHealth(cfg));
+    return textResult(await getEnhancedHealth(cfg, context));
   }
 
   return textResult({ error: `Unknown action: ${action}` });
