@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "sync:skills": "node ./scripts/sync-skills.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
     "pretest": "npm run sync:skills",
-    "prepack": "npm run sync:skills",
+    "prepack": "npm run clean && npm run sync:skills && npm run build",
     "test": "tsx --test *.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "npm run typecheck && npm test"
   },
   "openclaw": {
-    "extensions": ["./index.ts"],
+    "extensions": ["./dist/index.js"],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2"
     },
@@ -21,14 +23,9 @@
     }
   },
   "files": [
-    "index.ts",
-    "types.ts",
-    "client.ts",
-    "policy.ts",
-    "session.ts",
-    "tools/",
+    "dist/",
     "skills/",
-    "scripts/",
+    "scripts/sync-skills.mjs",
     "openclaw.plugin.json"
   ],
   "license": "MIT",

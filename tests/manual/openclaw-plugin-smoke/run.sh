@@ -90,6 +90,29 @@ export ARTIFACTS_DIR="$TEMP_ARTIFACTS"
 export OPENCLAW_VERSION
 export ANTHROPIC_API_KEY="$ANTHROPIC_KEY"
 
+echo "packing plugin (release-flow simulation: prepack → build → npm pack)..."
+# `npm pack` triggers the same `prepack` chain that `npm publish` would run
+# during release: clean → sync skills → tsc build → emit dist/. The resulting
+# tarball is the exact artifact that would be uploaded to npm + ClawHub.
+# Smoke installs from this tarball below to validate the published shape
+# (compiled runtime, files allowlist, manifest paths) end-to-end.
+PACK_DIR="$TEMP_ARTIFACTS/plugin-pack"
+mkdir -p "$PACK_DIR"
+if ! (cd "$ROOT_DIR/plugin" && npm pack --pack-destination "$PACK_DIR" >"$TEMP_ARTIFACTS/plugin-pack.log" 2>&1); then
+  cat "$TEMP_ARTIFACTS/plugin-pack.log" >&2
+  cp -R "$TEMP_ARTIFACTS/." "$FINAL_ARTIFACTS_DIR/"
+  echo "plugin pack failed — artifacts: $FINAL_ARTIFACTS_DIR" >&2
+  exit 1
+fi
+PLUGIN_TARBALL=$(ls "$PACK_DIR"/*.tgz 2>/dev/null | head -1 || true)
+if [[ -z "$PLUGIN_TARBALL" ]]; then
+  echo "plugin pack produced no tarball — see $TEMP_ARTIFACTS/plugin-pack.log" >&2
+  cp -R "$TEMP_ARTIFACTS/." "$FINAL_ARTIFACTS_DIR/"
+  exit 1
+fi
+cp "$PLUGIN_TARBALL" "$TEMP_ARTIFACTS/plugin.tgz"
+echo "  packed: $(basename "$PLUGIN_TARBALL") ($(wc -c <"$PLUGIN_TARBALL" | tr -d ' ') bytes)"
+
 echo "building docker images..."
 if ! docker compose -p "$PROJECT_NAME" -f "$SMOKE_DIR/docker-compose.yml" build --quiet >"$TEMP_ARTIFACTS/docker-build.log" 2>&1; then
   cat "$TEMP_ARTIFACTS/docker-build.log" >&2

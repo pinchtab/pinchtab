@@ -154,6 +154,76 @@ jobs:
           npm run build
           npm publish --dry-run
 
+  plugin-publish-dry-run:
+    name: Plugin Publish Dry Run
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Sync plugin version with release
+        working-directory: plugin
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          CURRENT=$(node -pe "require('./package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('openclaw.plugin.json', 'utf8'));
+              p.version = '$VERSION';
+              fs.writeFileSync('openclaw.plugin.json', JSON.stringify(p, null, 2) + '\n');
+            "
+          else
+            echo "Version already correct: $CURRENT"
+          fi
+
+      - name: Install plugin deps
+        working-directory: plugin
+        run: npm ci
+
+      - name: Dry-run npm pack (validates prepack chain + files allowlist)
+        working-directory: plugin
+        run: |
+          npm pack --dry-run
+          # Real pack so we know prepack actually emits dist/ before clawhub validates
+          npm pack
+
+      - name: Install ClawHub CLI
+        run: npm i -g clawhub
+
+      - name: Authenticate with ClawHub
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: clawhub login --token "$CLAWHUB_TOKEN" --no-browser
+
+      - name: Dry-run ClawHub publish
+        working-directory: plugin
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          clawhub package publish . \
+            --family code-plugin \
+            --version "$VERSION" \
+            --changelog "Release v$VERSION" \
+            --tags latest \
+            --source-repo pinchtab/pinchtab \
+            --source-commit "$(git rev-parse HEAD)" \
+            --source-ref "$TAG" \
+            --source-path plugin \
+            --dry-run
+
   approval:
     name: Manual Approval
     needs:
@@ -169,6 +239,7 @@ jobs:
       - e2e-infra-extended
       - smoke
       - publish-dry-run
+      - plugin-publish-dry-run
     if: >-
       always() && !cancelled()
       && needs.validate.result == 'success'
@@ -179,6 +250,7 @@ jobs:
       && needs.npm-checks.result == 'success'
       && needs.plugin-checks.result == 'success'
       && needs.publish-dry-run.result == 'success'
+      && needs.plugin-publish-dry-run.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: release-approval
@@ -196,6 +268,7 @@ jobs:
           echo "| npm | ✅ success | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Plugin | ✅ success | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Publish dry run | ✅ success | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Plugin publish dry run | ✅ success | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Smoke | ${{ needs.smoke.result == 'success' && '✅' || '⚠️ ' }}${{ needs.smoke.result }} | ${{ needs.smoke.outputs.passed || '-' }}/${{ needs.smoke.outputs.tests || '-' }} | ${{ needs.smoke.outputs.failed || '-' }} | ${{ needs.smoke.outputs.test_time || '-' }} | ${{ needs.smoke.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| E2E API | ${{ needs.e2e-api-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-api-extended.result }} | ${{ needs.e2e-api-extended.outputs.passed || '-' }}/${{ needs.e2e-api-extended.outputs.tests || '-' }} | ${{ needs.e2e-api-extended.outputs.failed || '-' }} | ${{ needs.e2e-api-extended.outputs.test_time || '-' }} | ${{ needs.e2e-api-extended.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| E2E CLI | ${{ needs.e2e-cli-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-cli-extended.result }} | ${{ needs.e2e-cli-extended.outputs.passed || '-' }}/${{ needs.e2e-cli-extended.outputs.tests || '-' }} | ${{ needs.e2e-cli-extended.outputs.failed || '-' }} | ${{ needs.e2e-cli-extended.outputs.test_time || '-' }} | ${{ needs.e2e-cli-extended.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
