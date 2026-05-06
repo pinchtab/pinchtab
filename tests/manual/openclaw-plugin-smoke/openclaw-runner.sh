@@ -132,9 +132,15 @@ if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   " 2>&1 | tee /artifacts/anthropic-probe.log
 fi
 
-node /workspace/plugin/scripts/sync-skills.mjs
+if [ ! -f /artifacts/plugin.tgz ]; then
+  echo "missing /artifacts/plugin.tgz — run.sh must run 'npm pack' before docker compose up" >&2
+  exit 1
+fi
 
-openclaw plugins install /workspace/plugin --link >/artifacts/plugin-install.log 2>&1
+# Install from the same tarball npm publish would upload — closest mirror of
+# the release flow. No --link, no source bind: the plugin is consumed exactly
+# as a downstream user would consume the published package.
+openclaw plugins install /artifacts/plugin.tgz >/artifacts/plugin-install.log 2>&1
 
 (openclaw gateway >/artifacts/gateway.log 2>&1) &
 GW_PID=$!
