@@ -190,7 +190,7 @@ jobs:
 
       - name: Install plugin deps
         working-directory: plugin
-        run: npm ci
+        run: npm install --ignore-scripts --no-package-lock
 
       - name: Dry-run npm pack (validates prepack chain + files allowlist)
         working-directory: plugin

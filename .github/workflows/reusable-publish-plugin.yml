@@ -78,6 +78,10 @@ jobs:
             echo "Version already correct: $CURRENT"
           fi
 
+      - name: Install plugin deps
+        working-directory: plugin
+        run: npm install --ignore-scripts --no-package-lock
+
       - name: Publish to npm
         working-directory: plugin
         run: npm publish --access public
