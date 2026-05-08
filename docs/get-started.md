@@ -54,6 +54,8 @@ go build -o pinchtab ./cmd/pinchtab
 
 **[Full build & contribution guide ->](guides/contributing.md)**
 
+> **macOS upgrade note:** current PinchTab uses `~/.pinchtab/config.json` as the default config path. If you still have an older config at `~/Library/Application Support/pinchtab/config.json`, move or merge it into `~/.pinchtab/config.json`.
+
 ## Platform Support
 
 PinchTab's primary tested workflow is local macOS and Linux.

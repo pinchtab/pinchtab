@@ -151,6 +151,8 @@ Default location by OS:
 
 On macOS and Linux, PinchTab defaults to `~/.pinchtab` so the CLI, npm-managed binary, and config file all use the same base directory.
 
+If you are upgrading from an older macOS setup and still have a config at `~/Library/Application Support/pinchtab/config.json`, treat that as a legacy location and move or merge it into `~/.pinchtab/config.json`.
+
 Override the config path with:
 
 ```bash
