@@ -36,6 +36,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	selector := r.URL.Query().Get("selector")
 	css1x := r.URL.Query().Get("css1x") == "true"
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
+	annotate := r.URL.Query().Get("annotate") == "true" || r.URL.Query().Get("annotate") == "1"
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
@@ -55,6 +56,41 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 500, fmt.Errorf("disable animations: %w", err))
 			return
 		}
+	}
+
+	if annotate {
+		quality := 80
+		if q := r.URL.Query().Get("quality"); q != "" {
+			if qn, err := strconv.Atoi(q); err == nil {
+				quality = qn
+			}
+		}
+		fmtStr := "jpeg"
+		if r.URL.Query().Get("format") == "png" {
+			fmtStr = "png"
+		}
+		img, items, outFormat, err := h.captureAnnotatedScreenshot(tCtx, resolvedTabID, selector, fmtStr, quality)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("annotate: %w", err))
+			return
+		}
+		contentType := "image/jpeg"
+		if outFormat == "png" {
+			contentType = "image/png"
+		}
+		if r.URL.Query().Get("raw") == "true" {
+			w.Header().Set("Content-Type", contentType)
+			if _, err := w.Write(img); err != nil {
+				slog.Error("annotated screenshot write", "err", err)
+			}
+			return
+		}
+		httpx.JSON(w, 200, map[string]any{
+			"format":      outFormat,
+			"base64":      base64.StdEncoding.EncodeToString(img),
+			"annotations": items,
+		})
+		return
 	}
 
 	var clip *page.Viewport

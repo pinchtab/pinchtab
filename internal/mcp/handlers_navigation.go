@@ -146,6 +146,9 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if v, ok := optBool(r, "css1x"); ok && v {
 			q.Set("css1x", "true")
 		}
+		if v, ok := optBool(r, "annotate"); ok && v {
+			q.Set("annotate", "true")
+		}
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
 		}
