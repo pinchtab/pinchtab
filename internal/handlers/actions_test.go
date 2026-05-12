@@ -38,6 +38,26 @@ type handoffRecordingBridge struct {
 	has   bool
 }
 
+type autoSwitchActionBridge struct {
+	mockBridge
+	actionTabs []string
+}
+
+func (m *autoSwitchActionBridge) TabContext(tabID string) (context.Context, string, error) {
+	if tabID == "" {
+		tabID = "tab1"
+	}
+	return context.Background(), tabID, nil
+}
+
+func (m *autoSwitchActionBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
+	m.actionTabs = append(m.actionTabs, req.TabID)
+	if len(m.actionTabs) == 1 {
+		return map[string]any{"clicked": true, "switchedToTab": "tab2"}, nil
+	}
+	return map[string]any{"ok": true, "tabId": req.TabID}, nil
+}
+
 func (m *liteActionBridge) AvailableActions() []string {
 	return []string{bridge.ActionClick, bridge.ActionType, bridge.ActionPress}
 }
@@ -221,6 +241,44 @@ func TestHandleActions_NoTabError(t *testing.T) {
 
 	if w.Code != 404 {
 		t.Errorf("expected 404 for no tab, got %d", w.Code)
+	}
+}
+
+func TestHandleActions_FollowsAutoSwitchedTab(t *testing.T) {
+	b := &autoSwitchActionBridge{}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	body := `{"actions":[{"kind":"click"},{"kind":"type","text":"after"}]}`
+	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleActions(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got, want := strings.Join(b.actionTabs, ","), "tab1,tab2"; got != want {
+		t.Fatalf("action tabs = %s, want %s", got, want)
+	}
+}
+
+func TestHandleMacro_FollowsAutoSwitchedTab(t *testing.T) {
+	b := &autoSwitchActionBridge{}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second, AllowMacro: true}, nil, nil, nil)
+
+	body := `{"steps":[{"kind":"click"},{"kind":"type","text":"after"}]}`
+	req := httptest.NewRequest("POST", "/macro", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleMacro(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got, want := strings.Join(b.actionTabs, ","), "tab1,tab2"; got != want {
+		t.Fatalf("action tabs = %s, want %s", got, want)
 	}
 }
 

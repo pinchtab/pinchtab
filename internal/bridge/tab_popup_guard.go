@@ -32,7 +32,6 @@ func (tm *TabManager) StartBrowserGuards() {
 			slog.Warn("browser popup guard unavailable", "err", err)
 			return
 		}
-
 		chromedp.ListenBrowser(tm.browserCtx, func(ev any) {
 			created, ok := ev.(*target.EventTargetCreated)
 			if !ok || !shouldBlockPopupTarget(created.TargetInfo) {
@@ -40,8 +39,17 @@ func (tm *TabManager) StartBrowserGuards() {
 			}
 
 			info := created.TargetInfo
+			// If a click is in flight for this opener, hand the new target
+			// to the click action (auto-switch) instead of closing it.
+			if tm.claimPendingPopup(info.OpenerID, info.TargetID) {
+				return
+			}
 			go tm.closePopupTarget(info.TargetID, info.OpenerID, info.URL)
 		})
+
+		tm.mu.Lock()
+		tm.guardActive = true
+		tm.mu.Unlock()
 	})
 }
 

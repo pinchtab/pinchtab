@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
-	"github.com/chromedp/chromedp"
 )
 
 func (tm *TabManager) markAccessed(tabID string) {
@@ -91,28 +90,14 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 			for _, t := range targets {
 				raw := string(t.TargetID)
 				if tm.idMgr.TabIDFromCDPTarget(raw) == tabID {
-					ctx, cancel := chromedp.NewContext(tm.browserCtx, chromedp.WithTargetID(target.ID(raw)))
-					if tm.onTabSetup != nil {
-						tm.onTabSetup(ctx)
+					if _, adoptErr := tm.adoptExistingTarget(target.ID(raw), false); adoptErr != nil {
+						slog.Warn("adopt target failed", "tabId", tabID, "err", adoptErr)
+						break
 					}
-					if tm.netMonitor != nil {
-						if err := tm.netMonitor.StartCapture(ctx, tabID); err != nil {
-							slog.Warn("eager network capture failed", "tab", tabID, "err", err)
-						}
-					}
-					if tm.dialogMgr != nil {
-						autoAccept := tm.config != nil && tm.config.DialogAutoAccept
-						ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
-						if err := EnableDialogEvents(ctx); err != nil {
-							slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
-						}
-					}
-					tm.RegisterTabWithCancel(tabID, raw, ctx, cancel)
-
 					tm.mu.RLock()
 					entry = tm.tabs[tabID]
 					tm.mu.RUnlock()
-					ok = true
+					ok = entry != nil
 					break
 				}
 			}

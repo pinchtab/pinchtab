@@ -54,6 +54,13 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) 
 	return result, "", err
 }
 
+func switchedTabFromActionResult(result map[string]any) string {
+	if switched, ok := result["switchedToTab"].(string); ok {
+		return strings.TrimSpace(switched)
+	}
+	return ""
+}
+
 func (h *Handlers) shouldUseLiteAction(req bridge.ActionRequest) bool {
 	kind := bridge.CanonicalActionKind(req.Kind)
 	if h.effectiveActionHumanize(req) && (kind == bridge.ActionClick || kind == bridge.ActionType || kind == bridge.ActionKeyboardType) {

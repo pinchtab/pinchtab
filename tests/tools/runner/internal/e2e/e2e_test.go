@@ -633,7 +633,7 @@ func TestDryRunSmokePlan(t *testing.T) {
 		`Skipping plugin-smoke: filter "" has no matching scenarios`,
 		"docker compose -f tests/e2e/docker-compose-multi.yml up -d pinchtab pinchtab-secure pinchtab-autoclose pinchtab-medium pinchtab-full fixtures",
 		"E2E_SUMMARY_TITLE=PinchTab E2E API Smoke Suite",
-		"runner-api /bin/bash /e2e/run.sh scenario=network-route-smoke.sh scenario=tabs-autoclose-smoke.sh",
+		"runner-api /bin/bash /e2e/run.sh scenario=auto-switch-smoke.sh scenario=network-route-smoke.sh scenario=tabs-autoclose-smoke.sh",
 		"E2E_SUMMARY_TITLE=PinchTab E2E CLI Smoke Suite",
 		"runner-cli /bin/bash /e2e/run.sh scenario=system-smoke.sh scenario=tabs-smoke.sh",
 		"docker compose -f tests/e2e/docker-compose-multi.yml restart pinchtab",

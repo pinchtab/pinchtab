@@ -78,6 +78,13 @@ type ActionRequest struct {
 	// straight-to-target dispatch.
 	Humanize *bool `json:"humanize,omitempty"`
 
+	// AutoSwitch, when explicitly set to false, disables the popup-aware
+	// auto-switch behavior on click actions. nil or true = on (default). When
+	// on, a click that opens a new tab adopts + focuses it and surfaces the
+	// new tab ID on the response as "switchedToTab". Only click/dblclick
+	// honor this field.
+	AutoSwitch *bool `json:"autoSwitch,omitempty"`
+
 	// DialogAction arms a one-shot dialog auto-handler before the action
 	// executes. Used when clicking a button/link that opens a JS dialog
 	// (alert/confirm/prompt). Values: "accept" or "dismiss". When set, the

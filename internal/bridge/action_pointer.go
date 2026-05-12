@@ -142,12 +142,26 @@ func submitFormIfButton(ctx context.Context, selector string) (bool, error) {
 	return submitted, err
 }
 
-func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	// Promote to the humanized click path when the caller (or instance
 	// config) opted in via humanize=true.
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
 	}
+
+	// Arm popup-aware auto-switch: if this click opens a new tab, we adopt
+	// + focus it and surface the new tab ID on the response.
+	auto := b.beginAutoSwitch(req)
+	defer func() {
+		if auto == nil {
+			return
+		}
+		if err == nil {
+			result = auto.finish(ctx, result)
+		} else {
+			auto.cancel(ctx)
+		}
+	}()
 
 	// Arm a one-shot dialog auto-handler if the caller expects the click
 	// to open a native JS dialog. Without this, the click would hang
@@ -179,6 +193,9 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 	// Run click in goroutine so we can poll for dialogs
 	go func() {
 		var err error
+		if auto != nil {
+			auto.prepareWindowOpenCapture(clickCtx)
+		}
 		if req.Selector != "" {
 			// For submit buttons, use requestSubmit() to fire constraint validation,
 			// JS submit handlers, and actual submission in one shot (issue #411).
@@ -195,8 +212,14 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 				resultCh <- clickResult{err: nodeErr}
 				return
 			}
+			if auto != nil {
+				auto.prepareNode(clickCtx, int64(node.BackendNodeID))
+			}
 			err = clickByNodeIDWithJSFallback(clickCtx, int64(node.BackendNodeID))
 		} else if req.NodeID > 0 {
+			if auto != nil {
+				auto.prepareNode(clickCtx, req.NodeID)
+			}
 			err = clickByNodeIDWithJSFallback(clickCtx, req.NodeID)
 		} else if req.HasXY {
 			err = ClickByCoordinate(clickCtx, req.X, req.Y)
@@ -236,9 +259,9 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string
 	}
 
 	// Wait for click result (dialog-action was provided or no tab ID)
-	result := <-resultCh
-	if result.err != nil {
-		return nil, result.err
+	res := <-resultCh
+	if res.err != nil {
+		return nil, res.err
 	}
 	if armedDialog {
 		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
@@ -272,17 +295,36 @@ func waitForArmedDialogSettle(dm *DialogManager, tabID string, timeout time.Dura
 	_ = dm.TakeAutoHandler(tabID)
 }
 
-func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
-	var err error
+func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+	auto := b.beginAutoSwitch(req)
+	defer func() {
+		if auto == nil {
+			return
+		}
+		if err == nil {
+			result = auto.finish(ctx, result)
+		} else {
+			auto.cancel(ctx)
+		}
+	}()
 	if req.Selector != "" {
 		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
+		if auto != nil {
+			auto.prepareNode(ctx, int64(node.BackendNodeID))
+		}
 		err = doubleClickByNodeIDWithJSFallback(ctx, int64(node.BackendNodeID))
 	} else if req.NodeID > 0 {
+		if auto != nil {
+			auto.prepareNode(ctx, req.NodeID)
+		}
 		err = doubleClickByNodeIDWithJSFallback(ctx, req.NodeID)
 	} else if req.HasXY {
+		if auto != nil {
+			auto.prepareWindowOpenCapture(ctx)
+		}
 		err = DoubleClickByCoordinate(ctx, req.X, req.Y)
 	} else {
 		return nil, fmt.Errorf("need selector, ref, nodeId, or x/y coordinates")
@@ -498,17 +540,34 @@ func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]
 	return nil, fmt.Errorf("need selector, ref, or nodeId")
 }
 
-func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+	auto := b.beginAutoSwitch(req)
+	defer func() {
+		if auto == nil {
+			return
+		}
+		if err == nil {
+			result = auto.finish(ctx, result)
+		} else {
+			auto.cancel(ctx)
+		}
+	}()
 	var backendNodeID cdp.BackendNodeID
 	switch {
 	case req.NodeID > 0:
 		backendNodeID = cdp.BackendNodeID(req.NodeID)
+		if auto != nil {
+			auto.prepareNode(ctx, req.NodeID)
+		}
 	case req.Selector != "":
 		node, err := firstNodeBySelector(ctx, req.Selector)
 		if err != nil {
 			return nil, err
 		}
 		backendNodeID = node.BackendNodeID
+		if auto != nil {
+			auto.prepareNode(ctx, int64(node.BackendNodeID))
+		}
 	default:
 		return nil, fmt.Errorf("need selector, ref, or nodeId")
 	}

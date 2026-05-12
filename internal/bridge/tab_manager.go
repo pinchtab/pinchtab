@@ -34,7 +34,13 @@ type TabManager struct {
 	currentTab   string // ID of the most recently used tab
 	executor     *TabExecutor
 	guardOnce    sync.Once
+	guardActive  bool
 	mu           sync.RWMutex
+
+	// pendingClicks tracks in-flight click actions that may open a popup.
+	// Keyed by the opener tab's raw CDP target ID. Read by the popup guard
+	// to decide whether to suppress closing the newly created tab.
+	pendingClicks map[target.ID]*pendingClickSlot
 }
 
 func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
@@ -155,19 +161,7 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		tm.onTabSetup(ctx)
 	}
 
-	var blockPatterns []string
-
-	if tm.config != nil && tm.config.BlockAds {
-		blockPatterns = CombineBlockPatterns(blockPatterns, AdBlockPatterns)
-	}
-
-	if tm.config != nil && tm.config.BlockMedia {
-		blockPatterns = CombineBlockPatterns(blockPatterns, MediaBlockPatterns)
-	} else if tm.config != nil && tm.config.BlockImages {
-		blockPatterns = CombineBlockPatterns(blockPatterns, ImageBlockPatterns)
-	}
-
-	if len(blockPatterns) > 0 {
+	if blockPatterns := tm.tabBlockPatterns(); len(blockPatterns) > 0 {
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
 

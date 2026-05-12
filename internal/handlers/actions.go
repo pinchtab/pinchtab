@@ -107,6 +107,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 				req.DismissBanners = b
 			}
 		}
+		if v := q.Get("autoSwitch"); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				req.AutoSwitch = &b
+			}
+		}
 		if vals, ok := q["deltaX"]; ok && len(vals) > 0 {
 			if n, err := strconv.Atoi(vals[0]); err == nil {
 				req.DeltaX = n
@@ -336,6 +341,13 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		if req.WaitNav && req.DismissBanners {
 			h.dismissBanners(tCtx, resolvedTabID, true)
 		}
+	}
+	// If the click opened (and auto-switched to) a new tab, point the
+	// request-scoped current tab at it so the next action lands there.
+	if switched := switchedTabFromActionResult(result); switched != "" {
+		h.setCurrentTabForRequest(r, switched)
+		w.Header().Set(activity.HeaderPTTabID, switched)
+		h.recordResolvedTab(r, switched)
 	}
 	w.Header().Set("X-Engine", engineName)
 	h.recordEngine(r, engineName)
@@ -601,6 +613,19 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			}
 		}
 		tCancel()
+		if err == nil && !allLite {
+			if switched := switchedTabFromActionResult(actionRes); switched != "" {
+				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
+				if switchErr != nil {
+					err = fmt.Errorf("auto-switch tab %s: %w", switched, switchErr)
+				} else {
+					ctx = nextCtx
+					resolvedTabID = nextTabID
+					w.Header().Set(activity.HeaderPTTabID, nextTabID)
+					h.recordResolvedTab(r, nextTabID)
+				}
+			}
+		}
 
 		if err != nil {
 			errMsg := fmt.Sprintf("action %s: %v", action.Kind, err)
@@ -806,6 +831,19 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cancel()
+		if err == nil && !allLiteMacro {
+			if switched := switchedTabFromActionResult(res); switched != "" {
+				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
+				if switchErr != nil {
+					err = fmt.Errorf("auto-switch tab %s: %w", switched, switchErr)
+				} else {
+					ctx = nextCtx
+					resolvedTabID = nextTabID
+					w.Header().Set(activity.HeaderPTTabID, nextTabID)
+					h.recordResolvedTab(r, nextTabID)
+				}
+			}
+		}
 		if err != nil {
 			errMsg := err.Error()
 			var dialogErr *bridge.ErrDialogBlocking
