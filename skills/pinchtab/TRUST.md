@@ -7,7 +7,7 @@
 - Launches a Chrome browser (local, under your control)
 - Exposes navigation, clicking, typing, and page inspection via HTTP API
 - Extracts the page's accessibility tree (for AI agents)
-- Runs screenshots, PDFs, and JavaScript evaluation
+- Runs screenshots and PDFs; JavaScript evaluation is available but **disabled by default** (`security.allowEvaluate = false`)
 
 High-risk operations such as JavaScript evaluation, local-file upload, file downloads, cookie access, and network export should be treated as explicit opt-in actions for the current task, not the default workflow. These are gated by security policy and disabled by default.
 
@@ -31,11 +31,32 @@ High-impact capabilities are **disabled by default** and require explicit config
 | File downloads | **Disabled** | `security.allowDownloads` |
 | File uploads | **Disabled** | `security.allowUploads` |
 | Network interception | **Disabled** | `security.allowNetworkIntercept` |
-| Challenge solving / stealth | **Disabled** | Requires explicit `/solve` call with user approval |
+| Challenge solving (autoSolver) | **Disabled** | `autoSolver.enabled`; requires explicit opt-in per deployment |
+| Stealth level | **Light** (minimal) | `instanceDefaults.stealthLevel`; `light` applies only basic fingerprint normalization — anti-bot bypass requires `medium` or `full`, which must be set explicitly |
 | Navigation domains | **Local-only allowlist** | `security.allowedDomains` (restrict or expand deliberately) |
 | Cookie access | **Disabled** | `security.allowCookies`; use only when task requires it; do not log or expose session tokens |
 
 Agents reusing authenticated browser sessions should use dedicated low-privilege profiles and confirm with the user before performing account-changing actions.
+
+## Network Export Defaults
+
+Network exports capture request/response metadata but apply conservative defaults:
+
+- **Response bodies are excluded** unless explicitly requested with `body=true`
+- **Sensitive headers are redacted by default** (`redact=true`) — `Cookie`, `Set-Cookie`, `Authorization`, `Proxy-Authorization`, `X-API-Key`, and `X-CSRF-Token` are replaced with `[REDACTED]`
+- Exported files are written with **0600 permissions** (owner-only access)
+- Writes are atomic (temp file + rename) with path traversal prevention
+
+## Daemon Lifecycle
+
+The background daemon (`pinchtab daemon install`) is a convenience for persistent local use, not a requirement. When browser automation is no longer needed:
+
+- `pinchtab daemon stop` — stop the daemon without uninstalling
+- `pinchtab daemon uninstall` — disable and remove the service file entirely
+
+As an alternative to the daemon, run `pinchtab server` in the foreground — it stops when the terminal closes.
+
+Agent sessions expire after **30 minutes of idle** by default (`sessions.agent.idleTimeoutSec`), and tabs can auto-close via `tabPolicy.lifecycle: "close_idle"`.
 
 ## Builds & Verification
 

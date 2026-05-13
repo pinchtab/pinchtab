@@ -10,8 +10,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/workflow"
+	configschema "github.com/pinchtab/pinchtab/internal/schema"
 	"github.com/pinchtab/pinchtab/internal/server"
-	configschema "github.com/pinchtab/pinchtab/schema"
 	"github.com/spf13/cobra"
 )
 

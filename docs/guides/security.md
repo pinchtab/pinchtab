@@ -21,6 +21,8 @@ The default security posture is:
 - `security.allowDownload = false`
 - `security.allowCookies = false`
 - `security.allowUpload = false`
+- `autoSolver.enabled = false`
+- `instanceDefaults.stealthLevel = "light"` (minimal fingerprint normalization only; anti-bot bypass requires explicit opt-in to `medium` or `full`)
 - `security.attach.enabled = false`
 - `security.attach.allowHosts = ["127.0.0.1", "localhost", "::1"]`
 - `security.attach.allowSchemes = ["ws", "wss"]`
@@ -345,6 +347,29 @@ For a secure local setup:
 ```
 
 If you intentionally expose PinchTab beyond localhost, treat the token as mandatory and keep the sensitive endpoint families disabled unless you have a specific reason to enable them. For anything more exposed than a single-machine local setup, assume you are operating an advanced deployment and review each security control explicitly.
+
+## Authenticated Browser Sessions
+
+When agents reuse browser sessions that a human has authenticated (logged-in profiles), follow these practices:
+
+- Use a **dedicated low-privilege profile** — not the user's personal browsing profile
+- **Confirm with the user** before performing account-changing actions (password changes, payment, deletion, permissions) in a reused session
+- Restrict navigation to the sites needed for the task via `security.allowedDomains` or instance-scoped `securityPolicy.allowedDomains`
+
+These are operational guidelines enforced at the agent/skill layer, not API-level gates. The profile system (`POST /profiles`) supports metadata fields (`name`, `description`, `useWhen`) to help agents select the right profile for the task.
+
+## Daemon Lifecycle
+
+The background daemon is a convenience for persistent local browser control. It runs continuously once installed (`KeepAlive` on macOS, `Restart=always` on Linux).
+
+When browser automation is no longer needed, disable it:
+
+- `pinchtab daemon stop` — stop the service without removing it
+- `pinchtab daemon uninstall` — stop, disable, and remove the service file
+
+For short-lived or one-off usage, prefer `pinchtab server` (foreground process, exits when the terminal closes) over the daemon.
+
+Agent session credentials auto-expire after **30 minutes of idle** (`sessions.agent.idleTimeoutSec: 1800`) and have a **24-hour max lifetime** (`sessions.agent.maxLifetimeSec: 86400`) by default.
 
 ## Agent Sessions
 
