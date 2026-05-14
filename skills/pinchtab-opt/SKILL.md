@@ -20,7 +20,17 @@ The subagents must run with `$TOOLS_DIR` as their working directory because `./s
 
 ## Prerequisites
 
-Docker services must be running. Verify before spawning agents:
+Stop any native PinchTab server that might occupy port 9867, then ensure Docker services are running:
+
+```bash
+# Kill native PinchTab server if running — it binds the same port as Docker services.
+pkill -f 'pinchtab server' 2>/dev/null
+pkill -f 'pinchtab.*serve' 2>/dev/null
+lsof -ti:9867 2>/dev/null | xargs kill 2>/dev/null
+sleep 1
+```
+
+Verify Docker health:
 
 ```bash
 $TOOLS_DIR/scripts/pt health

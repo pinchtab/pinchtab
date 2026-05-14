@@ -180,6 +180,12 @@ func RunRecordStep(argv []string, stdout, stderr io.Writer) int {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	stepID := fmt.Sprintf("%d.%d", args.Group, args.Step)
 
+	// Reset stale timing files when this is the first step in the report.
+	existingSteps, _ := data["steps"].([]any)
+	if len(existingSteps) == 0 {
+		resetTimingFiles(resultsDir, benchmarkType)
+	}
+
 	timing := computeTiming(resultsDir, benchmarkType)
 	dockerStats := collectDockerStats(benchmarkType)
 	cost := computeCost(args.InputTokens, args.OutputTokens, benchmark)
@@ -284,6 +290,12 @@ func persistTiming(resultsDir, benchmarkType string, stepEndMs int64) {
 	key := strings.ReplaceAll(benchmarkType, "_", "-")
 	lastStepEndFile := filepath.Join(resultsDir, fmt.Sprintf("last_step_end_%s.ms", key))
 	writeMsFile(lastStepEndFile, stepEndMs)
+}
+
+func resetTimingFiles(resultsDir, benchmarkType string) {
+	key := strings.ReplaceAll(benchmarkType, "_", "-")
+	_ = os.Remove(filepath.Join(resultsDir, fmt.Sprintf("run_start_%s.ms", key)))
+	_ = os.Remove(filepath.Join(resultsDir, fmt.Sprintf("last_step_end_%s.ms", key)))
 }
 
 func nowMs() int64 {

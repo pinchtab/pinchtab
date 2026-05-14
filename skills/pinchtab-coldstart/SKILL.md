@@ -13,6 +13,9 @@ Before spawning the subagent, clean the environment:
 
 ```bash
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
+# Stop Docker benchmark services if running — they bind port 9867 and
+# the cold-start native server will collide with them.
+docker compose -f "$PROJECT_ROOT/tests/tools/docker-compose.yml" down 2>/dev/null
 pkill -f 'pinchtab' 2>/dev/null
 pkill -f 'Google Chrome.*pinchtab' 2>/dev/null
 sleep 2

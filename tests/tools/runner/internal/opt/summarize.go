@@ -211,19 +211,21 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	}
 	rows = append(rows, row{"Errors", "0", fmt.Sprintf("%d", failed)})
 
+	// Prefer transcript-based timing, then run_usage wall clock, then per-step sum.
+	var displayDurationMs float64
 	if totalAgentDurationMs > 0 {
-		avgMs := totalAgentDurationMs / float64(blSteps)
-		rows = append(rows,
-			row{"", "", ""},
-			row{"Avg time/step", "", fmt.Sprintf("%.1fs", avgMs/1000)},
-			row{"Total time", "", fmtDuration(totalAgentDurationMs)},
-		)
+		displayDurationMs = totalAgentDurationMs
+	} else if wc, ok := usage["wall_clock_ms"].(float64); ok && wc > 0 {
+		displayDurationMs = wc
 	} else if stepsWithDuration > 0 {
-		avgMs := totalDurationMs / float64(stepsWithDuration)
+		displayDurationMs = totalDurationMs
+	}
+	if displayDurationMs > 0 {
+		avgMs := displayDurationMs / float64(blSteps)
 		rows = append(rows,
 			row{"", "", ""},
 			row{"Avg time/step", "", fmt.Sprintf("%.1fs", avgMs/1000)},
-			row{"Total time", "", fmtDuration(totalDurationMs)},
+			row{"Total time", "", fmtDuration(displayDurationMs)},
 		)
 	}
 

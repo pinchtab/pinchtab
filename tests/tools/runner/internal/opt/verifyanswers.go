@@ -19,7 +19,7 @@ var expectPatterns = map[string]string{
 	"0.2": `401|missing_token|unauth|bad_token|rejected`,
 	"0.3": `200|authed.*200|status.*ok|^ok$|"ok"`,
 	"0.4": `running`,
-	"0.5": `tab.*list|tabs.*returned|active tab|listed.*tab|\d+ tab.*found|tabs:|tab.*id`,
+	"0.5": `tab.*list|tabs.*returned|active tab|listed.*tab|\d+ tabs? (found|open)|tabs:|tab.*id`,
 	"0.6": `cleaned|closed|no stale|reused.*tab|no cleanup|single active|is empty|already empty|clean.*state|cannot close last|one tab`,
 	"0.7": `VERIFY_HOME_LOADED_12345|navigated to fixtures|fixtures.*home|PinchTab Benchmark|fixtures/`,
 	"0.8": `[0-9A-F]{32}|tab.*id.*captured`,
@@ -36,7 +36,7 @@ var expectPatterns = map[string]string{
 	"2.3": `Artificial Intelligence|ARTIFICIAL_INTELLIGENCE`,
 	// Group 3: Form
 	"3.1": `submitted|VERIFY_FORM_SUBMITTED_SUCCESS|FORM_SUBMITTED|SUBMISSION_DATA`,
-	"3.2": `[Rr]eset.*button|#reset-btn|[Rr]eset.*present|reset-btn`,
+	"3.2": `RESET_BUTTON_VISIBLE`,
 	// Group 4: SPA
 	"4.1": `TASK_STATS_TOTAL_3|Total.*3.*Active.*2.*Done.*1|3.*2.*1`,
 	"4.2": `TASK_ADDED|AUTOMATE|DEPLOYMENT|high`,
@@ -76,7 +76,7 @@ var expectPatterns = map[string]string{
 	"15.1": `1,284,930.*384,930|PROFIT_MARGIN_CALCULATED|Revenue.*Profit`,
 	"15.2": `FEATURE_COUNT_6.*7.*5|Go=6.*Python=7.*Rust=5|6, 7, 5|COMPARISON_TABLE_BUILT|Go.*6.*Python.*7.*Rust.*5`,
 	"15.3": `VERIFY_ARTICLE_PAGE_41414|<article|<h[12]|article.*html|html.*article|extracted.*html`,
-	"15.4": `flex`,
+	"15.4": `COMPUTED_DISPLAY_FLEX`,
 	// Group 16: Hover
 	"16.1": `HOVER_REVEALED_USER_1`,
 	"16.2": `HOVER_REVEALED_USER_2`,
