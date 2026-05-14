@@ -21,8 +21,13 @@ Navigate to `http://fixtures/article.html` and extract the HTML content of the m
 **Verify**: The extracted HTML captures the full article content from the page.
 
 ### 15.4 Inspect a stable computed CSS property
-Navigate to `http://fixtures/pricing.html` and find the Pro plan card. Report its computed `display` CSS value.
+Navigate to `http://fixtures/pricing.html` and find the Pro plan card element itself (not its parent container). Read its computed `display` CSS value and pick one:
 
-**Verify**: The computed display value is reported correctly.
+- A) `COMPUTED_DISPLAY_BLOCK`
+- B) `COMPUTED_DISPLAY_FLEX`
+- C) `COMPUTED_DISPLAY_GRID`
+- D) `COMPUTED_DISPLAY_INLINE`
+
+**Verify**: Answer is one of the options above.
 
 ---

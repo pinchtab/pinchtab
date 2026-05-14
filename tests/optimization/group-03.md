@@ -14,8 +14,12 @@ Go to `http://fixtures/form.html` and fill out the entire form with the followin
 **Verify**: The form was submitted and a confirmation appeared.
 
 ### 3.2 Reset and refill
-After submitting, check whether there is a way to reset the form or go back.
+After submitting, check whether a reset button is visible on the page. Pick one:
 
-**Verify**: A reset or back control is visible on the page.
+- A) `RESET_BUTTON_VISIBLE` — a reset button is present
+- B) `RESET_BUTTON_HIDDEN` — no reset button is visible
+- C) `RESET_BUTTON_ABSENT` — no reset button exists in the DOM
+
+**Verify**: Answer is one of the options above.
 
 ---

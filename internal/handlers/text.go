@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
@@ -84,6 +85,11 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 			targetFrameID = scope.FrameID
 		}
 	}
+
+	// Auto-wait: if the document is still loading, wait for readyState to
+	// reach at least "interactive" before extracting text. Prevents empty or
+	// partial results when text is called before the page finishes loading.
+	waitForReadyState(tCtx)
 
 	// Handle element selector - extract text from specific element instead of full page
 	selectorParam := r.URL.Query().Get("selector")
@@ -355,4 +361,30 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 		return "", fmt.Errorf("no element matches selector: %s", selector)
 	}
 	return text, nil
+}
+
+func waitForReadyState(ctx context.Context) {
+	var state string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
+		return
+	}
+	if state != "loading" {
+		return
+	}
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline:
+			return
+		case <-time.After(100 * time.Millisecond):
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
+				return
+			}
+			if state != "loading" {
+				return
+			}
+		}
+	}
 }

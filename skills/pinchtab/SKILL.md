@@ -224,6 +224,11 @@ pinchtab upload /absolute/path -s <css>             # requires security.allowUpl
 - `eval`: narrow read-only DOM inspection unless user asks for mutation. Blocked by default (`security.allowEvaluate: false`).
 - `download`: prefer temp/workspace path over arbitrary filesystem. Blocked by default.
 - `upload`: path must be user-provided or clearly approved. Blocked by default.
+  The file must exist inside the Docker container. Create it first, then upload:
+  ```bash
+  echo "file content" | docker exec -i tools-pinchtab-1 sh -c 'cat > /tmp/upload.txt'
+  pinchtab upload /tmp/upload.txt -s "#file-input"
+  ```
 
 ### HTTP API fallback
 

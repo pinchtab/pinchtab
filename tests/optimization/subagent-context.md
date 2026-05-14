@@ -47,6 +47,7 @@ For failures:
 - `<step>` is the step number within the group (e.g., `1`, `2`, `3`)
 - Keep answers factual — do not self-grade in the answer payload.
 - **Quote actual output, don't paraphrase.** The answer field must include the literal text or marker from the tool output. For example, if the server returns `status: ok`, write `status: ok` in the answer — not "Server responded with ok". Verification patterns match against exact substrings, so paraphrasing causes false failures.
+- **Always include `UPPER_CASE_MARKER` strings verbatim.** Fixture pages embed verification markers like `SUGGESTIONS_VISIBLE_COUNT_2`, `VERIFY_HOME_LOADED_12345`, `SCROLL_MIDDLE_MARKER`, etc. When you see these in the page content or tool output, copy them exactly into your answer — they are the primary tokens that automated verification matches against.
 
 ## Execution approach
 

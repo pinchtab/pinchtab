@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
@@ -60,6 +61,9 @@ func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
 		RequestCount             int64 `json:"request_count"`
 	}
 
+	var agentDurations []float64
+	var wallClockMs float64
+
 	for _, f := range files {
 		fh, err := os.Open(f)
 		if err != nil {
@@ -68,11 +72,14 @@ func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
 		}
 
 		var fileRequests int64
+		var firstTS, lastTS string
 		scanner := bufio.NewScanner(fh)
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
 		for scanner.Scan() {
+			line := scanner.Bytes()
 			var entry struct {
-				Message struct {
+				Timestamp string `json:"timestamp"`
+				Message   struct {
 					Role  string `json:"role"`
 					Usage struct {
 						InputTokens              int64 `json:"input_tokens"`
@@ -82,8 +89,14 @@ func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
 					} `json:"usage"`
 				} `json:"message"`
 			}
-			if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			if err := json.Unmarshal(line, &entry); err != nil {
 				continue
+			}
+			if entry.Timestamp != "" {
+				if firstTS == "" {
+					firstTS = entry.Timestamp
+				}
+				lastTS = entry.Timestamp
 			}
 			u := entry.Message.Usage
 			if u.InputTokens == 0 && u.CacheCreationInputTokens == 0 && u.CacheReadInputTokens == 0 && u.OutputTokens == 0 {
@@ -99,6 +112,18 @@ func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
 
 		totals.RequestCount += fileRequests
 		_, _ = fmt.Fprintf(stdout, "Parsed %d API responses from %s\n", fileRequests, filepath.Base(f))
+
+		if firstTS != "" && lastTS != "" {
+			t0, err0 := time.Parse(time.RFC3339Nano, firstTS)
+			t1, err1 := time.Parse(time.RFC3339Nano, lastTS)
+			if err0 == nil && err1 == nil {
+				d := t1.Sub(t0).Seconds() * 1000
+				agentDurations = append(agentDurations, d)
+				if d > wallClockMs {
+					wallClockMs = d
+				}
+			}
+		}
 	}
 
 	totalInput := totals.InputTokens + totals.CacheCreationInputTokens + totals.CacheReadInputTokens
@@ -114,6 +139,10 @@ func RunInjectUsage(argv []string, stdout, stderr io.Writer) int {
 		"total_input_tokens":          totalInput,
 		"output_tokens":               totals.OutputTokens,
 		"total_tokens":                totalTokens,
+	}
+	if wallClockMs > 0 {
+		usage["wall_clock_ms"] = wallClockMs
+		usage["agent_durations_ms"] = agentDurations
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\nToken usage:\n")
