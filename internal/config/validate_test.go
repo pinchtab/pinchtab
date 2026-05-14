@@ -470,6 +470,91 @@ func TestValidateFileConfig_ChromeExtraFlags(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_CloakBrowser(t *testing.T) {
+	quota := 2048
+	valid := &FileConfig{
+		Browser: BrowserConfig{
+			Provider:     BrowserProviderCloak,
+			ChromeBinary: "/opt/cloakbrowser/chrome",
+			Cloak: CloakBrowserConfig{
+				FingerprintSeed: "42069",
+				Platform:        "windows",
+				Locale:          "en-GB",
+				Timezone:        "Europe/London",
+				WebRTCIP:        "auto",
+				StorageQuotaMB:  &quota,
+			},
+		},
+	}
+	if errs := ValidateFileConfig(valid); len(errs) != 0 {
+		t.Fatalf("ValidateFileConfig(valid cloak config) errors = %v, want none", errs)
+	}
+
+	negativeQuota := -1
+	tests := []struct {
+		name string
+		fc   *FileConfig
+		want string
+	}{
+		{
+			name: "invalid provider",
+			fc:   &FileConfig{Browser: BrowserConfig{Provider: "firefox"}},
+			want: "browser.provider",
+		},
+		{
+			name: "cloak requires binary",
+			fc:   &FileConfig{Browser: BrowserConfig{Provider: BrowserProviderCloak}},
+			want: "browser.binary",
+		},
+		{
+			name: "invalid platform",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{Platform: "ios"},
+			}},
+			want: "browser.cloak.platform",
+		},
+		{
+			name: "negative storage quota",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{StorageQuotaMB: &negativeQuota},
+			}},
+			want: "browser.cloak.storageQuotaMB",
+		},
+		{
+			name: "fingerprint seed whitespace",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{FingerprintSeed: "42 069"},
+			}},
+			want: "browser.cloak.fingerprintSeed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateFileConfig(tt.fc)
+			if len(errs) == 0 {
+				t.Fatalf("ValidateFileConfig() returned no errors, want %s", tt.want)
+			}
+			found := false
+			for _, err := range errs {
+				if strings.Contains(err.Error(), tt.want) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("ValidateFileConfig() errors = %v, want field %s", errs, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidationError_Error(t *testing.T) {
 	err := ValidationError{
 		Field:   "server.port",

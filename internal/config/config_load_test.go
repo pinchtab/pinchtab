@@ -53,6 +53,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.CookieSecure != nil {
 		t.Errorf("default CookieSecure = %v, want nil for auto-detect", *cfg.CookieSecure)
 	}
+	if cfg.BrowserProvider != BrowserProviderChrome {
+		t.Errorf("default BrowserProvider = %v, want %s", cfg.BrowserProvider, BrowserProviderChrome)
+	}
+	if !cfg.Cloak.DisableDefaultStealthArgs {
+		t.Errorf("default Cloak.DisableDefaultStealthArgs = false, want true")
+	}
 	wantExtensionsDir := defaultExtensionsDir(userConfigDir())
 	if len(cfg.ExtensionPaths) != 1 || cfg.ExtensionPaths[0] != wantExtensionsDir {
 		t.Errorf("default ExtensionPaths = %v, want [%q]", cfg.ExtensionPaths, wantExtensionsDir)
@@ -689,6 +695,58 @@ func TestApplyFileConfigToRuntime_SanitizesChromeExtraFlags(t *testing.T) {
 
 	if cfg.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
 		t.Fatalf("ChromeExtraFlags = %q, want %q", cfg.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	}
+}
+
+func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
+	quota := 2048
+	disableDefaultStealthArgs := false
+	cfg := &RuntimeConfig{Cloak: CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true}}
+	fc := &FileConfig{
+		Browser: BrowserConfig{
+			Provider:     BrowserProviderCloak,
+			ChromeBinary: "/opt/cloakbrowser/chrome",
+			Cloak: CloakBrowserConfig{
+				FingerprintSeed:           "42069",
+				Platform:                  "windows",
+				Locale:                    "en-GB",
+				Timezone:                  "Europe/London",
+				WebRTCIP:                  "auto",
+				FontsDir:                  "/opt/fonts",
+				StorageQuotaMB:            &quota,
+				DisableDefaultStealthArgs: &disableDefaultStealthArgs,
+			},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.BrowserProvider != BrowserProviderCloak {
+		t.Fatalf("BrowserProvider = %q, want %q", cfg.BrowserProvider, BrowserProviderCloak)
+	}
+	if cfg.ChromeBinary != "/opt/cloakbrowser/chrome" {
+		t.Fatalf("ChromeBinary = %q, want configured binary", cfg.ChromeBinary)
+	}
+	if cfg.Cloak.FingerprintSeed != "42069" ||
+		cfg.Cloak.Platform != "windows" ||
+		cfg.Cloak.Locale != "en-GB" ||
+		cfg.Cloak.Timezone != "Europe/London" ||
+		cfg.Cloak.WebRTCIP != "auto" ||
+		cfg.Cloak.FontsDir != "/opt/fonts" ||
+		cfg.Cloak.StorageQuotaMB != quota ||
+		cfg.Cloak.DisableDefaultStealthArgs {
+		t.Fatalf("Cloak settings not applied: %+v", cfg.Cloak)
+	}
+
+	defaultCfg := &RuntimeConfig{}
+	ApplyFileConfigToRuntime(defaultCfg, &FileConfig{
+		Browser: BrowserConfig{
+			Provider:     BrowserProviderCloak,
+			ChromeBinary: "/opt/cloakbrowser/chrome",
+		},
+	})
+	if !defaultCfg.Cloak.DisableDefaultStealthArgs {
+		t.Fatal("Cloak.DisableDefaultStealthArgs = false for cloak provider with no override, want true")
 	}
 }
 

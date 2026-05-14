@@ -59,9 +59,11 @@ type RuntimeConfig struct {
 	BlockAds           bool
 	MaxTabs            int
 	MaxParallelTabs    int // 0 = auto-detect from runtime.NumCPU
+	BrowserProvider    string
 	ChromeBinary       string
 	ChromeDebugPort    int
 	ChromeExtraFlags   string
+	Cloak              CloakBrowserRuntimeConfig
 	ExtensionPaths     []string
 	UserAgent          string
 	NoAnimations       bool
@@ -280,11 +282,35 @@ type DashboardSessionFileConfig struct {
 }
 
 type BrowserConfig struct {
-	ChromeVersion    string   `json:"version,omitempty"`
-	ChromeBinary     string   `json:"binary,omitempty"`
-	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
-	ChromeExtraFlags string   `json:"extraFlags,omitempty"`
-	ExtensionPaths   []string `json:"extensionPaths,omitempty"`
+	Provider         string             `json:"provider,omitempty"`
+	ChromeVersion    string             `json:"version,omitempty"`
+	ChromeBinary     string             `json:"binary,omitempty"`
+	ChromeDebugPort  *int               `json:"remoteDebuggingPort,omitempty"`
+	ChromeExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak            CloakBrowserConfig `json:"cloak,omitempty"`
+	ExtensionPaths   []string           `json:"extensionPaths,omitempty"`
+}
+
+type CloakBrowserConfig struct {
+	FingerprintSeed           string `json:"fingerprintSeed,omitempty"`
+	Platform                  string `json:"platform,omitempty"`
+	Locale                    string `json:"locale,omitempty"`
+	Timezone                  string `json:"timezone,omitempty"`
+	WebRTCIP                  string `json:"webrtcIP,omitempty"`
+	FontsDir                  string `json:"fontsDir,omitempty"`
+	StorageQuotaMB            *int   `json:"storageQuotaMB,omitempty"`
+	DisableDefaultStealthArgs *bool  `json:"disableDefaultStealthArgs,omitempty"`
+}
+
+type CloakBrowserRuntimeConfig struct {
+	FingerprintSeed           string
+	Platform                  string
+	Locale                    string
+	Timezone                  string
+	WebRTCIP                  string
+	FontsDir                  string
+	StorageQuotaMB            int
+	DisableDefaultStealthArgs bool
 }
 
 type InstanceDefaultsConfig struct {

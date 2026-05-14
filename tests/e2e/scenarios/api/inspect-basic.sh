@@ -10,6 +10,7 @@ assert_ok "navigate to form.html"
 
 pt_get /snapshot
 assert_ok "snapshot to populate ref cache"
+FORM_SNAPSHOT="$RESULT"
 
 # Extract refs for various elements we will inspect.
 # form.html has: textbox (username), textbox (email), textbox (password),
@@ -135,9 +136,9 @@ end_test
 start_test "inspect: password field values redacted in snapshot"
 
 # Type a value into the password field so there's something to redact.
-PASS_REF=$(find_ref_by_role_and_name "textbox" "Password:" "$RESULT")
+PASS_REF=$(find_ref_by_role_and_name "textbox" "Password:" "$FORM_SNAPSHOT")
 if [ -z "$PASS_REF" ] || [ "$PASS_REF" = "null" ]; then
-  PASS_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.name | test("password";"i")) | .ref] | first // empty')
+  PASS_REF=$(echo "$FORM_SNAPSHOT" | jq -r '[.nodes[] | select(.name | test("password";"i")) | .ref] | first // empty')
 fi
 
 if [ -n "$PASS_REF" ] && [ "$PASS_REF" != "null" ]; then

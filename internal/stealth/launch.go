@@ -12,6 +12,15 @@ type LaunchContract struct {
 }
 
 func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract {
+	if config.NativeCloakStealthEnabled(cfg) {
+		return LaunchContract{
+			Flags: map[string]bool{
+				"nativeCloakBrowser":          true,
+				"pinchtabStealthArgsDisabled": true,
+			},
+		}
+	}
+
 	persona := BrowserPersona{}
 	if cfg != nil {
 		persona = BuildPersona(cfg.UserAgent, cfg.ChromeVersion)

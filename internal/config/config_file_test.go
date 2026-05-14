@@ -21,6 +21,9 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.Server.CookieSecure != nil {
 		t.Errorf("DefaultFileConfig.Server.CookieSecure = %v, want nil for auto-detect", formatBoolPtr(fc.Server.CookieSecure))
 	}
+	if fc.Browser.Provider != BrowserProviderChrome {
+		t.Errorf("DefaultFileConfig.Browser.Provider = %v, want %s", fc.Browser.Provider, BrowserProviderChrome)
+	}
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("DefaultFileConfig.InstanceDefaults.Mode = %v, want headless", fc.InstanceDefaults.Mode)
 	}
@@ -432,6 +435,12 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 	}
 
 	browser := raw["browser"].(map[string]any)
+	if provider, ok := browser["provider"]; !ok || provider != BrowserProviderChrome {
+		t.Fatalf("browser.provider = %#v, want chrome", provider)
+	}
+	if _, ok := browser["cloak"]; ok {
+		t.Fatal("browser.cloak should not be emitted for default chrome provider")
+	}
 	if ext, ok := browser["extensionPaths"]; !ok {
 		t.Fatal("browser.extensionPaths missing from JSON")
 	} else if items, ok := ext.([]any); !ok || len(items) != 0 {
@@ -473,6 +482,39 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 	}
 	if raw, ok := security["uploadMaxTotalBytes"]; !ok || int(raw.(float64)) != DefaultUploadMaxTotalBytes {
 		t.Fatalf("security.uploadMaxTotalBytes = %#v, want %d", raw, DefaultUploadMaxTotalBytes)
+	}
+}
+
+func TestFileConfigJSONEmitsCloakBrowserConfig(t *testing.T) {
+	disableDefaultStealthArgs := true
+	fc := DefaultFileConfig()
+	fc.Browser.Provider = BrowserProviderCloak
+	fc.Browser.ChromeBinary = "/opt/cloakbrowser/chrome"
+	fc.Browser.Cloak = CloakBrowserConfig{
+		FingerprintSeed:           "42069",
+		Platform:                  "windows",
+		DisableDefaultStealthArgs: &disableDefaultStealthArgs,
+	}
+
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal(FileConfig JSON) error = %v", err)
+	}
+	browser := raw["browser"].(map[string]any)
+	cloak, ok := browser["cloak"].(map[string]any)
+	if !ok {
+		t.Fatal("browser.cloak missing from JSON")
+	}
+	if cloak["fingerprintSeed"] != "42069" {
+		t.Fatalf("browser.cloak.fingerprintSeed = %#v, want 42069", cloak["fingerprintSeed"])
+	}
+	if cloak["platform"] != "windows" {
+		t.Fatalf("browser.cloak.platform = %#v, want windows", cloak["platform"])
 	}
 }
 

@@ -142,3 +142,46 @@ func TestBuildLaunchContractOwnsStealthLaunchFlags(t *testing.T) {
 		t.Fatalf("expected stealth launch contract to own user-agent, got %v", launch.Args)
 	}
 }
+
+func TestNewBundleNativeCloakDisablesPinchTabStealthOverlays(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		BrowserProvider: config.BrowserProviderCloak,
+		Cloak: config.CloakBrowserRuntimeConfig{
+			FingerprintSeed:           "42069",
+			DisableDefaultStealthArgs: true,
+		},
+		StealthLevel: "full",
+		Headless:     true,
+	}
+
+	bundle := NewBundle(cfg, 1234)
+	if bundle.Provider != config.BrowserProviderCloak {
+		t.Fatalf("Provider = %q, want %q", bundle.Provider, config.BrowserProviderCloak)
+	}
+	if !bundle.Native {
+		t.Fatal("expected native Cloak bundle")
+	}
+	if strings.Contains(bundle.Script, "__pinchtab_stealth_level") {
+		t.Fatalf("native Cloak script should not include PinchTab JS stealth overlay")
+	}
+	if !strings.Contains(bundle.Script, "window.open") {
+		t.Fatalf("native Cloak script should retain popup guard")
+	}
+	if len(bundle.Launch.Args) != 0 {
+		t.Fatalf("native Cloak launch args = %v, want none", bundle.Launch.Args)
+	}
+	if !bundle.Launch.Flags["pinchtabStealthArgsDisabled"] {
+		t.Fatalf("native Cloak launch flags = %v, want pinchtabStealthArgsDisabled", bundle.Launch.Flags)
+	}
+
+	status := StatusFromBundle(bundle, cfg, LaunchModeAllocator)
+	if status.Provider != config.BrowserProviderCloak || !status.Native || !status.PinchTabOverlaysDisabled {
+		t.Fatalf("status = %+v, want native cloak provider with overlays disabled", status)
+	}
+	if status.FingerprintSeed != "42069" {
+		t.Fatalf("status FingerprintSeed = %q, want 42069", status.FingerprintSeed)
+	}
+	if !status.Capabilities["sourceLevelFingerprinting"] {
+		t.Fatalf("status capabilities = %v, want sourceLevelFingerprinting", status.Capabilities)
+	}
+}

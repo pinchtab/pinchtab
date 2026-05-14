@@ -28,7 +28,7 @@ const usageText = `Usage:
 
 Options:
   --suite basic|extended|smoke|api|cli|infra|plugin|api-extended|cli-extended|infra-extended
-          smoke-orchestrator|smoke-security|smoke-lifecycle|smoke-docker
+          smoke-orchestrator|smoke-security|smoke-lifecycle
   --filter TEXT       Filter scenario file names, groups, tiers, helpers, or tags
   --test TEXT         Run one start_test block by name
   --extra FILES       Add extra scenario files, space-separated
@@ -130,7 +130,7 @@ func normalizeSuite(raw string) (string, error) {
 		return raw, nil
 	case "api", "cli", "infra", "plugin",
 		"api-extended", "cli-extended", "infra-extended",
-		"smoke", "smoke-orchestrator", "smoke-security", "smoke-lifecycle", "smoke-docker":
+		"smoke", "smoke-orchestrator", "smoke-security", "smoke-lifecycle":
 		return raw, nil
 	default:
 		return "", fmt.Errorf("unknown suite %q", raw)

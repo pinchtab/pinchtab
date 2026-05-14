@@ -178,9 +178,21 @@ Current nested file-config shape:
     "cookieSecure": null
   },
   "browser": {
+    "provider": "chrome",
     "version": "144.0.7559.133",
     "binary": "/path/to/chrome",
+    "remoteDebuggingPort": null,
     "extraFlags": "--disable-gpu",
+    "cloak": {
+      "fingerprintSeed": "42069",
+      "platform": "windows",
+      "locale": "en-GB",
+      "timezone": "Europe/London",
+      "webrtcIP": "auto",
+      "fontsDir": "/path/to/fonts",
+      "storageQuotaMB": 2048,
+      "disableDefaultStealthArgs": true
+    },
     "extensionPaths": ["/path/to/pinchtab/extensions"]
   },
   "instanceDefaults": {
@@ -338,6 +350,38 @@ Notes:
 The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the
 config file.
+
+### Browser Provider
+
+`browser.provider` selects the local browser backend:
+
+- `chrome` is the default and uses the normal Chrome/Chromium launch path.
+- `cloak` uses a user-installed CloakBrowser Chromium binary from `browser.binary`.
+
+When `browser.provider` is `cloak`, `browser.binary` must point at the local
+CloakBrowser Chromium executable. PinchTab does not download, bundle, or
+redistribute the CloakBrowser binary.
+
+`browser.cloak` maps supported CloakBrowser fingerprint settings to native launch
+flags:
+
+- `fingerprintSeed` -> `--fingerprint`
+- `platform` -> `--fingerprint-platform`
+- `locale` -> `--fingerprint-locale`
+- `timezone` -> `--fingerprint-timezone`
+- `webrtcIP` -> `--fingerprint-webrtc-ip`
+- `fontsDir` -> `--fingerprint-fonts-dir`
+- `storageQuotaMB` -> `--fingerprint-storage-quota`
+
+`disableDefaultStealthArgs` defaults to true for native Cloak mode. In that mode,
+PinchTab keeps its process, profile, tab, extension, and action-control behavior,
+but does not add its own JS stealth overlays or automation-hiding launch flags on
+top of CloakBrowser's native patches.
+
+Advanced CloakBrowser flags can still go through `browser.extraFlags` when they
+are not PinchTab-owned lifecycle flags.
+
+### Browser Extra Flags
 
 `browser.extraFlags` is validated and sanitized. It is only for user-safe Chrome flags that do not weaken browser security and do not override PinchTab-owned launch behavior.
 

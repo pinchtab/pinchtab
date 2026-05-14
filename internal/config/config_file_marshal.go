@@ -23,6 +23,82 @@ func intPtrIfPositive(v int) *int {
 	return &n
 }
 
+func intPtrIfNonNegative(v int) *int {
+	if v < 0 {
+		return nil
+	}
+	n := v
+	return &n
+}
+
+func boolPtrValue(v bool) *bool {
+	b := v
+	return &b
+}
+
+func browserProviderForFile(provider string) string {
+	if provider == "" {
+		return BrowserProviderChrome
+	}
+	return provider
+}
+
+func cloakBrowserConfigJSONFromFile(provider string, c CloakBrowserConfig) *cloakBrowserConfigJSON {
+	if !hasCloakBrowserConfig(c) {
+		return nil
+	}
+	if !IsCloakBrowserProvider(provider) &&
+		c.FingerprintSeed == "" &&
+		c.Platform == "" &&
+		c.Locale == "" &&
+		c.Timezone == "" &&
+		c.WebRTCIP == "" &&
+		c.FontsDir == "" &&
+		c.StorageQuotaMB == nil {
+		return nil
+	}
+	return &cloakBrowserConfigJSON{
+		FingerprintSeed:           c.FingerprintSeed,
+		Platform:                  c.Platform,
+		Locale:                    c.Locale,
+		Timezone:                  c.Timezone,
+		WebRTCIP:                  c.WebRTCIP,
+		FontsDir:                  c.FontsDir,
+		StorageQuotaMB:            c.StorageQuotaMB,
+		DisableDefaultStealthArgs: c.DisableDefaultStealthArgs,
+	}
+}
+
+func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
+	if cfg == nil {
+		return CloakBrowserConfig{}
+	}
+	c := cfg.Cloak
+	hasRuntimeCloak := IsCloakBrowserProvider(cfg.BrowserProvider) ||
+		c.FingerprintSeed != "" ||
+		c.Platform != "" ||
+		c.Locale != "" ||
+		c.Timezone != "" ||
+		c.WebRTCIP != "" ||
+		c.FontsDir != "" ||
+		c.StorageQuotaMB > 0
+	out := CloakBrowserConfig{
+		FingerprintSeed: c.FingerprintSeed,
+		Platform:        c.Platform,
+		Locale:          c.Locale,
+		Timezone:        c.Timezone,
+		WebRTCIP:        c.WebRTCIP,
+		FontsDir:        c.FontsDir,
+	}
+	if c.StorageQuotaMB > 0 {
+		out.StorageQuotaMB = intPtrIfNonNegative(c.StorageQuotaMB)
+	}
+	if hasRuntimeCloak {
+		out.DisableDefaultStealthArgs = boolPtrValue(c.DisableDefaultStealthArgs)
+	}
+	return out
+}
+
 // tabPolicyDefaultsFromRuntime emits a TabPolicyDefaults block when the runtime
 // config carries any non-default tab-policy setting (lifecycle, close delay, or
 // restore). Returns nil for a fully vanilla config so round-tripping doesn't
@@ -67,10 +143,12 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			CookieSecure:      fc.Server.CookieSecure,
 		},
 		Browser: browserConfigJSON{
+			Provider:         browserProviderForFile(fc.Browser.Provider),
 			ChromeVersion:    fc.Browser.ChromeVersion,
 			ChromeBinary:     fc.Browser.ChromeBinary,
 			ChromeDebugPort:  fc.Browser.ChromeDebugPort,
 			ChromeExtraFlags: fc.Browser.ChromeExtraFlags,
+			Cloak:            cloakBrowserConfigJSONFromFile(fc.Browser.Provider, fc.Browser.Cloak),
 			ExtensionPaths:   copyStringSlice(fc.Browser.ExtensionPaths),
 		},
 		InstanceDefaults: instanceDefaultsConfigJSON{
@@ -323,10 +401,12 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			CookieSecure:      cfg.CookieSecure,
 		},
 		Browser: BrowserConfig{
+			Provider:         NormalizeBrowserProvider(cfg.BrowserProvider),
 			ChromeVersion:    cfg.ChromeVersion,
 			ChromeBinary:     cfg.ChromeBinary,
 			ChromeDebugPort:  intPtrIfPositive(cfg.ChromeDebugPort),
 			ChromeExtraFlags: cfg.ChromeExtraFlags,
+			Cloak:            cloakBrowserConfigFromRuntime(cfg),
 			ExtensionPaths:   append([]string(nil), cfg.ExtensionPaths...),
 		},
 		InstanceDefaults: InstanceDefaultsConfig{

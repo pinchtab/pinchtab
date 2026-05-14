@@ -74,7 +74,12 @@ func setServerField(s *ServerConfig, field, value string) error {
 }
 
 func setBrowserField(b *BrowserConfig, field, value string) error {
+	if strings.HasPrefix(field, "cloak.") {
+		return setCloakBrowserField(&b.Cloak, strings.TrimPrefix(field, "cloak."), value)
+	}
 	switch field {
+	case "provider":
+		b.Provider = value
 	case "version":
 		b.ChromeVersion = value
 	case "binary":
@@ -83,6 +88,38 @@ func setBrowserField(b *BrowserConfig, field, value string) error {
 		b.ChromeExtraFlags = value
 	default:
 		return fmt.Errorf("unknown field browser.%s", field)
+	}
+	return nil
+}
+
+func setCloakBrowserField(c *CloakBrowserConfig, field, value string) error {
+	switch field {
+	case "fingerprintSeed":
+		c.FingerprintSeed = value
+	case "platform":
+		c.Platform = value
+	case "locale":
+		c.Locale = value
+	case "timezone":
+		c.Timezone = value
+	case "webrtcIP":
+		c.WebRTCIP = value
+	case "fontsDir":
+		c.FontsDir = value
+	case "storageQuotaMB":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("browser.cloak.storageQuotaMB must be a number: %w", err)
+		}
+		c.StorageQuotaMB = &n
+	case "disableDefaultStealthArgs":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("browser.cloak.disableDefaultStealthArgs must be true or false: %w", err)
+		}
+		c.DisableDefaultStealthArgs = &b
+	default:
+		return fmt.Errorf("unknown field browser.cloak.%s", field)
 	}
 	return nil
 }

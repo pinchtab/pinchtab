@@ -60,7 +60,12 @@ func getServerField(s *ServerConfig, field string) (string, error) {
 }
 
 func getBrowserField(b *BrowserConfig, field string) (string, error) {
+	if strings.HasPrefix(field, "cloak.") {
+		return getCloakBrowserField(&b.Cloak, strings.TrimPrefix(field, "cloak."))
+	}
 	switch field {
+	case "provider":
+		return b.Provider, nil
 	case "version":
 		return b.ChromeVersion, nil
 	case "binary":
@@ -69,6 +74,29 @@ func getBrowserField(b *BrowserConfig, field string) (string, error) {
 		return b.ChromeExtraFlags, nil
 	default:
 		return "", fmt.Errorf("unknown field browser.%s", field)
+	}
+}
+
+func getCloakBrowserField(c *CloakBrowserConfig, field string) (string, error) {
+	switch field {
+	case "fingerprintSeed":
+		return c.FingerprintSeed, nil
+	case "platform":
+		return c.Platform, nil
+	case "locale":
+		return c.Locale, nil
+	case "timezone":
+		return c.Timezone, nil
+	case "webrtcIP":
+		return c.WebRTCIP, nil
+	case "fontsDir":
+		return c.FontsDir, nil
+	case "storageQuotaMB":
+		return formatIntPtr(c.StorageQuotaMB), nil
+	case "disableDefaultStealthArgs":
+		return formatBoolPtr(c.DisableDefaultStealthArgs), nil
+	default:
+		return "", fmt.Errorf("unknown field browser.cloak.%s", field)
 	}
 }
 

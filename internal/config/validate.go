@@ -40,6 +40,21 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
+
+	if fc.Browser.Provider != "" && !isValidBrowserProvider(fc.Browser.Provider) {
+		errs = append(errs, ValidationError{
+			Field:   "browser.provider",
+			Message: fmt.Sprintf("invalid value %q (must be chrome or cloak)", fc.Browser.Provider),
+		})
+	}
+	if IsCloakBrowserProvider(fc.Browser.Provider) && strings.TrimSpace(fc.Browser.ChromeBinary) == "" {
+		errs = append(errs, ValidationError{
+			Field:   "browser.binary",
+			Message: "must be set when browser.provider is cloak",
+		})
+	}
+	errs = append(errs, validateCloakBrowserConfig(fc.Browser.Cloak)...)
+
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
 			errs = append(errs, ValidationError{
@@ -336,6 +351,54 @@ func validateBind(bind string, field string) error {
 	// If it contains a colon, assume it's an IPv6 attempt
 	// This is intentionally loose — the OS will reject truly invalid addresses
 	return nil
+}
+
+func isValidBrowserProvider(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case BrowserProviderChrome, BrowserProviderCloak:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateCloakBrowserConfig(cloak CloakBrowserConfig) []error {
+	var errs []error
+	if cloak.Platform != "" && !isValidCloakPlatform(cloak.Platform) {
+		errs = append(errs, ValidationError{
+			Field:   "browser.cloak.platform",
+			Message: fmt.Sprintf("invalid value %q (must be windows, macos, or linux)", cloak.Platform),
+		})
+	}
+	if cloak.StorageQuotaMB != nil && *cloak.StorageQuotaMB < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "browser.cloak.storageQuotaMB",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *cloak.StorageQuotaMB),
+		})
+	}
+	for field, value := range map[string]string{
+		"browser.cloak.fingerprintSeed": cloak.FingerprintSeed,
+		"browser.cloak.locale":          cloak.Locale,
+		"browser.cloak.timezone":        cloak.Timezone,
+		"browser.cloak.webrtcIP":        cloak.WebRTCIP,
+	} {
+		if strings.ContainsAny(strings.TrimSpace(value), " \t\n\r") {
+			errs = append(errs, ValidationError{
+				Field:   field,
+				Message: "must not contain whitespace",
+			})
+		}
+	}
+	return errs
+}
+
+func isValidCloakPlatform(platform string) bool {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "windows", "macos", "linux":
+		return true
+	default:
+		return false
+	}
 }
 
 func isValidStealthLevel(level string) bool {

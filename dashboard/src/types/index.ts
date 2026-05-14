@@ -97,10 +97,26 @@ export interface BackendObservabilityConfig {
   activity: BackendActivityConfig;
 }
 
+export type BackendBrowserProvider = "chrome" | "cloak";
+
+export interface BackendCloakBrowserConfig {
+  fingerprintSeed: string;
+  platform: "" | "windows" | "macos" | "linux";
+  locale: string;
+  timezone: string;
+  webrtcIP: string;
+  fontsDir: string;
+  storageQuotaMB?: number;
+  disableDefaultStealthArgs?: boolean;
+}
+
 export interface BackendBrowserConfig {
+  provider: BackendBrowserProvider;
   version: string;
   binary: string;
+  remoteDebuggingPort?: number;
   extraFlags: string;
+  cloak: BackendCloakBrowserConfig;
   extensionPaths: string[];
 }
 
@@ -233,9 +249,21 @@ export const defaultBackendConfig: BackendConfig = {
     cookieSecure: undefined,
   },
   browser: {
+    provider: "chrome",
     version: "144.0.7559.133",
     binary: "",
+    remoteDebuggingPort: undefined,
     extraFlags: "",
+    cloak: {
+      fingerprintSeed: "",
+      platform: "",
+      locale: "",
+      timezone: "",
+      webrtcIP: "",
+      fontsDir: "",
+      storageQuotaMB: undefined,
+      disableDefaultStealthArgs: true,
+    },
     extensionPaths: [],
   },
   instanceDefaults: {
@@ -356,6 +384,11 @@ export function normalizeBackendConfig(
     browser: {
       ...defaultBackendConfig.browser,
       ...(input?.browser ?? {}),
+      provider: input?.browser?.provider === "cloak" ? "cloak" : "chrome",
+      cloak: {
+        ...defaultBackendConfig.browser.cloak,
+        ...(input?.browser?.cloak ?? {}),
+      },
       extensionPaths:
         input?.browser?.extensionPaths ??
         defaultBackendConfig.browser.extensionPaths,

@@ -13,6 +13,7 @@
     "guides/contributing.md",
     "guides/security.md",
     "guides/mcp-agents.md",
+    "guides/cloakbrowser.md",
     "guides/attach-chrome.md",
     "guides/remote-bridge-orchestrator.md",
     "guides/tailscale-bridge-orchestrator.md",

@@ -64,6 +64,17 @@
         "null"
       ]
     },
+    "nullableNonNegativeInteger": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "nullableString": {
       "type": [
         "string",
@@ -189,6 +200,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "",
+            "chrome",
+            "cloak"
+          ],
+          "default": "chrome"
+        },
         "version": {
           "type": "string",
           "default": "144.0.7559.133"
@@ -202,8 +222,54 @@
         "extraFlags": {
           "type": "string"
         },
+        "cloak": {
+          "$ref": "#/definitions/cloakBrowser"
+        },
         "extensionPaths": {
           "$ref": "#/definitions/stringArray"
+        }
+      }
+    },
+    "cloakBrowser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fingerprintSeed": {
+          "type": "string",
+          "pattern": "^\\S*$",
+          "description": "Deterministic CloakBrowser fingerprint seed. Empty lets CloakBrowser generate a fresh identity."
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^\\S*$"
+        },
+        "timezone": {
+          "type": "string",
+          "pattern": "^\\S*$"
+        },
+        "webrtcIP": {
+          "type": "string",
+          "pattern": "^\\S*$",
+          "description": "Explicit WebRTC replacement IP, or auto when CloakBrowser should resolve the proxy exit IP."
+        },
+        "fontsDir": {
+          "type": "string"
+        },
+        "storageQuotaMB": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "disableDefaultStealthArgs": {
+          "$ref": "#/definitions/nullableBoolean",
+          "description": "When true, PinchTab does not add its JS stealth overlays or automation-hiding launch flags for CloakBrowser."
         }
       }
     },

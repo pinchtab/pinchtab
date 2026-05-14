@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 func TestChromeNeedsNoSandbox(t *testing.T) {
@@ -95,5 +98,89 @@ func TestShouldRetryChromeStartupWithDirectLaunch(t *testing.T) {
 				t.Fatalf("shouldRetryChromeStartupWithDirectLaunch() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildChromeArgs_CloakProviderUsesNativeFingerprintFlags(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		BrowserProvider: config.BrowserProviderCloak,
+		Cloak: config.CloakBrowserRuntimeConfig{
+			FingerprintSeed:           "42069",
+			Platform:                  "windows",
+			Locale:                    "en-GB",
+			Timezone:                  "Europe/London",
+			WebRTCIP:                  "auto",
+			FontsDir:                  "/opt/fonts",
+			StorageQuotaMB:            2048,
+			DisableDefaultStealthArgs: true,
+		},
+	}
+
+	args := BuildChromeArgs(cfg, 9222)
+	for _, want := range []string{
+		"--fingerprint=42069",
+		"--fingerprint-platform=windows",
+		"--fingerprint-locale=en-GB",
+		"--fingerprint-timezone=Europe/London",
+		"--fingerprint-webrtc-ip=auto",
+		"--fingerprint-fonts-dir=/opt/fonts",
+		"--fingerprint-storage-quota=2048",
+	} {
+		if !stealth.HasLaunchArg(args, want) {
+			t.Fatalf("BuildChromeArgs() missing %q in %v", want, args)
+		}
+	}
+	for _, blocked := range []string{
+		"--disable-automation",
+		"--enable-automation=false",
+		"--disable-blink-features=AutomationControlled",
+		"--enable-network-information-downlink-max",
+	} {
+		if stealth.HasLaunchArg(args, blocked) {
+			t.Fatalf("BuildChromeArgs() included PinchTab stealth arg %q in native Cloak mode: %v", blocked, args)
+		}
+	}
+	if stealth.HasLaunchArgPrefix(args, "--user-agent=") {
+		t.Fatalf("BuildChromeArgs() included PinchTab user-agent override in native Cloak mode: %v", args)
+	}
+}
+
+func TestBuildChromeArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		BrowserProvider: config.BrowserProviderChrome,
+		ChromeVersion:   "144.0.0.0",
+		ExtensionPaths:  []string{},
+	}
+
+	args := BuildChromeArgs(cfg, 9222)
+	for _, want := range []string{
+		"--remote-debugging-port=9222",
+		"--disable-background-networking",
+		"--disable-automation",
+		"--enable-automation=false",
+		"--disable-blink-features=AutomationControlled",
+		"--enable-network-information-downlink-max",
+		"--lang=en-US",
+		"--disable-extensions",
+	} {
+		if !stealth.HasLaunchArg(args, want) {
+			t.Fatalf("BuildChromeArgs() missing Chrome provider arg %q in %v", want, args)
+		}
+	}
+	if !stealth.HasLaunchArgPrefix(args, "--user-agent=Mozilla/5.0") {
+		t.Fatalf("BuildChromeArgs() missing Chrome provider user-agent in %v", args)
+	}
+	for _, blockedPrefix := range []string{
+		"--fingerprint=",
+		"--fingerprint-platform=",
+		"--fingerprint-locale=",
+		"--fingerprint-timezone=",
+		"--fingerprint-webrtc-ip=",
+		"--fingerprint-fonts-dir=",
+		"--fingerprint-storage-quota=",
+	} {
+		if stealth.HasLaunchArgPrefix(args, blockedPrefix) {
+			t.Fatalf("BuildChromeArgs() included Cloak flag prefix %q in Chrome provider mode: %v", blockedPrefix, args)
+		}
 	}
 }

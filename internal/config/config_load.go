@@ -80,8 +80,10 @@ func Load() *RuntimeConfig {
 		BlockAds:           false,
 		MaxTabs:            20,
 		MaxParallelTabs:    0,
+		BrowserProvider:    BrowserProviderChrome,
 		ChromeBinary:       "", // Set via config.json only
 		ChromeExtraFlags:   "",
+		Cloak:              CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true},
 		ExtensionPaths:     []string{defaultExtensionsDir(userConfigDir())},
 		UserAgent:          "",
 		NoAnimations:       false,
@@ -397,6 +399,12 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 
 	// Browser
+	if fc.Browser.Provider != "" {
+		cfg.BrowserProvider = NormalizeBrowserProvider(fc.Browser.Provider)
+		if IsCloakBrowserProvider(cfg.BrowserProvider) && fc.Browser.Cloak.DisableDefaultStealthArgs == nil {
+			cfg.Cloak.DisableDefaultStealthArgs = true
+		}
+	}
 	if fc.Browser.ChromeVersion != "" {
 		cfg.ChromeVersion = fc.Browser.ChromeVersion
 	}
@@ -409,6 +417,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Browser.ChromeExtraFlags != "" {
 		cfg.ChromeExtraFlags = SanitizeChromeExtraFlags(fc.Browser.ChromeExtraFlags)
 	}
+	applyCloakBrowserConfigToRuntime(cfg, fc.Browser.Cloak)
 	if fc.Browser.ExtensionPaths != nil {
 		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
 	}
@@ -633,4 +642,34 @@ func ApplyFileConfigToRuntime(cfg *RuntimeConfig, fc *FileConfig) {
 
 	applyFileConfig(cfg, fc)
 	finalizeProfileConfig(cfg)
+}
+
+func applyCloakBrowserConfigToRuntime(cfg *RuntimeConfig, cloak CloakBrowserConfig) {
+	if cfg == nil {
+		return
+	}
+	if cloak.FingerprintSeed != "" {
+		cfg.Cloak.FingerprintSeed = cloak.FingerprintSeed
+	}
+	if cloak.Platform != "" {
+		cfg.Cloak.Platform = cloak.Platform
+	}
+	if cloak.Locale != "" {
+		cfg.Cloak.Locale = cloak.Locale
+	}
+	if cloak.Timezone != "" {
+		cfg.Cloak.Timezone = cloak.Timezone
+	}
+	if cloak.WebRTCIP != "" {
+		cfg.Cloak.WebRTCIP = cloak.WebRTCIP
+	}
+	if cloak.FontsDir != "" {
+		cfg.Cloak.FontsDir = cloak.FontsDir
+	}
+	if cloak.StorageQuotaMB != nil {
+		cfg.Cloak.StorageQuotaMB = *cloak.StorageQuotaMB
+	}
+	if cloak.DisableDefaultStealthArgs != nil {
+		cfg.Cloak.DisableDefaultStealthArgs = *cloak.DisableDefaultStealthArgs
+	}
 }

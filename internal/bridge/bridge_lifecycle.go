@@ -55,6 +55,9 @@ func (b *Bridge) applyTargetStealth(ctx context.Context) {
 	if b == nil || b.Config == nil {
 		return
 	}
+	if config.NativeCloakStealthEnabled(b.Config) {
+		return
+	}
 
 	ua := ""
 	if b.StealthBundle != nil {
@@ -69,8 +72,10 @@ func (b *Bridge) applyTargetStealth(ctx context.Context) {
 }
 
 func (b *Bridge) tabSetup(ctx context.Context) {
-	b.applyTargetStealth(ctx)
-	b.installWorkerStealthParity(ctx)
+	if !config.NativeCloakStealthEnabled(b.Config) {
+		b.applyTargetStealth(ctx)
+		b.installWorkerStealthParity(ctx)
+	}
 	b.injectStealth(ctx)
 	if b.Config.NoAnimations {
 		if err := b.InjectNoAnimations(ctx); err != nil {

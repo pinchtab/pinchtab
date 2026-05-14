@@ -594,7 +594,7 @@ func TestStructuredEventTeeFiltersHumanOutputOnly(t *testing.T) {
 
 func TestRejectsRemovedLegacyAliases(t *testing.T) {
 	t.Setenv("E2E_LOGS", "")
-	for _, suite := range []string{"pr", "release", "all"} {
+	for _, suite := range []string{"pr", "release", "all", "smoke-docker"} {
 		var stdout, stderr bytes.Buffer
 		if code := Run([]string{"--suite", suite, "--dry-run"}, &stdout, &stderr); code == 0 {
 			t.Fatalf("Run should reject legacy alias %q, stdout: %s", suite, stdout.String())
@@ -661,16 +661,17 @@ func TestDryRunSmokePlan(t *testing.T) {
 	}
 }
 
-func TestDryRunSmokeDockerPlan(t *testing.T) {
+func TestDryRunSmokeFilterDockerPlan(t *testing.T) {
 	t.Setenv("E2E_LOGS", "")
 	var stdout, stderr bytes.Buffer
 
-	if code := Run([]string{"--suite", "smoke-docker", "--dry-run"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"--suite", "smoke", "--filter", "docker", "--dry-run"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("Run returned %d, stderr: %s", code, stderr.String())
 	}
 	out := stdout.String()
 	for _, want := range []string{
-		"suite:  smoke-docker",
+		"suite:  smoke",
+		"filter: docker",
 		"== E2E Docker Smoke tests (host) ==",
 		"docker build -t pinchtab-release-smoke:dry-run .",
 		"docker build --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
@@ -684,15 +685,15 @@ func TestDryRunSmokeDockerPlan(t *testing.T) {
 		}
 	}
 	if strings.Contains(out, "docker compose -f tests/e2e/docker-compose-multi.yml up") {
-		t.Fatalf("smoke-docker should not start the compose stack:\n%s", out)
+		t.Fatalf("smoke --filter docker should not start the compose stack:\n%s", out)
 	}
 }
 
-func TestDryRunSmokeDockerFilterAddsImageBuildDependency(t *testing.T) {
+func TestDryRunSmokeFilterMCPAddsImageBuildDependency(t *testing.T) {
 	t.Setenv("E2E_LOGS", "")
 	var stdout, stderr bytes.Buffer
 
-	if code := Run([]string{"--suite", "smoke-docker", "--filter", "mcp", "--dry-run"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"--suite", "smoke", "--filter", "mcp", "--dry-run"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("Run returned %d, stderr: %s", code, stderr.String())
 	}
 	out := stdout.String()

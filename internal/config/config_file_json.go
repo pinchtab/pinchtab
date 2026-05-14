@@ -28,11 +28,24 @@ type serverConfigJSON struct {
 }
 
 type browserConfigJSON struct {
-	ChromeVersion    string   `json:"version"`
-	ChromeBinary     string   `json:"binary"`
-	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
-	ChromeExtraFlags string   `json:"extraFlags"`
-	ExtensionPaths   []string `json:"extensionPaths"`
+	Provider         string                  `json:"provider"`
+	ChromeVersion    string                  `json:"version"`
+	ChromeBinary     string                  `json:"binary"`
+	ChromeDebugPort  *int                    `json:"remoteDebuggingPort,omitempty"`
+	ChromeExtraFlags string                  `json:"extraFlags"`
+	Cloak            *cloakBrowserConfigJSON `json:"cloak,omitempty"`
+	ExtensionPaths   []string                `json:"extensionPaths"`
+}
+
+type cloakBrowserConfigJSON struct {
+	FingerprintSeed           string `json:"fingerprintSeed,omitempty"`
+	Platform                  string `json:"platform,omitempty"`
+	Locale                    string `json:"locale,omitempty"`
+	Timezone                  string `json:"timezone,omitempty"`
+	WebRTCIP                  string `json:"webrtcIP,omitempty"`
+	FontsDir                  string `json:"fontsDir,omitempty"`
+	StorageQuotaMB            *int   `json:"storageQuotaMB,omitempty"`
+	DisableDefaultStealthArgs *bool  `json:"disableDefaultStealthArgs,omitempty"`
 }
 
 type instanceDefaultsConfigJSON struct {

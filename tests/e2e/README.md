@@ -11,7 +11,7 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ./dev e2e basic    # Run the basic suite (api + cli + infra basic tests)
 ./dev e2e extended # Run the extended suite
 ./dev e2e smoke    # Run smoke scenarios plus host Docker smoke checks
-./dev e2e smoke-docker # Run host Docker smoke checks only
+./dev smoke cloakbrowser # Run opt-in CloakBrowser Docker smoke image
 ./dev e2e api      # Run API basic tests
 ./dev e2e cli      # Run CLI basic tests
 ./dev e2e infra    # Run infra basic tests
@@ -26,7 +26,6 @@ Or directly through the Go runner:
 go run ./tests/tools/runner e2e --suite basic
 go run ./tests/tools/runner e2e --suite extended
 go run ./tests/tools/runner e2e --suite smoke
-go run ./tests/tools/runner e2e --suite smoke-docker
 go run ./tests/tools/runner e2e --suite infra-extended --filter orchestrator
 ```
 
@@ -65,6 +64,19 @@ By default, tier comes from the filename suffix: `*-basic.sh` is `basic`, `*-smo
 - `basic` is the PR happy path: fast, representative coverage with small setup. `./dev e2e basic` runs the API, CLI, and Infra basic suites.
 - `extended` is deeper coverage: edge cases, detailed interaction checks, and tests that are useful before release. Extended suites include the matching `basic` scenarios plus `extended` scenarios for that group.
 - `smoke` is independent high-setup coverage: lifecycle, multi-instance, host Docker, and production-like checks that do not belong in PR flow. `./dev e2e smoke` runs only `*-smoke.sh` scenarios plus host Docker smoke checks; it does not include `basic` or `extended`.
+
+CloakBrowser smoke checks need a Linux CloakBrowser binary and a compatible
+PinchTab image, so they are exposed as the manual Docker smoke command
+`./dev smoke cloakbrowser` instead of being included in the CI-backed
+`./dev e2e smoke` suite. By default, the command builds
+`tests/tools/docker/cloakbrowser-smoke.Dockerfile` into
+`pinchtab-cloakbrowser:test` and uses tmpfs mounts for browser profile and
+socket paths. The smoke reuses `tests/e2e/fixtures`, checks a representative
+endpoint subset, and then invokes the existing E2E scenario executor in the API
+runner container attached to the Cloak-backed container's network namespace for
+the Cloak-compatible API basic scenario set. This uses the same
+`tests/e2e/run.sh` API helper and assertion base as the normal Chrome API
+suite, while keeping CloakBrowser out of CI by default.
 
 ### Adding A Scenario
 

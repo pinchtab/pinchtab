@@ -144,8 +144,6 @@ func (r *Runner) run() int {
 		return r.runSmokeFiltered("security")
 	case "smoke-lifecycle":
 		return r.runSmokeFiltered("lifecycle")
-	case "smoke-docker":
-		return r.runDockerSmoke()
 	case "api":
 		return r.runSingle(apiSuite())
 	case "cli":
@@ -326,19 +324,6 @@ func (r *Runner) runSmoke() int {
 		_, _ = fmt.Fprintln(r.stdout, "E2E smoke suites passed")
 	}
 	return 0
-}
-
-func (r *Runner) runDockerSmoke() int {
-	steps := r.selectedDockerSmokeSteps()
-	if len(steps) == 0 {
-		_, _ = fmt.Fprintf(r.stderr, "e2e: no docker smoke steps matched filter %q\n", r.args.Filter)
-		return 1
-	}
-	code := r.runDockerSmokeSteps(steps)
-	if code == 0 && !r.args.DryRun {
-		_, _ = fmt.Fprintln(r.stdout, "E2E docker smoke suite passed")
-	}
-	return code
 }
 
 func (r *Runner) runDockerSmokeSteps(steps []dockerSmokeStep) int {
