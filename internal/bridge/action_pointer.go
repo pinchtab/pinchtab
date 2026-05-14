@@ -34,7 +34,17 @@ func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
 		return ctx.Err()
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return jsClickByBackendNodeAction(ctx, nodeID)
+		// Re-check: the parent context may have been cancelled (e.g. by the
+		// dialog-detection polling loop) while the trusted click was running.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// Use a bounded timeout for the JS fallback so it cannot hang for the
+		// full action timeout when JS execution is blocked (e.g. by an open
+		// dialog).
+		jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+		defer jsCancel()
+		return jsClickByBackendNodeAction(jsCtx, nodeID)
 	}
 	return err
 }
@@ -50,7 +60,12 @@ func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error 
 		return ctx.Err()
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return jsDoubleClickByBackendNodeAction(ctx, nodeID)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+		defer jsCancel()
+		return jsDoubleClickByBackendNodeAction(jsCtx, nodeID)
 	}
 	return err
 }
@@ -143,8 +158,6 @@ func submitFormIfButton(ctx context.Context, selector string) (bool, error) {
 }
 
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
-	// Promote to the humanized click path when the caller (or instance
-	// config) opted in via humanize=true.
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
 	}
@@ -159,7 +172,12 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		if err == nil {
 			result = auto.finish(ctx, result)
 		} else {
-			auto.cancel(ctx)
+			var dialogErr *ErrDialogBlocking
+			if errors.As(err, &dialogErr) {
+				auto.cancelWithoutRestore()
+			} else {
+				auto.cancel(ctx)
+			}
 		}
 	}()
 
@@ -304,7 +322,12 @@ func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (resu
 		if err == nil {
 			result = auto.finish(ctx, result)
 		} else {
-			auto.cancel(ctx)
+			var dialogErr *ErrDialogBlocking
+			if errors.As(err, &dialogErr) {
+				auto.cancelWithoutRestore()
+			} else {
+				auto.cancel(ctx)
+			}
 		}
 	}()
 	if req.Selector != "" {
@@ -549,7 +572,12 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 		if err == nil {
 			result = auto.finish(ctx, result)
 		} else {
-			auto.cancel(ctx)
+			var dialogErr *ErrDialogBlocking
+			if errors.As(err, &dialogErr) {
+				auto.cancelWithoutRestore()
+			} else {
+				auto.cancel(ctx)
+			}
 		}
 	}()
 	var backendNodeID cdp.BackendNodeID

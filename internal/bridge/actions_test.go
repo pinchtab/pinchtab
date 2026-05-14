@@ -470,6 +470,34 @@ func TestClickByNodeIDWithJSFallback_DoesNotFallbackOnOtherErrors(t *testing.T) 
 	}
 }
 
+func TestClickByNodeIDWithJSFallback_SkipsFallbackOnCancelledCtx(t *testing.T) {
+	origTrusted := clickByNodeIDAction
+	origFallback := jsClickByBackendNodeAction
+	t.Cleanup(func() {
+		clickByNodeIDAction = origTrusted
+		jsClickByBackendNodeAction = origFallback
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var fallbackCalled bool
+	clickByNodeIDAction = func(context.Context, int64) error {
+		cancel() // simulate dialog-detection cancelling the context
+		return context.DeadlineExceeded
+	}
+	jsClickByBackendNodeAction = func(context.Context, int64) error {
+		fallbackCalled = true
+		return nil
+	}
+
+	err := clickByNodeIDWithJSFallback(ctx, 42)
+	if err == nil {
+		t.Fatal("expected context cancelled error")
+	}
+	if fallbackCalled {
+		t.Fatal("JS fallback should not run when parent context is cancelled")
+	}
+}
+
 func TestTypeAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	raw := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
 	ctx, cancel := context.WithCancel(context.Background())

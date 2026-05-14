@@ -638,20 +638,20 @@ pt_get /snapshot
 ALERT_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.name == "Trigger Alert")][0].ref // empty')
 
 # Click without dialogAction should fail fast with dialog_blocking error
-START_TIME=$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')
+_CLICK_T0=$(get_time_ms)
 pt_post /action "{\"kind\":\"click\",\"ref\":\"${ALERT_REF}\"}"
-END_TIME=$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')
+_CLICK_T1=$(get_time_ms)
 
 assert_not_ok "click without dialogAction fails"
 assert_json_eq "$RESULT" '.code' 'dialog_blocking' "error code is dialog_blocking"
 
 # Verify fast-fail: should complete in under 2 seconds (not 30s timeout)
-ELAPSED=$((END_TIME - START_TIME))
-if [ "$ELAPSED" -gt 2000 ]; then
-  echo "FAIL: click took ${ELAPSED}ms, expected fast-fail under 2000ms"
+_CLICK_ELAPSED=$((_CLICK_T1 - _CLICK_T0))
+if [ "$_CLICK_ELAPSED" -gt 2000 ]; then
+  echo "FAIL: click took ${_CLICK_ELAPSED}ms, expected fast-fail under 2000ms"
   exit 1
 fi
-echo "PASS: fast-fail in ${ELAPSED}ms"
+echo "PASS: fast-fail in ${_CLICK_ELAPSED}ms"
 
 # Clean up: dismiss the pending dialog
 pt_post /dialog '{"action":"dismiss"}'

@@ -284,6 +284,18 @@ func (s *autoSwitchSession) cancel(ctx context.Context) {
 	}
 }
 
+// cancelWithoutRestore releases the pending-click slot but skips the
+// window.open restore script. Used when JS execution is blocked (e.g. by
+// an open dialog) and the restore script would hang.
+func (s *autoSwitchSession) cancelWithoutRestore() {
+	if s == nil {
+		return
+	}
+	if targetID, ok := s.tm.clearPendingClick(s.openerCDP, s.slot); ok && s.tm.browserCtx != nil {
+		s.tm.closePopupTarget(targetID, s.openerCDP, "")
+	}
+}
+
 // finish waits briefly for a popup target created by the click, adopts it,
 // focuses it, and annotates result with "switchedToTab". If no popup arrives
 // within autoSwitchGraceTimeout, result is returned unchanged.
