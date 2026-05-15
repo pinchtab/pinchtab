@@ -21,14 +21,17 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 const (
 	maxRecordDuration = 5 * time.Minute
 	maxRecordFrames   = 9000      // 5min × 30fps
+	maxGIFFrames      = 600       // ~2min at 5fps; keeps memory bounded during GIF encoding
 	maxTempBytes      = 1 << 30   // 1 GB disk
 	maxOutputBytes    = 256 << 20 // 256 MB encoded
 	encodeTimeout     = 2 * time.Minute
+	limitCleanupGrace = 5 * time.Minute
 	maxFPS            = 30
 	maxQuality        = 100
 	maxScale          = 1.0
@@ -41,7 +44,6 @@ type RecordingStatus struct {
 	Frames   int     `json:"frames"`
 	TabID    string  `json:"tabId,omitempty"`
 	FPS      int     `json:"fps,omitempty"`
-	Owner    string  `json:"owner,omitempty"`
 }
 
 type recorder struct {
@@ -51,7 +53,7 @@ type recorder struct {
 	tabCtx    context.Context
 	tabCancel context.CancelFunc
 	tabID     string
-	owner     string
+	owner     string // opaque key derived from authenticated session, never exposed
 	format    string
 	fps       int
 	quality   int
@@ -112,7 +114,7 @@ func (rec *recorder) stop(callerOwner string) ([]byte, string, error) {
 		<-doneCh
 		return nil, "", fmt.Errorf("no active recording")
 	}
-	if callerOwner != "" && rec.owner != "" && callerOwner != rec.owner {
+	if rec.owner != "" && callerOwner != rec.owner {
 		rec.mu.Unlock()
 		return nil, "", fmt.Errorf("recording owned by another session")
 	}
@@ -128,23 +130,26 @@ func (rec *recorder) stop(callerOwner string) ([]byte, string, error) {
 
 	<-doneCh
 
+	// Encode without holding the mutex so status/start aren't blocked.
+	var data []byte
+	var encErr error
+	if frameNum > 0 {
+		data, encErr = encode(tmpDir, format, fps, scale)
+		if encErr == nil && len(data) > maxOutputBytes {
+			data = nil
+			encErr = fmt.Errorf("encoded output too large (max %d bytes)", maxOutputBytes)
+		}
+	} else {
+		encErr = fmt.Errorf("no frames captured")
+	}
+
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	defer rec.cleanup()
 
-	if frameNum == 0 {
-		return nil, "", fmt.Errorf("no frames captured")
+	if encErr != nil {
+		return nil, "", encErr
 	}
-
-	data, err := encode(tmpDir, format, fps, scale)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if len(data) > maxOutputBytes {
-		return nil, "", fmt.Errorf("encoded output too large (%d bytes, max %d)", len(data), maxOutputBytes)
-	}
-
 	return data, format, nil
 }
 
@@ -176,7 +181,6 @@ func (rec *recorder) status() RecordingStatus {
 		Frames:   rec.frameNum,
 		TabID:    rec.tabID,
 		FPS:      rec.fps,
-		Owner:    rec.owner,
 	}
 }
 
@@ -191,6 +195,7 @@ func (rec *recorder) captureLoop() {
 	defer ticker.Stop()
 
 	var diskBytes atomic.Int64
+	limitHit := false
 
 	for {
 		select {
@@ -204,39 +209,67 @@ func (rec *recorder) captureLoop() {
 			return
 		case <-deadline.C:
 			slog.Info("recording stopped: max duration reached", "tab", rec.tabID)
-			return
+			limitHit = true
 		case <-ticker.C:
 			rec.mu.Lock()
 			if rec.frameNum >= maxRecordFrames {
 				rec.mu.Unlock()
 				slog.Info("recording stopped: max frames reached", "tab", rec.tabID)
-				return
+				limitHit = true
+			} else {
+				rec.mu.Unlock()
 			}
-			rec.mu.Unlock()
 
-			if diskBytes.Load() >= int64(maxTempBytes) {
+			if !limitHit && diskBytes.Load() >= int64(maxTempBytes) {
 				slog.Info("recording stopped: temp disk limit reached", "tab", rec.tabID)
-				return
+				limitHit = true
 			}
 
-			frame, err := captureScreencastJPEG(rec.tabCtx, rec.quality)
-			if err != nil {
-				slog.Debug("recording frame capture failed", "err", err)
+			if limitHit {
+				// noop: break out to the cleanup below
+			} else {
+				frame, err := captureScreencastJPEG(rec.tabCtx, rec.quality)
+				if err != nil {
+					slog.Debug("recording frame capture failed", "err", err)
+					continue
+				}
+
+				rec.mu.Lock()
+				rec.frameNum++
+				path := filepath.Join(rec.tmpDir, fmt.Sprintf("frame_%06d.jpg", rec.frameNum))
+				rec.mu.Unlock()
+
+				if err := os.WriteFile(path, frame, 0600); err != nil {
+					slog.Debug("recording frame write failed", "err", err)
+				} else {
+					diskBytes.Add(int64(len(frame)))
+				}
 				continue
 			}
+		}
 
-			rec.mu.Lock()
-			rec.frameNum++
-			path := filepath.Join(rec.tmpDir, fmt.Sprintf("frame_%06d.jpg", rec.frameNum))
-			rec.mu.Unlock()
-
-			if err := os.WriteFile(path, frame, 0600); err != nil {
-				slog.Debug("recording frame write failed", "err", err)
-			} else {
-				diskBytes.Add(int64(len(frame)))
-			}
+		if limitHit {
+			break
 		}
 	}
+
+	// Limit was reached. Keep frames for stop() to encode, but auto-cleanup
+	// after a grace period if nobody calls stop().
+	go func() {
+		timer := time.NewTimer(limitCleanupGrace)
+		defer timer.Stop()
+		select {
+		case <-rec.stopCh:
+			return
+		case <-timer.C:
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if rec.active && !rec.stopping {
+				slog.Info("recording auto-cleanup after limit grace period", "tab", rec.tabID)
+				rec.cleanup()
+			}
+		}
+	}()
 }
 
 func encode(tmpDir, format string, fps int, scale float64) ([]byte, error) {
@@ -262,10 +295,22 @@ func encodeGIF(tmpDir string, fps int, scale float64) ([]byte, error) {
 	}
 	sort.Strings(files)
 
+	if len(files) > maxGIFFrames {
+		files = files[:maxGIFFrames]
+	}
+
 	delay := 100 / fps
 	if delay < 1 {
 		delay = 1
 	}
+
+	// Encode to a temp file to avoid holding all paletted frames in memory.
+	outPath := filepath.Join(tmpDir, "output.gif")
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return nil, fmt.Errorf("create gif output: %w", err)
+	}
+	defer func() { _ = outFile.Close() }()
 
 	g := &gif.GIF{LoopCount: 0}
 
@@ -294,11 +339,12 @@ func encodeGIF(tmpDir string, fps int, scale float64) ([]byte, error) {
 		return nil, fmt.Errorf("no frames to encode")
 	}
 
-	var buf bytes.Buffer
-	if err := gif.EncodeAll(&buf, g); err != nil {
+	if err := gif.EncodeAll(outFile, g); err != nil {
 		return nil, fmt.Errorf("gif encode: %w", err)
 	}
-	return buf.Bytes(), nil
+	_ = outFile.Close()
+
+	return readFileCapped(outPath, maxOutputBytes)
 }
 
 func encodeFFmpeg(ctx context.Context, tmpDir, format string, fps int, scale float64, codec string, extraArgs ...string) ([]byte, error) {
@@ -325,7 +371,19 @@ func encodeFFmpeg(ctx context.Context, tmpDir, format string, fps int, scale flo
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("ffmpeg encode: %w\n%s", err, stderr.String())
 	}
-	return os.ReadFile(outFile)
+
+	return readFileCapped(outFile, maxOutputBytes)
+}
+
+func readFileCapped(path string, maxBytes int) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > int64(maxBytes) {
+		return nil, fmt.Errorf("encoded output too large (%d bytes, max %d)", info.Size(), maxBytes)
+	}
+	return os.ReadFile(path)
 }
 
 func scaleImage(src image.Image, scale float64) image.Image {
@@ -428,14 +486,14 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner := requestOwner(r)
+	owner := authenticatedOwner(r)
 
 	if err := h.recorder.start(ctx, resolvedTabID, owner, req.Format, req.FPS, req.Quality, req.Scale); err != nil {
 		httpx.ErrorCode(w, 409, "recording_error", err.Error(), false, nil)
 		return
 	}
 
-	slog.Info("recording started", "tab", resolvedTabID, "format", req.Format, "fps", req.FPS, "owner", owner)
+	slog.Info("recording started", "tab", resolvedTabID, "format", req.Format, "fps", req.FPS)
 	httpx.JSON(w, 200, map[string]any{
 		"status":  "recording",
 		"format":  req.Format,
@@ -447,7 +505,7 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 
 // HandleRecordStop stops the active recording and returns the encoded file.
 func (h *Handlers) HandleRecordStop(w http.ResponseWriter, r *http.Request) {
-	owner := requestOwner(r)
+	owner := authenticatedOwner(r)
 	data, format, err := h.recorder.stop(owner)
 	if err != nil {
 		httpx.ErrorCode(w, 400, "recording_error", err.Error(), false, nil)
@@ -477,12 +535,14 @@ func (h *Handlers) HandleRecordStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, h.recorder.status())
 }
 
-func requestOwner(r *http.Request) string {
-	if sid := r.Header.Get("X-Pinchtab-Session-Id"); sid != "" {
-		return sid
+// authenticatedOwner derives a non-secret owner key from the authenticated
+// session context. Only session-authenticated requests get an owner; token/cookie
+// auth callers get "" (anonymous). X-Agent-Id is not used because it is
+// caller-controllable on non-session auth paths.
+func authenticatedOwner(r *http.Request) string {
+	sess, ok := session.FromRequest(r)
+	if !ok || sess == nil {
+		return ""
 	}
-	if aid := r.Header.Get("X-Agent-Id"); aid != "" {
-		return aid
-	}
-	return ""
+	return "session:" + sess.AgentID
 }
