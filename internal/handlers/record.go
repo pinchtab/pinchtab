@@ -17,9 +17,21 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+)
+
+const (
+	maxRecordDuration = 5 * time.Minute
+	maxRecordFrames   = 9000      // 5min × 30fps
+	maxTempBytes      = 1 << 30   // 1 GB disk
+	maxOutputBytes    = 256 << 20 // 256 MB encoded
+	encodeTimeout     = 2 * time.Minute
+	maxFPS            = 30
+	maxQuality        = 100
+	maxScale          = 1.0
 )
 
 type RecordingStatus struct {
@@ -29,25 +41,30 @@ type RecordingStatus struct {
 	Frames   int     `json:"frames"`
 	TabID    string  `json:"tabId,omitempty"`
 	FPS      int     `json:"fps,omitempty"`
+	Owner    string  `json:"owner,omitempty"`
 }
 
 type recorder struct {
 	mu        sync.Mutex
 	active    bool
+	stopping  bool
 	tabCtx    context.Context
+	tabCancel context.CancelFunc
 	tabID     string
+	owner     string
 	format    string
 	fps       int
 	quality   int
 	scale     float64
 	tmpDir    string
 	frameNum  int
+	tempBytes int64
 	startTime time.Time
 	stopCh    chan struct{}
 	doneCh    chan struct{}
 }
 
-func (rec *recorder) start(tabCtx context.Context, tabID, format string, fps, quality int, scale float64) error {
+func (rec *recorder) start(tabCtx context.Context, tabID, owner, format string, fps, quality int, scale float64) error {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 
@@ -60,15 +77,21 @@ func (rec *recorder) start(tabCtx context.Context, tabID, format string, fps, qu
 		return fmt.Errorf("create temp dir: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(tabCtx)
+
 	rec.active = true
-	rec.tabCtx = tabCtx
+	rec.stopping = false
+	rec.tabCtx = ctx
+	rec.tabCancel = cancel
 	rec.tabID = tabID
+	rec.owner = owner
 	rec.format = format
 	rec.fps = fps
 	rec.quality = quality
 	rec.scale = scale
 	rec.tmpDir = tmpDir
 	rec.frameNum = 0
+	rec.tempBytes = 0
 	rec.startTime = time.Now()
 	rec.stopCh = make(chan struct{})
 	rec.doneCh = make(chan struct{})
@@ -77,36 +100,66 @@ func (rec *recorder) start(tabCtx context.Context, tabID, format string, fps, qu
 	return nil
 }
 
-func (rec *recorder) stop() ([]byte, string, error) {
+func (rec *recorder) stop(callerOwner string) ([]byte, string, error) {
 	rec.mu.Lock()
 	if !rec.active {
 		rec.mu.Unlock()
 		return nil, "", fmt.Errorf("no active recording")
 	}
+	if rec.stopping {
+		doneCh := rec.doneCh
+		rec.mu.Unlock()
+		<-doneCh
+		return nil, "", fmt.Errorf("no active recording")
+	}
+	if callerOwner != "" && rec.owner != "" && callerOwner != rec.owner {
+		rec.mu.Unlock()
+		return nil, "", fmt.Errorf("recording owned by another session")
+	}
+	rec.stopping = true
 	close(rec.stopCh)
+	doneCh := rec.doneCh
+	format := rec.format
+	tmpDir := rec.tmpDir
+	frameNum := rec.frameNum
+	fps := rec.fps
+	scale := rec.scale
 	rec.mu.Unlock()
 
-	<-rec.doneCh
+	<-doneCh
 
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
+	defer rec.cleanup()
 
-	defer func() {
-		_ = os.RemoveAll(rec.tmpDir)
-		rec.active = false
-		rec.tmpDir = ""
-	}()
-
-	if rec.frameNum == 0 {
+	if frameNum == 0 {
 		return nil, "", fmt.Errorf("no frames captured")
 	}
 
-	data, err := rec.encode()
+	data, err := encode(tmpDir, format, fps, scale)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return data, rec.format, nil
+	if len(data) > maxOutputBytes {
+		return nil, "", fmt.Errorf("encoded output too large (%d bytes, max %d)", len(data), maxOutputBytes)
+	}
+
+	return data, format, nil
+}
+
+func (rec *recorder) cleanup() {
+	if rec.tabCancel != nil {
+		rec.tabCancel()
+		rec.tabCancel = nil
+	}
+	if rec.tmpDir != "" {
+		_ = os.RemoveAll(rec.tmpDir)
+	}
+	rec.active = false
+	rec.stopping = false
+	rec.tmpDir = ""
+	rec.owner = ""
 }
 
 func (rec *recorder) status() RecordingStatus {
@@ -123,60 +176,93 @@ func (rec *recorder) status() RecordingStatus {
 		Frames:   rec.frameNum,
 		TabID:    rec.tabID,
 		FPS:      rec.fps,
+		Owner:    rec.owner,
 	}
 }
 
 func (rec *recorder) captureLoop() {
 	defer close(rec.doneCh)
 
+	deadline := time.NewTimer(maxRecordDuration)
+	defer deadline.Stop()
+
 	interval := time.Second / time.Duration(rec.fps)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	var diskBytes atomic.Int64
 
 	for {
 		select {
 		case <-rec.stopCh:
 			return
 		case <-rec.tabCtx.Done():
+			rec.mu.Lock()
+			rec.cleanup()
+			rec.mu.Unlock()
+			slog.Info("recording aborted: tab context canceled", "tab", rec.tabID)
+			return
+		case <-deadline.C:
+			slog.Info("recording stopped: max duration reached", "tab", rec.tabID)
 			return
 		case <-ticker.C:
+			rec.mu.Lock()
+			if rec.frameNum >= maxRecordFrames {
+				rec.mu.Unlock()
+				slog.Info("recording stopped: max frames reached", "tab", rec.tabID)
+				return
+			}
+			rec.mu.Unlock()
+
+			if diskBytes.Load() >= int64(maxTempBytes) {
+				slog.Info("recording stopped: temp disk limit reached", "tab", rec.tabID)
+				return
+			}
+
 			frame, err := captureScreencastJPEG(rec.tabCtx, rec.quality)
 			if err != nil {
 				slog.Debug("recording frame capture failed", "err", err)
 				continue
 			}
+
 			rec.mu.Lock()
 			rec.frameNum++
 			path := filepath.Join(rec.tmpDir, fmt.Sprintf("frame_%06d.jpg", rec.frameNum))
 			rec.mu.Unlock()
+
 			if err := os.WriteFile(path, frame, 0600); err != nil {
 				slog.Debug("recording frame write failed", "err", err)
+			} else {
+				diskBytes.Add(int64(len(frame)))
 			}
 		}
 	}
 }
 
-func (rec *recorder) encode() ([]byte, error) {
-	switch rec.format {
+func encode(tmpDir, format string, fps int, scale float64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), encodeTimeout)
+	defer cancel()
+
+	switch format {
 	case "gif":
-		return rec.encodeGIF()
+		return encodeGIF(tmpDir, fps, scale)
 	case "webm":
-		return rec.encodeFFmpeg("libvpx", "-crf", "10", "-b:v", "1M")
+		return encodeFFmpeg(ctx, tmpDir, format, fps, scale, "libvpx", "-crf", "10", "-b:v", "1M")
 	case "mp4":
-		return rec.encodeFFmpeg("libx264", "-pix_fmt", "yuv420p", "-crf", "23")
+		return encodeFFmpeg(ctx, tmpDir, format, fps, scale, "libx264", "-pix_fmt", "yuv420p", "-crf", "23")
 	default:
-		return nil, fmt.Errorf("unsupported format: %s", rec.format)
+		return nil, fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
-func (rec *recorder) encodeGIF() ([]byte, error) {
-	files, err := filepath.Glob(filepath.Join(rec.tmpDir, "frame_*.jpg"))
+func encodeGIF(tmpDir string, fps int, scale float64) ([]byte, error) {
+	files, err := filepath.Glob(filepath.Join(tmpDir, "frame_*.jpg"))
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(files)
 
-	delay := 100 / rec.fps
+	delay := 100 / fps
 	if delay < 1 {
 		delay = 1
 	}
@@ -193,8 +279,8 @@ func (rec *recorder) encodeGIF() ([]byte, error) {
 			continue
 		}
 
-		if rec.scale != 1.0 && rec.scale > 0 {
-			img = scaleImage(img, rec.scale)
+		if scale != 1.0 && scale > 0 {
+			img = scaleImage(img, scale)
 		}
 
 		bounds := img.Bounds()
@@ -215,25 +301,25 @@ func (rec *recorder) encodeGIF() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (rec *recorder) encodeFFmpeg(codec string, extraArgs ...string) ([]byte, error) {
-	outFile := filepath.Join(rec.tmpDir, "output."+rec.format)
+func encodeFFmpeg(ctx context.Context, tmpDir, format string, fps int, scale float64, codec string, extraArgs ...string) ([]byte, error) {
+	outFile := filepath.Join(tmpDir, "output."+format)
 
 	args := []string{
 		"-y",
-		"-framerate", strconv.Itoa(rec.fps),
-		"-i", filepath.Join(rec.tmpDir, "frame_%06d.jpg"),
+		"-framerate", strconv.Itoa(fps),
+		"-i", filepath.Join(tmpDir, "frame_%06d.jpg"),
 	}
 
-	if rec.scale != 1.0 && rec.scale > 0 {
+	if scale != 1.0 && scale > 0 {
 		args = append(args, "-vf",
-			fmt.Sprintf("scale=trunc(iw*%g/2)*2:trunc(ih*%g/2)*2", rec.scale, rec.scale))
+			fmt.Sprintf("scale=trunc(iw*%g/2)*2:trunc(ih*%g/2)*2", scale, scale))
 	}
 
 	args = append(args, "-c:v", codec)
 	args = append(args, extraArgs...)
 	args = append(args, outFile)
 
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -305,14 +391,20 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 	if req.FPS <= 0 {
 		req.FPS = 5
 	}
-	if req.FPS > 30 {
-		req.FPS = 30
+	if req.FPS > maxFPS {
+		req.FPS = maxFPS
 	}
 	if req.Quality <= 0 {
 		req.Quality = 80
 	}
+	if req.Quality > maxQuality {
+		req.Quality = maxQuality
+	}
 	if req.Scale <= 0 {
 		req.Scale = 1.0
+	}
+	if req.Scale > maxScale {
+		req.Scale = maxScale
 	}
 
 	switch req.Format {
@@ -336,12 +428,14 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.recorder.start(ctx, resolvedTabID, req.Format, req.FPS, req.Quality, req.Scale); err != nil {
+	owner := requestOwner(r)
+
+	if err := h.recorder.start(ctx, resolvedTabID, owner, req.Format, req.FPS, req.Quality, req.Scale); err != nil {
 		httpx.ErrorCode(w, 409, "recording_error", err.Error(), false, nil)
 		return
 	}
 
-	slog.Info("recording started", "tab", resolvedTabID, "format", req.Format, "fps", req.FPS)
+	slog.Info("recording started", "tab", resolvedTabID, "format", req.Format, "fps", req.FPS, "owner", owner)
 	httpx.JSON(w, 200, map[string]any{
 		"status":  "recording",
 		"format":  req.Format,
@@ -353,7 +447,8 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 
 // HandleRecordStop stops the active recording and returns the encoded file.
 func (h *Handlers) HandleRecordStop(w http.ResponseWriter, r *http.Request) {
-	data, format, err := h.recorder.stop()
+	owner := requestOwner(r)
+	data, format, err := h.recorder.stop(owner)
 	if err != nil {
 		httpx.ErrorCode(w, 400, "recording_error", err.Error(), false, nil)
 		return
@@ -380,4 +475,14 @@ func (h *Handlers) HandleRecordStop(w http.ResponseWriter, r *http.Request) {
 // HandleRecordStatus returns the current recording status.
 func (h *Handlers) HandleRecordStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, h.recorder.status())
+}
+
+func requestOwner(r *http.Request) string {
+	if sid := r.Header.Get("X-Pinchtab-Session-Id"); sid != "" {
+		return sid
+	}
+	if aid := r.Header.Get("X-Agent-Id"); aid != "" {
+		return aid
+	}
+	return ""
 }

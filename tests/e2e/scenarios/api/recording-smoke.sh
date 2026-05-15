@@ -1,5 +1,5 @@
 #!/bin/bash
-# recording-smoke.sh — Recording smoke tests (API + CLI).
+# recording-smoke.sh — Recording smoke tests (API).
 
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/api.sh"
@@ -14,7 +14,7 @@ assert_json_eq "$RESULT" ".active" "false" "no active recording"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "record: start → status → stop (API gif)"
+start_test "record: start → status → stop (gif)"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
@@ -57,29 +57,18 @@ assert_http_status 400 "stop without active recording"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "record: CLI start → stop roundtrip"
-
-rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/pinchtab/current-recording" 2>/dev/null || true
-rm -f /tmp/pinchtab-current-recording 2>/dev/null || true
-
-CLI_OUTFILE="/tmp/e2e-cli-recording.gif"
+start_test "record: double stop returns error"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-assert_ok "navigate for CLI recording"
+assert_ok "navigate for double stop"
 
-e2e_curl -s -X POST "${E2E_SERVER}/record/start" \
-  -H "Content-Type: application/json" \
-  -d '{"format":"gif","fps":2,"quality":60}' > /dev/null
-sleep 2
-e2e_curl -s -X POST "${E2E_SERVER}/record/stop" -o "$CLI_OUTFILE" \
+pt_post /record/start -d '{"format":"gif","fps":2,"quality":60}'
+assert_ok "start for double stop"
+
+e2e_curl -s -X POST "${E2E_SERVER}/record/stop" -o /dev/null \
   -H "Content-Type: application/json" -d '{}'
-FILESIZE=$(wc -c < "$CLI_OUTFILE" 2>/dev/null | tr -d ' ')
 
-if [ -f "$CLI_OUTFILE" ] && [ "$FILESIZE" -gt 0 ]; then
-  pass_assert "CLI recording file created ($FILESIZE bytes)"
-else
-  fail_assert "CLI recording file missing or empty"
-fi
-rm -f "$CLI_OUTFILE"
+pt_post /record/stop -d '{}'
+assert_http_status 400 "second stop returns error"
 
 end_test

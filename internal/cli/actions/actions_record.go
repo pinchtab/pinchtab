@@ -100,16 +100,29 @@ func recordingStateFile() string {
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
 		return dir + "/pinchtab/current-recording"
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home + "/.local/state/pinchtab/current-recording"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.TempDir()
 	}
-	return "/tmp/pinchtab-current-recording"
+	return home + "/.local/state/pinchtab/current-recording"
 }
 
 func writeRecordingState(outFile string) {
 	path := recordingStateFile()
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	_ = os.WriteFile(path, []byte(outFile+"\n"), 0644)
+	dir := filepath.Dir(path)
+	_ = os.MkdirAll(dir, 0700)
+	tmp, err := os.CreateTemp(dir, ".current-recording-*")
+	if err != nil {
+		_ = os.WriteFile(path, []byte(outFile+"\n"), 0600)
+		return
+	}
+	_, _ = tmp.WriteString(outFile + "\n")
+	_ = tmp.Chmod(0600)
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+	}
 }
 
 func readRecordingState() string {
