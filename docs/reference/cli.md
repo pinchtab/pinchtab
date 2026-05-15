@@ -92,6 +92,8 @@ pinchtab network              # GET  200  https://...
 | Command | Purpose |
 | --- | --- |
 | `pinchtab server` | Start the full server and dashboard |
+| `pinchtab server stop` | Stop the running server (foreground or background) |
+| `pinchtab server restart` | Stop + restart in background (applies config changes) |
 | `pinchtab bridge` | Start the single-instance bridge runtime |
 | `pinchtab mcp` | Start the stdio MCP server |
 | `pinchtab daemon` | Show daemon status and manage the background service |

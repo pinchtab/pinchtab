@@ -178,6 +178,25 @@ pinchtab screenshot --quality 80   # JPEG at 80%
 
 > ⚠️ **Quirk:** Use `screenshot` (full word), not `ss` or `shot`.
 
+### `pinchtab record`
+Record browser activity as a video file.
+
+```bash
+pinchtab record start output.gif          # start recording (format from extension)
+pinchtab record start output.gif --fps 2  # lower frame rate
+pinchtab record stop                      # stop and save to the path given at start
+pinchtab record status                    # check if recording is active
+```
+
+| Flag | Description |
+|------|-------------|
+| `--fps <n>` | Frames per second (default 5) |
+| `--quality <n>` | JPEG capture quality 1-100 (default 80) |
+| `--scale <f>` | Resolution scale (default 1.0; 0.5 = half size) |
+| `--tab <id>` | Target a specific tab |
+
+Supported formats: `.gif` (always available), `.webm` and `.mp4` (require ffmpeg on the server). Requires `security.allowScreencast: true`.
+
 ### `pinchtab text`
 Extract readable text from the page.
 

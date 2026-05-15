@@ -15,6 +15,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/server"
 	"github.com/spf13/cobra"
 )
 
@@ -42,9 +43,30 @@ var readProcessCommand = defaultReadProcessCommand
 
 var serverStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop a background server started with `pinchtab server --background`",
+	Short: "Stop the running server",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runServerStop(); err != nil {
+			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
+			os.Exit(1)
+		}
+	},
+}
+
+var serverRestartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Restart the running server (stop + start in background)",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := loadConfig()
+
+		if server.CheckPinchTabRunning(cfg.Port, cfg.Token) {
+			fmt.Println("Stopping server...")
+			if err := runServerStop(); err != nil {
+				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.WarningStyle, fmt.Sprintf("stop: %v", err)))
+			}
+		}
+
+		fmt.Println("Starting server...")
+		if err := runServerBackground(cfg, serverBackgroundOptions{}); err != nil {
 			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 			os.Exit(1)
 		}
@@ -210,15 +232,27 @@ func isPinchTabHealthReady(url, marker string) bool {
 	return marker == "" || health.Marker == marker
 }
 
+func stopViaAPI() error {
+	cfg := loadConfig()
+	if !server.CheckPinchTabRunning(cfg.Port, cfg.Token) {
+		return fmt.Errorf("no server running on port %s", cfg.Port)
+	}
+	if err := server.ShutdownServer(cfg.Port, cfg.Token); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	fmt.Printf("Stopped server on port %s\n", cfg.Port)
+	return nil
+}
+
 func runServerStop() error {
 	info, ok := readServerPID()
 	if !ok {
-		return fmt.Errorf("no background server PID file at %s", serverPIDFilePath())
+		return stopViaAPI()
 	}
 	pid := info.PID
 	if !processAlive(pid) {
 		_ = os.Remove(serverPIDFilePath())
-		return fmt.Errorf("background server (pid %d) is not running; cleaned up stale pid file", pid)
+		return stopViaAPI()
 	}
 	if err := verifyServerPIDInfo(info); err != nil {
 		return err

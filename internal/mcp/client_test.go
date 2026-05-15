@@ -123,6 +123,29 @@ func TestClientPostNilPayload(t *testing.T) {
 	}
 }
 
+func TestClientPostStreamReturnsReadableBody(t *testing.T) {
+	payload := strings.Repeat("X", 64*1024) // 64 KB — exceeds the 10 MB LimitReader test boundary
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = io.WriteString(w, payload)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok")
+	body, code, err := c.PostStream(context.Background(), "/record/stop", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = body.Close() }()
+	if code != 200 {
+		t.Fatalf("code = %d", code)
+	}
+	data, _ := io.ReadAll(body)
+	if len(data) != len(payload) {
+		t.Fatalf("read %d bytes, want %d", len(data), len(payload))
+	}
+}
+
 func TestClientAuthHeaderAbsentWhenNoToken(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h := r.Header.Get("Authorization"); h != "" {

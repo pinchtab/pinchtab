@@ -249,6 +249,9 @@ GET  /screencast
 GET  /screencast/tabs
 GET  /instances/{id}/screencast
 GET  /instances/{id}/proxy/screencast
+POST /record/start
+POST /record/stop
+GET  /record/status
 ```
 
 Screenshot query parameters:
@@ -281,6 +284,21 @@ PDF query parameters:
 - `footerTemplate`
 - `generateTaggedPDF`
 - `generateDocumentOutline`
+
+Record start body fields (JSON POST `/record/start`):
+
+- `format`: `gif`, `webm`, or `mp4`.
+- `fps`: Frames per second, 1-30 (default 5).
+- `quality`: JPEG capture quality 1-100 (default 80).
+- `scale`: Resolution multiplier (default 1.0).
+- `tabId`: Target a specific tab.
+
+Notes:
+
+- Recording endpoints are gated by `security.allowScreencast`.
+- `.webm` and `.mp4` formats require `ffmpeg` on the server PATH.
+- `.gif` format uses pure Go encoding (always available).
+- Only one recording per bridge instance.
 
 ## Downloads, Uploads, Cookies, And Clipboard
 

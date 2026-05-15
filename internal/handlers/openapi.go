@@ -103,6 +103,21 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 				"description":        security["screencast"].Message,
 				"x-pinchtab-enabled": security["screencast"].Enabled,
 			}},
+			"/record/start": map[string]any{"post": map[string]any{
+				"summary":            "Start recording browser activity to video",
+				"description":        security["screencast"].Message,
+				"x-pinchtab-enabled": security["screencast"].Enabled,
+			}},
+			"/record/stop": map[string]any{"post": map[string]any{
+				"summary":            "Stop recording and return encoded file",
+				"description":        security["screencast"].Message,
+				"x-pinchtab-enabled": security["screencast"].Enabled,
+			}},
+			"/record/status": map[string]any{"get": map[string]any{
+				"summary":            "Check recording status",
+				"description":        security["screencast"].Message,
+				"x-pinchtab-enabled": security["screencast"].Enabled,
+			}},
 			"/storage": map[string]any{
 				"get": map[string]any{
 					"summary":            "Get localStorage/sessionStorage items (current origin only)",

@@ -125,22 +125,26 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 		}
 	})
 
-	// Monitor browser context cancellation
+	// Monitor browser context cancellation. A canceled context during
+	// draining is expected (deliberate shutdown); otherwise it indicates
+	// an unexpected failure such as an in-process GPU crash.
 	go func() {
 		<-b.BrowserCtx.Done()
 		err := b.BrowserCtx.Err()
-		if err == nil || err == context.Canceled {
-			slog.Info("browser context ended", "reason", "context canceled")
+		if b.draining {
+			slog.Info("browser context ended during drain", "reason", err)
 			return
+		}
+		reason := "unexpected context cancellation"
+		if err != nil && err != context.Canceled {
+			reason = err.Error()
 		}
 		event := CrashEvent{
 			Time:   time.Now(),
-			Reason: err.Error(),
+			Reason: reason,
 		}
 		recordCrashEvent(event)
-		slog.Warn("🔥 BROWSER CONTEXT ENDED",
-			"error", err,
-		)
+		slog.Warn("🔥 BROWSER CONTEXT ENDED UNEXPECTEDLY", "error", err)
 		if handler != nil {
 			handler(event)
 		}

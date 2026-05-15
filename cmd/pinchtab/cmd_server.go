@@ -74,5 +74,6 @@ func init() {
 	serverCmd.Flags().String("background-child", "", "Internal marker for background server ownership")
 	_ = serverCmd.Flags().MarkHidden("background-child")
 	serverCmd.AddCommand(serverStopCmd)
+	serverCmd.AddCommand(serverRestartCmd)
 	rootCmd.AddCommand(serverCmd)
 }

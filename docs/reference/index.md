@@ -22,6 +22,7 @@ Note: this index is generated and should be checked against the code when comman
 - [Navigate](./navigate.md)
 - [PDF](./pdf.md)
 - [Press](./press.md)
+- [Record](./record.md)
 - [Profiles](./profiles.md)
 - [Scheduler And Tasks](./scheduler.md)
 - [Screenshot](./screenshot.md)

@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/server"
 )
 
 func TestIsBackgroundServerReadyRequiresValidPinchTabHealth(t *testing.T) {
@@ -137,6 +139,45 @@ func TestVerifyServerPIDInfoRefusesLegacyPID(t *testing.T) {
 	err := verifyServerPIDInfo(serverPIDInfo{PID: os.Getpid()})
 	if err == nil || !strings.Contains(err.Error(), "lacks verifiable background metadata") {
 		t.Fatalf("verifyServerPIDInfo() error = %v, want missing metadata error", err)
+	}
+}
+
+func TestStopViaAPIShutdownEndpoint(t *testing.T) {
+	shutdownCalled := false
+	healthAlive := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			if healthAlive {
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte(`{"status":"ok","mode":"dashboard","version":"dev"}`))
+			} else {
+				w.WriteHeader(503)
+			}
+		case "/shutdown":
+			if r.Method != http.MethodPost {
+				w.WriteHeader(405)
+				return
+			}
+			shutdownCalled = true
+			healthAlive = false
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`{"status":"shutting down"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	// Extract port from test server URL.
+	port := strings.TrimPrefix(srv.URL, "http://127.0.0.1:")
+
+	err := server.ShutdownServer(port, "")
+	if err != nil {
+		t.Fatalf("ShutdownServer() error = %v", err)
+	}
+	if !shutdownCalled {
+		t.Fatal("POST /shutdown was not called")
 	}
 }
 

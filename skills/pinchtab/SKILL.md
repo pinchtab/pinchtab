@@ -102,8 +102,11 @@ pinchtab security             # review security posture
 
 Key settings agents may need to change:
 - `security.allowEvaluate`: enable `eval` command (`true`/`false`)
+- `security.allowScreencast`: enable `record` commands (`true`/`false`)
 - `security.allowedDomains`: list of allowed hostnames (e.g. `["localhost", "127.0.0.1"]`)
 - `instanceDefaults.headless`: run Chrome headless (`true`) or headed (`false`)
+
+After changing config with the server running, restart to apply: `pinchtab server restart`.
 
 ## Essential Commands
 
@@ -111,6 +114,8 @@ Key settings agents may need to change:
 
 ```bash
 pinchtab server | daemon install | health
+pinchtab server stop                                # stop any running server (foreground or background)
+pinchtab server restart                             # stop + restart in background (applies config changes)
 pinchtab instances | profiles
 pinchtab --server http://localhost:9868 snap -i -c  # target a specific instance
 ```
@@ -209,6 +214,9 @@ Timeout 10s default, 30s max via `--timeout <ms>`. Prefer `--not-text`/`--state 
 ```bash
 pinchtab screenshot [-o path.png] [-q <jpeg-quality>]   # format by extension
 pinchtab pdf [-o path.pdf] [--landscape]
+pinchtab record start out.gif [--fps 5] [--scale 1.0]  # .gif/.webm/.mp4; requires security.allowScreencast; .gif works without ffmpeg, .webm/.mp4 need ffmpeg
+pinchtab record stop                                    # stop, encode, and save to path given at start
+pinchtab record status                                  # check active recording
 ```
 
 ### Advanced (explicit opt-in only)

@@ -101,6 +101,9 @@
       "services": ["pinchtab", "pinchtab-secure", "pinchtab-lite", "fixtures"],
       "ready": ["E2E_SERVER", "E2E_SECURE_SERVER", "E2E_LITE_SERVER"],
       "tags": ["system", "tasks", "idpi", "lite", "secure"]
+    },
+    "api/recording-smoke.sh": {
+      "tags": ["recording", "video", "smoke"]
     }
   }
 }

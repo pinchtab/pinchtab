@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-PinchTab currently exposes 38 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
+PinchTab currently exposes 41 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
 
 For selector-based interaction tools, prefer `selector`. `ref` and `query` are still accepted as deprecated/alias fallbacks on the element-action tools (`query` is shorthand for `find:<text>`).
 
@@ -92,6 +92,14 @@ All element-action tools accept the unified `selector` and the legacy aliases `r
 | `pinchtab_network_clear` | `tabId` | Clears one tab or all tabs when omitted |
 | `pinchtab_network_route` | `tabId` required, `pattern` required, `action`, `body`, `contentType`, `status`, `resourceType`, `method` | Install a request-interception rule on a tab. `action` is `continue` (default), `abort`, or `fulfill`. `fulfill` is blocked on hosts in `security.allowedDomains` and falls through to a real fetch on those hosts |
 | `pinchtab_network_unroute` | `tabId` required, `pattern` | Remove a tab's interception rule by pattern, or all rules when `pattern` is omitted |
+
+## Recording
+
+| Tool | Key Parameters | Notes |
+| --- | --- | --- |
+| `pinchtab_record_start` | `file` required, `fps`, `quality`, `scale`, `tabId` | Start recording; format inferred from extension (`.gif`, `.webm`, `.mp4`). Requires `security.allowScreencast`. GIF works without ffmpeg |
+| `pinchtab_record_stop` | `file` required | Stop recording, encode, and save to `file`. Encoding may take a while for long recordings |
+| `pinchtab_record_status` | — | Returns active recording status (format, fps, duration, frame count) |
 
 ## Dialog
 

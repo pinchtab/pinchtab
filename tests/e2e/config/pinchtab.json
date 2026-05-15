@@ -39,6 +39,7 @@
   "security": {
     "allowEvaluate": true,
     "allowDownload": true,
+    "allowScreencast": true,
     "allowCookies": true,
     "allowUpload": true,
     "allowClipboard": true,

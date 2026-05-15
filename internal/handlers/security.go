@@ -51,7 +51,7 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 			Enabled: h.screencastEnabled(),
 			Setting: "security.allowScreencast",
 			Message: httpx.DisabledEndpointMessage("screencast", "security.allowScreencast"),
-			Paths:   []string{"GET /screencast", "GET /screencast/tabs", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"},
+			Paths:   []string{"GET /screencast", "GET /screencast/tabs", "POST /record/start", "POST /record/stop", "GET /record/status", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"},
 		},
 		"download": {
 			Enabled: h.downloadEnabled(),

@@ -268,6 +268,23 @@ func allTools() []mcp.Tool {
 			mcp.WithString("pattern", mcp.Description("Pattern to remove (omit to clear all rules)")),
 		),
 
+		// ── Recording ───────────────────────────────────────────────
+		mcp.NewTool("pinchtab_record_start",
+			mcp.WithDescription("Start recording browser activity. Requires security.allowScreencast. GIF works without ffmpeg; WebM/MP4 need ffmpeg."),
+			mcp.WithString("file", mcp.Required(), mcp.Description("Output file path (.gif, .webm, or .mp4)")),
+			mcp.WithNumber("fps", mcp.Description("Frames per second 1-30 (default: 5)")),
+			mcp.WithNumber("quality", mcp.Description("JPEG capture quality 1-100 (default: 80)")),
+			mcp.WithNumber("scale", mcp.Description("Resolution scale 0-1.0 (default: 1.0)")),
+			mcp.WithString("tabId", mcp.Description("Target tab ID")),
+		),
+		mcp.NewTool("pinchtab_record_stop",
+			mcp.WithDescription("Stop recording and save the encoded file. Encoding may take a while for long recordings."),
+			mcp.WithString("file", mcp.Required(), mcp.Description("Output file path (must match the format from record_start)")),
+		),
+		mcp.NewTool("pinchtab_record_status",
+			mcp.WithDescription("Check active recording status (format, fps, duration, frame count)"),
+		),
+
 		// ── Dialog ──────────────────────────────────────────────────
 		mcp.NewTool("pinchtab_dialog",
 			mcp.WithDescription("Handle a JavaScript dialog (alert, confirm, prompt). Accept or dismiss the currently open dialog."),

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	configschema "github.com/pinchtab/pinchtab/internal/schema"
@@ -286,6 +287,7 @@ func handleConfigSet(path, value string) error {
 	}
 
 	fmt.Printf("Set %s = %s\n", path, displayConfigValue(path, value))
+	hintRestartIfRunning()
 	return nil
 }
 
@@ -329,6 +331,7 @@ func handleConfigPatch(jsonPatch string) error {
 	}
 
 	fmt.Println("Config patched successfully")
+	hintRestartIfRunning()
 	return nil
 }
 
@@ -348,6 +351,13 @@ func handleConfigValidate() {
 	}
 
 	fmt.Printf("Config file is valid: %s\n", configPath)
+}
+
+func hintRestartIfRunning() {
+	cfg := loadLocalConfig()
+	if server.CheckPinchTabRunning(cfg.Port, cfg.Token) {
+		output.Hint("Server is running — restart it to apply changes: pinchtab server restart")
+	}
 }
 
 func handleConfigSchema(printSchema bool) {

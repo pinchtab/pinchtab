@@ -157,6 +157,9 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/upload", "Upload file to file input", CapUpload, true},
 	{"GET", "/screencast", "Live tab frame stream", CapScreencast, false},
 	{"GET", "/screencast/tabs", "List tabs available for screencast", CapScreencast, false},
+	{"POST", "/record/start", "Start recording browser activity to video", CapScreencast, false},
+	{"POST", "/record/stop", "Stop recording and return encoded file", CapScreencast, false},
+	{"GET", "/record/status", "Check recording status", CapScreencast, false},
 	// CapStateExport gates all sensitive state I/O: reading, writing, injection, and deletion.
 	{"GET", "/storage", "Get storage items (current origin)", CapStateExport, true},
 	{"GET", "/state/show", "Show state file details", CapStateExport, false},

@@ -15,6 +15,8 @@ func DisabledEndpointHandler(feature, setting, code string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		ErrorCode(w, http.StatusForbidden, code, DisabledEndpointMessage(feature, setting), false, map[string]any{
 			"setting": setting,
+			"hint":    fmt.Sprintf("Enable %s to use this feature.", setting),
+			"remedy":  fmt.Sprintf("pinchtab config set %s true", setting),
 		})
 	}
 }

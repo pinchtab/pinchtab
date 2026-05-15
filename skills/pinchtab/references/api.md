@@ -300,6 +300,25 @@ curl "/screenshot?raw=true&quality=50" -o screenshot.jpg
 curl "/screenshot?raw=true&format=png" -o screenshot.png
 ```
 
+## Recording
+
+Record browser activity as a video file. Requires `security.allowScreencast: true`.
+
+```bash
+# CLI: pinchtab record start output.gif [--fps 2] [--quality 80] [--scale 1.0]
+# Start recording
+curl -X POST /record/start -H 'Content-Type: application/json' \
+  -d '{"format":"gif","fps":5,"quality":80}'
+
+# Check status
+curl /record/status
+
+# Stop and save (returns raw binary)
+curl -X POST /record/stop -o recording.gif
+```
+
+Formats: `gif` (always available), `webm` and `mp4` (require ffmpeg). One active recording per instance.
+
 ## Evaluate JavaScript
 
 Use this sparingly. Prefer `text`, `snapshot`, and normal actions first.

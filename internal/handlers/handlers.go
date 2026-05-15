@@ -42,6 +42,8 @@ type Handlers struct {
 	// tabId and has no stored scoped current tab. See EmptyPointerPolicy.
 	emptyPointerPolicy EmptyPointerPolicy
 
+	recorder *recorder
+
 	// Optional dependency injection (for unit testing)
 	evalJS           func(ctx context.Context, expression string, out *string) error
 	autoSolverRunner func(ctx context.Context, tabID string) error
@@ -64,6 +66,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		IDPIGuard:       idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains),
 		CurrentTabs:     NewCurrentTabStore(),
 		credentialStore: newCredentialStore(),
+		recorder:        &recorder{},
 	}
 
 	// Wire up the recovery engine with callbacks that delegate back to
@@ -297,6 +300,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /find", h.HandleFind)
 	mux.HandleFunc("GET /screencast", h.HandleScreencast)
 	mux.HandleFunc("GET /screencast/tabs", h.HandleScreencastAll)
+	mux.HandleFunc("POST /record/start", h.HandleRecordStart)
+	mux.HandleFunc("POST /record/stop", h.HandleRecordStop)
+	mux.HandleFunc("GET /record/status", h.HandleRecordStatus)
 	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("GET /clipboard/read", h.HandleClipboardRead)

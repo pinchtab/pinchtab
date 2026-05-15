@@ -63,6 +63,11 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		"pinchtab_network_route":   handleNetworkRoute(c),
 		"pinchtab_network_unroute": handleNetworkUnroute(c),
 
+		// Recording
+		"pinchtab_record_start":  handleRecordStart(c),
+		"pinchtab_record_stop":   handleRecordStop(c),
+		"pinchtab_record_status": handleRecordStatus(c),
+
 		// Dialog
 		"pinchtab_dialog": handleDialog(c),
 	}

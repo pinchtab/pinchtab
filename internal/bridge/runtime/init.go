@@ -181,9 +181,11 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		// Collapse the GPU process into the browser process. Saves one
 		// OS process and ~50-150MB per Chrome instance, and avoids the
 		// GPU-process sandbox negotiation in our --no-sandbox containers.
-		// Trade-off: a GPU code crash takes the browser with it, but the
-		// always-on strategy restarts instances anyway.
-		opts = append(opts, chromedp.Flag("in-process-gpu", true))
+		// Trade-off: a GPU code crash takes the browser with it. Disabled
+		// automatically after a crash so the failure doesn't repeat.
+		if !cfg.DisableInProcessGPU {
+			opts = append(opts, chromedp.Flag("in-process-gpu", true))
+		}
 	} else {
 		opts = append(opts, chromedp.Flag("headless", false))
 	}

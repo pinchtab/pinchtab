@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -293,6 +295,47 @@ func resetConfigSchemaPrintFlag(t *testing.T) {
 	}
 	if err := cmd.Flags().Set("print", "false"); err != nil {
 		t.Fatalf("reset schema print flag: %v", err)
+	}
+}
+
+func TestConfigSetHintsRestartWhenServerRunning(t *testing.T) {
+	// Spin up a fake health endpoint so hintRestartIfRunning detects a running server.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer srv.Close()
+
+	port := srv.URL[strings.LastIndex(srv.URL, ":")+1:]
+
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+
+	// Write a minimal valid config pointing at the fake server port.
+	configJSON := []byte(`{"configVersion":"0.8.0","server":{"port":"` + port + `","token":"test-token-for-restart-hint-00000"}}`)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, configJSON, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"config", "set", "security.allowScreencast", "true"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(stderr, "restart") {
+		t.Fatalf("expected restart hint on stderr, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "pinchtab server restart") {
+		t.Fatalf("expected 'pinchtab server restart' in hint, got %q", stderr)
 	}
 }
 

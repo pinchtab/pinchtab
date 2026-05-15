@@ -46,22 +46,23 @@ type RuntimeConfig struct {
 	TrustLoopbackProxy     bool     // when true, navigation responses with a loopback RemoteIPAddress (e.g. system HTTP/SOCKS proxy on 127.0.0.1) are not blocked; default false
 
 	// Browser/instance settings
-	Headless         bool
-	HeadlessSet      bool // true when explicitly set via config or flag
-	NoRestore        bool
-	ProfileDir       string
-	ProfilesBaseDir  string
-	DefaultProfile   string
-	ChromeVersion    string
-	Timezone         string
-	BlockImages      bool
-	BlockMedia       bool
-	BlockAds         bool
-	MaxTabs          int
-	MaxParallelTabs  int // 0 = auto-detect from runtime.NumCPU
-	ChromeBinary     string
-	ChromeDebugPort  int
-	ChromeExtraFlags string
+	Headless            bool
+	HeadlessSet         bool // true when explicitly set via config or flag
+	DisableInProcessGPU bool // runtime-only: set after a GPU crash to avoid repeating the failure
+	NoRestore           bool
+	ProfileDir          string
+	ProfilesBaseDir     string
+	DefaultProfile      string
+	ChromeVersion       string
+	Timezone            string
+	BlockImages         bool
+	BlockMedia          bool
+	BlockAds            bool
+	MaxTabs             int
+	MaxParallelTabs     int // 0 = auto-detect from runtime.NumCPU
+	ChromeBinary        string
+	ChromeDebugPort     int
+	ChromeExtraFlags    string
 	// CDPAttachURL: when set, the bridge skips launching its own Chrome and
 	// connects to an already-running Chrome whose browser-level CDP
 	// WebSocket URL is provided here (e.g.

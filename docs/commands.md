@@ -4,6 +4,8 @@
 
 ```bash
 pinchtab server                         # Start the full server (dashboard + API)
+pinchtab server stop                    # Stop the running server (foreground or background)
+pinchtab server restart                 # Stop + restart in background (applies config changes)
 pinchtab bridge                         # Start the bridge-only runtime
 pinchtab mcp                            # Start the MCP stdio server
 pinchtab daemon                         # Show daemon status
@@ -223,6 +225,12 @@ pinchtab download <url>                 # Download through the browser session
 pinchtab download <url> -o <path>       # Save downloaded file to a path
 pinchtab upload <file>                  # Upload to the default file input
 pinchtab upload <file> -s <css>         # Upload to a specific file input
+pinchtab record start <file>            # Start recording (.webm, .mp4, .gif)
+pinchtab record start <file> --fps 10   # Custom frame rate (default 5)
+pinchtab record start <file> --quality 90 # JPEG capture quality (default 80)
+pinchtab record start <file> --scale 0.5  # Half resolution
+pinchtab record stop                    # Stop recording and save
+pinchtab record status                  # Check recording status
 ```
 
 ## Instances, Profiles, And Activity

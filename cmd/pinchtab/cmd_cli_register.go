@@ -82,6 +82,7 @@ func registerBrowserCommands() {
 		tabResumeCmd,
 		handoffStatusCmd,
 		tabHandoffStatusCmd,
+		recordCmd,
 	)
 
 	// These commands carry GroupID="browser" (set by setCommandGroup above).
@@ -93,6 +94,7 @@ func registerBrowserCommands() {
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
 	mouseCmd.AddCommand(mouseMoveCmd, mouseDownCmd, mouseUpCmd, mouseWheelCmd)
 	networkCmd.AddCommand(networkRouteCmd, networkUnrouteCmd)
+	recordCmd.AddCommand(recordStartCmd, recordStopCmd, recordStatusCmd)
 
 	configureBrowserFlags()
 
@@ -155,6 +157,7 @@ func registerBrowserCommands() {
 		handoffCmd,
 		resumeCmd,
 		handoffStatusCmd,
+		recordCmd,
 	)
 }
 
@@ -257,6 +260,11 @@ func configureBrowserFlags() {
 	pdfCmd.Flags().Bool("generate-document-outline", false, "Generate document outline")
 	pdfCmd.Flags().Bool("file-output", false, "Use server-side file output")
 	pdfCmd.Flags().String("path", "", "Server-side output path")
+
+	recordStartCmd.Flags().Int("fps", 5, "Frames per second (1-30)")
+	recordStartCmd.Flags().Int("quality", 80, "JPEG capture quality (1-100)")
+	recordStartCmd.Flags().Float64("scale", 1.0, "Resolution scale multiplier")
+	addTabFlag(recordStartCmd)
 
 	findCmd.Flags().String("threshold", "", "Minimum similarity score (0-1)")
 	findCmd.Flags().Bool("explain", false, "Show score breakdown")
