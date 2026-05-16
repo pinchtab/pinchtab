@@ -45,6 +45,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9867/health
 
 Token: `pinchtab config token` or `~/.pinchtab/config.json` → `server.token`
 Default port: `9867`. Check health before any other call.
+Large real pages: cap text extraction too, not just snapshots. Start with `/text?maxChars=4000` (or smaller) before requesting more page content.
 
 **IDPI (Domain Allowlist):** If navigation fails with `Domain not in allowlist`, the server has IDPI enabled. Check `~/.pinchtab/config.json` → `security.idpi.allowedDomains`. Add required domains or set `security.idpi.enabled: false` for unrestricted browsing.
 

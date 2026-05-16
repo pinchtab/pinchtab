@@ -1,0 +1,5 @@
+{
+  "benchmark": {"name": "benchmark-2-init", "run_number": 1, "timestamp": "20260516_000000", "goal": "minimize tokens-to-first-result"},
+  "totals": {"tokens": 0, "passed": 0, "failed": 0},
+  "steps": []
+}

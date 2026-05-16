@@ -1,0 +1,69 @@
+{
+  "benchmark": {
+    "name": "benchmark-2-init",
+    "run_number": 3,
+    "timestamp": "20260516_161955",
+    "goal": "minimize tokens-to-first-result"
+  },
+  "totals": {
+    "tokens": 34135,
+    "passed": 5,
+    "failed": 1
+  },
+  "steps": [
+    {
+      "phase": 0,
+      "step": 1,
+      "id": "P0.1",
+      "status": "pass",
+      "tokens": 2622,
+      "notes": "answered auth nav text-vs-snap fill submit real-site IDPI in one read",
+      "timestamp": "2026-05-16T15:19:55Z"
+    },
+    {
+      "phase": 1,
+      "step": 1,
+      "id": "P1.1",
+      "status": "pass",
+      "tokens": 52,
+      "notes": "health ok on first authenticated call",
+      "timestamp": "2026-05-16T15:19:56Z"
+    },
+    {
+      "phase": 2,
+      "step": 1,
+      "id": "P2.1",
+      "status": "pass",
+      "tokens": 1375,
+      "notes": "fixtures hostname failed on host server; localhost:8080 succeeded and extracted headlines/users/revenue",
+      "timestamp": "2026-05-16T15:19:56Z"
+    },
+    {
+      "phase": 3,
+      "step": 1,
+      "id": "P3.1",
+      "status": "fail",
+      "tokens": 27930,
+      "notes": "real-site extraction blew past budget; GitHub/Wikipedia required full-page outputs and IDPI scan-content tuning",
+      "timestamp": "2026-05-16T15:19:56Z"
+    },
+    {
+      "phase": 4,
+      "step": 1,
+      "id": "P4.1",
+      "status": "pass",
+      "tokens": 814,
+      "notes": "form and search completed with fill/select/click flow",
+      "timestamp": "2026-05-16T15:19:56Z"
+    },
+    {
+      "phase": 5,
+      "step": 1,
+      "id": "P5.1",
+      "status": "pass",
+      "tokens": 1342,
+      "notes": "top HN story searched on fixtures; no results found",
+      "timestamp": "2026-05-16T15:19:56Z"
+    }
+  ]
+}
