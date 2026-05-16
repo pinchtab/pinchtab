@@ -7,23 +7,28 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESULTS_DIR="${SCRIPT_DIR}/results"
+RESULTS_DIR="${SCRIPT_DIR}/../results"
 LOG_FILE="${RESULTS_DIR}/optimization_log.md"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RUN_NUMBER=$(grep -c "^## Run #" "${LOG_FILE}" 2>/dev/null || echo 0)
 RUN_NUMBER=$((RUN_NUMBER + 1))
+mkdir -p "${RESULTS_DIR}"
 
 echo "=== PinchTab Optimization Run #${RUN_NUMBER} ==="
 echo "Timestamp: ${TIMESTAMP}"
 
-# Ensure we're on feat/benchmark branch
-cd ~/dev/pinchtab
-CURRENT_BRANCH=$(git branch --show-current)
+REPO_ROOT=$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)
+CURRENT_BRANCH=$(git -C "${REPO_ROOT}" branch --show-current)
 if [[ "${CURRENT_BRANCH}" != "feat/benchmark" ]]; then
-    echo "Switching to feat/benchmark branch..."
-    git checkout feat/benchmark
+    echo "WARNING: expected feat/benchmark, found ${CURRENT_BRANCH}"
 fi
-git pull --rebase origin feat/benchmark 2>/dev/null || true
+
+# Refresh the current worktree branch when an upstream exists, but do not
+# force a checkout in another worktree. The benchmark harness should operate
+# on the branch/worktree it was launched from.
+if UPSTREAM_REF=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+    git -C "${REPO_ROOT}" pull --rebase "${UPSTREAM_REF%%/*}" "${UPSTREAM_REF#*/}" 2>/dev/null || true
+fi
 
 # Ensure Docker is running
 cd "${SCRIPT_DIR}"
