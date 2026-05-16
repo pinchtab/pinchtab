@@ -29,9 +29,10 @@ metadata:
 # 1. Navigate
 pinchtab nav https://example.com
 
-# 2. Read content (prose → text, structure/prices/buttons → snap)
-pinchtab text          # prose extraction
-pinchtab snap -i -c    # interactive elements with refs
+# 2. Read content (prose → text, structure/headings/prices → snap -c)
+pinchtab text                         # prose extraction
+pinchtab snap -c --max-tokens 1000    # compact structure/headings/prices
+pinchtab snap -i -c --max-tokens 1000 # interactive elements with refs
 
 # 3. Interact
 pinchtab fill "#email" "user@example.com"  # fill a field
