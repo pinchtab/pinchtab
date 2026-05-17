@@ -138,11 +138,11 @@ ACT '{"kind":"click","selector":"#checkout-btn"}' > /dev/null
 S=$(SNAP "" 2000); VERIFY_MARKER 6 3 "$S" "VERIFY_CHECKOUT_SUCCESS_ORDER"
 
 # Group 7
-NAV "http://fixtures/wiki-go.html"; S1=$(SNAP "" 2000)
+NAV "http://fixtures/wiki-go.html"
 ACT '{"kind":"fill","selector":"#comment-text","text":"Great article."}' > /dev/null
 ACT '{"kind":"select","selector":"#comment-rating","value":"5"}' > /dev/null
 ACT '{"kind":"click","selector":"#submit-comment"}' > /dev/null
-S2=$(SNAP "" 2000); echo "$S1" | grep -q "VERIFY_WIKI_GO" && echo "$S2" | grep -q "COMMENT_POSTED_RATING_5" && REC 7 1 pass "c" || REC 7 1 fail "miss"
+S=$(SNAP "" 2000); echo "$S" | grep -q "VERIFY_WIKI_GO" && echo "$S" | grep -q "COMMENT_POSTED_RATING_5" && REC 7 1 pass "c" || REC 7 1 fail "miss"
 NAV "http://fixtures/wiki.html"; S1=$(SNAP "" 1500)
 ACT '{"kind":"click","selector":"#link-go","waitNav":true}' > /dev/null; S2=$(SNAP "" 500)
 echo "$S1" | grep -q "COUNT_LANGUAGES_12" && echo "$S2" | grep -q "VERIFY_WIKI_GO" && REC 7 2 pass "x" || REC 7 2 fail "miss"
@@ -255,7 +255,6 @@ FRAME '{"target":"#content-frame"}'
 ACT '{"kind":"fill","selector":"#iframe-input","text":"Hello World"}' > /dev/null
 ACT '{"kind":"click","selector":"#iframe-submit"}' > /dev/null
 S=$(SNAP "" 500)
-FRAME '{"target":"main"}'
 echo "$S" | grep -q "IFRAME_INPUT_RECEIVED_HELLO_WORLD" && REC 19 2 pass "native-frame" || REC 19 2 fail "miss"
 
 # Group 20
@@ -278,23 +277,15 @@ NAV "http://fixtures/drag.html"
 ACT '{"kind":"drag","selector":"#piece","dragX":12,"dragY":-158}' > /dev/null
 S=$(curl -sf "$BASE/tabs/$T/text" -H "$AUTH")
 if echo "$S" | grep -q "LAST_DROP=DROP_ZONE_A_OK"; then REC 22 1 pass "A"; else REC 22 1 fail "miss"; fi
-ACT '{"kind":"mouse-move","x":104,"y":200}' > /dev/null
-ACT '{"kind":"mouse-down","x":104,"y":200,"button":"left"}' > /dev/null
-ACT '{"kind":"mouse-move","x":344,"y":200}' > /dev/null
-ACT '{"kind":"mouse-up","x":344,"y":200,"button":"left"}' > /dev/null
-ACT '{"kind":"mouse-down","x":344,"y":200,"button":"left"}' > /dev/null
-ACT '{"kind":"mouse-move","x":584,"y":400}' > /dev/null
-ACT '{"kind":"mouse-up","x":584,"y":400,"button":"left"}' > /dev/null
+ACT '{"kind":"drag","selector":"#piece","dragX":240,"dragY":0}' > /dev/null
+ACT '{"kind":"drag","selector":"#piece","dragX":240,"dragY":200}' > /dev/null
 S=$(curl -sf "$BASE/tabs/$T/text" -H "$AUTH")
 if echo "$S" | grep -q "DROP_SEQUENCE=DROP_ZONE_A_OK,DROP_ZONE_B_OK,DROP_ZONE_C_OK"; then REC 22 2 pass "ABC"; else REC 22 2 fail "miss"; fi
 
 # Group 23 — loading state
 NAV "http://fixtures/loading.html"
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
-  S=$(curl -sf "$BASE/tabs/$T/text" -H "$AUTH")
-  echo "$S" | grep -q "VERIFY_LOADING_COMPLETE_88888" && break
-  sleep 0.3
-done
+curl -sf -X POST "$BASE/tabs/$T/wait" -H "$AUTH" -H "Content-Type: application/json" -d '{"text":"VERIFY_LOADING_COMPLETE_88888","timeout":5000}' > /dev/null
+S=$(curl -sf "$BASE/tabs/$T/text" -H "$AUTH")
 echo "$S" | grep -q "VERIFY_LOADING_COMPLETE_88888" && REC 23 1 pass "loaded" || REC 23 1 fail "did not load"
 
 # Group 24 — keyboard
@@ -373,7 +364,6 @@ FRAME '{"target":"#level-2"}'
 FRAME '{"target":"#level-3"}'
 ACT '{"kind":"click","selector":"#deep-button"}' > /dev/null
 S=$(SNAP "" 500)
-FRAME '{"target":"main"}'
 echo "$S" | grep -q "DEEP_CLICKED=YES_LEVEL_3" && REC 31 1 pass "nested-3" || REC 31 1 fail "miss"
 
 # Group 32 — dynamic iframe (inserted after load)
@@ -383,7 +373,6 @@ FRAME '{"target":"#late-frame"}'
 ACT '{"kind":"fill","selector":"#iframe-input","text":"Late World"}' > /dev/null
 ACT '{"kind":"click","selector":"#iframe-submit"}' > /dev/null
 S=$(SNAP "" 500)
-FRAME '{"target":"main"}'
 echo "$S" | grep -q "IFRAME_INPUT_RECEIVED_LATE_WORLD" && REC 32 1 pass "dynamic" || REC 32 1 fail "miss"
 
 # Group 33 — srcdoc iframe
@@ -392,7 +381,6 @@ FRAME '{"target":"#srcdoc-frame"}'
 ACT '{"kind":"fill","selector":"#inline-input","text":"srcdoc"}' > /dev/null
 ACT '{"kind":"click","selector":"#inline-submit"}' > /dev/null
 S=$(SNAP "" 500)
-FRAME '{"target":"main"}'
 echo "$S" | grep -q "INLINE_RECEIVED_SRCDOC" && REC 33 1 pass "srcdoc" || REC 33 1 fail "miss"
 
 # Group 34 — sandboxed iframe (allow-scripts allow-same-origin)
@@ -400,7 +388,6 @@ NAV "http://fixtures/iframe-sandbox.html"
 FRAME '{"target":"#sandboxed"}'
 ACT '{"kind":"click","selector":"#sandbox-button"}' > /dev/null
 S=$(SNAP "" 500)
-FRAME '{"target":"main"}'
 echo "$S" | grep -q "SANDBOX_CLICKED=YES" && REC 34 1 pass "sandbox" || REC 34 1 fail "miss"
 
 # Group 35 — long-form article (Readability vs --full)

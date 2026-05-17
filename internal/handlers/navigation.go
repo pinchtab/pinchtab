@@ -288,6 +288,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Bridge.DeleteRefCache(resolvedTabID)
+	h.clearTabFrameScope(resolvedTabID)
 
 	if err := h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector); err != nil {
 		httpx.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)

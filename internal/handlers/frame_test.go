@@ -62,6 +62,45 @@ func TestHandleFramePostMainClearsScope(t *testing.T) {
 	}
 }
 
+func TestClearTabFrameScopeDropsActiveScope(t *testing.T) {
+	mb := &mockBridge{
+		frameScopes: map[string]bridge.FrameScope{
+			"tab1": {FrameID: "child"},
+			"tab2": {FrameID: "other"},
+		},
+	}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
+
+	h.clearTabFrameScope("tab1")
+
+	if _, ok := mb.GetFrameScope("tab1"); ok {
+		t.Fatal("tab1 scope should have been cleared")
+	}
+	if _, ok := mb.GetFrameScope("tab2"); !ok {
+		t.Fatal("tab2 scope should remain — clear is per-tab")
+	}
+}
+
+func TestClearTabFrameScopeNoActiveScopeIsNoop(t *testing.T) {
+	mb := &mockBridge{frameScopes: map[string]bridge.FrameScope{}}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
+	h.clearTabFrameScope("tab1")
+	if _, ok := mb.GetFrameScope("tab1"); ok {
+		t.Fatal("no scope was set; nothing should appear after clear")
+	}
+}
+
+func TestClearTabFrameScopeEmptyTabIDIsNoop(t *testing.T) {
+	mb := &mockBridge{
+		frameScopes: map[string]bridge.FrameScope{"tab1": {FrameID: "child"}},
+	}
+	h := New(mb, &config.RuntimeConfig{}, nil, nil, nil)
+	h.clearTabFrameScope("")
+	if _, ok := mb.GetFrameScope("tab1"); !ok {
+		t.Fatal("empty tabID should not clear other tabs' scopes")
+	}
+}
+
 func TestFrameScopeForOwnerNodeFallsBackToRefCacheTargets(t *testing.T) {
 	cache := &bridge.RefCache{
 		Targets: map[string]bridge.RefTarget{

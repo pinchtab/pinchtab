@@ -177,6 +177,19 @@ func (h *Handlers) cancelAutoCloseIfEnabled(tabID string) {
 	h.Bridge.CancelAutoClose(tabID)
 }
 
+// clearTabFrameScope drops any active frame scope on a tab. Call from
+// /navigate after a successful navigation: the previous page's frame
+// tree is gone, so any FrameScope pointing into it would only cause
+// stale-scope failures on the next /snap, /text, /wait, or /action.
+func (h *Handlers) clearTabFrameScope(tabID string) {
+	if h == nil || tabID == "" {
+		return
+	}
+	if scopes := h.frameScopes(); scopes != nil {
+		scopes.ClearFrameScope(tabID)
+	}
+}
+
 func (h *Handlers) bridgeRestartStatus() (bool, time.Duration) {
 	provider, ok := h.Bridge.(restartStatusProvider)
 	if !ok {
