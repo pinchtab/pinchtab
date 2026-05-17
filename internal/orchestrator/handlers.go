@@ -51,6 +51,9 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	mux.HandleFunc("GET /instances/{id}/logs/stream", o.handleLogsStreamByID)
 	mux.HandleFunc("GET /instances/{id}/tabs", o.handleInstanceTabs)
 	mux.HandleFunc("POST /instances/{id}/tabs/open", o.handleInstanceTabOpen)
+	// F3 (SMI-81 hardening): reopen tabs persisted by the per-instance
+	// bridge across daemon/pod restarts. See handleInstanceTabsRestore.
+	mux.HandleFunc("POST /instances/{id}/tabs/restore", o.handleInstanceTabsRestore)
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
 	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.handleProxyScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.proxyToInstance)

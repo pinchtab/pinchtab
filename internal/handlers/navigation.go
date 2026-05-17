@@ -224,6 +224,11 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		h.recordResolvedTab(r, newTabID)
 		h.recordResolvedURL(r, url)
 
+		// F3 (SMI-81 hardening): snapshot the open-tab list to
+		// <profileDir>/tabs.json so pod rolls can restore. Best-effort:
+		// failures here do not affect the nav response.
+		h.persistTabStateAfterNav()
+
 		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": url, "title": title})
 		return
 	}
@@ -278,6 +283,9 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
 	title, _ := bridge.WaitForTitle(tCtx, titleWait)
 	h.recordResolvedURL(r, url)
+
+	// F3 (SMI-81 hardening): see comment in the new-tab branch above.
+	h.persistTabStateAfterNav()
 
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": url, "title": title})
 }
