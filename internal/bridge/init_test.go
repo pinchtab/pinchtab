@@ -126,6 +126,45 @@ func TestBuildChromeArgsIncludesExistingExtensionPaths(t *testing.T) {
 	}
 }
 
+func TestBuildChromeArgsIncludesProxyFlagsWhenConfigured(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{
+		Proxy: config.BrowserProxyConfig{
+			Server:     "http://proxy.example.com:8080",
+			BypassList: []string{"*.local", "127.0.0.1"},
+			Username:   "alice",
+			Password:   "s3cr3t",
+		},
+	}, 9222)
+
+	hasProxy, hasBypass := false, false
+	for _, a := range args {
+		if a == "--proxy-server=http://proxy.example.com:8080" {
+			hasProxy = true
+		}
+		if a == "--proxy-bypass-list=*.local;127.0.0.1" {
+			hasBypass = true
+		}
+		if strings.Contains(a, "alice") || strings.Contains(a, "s3cr3t") {
+			t.Fatalf("proxy credentials leaked into Chrome args: %q", a)
+		}
+	}
+	if !hasProxy {
+		t.Fatalf("expected --proxy-server flag in %v", args)
+	}
+	if !hasBypass {
+		t.Fatalf("expected --proxy-bypass-list flag in %v", args)
+	}
+}
+
+func TestBuildChromeArgsOmitsProxyFlagsWhenDisabled(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{}, 9222)
+	for _, a := range args {
+		if strings.HasPrefix(a, "--proxy-server=") || strings.HasPrefix(a, "--proxy-bypass-list=") {
+			t.Fatalf("did not expect proxy flag without config: %q", a)
+		}
+	}
+}
+
 func TestBaseChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
 	args := baseChromeFlagArgs()
 	for _, want := range []string{"--disable-metrics-reporting", "--metrics-recording-only"} {

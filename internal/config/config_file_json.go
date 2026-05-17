@@ -35,6 +35,11 @@ type browserConfigJSON struct {
 	ChromeExtraFlags string                  `json:"extraFlags"`
 	Cloak            *cloakBrowserConfigJSON `json:"cloak,omitempty"`
 	ExtensionPaths   []string                `json:"extensionPaths"`
+	// Pointer so omitempty drops the field for legacy configs (byte-identical round-trip).
+	Proxy         *BrowserProxyConfig  `json:"proxy,omitempty"`
+	DefaultTarget string               `json:"defaultTarget,omitempty"`
+	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
+	Targets       BrowserTargetsConfig `json:"targets,omitempty"`
 }
 
 type cloakBrowserConfigJSON struct {
@@ -98,9 +103,10 @@ type securityConfigJSON struct {
 }
 
 type attachJSON struct {
-	Enabled      *bool    `json:"enabled"`
-	AllowHosts   []string `json:"allowHosts"`
-	AllowSchemes []string `json:"allowSchemes"`
+	Enabled          *bool    `json:"enabled"`
+	AllowHosts       []string `json:"allowHosts"`
+	AllowSchemes     []string `json:"allowSchemes"`
+	ForwardProxyAuth *bool    `json:"forwardProxyAuth"`
 }
 
 type idpiConfigJSON struct {

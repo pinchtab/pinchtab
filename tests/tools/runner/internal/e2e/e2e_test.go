@@ -573,6 +573,66 @@ exit 23
 	}
 }
 
+func TestBringUpSharedStackCloakBuildsSupportImagesOnly(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	r := &Runner{
+		args:     Args{DryRun: true},
+		stdout:   &stdout,
+		stderr:   &stderr,
+		compose:  []string{"docker", "compose"},
+		logsMode: "hide",
+		overrides: &providerOverrides{
+			provider:     "cloak",
+			composeFiles: []string{"/tmp/docker-compose.cloak.yml"},
+		},
+	}
+
+	if code := r.bringUpSharedStack("compose.yml", []string{"pinchtab", "fixtures"}); code != 0 {
+		t.Fatalf("bringUpSharedStack returned %d, stderr: %s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	for _, want := range []string{
+		"docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml build fixtures runner-api runner-cli",
+		"docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml up -d --no-build pinchtab fixtures",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output missing %q:\n%s", want, out)
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, " build ") && strings.Contains(line, " pinchtab") {
+			t.Fatalf("cloak provider must not rebuild pinchtab services:\n%s", out)
+		}
+	}
+}
+
+func TestDryRunCloakProviderDoesNotRequireImage(t *testing.T) {
+	t.Setenv("E2E_LOGS", "")
+	var stdout, stderr bytes.Buffer
+
+	code := Run([]string{"--suite", "api", "--provider", "cloak", "--dry-run"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run returned %d, stderr: %s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	quotedOverride := "'" + dryRunCloakComposeOverride + "'"
+	for _, want := range []string{
+		"provider: cloak",
+		"docker compose -f tests/e2e/docker-compose.yml -f " + quotedOverride + " build fixtures runner-api runner-cli",
+		"docker compose -f tests/e2e/docker-compose.yml -f " + quotedOverride + " up -d --no-build pinchtab fixtures",
+		"PINCHTAB_E2E_PROVIDER=cloak",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(stderr.String(), "image not found") {
+		t.Fatalf("dry-run should not inspect the cloak image, stderr:\n%s", stderr.String())
+	}
+}
+
 func TestStructuredEventTeeFiltersHumanOutputOnly(t *testing.T) {
 	var human, log bytes.Buffer
 	tee := &structuredEventTee{human: &human, log: &log}

@@ -63,6 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-noto-color-emoji \
     procps \
+    socat \
   && rm -rf /var/lib/apt/lists/*
 
 # Non-root user; /data is the persistent volume mount point.

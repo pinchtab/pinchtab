@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,8 +94,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AttachEnabled {
 		t.Errorf("default AttachEnabled = %v, want false", cfg.AttachEnabled)
 	}
-	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "ws" || cfg.AttachAllowSchemes[1] != "wss" {
-		t.Errorf("default AttachAllowSchemes = %v, want [ws wss]", cfg.AttachAllowSchemes)
+	if cfg.AttachForwardProxyAuth {
+		t.Errorf("default AttachForwardProxyAuth = %v, want false", cfg.AttachForwardProxyAuth)
+	}
+	wantAttachSchemes := []string{"ws", "wss", "http", "https"}
+	if strings.Join(cfg.AttachAllowSchemes, ",") != strings.Join(wantAttachSchemes, ",") {
+		t.Errorf("default AttachAllowSchemes = %v, want %v", cfg.AttachAllowSchemes, wantAttachSchemes)
 	}
 	if !cfg.IDPI.Enabled {
 		t.Errorf("default IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
@@ -425,6 +430,9 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	if cfg.AttachEnabled {
 		t.Errorf("ApplyFileConfigToRuntime AttachEnabled = %v, want false", cfg.AttachEnabled)
 	}
+	if cfg.AttachForwardProxyAuth {
+		t.Errorf("ApplyFileConfigToRuntime AttachForwardProxyAuth = %v, want false", cfg.AttachForwardProxyAuth)
+	}
 	if !cfg.IDPI.Enabled {
 		t.Errorf("ApplyFileConfigToRuntime IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
 	}
@@ -536,9 +544,10 @@ func TestApplyFileConfigToRuntime_CopiesAttachConfig(t *testing.T) {
 	fc := &FileConfig{
 		Security: SecurityConfig{
 			Attach: AttachConfig{
-				Enabled:      &enabled,
-				AllowHosts:   []string{"127.0.0.1", "pinchtab-bridge"},
-				AllowSchemes: []string{"http", "https"},
+				Enabled:          &enabled,
+				AllowHosts:       []string{"127.0.0.1", "pinchtab-bridge"},
+				AllowSchemes:     []string{"http", "https"},
+				ForwardProxyAuth: &enabled,
 			},
 		},
 	}
@@ -555,6 +564,9 @@ func TestApplyFileConfigToRuntime_CopiesAttachConfig(t *testing.T) {
 	}
 	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "http" {
 		t.Fatalf("ApplyFileConfigToRuntime AttachAllowSchemes = %v, want copied schemes", cfg.AttachAllowSchemes)
+	}
+	if !cfg.AttachForwardProxyAuth {
+		t.Fatalf("ApplyFileConfigToRuntime AttachForwardProxyAuth = %v, want true", cfg.AttachForwardProxyAuth)
 	}
 }
 

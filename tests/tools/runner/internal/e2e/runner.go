@@ -21,14 +21,15 @@ const (
 )
 
 type Runner struct {
-	args     Args
-	suite    string
-	stdout   io.Writer
-	stderr   io.Writer
-	repoRoot string
-	compose  []string
-	logsMode string
-	overall  overallReportData
+	args      Args
+	suite     string
+	stdout    io.Writer
+	stderr    io.Writer
+	repoRoot  string
+	compose   []string
+	logsMode  string
+	overall   overallReportData
+	overrides *providerOverrides
 }
 
 type overallReportData struct {
@@ -111,6 +112,16 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 
 func (r *Runner) Run() int {
 	started := time.Now()
+	overrides, err := r.prepareProviderOverrides()
+	if err != nil {
+		_, _ = fmt.Fprintf(r.stderr, "e2e: %v\n", err)
+		return 1
+	}
+	r.overrides = overrides
+	if overrides != nil {
+		defer overrides.cleanup()
+		_, _ = fmt.Fprintf(r.stdout, "  provider: %s (image: %s)\n", overrides.provider, cloakImage)
+	}
 	code := r.run()
 	duration := time.Since(started)
 	r.printOverallSummary(duration)
@@ -553,15 +564,38 @@ func (r *Runner) planSuites(defs []suiteDef) ([]suitePlan, int) {
 }
 
 func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
-	if code := r.buildSharedStack(composeFile); code != 0 {
+	// Cloak runs against a prebuilt image (pinchtab-cloakbrowser:test) that
+	// must NOT be rebuilt by this lane. We still build support images such as
+	// fixtures and runners so clean workstations do not depend on stale local
+	// images.
+	skipPinchtabBuild := r.overrides != nil && r.overrides.provider == "cloak"
+	if skipPinchtabBuild {
+		if code := r.buildSharedStack(composeFile, cloakSupportBuildServices()...); code != 0 {
+			return code
+		}
+	} else {
+		if code := r.buildSharedStack(composeFile); code != 0 {
+			return code
+		}
+	}
+	args := []string{"up", "-d"}
+	if skipPinchtabBuild {
+		args = append(args, "--no-build")
+	}
+	args = append(args, services...)
+	if code := r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...)); code != 0 {
 		return code
 	}
-	args := append([]string{"up", "-d"}, services...)
-	return r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...))
+	if err := r.assertStealthStatus(composeFile); err != nil {
+		_, _ = fmt.Fprintf(r.stderr, "e2e: pre-suite stealth assertion failed: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
-func (r *Runner) buildSharedStack(composeFile string) int {
-	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, "build"))
+func (r *Runner) buildSharedStack(composeFile string, services ...string) int {
+	args := append([]string{"build"}, services...)
+	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, args...))
 	if code == 0 {
 		return 0
 	}
@@ -569,7 +603,12 @@ func (r *Runner) buildSharedStack(composeFile string) int {
 		return code
 	}
 	_, _ = fmt.Fprintln(r.stdout, "  build cache looked stale; retrying shared-stack build with --no-cache...")
-	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, "build", "--no-cache"))
+	retryArgs := append([]string{"build", "--no-cache"}, services...)
+	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, retryArgs...))
+}
+
+func cloakSupportBuildServices() []string {
+	return []string{"fixtures", "runner-api", "runner-cli"}
 }
 
 func (r *Runner) stackOutputHasBuildKitCacheFailure() bool {
@@ -608,6 +647,10 @@ func (r *Runner) suiteRunCommand(composeFile string, def suiteDef, scenarios []s
 }
 
 func (r *Runner) suiteEnvironment(def suiteDef, scenarios []scenarioMeta) []string {
+	provider := r.args.Provider
+	if provider == "" {
+		provider = "chrome"
+	}
 	return []string{
 		"E2E_HELPER=" + def.Helper,
 		"E2E_SCENARIO_DIR=" + def.ScenarioDir,
@@ -615,6 +658,7 @@ func (r *Runner) suiteEnvironment(def suiteDef, scenarios []scenarioMeta) []stri
 		"E2E_READY_TARGETS=" + strings.Join(readyTargetsForScenarios(def, scenarios), " "),
 		"E2E_TEST_FILTER=" + r.args.Test,
 		"E2E_SUMMARY_TITLE=" + suiteReportTitle(def),
+		"PINCHTAB_E2E_PROVIDER=" + provider,
 	}
 }
 
@@ -642,6 +686,11 @@ func suiteReportTitle(def suiteDef) string {
 func (r *Runner) composeArgs(composeFile string, args ...string) []string {
 	out := append([]string{}, r.compose...)
 	out = append(out, "-f", composeFile)
+	if r.overrides != nil {
+		for _, override := range r.overrides.composeFiles {
+			out = append(out, "-f", override)
+		}
+	}
 	out = append(out, args...)
 	return out
 }

@@ -20,15 +20,26 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/browserprobe"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/geo"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 var (
-	runtimeGOOS         = goruntime.GOOS
-	osGeteuid           = os.Geteuid
-	containerMarkerPath = "/.dockerenv"
+	runtimeGOOS              = goruntime.GOOS
+	osGeteuid                = os.Geteuid
+	containerMarkerPath      = "/.dockerenv"
+	geoProviderForConfigFunc = geoProviderForConfig
 )
+
+const launchGeoLookupTimeout = 3 * time.Second
+
+type launchGeoAlignment struct {
+	info  geo.Info
+	flags []string
+	env   []string
+}
 
 type Hooks struct {
 	SetHumanRandSeed          func(int64)
@@ -45,12 +56,24 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) 
 	}
 
 	bundle = ensureStealthBundle(cfg, bundle)
-	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, bundle, hooks)
-	browserCtx, browserCancel, launchMode, err := startChrome(allocCtx, cfg, bundle, opts, debugPort, hooks)
+	geoAlignment, err := resolveLaunchGeoAlignment(context.Background(), cfg)
+	if err != nil {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to resolve proxy geo alignment: %w", err)
+	}
+	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, bundle, hooks, geoAlignment)
+	browserCtx, browserCancel, launchMode, err := startChrome(allocCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment)
 	if err != nil {
 		allocCancel()
 		slog.Error("chrome initialization failed", "headless", cfg.Headless, "error", err.Error())
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start chrome: %w", err)
+	}
+
+	if proxyAuthEnabled(cfg.Proxy) {
+		if err := enableProxyAuth(browserCtx, cfg.Proxy); err != nil {
+			browserCancel()
+			allocCancel()
+			return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to enable proxy auth: %w", err)
+		}
 	}
 
 	slog.Info("chrome initialized successfully", "headless", cfg.Headless, "profile", cfg.ProfileDir)
@@ -58,34 +81,13 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) 
 }
 
 func findChromeBinary() string {
-	var candidates []string
-	switch goruntime.GOOS {
-	case "darwin":
-		candidates = []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-			"/Applications/Chromium.app/Contents/MacOS/Chromium",
-			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-		}
-	case "windows":
-		candidates = []string{
-			"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-			"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-		}
-	default:
-		candidates = []string{
-			"/usr/bin/google-chrome",
-			"/usr/bin/google-chrome-stable",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-		}
-	}
+	return FindChromeBinary()
+}
 
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-	return ""
+// FindChromeBinary exposes the launch-time Chrome discovery used by runtime
+// initialization so diagnostics can report against the same search path.
+func FindChromeBinary() string {
+	return browserprobe.DiscoverChromeBinary(runtimeGOOS).Found
 }
 
 func appendExecAllocatorFlag(opts []chromedp.ExecAllocatorOption, flag string) []chromedp.ExecAllocatorOption {
@@ -110,14 +112,17 @@ func appendExecAllocatorFlags(opts []chromedp.ExecAllocatorOption, flags []strin
 	return opts
 }
 
-func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int) {
+func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks, geoAlignment launchGeoAlignment) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int) {
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
 	}
 	opts = appendExecAllocatorFlags(opts, BaseChromeFlagArgs())
 	opts = appendExecAllocatorFlags(opts, bundle.Launch.Args)
-	opts = appendExecAllocatorFlags(opts, cloakBrowserFlagArgs(cfg))
+	opts = appendExecAllocatorFlags(opts, CloakBrowserFlagArgs(cfg))
+	opts = appendExecAllocatorFlags(opts, config.BrowserProxyFlags(cfg.Proxy))
+
+	opts = appendExecAllocatorFlags(opts, geoAlignment.flags)
 
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
@@ -190,6 +195,12 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 	}
 	opts = append(opts, chromedp.CombinedOutput(newPrefixedLogWriter(os.Stdout, "chrome")))
 	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
+		if len(geoAlignment.env) > 0 {
+			if cmd.Env == nil {
+				cmd.Env = os.Environ()
+			}
+			cmd.Env = mergeGeoEnv(cmd.Env, geoAlignment.env)
+		}
 		if hooks.ConfigureChromeProcessCmd != nil {
 			hooks.ConfigureChromeProcessCmd(cmd)
 		}
@@ -199,11 +210,11 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 	return ctx, cancel, opts, debugPort
 }
 
-func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
-	return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, false)
+func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, geoAlignment launchGeoAlignment) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+	return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, false)
 }
 
-func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, retriedProfileLock bool) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, geoAlignment launchGeoAlignment, retriedProfileLock bool) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 
@@ -238,7 +249,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 			if hooks.ClearStaleChromeProfile != nil {
 				if recovered, _ := hooks.ClearStaleChromeProfile(cfg.ProfileDir, errMsg); recovered {
 					time.Sleep(250 * time.Millisecond)
-					return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, true)
+					return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, true)
 				}
 			}
 		}
@@ -246,7 +257,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 		if shouldRetryChromeStartupWithDirectLaunch(parentCtx, err) && debugPort > 0 {
 			slog.Warn("chrome startup failed via allocator, trying direct-launch fallback", "port", debugPort, "error", errMsg)
 			time.Sleep(500 * time.Millisecond)
-			return startChromeWithRemoteAllocator(parentCtx, cfg, bundle, debugPort, bundle.Script)
+			return startChromeWithRemoteAllocator(parentCtx, cfg, bundle, debugPort, bundle.Script, geoAlignment)
 		}
 
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w", err)
@@ -287,7 +298,7 @@ func shouldRetryChromeStartupWithDirectLaunch(parentCtx context.Context, err err
 	return strings.Contains(err.Error(), "context canceled")
 }
 
-func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, debugPort int, injectedStealthScript string, geoAlignment launchGeoAlignment) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
 		chromeBinary = findChromeBinary()
@@ -296,11 +307,14 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 		return nil, nil, stealth.LaunchModeUninitialized, missingBrowserBinaryError(cfg)
 	}
 
-	args := buildChromeArgsWithBundle(cfg, bundle, debugPort)
-	// #nosec G204 -- chromeBinary from user config or findChromeBinary() known system paths
+	args := buildChromeArgsWithBundle(cfg, bundle, debugPort, geoAlignment)
+	// #nosec G204 -- chromeBinary from user config or shared browser discovery
 	cmd := exec.Command(chromeBinary, args...)
 	cmd.Stdout = newPrefixedLogWriter(os.Stdout, "chrome stdout")
 	cmd.Stderr = newPrefixedLogWriter(os.Stderr, "chrome stderr")
+	if len(geoAlignment.env) > 0 {
+		cmd.Env = mergeGeoEnv(os.Environ(), geoAlignment.env)
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start chrome directly: %w", err)
 	}
@@ -424,7 +438,11 @@ func chromeNeedsNoSandbox() bool {
 }
 
 func BuildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
-	return buildChromeArgsWithBundle(cfg, nil, port)
+	geoAlignment, err := resolveLaunchGeoAlignment(context.Background(), cfg)
+	if err != nil {
+		return buildChromeArgsWithBundle(cfg, nil, port, launchGeoAlignment{})
+	}
+	return buildChromeArgsWithBundle(cfg, nil, port, geoAlignment)
 }
 
 func existingExtensionPaths(paths []string) []string {
@@ -440,11 +458,13 @@ func existingExtensionPaths(paths []string) []string {
 	return validPaths
 }
 
-func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle, port int) []string {
+func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle, port int, geoAlignment launchGeoAlignment) []string {
 	bundle = ensureStealthBundle(cfg, bundle)
 	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, BaseChromeFlagArgs()...)
 	args = append(args, bundle.Launch.Args...)
-	args = append(args, cloakBrowserFlagArgs(cfg)...)
+	args = append(args, CloakBrowserFlagArgs(cfg)...)
+	args = append(args, config.BrowserProxyFlags(cfg.Proxy)...)
+	args = append(args, geoAlignment.flags...)
 
 	if validPaths := existingExtensionPaths(cfg.ExtensionPaths); len(validPaths) > 0 {
 		joined := strings.Join(validPaths, ",")
@@ -479,7 +499,7 @@ func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle
 	return appendChromeCompatibilityFlags(args)
 }
 
-func cloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
+func CloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
 	if cfg == nil || !config.IsCloakBrowserProvider(cfg.BrowserProvider) {
 		return nil
 	}
@@ -504,7 +524,7 @@ func cloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
 }
 
 func applyStartupStealth(ctx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, script string) error {
-	if !config.NativeCloakStealthEnabled(cfg) {
+	if !config.PinchTabStealthDefaultsDisabled(cfg) {
 		ua := ""
 		if bundle != nil {
 			ua = bundle.LaunchUserAgent()
@@ -574,6 +594,63 @@ func (w *prefixedLogWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+func geoProviderForConfig(cfg *config.RuntimeConfig) geo.Provider {
+	if cfg == nil || cfg.Proxy.Geo == nil || cfg.Proxy.Geo.IsZero() {
+		return geo.Noop{}
+	}
+	return geo.Static{Info: cfg.Proxy.GeoInfo()}
+}
+
+func resolveLaunchGeoAlignment(parent context.Context, cfg *config.RuntimeConfig) (launchGeoAlignment, error) {
+	if cfg == nil || cfg.Proxy.IsZero() || cfg.Proxy.Geo == nil || cfg.Proxy.Geo.IsZero() {
+		return launchGeoAlignment{}, nil
+	}
+	if !config.CloakBrowserProviderActive(cfg) {
+		return launchGeoAlignment{}, nil
+	}
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, launchGeoLookupTimeout)
+	defer cancel()
+
+	info, err := geoProviderForConfigFunc(cfg).Lookup(ctx, "")
+	if err != nil {
+		return launchGeoAlignment{}, err
+	}
+	flags, env := applyGeoAlignment(cfg.BrowserProvider, info, cfg.Cloak)
+	return launchGeoAlignment{
+		info:  info,
+		flags: flags,
+		env:   env,
+	}, nil
+}
+
+// mergeGeoEnv overlays additions over base by key; base is not mutated.
+func mergeGeoEnv(base, additions []string) []string {
+	if len(additions) == 0 {
+		return base
+	}
+	out := make([]string, 0, len(base)+len(additions))
+	overrideKeys := make(map[string]struct{}, len(additions))
+	for _, kv := range additions {
+		if eq := strings.IndexByte(kv, '='); eq > 0 {
+			overrideKeys[kv[:eq]] = struct{}{}
+		}
+	}
+	for _, kv := range base {
+		eq := strings.IndexByte(kv, '=')
+		if eq > 0 {
+			if _, replace := overrideKeys[kv[:eq]]; replace {
+				continue
+			}
+		}
+		out = append(out, kv)
+	}
+	out = append(out, additions...)
+	return out
 }
 
 func cryptoRandSeed() int64 {

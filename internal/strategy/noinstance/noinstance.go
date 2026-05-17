@@ -41,7 +41,11 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target, status, err := s.orch.FirstRunningURLForRequest(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return
+	}
 	if target == "" {
 		httpx.Error(w, 503, fmt.Errorf("no remote instances connected — attach a bridge first"))
 		return
@@ -52,7 +56,11 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target, status, err := s.orch.FirstRunningURLForRequest(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return
+	}
 	if target == "" {
 		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return

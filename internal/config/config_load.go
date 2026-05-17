@@ -111,7 +111,7 @@ func Load() *RuntimeConfig {
 		// Attach defaults
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
-		AttachAllowSchemes: []string{"ws", "wss"},
+		AttachAllowSchemes: []string{"ws", "wss", "http", "https"},
 
 		// IDPI defaults
 		IDPI: IDPIConfig{
@@ -226,6 +226,45 @@ func Load() *RuntimeConfig {
 	return cfg
 }
 
+// ConfigFileStatus reports on-disk config state without invoking Load (used by `pinchtab doctor`).
+type ConfigFileStatus struct {
+	Path        string
+	DefaultPath string
+	EnvOverride bool
+	Found       bool
+	ParseErr    error
+}
+
+// InspectConfigFile reports config-file load status with no side effects.
+func InspectConfigFile() ConfigFileStatus {
+	defaultPath := filepath.Join(userConfigDir(), "config.json")
+	path := envOr("PINCHTAB_CONFIG", defaultPath)
+	status := ConfigFileStatus{
+		Path:        path,
+		DefaultPath: defaultPath,
+		EnvOverride: os.Getenv("PINCHTAB_CONFIG") != "",
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return status
+	}
+	status.Found = true
+
+	if isLegacyConfig(data) {
+		var lc legacyFileConfig
+		if err := json.Unmarshal(data, &lc); err != nil {
+			status.ParseErr = err
+		}
+		return status
+	}
+	var fc FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		status.ParseErr = err
+	}
+	return status
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -325,6 +364,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.Attach.Enabled != nil {
 		cfg.AttachEnabled = *fc.Security.Attach.Enabled
 	}
+	if fc.Security.Attach.ForwardProxyAuth != nil {
+		cfg.AttachForwardProxyAuth = *fc.Security.Attach.ForwardProxyAuth
+	}
 	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
 	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	cfg.TrustedProxyCIDRs = append([]string(nil), fc.Security.TrustedProxyCIDRs...)
@@ -398,7 +440,18 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.Sessions.Agent.MaxLifetime = time.Duration(*fc.Sessions.Agent.MaxLifetimeSec) * time.Second
 	}
 
-	// Browser
+	// Migration shim must run before consuming legacy provider/binary/cloak fields below.
+	if synthesized, conflict := migrateLegacyBrowserConfig(&fc.Browser); conflict {
+		slog.Warn("config has both browser.targets and legacy browser.provider/binary/cloak set; explicit targets win, legacy fields ignored for target resolution")
+	} else if synthesized {
+		slog.Debug("migrated legacy browser config into browser.targets.default")
+	}
+	if len(fc.Browser.Targets) > 0 {
+		cfg.Targets = cloneBrowserTargetsConfig(fc.Browser.Targets)
+		cfg.DefaultTarget = fc.Browser.DefaultTarget
+		cfg.FallbackOrder = append([]string(nil), fc.Browser.FallbackOrder...)
+	}
+
 	if fc.Browser.Provider != "" {
 		cfg.BrowserProvider = NormalizeBrowserProvider(fc.Browser.Provider)
 		if IsCloakBrowserProvider(cfg.BrowserProvider) && fc.Browser.Cloak.DisableDefaultStealthArgs == nil {
@@ -418,6 +471,18 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.ChromeExtraFlags = SanitizeChromeExtraFlags(fc.Browser.ChromeExtraFlags)
 	}
 	applyCloakBrowserConfigToRuntime(cfg, fc.Browser.Cloak)
+	if !fc.Browser.Proxy.IsZero() {
+		cfg.Proxy = BrowserProxyConfig{
+			Server:     fc.Browser.Proxy.Server,
+			BypassList: append([]string(nil), fc.Browser.Proxy.BypassList...),
+			Username:   fc.Browser.Proxy.Username,
+			Password:   fc.Browser.Proxy.Password,
+		}
+		if fc.Browser.Proxy.Geo != nil {
+			geoCopy := *fc.Browser.Proxy.Geo
+			cfg.Proxy.Geo = &geoCopy
+		}
+	}
 	if fc.Browser.ExtensionPaths != nil {
 		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
 	}
@@ -531,6 +596,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	// Attach
 	if fc.Security.Attach.Enabled != nil {
 		cfg.AttachEnabled = *fc.Security.Attach.Enabled
+	}
+	if fc.Security.Attach.ForwardProxyAuth != nil {
+		cfg.AttachForwardProxyAuth = *fc.Security.Attach.ForwardProxyAuth
 	}
 	if len(fc.Security.Attach.AllowHosts) > 0 {
 		cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
@@ -664,7 +732,7 @@ func applyCloakBrowserConfigToRuntime(cfg *RuntimeConfig, cloak CloakBrowserConf
 		cfg.Cloak.WebRTCIP = cloak.WebRTCIP
 	}
 	if cloak.FontsDir != "" {
-		cfg.Cloak.FontsDir = cloak.FontsDir
+		cfg.Cloak.FontsDir = filepath.Clean(cloak.FontsDir)
 	}
 	if cloak.StorageQuotaMB != nil {
 		cfg.Cloak.StorageQuotaMB = *cloak.StorageQuotaMB

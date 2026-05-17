@@ -554,8 +554,15 @@
           },
           "default": [
             "ws",
-            "wss"
+            "wss",
+            "http",
+            "https"
           ]
+        },
+        "forwardProxyAuth": {
+          "$ref": "#/definitions/nullableBoolean",
+          "default": false,
+          "description": "Allow forwarding configured proxy authentication credentials over remote CDP attach. Disabled by default because the attached browser is outside PinchTab's process trust boundary."
         }
       }
     },

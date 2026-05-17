@@ -3,6 +3,7 @@ package dashboard
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -191,6 +193,12 @@ func TestHandlePutConfigPreservesWriteOnlySecretsFromRedactedGetPayload(t *testi
 	fc.AutoSolver.External.TwoCaptchaKey = "twocaptcha-secret"
 
 	api := newConfigAPITestAPI(t, fc)
+	sessions := browsersession.NewManager(browsersession.Config{ElevationWindow: time.Minute})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	api.SetSessionManager(sessions)
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	getRes := httptest.NewRecorder()
@@ -208,6 +216,7 @@ func TestHandlePutConfigPreservesWriteOnlySecretsFromRedactedGetPayload(t *testi
 	}
 
 	putReq := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	putReq.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
 	putRes := httptest.NewRecorder()
 	api.HandlePutConfig(putRes, putReq)
 	if putRes.Code != http.StatusOK {
@@ -295,6 +304,139 @@ func TestHandlePutConfigRejectsWriteOnlyTokenField(t *testing.T) {
 	}
 }
 
+func TestHandlePutConfigRequiresElevationForProxyChangeWithDashboardCookie(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+	sessions := browsersession.NewManager(browsersession.Config{ElevationWindow: time.Minute})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	api.SetSessionManager(sessions)
+
+	payload := config.DefaultFileConfig()
+	payload.Browser.Proxy = config.BrowserProxyConfig{
+		Server:   "http://proxy.example.com:8080",
+		Username: "alice",
+		Password: "secret",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusForbidden, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "session_elevation_required") {
+		t.Fatalf("response = %q, want session_elevation_required", w.Body.String())
+	}
+}
+
+func TestHandlePutConfigAllowsElevatedProxyChange(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+	sessions := browsersession.NewManager(browsersession.Config{ElevationWindow: time.Minute})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	if !sessions.Elevate(sessionID, "secret-token") {
+		t.Fatal("Elevate() = false, want true")
+	}
+	api.SetSessionManager(sessions)
+
+	payload := config.DefaultFileConfig()
+	payload.Browser.Proxy = config.BrowserProxyConfig{
+		Server:   "http://proxy.example.com:8080",
+		Username: "alice",
+		Password: "secret",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+}
+
+func TestHandlePutConfigAuditsProxyChangeServers(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+	sessions := browsersession.NewManager(browsersession.Config{ElevationWindow: time.Minute})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	if !sessions.Elevate(sessionID, "secret-token") {
+		t.Fatal("Elevate() = false, want true")
+	}
+	api.SetSessionManager(sessions)
+
+	payload := config.DefaultFileConfig()
+	payload.Browser.Proxy = config.BrowserProxyConfig{
+		Server:   "http://proxy.example.com:8080",
+		Username: "alice",
+		Password: "secret",
+	}
+	payload.Browser.Targets = config.BrowserTargetsConfig{
+		"proxy-target": {
+			Provider: config.BrowserProviderChrome,
+			Proxy: config.BrowserProxyConfig{
+				Server:   "socks5://10.0.0.1:1080",
+				Username: "bob",
+				Password: "target-secret",
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+	w := httptest.NewRecorder()
+	logs := captureDashboardSlog(t, func() {
+		api.HandlePutConfig(w, req)
+	})
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	for _, needle := range []string{
+		`"event":"config.proxy_changed"`,
+		`"scope":"browser.proxy"`,
+		`"server":"http://proxy.example.com:8080"`,
+		`"scope":"browser.targets.proxy-target.proxy"`,
+		`"server":"socks5://10.0.0.1:1080"`,
+	} {
+		if !strings.Contains(logs, needle) {
+			t.Fatalf("expected audit log to contain %q\n%s", needle, logs)
+		}
+	}
+	for _, secret := range []string{"secret-token", "secret", "target-secret"} {
+		if strings.Contains(logs, secret) {
+			t.Fatalf("audit log leaked secret %q\n%s", secret, logs)
+		}
+	}
+}
+
 func TestHandleHealthIncludesAgentCount(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	api := newConfigAPITestAPI(t, fc)
@@ -315,6 +457,16 @@ func TestHandleHealthIncludesAgentCount(t *testing.T) {
 	if health.Agents != 3 {
 		t.Fatalf("health agents = %d, want 3", health.Agents)
 	}
+}
+
+func captureDashboardSlog(t *testing.T, fn func()) string {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	defer slog.SetDefault(old)
+	fn()
+	return buf.String()
 }
 
 func TestHandleHealthSecurityVisibilityByAuthMethod(t *testing.T) {
@@ -393,8 +545,40 @@ func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
 	fc.Security.StateEncryptionKey = &encKey
 	fc.AutoSolver.External.CapsolverKey = "test-capsolver-key"
 	fc.AutoSolver.External.TwoCaptchaKey = "test-twocaptcha-key"
+	fc.Browser.Proxy = config.BrowserProxyConfig{
+		Server:   "http://proxy.example.com:8080",
+		Username: "alice",
+		Password: "raw-proxy-password",
+	}
+	fc.Browser.Targets = config.BrowserTargetsConfig{
+		"with-proxy": {
+			Provider: config.BrowserProviderChrome,
+			Proxy: config.BrowserProxyConfig{
+				Server:   "socks5://10.0.0.1:1080",
+				Username: "bob",
+				Password: "target-proxy-password",
+			},
+		},
+	}
 
 	redacted := redactToken(fc)
+
+	// Masked to "***" (not empty) so the dashboard knows credentials are configured.
+	if redacted.Browser.Proxy.Password != "***" {
+		t.Errorf("Browser.Proxy.Password not redacted: got %q", redacted.Browser.Proxy.Password)
+	}
+	if redacted.Browser.Proxy.Server != fc.Browser.Proxy.Server {
+		t.Errorf("Browser.Proxy.Server should be preserved, got %q", redacted.Browser.Proxy.Server)
+	}
+	if tp := redacted.Browser.Targets["with-proxy"].Proxy.Password; tp != "***" {
+		t.Errorf("per-target proxy password not redacted: got %q", tp)
+	}
+	if fc.Browser.Proxy.Password != "raw-proxy-password" {
+		t.Errorf("redactToken mutated source Browser.Proxy.Password: %q", fc.Browser.Proxy.Password)
+	}
+	if fc.Browser.Targets["with-proxy"].Proxy.Password != "target-proxy-password" {
+		t.Errorf("redactToken mutated source target proxy password")
+	}
 
 	// Use reflection to find any sensitive fields that weren't redacted
 	var unredacted []string
@@ -442,7 +626,7 @@ func findSensitiveFields(v reflect.Value, path string, unredacted *[]string) {
 			}
 		}
 
-		if isSensitive && !isZeroValue(fieldVal) {
+		if isSensitive && !isZeroValue(fieldVal) && !isMaskedString(fieldVal) {
 			*unredacted = append(*unredacted, fieldPath)
 		}
 
@@ -451,6 +635,13 @@ func findSensitiveFields(v reflect.Value, path string, unredacted *[]string) {
 			findSensitiveFields(fieldVal, fieldPath, unredacted)
 		}
 	}
+}
+
+func isMaskedString(v reflect.Value) bool {
+	if v.Kind() == reflect.String {
+		return v.String() == "***"
+	}
+	return false
 }
 
 func isZeroValue(v reflect.Value) bool {

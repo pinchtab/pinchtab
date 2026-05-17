@@ -11,6 +11,10 @@ func allTools() []mcp.Tool {
 			mcp.WithString("url", mcp.Required(), mcp.Description("The URL to navigate to")),
 			mcp.WithString("tabId", mcp.Description("Target tab ID (optional, uses current tab if empty)")),
 			mcp.WithBoolean("snap", mcp.Description("Return interactive compact snapshot after navigation (saves a round-trip)")),
+			mcp.WithString("browserTarget",
+				mcp.Description("Named browser target to use (e.g. 'chrome', 'cloak'). "+
+					"If a tabId is also supplied and the tab's instance was launched "+
+					"with a different target, the call returns 409 conflict.")),
 		),
 		mcp.NewTool("pinchtab_snapshot",
 			mcp.WithDescription("Get an accessibility tree snapshot of the current page. Use this sparingly: prefer pinchtab_find + action selectors for faster loops."),

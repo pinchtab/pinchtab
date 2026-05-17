@@ -30,11 +30,15 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.MultiInstance.Strategy != "always-on" {
 		t.Errorf("DefaultFileConfig.MultiInstance.Strategy = %v, want always-on", fc.MultiInstance.Strategy)
 	}
-	if len(fc.Security.Attach.AllowSchemes) != 2 || fc.Security.Attach.AllowSchemes[0] != "ws" || fc.Security.Attach.AllowSchemes[1] != "wss" {
-		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want [ws wss]", fc.Security.Attach.AllowSchemes)
+	wantSchemes := []string{"ws", "wss", "http", "https"}
+	if strings.Join(fc.Security.Attach.AllowSchemes, ",") != strings.Join(wantSchemes, ",") {
+		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want %v", fc.Security.Attach.AllowSchemes, wantSchemes)
 	}
 	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
 		t.Errorf("DefaultFileConfig.Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(fc.Security.Attach.Enabled))
+	}
+	if fc.Security.Attach.ForwardProxyAuth == nil || *fc.Security.Attach.ForwardProxyAuth {
+		t.Errorf("DefaultFileConfig.Security.Attach.ForwardProxyAuth = %v, want explicit false", formatBoolPtr(fc.Security.Attach.ForwardProxyAuth))
 	}
 	wantExtensionsDir := defaultExtensionsDir(userConfigDir())
 	if len(fc.Browser.ExtensionPaths) != 1 || fc.Browser.ExtensionPaths[0] != wantExtensionsDir {
@@ -194,6 +198,65 @@ func TestConfigSchemaURLUsesClosestOlderOrEqualPublishedSchema(t *testing.T) {
 	wantLatestPublishedURL := "https://raw.githubusercontent.com/pinchtab/pinchtab/v2.0.0/schema/config.json"
 	if got := CurrentConfigSchemaURL(); got != wantLatestPublishedURL {
 		t.Fatalf("newer than published CurrentConfigSchemaURL() = %q, want %q", got, wantLatestPublishedURL)
+	}
+}
+
+func TestFileConfigFromRuntime_PreservesBrowserTargets(t *testing.T) {
+	quota := 256
+	disableStealth := true
+	cfg := &RuntimeConfig{
+		BrowserProvider: BrowserProviderChrome,
+		DefaultTarget:   "chrome-local",
+		FallbackOrder:   []string{"cloak-primary"},
+		Targets: BrowserTargetsConfig{
+			"chrome-local": {
+				Provider:   BrowserProviderChrome,
+				Binary:     "/usr/bin/chrome",
+				ExtraFlags: "--ash-no-nudges",
+				Proxy: BrowserProxyConfig{
+					Server:     "http://proxy.example:8080",
+					BypassList: []string{"localhost"},
+					Geo:        &BrowserProxyGeoConfig{Timezone: "UTC"},
+				},
+			},
+			"cloak-primary": {
+				Provider: BrowserProviderCloak,
+				Binary:   "/opt/cloak/chrome",
+				Cloak: CloakBrowserConfig{
+					StorageQuotaMB:            &quota,
+					DisableDefaultStealthArgs: &disableStealth,
+				},
+			},
+		},
+	}
+
+	fc := FileConfigFromRuntime(cfg)
+	if fc.Browser.DefaultTarget != "chrome-local" {
+		t.Fatalf("DefaultTarget = %q, want chrome-local", fc.Browser.DefaultTarget)
+	}
+	if got := strings.Join(fc.Browser.FallbackOrder, ","); got != "cloak-primary" {
+		t.Fatalf("FallbackOrder = %q, want cloak-primary", got)
+	}
+	if len(fc.Browser.Targets) != 2 {
+		t.Fatalf("Targets len = %d, want 2", len(fc.Browser.Targets))
+	}
+	if fc.Browser.Targets["chrome-local"].Proxy.BypassList[0] != "localhost" {
+		t.Fatalf("proxy bypass not preserved: %+v", fc.Browser.Targets["chrome-local"].Proxy)
+	}
+	if fc.Browser.Targets["cloak-primary"].Cloak.StorageQuotaMB == nil ||
+		*fc.Browser.Targets["cloak-primary"].Cloak.StorageQuotaMB != 256 {
+		t.Fatalf("cloak target quota not preserved: %+v", fc.Browser.Targets["cloak-primary"].Cloak)
+	}
+
+	fc.Browser.FallbackOrder[0] = "mutated"
+	target := fc.Browser.Targets["chrome-local"]
+	target.Proxy.BypassList[0] = "mutated"
+	fc.Browser.Targets["chrome-local"] = target
+	if cfg.FallbackOrder[0] != "cloak-primary" {
+		t.Fatalf("runtime fallbackOrder shared with file config: %+v", cfg.FallbackOrder)
+	}
+	if cfg.Targets["chrome-local"].Proxy.BypassList[0] != "localhost" {
+		t.Fatalf("runtime target proxy shared with file config: %+v", cfg.Targets["chrome-local"].Proxy)
 	}
 }
 
@@ -380,6 +443,9 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	if parsed.Security.Attach.Enabled == nil || *parsed.Security.Attach.Enabled {
 		t.Errorf("round-trip Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.Enabled))
 	}
+	if parsed.Security.Attach.ForwardProxyAuth == nil || *parsed.Security.Attach.ForwardProxyAuth {
+		t.Errorf("round-trip Security.Attach.ForwardProxyAuth = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.ForwardProxyAuth))
+	}
 	if parsed.Observability.Activity.StateDir != "" {
 		t.Errorf("round-trip Observability.Activity.StateDir = %q, want empty string", parsed.Observability.Activity.StateDir)
 	}
@@ -515,6 +581,35 @@ func TestFileConfigJSONEmitsCloakBrowserConfig(t *testing.T) {
 	}
 	if cloak["platform"] != "windows" {
 		t.Fatalf("browser.cloak.platform = %#v, want windows", cloak["platform"])
+	}
+}
+
+func TestFileConfigJSONEmitsExplicitCloakFalseOnChromeProvider(t *testing.T) {
+	disableDefaultStealthArgs := false
+	fc := DefaultFileConfig()
+	fc.Browser.Provider = BrowserProviderChrome
+	fc.Browser.Cloak = CloakBrowserConfig{DisableDefaultStealthArgs: &disableDefaultStealthArgs}
+
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+	if !strings.Contains(string(data), `"disableDefaultStealthArgs":false`) {
+		t.Fatalf("explicit false cloak setting not preserved in JSON: %s", data)
+	}
+}
+
+func TestFileConfigFromRuntimeEmitsCloakStorageQuotaZeroForCloakProvider(t *testing.T) {
+	fc := FileConfigFromRuntime(&RuntimeConfig{
+		BrowserProvider: BrowserProviderCloak,
+		ChromeBinary:    "/opt/cloakbrowser/chrome",
+		Cloak: CloakBrowserRuntimeConfig{
+			StorageQuotaMB:            0,
+			DisableDefaultStealthArgs: true,
+		},
+	})
+	if fc.Browser.Cloak.StorageQuotaMB == nil || *fc.Browser.Cloak.StorageQuotaMB != 0 {
+		t.Fatalf("StorageQuotaMB = %v, want explicit 0", fc.Browser.Cloak.StorageQuotaMB)
 	}
 }
 

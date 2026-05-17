@@ -52,6 +52,17 @@ export interface Instance {
   attachType?: string;
   cdpUrl?: string; // CDP WebSocket URL (for CDP-attached instances)
   securityPolicy?: SecurityPolicy;
+  /**
+   * BrowserTarget is the resolved named target; empty on legacy configs.
+   */
+  browserTarget?: string;
+  browserProvider?: string;
+  /**
+   * FallbackFrom/FallbackReason are reserved for a future phase (always
+   * empty in P2.4a).
+   */
+  fallbackFrom?: string;
+  fallbackReason?: string;
 }
 /**
  * Agent represents a connected AI agent.

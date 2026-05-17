@@ -11,9 +11,7 @@ package simple
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -52,9 +50,12 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 
 // proxyToFirst ensures an instance is running, then proxies the request to it.
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
-	target, err := s.ensureRunning()
+	target, status, err := s.ensureRunning(r)
 	if err != nil {
-		httpx.Error(w, 503, err)
+		if status == 0 {
+			status = 503
+		}
+		httpx.Error(w, status, err)
 		return
 	}
 	activity.EnrichRouteActivity(r)
@@ -63,7 +64,11 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target, status, err := s.orch.FirstRunningURLForRequest(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return
+	}
 	if target == "" {
 		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
@@ -72,41 +77,9 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 }
 
 // ensureRunning returns the URL of a running instance, auto-launching one if needed.
-func (s *Strategy) ensureRunning() (string, error) {
+func (s *Strategy) ensureRunning(r *http.Request) (string, int, error) {
 	if s.orch == nil {
-		return "", fmt.Errorf("no running instances")
+		return "", 503, fmt.Errorf("no running instances")
 	}
-	if target := s.orch.FirstRunningURL(); target != "" {
-		return target, nil
-	}
-
-	slog.Info("simple strategy: no running instances, auto-launching")
-	mgr := s.orch.InstanceManager()
-	if mgr == nil {
-		return "", fmt.Errorf("no running instances")
-	}
-
-	launched, err := mgr.Launch("default", "", true)
-	if err != nil {
-		return "", fmt.Errorf("auto-launch failed: %w", err)
-	}
-
-	// Wait for instance to become ready.
-	deadline := time.Now().Add(30 * time.Second)
-	if launched.URL == "" {
-		return "", fmt.Errorf("auto-launched instance %q has no URL", launched.ID)
-	}
-	for time.Now().Before(deadline) {
-		time.Sleep(500 * time.Millisecond)
-		url := launched.URL
-		resp, healthErr := http.Get(url + "/health")
-		if healthErr == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return url, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("instance launched but did not become ready in time")
+	return s.orch.RouteForRequest(r)
 }

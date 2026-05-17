@@ -3,8 +3,13 @@ package config
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/config/geo"
 )
 
 // ValidationError represents a configuration validation error.
@@ -54,6 +59,8 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 	errs = append(errs, validateCloakBrowserConfig(fc.Browser.Cloak)...)
+	errs = append(errs, ValidateBrowserProxy("browser.proxy", fc.Browser.Proxy)...)
+	errs = append(errs, ValidateBrowserTargets(fc.Browser)...)
 
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
@@ -362,30 +369,60 @@ func isValidBrowserProvider(provider string) bool {
 	}
 }
 
+var cloakFingerprintSeedRegex = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
 func validateCloakBrowserConfig(cloak CloakBrowserConfig) []error {
+	return validateCloakBrowserConfigAt("browser.cloak", cloak)
+}
+
+func validateCloakBrowserConfigAt(fieldPrefix string, cloak CloakBrowserConfig) []error {
 	var errs []error
 	if cloak.Platform != "" && !isValidCloakPlatform(cloak.Platform) {
 		errs = append(errs, ValidationError{
-			Field:   "browser.cloak.platform",
+			Field:   fieldPrefix + ".platform",
 			Message: fmt.Sprintf("invalid value %q (must be windows, macos, or linux)", cloak.Platform),
 		})
 	}
 	if cloak.StorageQuotaMB != nil && *cloak.StorageQuotaMB < 0 {
 		errs = append(errs, ValidationError{
-			Field:   "browser.cloak.storageQuotaMB",
+			Field:   fieldPrefix + ".storageQuotaMB",
 			Message: fmt.Sprintf("must be >= 0 (got %d)", *cloak.StorageQuotaMB),
 		})
 	}
-	for field, value := range map[string]string{
-		"browser.cloak.fingerprintSeed": cloak.FingerprintSeed,
-		"browser.cloak.locale":          cloak.Locale,
-		"browser.cloak.timezone":        cloak.Timezone,
-		"browser.cloak.webrtcIP":        cloak.WebRTCIP,
-	} {
-		if strings.ContainsAny(strings.TrimSpace(value), " \t\n\r") {
+	if seed := strings.TrimSpace(cloak.FingerprintSeed); seed != "" && !cloakFingerprintSeedRegex.MatchString(seed) {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".fingerprintSeed",
+			Message: "must be 1-128 characters of letters, numbers, dot, underscore, colon, or hyphen",
+		})
+	}
+	if err := geo.Validate(geo.Info{Timezone: cloak.Timezone, Locale: cloak.Locale}); err != nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix,
+			Message: err.Error(),
+		})
+	}
+	if ip := strings.TrimSpace(cloak.WebRTCIP); ip != "" && !strings.EqualFold(ip, "auto") && net.ParseIP(ip) == nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".webrtcIP",
+			Message: fmt.Sprintf("webrtcIP %q must be \"auto\" or a valid IP address", cloak.WebRTCIP),
+		})
+	}
+	if dir := strings.TrimSpace(cloak.FontsDir); dir != "" {
+		clean := filepath.Clean(dir)
+		if clean != dir {
 			errs = append(errs, ValidationError{
-				Field:   field,
-				Message: "must not contain whitespace",
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be a clean path (got %q, clean form is %q)", dir, clean),
+			})
+		} else if st, err := os.Stat(dir); err != nil {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be an existing directory: %v", err),
+			})
+		} else if !st.IsDir() {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: "must be an existing directory",
 			})
 		}
 	}

@@ -135,6 +135,7 @@ func DefaultFileConfig() FileConfig {
 	maxRedirects := -1
 	trustLoopbackProxy := false
 	attachEnabled := false
+	attachForwardProxyAuth := false
 	activityEnabled := true
 	activitySessionIdleSec := 1800
 	activityRetentionDays := 30
@@ -200,9 +201,10 @@ func DefaultFileConfig() FileConfig {
 			MaxRedirects:           &maxRedirects,
 			TrustLoopbackProxy:     &trustLoopbackProxy,
 			Attach: AttachConfig{
-				Enabled:      &attachEnabled,
-				AllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
-				AllowSchemes: []string{"ws", "wss"},
+				Enabled:          &attachEnabled,
+				AllowHosts:       []string{"127.0.0.1", "localhost", "::1"},
+				AllowSchemes:     []string{"ws", "wss", "http", "https"},
+				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
 			IDPI: IDPIConfig{
 				Enabled:        true,

@@ -42,13 +42,18 @@ dashboard_cleanup_screencast() {
 }
 
 dashboard_assert_instance_found() {
-  pt_get /instances
-  DASHBOARD_INST_ID=$(echo "$RESULT" | jq -r '.[0].id // empty')
+  pt_get "/instances/tabs?fresh=1"
+  assert_ok "list tabs for screencast proxy"
+  DASHBOARD_INST_ID=$(echo "$RESULT" | jq -r --arg tab "$DASHBOARD_TAB_ID" '.[] | select(.id == $tab) | .instanceId // empty' | head -n 1)
+  if [ -z "${DASHBOARD_INST_ID}" ]; then
+    DASHBOARD_INST_ID=$(echo "$RESULT" | jq -r '.[] | select((.url // "") | contains("evaluate.html")) | .instanceId // empty' | head -n 1)
+  fi
   if [ -n "${DASHBOARD_INST_ID}" ]; then
-    echo -e "  ${GREEN}✓${NC} found instance for screencast proxy: ${DASHBOARD_INST_ID}"
+    echo -e "  ${GREEN}✓${NC} found tab owner for screencast proxy: ${DASHBOARD_INST_ID}"
     ((ASSERTIONS_PASSED++)) || true
   else
-    echo -e "  ${RED}✗${NC} could not find instance for screencast proxy"
+    echo -e "  ${RED}✗${NC} could not find tab owner for screencast proxy"
+    echo "$RESULT" | jq '.' 2>/dev/null || echo "$RESULT"
     ((ASSERTIONS_FAILED++)) || true
   fi
 }
@@ -67,7 +72,7 @@ dashboard_start_screencast_stream() {
       -H "Upgrade: websocket" \
       -H "Sec-WebSocket-Version: 13" \
       -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
-      --max-time 5 >/dev/null 2>&1 || true
+      --max-time 30 >/dev/null 2>&1 || true
   ) &
   DASHBOARD_WS_PID=$!
 

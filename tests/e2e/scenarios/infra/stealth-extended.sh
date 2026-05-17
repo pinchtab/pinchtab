@@ -444,8 +444,13 @@ end_test
 
 start_test "bot-detect-full: outer window dimensions exist"
 
-pt_post /evaluate '{"expression":"window.outerWidth > 0 && window.outerHeight > 0"}'
-assert_json_eq "$RESULT" '.result' 'true' "outerWidth/outerHeight > 0"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  pt_post /evaluate '{"expression":"window.outerWidth === 0 && window.outerHeight === 0"}'
+  assert_json_eq "$RESULT" '.result' 'true' "cloak zeroes outerWidth/outerHeight"
+else
+  pt_post /evaluate '{"expression":"window.outerWidth > 0 && window.outerHeight > 0"}'
+  assert_json_eq "$RESULT" '.result' 'true' "outerWidth/outerHeight > 0"
+fi
 
 end_test
 
@@ -543,19 +548,23 @@ if [ -n "$FULL_URL" ]; then
 
   start_test "bot-detect-full: permissive full score check"
 
-  pt_post /evaluate '{"expression":"JSON.stringify(window.__botDetectScore || {})"}'
-  score_json=$(echo "$RESULT" | jq -r '.result // "{}"')
-  critical_passed=$(echo "$score_json" | jq -r '.critical // 0')
-  critical_total=$(echo "$score_json" | jq -r '.criticalTotal // 0')
-
-  echo -e "  ${MUTED}Score: critical ${critical_passed}/${critical_total} (full)${NC}"
-
-  if [ "$critical_passed" -ge "$critical_total" ]; then
-    echo -e "  ${GREEN}✓${NC} score meets full expectations"
-    ((ASSERTIONS_PASSED++)) || true
+  if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+    skip_test "cloak removes surfaces this composite score rewards (chrome.runtime/battery/outer dims)"
   else
-    echo -e "  ${RED}✗${NC} score below full expectations (${critical_passed}/${critical_total})"
-    ((ASSERTIONS_FAILED++)) || true
+    pt_post /evaluate '{"expression":"JSON.stringify(window.__botDetectScore || {})"}'
+    score_json=$(echo "$RESULT" | jq -r '.result // "{}"')
+    critical_passed=$(echo "$score_json" | jq -r '.critical // 0')
+    critical_total=$(echo "$score_json" | jq -r '.criticalTotal // 0')
+
+    echo -e "  ${MUTED}Score: critical ${critical_passed}/${critical_total} (full)${NC}"
+
+    if [ "$critical_passed" -ge "$critical_total" ]; then
+      echo -e "  ${GREEN}✓${NC} score meets full expectations"
+      ((ASSERTIONS_PASSED++)) || true
+    else
+      echo -e "  ${RED}✗${NC} score below full expectations (${critical_passed}/${critical_total})"
+      ((ASSERTIONS_FAILED++)) || true
+    fi
   fi
 
   end_test

@@ -13,20 +13,28 @@ assert_ok "navigate"
 start_test "stealth: status endpoint available"
 
 pt_get /stealth/status
-assert_json_eq "$RESULT" '.level' 'light' "default level is light"
-assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
-assert_json_eq "$RESULT" '.capabilities.webdriverNotTrue' 'true' "status reports webdriver-not-true capability"
-assert_json_eq "$RESULT" '.capabilities.webdriverNativeStrategy' 'true' "status reports native webdriver strategy"
-assert_json_eq "$RESULT" '.capabilities.downlinkMax' 'true' "status reports downlinkMax capability"
-assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
-assert_json_eq "$RESULT" '.flags.downlinkMaxFlag' 'true' "status reports downlinkMax launch flag"
-assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "light status keeps iframe isolation disabled"
-assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "light status keeps stack sanitization disabled"
-assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "light status keeps toString masking disabled"
-assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "light status keeps Function.prototype.toString native"
-assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "light status keeps Intl locale coherence"
-assert_json_eq "$RESULT" '.capabilities.errorPrepareStackTraceNative' 'true' "light status keeps Error.prepareStackTrace native"
-assert_json_eq "$RESULT" '.capabilities.navigatorOverridesAbsent' 'true' "light status avoids navigator own-property overrides"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_json_eq "$RESULT" '.provider' 'cloak' "status reports cloak provider"
+  assert_json_eq "$RESULT" '.native' 'true' "status reports cloak native stealth"
+  assert_json_eq "$RESULT" '.pinchtabOverlaysDisabled' 'true' "status reports PinchTab overlays disabled"
+  assert_json_eq "$RESULT" '.fingerprintSeed' '42069' "status reports cloak fingerprint seed"
+  assert_json_eq "$RESULT" '.level' 'light' "status reports light cloak level"
+else
+  assert_json_eq "$RESULT" '.level' 'light' "default level is light"
+  assert_json_exists "$RESULT" '.scriptHash' "status includes script hash"
+  assert_json_eq "$RESULT" '.capabilities.webdriverNotTrue' 'true' "status reports webdriver-not-true capability"
+  assert_json_eq "$RESULT" '.capabilities.webdriverNativeStrategy' 'true' "status reports native webdriver strategy"
+  assert_json_eq "$RESULT" '.capabilities.downlinkMax' 'true' "status reports downlinkMax capability"
+  assert_json_eq "$RESULT" '.flags.globalUserAgent' 'true' "status reports global launch UA"
+  assert_json_eq "$RESULT" '.flags.downlinkMaxFlag' 'true' "status reports downlinkMax launch flag"
+  assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "light status keeps iframe isolation disabled"
+  assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "light status keeps stack sanitization disabled"
+  assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "light status keeps toString masking disabled"
+  assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "light status keeps Function.prototype.toString native"
+  assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "light status keeps Intl locale coherence"
+  assert_json_eq "$RESULT" '.capabilities.errorPrepareStackTraceNative' 'true' "light status keeps Error.prepareStackTrace native"
+  assert_json_eq "$RESULT" '.capabilities.navigatorOverridesAbsent' 'true' "light status avoids navigator own-property overrides"
+fi
 
 end_test
 
@@ -47,7 +55,11 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: chrome.runtime present"
 
-assert_eval_poll "!!window.chrome && !!window.chrome.runtime" "true" "window.chrome.runtime present"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "false" "chrome.runtime stripped by cloak native stealth"
+else
+  assert_eval_poll "!!window.chrome && !!window.chrome.runtime" "true" "window.chrome.runtime present"
+fi
 
 end_test
 
@@ -182,7 +194,11 @@ end_test
 
 start_test "bot-detect: chrome.runtime present"
 
-assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "true" "chrome.runtime exists"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "false" "chrome.runtime stripped by cloak native stealth"
+else
+  assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "true" "chrome.runtime exists"
+fi
 
 end_test
 
@@ -220,7 +236,11 @@ end_test
 
 start_test "bot-detect: battery API exists"
 
-assert_eval_poll "typeof navigator.getBattery === 'function'" "true" "getBattery exists"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_eval_poll "typeof navigator.getBattery === 'undefined'" "true" "battery API absent under cloak"
+else
+  assert_eval_poll "typeof navigator.getBattery === 'function'" "true" "getBattery exists"
+fi
 
 end_test
 
@@ -239,7 +259,11 @@ end_test
 
 start_test "stealth-capabilities: outer dimensions available"
 
-assert_eval_poll "window.__stealthCapabilities.outerDimensions" "true" "outer dimensions exist"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_eval_poll "window.outerWidth === 0 && window.outerHeight === 0" "true" "cloak zeroes outer dimensions"
+else
+  assert_eval_poll "window.__stealthCapabilities.outerDimensions" "true" "outer dimensions exist"
+fi
 
 end_test
 
@@ -258,13 +282,24 @@ end_test
 
 start_test "stealth-capabilities: battery API reported"
 
-assert_eval_poll "window.__stealthCapabilities.batteryApi" "true" "battery API reported by capability fixture"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  assert_eval_poll "typeof navigator.getBattery === 'undefined'" "true" "battery API absent under cloak"
+else
+  assert_eval_poll "window.__stealthCapabilities.batteryApi" "true" "battery API reported by capability fixture"
+fi
 
 end_test
 
 start_test "stealth-capabilities: downlinkMax reported"
 
-assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax reported by capability fixture"
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  # Cloak's native stealth removes downlinkMax from the NetworkInformation
+  # interface (own and prototype) — verify it stays absent so PinchTab's
+  # overlay is not silently re-adding it.
+  assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "false" "downlinkMax absent under cloak native stealth"
+else
+  assert_eval_poll "window.__stealthCapabilities.downlinkMaxPresent" "true" "downlinkMax reported by capability fixture"
+fi
 
 end_test
 

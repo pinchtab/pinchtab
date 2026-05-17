@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -172,6 +173,7 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config.NormalizeFileConfigAliasesFromJSON(&normalized, body)
+	preserveWriteOnlyConfigFields(&normalized, current)
 
 	if errs := config.ValidateFileConfig(&normalized); len(errs) > 0 {
 		messages := make([]string, 0, len(errs))
@@ -183,7 +185,12 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	preserveWriteOnlyConfigFields(&normalized, current)
+	changes := sensitiveConfigChanges(current, &normalized)
+	if changes.requiresElevation && !c.hasConfigWriteElevation(r) {
+		authn.AuditWarn(r, "config.update_elevation_required", "changes", changes.names)
+		httpx.ErrorCode(w, http.StatusForbidden, "session_elevation_required", "re-enter the API token before changing proxy or security settings", false, nil)
+		return
+	}
 	if err := config.SaveFileConfig(&normalized, path); err != nil {
 		httpx.Error(w, 500, err)
 		return
@@ -198,11 +205,98 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	restartReasons := c.restartReasonsFor(normalized)
+	if changes.proxyChanged {
+		authn.AuditLog(r, "config.proxy_changed",
+			"scopes", changes.proxyScopes,
+			"proxies", changes.proxyAudit,
+		)
+	}
 	authn.AuditLog(r, "config.updated",
 		"restartRequired", len(restartReasons) > 0,
 		"restartReasons", restartReasons,
 	)
 	httpx.JSON(w, 200, c.configEnvelopeFor(normalized, path, restartReasons))
+}
+
+type sensitiveConfigChangeSet struct {
+	requiresElevation bool
+	proxyChanged      bool
+	names             []string
+	proxyScopes       []string
+	proxyAudit        []proxyAuditChange
+}
+
+type proxyAuditChange struct {
+	Scope  string `json:"scope"`
+	Server string `json:"server"`
+}
+
+func sensitiveConfigChanges(current, next *config.FileConfig) sensitiveConfigChangeSet {
+	var out sensitiveConfigChangeSet
+	if current == nil || next == nil {
+		return out
+	}
+	if !reflect.DeepEqual(current.Security, next.Security) {
+		out.requiresElevation = true
+		out.names = append(out.names, "security")
+	}
+	if !reflect.DeepEqual(current.Browser.Proxy, next.Browser.Proxy) {
+		out.requiresElevation = true
+		out.proxyChanged = true
+		out.names = append(out.names, "browser.proxy")
+		out.proxyScopes = append(out.proxyScopes, "browser.proxy")
+		out.proxyAudit = append(out.proxyAudit, proxyAuditChange{
+			Scope:  "browser.proxy",
+			Server: next.Browser.Proxy.Redacted().Server,
+		})
+	}
+	for _, name := range changedTargetProxyNames(current.Browser.Targets, next.Browser.Targets) {
+		out.requiresElevation = true
+		out.proxyChanged = true
+		field := "browser.targets." + name + ".proxy"
+		out.names = append(out.names, field)
+		out.proxyScopes = append(out.proxyScopes, field)
+		out.proxyAudit = append(out.proxyAudit, proxyAuditChange{
+			Scope:  field,
+			Server: next.Browser.Targets[name].Proxy.Redacted().Server,
+		})
+	}
+	return out
+}
+
+func changedTargetProxyNames(current, next config.BrowserTargetsConfig) []string {
+	seen := make(map[string]struct{}, len(current)+len(next))
+	names := make([]string, 0, len(current)+len(next))
+	for name := range current {
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+	for name := range next {
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+	var changed []string
+	for _, name := range names {
+		if !reflect.DeepEqual(current[name].Proxy, next[name].Proxy) {
+			changed = append(changed, name)
+		}
+	}
+	return changed
+}
+
+func (c *ConfigAPI) hasConfigWriteElevation(r *http.Request) bool {
+	if c == nil || c.runtime == nil || strings.TrimSpace(c.runtime.Token) == "" {
+		return true
+	}
+	creds := authn.CredentialsFromRequest(r)
+	if creds.Method != authn.MethodCookie {
+		return true
+	}
+	return c.sessions != nil && c.sessions.IsElevated(creds.Value, c.runtime.Token)
 }
 
 func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
@@ -333,6 +427,16 @@ func redactToken(cfg config.FileConfig) config.FileConfig {
 	cfg.AutoSolver.External.CapsolverKey = ""
 	cfg.AutoSolver.External.TwoCaptchaKey = ""
 	cfg.AutoSolver.Credentials = config.AutoSolverCredentialsConf{}
+	cfg.Browser.Proxy = cfg.Browser.Proxy.Redacted()
+	if len(cfg.Browser.Targets) > 0 {
+		// Copy before mutating: maps are reference types.
+		copied := make(config.BrowserTargetsConfig, len(cfg.Browser.Targets))
+		for name, t := range cfg.Browser.Targets {
+			t.Proxy = t.Proxy.Redacted()
+			copied[name] = t
+		}
+		cfg.Browser.Targets = copied
+	}
 	return cfg
 }
 
@@ -355,6 +459,25 @@ func preserveWriteOnlyConfigFields(dst, src *config.FileConfig) {
 	preserveCredString(&dst.AutoSolver.Credentials.Form.Field1, src.AutoSolver.Credentials.Form.Field1)
 	preserveCredString(&dst.AutoSolver.Credentials.Form.Field2, src.AutoSolver.Credentials.Form.Field2)
 	preserveCredString(&dst.AutoSolver.Credentials.Form.Email, src.AutoSolver.Credentials.Form.Email)
+
+	// Restore the on-disk proxy password when the dashboard echoes back the redaction mask.
+	preserveProxyPassword(&dst.Browser.Proxy, src.Browser.Proxy)
+	for name, t := range dst.Browser.Targets {
+		if srcT, ok := src.Browser.Targets[name]; ok {
+			preserveProxyPassword(&t.Proxy, srcT.Proxy)
+			dst.Browser.Targets[name] = t
+		}
+	}
+}
+
+// preserveProxyPassword keeps the on-disk password when the inbound PUT is blank or the "***" mask.
+func preserveProxyPassword(dst *config.BrowserProxyConfig, src config.BrowserProxyConfig) {
+	if dst == nil {
+		return
+	}
+	if dst.Password == "" || dst.Password == "***" {
+		dst.Password = src.Password
+	}
 }
 
 // preserveCredString keeps the existing src value when dst is empty (i.e. the

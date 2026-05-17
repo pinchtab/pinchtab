@@ -12,7 +12,7 @@ type LaunchContract struct {
 }
 
 func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract {
-	if config.NativeCloakStealthEnabled(cfg) {
+	if config.PinchTabStealthDefaultsDisabled(cfg) {
 		return LaunchContract{
 			Flags: map[string]bool{
 				"nativeCloakBrowser":          true,
@@ -39,15 +39,20 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 		args = append(args, "--lang="+persona.Language)
 	}
 
+	flags := map[string]bool{
+		"automationControlledDisabled": true,
+		"enableAutomationFalse":        true,
+		"downlinkMaxFlag":              true,
+		"globalUserAgent":              persona.UserAgent != "",
+		"globalLanguage":               persona.Language != "",
+	}
+	if config.CloakBrowserProviderActive(cfg) {
+		flags["nativeCloakBrowser"] = true
+	}
+
 	return LaunchContract{
-		Args: args,
-		Flags: map[string]bool{
-			"automationControlledDisabled": true,
-			"enableAutomationFalse":        true,
-			"downlinkMaxFlag":              true,
-			"globalUserAgent":              persona.UserAgent != "",
-			"globalLanguage":               persona.Language != "",
-		},
+		Args:  args,
+		Flags: flags,
 	}
 }
 

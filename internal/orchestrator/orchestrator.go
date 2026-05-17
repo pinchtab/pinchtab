@@ -59,12 +59,16 @@ type Orchestrator struct {
 
 	// tabsCache stores per-instance snapshots of /tabs results to absorb
 	// repeated dashboard visibility queries. Routing never reads it.
-	tabsCache     *TabsCache
-	portAllocator *PortAllocator
-	idMgr         *ids.Manager
-	eventHandlers []EventHandler
-	instanceMgr   *instance.Manager
-	runtimeCfg    *config.RuntimeConfig
+	tabsCache        *TabsCache
+	portAllocator    *PortAllocator
+	idMgr            *ids.Manager
+	eventHandlers    []EventHandler
+	instanceMgr      *instance.Manager
+	runtimeCfg       *config.RuntimeConfig
+	fallbackLauncher Launcher
+
+	// attachHealthCheckTimeout overrides the default health-check timeout in tests.
+	attachHealthCheckTimeout time.Duration
 }
 
 // OnEvent adds an event handler for instance lifecycle events.
@@ -103,11 +107,31 @@ type InstanceInternal struct {
 	logBuf    *ringBuffer
 
 	requestedSecurityPolicy *bridge.SecurityPolicy
+
+	requestedBrowserTarget string
+	resolvedBrowserTarget  string
+	browserProvider        string
+	effectiveBinary        string
+
+	lastFailureReason LaunchFailureReason
 }
 
 type LaunchOptions struct {
 	ExtensionPaths []string
 	SecurityPolicy *bridge.SecurityPolicy
+
+	RequestedBrowserTarget string
+	BrowserTarget          string
+	BrowserProvider        string
+}
+
+type AttachOptions struct {
+	BrowserTarget   string
+	BrowserProvider string
+}
+
+var waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
+	return o.waitForChildBridgeHealthy(inst, timeout)
 }
 
 // generateInternalToken returns a random hex string used as the shared
@@ -349,9 +373,10 @@ func installStableBinary(src, dst string) error {
 }
 
 func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths []string) (*bridge.Instance, error) {
-	return o.LaunchWithOptions(name, port, headless, LaunchOptions{
+	opts := LaunchOptions{
 		ExtensionPaths: extensionPaths,
-	})
+	}
+	return o.LaunchWithTargetSelection(name, port, headless, "", nil, opts)
 }
 
 func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts LaunchOptions) (*bridge.Instance, error) {
@@ -447,7 +472,17 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	requestedPolicy := cloneSecurityPolicy(opts.SecurityPolicy)
 	effectivePolicy := effectiveSecurityPolicy(o.runtimeCfg, requestedPolicy)
 
-	childConfigPath, err := o.writeChildConfig(port, cdpPort, profilePath, instanceStateDir, headless, opts.ExtensionPaths, effectivePolicy)
+	// Target-aware launch only applies in orchestrator mode; direct-bridge path reads the global RuntimeConfig.
+	effectiveCfg := o.runtimeCfg
+	if strings.TrimSpace(opts.BrowserTarget) != "" {
+		resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, opts.BrowserTarget)
+		if err != nil {
+			return nil, err
+		}
+		effectiveCfg = resolved.Config
+	}
+
+	childConfigPath, err := o.writeChildConfig(effectiveCfg, port, cdpPort, profilePath, instanceStateDir, headless, opts.ExtensionPaths, effectivePolicy)
 	if err != nil {
 		return nil, fmt.Errorf("write child config: %w", err)
 	}
@@ -471,16 +506,18 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 
 	inst := &InstanceInternal{
 		Instance: bridge.Instance{
-			ID:             instanceID,
-			ProfileID:      profileID,
-			ProfileName:    name,
-			Port:           port,
-			URL:            o.childInstanceBaseURL(port),
-			Mode:           bridge.ModeFromHeadless(headless),
-			Headless:       headless,
-			Status:         "starting",
-			StartTime:      time.Now(),
-			SecurityPolicy: effectivePolicy,
+			ID:              instanceID,
+			ProfileID:       profileID,
+			ProfileName:     name,
+			Port:            port,
+			URL:             o.childInstanceBaseURL(port),
+			Mode:            bridge.ModeFromHeadless(headless),
+			Headless:        headless,
+			Status:          "starting",
+			StartTime:       time.Now(),
+			SecurityPolicy:  effectivePolicy,
+			BrowserTarget:   opts.BrowserTarget,
+			BrowserProvider: opts.BrowserProvider,
 		},
 		URL:     o.childInstanceBaseURL(port),
 		cdpPort: cdpPort,
@@ -488,6 +525,10 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		logBuf:  logBuf,
 
 		requestedSecurityPolicy: requestedPolicy,
+		requestedBrowserTarget:  opts.RequestedBrowserTarget,
+		resolvedBrowserTarget:   opts.BrowserTarget,
+		browserProvider:         opts.BrowserProvider,
+		effectiveBinary:         effectiveBinaryFromCfg(effectiveCfg),
 	}
 
 	o.mu.Lock()
@@ -522,8 +563,12 @@ func portConflictError(port string, inspection PortInspection) error {
 	return fmt.Errorf("instance port %s is already in use on this machine", port)
 }
 
-func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) (string, error) {
-	fc := config.FileConfigFromRuntime(o.runtimeCfg)
+// buildChildFileConfig builds the per-child FileConfig; nil effectiveCfg falls back to o.runtimeCfg.
+func (o *Orchestrator) buildChildFileConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) config.FileConfig {
+	if effectiveCfg == nil {
+		effectiveCfg = o.runtimeCfg
+	}
+	fc := config.FileConfigFromRuntime(effectiveCfg)
 	fc.Server.Port = port
 	fc.Server.StateDir = instanceStateDir
 	activityEnabled := false
@@ -557,8 +602,41 @@ func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, i
 		}
 		fc.Browser.ExtensionPaths = unique
 	}
+	return fc
+}
+
+func (o *Orchestrator) writeChildConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) (string, error) {
+	fc := o.buildChildFileConfig(effectiveCfg, port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths, securityPolicy)
 
 	configPath := filepath.Join(instanceStateDir, "config.json")
+	data, err := json.MarshalIndent(fc, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(configPath, 0600); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
+// writeAttachChildConfig writes a minimal child config for a CDP-attach bridge; RemoteCDPURL is passed via CLI flags.
+func (o *Orchestrator) writeAttachChildConfig(port, provider, stateDir string) (string, error) {
+	fc := config.FileConfigFromRuntime(o.runtimeCfg)
+	fc.Server.Port = port
+	fc.Server.StateDir = stateDir
+	activityEnabled := false
+	fc.Observability.Activity.Enabled = &activityEnabled
+	fc.Browser.Provider = provider
+	attachDisabled := false
+	fc.Security.Attach = config.AttachConfig{
+		Enabled:          &attachDisabled,
+		ForwardProxyAuth: &attachDisabled,
+	}
+
+	configPath := filepath.Join(stateDir, "config.json")
 	data, err := json.MarshalIndent(fc, "", "  ")
 	if err != nil {
 		return "", err
@@ -617,6 +695,13 @@ func mergeAllowedDomains(base []string, extras []string) []string {
 	return out
 }
 
+func effectiveBinaryFromCfg(cfg *config.RuntimeConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.ChromeBinary
+}
+
 func intPtr(v int) *int {
 	if v <= 0 {
 		return nil
@@ -642,6 +727,12 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 				existing.Status = "running"
 				existing.Error = ""
 				existing.StartTime = time.Now()
+				if inst.BrowserTarget != "" {
+					existing.BrowserTarget = inst.BrowserTarget
+				}
+				if inst.BrowserProvider != "" {
+					existing.BrowserProvider = inst.BrowserProvider
+				}
 				result := existing.Instance
 				o.mu.Unlock()
 
@@ -675,48 +766,221 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 	return &internal.Instance, true, nil
 }
 
-// Attach connects to an externally managed Chrome instance via CDP URL.
-// Unlike Launch, this does not start a Chrome process - it only registers
-// the external instance for tracking and proxying.
+// Attach wraps an externally-managed browser via a child bridge; the external process is never killed on Stop.
 func (o *Orchestrator) Attach(name, cdpURL string) (*bridge.Instance, error) {
-	inst, _, err := o.attachExternalInstance(name, bridge.Instance{
-		Attached:   true,
-		AttachType: "cdp",
-		CdpURL:     cdpURL,
-		URL:        cdpURL,
-		Mode:       bridge.ModeFromHeadless(false),
-	}, "")
+	return o.AttachWithProvider(name, cdpURL, "")
+}
+
+// AttachWithProvider is Attach with an explicit provider ("" defaults to chrome).
+func (o *Orchestrator) AttachWithProvider(name, cdpURL, provider string) (*bridge.Instance, error) {
+	return o.AttachWithOptions(name, cdpURL, AttachOptions{BrowserProvider: provider})
+}
+
+// AttachWithOptions wraps an externally-managed browser and records its resolved browser target.
+func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions) (*bridge.Instance, error) {
+	if err := profiles.ValidateProfileName(name); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cdpURL) == "" {
+		return nil, fmt.Errorf("cdpUrl is required")
+	}
+	if err := o.validateAttachURL(cdpURL); err != nil {
+		return nil, err
+	}
+	resolved, err := o.resolveAttachOptions(opts, config.BrowserProviderChrome)
 	if err != nil {
 		return nil, err
 	}
 
-	slog.Info("attached to external Chrome", "id", inst.ID, "name", name, "cdpUrl", internalurls.RedactForLog(cdpURL))
+	bridgePort, err := o.portAllocator.AllocatePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate bridge port: %w", err)
+	}
+	released := false
+	defer func() {
+		if !released {
+			o.portAllocator.ReleasePort(bridgePort)
+		}
+	}()
+	portStr := strconv.Itoa(bridgePort)
 
-	// Emit event
-	o.emitEvent("instance.attached", inst)
-	return inst, nil
+	profileID := o.idMgr.ProfileID(name)
+	instanceID := o.idMgr.InstanceID(profileID, name)
+
+	o.mu.Lock()
+	for _, existing := range o.instances {
+		if existing.ProfileName == name && instanceIsActive(existing) {
+			o.mu.Unlock()
+			return nil, fmt.Errorf("instance with name %q already exists", name)
+		}
+	}
+	o.mu.Unlock()
+
+	// RemoteCDPURL/RemoteBrowserName are passed via CLI flags rather than persisted.
+	stateDir := filepath.Join(o.baseDir, "attach", instanceID)
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return nil, fmt.Errorf("create attach state dir: %w", err)
+	}
+	if err := os.Chmod(stateDir, 0700); err != nil {
+		return nil, fmt.Errorf("set attach state dir permissions: %w", err)
+	}
+	childConfigPath, err := o.writeAttachChildConfig(portStr, resolved.BrowserProvider, stateDir)
+	if err != nil {
+		return nil, fmt.Errorf("write attach child config: %w", err)
+	}
+
+	envOverrides := map[string]string{
+		"PINCHTAB_PORT":   portStr,
+		"PINCHTAB_CONFIG": childConfigPath,
+	}
+	if o.internalToken != "" {
+		envOverrides["PINCHTAB_INTERNAL_TOKEN"] = o.internalToken
+	}
+	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
+
+	logBuf := newRingBuffer(256 * 1024)
+	args := []string{
+		"bridge",
+		"--cdp-url", cdpURL,
+		"--browser-provider", resolved.BrowserProvider,
+		"--remote-browser-name", name,
+	}
+	slog.Info("starting CDP attach bridge child",
+		"id", instanceID, "name", name, "port", portStr, "provider", resolved.BrowserProvider, "browserTarget", resolved.BrowserTarget,
+		"cdpUrl", internalurls.RedactForLog(cdpURL),
+	)
+	cmd, err := o.runner.Run(context.Background(), o.binary, args, env, logBuf, logBuf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start CDP attach bridge: %w", err)
+	}
+
+	baseURL := o.childInstanceBaseURL(portStr)
+	internal := &InstanceInternal{
+		Instance: bridge.Instance{
+			ID:              instanceID,
+			ProfileID:       profileID,
+			ProfileName:     name,
+			Port:            portStr,
+			URL:             baseURL,
+			Mode:            bridge.ModeFromHeadless(false),
+			Headless:        false,
+			Status:          "starting",
+			StartTime:       time.Now(),
+			Attached:        true,
+			AttachType:      "cdp-bridge",
+			CdpURL:          cdpURL,
+			BrowserTarget:   resolved.BrowserTarget,
+			BrowserProvider: resolved.BrowserProvider,
+		},
+		URL:    baseURL,
+		cmd:    cmd,
+		logBuf: logBuf,
+
+		requestedBrowserTarget: strings.TrimSpace(opts.BrowserTarget),
+		resolvedBrowserTarget:  resolved.BrowserTarget,
+		browserProvider:        resolved.BrowserProvider,
+	}
+
+	o.mu.Lock()
+	o.instances[instanceID] = internal
+	o.mu.Unlock()
+	released = true
+
+	go o.monitor(internal)
+
+	healthTimeout := o.attachHealthCheckTimeout
+	if healthTimeout <= 0 {
+		healthTimeout = 15 * time.Second
+	}
+	if err := waitForChildBridgeHealthyFunc(o, internal, healthTimeout); err != nil {
+		tail := tailChildLog(logBuf, 20)
+		slog.Warn("CDP attach bridge did not become healthy in time; tearing down child bridge", "id", instanceID, "err", err, "childLogTail", tail)
+		if stopErr := o.Stop(instanceID); stopErr != nil {
+			slog.Warn("failed to tear down unhealthy CDP attach bridge", "id", instanceID, "err", stopErr)
+		}
+		if tail != "" {
+			return nil, fmt.Errorf("CDP attach bridge did not become healthy: %w; child log tail:\n%s", err, tail)
+		}
+		return nil, fmt.Errorf("CDP attach bridge did not become healthy: %w", err)
+	}
+
+	result := internal.Instance
+	slog.Info("attached external browser via CDP bridge",
+		"id", result.ID, "name", name, "provider", resolved.BrowserProvider, "browserTarget", resolved.BrowserTarget,
+		"url", internalurls.RedactForLog(result.URL),
+		"cdpUrl", internalurls.RedactForLog(cdpURL),
+	)
+	o.emitEvent("instance.attached", &result)
+	return &result, nil
+}
+
+// waitForChildBridgeHealthy polls the child /health until OK or the deadline elapses.
+func (o *Orchestrator) waitForChildBridgeHealthy(inst *InstanceInternal, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	healthURL := strings.TrimRight(inst.URL, "/") + "/health"
+	for time.Now().Before(deadline) {
+		req, _ := http.NewRequest(http.MethodGet, healthURL, nil)
+		o.applyInstanceAuth(req, inst)
+		resp, err := o.client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				o.mu.Lock()
+				inst.Status = "running"
+				o.mu.Unlock()
+				return nil
+			}
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return fmt.Errorf("child bridge health check timed out after %v", timeout)
 }
 
 // AttachBridge registers an already-running bridge server as an attached instance.
 // If a bridge with the same name is already attached, it is updated in place (upsert)
 // provided the caller presents the current bridge token.
 func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instance, bool, error) {
+	return o.AttachBridgeWithOptions(name, baseURL, token, AttachOptions{})
+}
+
+// AttachBridgeWithOptions registers an already-running bridge server with target metadata.
+func (o *Orchestrator) AttachBridgeWithOptions(name, baseURL, token string, opts AttachOptions) (*bridge.Instance, bool, error) {
+	if err := o.validateAttachURL(baseURL); err != nil {
+		return nil, false, err
+	}
+	preserveExistingTarget := strings.TrimSpace(opts.BrowserTarget) == "" &&
+		strings.TrimSpace(opts.BrowserProvider) == "" &&
+		o.hasActiveAttachedBridge(name)
+	resolved, err := o.resolveAttachOptions(opts, "")
+	if err != nil {
+		return nil, false, err
+	}
+	if preserveExistingTarget {
+		resolved.BrowserTarget = ""
+		resolved.BrowserProvider = ""
+	}
+
 	normalizedBaseURL := strings.TrimRight(baseURL, "/")
 	if parsed, err := url.Parse(normalizedBaseURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
 		normalizedBaseURL = parsed.Scheme + "://" + parsed.Host
 	}
 
 	inst, created, err := o.attachExternalInstance(name, bridge.Instance{
-		Attached:   true,
-		AttachType: "bridge",
-		URL:        normalizedBaseURL,
-		Mode:       bridge.ModeFromHeadless(false),
+		Attached:        true,
+		AttachType:      "bridge",
+		URL:             normalizedBaseURL,
+		Mode:            bridge.ModeFromHeadless(false),
+		BrowserTarget:   resolved.BrowserTarget,
+		BrowserProvider: resolved.BrowserProvider,
 	}, token)
 	if err != nil {
 		return nil, false, err
 	}
 
-	slog.Info("attached to external bridge", "id", inst.ID, "name", name, "url", internalurls.RedactForLog(inst.URL))
+	slog.Info("attached to external bridge",
+		"id", inst.ID, "name", name, "browserTarget", inst.BrowserTarget, "provider", inst.BrowserProvider,
+		"url", internalurls.RedactForLog(inst.URL),
+	)
 	o.emitEvent("instance.attached", inst)
 	if created {
 		o.mu.RLock()
@@ -727,6 +991,72 @@ func (o *Orchestrator) AttachBridge(name, baseURL, token string) (*bridge.Instan
 		}
 	}
 	return inst, created, nil
+}
+
+func (o *Orchestrator) hasActiveAttachedBridge(name string) bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	for _, existing := range o.instances {
+		if existing.ProfileName == name && instanceIsActive(existing) && existing.Attached && existing.AttachType == "bridge" {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *Orchestrator) resolveAttachOptions(opts AttachOptions, defaultProvider string) (AttachOptions, error) {
+	requestedTarget := strings.TrimSpace(opts.BrowserTarget)
+	requestedProvider := strings.TrimSpace(opts.BrowserProvider)
+
+	explicitProvider := requestedProvider != ""
+	parsedProvider := ""
+	if explicitProvider {
+		provider, err := config.ParseBrowserProvider(requestedProvider)
+		if err != nil {
+			return AttachOptions{}, err
+		}
+		parsedProvider = provider
+	}
+
+	if o.runtimeCfg == nil || len(o.runtimeCfg.Targets) == 0 {
+		if parsedProvider == "" && defaultProvider != "" {
+			provider, err := config.ParseBrowserProvider(defaultProvider)
+			if err != nil {
+				return AttachOptions{}, err
+			}
+			parsedProvider = provider
+		}
+		if requestedTarget != "" {
+			return AttachOptions{}, fmt.Errorf("no browser targets configured; cannot resolve %q", requestedTarget)
+		}
+		return AttachOptions{BrowserProvider: parsedProvider}, nil
+	}
+
+	var resolved *config.ResolvedBrowserTarget
+	var err error
+	if strings.TrimSpace(requestedTarget) == "" {
+		resolved, err = config.ResolveDefaultBrowserTarget(o.runtimeCfg)
+	} else {
+		resolved, err = config.ResolveExplicitBrowserTarget(o.runtimeCfg, requestedTarget)
+	}
+	if err != nil {
+		return AttachOptions{}, err
+	}
+	target, targetProvider := "", ""
+	if resolved != nil && !resolved.Legacy {
+		target = resolved.Name
+		targetProvider = resolved.Provider
+	}
+	if explicitProvider && targetProvider != "" && parsedProvider != targetProvider {
+		return AttachOptions{}, fmt.Errorf("browser provider %q conflicts with browserTarget %q provider %q", parsedProvider, target, targetProvider)
+	}
+	if targetProvider == "" {
+		targetProvider = parsedProvider
+	}
+	if targetProvider == "" {
+		targetProvider = config.BrowserProviderChrome
+	}
+	return AttachOptions{BrowserTarget: target, BrowserProvider: targetProvider}, nil
 }
 
 func (o *Orchestrator) Stop(id string) error {
@@ -842,6 +1172,21 @@ func (o *Orchestrator) markStopped(id string) {
 		return
 	}
 
+	profileName := inst.ProfileName
+	delete(o.instances, id)
+	o.mu.Unlock()
+
+	o.releaseInstancePorts(id, inst)
+	o.removeInstanceFromManager(id)
+
+	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
+	o.cleanupStoppedProfile(profileName)
+}
+
+func (o *Orchestrator) releaseInstancePorts(id string, inst *InstanceInternal) {
+	if o == nil || o.portAllocator == nil || inst == nil {
+		return
+	}
 	portStr := inst.Port
 	if portInt, err := strconv.Atoi(portStr); err == nil {
 		o.portAllocator.ReleasePort(portInt)
@@ -851,18 +1196,16 @@ func (o *Orchestrator) markStopped(id string) {
 		o.portAllocator.ReleasePort(inst.cdpPort)
 		slog.Debug("released chrome debug port", "id", id, "port", inst.cdpPort)
 	}
+}
 
-	profileName := inst.ProfileName
-	delete(o.instances, id)
-	o.mu.Unlock()
-
-	if o.instanceMgr != nil {
+func (o *Orchestrator) removeInstanceFromManager(id string) {
+	if o != nil && o.instanceMgr != nil {
 		o.instanceMgr.Locator.InvalidateInstance(id)
 		o.instanceMgr.Repo.Remove(id)
 	}
+}
 
-	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
-
+func (o *Orchestrator) cleanupStoppedProfile(profileName string) {
 	// Kill any orphaned Chrome processes using this profile's directory.
 	// Chrome spawns helpers (GPU, renderer) in their own process groups,
 	// so killing the bridge process group doesn't reach them.
@@ -929,6 +1272,20 @@ func (o *Orchestrator) Logs(id string) (string, error) {
 }
 
 func (o *Orchestrator) FirstRunningURL() string {
+	return o.firstRunningURL(nil)
+}
+
+func (o *Orchestrator) FirstRunningURLForBrowserTarget(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return o.FirstRunningURL()
+	}
+	return o.firstRunningURL(func(inst *InstanceInternal) bool {
+		return inst != nil && inst.BrowserTarget == target
+	})
+}
+
+func (o *Orchestrator) firstRunningURL(match func(*InstanceInternal) bool) string {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	// Collect running instances and sort by start time for determinism.
@@ -941,6 +1298,9 @@ func (o *Orchestrator) FirstRunningURL() string {
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
 			if inst.URL == "" {
+				continue
+			}
+			if match != nil && !match(inst) {
 				continue
 			}
 			candidates = append(candidates, candidate{start: inst.StartTime, url: inst.URL})
@@ -956,6 +1316,32 @@ func (o *Orchestrator) FirstRunningURL() string {
 		return candidates[i].start.Before(candidates[j].start)
 	})
 	return candidates[0].url
+}
+
+func (o *Orchestrator) FirstRunningURLForRequest(r *http.Request) (string, int, error) {
+	requested := ExtractRequestedBrowserTarget(r)
+	if requested == "" {
+		resolved, err := config.ResolveDefaultBrowserTarget(o.runtimeCfg)
+		if err != nil {
+			return "", http.StatusBadRequest, err
+		}
+		if resolved != nil && !resolved.Legacy {
+			if resolved.Name == "" {
+				return "", http.StatusBadRequest, fmt.Errorf("no default browser target configured and none requested")
+			}
+			return o.FirstRunningURLForBrowserTarget(resolved.Name), 0, nil
+		}
+		return o.FirstRunningURL(), 0, nil
+	}
+	resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
+	if err != nil {
+		return "", http.StatusBadRequest, err
+	}
+	target := resolved.Name
+	if url := o.FirstRunningURLForBrowserTarget(target); url != "" {
+		return url, 0, nil
+	}
+	return "", http.StatusConflict, fmt.Errorf("no running instance for browserTarget %q", target)
 }
 
 // instanceTabsCached returns the tab list for inst using the per-instance
@@ -1011,6 +1397,36 @@ func (o *Orchestrator) allTabs(fresh bool) []bridge.InstanceTab {
 		all = append(all, tabs...)
 	}
 	return all
+}
+
+// FindInstanceByTab returns the running instance owning tabID, or (nil,false).
+func (o *Orchestrator) FindInstanceByTab(tabID string) (*bridge.Instance, bool) {
+	if tabID == "" {
+		return nil, false
+	}
+
+	o.mu.RLock()
+	instances := make([]*InstanceInternal, 0, len(o.instances))
+	for _, inst := range o.instances {
+		if inst.Status == "running" && instanceIsActive(inst) {
+			instances = append(instances, inst)
+		}
+	}
+	o.mu.RUnlock()
+
+	for _, inst := range instances {
+		tabs, err := o.instanceTabsCached(inst, false)
+		if err != nil {
+			continue
+		}
+		for _, tab := range tabs {
+			if tab.ID == tabID {
+				copyInst := inst.Instance
+				return &copyInst, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {

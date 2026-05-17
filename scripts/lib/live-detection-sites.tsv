@@ -1,0 +1,23 @@
+# Live-detection probe site list.
+# Tab-separated columns:
+#   name        slug used for the per-site artifact directory
+#   url         page to navigate to
+#   wait_for    "selector" (waitFor selector) or "load" (skip wait)
+#   selector    CSS/XPath used both as waitSelector (when wait_for=selector)
+#               and as the text-extract selector. "-" to skip text extract
+#               and fall back to the full-page body text.
+#   notes       free-form description, displayed in report.md
+#
+# Lines starting with '#' or empty are ignored.
+#
+# NOTE on omitted sites:
+#   * reCAPTCHA v3 — requires our own site key and an iframe-aware harness;
+#     keep a placeholder until P6 follow-up.
+#
+# Extend by appending a new row. Selectors should target a small, stable
+# element whose innerText carries the detection verdict.
+browserscan	https://www.browserscan.net/bot-detection	selector	#botStatus	BrowserScan bot-detection page; #botStatus reflects PASS/FAIL.
+fingerprintjs-demo	https://fingerprint.com/demo/	selector	.visitorId	FingerprintJS demo; visitorId text shows the stable visitor identifier.
+deviceandbrowserinfo	https://deviceandbrowserinfo.com/	load	-	Device + browser info dump. Full-page text snapshot only.
+cloudflare-turnstile	https://nopecha.com/demo/turnstile	selector	.cf-turnstile	Cloudflare Turnstile interactive challenge widget.
+pixelscan	https://pixelscan.net/	load	body	Pixelscan fingerprint/consistency check (replaces the old Cloudflare demo page).

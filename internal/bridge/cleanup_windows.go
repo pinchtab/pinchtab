@@ -56,13 +56,35 @@ func taskkillPIDs(pids []int) int {
 	return killed
 }
 
+// Test seam: overridden in tests.
+var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
+
+func findChromePIDsByProfileDir(profileDir string) []int {
+	return findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
+}
+
 // killChromeByProfileDir finds and kills Chrome processes using the given profile directory.
 func killChromeByProfileDir(profileDir string) int {
-	pids := findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
+	pids := findChromePIDsByProfileDirFunc(profileDir)
 	if len(pids) == 0 {
 		return 0
 	}
 	return taskkillPIDs(pids)
+}
+
+// terminateChromeByProfileDir: taskkill without /F (no SIGKILL escalation).
+func terminateChromeByProfileDir(profileDir string) int {
+	pids := findChromePIDsByProfileDirFunc(profileDir)
+	if len(pids) == 0 {
+		return 0
+	}
+	for _, pid := range pids {
+		cmd := exec.Command("taskkill", "/PID", strconv.Itoa(pid))
+		if err := cmd.Run(); err == nil {
+			slog.Info("cleanup: taskkill chrome process", "pid", pid)
+		}
+	}
+	return len(pids)
 }
 
 // KillAllPinchtabChrome kills all Chrome processes spawned by PinchTab.

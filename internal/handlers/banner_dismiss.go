@@ -18,9 +18,8 @@ import (
 //     Permissive labels are tried first because rejection paths often gate
 //     further interaction behind another modal.
 //  2. Phase 2 — if no button matched, hard-remove DOM nodes whose id, class,
-//     or aria-label contains "cookie"/"consent", plus role=dialog modals and
-//     fixed/absolute "overlay" containers. Re-enables document scrolling that
-//     banners commonly lock with overflow:hidden.
+//     or aria-label contains "cookie"/"consent". Re-enables document scrolling
+//     that banners commonly lock with overflow:hidden.
 //
 // The script is wrapped in try/catch and bounded to a short timeout from the
 // caller so it can never wedge a navigation response.
@@ -57,8 +56,7 @@ const bannerDismissJS = `(() => {
 
     // Phase 2: hard-remove obvious overlay containers.
     const sel = '[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i],' +
-                '[aria-label*="cookie" i], [aria-label*="consent" i],' +
-                '[class*="overlay" i], [role="dialog"], [aria-modal="true"]';
+                '[aria-label*="cookie" i], [aria-label*="consent" i]';
     const removed = [];
     document.querySelectorAll(sel).forEach((el) => {
       if (el === document.body || el === document.documentElement) return;

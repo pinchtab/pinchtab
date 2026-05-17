@@ -33,40 +33,44 @@ end_test
 
 start_test "config: fingerprint rotation preserves Chrome version"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-
-pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
-assert_ok "initial UA"
-INITIAL_UA=$(echo "$RESULT" | jq -r '.result')
-INITIAL_VERSION=$(echo "$INITIAL_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-
-if [ -z "$INITIAL_VERSION" ]; then
-  echo -e "  ${RED}✗${NC} initial UA missing Chrome version"
-  ((ASSERTIONS_FAILED++)) || true
+if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+  skip_test "fingerprint rotation is a PinchTab-overlay feature; cloak owns its own fingerprint engine"
 else
-  echo -e "  ${GREEN}✓${NC} initial version: $INITIAL_VERSION"
-  ((ASSERTIONS_PASSED++)) || true
+  pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+  assert_ok "navigate"
+  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+
+  pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
+  assert_ok "initial UA"
+  INITIAL_UA=$(echo "$RESULT" | jq -r '.result')
+  INITIAL_VERSION=$(echo "$INITIAL_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+  if [ -z "$INITIAL_VERSION" ]; then
+    echo -e "  ${RED}✗${NC} initial UA missing Chrome version"
+    ((ASSERTIONS_FAILED++)) || true
+  else
+    echo -e "  ${GREEN}✓${NC} initial version: $INITIAL_VERSION"
+    ((ASSERTIONS_PASSED++)) || true
+  fi
+
+  pt_post /fingerprint/rotate "{\"os\":\"mac\",\"tabId\":\"$TAB_ID\"}"
+  assert_ok "fingerprint rotate"
+
+  pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
+  assert_ok "rotated UA"
+  ROTATED_UA=$(echo "$RESULT" | jq -r '.result')
+  ROTATED_VERSION=$(echo "$ROTATED_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+  if [ "$INITIAL_VERSION" = "$ROTATED_VERSION" ]; then
+    echo -e "  ${GREEN}✓${NC} Chrome version preserved after rotation: $ROTATED_VERSION"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} Chrome version changed: $INITIAL_VERSION → $ROTATED_VERSION"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+
+  pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 fi
-
-pt_post /fingerprint/rotate "{\"os\":\"mac\",\"tabId\":\"$TAB_ID\"}"
-assert_ok "fingerprint rotate"
-
-pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
-assert_ok "rotated UA"
-ROTATED_UA=$(echo "$RESULT" | jq -r '.result')
-ROTATED_VERSION=$(echo "$ROTATED_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-
-if [ "$INITIAL_VERSION" = "$ROTATED_VERSION" ]; then
-  echo -e "  ${GREEN}✓${NC} Chrome version preserved after rotation: $ROTATED_VERSION"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} Chrome version changed: $INITIAL_VERSION → $ROTATED_VERSION"
-  ((ASSERTIONS_FAILED++)) || true
-fi
-
-pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
 
 end_test
 

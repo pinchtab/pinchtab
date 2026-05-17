@@ -1,6 +1,10 @@
 package mcp
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -77,6 +81,79 @@ func TestHandleNavigateAnyScheme(t *testing.T) {
 		if r.IsError {
 			t.Errorf("expected %q to succeed, got error: %s", u, resultText(t, r))
 		}
+	}
+}
+
+func TestHandleNavigate_WithBrowserTarget(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	// When browserTarget is supplied, the forwarded payload includes it.
+	r := callTool(t, "pinchtab_navigate", map[string]any{
+		"url":           "https://example.com",
+		"browserTarget": "chrome",
+	}, srv)
+
+	resp := resultJSON(t, r)
+	body, _ := resp["body"].(map[string]any)
+	if got, _ := body["browserTarget"].(string); got != "chrome" {
+		t.Errorf("browserTarget = %q, want chrome", got)
+	}
+
+	// When omitted/empty, the payload must not include the key.
+	r2 := callTool(t, "pinchtab_navigate", map[string]any{
+		"url":           "https://example.com",
+		"browserTarget": "",
+	}, srv)
+
+	resp2 := resultJSON(t, r2)
+	body2, _ := resp2["body"].(map[string]any)
+	if _, ok := body2["browserTarget"]; ok {
+		t.Errorf("browserTarget should be omitted when empty, got %v", body2["browserTarget"])
+	}
+}
+
+func TestHandleNavigateSnapUsesReturnedTabAndBrowserTarget(t *testing.T) {
+	var navigateBody map[string]any
+	var snapshotQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/navigate":
+			if err := json.NewDecoder(r.Body).Decode(&navigateBody); err != nil {
+				t.Errorf("decode navigate body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tabId": "tab-cloak",
+				"url":   "https://example.com",
+			})
+		case "/snapshot":
+			snapshotQuery = r.URL.Query()
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"snapshot": true,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_navigate", map[string]any{
+		"url":           "https://example.com",
+		"browserTarget": "cloak",
+		"snap":          true,
+	}, srv)
+	if r.IsError {
+		t.Fatalf("navigate returned error: %s", resultText(t, r))
+	}
+
+	if got, _ := navigateBody["browserTarget"].(string); got != "cloak" {
+		t.Fatalf("navigate browserTarget = %q, want cloak", got)
+	}
+	if got := snapshotQuery.Get("tabId"); got != "tab-cloak" {
+		t.Fatalf("snapshot tabId = %q, want tab-cloak; query=%v", got, snapshotQuery)
+	}
+	if got := snapshotQuery.Get("browserTarget"); got != "cloak" {
+		t.Fatalf("snapshot browserTarget = %q, want cloak; query=%v", got, snapshotQuery)
 	}
 }
 

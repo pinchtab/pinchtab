@@ -25,6 +25,7 @@ const (
 	LaunchModeAllocator      LaunchMode = "allocator"
 	LaunchModeDirectFallback LaunchMode = "direct_fallback"
 	LaunchModeAttached       LaunchMode = "attached"
+	LaunchModeRemoteCDP      LaunchMode = "remote-cdp"
 )
 
 type WebdriverMode string
@@ -34,17 +35,18 @@ const (
 )
 
 type Bundle struct {
-	Level        Level           `json:"level"`
-	Provider     string          `json:"provider"`
-	Native       bool            `json:"native"`
-	Seed         int64           `json:"seed"`
-	Script       string          `json:"-"`
-	ScriptHash   string          `json:"scriptHash"`
-	Launch       LaunchContract  `json:"-"`
-	PatchIDs     []string        `json:"patchIds"`
-	Capabilities map[string]bool `json:"capabilities"`
-	Tradeoffs    []string        `json:"tradeoffs,omitempty"`
-	Webdriver    WebdriverMode   `json:"webdriverMode"`
+	Level                    Level           `json:"level"`
+	Provider                 string          `json:"provider"`
+	Native                   bool            `json:"native"`
+	PinchTabOverlaysDisabled bool            `json:"pinchtabOverlaysDisabled"`
+	Seed                     int64           `json:"seed"`
+	Script                   string          `json:"-"`
+	ScriptHash               string          `json:"scriptHash"`
+	Launch                   LaunchContract  `json:"-"`
+	PatchIDs                 []string        `json:"patchIds"`
+	Capabilities             map[string]bool `json:"capabilities"`
+	Tradeoffs                []string        `json:"tradeoffs,omitempty"`
+	Webdriver                WebdriverMode   `json:"webdriverMode"`
 }
 
 type Status struct {
@@ -61,8 +63,10 @@ type Status struct {
 	PatchIDs                 []string        `json:"patchIds"`
 	Flags                    map[string]bool `json:"flags"`
 	Capabilities             map[string]bool `json:"capabilities"`
-	Tradeoffs                []string        `json:"tradeoffs,omitempty"`
-	TabOverrides             map[string]bool `json:"tabOverrides"`
+	// ProviderCapabilities is advisory; omitted for empty/unknown providers to preserve legacy JSON shape.
+	ProviderCapabilities []string        `json:"providerCapabilities,omitempty"`
+	Tradeoffs            []string        `json:"tradeoffs,omitempty"`
+	TabOverrides         map[string]bool `json:"tabOverrides"`
 }
 
 func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
@@ -75,7 +79,8 @@ func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 		provider = config.NormalizeBrowserProvider(cfg.BrowserProvider)
 	}
 	level := NormalizeLevel(levelName)
-	nativeCloak := config.NativeCloakStealthEnabled(cfg)
+	nativeCloak := config.CloakBrowserProviderActive(cfg)
+	disablePinchTabStealth := config.PinchTabStealthDefaultsDisabled(cfg)
 	personaJSON := "{}"
 	if cfg != nil {
 		if encoded, err := json.Marshal(BuildPersona(cfg.UserAgent, cfg.ChromeVersion)); err == nil {
@@ -87,7 +92,7 @@ func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 	patchIDs := patchIDsForLevel(level, headless)
 	capabilities := capabilityMap(level, headless)
 	tradeoffIDs := tradeoffs(level)
-	if nativeCloak {
+	if disablePinchTabStealth {
 		script = renderNativeCloakScript()
 		hashSource = script
 		patchIDs = nativeCloakPatchIDs()
@@ -96,11 +101,12 @@ func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 	}
 
 	return &Bundle{
-		Level:    level,
-		Provider: provider,
-		Native:   nativeCloak,
-		Seed:     seed,
-		Script:   script,
+		Level:                    level,
+		Provider:                 provider,
+		Native:                   nativeCloak,
+		PinchTabOverlaysDisabled: disablePinchTabStealth,
+		Seed:                     seed,
+		Script:                   script,
 		// Keep the status hash stable across identical configs even when the
 		// per-process seed changes. The seed is runtime entropy, not contract.
 		ScriptHash:   hashScript(hashSource),
@@ -154,10 +160,11 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 		UserAgent:                bundle.LaunchUserAgent(),
 		FingerprintSeed:          statusFingerprintSeed(cfg),
 		WebdriverMode:            bundle.Webdriver,
-		PinchTabOverlaysDisabled: bundle.Native,
+		PinchTabOverlaysDisabled: bundle.PinchTabOverlaysDisabled,
 		PatchIDs:                 append([]string(nil), bundle.PatchIDs...),
 		Flags:                    statusFlags(bundle, cfg),
 		Capabilities:             cloneBoolMap(bundle.Capabilities),
+		ProviderCapabilities:     providerCapabilityStrings(bundle.Provider),
 		Tradeoffs:                append([]string(nil), bundle.Tradeoffs...),
 		TabOverrides: map[string]bool{
 			"fingerprintRotateActive": false,
@@ -167,6 +174,18 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 		status.LaunchMode = LaunchModeUninitialized
 	}
 	return status
+}
+
+func providerCapabilityStrings(provider string) []string {
+	caps := config.ProviderCapabilities(provider)
+	if len(caps) == 0 {
+		return nil
+	}
+	out := make([]string, len(caps))
+	for i, c := range caps {
+		out[i] = string(c)
+	}
+	return out
 }
 
 func statusFingerprintSeed(cfg *config.RuntimeConfig) string {

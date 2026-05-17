@@ -107,6 +107,7 @@ type OrchestratorService interface {
 	Logs(id string) (string, error)
 	FirstRunningURL() string
 	AllTabs() []InstanceTab
+	FindInstanceByTab(tabID string) (*Instance, bool)
 	ScreencastURL(instanceID, tabID string) string
 	Shutdown()
 	ForceShutdown()
@@ -187,6 +188,14 @@ type Instance struct {
 	AttachType     string          `json:"attachType,omitempty"` // "cdp" or "bridge" for attached instances
 	CdpURL         string          `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
+
+	BrowserTarget   string `json:"browserTarget,omitempty"`
+	BrowserProvider string `json:"browserProvider,omitempty"`
+
+	// FallbackFrom/FallbackReason: omitempty keeps successful-launch
+	// Instance JSON byte-identical to pre-P2.4a output.
+	FallbackFrom   string `json:"fallbackFrom,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
 }
 
 func (i Instance) MarshalJSON() ([]byte, error) {

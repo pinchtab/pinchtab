@@ -26,9 +26,12 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 
 // proxyToManaged ensures the managed instance is running, then proxies.
 func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
-	target, err := s.ensureRunning()
+	target, status, err := s.ensureRunning(r)
 	if err != nil {
-		httpx.Error(w, 503, err)
+		if status == 0 {
+			status = 503
+		}
+		httpx.Error(w, status, err)
 		return
 	}
 	activity.EnrichRouteActivity(r)
@@ -38,25 +41,33 @@ func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
 
 // ensureRunning returns the URL of the managed instance, waiting briefly for
 // the initial launch / a restart to finish before giving up.
-func (s *Strategy) ensureRunning() (string, error) {
+func (s *Strategy) ensureRunning(r *http.Request) (string, int, error) {
 	if s.orch == nil {
-		return "", fmt.Errorf("no orchestrator configured")
+		return "", 503, fmt.Errorf("no orchestrator configured")
 	}
-	if target := s.orch.FirstRunningURL(); target != "" {
-		return target, nil
+	if target, status, err := s.orch.FirstRunningURLForRequest(r); err != nil {
+		return "", status, err
+	} else if target != "" {
+		return target, 0, nil
 	}
 	deadline := time.Now().Add(instanceReadyWait)
 	for time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
-		if target := s.orch.FirstRunningURL(); target != "" {
-			return target, nil
+		if target, status, err := s.orch.FirstRunningURLForRequest(r); err != nil {
+			return "", status, err
+		} else if target != "" {
+			return target, 0, nil
 		}
 	}
-	return "", fmt.Errorf("instance not ready after %s (may be restarting)", instanceReadyWait)
+	return "", 503, fmt.Errorf("instance not ready after %s (may be restarting)", instanceReadyWait)
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target, status, err := s.orch.FirstRunningURLForRequest(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return
+	}
 	if target == "" {
 		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return

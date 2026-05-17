@@ -10,12 +10,13 @@ import (
 )
 
 type Args struct {
-	Suite  string
-	Filter string
-	Test   string
-	Extra  string
-	Logs   string
-	DryRun bool
+	Suite    string
+	Filter   string
+	Test     string
+	Extra    string
+	Logs     string
+	Provider string
+	DryRun   bool
 }
 
 var errHelp = errors.New("help requested")
@@ -29,12 +30,15 @@ const usageText = `Usage:
 Options:
   --suite basic|extended|smoke|api|cli|infra|plugin|api-extended|cli-extended|infra-extended
           smoke-orchestrator|smoke-security|smoke-lifecycle
-  --filter TEXT       Filter scenario file names, groups, tiers, helpers, or tags
-  --test TEXT         Run one start_test block by name
-  --extra FILES       Add extra scenario files, space-separated
-  --logs show|hide    Control compose build/runner output
-  --dry-run           Print the compose plan without running it
-  --help, -h          Show this help
+  --filter TEXT          Filter scenario file names, groups, tiers, helpers, or tags
+  --test TEXT            Run one start_test block by name
+  --extra FILES          Add extra scenario files, space-separated
+  --logs show|hide       Control compose build/runner output
+  --provider chrome|cloak
+                         Select browser provider (default: chrome). Cloak requires
+                         the prebuilt pinchtab-cloakbrowser:test image.
+  --dry-run              Print the compose plan without running it
+  --help, -h             Show this help
 `
 
 func Run(argv []string, stdout, stderr io.Writer) int {
@@ -70,6 +74,14 @@ func ParseArgs(argv []string) (Args, error) {
 
 	for i := 0; i < len(argv); i++ {
 		arg := argv[i]
+		// Normalize --flag=value into --flag value so each case below
+		// keeps a single shape.
+		if idx := strings.Index(arg, "="); idx > 2 && strings.HasPrefix(arg, "--") {
+			value := arg[idx+1:]
+			arg = arg[:idx]
+			argv = append(argv[:i+1], append([]string{value}, argv[i+1:]...)...)
+			argv[i] = arg
+		}
 		switch arg {
 		case "--help", "-h":
 			return args, errHelp
@@ -103,6 +115,12 @@ func ParseArgs(argv []string) (Args, error) {
 				return args, err
 			}
 			args.Logs = v
+		case "--provider":
+			v, err := next(&i, arg)
+			if err != nil {
+				return args, err
+			}
+			args.Provider = v
 		case "--dry-run":
 			args.DryRun = true
 		default:
@@ -120,6 +138,14 @@ func ParseArgs(argv []string) (Args, error) {
 		default:
 			return args, fmt.Errorf("--logs must be show or hide")
 		}
+	}
+	if args.Provider == "" {
+		args.Provider = "chrome"
+	}
+	switch args.Provider {
+	case "chrome", "cloak":
+	default:
+		return args, fmt.Errorf("--provider must be chrome or cloak (got %q)", args.Provider)
 	}
 	return args, nil
 }

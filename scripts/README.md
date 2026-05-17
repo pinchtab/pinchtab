@@ -27,7 +27,6 @@ Development and CI scripts for PinchTab.
 | `autosolver-realworld-smoke.sh` | Smoke-test real-world autosolver flow against an external detection page |
 | `dev.sh` | Full build (dashboard + Go) and run |
 | `dev-e2e.sh` | Lookup wrapper for `./dev e2e test`; delegates execution to the Go E2E runner |
-| `docker-cloakbrowser-smoke.sh` | Docker CloakBrowser smoke using the dedicated local-only `tests/tools/docker/cloakbrowser-smoke.Dockerfile` image |
 | `docker-smoke.sh` | Host Docker smoke helper invoked by the Go E2E runner |
 | `npm-dev-binary.sh` | Build the canonical `./pinchtab-dev` binary for source-checkout npm-package testing |
 | `run.sh` | Run the existing `./pinchtab` binary |
@@ -38,6 +37,7 @@ Development and CI scripts for PinchTab.
 |--------|---------|
 | `doctor.sh` | Verify & setup dev environment (interactive — prompts before installing) |
 | `install-hooks.sh` | Install git pre-commit hook |
+| `install-skills.sh` | Symlink repo skills into `./.claude/skills` by default; set `CLAUDE_SKILLS_DIR=~/.claude/skills` for a global install |
 
 ## Testing
 
@@ -48,6 +48,8 @@ Development and CI scripts for PinchTab.
 
 ## `./dev` shortcuts
 
-- `./dev e2e smoke` runs the smoke tier through the Go e2e runner, including host Docker smoke checks.
-- `PINCHTAB_DOCKER_SMOKE_RELEASE_IMAGE=<image> ./dev e2e smoke --filter release` skips the release-image build and runs the matching Docker smoke checks against the specified image tag.
-- `./dev smoke cloakbrowser [image]` runs the manual Docker CloakBrowser smoke. By default it builds `pinchtab-cloakbrowser:test` from `tests/tools/docker/cloakbrowser-smoke.Dockerfile`, which installs the CloakBrowser binary into that local image. The smoke mounts `/data` and `/tmp` as tmpfs for Chromium profile and socket paths, serves `tests/e2e/fixtures`, checks a representative endpoint subset, and runs the Cloak-compatible API basic E2E scenario files in the API runner container attached to the Cloak container's network namespace. Set `SKIP_BUILD=1` to require a prebuilt image, or set `PINCHTAB_CLOAKBROWSER_E2E_SCENARIOS` to override the scenario list.
+- `./dev smoke ci` runs the CI-backed smoke subset through the Go e2e runner, including host Docker smoke checks.
+- `PINCHTAB_DOCKER_SMOKE_RELEASE_IMAGE=<image> ./dev smoke ci --filter release` skips the release-image build and runs the matching Docker smoke checks against the specified image tag.
+- `./dev smoke` runs all local smoke categories: CI smoke, browser parity, CDP attach, and live detection.
+- `./dev e2e --provider=cloak` runs the regular e2e suites against the prebuilt CloakBrowser provider image.
+- `./dev smoke cloakbrowser [--provider=chrome|cloak|all] [--multi-target|--profile-persistence|--profile-lock-recovery]` runs the specialized Chrome/CloakBrowser parity smoke via `scripts/docker-browser-parity-smoke.sh`. It builds the provider images from `tests/tools/docker/chrome-smoke.Dockerfile` and `tests/tools/docker/cloakbrowser-smoke.Dockerfile`; set `SKIP_BUILD=1` to require prebuilt images. The Cloak leg also honors `PINCHTAB_CLOAKBROWSER_E2E_SCENARIOS` for the scenario list.

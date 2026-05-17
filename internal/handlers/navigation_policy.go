@@ -141,38 +141,102 @@ func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResol
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	if _, err := netguard.ResolveAndValidatePublicIPs(ctx, host); err != nil {
-		if errors.Is(err, netguard.ErrResolveHost) {
-			return nil, fmt.Errorf("could not resolve navigation host")
-		}
+	ips, err := resolveNavigateHostAddrs(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("could not resolve navigation host")
+	}
+	if err := validateResolvedNavigatePublicIPs(ips); err != nil {
 		if errors.Is(err, netguard.ErrPrivateInternalIP) {
 			if allowExplicitInternal {
-				return &validatedNavigateTarget{allowInternal: true}, nil
+				return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
 			}
-			if len(trustedResolveCIDRs) > 0 {
-				ips, err2 := netguard.ResolveAndValidateIPsWithTrustedCIDRs(ctx, host, trustedResolveCIDRs)
-				if err2 == nil {
-					cidrs := make([]string, len(trustedResolveCIDRs))
-					for i, c := range trustedResolveCIDRs {
-						cidrs[i] = c.String()
-					}
-					addrs := make([]string, len(ips))
-					for i, a := range ips {
-						addrs[i] = a.String()
-					}
-					slog.Info("navigate: trusted resolve CIDR override",
-						"host", host,
-						"resolvedIPs", addrs,
-						"trustedCIDRs", cidrs,
-					)
-					return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
+			if len(trustedResolveCIDRs) > 0 && validateResolvedNavigateIPsWithTrustedCIDRs(ips, trustedResolveCIDRs) == nil {
+				cidrs := make([]string, len(trustedResolveCIDRs))
+				for i, c := range trustedResolveCIDRs {
+					cidrs[i] = c.String()
 				}
+				addrs := make([]string, len(ips))
+				for i, a := range ips {
+					addrs[i] = a.String()
+				}
+				slog.Info("navigate: trusted resolve CIDR override",
+					"host", host,
+					"resolvedIPs", addrs,
+					"trustedCIDRs", cidrs,
+				)
+				return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
 			}
 			return nil, fmt.Errorf("navigation target resolves to blocked private/internal IP")
 		}
 		return nil, fmt.Errorf("could not resolve navigation host")
 	}
 	return &validatedNavigateTarget{}, nil
+}
+
+func validateResolvedNavigatePublicIPs(ips []netip.Addr) error {
+	_, err := netguard.ValidateResolvedPublicAddrs(ips)
+	return err
+}
+
+func validateResolvedNavigateIPsWithTrustedCIDRs(ips []netip.Addr, trusted []*net.IPNet) error {
+	if len(ips) == 0 {
+		return netguard.ErrResolveHost
+	}
+	for _, addr := range ips {
+		ip := net.ParseIP(addr.String())
+		if err := netguard.ValidatePublicIP(ip); err != nil {
+			if !ipInCIDRs(ip, trusted) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveNavigateHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
+	host = netguard.NormalizeHost(host)
+	if host == "" {
+		return nil, netguard.ErrResolveHost
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, netguard.ErrResolveHost
+		}
+		return []netip.Addr{addr.Unmap()}, nil
+	}
+
+	ips, err := netguard.ResolveHostIPs(ctx, "ip", host)
+	if err != nil || len(ips) == 0 {
+		return nil, netguard.ErrResolveHost
+	}
+	seen := make(map[netip.Addr]struct{}, len(ips))
+	out := make([]netip.Addr, 0, len(ips))
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, netguard.ErrResolveHost
+		}
+		addr = addr.Unmap()
+		if _, ok := seen[addr]; ok {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, addr)
+	}
+	if len(out) == 0 {
+		return nil, netguard.ErrResolveHost
+	}
+	return out, nil
 }
 
 func extractNavigateHost(raw string) (string, bool) {

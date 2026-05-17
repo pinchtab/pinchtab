@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -185,8 +186,43 @@ func Execute() {
 	safelog.InstallDefault()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(commandExitCode(err))
 	}
+}
+
+type commandExitError struct {
+	code int
+	err  error
+}
+
+func newCommandExitError(code int, err error) error {
+	return &commandExitError{code: code, err: err}
+}
+
+func (e *commandExitError) Error() string {
+	if e.err == nil {
+		return fmt.Sprintf("exit status %d", e.code)
+	}
+	return e.err.Error()
+}
+
+func (e *commandExitError) Unwrap() error {
+	return e.err
+}
+
+func (e *commandExitError) ExitCode() int {
+	return e.code
+}
+
+func commandExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var coded *commandExitError
+	if errors.As(err, &coded) {
+		return coded.ExitCode()
+	}
+	return 1
 }
 
 // serverURL is the global --server flag for CLI commands

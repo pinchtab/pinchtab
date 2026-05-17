@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,11 +16,13 @@ import (
 )
 
 type startInstanceRequest struct {
-	ProfileID      string                 `json:"profileId,omitempty"`
-	Mode           string                 `json:"mode,omitempty"`
-	Port           string                 `json:"port,omitempty"`
-	ExtensionPaths []string               `json:"extensionPaths,omitempty"`
-	SecurityPolicy *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+	ProfileID       string                 `json:"profileId,omitempty"`
+	Mode            string                 `json:"mode,omitempty"`
+	Port            string                 `json:"port,omitempty"`
+	ExtensionPaths  []string               `json:"extensionPaths,omitempty"`
+	SecurityPolicy  *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+	BrowserTarget   string                 `json:"browserTarget,omitempty"`
+	FallbackTargets []string               `json:"fallbackTargets,omitempty"`
 }
 
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
@@ -266,18 +269,43 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 	headless := req.Mode != "headed"
 
-	inst, err := o.LaunchWithOptions(profileName, req.Port, headless, LaunchOptions{
+	opts := LaunchOptions{
 		ExtensionPaths: req.ExtensionPaths,
 		SecurityPolicy: req.SecurityPolicy,
-	})
+	}
+
+	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, req.BrowserTarget, req.FallbackTargets, opts)
 	if err != nil {
-		statusCode := classifyLaunchError(err)
-		httpx.Error(w, statusCode, err)
+		writeLaunchError(w, err)
 		return
 	}
 
 	authn.AuditLog(r, auditEvent, "instanceId", inst.ID, "profileName", profileName)
 	httpx.JSON(w, 201, inst)
+}
+
+// writeLaunchError maps launch / fallback errors to 400 (unknown target), 502 (exhaustion), or the legacy classifier.
+func writeLaunchError(w http.ResponseWriter, err error) {
+	var unknown *UnknownBrowserTargetError
+	if errors.As(err, &unknown) {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	var exhausted *FallbackExhaustedError
+	if errors.As(err, &exhausted) {
+		attempts := make([]map[string]string, 0, len(exhausted.Attempts))
+		for _, a := range exhausted.Attempts {
+			attempts = append(attempts, map[string]string{
+				"target": a.Target,
+				"reason": string(a.Reason),
+			})
+		}
+		httpx.ErrorCode(w, http.StatusBadGateway, "browser_target_unavailable", err.Error(), true, map[string]any{
+			"attempts": attempts,
+		})
+		return
+	}
+	httpx.Error(w, classifyLaunchError(err), err)
 }
 
 func validateStartInstanceSecurityPolicy(policy *bridge.SecurityPolicy) error {
@@ -337,8 +365,10 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 
 func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		CdpURL string `json:"cdpUrl"`
-		Name   string `json:"name,omitempty"`
+		CdpURL        string `json:"cdpUrl"`
+		Name          string `json:"name,omitempty"`
+		Provider      string `json:"provider,omitempty"`
+		BrowserTarget string `json:"browserTarget,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -348,6 +378,14 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 
 	if req.CdpURL == "" {
 		httpx.Error(w, 400, fmt.Errorf("cdpUrl is required"))
+		return
+	}
+	attachOpts, err := o.resolveAttachOptions(AttachOptions{
+		BrowserTarget:   req.BrowserTarget,
+		BrowserProvider: req.Provider,
+	}, config.BrowserProviderChrome)
+	if err != nil {
+		httpx.Error(w, 400, err)
 		return
 	}
 
@@ -363,21 +401,22 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		name = fmt.Sprintf("attached-%d", time.Now().UnixNano())
 	}
 
-	inst, err := o.Attach(name, req.CdpURL)
+	inst, err := o.AttachWithOptions(name, req.CdpURL, attachOpts)
 	if err != nil {
 		httpx.Error(w, classifyLaunchError(err), err)
 		return
 	}
 
-	authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "cdp")
+	authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "cdp-bridge")
 	httpx.JSON(w, 201, inst)
 }
 
 func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		BaseURL string `json:"baseUrl"`
-		Name    string `json:"name,omitempty"`
-		Token   string `json:"token,omitempty"`
+		BaseURL       string `json:"baseUrl"`
+		Name          string `json:"name,omitempty"`
+		Token         string `json:"token,omitempty"`
+		BrowserTarget string `json:"browserTarget,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -386,6 +425,11 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 	}
 	if req.BaseURL == "" {
 		httpx.Error(w, 400, fmt.Errorf("baseUrl is required"))
+		return
+	}
+	attachOpts, err := o.resolveAttachOptions(AttachOptions{BrowserTarget: req.BrowserTarget}, "")
+	if err != nil {
+		httpx.Error(w, 400, err)
 		return
 	}
 	if err := o.validateAttachURL(req.BaseURL); err != nil {
@@ -402,7 +446,7 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		name = fmt.Sprintf("bridge-%d", time.Now().UnixNano())
 	}
 
-	inst, created, err := o.AttachBridge(name, req.BaseURL, req.Token)
+	inst, created, err := o.AttachBridgeWithOptions(name, req.BaseURL, req.Token, attachOpts)
 	if err != nil {
 		httpx.Error(w, classifyLaunchError(err), err)
 		return
@@ -470,14 +514,15 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	}
 
 	if parsed.Scheme == "http" || parsed.Scheme == "https" {
-		if parsed.Path != "" && parsed.Path != "/" {
-			return fmt.Errorf("bridge baseUrl must not include a path")
+		// CDP attach allows /json/version; attach-bridge requires bare origin.
+		if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/json/version" {
+			return fmt.Errorf("HTTP attach URL must be the bare origin or end with /json/version")
 		}
 		if parsed.User != nil {
-			return fmt.Errorf("bridge baseUrl must not include userinfo")
+			return fmt.Errorf("attach URL must not include userinfo")
 		}
 		if parsed.RawQuery != "" || parsed.Fragment != "" {
-			return fmt.Errorf("bridge baseUrl must not include query or fragment")
+			return fmt.Errorf("attach URL must not include query or fragment")
 		}
 	}
 

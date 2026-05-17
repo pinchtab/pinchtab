@@ -137,3 +137,20 @@ func (rb *ringBuffer) String() string {
 	defer rb.mu.Unlock()
 	return string(rb.data)
 }
+
+// tailChildLog returns up to maxLines trailing non-empty lines from rb,
+// suitable for embedding in operator-facing error messages.
+func tailChildLog(rb *ringBuffer, maxLines int) string {
+	if rb == nil || maxLines <= 0 {
+		return ""
+	}
+	raw := strings.TrimRight(rb.String(), "\n")
+	if raw == "" {
+		return ""
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.Join(lines, "\n")
+}

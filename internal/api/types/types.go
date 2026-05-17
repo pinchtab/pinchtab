@@ -47,6 +47,15 @@ type Instance struct {
 	AttachType     string          `json:"attachType,omitempty"`
 	CdpURL         string          `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
+
+	// BrowserTarget is the resolved named target; empty on legacy configs.
+	BrowserTarget   string `json:"browserTarget,omitempty"`
+	BrowserProvider string `json:"browserProvider,omitempty"`
+
+	// FallbackFrom/FallbackReason are reserved for a future phase (always
+	// empty in P2.4a).
+	FallbackFrom   string `json:"fallbackFrom,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
 }
 
 // Agent represents a connected AI agent.

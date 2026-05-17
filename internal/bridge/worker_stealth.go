@@ -18,7 +18,7 @@ func (b *Bridge) installWorkerStealthParity(ctx context.Context) {
 	if b == nil || b.Config == nil {
 		return
 	}
-	if config.NativeCloakStealthEnabled(b.Config) {
+	if config.PinchTabStealthDefaultsDisabled(b.Config) {
 		return
 	}
 
@@ -38,7 +38,7 @@ func (b *Bridge) installWorkerStealthParity(ctx context.Context) {
 }
 
 func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, targetType string) {
-	if b == nil || config.NativeCloakStealthEnabled(b.Config) {
+	if b == nil || config.PinchTabStealthDefaultsDisabled(b.Config) {
 		return
 	}
 

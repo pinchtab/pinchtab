@@ -16,6 +16,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -63,6 +64,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		WaitFor        string  `json:"waitFor"`
 		WaitSelector   string  `json:"waitSelector"`
 		DismissBanners bool    `json:"dismissBanners"`
+		BrowserTarget  string  `json:"browserTarget,omitempty"`
 	}
 
 	if r.Method == http.MethodGet {
@@ -73,6 +75,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		req.WaitFor = q.Get("waitFor")
 		req.WaitSelector = q.Get("waitSelector")
 		req.DismissBanners = strings.EqualFold(q.Get("dismissBanners"), "true") || q.Get("dismissBanners") == "1"
+		req.BrowserTarget = q.Get("browserTarget")
 		if v := q.Get("waitTitle"); v != "" {
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
 				req.WaitTitle = n
@@ -87,6 +90,29 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 			return
+		}
+	}
+
+	requestedTarget, err := h.resolveNavigateBrowserTarget(req.BrowserTarget)
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	tabID := strings.TrimSpace(req.TabID)
+	if requestedTarget != "" && tabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil {
+			if inst.BrowserTarget != "" && inst.BrowserTarget != requestedTarget {
+				httpx.ErrorCode(w, http.StatusConflict, "browser_target_conflict",
+					fmt.Sprintf("tab %q is owned by instance with browserTarget %q; cannot navigate with browserTarget %q",
+						tabID, inst.BrowserTarget, requestedTarget),
+					false, map[string]any{
+						"tabId":            tabID,
+						"instanceTarget":   inst.BrowserTarget,
+						"requestedTarget":  requestedTarget,
+						"instanceProvider": inst.BrowserProvider,
+					})
+				return
+			}
 		}
 	}
 
@@ -304,6 +330,21 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	h.recordResolvedURL(r, navURL)
 
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": navURL, "title": title})
+}
+
+func (h *Handlers) resolveNavigateBrowserTarget(raw string) (string, error) {
+	target := strings.TrimSpace(raw)
+	if target == "" {
+		return "", nil
+	}
+	if h != nil && h.Config != nil && len(h.Config.Targets) > 0 {
+		resolved, err := config.ResolveExplicitBrowserTarget(h.Config, target)
+		if err != nil {
+			return "", err
+		}
+		return resolved.Name, nil
+	}
+	return target, nil
 }
 
 type navigateChromeOptions struct {

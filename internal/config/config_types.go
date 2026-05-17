@@ -64,6 +64,10 @@ type RuntimeConfig struct {
 	ChromeDebugPort    int
 	ChromeExtraFlags   string
 	Cloak              CloakBrowserRuntimeConfig
+	Proxy              BrowserProxyConfig
+	Targets            BrowserTargetsConfig
+	DefaultTarget      string
+	FallbackOrder      []string
 	ExtensionPaths     []string
 	UserAgent          string
 	NoAnimations       bool
@@ -89,9 +93,14 @@ type RuntimeConfig struct {
 	RestartStableAfter time.Duration // Stable runtime window that resets the restart counter (0 = strategy default)
 
 	// Attach settings
-	AttachEnabled      bool
-	AttachAllowHosts   []string
-	AttachAllowSchemes []string
+	AttachEnabled          bool
+	AttachAllowHosts       []string
+	AttachAllowSchemes     []string
+	AttachForwardProxyAuth bool
+
+	// RemoteCDPURL: when set, bridge attaches to an external browser via CDP instead of launching Chrome. Not persisted.
+	RemoteCDPURL      string
+	RemoteBrowserName string
 
 	// IDPI (Indirect Prompt Injection defense) settings
 	IDPI IDPIConfig
@@ -289,6 +298,25 @@ type BrowserConfig struct {
 	ChromeExtraFlags string             `json:"extraFlags,omitempty"`
 	Cloak            CloakBrowserConfig `json:"cloak,omitempty"`
 	ExtensionPaths   []string           `json:"extensionPaths,omitempty"`
+
+	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
+
+	DefaultTarget string               `json:"defaultTarget,omitempty"`
+	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
+	Targets       BrowserTargetsConfig `json:"targets,omitempty"`
+}
+
+// BrowserTargetsConfig maps target name -> target config. Names must match `^[a-z][a-z0-9-]{0,31}$`.
+type BrowserTargetsConfig map[string]BrowserTargetConfig
+
+// BrowserTargetConfig is a single named browser target. See docs/architecture/browser-targets.md.
+type BrowserTargetConfig struct {
+	Provider   string             `json:"provider,omitempty"`
+	Binary     string             `json:"binary,omitempty"`
+	ExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
+	// Proxy, when Server is non-empty, replaces the global BrowserConfig.Proxy entirely (no merge).
+	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
 }
 
 type CloakBrowserConfig struct {
@@ -390,9 +418,10 @@ type MultiInstanceRestartConfig struct {
 }
 
 type AttachConfig struct {
-	Enabled      *bool    `json:"enabled,omitempty"`
-	AllowHosts   []string `json:"allowHosts,omitempty"`
-	AllowSchemes []string `json:"allowSchemes,omitempty"`
+	Enabled          *bool    `json:"enabled,omitempty"`
+	AllowHosts       []string `json:"allowHosts,omitempty"`
+	AllowSchemes     []string `json:"allowSchemes,omitempty"`
+	ForwardProxyAuth *bool    `json:"forwardProxyAuth,omitempty"`
 }
 
 type TimeoutsConfig struct {

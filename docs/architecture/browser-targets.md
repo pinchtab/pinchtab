@@ -41,32 +41,21 @@ Example:
 {
   "browser": {
     "defaultTarget": "chrome-local",
-    "fallbackOrder": ["cloak-primary", "chrome-local"],
+    "fallbackOrder": ["cloak-primary"],
     "targets": {
       "chrome-local": {
         "provider": "chrome",
-        "binary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "modes": ["headless", "headed"]
+        "binary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
       },
       "cloak-primary": {
         "provider": "cloak",
         "binary": "/opt/cloakbrowser/chrome",
-        "modes": ["headless"],
         "cloak": {
           "fingerprintSeed": "42069",
           "platform": "linux",
           "locale": "en-US",
           "timezone": "UTC",
           "disableDefaultStealthArgs": true
-        }
-      },
-      "lightpanda-fast": {
-        "provider": "lightpanda",
-        "binary": "/usr/local/bin/lightpanda",
-        "modes": ["headless"],
-        "capabilityOverrides": {
-          "extensions": false,
-          "pdf": false
         }
       }
     }
@@ -80,7 +69,8 @@ Rules:
 - Target names are stable API identifiers. They must be lowercase, URL-safe,
   and not derived from binary paths.
 - `browser.fallbackOrder` is optional. If absent, fallback is disabled unless a
-  request supplies an explicit fallback list.
+  request supplies an explicit fallback list. It must not repeat targets or
+  include `browser.defaultTarget`.
 - Current `browser.provider`, `browser.binary`, `browser.extraFlags`, and
   `browser.cloak` remain valid and are interpreted as `browser.targets.default`
   during config load.
@@ -221,7 +211,6 @@ Capability resolution:
 
 - Provider adapters expose default capabilities.
 - Runtime probes can downgrade capabilities when a binary is missing a feature.
-- `capabilityOverrides` can disable capabilities for a target.
 - Endpoint handlers declare required capabilities.
 - If the selected target lacks a required capability, return `409
   browser_capability_unsupported` unless fallback is enabled and another target

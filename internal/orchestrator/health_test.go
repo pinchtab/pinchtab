@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,53 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
+
+type exitingMockCmd struct {
+	waitErr error
+}
+
+func (m *exitingMockCmd) Wait() error { return m.waitErr }
+func (m *exitingMockCmd) PID() int    { return 4242 }
+func (m *exitingMockCmd) Cancel()     {}
+
+func TestMonitor_SetsLastFailureReasonOnProcessExit(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+
+	// Stub the orchestrator HTTP client so the health probe never accidentally
+	// connects to a real service on the test port (e.g. a developer's running
+	// PinchTab on :9999). The test needs the monitor to land in the
+	// "exited early without ever becoming healthy" branch.
+	o.client = &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("stub: connection refused")
+		}),
+	}
+
+	inst := &InstanceInternal{
+		Instance: bridge.Instance{
+			ID:     "inst_test0001",
+			Port:   "9999",
+			Status: "starting",
+		},
+		URL:    "http://127.0.0.1:9999",
+		cmd:    &exitingMockCmd{waitErr: errors.New("signal: killed")},
+		logBuf: newRingBuffer(1024),
+	}
+	o.mu.Lock()
+	o.instances[inst.ID] = inst
+	o.mu.Unlock()
+
+	o.monitor(inst)
+
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	if inst.lastFailureReason != ReasonProcessExited {
+		t.Fatalf("lastFailureReason = %q, want %q", inst.lastFailureReason, ReasonProcessExited)
+	}
+	if !strings.Contains(inst.Error, "process exited before health check") {
+		t.Errorf("expected process-exit error message, got %q", inst.Error)
+	}
+}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -25,6 +26,10 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if tabID != "" {
 			payload["tabId"] = tabID
 		}
+		browserTarget := optString(r, "browserTarget")
+		if browserTarget != "" {
+			payload["browserTarget"] = browserTarget
+		}
 		body, code, err := c.Post(ctx, "/navigate", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -40,6 +45,11 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 			q.Set("format", "compact")
 			if tabID != "" {
 				q.Set("tabId", tabID)
+			} else if returnedTabID := responseStringField(body, "tabId"); returnedTabID != "" {
+				q.Set("tabId", returnedTabID)
+			}
+			if browserTarget != "" {
+				q.Set("browserTarget", browserTarget)
 			}
 			snapBody, _, snapErr := c.Get(ctx, "/snapshot", q)
 			if snapErr == nil {
@@ -49,6 +59,15 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 
 		return resultFromBytes(body, code)
 	}
+}
+
+func responseStringField(body []byte, field string) string {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	value, _ := payload[field].(string)
+	return strings.TrimSpace(value)
 }
 
 func handleSnapshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {

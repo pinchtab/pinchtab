@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use IO::Socket::INET;
+use POSIX ":sys_wait_h";
 
 my $root = $ENV{FIXTURES_ROOT} || '/fixtures';
 my $port = $ENV{FIXTURES_PORT} || 8080;
@@ -9,14 +10,56 @@ my $port = $ENV{FIXTURES_PORT} || 8080;
 my $server = IO::Socket::INET->new(
     LocalAddr => '0.0.0.0',
     LocalPort => $port,
-    Listen    => 20,
+    Listen    => 64,
     ReuseAddr => 1,
 ) or die "listen on $port: $!";
 
 $| = 1;
 print "fixture server listening on $port\n";
 
-while (my $client = $server->accept) {
+# Reap forked children eagerly so they don't pile up as zombies. POSIX::SIGCHLD
+# is delivered to the parent after fork; the default Perl handler does not
+# auto-restart syscalls, so accept() can return undef with $!=EINTR and our
+# loop would exit. Use a sigaction with SA_RESTART semantics by setting the
+# handler before the loop and explicitly retrying accept on EINTR below.
+$SIG{CHLD} = sub { local ($!, $?); while (waitpid(-1, WNOHANG) > 0) {} };
+$SIG{PIPE} = 'IGNORE';
+
+use Errno qw(EINTR);
+
+while (1) {
+    my $client = $server->accept;
+    if (!$client) {
+        next if $!{EINTR};
+        last;
+    }
+    # Fork per connection so a slow/half-open client cannot block the loop.
+    # The parent goes back to accept(); the child handles this one request
+    # with a per-client wall-clock timeout via alarm().
+    my $pid = fork();
+    if (!defined $pid) {
+        # fork() failed — handle in-process so the connection isn't dropped.
+        handle_client($client);
+        next;
+    }
+    if ($pid) {
+        # Parent: close our copy of the client socket and accept more.
+        close $client;
+        next;
+    }
+    # Child:
+    close $server;
+    eval {
+        local $SIG{ALRM} = sub { die "client_timeout\n" };
+        alarm(10);
+        handle_client($client);
+        alarm(0);
+    };
+    exit 0;
+}
+
+sub handle_client {
+    my ($client) = @_;
     $client->autoflush(1);
     my $request = <$client> || '';
     while (my $header = <$client>) {
@@ -25,7 +68,7 @@ while (my $client = $server->accept) {
 
     if ($request !~ m{^GET\s+([^ ]+)\s+HTTP/}i) {
         respond($client, 405, 'text/plain; charset=utf-8', 'method not allowed');
-        next;
+        return;
     }
 
     my $path = $1;
@@ -35,25 +78,25 @@ while (my $client = $server->accept) {
 
     if ($path eq '/redirect-to-internal') {
         redirect($client, 'http://127.0.0.1:9999/health');
-        next;
+        return;
     }
 
     if ($path =~ /\0/ || $path =~ m{(^|/)\.\.(/|\z)}) {
         respond($client, 403, 'text/plain; charset=utf-8', 'forbidden');
-        next;
+        return;
     }
 
     $path =~ s{^/+}{};
     my $file = "$root/$path";
     if (!-f $file) {
         respond($client, 404, 'text/plain; charset=utf-8', 'not found');
-        next;
+        return;
     }
 
     my $fh;
     if (!open $fh, '<:raw', $file) {
         respond($client, 500, 'text/plain; charset=utf-8', 'open failed');
-        next;
+        return;
     }
     local $/;
     my $body = <$fh>;

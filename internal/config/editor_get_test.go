@@ -145,8 +145,10 @@ func TestGetConfigValue_NilPointerReturnsEmpty(t *testing.T) {
 
 func TestGetConfigValue_AttachSlices(t *testing.T) {
 	fc := &FileConfig{}
+	forwardProxyAuth := true
 	fc.Security.Attach.AllowHosts = []string{"127.0.0.1", "localhost"}
 	fc.Security.Attach.AllowSchemes = []string{"ws", "wss"}
+	fc.Security.Attach.ForwardProxyAuth = &forwardProxyAuth
 
 	hosts, err := GetConfigValue(fc, "security.attach.allowHosts")
 	if err != nil {
@@ -162,6 +164,14 @@ func TestGetConfigValue_AttachSlices(t *testing.T) {
 	}
 	if schemes != "ws,wss" {
 		t.Errorf("allowSchemes = %q, want %q", schemes, "ws,wss")
+	}
+
+	forward, err := GetConfigValue(fc, "security.attach.forwardProxyAuth")
+	if err != nil {
+		t.Fatalf("GetConfigValue(security.attach.forwardProxyAuth) error = %v", err)
+	}
+	if forward != "true" {
+		t.Errorf("forwardProxyAuth = %q, want %q", forward, "true")
 	}
 }
 

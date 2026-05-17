@@ -332,6 +332,8 @@ func getAttachField(a *AttachConfig, field string) (string, error) {
 		return strings.Join(a.AllowHosts, ","), nil
 	case "allowSchemes":
 		return strings.Join(a.AllowSchemes, ","), nil
+	case "forwardProxyAuth":
+		return formatBoolPtr(a.ForwardProxyAuth), nil
 	default:
 		return "", fmt.Errorf("unknown field security.attach.%s", field)
 	}

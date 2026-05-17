@@ -329,7 +329,7 @@ func TestStrategy_Stop_SetsDeliberate(t *testing.T) {
 
 func TestStrategy_EnsureRunning_NoOrch(t *testing.T) {
 	s := New(AutorestartConfig{})
-	_, err := s.ensureRunning()
+	_, _, err := s.ensureRunning(httptest.NewRequest("GET", "/snapshot", nil))
 	if err == nil {
 		t.Error("expected error when no orchestrator")
 	}
@@ -555,6 +555,11 @@ func TestStrategy_LaunchInitial_TracksLaunchedMode(t *testing.T) {
 
 func TestStrategy_RestartInstance_UsesTrackedMode(t *testing.T) {
 	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	orch.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"127.0.0.1"},
+		AttachAllowSchemes: []string{"http"},
+	})
 	if _, _, err := orch.AttachBridge("default", "http://127.0.0.1:9999", ""); err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)
 	}

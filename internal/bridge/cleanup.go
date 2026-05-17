@@ -4,11 +4,11 @@ package bridge
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -79,13 +79,15 @@ func KillAllPinchtabChrome() int {
 	return len(pids)
 }
 
+// Test seam: overridden to simulate process presence without /proc or ps.
+var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
+
 // findChromePIDsByProfileDir returns PIDs of Chrome processes using the given profile directory.
 func findChromePIDsByProfileDir(profileDir string) []int {
-	needle := fmt.Sprintf("--user-data-dir=%s", profileDir)
-	if pids := findPIDsByNeedle(needle); len(pids) > 0 {
+	if pids := findChromePIDsByUserDataDirViaProc(profileDir); pids != nil {
 		return pids
 	}
-	return nil
+	return findChromePIDsByUserDataDirViaPS(profileDir)
 }
 
 // findPIDsByNeedle searches process command lines for a substring.
@@ -130,6 +132,72 @@ func findPIDsViaProc(needle string) []int {
 	return pids
 }
 
+func findChromePIDsByUserDataDirViaProc(profileDir string) []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil // /proc not available (macOS, some BSDs)
+	}
+
+	want := "--user-data-dir=" + profileDir
+	var pids []int
+	self := os.Getpid()
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 || pid == self {
+			continue
+		}
+		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		if cmdlineHasExactArg(bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0}), want) {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+func cmdlineHasExactArg(args [][]byte, want string) bool {
+	for _, arg := range args {
+		if string(arg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func findChromePIDsByUserDataDirViaPS(profileDir string) []int {
+	cmd := exec.Command("ps", "-axo", "pid=,args=")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	pattern := regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta("--user-data-dir="+profileDir) + `(?:\s|$)`)
+	lines := bytes.Split(out, []byte{'\n'})
+	var pids []int
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(string(rawLine))
+		if line == "" || !pattern.MatchString(line) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil || pid <= 0 {
+			continue
+		}
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 // findPIDsViaPS uses `ps -axo pid=,args=` to find matching processes.
 func findPIDsViaPS(needle string) []int {
 	cmd := exec.Command("ps", "-axo", "pid=,args=")
@@ -165,7 +233,7 @@ func findPIDsViaPS(needle string) []int {
 // directory, sends SIGTERM, waits briefly, then SIGKILL any survivors.
 // Returns the number of processes killed.
 func killChromeByProfileDir(profileDir string) int {
-	pids := findChromePIDsByProfileDir(profileDir)
+	pids := findChromePIDsByProfileDirFunc(profileDir)
 	if len(pids) == 0 {
 		return 0
 	}
@@ -193,4 +261,18 @@ func killChromeByProfileDir(profileDir string) int {
 	}
 
 	return killed
+}
+
+// terminateChromeByProfileDir sends SIGTERM without escalating to SIGKILL.
+func terminateChromeByProfileDir(profileDir string) int {
+	pids := findChromePIDsByProfileDirFunc(profileDir)
+	if len(pids) == 0 {
+		return 0
+	}
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, syscall.SIGTERM); err == nil {
+			slog.Info("cleanup: SIGTERM chrome process", "pid", pid)
+		}
+	}
+	return len(pids)
 }

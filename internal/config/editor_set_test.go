@@ -195,7 +195,11 @@ func TestSetConfigValue_AttachFields(t *testing.T) {
 		{"security.attach.allowSchemes", "ws,wss", func(fc *FileConfig) bool {
 			return len(fc.Security.Attach.AllowSchemes) == 2 && fc.Security.Attach.AllowSchemes[0] == "ws"
 		}, false},
+		{"security.attach.forwardProxyAuth", "true", func(fc *FileConfig) bool {
+			return fc.Security.Attach.ForwardProxyAuth != nil && *fc.Security.Attach.ForwardProxyAuth
+		}, false},
 		{"security.attach.enabled", "maybe", nil, true},
+		{"security.attach.forwardProxyAuth", "maybe", nil, true},
 		{"security.attach.unknown", "value", nil, true},
 	}
 

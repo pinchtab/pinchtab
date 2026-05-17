@@ -525,6 +525,12 @@ func setAttachField(a *AttachConfig, field, value string) error {
 		a.AllowHosts = parseCSVList(value)
 	case "allowSchemes":
 		a.AllowSchemes = parseCSVList(value)
+	case "forwardProxyAuth":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("security.attach.forwardProxyAuth: %w", err)
+		}
+		a.ForwardProxyAuth = &b
 	default:
 		return fmt.Errorf("unknown field security.attach.%s", field)
 	}

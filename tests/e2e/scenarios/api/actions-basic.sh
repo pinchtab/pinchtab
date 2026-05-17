@@ -4,39 +4,95 @@
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/api.sh"
 
+ACTIONS_TAB_ID=""
+
+actions_navigate() {
+  local url="$1"
+  local body
+  if [ -n "$ACTIONS_TAB_ID" ]; then
+    body=$(jq -nc --arg url "$url" --arg tabId "$ACTIONS_TAB_ID" '{url:$url, tabId:$tabId}')
+  else
+    body=$(jq -nc --arg url "$url" '{url:$url}')
+  fi
+
+  pt_post /navigate -d "$body"
+  assert_ok "navigate"
+
+  local tab_id
+  tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  if [ -n "$tab_id" ] && [ "$tab_id" != "null" ]; then
+    ACTIONS_TAB_ID="$tab_id"
+  fi
+}
+
+actions_snapshot() {
+  local query="${1:-}"
+  if [ -n "$query" ]; then
+    pt_get "/snapshot?tabId=${ACTIONS_TAB_ID}&${query}"
+  else
+    pt_get "/snapshot?tabId=${ACTIONS_TAB_ID}"
+  fi
+}
+
+actions_post_action() {
+  local body="$1"
+  local with_tab
+  with_tab=$(echo "$body" | jq -c --arg tabId "$ACTIONS_TAB_ID" '. + {tabId:$tabId}')
+  pt_post /action "$with_tab"
+}
+
+actions_evaluate() {
+  local expression="$1"
+  local body
+  body=$(jq -nc --arg tabId "$ACTIONS_TAB_ID" --arg expression "$expression" '{tabId:$tabId, expression:$expression}')
+  pt_post /evaluate "$body"
+}
+
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab click <button>"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+actions_navigate "${FIXTURES_URL}/buttons.html"
 
-pt_get /snapshot
-click_button "Increment"
+actions_snapshot
+REF=$(find_ref_by_name "Increment")
+if assert_ref_found "$REF" "button Increment"; then
+  actions_post_action "{\"kind\":\"click\",\"ref\":\"${REF}\"}"
+  assert_ok "click button by ref"
+fi
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab type <field> <text>"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_get /snapshot
-type_into "Username" "testuser123"
+actions_snapshot
+REF=$(find_ref_by_name "Username")
+if [ -z "$REF" ] || [ "$REF" = "null" ]; then
+  REF=$(find_ref_by_role "textbox")
+fi
+if assert_ref_found "$REF" "Username textbox"; then
+  actions_post_action "{\"kind\":\"type\",\"ref\":\"${REF}\",\"text\":\"testuser123\"}"
+  assert_ok "type text by ref"
+fi
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab press <key>"
 
-press_key "Escape"
+actions_post_action '{"kind":"press","key":"Escape"}'
+assert_ok "press Escape"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab click (CSS selector)"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+actions_navigate "${FIXTURES_URL}/buttons.html"
 
-pt_post /action -d '{"kind":"click","selector":"#increment"}'
+actions_post_action '{"kind":"click","selector":"#increment"}'
 assert_ok "click by selector"
 
 end_test
@@ -44,9 +100,9 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab type (CSS selector)"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_post /action -d '{"kind":"type","selector":"#username","text":"selectortest"}'
+actions_post_action '{"kind":"type","selector":"#username","text":"selectortest"}'
 assert_ok "type by selector"
 
 end_test
@@ -54,9 +110,9 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab snapshot (CSS selector filter)"
 
-pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_get "/snapshot?selector=#username"
+actions_snapshot "selector=%23username"
 assert_ok "snapshot with selector"
 
 end_test
@@ -64,10 +120,9 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab scroll (down)"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/table.html\"}"
-assert_ok "navigate"
+actions_navigate "${FIXTURES_URL}/table.html"
 
-pt_post /action '{"kind":"scroll","direction":"down"}'
+actions_post_action '{"kind":"scroll","direction":"down"}'
 assert_ok "scroll down"
 
 end_test
@@ -75,71 +130,67 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab focus (ref)"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "navigate"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_get /snapshot
+actions_snapshot
 REF=$(find_ref_by_role "textbox")
-assert_ref_found "$REF" "textbox ref"
-
-pt_post /action "{\"kind\":\"focus\",\"ref\":\"${REF}\"}"
-assert_ok "focus on input"
+if assert_ref_found "$REF" "textbox ref"; then
+  actions_post_action "{\"kind\":\"focus\",\"ref\":\"${REF}\"}"
+  assert_ok "focus on input"
+fi
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab select (combobox)"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "navigate"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_get /snapshot
+actions_snapshot
 REF=$(find_ref_by_role "combobox")
-assert_ref_found "$REF" "combobox ref"
-
-pt_post /action "{\"kind\":\"select\",\"ref\":\"${REF}\",\"value\":\"uk\"}"
-assert_ok "select option"
+if assert_ref_found "$REF" "combobox ref"; then
+  actions_post_action "{\"kind\":\"select\",\"ref\":\"${REF}\",\"value\":\"uk\"}"
+  assert_ok "select option"
+fi
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab fill (sets value + verifiable)"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "navigate"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_get /snapshot
+actions_snapshot
 REF=$(find_ref_by_role "textbox")
-assert_ref_found "$REF" "textbox ref"
+if assert_ref_found "$REF" "textbox ref"; then
+  actions_post_action "{\"kind\":\"fill\",\"ref\":\"${REF}\",\"text\":\"e2e_fill_test\"}"
+  assert_ok "fill input"
 
-pt_post /action "{\"kind\":\"fill\",\"ref\":\"${REF}\",\"text\":\"e2e_fill_test\"}"
-assert_ok "fill input"
-
-pt_post /evaluate '{"expression":"document.querySelector(\"#username\").value"}'
-assert_ok "evaluate"
-assert_json_contains "$RESULT" '.result' 'e2e_fill_test' "fill value persisted"
+  actions_evaluate 'document.querySelector("#username").value'
+  assert_ok "evaluate"
+  assert_json_contains "$RESULT" '.result' 'e2e_fill_test' "fill value persisted"
+fi
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab check/uncheck (CSS selector)"
 
-pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-assert_ok "navigate"
+actions_navigate "${FIXTURES_URL}/form.html"
 
-pt_post /action '{"kind":"check","selector":"#terms"}'
+actions_post_action '{"kind":"check","selector":"#terms"}'
 assert_ok "check checkbox"
 assert_json_eq "$RESULT" '.result.checked' 'true' "check response reports checked"
 
-pt_post /evaluate '{"expression":"document.querySelector(\"#terms\").checked"}'
+actions_evaluate 'document.querySelector("#terms").checked'
 assert_ok "evaluate checked state"
 assert_json_eq "$RESULT" '.result' 'true' "checkbox is checked in DOM"
 
-pt_post /action '{"kind":"uncheck","selector":"#terms"}'
+actions_post_action '{"kind":"uncheck","selector":"#terms"}'
 assert_ok "uncheck checkbox"
 assert_json_eq "$RESULT" '.result.checked' 'false' "uncheck response reports unchecked"
 
-pt_post /evaluate '{"expression":"document.querySelector(\"#terms\").checked"}'
+actions_evaluate 'document.querySelector("#terms").checked'
 assert_ok "evaluate unchecked state"
 assert_json_eq "$RESULT" '.result' 'false' "checkbox is unchecked in DOM"
 

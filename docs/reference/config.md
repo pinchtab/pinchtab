@@ -237,7 +237,8 @@ Current nested file-config shape:
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     },
     "idpi": {
       "enabled": true,
@@ -373,13 +374,20 @@ flags:
 - `fontsDir` -> `--fingerprint-fonts-dir`
 - `storageQuotaMB` -> `--fingerprint-storage-quota`
 
-`disableDefaultStealthArgs` defaults to true for native Cloak mode. In that mode,
+`disableDefaultStealthArgs` defaults to true for CloakBrowser targets. When set,
 PinchTab keeps its process, profile, tab, extension, and action-control behavior,
-but does not add its own JS stealth overlays or automation-hiding launch flags on
-top of CloakBrowser's native patches.
+but does not add its own JS stealth overlays or automation-hiding launch flags.
+Set it to false only when you intentionally want PinchTab's legacy stealth layer
+on top of CloakBrowser's native patches.
 
 Advanced CloakBrowser flags can still go through `browser.extraFlags` when they
 are not PinchTab-owned lifecycle flags.
+
+`browser.proxy.geo` is a CloakBrowser fingerprint-alignment hint. When a proxy
+server and geo block are configured for a CloakBrowser target, PinchTab maps the
+geo values into native CloakBrowser fingerprint flags unless the target already
+sets the corresponding `browser.cloak` field. The stock `chrome` provider does
+not derive `--lang`, `TZ`, or WebRTC launch settings from proxy geo data.
 
 ### Browser Extra Flags
 
@@ -560,13 +568,16 @@ headers correctly.
     "attach": {
       "enabled": true,
       "allowHosts": ["127.0.0.1", "localhost", "chrome.internal"],
-      "allowSchemes": ["ws", "wss", "http", "https"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     }
   }
 }
 ```
 
 `security.attach.allowHosts` is an allowlist. If you set it to `["*"]`, PinchTab accepts any reachable attach host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
+
+`security.attach.forwardProxyAuth` controls whether PinchTab may send configured proxy authentication credentials over remote CDP attach. It defaults to `false`; enable it only when the attached browser process and CDP transport are trusted.
 
 ### Activity Retention
 
@@ -635,6 +646,7 @@ Valid enum values:
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |
+| `security.attach.forwardProxyAuth` | `true`, `false` |
 
 ## Notes
 

@@ -1,12 +1,16 @@
 package orchestrator
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -22,6 +26,101 @@ const (
 	RoutingDecisionAgent    RoutingDecision = "agent"
 	RoutingDecisionFallback RoutingDecision = "fallback"
 )
+
+const routeInstanceReadyWait = 30 * time.Second
+
+var routeInstanceReadyPollInterval = 500 * time.Millisecond
+
+// RouteForRequest resolves a shorthand request to a running instance URL,
+// launching the selected target when none is available. This centralizes the
+// target-aware auto-launch behavior used by strategies such as simple.
+func (o *Orchestrator) RouteForRequest(r *http.Request) (string, int, error) {
+	if o == nil {
+		return "", http.StatusServiceUnavailable, fmt.Errorf("no orchestrator configured")
+	}
+
+	requestedTarget := ExtractRequestedBrowserTarget(r)
+	if requestedTarget != "" {
+		resolvedTarget, _, err := o.ResolveRequestedBrowserTarget(requestedTarget)
+		if err != nil {
+			return "", statusForRouteLaunchSelectionError(err), err
+		}
+		if target := o.FirstRunningURLForBrowserTarget(resolvedTarget); target != "" {
+			return target, 0, nil
+		}
+		return o.launchAndWaitForRequestRoute(autoLaunchProfileName(resolvedTarget), requestedTarget)
+	}
+
+	target, status, err := o.FirstRunningURLForRequest(r)
+	if err != nil {
+		return "", status, err
+	}
+	if target != "" {
+		return target, 0, nil
+	}
+
+	return o.launchAndWaitForRequestRoute("default", "")
+}
+
+func (o *Orchestrator) launchAndWaitForRequestRoute(profileName, requestedTarget string) (string, int, error) {
+	slog.Info("request route: no running instance, auto-launching", "profile", profileName, "browserTarget", requestedTarget)
+	launched, err := o.LaunchWithTargetSelection(profileName, "", true, requestedTarget, nil, LaunchOptions{})
+	if err != nil {
+		status := statusForRouteLaunchSelectionError(err)
+		return "", status, fmt.Errorf("auto-launch failed: %w", err)
+	}
+
+	if launched.URL == "" {
+		return "", http.StatusServiceUnavailable, fmt.Errorf("auto-launched instance %q has no URL", launched.ID)
+	}
+	url, err := o.waitForRequestRouteReady(launched.URL, routeInstanceReadyWait)
+	if err != nil {
+		return "", http.StatusServiceUnavailable, err
+	}
+	return url, 0, nil
+}
+
+func (o *Orchestrator) waitForRequestRouteReady(url string, timeout time.Duration) (string, error) {
+	healthURL := strings.TrimRight(url, "/") + "/health"
+	deadline := time.Now().Add(timeout)
+	client := o.client
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	for time.Now().Before(deadline) {
+		req, _ := http.NewRequest(http.MethodGet, healthURL, nil)
+		resp, err := client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return url, nil
+			}
+		}
+		time.Sleep(routeInstanceReadyPollInterval)
+	}
+
+	return "", fmt.Errorf("instance launched but did not become ready in time")
+}
+
+func autoLaunchProfileName(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "default"
+	}
+	return "default-" + target
+}
+
+func statusForRouteLaunchSelectionError(err error) int {
+	if errors.Is(err, ErrUnknownBrowserTarget) {
+		return http.StatusBadRequest
+	}
+	var exhausted *FallbackExhaustedError
+	if errors.As(err, &exhausted) {
+		return http.StatusBadGateway
+	}
+	return http.StatusServiceUnavailable
+}
 
 // WrapShorthand wraps a strategy-supplied fallback handler with the routing
 // precedence defined in tab-spec.md:
@@ -62,9 +161,18 @@ func (o *Orchestrator) WrapShorthand(fallback http.HandlerFunc) http.HandlerFunc
 // routeByTabOwner handles precedence rule 1. Returns true if a response was
 // already written (either a successful proxy or an error).
 func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, tabID string) bool {
+	requestedTarget, status, err := o.requestedBrowserTargetForRoute(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return true
+	}
+
 	// Fast path via locator cache.
 	if o.instanceMgr != nil {
 		if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil && inst != nil {
+			if writeBrowserTargetConflict(w, tabID, inst, requestedTarget) {
+				return true
+			}
 			if !o.allowCrossInstance(w, r, inst.ID) {
 				return true
 			}
@@ -77,6 +185,9 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 		if o.instanceMgr != nil {
 			o.instanceMgr.Locator.Register(tabID, internal.ID)
 		}
+		if writeBrowserTargetConflict(w, tabID, &internal.Instance, requestedTarget) {
+			return true
+		}
 		if !o.allowCrossInstance(w, r, internal.ID) {
 			return true
 		}
@@ -88,12 +199,52 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 	// — preserves legacy ergonomics for users running `--tab` against a
 	// just-created tab whose id has not propagated to the dashboard yet.
 	if only := o.singleRunningInstance(); only != nil {
+		if writeBrowserTargetConflict(w, tabID, &only.Instance, requestedTarget) {
+			return true
+		}
 		o.proxyToInstanceForRoute(w, r, &only.Instance, tabID, RoutingDecisionFallback)
 		return true
 	}
 
 	// Multiple instances and no owner found — refuse to guess.
 	httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab %q not found", tabID))
+	return true
+}
+
+func (o *Orchestrator) requestedBrowserTargetForRoute(r *http.Request) (string, int, error) {
+	requested := ExtractRequestedBrowserTarget(r)
+	if requested == "" {
+		return "", 0, nil
+	}
+	resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
+	if err != nil {
+		return "", http.StatusBadRequest, err
+	}
+	return resolved.Name, 0, nil
+}
+
+func writeBrowserTargetConflict(w http.ResponseWriter, tabID string, inst *bridge.Instance, requestedTarget string) bool {
+	if requestedTarget == "" || inst == nil || inst.BrowserTarget == "" || inst.BrowserTarget == requestedTarget {
+		return false
+	}
+	detail := fmt.Sprintf("instance %q has browserTarget %q; cannot route with browserTarget %q",
+		inst.ID, inst.BrowserTarget, requestedTarget)
+	if tabID != "" {
+		detail = fmt.Sprintf("tab %q is owned by instance with browserTarget %q; cannot route with browserTarget %q",
+			tabID, inst.BrowserTarget, requestedTarget)
+	}
+	meta := map[string]any{
+		"instanceId":       inst.ID,
+		"instanceTarget":   inst.BrowserTarget,
+		"requestedTarget":  requestedTarget,
+		"instanceProvider": inst.BrowserProvider,
+	}
+	if tabID != "" {
+		meta["tabId"] = tabID
+	}
+	httpx.ErrorCode(w, http.StatusConflict, "browser_target_conflict",
+		detail,
+		false, meta)
 	return true
 }
 
@@ -146,6 +297,16 @@ func (o *Orchestrator) routeToInstanceID(w http.ResponseWriter, r *http.Request,
 			o.bindings.ClearInstance(instanceID)
 		}
 		return false
+	}
+	requestedTarget, status, err := o.requestedBrowserTargetForRoute(r)
+	if err != nil {
+		httpx.Error(w, status, err)
+		return true
+	}
+	if requestedTarget != "" {
+		if internal.BrowserTarget == "" || internal.BrowserTarget != requestedTarget {
+			return false
+		}
 	}
 	o.proxyToInstanceForRoute(w, r, &internal.Instance, "", decision)
 	return true

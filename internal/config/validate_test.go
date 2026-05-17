@@ -472,6 +472,7 @@ func TestValidateFileConfig_ChromeExtraFlags(t *testing.T) {
 
 func TestValidateFileConfig_CloakBrowser(t *testing.T) {
 	quota := 2048
+	fontsDir := t.TempDir()
 	valid := &FileConfig{
 		Browser: BrowserConfig{
 			Provider:     BrowserProviderCloak,
@@ -482,6 +483,7 @@ func TestValidateFileConfig_CloakBrowser(t *testing.T) {
 				Locale:          "en-GB",
 				Timezone:        "Europe/London",
 				WebRTCIP:        "auto",
+				FontsDir:        fontsDir,
 				StorageQuotaMB:  &quota,
 			},
 		},
@@ -532,6 +534,42 @@ func TestValidateFileConfig_CloakBrowser(t *testing.T) {
 				Cloak:        CloakBrowserConfig{FingerprintSeed: "42 069"},
 			}},
 			want: "browser.cloak.fingerprintSeed",
+		},
+		{
+			name: "invalid timezone",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{Timezone: "Not/AZone"},
+			}},
+			want: "browser.cloak",
+		},
+		{
+			name: "invalid locale",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{Locale: "en-gb"},
+			}},
+			want: "browser.cloak",
+		},
+		{
+			name: "invalid webrtc ip",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{WebRTCIP: "not-an-ip"},
+			}},
+			want: "browser.cloak.webrtcIP",
+		},
+		{
+			name: "fonts dir must exist",
+			fc: &FileConfig{Browser: BrowserConfig{
+				Provider:     BrowserProviderCloak,
+				ChromeBinary: "/opt/cloakbrowser/chrome",
+				Cloak:        CloakBrowserConfig{FontsDir: "/definitely/not/a/real/fonts/dir"},
+			}},
+			want: "browser.cloak.fontsDir",
 		},
 	}
 

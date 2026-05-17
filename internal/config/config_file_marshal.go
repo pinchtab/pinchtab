@@ -47,16 +47,6 @@ func cloakBrowserConfigJSONFromFile(provider string, c CloakBrowserConfig) *cloa
 	if !hasCloakBrowserConfig(c) {
 		return nil
 	}
-	if !IsCloakBrowserProvider(provider) &&
-		c.FingerprintSeed == "" &&
-		c.Platform == "" &&
-		c.Locale == "" &&
-		c.Timezone == "" &&
-		c.WebRTCIP == "" &&
-		c.FontsDir == "" &&
-		c.StorageQuotaMB == nil {
-		return nil
-	}
 	return &cloakBrowserConfigJSON{
 		FingerprintSeed:           c.FingerprintSeed,
 		Platform:                  c.Platform,
@@ -67,6 +57,26 @@ func cloakBrowserConfigJSONFromFile(provider string, c CloakBrowserConfig) *cloa
 		StorageQuotaMB:            c.StorageQuotaMB,
 		DisableDefaultStealthArgs: c.DisableDefaultStealthArgs,
 	}
+}
+
+// browserProxyJSONFromFile returns nil when proxy is disabled so omitempty drops the field.
+func browserProxyJSONFromFile(p BrowserProxyConfig) *BrowserProxyConfig {
+	if p.IsZero() {
+		return nil
+	}
+	out := BrowserProxyConfig{
+		Server:   p.Server,
+		Username: p.Username,
+		Password: p.Password,
+	}
+	if len(p.BypassList) > 0 {
+		out.BypassList = append([]string(nil), p.BypassList...)
+	}
+	if p.Geo != nil && !p.Geo.IsZero() {
+		geoCopy := *p.Geo
+		out.Geo = &geoCopy
+	}
+	return &out
 }
 
 func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
@@ -81,7 +91,8 @@ func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
 		c.Timezone != "" ||
 		c.WebRTCIP != "" ||
 		c.FontsDir != "" ||
-		c.StorageQuotaMB > 0
+		c.StorageQuotaMB > 0 ||
+		!c.DisableDefaultStealthArgs
 	out := CloakBrowserConfig{
 		FingerprintSeed: c.FingerprintSeed,
 		Platform:        c.Platform,
@@ -90,7 +101,7 @@ func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
 		WebRTCIP:        c.WebRTCIP,
 		FontsDir:        c.FontsDir,
 	}
-	if c.StorageQuotaMB > 0 {
+	if c.StorageQuotaMB > 0 || IsCloakBrowserProvider(cfg.BrowserProvider) {
 		out.StorageQuotaMB = intPtrIfNonNegative(c.StorageQuotaMB)
 	}
 	if hasRuntimeCloak {
@@ -150,6 +161,10 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			ChromeExtraFlags: fc.Browser.ChromeExtraFlags,
 			Cloak:            cloakBrowserConfigJSONFromFile(fc.Browser.Provider, fc.Browser.Cloak),
 			ExtensionPaths:   copyStringSlice(fc.Browser.ExtensionPaths),
+			Proxy:            browserProxyJSONFromFile(fc.Browser.Proxy),
+			DefaultTarget:    fc.Browser.DefaultTarget,
+			FallbackOrder:    fc.Browser.FallbackOrder,
+			Targets:          fc.Browser.Targets,
 		},
 		InstanceDefaults: instanceDefaultsConfigJSON{
 			Mode:              fc.InstanceDefaults.Mode,
@@ -191,9 +206,10 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			TrustedResolveCIDRs:    copyStringSlice(fc.Security.TrustedResolveCIDRs),
 			TrustLoopbackProxy:     fc.Security.TrustLoopbackProxy,
 			Attach: attachJSON{
-				Enabled:      fc.Security.Attach.Enabled,
-				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
-				AllowSchemes: copyStringSlice(fc.Security.Attach.AllowSchemes),
+				Enabled:          fc.Security.Attach.Enabled,
+				AllowHosts:       copyStringSlice(fc.Security.Attach.AllowHosts),
+				AllowSchemes:     copyStringSlice(fc.Security.Attach.AllowSchemes),
+				ForwardProxyAuth: fc.Security.Attach.ForwardProxyAuth,
 			},
 			IDPI: idpiConfigJSON{
 				Enabled:         fc.Security.IDPI.Enabled,
@@ -345,6 +361,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	maxRedirects := cfg.MaxRedirects
 	trustLoopbackProxy := cfg.TrustLoopbackProxy
 	attachEnabled := cfg.AttachEnabled
+	attachForwardProxyAuth := cfg.AttachForwardProxyAuth
 	start := cfg.InstancePortStart
 	end := cfg.InstancePortEnd
 	restartMaxRestarts := cfg.RestartMaxRestarts
@@ -408,6 +425,10 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			ChromeExtraFlags: cfg.ChromeExtraFlags,
 			Cloak:            cloakBrowserConfigFromRuntime(cfg),
 			ExtensionPaths:   append([]string(nil), cfg.ExtensionPaths...),
+			Proxy:            cloneBrowserProxyConfig(cfg.Proxy),
+			DefaultTarget:    cfg.DefaultTarget,
+			FallbackOrder:    append([]string(nil), cfg.FallbackOrder...),
+			Targets:          cloneBrowserTargetsConfig(cfg.Targets),
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              mode,
@@ -448,9 +469,10 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			TrustedResolveCIDRs:    append([]string(nil), cfg.TrustedResolveCIDRs...),
 			TrustLoopbackProxy:     &trustLoopbackProxy,
 			Attach: AttachConfig{
-				Enabled:      &attachEnabled,
-				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
-				AllowSchemes: append([]string(nil), cfg.AttachAllowSchemes...),
+				Enabled:          &attachEnabled,
+				AllowHosts:       append([]string(nil), cfg.AttachAllowHosts...),
+				AllowSchemes:     append([]string(nil), cfg.AttachAllowSchemes...),
+				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
 			IDPI: cfg.IDPI,
 		},

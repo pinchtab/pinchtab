@@ -161,6 +161,7 @@ Most users should not need to think about `pinchtab bridge` directly, and only n
 - **Self-contained** — ~15MB binary, no external dependencies
 - **Accessibility-first** — Stable element refs instead of fragile coordinates
 - **ARM64-optimized** — First-class Raspberry Pi support with automatic Chromium detection
+- **CloakBrowser support** — Optional drop-in provider for sites that fingerprint stock Chromium. PinchTab launches a user-supplied CloakBrowser binary; no CloakBrowser is bundled in released artifacts. See [docs/guides/cloakbrowser.md](docs/guides/cloakbrowser.md).
 
 ---
 
@@ -403,6 +404,15 @@ cd pinchtab
 ./dev doctor                # Verifies environment, offers hooks/deps setup
 ./dev --help                # Shows the developer toolkit commands
 go build ./cmd/pinchtab     # Build pinchtab binary
+```
+
+For runtime diagnostics against your installed PinchTab + browser config (binary exists, executes, fingerprint flags accepted, CDP reachable), use:
+
+```bash
+pinchtab doctor             # human-readable report
+pinchtab doctor --json      # machine-readable
+pinchtab doctor --target <name>   # scope to one browser.targets entry
+pinchtab doctor --check <name>    # run a single check by name
 ```
 
 ---

@@ -333,10 +333,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	doShutdown := func() {
 		shutdownOnce.Do(func() {
 			slog.Info("shutting down dashboard...")
-			// Kill all Chrome processes under our profiles dir immediately.
-			// This runs before strategy.Stop() to ensure cleanup happens
-			// even if launchd SIGKILL arrives during graceful shutdown.
-			bridge.KillAllPinchtabChrome()
 			if err := activeStrategy.Stop(); err != nil {
 				slog.Warn("strategy stop failed", "err", err)
 			}
@@ -346,7 +342,8 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			syncCancel()
 			maintenanceCancel()
 			dash.Shutdown()
-			orch.Shutdown()
+			gracefulShutdownWithCap(orch, bridgeShutdownTotalCap)
+			bridge.KillAllPinchtabChrome()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := srv.Shutdown(ctx); err != nil {
@@ -365,9 +362,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		sig := make(chan os.Signal, 2)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
-		// Kill Chrome immediately on signal — synchronous, before anything else.
-		// launchd may SIGKILL us shortly after SIGTERM, so this must happen first.
-		bridge.KillAllPinchtabChrome()
 		go doShutdown()
 		<-sig
 		slog.Warn("force shutdown requested")
@@ -379,5 +373,25 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
+	}
+}
+
+const bridgeShutdownTotalCap = 8 * time.Second
+
+func gracefulShutdownWithCap(orch *orchestrator.Orchestrator, cap time.Duration) bool {
+	if orch == nil {
+		return true
+	}
+	done := make(chan struct{})
+	go func() {
+		orch.Shutdown()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(cap):
+		slog.Warn("graceful bridge shutdown exceeded cap, escalating", "cap", cap)
+		return false
 	}
 }

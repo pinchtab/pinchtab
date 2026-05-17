@@ -26,10 +26,10 @@ COMMANDS=(
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "test plugin:🔬:Plugin unit tests"
-  "e2e:🐳:E2E suites"
+  "e2e:🐳:E2E suites (add --provider=chrome|cloak to swap browser; default chrome)"
   "  basic:🐳:Basic suite (api + cli + infra)"
   "  extended:🐳:Extended suite (all extended)"
-  "  smoke:🐳:Smoke suite with Docker checks"
+  "  smoke:🐳:Alias for smoke ci (CI-backed subset)"
   "  smoke-plugin:🐳:OpenClaw plugin Docker smoke"
   "  api:🐳:API basic tests"
   "  cli:🐳:CLI basic tests"
@@ -39,8 +39,11 @@ COMMANDS=(
   "  cli-extended:🐳:CLI extended tests"
   "  infra-extended:🐳:Infra extended (multi-instance)"
   "  test <name>:🐳:Run a single E2E test by start_test name"
-  "smoke:💨:Manual smoke checks"
-  "  cloakbrowser:💨:CloakBrowser Docker image smoke"
+  "smoke:💨:All local smoke checks (use --provider=chrome|cloak|all or filter names)"
+  "  ci:💨:CI-backed smoke subset only"
+  "  cloakbrowser:💨:Browser parity / CloakBrowser smoke"
+  "  cdp-attach:💨:CDP attach smoke"
+  "  live-detection:💨:Advisory live detection-site probe (external network)"
   "opt:⚡:Optimization baseline"
   "  baseline:⚡:Run optimization baseline lane"
   "bench:📊:Benchmark lanes"
@@ -50,7 +53,7 @@ COMMANDS=(
   "doctor:🩺:Setup dev environment"
   "zombie:🧟:Run long Docker zombie-process soak smoke"
   "install:📦:Build & install to ~/.local/bin (override with PINCHTAB_INSTALL_DIR)"
-  "  skills:📦:Symlink ./skills/* into ~/.claude/skills (override with CLAUDE_SKILLS_DIR)"
+  "  skills:📦:Symlink ./skills/* into ./.claude/skills (override with CLAUDE_SKILLS_DIR)"
   "pack plugin:🎁:Build a ClawHub-ready plugin tarball (optionally pass <version>)"
   "check go:🧪:Go only"
   "check dashboard:🧪:Dashboard only"
@@ -259,23 +262,14 @@ run_command() {
       local bench_args="${target#bench }"
       exec bash scripts/dev-bench.sh ${bench_args}
       ;;
-    "smoke")
-      echo "  ${ACCENT}${BOLD}💨 Manual smoke checks${NC}"
-      echo ""
-      echo "  Usage:"
-      echo "    ./dev smoke cloakbrowser [pinchtab-image]"
-      echo ""
-      echo "  ${MUTED}CloakBrowser smoke checks are opt-in and Docker-backed. By default this builds pinchtab-cloakbrowser:test from tests/tools/docker/cloakbrowser-smoke.Dockerfile.${NC}"
-      exit 1
-      ;;
-    "smoke cloakbrowser"|"smoke cloakbrowser "*)
-      echo "  ${ACCENT}${BOLD}💨 CloakBrowser Docker smoke${NC}"
+    "smoke"|"smoke "*)
+      echo "  ${ACCENT}${BOLD}💨 Smoke${NC}"
       echo ""
       local -a smoke_args=()
-      if [ "$target" != "smoke cloakbrowser" ]; then
-        read -r -a smoke_args <<< "${target#smoke cloakbrowser }"
+      if [ "$target" != "smoke" ]; then
+        read -r -a smoke_args <<< "${target#smoke }"
       fi
-      exec bash scripts/docker-cloakbrowser-smoke.sh "${smoke_args[@]}"
+      exec bash scripts/dev-smoke.sh "${smoke_args[@]}"
       ;;
     "e2e test")
       echo "  ${ERROR}Missing test name. Usage: dev e2e test \"<name substring>\"${NC}"
@@ -295,6 +289,15 @@ run_command() {
         read -r -a smoke_args <<< "${target#e2e smoke-plugin }"
       fi
       exec bash tests/manual/openclaw-plugin-smoke/run.sh "${smoke_args[@]}"
+      ;;
+    "e2e smoke"|"e2e smoke "*)
+      echo "  ${ACCENT}${BOLD}🐳 E2E smoke moved to ./dev smoke ci${NC}"
+      echo ""
+      local -a smoke_args=()
+      if [ "$target" != "e2e smoke" ]; then
+        read -r -a smoke_args <<< "${target#e2e smoke }"
+      fi
+      exec bash scripts/dev-smoke.sh ci "${smoke_args[@]}"
       ;;
     "e2e"*)
       local -a e2e_args=()
@@ -457,6 +460,12 @@ if [ $# -gt 0 ]; then
       fi
       ;;
     e2e)
+      if [ "${2:-}" = "smoke" ]; then
+        echo ""
+        echo "  ${ACCENT}${BOLD}🐳 E2E smoke moved to ./dev smoke ci${NC}"
+        echo ""
+        exec bash scripts/dev-smoke.sh ci "${@:3}"
+      fi
       if [ "${2:-}" = "test" ]; then
         if [ $# -lt 3 ] || [ -z "${3:-}" ]; then
           echo "  ${ERROR}Missing test name. Usage: dev e2e test \"<name substring>\"${NC}" >&2

@@ -124,6 +124,46 @@ func TestValidateNavigateTarget_RejectsResolvedPrivateIP(t *testing.T) {
 	}
 }
 
+func TestValidateNavigateTarget_AllowsDualStackPublicResolution(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{
+			net.ParseIP("2606:2800:220:1:248:1893:25c8:1946"),
+			net.ParseIP("93.184.216.34"),
+		}, nil
+	})
+
+	if _, err := validateNavigateTarget("https://dual.example/app", false, nil); err != nil {
+		t.Fatalf("validateNavigateTarget should allow public dual-stack resolution: %v", err)
+	}
+}
+
+func TestValidateNavigateTarget_RejectsMixedPublicPrivateDualStackResolution(t *testing.T) {
+	tests := []struct {
+		name string
+		ips  []net.IP
+	}{
+		{
+			name: "private-v6-first",
+			ips:  []net.IP{net.ParseIP("fd00::10"), net.ParseIP("93.184.216.34")},
+		},
+		{
+			name: "public-v4-first",
+			ips:  []net.IP{net.ParseIP("93.184.216.34"), net.ParseIP("fd00::10")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+				return tt.ips, nil
+			})
+
+			if _, err := validateNavigateTarget("https://mixed.example/app", false, nil); err == nil {
+				t.Fatal("validateNavigateTarget should reject mixed public/private DNS answers")
+			}
+		})
+	}
+}
+
 func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted(t *testing.T) {
 	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("172.18.0.5")}, nil
@@ -133,8 +173,14 @@ func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted
 	if err != nil {
 		t.Fatalf("validateNavigateTarget should allow explicitly allowlisted private targets: %v", err)
 	}
-	if target == nil || !target.allowInternal {
-		t.Fatal("validateNavigateTarget should mark explicitly allowlisted private targets as allowed")
+	if target == nil {
+		t.Fatal("validateNavigateTarget returned nil target")
+	}
+	if target.allowInternal {
+		t.Fatal("allowlisted private targets should not disable redirect/internal-IP runtime guards")
+	}
+	if len(target.trustedResolvedIP) != 1 || target.trustedResolvedIP[0] != netip.MustParseAddr("172.18.0.5") {
+		t.Fatalf("trustedResolvedIP = %v, want [172.18.0.5]", target.trustedResolvedIP)
 	}
 }
 

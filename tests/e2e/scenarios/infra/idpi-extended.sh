@@ -38,9 +38,10 @@ start_test "idpi-off: hidden injection passes through without IDPI"
 # Navigate to the hidden injection fixture (permissive server, IDPI warn only)
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/idpi-hidden-injection.html\"}"
 assert_ok "navigate to hidden injection page"
+TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
 
 # Get snapshot — visible content should be present, IDPI warning should be set
-pt_get "/snapshot?format=json"
+pt_get "/snapshot?tabId=${TAB_ID}&format=json"
 assert_ok "snapshot succeeds"
 assert_contains "$RESULT" "Safe Button" "visible content present"
 assert_contains "$RESULT" "Learn more" "normal link present"

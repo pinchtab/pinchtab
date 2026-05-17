@@ -9,6 +9,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
@@ -44,6 +45,55 @@ func newBackendInstance(t *testing.T, o *Orchestrator, instanceID string) (*http
 	return srv, gotPath
 }
 
+func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
+	alwaysAlive(t)
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"ok"}`))),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserProviderChrome},
+			"cloak":  {Provider: config.BrowserProviderCloak},
+		},
+	})
+
+	body := []byte(`{"url":"about:blank","browserTarget":"cloak"}`)
+	req := httptest.NewRequest(http.MethodPost, "/navigate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(body))
+
+	target, status, err := o.RouteForRequest(req)
+	if err != nil {
+		t.Fatalf("RouteForRequest status=%d err=%v", status, err)
+	}
+	if target == "" {
+		t.Fatal("target URL is empty")
+	}
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
+	}
+	if instances[0].BrowserTarget != "cloak" {
+		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].BrowserTarget)
+	}
+	if instances[0].BrowserProvider != config.BrowserProviderCloak {
+		t.Fatalf("BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	}
+	if instances[0].ProfileName != "default-cloak" {
+		t.Fatalf("ProfileName = %q, want default-cloak", instances[0].ProfileName)
+	}
+}
+
 func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 	alwaysAlive(t)
 	o := NewOrchestrator(t.TempDir())
@@ -77,6 +127,45 @@ func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 	}
 	if *pathB != "/navigate" {
 		t.Fatalf("instance B path = %q, want /navigate", *pathB)
+	}
+}
+
+func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserProviderChrome},
+			"cloak":  {Provider: config.BrowserProviderCloak},
+		},
+	})
+	_, pathB := newBackendInstance(t, o, "inst_b")
+	o.instances["inst_b"].BrowserTarget = "chrome"
+	o.instances["inst_b"].BrowserProvider = config.BrowserProviderChrome
+	o.syncInstanceToManager(&o.instances["inst_b"].Instance)
+	o.instanceMgr.Locator.Register("tab-x", "inst_b")
+
+	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("fallback should not run for tab-owner conflict")
+	})
+
+	body := []byte(`{"tabId":"tab-x","browserTarget":"cloak"}`)
+	r := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.ContentLength = int64(len(body))
+	w := httptest.NewRecorder()
+
+	wrapped(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 body=%s", w.Code, w.Body.String())
+	}
+	if *pathB != "" {
+		t.Fatalf("conflicting target should not proxy to backend, got path %q", *pathB)
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("browser_target_conflict")) {
+		t.Fatalf("body = %s, want browser_target_conflict", w.Body.String())
 	}
 }
 
@@ -117,6 +206,43 @@ func TestWrapShorthand_TabNotFoundSingleInstanceFallsThrough(t *testing.T) {
 	}
 	if *gotPath != "/text" {
 		t.Fatalf("backend path = %q, want /text", *gotPath)
+	}
+}
+
+func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserProviderChrome},
+			"cloak":  {Provider: config.BrowserProviderCloak},
+		},
+	})
+	_, pathA := newBackendInstance(t, o, "inst_a")
+	o.instances["inst_a"].BrowserTarget = "chrome"
+	o.instances["inst_a"].BrowserProvider = config.BrowserProviderChrome
+	o.bindings.BindAgent("agent-1", "inst_a")
+
+	fallbackCalled := false
+	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
+		fallbackCalled = true
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	r := httptest.NewRequest("GET", "/text?browserTarget=cloak", nil)
+	r.Header.Set(activity.HeaderAgentID, "agent-1")
+	w := httptest.NewRecorder()
+	wrapped(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 body=%s", w.Code, w.Body.String())
+	}
+	if !fallbackCalled {
+		t.Fatal("fallback should run so browserTarget selection can choose the requested target")
+	}
+	if *pathA != "" {
+		t.Fatalf("mismatched identity binding should not proxy to backend, got path %q", *pathA)
 	}
 }
 

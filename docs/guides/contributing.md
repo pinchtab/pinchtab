@@ -252,8 +252,9 @@ go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
 ./dev e2e                                 # Run the default extended E2E suite
 ./dev e2e basic                           # Run API + CLI + Infra basic tests
-./dev e2e smoke                           # Run smoke scenarios + host Docker smoke checks
-./dev smoke cloakbrowser                  # Run opt-in CloakBrowser Docker smoke image
+./dev smoke ci                            # Run CI smoke scenarios + host Docker smoke checks
+./dev smoke                               # Run all local smoke categories
+./dev smoke --provider=cloak              # Run all local CloakBrowser smoke categories
 ./dev e2e api                             # Run API basic tests
 ./dev e2e cli                             # Run CLI basic tests
 ./dev e2e infra                           # Run Infra basic tests

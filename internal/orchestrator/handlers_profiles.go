@@ -31,9 +31,11 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Port           string                 `json:"port,omitempty"`
-		Headless       bool                   `json:"headless"`
-		SecurityPolicy *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+		Port            string                 `json:"port,omitempty"`
+		Headless        bool                   `json:"headless"`
+		SecurityPolicy  *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+		BrowserTarget   string                 `json:"browserTarget,omitempty"`
+		FallbackTargets []string               `json:"fallbackTargets,omitempty"`
 	}
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -46,12 +48,11 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, err := o.LaunchWithOptions(name, req.Port, req.Headless, LaunchOptions{
+	inst, err := o.LaunchWithTargetSelection(name, req.Port, req.Headless, req.BrowserTarget, req.FallbackTargets, LaunchOptions{
 		SecurityPolicy: req.SecurityPolicy,
 	})
 	if err != nil {
-		statusCode := classifyLaunchError(err)
-		httpx.Error(w, statusCode, err)
+		writeLaunchError(w, err)
 		return
 	}
 	authn.AuditLog(r, "instance.started", "profileId", id, "profileName", name, "instanceId", inst.ID)

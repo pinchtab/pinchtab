@@ -10,8 +10,10 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ./dev e2e          # Run the extended suite quietly by default
 ./dev e2e basic    # Run the basic suite (api + cli + infra basic tests)
 ./dev e2e extended # Run the extended suite
-./dev e2e smoke    # Run smoke scenarios plus host Docker smoke checks
-./dev smoke cloakbrowser # Run opt-in CloakBrowser Docker smoke image
+./dev smoke ci     # Run the CI-backed smoke subset
+./dev smoke        # Run all local smoke categories
+./dev smoke --provider=cloak # Run all local smoke categories for CloakBrowser
+./dev smoke cdp-attach       # Run only the CDP attach smoke
 ./dev e2e api      # Run API basic tests
 ./dev e2e cli      # Run CLI basic tests
 ./dev e2e infra    # Run infra basic tests
@@ -63,12 +65,12 @@ By default, tier comes from the filename suffix: `*-basic.sh` is `basic`, `*-smo
 
 - `basic` is the PR happy path: fast, representative coverage with small setup. `./dev e2e basic` runs the API, CLI, and Infra basic suites.
 - `extended` is deeper coverage: edge cases, detailed interaction checks, and tests that are useful before release. Extended suites include the matching `basic` scenarios plus `extended` scenarios for that group.
-- `smoke` is independent high-setup coverage: lifecycle, multi-instance, host Docker, and production-like checks that do not belong in PR flow. `./dev e2e smoke` runs only `*-smoke.sh` scenarios plus host Docker smoke checks; it does not include `basic` or `extended`.
+- `smoke` is independent high-setup coverage: lifecycle, multi-instance, host Docker, and production-like checks that do not belong in PR flow. `./dev smoke ci` runs only the CI-backed `*-smoke.sh` scenarios plus host Docker smoke checks; it does not include `basic`, `extended`, or opt-in provider/live-detection smokes. `./dev smoke` is the local full-smoke entrypoint and also runs provider parity, CDP attach, and live-detection categories unless filtered.
 
 CloakBrowser smoke checks need a Linux CloakBrowser binary and a compatible
-PinchTab image, so they are exposed as the manual Docker smoke command
-`./dev smoke cloakbrowser` instead of being included in the CI-backed
-`./dev e2e smoke` suite. By default, the command builds
+PinchTab image, so they are exposed through local `./dev smoke` filters
+instead of being included in the CI-backed `./dev smoke ci` subset. The
+`./dev smoke cloakbrowser` filter builds
 `tests/tools/docker/cloakbrowser-smoke.Dockerfile` into
 `pinchtab-cloakbrowser:test` and uses tmpfs mounts for browser profile and
 socket paths. The smoke reuses `tests/e2e/fixtures`, checks a representative
@@ -92,11 +94,16 @@ go run ./tests/tools/runner e2e --suite extended --filter feature --dry-run
 go run ./tests/tools/runner e2e --suite smoke --filter feature --dry-run
 ```
 
-### Filtering
+	### Filtering
 
 `--filter TEXT` selects scenario files before compose planning. It is a case-sensitive substring match against the scenario file name, manifest key, group, tier, helper, and tags. Suites with no matching scenarios are skipped, and the runner only starts services required by the remaining scenarios.
 
 For host Docker smoke checks, `--filter` matches the smoke step name or tags; required image build steps are included automatically when a filtered step depends on them.
+
+At the `./dev smoke` layer, positional names such as `cdp-attach`,
+`live-detection`, and `cloakbrowser` select those local smoke categories.
+Unknown names are passed to the CI-backed E2E smoke runner as `--filter`, so
+`./dev smoke orchestrator` maps to the orchestrator smoke scenario.
 
 `--test TEXT` is different: it does not select scenario files or compose services. It passes `E2E_TEST_FILTER` into the container so `run.sh` can run one matching `start_test` block inside the already-selected scenarios.
 

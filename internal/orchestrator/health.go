@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -115,16 +116,18 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			inst.lastFailureReason = ClassifyLaunchFailure(errors.New(inst.Error))
 			eventType = "instance.error"
-			slog.Error("instance exited before ready", "id", inst.ID)
+			slog.Error("instance exited before ready", "id", inst.ID, "reason", string(inst.lastFailureReason))
 		} else {
 			inst.Status = "error"
 			inst.Error = fmt.Errorf("health check timeout after %s (%s)", instanceStartupTimeout, lastProbe).Error()
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			inst.lastFailureReason = ClassifyLaunchFailure(errors.New(inst.Error))
 			eventType = "instance.error"
-			slog.Error("instance failed to start", "id", inst.ID)
+			slog.Error("instance failed to start", "id", inst.ID, "reason", string(inst.lastFailureReason))
 		}
 	}
 	instCopy := inst.Instance

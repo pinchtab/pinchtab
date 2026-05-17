@@ -145,3 +145,40 @@ func TestExtractExplicitTabID_LongOKBody(t *testing.T) {
 		t.Fatalf("got %q, want tail", got)
 	}
 }
+
+func TestExtractRequestedBrowserTarget_Query(t *testing.T) {
+	r := httptest.NewRequest("GET", "/navigate?browserTarget=cloak-1", nil)
+	if got := ExtractRequestedBrowserTarget(r); got != "cloak-1" {
+		t.Fatalf("got %q, want cloak-1", got)
+	}
+}
+
+func TestExtractRequestedBrowserTarget_BodyJSON(t *testing.T) {
+	body := []byte(`{"url":"about:blank","browserTarget":"cloak-1"}`)
+	r := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.ContentLength = int64(len(body))
+
+	if got := ExtractRequestedBrowserTarget(r); got != "cloak-1" {
+		t.Fatalf("got %q, want cloak-1", got)
+	}
+
+	rest, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("body read after peek: %v", err)
+	}
+	if !bytes.Equal(rest, body) {
+		t.Fatalf("body after peek = %q; want %q", rest, body)
+	}
+}
+
+func TestExtractRequestedBrowserTarget_QueryWinsOverBody(t *testing.T) {
+	body := []byte(`{"browserTarget":"body-target"}`)
+	r := httptest.NewRequest("POST", "/navigate?browserTarget=query-target", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.ContentLength = int64(len(body))
+
+	if got := ExtractRequestedBrowserTarget(r); got != "query-target" {
+		t.Fatalf("got %q, want query-target", got)
+	}
+}

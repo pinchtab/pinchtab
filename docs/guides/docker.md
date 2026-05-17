@@ -259,3 +259,88 @@ You can run orchestrator mode inside one container and start managed instances f
 - restart behavior is easier to reason about
 
 Choose based on whether you want container-level isolation or PinchTab-managed multi-instance orchestration.
+
+## CloakBrowser In Docker (local image only)
+
+The published `pinchtab/pinchtab` and `ghcr.io/pinchtab/pinchtab` images ship with stock Chromium. They do **not** include CloakBrowser, and PinchTab does not publish a CloakBrowser-bundled image. See [cloakbrowser.md → Licensing](cloakbrowser.md#licensing) for why.
+
+For local testing, the repository contains a self-built Dockerfile that layers CloakBrowser onto the PinchTab image. It is labelled "smoke" because it is intended for local smoke testing and parity validation only — not for distribution or production.
+
+### Build the local CloakBrowser smoke image
+
+```bash
+docker build \
+  -f tests/tools/docker/cloakbrowser-smoke.Dockerfile \
+  -t pinchtab-cloakbrowser:local \
+  .
+```
+
+This image is local-only:
+
+- it is not pushed to any registry
+- it is not produced by `./dev binaries`
+- `./dev smoke cloakbrowser` reuses it when present; set `SKIP_BUILD=0` or remove the image to force a rebuild
+
+### Run a CloakBrowser-backed container locally
+
+Create a config that points PinchTab at the in-image CloakBrowser binary:
+
+```json
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9867",
+    "token": "replace-me",
+    "stateDir": "/data"
+  },
+  "browser": {
+    "provider": "cloak",
+    "binary": "/opt/cloakbrowser/chrome",
+    "cloak": {
+      "fingerprintSeed": "42069",
+      "platform": "linux",
+      "timezone": "UTC",
+      "locale": "en-US",
+      "disableDefaultStealthArgs": true
+    }
+  },
+  "instanceDefaults": {
+    "mode": "headless",
+    "humanize": true
+  },
+  "profiles": {
+    "baseDir": "/data/profiles",
+    "defaultProfile": "default"
+  }
+}
+```
+
+Run it with the config mounted read-only and a persistent profile volume:
+
+```bash
+docker run -d \
+  --name pinchtab-cloak \
+  -p 127.0.0.1:9867:9867 \
+  --shm-size=2g \
+  -v pinchtab-cloak-data:/data \
+  -v "$PWD/pinchtab-cloak.json":/config/pinchtab.json:ro \
+  -e PINCHTAB_CONFIG=/config/pinchtab.json \
+  pinchtab-cloakbrowser:local
+```
+
+The `pinchtab-cloak-data` named volume holds `/data/profiles` across container restarts, so CloakBrowser keeps cookies, local storage, and history between runs. Delete the volume to start clean:
+
+```bash
+docker volume rm pinchtab-cloak-data
+```
+
+### Headless-only design
+
+The smoke image follows the same headless-only design as the bundled `pinchtab/pinchtab` image: no X11, no Wayland, no Xvfb. Headed CloakBrowser inside Docker is not a supported configuration. If you need a visible browser window for debugging, run PinchTab + CloakBrowser directly on the host — see [headed-mode.md](headed-mode.md) for the manual local setup.
+
+### Related guides
+
+- [cloakbrowser.md](cloakbrowser.md) — full CloakBrowser configuration, fingerprint flags, and troubleshooting
+- [attach-chrome.md](attach-chrome.md) — attach to an externally managed CloakBrowser via CDP
+- [headed-mode.md](headed-mode.md) — manual headed setup outside the bundled image
+- [security.md](security.md) — security model for container and non-local deployments
