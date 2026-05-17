@@ -7,28 +7,52 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// concealedReply returns the safe response shape for an action that
+// successfully wrote text. When req.Concealed is set, the plaintext is
+// replaced with the literal string "[REDACTED]" and a length plus
+// `concealed: true` flag is added so callers can confirm redaction was
+// applied. When not concealed, the original echo behavior is preserved
+// for debugging form fills.
+//
+// Use this everywhere a handler would otherwise return
+// map[string]any{"<verb>": req.Text}.
+func concealedReply(verb string, req ActionRequest, extras map[string]any) map[string]any {
+	out := make(map[string]any, len(extras)+3)
+	for k, v := range extras {
+		out[k] = v
+	}
+	if req.Concealed {
+		out[verb] = "[REDACTED]"
+		out["len"] = len(req.Text)
+		out["concealed"] = true
+	} else {
+		out[verb] = req.Text
+	}
+	return out
+}
+
 func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for type")
 	}
 	if req.Selector != "" {
-		return map[string]any{"typed": req.Text}, chromedp.Run(ctx,
+		return concealedReply("typed", req, nil), chromedp.Run(ctx,
 			chromedp.Click(req.Selector, chromedp.ByQuery),
 			chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery),
 		)
 	}
 	if req.NodeID > 0 {
-		return map[string]any{"typed": req.Text}, TypeByNodeID(ctx, req.NodeID, req.Text)
+		return concealedReply("typed", req, nil), TypeByNodeID(ctx, req.NodeID, req.Text)
 	}
 	return nil, fmt.Errorf("need selector or ref")
 }
 
 func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Selector != "" {
-		return map[string]any{"filled": req.Text}, chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
+		return concealedReply("filled", req, nil), chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
 	}
 	if req.NodeID > 0 {
-		return map[string]any{"filled": req.Text}, FillByNodeID(ctx, req.NodeID, req.Text)
+		return concealedReply("filled", req, nil), FillByNodeID(ctx, req.NodeID, req.Text)
 	}
 	return nil, fmt.Errorf("need selector or ref")
 }
@@ -66,7 +90,7 @@ func (b *Bridge) actionHumanType(ctx context.Context, req ActionRequest) (map[st
 		return nil, err
 	}
 
-	return map[string]any{"typed": req.Text, "human": true}, nil
+	return concealedReply("typed", req, map[string]any{"human": true}), nil
 }
 
 func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -102,7 +126,7 @@ func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"typed": req.Text}, nil
+	return concealedReply("typed", req, nil), nil
 }
 
 func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -117,7 +141,7 @@ func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (m
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"inserted": req.Text}, nil
+	return concealedReply("inserted", req, nil), nil
 }
 
 func (b *Bridge) actionKeyDown(ctx context.Context, req ActionRequest) (map[string]any, error) {

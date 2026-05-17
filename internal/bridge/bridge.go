@@ -484,6 +484,14 @@ type ActionRequest struct {
 	WaitNav bool   `json:"waitNav"`
 	Fast    bool   `json:"fast"`
 	Owner   string `json:"owner"`
+
+	// Concealed signals that req.Text holds a credential/secret
+	// (password, OTP, API key). When true, action handlers redact
+	// the value from their response body and return only metadata
+	// ({"filled":"[REDACTED]","len":N,"concealed":true}). Callers
+	// that capture the response into logs / agent transcripts /
+	// OTel spans no longer leak the secret.
+	Concealed bool `json:"concealed,omitempty"`
 }
 
 // NormalizeSelector merges legacy Ref and Selector (CSS) fields into the
