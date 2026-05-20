@@ -29,7 +29,7 @@ COMMANDS=(
   "e2e:🐳:E2E suites (add --provider=chrome|cloak to swap browser; default chrome)"
   "  basic:🐳:Basic suite (api + cli + infra)"
   "  extended:🐳:Extended suite (all extended)"
-  "  smoke:🐳:Alias for smoke ci (CI-backed subset)"
+  "  smoke:🐳:E2E smoke subset"
   "  smoke-plugin:🐳:OpenClaw plugin Docker smoke"
   "  api:🐳:API basic tests"
   "  cli:🐳:CLI basic tests"
@@ -39,10 +39,9 @@ COMMANDS=(
   "  cli-extended:🐳:CLI extended tests"
   "  infra-extended:🐳:Infra extended (multi-instance)"
   "  test <name>:🐳:Run a single E2E test by start_test name"
-  "smoke:💨:All local smoke checks (use --provider=chrome|cloak|all or filter names)"
-  "  ci:💨:CI-backed smoke subset only"
-  "  cloakbrowser:💨:Browser parity / CloakBrowser smoke"
-  "  cdp-attach:💨:CDP attach smoke"
+  "smoke:💨:Docker smoke checks (use --provider=chrome|cloak|all or filter names)"
+  "  cloakbrowser:💨:Docker browser parity / CloakBrowser smoke"
+  "  cdp-attach:💨:Docker CDP attach smoke"
   "  live-detection:💨:Advisory live detection-site probe (external network)"
   "opt:⚡:Optimization baseline"
   "  baseline:⚡:Run optimization baseline lane"
@@ -291,13 +290,15 @@ run_command() {
       exec bash tests/manual/openclaw-plugin-smoke/run.sh "${smoke_args[@]}"
       ;;
     "e2e smoke"|"e2e smoke "*)
-      echo "  ${ACCENT}${BOLD}🐳 E2E smoke moved to ./dev smoke ci${NC}"
+      echo "  ${ACCENT}${BOLD}🐳 E2E smoke${NC}"
       echo ""
-      local -a smoke_args=()
+      local -a smoke_args=("smoke")
       if [ "$target" != "e2e smoke" ]; then
-        read -r -a smoke_args <<< "${target#e2e smoke }"
+        local -a extra_args=()
+        read -r -a extra_args <<< "${target#e2e smoke }"
+        smoke_args+=("${extra_args[@]}")
       fi
-      exec bash scripts/dev-smoke.sh ci "${smoke_args[@]}"
+      run_e2e_runner "${smoke_args[@]}"
       ;;
     "e2e"*)
       local -a e2e_args=()
@@ -462,9 +463,9 @@ if [ $# -gt 0 ]; then
     e2e)
       if [ "${2:-}" = "smoke" ]; then
         echo ""
-        echo "  ${ACCENT}${BOLD}🐳 E2E smoke moved to ./dev smoke ci${NC}"
+        echo "  ${ACCENT}${BOLD}🐳 E2E smoke${NC}"
         echo ""
-        exec bash scripts/dev-smoke.sh ci "${@:3}"
+        run_e2e_runner smoke "${@:3}"
       fi
       if [ "${2:-}" = "test" ]; then
         if [ $# -lt 3 ] || [ -z "${3:-}" ]; then

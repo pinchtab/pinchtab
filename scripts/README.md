@@ -48,8 +48,7 @@ Development and CI scripts for PinchTab.
 
 ## `./dev` shortcuts
 
-- `./dev smoke ci` runs the CI-backed smoke subset through the Go e2e runner, including host Docker smoke checks.
-- `PINCHTAB_DOCKER_SMOKE_RELEASE_IMAGE=<image> ./dev smoke ci --filter release` skips the release-image build and runs the matching Docker smoke checks against the specified image tag.
-- `./dev smoke` runs all local smoke categories: CI smoke, browser parity, CDP attach, and live detection.
-- `./dev e2e --provider=cloak` runs the regular e2e suites against the prebuilt CloakBrowser provider image.
+- `./dev smoke` runs Docker smoke harnesses: browser parity, CDP attach, and live detection. The host shell remains the harness, but PinchTab and the browser under test run in containers.
+- `./dev e2e [suite]` runs E2E suites through the Go runner. The default provider is Chrome; pass `--provider=cloak` to run against CloakBrowser. The runner builds `pinchtab-cloakbrowser:test` from `tests/tools/docker/cloakbrowser-smoke.Dockerfile` unless `SKIP_BUILD=1` is set.
+- `PINCHTAB_DOCKER_SMOKE_RELEASE_IMAGE=<image> ./dev e2e smoke --filter release` skips the release-image build and runs the matching Docker smoke checks against the specified image tag.
 - `./dev smoke cloakbrowser [--provider=chrome|cloak|all] [--multi-target|--profile-persistence|--profile-lock-recovery]` runs the specialized Chrome/CloakBrowser parity smoke via `scripts/docker-browser-parity-smoke.sh`. It builds the provider images from `tests/tools/docker/chrome-smoke.Dockerfile` and `tests/tools/docker/cloakbrowser-smoke.Dockerfile`; set `SKIP_BUILD=1` to require prebuilt images. The Cloak leg also honors `PINCHTAB_CLOAKBROWSER_E2E_SCENARIOS` for the scenario list.

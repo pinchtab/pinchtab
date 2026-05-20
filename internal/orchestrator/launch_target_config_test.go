@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -160,11 +161,11 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
 		t.Errorf("Security.Attach.Enabled = %v, want false", fc.Security.Attach.Enabled)
 	}
-	if len(fc.Security.Attach.AllowHosts) != 0 {
-		t.Errorf("Security.Attach.AllowHosts = %v, want empty", fc.Security.Attach.AllowHosts)
+	if got := strings.Join(fc.Security.Attach.AllowHosts, ","); got != "*" {
+		t.Errorf("Security.Attach.AllowHosts = %q, want *", got)
 	}
-	if len(fc.Security.Attach.AllowSchemes) != 0 {
-		t.Errorf("Security.Attach.AllowSchemes = %v, want empty", fc.Security.Attach.AllowSchemes)
+	if got := strings.Join(fc.Security.Attach.AllowSchemes, ","); got != "http,ws" {
+		t.Errorf("Security.Attach.AllowSchemes = %q, want http,ws", got)
 	}
 	if fc.Security.Attach.ForwardProxyAuth == nil || *fc.Security.Attach.ForwardProxyAuth {
 		t.Errorf("Security.Attach.ForwardProxyAuth = %v, want false", fc.Security.Attach.ForwardProxyAuth)

@@ -120,7 +120,7 @@ func (r *Runner) Run() int {
 	r.overrides = overrides
 	if overrides != nil {
 		defer overrides.cleanup()
-		_, _ = fmt.Fprintf(r.stdout, "  provider: %s (image: %s)\n", overrides.provider, cloakImage)
+		_, _ = fmt.Fprintf(r.stdout, "  provider: %s (image: %s)\n", overrides.provider, overrides.image)
 	}
 	code := r.run()
 	duration := time.Since(started)
@@ -564,10 +564,9 @@ func (r *Runner) planSuites(defs []suiteDef) ([]suitePlan, int) {
 }
 
 func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
-	// Cloak runs against a prebuilt image (pinchtab-cloakbrowser:test) that
-	// must NOT be rebuilt by this lane. We still build support images such as
-	// fixtures and runners so clean workstations do not depend on stale local
-	// images.
+	// Cloak pinchtab services are supplied by the provider override image.
+	// Build support images such as fixtures and runners, but keep compose from
+	// rebuilding the overridden pinchtab services.
 	skipPinchtabBuild := r.overrides != nil && r.overrides.provider == "cloak"
 	if skipPinchtabBuild {
 		if code := r.buildSharedStack(composeFile, cloakSupportBuildServices()...); code != 0 {

@@ -122,6 +122,31 @@ func clearStaleChromeProfileLock(profileDir, errMsg string) (bool, error) {
 	return removed, nil
 }
 
+// quarantineCorruptedProfile renames profileDir to "<profileDir>.quarantine-<ts>"
+// and recreates an empty directory at the original path. Used to recover
+// from silent CDP attach failures where CloakBrowser refuses to ingest
+// existing profile state.
+func quarantineCorruptedProfile(profileDir string) (string, error) {
+	profileDir = strings.TrimSpace(profileDir)
+	if profileDir == "" {
+		return "", fmt.Errorf("empty profile dir")
+	}
+	if _, err := os.Stat(profileDir); err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("stat profile dir: %w", err)
+	}
+	quarantinePath := fmt.Sprintf("%s.quarantine-%d", profileDir, time.Now().Unix())
+	if err := os.Rename(profileDir, quarantinePath); err != nil {
+		return "", fmt.Errorf("rename profile dir: %w", err)
+	}
+	if err := os.MkdirAll(profileDir, 0755); err != nil {
+		return quarantinePath, fmt.Errorf("recreate profile dir: %w", err)
+	}
+	return quarantinePath, nil
+}
+
 func isProfileOwnedByRunningPinchtab(profileDir string) (bool, int) {
 	pidFile := filepath.Join(profileDir, "pinchtab.pid")
 	data, err := os.ReadFile(pidFile)

@@ -35,8 +35,8 @@ Options:
   --extra FILES          Add extra scenario files, space-separated
   --logs show|hide       Control compose build/runner output
   --provider chrome|cloak
-                         Select browser provider (default: chrome). Cloak requires
-                         the prebuilt pinchtab-cloakbrowser:test image.
+                         Select browser provider (default: chrome). Cloak builds
+                         pinchtab-cloakbrowser:test unless SKIP_BUILD=1 is set.
   --dry-run              Print the compose plan without running it
   --help, -h             Show this help
 `

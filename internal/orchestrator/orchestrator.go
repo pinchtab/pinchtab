@@ -631,8 +631,12 @@ func (o *Orchestrator) writeAttachChildConfig(port, provider, stateDir string) (
 	fc.Observability.Activity.Enabled = &activityEnabled
 	fc.Browser.Provider = provider
 	attachDisabled := false
+	allowHosts := append([]string(nil), fc.Security.Attach.AllowHosts...)
+	allowSchemes := append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	fc.Security.Attach = config.AttachConfig{
 		Enabled:          &attachDisabled,
+		AllowHosts:       allowHosts,
+		AllowSchemes:     allowSchemes,
 		ForwardProxyAuth: &attachDisabled,
 	}
 

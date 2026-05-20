@@ -11,11 +11,8 @@ import (
 	"time"
 )
 
-// cloakImage is the prebuilt image the cloak provider expects to find locally.
-// It is built by tests/tools/docker/cloakbrowser-smoke.Dockerfile and is
-// intentionally never auto-built by the e2e runner — it is too heavy and the
-// Cloak binary license requires explicit opt-in.
-const cloakImage = "pinchtab-cloakbrowser:test"
+const defaultCloakImage = "pinchtab-cloakbrowser:test"
+const defaultCloakDockerfile = "tests/tools/docker/cloakbrowser-smoke.Dockerfile"
 const dryRunCloakComposeOverride = "<generated-cloak-compose-override>"
 
 // pinchtabServices enumerates every pinchtab variant present in the e2e
@@ -35,6 +32,7 @@ var pinchtabServices = []string{
 // configs the runner mounts in place of the chrome configs.
 type providerOverrides struct {
 	provider     string
+	image        string
 	tmpDir       string
 	composeFiles []string
 }
@@ -52,15 +50,17 @@ func (r *Runner) prepareProviderOverrides() (*providerOverrides, error) {
 	if r.args.Provider != "cloak" {
 		return nil, fmt.Errorf("unsupported provider: %s", r.args.Provider)
 	}
+	image := cloakProviderImage()
 
 	if r.args.DryRun {
 		return &providerOverrides{
 			provider:     "cloak",
+			image:        image,
 			composeFiles: []string{dryRunCloakComposeOverride},
 		}, nil
 	}
 
-	if err := assertCloakImagePresent(); err != nil {
+	if err := r.ensureCloakImage(image); err != nil {
 		return nil, err
 	}
 
@@ -93,13 +93,14 @@ func (r *Runner) prepareProviderOverrides() (*providerOverrides, error) {
 
 	overridePath := filepath.Join(tmp, "docker-compose.cloak.yml")
 	fixturesDir := filepath.Join(r.repoRoot, "tests/e2e/fixtures")
-	if err := writeCloakComposeOverride(overridePath, cloakConfigs, fixturesDir); err != nil {
+	if err := writeCloakComposeOverride(overridePath, cloakConfigs, fixturesDir, image); err != nil {
 		_ = os.RemoveAll(tmp)
 		return nil, fmt.Errorf("write cloak compose override: %w", err)
 	}
 
 	return &providerOverrides{
 		provider:     "cloak",
+		image:        image,
 		tmpDir:       tmp,
 		composeFiles: []string{overridePath},
 	}, nil
@@ -112,17 +113,70 @@ func (o *providerOverrides) cleanup() {
 	_ = os.RemoveAll(o.tmpDir)
 }
 
-func assertCloakImagePresent() error {
-	cmd := exec.Command("docker", "image", "inspect", cloakImage)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf(
-			"%s image not found; build via tests/tools/docker/cloakbrowser-smoke.Dockerfile or `./dev smoke cloakbrowser` first",
-			cloakImage,
-		)
+func cloakProviderImage() string {
+	for _, env := range []string{"PINCHTAB_E2E_CLOAK_IMAGE", "PINCHTAB_PARITY_CLOAK_IMAGE"} {
+		if v := strings.TrimSpace(os.Getenv(env)); v != "" {
+			return v
+		}
+	}
+	return defaultCloakImage
+}
+
+func cloakProviderDockerfile() string {
+	if v := strings.TrimSpace(os.Getenv("PINCHTAB_CLOAKBROWSER_DOCKERFILE")); v != "" {
+		return v
+	}
+	return defaultCloakDockerfile
+}
+
+func (r *Runner) ensureCloakImage(image string) error {
+	if strings.TrimSpace(os.Getenv("SKIP_BUILD")) == "1" {
+		present, err := dockerImagePresent(image)
+		if err != nil {
+			return err
+		}
+		if present {
+			_, _ = fmt.Fprintf(r.stdout, "  provider image: reusing %s (SKIP_BUILD=1)\n", image)
+			return nil
+		}
+		return fmt.Errorf("%s image not found and SKIP_BUILD=1 is set; build with %s or unset SKIP_BUILD", image, cloakProviderDockerfile())
+	}
+
+	dockerfile := cloakProviderDockerfile()
+	dockerfilePath := dockerfile
+	if !filepath.IsAbs(dockerfilePath) {
+		dockerfilePath = filepath.Join(r.repoRoot, dockerfilePath)
+	}
+	if _, err := os.Stat(dockerfilePath); err != nil {
+		return fmt.Errorf("cloak Dockerfile not found at %s: %w", dockerfile, err)
+	}
+
+	code := r.runLoggedCommand(
+		"building Cloak provider image",
+		stackOutput,
+		[]string{"docker", "build", "-f", dockerfilePath, "-t", image, r.repoRoot},
+	)
+	if code != 0 {
+		return fmt.Errorf("build Cloak provider image failed (exit %d)", code)
 	}
 	return nil
+}
+
+func dockerImagePresent(image string) (bool, error) {
+	cmd := exec.Command("docker", "image", "inspect", image)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return true, nil
+	}
+	msg := strings.TrimSpace(string(out))
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "no such image") || strings.Contains(lower, "not found") {
+		return false, nil
+	}
+	if msg == "" {
+		return false, fmt.Errorf("inspect Docker image %s: %w", image, err)
+	}
+	return false, fmt.Errorf("inspect Docker image %s: %w: %s", image, err, msg)
 }
 
 // writeCloakConfig reads a chrome-flavoured pinchtab config and writes a
@@ -162,14 +216,14 @@ func writeCloakConfig(src, dst string) error {
 }
 
 // writeCloakComposeOverride writes a compose file that targets each pinchtab
-// service: swaps the image to the prebuilt cloak image, drops the build
+// service: swaps the image to the cloak provider image, drops the build
 // directive (via image-only + pull_policy:never), remaps the config bind mount
 // onto the cloak-flavoured copy we just generated, and preserves extension
 // fixture mounts needed by extension-parity E2E tests.
 //
 // The override is intentionally written as YAML by hand (no third-party deps)
 // since the structure is small and stable.
-func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixturesDir string) error {
+func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixturesDir, image string) error {
 	type extensionMount struct {
 		sourceDir string
 		target    string
@@ -222,7 +276,7 @@ func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixt
 
 	var b strings.Builder
 	b.WriteString("# Generated by tests/tools/runner — provider=cloak override.\n")
-	b.WriteString("# Swaps every pinchtab* service onto the prebuilt cloak image and\n")
+	b.WriteString("# Swaps every pinchtab* service onto the cloak provider image and\n")
 	b.WriteString("# mounts the cloak-flavoured runtime config in place of the chrome one.\n")
 	b.WriteString("services:\n")
 
@@ -239,7 +293,7 @@ func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixt
 			continue
 		}
 		fmt.Fprintf(&b, "  %s:\n", svc)
-		fmt.Fprintf(&b, "    image: %s\n", cloakImage)
+		fmt.Fprintf(&b, "    image: %s\n", image)
 		fmt.Fprintf(&b, "    pull_policy: never\n")
 		// Keep the override self-contained: every provider=cloak service gets
 		// the rewritten config plus the same extension fixtures its Chrome

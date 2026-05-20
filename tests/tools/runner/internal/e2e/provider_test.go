@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 		"pinchtab-bridge.json":            filepath.Join(tmp, "pinchtab-bridge.json"),
 	}
 
-	if err := writeCloakComposeOverride(outPath, configs, fixturesDir); err != nil {
+	if err := writeCloakComposeOverride(outPath, configs, fixturesDir, defaultCloakImage); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,12 +68,68 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 		if !strings.Contains(block, want) {
 			t.Fatalf("%s override missing cloak config mount %q:\n%s", svc, want, block)
 		}
-		if !strings.Contains(block, "image: "+cloakImage) {
+		if !strings.Contains(block, "image: "+defaultCloakImage) {
 			t.Fatalf("%s override missing cloak image:\n%s", svc, block)
 		}
 		if !strings.Contains(block, "pull_policy: never") {
 			t.Fatalf("%s override missing pull_policy: never:\n%s", svc, block)
 		}
+	}
+}
+
+func TestEnsureCloakImageBuildsByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "docker.log")
+	fakeDocker := filepath.Join(tmp, "docker")
+	script := "#!/bin/sh\n" +
+		"echo \"$@\" >> \"" + logPath + "\"\n" +
+		"if [ \"$1\" = \"image\" ] && [ \"$2\" = \"inspect\" ]; then\n" +
+		"  echo \"Error response from daemon: No such image: $3\" >&2\n" +
+		"  exit 1\n" +
+		"fi\n" +
+		"if [ \"$1\" = \"build\" ]; then\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exit 2\n"
+	if err := os.WriteFile(fakeDocker, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+":"+os.Getenv("PATH"))
+
+	repoRoot := t.TempDir()
+	dockerfilePath := filepath.Join(repoRoot, defaultCloakDockerfile)
+	if err := os.MkdirAll(filepath.Dir(dockerfilePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dockerfilePath, []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	r := &Runner{
+		stdout:   &stdout,
+		stderr:   &stderr,
+		repoRoot: repoRoot,
+		logsMode: "hide",
+	}
+	if err := r.ensureCloakImage(defaultCloakImage); err != nil {
+		t.Fatalf("ensureCloakImage returned error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := string(raw)
+	for _, want := range []string{
+		"build -f " + dockerfilePath + " -t " + defaultCloakImage + " " + repoRoot,
+	} {
+		if !strings.Contains(calls, want) {
+			t.Fatalf("docker calls missing %q:\n%s", want, calls)
+		}
+	}
+	if strings.Contains(calls, "image inspect") {
+		t.Fatalf("default Cloak image setup should build without reusing stale images:\n%s", calls)
 	}
 }
 

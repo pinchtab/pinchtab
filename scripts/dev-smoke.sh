@@ -15,22 +15,19 @@ usage() {
   cat <<'EOF'
 Usage:
   ./dev smoke [--provider=chrome|cloak|all] [filter...]
-  ./dev smoke ci [--provider=chrome|cloak] [--filter TEXT]
   ./dev smoke cdp-attach [chrome|cloak|all]
   ./dev smoke live-detection [--provider=chrome|cloak|all]
   ./dev smoke cloakbrowser [--provider=chrome|cloak|all] [special flags]
 
 Filters:
-  ci, e2e              Run the CI-backed E2E smoke subset
   cloakbrowser         Run browser parity / CloakBrowser smoke
   browser-parity       Alias for cloakbrowser
   cdp-attach           Run CDP attach smoke
   live-detection       Run advisory live detection smoke
-  docker, mcp, api...  Passed to the E2E smoke runner as --filter
 
 Defaults:
-  ./dev smoke          Runs all local smoke categories for all supported providers
-  ./dev smoke ci       Runs only the CI smoke subset, default provider chrome
+  ./dev smoke          Runs Docker smoke categories for supported providers:
+                       browser parity, CDP attach, and live detection
 
 Special cloakbrowser flags:
   --multi-target
@@ -40,12 +37,17 @@ EOF
 }
 
 provider=""
-ci_only=0
 dry_run=0
 logs="${E2E_LOGS:-hide}"
-e2e_filter=""
 declare -a filters=()
 declare -a parity_args=()
+
+e2e_smoke_error() {
+  echo "${ERROR}E2E smoke now lives under './dev e2e smoke'.${NC}" >&2
+  echo "${MUTED}Examples:${NC} ./dev e2e smoke --provider=chrome" >&2
+  echo "${MUTED}          ${NC} ./dev e2e smoke --provider=cloak --filter recording" >&2
+  exit 1
+}
 
 append_unique() {
   local value="$1"
@@ -58,7 +60,7 @@ append_unique() {
 
 is_named_smoke_filter() {
   case "$1" in
-    ci|ci-smoke|e2e|e2e-smoke|cloakbrowser|browser-parity|cdp-attach|live-detection)
+    cloakbrowser|browser-parity|cdp-attach|live-detection)
       return 0
       ;;
     *)
@@ -69,13 +71,6 @@ is_named_smoke_filter() {
 
 append_smoke_filter() {
   case "$1" in
-    ci|ci-smoke)
-      ci_only=1
-      append_unique "e2e"
-      ;;
-    e2e|e2e-smoke)
-      append_unique "e2e"
-      ;;
     cloakbrowser|browser-parity)
       append_unique "browser-parity"
       ;;
@@ -83,7 +78,10 @@ append_smoke_filter() {
       append_unique "$1"
       ;;
     *)
-      append_unique "$1"
+      echo "${ERROR}unknown smoke filter: $1${NC}" >&2
+      echo "${MUTED}Use './dev e2e smoke --filter $1' for E2E smoke filters.${NC}" >&2
+      usage >&2
+      exit 1
       ;;
   esac
 }
@@ -132,8 +130,7 @@ while [ "$#" -gt 0 ]; do
       exit 0
       ;;
     --ci)
-      ci_only=1
-      append_unique "e2e"
+      e2e_smoke_error
       ;;
     --dry-run)
       dry_run=1
@@ -179,11 +176,8 @@ while [ "$#" -gt 0 ]; do
       usage >&2
       exit 1
       ;;
-    ci|ci-smoke)
-      append_smoke_filter "$1"
-      ;;
-    e2e|e2e-smoke)
-      append_smoke_filter "$1"
+    ci|ci-smoke|e2e|e2e-smoke)
+      e2e_smoke_error
       ;;
     cloakbrowser|browser-parity)
       append_smoke_filter "$1"
@@ -202,11 +196,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$provider" ]; then
-  if [ "$ci_only" -eq 1 ]; then
-    provider="chrome"
-  else
-    provider="all"
-  fi
+  provider="all"
 fi
 
 case "$logs" in
@@ -246,13 +236,11 @@ run_step() {
   return "$code"
 }
 
-run_e2e_smoke() {
-  local selected_provider="$1"
-  local filter="${2:-}"
-  local -a args=(go run ./tests/tools/runner e2e --suite smoke --provider "$selected_provider" --logs "$logs")
-  [ "$dry_run" -eq 1 ] && args+=(--dry-run)
-  [ -n "$filter" ] && args+=(--filter "$filter")
-  run_step 0 "E2E smoke subset (${selected_provider}${filter:+, filter=${filter}})" "${args[@]}"
+run_browser_parity() {
+  local allow_skip="$1"
+  local selected_provider="$2"
+  run_step "$allow_skip" "Browser parity smoke (${selected_provider})" \
+    bash scripts/docker-browser-parity-smoke.sh "--provider=${selected_provider}" ${parity_args[@]+"${parity_args[@]}"}
 }
 
 run_cdp_attach() {
@@ -265,54 +253,29 @@ run_live_detection() {
   run_step "$2" "Live detection smoke (${selected_provider})" bash scripts/docker-live-detection-smoke.sh --provider="$selected_provider"
 }
 
-provider_list() {
-  case "$1" in
-    all) printf '%s\n' chrome cloak ;;
-    *) printf '%s\n' "$1" ;;
-  esac
-}
-
 failures=0
 
 run_or_record() {
   "$@" || failures=1
 }
 
-if [ "$ci_only" -eq 1 ]; then
-  if [ "$provider" = "all" ]; then
-    echo "${ERROR}./dev smoke ci accepts --provider=chrome|cloak, not all${NC}" >&2
-    exit 1
-  fi
-  if [ "${#filters[@]}" -gt 0 ]; then
-    for filter in "${filters[@]}"; do
-      [ "$filter" = "e2e" ] && continue
-      e2e_filter="$filter"
-    done
-  fi
-  run_e2e_smoke "$provider" "$e2e_filter"
-  exit $?
-fi
-
 if [ "${#filters[@]}" -eq 0 ]; then
-  # Full local smoke: run all categories. Browser parity runs before Cloak E2E
-  # because it builds the local CloakBrowser smoke image when needed.
+  # Full Docker smoke excludes the Go E2E smoke subset. Run that explicitly via
+  # `./dev e2e smoke`, which keeps the provider smoke harnesses and E2E lanes
+  # separate.
   case "$provider" in
     chrome)
-      run_or_record run_e2e_smoke chrome ""
-      run_or_record run_step 1 "Browser parity smoke (chrome)" bash scripts/docker-browser-parity-smoke.sh --provider=chrome "${parity_args[@]}"
+      run_or_record run_browser_parity 1 chrome
       run_or_record run_cdp_attach chrome 1
       run_or_record run_live_detection chrome 1
       ;;
     cloak)
-      run_or_record run_step 1 "Browser parity smoke (cloak)" bash scripts/docker-browser-parity-smoke.sh --provider=cloak "${parity_args[@]}"
-      run_or_record run_e2e_smoke cloak ""
+      run_or_record run_browser_parity 1 cloak
       run_or_record run_cdp_attach cloak 1
       run_or_record run_live_detection cloak 1
       ;;
     all)
-      run_or_record run_e2e_smoke chrome ""
-      run_or_record run_step 1 "Browser parity smoke (all)" bash scripts/docker-browser-parity-smoke.sh --provider=all "${parity_args[@]}"
-      run_or_record run_e2e_smoke cloak ""
+      run_or_record run_browser_parity 1 all
       run_or_record run_cdp_attach all 1
       run_or_record run_live_detection chrome 1
       run_or_record run_live_detection cloak 1
@@ -321,13 +284,8 @@ if [ "${#filters[@]}" -eq 0 ]; then
 else
   for filter in "${filters[@]}"; do
     case "$filter" in
-      e2e)
-        while IFS= read -r selected_provider; do
-          run_or_record run_e2e_smoke "$selected_provider" ""
-        done < <(provider_list "$provider")
-        ;;
       browser-parity)
-        run_or_record run_step 0 "Browser parity smoke (${provider})" bash scripts/docker-browser-parity-smoke.sh --provider="$provider" "${parity_args[@]}"
+        run_or_record run_browser_parity 0 "$provider"
         ;;
       cdp-attach)
         run_or_record run_cdp_attach "$provider" 0
@@ -341,9 +299,9 @@ else
         fi
         ;;
       *)
-        while IFS= read -r selected_provider; do
-          run_or_record run_e2e_smoke "$selected_provider" "$filter"
-        done < <(provider_list "$provider")
+        echo "${ERROR}unknown smoke filter: $filter${NC}" >&2
+        echo "${MUTED}Use './dev e2e smoke --filter $filter' for E2E smoke filters.${NC}" >&2
+        failures=1
         ;;
     esac
   done

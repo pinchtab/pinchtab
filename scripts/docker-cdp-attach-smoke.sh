@@ -3,12 +3,13 @@
 #
 # Two legs:
 #   1. Chrome CDP attach — starts a Chromium headless container with remote
-#      debugging enabled, runs the PinchTab server on the host, POSTs to
-#      /instances/attach with provider=chrome, and asserts the bridge wraps it.
+#      debugging enabled, starts PinchTab in Docker, POSTs to /instances/attach
+#      with provider=chrome, and asserts the bridge wraps it.
 #   2. CloakBrowser CDP attach — same as above but uses the local
 #      pinchtab-cloakbrowser:test image. Skipped if the image is unavailable.
 #
-# This smoke is opt-in and is NOT part of default CI.
+# The host process is only the harness. PinchTab and the browser under test run
+# in Docker containers on a temporary Docker network.
 #
 # Usage:
 #   ./dev smoke cdp-attach              # both legs
@@ -16,11 +17,12 @@
 #   ./dev smoke cdp-attach cloak        # CloakBrowser leg only
 #
 # Env overrides:
-#   PINCHTAB_BINARY        Path to the pinchtab binary (default: ./dist/pinchtab or `go run`)
-#   PINCHTAB_CDP_PORT      Host port for the external CDP browser (default: 19222)
-#   PINCHTAB_SERVER_PORT   Host port for PinchTab server (default: 19867)
+#   PINCHTAB_CDP_PORT      Host port for external CDP readiness checks (default: 19222)
+#   PINCHTAB_SERVER_PORT   Host port for the PinchTab API container (default: 19867)
+#   PINCHTAB_CDP_SMOKE_PINCHTAB_IMAGE PinchTab image (default: pinchtab-local:test)
 #   PINCHTAB_CDP_SMOKE_CHROME_IMAGE   Chrome image (default: chromedp/headless-shell:stable)
 #   PINCHTAB_CDP_SMOKE_CLOAK_IMAGE    CloakBrowser image (default: pinchtab-cloakbrowser:test)
+#   SKIP_BUILD=1           Reuse existing PinchTab image; do not docker build
 
 set -euo pipefail
 
@@ -31,27 +33,35 @@ LEG="${1:-all}"
 
 CHROME_IMAGE="${PINCHTAB_CDP_SMOKE_CHROME_IMAGE:-chromedp/headless-shell:stable}"
 CLOAK_IMAGE="${PINCHTAB_CDP_SMOKE_CLOAK_IMAGE:-pinchtab-cloakbrowser:test}"
+PINCHTAB_IMAGE="${PINCHTAB_CDP_SMOKE_PINCHTAB_IMAGE:-pinchtab-local:test}"
 CDP_PORT="${PINCHTAB_CDP_PORT:-19222}"
 SERVER_PORT="${PINCHTAB_SERVER_PORT:-19867}"
+PINCHTAB_CONTAINER_PORT="9867"
 CLOAK_DEVTOOLS_PORT="9222"
 CLOAK_FORWARD_PORT="9223"
+CHROME_ALIAS="chrome-cdp"
+CLOAK_ALIAS="cloak-cdp"
 
 TOKEN="cdp-attach-smoke-${RANDOM}${RANDOM}"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pinchtab-cdp-attach.XXXXXX")"
 CHROME_CONTAINER="pinchtab-cdp-smoke-chrome-${RANDOM}"
 CLOAK_CONTAINER="pinchtab-cdp-smoke-cloak-${RANDOM}"
-PINCHTAB_PID=""
+PINCHTAB_CONTAINER="pinchtab-cdp-smoke-server-${RANDOM}"
+NETWORK="pinchtab-cdp-smoke-net-${RANDOM}"
+NETWORK_CREATED=0
 FAILED=0
 ATTACHED_INSTANCE_ID=""
+CDP_ATTACH_URL=""
+CDP_ATTACH_HOST=""
 
 cleanup() {
   set +e
-  if [ -n "${PINCHTAB_PID}" ] && kill -0 "${PINCHTAB_PID}" 2>/dev/null; then
-    kill "${PINCHTAB_PID}" 2>/dev/null || true
-    wait "${PINCHTAB_PID}" 2>/dev/null || true
-  fi
+  docker rm -f "${PINCHTAB_CONTAINER}" >/dev/null 2>&1 || true
   docker rm -f "${CHROME_CONTAINER}" >/dev/null 2>&1 || true
   docker rm -f "${CLOAK_CONTAINER}" >/dev/null 2>&1 || true
+  if [ "${NETWORK_CREATED}" -eq 1 ]; then
+    docker network rm "${NETWORK}" >/dev/null 2>&1 || true
+  fi
   if [ "${FAILED}" -ne 0 ]; then
     echo ""
     echo "Artifacts kept at: ${TMP_DIR}"
@@ -80,34 +90,50 @@ require_cmd docker
 require_cmd curl
 require_cmd jq
 
-BIN="${PINCHTAB_BINARY:-}"
-if [ -z "${BIN}" ]; then
-  if [ -x "${ROOT}/dist/pinchtab" ]; then
-    BIN="${ROOT}/dist/pinchtab"
-  else
-    echo "Building pinchtab binary…"
-    (cd "${ROOT}" && go build -o "${TMP_DIR}/pinchtab" ./cmd/pinchtab)
-    BIN="${TMP_DIR}/pinchtab"
-  fi
-fi
-[ -x "${BIN}" ] || fail "pinchtab binary not executable at ${BIN}"
-
 CONFIG_FILE="${TMP_DIR}/config.json"
 write_config() {
   local provider="$1" binary="${2:-}"
   cat > "${CONFIG_FILE}" <<EOF
 {
-  "server": { "port": "${SERVER_PORT}", "bind": "127.0.0.1", "token": "${TOKEN}" },
+  "server": { "port": "${PINCHTAB_CONTAINER_PORT}", "bind": "0.0.0.0", "token": "${TOKEN}", "stateDir": "/data" },
   "browser": { "provider": "${provider}", "binary": "${binary}" },
+  "multiInstance": { "strategy": "explicit" },
   "security": {
     "attach": {
       "enabled": true,
-      "allowHosts": ["127.0.0.1", "localhost", "::1"],
+      "allowHosts": ["${CDP_ATTACH_HOST}", "${CHROME_ALIAS}", "${CLOAK_ALIAS}", "127.0.0.1", "localhost", "::1"],
       "allowSchemes": ["ws", "http"]
     }
   }
 }
 EOF
+}
+
+ensure_pinchtab_image() {
+  if [ "${SKIP_BUILD:-}" = "1" ]; then
+    if docker image inspect "${PINCHTAB_IMAGE}" >/dev/null 2>&1; then
+      echo "Reusing existing PinchTab image: ${PINCHTAB_IMAGE} (SKIP_BUILD=1)"
+      return
+    fi
+    skip "PinchTab image '${PINCHTAB_IMAGE}' not found and SKIP_BUILD=1 is set"
+  fi
+  echo "Building PinchTab image: ${PINCHTAB_IMAGE}"
+  docker build -t "${PINCHTAB_IMAGE}" "${ROOT}"
+}
+
+ensure_network() {
+  if [ "${NETWORK_CREATED}" -eq 1 ]; then
+    return
+  fi
+  docker network create "${NETWORK}" >/dev/null
+  NETWORK_CREATED=1
+}
+
+container_ip() {
+  local name="$1" ip
+  ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${name}")"
+  [ -n "${ip}" ] || fail "could not resolve Docker IP for ${name}"
+  printf '%s\n' "${ip}"
 }
 
 wait_http() {
@@ -140,23 +166,31 @@ api_get() {
 }
 
 start_pinchtab() {
-  echo ">>> Starting PinchTab server on :${SERVER_PORT}"
-  PINCHTAB_TOKEN="${TOKEN}" PINCHTAB_CONFIG="${CONFIG_FILE}" \
-    "${BIN}" server >"${TMP_DIR}/pinchtab.log" 2>&1 &
-  PINCHTAB_PID=$!
+  local provider="$1"
+  echo ">>> Starting PinchTab server container on host :${SERVER_PORT}"
+  docker rm -f "${PINCHTAB_CONTAINER}" >/dev/null 2>&1 || true
+  docker run -d --rm --name "${PINCHTAB_CONTAINER}" \
+    --network "${NETWORK}" \
+    --user 1000:1000 \
+    --shm-size=2g \
+    -p "127.0.0.1:${SERVER_PORT}:${PINCHTAB_CONTAINER_PORT}" \
+    -e "PINCHTAB_TOKEN=${TOKEN}" \
+    -e "PINCHTAB_CONFIG=/config/config.json" \
+    -v "${CONFIG_FILE}:/config/config.json:ro" \
+    --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+    --tmpfs /data:rw,nosuid,nodev,size=1024m,uid=1000,gid=1000,mode=0755 \
+    "${PINCHTAB_IMAGE}" \
+    >/dev/null
   if ! wait_api_http "http://127.0.0.1:${SERVER_PORT}/health" 60; then
-    cat "${TMP_DIR}/pinchtab.log" || true
+    docker logs "${PINCHTAB_CONTAINER}" >"${TMP_DIR}/pinchtab-${provider}.log" 2>&1 || true
+    cat "${TMP_DIR}/pinchtab-${provider}.log" || true
     fail "PinchTab server did not become healthy"
   fi
-  echo "    pinchtab pid=${PINCHTAB_PID}"
+  echo "    container=${PINCHTAB_CONTAINER}"
 }
 
 stop_pinchtab() {
-  if [ -n "${PINCHTAB_PID}" ] && kill -0 "${PINCHTAB_PID}" 2>/dev/null; then
-    kill "${PINCHTAB_PID}" 2>/dev/null || true
-    wait "${PINCHTAB_PID}" 2>/dev/null || true
-  fi
-  PINCHTAB_PID=""
+  docker rm -f "${PINCHTAB_CONTAINER}" >/dev/null 2>&1 || true
 }
 
 assert_attached_instance() {
@@ -164,7 +198,7 @@ assert_attached_instance() {
   local resp http
   resp="$(api_post /instances/attach "$(jq -nc \
     --arg name "${name}" \
-    --arg url "http://127.0.0.1:${CDP_PORT}" \
+    --arg url "${CDP_ATTACH_URL}" \
     --arg provider "${provider}" \
     '{name:$name, cdpUrl:$url, provider:$provider}')")"
   echo "    /instances/attach response: ${resp}" >&2
@@ -200,9 +234,14 @@ run_chrome_leg() {
   echo ""
   echo "=== Chrome CDP attach leg ==="
 
+  ensure_pinchtab_image
+  ensure_network
+
   echo ">>> Starting Chromium container on :${CDP_PORT}"
   local -a docker_args=(
     docker run -d --rm --name "${CHROME_CONTAINER}"
+    --network "${NETWORK}"
+    --network-alias "${CHROME_ALIAS}"
     -p "127.0.0.1:${CDP_PORT}:9222" \
     "${CHROME_IMAGE}"
   )
@@ -229,8 +268,11 @@ run_chrome_leg() {
     fail "Chromium DevTools not reachable on :${CDP_PORT}"
   fi
 
+  CDP_ATTACH_HOST="$(container_ip "${CHROME_CONTAINER}")"
+  CDP_ATTACH_URL="http://${CDP_ATTACH_HOST}:9222"
+
   write_config "chrome"
-  start_pinchtab
+  start_pinchtab "chrome"
   ATTACHED_INSTANCE_ID=""
   assert_attached_instance "smoke-chrome" "chrome"
   local inst_id="${ATTACHED_INSTANCE_ID}"
@@ -252,6 +294,8 @@ run_chrome_leg() {
 run_cloak_leg() {
   echo ""
   echo "=== CloakBrowser CDP attach leg ==="
+  ensure_pinchtab_image
+  ensure_network
   if ! docker image inspect "${CLOAK_IMAGE}" >/dev/null 2>&1; then
     skip "CloakBrowser image '${CLOAK_IMAGE}' not present — build with tests/tools/docker/cloakbrowser-smoke.Dockerfile to enable"
   fi
@@ -261,6 +305,8 @@ run_cloak_leg() {
 
   echo ">>> Starting CloakBrowser container on :${CDP_PORT}"
   docker run -d --rm --name "${CLOAK_CONTAINER}" \
+    --network "${NETWORK}" \
+    --network-alias "${CLOAK_ALIAS}" \
     -p "127.0.0.1:${CDP_PORT}:${CLOAK_FORWARD_PORT}" \
     -e CLOAK_DEVTOOLS_PORT="${CLOAK_DEVTOOLS_PORT}" \
     -e CLOAK_FORWARD_PORT="${CLOAK_FORWARD_PORT}" \
@@ -294,8 +340,11 @@ run_cloak_leg() {
     fail "CloakBrowser DevTools not reachable on :${CDP_PORT}"
   fi
 
+  CDP_ATTACH_HOST="$(container_ip "${CLOAK_CONTAINER}")"
+  CDP_ATTACH_URL="http://${CDP_ATTACH_HOST}:${CLOAK_FORWARD_PORT}"
+
   write_config "cloak" "/opt/cloakbrowser/chrome"
-  start_pinchtab
+  start_pinchtab "cloak"
   ATTACHED_INSTANCE_ID=""
   assert_attached_instance "smoke-cloak" "cloak"
   local inst_id="${ATTACHED_INSTANCE_ID}"

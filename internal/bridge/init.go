@@ -13,10 +13,11 @@ const popupGuardInitScript = stealth.PopupGuardInitScript
 // InitChrome initializes a Chrome browser for a Bridge instance.
 func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	return bridgeruntime.InitChrome(cfg, bundle, bridgeruntime.Hooks{
-		SetHumanRandSeed:          SetHumanRandSeed,
-		IsChromeProfileLockError:  isChromeProfileLockError,
-		ClearStaleChromeProfile:   clearStaleChromeProfileLock,
-		ConfigureChromeProcessCmd: configureChromeProcess,
+		SetHumanRandSeed:           SetHumanRandSeed,
+		IsChromeProfileLockError:   isChromeProfileLockError,
+		ClearStaleChromeProfile:    clearStaleChromeProfileLock,
+		ConfigureChromeProcessCmd:  configureChromeProcess,
+		QuarantineCorruptedProfile: quarantineCorruptedProfile,
 	})
 }
 

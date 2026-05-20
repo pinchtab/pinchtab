@@ -4,9 +4,75 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestQuarantineCorruptedProfile(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	profileDir := filepath.Join(tmp, "default")
+	if err := os.MkdirAll(filepath.Join(profileDir, "Default"), 0755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	marker := filepath.Join(profileDir, "Default", "Preferences")
+	if err := os.WriteFile(marker, []byte("original"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	quarantinePath, err := quarantineCorruptedProfile(profileDir)
+	if err != nil {
+		t.Fatalf("quarantineCorruptedProfile: %v", err)
+	}
+	if quarantinePath == "" {
+		t.Fatal("expected non-empty quarantine path")
+	}
+	if !strings.HasPrefix(quarantinePath, profileDir+".quarantine-") {
+		t.Fatalf("quarantine path %q should start with %q.quarantine-", quarantinePath, profileDir)
+	}
+
+	// Original marker must live in the quarantined copy, not the new empty dir.
+	if _, err := os.Stat(filepath.Join(quarantinePath, "Default", "Preferences")); err != nil {
+		t.Fatalf("expected marker preserved in quarantine: %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("expected fresh profile dir empty, but original marker still present: err=%v", err)
+	}
+
+	// Fresh profile dir must exist and be writable.
+	info, err := os.Stat(profileDir)
+	if err != nil {
+		t.Fatalf("expected recreated profile dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory at %s", profileDir)
+	}
+}
+
+func TestQuarantineCorruptedProfile_MissingDir(t *testing.T) {
+	t.Parallel()
+
+	path, err := quarantineCorruptedProfile(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err != nil {
+		t.Fatalf("missing dir should not error: %v", err)
+	}
+	if path != "" {
+		t.Fatalf("missing dir should return empty quarantine path, got %q", path)
+	}
+}
+
+func TestQuarantineCorruptedProfile_EmptyPath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := quarantineCorruptedProfile(""); err == nil {
+		t.Fatal("expected error for empty profile dir")
+	}
+	if _, err := quarantineCorruptedProfile("   "); err == nil {
+		t.Fatal("expected error for blank profile dir")
+	}
+}
 
 func TestIsChromeProfileLockError(t *testing.T) {
 	t.Parallel()

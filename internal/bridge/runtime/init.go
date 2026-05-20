@@ -46,6 +46,11 @@ type Hooks struct {
 	IsChromeProfileLockError  func(string) bool
 	ClearStaleChromeProfile   func(profileDir, errMsg string) (bool, error)
 	ConfigureChromeProcessCmd func(*exec.Cmd)
+	// QuarantineCorruptedProfile moves profileDir aside and recreates an
+	// empty dir at the same path. Used to recover from silent CDP attach
+	// failures (observed with CloakBrowser when the profile dir holds
+	// state it cannot ingest). Returns the quarantine path on success.
+	QuarantineCorruptedProfile func(profileDir string) (string, error)
 }
 
 // InitChrome initializes a Chrome browser for a Bridge instance.
@@ -251,10 +256,10 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 }
 
 func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, geoAlignment launchGeoAlignment) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
-	return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, false)
+	return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, false, false)
 }
 
-func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, geoAlignment launchGeoAlignment, retriedProfileLock bool) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks, geoAlignment launchGeoAlignment, retriedProfileLock, retriedProfileCorruption bool) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 
@@ -266,6 +271,7 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	const chromeStartupTimeout = 20 * time.Second
 	type runResult struct{ err error }
 	runCh := make(chan runResult, 1)
+	startTs := time.Now()
 	go func() {
 		runCh <- runResult{chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 			return nil
@@ -281,6 +287,8 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	}
 
 	if err != nil {
+		elapsed := time.Since(startTs)
+		silentDrop := isSilentCDPAttachFailure(cfg, err, parentCtx, browserCtx, elapsed)
 		browserCancel()
 		allocCancel()
 		errMsg := err.Error()
@@ -289,8 +297,23 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 			if hooks.ClearStaleChromeProfile != nil {
 				if recovered, _ := hooks.ClearStaleChromeProfile(cfg.ProfileDir, errMsg); recovered {
 					time.Sleep(250 * time.Millisecond)
-					return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, true)
+					return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, true, retriedProfileCorruption)
 				}
+			}
+		}
+
+		if silentDrop && !retriedProfileCorruption && hooks.QuarantineCorruptedProfile != nil && strings.TrimSpace(cfg.ProfileDir) != "" {
+			if quarantinePath, qerr := hooks.QuarantineCorruptedProfile(cfg.ProfileDir); qerr == nil {
+				slog.Warn("cloakbrowser silently dropped CDP attach; quarantined profile and retrying with fresh profile",
+					"originalProfile", cfg.ProfileDir,
+					"quarantinedTo", quarantinePath,
+					"elapsedMs", elapsed.Milliseconds())
+				time.Sleep(500 * time.Millisecond)
+				return startChromeWithRecovery(parentCtx, cfg, bundle, opts, debugPort, hooks, geoAlignment, retriedProfileLock, true)
+			} else {
+				slog.Warn("cloakbrowser silently dropped CDP attach; profile quarantine failed",
+					"originalProfile", cfg.ProfileDir,
+					"err", qerr.Error())
 			}
 		}
 
@@ -300,6 +323,9 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 			return startChromeWithRemoteAllocator(parentCtx, cfg, bundle, debugPort, bundle.Script, geoAlignment)
 		}
 
+		if silentDrop {
+			return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w (cloakbrowser dropped CDP attach silently after %dms; profile %q may be corrupted — try removing it or use a fresh profile)", err, elapsed.Milliseconds(), cfg.ProfileDir)
+		}
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w", err)
 	}
 
@@ -323,6 +349,34 @@ func isStartupTimeout(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context deadline exceeded")
+}
+
+// isSilentCDPAttachFailure detects the CloakBrowser-specific pattern where
+// Chrome accepts the launch, prints "DevTools listening", responds to the
+// initial Target.setDiscoverTargets, but then drops the websocket between
+// Target.attachToTarget and the reply — chromedp internally cancels the
+// browser context and chromedp.Run returns "context canceled" within a
+// few hundred milliseconds. Manifests when the profile dir holds state
+// CloakBrowser refuses to ingest.
+func isSilentCDPAttachFailure(cfg *config.RuntimeConfig, err error, parentCtx, browserCtx context.Context, elapsed time.Duration) bool {
+	if cfg == nil || !config.IsCloakBrowserProvider(cfg.BrowserProvider) {
+		return false
+	}
+	if err == nil {
+		return false
+	}
+	if parentCtx != nil && parentCtx.Err() != nil {
+		return false
+	}
+	if browserCtx == nil || browserCtx.Err() == nil {
+		return false
+	}
+	if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
+		return false
+	}
+	// The silent drop is fast — chromedp cancels within ~1s. Any later
+	// failure is more likely a real timeout from a different cause.
+	return elapsed < 5*time.Second
 }
 
 func shouldRetryChromeStartupWithDirectLaunch(parentCtx context.Context, err error) bool {

@@ -598,6 +598,7 @@ func TestBringUpSharedStackCloakBuildsSupportImagesOnly(t *testing.T) {
 		logsMode: "hide",
 		overrides: &providerOverrides{
 			provider:     "cloak",
+			image:        defaultCloakImage,
 			composeFiles: []string{"/tmp/docker-compose.cloak.yml"},
 		},
 	}

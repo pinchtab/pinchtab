@@ -60,3 +60,5 @@ tests/tools/browserbench/results/
 /runner
 tests/tools/scripts/runner
 skills/agent-browser
+tests/stealth-score/results/
+tests/stealth-score/.tmp/
