@@ -86,6 +86,7 @@
       <h2>Form Submitted Successfully!</h2>
       <p class="verification-text">VERIFY_FORM_SUBMITTED_SUCCESS</p>
       <div id="submitted-data"></div>
+      <button type="button" id="reset-form-btn" onclick="resetForm()">Reset Form</button>
     </div>
   </main>
   
@@ -147,6 +148,13 @@
       `;
       form.style.display = 'none';
     });
+
+    function resetForm() {
+      const form = document.getElementById('contact-form');
+      form.reset();
+      form.style.display = '';
+      document.getElementById('form-result').style.display = 'none';
+    }
   </script>
 </body>
 </html>
