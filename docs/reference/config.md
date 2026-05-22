@@ -67,6 +67,7 @@ pinchtab config show
 ```
 
 Secret values such as `server.token` remain masked in this output.
+The Security section also includes `security.trustLoopbackProxy` as `Trust Loopback Proxy` so proxy trust posture is explicit.
 
 ### `pinchtab config token`
 

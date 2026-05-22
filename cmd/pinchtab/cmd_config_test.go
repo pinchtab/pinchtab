@@ -177,6 +177,36 @@ func TestConfigShowLoadsLegacyFlatConfigWithoutToken(t *testing.T) {
 	}
 }
 
+func TestConfigShowIncludesTrustLoopbackProxy(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	t.Setenv("PINCHTAB_TOKEN", "")
+
+	fc := config.DefaultFileConfig()
+	if fc.Security.TrustLoopbackProxy == nil {
+		t.Fatal("default trustLoopbackProxy pointer is nil")
+	}
+	*fc.Security.TrustLoopbackProxy = true
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+	})
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "show"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "Trust Loopback Proxy: true") {
+		t.Fatalf("expected config show output to include trust loopback proxy setting, got %q", output)
+	}
+}
+
 func TestConfigGetMasksServerToken(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv("PINCHTAB_CONFIG", configPath)
