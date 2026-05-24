@@ -165,3 +165,55 @@ func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
 		t.Fatalf("expected lock file to be removed, got err=%v", err)
 	}
 }
+
+func TestIsProfileOwnedByRunningPinchtabTreatsPinchTabPIDWithoutChromeAsStale(t *testing.T) {
+	profileDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profileDir, "pinchtab.pid"), []byte("1234"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	origPID := chromePIDIsRunning
+	origPinchTab := isPinchTabProcessFunc
+	origLister := chromeProfileProcessLister
+	t.Cleanup(func() {
+		chromePIDIsRunning = origPID
+		isPinchTabProcessFunc = origPinchTab
+		chromeProfileProcessLister = origLister
+	})
+
+	chromePIDIsRunning = func(pid int) (bool, error) { return pid == 1234, nil }
+	isPinchTabProcessFunc = func(pid int) bool { return pid == 1234 }
+	chromeProfileProcessLister = func(path string) ([]chromeProfileProcess, error) { return nil, nil }
+
+	owned, _ := isProfileOwnedByRunningPinchtab(profileDir)
+	if owned {
+		t.Fatal("expected stale pinchtab pid with no chrome to be treated as not owned")
+	}
+}
+
+func TestIsProfileOwnedByRunningPinchtabKeepsLockWhenChromeUsesProfile(t *testing.T) {
+	profileDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profileDir, "pinchtab.pid"), []byte("1234"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	origPID := chromePIDIsRunning
+	origPinchTab := isPinchTabProcessFunc
+	origLister := chromeProfileProcessLister
+	t.Cleanup(func() {
+		chromePIDIsRunning = origPID
+		isPinchTabProcessFunc = origPinchTab
+		chromeProfileProcessLister = origLister
+	})
+
+	chromePIDIsRunning = func(pid int) (bool, error) { return pid == 1234, nil }
+	isPinchTabProcessFunc = func(pid int) bool { return pid == 1234 }
+	chromeProfileProcessLister = func(path string) ([]chromeProfileProcess, error) {
+		return []chromeProfileProcess{{PID: "99", Command: "/usr/bin/chromium --user-data-dir=" + path}}, nil
+	}
+
+	owned, pid := isProfileOwnedByRunningPinchtab(profileDir)
+	if !owned || pid != 1234 {
+		t.Fatalf("expected profile with active chrome to stay locked, got owned=%v pid=%d", owned, pid)
+	}
+}

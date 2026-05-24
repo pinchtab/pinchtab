@@ -27,6 +27,7 @@ var chromeProfileProcessLister = findChromeProfileProcesses
 var chromePIDIsRunning = isChromePIDRunning
 var killChromeProfileProcesses = killProcesses
 var isProfileOwnedByRunningPinchtabMock = isProfileOwnedByRunningPinchtab
+var isPinchTabProcessFunc = isPinchTabProcess
 
 var chromeSingletonFiles = []string{
 	"SingletonLock",
@@ -138,7 +139,17 @@ func isProfileOwnedByRunningPinchtab(profileDir string) (bool, int) {
 	if err == nil && running {
 		// Even if the PID is running, check if it's actually a pinchtab process
 		// to handle PID reuse.
-		if isPinchTabProcess(pid) {
+		if isPinchTabProcessFunc(pid) {
+			processes, procErr := chromeProfileProcessLister(profileDir)
+			if procErr == nil && len(processes) == 0 {
+				slog.Debug("pinchtab pid file points to a running pinchtab but no chrome is using the profile; treating lock as stale",
+					"profile", profileDir, "pid", pid)
+				return false, 0
+			}
+			if procErr != nil {
+				slog.Debug("unable to verify chrome ownership for running pinchtab pid; keeping profile locked",
+					"profile", profileDir, "pid", pid, "err", procErr)
+			}
 			slog.Debug("profile is owned by another active pinchtab", "profile", profileDir, "pid", pid)
 			return true, pid
 		}
