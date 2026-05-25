@@ -68,8 +68,8 @@ func TestStatusFromBundleReflectsCurrentCapabilityShape(t *testing.T) {
 	if status.Capabilities["errorStackSanitized"] {
 		t.Fatal("expected current full mode to keep stack sanitization disabled")
 	}
-	if status.Capabilities["functionToStringMasked"] {
-		t.Fatal("expected current full mode to keep function-toString masking disabled")
+	if !status.Capabilities["functionToStringMasked"] {
+		t.Fatal("expected full mode to report function-toString masking")
 	}
 	if !status.Capabilities["functionToStringNative"] {
 		t.Fatal("expected full mode to report native Function.prototype.toString semantics")

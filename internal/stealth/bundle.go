@@ -217,8 +217,11 @@ func capabilityMap(level Level, headless bool) map[string]bool {
 		caps["chromeRuntimeConnect"] = true
 		caps["chromeRuntimeSendMessage"] = true
 	}
-	if level == LevelFull && headless {
-		caps["webglSpoofing"] = true
+	if level == LevelFull {
+		caps["functionToStringMasked"] = true
+		if headless {
+			caps["webglSpoofing"] = true
+		}
 	}
 
 	return caps

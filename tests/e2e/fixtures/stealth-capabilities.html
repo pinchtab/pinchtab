@@ -199,8 +199,29 @@
           /^rgb/.test(systemColorStyle.backgroundColor || '') &&
           /^rgb/.test(systemColorStyle.borderTopColor || '');
         systemColorProbe.remove();
+        const fullModeRuntime = safe(() => String(typeof __pinchtab_stealth_level !== 'undefined' ? __pinchtab_stealth_level : '') === 'full', false);
         const iframeIsolation = await probeIframeIsolation();
         const stackProbe = probeStackSanitization();
+        const iframeFunctionToStringParity = await safeAsync(async () => {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = 'about:blank';
+          document.body.appendChild(iframe);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          try {
+            const frameWindow = iframe.contentWindow;
+            if (!frameWindow || !frameWindow.Function || !frameWindow.Function.prototype) return true;
+            const foreignToString = frameWindow.Function.prototype.toString;
+            if (typeof foreignToString !== 'function') return false;
+            const parentScreenWidthDescriptor = safe(() => Object.getOwnPropertyDescriptor(screen, 'width'), null);
+            const parentGetter = parentScreenWidthDescriptor && parentScreenWidthDescriptor.get;
+            if (!parentGetter) return true;
+            const source = safe(() => foreignToString.call(parentGetter), '');
+            return /\[native code\]/.test(source);
+          } finally {
+            try { document.body.removeChild(iframe); } catch(e) {}
+          }
+        }, true);
         const permissionsQueryToString = safe(() => Function.prototype.toString.call(navigator.permissions.query), '');
         const runtimeConnectToString = safe(() => {
           return window.chrome && window.chrome.runtime && typeof window.chrome.runtime.connect === 'function'
@@ -382,7 +403,8 @@
           iframeIsolation,
           errorStackSanitized: false,
           stackProbe: stackProbe.stack,
-          functionToStringMasked: false,
+          functionToStringMasked: fullModeRuntime,
+          iframeFunctionToStringParity,
           functionToStringNative,
           functionToStringName: safe(() => Function.prototype.toString.name, ''),
           functionToStringOwnNames,
@@ -462,6 +484,8 @@
         ['intlLocaleCoherent', capabilities.intlLocaleCoherent, capabilities.intlLocaleValues.join(', ') || 'none'],
         ['errorPrepareStackTraceNative', capabilities.errorPrepareStackTraceNative, String(capabilities.errorPrepareStackTraceNative)],
         ['functionToStringNative', capabilities.functionToStringNative, capabilities.functionToStringName + ' [' + capabilities.functionToStringOwnNames.join(', ') + ']'],
+        ['functionToStringMasked', capabilities.functionToStringMasked, String(capabilities.functionToStringMasked)],
+        ['iframeFunctionToStringParity', capabilities.iframeFunctionToStringParity, String(capabilities.iframeFunctionToStringParity)],
         ['devtoolsFormattersAbsentByDefault', capabilities.devtoolsFormattersAbsentByDefault, String(capabilities.devtoolsFormattersAbsentByDefault)],
         ['userAgentDataBrandMajorCoherent', capabilities.userAgentDataBrandMajorCoherent, JSON.stringify(capabilities.userAgentDataBrands)],
         ['userAgentDataVersionCoherent', capabilities.userAgentDataVersionCoherent, capabilities.userAgent + ' / ' + capabilities.userAgentDataPlatform],

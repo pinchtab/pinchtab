@@ -76,9 +76,12 @@ run_stealth_level_matrix() {
       assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'true' "status enables iframe isolation at medium"
     else
       assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "status keeps iframe isolation disabled at full"
+      assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'true' "status enables toString masking at full"
     fi
     assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium+"
-    assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium+"
+    if [ "$STEALTH_LEVEL" != "full" ]; then
+      assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium"
+    fi
     assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "status keeps native Function.prototype.toString at medium+"
   fi
   assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "status reports locale coherence"
@@ -154,7 +157,8 @@ run_stealth_level_matrix() {
     assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at full"
     assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains absent at full"
     assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at full"
-    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "false" "native-looking toString masking remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "true" "native-looking toString masking is active at full"
+    assert_eval_poll "window.__stealthCapabilities.iframeFunctionToStringParity" "true" "same-origin iframes get consistent toString masking at full"
   fi
   assert_eval_poll "window.__stealthCapabilities.functionToStringNative" "true" "Function.prototype.toString remains native-like"
   assert_eval_poll "window.__stealthCapabilities.webdriverDescriptorNativeLike" "true" "webdriver descriptor getter stays native-like"
