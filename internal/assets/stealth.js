@@ -333,10 +333,18 @@ if (!window.chrome.runtime) {
   }
 })();
 
-Object.defineProperty(navigator.connection || {}, 'rtt', {
-  get: () => 50 + Math.floor(seededRandom(sessionSeed * 3) * 100),
-  configurable: true
-});
+if (navigator.connection && !('rtt' in navigator.connection)) {
+  try {
+    const connectionProto = Object.getPrototypeOf(navigator.connection);
+    if (connectionProto && !Object.prototype.hasOwnProperty.call(connectionProto, 'rtt')) {
+      Object.defineProperty(connectionProto, 'rtt', {
+        get: () => 50 + Math.floor(seededRandom(sessionSeed * 3) * 100),
+        configurable: true,
+        enumerable: true
+      });
+    }
+  } catch (e) {}
+}
 
 // NETWORK INFORMATION - downlinkMax is often missing in headless.
 // Define it on the prototype so page checks see a normal API surface without
@@ -454,8 +462,13 @@ if (stealthLevel === 'medium' || stealthLevel === 'full') {
     window.chrome.runtime.sendMessage = wrapCallableAsNative(sendMessage, (target, thisArg, args) => Reflect.apply(target, thisArg, args));
   }
   
-  window.chrome.runtime.onConnect = window.chrome.runtime.onConnect || { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } };
-  window.chrome.runtime.onMessage = window.chrome.runtime.onMessage || { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } };
+  const makeEventHub = () => ({
+    addListener: maskFunctionAsNative(function addListener() {}, 'addListener'),
+    removeListener: maskFunctionAsNative(function removeListener() {}, 'removeListener'),
+    hasListener: maskFunctionAsNative(function hasListener() { return false; }, 'hasListener')
+  });
+  window.chrome.runtime.onConnect = window.chrome.runtime.onConnect || makeEventHub();
+  window.chrome.runtime.onMessage = window.chrome.runtime.onMessage || makeEventHub();
   
 })();
 
@@ -597,6 +610,39 @@ if (navigator.maxTouchPoints !== 0) {
   }
 
   document.querySelectorAll('iframe').forEach(patchIframeElement);
+
+  if (stealthLevel === 'full') {
+    try {
+      const iframeProto = HTMLIFrameElement.prototype;
+      const nativeCWDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentWindow');
+      if (nativeCWDesc && nativeCWDesc.get) {
+        const nativeCWGet = nativeCWDesc.get;
+        Object.defineProperty(iframeProto, 'contentWindow', {
+          get() {
+            const fw = Reflect.apply(nativeCWGet, this, []);
+            if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
+            return fw;
+          },
+          configurable: true,
+          enumerable: true
+        });
+      }
+      const nativeCDDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentDocument');
+      if (nativeCDDesc && nativeCDDesc.get) {
+        const nativeCDGet = nativeCDDesc.get;
+        Object.defineProperty(iframeProto, 'contentDocument', {
+          get() {
+            const fd = Reflect.apply(nativeCDGet, this, []);
+            const fw = fd && fd.defaultView;
+            if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
+            return fd;
+          },
+          configurable: true,
+          enumerable: true
+        });
+      }
+    } catch (e) {}
+  }
 })();
 
 } // end medium level
