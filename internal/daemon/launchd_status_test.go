@@ -1,13 +1,13 @@
 package daemon
 
 import (
+	"errors"
 	"testing"
 )
 
 func TestLaunchdManagerStatusEmptyOutput(t *testing.T) {
 	// When launchctl print returns empty output with no error,
-	// Status() currently returns empty string and nil error.
-	// This is ambiguous - it could mean "daemon not found" or "unknown state".
+	// Status() should return the explicit no-output message.
 	runner := &fakeCommandRunner{
 		outputs: map[string]string{
 			"launchctl print gui/501/com.pinchtab.pinchtab": "",
@@ -22,8 +22,7 @@ func TestLaunchdManagerStatusEmptyOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	// The current behavior returns an empty string for empty output.
-	// This test documents the current behavior.
+	// This documents the explicit fallback message for empty output.
 	if output != "Pinchtab daemon status returned no output." {
 		t.Fatalf("got: %q", output)
 	}
@@ -31,7 +30,7 @@ func TestLaunchdManagerStatusEmptyOutput(t *testing.T) {
 
 func TestLaunchdManagerPidNotRunning(t *testing.T) {
 	// When the daemon is not running, launchctl print returns an error.
-	// Pid() should return ("", nil) since no pid can be read.
+	// Pid() should surface that error.
 	runner := &fakeCommandRunner{
 		errors: map[string]error{
 			"launchctl print gui/501/com.pinchtab.pinchtab": errors.New("daemon not running"),
@@ -43,8 +42,8 @@ func TestLaunchdManagerPidNotRunning(t *testing.T) {
 	}
 
 	pid, err := manager.Pid()
-	if err != nil {
-		t.Fatalf("expected no error for not-running daemon, got: %v", err)
+	if err == nil {
+		t.Fatal("expected error for not-running daemon")
 	}
 	if pid != "" {
 		t.Fatalf("expected empty pid for not-running daemon, got: %q", pid)
