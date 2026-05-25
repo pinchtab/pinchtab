@@ -101,6 +101,8 @@ function installFunctionToStringMask(targetProto) {
       }
       return Reflect.apply(nativeFunctionToString, this, []);
     }
+    // Register the replacement toString itself so toString.call(toString) returns [native code].
+    try { nativeFunctionSourceMap.set(toString, makeNativeFunctionSource('toString')); } catch(e) {}
     Object.defineProperty(targetProto, 'toString', {
       value: toString, configurable: true, writable: true, enumerable: false
     });
@@ -617,28 +619,28 @@ if (navigator.maxTouchPoints !== 0) {
       const nativeCWDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentWindow');
       if (nativeCWDesc && nativeCWDesc.get) {
         const nativeCWGet = nativeCWDesc.get;
+        function contentWindowGetter() {
+          const fw = Reflect.apply(nativeCWGet, this, []);
+          if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
+          return fw;
+        }
+        recordNativeFunctionSource(contentWindowGetter, 'get contentWindow');
         Object.defineProperty(iframeProto, 'contentWindow', {
-          get() {
-            const fw = Reflect.apply(nativeCWGet, this, []);
-            if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
-            return fw;
-          },
-          configurable: true,
-          enumerable: true
+          get: contentWindowGetter, configurable: true, enumerable: true
         });
       }
       const nativeCDDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentDocument');
       if (nativeCDDesc && nativeCDDesc.get) {
         const nativeCDGet = nativeCDDesc.get;
+        function contentDocumentGetter() {
+          const fd = Reflect.apply(nativeCDGet, this, []);
+          const fw = fd && fd.defaultView;
+          if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
+          return fd;
+        }
+        recordNativeFunctionSource(contentDocumentGetter, 'get contentDocument');
         Object.defineProperty(iframeProto, 'contentDocument', {
-          get() {
-            const fd = Reflect.apply(nativeCDGet, this, []);
-            const fw = fd && fd.defaultView;
-            if (fw && fw !== window) { try { patchIframeWindow(fw); } catch(e) {} }
-            return fd;
-          },
-          configurable: true,
-          enumerable: true
+          get: contentDocumentGetter, configurable: true, enumerable: true
         });
       }
     } catch (e) {}

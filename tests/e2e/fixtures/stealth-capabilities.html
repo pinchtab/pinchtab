@@ -403,7 +403,11 @@
           iframeIsolation,
           errorStackSanitized: fullModeRuntime,
           stackProbe: stackProbe.stack,
-          functionToStringMasked: fullModeRuntime,
+          functionToStringMasked: safe(() => {
+            if (!fullModeRuntime) return false;
+            const source = Function.prototype.toString.call(Function.prototype.toString);
+            return /\[native code\]/.test(source);
+          }, false),
           iframeFunctionToStringParity,
           functionToStringNative,
           functionToStringName: safe(() => Function.prototype.toString.name, ''),
