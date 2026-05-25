@@ -70,7 +70,8 @@ const seededRandom = (function() {
 })();
 
 const stackSanitizerPatterns = [
-  /\b(?:maskFunctionAsNative|wrapCallableAsNative|wrapConstructableAsNative)\b/,
+  /\b(?:Object|Reflect)\.(?:apply|construct|get|set)\b/,
+  /\b(?:maskFunctionAsNative|wrapCallableAsNative|wrapConstructableAsNative|createNativeLikeGetter)\b/,
   /__pinchtab_/,
   /\bProxy\b/
 ];
@@ -111,11 +112,11 @@ function wrapCallableAsNative(fn, applyHandler) {
     return fn;
   }
   try {
-    return new Proxy(fn, {
+    return new Proxy(fn, wrapProxyHandlerWithSanitizedErrors({
       apply(target, thisArg, args) {
         return applyHandler(target, thisArg, args || []);
       }
-    });
+    }));
   } catch (e) {
     return fn;
   }
@@ -126,14 +127,14 @@ function wrapConstructableAsNative(fn, constructHandler) {
     return fn;
   }
   try {
-    return new Proxy(fn, {
+    return new Proxy(fn, wrapProxyHandlerWithSanitizedErrors({
       apply(target, thisArg, args) {
         return constructHandler(target, args || [], target);
       },
       construct(target, args, newTarget) {
         return constructHandler(target, args || [], newTarget || target);
       }
-    });
+    }));
   } catch (e) {
     return fn;
   }
@@ -161,6 +162,31 @@ function sanitizeErrorStack(error) {
     }
   } catch (e) {}
   return error;
+}
+
+function sanitizeThrownError(error) {
+  if (stealthLevel !== 'full') return error;
+  return sanitizeErrorStack(error);
+}
+
+function wrapProxyHandlerWithSanitizedErrors(handler) {
+  if (!handler || typeof handler !== 'object') return handler;
+  const wrapped = {};
+  for (const trap of Object.keys(handler)) {
+    if (typeof handler[trap] === 'function') {
+      const original = handler[trap];
+      wrapped[trap] = function() {
+        try {
+          return original.apply(this, arguments);
+        } catch (e) {
+          throw sanitizeThrownError(e);
+        }
+      };
+    } else {
+      wrapped[trap] = handler[trap];
+    }
+  }
+  return wrapped;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

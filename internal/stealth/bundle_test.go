@@ -65,8 +65,8 @@ func TestStatusFromBundleReflectsCurrentCapabilityShape(t *testing.T) {
 	if status.Capabilities["iframeIsolation"] {
 		t.Fatal("expected current full mode to keep iframe isolation capability disabled")
 	}
-	if status.Capabilities["errorStackSanitized"] {
-		t.Fatal("expected current full mode to keep stack sanitization disabled")
+	if !status.Capabilities["errorStackSanitized"] {
+		t.Fatal("expected full mode to report stack sanitization")
 	}
 	if !status.Capabilities["functionToStringMasked"] {
 		t.Fatal("expected full mode to report function-toString masking")

@@ -401,7 +401,7 @@
           matchMediaNameNative: typeof window.matchMedia !== 'function' || safe(() => window.matchMedia.name === 'matchMedia', false),
           maxTouchPointsDefined: typeof navigator.maxTouchPoints !== 'undefined',
           iframeIsolation,
-          errorStackSanitized: false,
+          errorStackSanitized: fullModeRuntime,
           stackProbe: stackProbe.stack,
           functionToStringMasked: fullModeRuntime,
           iframeFunctionToStringParity,

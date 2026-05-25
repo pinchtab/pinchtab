@@ -219,6 +219,7 @@ func capabilityMap(level Level, headless bool) map[string]bool {
 	}
 	if level == LevelFull {
 		caps["functionToStringMasked"] = true
+		caps["errorStackSanitized"] = true
 		if headless {
 			caps["webglSpoofing"] = true
 		}

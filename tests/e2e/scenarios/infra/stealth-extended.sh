@@ -78,7 +78,11 @@ run_stealth_level_matrix() {
       assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "status keeps iframe isolation disabled at full"
       assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'true' "status enables toString masking at full"
     fi
-    assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium+"
+    if [ "$STEALTH_LEVEL" = "full" ]; then
+      assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'true' "status enables stack sanitization at full"
+    else
+      assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium"
+    fi
     if [ "$STEALTH_LEVEL" != "full" ]; then
       assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium"
     fi
@@ -156,7 +160,7 @@ run_stealth_level_matrix() {
   else
     assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at full"
     assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains absent at full"
-    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "true" "stack sanitization is active at full"
     assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "true" "native-looking toString masking is active at full"
     assert_eval_poll "window.__stealthCapabilities.iframeFunctionToStringParity" "true" "same-origin iframes get consistent toString masking at full"
   fi
