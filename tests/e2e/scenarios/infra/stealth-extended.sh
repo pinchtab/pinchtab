@@ -409,30 +409,6 @@ run_stealth_level_matrix() {
   E2E_SERVER="$ORIG_URL"
 }
 
-if [ "${STEALTH_MATRIX:-0}" = "1" ]; then
-  matrix_levels=()
-  if [ -n "${STEALTH_LEVEL:-}" ]; then
-    matrix_levels=("${STEALTH_LEVEL}")
-  else
-    matrix_levels=(light medium full)
-  fi
-
-  original_level="${STEALTH_LEVEL:-}"
-  for matrix_level in "${matrix_levels[@]}"; do
-    STEALTH_LEVEL="${matrix_level}"
-    run_stealth_level_matrix
-  done
-  if [ -n "${original_level}" ]; then
-    STEALTH_LEVEL="${original_level}"
-  else
-    unset STEALTH_LEVEL
-  fi
-  if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    finish_suite
-  fi
-  return 0
-fi
-
 # Adds the heavier heuristics and secure-instance smoke checks on top of the
 # baseline coverage in 45-bot-detection.sh.
 

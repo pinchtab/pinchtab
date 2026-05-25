@@ -63,7 +63,6 @@ services:
       - E2E_SERVER=http://pinchtab:9999
       - E2E_SERVER_TOKEN=e2e-token
       - FIXTURES_URL=http://fixtures:80
-      - STEALTH_MATRIX
     volumes:
       - ./:/e2e:ro
       - ./results:/results
