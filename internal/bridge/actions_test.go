@@ -350,6 +350,22 @@ func TestRemovedHumanActionKindsAreUnknown(t *testing.T) {
 	}
 }
 
+func TestExecuteAction_ClickRejectsModeAndHumanizeTogether(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
+		Kind:     ActionClick,
+		Ref:      "e5",
+		Mode:     "dom",
+		Humanize: boolPtr(true),
+	})
+	if err == nil {
+		t.Fatal("expected error when mode and humanize are both set")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected mutually exclusive error, got: %v", err)
+	}
+}
+
 func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	raw := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
 	ctx, cancel := context.WithCancel(context.Background())

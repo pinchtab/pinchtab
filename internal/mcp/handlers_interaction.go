@@ -59,6 +59,9 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 					if mode != "dom" && mode != "dispatch" {
 						return mcp.NewToolResultError("mode must be 'dom' or 'dispatch'"), nil
 					}
+					if humanize, ok := optBool(r, "humanize"); ok && humanize {
+						return mcp.NewToolResultError("mode and humanize are mutually exclusive"), nil
+					}
 					payload["mode"] = mode
 				}
 				dialogAction := strings.ToLower(firstNonEmptyString(r, "dialogAction", "onDialog"))
