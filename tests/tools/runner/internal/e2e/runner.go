@@ -388,7 +388,7 @@ func (r *Runner) dockerSmokeSteps() []dockerSmokeStep {
 		steps = append(steps, dockerSmokeStep{
 			Name:                 "docker: build release image",
 			Tags:                 []string{"docker", "build", "release", "image"},
-			Command:              []string{"docker", "build", "-t", releaseImage, "."},
+			Command:              []string{"docker", "build", "--load", "-t", releaseImage, "."},
 			ProvidesReleaseImage: true,
 		})
 	}
@@ -396,7 +396,7 @@ func (r *Runner) dockerSmokeSteps() []dockerSmokeStep {
 		steps = append(steps, dockerSmokeStep{
 			Name:                "docker: build Chrome for Testing image",
 			Tags:                []string{"docker", "build", "chrome", "cft", "image"},
-			Command:             []string{"docker", "build", "--platform", "linux/amd64", "-f", "tests/tools/docker/chrome-cft-smoke.Dockerfile", "-t", chromeImage, "."},
+			Command:             []string{"docker", "build", "--load", "--platform", "linux/amd64", "-f", "tests/tools/docker/chrome-cft-smoke.Dockerfile", "-t", chromeImage, "."},
 			ProvidesChromeImage: true,
 		})
 	}
