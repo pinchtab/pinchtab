@@ -63,6 +63,10 @@ func JSClickByBackendNode(ctx context.Context, nodeID int64) error {
 	return bridgecdpops.JSClickByBackendNode(ctx, nodeID)
 }
 
+func JSDispatchClickByBackendNode(ctx context.Context, nodeID int64) error {
+	return bridgecdpops.JSDispatchClickByBackendNode(ctx, nodeID)
+}
+
 func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.DoubleClickByCoordinate(ctx, x, y)
 }

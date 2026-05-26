@@ -117,6 +117,49 @@ assert_json_eq "$RESULT" '.result' '240' "wheel delta Y accumulated"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab occluded click supports dom and dispatch modes"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/occluded-click.html\"}"
+assert_ok "navigate"
+
+pt_get "/snapshot?filter=interactive"
+assert_ok "snapshot"
+require_ref "button" "Proceed" TARGET_REF && {
+  pt_post /action "{\"kind\":\"click\",\"ref\":\"${TARGET_REF}\"}"
+  assert_http_status "500" "occluded ref click returns action failure"
+  assert_json_contains "$RESULT" '.error' 'element is occluded' "occluded error surfaced"
+
+  pt_get "/box?ref=${TARGET_REF}"
+  assert_ok "box lookup by ref"
+  assert_result_jq '.box.width > 0 and .box.height > 0' "box returns positive dimensions" "box dimensions missing"
+
+  pt_post /action "{\"kind\":\"mouse-move\",\"ref\":\"${TARGET_REF}\"}"
+  assert_ok "mouse-move by ref yields coordinates"
+  assert_result_jq '.result.x > 0 and .result.y > 0' "mouse-move exposes positive coordinates" "mouse-move coordinates missing"
+
+  pt_post /action "{\"kind\":\"click\",\"ref\":\"${TARGET_REF}\",\"mode\":\"dom\"}"
+  assert_ok "dom mode click succeeds despite occlusion"
+
+  pt_post /evaluate '{"expression":"window.occludedClickState"}'
+  assert_ok "evaluate click state after dom mode"
+  assert_json_eq "$RESULT" '.result.clicked' 'true' "dom mode triggered click"
+  assert_json_eq "$RESULT" '.result.clicks' '1' "dom mode fired one click"
+
+  pt_post /evaluate '{"expression":"window.occludedClickState = { clicked: false, clicks: 0, lastClientX: null, lastClientY: null }; window.occludedClickState"}'
+  assert_ok "reset click state"
+
+  pt_post /action "{\"kind\":\"click\",\"ref\":\"${TARGET_REF}\",\"mode\":\"dispatch\"}"
+  assert_ok "dispatch mode click succeeds despite occlusion"
+
+  pt_post /evaluate '{"expression":"window.occludedClickState"}'
+  assert_ok "evaluate click state after dispatch mode"
+  assert_json_eq "$RESULT" '.result.clicked' 'true' "dispatch mode triggered click"
+  assert_json_eq "$RESULT" '.result.clicks' '1' "dispatch mode fired one click"
+}
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab mouse current-pointer sequence"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/mouse-events.html\"}"

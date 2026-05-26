@@ -25,6 +25,7 @@ OK
 | `--dialog-text` | Prompt response text (with `--dialog-action accept`) |
 | `--x`, `--y` | Click at specific coordinates |
 | `--humanize` | Use humanized bezier+jitter input path (overrides instance config) |
+| `--mode dom\|dispatch` | Override the default click behavior. Omit `--mode` for the normal click path, use `dom` for `element.click()`, or `dispatch` for synthetic click events on the target |
 | `--json` | Full JSON response |
 | `--tab` | Target specific tab |
 
@@ -37,7 +38,9 @@ pinchtab click "text:Submit"            # Click by text
 pinchtab click e5 --snap                # Click and show new snapshot
 pinchtab click e5 --wait-nav            # Click and wait for navigation
 pinchtab click e5 --dialog-action accept  # Auto-accept alert/confirm
-pinchtab click --x 100 --y 200          # Click at coordinates
+pinchtab click e5 --mode dom             # Activate target directly despite occlusion
+pinchtab click e5 --mode dispatch        # Dispatch click events on target despite occlusion
+pinchtab click --x 100 --y 200           # Click at coordinates
 ```
 
 ## Notes
@@ -48,7 +51,10 @@ pinchtab click --x 100 --y 200          # Click at coordinates
 - Use [`/frame`](./frame.md) before selector-based iframe actions
 - Missing selectors fail immediately; use `pinchtab wait` first for dynamic UI (see [`commands.md`](../commands.md))
 - The API also accepts `selector` field: `{"kind":"click","selector":"#login"}`
-- Raw input is the default. To opt a click into the slower humanized path for a page that needs it, pass `humanize:true` in the action JSON or set `instanceDefaults.humanize:true`.
+- Click behavior works like this: omit `mode` for the normal click path, use `mode:"dom"` for `element.click()`, or `mode:"dispatch"` for synthetic click events.
+- `mode:"dom"` and `mode:"dispatch"` are mainly useful when the target is occluded by an overlay or popup.
+- `mode` and `humanize` are separate knobs: `mode` changes how the click is delivered to the target, while `humanize:true` keeps the normal pointer-click path but makes it slower and more human-like.
+- To opt a click into the slower humanized path for a page that needs it, pass `humanize:true` in the action JSON or set `instanceDefaults.humanize:true`.
 
 ## Related Pages
 

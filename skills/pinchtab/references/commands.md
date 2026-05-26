@@ -83,7 +83,9 @@ Unscoped commands resolve the current tab by caller identity. Session-authentica
 Click an element by its accessibility ref (from `snap`).
 
 ```bash
-pinchtab click e5
+pinchtab click e5                # normal click path (omit --mode)
+pinchtab click e5 --mode dom     # bypass occlusion with element.click()
+pinchtab click e5 --mode dispatch # bypass occlusion with synthetic events
 pinchtab click e5 --snap-diff    # click + return only changed elements
 pinchtab click e5 --snap         # click + return full snapshot
 pinchtab click e5 --tab <tabId>

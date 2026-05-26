@@ -20,6 +20,7 @@ func newActionCmd() *cobra.Command {
 	cmd.Flags().Int("dy", 0, "")
 	cmd.Flags().String("dialog-action", "", "")
 	cmd.Flags().String("dialog-text", "", "")
+	cmd.Flags().String("mode", "", "")
 	return cmd
 }
 
@@ -98,6 +99,21 @@ func TestClickDismissBannersWithoutWaitNavIsNoop(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if _, ok := body["dismissBanners"]; ok {
 		t.Errorf("expected dismissBanners not sent without --wait-nav, got %v", body["dismissBanners"])
+	}
+}
+
+func TestClickMode(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("mode", "dom")
+	Action(client, m.base(), "", "click", "e5", cmd)
+	var body map[string]any
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["mode"] != "dom" {
+		t.Errorf("expected mode=dom, got %v", body["mode"])
 	}
 }
 

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Occluded Click Fixture</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 32px;
+      min-height: 100vh;
+      background: #f5f7fb;
+    }
+    #target-wrap {
+      position: relative;
+      width: 360px;
+      height: 220px;
+      margin-top: 48px;
+    }
+    #target {
+      position: absolute;
+      left: 40px;
+      top: 40px;
+      width: 240px;
+      height: 80px;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      font-size: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 1;
+    }
+    #occluder {
+      position: absolute;
+      left: 40px;
+      top: 40px;
+      width: 240px;
+      height: 80px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.01);
+      z-index: 2;
+    }
+    #status {
+      margin-top: 24px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    #coords {
+      margin-top: 8px;
+      color: #334155;
+      font-family: ui-monospace, monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Occluded Click Fixture</h1>
+  <p>The button is visible but covered by a transparent overlay. Ref-based click should report occlusion; coordinate fallback should still work.</p>
+
+  <div id="target-wrap">
+    <button id="target" type="button">Proceed</button>
+    <div id="occluder" aria-hidden="true"></div>
+  </div>
+
+  <div id="status">not-clicked</div>
+  <pre id="coords"></pre>
+
+  <script>
+    window.occludedClickState = { clicked: false, clicks: 0, lastClientX: null, lastClientY: null };
+    const target = document.getElementById('target');
+    const status = document.getElementById('status');
+    const coords = document.getElementById('coords');
+
+    function render() {
+      status.textContent = window.occludedClickState.clicked ? 'clicked' : 'not-clicked';
+      coords.textContent = JSON.stringify(window.occludedClickState, null, 2);
+    }
+
+    target.addEventListener('click', (event) => {
+      window.occludedClickState.clicked = true;
+      window.occludedClickState.clicks += 1;
+      window.occludedClickState.lastClientX = Math.round(event.clientX || 0);
+      window.occludedClickState.lastClientY = Math.round(event.clientY || 0);
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

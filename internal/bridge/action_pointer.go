@@ -18,6 +18,7 @@ var mouseDownByCoordinateAction = MouseDownByCoordinate
 var mouseUpByCoordinateAction = MouseUpByCoordinate
 var clickByNodeIDAction = ClickByNodeID
 var jsClickByBackendNodeAction = JSClickByBackendNode
+var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
 var doubleClickByNodeIDAction = DoubleClickByNodeID
 var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
 
@@ -47,6 +48,19 @@ func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
 		return jsClickByBackendNodeAction(jsCtx, nodeID)
 	}
 	return err
+}
+
+func clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "default":
+		return clickByNodeIDWithJSFallback(ctx, nodeID)
+	case "dom":
+		return jsClickByBackendNodeAction(ctx, nodeID)
+	case "dispatch":
+		return dispatchClickByBackendNodeAction(ctx, nodeID)
+	default:
+		return fmt.Errorf("invalid click mode: %s", mode)
+	}
 }
 
 func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
@@ -233,12 +247,12 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 			if auto != nil {
 				auto.prepareNode(clickCtx, int64(node.BackendNodeID))
 			}
-			err = clickByNodeIDWithJSFallback(clickCtx, int64(node.BackendNodeID))
+			err = clickByNodeIDWithMode(clickCtx, int64(node.BackendNodeID), req.Mode)
 		} else if req.NodeID > 0 {
 			if auto != nil {
 				auto.prepareNode(clickCtx, req.NodeID)
 			}
-			err = clickByNodeIDWithJSFallback(clickCtx, req.NodeID)
+			err = clickByNodeIDWithMode(clickCtx, req.NodeID, req.Mode)
 		} else if req.HasXY {
 			err = ClickByCoordinate(clickCtx, req.X, req.Y)
 		} else {
