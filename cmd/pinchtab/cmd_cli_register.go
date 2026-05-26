@@ -185,6 +185,7 @@ func configureBrowserFlags() {
 	clickCmd.Flags().Bool("text", false, "Output page text after action (for verification)")
 	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
+	clickCmd.Flags().String("mode", "", "Click delivery mode override: dom | dispatch")
 	clickCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	dblclickCmd.Flags().String("css", "", "CSS selector instead of ref")

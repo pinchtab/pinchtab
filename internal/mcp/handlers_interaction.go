@@ -55,6 +55,12 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 				if waitNav, ok := optBool(r, "waitNav"); ok && waitNav {
 					payload["waitNav"] = true
 				}
+				if mode := strings.ToLower(strings.TrimSpace(optTrimmedString(r, "mode"))); mode != "" {
+					if mode != "dom" && mode != "dispatch" {
+						return mcp.NewToolResultError("mode must be 'dom' or 'dispatch'"), nil
+					}
+					payload["mode"] = mode
+				}
 				dialogAction := strings.ToLower(firstNonEmptyString(r, "dialogAction", "onDialog"))
 				if dialogAction != "" {
 					if dialogAction != "accept" && dialogAction != "dismiss" {
