@@ -50,6 +50,38 @@ pt_ok click --css "button[type=submit]"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab click --mode dom|dispatch"
+
+pt_ok nav "${FIXTURES_URL}/occluded-click.html"
+pt_ok snap --interactive --compact=false
+
+TARGET_REF=$(find_ref_by_role_and_name "button" "Proceed" "$PT_OUT")
+if assert_ref_found "$TARGET_REF" "occluded target ref"; then
+  pt click "$TARGET_REF"
+  assert_exit_code 1 "plain cli click fails on occlusion"
+  if printf '%s\n%s\n' "$PT_OUT" "$PT_ERR" | grep -q "element is occluded"; then
+    pass_assert "plain cli click surfaces occlusion"
+  else
+    fail_assert "plain cli click surfaces occlusion"
+    echo -e "  ${RED}stdout: $PT_OUT${NC}"
+    echo -e "  ${RED}stderr: $PT_ERR${NC}"
+  fi
+
+  pt_ok click "$TARGET_REF" --mode dom
+  assert_output_contains "OK" "dom mode click succeeds"
+  pt_ok eval "JSON.stringify(window.occludedClickState)"
+  assert_json_jq "$PT_OUT" '.clicked == true and .clicks == 1' "dom mode updated click state" "dom mode did not trigger click"
+
+  pt_ok eval "window.occludedClickState = { clicked: false, clicks: 0, lastClientX: null, lastClientY: null }; JSON.stringify(window.occludedClickState)"
+  pt_ok click "$TARGET_REF" --mode dispatch
+  assert_output_contains "OK" "dispatch mode click succeeds"
+  pt_ok eval "JSON.stringify(window.occludedClickState)"
+  assert_json_jq "$PT_OUT" '.clicked == true and .clicks == 1' "dispatch mode updated click state" "dispatch mode did not trigger click"
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab hover <ref>"
 
 pt_ok nav "${FIXTURES_URL}/buttons.html"

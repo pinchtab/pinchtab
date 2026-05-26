@@ -58,6 +58,7 @@ func allTools() []mcp.Tool {
 			mcp.WithNumber("y", mcp.Description("Optional Y coordinate for coordinate click")),
 			mcp.WithNumber("nodeId", mcp.Description("Optional backend node ID to target directly")),
 			mcp.WithBoolean("waitNav", mcp.Description("Wait for navigation after the click when the element triggers a page change")),
+			mcp.WithString("mode", mcp.Description("Optional click delivery override: 'dom' for element.click() or 'dispatch' for synthetic click events on the target")),
 			mcp.WithBoolean("snap", mcp.Description("Return interactive compact snapshot after click (saves a round-trip)")),
 			mcp.WithString("tabId", mcp.Description("Target tab ID")),
 		),

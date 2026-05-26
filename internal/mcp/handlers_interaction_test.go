@@ -34,6 +34,35 @@ func TestHandleClickWaitNav(t *testing.T) {
 	}
 }
 
+func TestHandleClickMode(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_click", map[string]any{
+		"ref":  "e5",
+		"mode": "dispatch",
+	}, srv)
+
+	resp := resultJSON(t, r)
+	body, _ := resp["body"].(map[string]any)
+	if got, _ := body["mode"].(string); got != "dispatch" {
+		t.Fatalf("mode = %q, want dispatch", got)
+	}
+}
+
+func TestHandleClickModeRejectsInvalidValue(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_click", map[string]any{
+		"ref":  "e5",
+		"mode": "raw",
+	}, srv)
+	if !r.IsError {
+		t.Fatal("expected error for invalid mode")
+	}
+}
+
 func TestHandleClickMissingRef(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
