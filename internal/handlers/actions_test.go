@@ -13,8 +13,8 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/engine"
 )
 
 type failMockBridge struct {
@@ -110,7 +110,7 @@ func (m *handoffRecordingBridge) TabHandoffState(tabID string) (bridge.TabHandof
 	return m.state, m.has
 }
 
-type fakeLiteEngine struct {
+type fakeStaticBrowser struct {
 	clickRefs []string
 	typeCalls []struct {
 		ref  string
@@ -118,31 +118,31 @@ type fakeLiteEngine struct {
 	}
 }
 
-func (f *fakeLiteEngine) Name() string { return "lite-test" }
-func (f *fakeLiteEngine) Navigate(ctx context.Context, url string) (*engine.NavigateResult, error) {
+func (f *fakeStaticBrowser) Name() string { return "static-test" }
+func (f *fakeStaticBrowser) Navigate(ctx context.Context, url string) (*browserops.NavigateResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLiteEngine) Snapshot(ctx context.Context, tabID, filter string) (*engine.SnapshotResult, error) {
+func (f *fakeStaticBrowser) Snapshot(ctx context.Context, tabID, filter string) (*browserops.SnapshotResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLiteEngine) Text(ctx context.Context, tabID string) (*engine.TextResult, error) {
+func (f *fakeStaticBrowser) Text(ctx context.Context, tabID string) (*browserops.TextResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLiteEngine) Click(ctx context.Context, tabID, ref string) error {
+func (f *fakeStaticBrowser) Click(ctx context.Context, tabID, ref string) error {
 	f.clickRefs = append(f.clickRefs, ref)
 	return nil
 }
-func (f *fakeLiteEngine) Type(ctx context.Context, tabID, ref, text string) error {
+func (f *fakeStaticBrowser) Type(ctx context.Context, tabID, ref, text string) error {
 	f.typeCalls = append(f.typeCalls, struct {
 		ref  string
 		text string
 	}{ref: ref, text: text})
 	return nil
 }
-func (f *fakeLiteEngine) Capabilities() []engine.Capability {
-	return []engine.Capability{engine.CapClick, engine.CapType}
+func (f *fakeStaticBrowser) Capabilities() []browserops.Capability {
+	return []browserops.Capability{browserops.CapClick, browserops.CapType}
 }
-func (f *fakeLiteEngine) Close() error { return nil }
+func (f *fakeStaticBrowser) Close() error { return nil }
 
 func (m *failMockBridge) TabContext(tabID string) (context.Context, string, error) {
 	return nil, "", fmt.Errorf("tab not found")
@@ -282,6 +282,68 @@ func TestHandleMacro_FollowsAutoSwitchedTab(t *testing.T) {
 	}
 }
 
+func TestHandleActions_ResponseIncludesRoute(t *testing.T) {
+	b := &autoSwitchActionBridge{}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	body := `{"actions":[{"kind":"click"},{"kind":"type","text":"hello"}]}`
+	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleActions(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Route *browserops.RouteMetadata `json:"route"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Route == nil {
+		t.Fatal("expected route in batch /actions response, got nil")
+	}
+	if resp.Route.UsedBrowser == "" {
+		t.Fatal("expected route.usedProvider to be set")
+	}
+	if len(resp.Route.Attempts) == 0 {
+		t.Fatal("expected route.attempts to be non-empty")
+	}
+}
+
+func TestHandleMacro_ResponseIncludesRoute(t *testing.T) {
+	b := &autoSwitchActionBridge{}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second, AllowMacro: true}, nil, nil, nil)
+
+	body := `{"steps":[{"kind":"click"},{"kind":"type","text":"hello"}]}`
+	req := httptest.NewRequest("POST", "/macro", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandleMacro(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Route *browserops.RouteMetadata `json:"route"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Route == nil {
+		t.Fatal("expected route in /macro response, got nil")
+	}
+	if resp.Route.UsedBrowser == "" {
+		t.Fatal("expected route.usedProvider to be set")
+	}
+	if len(resp.Route.Attempts) == 0 {
+		t.Fatal("expected route.attempts to be non-empty")
+	}
+}
+
 func TestHandleTabActions_MissingTabID(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/tabs//actions", bytes.NewReader([]byte(`{"actions":[{"kind":"click"}]}`)))
@@ -395,11 +457,11 @@ func TestHandleAction_GetMissingKind(t *testing.T) {
 	}
 }
 
-func TestHandleAction_LiteClickRoutesWithoutChrome(t *testing.T) {
+func TestHandleAction_StaticClickRoutesWithoutChrome(t *testing.T) {
 	b := &liteActionBridge{}
-	lite := &fakeLiteEngine{}
+	staticBrowser := &fakeStaticBrowser{}
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.Router = engine.NewRouter(engine.ModeLite, lite)
+	h.StaticBrowser = staticBrowser
 
 	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","ref":"e1"}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -410,21 +472,18 @@ func TestHandleAction_LiteClickRoutesWithoutChrome(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if got := w.Header().Get("X-Engine"); got != "lite" {
-		t.Fatalf("expected X-Engine=lite, got %q", got)
-	}
 	if b.ensureChromeCalled {
-		t.Fatal("expected lite action to skip chrome initialization")
+		t.Fatal("expected static action to skip chrome initialization")
 	}
-	if len(lite.clickRefs) != 1 || lite.clickRefs[0] != "e1" {
-		t.Fatalf("expected click ref e1, got %+v", lite.clickRefs)
+	if len(staticBrowser.clickRefs) != 1 || staticBrowser.clickRefs[0] != "e1" {
+		t.Fatalf("expected click ref e1, got %+v", staticBrowser.clickRefs)
 	}
 }
 
-func TestHandleAction_LiteUnsupportedReturns501(t *testing.T) {
+func TestHandleAction_StaticUnsupportedReturns501(t *testing.T) {
 	b := &liteActionBridge{}
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.Router = engine.NewRouter(engine.ModeLite, &fakeLiteEngine{})
+	h.StaticBrowser = &fakeStaticBrowser{}
 
 	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"press","ref":"e1","key":"Enter"}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -436,15 +495,15 @@ func TestHandleAction_LiteUnsupportedReturns501(t *testing.T) {
 		t.Fatalf("expected 501, got %d: %s", w.Code, w.Body.String())
 	}
 	if b.ensureChromeCalled {
-		t.Fatal("expected unsupported lite action to avoid chrome initialization")
+		t.Fatal("expected unsupported static action to avoid chrome initialization")
 	}
 }
 
-func TestHandleActions_LiteBatchSupportsClickAndType(t *testing.T) {
+func TestHandleActions_StaticBatchSupportsClickAndType(t *testing.T) {
 	b := &liteActionBridge{}
-	lite := &fakeLiteEngine{}
+	staticBrowser := &fakeStaticBrowser{}
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.Router = engine.NewRouter(engine.ModeLite, lite)
+	h.StaticBrowser = staticBrowser
 
 	body := `{
 		"actions": [
@@ -462,7 +521,7 @@ func TestHandleActions_LiteBatchSupportsClickAndType(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	if b.ensureChromeCalled {
-		t.Fatal("expected lite batch actions to skip chrome initialization")
+		t.Fatal("expected static batch actions to skip chrome initialization")
 	}
 
 	resp := struct {
@@ -475,11 +534,11 @@ func TestHandleActions_LiteBatchSupportsClickAndType(t *testing.T) {
 	if resp.Successful != 2 || resp.Failed != 0 {
 		t.Fatalf("expected 2 successful actions, got %+v", resp)
 	}
-	if len(lite.clickRefs) != 1 || lite.clickRefs[0] != "e1" {
-		t.Fatalf("unexpected click refs: %+v", lite.clickRefs)
+	if len(staticBrowser.clickRefs) != 1 || staticBrowser.clickRefs[0] != "e1" {
+		t.Fatalf("unexpected click refs: %+v", staticBrowser.clickRefs)
 	}
-	if len(lite.typeCalls) != 1 || lite.typeCalls[0].ref != "e2" || lite.typeCalls[0].text != "hello" {
-		t.Fatalf("unexpected type calls: %+v", lite.typeCalls)
+	if len(staticBrowser.typeCalls) != 1 || staticBrowser.typeCalls[0].ref != "e2" || staticBrowser.typeCalls[0].text != "hello" {
+		t.Fatalf("unexpected type calls: %+v", staticBrowser.typeCalls)
 	}
 }
 

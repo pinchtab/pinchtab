@@ -12,9 +12,9 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 )
 
@@ -108,16 +108,9 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 }
 
 func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
-	mode := engine.Mode(cfg.Engine)
-	if mode != engine.ModeLite && mode != engine.ModeAuto {
+	if cfg.DefaultBrowser != config.BrowserGhostChrome {
 		return
 	}
-
-	lite := engine.BuildLite(engine.BuildConfig{
-		Mode:        mode,
-		Guard:       h.IDPIGuard,
-		WrapContent: cfg.IDPI.Enabled && cfg.IDPI.WrapContent,
-	})
-	h.Router = engine.NewRouter(mode, lite)
-	slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
+	h.StaticBrowser = staticfetch.NewBrowser()
+	slog.Info("static browser router enabled", "browser", cfg.DefaultBrowser)
 }

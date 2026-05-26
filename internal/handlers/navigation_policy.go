@@ -2,58 +2,16 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/netip"
-	"net/url"
-	"slices"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/netguard"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 )
-
-// loopbackProxyCIDRs are the CIDRs implicitly trusted as legitimate proxy hops
-// when security.trustLoopbackProxy is enabled. Covers IPv4 and IPv6 loopback.
-var loopbackProxyCIDRs = func() []*net.IPNet {
-	cidrs := make([]*net.IPNet, 0, 2)
-	for _, s := range []string{"127.0.0.0/8", "::1/128"} {
-		if _, n, err := net.ParseCIDR(s); err == nil {
-			cidrs = append(cidrs, n)
-		}
-	}
-	return cidrs
-}()
-
-// buildNavigateTrustedProxyCIDRs returns the list of trusted CIDRs used by the
-// runtime navigation guard when checking the response RemoteIPAddress. It
-// merges security.trustedProxyCIDRs with the implicit loopback list when
-// security.trustLoopbackProxy is enabled, giving users a one-flag escape from
-// the SSRF guard tripping on a local HTTP/SOCKS proxy hop (e.g. macOS system
-// proxy on 127.0.0.1) without having to hand-craft a CIDR list.
-func buildNavigateTrustedProxyCIDRs(cfg *config.RuntimeConfig) []*net.IPNet {
-	if cfg == nil {
-		return nil
-	}
-	trusted := parseCIDRs(cfg.TrustedProxyCIDRs)
-	if cfg.TrustLoopbackProxy {
-		trusted = append(trusted, loopbackProxyCIDRs...)
-	}
-	return trusted
-}
-
-const maxNavigateURLLen = 8 << 10
-
-type validatedNavigateTarget struct {
-	allowInternal     bool
-	trustedResolvedIP []netip.Addr
-}
 
 type navigateRuntimeGuard struct {
 	mu          sync.Mutex
@@ -96,230 +54,8 @@ func (g *navigateRuntimeGuard) blocked() error {
 	return g.blockedErr
 }
 
-func validateNavigateURL(raw string) error {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return fmt.Errorf("url required")
-	}
-	if len(raw) > maxNavigateURLLen {
-		return fmt.Errorf("url too long")
-	}
-	if strings.EqualFold(raw, "about:blank") {
-		return nil
-	}
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("invalid url")
-	}
-	if parsed.Scheme == "" {
-		return nil
-	}
-
-	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
-		return nil
-	default:
-		return fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
-	}
-}
-
-func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResolveCIDRs []*net.IPNet) (*validatedNavigateTarget, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || strings.EqualFold(raw, "about:blank") {
-		return &validatedNavigateTarget{allowInternal: true}, nil
-	}
-
-	host, hasHost := extractNavigateHost(raw)
-	if !hasHost {
-		return &validatedNavigateTarget{}, nil
-	}
-	if netguard.IsLocalHost(host) {
-		return &validatedNavigateTarget{allowInternal: true}, nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-
-	ips, err := resolveNavigateHostAddrs(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("could not resolve navigation host")
-	}
-	if err := validateResolvedNavigatePublicIPs(ips); err != nil {
-		if errors.Is(err, netguard.ErrPrivateInternalIP) {
-			if allowExplicitInternal {
-				return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
-			}
-			if len(trustedResolveCIDRs) > 0 && validateResolvedNavigateIPsWithTrustedCIDRs(ips, trustedResolveCIDRs) == nil {
-				cidrs := make([]string, len(trustedResolveCIDRs))
-				for i, c := range trustedResolveCIDRs {
-					cidrs[i] = c.String()
-				}
-				addrs := make([]string, len(ips))
-				for i, a := range ips {
-					addrs[i] = a.String()
-				}
-				slog.Info("navigate: trusted resolve CIDR override",
-					"host", host,
-					"resolvedIPs", addrs,
-					"trustedCIDRs", cidrs,
-				)
-				return &validatedNavigateTarget{trustedResolvedIP: ips}, nil
-			}
-			return nil, fmt.Errorf("navigation target resolves to blocked private/internal IP")
-		}
-		return nil, fmt.Errorf("could not resolve navigation host")
-	}
-	return &validatedNavigateTarget{}, nil
-}
-
-func validateResolvedNavigatePublicIPs(ips []netip.Addr) error {
-	_, err := netguard.ValidateResolvedPublicAddrs(ips)
-	return err
-}
-
-func validateResolvedNavigateIPsWithTrustedCIDRs(ips []netip.Addr, trusted []*net.IPNet) error {
-	if len(ips) == 0 {
-		return netguard.ErrResolveHost
-	}
-	for _, addr := range ips {
-		ip := net.ParseIP(addr.String())
-		if err := netguard.ValidatePublicIP(ip); err != nil {
-			if !ipInCIDRs(ip, trusted) {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
-	for _, cidr := range cidrs {
-		if cidr.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-func resolveNavigateHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
-	host = netguard.NormalizeHost(host)
-	if host == "" {
-		return nil, netguard.ErrResolveHost
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, netguard.ErrResolveHost
-		}
-		return []netip.Addr{addr.Unmap()}, nil
-	}
-
-	ips, err := netguard.ResolveHostIPs(ctx, "ip", host)
-	if err != nil || len(ips) == 0 {
-		return nil, netguard.ErrResolveHost
-	}
-	seen := make(map[netip.Addr]struct{}, len(ips))
-	out := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, netguard.ErrResolveHost
-		}
-		addr = addr.Unmap()
-		if _, ok := seen[addr]; ok {
-			continue
-		}
-		seen[addr] = struct{}{}
-		out = append(out, addr)
-	}
-	if len(out) == 0 {
-		return nil, netguard.ErrResolveHost
-	}
-	return out, nil
-}
-
-func extractNavigateHost(raw string) (string, bool) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return "", false
-	}
-	if host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), "."); host != "" {
-		return host, true
-	}
-	if parsed.Scheme != "" {
-		return "", false
-	}
-
-	bare := parsed.Path
-	bare = strings.SplitN(bare, "/", 2)[0]
-	bare = strings.SplitN(bare, "?", 2)[0]
-	bare = strings.SplitN(bare, "#", 2)[0]
-	bare = strings.TrimSpace(bare)
-	if bare == "" || strings.HasPrefix(bare, "/") || strings.HasPrefix(bare, ".") {
-		return "", false
-	}
-	if h, _, err := net.SplitHostPort(bare); err == nil {
-		bare = h
-	}
-	host := strings.TrimSuffix(strings.ToLower(bare), ".")
-	if host == "" {
-		return "", false
-	}
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") || net.ParseIP(host) != nil || strings.Contains(host, ".") || strings.Contains(host, ":") {
-		return host, true
-	}
-	return "", false
-}
-
-func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.Addr) error {
-	normalized := netguard.NormalizeRemoteIP(raw)
-	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
-		if ip := net.ParseIP(normalized); ip != nil {
-			for _, cidr := range trustedCIDRs {
-				if cidr.Contains(ip) {
-					return nil
-				}
-			}
-			if addr, ok := netip.AddrFromSlice(ip); ok {
-				addr = addr.Unmap()
-				if slices.Contains(trustedIPs, addr) {
-					return nil
-				}
-			}
-		}
-		return fmt.Errorf("navigation connected to blocked remote IP %s", normalized)
-	}
-	return nil
-}
-
-func parseCIDRs(raw []string) []*net.IPNet {
-	var nets []*net.IPNet
-	for _, s := range raw {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if !strings.Contains(s, "/") {
-			if ip := net.ParseIP(s); ip != nil {
-				if ip.To4() != nil {
-					s = ip.String() + "/32"
-				} else {
-					s = ip.String() + "/128"
-				}
-			} else {
-				s += "/32"
-			}
-		}
-		if _, cidr, err := net.ParseCIDR(s); err == nil {
-			nets = append(nets, cidr)
-		}
-	}
-	return nets
-}
-
-func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFunc, target *validatedNavigateTarget, trustedCIDRs []*net.IPNet) (*navigateRuntimeGuard, error) {
-	if target == nil || target.allowInternal {
+func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFunc, target *navguard.ValidatedTarget, trustedCIDRs []*net.IPNet) (*navigateRuntimeGuard, error) {
+	if target == nil || target.AllowInternal {
 		return nil, nil
 	}
 	if err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
@@ -340,11 +76,45 @@ func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFun
 			if !guard.isMainDocumentResponse(string(e.RequestID)) {
 				return
 			}
-			if err := validateNavigateRemoteIPAddress(e.Response.RemoteIPAddress, trustedCIDRs, target.trustedResolvedIP); err != nil {
+			if err := navguard.ValidateRemoteIP(e.Response.RemoteIPAddress, trustedCIDRs, target.TrustedResolvedIP); err != nil {
 				guard.setBlocked(err)
 				tCancel()
 			}
 		}
 	})
 	return guard, nil
+}
+
+// validatedNavigateTarget is an alias kept for backward compatibility within
+// the handlers package during migration. New code should use navguard.ValidatedTarget.
+type validatedNavigateTarget = navguard.ValidatedTarget
+
+// validateNavigateURL delegates to navguard.ValidateURL.
+func validateNavigateURL(raw string) error {
+	return navguard.ValidateURL(raw)
+}
+
+// validateNavigateTarget delegates to navguard's target validation logic.
+func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResolveCIDRs []*net.IPNet) (*navguard.ValidatedTarget, error) {
+	v := &navguard.Validator{TrustedResolveCIDRs: trustedResolveCIDRs}
+	return v.ValidateTarget(context.Background(), raw, allowExplicitInternal)
+}
+
+// validateNavigateRemoteIPAddress delegates to navguard.ValidateRemoteIP.
+func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.Addr) error {
+	return navguard.ValidateRemoteIP(raw, trustedCIDRs, trustedIPs)
+}
+
+// parseCIDRs delegates to navguard.ParseCIDRs.
+func parseCIDRs(raw []string) []*net.IPNet {
+	return navguard.ParseCIDRs(raw)
+}
+
+// buildNavigateTrustedProxyCIDRs delegates to navguard.BuildTrustedProxyCIDRs
+// using the runtime config fields.
+func buildNavigateTrustedProxyCIDRs(cfg *config.RuntimeConfig) []*net.IPNet {
+	if cfg == nil {
+		return nil
+	}
+	return navguard.BuildTrustedProxyCIDRs(cfg.TrustLoopbackProxy, cfg.TrustedProxyCIDRs)
 }

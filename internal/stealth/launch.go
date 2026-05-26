@@ -61,7 +61,7 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 		"globalUserAgent":              pinUA,
 		"globalLanguage":               persona.Language != "",
 	}
-	if config.CloakBrowserProviderActive(cfg) {
+	if config.CloakBrowserActive(cfg) {
 		flags["nativeCloakBrowser"] = true
 	}
 

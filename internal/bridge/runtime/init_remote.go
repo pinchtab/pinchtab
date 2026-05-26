@@ -28,7 +28,7 @@ func InitRemoteCDP(ctx context.Context, cfg *config.RuntimeConfig, cdpURL string
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err
 	}
 
-	slog.Info("attaching to remote CDP endpoint", "provider", cfg.BrowserProvider)
+	slog.Info("attaching to remote CDP endpoint", "provider", cfg.DefaultBrowser)
 
 	if ctx == nil {
 		ctx = context.Background()

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browserops"
 )
 
 const (
@@ -35,24 +37,24 @@ type EventSourceConfig struct {
 }
 
 type Event struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Source      string    `json:"source"`
-	RequestID   string    `json:"requestId,omitempty"`
-	SessionID   string    `json:"sessionId,omitempty"`
-	AgentID     string    `json:"agentId,omitempty"`
-	Method      string    `json:"method"`
-	Path        string    `json:"path"`
-	Status      int       `json:"status"`
-	DurationMs  int64     `json:"durationMs"`
-	RemoteAddr  string    `json:"remoteAddr,omitempty"`
-	InstanceID  string    `json:"instanceId,omitempty"`
-	ProfileID   string    `json:"profileId,omitempty"`
-	ProfileName string    `json:"profileName,omitempty"`
-	TabID       string    `json:"tabId,omitempty"`
-	URL         string    `json:"url,omitempty"`
-	Action      string    `json:"action,omitempty"`
-	Engine      string    `json:"engine,omitempty"`
-	Ref         string    `json:"ref,omitempty"`
+	Timestamp   time.Time                 `json:"timestamp"`
+	Source      string                    `json:"source"`
+	RequestID   string                    `json:"requestId,omitempty"`
+	SessionID   string                    `json:"sessionId,omitempty"`
+	AgentID     string                    `json:"agentId,omitempty"`
+	Method      string                    `json:"method"`
+	Path        string                    `json:"path"`
+	Status      int                       `json:"status"`
+	DurationMs  int64                     `json:"durationMs"`
+	RemoteAddr  string                    `json:"remoteAddr,omitempty"`
+	InstanceID  string                    `json:"instanceId,omitempty"`
+	ProfileID   string                    `json:"profileId,omitempty"`
+	ProfileName string                    `json:"profileName,omitempty"`
+	TabID       string                    `json:"tabId,omitempty"`
+	URL         string                    `json:"url,omitempty"`
+	Action      string                    `json:"action,omitempty"`
+	Route       *browserops.RouteMetadata `json:"route,omitempty"`
+	Ref         string                    `json:"ref,omitempty"`
 }
 
 type Filter struct {
@@ -66,7 +68,6 @@ type Filter struct {
 	ProfileName string
 	TabID       string
 	Action      string
-	Engine      string
 	PathPrefix  string
 	Since       time.Time
 	Until       time.Time
@@ -384,9 +385,6 @@ func (f Filter) matches(evt Event) bool {
 		return false
 	}
 	if f.Action != "" && evt.Action != f.Action {
-		return false
-	}
-	if f.Engine != "" && evt.Engine != f.Engine {
 		return false
 	}
 	if f.PathPrefix != "" && !strings.HasPrefix(evt.Path, f.PathPrefix) {

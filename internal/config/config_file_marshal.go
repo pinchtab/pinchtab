@@ -2,7 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 func copyStringSlice(items []string) []string {
@@ -34,13 +37,6 @@ func intPtrIfNonNegative(v int) *int {
 func boolPtrValue(v bool) *bool {
 	b := v
 	return &b
-}
-
-func browserProviderForFile(provider string) string {
-	if provider == "" {
-		return BrowserProviderChrome
-	}
-	return provider
 }
 
 func cloakBrowserConfigJSONFromFile(provider string, c CloakBrowserConfig) *cloakBrowserConfigJSON {
@@ -84,7 +80,11 @@ func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
 		return CloakBrowserConfig{}
 	}
 	c := cfg.Cloak
-	hasRuntimeCloak := IsCloakBrowserProvider(cfg.BrowserProvider) ||
+	providerHasNativeStealth := false
+	if b, ok := browsers.Get(strings.ToLower(cfg.DefaultBrowser)); ok {
+		providerHasNativeStealth = b.Capabilities().Has(browsers.CapNativeStealth)
+	}
+	hasRuntimeCloak := providerHasNativeStealth ||
 		c.FingerprintSeed != "" ||
 		c.Platform != "" ||
 		c.Locale != "" ||
@@ -101,7 +101,7 @@ func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
 		WebRTCIP:        c.WebRTCIP,
 		FontsDir:        c.FontsDir,
 	}
-	if c.StorageQuotaMB > 0 || IsCloakBrowserProvider(cfg.BrowserProvider) {
+	if c.StorageQuotaMB > 0 || providerHasNativeStealth {
 		out.StorageQuotaMB = intPtrIfNonNegative(c.StorageQuotaMB)
 	}
 	if hasRuntimeCloak {
@@ -139,10 +139,28 @@ func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
 	return out
 }
 
+func browsersConfigJSONFromFile(bc BrowsersConfig) *BrowsersConfig {
+	if bc.Default == "" && len(bc.Available) == 0 && len(bc.Config) == 0 {
+		return nil
+	}
+	out := &BrowsersConfig{
+		Default:   bc.Default,
+		Available: copyStringSlice(bc.Available),
+	}
+	if len(bc.Config) > 0 {
+		out.Config = make(map[string]BrowserItemConfig, len(bc.Config))
+		for k, v := range bc.Config {
+			out.Config[k] = v
+		}
+	}
+	return out
+}
+
 func (fc FileConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fileConfigJSON{
 		Schema:        fc.Schema,
 		ConfigVersion: fc.ConfigVersion,
+		Browsers:      browsersConfigJSONFromFile(fc.Browsers),
 		Server: serverConfigJSON{
 			Port:                      fc.Server.Port,
 			Bind:                      fc.Server.Bind,
@@ -156,7 +174,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			CookieSecure:              fc.Server.CookieSecure,
 		},
 		Browser: browserConfigJSON{
-			Provider:         browserProviderForFile(fc.Browser.Provider),
+			Provider:         fc.Browser.Provider, // removed; kept for round-trip fidelity, omitted when empty via omitempty
 			ChromeVersion:    fc.Browser.ChromeVersion,
 			ChromeBinary:     fc.Browser.ChromeBinary,
 			ChromeDebugPort:  fc.Browser.ChromeDebugPort,
@@ -409,6 +427,16 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	retainBodies := cfg.RetainNetworkBodies
 	retainBodyMaxBytes := cfg.RetainNetworkBodyMaxBytes
 
+	// Always emit browsers.default; stop writing the deprecated browser.provider field.
+	browsersDefault := cfg.DefaultBrowser
+	if browsersDefault == "" {
+		browsersDefault = NormalizeBrowser(cfg.DefaultBrowser)
+	}
+	browsersBlock := BrowsersConfig{
+		Default:   browsersDefault,
+		Available: append([]string(nil), cfg.BrowsersAvailable...),
+	}
+
 	fc := FileConfig{
 		Schema: CurrentConfigSchemaURL(),
 		Server: ServerConfig{
@@ -424,7 +452,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			CookieSecure:              cfg.CookieSecure,
 		},
 		Browser: BrowserConfig{
-			Provider:         NormalizeBrowserProvider(cfg.BrowserProvider),
+			// Provider intentionally omitted — deprecated in favor of browsers.default.
 			ChromeVersion:    cfg.ChromeVersion,
 			ChromeBinary:     cfg.ChromeBinary,
 			ChromeDebugPort:  intPtrIfPositive(cfg.ChromeDebugPort),
@@ -563,6 +591,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				},
 			},
 		},
+		Browsers: browsersBlock,
 	}
 
 	return fc

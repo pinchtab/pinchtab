@@ -14,10 +14,10 @@ NC=$'\033[0m'
 usage() {
   cat <<'EOF'
 Usage:
-  ./dev smoke [--provider=chrome|cloak|all] [filter...]
+  ./dev smoke [--browser=chrome|cloak|all] [filter...]
   ./dev smoke cdp-attach [chrome|cloak|all]
-  ./dev smoke live-detection [--provider=chrome|cloak|all]
-  ./dev smoke cloakbrowser [--provider=chrome|cloak|all] [special flags]
+  ./dev smoke live-detection [--browser=chrome|cloak|all]
+  ./dev smoke cloakbrowser [--browser=chrome|cloak|all] [special flags]
 
 Filters:
   cloakbrowser         Run browser parity / CloakBrowser smoke
@@ -44,8 +44,8 @@ declare -a parity_args=()
 
 e2e_smoke_error() {
   echo "${ERROR}E2E smoke now lives under './dev e2e smoke'.${NC}" >&2
-  echo "${MUTED}Examples:${NC} ./dev e2e smoke --provider=chrome" >&2
-  echo "${MUTED}          ${NC} ./dev e2e smoke --provider=cloak --filter recording" >&2
+  echo "${MUTED}Examples:${NC} ./dev e2e smoke --browser=chrome" >&2
+  echo "${MUTED}          ${NC} ./dev e2e smoke --browser=cloak --filter recording" >&2
   exit 1
 }
 
@@ -113,7 +113,7 @@ append_requested_filter() {
 normalize_provider() {
   case "$1" in
     chrome|cloak|all) printf '%s\n' "$1" ;;
-    *) echo "invalid --provider: $1 (expected chrome|cloak|all)" >&2; return 1 ;;
+    *) echo "invalid --browser: $1 (expected chrome|cloak|all)" >&2; return 1 ;;
   esac
 }
 
@@ -146,12 +146,12 @@ while [ "$#" -gt 0 ]; do
       shift
       logs="$1"
       ;;
-    --provider=*)
-      set_provider "${1#--provider=}"
+    --browser=*)
+      set_provider "${1#--browser=}"
       ;;
-    --provider)
+    --browser)
       if [ "$#" -lt 2 ]; then
-        echo "${ERROR}--provider requires a value${NC}" >&2
+        echo "${ERROR}--browser requires a value${NC}" >&2
         exit 1
       fi
       shift
@@ -240,7 +240,7 @@ run_browser_parity() {
   local allow_skip="$1"
   local selected_provider="$2"
   run_step "$allow_skip" "Browser parity smoke (${selected_provider})" \
-    bash scripts/docker-browser-parity-smoke.sh "--provider=${selected_provider}" ${parity_args[@]+"${parity_args[@]}"}
+    bash scripts/docker-browser-parity-smoke.sh "--browser=${selected_provider}" ${parity_args[@]+"${parity_args[@]}"}
 }
 
 run_cdp_attach() {
@@ -250,7 +250,7 @@ run_cdp_attach() {
 
 run_live_detection() {
   local selected_provider="$1"
-  run_step "$2" "Live detection smoke (${selected_provider})" bash scripts/docker-live-detection-smoke.sh --provider="$selected_provider"
+  run_step "$2" "Live detection smoke (${selected_provider})" bash scripts/docker-live-detection-smoke.sh --browser="$selected_provider"
 }
 
 failures=0

@@ -139,7 +139,7 @@ partly inferred from scenario names, and partly embedded in runner code.
 This makes it hard to answer simple questions:
 
 - What tests belong to `./dev smoke cdp-attach`?
-- Which tests run for `--provider cloak`?
+- Which tests run for `--browser cloak`?
 - Which tests require a release image?
 - Which tests require a full PinchTab service versus a medium service?
 - Which tests are CI-safe and which are local opt-in checks?
@@ -660,7 +660,7 @@ Filtering should be consistent across E2E and smoke:
 - by suite: `--suite smoke-cdp`
 - by id substring: `--filter cdp-attach`
 - by tag: `--tag cdp`
-- by provider: `--provider chrome|cloak|all`
+- by provider: `--browser chrome|cloak|all`
 - by test block inside a scenario: current `--test` behavior
 
 `--dry-run` should print:
@@ -784,7 +784,7 @@ Work:
 Validation:
 
 - `go run ./tests/tools/runner e2e --suite basic --dry-run`
-- `go run ./tests/tools/runner e2e --suite smoke --provider chrome --dry-run`
+- `go run ./tests/tools/runner e2e --suite smoke --browser chrome --dry-run`
 - existing E2E smoke scenarios still execute through `tests/e2e/run.sh`
 
 ### Phase 3: Move Host Smoke Steps Into The Catalog
@@ -829,8 +829,8 @@ Work:
 Validation:
 
 - `./dev smoke --dry-run`
-- `./dev smoke cdp-attach --provider=chrome`
-- `./dev smoke ci --provider=all`
+- `./dev smoke cdp-attach --browser=chrome`
+- `./dev smoke ci --browser=all`
 - compare selected tests with current behavior
 
 ### Phase 5: Consolidate Provider And Config Generation

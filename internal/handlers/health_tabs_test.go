@@ -11,8 +11,8 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
@@ -298,15 +298,15 @@ func TestHandleHealth_EnsureChromeSuccess(t *testing.T) {
 	}
 }
 
-func TestHandleHealth_LiteModeSkipsChrome(t *testing.T) {
+func TestHandleHealth_GhostChromeSkipsChrome(t *testing.T) {
 	mockBridge := &MockBridge{
 		ensureChromeErr: "should not be called",
 	}
 
 	h := &Handlers{
-		Bridge: mockBridge,
-		Config: &config.RuntimeConfig{},
-		Router: engine.NewRouter(engine.ModeLite, engine.NewLiteEngine()),
+		Bridge:        mockBridge,
+		Config:        &config.RuntimeConfig{},
+		StaticBrowser: staticfetch.NewBrowser(),
 	}
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -330,8 +330,8 @@ func TestHandleHealth_LiteModeSkipsChrome(t *testing.T) {
 	if status, ok := resp["status"]; !ok || status != "ok" {
 		t.Errorf("expected status=ok, got %v", status)
 	}
-	if engineName, ok := resp["engine"]; !ok || engineName != "lite" {
-		t.Errorf("expected engine=lite, got %v", engineName)
+	if _, ok := resp["browserops"]; ok {
+		t.Error("health response must not contain \"browserops\" key (removed in favour of route metadata)")
 	}
 }
 

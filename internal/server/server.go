@@ -16,6 +16,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -27,8 +28,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/pinchtab/internal/strategy"
-
-	// Register strategies
 	_ "github.com/pinchtab/pinchtab/internal/strategy/alwayson"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/autorestart"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/explicit"
@@ -83,7 +82,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	})
 	var sessionAPI *dashboard.SessionAPI
 	if sessionStore.Enabled() {
-		sessionAPI = dashboard.NewSessionAPI(sessionStore)
+		sessionAPI = dashboard.NewSessionAPI(sessionStore, cfg.BrowsersAvailable)
 	}
 
 	// Wire up instance events to SSE broadcast

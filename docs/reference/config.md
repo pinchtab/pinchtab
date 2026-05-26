@@ -173,7 +173,6 @@ Current nested file-config shape:
     "bind": "127.0.0.1",
     "token": "your-secret-token",
     "stateDir": "/path/to/state",
-    "engine": "chrome",
     "networkBufferSize": 100,
     "retainNetworkBodies": false,
     "retainNetworkBodyMaxBytes": 262144,
@@ -181,7 +180,6 @@ Current nested file-config shape:
     "cookieSecure": null
   },
   "browser": {
-    "provider": "chrome",
     "version": "144.0.7559.133",
     "binary": "/path/to/chrome",
     "remoteDebuggingPort": null,
@@ -355,7 +353,10 @@ The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the
 config file.
 
-### Browser Provider
+### Browser Selection
+
+The CLI uses `--browser <name>` to select a browser. In the config file the
+equivalent field is `browser.provider`.
 
 `browser.provider` selects the local browser backend:
 
@@ -389,7 +390,7 @@ are not PinchTab-owned lifecycle flags.
 `browser.proxy.geo` is a CloakBrowser fingerprint-alignment hint. When a proxy
 server and geo block are configured for a CloakBrowser target, PinchTab maps the
 geo values into native CloakBrowser fingerprint flags unless the target already
-sets the corresponding `browser.cloak` field. The stock `chrome` provider does
+sets the corresponding `browser.cloak` field. The stock `chrome` browser does
 not derive `--lang`, `TZ`, or WebRTC launch settings from proxy geo data.
 
 ### Browser Extra Flags
@@ -489,7 +490,6 @@ They do not expose every field in those sections, and they do not support `sched
 
 Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 
-- `server.engine`
 - `server.networkBufferSize`
 - `browser.extensionPaths`
 - `instanceDefaults.dialogAutoAccept`

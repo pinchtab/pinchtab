@@ -47,9 +47,6 @@ func activityEventToLiveEvent(evt activity.Event) apiTypes.ActivityEvent {
 	if evt.Ref != "" {
 		details["ref"] = evt.Ref
 	}
-	if evt.Engine != "" {
-		details["engine"] = evt.Engine
-	}
 	if evt.Action != "" {
 		details["action"] = evt.Action
 	}

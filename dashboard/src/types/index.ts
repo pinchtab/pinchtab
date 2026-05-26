@@ -97,7 +97,7 @@ export interface BackendObservabilityConfig {
   activity: BackendActivityConfig;
 }
 
-export type BackendBrowserProvider = "chrome" | "cloak";
+export type BackendBrowserProvider = "chrome" | "cloak" | "ghost-chrome";
 
 export interface BackendCloakBrowserConfig {
   fingerprintSeed: string;
@@ -218,9 +218,15 @@ export interface BackendAutoSolverConfig {
   llmFallback: boolean;
 }
 
+export interface BackendBrowsersConfig {
+  default?: BackendBrowserProvider;
+  available?: string[];
+}
+
 export interface BackendConfig {
   server: BackendServerConfig;
   browser: BackendBrowserConfig;
+  browsers?: BackendBrowsersConfig;
   instanceDefaults: BackendInstanceDefaultsConfig;
   security: BackendSecurityConfig;
   profiles: BackendProfilesConfig;
@@ -265,6 +271,9 @@ export const defaultBackendConfig: BackendConfig = {
       disableDefaultStealthArgs: true,
     },
     extensionPaths: [],
+  },
+  browsers: {
+    default: "chrome",
   },
   instanceDefaults: {
     mode: "headless",
@@ -384,7 +393,12 @@ export function normalizeBackendConfig(
     browser: {
       ...defaultBackendConfig.browser,
       ...(input?.browser ?? {}),
-      provider: input?.browser?.provider === "cloak" ? "cloak" : "chrome",
+      provider:
+        input?.browser?.provider === "cloak"
+          ? "cloak"
+          : input?.browser?.provider === "ghost-chrome"
+            ? "ghost-chrome"
+            : "chrome",
       cloak: {
         ...defaultBackendConfig.browser.cloak,
         ...(input?.browser?.cloak ?? {}),
@@ -392,6 +406,10 @@ export function normalizeBackendConfig(
       extensionPaths:
         input?.browser?.extensionPaths ??
         defaultBackendConfig.browser.extensionPaths,
+    },
+    browsers: {
+      ...defaultBackendConfig.browsers,
+      ...(input?.browsers ?? {}),
     },
     instanceDefaults: {
       ...defaultBackendConfig.instanceDefaults,

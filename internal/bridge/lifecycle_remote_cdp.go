@@ -18,7 +18,7 @@ import (
 // cancels PinchTab-owned contexts only.
 func (b *Bridge) ensureRemoteCDPLocked(cfg *config.RuntimeConfig) error {
 	slog.Info("attaching bridge to remote CDP endpoint",
-		"provider", config.NormalizeBrowserProvider(cfg.BrowserProvider),
+		"provider", config.NormalizeBrowser(cfg.DefaultBrowser),
 		"remoteBrowserName", cfg.RemoteBrowserName,
 		"cdpUrl", internalurls.RedactForLog(cfg.RemoteCDPURL),
 	)

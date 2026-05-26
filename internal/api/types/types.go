@@ -2,7 +2,9 @@
 // These types are exported to TypeScript via tygo.
 package types
 
-import "time"
+import (
+	"time"
+)
 
 // Profile represents a browser profile stored on disk.
 // Matches internal/bridge/api.go ProfileInfo
@@ -48,9 +50,8 @@ type Instance struct {
 	CdpURL         string          `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
 
-	// BrowserTarget is the resolved named target; empty on legacy configs.
-	BrowserTarget   string `json:"browserTarget,omitempty"`
-	BrowserProvider string `json:"browserProvider,omitempty"`
+	BrowserProvider string `json:"-"`
+	Browser         string `json:"browser,omitempty"`
 
 	// FallbackFrom/FallbackReason are reserved for a future phase (always
 	// empty in P2.4a).
@@ -88,26 +89,44 @@ type ActivityEvent struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
+// RouteAttempt records a single browser that was considered during routing.
+type RouteAttempt struct {
+	Browser  string `json:"provider"`
+	Accepted bool   `json:"accepted"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// RouteMetadata records the browser-selection decision for a request.
+type RouteMetadata struct {
+	RequestedBrowser string         `json:"requestedProvider"`
+	UsedBrowser      string         `json:"usedProvider"`
+	Escalated        bool           `json:"escalated"`
+	Reason           string         `json:"reason,omitempty"`
+	Quality          int            `json:"quality,omitempty"`
+	FallbackAttempts int            `json:"fallbackAttempts,omitempty"`
+	Attempts         []RouteAttempt `json:"attempts,omitempty"`
+}
+
 // ActivityLogEvent represents a queryable backend activity record.
 type ActivityLogEvent struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Source      string    `json:"source"`
-	RequestID   string    `json:"requestId,omitempty"`
-	SessionID   string    `json:"sessionId,omitempty"`
-	AgentID     string    `json:"agentId,omitempty"`
-	Method      string    `json:"method"`
-	Path        string    `json:"path"`
-	Status      int       `json:"status"`
-	DurationMs  int64     `json:"durationMs"`
-	RemoteAddr  string    `json:"remoteAddr,omitempty"`
-	InstanceID  string    `json:"instanceId,omitempty"`
-	ProfileID   string    `json:"profileId,omitempty"`
-	ProfileName string    `json:"profileName,omitempty"`
-	TabID       string    `json:"tabId,omitempty"`
-	URL         string    `json:"url,omitempty"`
-	Action      string    `json:"action,omitempty"`
-	Engine      string    `json:"engine,omitempty"`
-	Ref         string    `json:"ref,omitempty"`
+	Timestamp   time.Time      `json:"timestamp"`
+	Source      string         `json:"source"`
+	RequestID   string         `json:"requestId,omitempty"`
+	SessionID   string         `json:"sessionId,omitempty"`
+	AgentID     string         `json:"agentId,omitempty"`
+	Method      string         `json:"method"`
+	Path        string         `json:"path"`
+	Status      int            `json:"status"`
+	DurationMs  int64          `json:"durationMs"`
+	RemoteAddr  string         `json:"remoteAddr,omitempty"`
+	InstanceID  string         `json:"instanceId,omitempty"`
+	ProfileID   string         `json:"profileId,omitempty"`
+	ProfileName string         `json:"profileName,omitempty"`
+	TabID       string         `json:"tabId,omitempty"`
+	URL         string         `json:"url,omitempty"`
+	Action      string         `json:"action,omitempty"`
+	Route       *RouteMetadata `json:"route,omitempty"`
+	Ref         string         `json:"ref,omitempty"`
 }
 
 // ActivityLogResponse is returned by the /api/activity endpoint.
@@ -198,4 +217,5 @@ type LaunchInstanceRequest struct {
 	ProfileID string `json:"profileId,omitempty"` // profile ID (prof_XXXXXXXX) or existing profile name
 	Mode      string `json:"mode,omitempty"`      // "headed" or empty for headless
 	Port      string `json:"port,omitempty"`      // port number as string
+	Browser   string `json:"browser,omitempty"`   // browser override (chrome, cloak, ghost-chrome)
 }

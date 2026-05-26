@@ -26,9 +26,8 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if tabID != "" {
 			payload["tabId"] = tabID
 		}
-		browserTarget := optString(r, "browserTarget")
-		if browserTarget != "" {
-			payload["browserTarget"] = browserTarget
+		if browser := optString(r, "browser"); browser != "" {
+			payload["browser"] = browser
 		}
 		body, code, err := c.Post(ctx, "/navigate", payload)
 		if err != nil {
@@ -47,9 +46,6 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 				q.Set("tabId", tabID)
 			} else if returnedTabID := responseStringField(body, "tabId"); returnedTabID != "" {
 				q.Set("tabId", returnedTabID)
-			}
-			if browserTarget != "" {
-				q.Set("browserTarget", browserTarget)
 			}
 			snapBody, _, snapErr := c.Get(ctx, "/snapshot", q)
 			if snapErr == nil {
@@ -104,6 +100,9 @@ func handleSnapshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if v, ok := optBool(r, "noAnimations"); ok && v {
 			q.Set("noAnimations", "true")
 		}
+		if browser := optString(r, "browser"); browser != "" {
+			q.Set("browser", browser)
+		}
 		body, code, err := c.Get(ctx, "/snapshot", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -116,10 +115,14 @@ func handleFrame(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Cal
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tabID := optString(r, "tabId")
 		target := optString(r, "target")
+		browser := optString(r, "browser")
 		if strings.TrimSpace(target) == "" {
 			q := url.Values{}
 			if tabID != "" {
 				q.Set("tabId", tabID)
+			}
+			if browser != "" {
+				q.Set("browser", browser)
 			}
 			body, code, err := c.Get(ctx, "/frame", q)
 			if err != nil {
@@ -131,6 +134,9 @@ func handleFrame(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Cal
 		payload := map[string]any{"target": target}
 		if tabID != "" {
 			payload["tabId"] = tabID
+		}
+		if browser != "" {
+			payload["browser"] = browser
 		}
 		body, code, err := c.Post(ctx, "/frame", payload)
 		if err != nil {
@@ -175,6 +181,9 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		}
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
+		}
+		if browser := optString(r, "browser"); browser != "" {
+			q.Set("browser", browser)
 		}
 		body, code, err := c.Get(ctx, "/screenshot", q)
 		if err != nil {
@@ -363,6 +372,9 @@ func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 		}
 		if v := optNumber(r, "maxChars"); v > 0 {
 			q.Set("maxChars", formatInt(v))
+		}
+		if browser := optString(r, "browser"); browser != "" {
+			q.Set("browser", browser)
 		}
 		body, code, err := c.Get(ctx, "/text", q)
 		if err != nil {

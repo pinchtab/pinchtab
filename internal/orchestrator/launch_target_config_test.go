@@ -17,7 +17,7 @@ func fakeOrch(cfg *config.RuntimeConfig) *Orchestrator {
 func runtimeCfgWithTargets() *config.RuntimeConfig {
 	return &config.RuntimeConfig{
 		Port:             "9867",
-		BrowserProvider:  config.BrowserProviderChrome,
+		DefaultBrowser:   config.BrowserChrome,
 		ChromeBinary:     "/global/chrome",
 		ChromeExtraFlags: "--global-flag",
 		Cloak: config.CloakBrowserRuntimeConfig{
@@ -26,11 +26,11 @@ func runtimeCfgWithTargets() *config.RuntimeConfig {
 		},
 		Targets: config.BrowserTargetsConfig{
 			"chrome": config.BrowserTargetConfig{
-				Provider: config.BrowserProviderChrome,
+				Provider: config.BrowserChrome,
 				Binary:   "/global/chrome",
 			},
 			"cloak": config.BrowserTargetConfig{
-				Provider:   config.BrowserProviderCloak,
+				Provider:   config.BrowserCloak,
 				Binary:     "/opt/cloak/cloakbrowser",
 				ExtraFlags: "--target-flag",
 				Cloak: config.CloakBrowserConfig{
@@ -54,8 +54,8 @@ func TestBuildChildFileConfig_TargetSelectedLaunchPromotesTargetBlock(t *testing
 	effective := resolved.Config
 	fc := o.buildChildFileConfig(effective, "9999", 12345, "/tmp/profile", "/tmp/state", true, nil, nil)
 
-	if fc.Browser.Provider != config.BrowserProviderCloak {
-		t.Errorf("Browser.Provider = %q, want cloak", fc.Browser.Provider)
+	if fc.Browsers.Default != config.BrowserCloak {
+		t.Errorf("Browsers.Default = %q, want cloak", fc.Browsers.Default)
 	}
 	if fc.Browser.ChromeBinary != "/opt/cloak/cloakbrowser" {
 		t.Errorf("Browser.ChromeBinary = %q, want /opt/cloak/cloakbrowser", fc.Browser.ChromeBinary)
@@ -72,7 +72,7 @@ func TestBuildChildFileConfig_TargetSelectedLaunchPromotesTargetBlock(t *testing
 	if fc.Browser.Cloak.Platform != "linux" {
 		t.Errorf("Cloak.Platform = %q, want preserved linux", fc.Browser.Cloak.Platform)
 	}
-	if cfg.BrowserProvider != config.BrowserProviderChrome ||
+	if cfg.DefaultBrowser != config.BrowserChrome ||
 		cfg.ChromeBinary != "/global/chrome" {
 		t.Errorf("runtime cfg mutated by override: %+v", cfg)
 	}
@@ -83,8 +83,8 @@ func TestBuildChildFileConfig_NoTargetSelected_UsesGlobalFields(t *testing.T) {
 	o := fakeOrch(cfg)
 
 	fc := o.buildChildFileConfig(cfg, "9999", 12345, "/tmp/profile", "/tmp/state", true, nil, nil)
-	if fc.Browser.Provider != config.BrowserProviderChrome {
-		t.Errorf("Browser.Provider = %q, want chrome (global)", fc.Browser.Provider)
+	if fc.Browsers.Default != config.BrowserChrome {
+		t.Errorf("Browsers.Default = %q, want chrome (global)", fc.Browsers.Default)
 	}
 	if fc.Browser.ChromeBinary != "/global/chrome" {
 		t.Errorf("Browser.ChromeBinary = %q, want /global/chrome", fc.Browser.ChromeBinary)
@@ -97,7 +97,7 @@ func TestBuildChildFileConfig_NoTargetSelected_UsesGlobalFields(t *testing.T) {
 func TestBuildChildFileConfig_LegacyConfigByteStable(t *testing.T) {
 	cfg := &config.RuntimeConfig{
 		Port:             "9867",
-		BrowserProvider:  config.BrowserProviderChrome,
+		DefaultBrowser:   config.BrowserChrome,
 		ChromeBinary:     "/usr/bin/chrome",
 		ChromeExtraFlags: "--flag",
 	}
@@ -124,7 +124,7 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 	cfg := &config.RuntimeConfig{
 		Port:                   "9867",
 		StateDir:               t.TempDir(),
-		BrowserProvider:        config.BrowserProviderChrome,
+		DefaultBrowser:         config.BrowserChrome,
 		Headless:               true,
 		HeadlessSet:            true,
 		Engine:                 "lite",
@@ -136,7 +136,7 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 	o := fakeOrch(cfg)
 
 	stateDir := t.TempDir()
-	configPath, err := o.writeAttachChildConfig("9999", config.BrowserProviderCloak, stateDir)
+	configPath, err := o.writeAttachChildConfig("9999", config.BrowserCloak, stateDir)
 	if err != nil {
 		t.Fatalf("writeAttachChildConfig: %v", err)
 	}
@@ -155,8 +155,8 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("InstanceDefaults.Mode = %q, want headless", fc.InstanceDefaults.Mode)
 	}
-	if fc.Browser.Provider != config.BrowserProviderCloak {
-		t.Errorf("Browser.Provider = %q, want cloak", fc.Browser.Provider)
+	if fc.Browsers.Default != config.BrowserCloak {
+		t.Errorf("Browsers.Default = %q, want cloak", fc.Browsers.Default)
 	}
 	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
 		t.Errorf("Security.Attach.Enabled = %v, want false", fc.Security.Attach.Enabled)

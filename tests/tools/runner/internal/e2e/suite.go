@@ -630,14 +630,11 @@ func (r *Runner) printSuiteSummary(def suiteDef, data suiteReportData, duration 
 	}
 
 	total := data.Passed + data.Failed
-	nameWidth := len("Test")
-	for _, result := range data.Results {
-		if len(result.Name) > nameWidth {
-			nameWidth = len(result.Name)
-		}
-	}
-	if nameWidth < 40 {
-		nameWidth = 40
+
+	if data.Failed == 0 && total > 0 {
+		_, _ = fmt.Fprintf(r.stdout, "  %s: %d/%d passed (%s)\n",
+			suiteReportTitle(def), data.Passed, total, formatDuration(duration))
+		return
 	}
 
 	_, _ = fmt.Fprintln(r.stdout, "")
@@ -645,27 +642,13 @@ func (r *Runner) printSuiteSummary(def suiteDef, data suiteReportData, duration 
 	if total == 0 {
 		_, _ = fmt.Fprintln(r.stdout, "  no test results emitted")
 	} else {
-		_, _ = fmt.Fprintf(r.stdout, "  %-*s %10s %8s\n", nameWidth, "Test", "Duration", "Status")
-		_, _ = fmt.Fprintf(r.stdout, "  %s\n", strings.Repeat("-", nameWidth+21))
-		for _, result := range data.Results {
-			status := "PASS"
-			if result.Status == "failed" {
-				status = "FAIL"
-			}
-			_, _ = fmt.Fprintf(r.stdout, "  %-*s %10dms %8s\n", nameWidth, result.Name, result.DurationMs, status)
-		}
-	}
-
-	_, _ = fmt.Fprintf(r.stdout, "  Passed: %d/%d\n", data.Passed, total)
-	_, _ = fmt.Fprintf(r.stdout, "  Failed: %d/%d\n", data.Failed, total)
-	_, _ = fmt.Fprintf(r.stdout, "  Test time: %dms\n", data.TotalMs)
-	_, _ = fmt.Fprintf(r.stdout, "  Suite wall time: %s\n", formatDuration(duration))
-
-	if data.Failed > 0 {
+		_, _ = fmt.Fprintf(r.stdout, "  Passed: %d/%d | Failed: %d | Wall time: %s\n",
+			data.Passed, total, data.Failed, formatDuration(duration))
+		_, _ = fmt.Fprintln(r.stdout, "")
 		_, _ = fmt.Fprintln(r.stdout, "  Failed tests:")
 		for _, result := range data.Results {
 			if result.Status == "failed" {
-				_, _ = fmt.Fprintf(r.stdout, "  - %s\n", result.Name)
+				_, _ = fmt.Fprintf(r.stdout, "    ✗ %s (%dms)\n", result.Name, result.DurationMs)
 			}
 		}
 	}

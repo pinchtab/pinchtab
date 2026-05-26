@@ -28,7 +28,7 @@ func InstanceStart(client *http.Client, base, token string, cmd *cobra.Command) 
 		}
 	}
 	if v, _ := cmd.Flags().GetString("browser"); v != "" {
-		body["browserTarget"] = v
+		body["browser"] = v
 	}
 	if fallbacks, _ := cmd.Flags().GetStringArray("browser-fallback"); len(fallbacks) > 0 {
 		body["fallbackTargets"] = fallbacks

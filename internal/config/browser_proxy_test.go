@@ -163,7 +163,7 @@ func TestValidateBrowserProxy_GeoBlock(t *testing.T) {
 
 func TestMigrateLegacyBrowserConfig_GeoCarriesIntoSynthesizedTarget(t *testing.T) {
 	bc := &BrowserConfig{
-		Provider: BrowserProviderChrome,
+		Provider: BrowserChrome,
 		Proxy: BrowserProxyConfig{
 			Server: "http://proxy.example.com:8080",
 			Geo: &BrowserProxyGeoConfig{
@@ -285,7 +285,7 @@ func TestBrowserProxyFlags(t *testing.T) {
 
 func TestMigrateLegacyBrowserConfig_ProxyCarriesIntoSynthesizedTarget(t *testing.T) {
 	bc := &BrowserConfig{
-		Provider: BrowserProviderChrome,
+		Provider: BrowserChrome,
 		Proxy: BrowserProxyConfig{
 			Server:   "http://proxy.example.com:8080",
 			Username: "alice",
@@ -310,7 +310,7 @@ func TestMigrateLegacyBrowserConfig_ProxyCarriesIntoSynthesizedTarget(t *testing
 
 func TestApplyTargetOverride_TargetProxyReplacesGlobal(t *testing.T) {
 	cfg := &RuntimeConfig{
-		BrowserProvider: BrowserProviderChrome,
+		DefaultBrowser: BrowserChrome,
 		Proxy: BrowserProxyConfig{
 			Server:     "http://global.example.com:8080",
 			Username:   "global-user",
@@ -319,14 +319,14 @@ func TestApplyTargetOverride_TargetProxyReplacesGlobal(t *testing.T) {
 		},
 		Targets: BrowserTargetsConfig{
 			"with-proxy": {
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 				Proxy: BrowserProxyConfig{
 					Server:     "socks5://target.example.com:1080",
 					BypassList: []string{"*.target.test"},
 				},
 			},
 			"inherits": {
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 			},
 		},
 	}
@@ -391,7 +391,7 @@ func TestApplyFileConfigToRuntime_ProxyGeoCopied(t *testing.T) {
 func TestFileConfig_ProxyRoundTrip(t *testing.T) {
 	t.Run("proxy omitted when empty", func(t *testing.T) {
 		fc := FileConfig{
-			Browser: BrowserConfig{Provider: BrowserProviderChrome},
+			Browser: BrowserConfig{Provider: BrowserChrome},
 		}
 		raw, err := json.Marshal(fc)
 		if err != nil {
@@ -405,7 +405,7 @@ func TestFileConfig_ProxyRoundTrip(t *testing.T) {
 	t.Run("geo omitted when nil", func(t *testing.T) {
 		fc := FileConfig{
 			Browser: BrowserConfig{
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 				Proxy: BrowserProxyConfig{
 					Server: "http://proxy.example.com:8080",
 				},
@@ -423,7 +423,7 @@ func TestFileConfig_ProxyRoundTrip(t *testing.T) {
 	t.Run("geo round-trips when configured", func(t *testing.T) {
 		fc := FileConfig{
 			Browser: BrowserConfig{
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 				Proxy: BrowserProxyConfig{
 					Server: "http://proxy.example.com:8080",
 					Geo: &BrowserProxyGeoConfig{
@@ -454,7 +454,7 @@ func TestFileConfig_ProxyRoundTrip(t *testing.T) {
 	t.Run("proxy emitted when configured", func(t *testing.T) {
 		fc := FileConfig{
 			Browser: BrowserConfig{
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 				Proxy: BrowserProxyConfig{
 					Server:   "http://proxy.example.com:8080",
 					Username: "alice",

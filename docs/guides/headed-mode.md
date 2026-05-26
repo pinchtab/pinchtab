@@ -135,8 +135,8 @@ deploy in.
 
 ## Related guides
 
-- [cloakbrowser.md](cloakbrowser.md) — CloakBrowser provider configuration
-  and troubleshooting
+- [cloakbrowser.md](cloakbrowser.md) — CloakBrowser configuration and
+  troubleshooting
 - [docker.md](docker.md) — bundled headless image and CloakBrowser smoke
   image (both headless-only)
 - [attach-chrome.md](attach-chrome.md) — attach to a separately launched

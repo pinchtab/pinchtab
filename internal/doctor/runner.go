@@ -3,10 +3,10 @@ package doctor
 
 import (
 	"context"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -73,20 +73,58 @@ func ExitCode(s Summary) int {
 func Registry(cfg *config.RuntimeConfig) []CheckEntry {
 	entries := []CheckEntry{
 		{Name: "config_file", Fn: checkConfigFile},
-		{Name: "chrome_present", Fn: checkChromePresent},
-		{Name: "cloakbrowser_present", Fn: checkCloakBrowserPresent},
-		{Name: "binary_exists", Fn: checkBinaryExists},
-		{Name: "binary_executable", Fn: checkBinaryExecutable},
-		{Name: "binary_starts", Fn: checkBinaryStarts},
 	}
-	if cfg != nil && config.IsCloakBrowserProvider(cfg.BrowserProvider) {
-		entries = append(entries,
-			CheckEntry{Name: "cdp_reachable", Fn: checkCDPReachable},
-			CheckEntry{Name: "fingerprint_flags_accepted", Fn: checkFingerprintFlagsAccepted},
-			CheckEntry{Name: "linux_fonts_present", Fn: checkLinuxFontsPresent},
-		)
+
+	// Add browser-specific checks from the browser registry.
+	browserID := config.NormalizeBrowser(browserFromCfg(cfg))
+	if b, ok := browsers.Get(browserID); ok {
+		env := buildDoctorEnv(cfg)
+		for _, dc := range b.DoctorChecks(browsers.TargetConfig{Provider: browserID}) {
+			dc := dc
+			entries = append(entries, CheckEntry{
+				Name: dc.ID,
+				Fn: func(ctx context.Context, _ *config.RuntimeConfig) CheckResult {
+					r := dc.Fn(ctx, env)
+					return CheckResult{
+						Status: mapDoctorStatus(r.Status),
+						Detail: r.Detail,
+						Err:    r.Err,
+					}
+				},
+			})
+		}
 	}
+
+	// Keep non-provider-specific checks after provider ones.
+	entries = append(entries,
+		CheckEntry{Name: "binary_exists", Fn: checkBinaryExists},
+		CheckEntry{Name: "binary_executable", Fn: checkBinaryExecutable},
+		CheckEntry{Name: "binary_starts", Fn: checkBinaryStarts},
+	)
+
 	return entries
+}
+
+func browserFromCfg(cfg *config.RuntimeConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.DefaultBrowser
+}
+
+func mapDoctorStatus(s browsers.DoctorStatus) CheckStatus {
+	switch s {
+	case browsers.DoctorPass:
+		return StatusPass
+	case browsers.DoctorFail:
+		return StatusFail
+	case browsers.DoctorWarn:
+		return StatusWarn
+	case browsers.DoctorSkip:
+		return StatusSkip
+	default:
+		return StatusSkip
+	}
 }
 
 // Run executes the diagnostic pipeline; when checkFilter is non-empty only
@@ -123,5 +161,23 @@ func KnownCheck(cfg *config.RuntimeConfig, name string) bool {
 	return false
 }
 
-// HostOS wraps runtime.GOOS to permit test override.
-var HostOS = func() string { return runtime.GOOS }
+// buildDoctorEnv constructs a browsers.DoctorEnv from a RuntimeConfig,
+// giving browser doctor checks access to the fields they need without
+// requiring browser sub-packages to import the config package.
+func buildDoctorEnv(cfg *config.RuntimeConfig) *browsers.DoctorEnv {
+	if cfg == nil {
+		return nil
+	}
+	return &browsers.DoctorEnv{
+		Binary: cfg.ChromeBinary,
+		Cloak: browsers.CloakFingerprint{
+			FingerprintSeed: cfg.Cloak.FingerprintSeed,
+			Platform:        cfg.Cloak.Platform,
+			Locale:          cfg.Cloak.Locale,
+			Timezone:        cfg.Cloak.Timezone,
+			WebRTCIP:        cfg.Cloak.WebRTCIP,
+			FontsDir:        cfg.Cloak.FontsDir,
+			StorageQuotaMB:  cfg.Cloak.StorageQuotaMB,
+		},
+	}
+}

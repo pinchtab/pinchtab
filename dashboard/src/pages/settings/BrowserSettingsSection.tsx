@@ -1,4 +1,8 @@
-import type { BackendCloakBrowserConfig, BackendConfig } from "../../types";
+import type {
+  BackendBrowserProvider,
+  BackendCloakBrowserConfig,
+  BackendConfig,
+} from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
 import { csvToList, fieldClass, listToCsv } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
@@ -13,6 +17,8 @@ export function BrowserSettingsSection({
   updateBackendSection,
 }: BrowserSettingsSectionProps) {
   const cloak = backendConfig.browser.cloak;
+  const currentProvider: BackendBrowserProvider =
+    backendConfig.browsers?.default ?? "chrome";
   const updateCloak = (patch: Partial<BackendCloakBrowserConfig>) =>
     updateBackendSection("browser", {
       cloak: {
@@ -31,16 +37,17 @@ export function BrowserSettingsSection({
         description="Browser backend used for new managed instances."
       >
         <select
-          value={backendConfig.browser.provider}
+          value={currentProvider}
           onChange={(e) =>
-            updateBackendSection("browser", {
-              provider: e.target.value === "cloak" ? "cloak" : "chrome",
+            updateBackendSection("browsers", {
+              default: e.target.value as BackendBrowserProvider,
             })
           }
           className={fieldClass}
         >
           <option value="chrome">Chrome</option>
           <option value="cloak">CloakBrowser</option>
+          <option value="ghost-chrome">Ghost + Chrome</option>
         </select>
       </SettingRow>
       <SettingRow
@@ -71,7 +78,7 @@ export function BrowserSettingsSection({
           className={fieldClass}
         />
       </SettingRow>
-      {backendConfig.browser.provider === "cloak" && (
+      {currentProvider === "cloak" && (
         <>
           <SettingRow
             label="Fingerprint seed"

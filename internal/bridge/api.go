@@ -189,8 +189,9 @@ type Instance struct {
 	CdpURL         string          `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
 
-	BrowserTarget   string `json:"browserTarget,omitempty"`
-	BrowserProvider string `json:"browserProvider,omitempty"`
+	Target          string `json:"-"`
+	BrowserProvider string `json:"-"`
+	Browser         string `json:"browser,omitempty"`
 
 	// FallbackFrom/FallbackReason: omitempty keeps successful-launch
 	// Instance JSON byte-identical to pre-P2.4a output.

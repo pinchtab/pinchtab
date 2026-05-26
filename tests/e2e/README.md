@@ -8,11 +8,12 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 
 ```bash
 ./dev e2e          # Run the extended suite quietly by default
+./dev e2e --browser=cloak         
 ./dev e2e basic    # Run the basic suite (api + cli + infra basic tests)
 ./dev e2e extended # Run the extended suite
 ./dev smoke ci     # Run the CI-backed smoke subset
 ./dev smoke        # Run all local smoke categories
-./dev smoke --provider=cloak # Run all local smoke categories for CloakBrowser
+./dev smoke --browser=cloak
 ./dev smoke cdp-attach       # Run only the CDP attach smoke
 ./dev e2e api      # Run API basic tests
 ./dev e2e cli      # Run CLI basic tests

@@ -60,7 +60,6 @@ type RuntimeConfig struct {
 	BlockAds            bool
 	MaxTabs             int
 	MaxParallelTabs     int // 0 = auto-detect from runtime.NumCPU
-	BrowserProvider     string
 	ChromeBinary        string
 	ChromeDebugPort     int
 	ChromeExtraFlags    string
@@ -74,6 +73,8 @@ type RuntimeConfig struct {
 	CDPAttachURL       string
 	Cloak              CloakBrowserRuntimeConfig
 	Proxy              BrowserProxyConfig
+	DefaultBrowser     string
+	BrowsersAvailable  []string
 	Targets            BrowserTargetsConfig
 	DefaultTarget      string
 	FallbackOrder      []string
@@ -117,7 +118,9 @@ type RuntimeConfig struct {
 	// Dialog settings
 	DialogAutoAccept bool
 
-	// Engine mode: "chrome" (default), "lite", or "auto"
+	// Engine is DEPRECATED. Use DefaultBrowser instead.
+	// Kept only for config file parsing compatibility. Runtime code should
+	// read DefaultBrowser, not this field.
 	Engine string
 
 	// Network monitoring
@@ -267,13 +270,15 @@ type FileConfig struct {
 	Observability    ObservabilityFileConfig `json:"observability,omitempty"`
 	Sessions         SessionsFileConfig      `json:"sessions,omitempty"`
 	AutoSolver       AutoSolverFileConfig    `json:"autoSolver,omitempty"`
+	Browsers         BrowsersConfig          `json:"browsers,omitempty"`
 }
 
 type ServerConfig struct {
-	Port                      string `json:"port,omitempty"`
-	Bind                      string `json:"bind,omitempty"`
-	Token                     string `json:"token,omitempty"`
-	StateDir                  string `json:"stateDir,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Bind     string `json:"bind,omitempty"`
+	Token    string `json:"token,omitempty"`
+	StateDir string `json:"stateDir,omitempty"`
+	// Engine is DEPRECATED. Use browsers.default instead. Kept for config file parsing only.
 	Engine                    string `json:"engine,omitempty"`
 	NetworkBufferSize         *int   `json:"networkBufferSize,omitempty"`
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`
@@ -304,6 +309,7 @@ type DashboardSessionFileConfig struct {
 }
 
 type BrowserConfig struct {
+	// Removed: presence triggers a validation error. Keep for JSON backward compat.
 	Provider         string             `json:"provider,omitempty"`
 	ChromeVersion    string             `json:"version,omitempty"`
 	ChromeBinary     string             `json:"binary,omitempty"`
@@ -352,6 +358,23 @@ type CloakBrowserRuntimeConfig struct {
 	FontsDir                  string
 	StorageQuotaMB            int
 	DisableDefaultStealthArgs bool
+}
+
+// BrowsersConfig is the Phase 1 top-level browsers block that declares
+// available browser providers and per-browser configuration overrides.
+type BrowsersConfig struct {
+	Default   string                       `json:"default,omitempty"`
+	Available []string                     `json:"available,omitempty"`
+	Config    map[string]BrowserItemConfig `json:"config,omitempty"`
+}
+
+// BrowserItemConfig holds per-browser configuration overrides within the
+// browsers.config map.
+type BrowserItemConfig struct {
+	Binary     string             `json:"binary,omitempty"`
+	ExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
+	Proxy      BrowserProxyConfig `json:"proxy,omitempty"`
 }
 
 type InstanceDefaultsConfig struct {

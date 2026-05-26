@@ -47,9 +47,17 @@ func (r *Runner) prepareProviderOverrides() (*providerOverrides, error) {
 	if r.args.Provider == "" || r.args.Provider == "chrome" {
 		return nil, nil
 	}
-	if r.args.Provider != "cloak" {
+	switch r.args.Provider {
+	case "cloak":
+		return r.prepareCloakOverrides()
+	case "ghost-chrome":
+		return r.prepareGhostChromeOverrides()
+	default:
 		return nil, fmt.Errorf("unsupported provider: %s", r.args.Provider)
 	}
+}
+
+func (r *Runner) prepareCloakOverrides() (*providerOverrides, error) {
 	image := cloakProviderImage()
 
 	if r.args.DryRun {
@@ -69,31 +77,15 @@ func (r *Runner) prepareProviderOverrides() (*providerOverrides, error) {
 		return nil, fmt.Errorf("create cloak tmp dir: %w", err)
 	}
 
-	configDir := filepath.Join(r.repoRoot, "tests/e2e/config")
-	entries, err := os.ReadDir(configDir)
+	configs, err := r.rewriteE2EConfigs(tmp, writeCloakConfig)
 	if err != nil {
 		_ = os.RemoveAll(tmp)
-		return nil, fmt.Errorf("read e2e config dir: %w", err)
-	}
-
-	cloakConfigs := map[string]string{}
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		src := filepath.Join(configDir, name)
-		dst := filepath.Join(tmp, name)
-		if err := writeCloakConfig(src, dst); err != nil {
-			_ = os.RemoveAll(tmp)
-			return nil, fmt.Errorf("rewrite config %s: %w", name, err)
-		}
-		cloakConfigs[name] = dst
+		return nil, err
 	}
 
 	overridePath := filepath.Join(tmp, "docker-compose.cloak.yml")
 	fixturesDir := filepath.Join(r.repoRoot, "tests/e2e/fixtures")
-	if err := writeCloakComposeOverride(overridePath, cloakConfigs, fixturesDir, image); err != nil {
+	if err := writeCloakComposeOverride(overridePath, configs, fixturesDir, image); err != nil {
 		_ = os.RemoveAll(tmp)
 		return nil, fmt.Errorf("write cloak compose override: %w", err)
 	}
@@ -104,6 +96,64 @@ func (r *Runner) prepareProviderOverrides() (*providerOverrides, error) {
 		tmpDir:       tmp,
 		composeFiles: []string{overridePath},
 	}, nil
+}
+
+func (r *Runner) prepareGhostChromeOverrides() (*providerOverrides, error) {
+	if r.args.DryRun {
+		return &providerOverrides{
+			provider:     "ghost-chrome",
+			composeFiles: []string{dryRunCloakComposeOverride},
+		}, nil
+	}
+
+	tmp, err := os.MkdirTemp("", "pinchtab-e2e-ghost-chrome-*")
+	if err != nil {
+		return nil, fmt.Errorf("create ghost-chrome tmp dir: %w", err)
+	}
+
+	configs, err := r.rewriteE2EConfigs(tmp, writeGhostChromeConfig)
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return nil, err
+	}
+
+	overridePath := filepath.Join(tmp, "docker-compose.ghost-chrome.yml")
+	fixturesDir := filepath.Join(r.repoRoot, "tests/e2e/fixtures")
+	if err := writeConfigOnlyComposeOverride(overridePath, configs, fixturesDir); err != nil {
+		_ = os.RemoveAll(tmp)
+		return nil, fmt.Errorf("write ghost-chrome compose override: %w", err)
+	}
+
+	return &providerOverrides{
+		provider:     "ghost-chrome",
+		tmpDir:       tmp,
+		composeFiles: []string{overridePath},
+	}, nil
+}
+
+// rewriteE2EConfigs reads every JSON file in tests/e2e/config/ and writes a
+// transformed copy using rewriteFn. Returns a map from basename to rewritten path.
+func (r *Runner) rewriteE2EConfigs(tmpDir string, rewriteFn func(src, dst string) error) (map[string]string, error) {
+	configDir := filepath.Join(r.repoRoot, "tests/e2e/config")
+	entries, err := os.ReadDir(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("read e2e config dir: %w", err)
+	}
+
+	configs := map[string]string{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		src := filepath.Join(configDir, name)
+		dst := filepath.Join(tmpDir, name)
+		if err := rewriteFn(src, dst); err != nil {
+			return nil, fmt.Errorf("rewrite config %s: %w", name, err)
+		}
+		configs[name] = dst
+	}
+	return configs, nil
 }
 
 func (o *providerOverrides) cleanup() {
@@ -180,9 +230,8 @@ func dockerImagePresent(image string) (bool, error) {
 }
 
 // writeCloakConfig reads a chrome-flavoured pinchtab config and writes a
-// cloak-flavoured copy: it preserves every other field and injects the
-// browser.provider + browser.binary + browser.cloak block. The fingerprint
-// seed mirrors scripts/lib/smoke-config.sh for consistency.
+// cloak-flavoured copy: it sets browsers.default, browser.binary, and the
+// browser.cloak block. The fingerprint seed mirrors scripts/lib/smoke-config.sh.
 func writeCloakConfig(src, dst string) error {
 	raw, err := os.ReadFile(src) // #nosec G304 -- src is constrained to tests/e2e/config/*.json.
 	if err != nil {
@@ -197,7 +246,6 @@ func writeCloakConfig(src, dst string) error {
 	if browser == nil {
 		browser = map[string]any{}
 	}
-	browser["provider"] = "cloak"
 	browser["binary"] = "/opt/cloakbrowser/chrome"
 	browser["cloak"] = map[string]any{
 		"fingerprintSeed":           "42069",
@@ -208,11 +256,130 @@ func writeCloakConfig(src, dst string) error {
 	}
 	cfg["browser"] = browser
 
+	// Set configVersion so the startup wizard doesn't rewrite the file,
+	// and browsers.default to select the cloak browser provider.
+	cfg["configVersion"] = "0.8.0"
+	browsers, _ := cfg["browsers"].(map[string]any)
+	if browsers == nil {
+		browsers = map[string]any{}
+	}
+	browsers["default"] = "cloak"
+	cfg["browsers"] = browsers
+
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 	return os.WriteFile(dst, append(out, '\n'), 0o644) // #nosec G306 -- read-only config fixture.
+}
+
+// writeGhostChromeConfig reads a chrome-flavoured pinchtab config and writes a
+// ghost-chrome-flavoured copy: it sets browsers.default to "ghost-chrome" and
+// configVersion to prevent the startup wizard from overwriting it. No binary or
+// cloak block changes — ghost-chrome uses Chrome under the hood.
+func writeGhostChromeConfig(src, dst string) error {
+	raw, err := os.ReadFile(src) // #nosec G304 -- src is constrained to tests/e2e/config/*.json.
+	if err != nil {
+		return err
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+
+	cfg["configVersion"] = "0.8.0"
+	browsers, _ := cfg["browsers"].(map[string]any)
+	if browsers == nil {
+		browsers = map[string]any{}
+	}
+	browsers["default"] = "ghost-chrome"
+	cfg["browsers"] = browsers
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	return os.WriteFile(dst, append(out, '\n'), 0o644) // #nosec G306 -- read-only config fixture.
+}
+
+// writeConfigOnlyComposeOverride writes a compose override that mounts
+// rewritten config files into each pinchtab service without swapping the image.
+// Used by ghost-chrome where the same Chrome image is used but the config
+// selects a different browsers.default.
+func writeConfigOnlyComposeOverride(path string, configs map[string]string, fixturesDir string) error {
+	type extensionMount struct {
+		sourceDir string
+		target    string
+	}
+	type serviceOverrideConfig struct {
+		configName      string
+		extensionMounts []extensionMount
+	}
+
+	serviceConfig := map[string]serviceOverrideConfig{
+		"pinchtab": {
+			configName: "pinchtab.json",
+			extensionMounts: []extensionMount{
+				{sourceDir: "test-extension", target: "/extensions/test-extension"},
+				{sourceDir: "test-extension-api", target: "/extensions/test-extension-api"},
+			},
+		},
+		"pinchtab-secure": {
+			configName: "pinchtab-secure.json",
+		},
+		"pinchtab-autoclose": {
+			configName: "pinchtab-autoclose.json",
+			extensionMounts: []extensionMount{
+				{sourceDir: "test-extension", target: "/extensions/test-extension"},
+			},
+		},
+		"pinchtab-medium": {
+			configName: "pinchtab-medium-permissive.json",
+			extensionMounts: []extensionMount{
+				{sourceDir: "test-extension", target: "/extensions/test-extension"},
+			},
+		},
+		"pinchtab-full": {
+			configName: "pinchtab-full-permissive.json",
+			extensionMounts: []extensionMount{
+				{sourceDir: "test-extension", target: "/extensions/test-extension"},
+			},
+		},
+		"pinchtab-lite": {
+			configName: "pinchtab-lite.json",
+		},
+		"pinchtab-bridge": {
+			configName: "pinchtab-bridge.json",
+		},
+	}
+
+	var b strings.Builder
+	b.WriteString("# Generated by tests/tools/runner — provider=ghost-chrome override.\n")
+	b.WriteString("# Mounts ghost-chrome-flavoured runtime config in place of the chrome one.\n")
+	b.WriteString("services:\n")
+
+	for _, svc := range pinchtabServices {
+		cfg, ok := serviceConfig[svc]
+		if !ok {
+			continue
+		}
+		baseName := cfg.configName
+		configPath, ok := configs[baseName]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(&b, "  %s:\n", svc)
+		b.WriteString("    volumes:\n")
+		fmt.Fprintf(&b, "      - %s:/fixture-config-ghost/%s:ro\n", configPath, baseName)
+		for _, mount := range cfg.extensionMounts {
+			source := filepath.Join(fixturesDir, mount.sourceDir)
+			fmt.Fprintf(&b, "      - %s:%s:ro\n", source, mount.target)
+		}
+		fmt.Fprintf(&b, "    command: [\"/bin/sh\", \"-lc\", \"mkdir -p /data/e2e-config && cp /fixture-config-ghost/%s /data/e2e-config/%s && exec /usr/local/bin/docker-entrypoint.sh pinchtab server\"]\n",
+			baseName, baseName)
+	}
+
+	return os.WriteFile(path, []byte(b.String()), 0o644) // #nosec G306 -- consumed read-only by docker compose.
 }
 
 // writeCloakComposeOverride writes a compose file that targets each pinchtab
@@ -295,15 +462,17 @@ func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixt
 		fmt.Fprintf(&b, "  %s:\n", svc)
 		fmt.Fprintf(&b, "    image: %s\n", image)
 		fmt.Fprintf(&b, "    pull_policy: never\n")
-		// Keep the override self-contained: every provider=cloak service gets
-		// the rewritten config plus the same extension fixtures its Chrome
-		// counterpart exposes in the base compose files.
+		// Mount the cloak config at a distinct path to avoid volume merge
+		// ambiguity with the base compose's /fixture-config mount. Override
+		// the command to copy from this path instead.
 		b.WriteString("    volumes:\n")
-		fmt.Fprintf(&b, "      - %s:/fixture-config/%s:ro\n", cloakPath, baseName)
+		fmt.Fprintf(&b, "      - %s:/fixture-config-cloak/%s:ro\n", cloakPath, baseName)
 		for _, mount := range cfg.extensionMounts {
 			source := filepath.Join(fixturesDir, mount.sourceDir)
 			fmt.Fprintf(&b, "      - %s:%s:ro\n", source, mount.target)
 		}
+		fmt.Fprintf(&b, "    command: [\"/bin/sh\", \"-lc\", \"mkdir -p /data/e2e-config && cp /fixture-config-cloak/%s /data/e2e-config/%s && exec /usr/local/bin/docker-entrypoint.sh pinchtab server\"]\n",
+			baseName, baseName)
 	}
 
 	return os.WriteFile(path, []byte(b.String()), 0o644) // #nosec G306 -- consumed read-only by docker compose.
@@ -373,6 +542,11 @@ func (r *Runner) assertStealthStatus(composeFile string) error {
 			"  /stealth/status: provider=cloak native=true overlaysDisabled=true seed=%s\n",
 			seed,
 		)
+	case "ghost-chrome":
+		if provider != "ghost-chrome" {
+			return fmt.Errorf("ghost-chrome stealth assertion failed (want provider=ghost-chrome); got: %s", formatStealthStatus(status))
+		}
+		_, _ = fmt.Fprintln(r.stdout, "  /stealth/status: provider=ghost-chrome")
 	default:
 		// chrome — sanity check only.
 		if provider != "chrome" {

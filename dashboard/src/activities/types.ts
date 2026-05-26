@@ -30,7 +30,6 @@ export interface ActivityQuery {
   profileName?: string;
   tabId?: string;
   action?: string;
-  engine?: string;
   pathPrefix?: string;
   since?: string;
   until?: string;

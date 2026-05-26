@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -152,7 +153,7 @@ func TestBuildLaunchContractOwnsStealthLaunchFlags(t *testing.T) {
 
 func TestNewBundleNativeCloakDisablesPinchTabStealthOverlays(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 		Cloak: config.CloakBrowserRuntimeConfig{
 			FingerprintSeed:           "42069",
 			DisableDefaultStealthArgs: true,
@@ -162,8 +163,8 @@ func TestNewBundleNativeCloakDisablesPinchTabStealthOverlays(t *testing.T) {
 	}
 
 	bundle := NewBundle(cfg, 1234)
-	if bundle.Provider != config.BrowserProviderCloak {
-		t.Fatalf("Provider = %q, want %q", bundle.Provider, config.BrowserProviderCloak)
+	if bundle.Provider != config.BrowserCloak {
+		t.Fatalf("Provider = %q, want %q", bundle.Provider, config.BrowserCloak)
 	}
 	if !bundle.Native {
 		t.Fatal("expected native Cloak bundle")
@@ -185,7 +186,7 @@ func TestNewBundleNativeCloakDisablesPinchTabStealthOverlays(t *testing.T) {
 	}
 
 	status := StatusFromBundle(bundle, cfg, LaunchModeAllocator)
-	if status.Provider != config.BrowserProviderCloak || !status.Native || !status.PinchTabOverlaysDisabled {
+	if status.Provider != config.BrowserCloak || !status.Native || !status.PinchTabOverlaysDisabled {
 		t.Fatalf("status = %+v, want native cloak provider with overlays disabled", status)
 	}
 	if status.FingerprintSeed != "42069" {
@@ -198,7 +199,7 @@ func TestNewBundleNativeCloakDisablesPinchTabStealthOverlays(t *testing.T) {
 
 func TestNewBundleCloakProviderCanKeepPinchTabStealthOverlays(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 		Cloak: config.CloakBrowserRuntimeConfig{
 			FingerprintSeed:           "42069",
 			DisableDefaultStealthArgs: false,
@@ -228,21 +229,21 @@ func TestNewBundleCloakProviderCanKeepPinchTabStealthOverlays(t *testing.T) {
 	}
 
 	status := StatusFromBundle(bundle, cfg, LaunchModeAllocator)
-	if status.Provider != config.BrowserProviderCloak || !status.Native || status.PinchTabOverlaysDisabled {
+	if status.Provider != config.BrowserCloak || !status.Native || status.PinchTabOverlaysDisabled {
 		t.Fatalf("status = %+v, want native cloak provider with overlays enabled", status)
 	}
 }
 
 func TestStatusFromBundleEchoesProviderCapabilities(t *testing.T) {
 	t.Run("chrome", func(t *testing.T) {
-		cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderChrome}
+		cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}
 		bundle := NewBundle(cfg, 1)
 		status := StatusFromBundle(bundle, cfg, LaunchModeAllocator)
 		if status == nil {
 			t.Fatal("expected non-nil status")
 			return
 		}
-		want := []string{"cdp", "headless", "pdf", "extensions", "downloads", "networkInterception"}
+		want := []string{"cdp", "downloads", "extensions", "headless", "networkInterception", "pdf"}
 		if !equalStringSlices(status.ProviderCapabilities, want) {
 			t.Fatalf("chrome ProviderCapabilities = %v, want %v", status.ProviderCapabilities, want)
 		}
@@ -255,7 +256,7 @@ func TestStatusFromBundleEchoesProviderCapabilities(t *testing.T) {
 
 	t.Run("cloak", func(t *testing.T) {
 		cfg := &config.RuntimeConfig{
-			BrowserProvider: config.BrowserProviderCloak,
+			DefaultBrowser: config.BrowserCloak,
 			Cloak: config.CloakBrowserRuntimeConfig{
 				DisableDefaultStealthArgs: true,
 			},
@@ -266,7 +267,7 @@ func TestStatusFromBundleEchoesProviderCapabilities(t *testing.T) {
 			t.Fatal("expected non-nil status")
 			return
 		}
-		want := []string{"cdp", "headless", "pdf", "extensions", "downloads", "networkInterception", "nativeStealth"}
+		want := []string{"cdp", "downloads", "extensions", "headless", "nativeStealth", "networkInterception", "pdf"}
 		if !equalStringSlices(status.ProviderCapabilities, want) {
 			t.Fatalf("cloak ProviderCapabilities = %v, want %v", status.ProviderCapabilities, want)
 		}

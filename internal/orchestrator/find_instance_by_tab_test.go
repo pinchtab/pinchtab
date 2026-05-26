@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
@@ -28,8 +29,8 @@ func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
 			ID:              "inst_a",
 			Status:          "running",
 			URL:             srv.URL,
-			BrowserTarget:   "chrome-default",
-			BrowserProvider: "chrome",
+			Browser:         config.BrowserChrome,
+			BrowserProvider: config.BrowserChrome,
 		},
 		URL: srv.URL,
 		cmd: &mockCmd{pid: 1, isAlive: true},
@@ -43,8 +44,8 @@ func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
 	if got == nil || got.ID != "inst_a" {
 		t.Fatalf("expected instance inst_a, got %+v", got)
 	}
-	if got.BrowserTarget != "chrome-default" {
-		t.Fatalf("expected BrowserTarget=chrome-default, got %q", got.BrowserTarget)
+	if got.Browser != config.BrowserChrome {
+		t.Fatalf("expected Browser=chrome, got %q", got.Browser)
 	}
 }
 

@@ -10,9 +10,8 @@ import (
 )
 
 var (
-	doctorJSON   bool
-	doctorTarget string
-	doctorCheck  string
+	doctorJSON  bool
+	doctorCheck string
 )
 
 var doctorCmd = &cobra.Command{
@@ -21,7 +20,7 @@ var doctorCmd = &cobra.Command{
 	Long: `Run a series of read-only diagnostic checks against the current
 PinchTab configuration. Initially focused on CloakBrowser discovery
 (binary exists, executes, exposes CDP, accepts fingerprint flags),
-but the framework is provider-neutral.
+but the framework is browser-neutral.
 
 The doctor command does not require a running PinchTab server. It works
 directly against the on-disk config and may launch a short-lived browser
@@ -33,7 +32,7 @@ Exit codes:
   2  usage or setup error (e.g. config could not be loaded)`,
 	Example: `  pinchtab doctor
   pinchtab doctor --json
-  pinchtab doctor --target cloak-eu
+  pinchtab doctor browser cloak-eu
   pinchtab doctor --check binary_exists`,
 	RunE:          runDoctor,
 	SilenceUsage:  true,
@@ -46,33 +45,24 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return newCommandExitError(2, fmt.Errorf("pinchtab doctor: %w", err))
 	}
 
-	target := strings.TrimSpace(doctorTarget)
 	check := strings.TrimSpace(doctorCheck)
-
-	if target != "" {
-		resolved, err := config.ResolveExplicitBrowserTarget(cfg, target)
-		if err != nil {
-			return newCommandExitError(2, fmt.Errorf("pinchtab doctor: %w", err))
-		}
-		cfg = resolved.Config
-	}
 
 	if check != "" {
 		if !doctor.KnownCheck(cfg, check) {
-			return newCommandExitError(2, fmt.Errorf("pinchtab doctor: unknown check %q for provider=%s", check, cfg.BrowserProvider))
+			return newCommandExitError(2, fmt.Errorf("pinchtab doctor: unknown check %q for browser=%s", check, cfg.DefaultBrowser))
 		}
 	}
 
 	results := doctor.Run(cmd.Context(), cfg, check)
-	provider := config.NormalizeBrowserProvider(cfg.BrowserProvider)
+	browser := config.NormalizeBrowser(cfg.DefaultBrowser)
 	out := cmd.OutOrStdout()
 
 	if doctorJSON {
-		if err := doctor.WriteJSON(out, provider, target, results); err != nil {
+		if err := doctor.WriteJSON(out, browser, "", results); err != nil {
 			return fmt.Errorf("write json: %w", err)
 		}
 	} else {
-		doctor.WriteText(out, provider, target, results)
+		doctor.WriteText(out, browser, "", results)
 	}
 
 	summary := doctor.Summarize(results)
@@ -93,8 +83,7 @@ func loadDoctorConfig() (*config.RuntimeConfig, error) {
 
 func init() {
 	doctorCmd.GroupID = "config"
-	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Emit machine-readable JSON")
-	doctorCmd.Flags().StringVar(&doctorTarget, "target", "", "Scope checks to a single browser.targets entry")
+	doctorCmd.PersistentFlags().BoolVar(&doctorJSON, "json", false, "Emit machine-readable JSON")
 	doctorCmd.Flags().StringVar(&doctorCheck, "check", "", "Run a single check by name (e.g. binary_exists)")
 	rootCmd.AddCommand(doctorCmd)
 }

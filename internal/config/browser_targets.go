@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 // DefaultBrowserTargetName is the synthetic target name produced by the legacy-config migration shim.
@@ -16,13 +18,9 @@ func IsValidBrowserTargetName(name string) bool {
 	return browserTargetNameRegex.MatchString(name)
 }
 
-func isRecognizedBrowserTargetProvider(p string) bool {
-	switch strings.ToLower(strings.TrimSpace(p)) {
-	case BrowserProviderChrome, BrowserProviderCloak:
-		return true
-	default:
-		return false
-	}
+func isRecognizedBrowserTarget(p string) bool {
+	_, ok := browsers.Get(strings.ToLower(strings.TrimSpace(p)))
+	return ok
 }
 
 func cloneBrowserTargetsConfig(in BrowserTargetsConfig) BrowserTargetsConfig {
@@ -94,18 +92,30 @@ func ValidateBrowserTargets(bc BrowserConfig) []error {
 				Field:   fmt.Sprintf("browser.targets.%s.provider", name),
 				Message: "provider is required",
 			})
-		} else if !isRecognizedBrowserTargetProvider(t.Provider) {
+		} else if !isRecognizedBrowserTarget(t.Provider) {
 			errs = append(errs, ValidationError{
 				Field:   fmt.Sprintf("browser.targets.%s.provider", name),
-				Message: fmt.Sprintf("unknown provider %q (must be chrome or cloak)", t.Provider),
+				Message: fmt.Sprintf("unknown provider %q (known: %v)", t.Provider, browsers.IDs()),
 			})
-		} else if NormalizeBrowserProvider(t.Provider) == BrowserProviderCloak &&
-			strings.TrimSpace(t.Binary) == "" &&
-			strings.TrimSpace(bc.ChromeBinary) == "" {
-			errs = append(errs, ValidationError{
-				Field:   fmt.Sprintf("browser.targets.%s.binary", name),
-				Message: "must be set when provider is cloak, or inherited from browser.binary",
-			})
+		} else {
+			provID := NormalizeBrowser(t.Provider)
+			if b, ok := browsers.Get(provID); ok {
+				binary := strings.TrimSpace(t.Binary)
+				if binary == "" {
+					binary = strings.TrimSpace(bc.ChromeBinary)
+				}
+				tcfg := browsers.TargetConfig{
+					Provider:   provID,
+					Binary:     binary,
+					ExtraFlags: t.ExtraFlags,
+				}
+				if err := b.ValidateTarget(tcfg); err != nil {
+					errs = append(errs, ValidationError{
+						Field:   fmt.Sprintf("browser.targets.%s.binary", name),
+						Message: err.Error(),
+					})
+				}
+			}
 		}
 		if strings.TrimSpace(t.ExtraFlags) != "" {
 			errs = append(errs, validateTargetExtraFlags(name, t.ExtraFlags)...)
@@ -206,7 +216,7 @@ func migrateLegacyBrowserConfig(bc *BrowserConfig) (synthesized bool, conflict b
 		return false, false
 	}
 
-	provider := NormalizeBrowserProvider(bc.Provider)
+	provider := NormalizeBrowser(bc.Provider)
 	target := BrowserTargetConfig{
 		Provider:   provider,
 		Binary:     bc.ChromeBinary,
@@ -265,6 +275,63 @@ func cloneBoolPtr(in *bool) *bool {
 	return &v
 }
 
+// TargetsForBrowser returns all target names whose Provider matches the given browser name (after normalization).
+func TargetsForBrowser(cfg *RuntimeConfig, browser string) []string {
+	if cfg == nil || len(cfg.Targets) == 0 {
+		return nil
+	}
+	browser = NormalizeBrowser(browser)
+	var names []string
+	for name, t := range cfg.Targets {
+		if NormalizeBrowser(t.Provider) == browser {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// AmbiguousBrowserError is returned when a resolved browser name matches
+// multiple configured targets and no defaultTarget disambiguates.
+type AmbiguousBrowserError struct {
+	Browser string
+	Targets []string
+}
+
+func (e *AmbiguousBrowserError) Error() string {
+	return fmt.Sprintf(
+		"browser %q matches multiple targets (%s); set browser.defaultTarget or specify a target explicitly",
+		e.Browser, strings.Join(e.Targets, ", "))
+}
+
+// ResolveBrowserToTarget bridges ResolveBrowser (which returns a browser name
+// like "cloak") to target resolution. When the resolved browser name matches
+// the Provider field of multiple targets and no DefaultTarget disambiguates,
+// it returns a structured AmbiguousBrowserError listing the matching targets.
+func ResolveBrowserToTarget(cfg *RuntimeConfig, browser string) (string, error) {
+	if cfg == nil || len(cfg.Targets) == 0 {
+		return "", nil // legacy path, no targets configured
+	}
+	matches := TargetsForBrowser(cfg, browser)
+	switch len(matches) {
+	case 0:
+		return "", nil // no target config for this browser, legacy path
+	case 1:
+		return matches[0], nil
+	default:
+		// Multiple targets — check if defaultTarget disambiguates
+		dt := ResolveDefaultTarget(cfg)
+		if dt != "" {
+			for _, m := range matches {
+				if m == dt {
+					return dt, nil
+				}
+			}
+		}
+		return "", &AmbiguousBrowserError{Browser: browser, Targets: matches}
+	}
+}
+
 // ResolveDefaultTarget returns the effective default target; empty when no targets are configured.
 func ResolveDefaultTarget(cfg *RuntimeConfig) string {
 	if cfg == nil || len(cfg.Targets) == 0 {
@@ -286,7 +353,7 @@ func ResolveDefaultTarget(cfg *RuntimeConfig) string {
 func ResolveDefaultBrowserTarget(cfg *RuntimeConfig) (*ResolvedBrowserTarget, error) {
 	if cfg == nil || len(cfg.Targets) == 0 {
 		return &ResolvedBrowserTarget{
-			Provider: NormalizeBrowserProvider(runtimeProvider(cfg)),
+			Provider: NormalizeBrowser(runtimeBrowser(cfg)),
 			Config:   CloneRuntimeConfig(cfg),
 			Legacy:   true,
 		}, nil
@@ -323,24 +390,24 @@ func resolveBrowserTargetByName(cfg *RuntimeConfig, name string) (*ResolvedBrows
 	applyTargetToRuntime(effective, t)
 	return &ResolvedBrowserTarget{
 		Name:     name,
-		Provider: effective.BrowserProvider,
+		Provider: effective.DefaultBrowser,
 		Target:   t,
 		Config:   effective,
 	}, nil
 }
 
-func runtimeProvider(cfg *RuntimeConfig) string {
+func runtimeBrowser(cfg *RuntimeConfig) string {
 	if cfg == nil {
 		return ""
 	}
-	return cfg.BrowserProvider
+	return cfg.DefaultBrowser
 }
 
 func applyTargetToRuntime(out *RuntimeConfig, t BrowserTargetConfig) {
 	if out == nil {
 		return
 	}
-	out.BrowserProvider = NormalizeBrowserProvider(t.Provider)
+	out.DefaultBrowser = NormalizeBrowser(t.Provider)
 	if strings.TrimSpace(t.Binary) != "" {
 		out.ChromeBinary = t.Binary
 	}

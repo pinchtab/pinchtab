@@ -55,7 +55,7 @@ func collectingHook(t *testing.T) (LifecycleHook, func(want int, wait time.Durat
 
 func TestLifecycle_RevokeFiresHookAfterUnlock(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
-	_, token, err := s.Create("agent-1", "test")
+	_, token, err := s.Create("agent-1", "test", "")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestLifecycle_PrunePropagatesEvents(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", IdleTimeout: time.Hour})
 	s.now = func() time.Time { return clock }
 
-	_, token, err := s.Create("agent-stale", "")
+	_, token, err := s.Create("agent-stale", "", "")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestLifecycle_AuthenticateExpiryFiresEvent(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", IdleTimeout: time.Hour})
 	s.now = func() time.Time { return clock }
 
-	_, token, err := s.Create("agent-expire", "")
+	_, token, err := s.Create("agent-expire", "", "")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestLifecycle_AuthenticateExpiryFiresEvent(t *testing.T) {
 
 func TestLifecycle_NoSubscribersIsSafe(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
-	_, token, _ := s.Create("agent-quiet", "")
+	_, token, _ := s.Create("agent-quiet", "", "")
 	sess, _ := s.Authenticate(token)
 	if !s.Revoke(sess.ID) {
 		t.Fatal("Revoke")

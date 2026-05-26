@@ -29,9 +29,12 @@ export default function InstanceCard({ instance, onOpen, onStop }: Props) {
             <div className="text-xs text-text-muted">:{instance.port}</div>
           </div>
         </div>
-        <Badge variant={instance.headless ? "info" : "default"}>
-          {instance.headless ? "Headless" : "Headed"}
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant="default">{instance.browser || "chrome"}</Badge>
+          <Badge variant={instance.headless ? "info" : "default"}>
+            {instance.headless ? "Headless" : "Headed"}
+          </Badge>
+        </div>
       </div>
 
       <div className="mb-3 rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.4)] px-3 py-2 text-xs">

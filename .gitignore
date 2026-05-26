@@ -24,6 +24,7 @@
 .tools/
 .venv/
 .claude
+.agents
 /pinchtab
 AGENTS.md
 BOOTSTRAP.md

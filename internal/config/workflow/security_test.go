@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 

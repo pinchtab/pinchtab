@@ -39,16 +39,20 @@ func (o *Orchestrator) RouteForRequest(r *http.Request) (string, int, error) {
 		return "", http.StatusServiceUnavailable, fmt.Errorf("no orchestrator configured")
 	}
 
-	requestedTarget := ExtractRequestedBrowserTarget(r)
-	if requestedTarget != "" {
-		resolvedTarget, _, err := o.ResolveRequestedBrowserTarget(requestedTarget)
+	requestedBrowser := ExtractRequestedBrowser(r)
+	if requestedBrowser != "" {
+		// Resolve the public "browser" (provider name) to an internal target.
+		resolvedTarget, err := config.ResolveBrowserToTarget(o.runtimeCfg, requestedBrowser)
 		if err != nil {
-			return "", statusForRouteLaunchSelectionError(err), err
+			return "", http.StatusBadRequest, err
 		}
-		if target := o.FirstRunningURLForBrowserTarget(resolvedTarget); target != "" {
-			return target, 0, nil
+		if resolvedTarget != "" {
+			if target := o.FirstRunningURLForTarget(resolvedTarget); target != "" {
+				return target, 0, nil
+			}
+			return o.launchAndWaitForRequestRoute(autoLaunchProfileName(resolvedTarget), requestedBrowser)
 		}
-		return o.launchAndWaitForRequestRoute(autoLaunchProfileName(resolvedTarget), requestedTarget)
+		// No targets configured (legacy path) — fall through to default routing.
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(r)
@@ -63,7 +67,7 @@ func (o *Orchestrator) RouteForRequest(r *http.Request) (string, int, error) {
 }
 
 func (o *Orchestrator) launchAndWaitForRequestRoute(profileName, requestedTarget string) (string, int, error) {
-	slog.Info("request route: no running instance, auto-launching", "profile", profileName, "browserTarget", requestedTarget)
+	slog.Info("request route: no running instance, auto-launching", "profile", profileName, "target", requestedTarget)
 	launched, err := o.LaunchWithTargetSelection(profileName, "", true, requestedTarget, nil, LaunchOptions{})
 	if err != nil {
 		status := statusForRouteLaunchSelectionError(err)
@@ -112,7 +116,7 @@ func autoLaunchProfileName(target string) string {
 }
 
 func statusForRouteLaunchSelectionError(err error) int {
-	if errors.Is(err, ErrUnknownBrowserTarget) {
+	if errors.Is(err, ErrUnknownBrowser) {
 		return http.StatusBadRequest
 	}
 	var exhausted *FallbackExhaustedError
@@ -212,37 +216,38 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 }
 
 func (o *Orchestrator) requestedBrowserTargetForRoute(r *http.Request) (string, int, error) {
-	requested := ExtractRequestedBrowserTarget(r)
+	requested := ExtractRequestedBrowser(r)
 	if requested == "" {
 		return "", 0, nil
 	}
-	resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
+	// The public param is "browser" (provider name); resolve to target name.
+	targetName, err := config.ResolveBrowserToTarget(o.runtimeCfg, requested)
 	if err != nil {
 		return "", http.StatusBadRequest, err
 	}
-	return resolved.Name, 0, nil
+	return targetName, 0, nil
 }
 
 func writeBrowserTargetConflict(w http.ResponseWriter, tabID string, inst *bridge.Instance, requestedTarget string) bool {
-	if requestedTarget == "" || inst == nil || inst.BrowserTarget == "" || inst.BrowserTarget == requestedTarget {
+	if requestedTarget == "" || inst == nil || inst.Target == "" || inst.Target == requestedTarget {
 		return false
 	}
-	detail := fmt.Sprintf("instance %q has browserTarget %q; cannot route with browserTarget %q",
-		inst.ID, inst.BrowserTarget, requestedTarget)
+	detail := fmt.Sprintf("instance %q has browser %q; cannot route with browser %q",
+		inst.ID, inst.BrowserProvider, requestedTarget)
 	if tabID != "" {
-		detail = fmt.Sprintf("tab %q is owned by instance with browserTarget %q; cannot route with browserTarget %q",
-			tabID, inst.BrowserTarget, requestedTarget)
+		detail = fmt.Sprintf("tab %q is owned by instance with browser %q; cannot route with browser %q",
+			tabID, inst.BrowserProvider, requestedTarget)
 	}
 	meta := map[string]any{
 		"instanceId":       inst.ID,
-		"instanceTarget":   inst.BrowserTarget,
-		"requestedTarget":  requestedTarget,
+		"instanceBrowser":  inst.BrowserProvider,
+		"requestedBrowser": requestedTarget,
 		"instanceProvider": inst.BrowserProvider,
 	}
 	if tabID != "" {
 		meta["tabId"] = tabID
 	}
-	httpx.ErrorCode(w, http.StatusConflict, "browser_target_conflict",
+	httpx.ErrorCode(w, http.StatusConflict, "browser_conflict",
 		detail,
 		false, meta)
 	return true
@@ -304,7 +309,7 @@ func (o *Orchestrator) routeToInstanceID(w http.ResponseWriter, r *http.Request,
 		return true
 	}
 	if requestedTarget != "" {
-		if internal.BrowserTarget == "" || internal.BrowserTarget != requestedTarget {
+		if internal.Target == "" || internal.Target != requestedTarget {
 			return false
 		}
 	}

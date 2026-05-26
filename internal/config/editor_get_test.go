@@ -21,7 +21,7 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"observability.activity.retentionDays", "14", "14"},
 		{"observability.activity.events.dashboard", "true", "true"},
 		{"observability.activity.events.mcp", "false", "false"},
-		{"browser.provider", "cloak", "cloak"},
+		// browser.provider is no longer supported; tested separately below.
 		{"browser.version", "120.0", "120.0"},
 		{"browser.binary", "/usr/bin/chrome", "/usr/bin/chrome"},
 		{"browser.cloak.fingerprintSeed", "42069", "42069"},

@@ -13,23 +13,23 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// ErrUnknownBrowserTarget disambiguates 400 (unknown target) from 502 (exhaustion) for handlers.
-var ErrUnknownBrowserTarget = errors.New("unknown browser target")
+// ErrUnknownBrowser disambiguates 400 (unknown target) from 502 (exhaustion) for handlers.
+var ErrUnknownBrowser = errors.New("unknown browser target")
 
-// UnknownBrowserTargetError satisfies errors.Is(ErrUnknownBrowserTarget).
-type UnknownBrowserTargetError struct {
+// UnknownBrowserError satisfies errors.Is(ErrUnknownBrowser).
+type UnknownBrowserError struct {
 	Target string
 	Err    error
 }
 
-func (e *UnknownBrowserTargetError) Error() string {
+func (e *UnknownBrowserError) Error() string {
 	return fmt.Sprintf("launch with fallback: resolve target %q: %v", e.Target, e.Err)
 }
 
-func (e *UnknownBrowserTargetError) Unwrap() error { return e.Err }
+func (e *UnknownBrowserError) Unwrap() error { return e.Err }
 
-func (e *UnknownBrowserTargetError) Is(target error) bool {
-	return target == ErrUnknownBrowserTarget
+func (e *UnknownBrowserError) Is(target error) bool {
+	return target == ErrUnknownBrowser
 }
 
 type FallbackAttempt struct {
@@ -109,7 +109,7 @@ func (a fallbackAttempt) String() string {
 }
 
 // LaunchWithFallback tries candidates in order, tearing down recoverable failures before moving on.
-// Returns *UnknownBrowserTargetError for invalid names, *FallbackExhaustedError when all candidates fail.
+// Returns *UnknownBrowserError for invalid names, *FallbackExhaustedError when all candidates fail.
 func (p LaunchPlanner) LaunchWithFallback(
 	name, port string, headless bool,
 	primaryAndFallbacks []string,
@@ -136,11 +136,11 @@ func (p LaunchPlanner) LaunchWithFallback(
 	for i, candidate := range candidates {
 		resolved, err := p.Launcher.ResolveTarget(candidate)
 		if err != nil {
-			return nil, &UnknownBrowserTargetError{Target: candidate, Err: err}
+			return nil, &UnknownBrowserError{Target: candidate, Err: err}
 		}
 
 		attemptOpts := opts
-		attemptOpts.BrowserTarget = resolved.Name
+		attemptOpts.ResolvedTarget = resolved.Name
 		attemptOpts.BrowserProvider = resolved.Provider
 
 		inst, launchErr := p.Launcher.Launch(name, port, headless, attemptOpts)
@@ -208,7 +208,7 @@ func (p LaunchPlanner) LaunchWithFallback(
 }
 
 // LaunchWithFallback tries candidates in order, tearing down recoverable failures before moving on.
-// Returns *UnknownBrowserTargetError for invalid names, *FallbackExhaustedError when all candidates fail.
+// Returns *UnknownBrowserError for invalid names, *FallbackExhaustedError when all candidates fail.
 func (o *Orchestrator) LaunchWithFallback(
 	name, port string, headless bool,
 	primaryAndFallbacks []string,

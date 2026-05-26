@@ -54,8 +54,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.CookieSecure != nil {
 		t.Errorf("default CookieSecure = %v, want nil for auto-detect", *cfg.CookieSecure)
 	}
-	if cfg.BrowserProvider != BrowserProviderChrome {
-		t.Errorf("default BrowserProvider = %v, want %s", cfg.BrowserProvider, BrowserProviderChrome)
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("default DefaultBrowser = %v, want %s", cfg.DefaultBrowser, BrowserChrome)
 	}
 	if !cfg.Cloak.DisableDefaultStealthArgs {
 		t.Errorf("default Cloak.DisableDefaultStealthArgs = false, want true")
@@ -715,8 +715,8 @@ func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
 	disableDefaultStealthArgs := false
 	cfg := &RuntimeConfig{Cloak: CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true}}
 	fc := &FileConfig{
+		Browsers: BrowsersConfig{Default: BrowserCloak},
 		Browser: BrowserConfig{
-			Provider:     BrowserProviderCloak,
 			ChromeBinary: "/opt/cloakbrowser/chrome",
 			Cloak: CloakBrowserConfig{
 				FingerprintSeed:           "42069",
@@ -733,8 +733,8 @@ func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
 
 	ApplyFileConfigToRuntime(cfg, fc)
 
-	if cfg.BrowserProvider != BrowserProviderCloak {
-		t.Fatalf("BrowserProvider = %q, want %q", cfg.BrowserProvider, BrowserProviderCloak)
+	if cfg.DefaultBrowser != BrowserCloak {
+		t.Fatalf("DefaultBrowser = %q, want %q", cfg.DefaultBrowser, BrowserCloak)
 	}
 	if cfg.ChromeBinary != "/opt/cloakbrowser/chrome" {
 		t.Fatalf("ChromeBinary = %q, want configured binary", cfg.ChromeBinary)
@@ -752,8 +752,8 @@ func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
 
 	defaultCfg := &RuntimeConfig{}
 	ApplyFileConfigToRuntime(defaultCfg, &FileConfig{
+		Browsers: BrowsersConfig{Default: BrowserCloak},
 		Browser: BrowserConfig{
-			Provider:     BrowserProviderCloak,
 			ChromeBinary: "/opt/cloakbrowser/chrome",
 		},
 	})
@@ -834,6 +834,93 @@ func TestApplyFileConfigToRuntime_AutoSolverSettings(t *testing.T) {
 	}
 	if cfg.AutoSolver.TwoCaptchaKey != "two-key" {
 		t.Fatalf("AutoSolver.TwoCaptchaKey = %q, want two-key", cfg.AutoSolver.TwoCaptchaKey)
+	}
+}
+
+func TestLoadConfig_BrowserProviderAloneNoLongerMapsToDefault(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"browser": {
+			"provider": "cloak"
+		}
+	}`)
+
+	cfg := Load()
+
+	// browser.provider is no longer supported; it should be ignored at load time
+	// and the default chrome provider is used.
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome (browser.provider ignored)", cfg.DefaultBrowser)
+	}
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("DefaultBrowser = %q, want %s (browser.provider ignored)", cfg.DefaultBrowser, BrowserChrome)
+	}
+}
+
+func TestLoadConfig_DefaultBrowserUsedEvenWithProviderPresent(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"browser": {
+			"binary": "/opt/cloakbrowser/chrome"
+		},
+		"browsers": {
+			"default": "chrome"
+		}
+	}`)
+
+	cfg := Load()
+
+	// browsers.default is the only supported way to set the browser.
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome", cfg.DefaultBrowser)
+	}
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("DefaultBrowser = %q, want %s", cfg.DefaultBrowser, BrowserChrome)
+	}
+}
+
+func TestFileConfigFromRuntime_UsesDefaultBrowser(t *testing.T) {
+	cfg := &RuntimeConfig{
+		DefaultBrowser:    "chrome",
+		BrowsersAvailable: []string{"chrome"},
+		ChromeVersion:     "100.0.0.0",
+		ExtensionPaths:    []string{},
+	}
+
+	fc := FileConfigFromRuntime(cfg)
+
+	// Provider should not be set on the output FileConfig
+	if fc.Browser.Provider != "" {
+		t.Errorf("FileConfigFromRuntime should not set browser.provider, got %q", fc.Browser.Provider)
+	}
+
+	// browsers.default should be set
+	if fc.Browsers.Default != "chrome" {
+		t.Errorf("FileConfigFromRuntime Browsers.Default = %q, want chrome", fc.Browsers.Default)
+	}
+
+	// Verify that the marshaled JSON also omits browser.provider
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	browser, ok := raw["browser"].(map[string]any)
+	if !ok {
+		t.Fatal("missing browser block in JSON output")
+	}
+	if _, ok := browser["provider"]; ok {
+		t.Fatal("browser.provider should not appear in marshaled JSON")
+	}
+	browsersBlock, ok := raw["browsers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing browsers block in JSON output")
+	}
+	if def := browsersBlock["default"]; def != "chrome" {
+		t.Errorf("browsers.default in JSON = %v, want chrome", def)
 	}
 }
 
@@ -945,5 +1032,32 @@ func TestLoadConfig_TabCloseDelayPreservesDefaultWhenAbsent(t *testing.T) {
 	cfg := Load()
 	if cfg.TabCloseDelay != 5*time.Minute {
 		t.Errorf("TabCloseDelay = %v, want 5m default", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_DefaultBrowsersNeverIncludesHighTrust(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{}`)
+
+	cfg := Load()
+
+	// Default BrowsersAvailable must be exactly ["chrome"].
+	if len(cfg.BrowsersAvailable) != 1 || cfg.BrowsersAvailable[0] != "chrome" {
+		t.Fatalf("BrowsersAvailable = %v, want [chrome]", cfg.BrowsersAvailable)
+	}
+
+	// Verify no high-trust browsers leaked into the default set.
+	highTrust := []string{"cloak", "ghost-chrome"}
+	for _, ht := range highTrust {
+		for _, b := range cfg.BrowsersAvailable {
+			if b == ht {
+				t.Errorf("high-trust browser %q must not appear in default BrowsersAvailable", ht)
+			}
+		}
+	}
+
+	// Default browser must also be chrome.
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome", cfg.DefaultBrowser)
 	}
 }

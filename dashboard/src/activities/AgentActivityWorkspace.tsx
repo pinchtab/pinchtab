@@ -70,7 +70,6 @@ function toDashboardActivityEvent(
     tabId: detailString(details, "tabId"),
     url: detailString(details, "url"),
     action: detailString(details, "action"),
-    engine: detailString(details, "engine"),
     ref: detailString(details, "ref"),
   });
 }

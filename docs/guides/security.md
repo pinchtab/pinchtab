@@ -407,7 +407,7 @@ See [Reference: Agent Sessions](../reference/sessions.md) for configuration and 
 
 ## Related guides
 
-- [cloakbrowser.md](cloakbrowser.md) — provider-specific fingerprint flags
+- [cloakbrowser.md](cloakbrowser.md) — browser-specific fingerprint flags
   and the licensing/distribution policy for CloakBrowser binaries
 - [attach-chrome.md](attach-chrome.md) — attach an externally managed Chrome
   or CloakBrowser via CDP, and the attach policy fields summarized above

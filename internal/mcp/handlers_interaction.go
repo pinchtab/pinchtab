@@ -16,6 +16,9 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
+		if browser := optString(r, "browser"); browser != "" {
+			payload["browser"] = browser
+		}
 
 		x, y, hasXY := resolveXY(r)
 		if hasXY {
@@ -208,6 +211,9 @@ func handleKeyboardText(c *Client, kind string) func(context.Context, mcp.CallTo
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
+		if browser := optString(r, "browser"); browser != "" {
+			payload["browser"] = browser
+		}
 		body, code, err := c.Post(ctx, "/action", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -225,6 +231,9 @@ func handleKeyboardKey(c *Client, kind string) func(context.Context, mcp.CallToo
 		payload := map[string]any{"kind": kind, "key": key}
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
+		}
+		if browser := optString(r, "browser"); browser != "" {
+			payload["browser"] = browser
 		}
 		body, code, err := c.Post(ctx, "/action", payload)
 		if err != nil {

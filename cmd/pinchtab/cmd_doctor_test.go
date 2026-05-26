@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,38 +11,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestRunDoctorReturnsUsageErrorWithoutMutatingTargetFlag(t *testing.T) {
+func TestRunDoctorBrowserShowsOverviewForUnknownTarget(t *testing.T) {
 	writeDoctorTestConfig(t, func(fc *config.FileConfig) {
 		fc.Browser.Targets = config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
+			"chrome": {Provider: config.BrowserChrome},
 		}
 		fc.Browser.DefaultTarget = "chrome"
 	})
-	restore := setDoctorGlobals(" missing ", " ", false)
-	t.Cleanup(restore)
 
 	var out bytes.Buffer
-	err := runDoctor(doctorTestCommand(&out), nil)
-	if err == nil {
-		t.Fatal("runDoctor() expected error")
+	err := runDoctorBrowser(doctorTestCommand(&out), []string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("runDoctorBrowser() unexpected error: %v", err)
 	}
-	if got := commandExitCode(err); got != 2 {
-		t.Fatalf("exit code = %d, want 2; err=%v", got, err)
+	output := out.String()
+	if !strings.Contains(output, "not a known provider") {
+		t.Fatalf("expected unknown browser message, got %q", output)
 	}
-	if !strings.Contains(err.Error(), `target "missing" not found`) {
-		t.Fatalf("expected missing target error, got %q", err.Error())
+	if !strings.Contains(output, "Known browsers:") {
+		t.Fatalf("expected known browsers list, got %q", output)
 	}
-	if doctorTarget != " missing " {
-		t.Fatalf("doctorTarget mutated to %q", doctorTarget)
+}
+
+func TestRunDoctorBrowserNoArgsShowsOverview(t *testing.T) {
+	writeDoctorTestConfig(t, nil)
+
+	var out bytes.Buffer
+	err := runDoctorBrowser(doctorTestCommand(&out), nil)
+	if err != nil {
+		t.Fatalf("runDoctorBrowser() unexpected error: %v", err)
 	}
-	if doctorCheck != " " {
-		t.Fatalf("doctorCheck mutated to %q", doctorCheck)
+	output := out.String()
+	if !strings.Contains(output, "Supported browsers:") {
+		t.Fatalf("expected overview output, got %q", output)
+	}
+	if !strings.Contains(output, "chrome") {
+		t.Fatalf("expected chrome in output, got %q", output)
 	}
 }
 
 func TestRunDoctorReturnsUsageErrorWithoutMutatingCheckFlag(t *testing.T) {
 	writeDoctorTestConfig(t, nil)
-	restore := setDoctorGlobals("", " nope ", false)
+	restore := setDoctorGlobals(" nope ", false)
 	t.Cleanup(restore)
 
 	var out bytes.Buffer
@@ -65,7 +76,7 @@ func TestRunDoctorReturnsFailureCodeWithoutExiting(t *testing.T) {
 	writeDoctorTestConfig(t, func(fc *config.FileConfig) {
 		fc.Browser.ChromeBinary = missingBinary
 	})
-	restore := setDoctorGlobals("", "binary_exists", false)
+	restore := setDoctorGlobals("binary_exists", false)
 	t.Cleanup(restore)
 
 	var out bytes.Buffer
@@ -98,13 +109,11 @@ func writeDoctorTestConfig(t *testing.T, mutate func(*config.FileConfig)) {
 	}
 }
 
-func setDoctorGlobals(target, check string, json bool) func() {
-	oldTarget, oldCheck, oldJSON := doctorTarget, doctorCheck, doctorJSON
-	doctorTarget = target
+func setDoctorGlobals(check string, json bool) func() {
+	oldCheck, oldJSON := doctorCheck, doctorJSON
 	doctorCheck = check
 	doctorJSON = json
 	return func() {
-		doctorTarget = oldTarget
 		doctorCheck = oldCheck
 		doctorJSON = oldJSON
 	}
@@ -113,5 +122,6 @@ func setDoctorGlobals(target, check string, json bool) func() {
 func doctorTestCommand(out *bytes.Buffer) *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.SetOut(out)
+	cmd.SetContext(context.Background())
 	return cmd
 }

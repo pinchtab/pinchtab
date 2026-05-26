@@ -26,7 +26,7 @@ COMMANDS=(
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "test plugin:🔬:Plugin unit tests"
-  "e2e:🐳:E2E suites (add --provider=chrome|cloak to swap browser; default chrome)"
+  "e2e:🐳:E2E suites (add --browser=chrome|cloak|ghost-chrome to swap browser; default chrome)"
   "  basic:🐳:Basic suite (api + cli + infra)"
   "  extended:🐳:Extended suite (all extended)"
   "  smoke:🐳:E2E smoke subset"
@@ -39,7 +39,7 @@ COMMANDS=(
   "  cli-extended:🐳:CLI extended tests"
   "  infra-extended:🐳:Infra extended (multi-instance)"
   "  test <name>:🐳:Run a single E2E test by start_test name"
-  "smoke:💨:Docker smoke checks (use --provider=chrome|cloak|all or filter names)"
+  "smoke:💨:Docker smoke checks (use --browser=chrome|cloak|ghost-chrome|all or filter names)"
   "  cloakbrowser:💨:Docker browser parity / CloakBrowser smoke"
   "  cdp-attach:💨:Docker CDP attach smoke"
   "  live-detection:💨:Advisory live detection-site probe (external network)"
@@ -112,7 +112,7 @@ run_e2e_runner() {
       logs=*)
         runner_args+=(--logs "${1#logs=}")
         ;;
-      --suite|--filter|--test|--extra|--logs)
+      --suite|--filter|--test|--extra|--logs|--browser)
         if [ "$#" -lt 2 ]; then
           echo "  ${ERROR}Missing value for $1${NC}" >&2
           exit 1
@@ -123,11 +123,14 @@ run_e2e_runner() {
         runner_args+=("$opt" "$value")
         [ "$opt" = "--filter" ] && filter_seen=1
         ;;
-      --suite=*|--filter=*|--test=*|--extra=*|--logs=*)
+      --suite=*|--filter=*|--test=*|--extra=*|--logs=*|--browser=*)
         local opt="${1%%=*}"
         local value="${1#*=}"
         runner_args+=("$opt" "$value")
         [ "$opt" = "--filter" ] && filter_seen=1
+        ;;
+      browser=*)
+        runner_args+=(--browser "${1#browser=}")
         ;;
       --dry-run|--help|-h)
         runner_args+=("$1")

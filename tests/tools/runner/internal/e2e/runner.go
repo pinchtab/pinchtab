@@ -91,12 +91,12 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 		logsMode = strings.TrimSpace(os.Getenv("E2E_LOGS"))
 	}
 	if logsMode == "" {
-		logsMode = "show"
+		logsMode = "compact"
 	}
 	switch logsMode {
-	case "show", "hide":
+	case "show", "hide", "compact":
 	default:
-		return nil, fmt.Errorf("--logs must be show or hide")
+		return nil, fmt.Errorf("--logs must be show, hide, or compact")
 	}
 
 	return &Runner{
@@ -120,7 +120,7 @@ func (r *Runner) Run() int {
 	r.overrides = overrides
 	if overrides != nil {
 		defer overrides.cleanup()
-		_, _ = fmt.Fprintf(r.stdout, "  provider: %s (image: %s)\n", overrides.provider, overrides.image)
+		_, _ = fmt.Fprintf(r.stdout, "  browser: %s (image: %s)\n", overrides.provider, overrides.image)
 	}
 	code := r.run()
 	duration := time.Since(started)
@@ -177,16 +177,17 @@ func (r *Runner) run() int {
 
 func (r *Runner) printPlanHeader() {
 	_, _ = fmt.Fprintln(r.stdout, "runner e2e (Go) - resolved plan")
-	_, _ = fmt.Fprintf(r.stdout, "  suite:  %s\n", r.suite)
-	_, _ = fmt.Fprintf(r.stdout, "  logs:   %s\n", r.logsMode)
+	_, _ = fmt.Fprintf(r.stdout, "  suite:    %s\n", r.suite)
+	_, _ = fmt.Fprintf(r.stdout, "  browser:  %s\n", r.args.Provider)
+	_, _ = fmt.Fprintf(r.stdout, "  logs:     %s\n", r.logsMode)
 	if r.args.Filter != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  filter: %s\n", r.args.Filter)
+		_, _ = fmt.Fprintf(r.stdout, "  filter:   %s\n", r.args.Filter)
 	}
 	if r.args.Test != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  test:   %s\n", r.args.Test)
+		_, _ = fmt.Fprintf(r.stdout, "  test:     %s\n", r.args.Test)
 	}
 	if r.args.Extra != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  extra:  %s\n", r.args.Extra)
+		_, _ = fmt.Fprintf(r.stdout, "  extra:    %s\n", r.args.Extra)
 	}
 	_, _ = fmt.Fprintln(r.stdout, "")
 }
@@ -579,7 +580,7 @@ func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
 	}
 	args := []string{"up", "-d"}
 	if skipPinchtabBuild {
-		args = append(args, "--no-build")
+		args = append(args, "--no-build", "--force-recreate")
 	}
 	args = append(args, services...)
 	if code := r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...)); code != 0 {
@@ -716,14 +717,14 @@ func (r *Runner) runLoggedCommand(label, outputFile string, command []string) in
 		return 0
 	}
 
-	if r.logsMode != "hide" {
+	if r.logsMode == "show" {
 		_, _ = fmt.Fprintf(r.stdout, "%s\n", label)
 		return r.runStreamingCommand(command, outputFile)
 	}
 	if outputFile == "" {
 		outputFile = stackOutput
 	}
-	return r.runHiddenCommand(label, outputFile, command)
+	return r.runCompactCommand(label, outputFile, command)
 }
 
 func (r *Runner) appendSuiteResult(def suiteDef, status string, duration time.Duration, name string) (err error) {
@@ -849,7 +850,7 @@ func (w *structuredEventTee) writeHumanLine(line []byte) error {
 	return err
 }
 
-func (r *Runner) runHiddenCommand(label, outputFile string, command []string) int {
+func (r *Runner) runCompactCommand(label, outputFile string, command []string) int {
 	outputPath := filepath.Join(r.repoRoot, outputFile)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		_, _ = fmt.Fprintf(r.stderr, "e2e: failed to prepare output path: %v\n", err)
@@ -866,7 +867,9 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 		}
 	}()
 
-	_, _ = fmt.Fprintf(r.stdout, "  %s...\n", label)
+	prog := newProgressLine(r.stdout)
+	prog.Update(fmt.Sprintf("  %s...", label))
+
 	cmd := exec.Command(command[0], command[1:]...) // #nosec G204 -- commands are constructed from fixed compose/script inputs.
 	cmd.Dir = r.repoRoot
 	cmd.Stdout = file
@@ -874,6 +877,7 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 	cmd.Stdin = os.Stdin
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
+		prog.Clear()
 		_, _ = fmt.Fprintf(r.stderr, "e2e: failed to start %s: %v\n", shellQuoteArgs(command), err)
 		return 1
 	}
@@ -881,37 +885,72 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	lastRunning := ""
-	heartbeat := 0
+	passed := 0
+	failed := 0
 	for {
 		select {
 		case err := <-done:
+			ticker.Stop()
+			passed, failed = r.countResults(outputFile)
 			if err == nil {
-				_, _ = fmt.Fprintf(r.stdout, "  %s: done\n", label)
+				if passed+failed > 0 {
+					prog.Complete(fmt.Sprintf("  %s: %d passed", label, passed))
+				} else {
+					prog.Complete(fmt.Sprintf("  %s: done", label))
+				}
 				return 0
 			}
 			if exitErr, ok := err.(*exec.ExitError); ok {
+				if passed+failed > 0 {
+					prog.Complete(fmt.Sprintf("  %s: %d passed, %d failed", label, passed, failed))
+				} else {
+					prog.Complete(fmt.Sprintf("  %s: failed (exit %d)", label, exitErr.ExitCode()))
+				}
 				return exitErr.ExitCode()
 			}
+			prog.Clear()
 			_, _ = fmt.Fprintf(r.stderr, "e2e: failed while running %s: %v\n", shellQuoteArgs(command), err)
 			return 1
 		case <-ticker.C:
+			p, f := r.countResults(outputFile)
+			passed, failed = p, f
 			name := r.readLastRunningName(outputFile)
+			if name != "" {
+				name = strings.TrimSuffix(name, ".sh")
+			}
 			if name != "" && name != lastRunning {
 				lastRunning = name
-				_, _ = fmt.Fprintf(r.stdout, "  running: %s\n", strings.TrimSuffix(name, ".sh"))
-				heartbeat = 0
-				continue
 			}
-			heartbeat++
-			if heartbeat >= 5 {
-				_, _ = fmt.Fprintf(r.stdout, "  %s...\n", label)
-				heartbeat = 0
+			total := passed + failed
+			if total > 0 && lastRunning != "" {
+				prog.Update(fmt.Sprintf("  %s [%d done] %s", label, total, lastRunning))
+			} else if lastRunning != "" {
+				prog.Update(fmt.Sprintf("  %s: %s", label, lastRunning))
 			}
 		}
 	}
+}
+
+func (r *Runner) countResults(outputFile string) (passed, failed int) {
+	file, err := os.Open(filepath.Join(r.repoRoot, outputFile))
+	if err != nil {
+		return 0, 0
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "E2E_RESULT\tpassed\t") {
+			passed++
+		} else if strings.HasPrefix(line, "E2E_RESULT\tfailed\t") {
+			failed++
+		}
+	}
+	return passed, failed
 }
 
 func (r *Runner) readLastRunningName(outputFile string) string {

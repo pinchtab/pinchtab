@@ -50,14 +50,11 @@ func ExtractExplicitTabID(r *http.Request) (string, TabIDSource) {
 	return "", TabIDSourceNone
 }
 
-func ExtractRequestedBrowserTarget(r *http.Request) string {
+func ExtractRequestedBrowser(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
-	if target := strings.TrimSpace(r.URL.Query().Get("browserTarget")); target != "" {
-		return target
-	}
-	return peekBodyStringField(r, "browserTarget")
+	return strings.TrimSpace(r.URL.Query().Get("browser"))
 }
 
 func peekBodyTabID(r *http.Request) string {

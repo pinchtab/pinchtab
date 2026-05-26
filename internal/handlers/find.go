@@ -145,17 +145,13 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		scanCancel()
 		sb.WriteString(bodyText)
 		if corpus := sb.String(); corpus != "" {
-			if ir := h.IDPIGuard.ScanContent(corpus); ir.Threat {
-				if ir.Blocked {
-					httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
-					return
-				}
-				w.Header().Set("X-IDPI-Warning", ir.Reason)
-				if ir.Pattern != "" {
-					w.Header().Set("X-IDPI-Pattern", ir.Pattern)
-				}
-				idpiWarning = ir.Reason
+			scanResult := h.ContentGuard.ScanOnly(corpus)
+			if scanResult.Blocked {
+				httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", scanResult.BlockReason))
+				return
 			}
+			scanResult.SetHeaders(w)
+			idpiWarning = scanResult.Warning
 		}
 	}
 

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config/geo"
 )
 
@@ -54,21 +55,13 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
-	if fc.Browser.Provider != "" && !isValidBrowserProvider(fc.Browser.Provider) {
-		errs = append(errs, ValidationError{
-			Field:   "browser.provider",
-			Message: fmt.Sprintf("invalid value %q (must be chrome or cloak)", fc.Browser.Provider),
-		})
-	}
-	if IsCloakBrowserProvider(fc.Browser.Provider) && strings.TrimSpace(fc.Browser.ChromeBinary) == "" {
-		errs = append(errs, ValidationError{
-			Field:   "browser.binary",
-			Message: "must be set when browser.provider is cloak",
-		})
+	if fc.Browser.Provider != "" {
+		errs = append(errs, fmt.Errorf("browser.provider is no longer supported; use browsers.default instead (e.g. \"browsers\": {\"default\": %q})", fc.Browser.Provider))
 	}
 	errs = append(errs, validateCloakBrowserConfig(fc.Browser.Cloak)...)
 	errs = append(errs, ValidateBrowserProxy("browser.proxy", fc.Browser.Proxy)...)
 	errs = append(errs, ValidateBrowserTargets(fc.Browser)...)
+	errs = append(errs, validateBrowsersBlock(*fc)...)
 
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
@@ -368,15 +361,6 @@ func validateBind(bind string, field string) error {
 	return nil
 }
 
-func isValidBrowserProvider(provider string) bool {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case BrowserProviderChrome, BrowserProviderCloak:
-		return true
-	default:
-		return false
-	}
-}
-
 var cloakFingerprintSeedRegex = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
 func validateCloakBrowserConfig(cloak CloakBrowserConfig) []error {
@@ -622,4 +606,52 @@ func ValidAllocationPolicies() []string {
 // ValidAttachSchemes returns all valid attach URL schemes.
 func ValidAttachSchemes() []string {
 	return []string{"ws", "wss", "http", "https"}
+}
+
+// validateBrowsersBlock validates the top-level browsers configuration block.
+func validateBrowsersBlock(fc FileConfig) []error {
+	bc := fc.Browsers
+	// Skip validation if entire block is empty/zero
+	if bc.Default == "" && len(bc.Available) == 0 && len(bc.Config) == 0 {
+		return nil
+	}
+
+	var errs []error
+
+	// Validate default is a known browser
+	if bc.Default != "" {
+		if _, ok := browsers.Get(bc.Default); !ok {
+			errs = append(errs, fmt.Errorf("browsers.default: unknown browser %q (known: %v)", bc.Default, browsers.IDs()))
+		}
+	}
+
+	// Validate each entry in available
+	for i, name := range bc.Available {
+		if _, ok := browsers.Get(name); !ok {
+			errs = append(errs, fmt.Errorf("browsers.available[%d]: unknown browser %q (known: %v)", i, name, browsers.IDs()))
+		}
+	}
+
+	// Validate default is in available (if available is explicitly set)
+	if bc.Default != "" && len(bc.Available) > 0 {
+		found := false
+		for _, name := range bc.Available {
+			if name == bc.Default {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("browsers.default %q is not in browsers.available %v", bc.Default, bc.Available))
+		}
+	}
+
+	// Validate config keys are known browsers
+	for name := range bc.Config {
+		if _, ok := browsers.Get(name); !ok {
+			errs = append(errs, fmt.Errorf("browsers.config: unknown browser %q (known: %v)", name, browsers.IDs()))
+		}
+	}
+
+	return errs
 }

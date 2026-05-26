@@ -1,0 +1,198 @@
+package doctor
+
+import (
+	"context"
+	"sort"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config"
+)
+
+// BrowserInfo describes a single browser's registration, configuration, and
+// capabilities in the context of a browsers report.
+type BrowserInfo struct {
+	Name         string        `json:"name"`
+	Registered   bool          `json:"registered"`
+	Configured   bool          `json:"configured"`
+	IsDefault    bool          `json:"isDefault,omitempty"`
+	Status       string        `json:"status"`       // "ready", "missing", "needs-config"
+	StatusDetail string        `json:"statusDetail"` // one-line summary
+	Checks       []CheckResult `json:"checks,omitempty"`
+	Handles      []string      `json:"handles,omitempty"`
+	SkipsOrFails []string      `json:"skipsOrFails,omitempty"`
+}
+
+// BrowsersReport is the structured output of ReportBrowsers.
+type BrowsersReport struct {
+	ConfiguredBrowsers []string      `json:"configuredBrowsers"`
+	DefaultBrowser     string        `json:"defaultBrowser"`
+	KnownBrowsers      []string      `json:"knownBrowsers"`
+	Browsers           []BrowserInfo `json:"browsers"`
+}
+
+// allShapes lists every Shape constant in browsers/config.go for capability
+// probing.
+var allShapes = []string{
+	browsers.ShapeStaticRead,
+	browsers.ShapeStaticSnapshot,
+	browsers.ShapeRenderedRead,
+	browsers.ShapeVisual,
+	browsers.ShapeInteraction,
+	browsers.ShapeSessionState,
+	browsers.ShapeNetworkControl,
+	browsers.ShapeDownloadUpload,
+}
+
+// ReportBrowsers builds a BrowsersReport by merging the browser registry with
+// the runtime configuration. It is read-only and never modifies the provided
+// config or enables additional browsers. It runs doctor checks and probes
+// CanHandle for every registered browser.
+func ReportBrowsers(ctx context.Context, cfg *config.RuntimeConfig) BrowsersReport {
+	known := browsers.IDs()
+	configured := cfgBrowsersAvailable(cfg)
+	defaultBrowser := cfgDefaultBrowser(cfg)
+
+	// Build a union of configured + known browser IDs, preserving order:
+	// configured first, then any known-only IDs.
+	seen := map[string]bool{}
+	var union []string
+	for _, id := range configured {
+		if !seen[id] {
+			seen[id] = true
+			union = append(union, id)
+		}
+	}
+	for _, id := range known {
+		if !seen[id] {
+			seen[id] = true
+			union = append(union, id)
+		}
+	}
+	sort.Strings(union)
+
+	env := buildDoctorEnv(cfg)
+
+	infos := make([]BrowserInfo, 0, len(union))
+	for _, id := range union {
+		info := BrowserInfo{
+			Name:       id,
+			Configured: contains(configured, id),
+			IsDefault:  id == defaultBrowser,
+		}
+
+		b, ok := browsers.Get(id)
+		if ok {
+			info.Registered = true
+
+			// Run doctor checks.
+			for _, dc := range b.DoctorChecks(browsers.TargetConfig{Provider: id}) {
+				r := dc.Fn(ctx, env)
+				info.Checks = append(info.Checks, CheckResult{
+					Name:   dc.ID,
+					Status: mapDoctorStatus(r.Status),
+					Detail: r.Detail,
+					Err:    r.Err,
+					ErrMsg: errMsg(r.Err),
+				})
+			}
+
+			// Probe CanHandle for each shape.
+			for _, shape := range allShapes {
+				d := b.CanHandle(browsers.RequestIntent{Shape: shape})
+				if d.Decision == browsers.DecisionHandle {
+					info.Handles = append(info.Handles, shape)
+				} else {
+					info.SkipsOrFails = append(info.SkipsOrFails, shape)
+				}
+			}
+		}
+
+		deriveBrowserStatus(&info)
+		infos = append(infos, info)
+	}
+
+	return BrowsersReport{
+		ConfiguredBrowsers: configured,
+		DefaultBrowser:     defaultBrowser,
+		KnownBrowsers:      known,
+		Browsers:           infos,
+	}
+}
+
+// deriveBrowserStatus sets the Status and StatusDetail fields on a BrowserInfo
+// based on registration state and check results.
+func deriveBrowserStatus(info *BrowserInfo) {
+	if !info.Registered {
+		info.Status = "missing"
+		info.StatusDetail = "not a known browser"
+		return
+	}
+
+	// Check for failures first.
+	for _, c := range info.Checks {
+		if c.Status == StatusFail {
+			info.Status = "missing"
+			info.StatusDetail = c.Detail
+			if info.StatusDetail == "" {
+				info.StatusDetail = c.ErrMsg
+			}
+			return
+		}
+	}
+
+	// Check for warnings.
+	for _, c := range info.Checks {
+		if c.Status == StatusWarn {
+			info.Status = "needs-config"
+			info.StatusDetail = c.Detail
+			return
+		}
+	}
+
+	// All pass/skip → ready.
+	info.Status = "ready"
+	// Find a useful detail from the first passing check.
+	for _, c := range info.Checks {
+		if c.Status == StatusPass && c.Detail != "" {
+			info.StatusDetail = c.Detail
+			return
+		}
+	}
+
+	// Special case for ghost-chrome or composed browsers.
+	if info.Name == "ghost-chrome" {
+		info.StatusDetail = "ghost -> chrome"
+	} else if info.StatusDetail == "" {
+		info.StatusDetail = "registered"
+	}
+}
+
+func cfgBrowsersAvailable(cfg *config.RuntimeConfig) []string {
+	if cfg == nil || len(cfg.BrowsersAvailable) == 0 {
+		return nil
+	}
+	return cfg.BrowsersAvailable
+}
+
+func cfgDefaultBrowser(cfg *config.RuntimeConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.DefaultBrowser
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func errMsg(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
+
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -396,7 +398,7 @@ func TestHandlePutConfigAuditsProxyChangeServers(t *testing.T) {
 	}
 	payload.Browser.Targets = config.BrowserTargetsConfig{
 		"proxy-target": {
-			Provider: config.BrowserProviderChrome,
+			Provider: config.BrowserChrome,
 			Proxy: config.BrowserProxyConfig{
 				Server:   "socks5://10.0.0.1:1080",
 				Username: "bob",
@@ -552,7 +554,7 @@ func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
 	}
 	fc.Browser.Targets = config.BrowserTargetsConfig{
 		"with-proxy": {
-			Provider: config.BrowserProviderChrome,
+			Provider: config.BrowserChrome,
 			Proxy: config.BrowserProxyConfig{
 				Server:   "socks5://10.0.0.1:1080",
 				Username: "bob",

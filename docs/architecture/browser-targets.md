@@ -1,39 +1,44 @@
 # Browser Targets
 
-PinchTab currently treats the browser backend as a single global provider:
-`browser.provider=chrome|cloak`. That works for first-class CloakBrowser support,
-but it makes browser type mutually exclusive. The next architecture should let
-one PinchTab server know about multiple browser targets and select one per
-request, per instance, or by fallback policy.
+> **Terminology note.** This document predates [`new-spec.md`](../../new-spec.md),
+> which makes "browser" the only user-facing concept. Where this document says
+> "browser target", read "browser". Internal code identifiers
+> (`BrowserTargetConfig`, `TargetConfig`, etc.) are unchanged.
 
-This spec uses "browser target" to mean a named runnable browser backend such as
-`chrome-local`, `cloak-us`, or `lightpanda-fast`. A target has a provider type,
+PinchTab currently treats the browser backend as a single global provider:
+`browsers.default=chrome|cloak`. That works for first-class CloakBrowser support,
+but it makes browser type mutually exclusive. The next architecture should let
+one PinchTab server know about multiple browsers and select one per request,
+per instance, or by fallback policy.
+
+This spec uses "browser" to mean a named runnable browser backend such as
+`chrome-local`, `cloak-us`, or `lightpanda-fast`. A browser has a provider type,
 launch or attach settings, profile storage, capabilities, and health state.
 
 ## Goals
 
-- Configure multiple browser targets in one PinchTab config.
-- Keep a default browser target for existing clients.
-- Let requests select a target explicitly when they need one.
-- Let PinchTab fall back to another configured target when startup or
+- Configure multiple browsers in one PinchTab config.
+- Keep a default browser for existing clients.
+- Let requests select a browser explicitly when they need one.
+- Let PinchTab fall back to another configured browser when startup or
   acquisition fails.
-- Support multiple targets of the same provider type.
+- Support multiple browsers of the same provider type.
 - Support future provider types with different capability surfaces, including
   lightweight browsers such as Lightpanda-style runtimes.
-- Preserve the current Chrome behavior when no multi-target config is present.
+- Preserve the current Chrome behavior when no multi-browser config is present.
 
 ## Non-Goals
 
 - Do not make PinchTab download third-party browser binaries at runtime.
-- Do not silently move an existing tab from one browser target to another.
+- Do not silently move an existing tab from one browser to another.
 - Do not fallback after a request has already performed page side effects unless
   the request explicitly opts into retry semantics.
-- Do not require every browser provider to support every endpoint.
+- Do not require every provider to support every endpoint.
 
 ## Configuration
 
-Introduce named targets under `browser.targets`. Keep current single-provider
-fields as a compatibility shorthand that migrates to a target named `default`.
+Introduce named browsers under `browser.targets`. Keep current single-provider
+fields as a compatibility shorthand that migrates to a browser named `default`.
 
 Example:
 
@@ -66,21 +71,22 @@ Example:
 Rules:
 
 - `browser.defaultTarget` is required once `browser.targets` is present.
-- Target names are stable API identifiers. They must be lowercase, URL-safe,
+- Browser names are stable API identifiers. They must be lowercase, URL-safe,
   and not derived from binary paths.
 - `browser.fallbackOrder` is optional. If absent, fallback is disabled unless a
-  request supplies an explicit fallback list. It must not repeat targets or
+  request supplies an explicit fallback list. It must not repeat browsers or
   include `browser.defaultTarget`.
-- Current `browser.provider`, `browser.binary`, `browser.extraFlags`, and
+- Current `browsers.default`, `browser.binary`, `browser.extraFlags`, and
   `browser.cloak` remain valid and are interpreted as `browser.targets.default`
   during config load.
-- Provider-specific blocks live inside each target, not globally.
-- Profile directories are target-scoped:
-  `profiles.baseDir/<target-name>/<profile-name>`.
+- Provider-specific blocks live inside each browser definition, not globally.
+- Profile directories are browser-scoped:
+  `profiles.baseDir/<browser-name>/<profile-name>`.
 
 ## Request Selection
 
-Add a canonical request option named `browserTarget`.
+Add a canonical request option named `browserTarget` (the field name references
+the internal target concept but selects a browser by name).
 
 Examples:
 
@@ -103,10 +109,10 @@ POST /instances/start
 Selection order:
 
 1. If a request references an existing `tabId` or `instanceId`, the existing
-   instance's browser target wins. A conflicting `browserTarget` is a `409`.
-2. If `browserTarget` is present, resolve that named target.
+   instance's browser wins. A conflicting `browserTarget` is a `409`.
+2. If `browserTarget` is present, resolve that named browser.
 3. If a request supplies a provider type such as `browserProvider=cloak`, resolve
-   the configured default target for that provider only when unambiguous.
+   the configured default browser for that provider only when unambiguous.
 4. Otherwise use `browser.defaultTarget`.
 5. If acquisition fails and fallback is enabled, walk the request fallback list
    first, then `browser.fallbackOrder`.
@@ -115,10 +121,10 @@ Surfaces:
 
 - HTTP JSON bodies use `browserTarget`.
 - HTTP query params may use `browserTarget` for GET-style endpoints.
-- CLI can expose `--browser <target>` as the user-facing alias.
+- CLI can expose `--browser <name>` as the user-facing alias.
 - MCP tools should expose `browserTarget` for explicitness.
 - `/instances/start` should accept `browserTarget` because instances are the
-  natural browser ownership boundary.
+  natural browser-ownership boundary.
 
 ## Fallback
 
@@ -131,8 +137,8 @@ Fallback is allowed for:
 - startup timeout
 - CDP connect failure
 - browser process exits during startup
-- target unhealthy or in cooldown
-- target lacks a required capability and the request allows capability fallback
+- browser unhealthy or in cooldown
+- browser lacks a required capability and the request allows capability fallback
 
 Fallback is not allowed for:
 
@@ -140,8 +146,8 @@ Fallback is not allowed for:
 - IDPI or allowed-domain blocks
 - auth/session failures
 - existing `tabId` or `instanceId` requests
-- action/navigation after the target page has already changed state, unless a
-  future endpoint explicitly declares idempotent retry behavior
+- action/navigation after the page has already changed state, unless a future
+  endpoint explicitly declares idempotent retry behavior
 
 Request-level controls:
 
@@ -154,7 +160,7 @@ Request-level controls:
 }
 ```
 
-Response metadata should expose the actual target:
+Response metadata should expose the actual browser used:
 
 ```json
 {
@@ -172,7 +178,7 @@ If fallback is disabled or exhausted, return a structured error:
 ```json
 {
   "code": "browser_target_unavailable",
-  "error": "browser target cloak-primary failed to start",
+  "error": "browser cloak-primary failed to start",
   "details": {
     "browserTarget": "cloak-primary",
     "browserProvider": "cloak",
@@ -185,7 +191,8 @@ If fallback is disabled or exhausted, return a structured error:
 ## Capabilities
 
 Each provider adapter declares a capability set. PinchTab uses capabilities to
-route requests, decide fallback, and return clear unsupported-operation errors.
+route requests to the right browser, decide fallback, and return clear
+unsupported-operation errors.
 
 Initial capability names:
 
@@ -212,11 +219,11 @@ Capability resolution:
 - Provider adapters expose default capabilities.
 - Runtime probes can downgrade capabilities when a binary is missing a feature.
 - Endpoint handlers declare required capabilities.
-- If the selected target lacks a required capability, return `409
-  browser_capability_unsupported` unless fallback is enabled and another target
+- If the selected browser lacks a required capability, return `409
+  browser_capability_unsupported` unless fallback is enabled and another browser
   can satisfy the request.
 
-This is what makes Lightpanda-style providers viable. A lightweight provider can
+This is what makes Lightpanda-style browsers viable. A lightweight browser can
 be configured beside Chrome and CloakBrowser, but only endpoints backed by its
 declared capabilities are routed to it. Missing features should be explicit,
 not discovered as late CDP errors.
@@ -228,7 +235,7 @@ paths.
 
 Adapter responsibilities:
 
-- validate target config
+- validate browser config
 - resolve binary or remote endpoint
 - report capabilities
 - build launch args or remote attach config
@@ -255,11 +262,11 @@ enough.
 
 ## Instance Model
 
-Instances become target-bound:
+Instances become browser-bound:
 
 - Every instance records `browserTarget` and `browserProvider`.
 - `/instances` includes those fields.
-- `/health` includes default target health and degraded target summaries.
+- `/health` includes default browser health and degraded browser summaries.
 - `/stealth/status` continues to report provider information for the active
   instance, and should add `browserTarget`.
 - Tab lifecycle, leases, locks, handoff, and active-tab routing remain
@@ -267,44 +274,44 @@ Instances become target-bound:
 
 Auto-start behavior:
 
-- `simple` strategy starts or reuses an instance for the selected target.
-- `always-on` starts one default instance per configured always-on target.
+- `simple` strategy starts or reuses an instance for the selected browser.
+- `always-on` starts one default instance per configured always-on browser.
 - Allocation policy must never hand a request to an instance from a different
-  target than the resolver selected.
+  browser than the resolver selected.
 
 ## Security
 
-Browser target selection is not a security bypass.
+Browser selection is not a security bypass.
 
 - Existing auth, sessions, IDPI, allowed domains, and endpoint capability gates
-  still run after target selection.
+  still run after browser selection.
 - Fallback must not bypass a security block. A blocked navigation should stay
-  blocked on every target.
-- Agent/session policy can later restrict allowed targets per token or agent.
-- Browser target names should be logged in activity and audit trails.
+  blocked on every browser.
+- Agent/session policy can later restrict allowed browsers per token or agent.
+- Browser names should be logged in activity and audit trails.
 - Provider-specific secrets, especially proxy credentials, must be redacted.
-- Hosted third-party browser targets require separate licensing and trust review
+- Hosted third-party browsers require separate licensing and trust review
   before being documented as supported.
 
 ## Migration
 
 Phase 1 keeps behavior identical:
 
-- Existing config without `browser.targets` produces one target named `default`.
-- Existing `browser.provider=chrome` remains the default.
+- Existing config without `browser.targets` produces one browser named `default`.
+- Existing `browsers.default=chrome` remains the default.
 - Existing tests for Chrome launch args stay unchanged.
 
-Phase 2 adds named target config and request selection:
+Phase 2 adds named browser config and request selection:
 
 - Add config structs, validation, JSON schema, editor get/set, and dashboard UI.
 - Add `browserTarget` request parsing to `/navigate`, `/instances/start`, and
   routes that can auto-acquire an instance.
-- Add target fields to instance metadata and health output.
+- Add browser fields to instance metadata and health output.
 
 Phase 3 adds fallback:
 
 - Add startup failure classification.
-- Add target health/cooldown state.
+- Add browser health/cooldown state.
 - Add global and request-level fallback order.
 - Add response metadata for fallback selection.
 
@@ -316,19 +323,19 @@ Phase 4 adds capability routing:
 
 Phase 5 adds future providers:
 
-- Remote CDP-backed targets.
-- Lightpanda-style lightweight targets with explicit partial capability support.
+- Remote CDP-backed browsers.
+- Lightpanda-style lightweight browsers with explicit partial capability support.
 - Provider-specific E2E smoke lanes selected by capability rather than provider
   name.
 
 ## Open Questions
 
 - Should `browserProvider=cloak` be accepted on requests, or should all requests
-  use only target names to avoid ambiguity?
+  use only browser names to avoid ambiguity?
 - Should fallback be opt-in per request, globally configured, or both?
-- Should target-level security policy exist, or should security stay purely
+- Should browser-level security policy exist, or should security stay purely
   instance/request scoped?
-- Should CLI defaults be `--browser <target>` only, or should commands also
+- Should CLI defaults be `--browser <name>` only, or should commands also
   expose `--browser-provider <provider>`?
-- How should target health be surfaced in dashboard without encouraging users to
-  run every target all the time?
+- How should browser health be surfaced in dashboard without encouraging users to
+  run every browser all the time?

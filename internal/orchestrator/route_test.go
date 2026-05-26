@@ -62,15 +62,12 @@ func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 
-	body := []byte(`{"url":"about:blank","browserTarget":"cloak"}`)
-	req := httptest.NewRequest(http.MethodPost, "/navigate", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.ContentLength = int64(len(body))
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
 
 	target, status, err := o.RouteForRequest(req)
 	if err != nil {
@@ -83,10 +80,10 @@ func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
 	}
-	if instances[0].BrowserTarget != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].BrowserTarget)
+	if instances[0].Target != "cloak" {
+		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].Target)
 	}
-	if instances[0].BrowserProvider != config.BrowserProviderCloak {
+	if instances[0].BrowserProvider != config.BrowserCloak {
 		t.Fatalf("BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 	if instances[0].ProfileName != "default-cloak" {
@@ -136,13 +133,13 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 	_, pathB := newBackendInstance(t, o, "inst_b")
-	o.instances["inst_b"].BrowserTarget = "chrome"
-	o.instances["inst_b"].BrowserProvider = config.BrowserProviderChrome
+	o.instances["inst_b"].Target = "chrome"
+	o.instances["inst_b"].BrowserProvider = config.BrowserChrome
 	o.syncInstanceToManager(&o.instances["inst_b"].Instance)
 	o.instanceMgr.Locator.Register("tab-x", "inst_b")
 
@@ -150,10 +147,7 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 		t.Fatal("fallback should not run for tab-owner conflict")
 	})
 
-	body := []byte(`{"tabId":"tab-x","browserTarget":"cloak"}`)
-	r := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
-	r.Header.Set("Content-Type", "application/json")
-	r.ContentLength = int64(len(body))
+	r := httptest.NewRequest("POST", "/navigate?browser=cloak&tabId=tab-x", nil)
 	w := httptest.NewRecorder()
 
 	wrapped(w, r)
@@ -164,8 +158,8 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 	if *pathB != "" {
 		t.Fatalf("conflicting target should not proxy to backend, got path %q", *pathB)
 	}
-	if !bytes.Contains(w.Body.Bytes(), []byte("browser_target_conflict")) {
-		t.Fatalf("body = %s, want browser_target_conflict", w.Body.String())
+	if !bytes.Contains(w.Body.Bytes(), []byte("browser_conflict")) {
+		t.Fatalf("body = %s, want browser_conflict", w.Body.String())
 	}
 }
 
@@ -215,13 +209,13 @@ func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 	_, pathA := newBackendInstance(t, o, "inst_a")
-	o.instances["inst_a"].BrowserTarget = "chrome"
-	o.instances["inst_a"].BrowserProvider = config.BrowserProviderChrome
+	o.instances["inst_a"].Target = "chrome"
+	o.instances["inst_a"].BrowserProvider = config.BrowserChrome
 	o.bindings.BindAgent("agent-1", "inst_a")
 
 	fallbackCalled := false
@@ -230,7 +224,7 @@ func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	r := httptest.NewRequest("GET", "/text?browserTarget=cloak", nil)
+	r := httptest.NewRequest("GET", "/text?browser=cloak", nil)
 	r.Header.Set(activity.HeaderAgentID, "agent-1")
 	w := httptest.NewRecorder()
 	wrapped(w, r)

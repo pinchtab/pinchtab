@@ -37,6 +37,7 @@ type serverBackgroundOptions struct {
 	Headed     bool
 	Verbose    bool
 	Extensions []string
+	Browser    string
 }
 
 var readProcessCommand = defaultReadProcessCommand
@@ -183,6 +184,9 @@ func backgroundServerArgs(marker string, opts serverBackgroundOptions) []string 
 	}
 	for _, ext := range opts.Extensions {
 		args = append(args, "-e", ext)
+	}
+	if opts.Browser != "" {
+		args = append(args, "--browser", opts.Browser)
 	}
 	return args
 }

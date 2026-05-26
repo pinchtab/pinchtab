@@ -6,6 +6,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -34,7 +35,7 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		Port            string                 `json:"port,omitempty"`
 		Headless        bool                   `json:"headless"`
 		SecurityPolicy  *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
-		BrowserTarget   string                 `json:"browserTarget,omitempty"`
+		Browser         string                 `json:"browser,omitempty"`
 		FallbackTargets []string               `json:"fallbackTargets,omitempty"`
 	}
 	if r.ContentLength > 0 {
@@ -48,7 +49,22 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, err := o.LaunchWithTargetSelection(name, req.Port, req.Headless, req.BrowserTarget, req.FallbackTargets, LaunchOptions{
+	// Resolve the public "browser" (provider name) to an internal target name.
+	var browserTarget string
+	if req.Browser != "" {
+		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
+		if resolveErr != nil {
+			httpx.Error(w, http.StatusBadRequest, resolveErr)
+			return
+		}
+		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
+			return
+		}
+		browserTarget = resolved
+	}
+
+	inst, err := o.LaunchWithTargetSelection(name, req.Port, req.Headless, browserTarget, req.FallbackTargets, LaunchOptions{
 		SecurityPolicy: req.SecurityPolicy,
 	})
 	if err != nil {

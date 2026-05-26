@@ -170,9 +170,11 @@ func DefaultFileConfig() FileConfig {
 			StateDir: userConfigDir(),
 		},
 		Browser: BrowserConfig{
-			Provider:       BrowserProviderChrome,
 			ChromeVersion:  "144.0.7559.133",
 			ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
+		},
+		Browsers: BrowsersConfig{
+			Default: BrowserChrome,
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              "headless",

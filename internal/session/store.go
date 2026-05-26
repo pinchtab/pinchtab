@@ -23,6 +23,7 @@ type Session struct {
 	ID          string        `json:"id"`
 	AgentID     string        `json:"agentId"`
 	Label       string        `json:"label,omitempty"`
+	Browser     string        `json:"browser,omitempty"`
 	TokenHash   [32]byte      `json:"-"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	LastSeenAt  time.Time     `json:"lastSeenAt"`
@@ -144,7 +145,7 @@ func (s *Store) applyConfig(cfg Config) {
 
 // Create generates a new session and returns the session ID and
 // plaintext token. The token is returned exactly once and is never stored.
-func (s *Store) Create(agentID, label string) (sessionID, sessionToken string, err error) {
+func (s *Store) Create(agentID, label, browser string) (sessionID, sessionToken string, err error) {
 	if s == nil {
 		return "", "", fmt.Errorf("store is nil")
 	}
@@ -163,6 +164,7 @@ func (s *Store) Create(agentID, label string) (sessionID, sessionToken string, e
 		ID:          id,
 		AgentID:     strings.TrimSpace(agentID),
 		Label:       strings.TrimSpace(label),
+		Browser:     strings.TrimSpace(browser),
 		TokenHash:   hashToken(token),
 		CreatedAt:   now,
 		LastSeenAt:  now,
@@ -392,6 +394,7 @@ type persistedSession struct {
 	ID         string    `json:"id"`
 	AgentID    string    `json:"agentId"`
 	Label      string    `json:"label,omitempty"`
+	Browser    string    `json:"browser,omitempty"`
 	TokenHash  string    `json:"tokenHash"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
@@ -430,6 +433,7 @@ func (s *Store) loadPersisted() {
 			ID:          rec.ID,
 			AgentID:     rec.AgentID,
 			Label:       rec.Label,
+			Browser:     rec.Browser,
 			TokenHash:   hash,
 			CreatedAt:   rec.CreatedAt,
 			LastSeenAt:  rec.LastSeenAt,
@@ -462,6 +466,7 @@ func (s *Store) saveLocked() {
 			ID:         sess.ID,
 			AgentID:    sess.AgentID,
 			Label:      sess.Label,
+			Browser:    sess.Browser,
 			TokenHash:  hex.EncodeToString(sess.TokenHash[:]),
 			CreatedAt:  sess.CreatedAt,
 			LastSeenAt: sess.LastSeenAt,

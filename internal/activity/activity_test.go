@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browserops"
 )
 
 func TestStoreRecordAndQuery(t *testing.T) {
@@ -403,6 +405,65 @@ func TestStoreRecord_SanitizesURLBeforePersisting(t *testing.T) {
 	}
 	if evt.URL != "https://example.com/callback" {
 		t.Fatalf("evt.URL = %q, want sanitized URL", evt.URL)
+	}
+}
+
+func TestEventRouteMetadataSerialization(t *testing.T) {
+	evt := Event{
+		Timestamp:  time.Now().UTC(),
+		Source:     "server",
+		Method:     "POST",
+		Path:       "/navigate",
+		Status:     200,
+		DurationMs: 42,
+		Route: &browserops.RouteMetadata{
+			RequestedBrowser: "chrome",
+			UsedBrowser:      "chrome",
+			Attempts: []browserops.RouteAttempt{
+				{Browser: "chrome", Accepted: true},
+			},
+		},
+	}
+
+	data, err := json.Marshal(evt)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	routeRaw, ok := m["route"]
+	if !ok {
+		t.Fatal("expected \"route\" key in serialized event")
+	}
+	route, ok := routeRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("route is %T, want map[string]any", routeRaw)
+	}
+
+	// Must use provider naming.
+	if _, ok := route["requestedProvider"]; !ok {
+		t.Fatal("route missing \"requestedProvider\" key")
+	}
+	if _, ok := route["usedProvider"]; !ok {
+		t.Fatal("route missing \"usedProvider\" key")
+	}
+	if got := route["requestedProvider"]; got != "chrome" {
+		t.Fatalf("requestedProvider = %v, want \"chrome\"", got)
+	}
+	if got := route["usedProvider"]; got != "chrome" {
+		t.Fatalf("usedProvider = %v, want \"chrome\"", got)
+	}
+
+	// Must NOT use browserops/provider naming at the route level.
+	if _, ok := route["browserops"]; ok {
+		t.Fatal("route must not contain \"browserops\" key")
+	}
+	if _, ok := route["provider"]; ok {
+		t.Fatal("route must not contain \"provider\" key")
 	}
 }
 

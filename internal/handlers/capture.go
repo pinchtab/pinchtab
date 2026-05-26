@@ -13,7 +13,7 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -45,17 +45,15 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	tabID := q.Get("tabId")
 	h.recordReadRequest(r, "capture", tabID)
 
-	// /capture is Chrome-only; the engine routing rule ensures
-	// useLite never returns true here, so we go straight to chrome.
-	if h.useLite(engine.CapCapture, "") {
-		// Defensive: if someone changes the rule and lite ends up routed here,
-		// surface a precise error rather than crashing on a missing impl.
+	// /capture is Chrome-only; the capability routing rule ensures the static
+	// browser never handles it here, so we go straight to chrome.
+	if h.useStaticBrowser(browserops.CapCapture) {
+		// Defensive: if someone changes the rule and the static browser ends up
+		// routed here, surface a precise error rather than crashing on a missing impl.
 		httpx.Error(w, http.StatusNotImplemented,
-			fmt.Errorf("capture is not supported by the lite engine"))
+			fmt.Errorf("capture is not supported by the static browser"))
 		return
 	}
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
 
 	if err := h.ensureChrome(); err != nil {
 		if h.writeBridgeUnavailable(w, err) {

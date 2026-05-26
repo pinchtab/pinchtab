@@ -80,10 +80,6 @@ func (h *Handlers) recordResolvedURL(r *http.Request, url string) {
 	h.recordActivity(r, activity.Update{URL: url})
 }
 
-func (h *Handlers) recordEngine(r *http.Request, engine string) {
-	h.recordActivity(r, activity.Update{Engine: engine})
-}
-
 func (h *Handlers) recordResolvedTab(r *http.Request, tabID string) {
 	h.recordActivity(r, activity.Update{TabID: tabID})
 }

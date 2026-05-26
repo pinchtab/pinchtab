@@ -8,14 +8,14 @@ import (
 )
 
 type jsonReport struct {
-	Provider string        `json:"provider"`
-	Target   string        `json:"target,omitempty"`
-	Results  []CheckResult `json:"results"`
-	Summary  Summary       `json:"summary"`
+	Browser string        `json:"browser"`
+	Target  string        `json:"target,omitempty"`
+	Results []CheckResult `json:"results"`
+	Summary Summary       `json:"summary"`
 }
 
-func WriteText(w io.Writer, provider, target string, results []CheckResult) {
-	header := fmt.Sprintf("pinchtab doctor (provider=%s", provider)
+func WriteText(w io.Writer, browser, target string, results []CheckResult) {
+	header := fmt.Sprintf("pinchtab doctor (browser=%s", browser)
 	if target != "" {
 		header += ", target=" + target
 	}
@@ -70,7 +70,7 @@ func shortDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
-func WriteJSON(w io.Writer, provider, target string, results []CheckResult) error {
+func WriteJSON(w io.Writer, browser, target string, results []CheckResult) error {
 	// Populate ErrMsg for JSON consumers in case a check forgot to copy from Err.
 	for i := range results {
 		if results[i].Err != nil && results[i].ErrMsg == "" {
@@ -78,10 +78,10 @@ func WriteJSON(w io.Writer, provider, target string, results []CheckResult) erro
 		}
 	}
 	report := jsonReport{
-		Provider: provider,
-		Target:   target,
-		Results:  results,
-		Summary:  Summarize(results),
+		Browser: browser,
+		Target:  target,
+		Results: results,
+		Summary: Summarize(results),
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

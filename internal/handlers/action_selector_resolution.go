@@ -25,9 +25,9 @@ func frameScopedSelectorError(kind string, err error) error {
 	return fmt.Errorf("%s in current frame: %w", kind, err)
 }
 
-func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID string, useLiteAction bool, req *bridge.ActionRequest) (actionSelectorResolution, error) {
+func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID string, useStaticAction bool, req *bridge.ActionRequest) (actionSelectorResolution, error) {
 	req.NormalizeSelector()
-	if useLiteAction || req.NodeID != 0 {
+	if useStaticAction || req.NodeID != 0 {
 		return actionSelectorResolution{}, nil
 	}
 	if req.Selector == "" {

@@ -197,8 +197,8 @@ func setupTargetsOrchestrator(t *testing.T) *Orchestrator {
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
 		Targets: config.BrowserTargetsConfig{
-			"chrome-local": {Provider: config.BrowserProviderChrome},
-			"cloak-1":      {Provider: config.BrowserProviderCloak},
+			"chrome-local": {Provider: config.BrowserChrome},
+			"cloak-1":      {Provider: config.BrowserCloak},
 		},
 	})
 	return o
@@ -230,7 +230,7 @@ func TestHandleStartInstance_LegacyConfigEmptyBody_NoTargetFields(t *testing.T) 
 func TestHandleStartInstance_TargetsConfigValid_EchoesValues(t *testing.T) {
 	o := setupTargetsOrchestrator(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browserTarget":"cloak-1"}`))
+	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browser":"cloak"}`))
 	w := httptest.NewRecorder()
 
 	o.handleStartInstance(w, req)
@@ -238,31 +238,35 @@ func TestHandleStartInstance_TargetsConfigValid_EchoesValues(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d body=%s", w.Code, http.StatusCreated, w.Body.String())
 	}
-	var inst bridge.Instance
-	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
-		t.Fatalf("decode: %v", err)
+	// browserTarget/browserProvider are hidden from JSON (json:"-"),
+	// so verify via the orchestrator's internal state instead.
+	body := w.Body.String()
+	if strings.Contains(body, `"browserTarget"`) || strings.Contains(body, `"browserProvider"`) {
+		t.Fatalf("JSON response must not contain browserTarget/browserProvider; body=%s", body)
 	}
-	if inst.BrowserTarget != "cloak-1" {
-		t.Fatalf("BrowserTarget = %q, want cloak-1", inst.BrowserTarget)
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if inst.BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", inst.BrowserProvider)
+	if instances[0].Target != "cloak-1" {
+		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
+	}
+	if instances[0].BrowserProvider != config.BrowserCloak {
+		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 }
 
-func TestHandleStartInstance_TargetsConfigBadTarget_Rejects400(t *testing.T) {
+func TestHandleStartInstance_TargetsConfigBadBrowser_Rejects400(t *testing.T) {
 	o := setupTargetsOrchestrator(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browserTarget":"ghost"}`))
+	// "ghost-chrome" is a recognized provider but has no configured target.
+	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browser":"ghost-chrome"}`))
 	w := httptest.NewRecorder()
 
 	o.handleStartInstance(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 body=%s", w.Code, w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "not found") {
-		t.Fatalf("body = %q, want 'not found'", w.Body.String())
 	}
 }
 
@@ -292,7 +296,7 @@ func TestHandleLaunchByName_LegacyConfigEmptyBody_NoTargetFields(t *testing.T) {
 func TestHandleLaunchByName_TargetsConfigValid_EchoesValues(t *testing.T) {
 	o := setupTargetsOrchestrator(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browserTarget":"chrome-local"}`))
+	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browser":"chrome"}`))
 	w := httptest.NewRecorder()
 
 	o.handleLaunchByName(w, req)
@@ -300,31 +304,35 @@ func TestHandleLaunchByName_TargetsConfigValid_EchoesValues(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d body=%s", w.Code, http.StatusCreated, w.Body.String())
 	}
-	var inst bridge.Instance
-	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
-		t.Fatalf("decode: %v", err)
+	// browserTarget/browserProvider are hidden from JSON (json:"-"),
+	// so verify via the orchestrator's internal state instead.
+	body := w.Body.String()
+	if strings.Contains(body, `"browserTarget"`) || strings.Contains(body, `"browserProvider"`) {
+		t.Fatalf("JSON response must not contain browserTarget/browserProvider; body=%s", body)
 	}
-	if inst.BrowserTarget != "chrome-local" {
-		t.Fatalf("BrowserTarget = %q, want chrome-local", inst.BrowserTarget)
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if inst.BrowserProvider != config.BrowserProviderChrome {
-		t.Fatalf("BrowserProvider = %q, want chrome", inst.BrowserProvider)
+	if instances[0].Target != "chrome-local" {
+		t.Fatalf("internal BrowserTarget = %q, want chrome-local", instances[0].Target)
+	}
+	if instances[0].BrowserProvider != config.BrowserChrome {
+		t.Fatalf("internal BrowserProvider = %q, want chrome", instances[0].BrowserProvider)
 	}
 }
 
-func TestHandleLaunchByName_TargetsConfigBadTarget_Rejects400(t *testing.T) {
+func TestHandleLaunchByName_TargetsConfigBadBrowser_Rejects400(t *testing.T) {
 	o := setupTargetsOrchestrator(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browserTarget":"ghost"}`))
+	// "ghost-chrome" is a recognized provider but has no configured target.
+	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browser":"ghost-chrome"}`))
 	w := httptest.NewRecorder()
 
 	o.handleLaunchByName(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 body=%s", w.Code, w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "not found") {
-		t.Fatalf("body = %q, want 'not found'", w.Body.String())
 	}
 }
 
@@ -347,8 +355,8 @@ func TestHandleAttachInstanceRejectsUnknownProvider(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "invalid browser provider") {
-		t.Fatalf("body = %q, want invalid provider message", w.Body.String())
+	if !strings.Contains(w.Body.String(), "unknown browser") {
+		t.Fatalf("body = %q, want unknown browser message", w.Body.String())
 	}
 }
 
@@ -369,15 +377,21 @@ func TestHandleAttachInstanceUsesDefaultBrowserTargetWhenOmitted(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201 body=%s", w.Code, w.Body.String())
 	}
+	// browserTarget/browserProvider are hidden from JSON (json:"-"),
+	// so verify via the orchestrator's internal state instead.
 	var inst bridge.Instance
 	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if inst.BrowserTarget != "cloak-1" {
-		t.Fatalf("BrowserTarget = %q, want cloak-1", inst.BrowserTarget)
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if inst.BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", inst.BrowserProvider)
+	if instances[0].Target != "cloak-1" {
+		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
+	}
+	if instances[0].BrowserProvider != config.BrowserCloak {
+		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/text", nil))
@@ -397,7 +411,7 @@ func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
 		"name":"attached-cloak",
 		"cdpUrl":"ws://127.0.0.1:9222/devtools/browser/abc",
-		"browserTarget":"cloak-1"
+		"browser":"cloak"
 	}`))
 	w := httptest.NewRecorder()
 
@@ -406,21 +420,27 @@ func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201 body=%s", w.Code, w.Body.String())
 	}
-	var inst bridge.Instance
-	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
-		t.Fatalf("decode: %v", err)
+	// browserTarget/browserProvider are hidden from JSON (json:"-"),
+	// so verify via the orchestrator's internal state instead.
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if inst.BrowserTarget != "cloak-1" {
-		t.Fatalf("BrowserTarget = %q, want cloak-1", inst.BrowserTarget)
+	if instances[0].Target != "cloak-1" {
+		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
 	}
-	if inst.BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", inst.BrowserProvider)
+	if instances[0].BrowserProvider != config.BrowserCloak {
+		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 	if !strings.Contains(strings.Join(runner.args, " "), "--browser-provider cloak") {
 		t.Fatalf("runner args = %v, want cloak provider", runner.args)
 	}
 
-	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/text?browserTarget=cloak-1", nil))
+	var inst bridge.Instance
+	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/text?browser=cloak", nil))
 	if err != nil {
 		t.Fatalf("FirstRunningURLForRequest error status=%d err=%v", status, err)
 	}
@@ -429,14 +449,15 @@ func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
 	}
 }
 
-func TestHandleAttachInstanceRejectsUnknownBrowserTarget(t *testing.T) {
+func TestHandleAttachInstanceRejectsUnknownBrowser(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := setupAttachTargetsOrchestrator(t, runner)
 
+	// "ghost-chrome" is a recognized provider but has no configured target.
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
 		"name":"attached-ghost",
 		"cdpUrl":"ws://127.0.0.1:9222/devtools/browser/abc",
-		"browserTarget":"ghost"
+		"browser":"ghost-chrome"
 	}`))
 	w := httptest.NewRecorder()
 
@@ -445,11 +466,8 @@ func TestHandleAttachInstanceRejectsUnknownBrowserTarget(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "not found") {
-		t.Fatalf("body = %q, want unknown-target message", w.Body.String())
-	}
 	if runner.runCalled {
-		t.Fatal("unknown browserTarget should be rejected before starting child bridge")
+		t.Fatal("unknown browser should be rejected before starting child bridge")
 	}
 }
 
@@ -460,7 +478,7 @@ func TestHandleAttachInstanceRejectsProviderTargetConflict(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
 		"name":"attached-conflict",
 		"cdpUrl":"ws://127.0.0.1:9222/devtools/browser/abc",
-		"browserTarget":"cloak-1",
+		"browser":"cloak",
 		"provider":"chrome"
 	}`))
 	w := httptest.NewRecorder()
@@ -504,15 +522,17 @@ func TestHandleAttachBridgeUsesDefaultBrowserTarget(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201 body=%s", w.Code, w.Body.String())
 	}
-	var inst bridge.Instance
-	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
-		t.Fatalf("decode: %v", err)
+	// browserTarget/browserProvider are hidden from JSON (json:"-"),
+	// so verify via the orchestrator's internal state instead.
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if inst.BrowserTarget != "cloak-1" {
-		t.Fatalf("BrowserTarget = %q, want cloak-1", inst.BrowserTarget)
+	if instances[0].Target != "cloak-1" {
+		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
 	}
-	if inst.BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", inst.BrowserProvider)
+	if instances[0].BrowserProvider != config.BrowserCloak {
+		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/tabs", nil))
@@ -537,8 +557,8 @@ func setupAttachTargetsOrchestrator(t *testing.T, runner *mockRunner) *Orchestra
 		AttachAllowSchemes: []string{"ws"},
 		DefaultTarget:      "chrome-local",
 		Targets: config.BrowserTargetsConfig{
-			"chrome-local": {Provider: config.BrowserProviderChrome},
-			"cloak-1":      {Provider: config.BrowserProviderCloak},
+			"chrome-local": {Provider: config.BrowserChrome},
+			"cloak-1":      {Provider: config.BrowserCloak},
 		},
 	})
 	return o
@@ -555,9 +575,9 @@ func setupFallbackOrchestrator(t *testing.T) *Orchestrator {
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
 		Targets: config.BrowserTargetsConfig{
-			"chrome-local": {Provider: config.BrowserProviderChrome},
-			"cloak-1":      {Provider: config.BrowserProviderCloak},
-			"backup":       {Provider: config.BrowserProviderChrome},
+			"chrome-local": {Provider: config.BrowserChrome},
+			"cloak-1":      {Provider: config.BrowserCloak},
+			"backup":       {Provider: config.BrowserChrome},
 		},
 		FallbackOrder: []string{"cloak-1"},
 	})
@@ -572,7 +592,7 @@ func TestHandleStartInstance_RequestFallbackTargets_Wins(t *testing.T) {
 		{target: "backup", succeed: true},
 	})
 
-	body := `{"browserTarget":"chrome-local","fallbackTargets":["backup"]}`
+	body := `{"browser":"chrome","fallbackTargets":["backup"]}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -584,16 +604,22 @@ func TestHandleStartInstance_RequestFallbackTargets_Wins(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls (primary + request fallback), got %d", len(fl.calls))
 	}
-	if fl.calls[1].BrowserTarget != "backup" {
-		t.Fatalf("second call BrowserTarget = %q, want backup (request must win over cfg.FallbackOrder)", fl.calls[1].BrowserTarget)
+	if fl.calls[1].ResolvedTarget != "backup" {
+		t.Fatalf("second call BrowserTarget = %q, want backup (request must win over cfg.FallbackOrder)", fl.calls[1].ResolvedTarget)
 	}
 
+	// browserTarget is hidden from JSON (json:"-"), verify internal state.
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
+	}
+	if instances[0].Target != "backup" {
+		t.Fatalf("internal BrowserTarget = %q, want backup", instances[0].Target)
+	}
+	// FallbackFrom is still in JSON, verify from response.
 	var inst bridge.Instance
 	if err := json.NewDecoder(w.Body).Decode(&inst); err != nil {
 		t.Fatalf("decode: %v", err)
-	}
-	if inst.BrowserTarget != "backup" {
-		t.Fatalf("BrowserTarget = %q, want backup", inst.BrowserTarget)
 	}
 	if inst.FallbackFrom != "chrome-local" {
 		t.Fatalf("FallbackFrom = %q, want chrome-local", inst.FallbackFrom)
@@ -608,7 +634,7 @@ func TestHandleStartInstance_ConfigFallbackOrder_UsedWhenRequestEmpty(t *testing
 		{target: "cloak-1", succeed: true},
 	})
 
-	body := `{"browserTarget":"chrome-local"}`
+	body := `{"browser":"chrome"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -620,8 +646,8 @@ func TestHandleStartInstance_ConfigFallbackOrder_UsedWhenRequestEmpty(t *testing
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls (primary + cfg fallback), got %d", len(fl.calls))
 	}
-	if fl.calls[1].BrowserTarget != "cloak-1" {
-		t.Fatalf("second call BrowserTarget = %q, want cloak-1 (from cfg.FallbackOrder)", fl.calls[1].BrowserTarget)
+	if fl.calls[1].ResolvedTarget != "cloak-1" {
+		t.Fatalf("second call BrowserTarget = %q, want cloak-1 (from cfg.FallbackOrder)", fl.calls[1].ResolvedTarget)
 	}
 }
 
@@ -653,7 +679,7 @@ func TestHandleStartInstance_Exhaustion_502(t *testing.T) {
 		{target: "backup", failReason: ReasonStartupTimeout},
 	})
 
-	body := `{"browserTarget":"chrome-local","fallbackTargets":["backup"]}`
+	body := `{"browser":"chrome","fallbackTargets":["backup"]}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -701,7 +727,7 @@ func TestHandleLaunchByName_RequestFallbackTargets_Wins(t *testing.T) {
 		{target: "backup", succeed: true},
 	})
 
-	body := `{"browserTarget":"chrome-local","fallbackTargets":["backup"]}`
+	body := `{"browser":"chrome","fallbackTargets":["backup"]}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -713,8 +739,8 @@ func TestHandleLaunchByName_RequestFallbackTargets_Wins(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls, got %d", len(fl.calls))
 	}
-	if fl.calls[1].BrowserTarget != "backup" {
-		t.Fatalf("second call BrowserTarget = %q, want backup", fl.calls[1].BrowserTarget)
+	if fl.calls[1].ResolvedTarget != "backup" {
+		t.Fatalf("second call BrowserTarget = %q, want backup", fl.calls[1].ResolvedTarget)
 	}
 }
 
@@ -726,7 +752,7 @@ func TestHandleLaunchByName_Exhaustion_502(t *testing.T) {
 		{target: "cloak-1", failReason: ReasonStartupTimeout},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browserTarget":"chrome-local"}`))
+	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(`{"browser":"chrome"}`))
 	w := httptest.NewRecorder()
 
 	o.handleLaunchByName(w, req)

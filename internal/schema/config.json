@@ -49,6 +49,9 @@
     },
     "autoSolver": {
       "$ref": "#/definitions/autoSolver"
+    },
+    "browsers": {
+      "$ref": "#/definitions/browsers"
     }
   },
   "definitions": {
@@ -174,7 +177,9 @@
             "lite",
             "auto"
           ],
-          "default": "chrome"
+          "default": "chrome",
+          "description": "Deprecated: use browsers.default instead. Values are mapped automatically at startup.",
+          "deprecated": true
         },
         "networkBufferSize": {
           "anyOf": [
@@ -217,6 +222,8 @@
       "properties": {
         "provider": {
           "type": "string",
+          "description": "Removed: use browsers.default instead. Presence triggers a validation error.",
+          "deprecated": true,
           "enum": [
             "",
             "chrome",
@@ -983,6 +990,64 @@
         },
         "email": {
           "type": "string"
+        }
+      }
+    },
+    "browsers": {
+      "type": "object",
+      "description": "Phase 1 browser configuration.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Default browser for new instances.",
+          "enum": ["chrome", "ghost-chrome", "cloak"],
+          "default": "chrome"
+        },
+        "available": {
+          "type": "array",
+          "description": "Available browser names.",
+          "items": {
+            "type": "string",
+            "enum": ["chrome", "ghost-chrome", "cloak"]
+          }
+        },
+        "config": {
+          "type": "object",
+          "description": "Per-browser configuration overrides.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "binary": {
+                "type": "string",
+                "description": "Path to browser binary."
+              },
+              "extraFlags": {
+                "type": "string",
+                "description": "Additional launch flags."
+              },
+              "cloak": {
+                "$ref": "#/definitions/cloakBrowser"
+              },
+              "proxy": {
+                "type": "object",
+                "description": "Per-browser proxy configuration.",
+                "properties": {
+                  "server": {
+                    "type": "string"
+                  },
+                  "bypassList": {
+                    "$ref": "#/definitions/stringArray"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

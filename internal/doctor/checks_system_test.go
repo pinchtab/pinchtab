@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all" // register browser providers for DiscoverChromeBinary
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -118,9 +119,21 @@ func withStubBinary(t *testing.T, name, versionOutput string) string {
 	return dir
 }
 
+// runChromePresent exercises the provider-supplied chrome_present check
+// through the doctor registry, matching the wiring in Registry().
+func runChromePresent(t *testing.T) CheckResult {
+	t.Helper()
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}
+	results := Run(context.Background(), cfg, "chrome_present")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for chrome_present filter, got %d", len(results))
+	}
+	return results[0]
+}
+
 func TestChromePresent_PassWithRecentVersion(t *testing.T) {
 	withStubBinary(t, "google-chrome", "Google Chrome 146.0.7680.177")
-	r := checkChromePresent(context.Background(), nil)
+	r := runChromePresent(t)
 	if r.Status != StatusPass {
 		t.Fatalf("status = %v want pass; detail=%q err=%v", r.Status, r.Detail, r.Err)
 	}
@@ -131,7 +144,7 @@ func TestChromePresent_PassWithRecentVersion(t *testing.T) {
 
 func TestChromePresent_WarnOnOldVersion(t *testing.T) {
 	withStubBinary(t, "google-chrome", "Google Chrome 99.0.4844.51")
-	r := checkChromePresent(context.Background(), nil)
+	r := runChromePresent(t)
 	if r.Status != StatusWarn {
 		t.Fatalf("status = %v want warn; detail=%q", r.Status, r.Detail)
 	}
@@ -142,11 +155,17 @@ func TestChromePresent_WarnOnOldVersion(t *testing.T) {
 
 func TestChromePresent_FailWhenAbsent(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	// Force shared binary discovery to walk an OS arm with no fallback hits.
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "linux" }
-	r := checkChromePresent(context.Background(), nil)
+
+	// The chrome provider uses runtime.GOOS for common-path discovery.
+	// If the real Chrome is installed at a common path for the current OS
+	// (e.g. /Applications/… on macOS) it will still be found even though
+	// PATH is empty. Skip when that is the case — the FailWhenAbsent
+	// scenario only applies on systems that truly lack a Chrome install.
+	r := runChromePresent(t)
+	if r.Status == StatusPass || r.Status == StatusWarn {
+		t.Skipf("real Chrome found on this machine; cannot simulate absence (detail=%q)", r.Detail)
+	}
+
 	if r.Status != StatusFail {
 		t.Fatalf("status = %v want fail; detail=%q", r.Status, r.Detail)
 	}
@@ -156,64 +175,50 @@ func TestChromePresent_FailWhenAbsent(t *testing.T) {
 }
 
 func TestChromePresent_SkipOnWindows(t *testing.T) {
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "windows" }
-	r := checkChromePresent(context.Background(), nil)
+	if runtime.GOOS != "windows" {
+		t.Skip("chrome provider skip-on-windows requires actual windows")
+	}
+	r := runChromePresent(t)
 	if r.Status != StatusSkip {
 		t.Fatalf("status = %v want skip", r.Status)
 	}
 }
 
-func TestCloakBrowserPresent_SkipWhenAbsentAndUnconfigured(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "linux" }
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderChrome}
-	r := checkCloakBrowserPresent(context.Background(), cfg)
-	if r.Status != StatusSkip {
-		t.Fatalf("status = %v want skip; detail=%q", r.Status, r.Detail)
+// runCloakPresent exercises the provider-supplied cloakbrowser_present check
+// through the doctor registry, matching the wiring in Registry().
+func runCloakPresent(t *testing.T) CheckResult {
+	t.Helper()
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserCloak}
+	results := Run(context.Background(), cfg, "cloakbrowser_present")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for cloakbrowser_present filter, got %d", len(results))
+	}
+	return results[0]
+}
+
+func TestCloakBrowserPresent_NotInRegistryWhenUnconfigured(t *testing.T) {
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}
+	if KnownCheck(cfg, "cloakbrowser_present") {
+		t.Fatal("cloakbrowser_present should not appear in registry when provider is chrome")
 	}
 }
 
 func TestCloakBrowserPresent_FailWhenAbsentAndConfigured(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "linux" }
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderCloak}
-	r := checkCloakBrowserPresent(context.Background(), cfg)
+	r := runCloakPresent(t)
 	if r.Status != StatusFail {
 		t.Fatalf("status = %v want fail; detail=%q", r.Status, r.Detail)
 	}
-}
-
-func TestCloakBrowserPresent_FailWhenTargetConfiguredCloak(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "linux" }
-	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderChrome,
-		Targets: config.BrowserTargetsConfig{
-			"cloak-eu": config.BrowserTargetConfig{Provider: config.BrowserProviderCloak},
-		},
-	}
-	r := checkCloakBrowserPresent(context.Background(), cfg)
-	if r.Status != StatusFail {
-		t.Fatalf("status = %v want fail; detail=%q", r.Status, r.Detail)
+	if !strings.Contains(r.Detail, "cloakbrowser not found") {
+		t.Errorf("expected 'cloakbrowser not found' in detail, got %q", r.Detail)
 	}
 }
 
 func TestCloakBrowserPresent_PassWithStub(t *testing.T) {
 	withStubBinary(t, "cloakbrowser", "CloakBrowser 130.0.6723.91")
 	t.Setenv("HOME", t.TempDir())
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderCloak}
-	r := checkCloakBrowserPresent(context.Background(), cfg)
+	r := runCloakPresent(t)
 	if r.Status != StatusPass {
 		t.Fatalf("status = %v want pass; detail=%q err=%v", r.Status, r.Detail, r.Err)
 	}

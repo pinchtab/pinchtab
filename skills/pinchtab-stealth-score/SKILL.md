@@ -1,12 +1,12 @@
 ---
 name: pinchtab-stealth-score
-description: "Run the PinchTab stealth-score sweep against 15 bot-detection / fingerprint sites (sannysoft, rebrowser, deviceandbrowserinfo, iphey, whoer, browserscan, pixelscan, fingerprint-scan, incolumitas, fvision, amiunique, browserleaks, creepjs, coveryourtracks, fingerprint-demo). Starts a Docker PinchTab container per provider (chrome / cloak / both), spawns a blind agent that drives PinchTab through plain-English per-site playbooks, captures structured metrics, prints a side-by-side comparison highlighting divergent metrics, and appends to history.jsonl for cross-session tracking. Use when asked to 'run stealth score', 'compare cloak vs chrome detection', 'measure stealth', or '/pinchtab-stealth-score'."
+description: "Run the PinchTab stealth-score sweep against 15 bot-detection / fingerprint sites (sannysoft, rebrowser, deviceandbrowserinfo, iphey, whoer, browserscan, pixelscan, fingerprint-scan, incolumitas, fvision, amiunique, browserleaks, creepjs, coveryourtracks, fingerprint-demo). Starts a Docker PinchTab container per browser (chrome / cloak / both), spawns a blind agent that drives PinchTab through plain-English per-site playbooks, captures structured metrics, prints a side-by-side comparison highlighting divergent metrics, and appends to history.jsonl for cross-session tracking. Use when asked to 'run stealth score', 'compare cloak vs chrome detection', 'measure stealth', or '/pinchtab-stealth-score'."
 ---
 
 # PinchTab Stealth Score
 
 Drive PinchTab through a list of public bot-detection sites under each browser
-provider (`chrome`, `cloak`, or `both`), and collect the metrics that matter
+(`chrome`, `cloak`, or `both`), and collect the metrics that matter
 most for analyst comparison. The Docker plumbing rebuilds the PinchTab image
 from current source so you're benchmarking the working tree.
 
@@ -35,7 +35,7 @@ Current sites (15) — `sannysoft`, `rebrowser`, `deviceandbrowserinfo`, `iphey`
 `fvision`, `amiunique`, `browserleaks` (multi-page: canvas+webgl+fonts+tls),
 `creepjs`, `coveryourtracks`, `fingerprint-demo`.
 
-Expected duration: ~12-15 min per provider once images are cached, so a `both`
+Expected duration: ~12-15 min per browser once images are cached, so a `both`
 run takes ~25-30 min plus first-time image build (~10 min for cloak).
 
 ## Path Resolution
@@ -67,7 +67,7 @@ pkill -9 -f "pinchtab " 2>/dev/null || true
 
 ## Execution
 
-For each requested provider, run the same loop:
+For each requested browser, run the same loop:
 
 ### 1. Bring up the container
 
@@ -76,7 +76,7 @@ For each requested provider, run the same loop:
 ```
 
 `up.sh` builds the appropriate image if absent (chrome-smoke or cloakbrowser),
-writes a provider config with open `allowedDomains`, and starts a container
+writes a browser config with open `allowedDomains`, and starts a container
 named `stealth-score-pinchtab` on host port 9867. It exits non-zero if the
 container fails to become healthy.
 
@@ -125,7 +125,7 @@ Time-box each site to ~2 minutes. If a site is slow, hangs, or shows a Cloudflar
 
 Finalize the report (set completed_at + sites_processed) and print STEALTH_SCORE_RUN_COMPLETE on stdout as your final line.
 
-The container is already running and healthy. Do NOT touch Docker, do NOT switch providers, do NOT run `pinchtab server` or `daemon` — the wrapper talks to the container directly.
+The container is already running and healthy. Do NOT touch Docker, do NOT switch browsers, do NOT run `pinchtab server` or `daemon` — the wrapper talks to the container directly.
 ```
 
 ### 4. Tear down
@@ -134,12 +134,12 @@ The container is already running and healthy. Do NOT touch Docker, do NOT switch
 "$SCORE_DIR/down.sh"
 ```
 
-When both providers are requested, run **sequentially**: up → agent → down for
+When both browsers are requested, run **sequentially**: up → agent → down for
 chrome, then up → agent → down for cloak. They share port 9867.
 
 ## Summarize
 
-After all per-provider JSON reports exist, build the side-by-side comparison
+After all per-browser JSON reports exist, build the side-by-side comparison
 using the Go runner:
 
 ```bash
@@ -158,7 +158,7 @@ The summarizer:
 
 1. Prints a markdown comparison: headline counts, a **divergent-metrics** table
    (only rows where chrome and cloak disagree on real values), and per-site
-   tables for every metric captured by either provider. Pipe directly to the user.
+   tables for every metric captured by either browser. Pipe directly to the user.
 2. Appends one JSON line to `tests/stealth-score/history.jsonl` per
    comparison run (run id, providers, sites count, divergence count, list of
    divergent metrics). The file is kept in the repo so multi-session history
@@ -172,7 +172,7 @@ when reporting so the user knows where to look for trends.
 
 ```
 tests/stealth-score/
-├── up.sh                    # boot docker container per provider
+├── up.sh                    # boot docker container per browser
 ├── down.sh                  # tear down docker container
 ├── sites/
 │   ├── index.md             # ordered list of sites to process
@@ -194,7 +194,7 @@ tests/stealth-score/
 ├── subagent-context.md      # blind agent's environment + recording format
 ├── history.jsonl            # one-line summary per comparison run (kept in repo)
 ├── history.md               # last-20 runs rendered table (regenerated each run)
-├── .tmp/                    # gitignored; per-provider configs written by up.sh
+├── .tmp/                    # gitignored; per-browser configs written by up.sh
 └── results/                 # gitignored; <provider>_<ts>.json per run
 ```
 

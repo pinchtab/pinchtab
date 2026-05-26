@@ -64,7 +64,7 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 		"pinchtab-bridge":    "pinchtab-bridge.json",
 	} {
 		block := serviceBlock(t, compose, svc)
-		want := configs[configName] + ":/fixture-config/" + configName + ":ro"
+		want := configs[configName] + ":/fixture-config-cloak/" + configName + ":ro"
 		if !strings.Contains(block, want) {
 			t.Fatalf("%s override missing cloak config mount %q:\n%s", svc, want, block)
 		}
@@ -160,15 +160,65 @@ func TestWriteCloakConfigPreservesExtensionPaths(t *testing.T) {
 	}
 	out := string(raw)
 	for _, want := range []string{
-		`"provider": "cloak"`,
+		`"default": "cloak"`,
 		`"binary": "/opt/cloakbrowser/chrome"`,
+		`"extensionPaths": [`,
+		`"/extensions/test-extension"`,
+		`"allowedDomains": [`,
+		`"fixtures"`,
+		`"configVersion": "0.8.0"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("cloak config missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestWriteGhostChromeConfigSetsBrowsersDefault(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "pinchtab.json")
+	dst := filepath.Join(tmp, "pinchtab.ghost.json")
+
+	input := `{
+  "browser": {
+    "extensionPaths": ["/extensions/test-extension"]
+  },
+  "security": {
+    "allowedDomains": ["fixtures"]
+  }
+}`
+	if err := os.WriteFile(src, []byte(input), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeGhostChromeConfig(src, dst); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(raw)
+	for _, want := range []string{
+		`"default": "ghost-chrome"`,
+		`"configVersion": "0.8.0"`,
 		`"extensionPaths": [`,
 		`"/extensions/test-extension"`,
 		`"allowedDomains": [`,
 		`"fixtures"`,
 	} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("cloak config missing %q:\n%s", want, out)
+			t.Fatalf("ghost-chrome config missing %q:\n%s", want, out)
+		}
+	}
+	for _, absent := range []string{
+		`"binary"`,
+		`"cloak"`,
+		`"fingerprintSeed"`,
+	} {
+		if strings.Contains(out, absent) {
+			t.Fatalf("ghost-chrome config should not contain %q:\n%s", absent, out)
 		}
 	}
 }

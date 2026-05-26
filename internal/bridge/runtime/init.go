@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/browserprobe"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/chrome"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/cloak"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/geo"
 	"github.com/pinchtab/pinchtab/internal/stealth"
@@ -65,8 +67,15 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) 
 	}
 
 	slog.Info("starting chrome initialization", "headless", cfg.Headless, "profile", cfg.ProfileDir, "binary", cfg.ChromeBinary)
-	if config.IsCloakBrowserProvider(cfg.BrowserProvider) && strings.TrimSpace(cfg.ChromeBinary) == "" {
-		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, missingBrowserBinaryError(cfg)
+	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	if b, ok := browsers.Get(browserID); ok {
+		tcfg := browsers.TargetConfig{
+			Provider: browserID,
+			Binary:   strings.TrimSpace(cfg.ChromeBinary),
+		}
+		if err := b.ValidateTarget(tcfg); err != nil {
+			return nil, nil, nil, nil, stealth.LaunchModeUninitialized, missingBrowserBinaryError(cfg)
+		}
 	}
 
 	bundle = ensureStealthBundle(cfg, bundle)
@@ -100,6 +109,15 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) 
 // is taken. The allocator is a chromedp remote allocator; the returned
 // cancel funcs release only the chromedp side, never the external Chrome.
 func initChromeFromExistingCDP(cfg *config.RuntimeConfig, bundle *stealth.Bundle) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+	browserID, _ := config.ParseBrowser(cfg.DefaultBrowser, cfg.BrowsersAvailable)
+	if browserID == "" {
+		browserID = config.NormalizeBrowser(cfg.DefaultBrowser)
+	}
+	if b, ok := browsers.Get(browserID); ok && !b.SupportsRemoteCDP() {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized,
+			fmt.Errorf("provider %q does not support remote CDP attach", browserID)
+	}
+
 	wsURL := strings.TrimSpace(cfg.CDPAttachURL)
 	slog.Info("attaching to existing Chrome via CDP", "cdpUrl", wsURL)
 
@@ -130,7 +148,11 @@ func findChromeBinary() string {
 // FindChromeBinary exposes the launch-time Chrome discovery used by runtime
 // initialization so diagnostics can report against the same search path.
 func FindChromeBinary() string {
-	return browserprobe.DiscoverChromeBinary(runtimeGOOS).Found
+	b, ok := browsers.Get("chrome")
+	if !ok {
+		return ""
+	}
+	return b.DiscoverBinary().Found
 }
 
 func appendExecAllocatorFlag(opts []chromedp.ExecAllocatorOption, flag string) []chromedp.ExecAllocatorOption {
@@ -160,9 +182,22 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
 	}
-	opts = appendExecAllocatorFlags(opts, BaseChromeFlagArgs())
+	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	launchCfg := browsers.LaunchConfig{
+		Mode: engineToLaunchMode(cfg.Engine),
+		Cloak: browsers.CloakFingerprint{
+			FingerprintSeed: cfg.Cloak.FingerprintSeed,
+			Platform:        cfg.Cloak.Platform,
+			Locale:          cfg.Cloak.Locale,
+			Timezone:        cfg.Cloak.Timezone,
+			WebRTCIP:        cfg.Cloak.WebRTCIP,
+			FontsDir:        cfg.Cloak.FontsDir,
+			StorageQuotaMB:  cfg.Cloak.StorageQuotaMB,
+		},
+	}
+	providerArgs, _, _ := browsers.MustGet(browserID).BuildLaunchArgs(launchCfg)
+	opts = appendExecAllocatorFlags(opts, providerArgs)
 	opts = appendExecAllocatorFlags(opts, bundle.Launch.Args)
-	opts = appendExecAllocatorFlags(opts, CloakBrowserFlagArgs(cfg))
 	opts = appendExecAllocatorFlags(opts, config.BrowserProxyFlags(cfg.Proxy))
 
 	opts = appendExecAllocatorFlags(opts, geoAlignment.flags)
@@ -288,7 +323,17 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 
 	if err != nil {
 		elapsed := time.Since(startTs)
-		silentDrop := isSilentCDPAttachFailure(cfg, err, parentCtx, browserCtx, elapsed)
+		browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+		silentDrop := false
+		if b, ok := browsers.Get(browserID); ok {
+			kind := b.ClassifyLaunchError(browsers.LaunchFailure{
+				Err:             err,
+				Elapsed:         elapsed,
+				ParentCanceled:  parentCtx != nil && parentCtx.Err() != nil,
+				BrowserCanceled: browserCtx != nil && browserCtx.Err() != nil,
+			})
+			silentDrop = kind == browsers.LaunchErrorSilentCDPDrop
+		}
 		browserCancel()
 		allocCancel()
 		errMsg := err.Error()
@@ -349,34 +394,6 @@ func isStartupTimeout(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context deadline exceeded")
-}
-
-// isSilentCDPAttachFailure detects the CloakBrowser-specific pattern where
-// Chrome accepts the launch, prints "DevTools listening", responds to the
-// initial Target.setDiscoverTargets, but then drops the websocket between
-// Target.attachToTarget and the reply — chromedp internally cancels the
-// browser context and chromedp.Run returns "context canceled" within a
-// few hundred milliseconds. Manifests when the profile dir holds state
-// CloakBrowser refuses to ingest.
-func isSilentCDPAttachFailure(cfg *config.RuntimeConfig, err error, parentCtx, browserCtx context.Context, elapsed time.Duration) bool {
-	if cfg == nil || !config.IsCloakBrowserProvider(cfg.BrowserProvider) {
-		return false
-	}
-	if err == nil {
-		return false
-	}
-	if parentCtx != nil && parentCtx.Err() != nil {
-		return false
-	}
-	if browserCtx == nil || browserCtx.Err() == nil {
-		return false
-	}
-	if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
-		return false
-	}
-	// The silent drop is fast — chromedp cancels within ~1s. Any later
-	// failure is more likely a real timeout from a different cause.
-	return elapsed < 5*time.Second
 }
 
 func shouldRetryChromeStartupWithDirectLaunch(parentCtx context.Context, err error) bool {
@@ -483,32 +500,13 @@ func waitForChromeDevTools(port int, timeout time.Duration) (string, error) {
 	return "", fmt.Errorf("chrome devtools not ready on port %d after %v", port, timeout)
 }
 
+func chromeLaunchArgs(headless bool) []string {
+	args, _, _ := browsers.MustGet("chrome").BuildLaunchArgs(browsers.LaunchConfig{Headless: headless})
+	return args
+}
+
 func BaseChromeFlagArgs() []string {
-	return []string{
-		"--disable-background-networking",
-		"--enable-features=NetworkService,NetworkServiceInProcess",
-		"--disable-background-timer-throttling",
-		"--disable-backgrounding-occluded-windows",
-		"--disable-breakpad",
-		"--disable-session-crashed-bubble",
-		"--disable-client-side-phishing-detection",
-		"--disable-default-apps",
-		"--disable-dev-shm-usage",
-		"--disable-features=Translate,BlinkGenPropertyTrees",
-		"--hide-crash-restore-bubble",
-		"--disable-hang-monitor",
-		"--disable-ipc-flooding-protection",
-		"--disable-metrics-reporting",
-		"--disable-prompt-on-repost",
-		"--disable-renderer-backgrounding",
-		"--disable-sync",
-		"--force-color-profile=srgb",
-		"--metrics-recording-only",
-		"--noerrdialogs",
-		"--safebrowsing-disable-auto-update",
-		"--password-store=basic",
-		"--use-mock-keychain",
-	}
+	return chromeLaunchArgs(false)
 }
 
 func appendChromeCompatibilityFlags(args []string) []string {
@@ -554,47 +552,38 @@ func existingExtensionPaths(paths []string) []string {
 
 func buildChromeArgsWithBundle(cfg *config.RuntimeConfig, bundle *stealth.Bundle, port int, geoAlignment launchGeoAlignment) []string {
 	bundle = ensureStealthBundle(cfg, bundle)
-	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, BaseChromeFlagArgs()...)
+
+	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	launchCfg := browsers.LaunchConfig{
+		Mode:           engineToLaunchMode(cfg.Engine),
+		Headless:       cfg.Headless,
+		DebugPort:      port,
+		ExtensionPaths: cfg.ExtensionPaths,
+		ProfileDir:     cfg.ProfileDir,
+		Timezone:       cfg.Timezone,
+		ExtraFlags:     config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags),
+		NoSandbox:      chromeNeedsNoSandbox(),
+		Cloak: browsers.CloakFingerprint{
+			FingerprintSeed: cfg.Cloak.FingerprintSeed,
+			Platform:        cfg.Cloak.Platform,
+			Locale:          cfg.Cloak.Locale,
+			Timezone:        cfg.Cloak.Timezone,
+			WebRTCIP:        cfg.Cloak.WebRTCIP,
+			FontsDir:        cfg.Cloak.FontsDir,
+			StorageQuotaMB:  cfg.Cloak.StorageQuotaMB,
+		},
+	}
+	args, _, _ := browsers.MustGet(browserID).BuildLaunchArgs(launchCfg)
+
 	args = append(args, bundle.Launch.Args...)
-	args = append(args, CloakBrowserFlagArgs(cfg)...)
 	args = append(args, config.BrowserProxyFlags(cfg.Proxy)...)
 	args = append(args, geoAlignment.flags...)
 
-	if validPaths := existingExtensionPaths(cfg.ExtensionPaths); len(validPaths) > 0 {
-		joined := strings.Join(validPaths, ",")
-		args = append(args, "--load-extension="+joined, "--disable-extensions-except="+joined)
-	} else {
-		args = append(args, "--disable-extensions")
-	}
-
-	if cfg.Headless {
-		args = append(args,
-			"--headless=new",
-			"--disable-gpu",
-			"--disable-vulkan",
-			"--use-angle=swiftshader",
-			"--enable-unsafe-swiftshader",
-		)
-	}
-
-	if cfg.ProfileDir != "" {
-		args = append(args, "--user-data-dir="+cfg.ProfileDir)
-	}
-
-	w, h := randomWindowSize()
-	args = append(args, fmt.Sprintf("--window-size=%d,%d", w, h))
-
-	if cfg.Timezone != "" {
-		args = append(args, "--tz="+cfg.Timezone)
-	}
-
-	args = append(args, config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags)...)
-
-	return appendChromeCompatibilityFlags(args)
+	return args
 }
 
 func CloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
-	if cfg == nil || !config.IsCloakBrowserProvider(cfg.BrowserProvider) {
+	if cfg == nil || !config.IsCloakBrowser(cfg.DefaultBrowser) {
 		return nil
 	}
 	cloak := cfg.Cloak
@@ -634,10 +623,12 @@ func applyStartupStealth(ctx context.Context, cfg *config.RuntimeConfig, bundle 
 }
 
 func missingBrowserBinaryError(cfg *config.RuntimeConfig) error {
-	if cfg != nil && config.IsCloakBrowserProvider(cfg.BrowserProvider) {
-		return fmt.Errorf("cloakbrowser binary not found: set browser.binary to the CloakBrowser Chromium binary when browser.provider is cloak")
+	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	if b, ok := browsers.Get(browserID); ok {
+		name := b.DisplayName()
+		return fmt.Errorf("%s binary not found: set browser.binary to the %s binary path", strings.ToLower(name), name)
 	}
-	return fmt.Errorf("chrome/chromium not found: please install chrome or chromium, or set 'binary' in config.json")
+	return fmt.Errorf("browser binary not found: set browser.binary in config")
 }
 
 func injectedScript(ctx context.Context, script string) error {
@@ -701,7 +692,7 @@ func resolveLaunchGeoAlignment(parent context.Context, cfg *config.RuntimeConfig
 	if cfg == nil || cfg.Proxy.IsZero() || cfg.Proxy.Geo == nil || cfg.Proxy.Geo.IsZero() {
 		return launchGeoAlignment{}, nil
 	}
-	if !config.CloakBrowserProviderActive(cfg) {
+	if !config.CloakBrowserActive(cfg) {
 		return launchGeoAlignment{}, nil
 	}
 	if parent == nil {
@@ -714,7 +705,7 @@ func resolveLaunchGeoAlignment(parent context.Context, cfg *config.RuntimeConfig
 	if err != nil {
 		return launchGeoAlignment{}, err
 	}
-	flags, env := applyGeoAlignment(cfg.BrowserProvider, info, cfg.Cloak)
+	flags, env := applyGeoAlignment(cfg.DefaultBrowser, info, cfg.Cloak)
 	return launchGeoAlignment{
 		info:  info,
 		flags: flags,
@@ -753,4 +744,15 @@ func cryptoRandSeed() int64 {
 		return 42
 	}
 	return n.Int64()
+}
+
+func engineToLaunchMode(engine string) browsers.LaunchMode {
+	switch engine {
+	case "lite":
+		return browsers.LaunchModeLite
+	case "auto":
+		return browsers.LaunchModeAuto
+	default:
+		return browsers.LaunchModeChrome
+	}
 }

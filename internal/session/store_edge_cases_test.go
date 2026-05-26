@@ -58,11 +58,11 @@ func TestStore_AuthenticateBadTokenReturnsNil(t *testing.T) {
 // Create with duplicate agent ID is allowed (agent can hold multiple sessions).
 func TestStore_CreateDuplicateAgentAllowed(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
-	id1, tok1, err := s.Create("agent-dup", "label-1")
+	id1, tok1, err := s.Create("agent-dup", "label-1", "")
 	if err != nil {
 		t.Fatalf("Create first: %v", err)
 	}
-	id2, tok2, err := s.Create("agent-dup", "label-2")
+	id2, tok2, err := s.Create("agent-dup", "label-2", "")
 	if err != nil {
 		t.Fatalf("Create second: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestStore_CreateDuplicateAgentAllowed(t *testing.T) {
 // Idle timeout validation: zero and negative values are accepted and normalized.
 func TestStore_CreateWithZeroIdleTimeout(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", IdleTimeout: 0})
-	_, _, err := s.Create("agent-zero", "")
+	_, _, err := s.Create("agent-zero", "", "")
 	if err != nil {
 		t.Fatalf("Create with IdleTimeout=0: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestStore_CreateWithZeroIdleTimeout(t *testing.T) {
 
 func TestStore_CreateWithNegativeIdleTimeout(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", IdleTimeout: -time.Hour})
-	_, _, err := s.Create("agent-neg", "")
+	_, _, err := s.Create("agent-neg", "", "")
 	if err != nil {
 		t.Fatalf("Create with IdleTimeout=-1h: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestStore_CreateWithNegativeIdleTimeout(t *testing.T) {
 // Max lifetime validation: zero and negative values are accepted and normalized.
 func TestStore_CreateWithZeroMaxLifetime(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", MaxLifetime: 0})
-	_, _, err := s.Create("agent-zero-ml", "")
+	_, _, err := s.Create("agent-zero-ml", "", "")
 	if err != nil {
 		t.Fatalf("Create with MaxLifetime=0: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestStore_CreateWithZeroMaxLifetime(t *testing.T) {
 
 func TestStore_CreateWithNegativeMaxLifetime(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred", MaxLifetime: -time.Hour})
-	_, _, err := s.Create("agent-neg-ml", "")
+	_, _, err := s.Create("agent-neg-ml", "", "")
 	if err != nil {
 		t.Fatalf("Create with MaxLifetime=-1h: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestStore_CreateWithNegativeMaxLifetime(t *testing.T) {
 func TestStore_OnLifecycleNilFnIsSafe(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
 	s.OnLifecycle(nil) // must not panic
-	_, tok, _ := s.Create("agent-hook-nil", "")
+	_, tok, _ := s.Create("agent-hook-nil", "", "")
 	sess, _ := s.Authenticate(tok)
 	s.Revoke(sess.ID) // must not panic
 }
@@ -127,7 +127,7 @@ func TestStore_OnLifecycleNilFnIsSafe(t *testing.T) {
 // Revoke is idempotent while the session entry still exists.
 func TestStore_RevokeTwiceReturnsTrue(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
-	_, tok, _ := s.Create("agent-rev2", "")
+	_, tok, _ := s.Create("agent-rev2", "", "")
 	sess, _ := s.Authenticate(tok)
 	if !s.Revoke(sess.ID) {
 		t.Fatal("first Revoke should succeed")

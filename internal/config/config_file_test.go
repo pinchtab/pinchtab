@@ -21,8 +21,8 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.Server.CookieSecure != nil {
 		t.Errorf("DefaultFileConfig.Server.CookieSecure = %v, want nil for auto-detect", formatBoolPtr(fc.Server.CookieSecure))
 	}
-	if fc.Browser.Provider != BrowserProviderChrome {
-		t.Errorf("DefaultFileConfig.Browser.Provider = %v, want %s", fc.Browser.Provider, BrowserProviderChrome)
+	if fc.Browsers.Default != BrowserChrome {
+		t.Errorf("DefaultFileConfig.Browsers.Default = %v, want %s", fc.Browsers.Default, BrowserChrome)
 	}
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("DefaultFileConfig.InstanceDefaults.Mode = %v, want headless", fc.InstanceDefaults.Mode)
@@ -205,12 +205,12 @@ func TestFileConfigFromRuntime_PreservesBrowserTargets(t *testing.T) {
 	quota := 256
 	disableStealth := true
 	cfg := &RuntimeConfig{
-		BrowserProvider: BrowserProviderChrome,
-		DefaultTarget:   "chrome-local",
-		FallbackOrder:   []string{"cloak-primary"},
+		DefaultBrowser: BrowserChrome,
+		DefaultTarget:  "chrome-local",
+		FallbackOrder:  []string{"cloak-primary"},
 		Targets: BrowserTargetsConfig{
 			"chrome-local": {
-				Provider:   BrowserProviderChrome,
+				Provider:   BrowserChrome,
 				Binary:     "/usr/bin/chrome",
 				ExtraFlags: "--ash-no-nudges",
 				Proxy: BrowserProxyConfig{
@@ -220,7 +220,7 @@ func TestFileConfigFromRuntime_PreservesBrowserTargets(t *testing.T) {
 				},
 			},
 			"cloak-primary": {
-				Provider: BrowserProviderCloak,
+				Provider: BrowserCloak,
 				Binary:   "/opt/cloak/chrome",
 				Cloak: CloakBrowserConfig{
 					StorageQuotaMB:            &quota,
@@ -501,8 +501,16 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 	}
 
 	browser := raw["browser"].(map[string]any)
-	if provider, ok := browser["provider"]; !ok || provider != BrowserProviderChrome {
-		t.Fatalf("browser.provider = %#v, want chrome", provider)
+	if _, ok := browser["provider"]; ok {
+		t.Fatal("browser.provider should not be emitted in JSON (deprecated in favor of browsers.default)")
+	}
+	// Verify browsers.default is emitted instead
+	if browsersRaw, ok := raw["browsers"]; !ok {
+		t.Fatal("browsers block missing from JSON")
+	} else if browsersMap, ok := browsersRaw.(map[string]any); !ok {
+		t.Fatal("browsers block is not an object")
+	} else if def, ok := browsersMap["default"]; !ok || def != BrowserChrome {
+		t.Fatalf("browsers.default = %#v, want chrome", def)
 	}
 	if _, ok := browser["cloak"]; ok {
 		t.Fatal("browser.cloak should not be emitted for default chrome provider")
@@ -554,7 +562,7 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 func TestFileConfigJSONEmitsCloakBrowserConfig(t *testing.T) {
 	disableDefaultStealthArgs := true
 	fc := DefaultFileConfig()
-	fc.Browser.Provider = BrowserProviderCloak
+	fc.Browser.Provider = BrowserCloak
 	fc.Browser.ChromeBinary = "/opt/cloakbrowser/chrome"
 	fc.Browser.Cloak = CloakBrowserConfig{
 		FingerprintSeed:           "42069",
@@ -587,7 +595,7 @@ func TestFileConfigJSONEmitsCloakBrowserConfig(t *testing.T) {
 func TestFileConfigJSONEmitsExplicitCloakFalseOnChromeProvider(t *testing.T) {
 	disableDefaultStealthArgs := false
 	fc := DefaultFileConfig()
-	fc.Browser.Provider = BrowserProviderChrome
+	fc.Browser.Provider = BrowserChrome
 	fc.Browser.Cloak = CloakBrowserConfig{DisableDefaultStealthArgs: &disableDefaultStealthArgs}
 
 	data, err := json.Marshal(fc)
@@ -601,8 +609,8 @@ func TestFileConfigJSONEmitsExplicitCloakFalseOnChromeProvider(t *testing.T) {
 
 func TestFileConfigFromRuntimeEmitsCloakStorageQuotaZeroForCloakProvider(t *testing.T) {
 	fc := FileConfigFromRuntime(&RuntimeConfig{
-		BrowserProvider: BrowserProviderCloak,
-		ChromeBinary:    "/opt/cloakbrowser/chrome",
+		DefaultBrowser: BrowserCloak,
+		ChromeBinary:   "/opt/cloakbrowser/chrome",
 		Cloak: CloakBrowserRuntimeConfig{
 			StorageQuotaMB:            0,
 			DisableDefaultStealthArgs: true,

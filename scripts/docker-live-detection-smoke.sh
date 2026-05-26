@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # docker-live-detection-smoke.sh — opt-in live detection-site probe (P6).
 #
-# Spins up a single PinchTab container (Chrome by default, --provider=cloak for
+# Spins up a single PinchTab container (Chrome by default, --browser=cloak for
 # CloakBrowser), drives the managed instance through a small list of public bot
 # detection demo sites, and for each site captures:
 #
@@ -23,8 +23,8 @@
 #
 # Usage:
 #   ./dev smoke live-detection                          # Chrome leg
-#   ./dev smoke live-detection --provider=chrome
-#   ./dev smoke live-detection --provider=cloak
+#   ./dev smoke live-detection --browser=chrome
+#   ./dev smoke live-detection --browser=cloak
 #
 # Env overrides:
 #   PINCHTAB_PARITY_CHROME_IMAGE     Chrome leg image (default: pinchtab-chrome-smoke:test)
@@ -56,14 +56,14 @@ source "$LIB_DIR/smoke-health.sh"
 PROVIDER="chrome"
 for arg in "$@"; do
   case "$arg" in
-    --provider=chrome|--provider=cloak)
-      PROVIDER="${arg#--provider=}"
+    --browser=chrome|--browser=cloak)
+      PROVIDER="${arg#--browser=}"
       ;;
-    --provider=*)
-      fail "invalid --provider: ${arg#--provider=} (expected chrome|cloak)"
+    --browser=*)
+      fail "invalid --browser: ${arg#--browser=} (expected chrome|cloak)"
       ;;
-    --provider)
-      fail "--provider requires =VALUE (e.g. --provider=chrome)"
+    --browser)
+      fail "--browser requires =VALUE (e.g. --browser=chrome)"
       ;;
     --help|-h)
       sed -n '2,38p' "$0"

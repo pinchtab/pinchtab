@@ -3,41 +3,82 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 const (
-	BrowserProviderChrome = "chrome"
-	BrowserProviderCloak  = "cloak"
+	BrowserChrome      = "chrome"
+	BrowserCloak       = "cloak"
+	BrowserGhostChrome = "ghost-chrome"
 )
 
-func NormalizeBrowserProvider(provider string) string {
+// NormalizeBrowser maps user-facing config values (browser.provider,
+// CLI flags) to canonical browser registry IDs. It is the intentional gateway
+// between the config/API layer and browsers.Get during the browser architecture
+// migration.
+func NormalizeBrowser(provider string) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case BrowserProviderCloak:
-		return BrowserProviderCloak
+	case BrowserCloak:
+		return BrowserCloak
+	case BrowserGhostChrome:
+		return BrowserGhostChrome
 	default:
-		return BrowserProviderChrome
+		return BrowserChrome
 	}
 }
 
-func ParseBrowserProvider(provider string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "", BrowserProviderChrome:
-		return BrowserProviderChrome, nil
-	case BrowserProviderCloak:
-		return BrowserProviderCloak, nil
-	default:
-		return "", fmt.Errorf("invalid browser provider %q (must be chrome or cloak)", provider)
+func ParseBrowser(name string, configured []string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if normalized == "" {
+		return BrowserChrome, nil
 	}
+	for _, c := range configured {
+		if strings.ToLower(strings.TrimSpace(c)) == normalized {
+			return normalized, nil
+		}
+	}
+	if _, ok := browsers.Get(normalized); ok {
+		return normalized, nil
+	}
+	if len(configured) > 0 {
+		return "", fmt.Errorf("unknown browser %q; configured: %v, built-in: %v", name, configured, browsers.IDs())
+	}
+	return "", fmt.Errorf("unknown browser %q (known: %v)", name, browsers.IDs())
 }
 
-func IsCloakBrowserProvider(provider string) bool {
-	return NormalizeBrowserProvider(provider) == BrowserProviderCloak
+// ResolveBrowser applies the browser precedence chain:
+// request > session > instance > global default > configuredOrder[0] > chrome.
+// Each level is checked in order; the first non-empty value wins.
+func ResolveBrowser(request, session, instance, globalDefault string, configuredOrder []string) string {
+	if request != "" {
+		return request
+	}
+	if session != "" {
+		return session
+	}
+	if instance != "" {
+		return instance
+	}
+	if globalDefault != "" {
+		return globalDefault
+	}
+	if len(configuredOrder) > 0 {
+		return configuredOrder[0]
+	}
+	return BrowserChrome
 }
 
-// CloakBrowserProviderActive reports only the configured browser provider. It
+// IsCloakBrowser gates Cloak-specific fingerprint behavior in
+// stealth and runtime paths.
+func IsCloakBrowser(provider string) bool {
+	return NormalizeBrowser(provider) == BrowserCloak
+}
+
+// CloakBrowserActive reports whether the configured browser is Cloak. It
 // deliberately does not mean PinchTab's stealth layer should be disabled.
-func CloakBrowserProviderActive(cfg *RuntimeConfig) bool {
-	if cfg == nil || !IsCloakBrowserProvider(cfg.BrowserProvider) {
+func CloakBrowserActive(cfg *RuntimeConfig) bool {
+	if cfg == nil || !IsCloakBrowser(cfg.DefaultBrowser) {
 		return false
 	}
 	return true
@@ -46,7 +87,7 @@ func CloakBrowserProviderActive(cfg *RuntimeConfig) bool {
 // PinchTabStealthDefaultsDisabled is the explicit opt-out from PinchTab's JS
 // stealth overlays and automation-hiding launch flags.
 func PinchTabStealthDefaultsDisabled(cfg *RuntimeConfig) bool {
-	if !CloakBrowserProviderActive(cfg) {
+	if !CloakBrowserActive(cfg) {
 		return false
 	}
 	return cfg.Cloak.DisableDefaultStealthArgs

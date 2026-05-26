@@ -158,16 +158,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 			chromedp.Evaluate(`document.body ? document.body.innerText : ""`, &pageText),
 		)
 		corpus := pageTitle + "\n" + pageURL + "\n" + pageText
-		if ir := h.IDPIGuard.ScanContent(corpus); ir.Threat {
-			if ir.Blocked {
-				httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
-				return
-			}
-			w.Header().Set("X-IDPI-Warning", ir.Reason)
-			if ir.Pattern != "" {
-				w.Header().Set("X-IDPI-Pattern", ir.Pattern)
-			}
+		scanResult := h.ContentGuard.ScanOnly(corpus)
+		if scanResult.Blocked {
+			httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", scanResult.BlockReason))
+			return
 		}
+		scanResult.SetHeaders(w)
 	}
 
 	var buf []byte

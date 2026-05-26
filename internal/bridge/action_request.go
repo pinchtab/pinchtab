@@ -95,6 +95,12 @@ type ActionRequest struct {
 	// DialogText is the optional prompt text used when DialogAction is
 	// "accept" on a prompt() dialog.
 	DialogText string `json:"dialogText,omitempty"`
+
+	// Browser specifies which browser to use for this request (e.g. "chrome",
+	// "cloak", "ghost-chrome"). Validated against configured + registry
+	// browsers. Recorded on route metadata but does not change actual
+	// routing yet.
+	Browser string `json:"browser,omitempty"`
 }
 
 type actionRequestAlias ActionRequest

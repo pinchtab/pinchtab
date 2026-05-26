@@ -144,8 +144,8 @@ func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *test
 	orch.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 	t.Cleanup(func() {
@@ -154,9 +154,7 @@ func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *test
 		}
 	})
 
-	body := `{"url":"about:blank","browserTarget":"cloak"}`
-	req := httptest.NewRequest(http.MethodPost, "/navigate", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
 
 	s := &Strategy{orch: orch}
 	target, status, err := s.ensureRunning(req)
@@ -170,10 +168,10 @@ func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *test
 	if len(instances) != 1 {
 		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
 	}
-	if instances[0].BrowserTarget != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].BrowserTarget)
+	if instances[0].Target != "cloak" {
+		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].Target)
 	}
-	if instances[0].BrowserProvider != config.BrowserProviderCloak {
+	if instances[0].BrowserProvider != config.BrowserCloak {
 		t.Fatalf("BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
 	}
 	if instances[0].ProfileName != "default-cloak" {

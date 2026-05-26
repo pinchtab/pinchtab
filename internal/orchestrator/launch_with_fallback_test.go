@@ -32,11 +32,11 @@ type fakeLauncher struct {
 
 func (fl *fakeLauncher) ResolveTarget(candidate string) (ResolvedLaunchTarget, error) {
 	if strings.Contains(candidate, "cloak") {
-		return ResolvedLaunchTarget{Name: candidate, Provider: config.BrowserProviderCloak}, nil
+		return ResolvedLaunchTarget{Name: candidate, Provider: config.BrowserCloak}, nil
 	}
 	switch candidate {
 	case "chrome", "chrome-local", "backup":
-		return ResolvedLaunchTarget{Name: candidate, Provider: config.BrowserProviderChrome}, nil
+		return ResolvedLaunchTarget{Name: candidate, Provider: config.BrowserChrome}, nil
 	default:
 		return ResolvedLaunchTarget{}, fmt.Errorf("unknown target %q", candidate)
 	}
@@ -71,14 +71,14 @@ func (fl *fakeLauncher) Launch(name, port string, headless bool, opts LaunchOpti
 		Mode:            bridge.ModeFromHeadless(headless),
 		Status:          "starting",
 		StartTime:       time.Now(),
-		BrowserTarget:   opts.BrowserTarget,
+		Target:          opts.ResolvedTarget,
 		BrowserProvider: opts.BrowserProvider,
 	}
 	if fl.orch != nil {
 		internal := &InstanceInternal{
-			Instance:              instance,
-			resolvedBrowserTarget: opts.BrowserTarget,
-			browserProvider:       opts.BrowserProvider,
+			Instance:        instance,
+			resolvedTarget:  opts.ResolvedTarget,
+			browserProvider: opts.BrowserProvider,
 		}
 		fl.orch.mu.Lock()
 		fl.orch.instances[id] = internal
@@ -163,11 +163,11 @@ func newFallbackTestOrch(t *testing.T) *Orchestrator {
 		instances:     make(map[string]*InstanceInternal),
 		portAllocator: NewPortAllocator(9000, 9100),
 		runtimeCfg: &config.RuntimeConfig{
-			BrowserProvider: config.BrowserProviderChrome,
+			DefaultBrowser: config.BrowserChrome,
 			Targets: config.BrowserTargetsConfig{
-				"chrome": config.BrowserTargetConfig{Provider: config.BrowserProviderChrome},
-				"cloak":  config.BrowserTargetConfig{Provider: config.BrowserProviderCloak},
-				"backup": config.BrowserTargetConfig{Provider: config.BrowserProviderChrome},
+				"chrome": config.BrowserTargetConfig{Provider: config.BrowserChrome},
+				"cloak":  config.BrowserTargetConfig{Provider: config.BrowserCloak},
+				"backup": config.BrowserTargetConfig{Provider: config.BrowserChrome},
 			},
 			DefaultTarget: "chrome",
 		},
@@ -191,8 +191,8 @@ func TestLaunchWithFallback_FirstCandidateSucceeds(t *testing.T) {
 	if inst.FallbackFrom != "" || inst.FallbackReason != "" {
 		t.Errorf("expected no fallback metadata, got from=%q reason=%q", inst.FallbackFrom, inst.FallbackReason)
 	}
-	if inst.BrowserTarget != "chrome" {
-		t.Errorf("BrowserTarget = %q, want chrome", inst.BrowserTarget)
+	if inst.Target != "chrome" {
+		t.Errorf("BrowserTarget = %q, want chrome", inst.Target)
 	}
 	if len(fl.calls) != 1 {
 		t.Errorf("expected 1 launch call, got %d", len(fl.calls))
@@ -217,8 +217,8 @@ func TestLaunchWithFallback_FirstFailsSecondSucceeds(t *testing.T) {
 	if planned.FallbackReason != ReasonBinaryMissing {
 		t.Errorf("FallbackReason = %q, want %q", planned.FallbackReason, ReasonBinaryMissing)
 	}
-	if inst.BrowserTarget != "cloak" {
-		t.Errorf("BrowserTarget = %q, want cloak", inst.BrowserTarget)
+	if inst.Target != "cloak" {
+		t.Errorf("BrowserTarget = %q, want cloak", inst.Target)
 	}
 	if len(fl.calls) != 2 {
 		t.Errorf("expected 2 launch calls, got %d", len(fl.calls))
@@ -266,8 +266,8 @@ func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch returned error: %v", err)
 	}
-	if inst.BrowserTarget != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak fallback", inst.BrowserTarget)
+	if inst.Target != "cloak" {
+		t.Fatalf("BrowserTarget = %q, want cloak fallback", inst.Target)
 	}
 	if inst.FallbackFrom != "chrome" {
 		t.Fatalf("FallbackFrom = %q, want chrome", inst.FallbackFrom)
@@ -275,8 +275,8 @@ func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("launch calls = %d, want 2", len(fl.calls))
 	}
-	if fl.calls[0].BrowserTarget != "chrome" || fl.calls[1].BrowserTarget != "cloak" {
-		t.Fatalf("launch target order = [%q, %q], want [chrome, cloak]", fl.calls[0].BrowserTarget, fl.calls[1].BrowserTarget)
+	if fl.calls[0].ResolvedTarget != "chrome" || fl.calls[1].ResolvedTarget != "cloak" {
+		t.Fatalf("launch target order = [%q, %q], want [chrome, cloak]", fl.calls[0].ResolvedTarget, fl.calls[1].ResolvedTarget)
 	}
 }
 

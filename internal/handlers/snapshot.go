@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,9 +13,14 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 	"gopkg.in/yaml.v3"
 )
 
@@ -61,32 +67,168 @@ import (
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 
-	// --- Lite engine fast path ---
+	// Browser resolution: request > session > instance > global default > chrome
+	requestBrowser := strings.TrimSpace(r.URL.Query().Get("browser"))
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
 	tabID := r.URL.Query().Get("tabId")
-	h.recordReadRequest(r, "snapshot", tabID)
-	if h.useLite(engine.CapSnapshot, "") {
-		h.recordEngine(r, "lite")
-		result, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
-		if err != nil {
-			if engine.IsIDPIBlocked(err) {
-				httpx.Error(w, http.StatusForbidden, err)
-			} else {
-				httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
-			}
+	if tabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
+
+	browser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if browser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(browser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
 			return
 		}
+	}
+
+	// --- Ghost-chrome routing fast path ---
+	// For ghost-chrome, use the static browser to read a snapshot from stored state
+	// (set by a prior ghost-chrome /navigate). If the static browser has content,
+	// serve it directly. If not available, escalate to Chrome.
+	if browser == config.BrowserGhostChrome && h.StaticBrowser != nil {
+		h.recordReadRequest(r, "snapshot", tabID)
+		result, err := h.StaticBrowser.Snapshot(r.Context(), tabID, filter)
+		if err == nil && len(result.Nodes) > 0 {
+			// Quality gate: assess ghost snapshot before serving.
+			assessNodes := make([]ghostchrome.SnapshotNode, len(result.Nodes))
+			for i, n := range result.Nodes {
+				assessNodes[i] = ghostchrome.SnapshotNode{Role: n.Role, Name: n.Name}
+			}
+			if ghostchrome.AssessSnapshot(assessNodes) {
+				// IDPI content scan at handler level.
+				var sb strings.Builder
+				for _, n := range result.Nodes {
+					if n.Name != "" || n.Value != "" {
+						sb.WriteString(n.Name)
+						if n.Name != "" && n.Value != "" {
+							sb.WriteByte(' ')
+						}
+						sb.WriteString(n.Value)
+						sb.WriteByte('\n')
+					}
+				}
+				scanResult := h.ContentGuard.ScanOnly(sb.String())
+				if scanResult.Blocked {
+					httpx.Error(w, http.StatusForbidden, fmt.Errorf("snapshot blocked: %s", scanResult.BlockReason))
+					return
+				}
+				scanResult.SetHeaders(w)
+
+				flat := make([]bridge.A11yNode, len(result.Nodes))
+				for i, n := range result.Nodes {
+					flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
+				}
+				route := &browserops.RouteMetadata{
+					RequestedBrowser: browser,
+					UsedBrowser:      "ghost",
+					Attempts:         []browserops.RouteAttempt{{Browser: "ghost", Accepted: true}},
+				}
+				if requestBrowser != "" {
+					route.RequestedBrowser = requestBrowser
+				}
+				h.recordActivity(r, activity.Update{Route: route})
+				httpx.JSON(w, 200, map[string]any{"nodes": flat, "route": route})
+				return
+			}
+			// Quality too low — escalate to Chrome (fall through).
+		}
+		// Ghost snapshot not available or quality insufficient.
+		// Fall through to Chrome path.
+	}
+
+	handleDecision, err := checkBrowserCanHandle(browser, browsers.RequestIntent{
+		Shape: browsers.ShapeStaticSnapshot,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		browser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	snapBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, browser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg := h.resolveEffectiveConfig(snapBrowserTarget)
+
+	// --- Static browser fast path ---
+	h.recordReadRequest(r, "snapshot", tabID)
+	if h.useStaticBrowser(browserops.CapSnapshot) {
+		result, err := h.StaticBrowser.Snapshot(r.Context(), tabID, filter)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
+			return
+		}
+		// IDPI content scan at handler level.
+		var sb strings.Builder
+		for _, n := range result.Nodes {
+			if n.Name != "" || n.Value != "" {
+				sb.WriteString(n.Name)
+				if n.Name != "" && n.Value != "" {
+					sb.WriteByte(' ')
+				}
+				sb.WriteString(n.Value)
+				sb.WriteByte('\n')
+			}
+		}
+		scanResult := h.ContentGuard.ScanOnly(sb.String())
+		if scanResult.Blocked {
+			httpx.Error(w, http.StatusForbidden, fmt.Errorf("snapshot blocked: %s", scanResult.BlockReason))
+			return
+		}
+		scanResult.SetHeaders(w)
+
 		// Convert to bridge.A11yNode for API compatibility.
 		flat := make([]bridge.A11yNode, len(result.Nodes))
 		for i, n := range result.Nodes {
 			flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
 		}
-		w.Header().Set("X-Engine", "lite")
-		httpx.JSON(w, 200, map[string]any{"engine": "lite", "nodes": flat})
+		snapRoute := browserops.SingleBrowserRoute(browser)
+		snapRoute.Attempts = append(snapRoute.Attempts, browserops.RouteAttempt{
+			Browser:  browser,
+			Accepted: handleDecision.Decision == browsers.DecisionHandle,
+			Reason:   handleDecision.Reason,
+		})
+		if requestBrowser != "" {
+			snapRoute.RequestedBrowser = requestBrowser
+		}
+		h.recordActivity(r, activity.Update{Route: snapRoute})
+		httpx.JSON(w, 200, map[string]any{"nodes": flat, "route": snapRoute})
 		return
 	}
 
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
+	snapChromeRoute := browserops.SingleBrowserRoute("chrome")
+	snapChromeRoute.Attempts = append(snapChromeRoute.Attempts, browserops.RouteAttempt{
+		Browser:  browser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		snapChromeRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: snapChromeRoute})
 
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
@@ -128,7 +270,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
@@ -380,7 +522,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{
 			"url":     url,
 			"title":   title,
-			"engine":  "chrome",
+			"route":   snapChromeRoute,
 			"diff":    true,
 			"added":   added,
 			"changed": changed,
@@ -445,11 +587,11 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(yamlContent)
 	default:
 		resp := map[string]any{
-			"url":    url,
-			"title":  title,
-			"engine": "chrome",
-			"nodes":  flat,
-			"count":  len(flat),
+			"url":   url,
+			"title": title,
+			"route": snapChromeRoute,
+			"nodes": flat,
+			"count": len(flat),
 		}
 		if truncated {
 			resp["truncated"] = true

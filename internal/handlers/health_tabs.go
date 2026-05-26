@@ -7,7 +7,6 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -16,10 +15,9 @@ type tabHandoffReader interface {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	if h.Router != nil && h.Router.Mode() == engine.ModeLite {
+	if h.StaticBrowser != nil {
 		resp := map[string]any{
 			"status": "ok",
-			"engine": "lite",
 		}
 		if hasFailureDiagnostics() {
 			resp["failures"] = FailureSnapshot()

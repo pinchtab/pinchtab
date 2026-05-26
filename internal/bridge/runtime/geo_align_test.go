@@ -12,7 +12,7 @@ import (
 )
 
 func TestApplyGeoAlignment_ZeroInfo(t *testing.T) {
-	flags, env := applyGeoAlignment(config.BrowserProviderChrome, geo.Info{}, config.CloakBrowserRuntimeConfig{})
+	flags, env := applyGeoAlignment(config.BrowserChrome, geo.Info{}, config.CloakBrowserRuntimeConfig{})
 	if len(flags) != 0 || len(env) != 0 {
 		t.Fatalf("expected no flags/env for zero info, got flags=%v env=%v", flags, env)
 	}
@@ -27,7 +27,7 @@ func TestResolveLaunchGeoAlignmentSkipsLookupWithoutProxyServer(t *testing.T) {
 	}
 
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderChrome,
+		DefaultBrowser: config.BrowserChrome,
 		Proxy: config.BrowserProxyConfig{
 			Geo: &config.BrowserProxyGeoConfig{Timezone: "Europe/London"},
 		},
@@ -55,7 +55,7 @@ func TestResolveLaunchGeoAlignmentPropagatesLookupError(t *testing.T) {
 	}
 
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 		Proxy: config.BrowserProxyConfig{
 			Server: "http://proxy.example.com:8080",
 			Geo:    &config.BrowserProxyGeoConfig{Timezone: "Europe/London"},
@@ -79,7 +79,7 @@ func TestBuildChromeArgsWithBundleUsesProvidedGeoAlignment(t *testing.T) {
 	}
 
 	args := buildChromeArgsWithBundle(&config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 	}, nil, 9222, launchGeoAlignment{
 		flags: []string{"--fingerprint-locale=en-GB"},
 	})
@@ -105,7 +105,7 @@ func TestResolveLaunchGeoAlignmentSkipsLookupForChromeProvider(t *testing.T) {
 	}
 
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderChrome,
+		DefaultBrowser: config.BrowserChrome,
 		Proxy: config.BrowserProxyConfig{
 			Server: "http://proxy.example.com:8080",
 			Geo:    &config.BrowserProxyGeoConfig{Timezone: "Europe/London", Locale: "en-GB"},
@@ -126,7 +126,7 @@ func TestApplyGeoAlignment_ChromeNoop(t *testing.T) {
 		Locale:     "en-GB",
 		CountryISO: "GB",
 	}
-	flags, env := applyGeoAlignment(config.BrowserProviderChrome, info, config.CloakBrowserRuntimeConfig{})
+	flags, env := applyGeoAlignment(config.BrowserChrome, info, config.CloakBrowserRuntimeConfig{})
 	if len(flags) != 0 || len(env) != 0 {
 		t.Fatalf("chrome provider should not receive proxy-derived geo flags/env, got flags=%v env=%v", flags, env)
 	}
@@ -134,7 +134,7 @@ func TestApplyGeoAlignment_ChromeNoop(t *testing.T) {
 
 func TestApplyGeoAlignment_ChromeLocaleOnlyNoop(t *testing.T) {
 	info := geo.Info{Locale: "en-GB"}
-	flags, env := applyGeoAlignment(config.BrowserProviderChrome, info, config.CloakBrowserRuntimeConfig{})
+	flags, env := applyGeoAlignment(config.BrowserChrome, info, config.CloakBrowserRuntimeConfig{})
 	if len(flags) != 0 || len(env) != 0 {
 		t.Fatalf("chrome provider should not receive proxy-derived geo flags/env, got flags=%v env=%v", flags, env)
 	}
@@ -143,7 +143,7 @@ func TestApplyGeoAlignment_ChromeLocaleOnlyNoop(t *testing.T) {
 func TestApplyGeoAlignment_ChromeCountryOnly_NoFlags(t *testing.T) {
 	// CountryISO is metadata only — it must not trigger flag emission.
 	info := geo.Info{CountryISO: "GB"}
-	flags, env := applyGeoAlignment(config.BrowserProviderChrome, info, config.CloakBrowserRuntimeConfig{})
+	flags, env := applyGeoAlignment(config.BrowserChrome, info, config.CloakBrowserRuntimeConfig{})
 	if len(flags) != 0 || len(env) != 0 {
 		t.Fatalf("country-only info should produce no flags/env, got flags=%v env=%v", flags, env)
 	}
@@ -155,7 +155,7 @@ func TestApplyGeoAlignment_Cloak(t *testing.T) {
 		Locale:   "en-GB",
 		WebRTCIP: "203.0.113.7",
 	}
-	flags, env := applyGeoAlignment(config.BrowserProviderCloak, info, config.CloakBrowserRuntimeConfig{})
+	flags, env := applyGeoAlignment(config.BrowserCloak, info, config.CloakBrowserRuntimeConfig{})
 
 	wantFlags := []string{
 		"--fingerprint-timezone=Europe/London",
@@ -179,7 +179,7 @@ func TestApplyGeoAlignment_CloakExplicitWinsOverDerivedGeo(t *testing.T) {
 	cloak := config.CloakBrowserRuntimeConfig{
 		Timezone: "America/New_York", // explicit per-target override
 	}
-	flags, _ := applyGeoAlignment(config.BrowserProviderCloak, info, cloak)
+	flags, _ := applyGeoAlignment(config.BrowserCloak, info, cloak)
 
 	// Explicit Cloak timezone wins → no derived flag.
 	for _, f := range flags {
@@ -213,8 +213,8 @@ func TestBuildChromeArgs_ChromeDoesNotApplyProxyGeoFlagsByDefault(t *testing.T) 
 	}
 
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderChrome,
-		ChromeVersion:   "144.0.0.0",
+		DefaultBrowser: config.BrowserChrome,
+		ChromeVersion:  "144.0.0.0",
 		Proxy: config.BrowserProxyConfig{
 			Server: "http://proxy.example.com:8080",
 			Geo: &config.BrowserProxyGeoConfig{
@@ -236,7 +236,7 @@ func TestBuildChromeArgs_ChromeDoesNotApplyProxyGeoFlagsByDefault(t *testing.T) 
 
 func TestBuildChromeArgs_CloakAppliesGeoFlagsAndRespectsExplicit(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 		Cloak: config.CloakBrowserRuntimeConfig{
 			Timezone: "America/New_York", // explicit wins
 		},

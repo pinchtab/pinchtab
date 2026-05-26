@@ -12,24 +12,22 @@ import (
 
 func TestConfigureBridgeRouter(t *testing.T) {
 	tests := []struct {
-		name       string
-		engine     string
-		wantRouter bool
+		name              string
+		browsersDefault   string
+		wantStaticBrowser bool
 	}{
-		{name: "chrome", engine: "chrome", wantRouter: false},
-		{name: "lite", engine: "lite", wantRouter: true},
-		{name: "auto", engine: "auto", wantRouter: true},
+		{name: "chrome", browsersDefault: "chrome", wantStaticBrowser: false},
+		{name: "cloak", browsersDefault: "cloak", wantStaticBrowser: false},
+		{name: "ghost-chrome", browsersDefault: "ghost-chrome", wantStaticBrowser: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := handlers.New(nil, &config.RuntimeConfig{Engine: tt.engine}, nil, nil, nil)
-			configureBridgeRouter(h, &config.RuntimeConfig{Engine: tt.engine})
-			if (h.Router != nil) != tt.wantRouter {
-				t.Fatalf("router presence = %v, want %v", h.Router != nil, tt.wantRouter)
-			}
-			if h.Router != nil && string(h.Router.Mode()) != tt.engine {
-				t.Fatalf("router mode = %q, want %q", h.Router.Mode(), tt.engine)
+			cfg := &config.RuntimeConfig{DefaultBrowser: tt.browsersDefault}
+			h := handlers.New(nil, cfg, nil, nil, nil)
+			configureBridgeRouter(h, cfg)
+			if (h.StaticBrowser != nil) != tt.wantStaticBrowser {
+				t.Fatalf("Browser presence = %v, want %v", h.StaticBrowser != nil, tt.wantStaticBrowser)
 			}
 		})
 	}

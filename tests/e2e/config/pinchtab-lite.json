@@ -2,8 +2,10 @@
   "server": {
     "bind": "0.0.0.0",
     "port": "9999",
-    "engine": "lite",
     "token": "e2e-token"
+  },
+  "browsers": {
+    "default": "ghost-chrome"
   },
   "security": {
     "allowEvaluate": false,

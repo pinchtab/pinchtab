@@ -15,10 +15,14 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // HandleNavigate navigates a tab to a URL or creates a new tab.
@@ -64,7 +68,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		WaitFor        string  `json:"waitFor"`
 		WaitSelector   string  `json:"waitSelector"`
 		DismissBanners bool    `json:"dismissBanners"`
-		BrowserTarget  string  `json:"browserTarget,omitempty"`
+		Browser        string  `json:"browser,omitempty"`
 	}
 
 	if r.Method == http.MethodGet {
@@ -75,7 +79,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		req.WaitFor = q.Get("waitFor")
 		req.WaitSelector = q.Get("waitSelector")
 		req.DismissBanners = strings.EqualFold(q.Get("dismissBanners"), "true") || q.Get("dismissBanners") == "1"
-		req.BrowserTarget = q.Get("browserTarget")
+		req.Browser = q.Get("browser")
 		if v := q.Get("waitTitle"); v != "" {
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
 				req.WaitTitle = n
@@ -93,22 +97,75 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	requestedTarget, err := h.resolveNavigateBrowserTarget(req.BrowserTarget)
+	// Browser resolution: request > session > instance > global default > chrome
+	requestBrowser := strings.TrimSpace(req.Browser)
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
+	// Instance browser lookup is done later when we have a tabID (for existing tabs)
+
+	resolvedBrowser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if resolvedBrowser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(resolvedBrowser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	handleDecision, err := checkBrowserCanHandle(resolvedBrowser, browsers.RequestIntent{
+		Shape: browsers.ShapeRenderedRead,
+	})
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, err)
 		return
 	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		resolvedBrowser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	browserTarget, err := config.ResolveBrowserToTarget(h.Config, resolvedBrowser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	requestedTarget, err := h.resolveNavigateBrowserTarget("")
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	// When ResolveBrowserToTarget found an unambiguous target and no explicit
+	// target was provided, use it.
+	if requestedTarget == "" && browserTarget != "" {
+		requestedTarget = browserTarget
+	}
+
+	// Resolve the effective config with target-specific overrides (binary,
+	// proxy, Cloak, extraFlags) merged in.
+	effectiveCfg := h.resolveEffectiveConfig(browserTarget)
+
 	tabID := strings.TrimSpace(req.TabID)
 	if requestedTarget != "" && tabID != "" && h.Orchestrator != nil {
 		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil {
-			if inst.BrowserTarget != "" && inst.BrowserTarget != requestedTarget {
-				httpx.ErrorCode(w, http.StatusConflict, "browser_target_conflict",
-					fmt.Sprintf("tab %q is owned by instance with browserTarget %q; cannot navigate with browserTarget %q",
-						tabID, inst.BrowserTarget, requestedTarget),
+			if inst.Target != "" && inst.Target != requestedTarget {
+				httpx.ErrorCode(w, http.StatusConflict, "browser_conflict",
+					fmt.Sprintf("tab %q is owned by instance with browser %q; cannot navigate with browser %q",
+						tabID, inst.BrowserProvider, requestedTarget),
 					false, map[string]any{
 						"tabId":            tabID,
-						"instanceTarget":   inst.BrowserTarget,
-						"requestedTarget":  requestedTarget,
+						"instanceBrowser":  inst.BrowserProvider,
+						"requestedBrowser": requestedTarget,
 						"instanceProvider": inst.BrowserProvider,
 					})
 				return
@@ -131,46 +188,96 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
 	}
 
-	trustedResolveCIDRs := parseCIDRs(h.Config.TrustedResolveCIDRs)
+	trustedResolveCIDRs := parseCIDRs(effectiveCfg.TrustedResolveCIDRs)
 	target, err := validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL), trustedResolveCIDRs)
 	if err != nil {
 		httpx.Error(w, http.StatusForbidden, err)
 		return
 	}
-	trustedCIDRs := buildNavigateTrustedProxyCIDRs(h.Config)
+	trustedCIDRs := buildNavigateTrustedProxyCIDRs(effectiveCfg)
 	h.recordNavigateRequest(r, req.TabID, req.URL)
 
-	// --- Lite engine fast path ---
-	if h.useLite(engine.CapNavigate, req.URL) {
-		h.recordEngine(r, "lite")
+	// --- Provider routing ---
+	// Call routing.Route() for all browsers. For ghost-chrome, if the ghost
+	// result is accepted (quality above threshold), return the navigate result
+	// directly without Chrome. For chrome/cloak, the result carries routing
+	// metadata but no GhostResult, so we fall through to the Chrome path.
+	routeResult := h.routeRequest(r.Context(), req.URL, resolvedBrowser, browsers.RequestIntent{
+		Shape: browsers.ShapeStaticRead,
+	})
+	if routeResult != nil {
+		// Ghost-chrome: serve ghost content if accepted
+		if !routeResult.Escalated && routeResult.GhostResult != nil {
+			route := routeResult.Route
+			if route == nil {
+				route = browserops.SingleBrowserRoute("ghost")
+			}
+			if requestBrowser != "" {
+				route.RequestedBrowser = requestBrowser
+			}
+			h.recordActivity(r, activity.Update{Route: route})
+			gr := routeResult.GhostResult
+			httpx.JSON(w, 200, map[string]any{
+				"tabId": gr.URL, // use URL as synthetic tabID for ghost-chrome
+				"url":   gr.URL,
+				"title": gr.Title,
+				"route": route,
+			})
+			return
+		}
+		// If escalated (ghost-chrome quality too low), switch to Chrome
+		if routeResult.Escalated {
+			resolvedBrowser = config.BrowserChrome
+		}
+	}
+
+	// --- Static browser fast path ---
+	if h.useStaticBrowser(browserops.CapNavigate) {
 		var trustedResolvedIP []netip.Addr
 		allowInternal := false
 		if target != nil {
-			trustedResolvedIP = target.trustedResolvedIP
-			allowInternal = target.allowInternal
+			trustedResolvedIP = target.TrustedResolvedIP
+			allowInternal = target.AllowInternal
 		}
-		liteCtx := engine.WithNavigateNetworkPolicy(r.Context(), &engine.NavigateNetworkPolicy{
+		liteCtx := staticfetch.WithNavigateNetworkPolicy(r.Context(), &staticfetch.NavigateNetworkPolicy{
 			AllowInternal:     allowInternal,
 			TrustedProxyCIDRs: trustedCIDRs,
 			TrustedResolvedIP: trustedResolvedIP,
-			MaxRedirects:      h.Config.MaxRedirects,
+			MaxRedirects:      effectiveCfg.MaxRedirects,
 		})
-		result, err := h.Router.Lite().Navigate(liteCtx, req.URL)
+		result, err := h.StaticBrowser.Navigate(liteCtx, req.URL)
 		if err != nil {
-			if engine.IsIDPIBlocked(err) || engine.IsNetworkPolicyBlocked(err) {
+			if staticfetch.IsNetworkPolicyBlocked(err) {
 				httpx.Error(w, http.StatusForbidden, err)
 			} else {
 				httpx.Error(w, 502, fmt.Errorf("lite navigate: %w", err))
 			}
 			return
 		}
-		w.Header().Set("X-Engine", "lite")
-		httpx.JSON(w, 200, map[string]any{"tabId": result.TabID, "url": result.URL, "title": result.Title})
+		result.Route = browserops.SingleBrowserRoute(resolvedBrowser)
+		result.Route.Attempts = append(result.Route.Attempts, browserops.RouteAttempt{
+			Browser:  resolvedBrowser,
+			Accepted: handleDecision.Decision == browsers.DecisionHandle,
+			Reason:   handleDecision.Reason,
+		})
+		if requestBrowser != "" {
+			result.Route.RequestedBrowser = requestBrowser
+		}
+		h.recordActivity(r, activity.Update{Route: result.Route})
+		httpx.JSON(w, 200, map[string]any{"tabId": result.TabID, "url": result.URL, "title": result.Title, "route": result.Route})
 		return
 	}
 
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
+	navRoute := browserops.SingleBrowserRoute("chrome")
+	navRoute.Attempts = append(navRoute.Attempts, browserops.RouteAttempt{
+		Browser:  resolvedBrowser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		navRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: navRoute})
 
 	if !h.ensureChromeOrRespond(w) {
 		return
@@ -208,7 +315,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		titleWait = time.Duration(req.WaitTitle * float64(time.Second))
 	}
 
-	navTimeout := h.Config.NavigateTimeout
+	navTimeout := effectiveCfg.NavigateTimeout
 	if req.Timeout > 0 {
 		if req.Timeout > 120 {
 			req.Timeout = 120
@@ -218,17 +325,17 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	var blockPatterns []string
 
-	blockAds := h.Config.BlockAds
+	blockAds := effectiveCfg.BlockAds
 	if req.BlockAds != nil {
 		blockAds = *req.BlockAds
 	}
 
-	blockMedia := h.Config.BlockMedia
+	blockMedia := effectiveCfg.BlockMedia
 	if req.BlockMedia != nil {
 		blockMedia = *req.BlockMedia
 	}
 
-	blockImages := h.Config.BlockImages
+	blockImages := effectiveCfg.BlockImages
 	if req.BlockImages != nil {
 		blockImages = *req.BlockImages
 	}
@@ -254,6 +361,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			TrustedCIDRs:   trustedCIDRs,
 			BlockPatterns:  blockPatterns,
 			DismissBanners: req.DismissBanners,
+			Route:          navRoute,
+			MaxRedirects:   effectiveCfg.MaxRedirects,
 		})
 		return
 	}
@@ -271,6 +380,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 				TrustedCIDRs:   trustedCIDRs,
 				BlockPatterns:  blockPatterns,
 				DismissBanners: req.DismissBanners,
+				Route:          navRoute,
+				MaxRedirects:   effectiveCfg.MaxRedirects,
 			})
 			return
 		}
@@ -295,7 +406,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		_ = bridge.SetResourceBlocking(tCtx, nil)
 	}
 
-	if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
+	if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, effectiveCfg.MaxRedirects); err != nil {
 		if navGuard != nil {
 			if blockedErr := navGuard.blocked(); blockedErr != nil {
 				httpx.Error(w, http.StatusForbidden, blockedErr)
@@ -330,7 +441,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	h.setCurrentTabForRequest(r, resolvedTabID)
 	h.recordResolvedURL(r, navURL)
 
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": navURL, "title": title})
+	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": navURL, "title": title, "route": navRoute})
 }
 
 func (h *Handlers) resolveNavigateBrowserTarget(raw string) (string, error) {
@@ -358,6 +469,8 @@ type navigateChromeOptions struct {
 	TrustedCIDRs   []*net.IPNet
 	BlockPatterns  []string
 	DismissBanners bool
+	Route          *browserops.RouteMetadata
+	MaxRedirects   int
 }
 
 func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, opts navigateChromeOptions) {
@@ -382,7 +495,7 @@ func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, 
 		_ = bridge.SetResourceBlocking(tCtx, opts.BlockPatterns)
 	}
 
-	if err := bridge.NavigatePageWithRedirectLimit(tCtx, opts.URL, h.Config.MaxRedirects); err != nil {
+	if err := bridge.NavigatePageWithRedirectLimit(tCtx, opts.URL, opts.MaxRedirects); err != nil {
 		if navGuard != nil {
 			if blockedErr := navGuard.blocked(); blockedErr != nil {
 				httpx.Error(w, http.StatusForbidden, blockedErr)
@@ -415,7 +528,11 @@ func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, 
 	h.recordResolvedTab(r, newTabID)
 	h.recordResolvedURL(r, navURL)
 
-	httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": navURL, "title": title})
+	resp := map[string]any{"tabId": newTabID, "url": navURL, "title": title}
+	if opts.Route != nil {
+		resp["route"] = opts.Route
+	}
+	httpx.JSON(w, 200, resp)
 }
 
 // HandleTabNavigate navigates an existing tab identified by path ID.

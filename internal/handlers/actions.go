@@ -14,8 +14,12 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/semantic/recovery"
 )
 
@@ -122,6 +126,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 				req.DeltaY = n
 			}
 		}
+		req.Browser = q.Get("browser")
 	} else {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -130,6 +135,59 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		req.Kind = bridge.CanonicalActionKind(req.Kind)
 		req.DialogAction = strings.ToLower(strings.TrimSpace(req.DialogAction))
 	}
+
+	// Browser resolution: request > session > instance > global default > chrome
+	requestBrowser := strings.TrimSpace(req.Browser)
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
+	if req.TabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(req.TabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
+
+	resolvedBrowser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if resolvedBrowser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(resolvedBrowser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	handleDecision, err := checkBrowserCanHandle(resolvedBrowser, browsers.RequestIntent{
+		Shape:         browsers.ShapeInteraction,
+		StateChanging: true,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		resolvedBrowser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	browserTarget, err := config.ResolveBrowserToTarget(h.Config, resolvedBrowser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg := h.resolveEffectiveConfig(browserTarget)
+
+	req.Browser = resolvedBrowser
 
 	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
 	if req.Kind == "" {
@@ -141,7 +199,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActionRequest(r, req)
-	if !h.shouldUseLiteAction(req) {
+	if !h.shouldUseStaticAction(req) {
 		if available := h.Bridge.AvailableActions(); len(available) > 0 {
 			known := false
 			for _, k := range available {
@@ -157,11 +215,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Resolve tab — skip for lite actions (lite engine manages its own tabs)
-	useLiteAction := h.shouldUseLiteAction(req)
+	// Resolve tab — skip for static actions (static browser manages its own tabs)
+	useStaticAction := h.shouldUseStaticAction(req)
 	var resolvedTabID string
 	var ctx context.Context
-	if useLiteAction {
+	if useStaticAction {
 		ctx = r.Context()
 		resolvedTabID = req.TabID
 	} else {
@@ -192,7 +250,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(activity.HeaderPTTabID, resolvedTabID)
 
 	// Allow custom timeout via query param (1-60 seconds)
-	actionTimeout := h.Config.ActionTimeout
+	actionTimeout := effectiveCfg.ActionTimeout
 	if r.Method == http.MethodGet {
 		if v := r.URL.Query().Get("timeout"); v != "" {
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
@@ -209,7 +267,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	// Unified selector resolution: normalize legacy ref/selector fields
 	// and resolve browser/semantic selectors to node IDs when possible.
-	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, useLiteAction, &req)
+	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, useStaticAction, &req)
 	if err != nil {
 		httpx.Error(w, selectorResolution.httpStatus(), err)
 		return
@@ -219,7 +277,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// Cache intent before execution so recovery can reconstruct the query.
 	// Only cache when the ref IS in the snapshot — otherwise we'd overwrite
 	// the richer /find-cached entry (which has the Query) with a blank one.
-	if !useLiteAction && req.Ref != "" && h.Recovery != nil && !refMissing {
+	if !useStaticAction && req.Ref != "" && h.Recovery != nil && !refMissing {
 		h.cacheActionIntent(resolvedTabID, req)
 	}
 
@@ -227,7 +285,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// returning 404. This handles the common case where a page reload
 	// cleared the snapshot (DeleteRefCache) but the intent is still cached.
 	var result map[string]any
-	var engineName string
+	var actionBackend string
 	var actionErr error
 	var recoveryResult *recovery.RecoveryResult
 
@@ -250,7 +308,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 404, fmt.Errorf("ref %s not found - take a /snapshot first", req.Ref))
 		return
 	} else {
-		result, engineName, actionErr = h.executeAction(tCtx, req)
+		result, actionBackend, actionErr = h.executeAction(tCtx, req)
 		if actionErr != nil && shouldRetryPointerAction(req, actionErr) {
 			if req.Ref != "" && shouldRetryStaleRef(actionErr) {
 				recordStaleRefRetry()
@@ -263,7 +321,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			}
 			h.refreshActionNodeIDFromSelector(tCtx, &req)
 			time.Sleep(pointerRetryDelay)
-			result, engineName, actionErr = h.executeAction(tCtx, req)
+			result, actionBackend, actionErr = h.executeAction(tCtx, req)
 		}
 		// Semantic self-healing: if stale-ref retry still failed, attempt
 		// recovery via the semantic matcher.
@@ -296,11 +354,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			httpx.ErrorCode(w, 409, "navigation_changed", actionErr.Error(), false, nil)
 			return
 		}
-		if errors.Is(actionErr, engine.ErrLiteNotSupported) {
+		if errors.Is(actionErr, staticfetch.ErrStaticNotSupported) {
 			httpx.ErrorCode(w, http.StatusNotImplemented, "not_supported", actionErr.Error(), false, nil)
 			return
 		}
-		if engine.IsIDPIBlocked(actionErr) {
+		if browserops.IsIDPIBlocked(actionErr) {
 			httpx.ErrorCode(w, http.StatusForbidden, "idpi_blocked", actionErr.Error(), false, nil)
 			return
 		}
@@ -329,10 +387,10 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if engineName == "" {
-		engineName = "chrome"
+	if actionBackend == "" {
+		actionBackend = "chrome"
 	}
-	if engineName != "lite" {
+	if actionBackend != "static" {
 		h.maybeAutoSolve(tCtx, resolvedTabID, autoSolverTriggerAction)
 		// Banner dismissal only makes sense when the click triggered a
 		// navigation (waitNav settles us on a fresh page). Without waitNav we
@@ -349,9 +407,17 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(activity.HeaderPTTabID, switched)
 		h.recordResolvedTab(r, switched)
 	}
-	w.Header().Set("X-Engine", engineName)
-	h.recordEngine(r, engineName)
-	resp := map[string]any{"success": true, "result": result}
+	actionRoute := browserops.SingleBrowserRoute(resolvedBrowser)
+	actionRoute.Attempts = append(actionRoute.Attempts, browserops.RouteAttempt{
+		Browser:  resolvedBrowser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		actionRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: actionRoute})
+	resp := map[string]any{"success": true, "result": result, "route": actionRoute}
 	if recoveryResult != nil {
 		resp["recovery"] = recoveryResult
 	}
@@ -446,12 +512,65 @@ func (h *Handlers) HandleTabActions(w http.ResponseWriter, r *http.Request) {
 // handleActionsBatch processes a batch of actions (used by both single and batch endpoints)
 func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, req actionsRequest) {
 
+	// Browser resolution: use the first action's browser field as the request
+	// browser, then fall through session > instance > global default > chrome.
+	var requestBrowser string
+	if len(req.Actions) > 0 {
+		requestBrowser = strings.TrimSpace(req.Actions[0].Browser)
+	}
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
+	if req.TabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(req.TabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
+	resolvedBrowser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if resolvedBrowser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(resolvedBrowser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+	handleDecision, err := checkBrowserCanHandle(resolvedBrowser, browsers.RequestIntent{
+		Shape:         browsers.ShapeInteraction,
+		StateChanging: true,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		resolvedBrowser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	batchBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, resolvedBrowser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg := h.resolveEffectiveConfig(batchBrowserTarget)
+
 	// Use lite tab resolution only when every action can stay on the lite path.
-	allLite := h.Router != nil && h.Router.Mode() == engine.ModeLite
-	if allLite {
+	allStatic := h.StaticBrowser != nil
+	if allStatic {
 		for _, action := range req.Actions {
-			if !h.shouldUseLiteAction(action) {
-				allLite = false
+			if !h.shouldUseStaticAction(action) {
+				allStatic = false
 				break
 			}
 		}
@@ -459,7 +578,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	var ctx context.Context
 	var resolvedTabID string
 	owner := resolveOwner(r, req.Owner)
-	if allLite {
+	if allStatic {
 		ctx = r.Context()
 		resolvedTabID = req.TabID
 	} else {
@@ -479,7 +598,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	for i, action := range req.Actions {
 		if action.TabID == "" {
 			action.TabID = resolvedTabID
-		} else if !allLite && action.TabID != resolvedTabID {
+		} else if !allStatic && action.TabID != resolvedTabID {
 			var err error
 			ctx, resolvedTabID, err = h.tabContext(r, action.TabID)
 			if err != nil {
@@ -500,7 +619,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				continue
 			}
 		}
-		if !allLite {
+		if !allStatic {
 			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 				return
 			}
@@ -513,10 +632,10 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			}
 		}
 
-		tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-		useLiteAction := h.shouldUseLiteAction(action)
+		tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
+		useStaticAction := h.shouldUseStaticAction(action)
 
-		selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, resolvedTabID, useLiteAction, &action)
+		selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, resolvedTabID, useStaticAction, &action)
 		if resolveErr != nil {
 			tCancel()
 			results = append(results, actionResult{
@@ -544,7 +663,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		// Cache intent before execution so recovery can reconstruct the query.
 		// Only cache when the ref IS in the snapshot to avoid overwriting
 		// the richer /find-cached entry (which has the Query).
-		if !useLiteAction && action.Ref != "" && h.Recovery != nil && !refMissing {
+		if !useStaticAction && action.Ref != "" && h.Recovery != nil && !refMissing {
 			h.cacheActionIntent(resolvedTabID, action)
 		}
 
@@ -613,7 +732,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			}
 		}
 		tCancel()
-		if err == nil && !allLite {
+		if err == nil && !allStatic {
 			if switched := switchedTabFromActionResult(actionRes); switched != "" {
 				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
 				if switchErr != nil {
@@ -658,15 +777,27 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	}
 
 	successful := countSuccessful(results)
-	if !allLite && successful > 0 {
+	if !allStatic && successful > 0 {
 		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
 	}
+
+	batchRoute := browserops.SingleBrowserRoute(resolvedBrowser)
+	batchRoute.Attempts = append(batchRoute.Attempts, browserops.RouteAttempt{
+		Browser:  resolvedBrowser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		batchRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: batchRoute})
 
 	httpx.JSON(w, 200, map[string]any{
 		"results":    results,
 		"total":      len(req.Actions),
 		"successful": successful,
 		"failed":     len(req.Actions) - successful,
+		"route":      batchRoute,
 	})
 }
 
@@ -693,23 +824,77 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owner := resolveOwner(r, req.Owner)
-	stepTimeout := h.Config.ActionTimeout
+
+	// Browser resolution: use the first step's browser field as the request
+	// browser, then fall through session > instance > global default > chrome.
+	var macroRequestBrowser string
+	if len(req.Steps) > 0 {
+		macroRequestBrowser = strings.TrimSpace(req.Steps[0].Browser)
+	}
+	var macroSessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		macroSessionBrowser = sess.Browser
+	}
+	var macroInstanceBrowser string
+	if req.TabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(req.TabID); ok && inst != nil && inst.Browser != "" {
+			macroInstanceBrowser = inst.Browser
+		}
+	}
+	macroResolvedBrowser := config.ResolveBrowser(macroRequestBrowser, macroSessionBrowser, macroInstanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if macroResolvedBrowser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(macroResolvedBrowser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+	macroHandleDecision, err := checkBrowserCanHandle(macroResolvedBrowser, browsers.RequestIntent{
+		Shape:         browsers.ShapeInteraction,
+		StateChanging: true,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if macroHandleDecision.Decision == browsers.DecisionSkip {
+		macroResolvedBrowser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	macroBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, macroResolvedBrowser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	// Resolve the effective config with target-specific overrides merged in.
+	macroEffectiveCfg := h.resolveEffectiveConfig(macroBrowserTarget)
+
+	stepTimeout := macroEffectiveCfg.ActionTimeout
 	if req.StepTimeout > 0 && req.StepTimeout <= 60 {
 		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
 	}
 
-	allLiteMacro := h.Router != nil && h.Router.Mode() == engine.ModeLite
-	if allLiteMacro {
+	allStaticMacro := h.StaticBrowser != nil
+	if allStaticMacro {
 		for _, step := range req.Steps {
-			if !h.shouldUseLiteAction(step) {
-				allLiteMacro = false
+			if !h.shouldUseStaticAction(step) {
+				allStaticMacro = false
 				break
 			}
 		}
 	}
 	var ctx context.Context
 	var resolvedTabID string
-	if allLiteMacro {
+	if allStaticMacro {
 		ctx = r.Context()
 		resolvedTabID = req.TabID
 	} else {
@@ -730,7 +915,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		if step.TabID == "" {
 			step.TabID = resolvedTabID
 		}
-		if !allLiteMacro {
+		if !allStaticMacro {
 			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
 				return
 			}
@@ -742,9 +927,9 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		useLiteAction := h.shouldUseLiteAction(step)
+		useStaticAction := h.shouldUseStaticAction(step)
 		selectorCtx, selectorCancel := context.WithTimeout(ctx, stepTimeout)
-		selectorResolution, resolveErr := h.resolveActionRequestSelector(selectorCtx, resolvedTabID, useLiteAction, &step)
+		selectorResolution, resolveErr := h.resolveActionRequestSelector(selectorCtx, resolvedTabID, useStaticAction, &step)
 		selectorCancel()
 		if resolveErr != nil {
 			results = append(results, actionResult{
@@ -761,7 +946,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		// Cache intent before execution so recovery can reconstruct the query.
 		// Only cache when the ref IS in the snapshot to avoid overwriting
 		// the richer /find-cached entry (which has the Query).
-		if !useLiteAction && step.Ref != "" && h.Recovery != nil && !stepRefMissing {
+		if !useStaticAction && step.Ref != "" && h.Recovery != nil && !stepRefMissing {
 			h.cacheActionIntent(resolvedTabID, step)
 		}
 
@@ -831,7 +1016,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cancel()
-		if err == nil && !allLiteMacro {
+		if err == nil && !allStaticMacro {
 			if switched := switchedTabFromActionResult(res); switched != "" {
 				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
 				if switchErr != nil {
@@ -866,9 +1051,20 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	}
 
 	successful := countSuccessful(results)
-	if !allLiteMacro && successful > 0 {
+	if !allStaticMacro && successful > 0 {
 		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
 	}
+
+	macroRoute := browserops.SingleBrowserRoute(macroResolvedBrowser)
+	macroRoute.Attempts = append(macroRoute.Attempts, browserops.RouteAttempt{
+		Browser:  macroResolvedBrowser,
+		Accepted: macroHandleDecision.Decision == browsers.DecisionHandle,
+		Reason:   macroHandleDecision.Reason,
+	})
+	if macroRequestBrowser != "" {
+		macroRoute.RequestedBrowser = macroRequestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: macroRoute})
 
 	httpx.JSON(w, 200, map[string]any{
 		"kind":       "macro",
@@ -876,5 +1072,6 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		"total":      len(req.Steps),
 		"successful": successful,
 		"failed":     len(req.Steps) - successful,
+		"route":      macroRoute,
 	})
 }

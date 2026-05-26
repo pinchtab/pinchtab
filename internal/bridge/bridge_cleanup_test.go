@@ -178,8 +178,8 @@ func TestCleanup_CloakTermBeforeKill(t *testing.T) {
 
 	ctx := context.TODO()
 	b := New(ctx, ctx, &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
-		ProfileDir:      "/tmp/pinchtab-test-profile",
+		DefaultBrowser: config.BrowserCloak,
+		ProfileDir:     "/tmp/pinchtab-test-profile",
 	})
 	b.Cleanup()
 

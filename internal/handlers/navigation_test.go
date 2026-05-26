@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
@@ -102,7 +103,7 @@ func TestValidateNavigateTarget_AllowsLocalHosts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("validateNavigateTarget(%q) error = %v", rawURL, err)
 		}
-		if target == nil || !target.allowInternal {
+		if target == nil || !target.AllowInternal {
 			t.Fatalf("validateNavigateTarget(%q) should allow local targets", rawURL)
 		}
 	}
@@ -176,11 +177,11 @@ func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted
 	if target == nil {
 		t.Fatal("validateNavigateTarget returned nil target")
 	}
-	if target.allowInternal {
+	if target.AllowInternal {
 		t.Fatal("allowlisted private targets should not disable redirect/internal-IP runtime guards")
 	}
-	if len(target.trustedResolvedIP) != 1 || target.trustedResolvedIP[0] != netip.MustParseAddr("172.18.0.5") {
-		t.Fatalf("trustedResolvedIP = %v, want [172.18.0.5]", target.trustedResolvedIP)
+	if len(target.TrustedResolvedIP) != 1 || target.TrustedResolvedIP[0] != netip.MustParseAddr("172.18.0.5") {
+		t.Fatalf("trustedResolvedIP = %v, want [172.18.0.5]", target.TrustedResolvedIP)
 	}
 }
 
@@ -198,7 +199,7 @@ func TestValidateNavigateURL_AllowsHTTPHTTPSAndBareHostnames(t *testing.T) {
 }
 
 func TestValidateNavigateURL_RejectsOverlongURL(t *testing.T) {
-	rawURL := "https://pinchtab.com/" + strings.Repeat("a", maxNavigateURLLen)
+	rawURL := "https://pinchtab.com/" + strings.Repeat("a", navguard.MaxURLLen)
 	if err := validateNavigateURL(rawURL); err == nil {
 		t.Fatal("validateNavigateURL should reject overlong urls")
 	}
@@ -248,11 +249,11 @@ func TestValidateNavigateTarget_AllowsPrivateIPWithTrustedResolveCIDR(t *testing
 	if err != nil {
 		t.Fatalf("expected trusted CIDR to allow private IP, got %v", err)
 	}
-	if target == nil || target.allowInternal {
+	if target == nil || target.AllowInternal {
 		t.Fatal("trusted CIDR override should not set allowInternal (runtime guard should still be active)")
 	}
-	if len(target.trustedResolvedIP) != 1 || target.trustedResolvedIP[0] != netip.MustParseAddr("10.0.0.5") {
-		t.Fatalf("expected exact trusted resolved IPs to be captured, got %v", target.trustedResolvedIP)
+	if len(target.TrustedResolvedIP) != 1 || target.TrustedResolvedIP[0] != netip.MustParseAddr("10.0.0.5") {
+		t.Fatalf("expected exact trusted resolved IPs to be captured, got %v", target.TrustedResolvedIP)
 	}
 }
 
@@ -385,7 +386,7 @@ func TestHandleNavigate_AllowsResolvedPrivateIPWhenIDPIAllowlisted(t *testing.T)
 
 func TestHandleNavigate_RejectsOverlongURL(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
-	longURL := "https://pinchtab.com/" + strings.Repeat("a", maxNavigateURLLen)
+	longURL := "https://pinchtab.com/" + strings.Repeat("a", navguard.MaxURLLen)
 
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"`+longURL+`"}`)))
 	w := httptest.NewRecorder()

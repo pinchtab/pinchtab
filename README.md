@@ -411,8 +411,8 @@ For runtime diagnostics against your installed PinchTab + browser config (binary
 ```bash
 pinchtab doctor             # human-readable report
 pinchtab doctor --json      # machine-readable
-pinchtab doctor --target <name>   # scope to one browser.targets entry
 pinchtab doctor --check <name>    # run a single check by name
+pinchtab doctor browser <name>    # scope to one browser.targets entry
 ```
 
 ---

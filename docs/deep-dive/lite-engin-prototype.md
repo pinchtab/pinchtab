@@ -1,5 +1,10 @@
 # Lite Engine: Chrome-Free DOM Capture using Gost-DOM
 
+> **Deprecated:** This document describes the legacy engine model (`chrome`/`lite`/`auto`).
+> The engine has been replaced by the **browser provider** model. Use `browsers.default`
+> in your config with providers: `chrome`, `cloak`, or `ghost-chrome`.
+> See [terminology](../architecture/terminology.md) for details.
+
 **Branch:** `feat/lite-engine-gostdom`
 **Issue:** [#201](https://github.com/pinchtab/pinchtab/issues/201)
 **Related Draft PR:** [#200](https://github.com/pinchtab/pinchtab/pull/200)

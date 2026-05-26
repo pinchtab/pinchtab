@@ -10,13 +10,14 @@ import (
 )
 
 type Args struct {
-	Suite    string
-	Filter   string
-	Test     string
-	Extra    string
-	Logs     string
-	Provider string
-	DryRun   bool
+	Suite     string
+	Filter    string
+	Test      string
+	Extra     string
+	Logs      string
+	Provider  string
+	Providers []string // resolved list; len>1 means matrix mode
+	DryRun    bool
 }
 
 var errHelp = errors.New("help requested")
@@ -33,10 +34,15 @@ Options:
   --filter TEXT          Filter scenario file names, groups, tiers, helpers, or tags
   --test TEXT            Run one start_test block by name
   --extra FILES          Add extra scenario files, space-separated
-  --logs show|hide       Control compose build/runner output
-  --provider chrome|cloak
-                         Select browser provider (default: chrome). Cloak builds
-                         pinchtab-cloakbrowser:test unless SKIP_BUILD=1 is set.
+  --logs compact|show|hide
+                         Control output verbosity (default: compact).
+                         compact: single-line progress per step.
+                         show: full streaming output. hide: alias for compact.
+  --browser chrome|cloak|ghost-chrome|all
+                         Select browser (default: chrome). Use "all" or
+                         comma-separated names to run a browser matrix. Cloak
+                         builds pinchtab-cloakbrowser:test unless SKIP_BUILD=1.
+                         ghost-chrome uses Chrome with static routing.
   --dry-run              Print the compose plan without running it
   --help, -h             Show this help
 `
@@ -53,12 +59,57 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// Matrix mode: run once per provider, tearing down between each.
+	if len(args.Providers) > 1 {
+		return runProviderMatrix(args, stdout, stderr)
+	}
+
 	r, err := NewRunner(args, stdout, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "e2e: %v\n", err)
 		return 1
 	}
 	return r.Run()
+}
+
+// runProviderMatrix iterates over each provider in args.Providers, runs
+// the full suite for that provider, and reports a combined result.
+func runProviderMatrix(args Args, stdout, stderr io.Writer) int {
+	_, _ = fmt.Fprintf(stdout, "runner e2e (Go) - browser matrix: %s\n\n",
+		strings.Join(args.Providers, ", "))
+
+	worstCode := 0
+	for i, provider := range args.Providers {
+		if i > 0 {
+			_, _ = fmt.Fprintln(stdout, "")
+			_, _ = fmt.Fprintln(stdout, strings.Repeat("─", 60))
+		}
+		_, _ = fmt.Fprintf(stdout, "== browser matrix [%d/%d]: %s ==\n\n",
+			i+1, len(args.Providers), provider)
+
+		single := args
+		single.Provider = provider
+		single.Providers = []string{provider}
+
+		r, err := NewRunner(single, stdout, stderr)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "e2e: browser %s: %v\n", provider, err)
+			worstCode = 1
+			continue
+		}
+		if code := r.Run(); code != 0 {
+			worstCode = code
+		}
+	}
+
+	_, _ = fmt.Fprintln(stdout, "")
+	if worstCode == 0 {
+		_, _ = fmt.Fprintf(stdout, "Browser matrix completed: all %d browsers passed\n",
+			len(args.Providers))
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Browser matrix completed: one or more browsers failed\n")
+	}
+	return worstCode
 }
 
 func ParseArgs(argv []string) (Args, error) {
@@ -115,7 +166,7 @@ func ParseArgs(argv []string) (Args, error) {
 				return args, err
 			}
 			args.Logs = v
-		case "--provider":
+		case "--browser":
 			v, err := next(&i, arg)
 			if err != nil {
 				return args, err
@@ -134,20 +185,45 @@ func ParseArgs(argv []string) (Args, error) {
 	}
 	if args.Logs != "" {
 		switch args.Logs {
-		case "show", "hide":
+		case "show", "hide", "compact":
 		default:
-			return args, fmt.Errorf("--logs must be show or hide")
+			return args, fmt.Errorf("--logs must be compact, show, or hide")
 		}
 	}
 	if args.Provider == "" {
 		args.Provider = "chrome"
 	}
-	switch args.Provider {
-	case "chrome", "cloak":
-	default:
-		return args, fmt.Errorf("--provider must be chrome or cloak (got %q)", args.Provider)
+	args.Providers = resolveProviderList(args.Provider)
+	if len(args.Providers) == 0 {
+		return args, fmt.Errorf("--browser must be chrome, cloak, ghost-chrome, all, or a comma-separated list (got %q)", args.Provider)
+	}
+	for _, p := range args.Providers {
+		switch p {
+		case "chrome", "cloak", "ghost-chrome":
+		default:
+			return args, fmt.Errorf("--browser list contains unknown browser %q (got %q)", p, args.Provider)
+		}
 	}
 	return args, nil
+}
+
+// resolveProviderList expands the --browser value into a deduplicated
+// ordered list.  "all" expands to ["chrome","cloak","ghost-chrome"].
+func resolveProviderList(raw string) []string {
+	if raw == "all" {
+		return []string{"chrome", "cloak", "ghost-chrome"}
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 func normalizeSuite(raw string) (string, error) {

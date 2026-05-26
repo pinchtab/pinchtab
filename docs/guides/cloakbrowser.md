@@ -12,12 +12,12 @@ agent -> PinchTab API -> PinchTab bridge -> CloakBrowser Chromium
 
 PinchTab can launch a user-installed CloakBrowser binary with:
 
-- `browser.provider=cloak`
+- `browsers.default=cloak`
 - `browser.binary=/absolute/path/to/cloakbrowser/chrome`
 - structured fingerprint settings under `browser.cloak`
 - PinchTab profile directories, tab lifecycle, screenshots, snapshots, actions,
   downloads, uploads, clipboard, and evaluate endpoints
-- `/stealth/status` reporting for the active provider, native Cloak mode, and
+- `/stealth/status` reporting for the active browser, native Cloak mode, and
   PinchTab overlay status
 
 When `browser.cloak.disableDefaultStealthArgs=true`, PinchTab disables its
@@ -92,7 +92,7 @@ Create or update your PinchTab config:
 
 ```bash
 pinchtab config init
-pinchtab config set browser.provider cloak
+pinchtab config set browsers.default cloak      # CLI: --browser=cloak
 pinchtab config set browser.binary /absolute/path/to/cloakbrowser/chrome
 pinchtab config set browser.cloak.fingerprintSeed 42069
 pinchtab config set browser.cloak.platform windows
@@ -104,8 +104,10 @@ Example config fragment:
 
 ```json
 {
+  "browsers": {
+    "default": "cloak"
+  },
   "browser": {
-    "provider": "cloak",
     "binary": "/absolute/path/to/cloakbrowser/chrome",
     "cloak": {
       "fingerprintSeed": "42069",
@@ -147,8 +149,10 @@ structured PinchTab field.
 
 ```json
 {
+  "browsers": {
+    "default": "cloak"
+  },
   "browser": {
-    "provider": "cloak",
     "binary": "/absolute/path/to/cloakbrowser/chrome",
     "cloak": {
       "fingerprintSeed": "42069",
@@ -191,7 +195,7 @@ without mutating any state:
 ```bash
 pinchtab doctor                       # human-readable report
 pinchtab doctor --json                # machine-readable JSON
-pinchtab doctor --target cloak-eu     # scope to one browser.targets entry
+pinchtab doctor browser cloak-eu      # scope to one browser.targets entry
 pinchtab doctor --check binary_exists # run a single check by name
 ```
 
@@ -260,8 +264,10 @@ image:
     "token": "replace-me",
     "stateDir": "/data"
   },
+  "browsers": {
+    "default": "cloak"
+  },
   "browser": {
-    "provider": "cloak",
     "binary": "/opt/cloakbrowser/chrome",
     "cloak": {
       "fingerprintSeed": "42069",
@@ -303,10 +309,10 @@ binary license explicitly permits redistribution for your use case.
 Project maintainers can validate the Docker integration with:
 
 ```bash
-./dev e2e --provider=cloak
+./dev e2e --browser=cloak
 ```
 
-That command swaps the runtime config to `browser.provider=cloak`
+That command swaps the runtime browser to `browsers.default=cloak`
 (`/opt/cloakbrowser/chrome`, `fingerprintSeed=42069`,
 `disableDefaultStealthArgs=true`), reuses the prebuilt
 `pinchtab-cloakbrowser:test` image (build it once via
@@ -316,7 +322,7 @@ auto-build it), asserts `/stealth/status` reports
 fingerprintSeed=42069`, and runs the full E2E suite against the cloak
 container.
 
-Use `./dev smoke --provider=cloak` for the full local CloakBrowser smoke set.
+Use `./dev smoke --browser=cloak` for the full local CloakBrowser smoke set.
 Use `./dev smoke cloakbrowser` when you only need the specialized parity legs,
 including `--multi-target`, `--profile-persistence`, and
 `--profile-lock-recovery`.
@@ -342,7 +348,7 @@ curl -X POST http://localhost:9867/instances/attach \
 For a remote CloakBrowser attach:
 
 - `browserTarget` should name a CloakBrowser target when `browser.targets` is configured; if omitted, the configured default target is used
-- `provider` must be `cloak` when no browser target is configured, or must match the selected target when both fields are present
+- `provider` in the JSON body must be `cloak` when no browser target is configured, or must match the selected target when both fields are present
 - `/stealth/status` reports `provider=cloak`, `launchMode=remote-cdp`,
   `native=true`, and `pinchtabOverlaysDisabled=true` — PinchTab does not inject
   its JS fingerprint overlays, on the assumption the external browser owns
@@ -458,16 +464,16 @@ Chromium versions drift, and per-site signals evolve independently of any
 single component.
 
 To investigate, re-run the live-detection smoke against the configured
-provider:
+browser:
 
 ```bash
 ./dev smoke live-detection                       # Chrome leg (baseline)
-./dev smoke live-detection --provider=chrome
-./dev smoke live-detection --provider=cloak
+./dev smoke live-detection --browser=chrome
+./dev smoke live-detection --browser=cloak
 ```
 
 The smoke captures per-site screenshots and an extracted summary into
-`./tests/e2e/results/live-detection/<provider>-<timestamp>/`. Compare the cloak run
+`./tests/e2e/results/live-detection/<browser>-<timestamp>/`. Compare the cloak run
 against the chrome baseline: a non-zero cloak score that matches the
 Chrome baseline indicates a generic Chromium signal, not a CloakBrowser
 regression. Re-run the smoke after upstream CloakBrowser or detector

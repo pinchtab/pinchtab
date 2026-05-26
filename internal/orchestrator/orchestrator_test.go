@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
+
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -525,9 +527,9 @@ func TestOrchestrator_AttachWithProviderRejectsUnknownProvider(t *testing.T) {
 
 	_, err := o.AttachWithProvider("ext-cloak", "ws://127.0.0.1:9222/devtools/browser/abc", "cloack")
 	if err == nil {
-		t.Fatal("expected invalid browser provider error")
+		t.Fatal("expected unknown browser error")
 	}
-	if !strings.Contains(err.Error(), "invalid browser provider") {
+	if !strings.Contains(err.Error(), "unknown browser") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if runner.runCalled {
@@ -617,26 +619,23 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesBrowserTarget(t *testing.T) 
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 	now := time.Now()
 	o.instances["chrome"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", BrowserTarget: "chrome", StartTime: now},
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Target: "chrome", StartTime: now},
 		URL:      "http://chrome.local",
 		cmd:      &mockCmd{pid: 111, isAlive: true},
 	}
 	o.instances["cloak"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", BrowserTarget: "cloak", StartTime: now.Add(time.Second)},
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Target: "cloak", StartTime: now.Add(time.Second)},
 		URL:      "http://cloak.local",
 		cmd:      &mockCmd{pid: 222, isAlive: true},
 	}
 
-	body := []byte(`{"url":"about:blank","browserTarget":"cloak"}`)
-	req := httptest.NewRequest(http.MethodPost, "/navigate", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.ContentLength = int64(len(body))
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
 
 	url, status, err := o.FirstRunningURLForRequest(req)
 	if err != nil {
@@ -656,18 +655,18 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesDefaultTargetWhenOmitted(t *
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "cloak",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 	now := time.Now()
 	o.instances["chrome"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", BrowserTarget: "chrome", StartTime: now},
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Target: "chrome", StartTime: now},
 		URL:      "http://chrome.local",
 		cmd:      &mockCmd{pid: 111, isAlive: true},
 	}
 	o.instances["cloak"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", BrowserTarget: "cloak", StartTime: now.Add(time.Second)},
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Target: "cloak", StartTime: now.Add(time.Second)},
 		URL:      "http://cloak.local",
 		cmd:      &mockCmd{pid: 222, isAlive: true},
 	}
@@ -682,19 +681,21 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesDefaultTargetWhenOmitted(t *
 	}
 }
 
-func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowserTarget(t *testing.T) {
+func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowser(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
-		DefaultTarget: "chrome",
+		DefaultTarget: "cloak-1",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
+			"cloak-1": {Provider: config.BrowserCloak},
 		},
 	})
-	req := httptest.NewRequest(http.MethodGet, "/navigate?browserTarget=ghost", nil)
+	// "ghost" normalizes to "chrome" via NormalizeBrowser, but no target
+	// has provider "chrome" in this config → no match → 400.
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=ghost", nil)
 
 	_, status, err := o.FirstRunningURLForRequest(req)
 	if err == nil {
-		t.Fatal("expected unknown browserTarget error")
+		t.Fatal("expected unknown browser error")
 	}
 	if status != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
@@ -706,15 +707,15 @@ func TestOrchestrator_FirstRunningURLForRequest_RequestedTargetNotRunningConflic
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
-	req := httptest.NewRequest(http.MethodGet, "/navigate?browserTarget=cloak", nil)
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=cloak", nil)
 
 	_, status, err := o.FirstRunningURLForRequest(req)
 	if err == nil {
-		t.Fatal("expected no-running browserTarget error")
+		t.Fatal("expected no-running browser error")
 	}
 	if status != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", status)
@@ -799,20 +800,20 @@ func TestOrchestrator_AttachBridgeWithOptions_UpsertUpdatesBrowserTarget(t *test
 		AttachAllowHosts:   []string{"10.0.0.8", "10.0.0.9"},
 		DefaultTarget:      "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 
-	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{BrowserTarget: "chrome"})
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{ResolvedTarget: "chrome"})
 	if err != nil {
 		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
 	}
-	if first.BrowserTarget != "chrome" || first.BrowserProvider != config.BrowserProviderChrome {
-		t.Fatalf("first target/provider = %q/%q, want chrome/chrome", first.BrowserTarget, first.BrowserProvider)
+	if first.Target != "chrome" || first.BrowserProvider != config.BrowserChrome {
+		t.Fatalf("first target/provider = %q/%q, want chrome/chrome", first.Target, first.BrowserProvider)
 	}
 
-	second, created, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.9:9868", "bridge-token", AttachOptions{BrowserTarget: "cloak"})
+	second, created, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.9:9868", "bridge-token", AttachOptions{ResolvedTarget: "cloak"})
 	if err != nil {
 		t.Fatalf("second AttachBridgeWithOptions failed: %v", err)
 	}
@@ -822,16 +823,16 @@ func TestOrchestrator_AttachBridgeWithOptions_UpsertUpdatesBrowserTarget(t *test
 	if second.ID != first.ID {
 		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
 	}
-	if second.BrowserTarget != "cloak" || second.BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("second target/provider = %q/%q, want cloak/cloak", second.BrowserTarget, second.BrowserProvider)
+	if second.Target != "cloak" || second.BrowserProvider != config.BrowserCloak {
+		t.Fatalf("second target/provider = %q/%q, want cloak/cloak", second.Target, second.BrowserProvider)
 	}
 
 	list := o.List()
 	if len(list) != 1 {
 		t.Fatalf("expected 1 instance in list, got %d", len(list))
 	}
-	if list[0].BrowserTarget != "cloak" || list[0].BrowserProvider != config.BrowserProviderCloak {
-		t.Fatalf("listed target/provider = %q/%q, want cloak/cloak", list[0].BrowserTarget, list[0].BrowserProvider)
+	if list[0].Target != "cloak" || list[0].BrowserProvider != config.BrowserCloak {
+		t.Fatalf("listed target/provider = %q/%q, want cloak/cloak", list[0].Target, list[0].BrowserProvider)
 	}
 }
 
@@ -844,12 +845,12 @@ func TestOrchestrator_AttachBridge_UpsertWithoutTargetPreservesExistingBrowserTa
 		AttachAllowHosts:   []string{"10.0.0.8", "10.0.0.9"},
 		DefaultTarget:      "chrome",
 		Targets: config.BrowserTargetsConfig{
-			"chrome": {Provider: config.BrowserProviderChrome},
-			"cloak":  {Provider: config.BrowserProviderCloak},
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
 
-	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{BrowserTarget: "cloak"})
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{ResolvedTarget: "cloak"})
 	if err != nil {
 		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
 	}
@@ -863,10 +864,10 @@ func TestOrchestrator_AttachBridge_UpsertWithoutTargetPreservesExistingBrowserTa
 	if second.ID != first.ID {
 		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
 	}
-	if second.BrowserTarget != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want preserved cloak", second.BrowserTarget)
+	if second.Target != "cloak" {
+		t.Fatalf("Target = %q, want preserved cloak", second.Target)
 	}
-	if second.BrowserProvider != config.BrowserProviderCloak {
+	if second.BrowserProvider != config.BrowserCloak {
 		t.Fatalf("BrowserProvider = %q, want preserved cloak", second.BrowserProvider)
 	}
 }
@@ -1100,6 +1101,67 @@ func TestOrchestrator_RegisterHandlers_CacheRoutes(t *testing.T) {
 		if pattern != rt.route {
 			t.Errorf("expected route %q for %s %s, got %q", rt.route, rt.method, rt.path, pattern)
 		}
+	}
+}
+
+func TestOrchestrator_LaunchWithOptions_BrowserFieldSet(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	inst, err := o.LaunchWithOptions("browser-test", "9050", true, LaunchOptions{
+		Browser: "cloak",
+	})
+	if err != nil {
+		t.Fatalf("Launch with Browser=cloak failed: %v", err)
+	}
+	if inst.Browser != "cloak" {
+		t.Fatalf("Browser = %q, want %q", inst.Browser, "cloak")
+	}
+}
+
+func TestOrchestrator_LaunchWithOptions_BrowserFieldEmpty(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	inst, err := o.LaunchWithOptions("browser-empty", "9051", true, LaunchOptions{})
+	if err != nil {
+		t.Fatalf("Launch with empty Browser failed: %v", err)
+	}
+	if inst.Browser != "" {
+		t.Fatalf("Browser = %q, want empty", inst.Browser)
+	}
+}
+
+func TestOrchestrator_LaunchWithOptions_BrowserFieldInvalid(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	_, err := o.LaunchWithOptions("browser-invalid", "9052", true, LaunchOptions{
+		Browser: "nonexistent-browser",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid browser, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid browser") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if runner.runCalled {
+		t.Fatal("runner should not have been called for invalid browser")
 	}
 }
 

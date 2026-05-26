@@ -1198,7 +1198,7 @@ func TestStatusWriter(t *testing.T) {
 
 func TestAuthMiddleware_SessionAuth(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	_, token, _ := store.Create("test-agent", "test")
+	_, token, _ := store.Create("test-agent", "test", "")
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
 	called := false
@@ -1222,7 +1222,7 @@ func TestAuthMiddleware_SessionAuth(t *testing.T) {
 
 func TestAuthMiddleware_SessionAuthRejectsDashboardAdminRoute(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	_, token, _ := store.Create("test-agent", "test")
+	_, token, _ := store.Create("test-agent", "test", "")
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
 	called := false
@@ -1246,7 +1246,7 @@ func TestAuthMiddleware_SessionAuthRejectsDashboardAdminRoute(t *testing.T) {
 
 func TestAuthMiddleware_SessionAuthWithoutGrantsAllowsNonAdminRoutes(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	_, token, _ := store.Create("test-agent", "test")
+	_, token, _ := store.Create("test-agent", "test", "")
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
 	called := false
@@ -1270,7 +1270,7 @@ func TestAuthMiddleware_SessionAuthWithoutGrantsAllowsNonAdminRoutes(t *testing.
 
 func TestAuthMiddleware_SessionAuthAllowsRevokeRouteToReachHandler(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	sessionID, token, _ := store.Create("test-agent", "test")
+	sessionID, token, _ := store.Create("test-agent", "test", "")
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
 	called := false
@@ -1294,7 +1294,7 @@ func TestAuthMiddleware_SessionAuthAllowsRevokeRouteToReachHandler(t *testing.T)
 
 func TestAuthMiddleware_SessionAuthHonorsBrowseGrant(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	sessionID, token, _ := store.Create("test-agent", "test")
+	sessionID, token, _ := store.Create("test-agent", "test", "")
 	sess, ok := store.Get(sessionID)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
@@ -1323,7 +1323,7 @@ func TestAuthMiddleware_SessionAuthHonorsBrowseGrant(t *testing.T) {
 
 func TestAuthMiddleware_SessionAuthRejectsRouteOutsideGrant(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	sessionID, token, _ := store.Create("test-agent", "test")
+	sessionID, token, _ := store.Create("test-agent", "test", "")
 	sess, ok := store.Get(sessionID)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
@@ -1352,7 +1352,7 @@ func TestAuthMiddleware_SessionAuthRejectsRouteOutsideGrant(t *testing.T) {
 
 func TestAuthMiddleware_ForbiddenSessionRequestDoesNotExtendIdleLifetime(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 100 * time.Millisecond, MaxLifetime: 24 * time.Hour})
-	sessionID, token, _ := store.Create("test-agent", "test")
+	sessionID, token, _ := store.Create("test-agent", "test", "")
 	sess, ok := store.Get(sessionID)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
@@ -1389,7 +1389,7 @@ func TestAuthMiddleware_ForbiddenSessionRequestDoesNotExtendIdleLifetime(t *test
 
 func TestAuthMiddleware_SessionAuthEnrichesActivity(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	sessionID, token, _ := store.Create("test-agent", "test")
+	sessionID, token, _ := store.Create("test-agent", "test", "")
 	rec := &activityCaptureRecorder{}
 
 	cfg := &config.RuntimeConfig{Token: "server-token"}
@@ -1418,7 +1418,7 @@ func TestAuthMiddleware_SessionAuthEnrichesActivity(t *testing.T) {
 
 func TestAuthMiddleware_SessionAttachesAuthenticatedSessionToContext(t *testing.T) {
 	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
-	_, token, _ := store.Create("test-agent", "test")
+	_, token, _ := store.Create("test-agent", "test", "")
 
 	var (
 		called     bool

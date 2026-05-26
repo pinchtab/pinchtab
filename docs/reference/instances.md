@@ -186,7 +186,7 @@ This is the fleet-wide tab listing endpoint. It is different from `GET /tabs`, w
 curl http://localhost:9867/instances/metrics
 ```
 
-## Attach An Existing Chrome Or CloakBrowser (CDP)
+## Attach An Existing Browser (CDP)
 
 ```bash
 curl -X POST http://localhost:9867/instances/attach \
@@ -219,10 +219,10 @@ Accepted `cdpUrl` shapes:
 Page-level URLs (`/devtools/page/...`) are rejected.
 
 `browserTarget` is optional. When `browser.targets` is configured, an omitted
-value attaches to the configured default target and the target provider is used.
+value attaches to the configured default target and the target's browser is used.
 When `browserTarget` is present, it must name a configured target. If `provider`
-is also present, it must match that target's provider. Without `browser.targets`,
-`provider` is `chrome` (default) or `cloak`; the cloak provider disables
+is also present, it must match that target's browser. Without `browser.targets`,
+`provider` is `chrome` (default) or `cloak`; the cloak browser disables
 PinchTab JS overlays on the assumption that the external browser owns native
 fingerprint behavior.
 

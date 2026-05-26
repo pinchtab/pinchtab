@@ -9,6 +9,7 @@ package runtime
 //   - Unknown providers: no-op.
 
 import (
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/geo"
 )
@@ -20,26 +21,20 @@ func applyGeoAlignment(provider string, info geo.Info, cloak config.CloakBrowser
 	if info.IsZero() {
 		return nil, nil
 	}
-	switch config.NormalizeBrowserProvider(provider) {
-	case config.BrowserProviderCloak:
-		return cloakGeoFlags(info, cloak), nil
-	default:
+	browserID := config.NormalizeBrowser(provider)
+	b, ok := browsers.Get(browserID)
+	if !ok {
 		return nil, nil
 	}
-}
-
-// Skips fields the operator has explicitly set on the Cloak config —
-// per-target intent (e.g. NY locale via London proxy) wins.
-func cloakGeoFlags(info geo.Info, cloak config.CloakBrowserRuntimeConfig) []string {
-	var flags []string
-	if info.Timezone != "" && cloak.Timezone == "" {
-		flags = append(flags, "--fingerprint-timezone="+info.Timezone)
+	gc := browsers.GeoConfig{
+		Timezone:         info.Timezone,
+		Locale:           info.Locale,
+		WebRTCIP:         info.WebRTCIP,
+		CountryISO:       info.CountryISO,
+		OperatorTimezone: cloak.Timezone,
+		OperatorLocale:   cloak.Locale,
+		OperatorWebRTCIP: cloak.WebRTCIP,
 	}
-	if info.Locale != "" && cloak.Locale == "" {
-		flags = append(flags, "--fingerprint-locale="+info.Locale)
-	}
-	if info.WebRTCIP != "" && cloak.WebRTCIP == "" {
-		flags = append(flags, "--fingerprint-webrtc-ip="+info.WebRTCIP)
-	}
-	return flags
+	gs := b.GeoAlignment(gc)
+	return gs.Flags, gs.Env
 }

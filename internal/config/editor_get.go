@@ -65,7 +65,7 @@ func getBrowserField(b *BrowserConfig, field string) (string, error) {
 	}
 	switch field {
 	case "provider":
-		return b.Provider, nil
+		return "", fmt.Errorf("browser.provider is no longer supported; use browsers.default")
 	case "version":
 		return b.ChromeVersion, nil
 	case "binary":

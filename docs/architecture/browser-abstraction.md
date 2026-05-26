@@ -18,7 +18,7 @@ Current branch points:
 | Doctor registry | `internal/doctor/runner.go` | `if IsCloakBrowserProvider()` adds checks |
 | Config validation | `internal/config/browser_targets.go` | Hardcoded `{chrome, cloak}` allowlist |
 
-`Engine` (`chrome` / `lite` / `auto`) and `Capabilities` are additional concepts layered on top, partially wired.
+`Engine` (`chrome` / `lite` / `auto`) — **deprecated**; replaced by the browser provider model (`chrome` / `cloak` / `ghost-chrome`). See [routing-contract.md](routing-contract.md) and [terminology.md](terminology.md) for the canonical provider definitions. `Capabilities` are additional concepts layered on top, partially wired.
 
 ## Goal
 
@@ -92,13 +92,21 @@ func init() { browsers.Register(&Browser{}) }
 
 Importers wire providers via a barrel file (e.g. `internal/browsers/all/all.go`) so callers get all built-ins with one blank import.
 
-### Engine as a launch mode, not a provider axis
+### Launch mode (deprecated engine axis)
 
-`Engine` becomes a field on `LaunchConfig`:
+> **Deprecation note:** The `chrome` / `lite` / `auto` engine values described
+> below are superseded by the browser provider model (`chrome` / `cloak` /
+> `ghost-chrome`). Provider routing now decides which browser handles a request
+> (see [routing-contract.md](routing-contract.md)). The `Mode` field on
+> `LaunchConfig` is retained only as an internal implementation detail for
+> controlling headful vs headless launch flags; it is no longer exposed as a
+> user-facing selection concept.
+
+`Mode` is a field on `LaunchConfig`:
 
 ```go
 type LaunchConfig struct {
-    Mode      LaunchMode  // "chrome" | "lite" | "auto"
+    Mode      LaunchMode  // "chrome" | "lite" | "auto" (internal only)
     Binary    string
     UserDir   string
     Proxy     ProxyConfig
@@ -194,7 +202,7 @@ Extract-then-rewire. Each step lands independently with no behavior change.
 4. **Doctor migration.** Move provider-specific checks into `browsers/{chrome,cloak}/doctor.go`. `doctor/runner.go` collapses to a registry walk.
 5. **Geo migration.** Replace `geo_align.go` switch with `b.GeoAlignment(...)` call. Delete `geo_align.go` body.
 6. **Validator migration.** Replace `browser_targets.go` allowlist with `browsers.Get(...)` check.
-7. **Engine integration.** Wire `LaunchMode` through `LaunchConfig`. `auto` resolution lives in the registry or a small helper.
+7. **Launch-mode integration.** Wire `LaunchMode` through `LaunchConfig` (internal only; the public-facing engine concept is replaced by browser provider routing). `auto` resolution lives in the registry or a small helper.
 8. **Validation by stub.** Add `browsers/lightpanda/` that registers but only stubs `BuildLaunchArgs` (returns "not implemented"). If wiring it requires editing anything outside `browsers/lightpanda/`, the abstraction has leaked — fix before merging.
 
 ## Non-goals

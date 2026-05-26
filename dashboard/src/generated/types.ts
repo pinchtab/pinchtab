@@ -52,11 +52,7 @@ export interface Instance {
   attachType?: string;
   cdpUrl?: string; // CDP WebSocket URL (for CDP-attached instances)
   securityPolicy?: SecurityPolicy;
-  /**
-   * BrowserTarget is the resolved named target; empty on legacy configs.
-   */
-  browserTarget?: string;
-  browserProvider?: string;
+  browser?: string;
   /**
    * FallbackFrom/FallbackReason are reserved for a future phase (always
    * empty in P2.4a).
@@ -98,6 +94,26 @@ export interface ActivityEvent {
   details?: { [key: string]: any };
 }
 /**
+ * RouteAttempt records a single browser that was considered during routing.
+ */
+export interface RouteAttempt {
+  provider: string;
+  accepted: boolean;
+  reason?: string;
+}
+/**
+ * RouteMetadata records the browser-selection decision for a request.
+ */
+export interface RouteMetadata {
+  requestedProvider: string;
+  usedProvider: string;
+  escalated: boolean;
+  reason?: string;
+  quality?: number /* int */;
+  fallbackAttempts?: number /* int */;
+  attempts?: RouteAttempt[];
+}
+/**
  * ActivityLogEvent represents a queryable backend activity record.
  */
 export interface ActivityLogEvent {
@@ -117,7 +133,7 @@ export interface ActivityLogEvent {
   tabId?: string;
   url?: string;
   action?: string;
-  engine?: string;
+  route?: RouteMetadata;
   ref?: string;
 }
 /**
@@ -221,4 +237,5 @@ export interface LaunchInstanceRequest {
   profileId?: string; // profile ID (prof_XXXXXXXX) or existing profile name
   mode?: string; // "headed" or empty for headless
   port?: string; // port number as string
+  browser?: string; // browser override (chrome, cloak, ghost-chrome)
 }

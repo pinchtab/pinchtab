@@ -7,9 +7,9 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// ResolveRequestedBrowserTarget resolves a public browserTarget value against
+// ResolveRequestedBrowser resolves a public browserTarget value against
 // the current runtime config and wraps failures for HTTP handlers.
-func (o *Orchestrator) ResolveRequestedBrowserTarget(requested string) (targetName, provider string, err error) {
+func (o *Orchestrator) ResolveRequestedBrowser(requested string) (targetName, provider string, err error) {
 	var resolved *config.ResolvedBrowserTarget
 	if strings.TrimSpace(requested) == "" {
 		resolved, err = config.ResolveDefaultBrowserTarget(o.runtimeCfg)
@@ -17,7 +17,7 @@ func (o *Orchestrator) ResolveRequestedBrowserTarget(requested string) (targetNa
 		resolved, err = config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
 	}
 	if err != nil {
-		return "", "", &UnknownBrowserTargetError{Target: requested, Err: err}
+		return "", "", &UnknownBrowserError{Target: requested, Err: err}
 	}
 	if resolved == nil || resolved.Legacy {
 		return "", "", nil
@@ -34,13 +34,13 @@ func (o *Orchestrator) LaunchWithTargetSelection(
 	fallbackTargets []string,
 	opts LaunchOptions,
 ) (*bridge.Instance, error) {
-	resolvedTarget, resolvedProvider, err := o.ResolveRequestedBrowserTarget(requestedTarget)
+	resolvedTarget, resolvedProvider, err := o.ResolveRequestedBrowser(requestedTarget)
 	if err != nil {
 		return nil, err
 	}
 
-	opts.RequestedBrowserTarget = requestedTarget
-	opts.BrowserTarget = resolvedTarget
+	opts.RequestedProvider = requestedTarget
+	opts.ResolvedTarget = resolvedTarget
 	opts.BrowserProvider = resolvedProvider
 
 	var fallbacks []string

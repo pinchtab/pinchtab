@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/assets"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -72,14 +73,14 @@ type Status struct {
 func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
 	levelName := ""
 	headless := false
-	provider := config.BrowserProviderChrome
+	provider := config.BrowserChrome
 	if cfg != nil {
 		levelName = cfg.StealthLevel
 		headless = cfg.Headless
-		provider = config.NormalizeBrowserProvider(cfg.BrowserProvider)
+		provider = config.NormalizeBrowser(cfg.DefaultBrowser)
 	}
 	level := NormalizeLevel(levelName)
-	nativeCloak := config.CloakBrowserProviderActive(cfg)
+	nativeCloak := config.CloakBrowserActive(cfg)
 	disablePinchTabStealth := config.PinchTabStealthDefaultsDisabled(cfg)
 	personaJSON := "{}"
 	if cfg != nil {
@@ -177,7 +178,11 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 }
 
 func providerCapabilityStrings(provider string) []string {
-	caps := config.ProviderCapabilities(provider)
+	b, ok := browsers.Get(provider)
+	if !ok {
+		return nil
+	}
+	caps := b.Capabilities().List()
 	if len(caps) == 0 {
 		return nil
 	}
@@ -189,7 +194,7 @@ func providerCapabilityStrings(provider string) []string {
 }
 
 func statusFingerprintSeed(cfg *config.RuntimeConfig) string {
-	if cfg == nil || !config.IsCloakBrowserProvider(cfg.BrowserProvider) {
+	if cfg == nil || !config.IsCloakBrowser(cfg.DefaultBrowser) {
 		return ""
 	}
 	return cfg.Cloak.FingerprintSeed

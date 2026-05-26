@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 var configHintOnce sync.Once
@@ -82,7 +85,7 @@ func Load() *RuntimeConfig {
 		BlockAds:           false,
 		MaxTabs:            20,
 		MaxParallelTabs:    0,
-		BrowserProvider:    BrowserProviderChrome,
+		DefaultBrowser:     BrowserChrome,
 		ChromeBinary:       "", // Set via config.json only
 		ChromeExtraFlags:   "",
 		Cloak:              CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true},
@@ -460,12 +463,36 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.FallbackOrder = append([]string(nil), fc.Browser.FallbackOrder...)
 	}
 
-	if fc.Browser.Provider != "" {
-		cfg.BrowserProvider = NormalizeBrowserProvider(fc.Browser.Provider)
-		if IsCloakBrowserProvider(cfg.BrowserProvider) && fc.Browser.Cloak.DisableDefaultStealthArgs == nil {
-			cfg.Cloak.DisableDefaultStealthArgs = true
+	// Resolve the effective browser provider: browsers.default is the
+	// authoritative source; the deprecated server.engine field is a fallback.
+	// browser.provider is no longer supported (rejected at validation time).
+	if fc.Browsers.Default != "" {
+		cfg.DefaultBrowser = fc.Browsers.Default
+		if fc.Server.Engine != "" {
+			slog.Warn("both server.engine and browsers.default are set; browsers.default takes precedence, server.engine is ignored",
+				"engine", fc.Server.Engine, "browsers.default", fc.Browsers.Default)
 		}
+	} else if fc.Server.Engine != "" {
+		// Deprecated: migrate server.engine → DefaultBrowser.
+		switch fc.Server.Engine {
+		case "chrome":
+			cfg.DefaultBrowser = BrowserChrome
+		case "lite", "auto":
+			cfg.DefaultBrowser = BrowserGhostChrome
+		default:
+			cfg.DefaultBrowser = BrowserChrome
+		}
+		slog.Warn("server.engine is deprecated; migrate to browsers.default in config.json",
+			"engine", fc.Server.Engine, "browsers.default", cfg.DefaultBrowser)
+	} else {
+		cfg.DefaultBrowser = "chrome"
 	}
+
+	// Apply native-stealth default when the winning provider supports it.
+	if b, ok := browsers.Get(strings.ToLower(cfg.DefaultBrowser)); ok && b.Capabilities().Has(browsers.CapNativeStealth) && fc.Browser.Cloak.DisableDefaultStealthArgs == nil {
+		cfg.Cloak.DisableDefaultStealthArgs = true
+	}
+
 	if fc.Browser.ChromeVersion != "" {
 		cfg.ChromeVersion = fc.Browser.ChromeVersion
 	}
@@ -493,6 +520,16 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Browser.ExtensionPaths != nil {
 		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
+	}
+
+	// Process browsers block — available list
+	if len(fc.Browsers.Available) > 0 {
+		cfg.BrowsersAvailable = make([]string, len(fc.Browsers.Available))
+		copy(cfg.BrowsersAvailable, fc.Browsers.Available)
+	} else if cfg.DefaultBrowser != "" {
+		cfg.BrowsersAvailable = []string{cfg.DefaultBrowser}
+	} else {
+		cfg.BrowsersAvailable = []string{"chrome"}
 	}
 
 	// Instance defaults — resolve headless bool into mode string.

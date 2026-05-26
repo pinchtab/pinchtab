@@ -70,10 +70,10 @@
       "ready": ["E2E_SERVER", "E2E_FULL_SERVER"],
       "tags": ["dashboard", "screencast", "full", "smoke"]
     },
-    "infra/engine-modes-extended.sh": {
+    "infra/browser-routing-extended.sh": {
       "services": ["pinchtab", "pinchtab-secure", "pinchtab-lite", "fixtures"],
       "ready": ["E2E_SERVER", "E2E_SECURE_SERVER", "E2E_LITE_SERVER"],
-      "tags": ["engine", "lite", "secure"]
+      "tags": ["browser-routing", "lite", "secure"]
     },
     "infra/idpi-extended.sh": {
       "services": ["pinchtab", "pinchtab-secure", "fixtures"],
@@ -112,6 +112,21 @@
     },
     "api/recording-smoke.sh": {
       "tags": ["recording", "video", "smoke"]
+    },
+    "api/browser-route-basic.sh": {
+      "tags": ["browser", "route", "metadata", "provider", "pr"]
+    },
+    "api/browser-selection-basic.sh": {
+      "tags": ["browser", "selection", "errors", "provider", "pr"]
+    },
+    "api/browser-activity-basic.sh": {
+      "tags": ["browser", "activity", "metadata", "route", "pr"]
+    },
+    "infra/browser-instance-basic.sh": {
+      "tags": ["browser", "instance", "launch", "provider", "pr"]
+    },
+    "infra/browser-config-basic.sh": {
+      "tags": ["browser", "config", "dashboard", "proxy", "redaction", "pr"]
     }
   }
 }

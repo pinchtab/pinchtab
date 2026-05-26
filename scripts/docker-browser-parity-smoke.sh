@@ -17,15 +17,15 @@
 #
 # Usage:
 #   ./dev smoke cloakbrowser                       # both legs (default)
-#   ./dev smoke cloakbrowser --provider=chrome     # Chrome leg only
-#   ./dev smoke cloakbrowser --provider=cloak      # Cloak leg only
-#   ./dev smoke cloakbrowser --provider=all
+#   ./dev smoke cloakbrowser --browser=chrome     # Chrome leg only
+#   ./dev smoke cloakbrowser --browser=cloak      # Cloak leg only
+#   ./dev smoke cloakbrowser --browser=all
 #   ./dev smoke cloakbrowser --multi-target        # one-container multi-target leg
-#   ./dev smoke cloakbrowser --provider=all --multi-target  # per-leg + multi-target
+#   ./dev smoke cloakbrowser --browser=all --multi-target  # per-leg + multi-target
 #   ./dev smoke cloakbrowser --profile-persistence # opt-in profile-persistence leg
 #                                                  # (Docker named volume + UUID round-trip;
-#                                                  #  defaults to --provider=cloak,
-#                                                  #  honors an explicit --provider=chrome)
+#                                                  #  defaults to --browser=cloak,
+#                                                  #  honors an explicit --browser=chrome)
 #   ./dev smoke cloakbrowser --profile-lock-recovery
 #                                                  # opt-in lock-recovery leg (P3b):
 #                                                  # seeds the P3a marker, plants a stale
@@ -35,7 +35,7 @@
 #                                                  # recovers cleanly without losing
 #                                                  # profile state. Mutually exclusive with
 #                                                  # --multi-target; defaults to
-#                                                  # --provider=cloak.
+#                                                  # --browser=cloak.
 #
 # Env overrides:
 #   PINCHTAB_PARITY_CHROME_IMAGE     Chrome leg image (default: pinchtab-local:test)
@@ -90,11 +90,11 @@ LEGACY_CLOAK_IMAGE=""
 
 for arg in "$@"; do
   case "$arg" in
-    --provider=*)
-      PROVIDERS_ARG="${arg#--provider=}"
+    --browser=*)
+      PROVIDERS_ARG="${arg#--browser=}"
       ;;
-    --provider)
-      fail "--provider requires =VALUE (e.g. --provider=chrome)"
+    --browser)
+      fail "--browser requires =VALUE (e.g. --browser=chrome)"
       ;;
     --multi-target)
       MULTI_TARGET=1
@@ -136,10 +136,10 @@ if [ "$PROFILE_LOCK_RECOVERY" -eq 1 ]; then
     cloak)  LOCK_RECOVERY_PROVIDER="cloak"  ;;
     chrome) LOCK_RECOVERY_PROVIDER="chrome" ;;
     ""|all)
-      fail "--profile-lock-recovery requires a single provider (--provider=chrome or --provider=cloak; default cloak)"
+      fail "--profile-lock-recovery requires a single provider (--browser=chrome or --browser=cloak; default cloak)"
       ;;
     *)
-      fail "invalid --provider for --profile-lock-recovery: $PROVIDERS_ARG (expected chrome|cloak)"
+      fail "invalid --browser for --profile-lock-recovery: $PROVIDERS_ARG (expected chrome|cloak)"
       ;;
   esac
   RUN_PROFILE_LOCK_RECOVERY=1
@@ -156,10 +156,10 @@ elif [ "$PROFILE_PERSISTENCE" -eq 1 ]; then
     cloak)  PERSISTENCE_PROVIDER="cloak"  ;;
     chrome) PERSISTENCE_PROVIDER="chrome" ;;
     ""|all)
-      fail "--profile-persistence requires a single provider (--provider=chrome or --provider=cloak; default cloak)"
+      fail "--profile-persistence requires a single provider (--browser=chrome or --browser=cloak; default cloak)"
       ;;
     *)
-      fail "invalid --provider for --profile-persistence: $PROVIDERS_ARG (expected chrome|cloak)"
+      fail "invalid --browser for --profile-persistence: $PROVIDERS_ARG (expected chrome|cloak)"
       ;;
   esac
   RUN_PROFILE_PERSISTENCE=1
@@ -173,10 +173,10 @@ elif [ "$MULTI_TARGET" -eq 1 ]; then
       fi
       ;;
     chrome|cloak)
-      fail "--multi-target is mutually exclusive with --provider=${PROVIDERS_ARG} (use --provider=all to run both)"
+      fail "--multi-target is mutually exclusive with --browser=${PROVIDERS_ARG} (use --browser=all to run both)"
       ;;
     *)
-      fail "invalid --provider: $PROVIDERS_ARG (expected chrome|cloak|all)"
+      fail "invalid --browser: $PROVIDERS_ARG (expected chrome|cloak|all)"
       ;;
   esac
 else
@@ -184,7 +184,7 @@ else
     all)    PROVIDERS=(chrome cloak) ;;
     chrome) PROVIDERS=(chrome) ;;
     cloak)  PROVIDERS=(cloak) ;;
-    *)      fail "invalid --provider: $PROVIDERS_ARG (expected chrome|cloak|all)" ;;
+    *)      fail "invalid --browser: $PROVIDERS_ARG (expected chrome|cloak|all)" ;;
   esac
 fi
 

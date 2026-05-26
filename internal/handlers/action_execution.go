@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -43,8 +44,8 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 
 func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
 	req.Kind = bridge.CanonicalActionKind(req.Kind)
-	if h.shouldUseLiteAction(req) {
-		return h.executeLiteAction(ctx, req)
+	if h.shouldUseStaticAction(req) {
+		return h.executeStaticAction(ctx, req)
 	}
 
 	if err := h.ensureChrome(); err != nil {
@@ -61,16 +62,16 @@ func switchedTabFromActionResult(result map[string]any) string {
 	return ""
 }
 
-func (h *Handlers) shouldUseLiteAction(req bridge.ActionRequest) bool {
+func (h *Handlers) shouldUseStaticAction(req bridge.ActionRequest) bool {
 	kind := bridge.CanonicalActionKind(req.Kind)
 	if h.effectiveActionHumanize(req) && (kind == bridge.ActionClick || kind == bridge.ActionType || kind == bridge.ActionKeyboardType) {
 		return false
 	}
 	capability, ok := actionCapability(kind)
 	if !ok {
-		return h.Router != nil && h.Router.Mode() == engine.ModeLite
+		return h.StaticBrowser != nil
 	}
-	return h.useLite(capability, "")
+	return h.useStaticBrowser(capability)
 }
 
 func (h *Handlers) effectiveActionHumanize(req bridge.ActionRequest) bool {
@@ -83,45 +84,45 @@ func (h *Handlers) effectiveActionHumanize(req bridge.ActionRequest) bool {
 	return false
 }
 
-func (h *Handlers) executeLiteAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
-	if h.Router == nil || h.Router.Lite() == nil {
-		return nil, "", fmt.Errorf("lite engine unavailable")
+func (h *Handlers) executeStaticAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
+	if h.StaticBrowser == nil {
+		return nil, "", fmt.Errorf("static browser unavailable")
 	}
 	switch bridge.CanonicalActionKind(req.Kind) {
 	case bridge.ActionClick:
 		if req.Ref == "" {
-			return nil, "lite", fmt.Errorf("lite mode actions require ref from /snapshot")
+			return nil, "static", fmt.Errorf("static browser actions require ref from /snapshot")
 		}
-		if err := h.Router.Lite().Click(ctx, req.TabID, req.Ref); err != nil {
-			return nil, "lite", err
+		if err := h.StaticBrowser.Click(ctx, req.TabID, req.Ref); err != nil {
+			return nil, "static", err
 		}
-		return map[string]any{"clicked": true}, "lite", nil
+		return map[string]any{"clicked": true}, "static", nil
 	case bridge.ActionType, bridge.ActionFill:
 		if req.Ref == "" {
-			return nil, "lite", fmt.Errorf("lite mode actions require ref from /snapshot")
+			return nil, "static", fmt.Errorf("static browser actions require ref from /snapshot")
 		}
 		text := req.Text
 		if req.Kind == bridge.ActionFill && text == "" {
 			text = req.Value
 		}
 		if text == "" {
-			return nil, "lite", fmt.Errorf("text required for %s", req.Kind)
+			return nil, "static", fmt.Errorf("text required for %s", req.Kind)
 		}
-		if err := h.Router.Lite().Type(ctx, req.TabID, req.Ref, text); err != nil {
-			return nil, "lite", err
+		if err := h.StaticBrowser.Type(ctx, req.TabID, req.Ref, text); err != nil {
+			return nil, "static", err
 		}
-		return map[string]any{"typed": true, "len": len([]rune(text))}, "lite", nil
+		return map[string]any{"typed": true, "len": len([]rune(text))}, "static", nil
 	default:
-		return nil, "lite", fmt.Errorf("%w: %s", engine.ErrLiteNotSupported, req.Kind)
+		return nil, "static", fmt.Errorf("%w: %s", staticfetch.ErrStaticNotSupported, req.Kind)
 	}
 }
 
-func actionCapability(kind string) (engine.Capability, bool) {
+func actionCapability(kind string) (browserops.Capability, bool) {
 	switch bridge.CanonicalActionKind(kind) {
 	case bridge.ActionClick:
-		return engine.CapClick, true
+		return browserops.CapClick, true
 	case bridge.ActionType, bridge.ActionFill:
-		return engine.CapType, true
+		return browserops.CapType, true
 	default:
 		return "", false
 	}
@@ -170,7 +171,7 @@ func shouldRetryStaleRef(err error) bool {
 		return true
 	}
 	// Fallback string matching is still needed for stale failures that can bypass
-	// bridge.ExecuteAction classification (for example, lite-engine paths or other
+	// bridge.ExecuteAction classification (for example, static paths or other
 	// non-bridge error surfaces that return raw backend-node messages).
 	e := strings.ToLower(err.Error())
 	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")

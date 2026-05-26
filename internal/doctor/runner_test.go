@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -52,12 +51,12 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestRun_RegistryOrdering_Chrome(t *testing.T) {
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderChrome, ChromeBinary: "/does/not/exist"}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome, ChromeBinary: "/does/not/exist"}
 	got := Run(context.Background(), cfg, "")
 	wantOrder := []string{
 		"config_file",
 		"chrome_present",
-		"cloakbrowser_present",
+		"handle_decisions",
 		"binary_exists",
 		"binary_executable",
 		"binary_starts",
@@ -73,18 +72,21 @@ func TestRun_RegistryOrdering_Chrome(t *testing.T) {
 }
 
 func TestRun_RegistryOrdering_Cloak(t *testing.T) {
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderCloak, ChromeBinary: "/does/not/exist"}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserCloak, ChromeBinary: "/does/not/exist"}
 	got := Run(context.Background(), cfg, "")
+	// The three cloak-specific checks now come from Browser.DoctorChecks(),
+	// so they appear right after cloakbrowser_present (provider block) and
+	// before the generic binary checks.
 	wantOrder := []string{
 		"config_file",
-		"chrome_present",
 		"cloakbrowser_present",
-		"binary_exists",
-		"binary_executable",
-		"binary_starts",
 		"cdp_reachable",
 		"fingerprint_flags_accepted",
 		"linux_fonts_present",
+		"handle_decisions",
+		"binary_exists",
+		"binary_executable",
+		"binary_starts",
 	}
 	if len(got) != len(wantOrder) {
 		t.Fatalf("expected %d results for cloak provider, got %d", len(wantOrder), len(got))
@@ -97,7 +99,7 @@ func TestRun_RegistryOrdering_Cloak(t *testing.T) {
 }
 
 func TestRun_CheckFilter(t *testing.T) {
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderChrome, ChromeBinary: "/does/not/exist"}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome, ChromeBinary: "/does/not/exist"}
 	got := Run(context.Background(), cfg, "binary_exists")
 	if len(got) != 1 {
 		t.Fatalf("filter binary_exists: got %d results, want 1", len(got))
@@ -108,7 +110,7 @@ func TestRun_CheckFilter(t *testing.T) {
 }
 
 func TestKnownCheck(t *testing.T) {
-	cfg := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderChrome}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}
 	if !KnownCheck(cfg, "binary_exists") {
 		t.Error("binary_exists should be known for chrome provider")
 	}
@@ -118,7 +120,7 @@ func TestKnownCheck(t *testing.T) {
 	if KnownCheck(cfg, "nonsense") {
 		t.Error("unknown check name should report false")
 	}
-	cloak := &config.RuntimeConfig{BrowserProvider: config.BrowserProviderCloak}
+	cloak := &config.RuntimeConfig{DefaultBrowser: config.BrowserCloak}
 	if !KnownCheck(cloak, "cdp_reachable") {
 		t.Error("cdp_reachable should be known for cloak provider")
 	}
@@ -217,64 +219,6 @@ func TestParseVersionLine(t *testing.T) {
 	}
 }
 
-func TestFontsCheck_SkipsOnNonLinux(t *testing.T) {
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "darwin" }
-	cfg := &config.RuntimeConfig{Cloak: config.CloakBrowserRuntimeConfig{Platform: "windows"}}
-	r := checkLinuxFontsPresent(context.Background(), cfg)
-	if r.Status != StatusSkip {
-		t.Fatalf("status = %v, want skip", r.Status)
-	}
-}
-
-func TestFontsCheck_SkipsWhenPlatformNotWindows(t *testing.T) {
-	prev := HostOS
-	defer func() { HostOS = prev }()
-	HostOS = func() string { return "linux" }
-	cfg := &config.RuntimeConfig{Cloak: config.CloakBrowserRuntimeConfig{Platform: "macos"}}
-	r := checkLinuxFontsPresent(context.Background(), cfg)
-	if r.Status != StatusSkip {
-		t.Fatalf("status = %v, want skip", r.Status)
-	}
-}
-
-func TestBuildCloakFingerprintArgs(t *testing.T) {
-	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
-		Cloak: config.CloakBrowserRuntimeConfig{
-			FingerprintSeed: "seed-1",
-			Platform:        "windows",
-			Timezone:        "Europe/London",
-			Locale:          "en-GB",
-			WebRTCIP:        "1.2.3.4",
-		},
-	}
-	args := bridgeruntime.CloakBrowserFlagArgs(cfg)
-	want := []string{
-		"--fingerprint=seed-1",
-		"--fingerprint-platform=windows",
-		"--fingerprint-locale=en-GB",
-		"--fingerprint-timezone=Europe/London",
-		"--fingerprint-webrtc-ip=1.2.3.4",
-	}
-	if len(args) != len(want) {
-		t.Fatalf("args = %v, want %v", args, want)
-	}
-	for i, a := range args {
-		if a != want[i] {
-			t.Errorf("args[%d] = %q, want %q", i, a, want[i])
-		}
-	}
-}
-
-func TestBuildCloakFingerprintArgs_Empty(t *testing.T) {
-	cfg := &config.RuntimeConfig{}
-	if got := bridgeruntime.CloakBrowserFlagArgs(cfg); len(got) != 0 {
-		t.Fatalf("expected no args, got %v", got)
-	}
-}
-
 func TestWriteText_FormatsResults(t *testing.T) {
 	results := []CheckResult{
 		{Name: "binary_exists", Status: StatusPass, Detail: "/opt/chrome", Duration: 52 * time.Millisecond},
@@ -284,7 +228,7 @@ func TestWriteText_FormatsResults(t *testing.T) {
 	var buf bytes.Buffer
 	WriteText(&buf, "cloak", "", results)
 	out := buf.String()
-	if !strings.Contains(out, "pinchtab doctor (provider=cloak)") {
+	if !strings.Contains(out, "pinchtab doctor (browser=cloak)") {
 		t.Errorf("missing header in output:\n%s", out)
 	}
 	if !strings.Contains(out, "binary_exists") || !strings.Contains(out, "/opt/chrome") {
@@ -308,8 +252,8 @@ func TestWriteJSON_Structure(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
 		t.Fatalf("unmarshal: %v\nbody=%s", err, buf.String())
 	}
-	if report.Provider != "cloak" || report.Target != "default" {
-		t.Errorf("provider/target mismatch: %+v", report)
+	if report.Browser != "cloak" || report.Target != "default" {
+		t.Errorf("browser/target mismatch: %+v", report)
 	}
 	if len(report.Results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(report.Results))

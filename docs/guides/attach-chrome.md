@@ -57,9 +57,10 @@ The attach request body is:
 ```
 
 `browserTarget` is optional. When `browser.targets` is configured, an omitted
-value attaches to the configured default target and the target provider is used.
+value attaches to the configured default target and the target's browser is used.
 If you also pass `provider`, it must match that target. Without browser targets,
-`provider` defaults to `chrome`; use `cloak` for a CloakBrowser endpoint.
+`provider` defaults to `chrome`; use `cloak` for a CloakBrowser endpoint
+(equivalent to `--browser cloak` on the CLI).
 
 Accepted `cdpUrl` shapes:
 
@@ -274,7 +275,7 @@ pinchtab instance start
 ## Related guides
 
 - [cloakbrowser.md](cloakbrowser.md) — full CloakBrowser configuration and
-  the `provider: cloak` attach variant
+  the `--browser cloak` attach variant
 - [docker.md](docker.md) — running PinchTab (and the local CloakBrowser
   smoke image) in containers
 - [headed-mode.md](headed-mode.md) — manual headed setup outside the

@@ -11,12 +11,15 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/contentguard"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/pinchtab/internal/ids"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -31,8 +34,10 @@ type Handlers struct {
 	Matcher         semantic.ElementMatcher
 	IntentCache     *recovery.IntentCache
 	Recovery        *recovery.RecoveryEngine
-	Router          *engine.Router // optional; nil ⇒ chrome-only
+	StaticBrowser   browserops.BrowserRuntime // optional; nil ⇒ chrome-only (ghost-chrome static fetch)
 	IDPIGuard       idpi.Guard
+	ContentGuard    *contentguard.Scanner
+	NavGuard        *navguard.Validator
 	CurrentTabs     *CurrentTabStore
 	Version         string // build version injected at startup
 	clipboard       clipboardStore
@@ -54,16 +59,26 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	matcher := semantic.NewCombinedMatcher(semantic.NewHashingEmbedder(128))
 	intentCache := recovery.NewIntentCache(200, 10*time.Minute)
 
+	idpiGuard := idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains)
 	h := &Handlers{
-		Bridge:          b,
-		Config:          cfg,
-		Profiles:        p,
-		Dashboard:       d,
-		Orchestrator:    o,
-		IdMgr:           ids.NewManager(),
-		Matcher:         matcher,
-		IntentCache:     intentCache,
-		IDPIGuard:       idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains),
+		Bridge:       b,
+		Config:       cfg,
+		Profiles:     p,
+		Dashboard:    d,
+		Orchestrator: o,
+		IdMgr:        ids.NewManager(),
+		Matcher:      matcher,
+		IntentCache:  intentCache,
+		IDPIGuard:    idpiGuard,
+		ContentGuard: &contentguard.Scanner{
+			Guard:       idpiGuard,
+			WrapEnabled: cfg.IDPI.WrapContent,
+		},
+		NavGuard: &navguard.Validator{
+			TrustedResolveCIDRs: navguard.ParseCIDRs(cfg.TrustedResolveCIDRs),
+			TrustedProxyCIDRs:   navguard.BuildTrustedProxyCIDRs(cfg.TrustLoopbackProxy, cfg.TrustedProxyCIDRs),
+			IDPIDomainAllowed:   idpiGuard.DomainAllowed,
+		},
 		CurrentTabs:     NewCurrentTabStore(),
 		credentialStore: newCredentialStore(),
 		recorder:        &recorder{},
@@ -217,9 +232,17 @@ func (h *Handlers) writeBridgeUnavailable(w http.ResponseWriter, err error) bool
 	return true
 }
 
-// useLite returns true when the engine router routes this operation to lite.
-func (h *Handlers) useLite(op engine.Capability, url string) bool {
-	return h.Router != nil && h.Router.UseLite(op, url)
+// useStaticBrowser returns true when the static browser should handle this operation.
+func (h *Handlers) useStaticBrowser(op browserops.Capability) bool {
+	if h.StaticBrowser == nil {
+		return false
+	}
+	switch op {
+	case browserops.CapScreenshot, browserops.CapPDF, browserops.CapEvaluate, browserops.CapCookies, browserops.CapCapture:
+		return false
+	default:
+		return true
+	}
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
@@ -397,5 +420,24 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 
 	if doShutdown != nil {
 		mux.HandleFunc("POST /shutdown", h.HandleShutdown(doShutdown))
+	}
+}
+
+// checkBrowserCanHandle is the single enforcement point for browser capability
+// decisions. DecisionSkip returns without error — the caller should fallback to
+// Chrome. DecisionFail returns an error for HTTP 400.
+func checkBrowserCanHandle(browserName string, intent browsers.RequestIntent) (browsers.HandleDecision, error) {
+	b, ok := browsers.Get(browserName)
+	if !ok {
+		return browsers.HandleDecision{Decision: browsers.DecisionHandle}, nil
+	}
+	d := b.CanHandle(intent)
+	switch d.Decision {
+	case browsers.DecisionSkip:
+		return d, nil // caller should fallback to Chrome
+	case browsers.DecisionFail:
+		return d, fmt.Errorf("browser %q failed: %s", browserName, d.Reason)
+	default:
+		return d, nil
 	}
 }

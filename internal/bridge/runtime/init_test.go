@@ -5,8 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/chrome"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/cloak"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
@@ -103,7 +108,7 @@ func TestShouldRetryChromeStartupWithDirectLaunch(t *testing.T) {
 
 func TestBuildChromeArgs_CloakProviderUsesNativeFingerprintFlags(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderCloak,
+		DefaultBrowser: config.BrowserCloak,
 		Cloak: config.CloakBrowserRuntimeConfig{
 			FingerprintSeed:           "42069",
 			Platform:                  "windows",
@@ -147,9 +152,9 @@ func TestBuildChromeArgs_CloakProviderUsesNativeFingerprintFlags(t *testing.T) {
 
 func TestBuildChromeArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *testing.T) {
 	cfg := &config.RuntimeConfig{
-		BrowserProvider: config.BrowserProviderChrome,
-		ChromeVersion:   "144.0.0.0",
-		ExtensionPaths:  []string{},
+		DefaultBrowser: config.BrowserChrome,
+		ChromeVersion:  "144.0.0.0",
+		ExtensionPaths: []string{},
 	}
 
 	args := BuildChromeArgs(cfg, 9222)
@@ -182,5 +187,126 @@ func TestBuildChromeArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *testi
 		if stealth.HasLaunchArgPrefix(args, blockedPrefix) {
 			t.Fatalf("BuildChromeArgs() included Cloak flag prefix %q in Chrome provider mode: %v", blockedPrefix, args)
 		}
+	}
+}
+
+func TestCloakBrowserFlagArgsMatchesNativeBuildLaunchArgs(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		DefaultBrowser: "cloak",
+		Cloak: config.CloakBrowserRuntimeConfig{
+			FingerprintSeed: "parity-seed-42",
+			Platform:        "linux",
+			Locale:          "en-US",
+			Timezone:        "America/New_York",
+			WebRTCIP:        "10.0.0.1",
+			FontsDir:        "/usr/share/fonts",
+			StorageQuotaMB:  256,
+		},
+	}
+	wrapperArgs := CloakBrowserFlagArgs(cfg)
+
+	nativeArgs, _, _ := browsers.MustGet("cloak").BuildLaunchArgs(browsers.LaunchConfig{
+		Cloak: browsers.CloakFingerprint{
+			FingerprintSeed: cfg.Cloak.FingerprintSeed,
+			Platform:        cfg.Cloak.Platform,
+			Locale:          cfg.Cloak.Locale,
+			Timezone:        cfg.Cloak.Timezone,
+			WebRTCIP:        cfg.Cloak.WebRTCIP,
+			FontsDir:        cfg.Cloak.FontsDir,
+			StorageQuotaMB:  cfg.Cloak.StorageQuotaMB,
+		},
+	})
+
+	// Extract only fingerprint flags from native output
+	var nativeFP []string
+	for _, a := range nativeArgs {
+		if strings.HasPrefix(a, "--fingerprint") {
+			nativeFP = append(nativeFP, a)
+		}
+	}
+
+	if len(wrapperArgs) != len(nativeFP) {
+		t.Fatalf("wrapper produced %d args, native produced %d fingerprint args\nwrapper: %v\nnative:  %v", len(wrapperArgs), len(nativeFP), wrapperArgs, nativeFP)
+	}
+	for i := range wrapperArgs {
+		if wrapperArgs[i] != nativeFP[i] {
+			t.Errorf("arg[%d] mismatch: wrapper=%q native=%q", i, wrapperArgs[i], nativeFP[i])
+		}
+	}
+}
+
+func TestCloakBrowserFlagArgsNilForNonCloak(t *testing.T) {
+	cfg := &config.RuntimeConfig{DefaultBrowser: "chrome"}
+	if got := CloakBrowserFlagArgs(cfg); len(got) != 0 {
+		t.Errorf("expected nil/empty for chrome provider; got %v", got)
+	}
+	if got := CloakBrowserFlagArgs(nil); got != nil {
+		t.Errorf("expected nil for nil config; got %v", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Stub browser that does NOT support remote CDP (for guard tests)
+// ---------------------------------------------------------------------------
+
+type noCDPBrowser struct{}
+
+func (noCDPBrowser) ID() string                                                  { return "nocdpstub" }
+func (noCDPBrowser) DisplayName() string                                         { return "NoCDPStub" }
+func (noCDPBrowser) Capabilities() browsers.CapabilitySet                        { return browsers.CapabilitySet{} }
+func (noCDPBrowser) DiscoverBinary() browsers.BinaryDiscovery                    { return browsers.BinaryDiscovery{} }
+func (noCDPBrowser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck { return nil }
+func (noCDPBrowser) BuildLaunchArgs(_ browsers.LaunchConfig) ([]string, []string, error) {
+	return nil, nil, nil
+}
+func (noCDPBrowser) SupportsRemoteCDP() bool { return false }
+func (noCDPBrowser) GeoAlignment(_ browsers.GeoConfig) browsers.GeoStrategy {
+	return browsers.GeoStrategy{}
+}
+func (noCDPBrowser) ValidateTarget(_ browsers.TargetConfig) error { return nil }
+func (noCDPBrowser) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchErrorKind {
+	return browsers.LaunchErrorUnknown
+}
+func (noCDPBrowser) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
+	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
+}
+
+var registerNoCDPOnce sync.Once
+
+func TestInitRemoteCDP_RejectsUnsupportedProvider(t *testing.T) {
+	registerNoCDPOnce.Do(func() {
+		browsers.Register(&noCDPBrowser{})
+	})
+
+	cfg := &config.RuntimeConfig{
+		DefaultBrowser: "nocdpstub",
+		CDPAttachURL:   "ws://127.0.0.1:9222",
+	}
+	_, _, _, _, _, err := InitChrome(cfg, nil, Hooks{})
+	if err == nil {
+		t.Fatal("expected error for unsupported CDP provider")
+	}
+	if !strings.Contains(err.Error(), "does not support remote CDP") {
+		t.Fatalf("expected 'does not support remote CDP' in error; got: %v", err)
+	}
+}
+
+func TestEngineToLaunchMode(t *testing.T) {
+	cases := []struct {
+		engine string
+		want   browsers.LaunchMode
+	}{
+		{"", browsers.LaunchModeChrome},
+		{"chrome", browsers.LaunchModeChrome},
+		{"lite", browsers.LaunchModeLite},
+		{"auto", browsers.LaunchModeAuto},
+		{"unknown", browsers.LaunchModeChrome},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("engine=%q", c.engine), func(t *testing.T) {
+			if got := engineToLaunchMode(c.engine); got != c.want {
+				t.Errorf("engineToLaunchMode(%q) = %q; want %q", c.engine, got, c.want)
+			}
+		})
 	}
 }

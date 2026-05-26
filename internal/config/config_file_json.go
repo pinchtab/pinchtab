@@ -5,6 +5,7 @@ type fileConfigJSON struct {
 	ConfigVersion    string                      `json:"configVersion,omitempty"`
 	Server           serverConfigJSON            `json:"server"`
 	Browser          browserConfigJSON           `json:"browser"`
+	Browsers         *BrowsersConfig             `json:"browsers,omitempty"`
 	InstanceDefaults instanceDefaultsConfigJSON  `json:"instanceDefaults"`
 	Security         securityConfigJSON          `json:"security"`
 	Profiles         profilesConfigJSON          `json:"profiles"`
@@ -30,7 +31,7 @@ type serverConfigJSON struct {
 }
 
 type browserConfigJSON struct {
-	Provider         string                  `json:"provider"`
+	Provider         string                  `json:"provider,omitempty"`
 	ChromeVersion    string                  `json:"version"`
 	ChromeBinary     string                  `json:"binary"`
 	ChromeDebugPort  *int                    `json:"remoteDebuggingPort,omitempty"`

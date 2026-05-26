@@ -51,7 +51,7 @@ func TestSetConfigValue_BrowserAndInstanceDefaultsFields(t *testing.T) {
 		check   func(*FileConfig) bool
 		wantErr bool
 	}{
-		{"browser.provider", "cloak", func(fc *FileConfig) bool { return fc.Browser.Provider == BrowserProviderCloak }, false},
+		{"browser.provider", "cloak", nil, true},
 		{"browser.version", "144.0.7559.133", func(fc *FileConfig) bool { return fc.Browser.ChromeVersion == "144.0.7559.133" }, false},
 		{"browser.binary", "/tmp/chrome", func(fc *FileConfig) bool { return fc.Browser.ChromeBinary == "/tmp/chrome" }, false},
 		{"browser.cloak.fingerprintSeed", "42069", func(fc *FileConfig) bool { return fc.Browser.Cloak.FingerprintSeed == "42069" }, false},

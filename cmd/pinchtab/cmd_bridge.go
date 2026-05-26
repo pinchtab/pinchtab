@@ -11,9 +11,8 @@ import (
 )
 
 var (
-	bridgeEngine            string
 	bridgeCDPAttach         string
-	bridgeBrowserProvider   string
+	bridgeBrowser           string
 	bridgeRemoteBrowserName string
 	bridgeBind              string
 	bridgePort              string
@@ -32,15 +31,10 @@ Examples:
   pinchtab bridge
   pinchtab bridge --cdp-attach ws://127.0.0.1:9222/devtools/browser/<id>
   pinchtab bridge --cdp-attach http://127.0.0.1:9222 \
-    --browser-provider cloak --remote-browser-name cloak-manager-profile
+    --browser cloak --remote-browser-name cloak-manager-profile
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := loadConfig()
-		engineMode, err := resolveBridgeEngine(bridgeEngine, cfg.Engine)
-		if err != nil {
-			return err
-		}
-		cfg.Engine = engineMode
 		if v := strings.TrimSpace(bridgeCDPAttach); v != "" {
 			cdpURL, err := validateBridgeCDPURL(v)
 			if err != nil {
@@ -56,12 +50,10 @@ Examples:
 			cfg.Port = v
 		}
 
-		if v := strings.TrimSpace(bridgeBrowserProvider); v != "" {
-			provider, err := config.ParseBrowserProvider(v)
-			if err != nil {
-				return err
-			}
-			cfg.BrowserProvider = provider
+		if browser, err := resolveBridgeBrowser(bridgeBrowser, cfg.BrowsersAvailable); err != nil {
+			return err
+		} else if browser != "" {
+			cfg.DefaultBrowser = browser
 		}
 		if v := strings.TrimSpace(bridgeRemoteBrowserName); v != "" {
 			cfg.RemoteBrowserName = v
@@ -103,27 +95,20 @@ func validateBridgeCDPURL(raw string) (string, error) {
 	return trimmed, nil
 }
 
-func resolveBridgeEngine(flagValue, configValue string) (string, error) {
-	engineMode := strings.ToLower(strings.TrimSpace(configValue))
-	if strings.TrimSpace(flagValue) != "" {
-		engineMode = strings.ToLower(strings.TrimSpace(flagValue))
+func resolveBridgeBrowser(browserFlag string, configured []string) (string, error) {
+	v := strings.TrimSpace(browserFlag)
+	if v == "" {
+		return "", nil
 	}
-	if engineMode == "" {
-		engineMode = "chrome"
-	}
-	if engineMode != "chrome" && engineMode != "lite" && engineMode != "auto" {
-		return "", fmt.Errorf("invalid --engine %q (expected chrome, lite, or auto)", engineMode)
-	}
-	return engineMode, nil
+	return config.ParseBrowser(v, configured)
 }
 
 func init() {
 	bridgeCmd.GroupID = "primary"
-	bridgeCmd.Flags().StringVar(&bridgeEngine, "engine", "", "Bridge engine: chrome, lite, or auto (overrides config)")
 	bridgeCmd.Flags().StringVar(&bridgeCDPAttach, "cdp-attach", "", "Attach to an existing browser via this CDP URL (ws://... browser-level, or http://... DevTools origin)")
 	bridgeCmd.Flags().StringVar(&bridgeBind, "bind", "", "Bind address for the bridge HTTP server (overrides config server.bind)")
 	bridgeCmd.Flags().StringVar(&bridgePort, "port", "", "Port for the bridge HTTP server (overrides config server.port)")
-	bridgeCmd.Flags().StringVar(&bridgeBrowserProvider, "browser-provider", "", "Browser provider for remote attach: chrome or cloak (default: from config)")
+	bridgeCmd.Flags().StringVar(&bridgeBrowser, "browser", "", "Browser to use: chrome, cloak, or ghost-chrome (overrides config)")
 	bridgeCmd.Flags().StringVar(&bridgeRemoteBrowserName, "remote-browser-name", "", "Opaque label for the externally-managed browser; surfaces in /stealth/status")
 	rootCmd.AddCommand(bridgeCmd)
 }

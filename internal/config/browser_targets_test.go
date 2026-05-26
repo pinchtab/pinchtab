@@ -2,13 +2,16 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 )
 
 func TestMigrateLegacyBrowserConfig_LegacyOnlySynthesizesDefaultTarget(t *testing.T) {
 	bc := BrowserConfig{
-		Provider:     BrowserProviderChrome,
+		Provider:     BrowserChrome,
 		ChromeBinary: "/usr/bin/chrome",
 	}
 	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
@@ -25,7 +28,7 @@ func TestMigrateLegacyBrowserConfig_LegacyOnlySynthesizesDefaultTarget(t *testin
 	if !ok {
 		t.Fatalf("targets[%q] missing", DefaultBrowserTargetName)
 	}
-	if tgt.Provider != BrowserProviderChrome {
+	if tgt.Provider != BrowserChrome {
 		t.Fatalf("target.Provider = %q, want chrome", tgt.Provider)
 	}
 	if tgt.Binary != "/usr/bin/chrome" {
@@ -35,7 +38,7 @@ func TestMigrateLegacyBrowserConfig_LegacyOnlySynthesizesDefaultTarget(t *testin
 
 func TestMigrateLegacyBrowserConfig_CloakLegacyCopiesCloakSubBlock(t *testing.T) {
 	bc := BrowserConfig{
-		Provider:     BrowserProviderCloak,
+		Provider:     BrowserCloak,
 		ChromeBinary: "/opt/cloak/chrome",
 		Cloak: CloakBrowserConfig{
 			FingerprintSeed: "42",
@@ -56,7 +59,7 @@ func TestMigrateLegacyBrowserConfig_DeepClonesLegacyTargetFields(t *testing.T) {
 	quota := 128
 	disableStealth := true
 	bc := BrowserConfig{
-		Provider: BrowserProviderChrome,
+		Provider: BrowserChrome,
 		Cloak: CloakBrowserConfig{
 			StorageQuotaMB:            &quota,
 			DisableDefaultStealthArgs: &disableStealth,
@@ -96,7 +99,7 @@ func TestMigrateLegacyBrowserConfig_TargetsOnlyLeftIntact(t *testing.T) {
 	bc := BrowserConfig{
 		DefaultTarget: "chrome-local",
 		Targets: BrowserTargetsConfig{
-			"chrome-local": {Provider: BrowserProviderChrome, Binary: "/usr/bin/chrome"},
+			"chrome-local": {Provider: BrowserChrome, Binary: "/usr/bin/chrome"},
 		},
 	}
 	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
@@ -116,11 +119,11 @@ func TestMigrateLegacyBrowserConfig_TargetsOnlyLeftIntact(t *testing.T) {
 
 func TestMigrateLegacyBrowserConfig_BothPresentExplicitWinsAndFlagsConflict(t *testing.T) {
 	bc := BrowserConfig{
-		Provider:      BrowserProviderChrome,
+		Provider:      BrowserChrome,
 		ChromeBinary:  "/legacy/chrome",
 		DefaultTarget: "explicit",
 		Targets: BrowserTargetsConfig{
-			"explicit": {Provider: BrowserProviderChrome, Binary: "/explicit/chrome"},
+			"explicit": {Provider: BrowserChrome, Binary: "/explicit/chrome"},
 		},
 	}
 	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
@@ -137,7 +140,7 @@ func TestMigrateLegacyBrowserConfig_BothPresentExplicitWinsAndFlagsConflict(t *t
 		t.Fatalf("explicit defaultTarget overwritten: %q", bc.DefaultTarget)
 	}
 	// Legacy fields preserved on the file config for round-trip.
-	if bc.Provider != BrowserProviderChrome || bc.ChromeBinary != "/legacy/chrome" {
+	if bc.Provider != BrowserChrome || bc.ChromeBinary != "/legacy/chrome" {
 		t.Fatalf("legacy fields lost; got Provider=%q Binary=%q", bc.Provider, bc.ChromeBinary)
 	}
 }
@@ -164,8 +167,8 @@ func TestValidateBrowserTargets_GoodConfig_NoErrors(t *testing.T) {
 		DefaultTarget: "chrome-local",
 		FallbackOrder: []string{"cloak-primary"},
 		Targets: BrowserTargetsConfig{
-			"chrome-local":  {Provider: BrowserProviderChrome, Binary: "/usr/bin/chrome"},
-			"cloak-primary": {Provider: BrowserProviderCloak, Binary: "/opt/cloak/chrome"},
+			"chrome-local":  {Provider: BrowserChrome, Binary: "/usr/bin/chrome"},
+			"cloak-primary": {Provider: BrowserCloak, Binary: "/opt/cloak/chrome"},
 		},
 	}
 	if errs := ValidateBrowserTargets(bc); len(errs) != 0 {
@@ -177,7 +180,7 @@ func TestValidateBrowserTargets_RejectsBadTargetName(t *testing.T) {
 	bc := BrowserConfig{
 		DefaultTarget: "Bad_Name",
 		Targets: BrowserTargetsConfig{
-			"Bad_Name": {Provider: BrowserProviderChrome},
+			"Bad_Name": {Provider: BrowserChrome},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -237,7 +240,7 @@ func TestValidateBrowserTargets_RejectsCloakTargetWithoutBinary(t *testing.T) {
 	bc := BrowserConfig{
 		DefaultTarget: "cloak",
 		Targets: BrowserTargetsConfig{
-			"cloak": {Provider: BrowserProviderCloak},
+			"cloak": {Provider: BrowserCloak},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -258,7 +261,7 @@ func TestValidateBrowserTargets_CloakTargetCanInheritGlobalBinary(t *testing.T) 
 		DefaultTarget:    "cloak",
 		ChromeExtraFlags: "--global-flag",
 		Targets: BrowserTargetsConfig{
-			"cloak": {Provider: BrowserProviderCloak},
+			"cloak": {Provider: BrowserCloak},
 		},
 	}
 	if errs := ValidateBrowserTargets(bc); len(errs) != 0 {
@@ -271,7 +274,7 @@ func TestValidateBrowserTargets_DanglingFallbackReference(t *testing.T) {
 		DefaultTarget: "a",
 		FallbackOrder: []string{"missing"},
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome},
+			"a": {Provider: BrowserChrome},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -291,8 +294,8 @@ func TestValidateBrowserTargets_RejectsFallbackDuplicateAndDefaultSelfReference(
 		DefaultTarget: "a",
 		FallbackOrder: []string{"b", "a", "b"},
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome},
-			"b": {Provider: BrowserProviderChrome},
+			"a": {Provider: BrowserChrome},
+			"b": {Provider: BrowserChrome},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -315,7 +318,7 @@ func TestValidateBrowserTargets_RejectsUnsafeTargetExtraFlags(t *testing.T) {
 	bc := BrowserConfig{
 		DefaultTarget: "a",
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome, ExtraFlags: "--disable-web-security"},
+			"a": {Provider: BrowserChrome, ExtraFlags: "--disable-web-security"},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -335,7 +338,7 @@ func TestValidateBrowserTargets_ValidatesTargetCloakConfig(t *testing.T) {
 		DefaultTarget: "cloak",
 		Targets: BrowserTargetsConfig{
 			"cloak": {
-				Provider: BrowserProviderCloak,
+				Provider: BrowserCloak,
 				Binary:   "/opt/cloak/chrome",
 				Cloak:    CloakBrowserConfig{Locale: "en-gb"},
 			},
@@ -356,8 +359,8 @@ func TestValidateBrowserTargets_ValidatesTargetCloakConfig(t *testing.T) {
 func TestValidateBrowserTargets_DefaultTargetMissingWithMultipleTargets(t *testing.T) {
 	bc := BrowserConfig{
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome},
-			"b": {Provider: BrowserProviderChrome},
+			"a": {Provider: BrowserChrome},
+			"b": {Provider: BrowserChrome},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -376,7 +379,7 @@ func TestValidateBrowserTargets_DefaultTargetReferencingUnknown(t *testing.T) {
 	bc := BrowserConfig{
 		DefaultTarget: "ghost",
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome},
+			"a": {Provider: BrowserChrome},
 		},
 	}
 	errs := ValidateBrowserTargets(bc)
@@ -394,7 +397,7 @@ func TestValidateBrowserTargets_DefaultTargetReferencingUnknown(t *testing.T) {
 func TestValidateBrowserTargets_SingleTargetNoDefaultIsAllowed(t *testing.T) {
 	bc := BrowserConfig{
 		Targets: BrowserTargetsConfig{
-			"only": {Provider: BrowserProviderChrome},
+			"only": {Provider: BrowserChrome},
 		},
 	}
 	if errs := ValidateBrowserTargets(bc); len(errs) != 0 {
@@ -406,8 +409,8 @@ func TestResolveDefaultTarget_ReturnsExplicit(t *testing.T) {
 	cfg := &RuntimeConfig{
 		DefaultTarget: "primary",
 		Targets: BrowserTargetsConfig{
-			"primary": {Provider: BrowserProviderChrome},
-			"backup":  {Provider: BrowserProviderChrome},
+			"primary": {Provider: BrowserChrome},
+			"backup":  {Provider: BrowserChrome},
 		},
 	}
 	if got := ResolveDefaultTarget(cfg); got != "primary" {
@@ -418,7 +421,7 @@ func TestResolveDefaultTarget_ReturnsExplicit(t *testing.T) {
 func TestResolveDefaultTarget_SingleTargetAutoPicks(t *testing.T) {
 	cfg := &RuntimeConfig{
 		Targets: BrowserTargetsConfig{
-			"only": {Provider: BrowserProviderChrome},
+			"only": {Provider: BrowserChrome},
 		},
 	}
 	if got := ResolveDefaultTarget(cfg); got != "only" {
@@ -436,9 +439,9 @@ func TestResolveDefaultTarget_NoTargetsReturnsEmpty(t *testing.T) {
 func TestResolveDefaultBrowserTarget_LegacyNoTargetsReturnsFreshConfig(t *testing.T) {
 	cookieSecure := true
 	cfg := &RuntimeConfig{
-		BrowserProvider: BrowserProviderCloak,
-		CookieSecure:    &cookieSecure,
-		AllowedDomains:  []string{"example.com"},
+		DefaultBrowser: BrowserCloak,
+		CookieSecure:   &cookieSecure,
+		AllowedDomains: []string{"example.com"},
 	}
 	resolved, err := ResolveDefaultBrowserTarget(cfg)
 	if err != nil {
@@ -447,7 +450,7 @@ func TestResolveDefaultBrowserTarget_LegacyNoTargetsReturnsFreshConfig(t *testin
 	if resolved == nil || !resolved.Legacy {
 		t.Fatalf("resolved legacy = %+v, want legacy result", resolved)
 	}
-	if resolved.Name != "" || resolved.Provider != BrowserProviderCloak {
+	if resolved.Name != "" || resolved.Provider != BrowserCloak {
 		t.Fatalf("resolved = %+v, want unnamed cloak legacy target", resolved)
 	}
 	if resolved.Config == nil || resolved.Config == cfg {
@@ -466,12 +469,12 @@ func TestResolveDefaultBrowserTarget_LegacyNoTargetsReturnsFreshConfig(t *testin
 
 func TestResolveDefaultBrowserTarget_SingleTargetPromotesEffectiveConfig(t *testing.T) {
 	cfg := &RuntimeConfig{
-		BrowserProvider:  BrowserProviderChrome,
+		DefaultBrowser:   BrowserChrome,
 		ChromeBinary:     "/global/chrome",
 		ChromeExtraFlags: "--global-flag",
 		Targets: BrowserTargetsConfig{
 			"only": {
-				Provider:   BrowserProviderCloak,
+				Provider:   BrowserCloak,
 				Binary:     "/opt/cloak/chrome",
 				ExtraFlags: "--target-flag",
 				Cloak:      CloakBrowserConfig{Timezone: "UTC"},
@@ -482,14 +485,14 @@ func TestResolveDefaultBrowserTarget_SingleTargetPromotesEffectiveConfig(t *test
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if resolved.Name != "only" || resolved.Provider != BrowserProviderCloak || resolved.Legacy {
+	if resolved.Name != "only" || resolved.Provider != BrowserCloak || resolved.Legacy {
 		t.Fatalf("resolved = %+v, want non-legacy cloak target named only", resolved)
 	}
 	if resolved.Config == cfg {
 		t.Fatalf("resolved.Config should not reuse input pointer")
 	}
-	if resolved.Config.BrowserProvider != BrowserProviderCloak {
-		t.Fatalf("effective provider = %q, want cloak", resolved.Config.BrowserProvider)
+	if resolved.Config.DefaultBrowser != BrowserCloak {
+		t.Fatalf("effective provider = %q, want cloak", resolved.Config.DefaultBrowser)
 	}
 	if resolved.Config.ChromeBinary != "/opt/cloak/chrome" {
 		t.Fatalf("effective binary = %q, want /opt/cloak/chrome", resolved.Config.ChromeBinary)
@@ -500,7 +503,7 @@ func TestResolveDefaultBrowserTarget_SingleTargetPromotesEffectiveConfig(t *test
 	if resolved.Config.Cloak.Timezone != "UTC" {
 		t.Fatalf("effective cloak timezone = %q, want UTC", resolved.Config.Cloak.Timezone)
 	}
-	if cfg.BrowserProvider != BrowserProviderChrome || cfg.ChromeBinary != "/global/chrome" {
+	if cfg.DefaultBrowser != BrowserChrome || cfg.ChromeBinary != "/global/chrome" {
 		t.Fatalf("input cfg was mutated: %+v", cfg)
 	}
 }
@@ -508,7 +511,7 @@ func TestResolveDefaultBrowserTarget_SingleTargetPromotesEffectiveConfig(t *test
 func TestResolveExplicitBrowserTarget_RejectsEmptyName(t *testing.T) {
 	cfg := &RuntimeConfig{
 		Targets: BrowserTargetsConfig{
-			"only": {Provider: BrowserProviderChrome},
+			"only": {Provider: BrowserChrome},
 		},
 	}
 	if _, err := ResolveExplicitBrowserTarget(cfg, " "); err == nil {
@@ -519,7 +522,7 @@ func TestResolveExplicitBrowserTarget_RejectsEmptyName(t *testing.T) {
 func TestResolveExplicitBrowserTarget_ConfigDoesNotAliasOriginal(t *testing.T) {
 	cookieSecure := true
 	cfg := &RuntimeConfig{
-		BrowserProvider:        BrowserProviderChrome,
+		DefaultBrowser:         BrowserChrome,
 		CookieSecure:           &cookieSecure,
 		AllowedDomains:         []string{"allowed.example"},
 		DownloadAllowedDomains: []string{"download.example"},
@@ -536,7 +539,7 @@ func TestResolveExplicitBrowserTarget_ConfigDoesNotAliasOriginal(t *testing.T) {
 		DefaultTarget:          "proxy",
 		Targets: BrowserTargetsConfig{
 			"proxy": {
-				Provider: BrowserProviderChrome,
+				Provider: BrowserChrome,
 				Proxy: BrowserProxyConfig{
 					Server:     "http://proxy.example:8080",
 					BypassList: []string{"target"},
@@ -547,7 +550,7 @@ func TestResolveExplicitBrowserTarget_ConfigDoesNotAliasOriginal(t *testing.T) {
 					StorageQuotaMB:  intPtr(256),
 				},
 			},
-			"backup": {Provider: BrowserProviderChrome},
+			"backup": {Provider: BrowserChrome},
 		},
 	}
 
@@ -637,15 +640,15 @@ func TestResolveRequestedTarget_TargetsEmptyRequestedReturnsDefault(t *testing.T
 	cfg := &RuntimeConfig{
 		DefaultTarget: "primary",
 		Targets: BrowserTargetsConfig{
-			"primary": {Provider: BrowserProviderChrome},
-			"backup":  {Provider: BrowserProviderCloak},
+			"primary": {Provider: BrowserChrome},
+			"backup":  {Provider: BrowserCloak},
 		},
 	}
 	name, provider, err := ResolveRequestedTarget(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if name != "primary" || provider != BrowserProviderChrome {
+	if name != "primary" || provider != BrowserChrome {
 		t.Fatalf("got (%q, %q), want (primary, chrome)", name, provider)
 	}
 }
@@ -653,8 +656,8 @@ func TestResolveRequestedTarget_TargetsEmptyRequestedReturnsDefault(t *testing.T
 func TestResolveRequestedTarget_TargetsMultiNoDefaultErrors(t *testing.T) {
 	cfg := &RuntimeConfig{
 		Targets: BrowserTargetsConfig{
-			"a": {Provider: BrowserProviderChrome},
-			"b": {Provider: BrowserProviderChrome},
+			"a": {Provider: BrowserChrome},
+			"b": {Provider: BrowserChrome},
 		},
 	}
 	_, _, err := ResolveRequestedTarget(cfg, "")
@@ -670,15 +673,15 @@ func TestResolveRequestedTarget_ValidRequestedReturnsProvider(t *testing.T) {
 	cfg := &RuntimeConfig{
 		DefaultTarget: "primary",
 		Targets: BrowserTargetsConfig{
-			"primary": {Provider: BrowserProviderChrome},
-			"cloak-1": {Provider: BrowserProviderCloak},
+			"primary": {Provider: BrowserChrome},
+			"cloak-1": {Provider: BrowserCloak},
 		},
 	}
 	name, provider, err := ResolveRequestedTarget(cfg, "cloak-1")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if name != "cloak-1" || provider != BrowserProviderCloak {
+	if name != "cloak-1" || provider != BrowserCloak {
 		t.Fatalf("got (%q, %q), want (cloak-1, cloak)", name, provider)
 	}
 }
@@ -687,7 +690,7 @@ func TestResolveRequestedTarget_UnknownRequestedErrors(t *testing.T) {
 	cfg := &RuntimeConfig{
 		DefaultTarget: "primary",
 		Targets: BrowserTargetsConfig{
-			"primary": {Provider: BrowserProviderChrome},
+			"primary": {Provider: BrowserChrome},
 		},
 	}
 	_, _, err := ResolveRequestedTarget(cfg, "ghost")
@@ -703,7 +706,7 @@ func TestResolveRequestedTarget_InvalidNameErrors(t *testing.T) {
 	cfg := &RuntimeConfig{
 		DefaultTarget: "primary",
 		Targets: BrowserTargetsConfig{
-			"primary": {Provider: BrowserProviderChrome},
+			"primary": {Provider: BrowserChrome},
 		},
 	}
 	_, _, err := ResolveRequestedTarget(cfg, "Bad_Name")
@@ -712,6 +715,179 @@ func TestResolveRequestedTarget_InvalidNameErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid browser target name") {
 		t.Fatalf("err = %v, want 'invalid browser target name'", err)
+	}
+}
+
+// --- TargetsForBrowser ---
+
+func TestTargetsForBrowser_SingleMatch(t *testing.T) {
+	cfg := &RuntimeConfig{
+		Targets: BrowserTargetsConfig{
+			"cloak-default": {Provider: BrowserCloak},
+			"chrome-local":  {Provider: BrowserChrome},
+		},
+	}
+	got := TargetsForBrowser(cfg, "cloak")
+	if len(got) != 1 || got[0] != "cloak-default" {
+		t.Fatalf("TargetsForBrowser(cloak) = %v, want [cloak-default]", got)
+	}
+}
+
+func TestTargetsForBrowser_MultipleMatches(t *testing.T) {
+	cfg := &RuntimeConfig{
+		Targets: BrowserTargetsConfig{
+			"cloak-eu": {Provider: BrowserCloak},
+			"cloak-us": {Provider: BrowserCloak},
+			"chrome":   {Provider: BrowserChrome},
+		},
+	}
+	got := TargetsForBrowser(cfg, "cloak")
+	if len(got) != 2 || got[0] != "cloak-eu" || got[1] != "cloak-us" {
+		t.Fatalf("TargetsForBrowser(cloak) = %v, want [cloak-eu cloak-us]", got)
+	}
+}
+
+func TestTargetsForBrowser_NoMatch(t *testing.T) {
+	cfg := &RuntimeConfig{
+		Targets: BrowserTargetsConfig{
+			"chrome-local": {Provider: BrowserChrome},
+		},
+	}
+	got := TargetsForBrowser(cfg, "cloak")
+	if len(got) != 0 {
+		t.Fatalf("TargetsForBrowser(cloak) = %v, want empty", got)
+	}
+}
+
+func TestTargetsForBrowser_NilConfig(t *testing.T) {
+	got := TargetsForBrowser(nil, "chrome")
+	if got != nil {
+		t.Fatalf("TargetsForBrowser(nil) = %v, want nil", got)
+	}
+}
+
+func TestTargetsForBrowser_EmptyTargets(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	got := TargetsForBrowser(cfg, "chrome")
+	if got != nil {
+		t.Fatalf("TargetsForBrowser(empty) = %v, want nil", got)
+	}
+}
+
+// --- ResolveBrowserToTarget ---
+
+func TestResolveBrowserToTarget_SingleTarget(t *testing.T) {
+	cfg := &RuntimeConfig{
+		Targets: BrowserTargetsConfig{
+			"cloak-default": {Provider: BrowserCloak},
+			"chrome-local":  {Provider: BrowserChrome},
+		},
+	}
+	got, err := ResolveBrowserToTarget(cfg, "cloak")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "cloak-default" {
+		t.Fatalf("ResolveBrowserToTarget = %q, want cloak-default", got)
+	}
+}
+
+func TestResolveBrowserToTarget_AmbiguousNoDefault(t *testing.T) {
+	cfg := &RuntimeConfig{
+		Targets: BrowserTargetsConfig{
+			"cloak-eu": {Provider: BrowserCloak},
+			"cloak-us": {Provider: BrowserCloak},
+		},
+	}
+	_, err := ResolveBrowserToTarget(cfg, "cloak")
+	if err == nil {
+		t.Fatal("expected AmbiguousBrowserError, got nil")
+	}
+	var ambErr *AmbiguousBrowserError
+	if !errors.As(err, &ambErr) {
+		t.Fatalf("expected *AmbiguousBrowserError, got %T: %v", err, err)
+	}
+	if ambErr.Browser != "cloak" {
+		t.Fatalf("AmbiguousBrowserError.Browser = %q, want cloak", ambErr.Browser)
+	}
+	if len(ambErr.Targets) != 2 || ambErr.Targets[0] != "cloak-eu" || ambErr.Targets[1] != "cloak-us" {
+		t.Fatalf("AmbiguousBrowserError.Targets = %v, want [cloak-eu cloak-us]", ambErr.Targets)
+	}
+}
+
+func TestResolveBrowserToTarget_AmbiguousWithDefault(t *testing.T) {
+	cfg := &RuntimeConfig{
+		DefaultTarget: "cloak-eu",
+		Targets: BrowserTargetsConfig{
+			"cloak-eu": {Provider: BrowserCloak},
+			"cloak-us": {Provider: BrowserCloak},
+		},
+	}
+	got, err := ResolveBrowserToTarget(cfg, "cloak")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "cloak-eu" {
+		t.Fatalf("ResolveBrowserToTarget = %q, want cloak-eu", got)
+	}
+}
+
+func TestResolveBrowserToTarget_NoTargets(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	got, err := ResolveBrowserToTarget(cfg, "chrome")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("ResolveBrowserToTarget = %q, want empty", got)
+	}
+}
+
+func TestResolveBrowserToTarget_NilConfig(t *testing.T) {
+	got, err := ResolveBrowserToTarget(nil, "chrome")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("ResolveBrowserToTarget = %q, want empty", got)
+	}
+}
+
+func TestResolveBrowserToTarget_DefaultNotInMatches(t *testing.T) {
+	cfg := &RuntimeConfig{
+		DefaultTarget: "chrome-local",
+		Targets: BrowserTargetsConfig{
+			"cloak-eu":     {Provider: BrowserCloak},
+			"cloak-us":     {Provider: BrowserCloak},
+			"chrome-local": {Provider: BrowserChrome},
+		},
+	}
+	_, err := ResolveBrowserToTarget(cfg, "cloak")
+	if err == nil {
+		t.Fatal("expected AmbiguousBrowserError when default doesn't match browser, got nil")
+	}
+	var ambErr *AmbiguousBrowserError
+	if !errors.As(err, &ambErr) {
+		t.Fatalf("expected *AmbiguousBrowserError, got %T: %v", err, err)
+	}
+	if ambErr.Browser != "cloak" {
+		t.Fatalf("AmbiguousBrowserError.Browser = %q, want cloak", ambErr.Browser)
+	}
+}
+
+func TestResolveBrowserToTarget_NoMatchingProvider(t *testing.T) {
+	cfg := &RuntimeConfig{
+		DefaultTarget: "chrome-local",
+		Targets: BrowserTargetsConfig{
+			"chrome-local": {Provider: BrowserChrome},
+		},
+	}
+	got, err := ResolveBrowserToTarget(cfg, "cloak")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("ResolveBrowserToTarget = %q, want empty (no matching provider)", got)
 	}
 }
 
@@ -744,12 +920,12 @@ func TestIsValidBrowserTargetName(t *testing.T) {
 func TestFileConfig_TargetsRoundTrip(t *testing.T) {
 	fc := FileConfig{
 		Browser: BrowserConfig{
-			Provider:      BrowserProviderChrome,
+			Provider:      BrowserChrome,
 			ChromeBinary:  "/usr/bin/chrome",
 			DefaultTarget: "chrome-local",
 			FallbackOrder: []string{"chrome-local"},
 			Targets: BrowserTargetsConfig{
-				"chrome-local": {Provider: BrowserProviderChrome, Binary: "/usr/bin/chrome"},
+				"chrome-local": {Provider: BrowserChrome, Binary: "/usr/bin/chrome"},
 			},
 		},
 	}
@@ -774,7 +950,7 @@ func TestFileConfig_TargetsRoundTrip(t *testing.T) {
 		t.Fatalf("Targets[chrome-local] lost; got %+v", back.Browser.Targets)
 	}
 	// Legacy fields preserved.
-	if back.Browser.Provider != BrowserProviderChrome || back.Browser.ChromeBinary != "/usr/bin/chrome" {
+	if back.Browser.Provider != BrowserChrome || back.Browser.ChromeBinary != "/usr/bin/chrome" {
 		t.Fatalf("legacy fields lost: %+v", back.Browser)
 	}
 }
@@ -782,7 +958,7 @@ func TestFileConfig_TargetsRoundTrip(t *testing.T) {
 func TestFileConfig_LegacyOnlyMarshalOmitsNewKeys(t *testing.T) {
 	fc := FileConfig{
 		Browser: BrowserConfig{
-			Provider:     BrowserProviderChrome,
+			Provider:     BrowserChrome,
 			ChromeBinary: "/usr/bin/chrome",
 		},
 	}
@@ -800,7 +976,7 @@ func TestFileConfig_LegacyOnlyMarshalOmitsNewKeys(t *testing.T) {
 
 func baseRuntimeForOverride() *RuntimeConfig {
 	return &RuntimeConfig{
-		BrowserProvider:  BrowserProviderChrome,
+		DefaultBrowser:   BrowserChrome,
 		ChromeBinary:     "/global/chrome",
 		ChromeExtraFlags: "--global-flag",
 		Cloak: CloakBrowserRuntimeConfig{
@@ -823,7 +999,7 @@ func TestApplyTargetOverride_EmptyTargetName_ReturnsUnchanged(t *testing.T) {
 func TestApplyTargetOverride_UnknownTarget_ReturnsUnchanged(t *testing.T) {
 	cfg := baseRuntimeForOverride()
 	cfg.Targets = BrowserTargetsConfig{
-		"chrome": BrowserTargetConfig{Provider: BrowserProviderChrome},
+		"chrome": BrowserTargetConfig{Provider: BrowserChrome},
 	}
 	got := ApplyTargetOverride(cfg, "missing")
 	if got != cfg {
@@ -841,7 +1017,7 @@ func TestApplyTargetOverride_OverridesProviderBinaryFlags(t *testing.T) {
 	cfg := baseRuntimeForOverride()
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak-eu": BrowserTargetConfig{
-			Provider:   BrowserProviderCloak,
+			Provider:   BrowserCloak,
 			Binary:     "/opt/cloak/cloakbrowser",
 			ExtraFlags: "--target-flag",
 		},
@@ -850,8 +1026,8 @@ func TestApplyTargetOverride_OverridesProviderBinaryFlags(t *testing.T) {
 	if got == cfg {
 		t.Fatalf("expected a new pointer, got input pointer back")
 	}
-	if got.BrowserProvider != BrowserProviderCloak {
-		t.Errorf("provider = %q, want %q", got.BrowserProvider, BrowserProviderCloak)
+	if got.DefaultBrowser != BrowserCloak {
+		t.Errorf("provider = %q, want %q", got.DefaultBrowser, BrowserCloak)
 	}
 	if got.ChromeBinary != "/opt/cloak/cloakbrowser" {
 		t.Errorf("binary = %q, want /opt/cloak/cloakbrowser", got.ChromeBinary)
@@ -860,7 +1036,7 @@ func TestApplyTargetOverride_OverridesProviderBinaryFlags(t *testing.T) {
 		t.Errorf("extraFlags = %q, want --target-flag", got.ChromeExtraFlags)
 	}
 	// Input MUST be untouched.
-	if cfg.BrowserProvider != BrowserProviderChrome ||
+	if cfg.DefaultBrowser != BrowserChrome ||
 		cfg.ChromeBinary != "/global/chrome" ||
 		cfg.ChromeExtraFlags != "--global-flag" {
 		t.Errorf("input cfg was mutated: %+v", cfg)
@@ -871,7 +1047,7 @@ func TestApplyTargetOverride_EmptyBinary_KeepsGlobalBinary(t *testing.T) {
 	cfg := baseRuntimeForOverride()
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak": BrowserTargetConfig{
-			Provider: BrowserProviderCloak,
+			Provider: BrowserCloak,
 			// no Binary, no ExtraFlags
 		},
 	}
@@ -882,8 +1058,8 @@ func TestApplyTargetOverride_EmptyBinary_KeepsGlobalBinary(t *testing.T) {
 	if got.ChromeExtraFlags != "--global-flag" {
 		t.Errorf("extraFlags = %q, want global --global-flag (inherit)", got.ChromeExtraFlags)
 	}
-	if got.BrowserProvider != BrowserProviderCloak {
-		t.Errorf("provider = %q, want cloak", got.BrowserProvider)
+	if got.DefaultBrowser != BrowserCloak {
+		t.Errorf("provider = %q, want cloak", got.DefaultBrowser)
 	}
 }
 
@@ -891,7 +1067,7 @@ func TestApplyTargetOverride_CloakDeepMerge_PartialTarget(t *testing.T) {
 	cfg := baseRuntimeForOverride()
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak": BrowserTargetConfig{
-			Provider: BrowserProviderCloak,
+			Provider: BrowserCloak,
 			Cloak: CloakBrowserConfig{
 				// Override seed + timezone; leave others zero.
 				FingerprintSeed: "target-seed",
@@ -926,7 +1102,7 @@ func TestApplyTargetOverride_CloakEmpty_PreservesGlobalCloak(t *testing.T) {
 	cfg := baseRuntimeForOverride()
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak": BrowserTargetConfig{
-			Provider: BrowserProviderCloak,
+			Provider: BrowserCloak,
 			// Cloak left zero.
 		},
 	}
@@ -941,7 +1117,7 @@ func TestApplyTargetOverride_CloakUnion_NonOverlappingFields(t *testing.T) {
 	cfg.Cloak = CloakBrowserRuntimeConfig{FingerprintSeed: "g"}
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak": BrowserTargetConfig{
-			Provider: BrowserProviderCloak,
+			Provider: BrowserCloak,
 			Cloak:    CloakBrowserConfig{Platform: "windows"},
 		},
 	}
@@ -963,7 +1139,7 @@ func TestApplyTargetOverride_CloakOverlap_TargetWins(t *testing.T) {
 	}
 	cfg.Targets = BrowserTargetsConfig{
 		"cloak": BrowserTargetConfig{
-			Provider: BrowserProviderCloak,
+			Provider: BrowserCloak,
 			Cloak: CloakBrowserConfig{
 				FingerprintSeed:           "target-seed",
 				StorageQuotaMB:            intPtr(2048),
@@ -996,7 +1172,7 @@ func TestApplyTargetOverride_ClonesTargetProxyAndTargetsMap(t *testing.T) {
 	}
 	cfg.Targets = BrowserTargetsConfig{
 		"proxy": {
-			Provider: BrowserProviderChrome,
+			Provider: BrowserChrome,
 			Proxy: BrowserProxyConfig{
 				Server:     "http://proxy.example:8080",
 				BypassList: []string{"localhost"},
@@ -1008,7 +1184,7 @@ func TestApplyTargetOverride_ClonesTargetProxyAndTargetsMap(t *testing.T) {
 	got := ApplyTargetOverride(cfg, "proxy")
 	got.Proxy.BypassList[0] = "mutated"
 	got.Proxy.Geo.Timezone = "Europe/London"
-	got.Targets["proxy"] = BrowserTargetConfig{Provider: BrowserProviderCloak}
+	got.Targets["proxy"] = BrowserTargetConfig{Provider: BrowserCloak}
 
 	original := cfg.Targets["proxy"]
 	if original.Proxy.BypassList[0] != "localhost" {
@@ -1017,7 +1193,7 @@ func TestApplyTargetOverride_ClonesTargetProxyAndTargetsMap(t *testing.T) {
 	if original.Proxy.Geo.Timezone != "UTC" {
 		t.Fatalf("target proxy geo mutated through override: %+v", original.Proxy.Geo)
 	}
-	if original.Provider != BrowserProviderChrome {
+	if original.Provider != BrowserChrome {
 		t.Fatalf("target map shared with override: %+v", original)
 	}
 }

@@ -21,7 +21,7 @@ type startInstanceRequest struct {
 	Port            string                 `json:"port,omitempty"`
 	ExtensionPaths  []string               `json:"extensionPaths,omitempty"`
 	SecurityPolicy  *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
-	BrowserTarget   string                 `json:"browserTarget,omitempty"`
+	Browser         string                 `json:"browser,omitempty"`
 	FallbackTargets []string               `json:"fallbackTargets,omitempty"`
 }
 
@@ -269,12 +269,28 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 	headless := req.Mode != "headed"
 
+	// Resolve the public "browser" (provider name) to an internal target name.
+	var browserTarget string
+	if req.Browser != "" {
+		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
+		if resolveErr != nil {
+			httpx.Error(w, http.StatusBadRequest, resolveErr)
+			return
+		}
+		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
+			return
+		}
+		browserTarget = resolved
+	}
+
 	opts := LaunchOptions{
 		ExtensionPaths: req.ExtensionPaths,
 		SecurityPolicy: req.SecurityPolicy,
+		Browser:        req.Browser,
 	}
 
-	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, req.BrowserTarget, req.FallbackTargets, opts)
+	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, browserTarget, req.FallbackTargets, opts)
 	if err != nil {
 		writeLaunchError(w, err)
 		return
@@ -286,7 +302,7 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 // writeLaunchError maps launch / fallback errors to 400 (unknown target), 502 (exhaustion), or the legacy classifier.
 func writeLaunchError(w http.ResponseWriter, err error) {
-	var unknown *UnknownBrowserTargetError
+	var unknown *UnknownBrowserError
 	if errors.As(err, &unknown) {
 		httpx.Error(w, http.StatusBadRequest, err)
 		return
@@ -365,10 +381,10 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 
 func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		CdpURL        string `json:"cdpUrl"`
-		Name          string `json:"name,omitempty"`
-		Provider      string `json:"provider,omitempty"`
-		BrowserTarget string `json:"browserTarget,omitempty"`
+		CdpURL   string `json:"cdpUrl"`
+		Name     string `json:"name,omitempty"`
+		Provider string `json:"provider,omitempty"`
+		Browser  string `json:"browser,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -380,10 +396,26 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, 400, fmt.Errorf("cdpUrl is required"))
 		return
 	}
+
+	// Resolve the public "browser" (provider name) to an internal target name.
+	var browserTarget string
+	if req.Browser != "" {
+		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
+		if resolveErr != nil {
+			httpx.Error(w, http.StatusBadRequest, resolveErr)
+			return
+		}
+		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
+			return
+		}
+		browserTarget = resolved
+	}
+
 	attachOpts, err := o.resolveAttachOptions(AttachOptions{
-		BrowserTarget:   req.BrowserTarget,
+		ResolvedTarget:  browserTarget,
 		BrowserProvider: req.Provider,
-	}, config.BrowserProviderChrome)
+	}, config.BrowserChrome)
 	if err != nil {
 		httpx.Error(w, 400, err)
 		return
@@ -413,10 +445,10 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 
 func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		BaseURL       string `json:"baseUrl"`
-		Name          string `json:"name,omitempty"`
-		Token         string `json:"token,omitempty"`
-		BrowserTarget string `json:"browserTarget,omitempty"`
+		BaseURL string `json:"baseUrl"`
+		Name    string `json:"name,omitempty"`
+		Token   string `json:"token,omitempty"`
+		Browser string `json:"browser,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -427,7 +459,23 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		httpx.Error(w, 400, fmt.Errorf("baseUrl is required"))
 		return
 	}
-	attachOpts, err := o.resolveAttachOptions(AttachOptions{BrowserTarget: req.BrowserTarget}, "")
+
+	// Resolve the public "browser" (provider name) to an internal target name.
+	var browserTarget string
+	if req.Browser != "" {
+		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
+		if resolveErr != nil {
+			httpx.Error(w, http.StatusBadRequest, resolveErr)
+			return
+		}
+		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
+			return
+		}
+		browserTarget = resolved
+	}
+
+	attachOpts, err := o.resolveAttachOptions(AttachOptions{ResolvedTarget: browserTarget}, "")
 	if err != nil {
 		httpx.Error(w, 400, err)
 		return

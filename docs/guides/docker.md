@@ -283,7 +283,9 @@ This image is local-only:
 
 ### Run a CloakBrowser-backed container locally
 
-Create a config that points PinchTab at the in-image CloakBrowser binary:
+Create a config that points PinchTab at the in-image CloakBrowser binary
+(`"provider": "cloak"` in the config file is equivalent to `--browser cloak`
+on the CLI):
 
 ```json
 {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,39 +11,164 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // HandleText extracts readable text from the current tab.
 //
 // @Endpoint GET /text
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
-	// --- Lite engine fast path ---
+	// Browser resolution: request > session > instance > global default > chrome
+	requestBrowser := strings.TrimSpace(r.URL.Query().Get("browser"))
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
 	tabID := r.URL.Query().Get("tabId")
-	h.recordReadRequest(r, "text", tabID)
-	if h.useLite(engine.CapText, "") {
-		h.recordEngine(r, "lite")
-		result, err := h.Router.Lite().Text(r.Context(), tabID)
-		if err != nil {
-			if engine.IsIDPIBlocked(err) {
-				httpx.Error(w, http.StatusForbidden, err)
-			} else {
-				httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
-			}
+	if tabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
+
+	browser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if browser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(browser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
 			return
 		}
-		w.Header().Set("X-Engine", "lite")
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte(result.Text))
+	}
+
+	// --- Ghost-chrome routing fast path ---
+	// For ghost-chrome, use the static browser to read text from stored state
+	// (set by a prior ghost-chrome /navigate). If the static browser has content,
+	// serve it directly. If not available or empty, escalate to Chrome.
+	if browser == config.BrowserGhostChrome && h.StaticBrowser != nil {
+		h.recordReadRequest(r, "text", tabID)
+		result, err := h.StaticBrowser.Text(r.Context(), tabID)
+		if err == nil && result.Text != "" {
+			// Quality gate: assess ghost content before serving.
+			gr := ghostchrome.AssessContent(result.Text)
+			if gr.ShouldAccept() {
+				// IDPI content scan at handler level.
+				scanResult := h.ContentGuard.Scan(result.Text, result.URL)
+				if scanResult.Blocked {
+					httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked: %s", scanResult.BlockReason))
+					return
+				}
+				scanResult.SetHeaders(w)
+
+				route := &browserops.RouteMetadata{
+					RequestedBrowser: browser,
+					UsedBrowser:      "ghost",
+					Attempts:         []browserops.RouteAttempt{{Browser: "ghost", Accepted: true, Reason: gr.FormatReason()}},
+				}
+				if requestBrowser != "" {
+					route.RequestedBrowser = requestBrowser
+				}
+				h.recordActivity(r, activity.Update{Route: route})
+
+				format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+				if format == "text" || format == "plain" {
+					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+					w.WriteHeader(200)
+					_, _ = w.Write([]byte(scanResult.Text))
+					return
+				}
+				httpx.JSON(w, 200, map[string]any{
+					"url":   result.URL,
+					"title": result.Title,
+					"text":  scanResult.Text,
+					"route": route,
+				})
+				return
+			}
+			// Quality too low — escalate to Chrome (fall through).
+		}
+		// Ghost text not available or quality insufficient.
+		// Fall through to Chrome path.
+	}
+
+	handleDecision, err := checkBrowserCanHandle(browser, browsers.RequestIntent{
+		Shape: browsers.ShapeRenderedRead,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		browser = config.BrowserChrome
+	}
+
+	// Validate that the resolved browser can be unambiguously mapped to a target.
+	textBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, browser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg := h.resolveEffectiveConfig(textBrowserTarget)
+
+	// --- Static browser fast path ---
+	h.recordReadRequest(r, "text", tabID)
+	if h.useStaticBrowser(browserops.CapText) {
+		result, err := h.StaticBrowser.Text(r.Context(), tabID)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
+			return
+		}
+		// IDPI content scan at handler level.
+		scanResult := h.ContentGuard.Scan(result.Text, result.URL)
+		if scanResult.Blocked {
+			httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked: %s", scanResult.BlockReason))
+			return
+		}
+		scanResult.SetHeaders(w)
+
+		result.Route = browserops.SingleBrowserRoute(browser)
+		result.Route.Attempts = append(result.Route.Attempts, browserops.RouteAttempt{
+			Browser:  browser,
+			Accepted: handleDecision.Decision == browsers.DecisionHandle,
+			Reason:   handleDecision.Reason,
+		})
+		if requestBrowser != "" {
+			result.Route.RequestedBrowser = requestBrowser
+		}
+		h.recordActivity(r, activity.Update{Route: result.Route})
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(scanResult.Text))
+		return
+	}
+
+	textRoute := browserops.SingleBrowserRoute("chrome")
+	textRoute.Attempts = append(textRoute.Attempts, browserops.RouteAttempt{
+		Browser:  browser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		textRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: textRoute})
 
 	// Ensure Chrome is initialized
 	if err := h.ensureChrome(); err != nil {
@@ -72,7 +198,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
@@ -149,25 +275,14 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	)
 	h.recordResolvedURL(r, url)
 
-	// IDPI: scan extracted text for injection patterns before it reaches the caller.
-	idpiResult := h.IDPIGuard.ScanContent(text)
-	if idpiResult.Blocked {
-		httpx.Error(w, http.StatusForbidden,
-			fmt.Errorf("content blocked by IDPI scanner: %s", idpiResult.Reason))
+	// IDPI: scan extracted text for injection patterns and optionally wrap.
+	result := h.ContentGuard.Scan(text, url)
+	if result.Blocked {
+		httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked by IDPI scanner: %s", result.BlockReason))
 		return
 	}
-	if idpiResult.Threat {
-		w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
-		if idpiResult.Pattern != "" {
-			w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
-		}
-	}
-
-	// IDPI: wrap plain-text content in <untrusted_web_content> delimiters so
-	// downstream LLMs treat it as data, not instructions.
-	if h.Config.IDPI.Enabled && h.Config.IDPI.WrapContent {
-		text = h.IDPIGuard.WrapContent(text, url)
-	}
+	result.SetHeaders(w)
+	text = result.Text
 
 	if format == "text" || format == "plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -181,9 +296,10 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		"title":     title,
 		"text":      text,
 		"truncated": truncated,
+		"route":     textRoute,
 	}
-	if idpiResult.Threat {
-		resp["idpiWarning"] = idpiResult.Reason
+	if result.Warning != "" {
+		resp["idpiWarning"] = result.Warning
 	}
 	httpx.JSON(w, 200, resp)
 }
