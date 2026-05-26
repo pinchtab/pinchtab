@@ -9,10 +9,16 @@ import (
 // namedKeyDefs maps friendly key names (as accepted by the CLI "press" command)
 // to their CDP Input.dispatchKeyEvent parameters. Keys not in this table fall
 // through to chromedp.KeyEvent so that single printable characters still work.
+//
+// insertText is the character text sent in the keyDown event's "text" field.
+// This is what Playwright does: it makes Chrome generate both keydown and
+// keypress DOM events, triggering built-in browser default actions (form
+// submission for Enter, focus-advance for Tab). We do NOT send a separate
+// Input.insertText call — the text field here is for event generation only.
 var namedKeyDefs = map[string]struct {
 	code       string
 	virtualKey int64
-	insertText string // non-empty for keys that produce a character (Enter→\r, Tab→\t)
+	insertText string // text field for keyDown event (triggers keypress + default action)
 }{
 	"Enter":      {"Enter", 13, "\r"},
 	"Return":     {"Enter", 13, "\r"},
@@ -75,15 +81,38 @@ func DispatchNamedKey(ctx context.Context, key string) error {
 		})
 	}
 
-	actions := chromedp.Tasks{dispatchEvent("rawKeyDown")}
+	// Character-producing keys (Enter, Tab) must use "keyDown" with the text
+	// field set, mirroring what Playwright does. This causes Chrome to fire both
+	// the keydown and keypress DOM events, which triggers built-in default
+	// actions (form submit on Enter, focus-advance on Tab).
+	//
+	// Non-character keys (Escape, arrows, etc.) use "rawKeyDown" — they have no
+	// default browser action that requires a keypress event.
+	//
+	// Note: we do NOT follow up with a separate Input.insertText for Enter.
+	// The text field in the keyDown event is enough to trigger keypress/form
+	// submission; a separate insertText would corrupt the field value.
+	downType := "rawKeyDown"
+	var downText string
 	if def.insertText != "" {
-		insertText := def.insertText
-		actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
-				"text": insertText,
-			}, nil)
-		}))
+		downType = "keyDown"
+		downText = def.insertText
 	}
+	dispatchKeyDown := chromedp.ActionFunc(func(ctx context.Context) error {
+		params := map[string]any{
+			"type":                  downType,
+			"key":                   w3cKey,
+			"code":                  def.code,
+			"windowsVirtualKeyCode": def.virtualKey,
+			"nativeVirtualKeyCode":  def.virtualKey,
+		}
+		if downText != "" {
+			params["text"] = downText
+			params["unmodifiedText"] = downText
+		}
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchKeyEvent", params, nil)
+	})
+	actions := chromedp.Tasks{dispatchKeyDown}
 	actions = append(actions, dispatchEvent("keyUp"))
 
 	return chromedp.Run(ctx, actions...)

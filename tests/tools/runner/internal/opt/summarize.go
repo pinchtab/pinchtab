@@ -15,6 +15,7 @@ import (
 
 func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	var reportFile string
+	var baselineFile string
 	var transcriptFiles []string
 
 	i := 0
@@ -27,6 +28,13 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 			}
 			reportFile = argv[i+1]
 			i += 2
+		case "--baseline", "-b":
+			if i+1 >= len(argv) {
+				_, _ = fmt.Fprintf(stderr, "summarize: %s requires a value\n", argv[i])
+				return 1
+			}
+			baselineFile = argv[i+1]
+			i += 2
 		default:
 			_, _ = fmt.Fprintf(stderr, "summarize: unknown option: %s\n", argv[i])
 			return 1
@@ -35,8 +43,22 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	transcriptFiles = argv[i:]
 
 	if reportFile == "" {
-		_, _ = fmt.Fprintln(stderr, "usage: summarize -r <merged-report.json> [transcript1.jsonl ...]")
+		_, _ = fmt.Fprintln(stderr, "usage: summarize -r <merged-report.json> [-b baseline.json] [transcript1.jsonl ...]")
 		return 1
+	}
+
+	// Load baseline reference if provided
+	var baselineRef map[string]any
+	if baselineFile != "" {
+		data, err := os.ReadFile(baselineFile)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "summarize: cannot read baseline file: %v\n", err)
+			return 1
+		}
+		if err := json.Unmarshal(data, &baselineRef); err != nil {
+			_, _ = fmt.Fprintf(stderr, "summarize: cannot parse baseline file: %v\n", err)
+			return 1
+		}
 	}
 
 	data, err := os.ReadFile(reportFile)
@@ -211,21 +233,42 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	}
 	rows = append(rows, row{"Errors", "0", fmt.Sprintf("%d", failed)})
 
-	// Prefer transcript-based timing, then run_usage wall clock, then per-step sum.
+	// Prefer transcript-based timing (sum across agents), then run_usage agent_durations_ms
+	// sum (parallel runs — total compute time), then wall_clock_ms, then per-step sum.
 	var displayDurationMs float64
 	if totalAgentDurationMs > 0 {
 		displayDurationMs = totalAgentDurationMs
-	} else if wc, ok := usage["wall_clock_ms"].(float64); ok && wc > 0 {
-		displayDurationMs = wc
+	} else if usage != nil {
+		if durations, ok := usage["agent_durations_ms"].([]any); ok && len(durations) > 0 {
+			var sum float64
+			for _, d := range durations {
+				if v, ok := d.(float64); ok {
+					sum += v
+				}
+			}
+			displayDurationMs = sum
+		} else if wc, ok := usage["wall_clock_ms"].(float64); ok && wc > 0 {
+			displayDurationMs = wc
+		}
 	} else if stepsWithDuration > 0 {
 		displayDurationMs = totalDurationMs
+	}
+	blAvgStr := ""
+	blTotalStr := ""
+	if baselineRef != nil {
+		if v, ok := baselineRef["avg_time_per_step_ms"].(float64); ok && v > 0 {
+			blAvgStr = fmt.Sprintf("%.1fs", v/1000)
+		}
+		if v, ok := baselineRef["total_time_ms"].(float64); ok && v > 0 {
+			blTotalStr = fmtDuration(v)
+		}
 	}
 	if displayDurationMs > 0 {
 		avgMs := displayDurationMs / float64(blSteps)
 		rows = append(rows,
 			row{"", "", ""},
-			row{"Avg time/step", "", fmt.Sprintf("%.1fs", avgMs/1000)},
-			row{"Total time", "", fmtDuration(displayDurationMs)},
+			row{"Avg time/step", blAvgStr, fmt.Sprintf("%.1fs", avgMs/1000)},
+			row{"Total time", blTotalStr, fmtDuration(displayDurationMs)},
 		)
 	}
 

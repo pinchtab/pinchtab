@@ -1,11 +1,11 @@
 ---
 name: pinchtab-opt
-description: "Run the PinchTab optimization loop. Spawns blind subagents that execute 99 browser automation steps across 45 groups using only the PinchTab skill, then reports pass/fail results and operation counts vs baseline. Use when asked to 'run optimization', 'run the opt loop', 'benchmark the agent', or 'test pinchtab agent'."
+description: "Run the PinchTab optimization loop. Spawns blind subagents that execute 108 browser automation steps across 47 groups using only the PinchTab skill, then reports pass/fail results and operation counts vs baseline. Use when asked to 'run optimization', 'run the opt loop', 'benchmark the agent', or 'test pinchtab agent'."
 ---
 
 # PinchTab Optimization Loop
 
-Run blind subagents against 99 browser automation steps (45 groups) to measure how well an AI agent can drive PinchTab without hand-held selectors.
+Run blind subagents against 108 browser automation steps (47 groups) to measure how well an AI agent can drive PinchTab without hand-held selectors.
 
 ## Path Resolution
 
@@ -74,7 +74,7 @@ Use the **Agent** tool with `run_in_background: true`. Split the 45 groups into 
 
 - **Batch A**: groups 0-14 (45 steps)
 - **Batch B**: groups 15-29 (30 steps)
-- **Batch C**: groups 30-44 (24 steps)
+- **Batch C**: groups 30-46 (33 steps)
 
 Each subagent gets the **same prompt template** — only the group range and `{REPORT_FILE}` change. Replace `{START}`, `{END}`, `{START_PAD}`, `{END_PAD}`, `{PROJECT_ROOT}`, and `{REPORT_FILE}` with actual values:
 
@@ -110,17 +110,43 @@ While agents run, periodically count step-end recordings in each agent's output 
 grep -c "step-end" <output_file>
 ```
 
-Expected totals: Batch A ~45, Batch B ~30, Batch C ~24 = 99 total.
+Expected totals: Batch A ~45, Batch B ~30, Batch C ~33 = 108 total.
 
 ### 3. Collect and summarize
 
-Once all 3 agents complete, use `./scripts/runner` subcommands to merge reports (`merge-reports`), inject token usage from subagent transcripts (`inject-usage`), and print the final comparison table (`opt summarize`). Present the summarize output to the user as-is.
+Once all 3 agents complete, run these steps **in order**. The Agent tool returns each subagent's output file path — save all three as `TRANSCRIPT_A`, `TRANSCRIPT_B`, `TRANSCRIPT_C`.
+
+```bash
+SKILL_DIR=~/.claude/skills/pinchtab-opt
+MERGED="$RESULTS_DIR/merged_${TIMESTAMP}.json"
+
+# Merge the three agent reports into one JSON (strip non-JSON header lines)
+cd "$TOOLS_DIR" && \
+  ./scripts/runner opt merge-reports \
+    "$RESULTS_DIR/agentA_${TIMESTAMP}.json" \
+    "$RESULTS_DIR/agentB_${TIMESTAMP}.json" \
+    "$RESULTS_DIR/agentC_${TIMESTAMP}.json" \
+  2>/dev/null | grep -v '^Loaded\|^Merged' > "$MERGED"
+
+# Inject token usage from the subagent JSONL transcripts
+./scripts/runner opt inject-usage \
+  -r "$MERGED" \
+  "$TRANSCRIPT_A" "$TRANSCRIPT_B" "$TRANSCRIPT_C"
+
+# Print the final comparison table — present this output to the user as-is
+./scripts/runner opt summarize \
+  -r "$MERGED" \
+  -b "$SKILL_DIR/baseline-ref.json" \
+  "$TRANSCRIPT_A" "$TRANSCRIPT_B" "$TRANSCRIPT_C"
+```
+
+The `--baseline` / `-b` flag loads stored reference timing and ops from `baseline-ref.json` so the Baseline column is fully populated. The transcripts enable the Browser ops and Ops/step rows.
 
 ## Reference Numbers
 
-- **Baseline**: 99/99 steps
-- **Expected agent range**: 400-600 browser ops, 4-6 ops/step (agent must explore pages before acting)
-- **Group count**: 45 groups, 99 total steps
+- **Baseline**: 108/108 steps, 272 ops, 49s total, 0.5s/step (stored in `baseline-ref.json`)
+- **Expected agent range**: 250-400 browser ops, 2.5-4 ops/step
+- **Group count**: 47 groups, 108 total steps
 
 ## File Locations (relative to project root)
 
@@ -128,8 +154,9 @@ Once all 3 agents complete, use `./scripts/runner` subcommands to merge reports 
 |------|---------|
 | `tests/optimization/subagent-context.md` | Subagent instructions (env, wrapper, recording) |
 | `tests/optimization/index.md` | Group listing |
-| `tests/optimization/group-00.md` .. `group-44.md` | Task descriptions |
+| `tests/optimization/group-00.md` .. `group-46.md` | Task descriptions |
 | `skills/pinchtab/SKILL.md` | PinchTab command reference (read by subagent) |
 | `tests/tools/scripts/pt` | PinchTab wrapper (CWD must be `tests/tools`) |
 | `tests/tools/scripts/runner` | Step recorder (CWD must be `tests/tools`) |
 | `tests/tools/scripts/baseline.sh` | Baseline (subagent must NOT read this) |
+| `~/.claude/skills/pinchtab-opt/baseline-ref.json` | Stored baseline timing/ops reference for table |

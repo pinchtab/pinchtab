@@ -1,0 +1,8 @@
+{
+  "note": "Generated 2026-05-26 by running scripts/baseline.sh against Docker fixture server. Update by re-running baseline and measuring wall-clock time.",
+  "total_steps": 108,
+  "browser_ops": 272,
+  "ops_per_step": 2.5,
+  "total_time_ms": 49772,
+  "avg_time_per_step_ms": 461
+}

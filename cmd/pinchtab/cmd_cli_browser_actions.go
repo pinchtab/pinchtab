@@ -64,7 +64,7 @@ var dblclickCmd = newOptionalRefActionCmd("dblclick <ref>", "Double-click elemen
 
 var typeCmd = newSimpleActionCmd("type <ref> <text>", "Type into element", "type", cobra.MinimumNArgs(2))
 
-var pressCmd = newSimpleActionCmd("press <key>", "Press key (Enter, Tab, Escape...)", "press", cobra.MinimumNArgs(1))
+var pressCmd = newSimpleActionCmd("press [ref] <key>", "Press key (Enter, Tab, Escape...), optionally focusing a ref first", "press", cobra.MinimumNArgs(1))
 
 var fillCmd = newSimpleActionCmd("fill <ref|selector> <text>", "Fill input directly", "fill", cobra.MinimumNArgs(2))
 
