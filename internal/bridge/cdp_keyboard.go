@@ -6,19 +6,13 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// namedKeyDefs maps friendly key names (as accepted by the CLI "press" command)
-// to their CDP Input.dispatchKeyEvent parameters. Keys not in this table fall
-// through to chromedp.KeyEvent so that single printable characters still work.
-//
-// insertText is the character text sent in the keyDown event's "text" field.
-// This is what Playwright does: it makes Chrome generate both keydown and
-// keypress DOM events, triggering built-in browser default actions (form
-// submission for Enter, focus-advance for Tab). We do NOT send a separate
-// Input.insertText call — the text field here is for event generation only.
+// namedKeyDefs maps friendly key names to CDP Input.dispatchKeyEvent parameters.
+// Keys absent from this table fall through to chromedp.KeyEvent.
+// insertText non-empty → use "keyDown" (fires keypress + default action); empty → "rawKeyDown".
 var namedKeyDefs = map[string]struct {
 	code       string
 	virtualKey int64
-	insertText string // text field for keyDown event (triggers keypress + default action)
+	insertText string
 }{
 	"Enter":      {"Enter", 13, "\r"},
 	"Return":     {"Enter", 13, "\r"},
@@ -49,14 +43,8 @@ var namedKeyDefs = map[string]struct {
 	"F12":        {"F12", 123, ""},
 }
 
-// DispatchNamedKey sends proper CDP keyDown / keyUp events for well-known key
-// names (e.g. "Enter", "Tab", "Escape", "ArrowLeft") so that JavaScript event
-// handlers receive a KeyboardEvent with the correct key property.
-//
-// Unlike chromedp.KeyEvent, which treats multi-character strings as text
-// sequences and would type "Enter" as five separate characters, this function
-// consults namedKeyDefs and emits a single logical keystroke. Unrecognised keys
-// fall back to chromedp.KeyEvent so that single printable characters still work.
+// DispatchNamedKey sends CDP keyDown/keyUp for named keys (Enter, Tab, Escape, ArrowLeft …).
+// Unrecognised keys fall back to chromedp.KeyEvent.
 func DispatchNamedKey(ctx context.Context, key string) error {
 	def, ok := namedKeyDefs[key]
 	if !ok {
@@ -81,17 +69,8 @@ func DispatchNamedKey(ctx context.Context, key string) error {
 		})
 	}
 
-	// Character-producing keys (Enter, Tab) must use "keyDown" with the text
-	// field set, mirroring what Playwright does. This causes Chrome to fire both
-	// the keydown and keypress DOM events, which triggers built-in default
-	// actions (form submit on Enter, focus-advance on Tab).
-	//
-	// Non-character keys (Escape, arrows, etc.) use "rawKeyDown" — they have no
-	// default browser action that requires a keypress event.
-	//
-	// Note: we do NOT follow up with a separate Input.insertText for Enter.
-	// The text field in the keyDown event is enough to trigger keypress/form
-	// submission; a separate insertText would corrupt the field value.
+	// "keyDown" + text field fires keypress and triggers default actions (form submit, tab advance).
+	// "rawKeyDown" for non-character keys — no keypress needed.
 	downType := "rawKeyDown"
 	var downText string
 	if def.insertText != "" {

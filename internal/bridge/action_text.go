@@ -56,9 +56,6 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 	if req.Key == "" {
 		return nil, fmt.Errorf("key required for press")
 	}
-	// If a ref/selector was given alongside the key, focus that element first
-	// so the key lands on the intended target (e.g. `press e2 Enter` to submit
-	// a form from the password field).
 	if req.NodeID > 0 {
 		if err := focusBackendNode(ctx, req.NodeID); err != nil {
 			return nil, err

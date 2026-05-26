@@ -400,10 +400,6 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "press":
-		// Accept both `press <key>` and `press <ref> <key>`.
-		// When a ref is given it is used only to focus the element before
-		// dispatching the key — this matches how agents naturally write it
-		// ("press e2 Enter") by analogy with "fill e2 <text>".
 		if len(args) >= 2 {
 			setSelectorBody(body, args[0])
 			body["key"] = args[1]
