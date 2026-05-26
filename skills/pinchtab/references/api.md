@@ -86,9 +86,15 @@ Returns flat JSON array of nodes with `ref`, `role`, `name`, `depth`, `value`, `
 
 ```bash
 # CLI: pinchtab click e5 / pinchtab type e12 hello / pinchtab press Enter
-# Click by ref
+# Click by ref (normal click path; omit mode)
 curl -X POST /action -H 'Content-Type: application/json' \
   -d '{"kind": "click", "ref": "e5"}'
+
+# Bypass occlusion on the target element
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "click", "ref": "e5", "mode": "dom"}'
+curl -X POST /action -H 'Content-Type: application/json' \
+  -d '{"kind": "click", "ref": "e5", "mode": "dispatch"}'
 
 # Type into focused element (click first, then type)
 curl -X POST /action -H 'Content-Type: application/json' \
@@ -147,6 +153,9 @@ curl -X POST /action -H 'Content-Type: application/json' \
 
 Notes:
 
+- click behavior works like this: omit `mode` for the normal click path, use `mode:"dom"` for `element.click()`, or `mode:"dispatch"` for synthetic click events
+- `mode:"dom"` and `mode:"dispatch"` are mainly for bypassing occlusion
+- `mode` is separate from `humanize:true`, which keeps the normal pointer path but makes it slower and more human-like
 - selector-based click and double-click paths resolve through backend node IDs before dispatching pointer events
 - low-level pointer actions accept `ref`, `selector`, `nodeId`, or `x`/`y`
 - `mouse-down` and `mouse-up` accept `button` with `left`, `right`, or `middle`

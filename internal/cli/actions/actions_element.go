@@ -46,6 +46,9 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		if waitNav {
 			body["waitNav"] = true
 		}
+		if v, _ := cmd.Flags().GetString("mode"); v != "" {
+			body["mode"] = v
+		}
 		// --dismiss-banners only fires when --wait-nav is set; without nav,
 		// banners haven't changed and the dismissal pass would be wasted.
 		if waitNav {

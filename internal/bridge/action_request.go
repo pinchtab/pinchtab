@@ -51,6 +51,7 @@ type ActionRequest struct {
 	Y      float64 `json:"y,omitempty"`
 	HasXY  bool    `json:"hasXY,omitempty"`
 	Button string  `json:"button,omitempty"`
+	Mode   string  `json:"mode,omitempty"`
 
 	ScrollX int `json:"scrollX"`
 	ScrollY int `json:"scrollY"`

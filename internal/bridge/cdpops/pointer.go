@@ -459,6 +459,26 @@ const jsClickFn = `function() {
 	}
 }`
 
+const jsDispatchClickFn = `function() {
+	var el = this;
+	var r = el.getBoundingClientRect();
+	var cx = r.left + r.width / 2;
+	var cy = r.top + r.height / 2;
+	var init = {
+		clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+		button: 0, buttons: 1,
+		bubbles: true, cancelable: true, view: window
+	};
+	if (typeof el.focus === 'function') {
+		try { el.focus({preventScroll: true}); } catch (e) {}
+	}
+	el.dispatchEvent(new PointerEvent('pointerdown', Object.assign({}, init, {pointerId: 1, pointerType: 'mouse', isPrimary: true})));
+	el.dispatchEvent(new MouseEvent('mousedown', init));
+	el.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, init, {pointerId: 1, pointerType: 'mouse', isPrimary: true, buttons: 0})));
+	el.dispatchEvent(new MouseEvent('mouseup', Object.assign({}, init, {buttons: 0})));
+	el.dispatchEvent(new MouseEvent('click', Object.assign({}, init, {buttons: 0, detail: 1})));
+}`
+
 const jsDoubleClickFn = `function() {
 	var el = this;
 	var r = el.getBoundingClientRect();
@@ -509,9 +529,6 @@ func resolveBackendNodeObjectID(ctx context.Context, backendNodeID int64) (strin
 // the JS path runs the same handler chain (mousedown, mouseup, click) plus
 // the browser's default action (el.click()) without the ack tax.
 func JSClickByBackendNode(ctx context.Context, backendNodeID int64) error {
-	if _, _, err := PointerPointForNode(ctx, backendNodeID, true); err != nil {
-		return err
-	}
 	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
 	if err != nil {
 		return err
@@ -519,6 +536,22 @@ func JSClickByBackendNode(ctx context.Context, backendNodeID int64) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
 			"functionDeclaration": jsClickFn,
+			"objectId":            objectID,
+		}, nil)
+	}))
+}
+
+// JSDispatchClickByBackendNode dispatches synthetic pointer/mouse events on the
+// target element without invoking element.click(). This bypasses occlusion while
+// staying closer to the browser event sequence than a DOM click.
+func JSDispatchClickByBackendNode(ctx context.Context, backendNodeID int64) error {
+	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
+	if err != nil {
+		return err
+	}
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": jsDispatchClickFn,
 			"objectId":            objectID,
 		}, nil)
 	}))
