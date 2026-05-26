@@ -35,7 +35,7 @@ All element-action tools accept the unified `selector` and the legacy aliases `r
 
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_click` | `selector`, `ref`, `query`, `tabId`, `x`, `y`, `nodeId`, `dialogAction`, `dialogText`, `waitNav`, `mode`, `snap` | Click element by selector or coordinate; `mode` accepts `dom` or `dispatch` to bypass occlusion; `dialogAction` handles a dialog opened by the click; `waitNav=true` waits for navigation; `snap=true` returns a snapshot |
+| `pinchtab_click` | `selector`, `ref`, `query`, `tabId`, `x`, `y`, `nodeId`, `dialogAction`, `dialogText`, `waitNav`, `mode`, `snap` | Click element by selector or coordinate; `mode` accepts `dom` or `dispatch` as a broad low-level escape hatch for click delivery; `mode` and `humanize` are mutually exclusive; `dialogAction` handles a dialog opened by the click; `waitNav=true` waits for navigation; `snap=true` returns a snapshot |
 | `pinchtab_type` | `selector`, `ref`, `query`, `text` required, `tabId` | Sends key events at the targeted input |
 | `pinchtab_press` | `key` required, `tabId` | Press a key such as `Enter` |
 | `pinchtab_hover` | `selector`, `ref`, `query`, `tabId`, `x`, `y`, `nodeId` | Hover an element or coordinate |

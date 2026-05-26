@@ -31,8 +31,8 @@ CLI-first browser skill. Use `pinchtab` commands.
 2. Navigate: `pinchtab nav <url> --snap` — auto-starts the local server if needed, then returns tab ID + interactive snapshot in one call.
 3. Interact: `pinchtab click <ref> --snap-diff` — returns OK + only changed elements (most token-efficient).
    - Click behavior: omit `--mode` for the normal click path, use `--mode dom`, or use `--mode dispatch`.
-   - Occlusion workaround: `pinchtab click <ref> --mode dom` or `pinchtab click <ref> --mode dispatch`
-   - `--humanize` is separate: it keeps the normal pointer-click path, but makes it slower and more human-like.
+   - Treat `--mode` as a broad, low-level escape hatch. Occlusion workaround is the common case: `pinchtab click <ref> --mode dom` or `pinchtab click <ref> --mode dispatch`
+   - `--mode` and `--humanize` are mutually exclusive.
 4. For read-only observation: `pinchtab text` when you won't act on refs.
 
 **Key optimization**: Use `--snap-diff` on `click`, `fill`, `select`, `back`, `forward`, `reload` to get only added/changed/removed elements — most token-efficient for multi-step flows. Use `--snap` when you need the full snapshot (e.g., first navigation, or after major page changes). Use `--text` when you need prose content for verification (skips snap, returns page text directly).
@@ -196,8 +196,8 @@ Rules:
 - **Prefer `--snap-diff`** with `click`, `fill`, `select`, `back`, `forward`, `reload` — returns `OK` + only changed elements. Use `--snap` when you need the full snapshot (first nav, major page change).
 - Prefer `fill` for form entry; `type` only when the site depends on keystroke events.
 - Click behavior: omit `--mode` for the normal click path, use `click --mode dom` for `element.click()`, or `click --mode dispatch` for synthetic click events.
-- `click --mode dom` and `click --mode dispatch` are mainly for bypassing occlusion.
-- `click --humanize` is different from `--mode`: it still uses pointer input, just with slower human-like motion/timing.
+- Treat `click --mode dom` and `click --mode dispatch` as broad low-level escape hatches; bypassing occlusion is the common case.
+- `click --mode ...` and `click --humanize` are mutually exclusive.
 - `click --wait-nav` when a click navigates. May return `{"success":true}` or `Error 409: unexpected page navigation` — treat 409 as success and verify with fresh `snap`/`text`.
 - `--dismiss-banners` on `nav`/`back`/`forward`/`reload` (and on `click --wait-nav`) runs a best-effort pass that clicks a visible Accept all / Got it / OK / Close / Dismiss button, or removes obvious cookie/consent/dialog/overlay containers. Use when a fresh page-load shows a modal that blocks interaction (typical symptom: `Error 500: action click: element is occluded`). Heuristic — can misfire on pages that label legitimate UI as `overlay` or `modal`; not a substitute for an explicit selector when one is known.
 - Use low-level `mouse` only for drag handles, canvas widgets, or exact pointer sequences.

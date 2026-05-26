@@ -154,8 +154,8 @@ curl -X POST /action -H 'Content-Type: application/json' \
 Notes:
 
 - click behavior works like this: omit `mode` for the normal click path, use `mode:"dom"` for `element.click()`, or `mode:"dispatch"` for synthetic click events
-- `mode:"dom"` and `mode:"dispatch"` are mainly for bypassing occlusion
-- `mode` is separate from `humanize:true`, which keeps the normal pointer path but makes it slower and more human-like
+- treat `mode` as a broad low-level escape hatch; bypassing occlusion is the common case
+- `mode` and `humanize:true` are mutually exclusive
 - selector-based click and double-click paths resolve through backend node IDs before dispatching pointer events
 - low-level pointer actions accept `ref`, `selector`, `nodeId`, or `x`/`y`
 - `mouse-down` and `mouse-up` accept `button` with `left`, `right`, or `middle`

@@ -46,8 +46,14 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		if waitNav {
 			body["waitNav"] = true
 		}
-		if v, _ := cmd.Flags().GetString("mode"); v != "" {
-			body["mode"] = v
+		mode, _ := cmd.Flags().GetString("mode")
+		if mode != "" {
+			body["mode"] = mode
+		}
+		if mode != "" && cmd.Flags().Changed("humanize") {
+			if humanize, _ := cmd.Flags().GetBool("humanize"); humanize {
+				cli.Fatal("Error: mode and humanize are mutually exclusive")
+			}
 		}
 		// --dismiss-banners only fires when --wait-nav is set; without nav,
 		// banners haven't changed and the dismissal pass would be wasted.

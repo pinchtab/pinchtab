@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 )
 
 // ActionFunc is the type for action handlers.
@@ -147,6 +148,9 @@ func hasJSONKey(raw map[string]json.RawMessage, key string) bool {
 func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionRequest) (map[string]any, error) {
 	kind = CanonicalActionKind(kind)
 	req.Kind = CanonicalActionKind(req.Kind)
+	if kind == ActionClick && req.Humanize != nil && *req.Humanize && strings.TrimSpace(req.Mode) != "" {
+		return nil, fmt.Errorf("mode and humanize are mutually exclusive")
+	}
 	fn, ok := b.Actions[kind]
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", kind)

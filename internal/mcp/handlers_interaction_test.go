@@ -63,6 +63,20 @@ func TestHandleClickModeRejectsInvalidValue(t *testing.T) {
 	}
 }
 
+func TestHandleClickRejectsModeAndHumanizeTogether(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_click", map[string]any{
+		"ref":      "e5",
+		"mode":     "dom",
+		"humanize": true,
+	}, srv)
+	if !r.IsError {
+		t.Fatal("expected error when mode and humanize are both set")
+	}
+}
+
 func TestHandleClickMissingRef(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
