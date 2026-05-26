@@ -655,8 +655,8 @@ func TestDryRunSmokePlan(t *testing.T) {
 		"E2E_SUMMARY_TITLE=PinchTab E2E Infra Smoke Suite",
 		"runner-api /bin/bash /e2e/run.sh scenario=autosolver-smoke.sh scenario=dashboard-smoke.sh scenario=orchestrator-smoke.sh scenario=security-smoke.sh",
 		"== E2E Docker Smoke tests (host) ==",
-		"docker build -t pinchtab-release-smoke:dry-run .",
-		"docker build --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
+		"docker build --load -t pinchtab-release-smoke:dry-run .",
+		"docker build --load --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
 		"bash scripts/docker-smoke.sh pinchtab-release-smoke:dry-run",
 		"bash scripts/docker-chrome-cft-smoke.sh pinchtab-chrome-cft-smoke:dry-run",
 		"bash scripts/docker-port-conflict-smoke.sh pinchtab-chrome-cft-smoke:dry-run",
@@ -687,8 +687,8 @@ func TestDryRunSmokeDockerPlan(t *testing.T) {
 	for _, want := range []string{
 		"suite:  smoke-docker",
 		"== E2E Docker Smoke tests (host) ==",
-		"docker build -t pinchtab-release-smoke:dry-run .",
-		"docker build --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
+		"docker build --load -t pinchtab-release-smoke:dry-run .",
+		"docker build --load --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
 		"bash scripts/docker-smoke.sh pinchtab-release-smoke:dry-run",
 		"bash scripts/docker-chrome-cft-smoke.sh pinchtab-chrome-cft-smoke:dry-run",
 		"bash scripts/docker-port-conflict-smoke.sh pinchtab-chrome-cft-smoke:dry-run",
@@ -712,7 +712,7 @@ func TestDryRunSmokeDockerFilterAddsImageBuildDependency(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, want := range []string{
-		"docker build -t pinchtab-release-smoke:dry-run .",
+		"docker build --load -t pinchtab-release-smoke:dry-run .",
 		"bash scripts/docker-mcp-smoke.sh pinchtab-release-smoke:dry-run",
 	} {
 		if !strings.Contains(out, want) {
