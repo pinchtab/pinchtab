@@ -134,8 +134,16 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	// Count baseline ops from baseline.sh
-	baselineOps := countBaselineOps()
+	// Prefer baseline-ref.json values; fall back to parsing baseline.sh.
+	baselineOps := 0
+	if baselineRef != nil {
+		if v, ok := baselineRef["browser_ops"].(float64); ok && v > 0 {
+			baselineOps = int(v)
+		}
+	}
+	if baselineOps == 0 {
+		baselineOps = countBaselineOps()
+	}
 
 	// Parse browser ops and agent durations from transcripts
 	ptRe := regexp.MustCompile(`\./scripts/pt\s+(\w+)`)
@@ -224,7 +232,13 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		blOpsRatio := ""
 		if baselineOps > 0 {
 			blOpsStr = fmtInt(int64(baselineOps))
-			blOpsRatio = fmt.Sprintf("%.1f", float64(baselineOps)/float64(blSteps))
+			opsPerStep := float64(baselineOps) / float64(blSteps)
+			if baselineRef != nil {
+				if v, ok := baselineRef["ops_per_step"].(float64); ok && v > 0 {
+					opsPerStep = v
+				}
+			}
+			blOpsRatio = fmt.Sprintf("%.1f", opsPerStep)
 		}
 		rows = append(rows,
 			row{"Browser ops", blOpsStr, fmtInt(int64(totalOps))},
