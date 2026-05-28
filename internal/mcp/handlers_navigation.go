@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -146,8 +147,10 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if v, ok := optBool(r, "css1x"); ok && v {
 			q.Set("css1x", "true")
 		}
+		annotate := false
 		if v, ok := optBool(r, "annotate"); ok && v {
 			q.Set("annotate", "true")
+			annotate = true
 		}
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
@@ -156,8 +159,45 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return resultFromBytes(body, code)
+		if code >= 400 {
+			return resultFromBytes(body, code)
+		}
+		return screenshotResult(body, annotate)
 	}
+}
+
+// screenshotResult turns the /screenshot JSON envelope into an MCP image
+// result so clients can render the picture natively. The text portion carries
+// the annotations list (annotate mode) or an empty object so callers can still
+// rely on a JSON-shaped first content block. On any parse hiccup we fall back
+// to the raw bytes so error envelopes and future fields still surface.
+func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
+	var env struct {
+		Format      string          `json:"format"`
+		Base64      string          `json:"base64"`
+		Annotations json.RawMessage `json:"annotations,omitempty"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || env.Base64 == "" {
+		return resultFromBytes(body, 200)
+	}
+
+	mimeType := "image/jpeg"
+	if strings.EqualFold(env.Format, "png") {
+		mimeType = "image/png"
+	}
+
+	text := "{}"
+	if annotate && len(env.Annotations) > 0 {
+		payload := map[string]any{
+			"format":      env.Format,
+			"annotations": json.RawMessage(env.Annotations),
+		}
+		if encoded, err := json.Marshal(payload); err == nil {
+			text = string(encoded)
+		}
+	}
+
+	return mcp.NewToolResultImage(text, env.Base64, mimeType), nil
 }
 
 func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {

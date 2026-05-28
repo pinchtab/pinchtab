@@ -7,12 +7,12 @@ metadata:
       - name: pinchtab
         config:
           command: pinchtab
-          args: ["mcp", "--server", "http://pinchtab:9867"]
+          args: ["mcp"]
 ---
 
 # Browser Automation via PinchTab MCP
 
-Use MCP tools to control a browser running in a separate container. The MCP server connects to the PinchTab HTTP API at `http://pinchtab:9867`.
+Use MCP tools to control a browser through the PinchTab HTTP API. The MCP server defaults to `http://127.0.0.1:9867`; for remote or containerized PinchTab instances, override with the `PINCHTAB_SERVER` env var (e.g. `PINCHTAB_SERVER=http://pinchtab:9867`).
 
 ## Core Workflow
 
@@ -102,11 +102,11 @@ Semantic search for elements without a full snapshot. Returns matching refs. Gre
 pinchtab_screenshot()
 ```
 
-Returns a JSON envelope with `format` and `base64` fields. Decode the base64 string to get the image bytes. Inline screenshots can exceed the context window (a single image can be 500KB-2MB), so use sparingly.
+Returns an MCP image (image/jpeg by default) — clients render it inline. With `annotate=true`, the response also carries a JSON list of `{ref, role, name, tag, box: {x, y, w, h}}` so refs in the picture map back to the same selectors used by `pinchtab_click` etc. Screenshots are heavy (500KB–2MB per image), so use sparingly.
 
 - Add `quality=60` to reduce file size for JPEG screenshots.
 - Use `selector="e5"` to capture a specific element instead of the full page.
-- Use `annotate=true` to overlay numbered ref boxes (useful for visual verification).
+- Use `annotate=true` to overlay numbered ref boxes and get the matching annotations list.
 
 **When to use screenshots**:
 - Visual layout verification (CSS issues, overlapping elements)

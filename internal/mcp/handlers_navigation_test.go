@@ -1,8 +1,14 @@
 package mcp
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func TestHandleNavigate(t *testing.T) {
@@ -200,6 +206,100 @@ func TestHandleScreenshot(t *testing.T) {
 	}
 	if !strings.Contains(text, `"css1x"`) {
 		t.Errorf("expected css1x query param, got %s", text)
+	}
+}
+
+func TestHandleScreenshotEnvelopeReturnsImage(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("PNGBYTES"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"format": "png",
+			"base64": encoded,
+		})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_screenshot", map[string]any{"format": "png"}, srv)
+
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	if len(r.Content) < 2 {
+		t.Fatalf("expected text+image content, got %d blocks", len(r.Content))
+	}
+	if text := resultText(t, r); strings.TrimSpace(text) != "{}" {
+		t.Errorf("expected empty JSON text block, got %q", text)
+	}
+	img, ok := r.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("content[1] = %T, want ImageContent", r.Content[1])
+	}
+	if img.MIMEType != "image/png" {
+		t.Errorf("MIMEType = %q, want image/png", img.MIMEType)
+	}
+	if img.Data != encoded {
+		t.Errorf("image data mismatch: got %q want %q", img.Data, encoded)
+	}
+}
+
+func TestHandleScreenshotAnnotateCarriesAnnotations(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("JPEGBYTES"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("annotate") != "true" {
+			t.Errorf("expected annotate=true, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"format": "jpeg",
+			"base64": encoded,
+			"annotations": []map[string]any{
+				{
+					"ref":  "e5",
+					"role": "button",
+					"name": "Submit",
+					"tag":  "button",
+					"box":  map[string]float64{"x": 10, "y": 20, "w": 30, "h": 40},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_screenshot", map[string]any{"annotate": true}, srv)
+
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	text := resultText(t, r)
+	if !strings.Contains(text, `"annotations"`) || !strings.Contains(text, `"e5"`) {
+		t.Errorf("expected annotations JSON in text block, got %q", text)
+	}
+	img, ok := r.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("content[1] = %T, want ImageContent", r.Content[1])
+	}
+	if img.MIMEType != "image/jpeg" {
+		t.Errorf("MIMEType = %q, want image/jpeg", img.MIMEType)
+	}
+	if img.Data != encoded {
+		t.Errorf("image data mismatch")
+	}
+}
+
+func TestHandleScreenshotHTTPErrorPassesThrough(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"no tab"}`, http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_screenshot", nil, srv)
+
+	if !r.IsError {
+		t.Fatalf("expected error result for 404, got %s", resultText(t, r))
+	}
+	if !strings.Contains(resultText(t, r), "no tab") {
+		t.Errorf("expected upstream error body in message, got %q", resultText(t, r))
 	}
 }
 
