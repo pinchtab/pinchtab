@@ -114,7 +114,8 @@ Typical results:
 - navigation tools return JSON from the matching HTTP endpoint
 - `pinchtab_snapshot` returns text for `compact`/`text` formats and JSON otherwise
 - `pinchtab_get_text` returns plain text when `format=text|plain`, JSON otherwise
-- `pinchtab_screenshot` and `pinchtab_pdf` return JSON containing base64 payloads
+- `pinchtab_screenshot` returns an MCP image content block (image/jpeg by default, image/png when `format=png`); the accompanying text block is `{}` by default, or a JSON envelope `{"format", "annotations": [{"ref", "role", "name", "tag", "box": {"x","y","w","h"}}, ...]}` when `annotate=true`
+- `pinchtab_pdf` returns JSON containing a base64-encoded PDF payload
 - wait tools return wait status JSON
 - network tools return the same request logs you would see from `/network`
 
