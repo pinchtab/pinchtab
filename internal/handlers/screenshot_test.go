@@ -49,3 +49,15 @@ func TestHandleTabScreenshot_NoTab(t *testing.T) {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
 }
+
+func TestHandleScreenshot_BeyondViewportRequestParses(t *testing.T) {
+	// Sanity check that the new query param does not blow up parsing — the
+	// handler still bails at the tab lookup because mockBridge is failing.
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/screenshot?beyondViewport=true", nil)
+	w := httptest.NewRecorder()
+	h.HandleScreenshot(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}

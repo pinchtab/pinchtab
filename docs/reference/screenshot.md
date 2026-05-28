@@ -12,6 +12,9 @@ curl "http://localhost:9867/screenshot?selector=%23checkout-button&raw=true" > b
 # Capture element at CSS 1x size (instead of device pixels)
 curl "http://localhost:9867/screenshot?selector=%23checkout-button&css1x=true&raw=true" > button-1x.jpg
 
+# Capture the entire scrollable document, not just the visible viewport
+curl "http://localhost:9867/screenshot?beyondViewport=true&raw=true" > fullpage.jpg
+
 # Get JSON with base64 JPEG (default)
 curl "http://localhost:9867/screenshot"
 
@@ -38,6 +41,7 @@ curl "http://localhost:9867/screenshot?output=file"
 - `quality`: JPEG quality `0-100` (default: `80`). Ignored for PNG.
 - `selector`: Unified selector to capture one element (e.g. `e5`, `#id`, `xpath://...`, `text:Submit`).
 - `css1x`: `true` to output selector screenshots at CSS pixel size (1x). Ignored when `selector` is omitted.
+- `beyondViewport`: `true` to capture the full scrollable document instead of just the visible viewport. Ignored when `selector` is set. With `annotate=true` the returned box coordinates are document-relative.
 - `raw`: `true` to return image bytes directly instead of JSON.
 - `output`: `file` to save to state directory.
 - `tabId`: Target a specific tab.
@@ -48,6 +52,7 @@ curl "http://localhost:9867/screenshot?output=file"
 - `-q <0-100>`: Set JPEG quality.
 - `-s <selector>`: Capture a specific element.
 - `--css-1x`: With `-s/--selector`, export at CSS 1x size.
+- `--beyond-viewport`: Capture the full scrollable document. Ignored when `--selector` is set.
 - `--tab <id>`: Target a specific tab.
 
 ## Related Pages

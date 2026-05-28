@@ -175,10 +175,13 @@ Capture a screenshot of the current page.
 
 ```bash
 pinchtab screenshot
-pinchtab screenshot --quality 80   # JPEG at 80%
+pinchtab screenshot --quality 80           # JPEG at 80%
+pinchtab screenshot --beyond-viewport      # full scrollable page, not just the viewport
 ```
 
 > ⚠️ **Quirk:** Use `screenshot` (full word), not `ss` or `shot`.
+
+`--beyond-viewport` is ignored when `-s/--selector` is set — selectors already clip to an element.
 
 ### `pinchtab record`
 Record browser activity as a video file.

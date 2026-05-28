@@ -38,7 +38,7 @@ func TestProjectAnnotationBoxes_Viewport(t *testing.T) {
 	items := []annotationItem{
 		{Ref: "e1", Box: annotationRect{X: 12.4, Y: 33.6, W: 100, H: 32}},
 	}
-	got := projectAnnotationBoxes(items, nil, modeViewport)
+	got := projectAnnotationBoxes(items, nil, modeViewport, 0, 0)
 	want := annotationRect{X: 12, Y: 34, W: 100, H: 32}
 	if !reflect.DeepEqual(got[0].Box, want) {
 		t.Fatalf("viewport projection = %+v, want %+v", got[0].Box, want)
@@ -50,7 +50,7 @@ func TestProjectAnnotationBoxes_SelectorClipSubtractsOrigin(t *testing.T) {
 	items := []annotationItem{
 		{Ref: "e1", Box: annotationRect{X: 110, Y: 130, W: 50, H: 20}},
 	}
-	got := projectAnnotationBoxes(items, &target, modeSelectorClip)
+	got := projectAnnotationBoxes(items, &target, modeSelectorClip, 0, 0)
 	want := annotationRect{X: 10, Y: 30, W: 50, H: 20}
 	if !reflect.DeepEqual(got[0].Box, want) {
 		t.Fatalf("selector projection = %+v, want %+v", got[0].Box, want)
@@ -58,6 +58,39 @@ func TestProjectAnnotationBoxes_SelectorClipSubtractsOrigin(t *testing.T) {
 	// Source item should not be mutated.
 	if items[0].Box.X != 110 {
 		t.Fatalf("source mutated: %+v", items[0].Box)
+	}
+}
+
+func TestProjectAnnotationBoxes_BeyondViewportAddsScroll(t *testing.T) {
+	// Item rect is viewport-relative; scroll offsets convert it into the
+	// document-coord image origin captured by beyondViewport mode.
+	items := []annotationItem{
+		{Ref: "e1", Box: annotationRect{X: 50, Y: -200, W: 100, H: 40}},
+	}
+	got := projectAnnotationBoxes(items, nil, modeBeyondViewport, 25, 500)
+	want := annotationRect{X: 75, Y: 300, W: 100, H: 40}
+	if !reflect.DeepEqual(got[0].Box, want) {
+		t.Fatalf("beyondViewport projection = %+v, want %+v", got[0].Box, want)
+	}
+	if items[0].Box.Y != -200 {
+		t.Fatalf("source mutated: %+v", items[0].Box)
+	}
+}
+
+func TestFilterAnnotationItems_BeyondViewportKeepsOffscreen(t *testing.T) {
+	// Document is 800×3000; viewport is 800×600 scrolled to y=500.
+	// Items live at document y=10 (above viewport) and y=2500 (below viewport).
+	// Both should survive the filter because both fall inside the document.
+	docRegion := annotationRect{X: 0, Y: -500, W: 800, H: 3000} // viewport-rel doc bounds
+	items := []annotationItem{
+		{Ref: "e1", Box: annotationRect{X: 10, Y: -490, W: 100, H: 30}}, // doc y=10
+		{Ref: "e2", Box: annotationRect{X: 10, Y: 2000, W: 100, H: 30}}, // doc y=2500
+		{Ref: "e3", Box: annotationRect{X: 10, Y: 2510, W: 100, H: 30}}, // doc y=3010 — outside doc
+	}
+	src := append([]annotationItem(nil), items...)
+	got := filterAnnotationItems(src, nil, docRegion)
+	if len(got) != 2 || got[0].Ref != "e1" || got[1].Ref != "e2" {
+		t.Fatalf("beyondViewport filter = %+v, want e1+e2", got)
 	}
 }
 

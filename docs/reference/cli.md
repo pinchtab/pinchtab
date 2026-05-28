@@ -146,7 +146,7 @@ Common commands:
 | `pinchtab fill <selector> <text>` | Fill directly |
 | `pinchtab text` | Extract page text (`--full`, `--raw`, `--frame <frameId>`) |
 | `pinchtab find <query>` | Semantic element search |
-| `pinchtab screenshot` | Save a screenshot (`-s/--selector` captures a specific element, `--css-1x` exports selector shots at CSS size) |
+| `pinchtab screenshot` | Save a screenshot (`-s/--selector` captures a specific element, `--css-1x` exports selector shots at CSS size, `--beyond-viewport` captures the full scrollable document) |
 | `pinchtab pdf` | Export the page as PDF |
 | `pinchtab network` | Inspect captured network requests |
 | `pinchtab wait ...` | Wait for selector, text, URL, JS, or time |

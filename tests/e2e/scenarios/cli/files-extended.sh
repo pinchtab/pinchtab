@@ -59,6 +59,20 @@ close_capture_tab
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab screenshot --beyond-viewport"
+
+# Captures the full scrollable document. The fixture (tall.html) is
+# deliberately ~4000px tall so the file is unambiguously larger than the
+# viewport-only capture from the previous tests.
+rm -f /tmp/e2e-beyond.jpg
+pt_ok nav "${FIXTURES_URL}/tall.html"
+pt_ok screenshot --beyond-viewport -o /tmp/e2e-beyond.jpg
+assert_file_exists /tmp/e2e-beyond.jpg "beyond-viewport screenshot file created"
+rm -f /tmp/e2e-beyond.jpg
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab pdf -o custom.pdf"
 
 pt_ok nav "${FIXTURES_URL}/index.html"

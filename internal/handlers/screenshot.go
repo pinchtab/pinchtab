@@ -37,6 +37,13 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	css1x := r.URL.Query().Get("css1x") == "true"
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 	annotate := r.URL.Query().Get("annotate") == "true" || r.URL.Query().Get("annotate") == "1"
+	// beyondViewport captures the full scrollable document. selector wins
+	// silently when both are set — selector already clips to an element, and
+	// stacking a doc-sized clip on top would be meaningless.
+	beyondViewport := r.URL.Query().Get("beyondViewport") == "true" || r.URL.Query().Get("beyondViewport") == "1"
+	if selector != "" {
+		beyondViewport = false
+	}
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
@@ -69,7 +76,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("format") == "png" {
 			fmtStr = "png"
 		}
-		img, items, outFormat, err := h.captureAnnotatedScreenshot(tCtx, resolvedTabID, selector, fmtStr, quality)
+		img, items, outFormat, err := h.captureAnnotatedScreenshot(tCtx, resolvedTabID, selector, fmtStr, quality, beyondViewport)
 		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("annotate: %w", err))
 			return
@@ -105,6 +112,13 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 500, fmt.Errorf("selector screenshot: %w", err))
 			return
 		}
+	} else if beyondViewport {
+		docW, docH, err := documentSize(tCtx)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("document size: %w", err))
+			return
+		}
+		clip = &page.Viewport{X: 0, Y: 0, Width: docW, Height: docH, Scale: 1}
 	}
 
 	var buf []byte
@@ -131,6 +145,9 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			shot := page.CaptureScreenshot().WithFormat(format)
 			if clip != nil {
 				shot = shot.WithClip(clip)
+			}
+			if beyondViewport {
+				shot = shot.WithCaptureBeyondViewport(true)
 			}
 			if format == page.CaptureScreenshotFormatJpeg {
 				shot = shot.WithQuality(int64(quality))

@@ -212,6 +212,7 @@ pinchtab screenshot -o <path>           # Save screenshot to a chosen path
 pinchtab screenshot -q <0-100>          # JPEG quality
 pinchtab screenshot -s <selector>       # Capture a specific element by selector
 pinchtab screenshot -s <selector> --css-1x # Export selector screenshot at CSS pixel size
+pinchtab screenshot --beyond-viewport   # Capture the full scrollable document (ignored with -s)
 pinchtab pdf                            # Export the active page as PDF
 pinchtab pdf -o <path>                  # Save PDF to a chosen path
 pinchtab pdf --landscape                # Landscape orientation

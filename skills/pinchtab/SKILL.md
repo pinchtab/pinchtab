@@ -223,7 +223,7 @@ Timeout 10s default, 30s max via `--timeout <ms>`. Prefer `--not-text`/`--state 
 ### Export, debug, verification
 
 ```bash
-pinchtab screenshot [-o path.png] [-q <jpeg-quality>]   # format by extension
+pinchtab screenshot [-o path.png] [-q <jpeg-quality>] [--beyond-viewport]   # format by extension; --beyond-viewport captures the full scrollable page
 pinchtab pdf [-o path.pdf] [--landscape]
 pinchtab record start out.gif [--fps 5] [--scale 1.0]  # .gif/.webm/.mp4; requires security.allowScreencast; .gif works without ffmpeg, .webm/.mp4 need ffmpeg
 pinchtab record stop                                    # stop, encode, and save to path given at start

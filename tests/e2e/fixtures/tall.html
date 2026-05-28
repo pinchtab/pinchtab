@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test - Tall Page</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    #spacer {
+      height: 4000px;
+      background: linear-gradient(to bottom, #ffffff 0%, #888888 50%, #111111 100%);
+    }
+    #top, #bottom { padding: 16px; }
+  </style>
+</head>
+<body>
+  <div id="top">
+    <h1 id="hero">Tall Page Top</h1>
+    <p>Used by beyondViewport screenshot tests. The spacer below is 4000px tall so a full-page capture is unambiguously larger than a viewport-only capture.</p>
+  </div>
+  <div id="spacer"></div>
+  <div id="bottom">
+    <h2 id="footer-heading">Tall Page Bottom</h2>
+    <button id="bottom-btn">Bottom button</button>
+  </div>
+</body>
+</html>

@@ -76,6 +76,26 @@ fi
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "screenshot: beyondViewport captures full document"
+
+# tall.html is ~4000px high — much taller than the viewport — so the
+# full-document capture is unambiguously larger than the viewport-only
+# capture. Same size-delta heuristic as the quality test above; avoids
+# needing image-decode tooling in the e2e container.
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/tall.html\"}"
+
+VIEWPORT_SIZE=$(e2e_curl -s "${E2E_SERVER}/screenshot" | wc -c)
+BEYOND_SIZE=$(e2e_curl -s "${E2E_SERVER}/screenshot?beyondViewport=true" | wc -c)
+
+if [ "$BEYOND_SIZE" -gt "$VIEWPORT_SIZE" ]; then
+  pass_assert "beyondViewport ($BEYOND_SIZE bytes) > viewport ($VIEWPORT_SIZE bytes)"
+else
+  fail_assert "beyondViewport ($BEYOND_SIZE) not larger than viewport ($VIEWPORT_SIZE)"
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "screenshot: output=file"
 
 pt_get "/screenshot?output=file"

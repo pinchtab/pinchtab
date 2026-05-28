@@ -27,6 +27,7 @@ type captureMode int
 const (
 	modeViewport captureMode = iota
 	modeSelectorClip
+	modeBeyondViewport
 )
 
 type annotationItem struct {
@@ -269,25 +270,34 @@ func rectsOverlap(a, b annotationRect) bool {
 // projectAnnotationBoxes returns boxes in the coordinate space of the
 // returned screenshot. Viewport mode passes the rects through unchanged;
 // selector-clip mode subtracts the target origin so boxes are relative to
-// the clipped image.
-func projectAnnotationBoxes(items []annotationItem, target *annotationRect, mode captureMode) []annotationItem {
+// the clipped image; beyond-viewport mode adds the current document scroll
+// because the image origin is the document top-left, not the viewport.
+func projectAnnotationBoxes(items []annotationItem, target *annotationRect, mode captureMode, scrollX, scrollY float64) []annotationItem {
 	out := make([]annotationItem, len(items))
 	for i, it := range items {
 		out[i] = it
-		if mode == modeSelectorClip && target != nil {
+		switch {
+		case mode == modeSelectorClip && target != nil:
 			out[i].Box = annotationRect{
 				X: roundFloat(it.Box.X - target.X),
 				Y: roundFloat(it.Box.Y - target.Y),
 				W: roundFloat(it.Box.W),
 				H: roundFloat(it.Box.H),
 			}
-			continue
-		}
-		out[i].Box = annotationRect{
-			X: roundFloat(it.Box.X),
-			Y: roundFloat(it.Box.Y),
-			W: roundFloat(it.Box.W),
-			H: roundFloat(it.Box.H),
+		case mode == modeBeyondViewport:
+			out[i].Box = annotationRect{
+				X: roundFloat(it.Box.X + scrollX),
+				Y: roundFloat(it.Box.Y + scrollY),
+				W: roundFloat(it.Box.W),
+				H: roundFloat(it.Box.H),
+			}
+		default:
+			out[i].Box = annotationRect{
+				X: roundFloat(it.Box.X),
+				Y: roundFloat(it.Box.Y),
+				W: roundFloat(it.Box.W),
+				H: roundFloat(it.Box.H),
+			}
 		}
 	}
 	return out
@@ -438,6 +448,7 @@ func (h *Handlers) captureAnnotatedScreenshot(
 	ctx context.Context,
 	tabID, selector, format string,
 	quality int,
+	beyondViewport bool,
 ) (img []byte, projected []annotationItem, outFormat string, err error) {
 	items, target, err := h.collectScreenshotAnnotations(ctx, tabID, selector)
 	if err != nil {
@@ -445,16 +456,35 @@ func (h *Handlers) captureAnnotatedScreenshot(
 	}
 
 	mode := modeViewport
-	if target != nil {
+	switch {
+	case target != nil:
 		mode = modeSelectorClip
+	case beyondViewport:
+		mode = modeBeyondViewport
 	}
 
+	// scrollX/scrollY are read once and reused for region shift, clipTopY,
+	// and final box projection so all three stay consistent if the page
+	// scrolls between calls.
+	var scrollX, scrollY float64
+	var docW, docH float64
 	region := annotationRect{}
-	if mode == modeViewport {
+	switch mode {
+	case modeViewport:
 		region, err = viewportRect(ctx)
 		if err != nil {
 			return nil, nil, "", err
 		}
+	case modeBeyondViewport:
+		docW, docH, err = documentSize(ctx)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("document size: %w", err)
+		}
+		scrollX, scrollY, _ = pageScroll(ctx)
+		// Item rects are viewport-relative; shift the document rect into the
+		// same space so filterAnnotationItems can keep every element that
+		// lives anywhere inside the captured document.
+		region = annotationRect{X: -scrollX, Y: -scrollY, W: docW, H: docH}
 	}
 	items = filterAnnotationItems(items, target, region)
 
@@ -465,8 +495,14 @@ func (h *Handlers) captureAnnotatedScreenshot(
 	overlayInjected := false
 	if len(items) > 0 {
 		clipTopY := 0.0
-		if mode == modeSelectorClip && target != nil {
+		switch {
+		case mode == modeSelectorClip && target != nil:
 			clipTopY = target.Y
+		case mode == modeBeyondViewport:
+			// Document top in viewport coords. Lets the overlay's "is there
+			// room for a label above the box inside the captured image" check
+			// reduce to "document y >= labelHeight".
+			clipTopY = -scrollY
 		}
 		if err := injectAnnotationOverlay(ctx, items, clipTopY); err != nil {
 			return nil, nil, "", fmt.Errorf("inject overlay: %w", err)
@@ -494,7 +530,8 @@ func (h *Handlers) captureAnnotatedScreenshot(
 	}
 
 	var clip *page.Viewport
-	if mode == modeSelectorClip && target != nil {
+	switch {
+	case mode == modeSelectorClip && target != nil:
 		// Translate viewport rect into page coords for CDP clip.
 		dpr, _ := devicePixelRatioForAnnotation(ctx)
 		_ = dpr // CDP clip uses CSS pixels with `scale: 1`.
@@ -509,12 +546,17 @@ func (h *Handlers) captureAnnotatedScreenshot(
 			Height: target.H,
 			Scale:  1,
 		}
+	case mode == modeBeyondViewport:
+		clip = &page.Viewport{X: 0, Y: 0, Width: docW, Height: docH, Scale: 1}
 	}
 
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		shot := page.CaptureScreenshot().WithFormat(cdpFormat)
 		if clip != nil {
 			shot = shot.WithClip(clip)
+		}
+		if mode == modeBeyondViewport {
+			shot = shot.WithCaptureBeyondViewport(true)
 		}
 		if cdpFormat == page.CaptureScreenshotFormatJpeg {
 			shot = shot.WithQuality(int64(quality))
@@ -526,7 +568,7 @@ func (h *Handlers) captureAnnotatedScreenshot(
 		return nil, nil, "", fmt.Errorf("capture: %w", err)
 	}
 
-	projected = projectAnnotationBoxes(items, target, mode)
+	projected = projectAnnotationBoxes(items, target, mode, scrollX, scrollY)
 	return img, projected, outFormat, nil
 }
 
@@ -554,6 +596,46 @@ func pageScroll(ctx context.Context) (float64, float64, error) {
 		return 0, 0, err
 	}
 	return resp.Result.Value.X, resp.Result.Value.Y, nil
+}
+
+// documentSize returns the CSS-pixel scrollable size of the document. Used
+// to clip beyond-viewport captures to the full page content. Mirrors what
+// Puppeteer/Playwright measure for fullPage screenshots — max of
+// documentElement and body across scrollWidth/scrollHeight.
+func documentSize(ctx context.Context) (float64, float64, error) {
+	const fn = `(() => {
+		const d = document;
+		const de = d.documentElement;
+		const b = d.body || de;
+		return {
+			w: Math.max(de.scrollWidth, b.scrollWidth, de.clientWidth, de.offsetWidth),
+			h: Math.max(de.scrollHeight, b.scrollHeight, de.clientHeight, de.offsetHeight)
+		};
+	})()`
+	var raw json.RawMessage
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
+			"expression":    fn,
+			"returnByValue": true,
+		}, &raw)
+	})); err != nil {
+		return 0, 0, err
+	}
+	var resp struct {
+		Result struct {
+			Value struct {
+				W float64 `json:"w"`
+				H float64 `json:"h"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return 0, 0, err
+	}
+	if resp.Result.Value.W <= 0 || resp.Result.Value.H <= 0 {
+		return 0, 0, fmt.Errorf("invalid document size (%.0fx%.0f)", resp.Result.Value.W, resp.Result.Value.H)
+	}
+	return resp.Result.Value.W, resp.Result.Value.H, nil
 }
 
 // devicePixelRatioForAnnotation kept as a small helper in case callers want

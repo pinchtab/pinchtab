@@ -107,6 +107,7 @@ Returns an MCP image (image/jpeg by default) — clients render it inline. The t
 - Add `quality=60` to reduce file size for JPEG screenshots.
 - Use `selector="e5"` to capture a specific element instead of the full page.
 - Use `annotate=true` to overlay numbered ref boxes and get the matching annotations list.
+- Use `beyondViewport=true` to capture the entire scrollable document (annotation box coords become document-relative). Ignored when `selector` is set.
 
 **When to use screenshots**:
 - Visual layout verification (CSS issues, overlapping elements)

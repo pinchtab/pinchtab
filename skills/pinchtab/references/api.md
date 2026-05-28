@@ -345,6 +345,9 @@ curl "/screenshot?raw=true&quality=50" -o screenshot.jpg
 
 # Returns raw PNG
 curl "/screenshot?raw=true&format=png" -o screenshot.png
+
+# Returns raw JPEG of the entire scrollable document (not just the viewport)
+curl "/screenshot?raw=true&beyondViewport=true" -o fullpage.jpg
 ```
 
 ## Recording
