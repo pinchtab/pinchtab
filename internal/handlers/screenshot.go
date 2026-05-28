@@ -139,23 +139,13 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		ext = ".png"
 	}
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			shot := page.CaptureScreenshot().WithFormat(format)
-			if clip != nil {
-				shot = shot.WithClip(clip)
-			}
-			if beyondViewport {
-				shot = shot.WithCaptureBeyondViewport(true)
-			}
-			if format == page.CaptureScreenshotFormatJpeg {
-				shot = shot.WithQuality(int64(quality))
-			}
-			buf, err = shot.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	buf, err = bridge.CaptureScreenshot(tCtx, bridge.ScreenshotOpts{
+		Format:         format,
+		Quality:        quality,
+		Clip:           clip,
+		BeyondViewport: beyondViewport,
+	})
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("screenshot: %w", err))
 		return
 	}

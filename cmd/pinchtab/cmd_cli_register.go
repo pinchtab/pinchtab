@@ -32,6 +32,7 @@ func registerBrowserCommands() {
 		dragCmd,
 		typeCmd,
 		screenshotCmd,
+		captureCmd,
 		tabsCmd,
 		pressCmd,
 		fillCmd,
@@ -111,6 +112,7 @@ func registerBrowserCommands() {
 		dragCmd,
 		typeCmd,
 		screenshotCmd,
+		captureCmd,
 		tabsCmd,
 		pressCmd,
 		fillCmd,
@@ -243,6 +245,17 @@ func configureBrowserFlags() {
 	screenshotCmd.Flags().Bool("annotate", false, "Overlay numbered ref boxes on interactive elements (or on --selector matches). Prints a [n] ref legend to stdout.")
 	screenshotCmd.Flags().String("format", "", "Image format: 'jpeg' (default) or 'png'")
 	screenshotCmd.Flags().Bool("beyond-viewport", false, "Capture the entire scrollable document, not just the visible viewport. Ignored when --selector is set.")
+
+	captureCmd.Flags().StringP("output", "o", "", "Save the captured image to this local file path (default: capture-<ts>.jpg)")
+	captureCmd.Flags().StringP("selector", "s", "", "Scope: clips screenshot and filters snapshot subtree to the same element")
+	captureCmd.Flags().String("filter", "", "Snapshot filter: 'interactive' or 'all' (default: all)")
+	captureCmd.Flags().String("format", "", "Image format: 'jpeg' (default) or 'png'")
+	captureCmd.Flags().StringP("quality", "q", "", "JPEG quality (0-100)")
+	captureCmd.Flags().String("depth", "", "Snapshot max depth (-1 for full)")
+	captureCmd.Flags().String("wait", "", "Lifecycle wait: stable (default) | load | none")
+	captureCmd.Flags().Bool("with-bounds", true, "Populate boundingBox per snapshot node (default true)")
+	captureCmd.Flags().Bool("beyond-viewport", false, "Capture the entire scrollable document; coordinate space becomes 'document'")
+	captureCmd.Flags().Bool("require-pair", false, "Return 409 if navigation is observed during the capture window")
 
 	pdfCmd.Flags().StringP("output", "o", "", "Save PDF to file path")
 	pdfCmd.Flags().Bool("landscape", false, "Landscape orientation")

@@ -19,7 +19,7 @@ func (CapabilityRule) Name() string { return "capability" }
 
 func (CapabilityRule) Decide(op Capability, _ string) Decision {
 	switch op {
-	case CapScreenshot, CapPDF, CapEvaluate, CapCookies:
+	case CapScreenshot, CapPDF, CapEvaluate, CapCookies, CapCapture:
 		return UseChrome
 	}
 	return Undecided

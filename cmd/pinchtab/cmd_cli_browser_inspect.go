@@ -42,6 +42,17 @@ var screenshotCmd = &cobra.Command{
 	},
 }
 
+var captureCmd = &cobra.Command{
+	Use:     "capture",
+	Aliases: []string{"cap"},
+	Short:   "Paired screenshot + accessibility snapshot from the same DOM epoch",
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.Capture(rt.client, rt.base, rt.token, cmd)
+		})
+	},
+}
+
 var evalCmd = &cobra.Command{
 	Use:   "eval <expression>",
 	Short: "Evaluate JavaScript",

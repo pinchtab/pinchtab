@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"time"
 
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
@@ -44,6 +45,21 @@ func FrameOwnerMap(ctx context.Context, tree RawFrameTree) map[string]int64 {
 
 func FetchFrameTree(ctx context.Context) (RawFrameTree, error) {
 	return bridgeobserve.FetchFrameTree(ctx)
+}
+
+func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time.Duration, error) {
+	return bridgeobserve.WaitForQuietWindow(ctx, quiet, ceiling)
+}
+
+type BoundingBox = bridgeobserve.BoundingBox
+type ViewportInfo = bridgeobserve.ViewportInfo
+
+func FetchLayout(ctx context.Context) (ViewportInfo, error) {
+	return bridgeobserve.FetchLayout(ctx)
+}
+
+func AnnotateBounds(ctx context.Context, nodes []A11yNode, pageCoords bool, vp ViewportInfo) error {
+	return bridgeobserve.AnnotateBounds(ctx, nodes, pageCoords, vp)
 }
 
 func FetchAXTree(ctx context.Context) ([]RawAXNode, error) {

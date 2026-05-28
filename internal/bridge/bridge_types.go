@@ -33,9 +33,10 @@ type RefTarget struct {
 }
 
 type RefCache struct {
-	Refs    map[string]int64
-	Targets map[string]RefTarget
-	Nodes   []A11yNode
+	Refs     map[string]int64
+	Targets  map[string]RefTarget
+	Nodes    []A11yNode
+	DomEpoch string
 }
 
 func (c *RefCache) Lookup(ref string) (RefTarget, bool) {

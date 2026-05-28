@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Capture Modal Race - PinchTab Fixture</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal[data-open="true"] { display: flex; }
+    .modal-card {
+      background: white;
+      padding: 32px;
+      border-radius: 8px;
+      max-width: 480px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Underlying page</h1>
+    <form>
+      <label>Email <input id="email" type="email"></label>
+      <label>Password <input id="password" type="password"></label>
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+
+  <div id="consent" class="modal" role="dialog" aria-labelledby="consent-title">
+    <div class="modal-card">
+      <h2 id="consent-title">We've updated our terms</h2>
+      <p>Please review and accept the new terms before continuing.</p>
+      <button id="consent-accept">Accept</button>
+      <button id="consent-decline">Decline</button>
+    </div>
+  </div>
+
+  <script>
+    // Mount the consent modal after the page has settled. With
+    // wait:stable the capture window should open AFTER this mount fires,
+    // so the snapshot describes the dialog subtree and the image shows
+    // the modal. With wait:none they race.
+    const delay = Number(new URLSearchParams(location.search).get('mountAfter') || 250);
+    setTimeout(() => {
+      document.getElementById('consent').setAttribute('data-open', 'true');
+    }, delay);
+  </script>
+</body>
+</html>

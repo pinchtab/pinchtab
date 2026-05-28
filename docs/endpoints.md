@@ -241,6 +241,8 @@ Find body fields:
 ```text
 GET  /screenshot
 GET  /tabs/{id}/screenshot
+GET  /capture
+GET  /tabs/{id}/capture
 GET  /pdf
 POST /pdf
 GET  /tabs/{id}/pdf
@@ -262,6 +264,71 @@ Screenshot query parameters:
 - `raw=true`
 - `output=file`
 - `noAnimations=true`
+
+`/capture` returns a screenshot and an accessibility snapshot from the same
+DOM epoch in a single call. It is the vision-grounded alternative to issuing
+`/screenshot` and `/snapshot` back-to-back — the two unpaired calls share no
+synchronization primitive, so the page can mutate between them and refs from
+the snapshot can point at nodes that did not exist when the image was taken.
+
+Capture query parameters:
+
+- `tabId`
+- `selector` — clips screenshot and filters snapshot subtree to the same element
+- `filter=interactive|all`
+- `depth` — snapshot max depth (default `-1` for full)
+- `format=jpeg|png`
+- `quality`
+- `output=file|inline|raw` — default `file`
+- `requirePair=true` — return `409 Conflict` when navigation is observed during the capture window
+- `noAnimations=true`
+- `wait=stable|load|none` — default `stable`. `stable` waits for
+  `Page.lifecycleEvent` quiescence (250ms of silence, 750ms ceiling) before
+  opening the capture window so the screenshot and the AX-tree describe a
+  settled page. `none` skips the wait. `load` is currently an alias for
+  `none`; reserved for a future `document.readyState` gate.
+- `withBounds=true|false` — default `true`. When on, every snapshot node
+  with a non-zero backend node id gets a `boundingBox` field and a
+  `visible` flag. Each bounded node costs one `DOM.getBoxModel` round trip
+  (~5ms); for the typical interactive-filter snapshot the budget is under
+  250ms. Pass `withBounds=false` to skip the per-node work.
+- `beyondViewport=true|false` — default `false`. When on, the image spans
+  the full document instead of just the visible viewport. The response
+  sets `image.coordinateSpace` to `"document"` and bounding boxes are
+  expressed in page (document) coordinates so they overlay the full image.
+  When a `selector` is also supplied, the selector clip wins and
+  `beyondViewport` is silently ignored — the same rule `/screenshot`
+  enforces. Beyond-viewport captures force a layout pass that can resolve
+  lazy images and fire `IntersectionObserver`; the AX-tree fetch and bounds
+  harvest run after the screenshot so they reflect the post-reflow state.
+
+The response carries `image.coordinateSpace`, `image.devicePixelRatio`,
+and `image.viewport` ( `w`, `h`, `scrollX`, `scrollY` in CSS pixels at
+capture time) so clients can translate between image pixels and
+`boundingBox` values without guessing.
+
+The response carries an `epoch.domEpoch` token cached on the tab's ref-cache.
+Future client work can pass `expectedEpoch` to action endpoints to detect
+stale refs at the use site; in P1 it is informational. `pairing.navigated`
+is `true` when the main frame's `loaderId` changed mid-capture — that is the
+only drift mode P1 detects. In-document churn (re-renders, observer
+mutations) is the residual risk that later phases address.
+
+Response shape:
+
+```json
+{
+  "status": "ok",
+  "tabId": "tab_abc",
+  "url": "https://example.com",
+  "title": "Example",
+  "capturedAt": "2026-05-29T10:11:12.345Z",
+  "epoch": { "frameId": "...", "loaderId": "...", "domEpoch": "ep_..." },
+  "pairing": { "navigated": false, "captureDurationMs": 312 },
+  "image": { "format": "jpeg", "path": "/.../captures/cap-...jpg", "bytes": 184223 },
+  "snapshot": { "filter": "interactive", "nodeCount": 14, "nodes": [...] }
+}
+```
 
 PDF query parameters:
 

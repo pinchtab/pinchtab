@@ -40,6 +40,7 @@ const (
 	CapPDF        Capability = "pdf"
 	CapEvaluate   Capability = "evaluate"
 	CapCookies    Capability = "cookies"
+	CapCapture    Capability = "capture"
 )
 
 // Mode controls the engine selection strategy.

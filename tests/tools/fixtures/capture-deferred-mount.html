@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Capture Deferred Mount - PinchTab Fixture</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; padding: 20px; }
+    .placeholder { color: #888; font-style: italic; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Capture Fixture: deferred mount</h1>
+    <p class="placeholder">Loading payment form…</p>
+    <div id="hydrated"></div>
+  </main>
+  <script>
+    // Simulate React hydration / lazy island. The "Pay now" button only
+    // appears after a delay. With wait:stable the capture window should
+    // wait for this mount to settle; with wait:none the capture races it
+    // and the snapshot may miss the button.
+    const delay = Number(new URLSearchParams(location.search).get('mountAfter') || 200);
+    setTimeout(() => {
+      const root = document.getElementById('hydrated');
+      root.innerHTML = '<button id="pay">Pay now</button>';
+      document.querySelector('.placeholder').remove();
+    }, delay);
+  </script>
+</body>
+</html>

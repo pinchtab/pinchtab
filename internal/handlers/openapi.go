@@ -56,6 +56,8 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 			"/action":            map[string]any{"post": map[string]any{"summary": "Single action"}, "get": map[string]any{"summary": "Single action (query params)"}},
 			"/actions":           map[string]any{"post": map[string]any{"summary": "Batch actions"}},
 			"/snapshot":          map[string]any{"get": map[string]any{"summary": "Accessibility snapshot"}},
+			"/capture":           map[string]any{"get": map[string]any{"summary": "Paired screenshot + accessibility snapshot from the same DOM epoch"}},
+			"/tabs/{id}/capture": map[string]any{"get": map[string]any{"summary": "Paired screenshot + snapshot for a specific tab"}},
 			"/evaluate": map[string]any{"post": map[string]any{
 				"summary":            "Run JavaScript in the current tab",
 				"description":        security["evaluate"].Message,

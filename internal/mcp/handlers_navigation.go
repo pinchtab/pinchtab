@@ -210,6 +210,119 @@ func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultImage(string(encoded), env.Base64, mimeType), nil
 }
 
+// handleCapture implements pinchtab_capture: a paired screenshot + accessibility
+// snapshot from the same DOM epoch. The image is delivered as an MCP image
+// block; the text block is a JSON envelope containing epoch/pairing metadata
+// and the snapshot nodes so a vision-capable model can overlay refs on pixels.
+func handleCapture(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		q := url.Values{}
+		q.Set("output", "inline")
+
+		if tabID := optString(r, "tabId"); tabID != "" {
+			q.Set("tabId", tabID)
+		}
+		if selector := optString(r, "selector"); selector != "" {
+			q.Set("selector", selector)
+		}
+		if filter := optString(r, "filter"); filter != "" {
+			q.Set("filter", filter)
+		}
+		if format := optString(r, "format"); format != "" {
+			q.Set("format", format)
+		}
+		if wait := optString(r, "wait"); wait != "" {
+			q.Set("wait", wait)
+		}
+		if quality, ok := optFloat(r, "quality"); ok {
+			q.Set("quality", fmt.Sprintf("%d", int(quality)))
+		}
+		if v := optNumber(r, "depth"); v > 0 {
+			q.Set("depth", formatInt(v))
+		}
+		if v, ok := optBool(r, "beyondViewport"); ok && v {
+			q.Set("beyondViewport", "true")
+		}
+		if v, ok := optBool(r, "requirePair"); ok && v {
+			q.Set("requirePair", "true")
+		}
+		if v, ok := optBool(r, "withBounds"); ok && !v {
+			q.Set("withBounds", "false")
+		}
+		if v, ok := optBool(r, "noAnimations"); ok && v {
+			q.Set("noAnimations", "true")
+		}
+
+		body, code, err := c.Get(ctx, "/capture", q)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if code >= 400 {
+			return resultFromBytes(body, code)
+		}
+		return captureResult(body)
+	}
+}
+
+// captureResult parses /capture's inline envelope and produces a paired MCP
+// result: image block + JSON text block. On parse failure we fall back to the
+// raw bytes so downstream callers still see the wire response.
+func captureResult(body []byte) (*mcp.CallToolResult, error) {
+	var env struct {
+		Status     string          `json:"status"`
+		TabID      string          `json:"tabId"`
+		URL        string          `json:"url"`
+		Title      string          `json:"title"`
+		CapturedAt string          `json:"capturedAt"`
+		Epoch      json.RawMessage `json:"epoch"`
+		Pairing    json.RawMessage `json:"pairing"`
+		Image      struct {
+			Format          string          `json:"format"`
+			Base64          string          `json:"base64"`
+			Bytes           int             `json:"bytes"`
+			CoordinateSpace string          `json:"coordinateSpace"`
+			DPR             float64         `json:"devicePixelRatio"`
+			Viewport        json.RawMessage `json:"viewport"`
+		} `json:"image"`
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || env.Image.Base64 == "" {
+		return resultFromBytes(body, 200)
+	}
+
+	format := strings.ToLower(strings.TrimSpace(env.Image.Format))
+	if format != "png" {
+		format = "jpeg"
+	}
+	mimeType := "image/jpeg"
+	if format == "png" {
+		mimeType = "image/png"
+	}
+
+	textPayload := map[string]any{
+		"status":     env.Status,
+		"tabId":      env.TabID,
+		"url":        env.URL,
+		"title":      env.Title,
+		"capturedAt": env.CapturedAt,
+		"epoch":      env.Epoch,
+		"pairing":    env.Pairing,
+		"image": map[string]any{
+			"format":           format,
+			"bytes":            env.Image.Bytes,
+			"coordinateSpace":  env.Image.CoordinateSpace,
+			"devicePixelRatio": env.Image.DPR,
+			"viewport":         env.Image.Viewport,
+		},
+		"snapshot": env.Snapshot,
+	}
+	encoded, err := json.Marshal(textPayload)
+	if err != nil {
+		return resultFromBytes(body, 200)
+	}
+	return mcp.NewToolResultImage(string(encoded), env.Image.Base64, mimeType), nil
+}
+
 func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		q := url.Values{}

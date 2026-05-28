@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Known Bounds - PinchTab Fixture</title>
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    #known {
+      position: absolute;
+      left: 100px;
+      top: 200px;
+      width: 240px;
+      height: 48px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      font-size: 16px;
+    }
+    #below-fold {
+      position: absolute;
+      left: 50px;
+      top: 1400px;
+      width: 200px;
+      height: 40px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Capture Fixture: known bounds</h1>
+    <p>
+      The button #known is positioned at CSS coords (100, 200) with size
+      (240, 48). After <code>pinchtab capture --with-bounds</code>, the
+      ref's boundingBox should report
+      <code>{x: 100, y: 200, w: 240, h: 48}</code> within 1 CSS pixel.
+    </p>
+    <button id="known">Known Position Button</button>
+    <button id="below-fold">Below Fold</button>
+  </main>
+</body>
+</html>

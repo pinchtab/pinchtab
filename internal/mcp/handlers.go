@@ -17,6 +17,7 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		"pinchtab_snapshot":   handleSnapshot(c),
 		"pinchtab_frame":      handleFrame(c),
 		"pinchtab_screenshot": handleScreenshot(c),
+		"pinchtab_capture":    handleCapture(c),
 		"pinchtab_get_text":   handleGetText(c),
 
 		// Interaction

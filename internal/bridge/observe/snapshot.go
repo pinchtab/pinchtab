@@ -13,28 +13,41 @@ import (
 )
 
 type A11yNode struct {
-	Ref            string `json:"ref"`
-	Role           string `json:"role"`
-	Name           string `json:"name"`
-	Depth          int    `json:"depth"`
-	Value          string `json:"value,omitempty"`
-	Label          string `json:"label,omitempty"`
-	Placeholder    string `json:"placeholder,omitempty"`
-	Alt            string `json:"alt,omitempty"`
-	Title          string `json:"title,omitempty"`
-	TestID         string `json:"testid,omitempty"`
-	Text           string `json:"text,omitempty"`
-	Tag            string `json:"tag,omitempty"`
-	Disabled       bool   `json:"disabled,omitempty"`
-	Focused        bool   `json:"focused,omitempty"`
-	Hidden         bool   `json:"hidden,omitempty"`
-	NodeID         int64  `json:"nodeId,omitempty"`
-	FrameID        string `json:"frameId,omitempty"`
-	FrameURL       string `json:"frameUrl,omitempty"`
-	FrameName      string `json:"frameName,omitempty"`
-	ChildFrameID   string `json:"childFrameId,omitempty"`
-	ChildFrameURL  string `json:"childFrameUrl,omitempty"`
-	ChildFrameName string `json:"childFrameName,omitempty"`
+	Ref            string       `json:"ref"`
+	Role           string       `json:"role"`
+	Name           string       `json:"name"`
+	Depth          int          `json:"depth"`
+	Value          string       `json:"value,omitempty"`
+	Label          string       `json:"label,omitempty"`
+	Placeholder    string       `json:"placeholder,omitempty"`
+	Alt            string       `json:"alt,omitempty"`
+	Title          string       `json:"title,omitempty"`
+	TestID         string       `json:"testid,omitempty"`
+	Text           string       `json:"text,omitempty"`
+	Tag            string       `json:"tag,omitempty"`
+	Disabled       bool         `json:"disabled,omitempty"`
+	Focused        bool         `json:"focused,omitempty"`
+	Hidden         bool         `json:"hidden,omitempty"`
+	NodeID         int64        `json:"nodeId,omitempty"`
+	FrameID        string       `json:"frameId,omitempty"`
+	FrameURL       string       `json:"frameUrl,omitempty"`
+	FrameName      string       `json:"frameName,omitempty"`
+	ChildFrameID   string       `json:"childFrameId,omitempty"`
+	ChildFrameURL  string       `json:"childFrameUrl,omitempty"`
+	ChildFrameName string       `json:"childFrameName,omitempty"`
+	BoundingBox    *BoundingBox `json:"boundingBox,omitempty"`
+	Visible        bool         `json:"visible,omitempty"`
+}
+
+// BoundingBox is a CSS-pixel rectangle for a snapshot node. Populated only by
+// PairedCapture when CaptureOpts.WithBounds is true. Coordinate space depends
+// on PairedResult.CoordinateSpace — viewport-relative by default, document
+// (page) coordinates when BeyondViewport is on.
+type BoundingBox struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
 }
 
 type RawAXNode struct {
@@ -57,9 +70,10 @@ type RawAXTreeResponse struct {
 }
 
 type RawFrame struct {
-	ID   string `json:"id"`
-	URL  string `json:"url,omitempty"`
-	Name string `json:"name,omitempty"`
+	ID       string `json:"id"`
+	URL      string `json:"url,omitempty"`
+	Name     string `json:"name,omitempty"`
+	LoaderID string `json:"loaderId,omitempty"`
 }
 
 type RawFrameTree struct {
