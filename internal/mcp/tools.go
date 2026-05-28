@@ -30,7 +30,7 @@ func allTools() []mcp.Tool {
 			mcp.WithString("target", mcp.Description("Frame target: 'main', a snapshot ref, a selector for an iframe element, or a frame name/URL")),
 		),
 		mcp.NewTool("pinchtab_screenshot",
-			mcp.WithDescription("Take a screenshot of the current page. With annotate=true, the response is a JSON envelope with the image plus a list of {ref, role, name, box} so the model can label elements visually and act on the same refs."),
+			mcp.WithDescription("Take a screenshot of the current page. The result is delivered as an MCP image content block (image/jpeg by default, image/png with format='png') so clients render it directly. The accompanying text block is always a JSON envelope `{\"format\": \"jpeg\"|\"png\", \"annotations\": [...]}` — `annotations` is an empty array by default. With `annotate=true`, the picture has numbered overlay boxes on interactive elements and `annotations` is populated with `[{\"ref\": \"e5\", \"role\": \"button\", \"name\": \"Submit\", \"tag\": \"button\", \"box\": {\"x\": <number>, \"y\": <number>, \"w\": <number>, \"h\": <number>}}, ...]`; the `ref` values reuse the same selectors as pinchtab_click/fill/etc."),
 			mcp.WithString("tabId", mcp.Description("Target tab ID")),
 			mcp.WithString("selector", mcp.Description("Unified selector. Without annotate it clips the screenshot to the element. With annotate=true it narrows which elements receive overlay boxes (default: all interactive elements).")),
 			mcp.WithString("format", mcp.Description("Image format: 'jpeg' (default) or 'png'")),

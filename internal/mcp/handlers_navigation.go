@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -146,8 +147,10 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if v, ok := optBool(r, "css1x"); ok && v {
 			q.Set("css1x", "true")
 		}
+		annotate := false
 		if v, ok := optBool(r, "annotate"); ok && v {
 			q.Set("annotate", "true")
+			annotate = true
 		}
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
@@ -156,8 +159,52 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return resultFromBytes(body, code)
+		if code >= 400 {
+			return resultFromBytes(body, code)
+		}
+		return screenshotResult(body, annotate)
 	}
+}
+
+// screenshotResult turns the /screenshot JSON envelope into an MCP image
+// result so clients can render the picture natively. The text portion is
+// always a JSON object `{"format", "annotations": [...]}` so downstream
+// callers can parse one stable schema regardless of `annotate`. On any parse
+// hiccup we fall back to the raw bytes so error envelopes and future fields
+// still surface.
+func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
+	var env struct {
+		Format      string          `json:"format"`
+		Base64      string          `json:"base64"`
+		Annotations json.RawMessage `json:"annotations,omitempty"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || env.Base64 == "" {
+		return resultFromBytes(body, 200)
+	}
+
+	format := strings.ToLower(strings.TrimSpace(env.Format))
+	if format != "png" {
+		format = "jpeg"
+	}
+	mimeType := "image/jpeg"
+	if format == "png" {
+		mimeType = "image/png"
+	}
+
+	annotations := json.RawMessage("[]")
+	if annotate && len(env.Annotations) > 0 {
+		annotations = env.Annotations
+	}
+	payload := map[string]any{
+		"format":      format,
+		"annotations": annotations,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return resultFromBytes(body, 200)
+	}
+
+	return mcp.NewToolResultImage(string(encoded), env.Base64, mimeType), nil
 }
 
 func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
