@@ -26,7 +26,7 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 | `pinchtab_navigate` | `url` required, `tabId`, `snap` | Uses `/navigate`; omitting `tabId` opens a new tab. `snap=true` returns an interactive compact snapshot in the same response |
 | `pinchtab_snapshot` | `tabId`, `interactive`, `compact`, `format`, `diff`, `selector`, `maxTokens`, `depth`, `noAnimations` | `selector` scopes the snapshot; `format` is limited to `compact` or `text` |
 | `pinchtab_frame` | `tabId`, `target` | Get or set the frame scope for selector-based actions on the tab; `target` accepts `main`, a snapshot ref, an iframe selector, or a frame name/URL |
-| `pinchtab_screenshot` | `tabId`, `selector`, `css1x`, `format`, `quality` | `selector` captures a specific element in current frame scope; `css1x=true` exports selector shots at CSS pixel size; `format` is `jpeg` or `png` |
+| `pinchtab_screenshot` | `tabId`, `selector`, `css1x`, `format`, `quality`, `annotate` | `selector` captures a specific element in current frame scope; `css1x=true` exports selector shots at CSS pixel size; `format` is `jpeg` or `png`; `annotate=true` overlays numbered ref boxes and populates the annotations envelope |
 | `pinchtab_get_text` | `tabId`, `raw`, `format`, `maxChars` | `raw=true` maps to `/text?mode=raw`; `format=text/plain` returns plain text; inherits the current `pinchtab_frame` scope for that tab |
 
 ## Interaction
@@ -114,7 +114,7 @@ Typical results:
 - navigation tools return JSON from the matching HTTP endpoint
 - `pinchtab_snapshot` returns text for `compact`/`text` formats and JSON otherwise
 - `pinchtab_get_text` returns plain text when `format=text|plain`, JSON otherwise
-- `pinchtab_screenshot` returns an MCP image content block (image/jpeg by default, image/png when `format=png`); the accompanying text block is `{}` by default, or a JSON envelope `{"format", "annotations": [{"ref", "role", "name", "tag", "box": {"x","y","w","h"}}, ...]}` when `annotate=true`
+- `pinchtab_screenshot` returns an MCP image content block (image/jpeg by default, image/png when `format=png`) plus a text block that is always the JSON envelope `{"format", "annotations": [...]}` — `annotations` is `[]` by default and `[{"ref","role","name","tag","box":{"x","y","w","h"}}, ...]` when `annotate=true`
 - `pinchtab_pdf` returns JSON containing a base64-encoded PDF payload
 - wait tools return wait status JSON
 - network tools return the same request logs you would see from `/network`

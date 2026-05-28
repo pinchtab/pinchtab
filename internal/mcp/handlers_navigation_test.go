@@ -228,8 +228,18 @@ func TestHandleScreenshotEnvelopeReturnsImage(t *testing.T) {
 	if len(r.Content) < 2 {
 		t.Fatalf("expected text+image content, got %d blocks", len(r.Content))
 	}
-	if text := resultText(t, r); strings.TrimSpace(text) != "{}" {
-		t.Errorf("expected empty JSON text block, got %q", text)
+	var env struct {
+		Format      string           `json:"format"`
+		Annotations []map[string]any `json:"annotations"`
+	}
+	if err := json.Unmarshal([]byte(resultText(t, r)), &env); err != nil {
+		t.Fatalf("text block is not JSON: %v", err)
+	}
+	if env.Format != "png" {
+		t.Errorf("format = %q, want png", env.Format)
+	}
+	if env.Annotations == nil || len(env.Annotations) != 0 {
+		t.Errorf("annotations = %#v, want empty array", env.Annotations)
 	}
 	img, ok := r.Content[1].(mcp.ImageContent)
 	if !ok {

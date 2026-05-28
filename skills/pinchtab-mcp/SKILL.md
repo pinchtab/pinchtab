@@ -102,7 +102,7 @@ Semantic search for elements without a full snapshot. Returns matching refs. Gre
 pinchtab_screenshot()
 ```
 
-Returns an MCP image (image/jpeg by default) — clients render it inline. With `annotate=true`, the response also carries a JSON list of `{ref, role, name, tag, box: {x, y, w, h}}` so refs in the picture map back to the same selectors used by `pinchtab_click` etc. Screenshots are heavy (500KB–2MB per image), so use sparingly.
+Returns an MCP image (image/jpeg by default) — clients render it inline. The text block is always the JSON envelope `{"format": "jpeg"|"png", "annotations": [...]}`; `annotations` is `[]` by default and becomes `[{ref, role, name, tag, box: {x, y, w, h}}, ...]` with `annotate=true` so refs in the picture map back to the same selectors used by `pinchtab_click` etc. Screenshots are heavy (500KB–2MB per image), so use sparingly.
 
 - Add `quality=60` to reduce file size for JPEG screenshots.
 - Use `selector="e5"` to capture a specific element instead of the full page.

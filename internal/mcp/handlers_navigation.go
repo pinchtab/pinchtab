@@ -167,10 +167,11 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 }
 
 // screenshotResult turns the /screenshot JSON envelope into an MCP image
-// result so clients can render the picture natively. The text portion carries
-// the annotations list (annotate mode) or an empty object so callers can still
-// rely on a JSON-shaped first content block. On any parse hiccup we fall back
-// to the raw bytes so error envelopes and future fields still surface.
+// result so clients can render the picture natively. The text portion is
+// always a JSON object `{"format", "annotations": [...]}` so downstream
+// callers can parse one stable schema regardless of `annotate`. On any parse
+// hiccup we fall back to the raw bytes so error envelopes and future fields
+// still surface.
 func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
 	var env struct {
 		Format      string          `json:"format"`
@@ -181,23 +182,29 @@ func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
 		return resultFromBytes(body, 200)
 	}
 
+	format := strings.ToLower(strings.TrimSpace(env.Format))
+	if format != "png" {
+		format = "jpeg"
+	}
 	mimeType := "image/jpeg"
-	if strings.EqualFold(env.Format, "png") {
+	if format == "png" {
 		mimeType = "image/png"
 	}
 
-	text := "{}"
+	annotations := json.RawMessage("[]")
 	if annotate && len(env.Annotations) > 0 {
-		payload := map[string]any{
-			"format":      env.Format,
-			"annotations": json.RawMessage(env.Annotations),
-		}
-		if encoded, err := json.Marshal(payload); err == nil {
-			text = string(encoded)
-		}
+		annotations = env.Annotations
+	}
+	payload := map[string]any{
+		"format":      format,
+		"annotations": annotations,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return resultFromBytes(body, 200)
 	}
 
-	return mcp.NewToolResultImage(text, env.Base64, mimeType), nil
+	return mcp.NewToolResultImage(string(encoded), env.Base64, mimeType), nil
 }
 
 func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {

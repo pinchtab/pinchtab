@@ -53,7 +53,7 @@ All tool names are prefixed with `pinchtab_`.
 |------|-------------|
 | `pinchtab_navigate` | Navigate to a URL. Required param: `url`. Optional: `tabId`. |
 | `pinchtab_snapshot` | Accessibility tree. Optional: `interactive`, `compact`, `format` (`compact` or `text`), `diff`, `selector`, `maxTokens`, `depth`, `noAnimations`, `tabId`. |
-| `pinchtab_screenshot` | Capture screenshot. Optional: `format` (`jpeg` default, `png`), `quality`, `selector`, `css1x`, `annotate`, `tabId`. Returns an MCP image content block (rendered inline by clients); with `annotate=true` the text block carries the annotations list (`ref`, `role`, `name`, `tag`, `box {x,y,w,h}`) so refs in the picture map back to selectors. |
+| `pinchtab_screenshot` | Capture screenshot. Optional: `format` (`jpeg` default, `png`), `quality`, `selector`, `css1x`, `annotate`, `tabId`. Returns an MCP image content block (rendered inline by clients) plus a stable JSON text block `{"format", "annotations": [...]}`; `annotations` is `[]` by default and is populated with `{ref, role, name, tag, box {x,y,w,h}}` entries when `annotate=true` so refs in the picture map back to selectors. |
 | `pinchtab_get_text` | Extract readable page text. Optional: `raw`, `format`, `maxChars`, `tabId`. |
 
 ### Interaction
