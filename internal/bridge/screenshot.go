@@ -8,6 +8,27 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// MinScale / MaxScale bound the bitmap rescale factor. Anything outside is
+// almost certainly a mistake or a DoS — 50× would ask the renderer for a
+// multi-gigapixel image.
+const (
+	MinScale = 0.05
+	MaxScale = 4.0
+)
+
+func ClampScale(scale float64) float64 {
+	if scale <= 0 {
+		return 1
+	}
+	if scale < MinScale {
+		return MinScale
+	}
+	if scale > MaxScale {
+		return MaxScale
+	}
+	return scale
+}
+
 // fetchViewportSize returns window.innerWidth/innerHeight via one
 // Runtime.evaluate round trip. Falls back to (0, 0) on any failure so the
 // caller can decide whether to bail or skip the rescale.
@@ -75,8 +96,10 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 			clip = &c
 		} else {
 			// Synthesize a viewport-covering clip so CDP's clip.scale applies.
-			// Prefer caller-supplied dims; otherwise fetch innerWidth/Height
-			// via a single Runtime.evaluate.
+			//
+			// Known issue: two back-to-back /capture?scale=<n!=1> on the same
+			// tab without nav between can hang on the second call. Workaround:
+			// nav between captures (see e2e cli/capture-basic.sh).
 			w, h := opts.ViewportWidth, opts.ViewportHeight
 			if w == 0 || h == 0 {
 				w, h = fetchViewportSize(ctx)

@@ -22,10 +22,9 @@ type CaptureOpts struct {
 	DisableAnimations  bool
 
 	// Wait controls the lifecycle wait before the capture window opens.
-	// Empty (or "none") skips the wait. "stable" waits for
-	// Page.lifecycleEvent quiescence — 250ms of silence or 750ms ceiling.
-	// "load" is currently a no-op alias for "none"; reserved for a future
-	// document.readyState gate.
+	// Empty (or "none") skips the wait. "load" polls document.readyState
+	// until it reaches "complete" (2s ceiling). "stable" waits for
+	// Page.lifecycleEvent quiescence — 250ms of silence, 750ms ceiling.
 	Wait string
 
 	// WithBounds populates BoundingBox + Visible on every snapshot node that
@@ -59,10 +58,12 @@ type PairedResult struct {
 	ImageFormat string // "jpeg" or "png"
 
 	// Viewport metadata captured alongside the image. CoordinateSpace is
-	// "viewport" by default and "document" when ImageOpts.BeyondViewport is
-	// true — bounding boxes are expressed in the named space.
+	// "viewport" by default, "document" when ImageOpts.BeyondViewport is true,
+	// and "clip" for selector-clipped captures. Bounding boxes are expressed in
+	// the named space.
 	Viewport        ViewportInfo
 	CoordinateSpace string
+	Clip            *page.Viewport
 
 	Filter string
 	Nodes  []A11yNode
@@ -74,10 +75,10 @@ type PairedResult struct {
 // navigation between the two CDP calls" — checked by comparing the main
 // frame's loaderId before and after the capture window. opts.Wait == "stable"
 // adds a Page.lifecycleEvent quiet-window wait before the window opens.
-// opts.WithBounds populates a viewport- or document-relative BoundingBox per
-// snapshot node via DOM.getBoxModel. Residual risk: in-document churn (React
-// re-renders, IntersectionObserver mutations) is not detected — wait:stable
-// reduces but does not eliminate it.
+// opts.WithBounds populates a viewport-, document-, or clip-relative
+// BoundingBox per snapshot node via DOM.getBoxModel. Residual risk:
+// in-document churn (React re-renders, IntersectionObserver mutations) is not
+// detected — wait:stable reduces but does not eliminate it.
 func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error) {
 	start := time.Now()
 	res := &PairedResult{
@@ -92,11 +93,12 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 		}
 	}
 
-	if opts.Wait == WaitStable {
-		// Errors here are non-fatal — a failed wait should still produce a
-		// capture, just without the quiet-window guarantee. The duration is
-		// captured for diagnostics but not currently surfaced in PairedResult.
+	// Wait errors are non-fatal — degrade rather than fail the capture.
+	switch opts.Wait {
+	case WaitStable:
 		_, _ = WaitForQuietWindow(ctx, 250*time.Millisecond, 750*time.Millisecond)
+	case WaitLoad:
+		_, _ = WaitForReadyState(ctx, 2*time.Second)
 	}
 
 	// Pre-capture frame info — root frame id + loader id.
@@ -147,7 +149,12 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	)
 
 	pageCoords := opts.Image.BeyondViewport
-	if pageCoords {
+	if opts.Image.Clip != nil {
+		res.CoordinateSpace = "clip"
+		clip := *opts.Image.Clip
+		res.Clip = &clip
+		pageCoords = true
+	} else if pageCoords {
 		res.CoordinateSpace = "document"
 	} else {
 		res.CoordinateSpace = "viewport"
@@ -155,6 +162,9 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 
 	if opts.WithBounds {
 		_ = AnnotateBounds(ctx, res.Nodes, pageCoords, res.Viewport)
+		if opts.Image.Clip != nil {
+			projectBoundsToClip(res.Nodes, *opts.Image.Clip)
+		}
 	}
 
 	// Post-capture frame info. Compare root frame id + loader id to detect
@@ -173,6 +183,16 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 
 func imageFormatString(f page.CaptureScreenshotFormat) string {
 	return string(f)
+}
+
+func projectBoundsToClip(nodes []A11yNode, clip page.Viewport) {
+	for i := range nodes {
+		if nodes[i].BoundingBox == nil {
+			continue
+		}
+		nodes[i].BoundingBox.X -= clip.X
+		nodes[i].BoundingBox.Y -= clip.Y
+	}
 }
 
 // filterAXNodesByFrame mirrors handlers.scopeSnapshotNodesByFrame: drop any

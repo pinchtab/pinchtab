@@ -21,7 +21,8 @@ pinchtab capture --require-pair
 # Full-document image; bounding boxes in page coords
 pinchtab capture --beyond-viewport
 
-# Scope to one element: image clips to it, snapshot subtree filters to it
+# Scope to one element: image clips to it, snapshot subtree filters to it.
+# Bounding boxes are relative to the clipped image origin.
 pinchtab capture -s "#checkout-form"
 ```
 
@@ -81,11 +82,14 @@ an `expectedEpoch` query param to reject stale refs at use time.
 
 When `withBounds=true` (the default), each snapshot node with a
 non-zero backend node id gets a `boundingBox` and a `visible` flag. The
-coordinate space depends on `beyondViewport`:
+coordinate space depends on `selector` and `beyondViewport`:
 
 - **`viewport`** (default): boxes are viewport-relative CSS pixels. The
   image is the visible viewport. `image.devicePixelRatio` tells you the
   ratio of image pixels to CSS pixels.
+- **`clip`** (when `selector` is set): boxes are relative to the cropped
+  image origin. The response also includes `image.clip` with the original
+  document-relative clip rectangle.
 - **`document`** (when `beyondViewport=true`): boxes use page coordinates
   (`box.x` and `box.y` include scroll offset). The image is the full
   document.
@@ -106,7 +110,7 @@ viewport — a cheap heuristic, not a strict occlusion check.
 | `quality` | JPEG quality 0-100 |
 | `depth` | Snapshot tree depth limit |
 | `output` | `file` (default), `inline` (base64 in JSON), or `raw` (bytes only — drops the snapshot) |
-| `wait` | `stable` (default) waits for `Page.lifecycleEvent` quiescence (250ms silence / 750ms ceiling); `load` and `none` skip the wait |
+| `wait` | `stable` (default) waits for `Page.lifecycleEvent` quiescence (250ms silence / 750ms ceiling); `load` polls `document.readyState` until `complete` (2s ceiling); `none` skips the wait |
 | `withBounds` | `true` (default) — populate `boundingBox` + `visible` on every snapshot node |
 | `beyondViewport` | `true` — capture the full scrollable document; coordinate space becomes `document` |
 | `scale` | Rescale the output bitmap. Default `1`. `0.5` halves each axis (quarter the pixels) |

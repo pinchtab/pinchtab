@@ -10,6 +10,34 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// WaitForReadyState polls document.readyState until "complete" or ceiling.
+// Lighter than WaitForQuietWindow — use when "load event fired" is enough.
+func WaitForReadyState(ctx context.Context, ceiling time.Duration) (string, error) {
+	if ceiling <= 0 {
+		ceiling = 2 * time.Second
+	}
+	deadline := time.Now().Add(ceiling)
+	const poll = 50 * time.Millisecond
+
+	var state string
+	for {
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
+			return state, err
+		}
+		if state == "complete" {
+			return state, nil
+		}
+		if !time.Now().Before(deadline) {
+			return state, nil
+		}
+		select {
+		case <-ctx.Done():
+			return state, ctx.Err()
+		case <-time.After(poll):
+		}
+	}
+}
+
 // WaitForQuietWindow blocks until either no Page.lifecycleEvent has been
 // observed for `quiet` duration, or `ceiling` has elapsed since the call
 // started. Returns the duration actually waited.

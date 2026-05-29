@@ -65,11 +65,10 @@ func FetchLayout(ctx context.Context) (ViewportInfo, error) {
 // non-zero. Each node costs one DOM.getBoxModel round trip; for the typical
 // FilterInteractive snapshot of <50 nodes the total budget is ~250ms.
 //
-// pageCoords=true translates viewport-relative boxes into document
-// (page) coordinates by adding the current scroll offset — the form needed
-// by beyondViewport captures whose image spans the whole document. With
-// pageCoords=false the boxes are left in viewport coords, matching the
-// default viewport-only screenshot.
+// DOM.getBoxModel returns document-relative CSS coordinates. pageCoords=true
+// leaves boxes in that space for beyondViewport/clip captures. pageCoords=false
+// projects boxes into viewport coordinates by subtracting the current scroll
+// offset, matching the default viewport-only screenshot.
 //
 // Visibility heuristic: a node is Visible if its rect has non-zero area and
 // intersects the viewport. The check is intentionally cheap — strict
@@ -83,12 +82,13 @@ func AnnotateBounds(ctx context.Context, nodes []A11yNode, pageCoords bool, vp V
 		if !ok {
 			continue
 		}
-		if pageCoords {
-			box.X += vp.ScrollX
-			box.Y += vp.ScrollY
+		visible := isVisible(box, true, vp)
+		if !pageCoords {
+			box.X -= vp.ScrollX
+			box.Y -= vp.ScrollY
 		}
 		nodes[i].BoundingBox = &box
-		nodes[i].Visible = isVisible(box, pageCoords, vp)
+		nodes[i].Visible = visible
 	}
 	return nil
 }

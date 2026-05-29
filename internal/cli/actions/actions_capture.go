@@ -24,6 +24,7 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 
 	outFile, _ := cmd.Flags().GetString("output")
 	jsonOutput, _ := cmd.Flags().GetBool("json")
+	outFileExplicit := cmd.Flags().Changed("output")
 
 	format, _ := cmd.Flags().GetString("format")
 	if format == "" {
@@ -77,30 +78,31 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 		return
 	}
 
-	// Always materialize the image locally — both terse and --json callers
-	// need the file. --json mode still prints the base64 envelope so
-	// pipelines that prefer inline bytes can keep using it.
+	// --json without an explicit --output skips the file write so piping JSON
+	// doesn't leave a stray image in pwd. Base64 stays in the envelope.
 	ext := ".jpg"
 	if resp.Image.Format == "png" {
 		ext = ".png"
 	}
-	if outFile == "" {
-		outFile = fmt.Sprintf("capture-%s%s", time.Now().Format("20060102-150405"), ext)
-	}
-	img, err := base64.StdEncoding.DecodeString(resp.Image.Base64)
-	if err != nil {
-		output.Error("capture", fmt.Sprintf("decode image bytes: %v", err), output.ExitRuntime)
-		return
-	}
-	if err := os.WriteFile(outFile, img, 0600); err != nil {
-		output.Error("capture", fmt.Sprintf("write image: %v", err), output.ExitRuntime)
-		return
+	writeImage := !jsonOutput || outFileExplicit
+	var img []byte
+	if writeImage {
+		if outFile == "" {
+			outFile = fmt.Sprintf("capture-%s%s", time.Now().Format("20060102-150405"), ext)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(resp.Image.Base64)
+		if err != nil {
+			output.Error("capture", fmt.Sprintf("decode image bytes: %v", err), output.ExitRuntime)
+			return
+		}
+		img = decoded
+		if err := os.WriteFile(outFile, img, 0600); err != nil {
+			output.Error("capture", fmt.Sprintf("write image: %v", err), output.ExitRuntime)
+			return
+		}
 	}
 
 	if jsonOutput {
-		// Echo what the server sent, pretty-printed. The base64 stays in
-		// place for callers who want inline bytes; outFile is where we
-		// wrote the decoded copy.
 		var pretty map[string]any
 		if err := json.Unmarshal(raw, &pretty); err == nil {
 			output.JSON(pretty)
@@ -124,7 +126,7 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 		fmt.Println()
 		filter := resp.Snapshot.Filter
 		if filter == "" {
-			filter = "all"
+			filter = "interactive"
 		}
 		output.Value(fmt.Sprintf("snapshot: %d nodes (%s)", resp.Snapshot.NodeCount, filter))
 		for _, n := range resp.Snapshot.Nodes {

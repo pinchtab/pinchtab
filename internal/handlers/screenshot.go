@@ -140,8 +140,8 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	scale := 1.0
 	if s := r.URL.Query().Get("scale"); s != "" {
-		if sf, err := strconv.ParseFloat(s, 64); err == nil && sf > 0 {
-			scale = sf
+		if sf, err := strconv.ParseFloat(s, 64); err == nil {
+			scale = bridge.ClampScale(sf)
 		}
 	}
 	buf, err = bridge.CaptureScreenshot(tCtx, bridge.ScreenshotOpts{

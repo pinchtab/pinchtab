@@ -51,6 +51,10 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 	return bridgeobserve.WaitForQuietWindow(ctx, quiet, ceiling)
 }
 
+func WaitForReadyState(ctx context.Context, ceiling time.Duration) (string, error) {
+	return bridgeobserve.WaitForReadyState(ctx, ceiling)
+}
+
 type BoundingBox = bridgeobserve.BoundingBox
 type ViewportInfo = bridgeobserve.ViewportInfo
 

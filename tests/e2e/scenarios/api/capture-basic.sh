@@ -1,10 +1,5 @@
 #!/bin/bash
 # capture-basic.sh — /capture endpoint happy paths.
-#
-# /capture returns a screenshot AND an accessibility snapshot from the
-# same DOM epoch in one HTTP call. These scenarios cover the contract
-# /screenshot + /snapshot together cannot satisfy: paired epoch, frame
-# parity, scale, bounding boxes, and the requirePair drift gate.
 
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/api.sh"
@@ -19,12 +14,12 @@ assert_ok "capture"
 
 assert_json_exists "$RESULT" '.status' "response.status"
 assert_json_exists "$RESULT" '.epoch.domEpoch' "epoch.domEpoch present"
-# pairing.navigated may legitimately be false on a fresh capture, so use
-# `has` rather than truthy-check.
+# jq -e treats `false` as missing — use has() since navigated may be false.
 assert_json_exists "$RESULT" '.pairing | has("navigated")' "pairing.navigated present"
 assert_json_exists "$RESULT" '.image.path' "image written to disk"
 assert_json_exists "$RESULT" '.snapshot.nodes' "snapshot.nodes present"
 assert_json_exists "$RESULT" '.image.coordinateSpace' "image.coordinateSpace present"
+assert_result_eq '.snapshot.filter' 'interactive' 'default filter=interactive'
 
 end_test
 
@@ -75,9 +70,6 @@ start_test "capture: scale reduces image bytes"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 
-# inline output puts base64 in the response — byte size of the decoded
-# image is what we want to compare. A scale of 0.25 should produce
-# materially fewer bytes than scale=1.
 FULL_BYTES=$(e2e_curl -s "${E2E_SERVER}/capture?output=inline" | jq -r '.image.bytes')
 HALF_BYTES=$(e2e_curl -s "${E2E_SERVER}/capture?output=inline&scale=0.25" | jq -r '.image.bytes')
 
@@ -97,7 +89,6 @@ pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 pt_get "/capture?withBounds=true&filter=interactive"
 assert_ok "capture withBounds"
 
-# At least one interactive node should carry a boundingBox.
 HAS_BOUNDS=$(echo "$RESULT" | jq '[.snapshot.nodes[] | select(.boundingBox != null)] | length')
 if [ "$HAS_BOUNDS" -gt 0 ]; then
   pass_assert "$HAS_BOUNDS nodes with boundingBox"
@@ -119,6 +110,28 @@ if [ "$HAS_BOUNDS" -eq 0 ]; then
 else
   fail_assert "expected no boundingBox, found $HAS_BOUNDS"
 fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "capture: selector bounds are clip-relative"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+
+SELECTOR_ENC='%23test-form'
+pt_get "/capture?selector=${SELECTOR_ENC}&withBounds=true&filter=interactive"
+assert_ok "capture selector"
+
+assert_result_eq '.image.coordinateSpace' 'clip' 'coordinateSpace=clip under selector'
+assert_result_exists '.image.clip' 'image.clip present'
+assert_result_jq \
+  '[.snapshot.nodes[] | select(.boundingBox != null)] | length > 0' \
+  'selector returned bounded nodes' \
+  'selector capture returned no bounded nodes'
+assert_result_jq \
+  '[.snapshot.nodes[] | select(.boundingBox != null and .boundingBox.y < 200)] | length > 0' \
+  'at least one selector bound near clip origin' \
+  'selector bounds look unprojected'
 
 end_test
 
@@ -151,8 +164,6 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "/screenshot ?scale= reduces image bytes"
 
-# Sibling test that exercises the new --scale path on /screenshot too,
-# since the underlying bridge.CaptureScreenshot helper is shared.
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 FULL=$(e2e_curl -s "${E2E_SERVER}/screenshot" | wc -c)
 HALF=$(e2e_curl -s "${E2E_SERVER}/screenshot?scale=0.25" | wc -c)

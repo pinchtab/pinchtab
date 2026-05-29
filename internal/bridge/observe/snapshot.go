@@ -41,8 +41,9 @@ type A11yNode struct {
 
 // BoundingBox is a CSS-pixel rectangle for a snapshot node. Populated only by
 // PairedCapture when CaptureOpts.WithBounds is true. Coordinate space depends
-// on PairedResult.CoordinateSpace — viewport-relative by default, document
-// (page) coordinates when BeyondViewport is on.
+// on PairedResult.CoordinateSpace: viewport-relative by default, document
+// coordinates when BeyondViewport is on, and clip-relative when selector
+// scoping crops the image.
 type BoundingBox struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`

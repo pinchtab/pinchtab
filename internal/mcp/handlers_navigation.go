@@ -237,6 +237,9 @@ func handleCapture(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
 		}
+		if scale, ok := optFloat(r, "scale"); ok && scale > 0 {
+			q.Set("scale", fmt.Sprintf("%g", scale))
+		}
 		if v := optNumber(r, "depth"); v > 0 {
 			q.Set("depth", formatInt(v))
 		}
@@ -283,6 +286,7 @@ func captureResult(body []byte) (*mcp.CallToolResult, error) {
 			CoordinateSpace string          `json:"coordinateSpace"`
 			DPR             float64         `json:"devicePixelRatio"`
 			Viewport        json.RawMessage `json:"viewport"`
+			Clip            json.RawMessage `json:"clip,omitempty"`
 		} `json:"image"`
 		Snapshot json.RawMessage `json:"snapshot"`
 	}
@@ -299,6 +303,16 @@ func captureResult(body []byte) (*mcp.CallToolResult, error) {
 		mimeType = "image/png"
 	}
 
+	imagePayload := map[string]any{
+		"format":           format,
+		"bytes":            env.Image.Bytes,
+		"coordinateSpace":  env.Image.CoordinateSpace,
+		"devicePixelRatio": env.Image.DPR,
+		"viewport":         env.Image.Viewport,
+	}
+	if len(env.Image.Clip) > 0 {
+		imagePayload["clip"] = env.Image.Clip
+	}
 	textPayload := map[string]any{
 		"status":     env.Status,
 		"tabId":      env.TabID,
@@ -307,14 +321,8 @@ func captureResult(body []byte) (*mcp.CallToolResult, error) {
 		"capturedAt": env.CapturedAt,
 		"epoch":      env.Epoch,
 		"pairing":    env.Pairing,
-		"image": map[string]any{
-			"format":           format,
-			"bytes":            env.Image.Bytes,
-			"coordinateSpace":  env.Image.CoordinateSpace,
-			"devicePixelRatio": env.Image.DPR,
-			"viewport":         env.Image.Viewport,
-		},
-		"snapshot": env.Snapshot,
+		"image":      imagePayload,
+		"snapshot":   env.Snapshot,
 	}
 	encoded, err := json.Marshal(textPayload)
 	if err != nil {

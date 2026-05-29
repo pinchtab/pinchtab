@@ -5,6 +5,32 @@ import (
 	"testing"
 )
 
+func TestCaptureEndpointIsShorthandAndTabScoped(t *testing.T) {
+	wantShorthand := "GET /capture"
+	found := false
+	for _, route := range ShorthandRoutes() {
+		if route == wantShorthand {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ShorthandRoutes() missing %s — proxy mux will 404 until the routes catalog entry is added next to the handlers.RegisterRoutes call", wantShorthand)
+	}
+
+	wantTab := "GET /tabs/{id}/capture"
+	found = false
+	for _, route := range TabScopedRoutes() {
+		if route == wantTab {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("TabScopedRoutes() missing %s — the catalog entry's TabScoped flag was likely flipped to false", wantTab)
+	}
+}
+
 func TestFrameEndpointsAreShorthandAndTabScoped(t *testing.T) {
 	found := map[string]bool{
 		"GET /frame":  false,

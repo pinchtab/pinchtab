@@ -28,7 +28,7 @@ import (
 //
 // @Param tabId string query Tab ID (optional, defaults to current)
 // @Param selector string query Optional scope (clips screenshot and filters snapshot subtree)
-// @Param filter string query Snapshot filter: "interactive" or "all" (default "all")
+// @Param filter string query Snapshot filter: "interactive" or "all" (default "interactive")
 // @Param depth int query Snapshot max depth (default -1 for full)
 // @Param format string query Image format: "jpeg" or "png" (default "jpeg")
 // @Param quality int query JPEG quality 1-100 (default 80)
@@ -67,6 +67,9 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 
 	selector := q.Get("selector")
 	filter := q.Get("filter")
+	if filter == "" {
+		filter = bridge.FilterInteractive
+	}
 	output := q.Get("output")
 	if output == "" {
 		output = "file"
@@ -75,12 +78,11 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	reqNoAnim := q.Get("noAnimations") == "true"
 	beyondViewport := q.Get("beyondViewport") == "true" || q.Get("beyondViewport") == "1"
 
-	// scale rescales the rendered bitmap. Default 1 (native). 0.5 halves
-	// each axis (quarter of the pixels).
+	// Clamp so ?scale=10000 can't ask CDP for a gigapixel image.
 	scale := 1.0
 	if s := q.Get("scale"); s != "" {
-		if sf, err := strconv.ParseFloat(s, 64); err == nil && sf > 0 {
-			scale = sf
+		if sf, err := strconv.ParseFloat(s, 64); err == nil {
+			scale = bridge.ClampScale(sf)
 		}
 	}
 
@@ -93,9 +95,9 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		withBounds = false
 	}
 
-	// Default to wait=stable: vision-grounded callers are the primary user and
-	// they want a quiesced page. Callers that want raw timing pass wait=none
-	// (or the alias wait=load — reserved for a future readyState gate).
+	// Default to wait=stable: vision-grounded callers are the primary user
+	// and they want a quiesced page. wait=load polls document.readyState;
+	// wait=none skips the wait entirely.
 	wait := q.Get("wait")
 	if wait == "" {
 		wait = bridge.WaitStable
@@ -211,6 +213,14 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 			"scrollX": result.Viewport.ScrollX,
 			"scrollY": result.Viewport.ScrollY,
 		},
+	}
+	if result.Clip != nil {
+		imageInfo["clip"] = map[string]any{
+			"x": result.Clip.X,
+			"y": result.Clip.Y,
+			"w": result.Clip.Width,
+			"h": result.Clip.Height,
+		}
 	}
 
 	switch output {
