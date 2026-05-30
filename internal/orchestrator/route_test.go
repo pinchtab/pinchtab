@@ -80,14 +80,48 @@ func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
 	}
-	if instances[0].Target != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want cloak", instances[0].Browser)
 	}
 	if instances[0].ProfileName != "default-cloak" {
 		t.Fatalf("ProfileName = %q, want default-cloak", instances[0].ProfileName)
+	}
+}
+
+func TestRouteForRequest_RejectsUnknownBrowser(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	newBackendInstance(t, o, "inst_chrome")
+	o.instances["inst_chrome"].Browser = config.BrowserChrome
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=chrme", nil)
+	_, status, err := o.RouteForRequest(req)
+	if err == nil {
+		t.Fatal("expected unknown browser error for typo")
+	}
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+}
+
+func TestRouteForRequest_AcceptsValidBrowsers(t *testing.T) {
+	alwaysAlive(t)
+	for _, browser := range []string{"chrome", "cloak", "ghost-chrome"} {
+		t.Run(browser, func(t *testing.T) {
+			o := NewOrchestrator(t.TempDir())
+			_, _ = newBackendInstance(t, o, "inst_"+browser)
+			o.instances["inst_"+browser].Browser = browser
+			o.syncInstanceToManager(&o.instances["inst_"+browser].Instance)
+
+			req := httptest.NewRequest(http.MethodPost, "/navigate?browser="+browser, nil)
+			target, status, err := o.RouteForRequest(req)
+			if err != nil {
+				t.Fatalf("RouteForRequest status=%d err=%v", status, err)
+			}
+			if target == "" {
+				t.Fatal("expected non-empty target URL for valid browser")
+			}
+		})
 	}
 }
 
@@ -138,8 +172,7 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 		},
 	})
 	_, pathB := newBackendInstance(t, o, "inst_b")
-	o.instances["inst_b"].Target = "chrome"
-	o.instances["inst_b"].BrowserProvider = config.BrowserChrome
+	o.instances["inst_b"].Browser = config.BrowserChrome
 	o.syncInstanceToManager(&o.instances["inst_b"].Instance)
 	o.instanceMgr.Locator.Register("tab-x", "inst_b")
 
@@ -214,8 +247,7 @@ func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing
 		},
 	})
 	_, pathA := newBackendInstance(t, o, "inst_a")
-	o.instances["inst_a"].Target = "chrome"
-	o.instances["inst_a"].BrowserProvider = config.BrowserChrome
+	o.instances["inst_a"].Browser = config.BrowserChrome
 	o.bindings.BindAgent("agent-1", "inst_a")
 
 	fallbackCalled := false

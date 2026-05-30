@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -72,19 +70,7 @@ func (h *Handlers) setHeaders(w http.ResponseWriter, r *http.Request, req header
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	hdrs := make(network.Headers, len(req.Headers))
-	for k, v := range req.Headers {
-		hdrs[k] = v
-	}
-
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := network.SetExtraHTTPHeaders(hdrs).Do(ctx); err != nil {
-				return fmt.Errorf("setExtraHTTPHeaders: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetExtraHTTPHeaders(tCtx, req.Headers); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP set extra HTTP headers: %w", err))
 		return
 	}

@@ -64,21 +64,19 @@ func (fl *fakeLauncher) Launch(name, port string, headless bool, opts LaunchOpti
 	fl.outcomes[id] = step
 
 	instance := bridge.Instance{
-		ID:              id,
-		ProfileName:     name,
-		Port:            port,
-		Headless:        headless,
-		Mode:            bridge.ModeFromHeadless(headless),
-		Status:          "starting",
-		StartTime:       time.Now(),
-		Target:          opts.ResolvedTarget,
-		BrowserProvider: opts.BrowserProvider,
+		ID:          id,
+		ProfileName: name,
+		Port:        port,
+		Headless:    headless,
+		Mode:        bridge.ModeFromHeadless(headless),
+		Status:      "starting",
+		StartTime:   time.Now(),
+		Browser:     opts.Browser,
 	}
 	if fl.orch != nil {
 		internal := &InstanceInternal{
-			Instance:        instance,
-			resolvedTarget:  opts.ResolvedTarget,
-			browserProvider: opts.BrowserProvider,
+			Instance: instance,
+			browser:  opts.Browser,
 		}
 		fl.orch.mu.Lock()
 		fl.orch.instances[id] = internal
@@ -191,8 +189,8 @@ func TestLaunchWithFallback_FirstCandidateSucceeds(t *testing.T) {
 	if inst.FallbackFrom != "" || inst.FallbackReason != "" {
 		t.Errorf("expected no fallback metadata, got from=%q reason=%q", inst.FallbackFrom, inst.FallbackReason)
 	}
-	if inst.Target != "chrome" {
-		t.Errorf("BrowserTarget = %q, want chrome", inst.Target)
+	if inst.Browser != config.BrowserChrome {
+		t.Errorf("Browser = %q, want chrome", inst.Browser)
 	}
 	if len(fl.calls) != 1 {
 		t.Errorf("expected 1 launch call, got %d", len(fl.calls))
@@ -217,8 +215,8 @@ func TestLaunchWithFallback_FirstFailsSecondSucceeds(t *testing.T) {
 	if planned.FallbackReason != ReasonBinaryMissing {
 		t.Errorf("FallbackReason = %q, want %q", planned.FallbackReason, ReasonBinaryMissing)
 	}
-	if inst.Target != "cloak" {
-		t.Errorf("BrowserTarget = %q, want cloak", inst.Target)
+	if inst.Browser != config.BrowserCloak {
+		t.Errorf("Browser = %q, want cloak", inst.Browser)
 	}
 	if len(fl.calls) != 2 {
 		t.Errorf("expected 2 launch calls, got %d", len(fl.calls))
@@ -266,8 +264,8 @@ func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch returned error: %v", err)
 	}
-	if inst.Target != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak fallback", inst.Target)
+	if inst.Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want cloak fallback", inst.Browser)
 	}
 	if inst.FallbackFrom != "chrome" {
 		t.Fatalf("FallbackFrom = %q, want chrome", inst.FallbackFrom)
@@ -275,8 +273,8 @@ func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("launch calls = %d, want 2", len(fl.calls))
 	}
-	if fl.calls[0].ResolvedTarget != "chrome" || fl.calls[1].ResolvedTarget != "cloak" {
-		t.Fatalf("launch target order = [%q, %q], want [chrome, cloak]", fl.calls[0].ResolvedTarget, fl.calls[1].ResolvedTarget)
+	if fl.calls[0].Browser != config.BrowserChrome || fl.calls[1].Browser != config.BrowserCloak {
+		t.Fatalf("launch browser order = [%q, %q], want [chrome, cloak]", fl.calls[0].Browser, fl.calls[1].Browser)
 	}
 }
 

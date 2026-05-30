@@ -1,115 +1,9 @@
 package ghostchrome
 
 import (
-	"context"
-	"errors"
 	"strings"
 	"testing"
-
-	"github.com/pinchtab/pinchtab/internal/browsers"
 )
-
-func TestGhostAdapter_CanHandle(t *testing.T) {
-	a := &GhostAdapter{}
-	d := a.CanHandle(browsers.RequestIntent{Shape: browsers.ShapeStaticRead})
-	if d.Decision != browsers.DecisionHandle {
-		t.Errorf("CanHandle(static-read) = %q, want handle", d.Decision)
-	}
-	d = a.CanHandle(browsers.RequestIntent{Shape: browsers.ShapeInteraction})
-	if d.Decision != browsers.DecisionSkip {
-		t.Errorf("CanHandle(interaction) = %q, want skip", d.Decision)
-	}
-}
-
-func TestGhostAdapter_Try_NilEngine(t *testing.T) {
-	a := &GhostAdapter{}
-	r := a.Try(context.Background(), nil, "https://example.com")
-	if r.OK {
-		t.Error("expected OK=false for nil browserops")
-	}
-	if r.SkipReason == "" {
-		t.Error("expected non-empty SkipReason for nil browserops")
-	}
-}
-
-// stubFetcher implements StaticFetcher for testing.
-type stubFetcher struct {
-	navResult  *StaticNavResult
-	navErr     error
-	textResult *StaticTextResult
-	textErr    error
-}
-
-func (s *stubFetcher) Navigate(_ context.Context, url string) (StaticNavResult, error) {
-	if s.navErr != nil {
-		return StaticNavResult{}, s.navErr
-	}
-	if s.navResult != nil {
-		return *s.navResult, nil
-	}
-	return StaticNavResult{URL: url, Title: "Test"}, nil
-}
-
-func (s *stubFetcher) Text(_ context.Context, _ string) (StaticTextResult, error) {
-	if s.textErr != nil {
-		return StaticTextResult{}, s.textErr
-	}
-	if s.textResult != nil {
-		return *s.textResult, nil
-	}
-	return StaticTextResult{}, nil
-}
-
-func TestGhostAdapter_Try_Success(t *testing.T) {
-	a := &GhostAdapter{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://example.com", Title: "Example"},
-		textResult: &StaticTextResult{Text: "This is a test page with enough words to get a decent quality score. We need at least fifty words to cross the threshold so let us keep adding more words until we reach that number. One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty."},
-	}
-	r := a.Try(context.Background(), stub, "https://example.com")
-	if !r.OK {
-		t.Fatalf("expected OK=true; got SkipReason=%q", r.SkipReason)
-	}
-	if r.URL != "https://example.com" {
-		t.Errorf("URL = %q, want https://example.com", r.URL)
-	}
-	if r.Title != "Example" {
-		t.Errorf("Title = %q, want Example", r.Title)
-	}
-	if r.Quality < 50 {
-		t.Errorf("Quality = %d, want >= 50", r.Quality)
-	}
-	if r.PageClass != "static" {
-		t.Errorf("PageClass = %q, want static", r.PageClass)
-	}
-}
-
-func TestGhostAdapter_Try_NavigateError(t *testing.T) {
-	a := &GhostAdapter{}
-	stub := &stubFetcher{navErr: errors.New("connection refused")}
-	r := a.Try(context.Background(), stub, "https://example.com")
-	if r.OK {
-		t.Error("expected OK=false for nav error")
-	}
-	if r.SkipReason == "" {
-		t.Error("expected non-empty SkipReason for nav error")
-	}
-}
-
-func TestGhostAdapter_Try_TextError(t *testing.T) {
-	a := &GhostAdapter{}
-	stub := &stubFetcher{
-		navResult: &StaticNavResult{URL: "https://example.com", Title: "Example"},
-		textErr:   errors.New("text extraction failed"),
-	}
-	r := a.Try(context.Background(), stub, "https://example.com")
-	if r.OK {
-		t.Error("expected OK=false for text error")
-	}
-	if r.SkipReason == "" {
-		t.Error("expected non-empty SkipReason for text error")
-	}
-}
 
 func TestGhostResult_ShouldAccept(t *testing.T) {
 	tests := []struct {
@@ -151,39 +45,6 @@ func TestGhostResult_FormatReason(t *testing.T) {
 			t.Errorf("FormatReason() = %q", got)
 		}
 	})
-}
-
-func TestGhostAdapter_Try_DetectsSPA(t *testing.T) {
-	a := &GhostAdapter{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://spa.example.com", Title: "SPA App"},
-		textResult: &StaticTextResult{Text: `Loading... <div id="__next"></div>`},
-	}
-	r := a.Try(context.Background(), stub, "https://spa.example.com")
-	if !r.NeedsBrowser {
-		t.Error("expected NeedsBrowser=true for SPA content")
-	}
-	if r.PageClass != "spa" {
-		t.Errorf("PageClass = %q, want spa", r.PageClass)
-	}
-	if r.ShouldAccept() {
-		t.Error("SPA content should not be accepted")
-	}
-}
-
-func TestGhostAdapter_Try_ThinContent(t *testing.T) {
-	a := &GhostAdapter{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://example.com", Title: "Thin"},
-		textResult: &StaticTextResult{Text: ""},
-	}
-	r := a.Try(context.Background(), stub, "https://example.com")
-	if !r.IsThin {
-		t.Error("expected IsThin=true for very short content")
-	}
-	if r.ShouldAccept() {
-		t.Error("thin content should not be accepted")
-	}
 }
 
 func TestLooksLikeSPA(t *testing.T) {

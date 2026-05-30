@@ -270,6 +270,9 @@ func (noCDPBrowser) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.Launc
 func (noCDPBrowser) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
 }
+func (noCDPBrowser) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance {
+	return nil
+}
 
 var registerNoCDPOnce sync.Once
 
@@ -288,25 +291,5 @@ func TestInitRemoteCDP_RejectsUnsupportedProvider(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not support remote CDP") {
 		t.Fatalf("expected 'does not support remote CDP' in error; got: %v", err)
-	}
-}
-
-func TestEngineToLaunchMode(t *testing.T) {
-	cases := []struct {
-		engine string
-		want   browsers.LaunchMode
-	}{
-		{"", browsers.LaunchModeChrome},
-		{"chrome", browsers.LaunchModeChrome},
-		{"lite", browsers.LaunchModeLite},
-		{"auto", browsers.LaunchModeAuto},
-		{"unknown", browsers.LaunchModeChrome},
-	}
-	for _, c := range cases {
-		t.Run(fmt.Sprintf("engine=%q", c.engine), func(t *testing.T) {
-			if got := engineToLaunchMode(c.engine); got != c.want {
-				t.Errorf("engineToLaunchMode(%q) = %q; want %q", c.engine, got, c.want)
-			}
-		})
 	}
 }

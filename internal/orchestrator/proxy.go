@@ -316,7 +316,9 @@ func (o *Orchestrator) applyInstanceAuth(req *http.Request, inst *InstanceIntern
 		token = o.childAuthToken
 	}
 	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+		bearer := "Bearer " + token
+		req.Header.Set("Authorization", bearer)
+		handlers.SetProxyWSBackendAuthorization(req.Header, bearer)
 	}
 	// Mark spawned-child hops as trusted-internal-proxy so the instance
 	// honors X-PinchTab-* identity headers we propagate. Attached external

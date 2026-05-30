@@ -2,14 +2,12 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -198,7 +196,7 @@ func (h *Handlers) inspectByRef(ctx context.Context, tabID, ref string, kind ins
 	if !ok {
 		return inspectPayload{}, fmt.Errorf("ref not found: %s", ref)
 	}
-	return inspectByBackendNodeID(ctx, target.BackendNodeID, kind)
+	return h.inspectByBackendNodeID(ctx, target.BackendNodeID, kind)
 }
 
 func (h *Handlers) inspectBySelector(ctx context.Context, tabID, rawSelector, frameID string, kind inspectKind) (inspectPayload, error) {
@@ -206,63 +204,20 @@ func (h *Handlers) inspectBySelector(ctx context.Context, tabID, rawSelector, fr
 	if err != nil {
 		return inspectPayload{}, frameScopedSelectorError("selector", err)
 	}
-	return inspectByBackendNodeID(ctx, nodeID, kind)
+	return h.inspectByBackendNodeID(ctx, nodeID, kind)
 }
 
-func inspectByBackendNodeID(ctx context.Context, nodeID int64, kind inspectKind) (inspectPayload, error) {
+func (h *Handlers) inspectByBackendNodeID(ctx context.Context, nodeID int64, kind inspectKind) (inspectPayload, error) {
 	var payload inspectPayload
 	if nodeID == 0 {
 		return payload, fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
 	}
 
-	var resolveResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &resolveResult)
-	})); err != nil {
-		return payload, fmt.Errorf("resolve node: %w", err)
-	}
-
-	var resolved struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(resolveResult, &resolved); err != nil {
-		return payload, fmt.Errorf("parse resolved node: %w", err)
-	}
-	if resolved.Object.ObjectID == "" {
-		return payload, fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
-	}
-
 	functionDeclaration := inspectFunctionDeclaration(kind)
-	var callResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": functionDeclaration,
-			"objectId":            resolved.Object.ObjectID,
-			"returnByValue":       true,
-		}, &callResult)
-	})); err != nil {
-		return payload, fmt.Errorf("inspect %s: %w", kind, err)
+	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, functionDeclaration, nil, &payload); err != nil {
+		return inspectPayload{}, fmt.Errorf("inspect %s: %w", kind, err)
 	}
-
-	var result struct {
-		Result struct {
-			Value inspectPayload `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(callResult, &result); err != nil {
-		return payload, fmt.Errorf("inspect %s parse: %w", kind, err)
-	}
-	if result.ExceptionDetails != nil && result.ExceptionDetails.Text != "" {
-		return payload, fmt.Errorf("inspect %s: %s", kind, result.ExceptionDetails.Text)
-	}
-	return result.Result.Value, nil
+	return payload, nil
 }
 
 func inspectFunctionDeclaration(kind inspectKind) string {
@@ -296,42 +251,7 @@ func inspectFunctionDeclaration(kind inspectKind) string {
 }
 
 func (h *Handlers) evalInspectExpression(ctx context.Context, frameID, expr string, out any) error {
-	if frameID == "" {
-		return h.evalRuntime(ctx, expr, out)
-	}
-	execID, err := bridge.FrameExecutionContextID(ctx, frameID)
-	if err != nil {
-		return fmt.Errorf("resolve frame context: %w", err)
-	}
-	var raw json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expr,
-			"returnByValue": true,
-			"contextId":     execID,
-		}, &raw)
-	}))
-	if err != nil {
-		return err
-	}
-	var result struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return fmt.Errorf("inspect parse: %w", err)
-	}
-	if result.ExceptionDetails != nil && result.ExceptionDetails.Text != "" {
-		return fmt.Errorf("%s", result.ExceptionDetails.Text)
-	}
-	if len(result.Result.Value) == 0 {
-		return nil
-	}
-	return json.Unmarshal(result.Result.Value, out)
+	return h.Bridge.EvaluateInFrame(ctx, frameID, expr, out, bridge.EvalOpts{})
 }
 
 func parsePositiveInt(raw string) int {

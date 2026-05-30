@@ -56,11 +56,8 @@ func TestHandleStartByID_TargetsConfigDefault_EchoesValues(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "cloak-1" {
-		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
 }
 

@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -97,31 +95,8 @@ func (h *Handlers) getElementVisible(ctx context.Context, tabID, ref string) (bo
 	}
 
 	var visible bool
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		// Step 1: Resolve backend node ID to a remote object
-		var resolveResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &resolveResult); err != nil {
-			return fmt.Errorf("resolve node: %w", err)
-		}
-
-		var resolved struct {
-			Object struct {
-				ObjectID string `json:"objectId"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(resolveResult, &resolved); err != nil {
-			return fmt.Errorf("parse resolved node: %w", err)
-		}
-		if resolved.Object.ObjectID == "" {
-			return fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
-		}
-
-		// Step 2: Evaluate visibility checks on the element
-		var callResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": `function() {
+	err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
+		`function() {
   var el = this;
   if (!el.offsetParent && el.style.position !== 'fixed' && el.style.position !== 'sticky') return false;
   var style = window.getComputedStyle(el);
@@ -129,33 +104,7 @@ func (h *Handlers) getElementVisible(ctx context.Context, tabID, ref string) (bo
   var rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }`,
-			"objectId":      resolved.Object.ObjectID,
-			"returnByValue": true,
-		}, &callResult); err != nil {
-			return fmt.Errorf("check element visibility: %w", err)
-		}
-
-		var callParsed struct {
-			Result struct {
-				Type  string `json:"type"`
-				Value any    `json:"value"`
-			} `json:"result"`
-			ExceptionDetails *struct {
-				Text string `json:"text"`
-			} `json:"exceptionDetails,omitempty"`
-		}
-		if err := json.Unmarshal(callResult, &callParsed); err != nil {
-			return fmt.Errorf("parse visibility result: %w", err)
-		}
-		if callParsed.ExceptionDetails != nil && callParsed.ExceptionDetails.Text != "" {
-			return fmt.Errorf("check element visibility: %s", callParsed.ExceptionDetails.Text)
-		}
-
-		if b, ok := callParsed.Result.Value.(bool); ok {
-			visible = b
-		}
-		return nil
-	}))
+		nil, &visible)
 	if err != nil {
 		return false, err
 	}

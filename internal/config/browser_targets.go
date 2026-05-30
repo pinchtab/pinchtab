@@ -194,7 +194,7 @@ func validateTargetExtraFlags(targetName, raw string) []error {
 
 // migrateLegacyBrowserConfig synthesizes targets["default"] from legacy fields when targets is empty.
 // When both blocks are present, explicit targets win and conflict=true so the caller can warn.
-func migrateLegacyBrowserConfig(bc *BrowserConfig) (synthesized bool, conflict bool) {
+func migrateLegacyBrowserConfig(bc *BrowserConfig, browsersDefault string) (synthesized bool, conflict bool) {
 	if bc == nil {
 		return false, false
 	}
@@ -216,7 +216,11 @@ func migrateLegacyBrowserConfig(bc *BrowserConfig) (synthesized bool, conflict b
 		return false, false
 	}
 
-	provider := NormalizeBrowser(bc.Provider)
+	providerRaw := bc.Provider
+	if providerRaw == "" {
+		providerRaw = browsersDefault
+	}
+	provider := NormalizeBrowser(providerRaw)
 	target := BrowserTargetConfig{
 		Provider:   provider,
 		Binary:     bc.ChromeBinary,
@@ -302,34 +306,6 @@ func (e *AmbiguousBrowserError) Error() string {
 	return fmt.Sprintf(
 		"browser %q matches multiple targets (%s); set browser.defaultTarget or specify a target explicitly",
 		e.Browser, strings.Join(e.Targets, ", "))
-}
-
-// ResolveBrowserToTarget bridges ResolveBrowser (which returns a browser name
-// like "cloak") to target resolution. When the resolved browser name matches
-// the Provider field of multiple targets and no DefaultTarget disambiguates,
-// it returns a structured AmbiguousBrowserError listing the matching targets.
-func ResolveBrowserToTarget(cfg *RuntimeConfig, browser string) (string, error) {
-	if cfg == nil || len(cfg.Targets) == 0 {
-		return "", nil // legacy path, no targets configured
-	}
-	matches := TargetsForBrowser(cfg, browser)
-	switch len(matches) {
-	case 0:
-		return "", nil // no target config for this browser, legacy path
-	case 1:
-		return matches[0], nil
-	default:
-		// Multiple targets — check if defaultTarget disambiguates
-		dt := ResolveDefaultTarget(cfg)
-		if dt != "" {
-			for _, m := range matches {
-				if m == dt {
-					return dt, nil
-				}
-			}
-		}
-		return "", &AmbiguousBrowserError{Browser: browser, Targets: matches}
-	}
 }
 
 // ResolveDefaultTarget returns the effective default target; empty when no targets are configured.

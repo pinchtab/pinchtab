@@ -19,7 +19,7 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 		"pinchtab-autoclose.json":         filepath.Join(tmp, "pinchtab-autoclose.json"),
 		"pinchtab-medium-permissive.json": filepath.Join(tmp, "pinchtab-medium-permissive.json"),
 		"pinchtab-full-permissive.json":   filepath.Join(tmp, "pinchtab-full-permissive.json"),
-		"pinchtab-lite.json":              filepath.Join(tmp, "pinchtab-lite.json"),
+		"pinchtab-ghostchrome.json":       filepath.Join(tmp, "pinchtab-ghostchrome.json"),
 		"pinchtab-bridge.json":            filepath.Join(tmp, "pinchtab-bridge.json"),
 	}
 
@@ -47,7 +47,7 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 		t.Fatalf("pinchtab override missing extension API mount %q:\n%s", wantAPIExtension, pinchtabBlock)
 	}
 
-	for _, svc := range []string{"pinchtab-secure", "pinchtab-lite", "pinchtab-bridge"} {
+	for _, svc := range []string{"pinchtab-secure", "pinchtab-ghostchrome", "pinchtab-bridge"} {
 		block := serviceBlock(t, compose, svc)
 		if strings.Contains(block, "/extensions/test-extension") {
 			t.Fatalf("%s override should not add extension mounts:\n%s", svc, block)
@@ -55,13 +55,13 @@ func TestWriteCloakComposeOverrideMountsExtensionFixtures(t *testing.T) {
 	}
 
 	for svc, configName := range map[string]string{
-		"pinchtab":           "pinchtab.json",
-		"pinchtab-secure":    "pinchtab-secure.json",
-		"pinchtab-autoclose": "pinchtab-autoclose.json",
-		"pinchtab-medium":    "pinchtab-medium-permissive.json",
-		"pinchtab-full":      "pinchtab-full-permissive.json",
-		"pinchtab-lite":      "pinchtab-lite.json",
-		"pinchtab-bridge":    "pinchtab-bridge.json",
+		"pinchtab":             "pinchtab.json",
+		"pinchtab-secure":      "pinchtab-secure.json",
+		"pinchtab-autoclose":   "pinchtab-autoclose.json",
+		"pinchtab-medium":      "pinchtab-medium-permissive.json",
+		"pinchtab-full":        "pinchtab-full-permissive.json",
+		"pinchtab-ghostchrome": "pinchtab-ghostchrome.json",
+		"pinchtab-bridge":      "pinchtab-bridge.json",
 	} {
 		block := serviceBlock(t, compose, svc)
 		want := configs[configName] + ":/fixture-config-cloak/" + configName + ":ro"

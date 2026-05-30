@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -108,56 +106,9 @@ func (h *Handlers) getElementBox(ctx context.Context, tabID, ref string) (*bound
 	}
 
 	var result boundingBox
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		// Step 1: Resolve backend node ID to a remote object
-		var resolveResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &resolveResult); err != nil {
-			return fmt.Errorf("resolve node: %w", err)
-		}
-
-		var resolved struct {
-			Object struct {
-				ObjectID string `json:"objectId"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(resolveResult, &resolved); err != nil {
-			return fmt.Errorf("parse resolved node: %w", err)
-		}
-		if resolved.Object.ObjectID == "" {
-			return fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
-		}
-
-		// Step 2: Call getBoundingClientRect() and extract into a plain object
-		var callResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": `function() { var r = this.getBoundingClientRect(); return {x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, right: r.right, bottom: r.bottom, left: r.left}; }`,
-			"objectId":            resolved.Object.ObjectID,
-			"returnByValue":       true,
-		}, &callResult); err != nil {
-			return fmt.Errorf("get bounding box: %w", err)
-		}
-
-		var callParsed struct {
-			Result struct {
-				Type  string      `json:"type"`
-				Value boundingBox `json:"value"`
-			} `json:"result"`
-			ExceptionDetails *struct {
-				Text string `json:"text"`
-			} `json:"exceptionDetails,omitempty"`
-		}
-		if err := json.Unmarshal(callResult, &callParsed); err != nil {
-			return fmt.Errorf("parse box result: %w", err)
-		}
-		if callParsed.ExceptionDetails != nil && callParsed.ExceptionDetails.Text != "" {
-			return fmt.Errorf("get bounding box: %s", callParsed.ExceptionDetails.Text)
-		}
-
-		result = callParsed.Result.Value
-		return nil
-	}))
+	err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
+		`function() { var r = this.getBoundingClientRect(); return {x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, right: r.right, bottom: r.bottom, left: r.left}; }`,
+		nil, &result)
 	if err != nil {
 		return nil, err
 	}

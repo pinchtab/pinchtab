@@ -13,6 +13,7 @@ const (
 	CapNativeStealth       BrowserCapability = "nativeStealth"
 	CapDownloads           BrowserCapability = "downloads"
 	CapNetworkInterception BrowserCapability = "networkInterception"
+	CapEventScreencast     BrowserCapability = "eventScreencast"
 )
 
 // CapabilitySet is an immutable set of BrowserCapability values.

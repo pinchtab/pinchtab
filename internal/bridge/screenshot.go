@@ -3,9 +3,11 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 // MinScale / MaxScale bound the bitmap rescale factor. Anything outside is
@@ -168,7 +170,21 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 
 	var buf []byte
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		shot := page.CaptureScreenshot().WithFormat(opts.Format)
+		// Wake the target's renderer before capturing. Background / non-foreground
+		// tabs (common once target-aware orchestration spreads tabs across
+		// providers) throttle their compositor and stop painting, so
+		// captureScreenshot blocks until the action deadline (~30s). A best-effort
+		// BringToFront resumes painting for the target we are about to capture; the
+		// error is ignored so providers whose CDP proxy does not implement it
+		// (e.g. Cloak) still capture normally.
+		_ = page.BringToFront().Do(ctx)
+
+		// WithFromSurface(false) reads the renderer's current view directly instead
+		// of waiting for a fresh compositor surface frame. On idle pages in headed
+		// browsers (e.g. Cloak) the surface stops swapping frames, so the default
+		// fromSurface=true blocks until the action deadline (~30s). In headless
+		// Chrome the flag is a no-op, so chrome/ghost-chrome are unaffected.
+		shot := page.CaptureScreenshot().WithFormat(opts.Format).WithFromSurface(false)
 		if clip != nil {
 			shot = shot.WithClip(clip)
 		}
@@ -183,4 +199,35 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 		return inner
 	}))
 	return buf, err
+}
+
+// CaptureScreenshot is the provider-aware entry point used across the BridgeAPI
+// (screencast polling, recorder, annotated capture). It delegates to the shared
+// package-level CaptureScreenshot engine so every provider gets the same
+// rendering path, including the BringToFront + WithFromSurface(false) fixes that
+// keep headed browsers (e.g. Cloak) from blocking on an idle compositor surface.
+func (b *Bridge) CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error) {
+	cdpFormat := page.CaptureScreenshotFormatJpeg
+	if format == "png" {
+		cdpFormat = page.CaptureScreenshotFormatPng
+	}
+	var vp *page.Viewport
+	if clip != nil {
+		vp = &page.Viewport{
+			X:      clip.X,
+			Y:      clip.Y,
+			Width:  clip.Width,
+			Height: clip.Height,
+			Scale:  clip.Scale,
+		}
+	}
+	buf, err := CaptureScreenshot(ctx, ScreenshotOpts{
+		Format:  cdpFormat,
+		Quality: quality,
+		Clip:    vp,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("screenshot: %w", err)
+	}
+	return buf, nil
 }

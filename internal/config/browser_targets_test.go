@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
@@ -14,7 +13,7 @@ func TestMigrateLegacyBrowserConfig_LegacyOnlySynthesizesDefaultTarget(t *testin
 		Provider:     BrowserChrome,
 		ChromeBinary: "/usr/bin/chrome",
 	}
-	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(&bc, "")
 	if !synthesized {
 		t.Fatalf("expected synthesized=true, got false")
 	}
@@ -45,7 +44,7 @@ func TestMigrateLegacyBrowserConfig_CloakLegacyCopiesCloakSubBlock(t *testing.T)
 			Platform:        "linux",
 		},
 	}
-	synthesized, _ := migrateLegacyBrowserConfig(&bc)
+	synthesized, _ := migrateLegacyBrowserConfig(&bc, "")
 	if !synthesized {
 		t.Fatalf("expected synthesized=true")
 	}
@@ -70,7 +69,7 @@ func TestMigrateLegacyBrowserConfig_DeepClonesLegacyTargetFields(t *testing.T) {
 			Geo:        &BrowserProxyGeoConfig{Timezone: "UTC"},
 		},
 	}
-	synthesized, _ := migrateLegacyBrowserConfig(&bc)
+	synthesized, _ := migrateLegacyBrowserConfig(&bc, "")
 	if !synthesized {
 		t.Fatalf("expected synthesized=true")
 	}
@@ -102,7 +101,7 @@ func TestMigrateLegacyBrowserConfig_TargetsOnlyLeftIntact(t *testing.T) {
 			"chrome-local": {Provider: BrowserChrome, Binary: "/usr/bin/chrome"},
 		},
 	}
-	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(&bc, "")
 	if synthesized {
 		t.Fatalf("expected synthesized=false when targets are already present")
 	}
@@ -126,7 +125,7 @@ func TestMigrateLegacyBrowserConfig_BothPresentExplicitWinsAndFlagsConflict(t *t
 			"explicit": {Provider: BrowserChrome, Binary: "/explicit/chrome"},
 		},
 	}
-	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(&bc, "")
 	if synthesized {
 		t.Fatalf("explicit targets must NOT be overwritten (synthesized should be false)")
 	}
@@ -147,12 +146,33 @@ func TestMigrateLegacyBrowserConfig_BothPresentExplicitWinsAndFlagsConflict(t *t
 
 func TestMigrateLegacyBrowserConfig_EmptyConfigNoop(t *testing.T) {
 	bc := BrowserConfig{}
-	synthesized, conflict := migrateLegacyBrowserConfig(&bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(&bc, "")
 	if synthesized || conflict {
 		t.Fatalf("empty browser config should be a no-op; got synth=%v conflict=%v", synthesized, conflict)
 	}
 	if len(bc.Targets) != 0 || bc.DefaultTarget != "" {
 		t.Fatalf("empty config mutated: %+v", bc)
+	}
+}
+
+func TestMigrateLegacyBrowserConfig_CloakWithBrowsersDefault(t *testing.T) {
+	bc := BrowserConfig{
+		ChromeBinary: "/opt/cloakbrowser/chrome",
+		Cloak: CloakBrowserConfig{
+			FingerprintSeed: "42069",
+			Platform:        "linux",
+		},
+	}
+	synthesized, conflict := migrateLegacyBrowserConfig(&bc, "cloak")
+	if !synthesized {
+		t.Fatalf("expected synthesized=true")
+	}
+	if conflict {
+		t.Fatalf("expected conflict=false")
+	}
+	tgt := bc.Targets[DefaultBrowserTargetName]
+	if tgt.Provider != BrowserCloak {
+		t.Fatalf("target.Provider = %q, want %q; browsers.default should be used when browser.provider is empty", tgt.Provider, BrowserCloak)
 	}
 }
 
@@ -771,123 +791,6 @@ func TestTargetsForBrowser_EmptyTargets(t *testing.T) {
 	got := TargetsForBrowser(cfg, "chrome")
 	if got != nil {
 		t.Fatalf("TargetsForBrowser(empty) = %v, want nil", got)
-	}
-}
-
-// --- ResolveBrowserToTarget ---
-
-func TestResolveBrowserToTarget_SingleTarget(t *testing.T) {
-	cfg := &RuntimeConfig{
-		Targets: BrowserTargetsConfig{
-			"cloak-default": {Provider: BrowserCloak},
-			"chrome-local":  {Provider: BrowserChrome},
-		},
-	}
-	got, err := ResolveBrowserToTarget(cfg, "cloak")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "cloak-default" {
-		t.Fatalf("ResolveBrowserToTarget = %q, want cloak-default", got)
-	}
-}
-
-func TestResolveBrowserToTarget_AmbiguousNoDefault(t *testing.T) {
-	cfg := &RuntimeConfig{
-		Targets: BrowserTargetsConfig{
-			"cloak-eu": {Provider: BrowserCloak},
-			"cloak-us": {Provider: BrowserCloak},
-		},
-	}
-	_, err := ResolveBrowserToTarget(cfg, "cloak")
-	if err == nil {
-		t.Fatal("expected AmbiguousBrowserError, got nil")
-	}
-	var ambErr *AmbiguousBrowserError
-	if !errors.As(err, &ambErr) {
-		t.Fatalf("expected *AmbiguousBrowserError, got %T: %v", err, err)
-	}
-	if ambErr.Browser != "cloak" {
-		t.Fatalf("AmbiguousBrowserError.Browser = %q, want cloak", ambErr.Browser)
-	}
-	if len(ambErr.Targets) != 2 || ambErr.Targets[0] != "cloak-eu" || ambErr.Targets[1] != "cloak-us" {
-		t.Fatalf("AmbiguousBrowserError.Targets = %v, want [cloak-eu cloak-us]", ambErr.Targets)
-	}
-}
-
-func TestResolveBrowserToTarget_AmbiguousWithDefault(t *testing.T) {
-	cfg := &RuntimeConfig{
-		DefaultTarget: "cloak-eu",
-		Targets: BrowserTargetsConfig{
-			"cloak-eu": {Provider: BrowserCloak},
-			"cloak-us": {Provider: BrowserCloak},
-		},
-	}
-	got, err := ResolveBrowserToTarget(cfg, "cloak")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "cloak-eu" {
-		t.Fatalf("ResolveBrowserToTarget = %q, want cloak-eu", got)
-	}
-}
-
-func TestResolveBrowserToTarget_NoTargets(t *testing.T) {
-	cfg := &RuntimeConfig{}
-	got, err := ResolveBrowserToTarget(cfg, "chrome")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "" {
-		t.Fatalf("ResolveBrowserToTarget = %q, want empty", got)
-	}
-}
-
-func TestResolveBrowserToTarget_NilConfig(t *testing.T) {
-	got, err := ResolveBrowserToTarget(nil, "chrome")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "" {
-		t.Fatalf("ResolveBrowserToTarget = %q, want empty", got)
-	}
-}
-
-func TestResolveBrowserToTarget_DefaultNotInMatches(t *testing.T) {
-	cfg := &RuntimeConfig{
-		DefaultTarget: "chrome-local",
-		Targets: BrowserTargetsConfig{
-			"cloak-eu":     {Provider: BrowserCloak},
-			"cloak-us":     {Provider: BrowserCloak},
-			"chrome-local": {Provider: BrowserChrome},
-		},
-	}
-	_, err := ResolveBrowserToTarget(cfg, "cloak")
-	if err == nil {
-		t.Fatal("expected AmbiguousBrowserError when default doesn't match browser, got nil")
-	}
-	var ambErr *AmbiguousBrowserError
-	if !errors.As(err, &ambErr) {
-		t.Fatalf("expected *AmbiguousBrowserError, got %T: %v", err, err)
-	}
-	if ambErr.Browser != "cloak" {
-		t.Fatalf("AmbiguousBrowserError.Browser = %q, want cloak", ambErr.Browser)
-	}
-}
-
-func TestResolveBrowserToTarget_NoMatchingProvider(t *testing.T) {
-	cfg := &RuntimeConfig{
-		DefaultTarget: "chrome-local",
-		Targets: BrowserTargetsConfig{
-			"chrome-local": {Provider: BrowserChrome},
-		},
-	}
-	got, err := ResolveBrowserToTarget(cfg, "cloak")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "" {
-		t.Fatalf("ResolveBrowserToTarget = %q, want empty (no matching provider)", got)
 	}
 }
 

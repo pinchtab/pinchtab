@@ -24,7 +24,7 @@ var pinchtabServices = []string{
 	"pinchtab-autoclose",
 	"pinchtab-medium",
 	"pinchtab-full",
-	"pinchtab-lite",
+	"pinchtab-ghostchrome",
 	"pinchtab-bridge",
 }
 
@@ -345,8 +345,8 @@ func writeConfigOnlyComposeOverride(path string, configs map[string]string, fixt
 				{sourceDir: "test-extension", target: "/extensions/test-extension"},
 			},
 		},
-		"pinchtab-lite": {
-			configName: "pinchtab-lite.json",
+		"pinchtab-ghostchrome": {
+			configName: "pinchtab-ghostchrome.json",
 		},
 		"pinchtab-bridge": {
 			configName: "pinchtab-bridge.json",
@@ -369,6 +369,10 @@ func writeConfigOnlyComposeOverride(path string, configs map[string]string, fixt
 			continue
 		}
 		fmt.Fprintf(&b, "  %s:\n", svc)
+		fmt.Fprintf(&b, "    image: e2e-pinchtab:latest\n")
+		fmt.Fprintf(&b, "    pull_policy: never\n")
+		b.WriteString("    environment:\n")
+		b.WriteString("      PINCHTAB_RATE_LIMIT_MAX: \"3000\"\n")
 		b.WriteString("    volumes:\n")
 		fmt.Fprintf(&b, "      - %s:/fixture-config-ghost/%s:ro\n", configPath, baseName)
 		for _, mount := range cfg.extensionMounts {
@@ -433,8 +437,8 @@ func writeCloakComposeOverride(path string, cloakConfigs map[string]string, fixt
 				{sourceDir: "test-extension", target: "/extensions/test-extension"},
 			},
 		},
-		"pinchtab-lite": {
-			configName: "pinchtab-lite.json",
+		"pinchtab-ghostchrome": {
+			configName: "pinchtab-ghostchrome.json",
 		},
 		"pinchtab-bridge": {
 			configName: "pinchtab-bridge.json",

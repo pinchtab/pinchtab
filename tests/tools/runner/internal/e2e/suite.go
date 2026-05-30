@@ -63,7 +63,7 @@ func apiExtendedSuite() suiteDef {
 		Report:      "tests/e2e/results/report-api-extended.md",
 		LogPrefix:   "logs-api-extended",
 		Output:      "tests/e2e/results/output-api-extended.log",
-		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-lite", "pinchtab-bridge"},
+		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-ghostchrome", "pinchtab-bridge"},
 	}
 }
 
@@ -145,7 +145,7 @@ func infraExtendedSuite() suiteDef {
 		Report:      "tests/e2e/results/report-infra-extended.md",
 		LogPrefix:   "logs-infra-extended",
 		Output:      "tests/e2e/results/output-infra-extended.log",
-		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-lite", "pinchtab-bridge"},
+		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-ghostchrome", "pinchtab-bridge"},
 	}
 }
 
@@ -186,7 +186,7 @@ func apiSmokeSuite() suiteDef {
 		Report:      "tests/e2e/results/report-api-smoke.md",
 		LogPrefix:   "logs-api-smoke",
 		Output:      "tests/e2e/results/output-api-smoke.log",
-		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-autoclose", "pinchtab-medium", "pinchtab-full", "pinchtab-lite", "pinchtab-bridge"},
+		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-autoclose", "pinchtab-medium", "pinchtab-full", "pinchtab-ghostchrome", "pinchtab-bridge"},
 	}
 }
 
@@ -228,7 +228,7 @@ func infraSmokeSuite() suiteDef {
 		Report:      "tests/e2e/results/report-infra-smoke.md",
 		LogPrefix:   "logs-infra-smoke",
 		Output:      "tests/e2e/results/output-infra-smoke.log",
-		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-lite", "pinchtab-bridge"},
+		LogServices: []string{"runner-api", "pinchtab", "pinchtab-secure", "pinchtab-medium", "pinchtab-full", "pinchtab-ghostchrome", "pinchtab-bridge"},
 	}
 }
 
@@ -285,7 +285,7 @@ func extendedReady() []string {
 		"E2E_AUTOCLOSE_SERVER",
 		"E2E_MEDIUM_SERVER",
 		"E2E_FULL_SERVER",
-		"E2E_LITE_SERVER",
+		"E2E_SERVER_GHOSTCHROME",
 		"E2E_BRIDGE_URL|60|E2E_BRIDGE_TOKEN",
 	}
 }

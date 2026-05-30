@@ -1,28 +1,65 @@
 package orchestrator
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// ResolveRequestedBrowser resolves a public browserTarget value against
-// the current runtime config and wraps failures for HTTP handlers.
+// ResolveRequestedBrowser resolves a public browser name (provider like
+// "cloak") or target name (like "cloak-1") against the current runtime
+// config and wraps failures for HTTP handlers.
 func (o *Orchestrator) ResolveRequestedBrowser(requested string) (targetName, provider string, err error) {
-	var resolved *config.ResolvedBrowserTarget
-	if strings.TrimSpace(requested) == "" {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		var resolved *config.ResolvedBrowserTarget
 		resolved, err = config.ResolveDefaultBrowserTarget(o.runtimeCfg)
-	} else {
-		resolved, err = config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
+		if err != nil {
+			return "", "", &UnknownBrowserError{Target: requested, Err: err}
+		}
+		if resolved == nil || resolved.Legacy {
+			return "", "", nil
+		}
+		return resolved.Name, resolved.Provider, nil
 	}
-	if err != nil {
-		return "", "", &UnknownBrowserError{Target: requested, Err: err}
+
+	// Try as explicit target name first.
+	if o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+		resolved, explicitErr := config.ResolveExplicitBrowserTarget(o.runtimeCfg, requested)
+		if explicitErr == nil && resolved != nil && !resolved.Legacy {
+			return resolved.Name, resolved.Provider, nil
+		}
 	}
-	if resolved == nil || resolved.Legacy {
-		return "", "", nil
+
+	// Fall back to browser (provider) name resolution.
+	if o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+		matches := config.TargetsForBrowser(o.runtimeCfg, requested)
+		switch len(matches) {
+		case 1:
+			resolved, resolveErr := config.ResolveExplicitBrowserTarget(o.runtimeCfg, matches[0])
+			if resolveErr == nil && resolved != nil {
+				return resolved.Name, resolved.Provider, nil
+			}
+		case 0:
+			// No matching target for this browser — treat as unknown.
+			return "", "", &UnknownBrowserError{Target: requested, Err: fmt.Errorf("no browser target configured for browser %q", requested)}
+		default:
+			dt := config.ResolveDefaultTarget(o.runtimeCfg)
+			for _, m := range matches {
+				if m == dt {
+					resolved, resolveErr := config.ResolveExplicitBrowserTarget(o.runtimeCfg, dt)
+					if resolveErr == nil && resolved != nil {
+						return resolved.Name, resolved.Provider, nil
+					}
+				}
+			}
+			return "", "", &config.AmbiguousBrowserError{Browser: requested, Targets: matches}
+		}
 	}
-	return resolved.Name, resolved.Provider, nil
+
+	return "", "", nil
 }
 
 // LaunchWithTargetSelection applies browserTarget/defaultTarget/fallbackOrder
@@ -40,8 +77,7 @@ func (o *Orchestrator) LaunchWithTargetSelection(
 	}
 
 	opts.RequestedProvider = requestedTarget
-	opts.ResolvedTarget = resolvedTarget
-	opts.BrowserProvider = resolvedProvider
+	opts.Browser = resolvedProvider
 
 	var fallbacks []string
 	if len(fallbackTargets) > 0 {

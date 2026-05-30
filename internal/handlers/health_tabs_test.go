@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
@@ -86,7 +85,7 @@ func TestHandleHealth_BridgeListTargetsError(t *testing.T) {
 func TestHandleHealth_Success(t *testing.T) {
 	// Create a mock bridge that returns targets
 	mockBridge := &MockBridge{
-		targets: []*target.Info{
+		targets: []bridge.TabTarget{
 			{TargetID: "target1", URL: "https://pinchtab.com", Title: "Example"},
 		},
 	}
@@ -139,7 +138,7 @@ func TestHandleTabs_NilBridge(t *testing.T) {
 // TestHandleTabs_Success verifies tabs endpoint returns tab list when bridge works
 func TestHandleTabs_Success(t *testing.T) {
 	mockBridge := &MockBridge{
-		targets: []*target.Info{
+		targets: []bridge.TabTarget{
 			{TargetID: "tab1", URL: "https://pinchtab.com", Title: "Example", Type: "page"},
 			{TargetID: "tab2", URL: "https://google.com", Title: "Google", Type: "page"},
 		},
@@ -176,7 +175,7 @@ func TestHandleTabs_Success(t *testing.T) {
 
 func TestHandleTabs_CurrentTrackedTabIsReturnedFirst(t *testing.T) {
 	mockBridge := &MockBridge{
-		targets: []*target.Info{
+		targets: []bridge.TabTarget{
 			{TargetID: "tab1", URL: "https://pinchtab.com", Title: "Example", Type: "page"},
 			{TargetID: "tab2", URL: "https://google.com", Title: "Google", Type: "page"},
 			{TargetID: "tab3", URL: "https://example.com", Title: "Example 2", Type: "page"},
@@ -218,7 +217,7 @@ func TestHandleTabs_CurrentTrackedTabIsReturnedFirst(t *testing.T) {
 // TestHandleHealth_EnsureChromeFailure verifies /health returns 503 when Chrome initialization fails
 func TestHandleHealth_EnsureChromeFailure(t *testing.T) {
 	mockBridge := &MockBridge{
-		targets:            []*target.Info{},
+		targets:            []bridge.TabTarget{},
 		ensureChromeErr:    "failed to start Chrome: connection refused",
 		ensureChromeCalled: false,
 	}
@@ -262,7 +261,7 @@ func TestHandleHealth_EnsureChromeFailure(t *testing.T) {
 // TestHandleHealth_EnsureChromeSuccess verifies /health calls ensureChrome and then checks ListTargets
 func TestHandleHealth_EnsureChromeSuccess(t *testing.T) {
 	mockBridge := &MockBridge{
-		targets: []*target.Info{
+		targets: []bridge.TabTarget{
 			{TargetID: "target1", URL: "https://pinchtab.com", Title: "Example"},
 		},
 		ensureChromeCalled: false,
@@ -298,43 +297,6 @@ func TestHandleHealth_EnsureChromeSuccess(t *testing.T) {
 	}
 }
 
-func TestHandleHealth_GhostChromeSkipsChrome(t *testing.T) {
-	mockBridge := &MockBridge{
-		ensureChromeErr: "should not be called",
-	}
-
-	h := &Handlers{
-		Bridge:        mockBridge,
-		Config:        &config.RuntimeConfig{},
-		StaticBrowser: staticfetch.NewBrowser(),
-	}
-
-	req := httptest.NewRequest("GET", "/health", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleHealth(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	if mockBridge.ensureChromeCalled {
-		t.Error("expected lite health to skip ensureChrome")
-	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-
-	if status, ok := resp["status"]; !ok || status != "ok" {
-		t.Errorf("expected status=ok, got %v", status)
-	}
-	if _, ok := resp["browserops"]; ok {
-		t.Error("health response must not contain \"browserops\" key (removed in favour of route metadata)")
-	}
-}
-
 // contains is a simple helper to check if a string contains a substring
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
@@ -347,7 +309,7 @@ func contains(s, substr string) bool {
 
 // MockBridge is a test implementation of the BridgeAPI interface
 type MockBridge struct {
-	targets            []*target.Info
+	targets            []bridge.TabTarget
 	listTargetsErr     string
 	ensureChromeCalled bool
 	ensureChromeErr    string
@@ -356,7 +318,7 @@ type MockBridge struct {
 	retryAfter         time.Duration
 }
 
-func (m *MockBridge) ListTargets() ([]*target.Info, error) {
+func (m *MockBridge) ListTargets() ([]bridge.TabTarget, error) {
 	if m.listTargetsErr != "" {
 		return nil, fmt.Errorf("%s", m.listTargetsErr)
 	}
@@ -367,11 +329,11 @@ func (m *MockBridge) BrowserContext() context.Context {
 	return context.Background()
 }
 
-func (m *MockBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *MockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if tabID == "" && m.currentTabID != "" {
-		return context.Background(), m.currentTabID, nil
+		return bridge.NewTabHandle(context.Background()), m.currentTabID, nil
 	}
-	return context.Background(), tabID, nil
+	return bridge.NewTabHandle(context.Background()), tabID, nil
 }
 
 func (m *MockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
@@ -508,11 +470,124 @@ func (m *MockBridge) ClearCookies(ctx context.Context) error {
 	return nil
 }
 
+func (m *MockBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
+	return nil
+}
+
+func (m *MockBridge) CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) StartScreencast(ctx context.Context, opts bridge.ScreencastOpts) (*bridge.ScreencastStream, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockBridge) Navigate(ctx context.Context, url string, params bridge.NavigateParams) (*bridge.NavigateResult, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) Snapshot(ctx context.Context, tabID string, filter string, params bridge.ContentParams) (*bridge.SnapshotResult, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) Text(ctx context.Context, tabID string, params bridge.ContentParams) (*bridge.TextResult, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBridge) EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts bridge.EvalOpts) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBridge) DescribeNode(ctx context.Context, backendNodeID int64) (*bridge.NodeInfo, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockBridge) SetViewport(ctx context.Context, params bridge.ViewportParams) error {
+	return nil
+}
+
+func (m *MockBridge) SetGeolocation(ctx context.Context, lat, lng, accuracy float64) error {
+	return nil
+}
+
+func (m *MockBridge) SetEmulatedMedia(ctx context.Context, feature, value string) error {
+	return nil
+}
+
+func (m *MockBridge) SetNetworkConditions(ctx context.Context, params bridge.NetworkConditions) error {
+	return nil
+}
+
+func (m *MockBridge) SetExtraHTTPHeaders(ctx context.Context, headers map[string]string) error {
+	return nil
+}
+
+func (m *MockBridge) GetCookies(ctx context.Context, urls []string) ([]bridge.CookieData, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) SetCookie(ctx context.Context, params bridge.SetCookieParams) error {
+	return nil
+}
+
+func (m *MockBridge) CurrentURL(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *MockBridge) CurrentTitle(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *MockBridge) PrintToPDF(ctx context.Context, params bridge.PDFParams) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *MockBridge) SetFileInputFiles(ctx context.Context, nodeID int64, paths []string) error {
+	return nil
+}
+
+func (m *MockBridge) ResolveSelectorToNodeID(ctx context.Context, selector string) (int64, error) {
+	return 0, nil
+}
+
+func (m *MockBridge) DownloadURL(ctx context.Context, dlURL string, opts bridge.DownloadOpts) (*bridge.DownloadResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockBridge) EnableFetchWithAuth(ctx context.Context) error                          { return nil }
+func (m *MockBridge) DisableFetch(ctx context.Context) error                                 { return nil }
+func (m *MockBridge) ListenAuthRequired(ctx context.Context, handler func(string, bool))     {}
+func (m *MockBridge) ContinueWithAuth(ctx context.Context, requestID, u, p string) error     { return nil }
+func (m *MockBridge) ContinueRequest(ctx context.Context, requestID string) error            { return nil }
+func (m *MockBridge) GoBack(ctx context.Context) (bool, error)                               { return false, nil }
+func (m *MockBridge) GoForward(ctx context.Context) (bool, error)                            { return false, nil }
+func (m *MockBridge) Reload(ctx context.Context) error                                       { return nil }
+func (m *MockBridge) WaitVisible(ctx context.Context, selector string) error                 { return nil }
+func (m *MockBridge) EnableNetwork(ctx context.Context) error                                { return nil }
+func (m *MockBridge) ListenNetworkEvents(ctx context.Context, h2 bridge.NetworkEventHandler) {}
+func (m *MockBridge) SetRawCookie(ctx context.Context, p bridge.RawSetCookieParams) error    { return nil }
+func (m *MockBridge) GetRawCookies(ctx context.Context) ([]bridge.RawCookie, error)          { return nil, nil }
+func (m *MockBridge) SetUserAgentOverride(ctx context.Context, p bridge.UserAgentOverrideParams) error {
+	return nil
+}
+func (m *MockBridge) SetLocaleOverride(ctx context.Context, locale string) error { return nil }
+func (m *MockBridge) SetTimezoneOverride(ctx context.Context, tz string) error   { return nil }
+func (m *MockBridge) SetDeviceMetricsOverride(ctx context.Context, p bridge.DeviceMetricsOverrideParams) error {
+	return nil
+}
+func (m *MockBridge) AddScriptToEvaluateOnNewDocument(ctx context.Context, source string) (string, error) {
+	return "", nil
+}
+
 type mockBridgeDisconnected struct {
 	mockBridge
 }
 
-func (m *mockBridgeDisconnected) ListTargets() ([]*target.Info, error) {
+func (m *mockBridgeDisconnected) ListTargets() ([]bridge.TabTarget, error) {
 	return nil, fmt.Errorf("disconnected")
 }
 

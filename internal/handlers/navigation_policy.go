@@ -7,8 +7,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/navguard"
 )
@@ -54,33 +53,31 @@ func (g *navigateRuntimeGuard) blocked() error {
 	return g.blockedErr
 }
 
-func installNavigateRuntimeGuard(tCtx context.Context, tCancel context.CancelFunc, target *navguard.ValidatedTarget, trustedCIDRs []*net.IPNet) (*navigateRuntimeGuard, error) {
+func installNavigateRuntimeGuardWithBridge(b bridge.BridgeAPI, tCtx context.Context, tCancel context.CancelFunc, target *navguard.ValidatedTarget, trustedCIDRs []*net.IPNet) (*navigateRuntimeGuard, error) {
 	if target == nil || target.AllowInternal {
 		return nil, nil
 	}
-	if err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return network.Enable().Do(ctx)
-	})); err != nil {
+	if err := b.EnableNetwork(tCtx); err != nil {
 		return nil, fmt.Errorf("network enable: %w", err)
 	}
 
 	guard := &navigateRuntimeGuard{}
-	chromedp.ListenTarget(tCtx, func(ev interface{}) {
-		switch e := ev.(type) {
-		case *network.EventRequestWillBeSent:
-			if e.Type != network.ResourceTypeDocument {
+	b.ListenNetworkEvents(tCtx, bridge.NetworkEventHandler{
+		OnRequestWillBeSent: func(frameID, requestID, resourceType string) {
+			if resourceType != "Document" {
 				return
 			}
-			guard.noteMainDocumentRequest(string(e.FrameID), string(e.RequestID))
-		case *network.EventResponseReceived:
-			if !guard.isMainDocumentResponse(string(e.RequestID)) {
+			guard.noteMainDocumentRequest(frameID, requestID)
+		},
+		OnResponseReceived: func(requestID, remoteIPAddress string) {
+			if !guard.isMainDocumentResponse(requestID) {
 				return
 			}
-			if err := navguard.ValidateRemoteIP(e.Response.RemoteIPAddress, trustedCIDRs, target.TrustedResolvedIP); err != nil {
+			if err := navguard.ValidateRemoteIP(remoteIPAddress, trustedCIDRs, target.TrustedResolvedIP); err != nil {
 				guard.setBlocked(err)
 				tCancel()
 			}
-		}
+		},
 	})
 	return guard, nil
 }

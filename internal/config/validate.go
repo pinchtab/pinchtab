@@ -55,6 +55,9 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
+	if fc.Server.Engine != "" {
+		errs = append(errs, fmt.Errorf("server.engine is no longer supported; use browsers.default instead"))
+	}
 	if fc.Browser.Provider != "" {
 		errs = append(errs, fmt.Errorf("browser.provider is no longer supported; use browsers.default instead (e.g. \"browsers\": {\"default\": %q})", fc.Browser.Provider))
 	}

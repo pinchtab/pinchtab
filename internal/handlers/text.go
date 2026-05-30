@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,14 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
-	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -49,56 +46,6 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// --- Ghost-chrome routing fast path ---
-	// For ghost-chrome, use the static browser to read text from stored state
-	// (set by a prior ghost-chrome /navigate). If the static browser has content,
-	// serve it directly. If not available or empty, escalate to Chrome.
-	if browser == config.BrowserGhostChrome && h.StaticBrowser != nil {
-		h.recordReadRequest(r, "text", tabID)
-		result, err := h.StaticBrowser.Text(r.Context(), tabID)
-		if err == nil && result.Text != "" {
-			// Quality gate: assess ghost content before serving.
-			gr := ghostchrome.AssessContent(result.Text)
-			if gr.ShouldAccept() {
-				// IDPI content scan at handler level.
-				scanResult := h.ContentGuard.Scan(result.Text, result.URL)
-				if scanResult.Blocked {
-					httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked: %s", scanResult.BlockReason))
-					return
-				}
-				scanResult.SetHeaders(w)
-
-				route := &browserops.RouteMetadata{
-					RequestedBrowser: browser,
-					UsedBrowser:      "ghost",
-					Attempts:         []browserops.RouteAttempt{{Browser: "ghost", Accepted: true, Reason: gr.FormatReason()}},
-				}
-				if requestBrowser != "" {
-					route.RequestedBrowser = requestBrowser
-				}
-				h.recordActivity(r, activity.Update{Route: route})
-
-				format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
-				if format == "text" || format == "plain" {
-					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-					w.WriteHeader(200)
-					_, _ = w.Write([]byte(scanResult.Text))
-					return
-				}
-				httpx.JSON(w, 200, map[string]any{
-					"url":   result.URL,
-					"title": result.Title,
-					"text":  scanResult.Text,
-					"route": route,
-				})
-				return
-			}
-			// Quality too low — escalate to Chrome (fall through).
-		}
-		// Ghost text not available or quality insufficient.
-		// Fall through to Chrome path.
-	}
-
 	handleDecision, err := checkBrowserCanHandle(browser, browsers.RequestIntent{
 		Shape: browsers.ShapeRenderedRead,
 	})
@@ -110,8 +57,8 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		browser = config.BrowserChrome
 	}
 
-	// Validate that the resolved browser can be unambiguously mapped to a target.
-	textBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, browser)
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg, err := h.resolveEffectiveConfig(browser)
 	if err != nil {
 		var ambErr *config.AmbiguousBrowserError
 		if errors.As(err, &ambErr) {
@@ -125,39 +72,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the effective config with target-specific overrides merged in.
-	effectiveCfg := h.resolveEffectiveConfig(textBrowserTarget)
-
-	// --- Static browser fast path ---
 	h.recordReadRequest(r, "text", tabID)
-	if h.useStaticBrowser(browserops.CapText) {
-		result, err := h.StaticBrowser.Text(r.Context(), tabID)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
-			return
-		}
-		// IDPI content scan at handler level.
-		scanResult := h.ContentGuard.Scan(result.Text, result.URL)
-		if scanResult.Blocked {
-			httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked: %s", scanResult.BlockReason))
-			return
-		}
-		scanResult.SetHeaders(w)
-
-		result.Route = browserops.SingleBrowserRoute(browser)
-		result.Route.Attempts = append(result.Route.Attempts, browserops.RouteAttempt{
-			Browser:  browser,
-			Accepted: handleDecision.Decision == browsers.DecisionHandle,
-			Reason:   handleDecision.Reason,
-		})
-		if requestBrowser != "" {
-			result.Route.RequestedBrowser = requestBrowser
-		}
-		h.recordActivity(r, activity.Update{Route: result.Route})
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte(scanResult.Text))
-		return
-	}
 
 	textRoute := browserops.SingleBrowserRoute("chrome")
 	textRoute.Attempts = append(textRoute.Attempts, browserops.RouteAttempt{
@@ -215,7 +130,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	// Auto-wait: if the document is still loading, wait for readyState to
 	// reach at least "interactive" before extracting text. Prevents empty or
 	// partial results when text is called before the page finishes loading.
-	waitForReadyState(tCtx)
+	h.waitForReadyState(tCtx)
 
 	// Handle element selector - extract text from specific element instead of full page
 	selectorParam := r.URL.Query().Get("selector")
@@ -226,11 +141,8 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 500, fmt.Errorf("element text extract: %w", err))
 			return
 		}
-		var url, title string
-		_ = chromedp.Run(tCtx,
-			chromedp.Location(&url),
-			chromedp.Title(&title),
-		)
+		url, _ := h.Bridge.CurrentURL(tCtx)
+		title, _ := h.Bridge.CurrentTitle(tCtx)
 		h.recordResolvedURL(r, url)
 		httpx.JSON(w, 200, map[string]any{
 			"url":   url,
@@ -268,11 +180,8 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		truncated = true
 	}
 
-	var url, title string
-	_ = chromedp.Run(tCtx,
-		chromedp.Location(&url),
-		chromedp.Title(&title),
-	)
+	url, _ := h.Bridge.CurrentURL(tCtx)
+	title, _ := h.Bridge.CurrentTitle(tCtx)
 	h.recordResolvedURL(r, url)
 
 	// IDPI: scan extracted text for injection patterns and optionally wrap.
@@ -333,14 +242,14 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 	if err != nil {
 		// Fallback: top frame only.
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 
 	ids := observe.FrameIDs(frameTree)
 	if len(ids) == 0 {
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 
@@ -354,7 +263,7 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 	}
 	if len(parts) == 0 {
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 	return strings.Join(parts, "\n\n")
@@ -363,44 +272,14 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 // evalTextInFrame evaluates a text-extraction script in a specific frame's
 // isolated world and returns the result string.
 func (h *Handlers) evalTextInFrame(ctx context.Context, script, frameID string) (string, error) {
-	execID, err := bridge.FrameExecutionContextID(ctx, frameID)
-	if err != nil {
-		return "", fmt.Errorf("resolve frame context: %w", err)
-	}
-	if execID == 0 {
-		// Top frame — use the simpler chromedp path.
-		var text string
-		if err := chromedp.Run(ctx, chromedp.Evaluate(script, &text)); err != nil {
-			return "", fmt.Errorf("text extract: %w", err)
+	var text string
+	if err := h.Bridge.EvaluateInFrame(ctx, frameID, script, &text, bridge.EvalOpts{}); err != nil {
+		if frameID != "" {
+			return "", fmt.Errorf("text extract (frame %s): %w", frameID, err)
 		}
-		return text, nil
+		return "", fmt.Errorf("text extract: %w", err)
 	}
-	var raw json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    script,
-			"returnByValue": true,
-			"contextId":     execID,
-		}, &raw)
-	}))
-	if err != nil {
-		return "", fmt.Errorf("text extract (frame %s): %w", frameID, err)
-	}
-	var er struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &er); err != nil {
-		return "", fmt.Errorf("text extract parse: %w", err)
-	}
-	if er.ExceptionDetails != nil && er.ExceptionDetails.Text != "" {
-		return "", fmt.Errorf("text extract (frame %s): %s", frameID, er.ExceptionDetails.Text)
-	}
-	return er.Result.Value, nil
+	return text, nil
 }
 
 // extractElementText extracts innerText from a specific element by selector or ref.
@@ -418,35 +297,9 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 		}
 		nodeID := target.BackendNodeID
 
-		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-			var objRes struct {
-				Object struct {
-					ObjectID string `json:"objectId"`
-				} `json:"object"`
-			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-				"backendNodeId": nodeID,
-			}, &objRes); err != nil {
-				return err
-			}
-			if objRes.Object.ObjectID == "" {
-				return fmt.Errorf("could not resolve node")
-			}
-			var callRes struct {
-				Result struct {
-					Value string `json:"value"`
-				} `json:"result"`
-			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-				"functionDeclaration": `function() { return this.innerText || this.textContent || ''; }`,
-				"objectId":            objRes.Object.ObjectID,
-				"returnByValue":       true,
-			}, &callRes); err != nil {
-				return err
-			}
-			text = callRes.Result.Value
-			return nil
-		}))
+		err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
+			`function() { return this.innerText || this.textContent || ''; }`,
+			nil, &text)
 		if err != nil {
 			return "", err
 		}
@@ -470,7 +323,7 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, selector)
 	}
 
-	if err := chromedp.Run(ctx, chromedp.Evaluate(script, &text)); err != nil {
+	if err := h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{}); err != nil {
 		return "", err
 	}
 	if text == "" {
@@ -479,9 +332,9 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 	return text, nil
 }
 
-func waitForReadyState(ctx context.Context) {
+func (h *Handlers) waitForReadyState(ctx context.Context) {
 	var state string
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
+	if err := h.Bridge.Evaluate(ctx, `document.readyState`, &state, bridge.EvalOpts{}); err != nil {
 		return
 	}
 	if state != "loading" {
@@ -495,7 +348,7 @@ func waitForReadyState(ctx context.Context) {
 		case <-deadline:
 			return
 		case <-time.After(100 * time.Millisecond):
-			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
+			if err := h.Bridge.Evaluate(ctx, `document.readyState`, &state, bridge.EvalOpts{}); err != nil {
 				return
 			}
 			if state != "loading" {

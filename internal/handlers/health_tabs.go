@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -15,20 +14,6 @@ type tabHandoffReader interface {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	if h.StaticBrowser != nil {
-		resp := map[string]any{
-			"status": "ok",
-		}
-		if hasFailureDiagnostics() {
-			resp["failures"] = FailureSnapshot()
-		}
-		if bridge.HasCrashDiagnostics() {
-			resp["crashes"] = bridge.CrashSnapshot()
-		}
-		httpx.JSON(w, http.StatusOK, resp)
-		return
-	}
-
 	// Guard against nil Bridge
 	if h.Bridge == nil {
 		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": "bridge not initialized"})
@@ -172,12 +157,12 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tabs := make([]map[string]any, 0, len(targets))
-	appendTab := func(t *target.Info) {
+	appendTab := func(t bridge.TabTarget) {
 		// Skip the initial about:blank tab that Chrome creates on launch
 		if bridge.IsTransientURL(t.URL, h.Config.Port) {
 			return
 		}
-		tabID := string(t.TargetID)
+		tabID := t.TargetID
 		entry := map[string]any{
 			"id":    tabID,
 			"url":   t.URL,
@@ -202,13 +187,13 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 
 	// First pass: add the current focused tab
 	for _, t := range targets {
-		if string(t.TargetID) == currentTabID {
+		if t.TargetID == currentTabID {
 			appendTab(t)
 		}
 	}
 	// Second pass: add all other tabs
 	for _, t := range targets {
-		if string(t.TargetID) == currentTabID {
+		if t.TargetID == currentTabID {
 			continue
 		}
 		appendTab(t)

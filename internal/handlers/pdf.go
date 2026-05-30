@@ -14,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -149,14 +148,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		if scanTimeout <= 0 {
 			scanTimeout = 5 * time.Second
 		}
-		var pageTitle, pageURL, pageText string
 		scanCtx, scanCancel := context.WithTimeout(tCtx, scanTimeout)
 		defer scanCancel()
-		_ = chromedp.Run(scanCtx,
-			chromedp.Title(&pageTitle),
-			chromedp.Location(&pageURL),
-			chromedp.Evaluate(`document.body ? document.body.innerText : ""`, &pageText),
-		)
+		pageTitle, _ := h.Bridge.CurrentTitle(scanCtx)
+		pageURL, _ := h.Bridge.CurrentURL(scanCtx)
+		var pageText string
+		_ = h.Bridge.Evaluate(scanCtx, `document.body ? document.body.innerText : ""`, &pageText, bridge.EvalOpts{})
 		corpus := pageTitle + "\n" + pageURL + "\n" + pageText
 		scanResult := h.ContentGuard.ScanOnly(corpus)
 		if scanResult.Blocked {
@@ -166,39 +163,25 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		scanResult.SetHeaders(w)
 	}
 
-	var buf []byte
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			p := page.PrintToPDF().
-				WithPrintBackground(true).
-				WithScale(scale).
-				WithLandscape(landscape).
-				WithPaperWidth(paperWidth).
-				WithPaperHeight(paperHeight).
-				WithMarginTop(marginTop).
-				WithMarginBottom(marginBottom).
-				WithMarginLeft(marginLeft).
-				WithMarginRight(marginRight).
-				WithPreferCSSPageSize(preferCSSPageSize).
-				WithDisplayHeaderFooter(displayHeaderFooter).
-				WithGenerateTaggedPDF(generateTaggedPDF).
-				WithGenerateDocumentOutline(generateDocumentOutline)
-
-			if pageRanges != "" {
-				p = p.WithPageRanges(pageRanges)
-			}
-			if headerTemplate != "" {
-				p = p.WithHeaderTemplate(headerTemplate)
-			}
-			if footerTemplate != "" {
-				p = p.WithFooterTemplate(footerTemplate)
-			}
-
-			buf, _, err = p.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	buf, err := h.Bridge.PrintToPDF(tCtx, bridge.PDFParams{
+		Landscape:               landscape,
+		PrintBackground:         true,
+		Scale:                   scale,
+		PaperWidth:              paperWidth,
+		PaperHeight:             paperHeight,
+		MarginTop:               marginTop,
+		MarginBottom:            marginBottom,
+		MarginLeft:              marginLeft,
+		MarginRight:             marginRight,
+		PageRanges:              pageRanges,
+		PreferCSSPageSize:       preferCSSPageSize,
+		DisplayHeaderFooter:     displayHeaderFooter,
+		GenerateTaggedPDF:       generateTaggedPDF,
+		GenerateDocumentOutline: generateDocumentOutline,
+		HeaderTemplate:          headerTemplate,
+		FooterTemplate:          footerTemplate,
+	})
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("pdf: %w", err))
 		return
 	}

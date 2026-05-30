@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -264,25 +265,12 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 			return
 		}
 	} else {
-		profileName = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+		var rnd [4]byte
+		_, _ = rand.Read(rnd[:])
+		profileName = fmt.Sprintf("instance-%d-%x", time.Now().UnixNano(), rnd)
 	}
 
 	headless := req.Mode != "headed"
-
-	// Resolve the public "browser" (provider name) to an internal target name.
-	var browserTarget string
-	if req.Browser != "" {
-		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
-		if resolveErr != nil {
-			httpx.Error(w, http.StatusBadRequest, resolveErr)
-			return
-		}
-		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
-			return
-		}
-		browserTarget = resolved
-	}
 
 	opts := LaunchOptions{
 		ExtensionPaths: req.ExtensionPaths,
@@ -290,7 +278,7 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 		Browser:        req.Browser,
 	}
 
-	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, browserTarget, req.FallbackTargets, opts)
+	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, req.Browser, req.FallbackTargets, opts)
 	if err != nil {
 		writeLaunchError(w, err)
 		return
@@ -397,24 +385,33 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Resolve the public "browser" (provider name) to an internal target name.
-	var browserTarget string
-	if req.Browser != "" {
-		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
-		if resolveErr != nil {
-			httpx.Error(w, http.StatusBadRequest, resolveErr)
+	// Validate browser/provider conflict: if both are set they must agree.
+	if req.Browser != "" && req.Provider != "" {
+		normBrowser := config.NormalizeBrowser(req.Browser)
+		normProvider := config.NormalizeBrowser(req.Provider)
+		if normBrowser != normProvider {
+			httpx.Error(w, 400, fmt.Errorf("browser provider %q conflicts with browserTarget %q provider %q", req.Provider, req.Browser, normBrowser))
 			return
 		}
-		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
+	}
+
+	attachBrowser := req.Browser
+	if attachBrowser == "" && req.Provider != "" {
+		attachBrowser = req.Provider
+	}
+
+	// When targets are configured, validate the requested browser maps to at
+	// least one target before attempting the attach.
+	if attachBrowser != "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+		matches := config.TargetsForBrowser(o.runtimeCfg, attachBrowser)
+		if len(matches) == 0 {
+			httpx.Error(w, 400, fmt.Errorf("no browser target configured for browser %q", attachBrowser))
 			return
 		}
-		browserTarget = resolved
 	}
 
 	attachOpts, err := o.resolveAttachOptions(AttachOptions{
-		ResolvedTarget:  browserTarget,
-		BrowserProvider: req.Provider,
+		Browser: attachBrowser,
 	}, config.BrowserChrome)
 	if err != nil {
 		httpx.Error(w, 400, err)
@@ -460,22 +457,7 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Resolve the public "browser" (provider name) to an internal target name.
-	var browserTarget string
-	if req.Browser != "" {
-		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
-		if resolveErr != nil {
-			httpx.Error(w, http.StatusBadRequest, resolveErr)
-			return
-		}
-		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
-			return
-		}
-		browserTarget = resolved
-	}
-
-	attachOpts, err := o.resolveAttachOptions(AttachOptions{ResolvedTarget: browserTarget}, "")
+	attachOpts, err := o.resolveAttachOptions(AttachOptions{Browser: req.Browser}, "")
 	if err != nil {
 		httpx.Error(w, 400, err)
 		return

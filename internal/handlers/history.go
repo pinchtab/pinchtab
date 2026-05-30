@@ -1,13 +1,9 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -48,30 +44,17 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use CDP directly instead of chromedp.NavigateBack() which wraps in
-	// responseAction() and waits for Page.loadEventFired — hangs indefinitely.
-	var noHistory bool
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		cur, entries, err := page.GetNavigationHistory().Do(ctx)
-		if err != nil {
-			return fmt.Errorf("get history: %w", err)
-		}
-		if cur <= 0 || cur > int64(len(entries)-1) {
-			noHistory = true
-			return nil
-		}
-		return page.NavigateToHistoryEntry(entries[cur-1].ID).Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("back: %w", err))
+	didNavigate, err := h.Bridge.GoBack(ctx)
+	if err != nil {
+		httpx.Error(w, 500, err)
 		return
 	}
-	if !noHistory {
+	if didNavigate {
 		time.Sleep(200 * time.Millisecond)
 		h.dismissBanners(ctx, resolvedID, dismissBanners)
 	}
 
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
+	curURL, _ := h.Bridge.CurrentURL(ctx)
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
 }
 
@@ -88,28 +71,17 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var noHistory bool
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		cur, entries, err := page.GetNavigationHistory().Do(ctx)
-		if err != nil {
-			return fmt.Errorf("get history: %w", err)
-		}
-		if cur < 0 || cur >= int64(len(entries)-1) {
-			noHistory = true
-			return nil
-		}
-		return page.NavigateToHistoryEntry(entries[cur+1].ID).Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("forward: %w", err))
+	didNavigate, err := h.Bridge.GoForward(ctx)
+	if err != nil {
+		httpx.Error(w, 500, err)
 		return
 	}
-	if !noHistory {
+	if didNavigate {
 		time.Sleep(200 * time.Millisecond)
 		h.dismissBanners(ctx, resolvedID, dismissBanners)
 	}
 
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
+	curURL, _ := h.Bridge.CurrentURL(ctx)
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
 }
 
@@ -126,10 +98,8 @@ func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return page.Reload().Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("reload: %w", err))
+	if err := h.Bridge.Reload(ctx); err != nil {
+		httpx.Error(w, 500, err)
 		return
 	}
 	// page.Reload() returns when the nav kicks off, not when the document
@@ -141,8 +111,7 @@ func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
 		h.dismissBanners(ctx, resolvedID, true)
 	}
 
-	var curURL string
-	_ = chromedp.Run(ctx, chromedp.Location(&curURL))
+	curURL, _ := h.Bridge.CurrentURL(ctx)
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
 }
 

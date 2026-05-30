@@ -7,19 +7,28 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
+
+// TabTarget is a bridge-level representation of a browser tab/target,
+// decoupling handlers from the cdproto/target package.
+type TabTarget struct {
+	TargetID string `json:"targetId"`
+	URL      string `json:"url"`
+	Title    string `json:"title"`
+	Type     string `json:"type"`
+}
 
 // BridgeAPI abstracts browser tab operations for handler testing.
 var ErrBrowserDraining = errors.New("browser restart in progress; retry shortly")
 
 type BridgeAPI interface {
 	BrowserContext() context.Context
-	TabContext(tabID string) (ctx context.Context, resolvedID string, err error)
-	ListTargets() ([]*target.Info, error)
+	TabContext(tabID string) (ctx *TabHandle, resolvedID string, err error)
+	ListTargets() ([]TabTarget, error)
 	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
 	FocusTab(tabID string) error
@@ -74,15 +83,187 @@ type BridgeAPI interface {
 	GetErrorLogs(tabID string, limit int) []ErrorEntry
 	ClearErrorLogs(tabID string)
 
+	// Navigation
+	Navigate(ctx context.Context, url string, params NavigateParams) (*NavigateResult, error)
+
+	// Snapshot
+	Snapshot(ctx context.Context, tabID string, filter string, params ContentParams) (*SnapshotResult, error)
+
+	// Text
+	Text(ctx context.Context, tabID string, params ContentParams) (*TextResult, error)
+
 	// Cache management
 	ClearCache(ctx context.Context) error
 	CanClearCache(ctx context.Context) (bool, error)
 
 	// Cookie management
 	ClearCookies(ctx context.Context) error
+
+	// JavaScript evaluation
+	Evaluate(ctx context.Context, expression string, result any, opts EvalOpts) error
+
+	// CallFunctionOnNode resolves a backend node ID to a Runtime object,
+	// then calls the given JavaScript function on it. args may be nil.
+	// The result is unmarshaled from the CDP returnByValue response.
+	CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error
+
+	// EvaluateInFrame evaluates a JavaScript expression in the given
+	// frame's execution context. If frameID is empty, behaves like Evaluate.
+	EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts EvalOpts) error
+
+	// DescribeNode returns DOM structural info for a backend node ID.
+	DescribeNode(ctx context.Context, backendNodeID int64) (*NodeInfo, error)
+
+	// Screenshot capture
+	CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error)
+
+	// Screencast streaming
+	StartScreencast(ctx context.Context, opts ScreencastOpts) (*ScreencastStream, error)
+
+	// Emulation
+	SetViewport(ctx context.Context, params ViewportParams) error
+	SetGeolocation(ctx context.Context, lat, lng, accuracy float64) error
+	SetEmulatedMedia(ctx context.Context, feature, value string) error
+
+	// Network state
+	SetNetworkConditions(ctx context.Context, params NetworkConditions) error
+	SetExtraHTTPHeaders(ctx context.Context, headers map[string]string) error
+	GetCookies(ctx context.Context, urls []string) ([]CookieData, error)
+	SetCookie(ctx context.Context, params SetCookieParams) error
+
+	// Navigation info
+	CurrentURL(ctx context.Context) (string, error)
+	CurrentTitle(ctx context.Context) (string, error)
+
+	// PDF generation
+	PrintToPDF(ctx context.Context, params PDFParams) ([]byte, error)
+
+	// DOM file input
+	SetFileInputFiles(ctx context.Context, nodeID int64, paths []string) error
+	ResolveSelectorToNodeID(ctx context.Context, selector string) (int64, error)
+
+	// Download
+	DownloadURL(ctx context.Context, dlURL string, opts DownloadOpts) (*DownloadResult, error)
+
+	// HTTP auth credentials (Fetch domain)
+	EnableFetchWithAuth(ctx context.Context) error
+	DisableFetch(ctx context.Context) error
+	ListenAuthRequired(ctx context.Context, handler func(requestID string, isAuth bool))
+	ContinueWithAuth(ctx context.Context, requestID, username, password string) error
+	ContinueRequest(ctx context.Context, requestID string) error
+
+	// Navigation history
+	GoBack(ctx context.Context) (didNavigate bool, err error)
+	GoForward(ctx context.Context) (didNavigate bool, err error)
+	Reload(ctx context.Context) error
+
+	// Navigation wait helpers
+	WaitVisible(ctx context.Context, selector string) error
+
+	// Navigation policy (network guard)
+	EnableNetwork(ctx context.Context) error
+	ListenNetworkEvents(ctx context.Context, handler NetworkEventHandler)
+
+	// State: cookie restore
+	SetRawCookie(ctx context.Context, params RawSetCookieParams) error
+	GetRawCookies(ctx context.Context) ([]RawCookie, error)
+
+	// Stealth: fingerprint rotation
+	SetUserAgentOverride(ctx context.Context, params UserAgentOverrideParams) error
+	SetLocaleOverride(ctx context.Context, locale string) error
+	SetTimezoneOverride(ctx context.Context, timezoneID string) error
+	SetDeviceMetricsOverride(ctx context.Context, params DeviceMetricsOverrideParams) error
+	AddScriptToEvaluateOnNewDocument(ctx context.Context, source string) (string, error)
+}
+
+// EvalOpts configures JavaScript evaluation behavior.
+type EvalOpts struct {
+	AwaitPromise bool
+}
+
+// NodeInfo holds DOM structural info returned by DescribeNode.
+type NodeInfo struct {
+	LocalName      string
+	Attributes     []string
+	ChildNodeCount int
+}
+
+// ScreencastOpts configures a screencast stream.
+type ScreencastOpts struct {
+	Quality       int // 1-100, default 30
+	MaxWidth      int // pixels, default 800
+	MaxHeight     int // pixels, default 600
+	EveryNthFrame int // frame skipping for event mode, default 4
+	FPS           int // frames per second (caps at 30), default 1
+}
+
+// ScreencastStream delivers decoded binary JPEG frames over a channel.
+type ScreencastStream struct {
+	Frames <-chan []byte
+	done   chan struct{}
+	closer func()
+}
+
+// Close stops the screencast and releases resources.
+func (s *ScreencastStream) Close() {
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
+	if s.closer != nil {
+		s.closer()
+	}
 }
 
 type LockInfo = bridgetabs.LockInfo
+
+// NetworkEventHandler receives network events for navigation guards.
+type NetworkEventHandler struct {
+	OnRequestWillBeSent func(frameID, requestID string, resourceType string)
+	OnResponseReceived  func(requestID string, remoteIPAddress string)
+}
+
+// RawSetCookieParams holds parameters for setting a cookie via CDP network domain,
+// used by state.go to restore cookies from state files without importing cdproto.
+type RawSetCookieParams struct {
+	Name     string
+	Value    string
+	Domain   string
+	Path     string
+	Secure   bool
+	HTTPOnly bool
+	SameSite string // "Strict", "Lax", "None", or ""
+}
+
+// RawCookie represents a raw cookie from the CDP network domain.
+type RawCookie struct {
+	Name     string  `json:"name"`
+	Value    string  `json:"value"`
+	Domain   string  `json:"domain"`
+	Path     string  `json:"path"`
+	Expires  float64 `json:"expires"`
+	Secure   bool    `json:"secure"`
+	HTTPOnly bool    `json:"httpOnly"`
+	SameSite string  `json:"sameSite"`
+}
+
+// UserAgentOverrideParams holds parameters for user agent override.
+type UserAgentOverrideParams struct {
+	UserAgent      string
+	Platform       string
+	AcceptLanguage string
+}
+
+// DeviceMetricsOverrideParams holds parameters for device metrics override.
+type DeviceMetricsOverrideParams struct {
+	Width             int64
+	Height            int64
+	DeviceScaleFactor float64
+	Mobile            bool
+	ScreenWidth       int64
+	ScreenHeight      int64
+}
 
 // ProfileService abstracts profile management operations.
 type ProfileService interface {
@@ -189,9 +370,7 @@ type Instance struct {
 	CdpURL         string          `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
 
-	Target          string `json:"-"`
-	BrowserProvider string `json:"-"`
-	Browser         string `json:"browser,omitempty"`
+	Browser string `json:"browser,omitempty"`
 
 	// FallbackFrom/FallbackReason: omitempty keeps successful-launch
 	// Instance JSON byte-identical to pre-P2.4a output.

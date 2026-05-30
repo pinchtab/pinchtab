@@ -118,11 +118,6 @@ type RuntimeConfig struct {
 	// Dialog settings
 	DialogAutoAccept bool
 
-	// Engine is DEPRECATED. Use DefaultBrowser instead.
-	// Kept only for config file parsing compatibility. Runtime code should
-	// read DefaultBrowser, not this field.
-	Engine string
-
 	// Network monitoring
 	NetworkBufferSize         int  // Per-tab network buffer size (default 100)
 	RetainNetworkBodies       bool // When true, opportunistically retain response bodies in the per-tab network buffer
@@ -278,7 +273,8 @@ type ServerConfig struct {
 	Bind     string `json:"bind,omitempty"`
 	Token    string `json:"token,omitempty"`
 	StateDir string `json:"stateDir,omitempty"`
-	// Engine is DEPRECATED. Use browsers.default instead. Kept for config file parsing only.
+	// Engine is no longer supported. Kept for JSON parsing so old configs get a
+	// validation error instead of silently ignoring the field.
 	Engine                    string `json:"engine,omitempty"`
 	NetworkBufferSize         *int   `json:"networkBufferSize,omitempty"`
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`

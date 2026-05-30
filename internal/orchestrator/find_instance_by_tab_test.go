@@ -26,11 +26,10 @@ func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
 
 	inst := &InstanceInternal{
 		Instance: bridge.Instance{
-			ID:              "inst_a",
-			Status:          "running",
-			URL:             srv.URL,
-			Browser:         config.BrowserChrome,
-			BrowserProvider: config.BrowserChrome,
+			ID:      "inst_a",
+			Status:  "running",
+			URL:     srv.URL,
+			Browser: config.BrowserChrome,
 		},
 		URL: srv.URL,
 		cmd: &mockCmd{pid: 1, isAlive: true},

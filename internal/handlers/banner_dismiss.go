@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 // bannerDismissJS is a best-effort routine that clears cookie/consent/login
@@ -85,7 +85,7 @@ const bannerDismissJS = `(() => {
 const bannerDismissTimeout = 750 * time.Millisecond
 
 // dismissBanners runs the dismissal script on the current page of the given
-// chromedp context. Errors are swallowed: dismissal is purely best-effort.
+// tab context. Errors are swallowed: dismissal is purely best-effort.
 //
 // Pass enabled=false to no-op (lets call-sites wire the helper unconditionally
 // and decide based on the request flag).
@@ -98,7 +98,7 @@ func (h *Handlers) dismissBanners(ctx context.Context, tabID string, enabled boo
 	defer cancel()
 
 	var result string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(bannerDismissJS, &result)); err != nil {
+	if err := h.Bridge.Evaluate(tCtx, bannerDismissJS, &result, bridge.EvalOpts{}); err != nil {
 		slog.Debug("banner dismiss skipped", "tab_id", tabID, "error", err)
 		return
 	}

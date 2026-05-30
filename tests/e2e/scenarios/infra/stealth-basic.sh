@@ -13,7 +13,7 @@ assert_ok "navigate"
 start_test "stealth: status endpoint available"
 
 pt_get /stealth/status
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_json_eq "$RESULT" '.provider' 'cloak' "status reports cloak provider"
   assert_json_eq "$RESULT" '.native' 'true' "status reports cloak native stealth"
   assert_json_eq "$RESULT" '.pinchtabOverlaysDisabled' 'true' "status reports PinchTab overlays disabled"
@@ -55,7 +55,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: chrome.runtime present"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "false" "chrome.runtime stripped by cloak native stealth"
 else
   assert_eval_poll "!!window.chrome && !!window.chrome.runtime" "true" "window.chrome.runtime present"
@@ -194,7 +194,7 @@ end_test
 
 start_test "bot-detect: chrome.runtime present"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "false" "chrome.runtime stripped by cloak native stealth"
 else
   assert_eval_poll "!!(window.chrome && window.chrome.runtime)" "true" "chrome.runtime exists"
@@ -236,7 +236,7 @@ end_test
 
 start_test "bot-detect: battery API exists"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_eval_poll "typeof navigator.getBattery === 'undefined'" "true" "battery API absent under cloak"
 else
   assert_eval_poll "typeof navigator.getBattery === 'function'" "true" "getBattery exists"
@@ -259,7 +259,7 @@ end_test
 
 start_test "stealth-capabilities: outer dimensions available"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_eval_poll "window.outerWidth === 0 && window.outerHeight === 0" "true" "cloak zeroes outer dimensions"
 else
   assert_eval_poll "window.__stealthCapabilities.outerDimensions" "true" "outer dimensions exist"
@@ -282,7 +282,7 @@ end_test
 
 start_test "stealth-capabilities: battery API reported"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_eval_poll "typeof navigator.getBattery === 'undefined'" "true" "battery API absent under cloak"
 else
   assert_eval_poll "window.__stealthCapabilities.batteryApi" "true" "battery API reported by capability fixture"
@@ -292,7 +292,7 @@ end_test
 
 start_test "stealth-capabilities: downlinkMax reported"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   # Cloak's native stealth removes downlinkMax from the NetworkInformation
   # interface (own and prototype) — verify it stays absent so PinchTab's
   # overlay is not silently re-adding it.

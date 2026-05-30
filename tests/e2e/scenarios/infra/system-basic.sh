@@ -33,7 +33,7 @@ end_test
 
 start_test "config: fingerprint rotation preserves Chrome version"
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   skip_test "fingerprint rotation is a PinchTab-overlay feature; cloak owns its own fingerprint engine"
 else
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"

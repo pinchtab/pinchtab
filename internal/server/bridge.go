@@ -12,7 +12,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
+	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/bridgekit"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
@@ -111,6 +111,7 @@ func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
 	if cfg.DefaultBrowser != config.BrowserGhostChrome {
 		return
 	}
-	h.StaticBrowser = staticfetch.NewBrowser()
-	slog.Info("static browser router enabled", "browser", cfg.DefaultBrowser)
+	adapter := bridgekit.NewBridgeAdapter(h.Bridge, cfg)
+	h.Bridge = adapter
+	slog.Info("ghost-chrome bridge proxy enabled", "browser", cfg.DefaultBrowser)
 }

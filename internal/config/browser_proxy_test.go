@@ -172,7 +172,7 @@ func TestMigrateLegacyBrowserConfig_GeoCarriesIntoSynthesizedTarget(t *testing.T
 			},
 		},
 	}
-	synthesized, conflict := migrateLegacyBrowserConfig(bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(bc, "")
 	if !synthesized || conflict {
 		t.Fatalf("expected synthesized=true conflict=false, got %v/%v", synthesized, conflict)
 	}
@@ -292,7 +292,7 @@ func TestMigrateLegacyBrowserConfig_ProxyCarriesIntoSynthesizedTarget(t *testing
 			Password: "s3cr3t",
 		},
 	}
-	synthesized, conflict := migrateLegacyBrowserConfig(bc)
+	synthesized, conflict := migrateLegacyBrowserConfig(bc, "")
 	if !synthesized || conflict {
 		t.Fatalf("expected synthesized=true conflict=false, got synthesized=%v conflict=%v", synthesized, conflict)
 	}

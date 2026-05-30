@@ -96,6 +96,22 @@ jobs:
       summary_title: Release E2E (Infra)
       timeout_minutes: 35
 
+  # Non-chrome browser parity (cloak, ghost-chrome). Advisory, like the chrome e2e jobs.
+  e2e-extended-browsers:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [cloak, ghost-chrome]
+        suite: [api-extended, cli-extended, infra-extended]
+    uses: ./.github/workflows/reusable-e2e.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+      suite: ${{ matrix.suite }}
+      browser: ${{ matrix.browser }}
+      summary_title: Release E2E (${{ matrix.suite }} / ${{ matrix.browser }})
+      timeout_minutes: 40
+
   smoke:
     needs: validate
     uses: ./.github/workflows/reusable-smoke.yml
@@ -237,6 +253,7 @@ jobs:
       - e2e-api-extended
       - e2e-cli-extended
       - e2e-infra-extended
+      - e2e-extended-browsers
       - smoke
       - publish-dry-run
       - plugin-publish-dry-run
@@ -273,9 +290,10 @@ jobs:
           echo "| E2E API | ${{ needs.e2e-api-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-api-extended.result }} | ${{ needs.e2e-api-extended.outputs.passed || '-' }}/${{ needs.e2e-api-extended.outputs.tests || '-' }} | ${{ needs.e2e-api-extended.outputs.failed || '-' }} | ${{ needs.e2e-api-extended.outputs.test_time || '-' }} | ${{ needs.e2e-api-extended.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| E2E CLI | ${{ needs.e2e-cli-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-cli-extended.result }} | ${{ needs.e2e-cli-extended.outputs.passed || '-' }}/${{ needs.e2e-cli-extended.outputs.tests || '-' }} | ${{ needs.e2e-cli-extended.outputs.failed || '-' }} | ${{ needs.e2e-cli-extended.outputs.test_time || '-' }} | ${{ needs.e2e-cli-extended.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| E2E Infra | ${{ needs.e2e-infra-extended.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-infra-extended.result }} | ${{ needs.e2e-infra-extended.outputs.passed || '-' }}/${{ needs.e2e-infra-extended.outputs.tests || '-' }} | ${{ needs.e2e-infra-extended.outputs.failed || '-' }} | ${{ needs.e2e-infra-extended.outputs.test_time || '-' }} | ${{ needs.e2e-infra-extended.outputs.overall_wall_time || '-' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| E2E cloak + ghost-chrome (advisory) | ${{ needs.e2e-extended-browsers.result == 'success' && '✅' || '⚠️ ' }}${{ needs.e2e-extended-browsers.result }} | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.e2e-api-extended.result }}" != "success" ] || [ "${{ needs.e2e-cli-extended.result }}" != "success" ] || [ "${{ needs.e2e-infra-extended.result }}" != "success" ] || [ "${{ needs.smoke.result }}" != "success" ]; then
+          if [ "${{ needs.e2e-api-extended.result }}" != "success" ] || [ "${{ needs.e2e-cli-extended.result }}" != "success" ] || [ "${{ needs.e2e-infra-extended.result }}" != "success" ] || [ "${{ needs.e2e-extended-browsers.result }}" != "success" ] || [ "${{ needs.smoke.result }}" != "success" ]; then
             echo "⚠️ **Some checks failed — review the E2E job summaries and uploaded result artifacts before approving.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 

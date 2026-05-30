@@ -6,7 +6,6 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -49,23 +48,9 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the public "browser" (provider name) to an internal target name.
-	var browserTarget string
-	if req.Browser != "" {
-		resolved, resolveErr := config.ResolveBrowserToTarget(o.runtimeCfg, req.Browser)
-		if resolveErr != nil {
-			httpx.Error(w, http.StatusBadRequest, resolveErr)
-			return
-		}
-		if resolved == "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-			httpx.Error(w, http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", req.Browser))
-			return
-		}
-		browserTarget = resolved
-	}
-
-	inst, err := o.LaunchWithTargetSelection(name, req.Port, req.Headless, browserTarget, req.FallbackTargets, LaunchOptions{
+	inst, err := o.LaunchWithTargetSelection(name, req.Port, req.Headless, req.Browser, req.FallbackTargets, LaunchOptions{
 		SecurityPolicy: req.SecurityPolicy,
+		Browser:        req.Browser,
 	})
 	if err != nil {
 		writeLaunchError(w, err)

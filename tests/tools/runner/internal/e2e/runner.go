@@ -658,7 +658,7 @@ func (r *Runner) suiteEnvironment(def suiteDef, scenarios []scenarioMeta) []stri
 		"E2E_READY_TARGETS=" + strings.Join(readyTargetsForScenarios(def, scenarios), " "),
 		"E2E_TEST_FILTER=" + r.args.Test,
 		"E2E_SUMMARY_TITLE=" + suiteReportTitle(def),
-		"PINCHTAB_E2E_PROVIDER=" + provider,
+		"PINCHTAB_E2E_BROWSER=" + provider,
 	}
 }
 

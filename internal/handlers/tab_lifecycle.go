@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -70,7 +69,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
 			defer tCancel()
 			go httpx.CancelOnClientDone(r.Context(), tCancel)
-			navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
+			navGuard, err := installNavigateRuntimeGuardWithBridge(h.Bridge, tCtx, tCancel, target, trustedCIDRs)
 			if err != nil {
 				_ = h.Bridge.CloseTab(newTabID)
 				httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
@@ -94,8 +93,8 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var curURL, title string
-		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
+		curURL, _ := h.Bridge.CurrentURL(ctx)
+		title, _ := h.Bridge.CurrentTitle(ctx)
 
 		h.setCurrentTabForRequest(r, newTabID)
 		h.recordActivity(r, activity.Update{Action: "tab.new", TabID: newTabID, URL: curURL})

@@ -248,11 +248,8 @@ func TestHandleStartInstance_TargetsConfigValid_EchoesValues(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "cloak-1" {
-		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
 }
 
@@ -314,11 +311,8 @@ func TestHandleLaunchByName_TargetsConfigValid_EchoesValues(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "chrome-local" {
-		t.Fatalf("internal BrowserTarget = %q, want chrome-local", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserChrome {
-		t.Fatalf("internal BrowserProvider = %q, want chrome", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserChrome {
+		t.Fatalf("internal Browser = %q, want chrome", instances[0].Browser)
 	}
 }
 
@@ -387,11 +381,8 @@ func TestHandleAttachInstanceUsesDefaultBrowserTargetWhenOmitted(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "cloak-1" {
-		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/text", nil))
@@ -426,11 +417,8 @@ func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "cloak-1" {
-		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
 	if !strings.Contains(strings.Join(runner.args, " "), "--browser-provider cloak") {
 		t.Fatalf("runner args = %v, want cloak provider", runner.args)
@@ -528,11 +516,8 @@ func TestHandleAttachBridgeUsesDefaultBrowserTarget(t *testing.T) {
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "cloak-1" {
-		t.Fatalf("internal BrowserTarget = %q, want cloak-1", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("internal BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(httptest.NewRequest(http.MethodGet, "/tabs", nil))
@@ -604,17 +589,17 @@ func TestHandleStartInstance_RequestFallbackTargets_Wins(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls (primary + request fallback), got %d", len(fl.calls))
 	}
-	if fl.calls[1].ResolvedTarget != "backup" {
-		t.Fatalf("second call BrowserTarget = %q, want backup (request must win over cfg.FallbackOrder)", fl.calls[1].ResolvedTarget)
+	if fl.calls[1].Browser != config.BrowserChrome {
+		t.Fatalf("second call Browser = %q, want chrome (backup target uses chrome provider)", fl.calls[1].Browser)
 	}
 
-	// browserTarget is hidden from JSON (json:"-"), verify internal state.
+	// Verify internal state via Browser field.
 	instances := o.List()
 	if len(instances) != 1 {
 		t.Fatalf("expected 1 instance, got %d", len(instances))
 	}
-	if instances[0].Target != "backup" {
-		t.Fatalf("internal BrowserTarget = %q, want backup", instances[0].Target)
+	if instances[0].Browser != config.BrowserChrome {
+		t.Fatalf("internal Browser = %q, want chrome", instances[0].Browser)
 	}
 	// FallbackFrom is still in JSON, verify from response.
 	var inst bridge.Instance
@@ -646,8 +631,8 @@ func TestHandleStartInstance_ConfigFallbackOrder_UsedWhenRequestEmpty(t *testing
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls (primary + cfg fallback), got %d", len(fl.calls))
 	}
-	if fl.calls[1].ResolvedTarget != "cloak-1" {
-		t.Fatalf("second call BrowserTarget = %q, want cloak-1 (from cfg.FallbackOrder)", fl.calls[1].ResolvedTarget)
+	if fl.calls[1].Browser != config.BrowserCloak {
+		t.Fatalf("second call Browser = %q, want cloak (from cfg.FallbackOrder)", fl.calls[1].Browser)
 	}
 }
 
@@ -739,8 +724,8 @@ func TestHandleLaunchByName_RequestFallbackTargets_Wins(t *testing.T) {
 	if len(fl.calls) != 2 {
 		t.Fatalf("expected 2 launch calls, got %d", len(fl.calls))
 	}
-	if fl.calls[1].ResolvedTarget != "backup" {
-		t.Fatalf("second call BrowserTarget = %q, want backup", fl.calls[1].ResolvedTarget)
+	if fl.calls[1].Browser != config.BrowserChrome {
+		t.Fatalf("second call Browser = %q, want chrome (backup uses chrome provider)", fl.calls[1].Browser)
 	}
 }
 

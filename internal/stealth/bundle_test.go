@@ -243,7 +243,7 @@ func TestStatusFromBundleEchoesProviderCapabilities(t *testing.T) {
 			t.Fatal("expected non-nil status")
 			return
 		}
-		want := []string{"cdp", "downloads", "extensions", "headless", "networkInterception", "pdf"}
+		want := []string{"cdp", "downloads", "eventScreencast", "extensions", "headless", "networkInterception", "pdf"}
 		if !equalStringSlices(status.ProviderCapabilities, want) {
 			t.Fatalf("chrome ProviderCapabilities = %v, want %v", status.ProviderCapabilities, want)
 		}

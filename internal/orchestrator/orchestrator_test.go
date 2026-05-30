@@ -625,12 +625,12 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesBrowserTarget(t *testing.T) 
 	})
 	now := time.Now()
 	o.instances["chrome"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Target: "chrome", StartTime: now},
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Browser: config.BrowserChrome, StartTime: now},
 		URL:      "http://chrome.local",
 		cmd:      &mockCmd{pid: 111, isAlive: true},
 	}
 	o.instances["cloak"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Target: "cloak", StartTime: now.Add(time.Second)},
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Browser: config.BrowserCloak, StartTime: now.Add(time.Second)},
 		URL:      "http://cloak.local",
 		cmd:      &mockCmd{pid: 222, isAlive: true},
 	}
@@ -661,12 +661,12 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesDefaultTargetWhenOmitted(t *
 	})
 	now := time.Now()
 	o.instances["chrome"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Target: "chrome", StartTime: now},
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Browser: config.BrowserChrome, StartTime: now},
 		URL:      "http://chrome.local",
 		cmd:      &mockCmd{pid: 111, isAlive: true},
 	}
 	o.instances["cloak"] = &InstanceInternal{
-		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Target: "cloak", StartTime: now.Add(time.Second)},
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Browser: config.BrowserCloak, StartTime: now.Add(time.Second)},
 		URL:      "http://cloak.local",
 		cmd:      &mockCmd{pid: 222, isAlive: true},
 	}
@@ -696,6 +696,20 @@ func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowser(t *testing
 	_, status, err := o.FirstRunningURLForRequest(req)
 	if err == nil {
 		t.Fatal("expected unknown browser error")
+	}
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowserNoTargets(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	// No targets configured — the no-targets fallback path must still reject unknowns.
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=chrme", nil)
+
+	_, status, err := o.FirstRunningURLForRequest(req)
+	if err == nil {
+		t.Fatal("expected unknown browser error for typo without targets")
 	}
 	if status != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
@@ -805,15 +819,15 @@ func TestOrchestrator_AttachBridgeWithOptions_UpsertUpdatesBrowserTarget(t *test
 		},
 	})
 
-	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{ResolvedTarget: "chrome"})
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{Browser: config.BrowserChrome})
 	if err != nil {
 		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
 	}
-	if first.Target != "chrome" || first.BrowserProvider != config.BrowserChrome {
-		t.Fatalf("first target/provider = %q/%q, want chrome/chrome", first.Target, first.BrowserProvider)
+	if first.Browser != config.BrowserChrome {
+		t.Fatalf("first browser = %q, want chrome", first.Browser)
 	}
 
-	second, created, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.9:9868", "bridge-token", AttachOptions{ResolvedTarget: "cloak"})
+	second, created, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.9:9868", "bridge-token", AttachOptions{Browser: config.BrowserCloak})
 	if err != nil {
 		t.Fatalf("second AttachBridgeWithOptions failed: %v", err)
 	}
@@ -823,16 +837,16 @@ func TestOrchestrator_AttachBridgeWithOptions_UpsertUpdatesBrowserTarget(t *test
 	if second.ID != first.ID {
 		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
 	}
-	if second.Target != "cloak" || second.BrowserProvider != config.BrowserCloak {
-		t.Fatalf("second target/provider = %q/%q, want cloak/cloak", second.Target, second.BrowserProvider)
+	if second.Browser != config.BrowserCloak {
+		t.Fatalf("second browser = %q, want cloak", second.Browser)
 	}
 
 	list := o.List()
 	if len(list) != 1 {
 		t.Fatalf("expected 1 instance in list, got %d", len(list))
 	}
-	if list[0].Target != "cloak" || list[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("listed target/provider = %q/%q, want cloak/cloak", list[0].Target, list[0].BrowserProvider)
+	if list[0].Browser != config.BrowserCloak {
+		t.Fatalf("listed browser = %q, want cloak", list[0].Browser)
 	}
 }
 
@@ -850,7 +864,7 @@ func TestOrchestrator_AttachBridge_UpsertWithoutTargetPreservesExistingBrowserTa
 		},
 	})
 
-	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{ResolvedTarget: "cloak"})
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{Browser: config.BrowserCloak})
 	if err != nil {
 		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
 	}
@@ -864,11 +878,8 @@ func TestOrchestrator_AttachBridge_UpsertWithoutTargetPreservesExistingBrowserTa
 	if second.ID != first.ID {
 		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
 	}
-	if second.Target != "cloak" {
-		t.Fatalf("Target = %q, want preserved cloak", second.Target)
-	}
-	if second.BrowserProvider != config.BrowserCloak {
-		t.Fatalf("BrowserProvider = %q, want preserved cloak", second.BrowserProvider)
+	if second.Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want preserved cloak", second.Browser)
 	}
 }
 

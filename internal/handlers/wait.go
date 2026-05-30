@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -265,7 +264,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	// Poll loop
 	for {
 		var result bool
-		evalErr := chromedp.Run(tCtx, chromedp.Evaluate(js, &result))
+		evalErr := h.Bridge.Evaluate(tCtx, js, &result, bridge.EvalOpts{})
 		if evalErr == nil && result {
 			httpx.JSON(w, 200, waitResponse{
 				Waited:  true,

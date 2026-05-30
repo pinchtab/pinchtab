@@ -168,11 +168,8 @@ func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *test
 	if len(instances) != 1 {
 		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
 	}
-	if instances[0].Target != "cloak" {
-		t.Fatalf("BrowserTarget = %q, want cloak", instances[0].Target)
-	}
-	if instances[0].BrowserProvider != config.BrowserCloak {
-		t.Fatalf("BrowserProvider = %q, want cloak", instances[0].BrowserProvider)
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want cloak", instances[0].Browser)
 	}
 	if instances[0].ProfileName != "default-cloak" {
 		t.Fatalf("ProfileName = %q, want default-cloak", instances[0].ProfileName)

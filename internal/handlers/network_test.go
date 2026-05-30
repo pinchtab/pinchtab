@@ -645,7 +645,7 @@ func (m *networkFailTabBridge) NetworkMonitor() *bridge.NetworkMonitor {
 	return m.nm
 }
 
-func (m *networkFailTabBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *networkFailTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	return nil, "", fmt.Errorf("tab not found")
 }
 

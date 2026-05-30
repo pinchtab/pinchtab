@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -197,7 +196,7 @@ func downloadTooLargeError(size int64, maxBytes int) error {
 	return fmt.Errorf("%w: received %d bytes, max %d", errDownloadTooLarge, size, maxBytes)
 }
 
-func parseContentLengthHeader(headers network.Headers) (int64, bool) {
+func parseContentLengthHeader(headers map[string]interface{}) (int64, bool) {
 	for key, raw := range headers {
 		if !strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
 			continue
@@ -213,6 +212,11 @@ func parseContentLengthHeader(headers network.Headers) (int64, bool) {
 		return size, true
 	}
 	return 0, false
+}
+
+// parseContentLengthHeaderGeneric is a type-compatible alias for bridge callbacks.
+func parseContentLengthHeaderGeneric(headers map[string]interface{}) (int64, bool) {
+	return parseContentLengthHeader(headers)
 }
 
 func writeDownloadGuardError(w http.ResponseWriter, err error, maxBytes int) bool {

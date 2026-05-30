@@ -2,7 +2,12 @@ package bridge
 
 import (
 	"context"
+	"net"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/contentguard"
+	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
 type TabEntry struct {
@@ -84,4 +89,54 @@ type FrameScope struct {
 
 func (s FrameScope) Active() bool {
 	return s.FrameID != ""
+}
+
+// NavigateResult is the bridge-level response from a navigation, carrying
+// route metadata alongside the tab/URL/title information.
+type NavigateResult struct {
+	TabID string
+	URL   string
+	Title string
+	Route *browserops.RouteMetadata
+}
+
+// SnapshotResult is the bridge-level response from a snapshot operation.
+// It carries the rich A11yNode tree (not the simpler browserops.SnapshotNode)
+// together with ref-cache data so that handlers can store it via SetRefCache
+// without needing to call CDP directly.
+type SnapshotResult struct {
+	Nodes       []A11yNode
+	Refs        map[string]int64
+	Targets     map[string]RefTarget
+	URL         string
+	Title       string
+	Truncated   bool
+	Hint        string
+	IDPIWarning string
+	Route       *browserops.RouteMetadata
+}
+
+// TextResult is the bridge-level response from a text extraction operation.
+type TextResult struct {
+	Text        string
+	URL         string
+	Title       string
+	Truncated   bool
+	IDPIWarning string
+	Route       *browserops.RouteMetadata
+}
+
+// NavigateParams carries per-request security policy for navigation.
+type NavigateParams struct {
+	MaxRedirects       int
+	AllowInternal      bool
+	TrustedProxyCIDRs  []net.IPNet
+	TrustedResolvedIPs []net.IP
+	IDPIGuard          idpi.Guard
+}
+
+// ContentParams carries per-request IDPI policy for content operations.
+type ContentParams struct {
+	ContentGuard *contentguard.Scanner
+	MaxDepth     int // max AX tree depth for snapshots; 0 or -1 means unlimited
 }

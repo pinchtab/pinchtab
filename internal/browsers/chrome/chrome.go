@@ -2,6 +2,7 @@
 package chrome
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -99,6 +100,7 @@ func (Browser) Capabilities() browsers.CapabilitySet {
 		browsers.CapExtensions,
 		browsers.CapDownloads,
 		browsers.CapNetworkInterception,
+		browsers.CapEventScreencast,
 	)
 }
 
@@ -201,6 +203,10 @@ func (Browser) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchErro
 
 func (Browser) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
+}
+
+func (Browser) NewRuntimeInstance(browserCtx context.Context, headless bool) browsers.RuntimeInstance {
+	return NewInstance(browserCtx, headless)
 }
 
 func init() { browsers.Register(&Browser{}) }

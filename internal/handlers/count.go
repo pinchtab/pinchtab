@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -88,7 +89,7 @@ func (h *Handlers) countElements(ctx context.Context, selector string) (int, err
 	expr := fmt.Sprintf("document.querySelectorAll(%s).length", string(selectorJSON))
 
 	var count int
-	if err := h.evalRuntime(ctx, expr, &count); err != nil {
+	if err := h.evalRuntime(ctx, expr, &count, bridge.EvalOpts{}); err != nil {
 		return 0, err
 	}
 	return count, nil

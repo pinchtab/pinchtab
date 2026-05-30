@@ -89,24 +89,25 @@ type RecordingStatus struct {
 }
 
 type recorder struct {
-	mu         sync.Mutex
-	state      recorderState
-	stopReason string
-	tabCtx     context.Context
-	tabCancel  context.CancelFunc
-	tabID      string
-	owner      string // opaque key derived from authenticated session, never exposed
-	format     string
-	fps        int
-	quality    int
-	scale      float64
-	tmpDir     string
-	frameNum   int
-	startTime  time.Time
-	stopCh     chan struct{}
-	doneCh     chan struct{}
-	outputPath string // final destination set by stop(); encoding writes here
-	encodeErr  error  // set by background encode goroutine
+	mu           sync.Mutex
+	state        recorderState
+	stopReason   string
+	tabCtx       context.Context
+	tabCancel    context.CancelFunc
+	tabID        string
+	owner        string // opaque key derived from authenticated session, never exposed
+	format       string
+	fps          int
+	quality      int
+	scale        float64
+	tmpDir       string
+	frameNum     int
+	startTime    time.Time
+	stopCh       chan struct{}
+	doneCh       chan struct{}
+	outputPath   string // final destination set by stop(); encoding writes here
+	encodeErr    error  // set by background encode goroutine
+	captureFrame func(ctx context.Context, quality int) ([]byte, error)
 }
 
 func (rec *recorder) start(tabCtx context.Context, tabID, owner, format string, fps, quality int, scale float64) error {
@@ -374,7 +375,7 @@ func (rec *recorder) checkLimits(diskBytes *atomic.Int64) string {
 }
 
 func (rec *recorder) writeFrame(diskBytes *atomic.Int64) {
-	frame, err := captureScreencastJPEG(rec.tabCtx, rec.quality)
+	frame, err := rec.captureFrame(rec.tabCtx, rec.quality)
 	if err != nil {
 		slog.Debug("recording frame capture failed", "err", err)
 		return

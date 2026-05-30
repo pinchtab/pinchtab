@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,15 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/fetch"
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -79,8 +76,10 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		if currentURL == "" {
 			lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
-			if err := chromedp.Run(lookupCtx, chromedp.Location(&currentURL)); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("resolve current tab url: %w", err))
+			var lookupErr error
+			currentURL, lookupErr = h.Bridge.CurrentURL(lookupCtx)
+			if lookupErr != nil {
+				httpx.Error(w, 500, fmt.Errorf("resolve current tab url: %w", lookupErr))
 				return
 			}
 		}
@@ -99,128 +98,6 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	raw := r.URL.Query().Get("raw") == "true"
 
-	// Create a temporary tab for the download — avoids navigating the user's tab away.
-	browserCtx := h.Bridge.BrowserContext()
-	tabCtx, tabCancel := chromedp.NewContext(browserCtx)
-	defer tabCancel()
-
-	tCtx, tCancel := context.WithTimeout(tabCtx, 30*time.Second)
-	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
-
-	var requestID network.RequestID
-	var responseMIME string
-	var responseStatus int
-	requestGuard := newDownloadRequestGuard(validator, h.Config.MaxRedirects)
-	var mainFrameID cdp.FrameID
-	done := make(chan struct{}, 1)
-	var receivedBytes atomic.Int64
-
-	// Intercept every browser-side request so redirects and follow-on navigations
-	// cannot escape the public-only URL policy enforced for /download.
-	if err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return fetch.Enable().Do(ctx)
-	})); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("fetch enable: %w", err))
-		return
-	}
-	defer func() {
-		_ = chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-			return fetch.Disable().Do(ctx)
-		}))
-	}()
-
-	chromedp.ListenTarget(tCtx, func(ev interface{}) {
-		switch e := ev.(type) {
-		case *fetch.EventRequestPaused:
-			// Handle in goroutine to avoid deadlocking the event dispatcher.
-			go func() {
-				reqID := e.RequestID
-				if err := requestGuard.Validate(e.Request.URL, e.RedirectedRequestID != ""); err != nil {
-					requestGuard.NoteBlocked(err)
-					select {
-					case done <- struct{}{}:
-					default:
-					}
-					_ = fetch.FailRequest(reqID, network.ErrorReasonBlockedByClient).Do(cdp.WithExecutor(tCtx, chromedp.FromContext(tCtx).Target))
-					return
-				}
-				_ = fetch.ContinueRequest(reqID).Do(cdp.WithExecutor(tCtx, chromedp.FromContext(tCtx).Target))
-			}()
-		case *network.EventRequestWillBeSent:
-			if e.Type != network.ResourceTypeDocument {
-				return
-			}
-			if mainFrameID == "" {
-				mainFrameID = e.FrameID
-			}
-			if e.FrameID == mainFrameID {
-				requestID = e.RequestID
-			}
-		case *network.EventResponseReceived:
-			if e.RequestID == requestID && requestID != "" {
-				requestID = e.RequestID
-				responseMIME = e.Response.MimeType
-				responseStatus = int(e.Response.Status)
-				if !validator.isDomainAllowed(e.Response.URL) {
-					if err := validateDownloadRemoteIPAddress(e.Response.RemoteIPAddress); err != nil {
-						requestGuard.NoteBlocked(err)
-						select {
-						case done <- struct{}{}:
-						default:
-						}
-						tCancel()
-						return
-					}
-				}
-				if contentLength, ok := parseContentLengthHeader(e.Response.Headers); ok && contentLength > int64(maxDownloadBytes) {
-					requestGuard.NoteBlocked(downloadTooLargeError(contentLength, maxDownloadBytes))
-					select {
-					case done <- struct{}{}:
-					default:
-					}
-					tCancel()
-					return
-				}
-			}
-		case *network.EventDataReceived:
-			if e.RequestID == requestID && requestID != "" {
-				chunk := e.EncodedDataLength
-				if chunk <= 0 {
-					chunk = e.DataLength
-				}
-				if chunk > 0 && receivedBytes.Add(chunk) > int64(maxDownloadBytes) {
-					requestGuard.NoteBlocked(downloadTooLargeError(receivedBytes.Load(), maxDownloadBytes))
-					select {
-					case done <- struct{}{}:
-					default:
-					}
-					tCancel()
-					return
-				}
-			}
-		case *network.EventLoadingFinished:
-			if e.RequestID == requestID && requestID != "" {
-				select {
-				case done <- struct{}{}:
-				default:
-				}
-			}
-		case *network.EventLoadingFailed:
-			if e.RequestID == requestID && requestID != "" {
-				select {
-				case done <- struct{}{}:
-				default:
-				}
-			}
-		}
-	})
-
-	if err := chromedp.Run(tCtx, network.Enable()); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("network enable: %w", err))
-		return
-	}
-
 	// Re-check scheme before navigation (validateDownloadURL already enforces this,
 	// but inline check satisfies CodeQL SSRF analysis).
 	if parsed, err := url.Parse(dlURL); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
@@ -228,10 +105,34 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Navigate the temp tab to the URL — uses browser's cookie jar and stealth.
-	if err := chromedp.Run(tCtx, chromedp.Navigate(dlURL)); err != nil {
-		if writeDownloadGuardError(w, requestGuard.BlockedError(), maxDownloadBytes) {
-			return
+	tCtx, tCancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer tCancel()
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
+
+	requestGuard := newDownloadRequestGuard(validator, h.Config.MaxRedirects)
+	browserCtx := h.Bridge.BrowserContext()
+
+	result, err := h.Bridge.DownloadURL(tCtx, dlURL, bridge.DownloadOpts{
+		MaxBytes:     maxDownloadBytes,
+		MaxRedirects: h.Config.MaxRedirects,
+		ValidateURL: func(rawURL string, isRedirect bool) error {
+			return requestGuard.Validate(rawURL, isRedirect)
+		},
+		ValidateRemoteIP: func(remoteIP string) error {
+			return validateDownloadRemoteIPAddress(remoteIP)
+		},
+		IsDomainAllowed: func(rawURL string) bool {
+			return validator.isDomainAllowed(rawURL)
+		},
+		ParseContentLength: func(headers map[string]interface{}) (int64, bool) {
+			return parseContentLengthHeaderGeneric(headers)
+		},
+	})
+	if err != nil {
+		if bErr := requestGuard.BlockedError(); bErr != nil {
+			if writeDownloadGuardError(w, bErr, maxDownloadBytes) {
+				return
+			}
 		}
 		// Chrome aborts navigation for binary downloads (.gz, etc.).
 		// Fall back to a direct Go HTTP fetch using the browser's cookies.
@@ -251,54 +152,39 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 				httpx.Error(w, 502, fmt.Errorf("remote server returned HTTP %d", status))
 				return
 			}
-			responseMIME = mime
 			h.recordActivity(r, activity.Update{Action: "download", URL: dlURL})
-			h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+			h.writeDownloadResponse(w, body, mime, dlURL, output, filePath, raw, maxDownloadBytes)
+			return
+		}
+		if errors.Is(err, bridge.ErrTooManyRedirects) {
+			httpx.Error(w, 422, fmt.Errorf("download: %w", err))
+			return
+		}
+		if strings.Contains(err.Error(), "download response too large") {
+			httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "download_too_large", err.Error(), false, map[string]any{
+				"maxBytes": maxDownloadBytes,
+			})
+			return
+		}
+		if strings.Contains(err.Error(), "timed out") {
+			httpx.Error(w, 504, fmt.Errorf("download timed out"))
+			return
+		}
+		if strings.Contains(err.Error(), "HTTP") && result != nil && result.StatusCode >= 400 {
+			httpx.Error(w, 502, err)
+			return
+		}
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "blocked") || strings.Contains(errMsg, "private") || strings.Contains(errMsg, "unsafe") {
+			httpx.Error(w, 400, fmt.Errorf("unsafe browser request: %w", err))
 			return
 		}
 		httpx.Error(w, 502, fmt.Errorf("navigate to download URL: %w", err))
 		return
 	}
 
-	select {
-	case <-done:
-	case <-tCtx.Done():
-		if writeDownloadGuardError(w, requestGuard.BlockedError(), maxDownloadBytes) {
-			return
-		}
-		httpx.Error(w, 504, fmt.Errorf("download timed out"))
-		return
-	}
-
-	if writeDownloadGuardError(w, requestGuard.BlockedError(), maxDownloadBytes) {
-		return
-	}
-
-	if responseStatus >= 400 {
-		httpx.Error(w, 502, fmt.Errorf("remote server returned HTTP %d", responseStatus))
-		return
-	}
-	if requestID == "" {
-		httpx.Error(w, 502, fmt.Errorf("download response was not captured"))
-		return
-	}
-
-	var body []byte
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			b, err := network.GetResponseBody(requestID).Do(ctx)
-			if err != nil {
-				return err
-			}
-			body = b
-			return nil
-		}),
-	); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("get response body: %w", err))
-		return
-	}
 	h.recordActivity(r, activity.Update{Action: "download", URL: dlURL})
-	h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+	h.writeDownloadResponse(w, result.Body, result.MIMEType, dlURL, output, filePath, raw, maxDownloadBytes)
 }
 
 func (h *Handlers) writeDownloadResponse(w http.ResponseWriter, body []byte, mime, dlURL, output, filePath string, raw bool, maxBytes int) {

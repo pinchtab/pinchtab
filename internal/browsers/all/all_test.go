@@ -103,7 +103,16 @@ func TestCloakCapabilitySupersetOfChrome(t *testing.T) {
 	chromeCaps := browsers.MustGet("chrome").Capabilities().List()
 	cloakCaps := browsers.MustGet("cloak").Capabilities()
 
+	// Cloak intentionally lacks CapEventScreencast because its CDP proxy
+	// does not support Page.startScreencast — polling is used instead.
+	chromeOnly := map[browsers.BrowserCapability]bool{
+		browsers.CapEventScreencast: true,
+	}
+
 	for _, c := range chromeCaps {
+		if chromeOnly[c] {
+			continue
+		}
 		if !cloakCaps.Has(c) {
 			t.Errorf("Cloak missing Chrome capability %q", c)
 		}
@@ -112,8 +121,8 @@ func TestCloakCapabilitySupersetOfChrome(t *testing.T) {
 	if !cloakCaps.Has(browsers.CapNativeStealth) {
 		t.Error("Cloak should have CapNativeStealth beyond Chrome's set")
 	}
-	if cloakCaps.Len() <= len(chromeCaps) {
-		t.Errorf("Cloak should have more capabilities than Chrome; got %d vs %d", cloakCaps.Len(), len(chromeCaps))
+	if cloakCaps.Has(browsers.CapEventScreencast) {
+		t.Error("Cloak should NOT have CapEventScreencast")
 	}
 }
 

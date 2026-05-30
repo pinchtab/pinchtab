@@ -5,13 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -19,11 +17,6 @@ import (
 
 type failMockBridge struct {
 	bridge.BridgeAPI
-}
-
-type liteActionBridge struct {
-	mockBridge
-	ensureChromeCalled bool
 }
 
 type recordingActionBridge struct {
@@ -43,11 +36,11 @@ type autoSwitchActionBridge struct {
 	actionTabs []string
 }
 
-func (m *autoSwitchActionBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *autoSwitchActionBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if tabID == "" {
 		tabID = "tab1"
 	}
-	return context.Background(), tabID, nil
+	return bridge.NewTabHandle(context.Background()), tabID, nil
 }
 
 func (m *autoSwitchActionBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
@@ -56,19 +49,6 @@ func (m *autoSwitchActionBridge) ExecuteAction(ctx context.Context, kind string,
 		return map[string]any{"clicked": true, "switchedToTab": "tab2"}, nil
 	}
 	return map[string]any{"ok": true, "tabId": req.TabID}, nil
-}
-
-func (m *liteActionBridge) AvailableActions() []string {
-	return []string{bridge.ActionClick, bridge.ActionType, bridge.ActionPress}
-}
-
-func (m *liteActionBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
-	m.ensureChromeCalled = true
-	return fmt.Errorf("ensureChrome should not be called for lite-routed actions")
-}
-
-func (m *liteActionBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
-	return nil
 }
 
 func (m *recordingActionBridge) AvailableActions() []string {
@@ -110,45 +90,11 @@ func (m *handoffRecordingBridge) TabHandoffState(tabID string) (bridge.TabHandof
 	return m.state, m.has
 }
 
-type fakeStaticBrowser struct {
-	clickRefs []string
-	typeCalls []struct {
-		ref  string
-		text string
-	}
-}
-
-func (f *fakeStaticBrowser) Name() string { return "static-test" }
-func (f *fakeStaticBrowser) Navigate(ctx context.Context, url string) (*browserops.NavigateResult, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (f *fakeStaticBrowser) Snapshot(ctx context.Context, tabID, filter string) (*browserops.SnapshotResult, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (f *fakeStaticBrowser) Text(ctx context.Context, tabID string) (*browserops.TextResult, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (f *fakeStaticBrowser) Click(ctx context.Context, tabID, ref string) error {
-	f.clickRefs = append(f.clickRefs, ref)
-	return nil
-}
-func (f *fakeStaticBrowser) Type(ctx context.Context, tabID, ref, text string) error {
-	f.typeCalls = append(f.typeCalls, struct {
-		ref  string
-		text string
-	}{ref: ref, text: text})
-	return nil
-}
-func (f *fakeStaticBrowser) Capabilities() []browserops.Capability {
-	return []browserops.Capability{browserops.CapClick, browserops.CapType}
-}
-func (f *fakeStaticBrowser) Close() error { return nil }
-
-func (m *failMockBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *failMockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	return nil, "", fmt.Errorf("tab not found")
 }
 
-func (m *failMockBridge) ListTargets() ([]*target.Info, error) {
+func (m *failMockBridge) ListTargets() ([]bridge.TabTarget, error) {
 	return nil, fmt.Errorf("list targets failed")
 }
 
@@ -164,8 +110,24 @@ func (m *failMockBridge) AvailableActions() []string {
 	return []string{bridge.ActionClick, bridge.ActionType}
 }
 
+func (m *failMockBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
+	return nil
+}
+
 func (m *failMockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
+}
+
+func (m *failMockBridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *failMockBridge) EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts bridge.EvalOpts) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *failMockBridge) DescribeNode(ctx context.Context, backendNodeID int64) (*bridge.NodeInfo, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func TestHandleActions_EmptyArray(t *testing.T) {
@@ -454,91 +416,6 @@ func TestHandleAction_GetMissingKind(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Errorf("expected 400 for missing kind, got %d", w.Code)
-	}
-}
-
-func TestHandleAction_StaticClickRoutesWithoutChrome(t *testing.T) {
-	b := &liteActionBridge{}
-	staticBrowser := &fakeStaticBrowser{}
-	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.StaticBrowser = staticBrowser
-
-	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","ref":"e1"}`)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.HandleAction(w, req)
-
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if b.ensureChromeCalled {
-		t.Fatal("expected static action to skip chrome initialization")
-	}
-	if len(staticBrowser.clickRefs) != 1 || staticBrowser.clickRefs[0] != "e1" {
-		t.Fatalf("expected click ref e1, got %+v", staticBrowser.clickRefs)
-	}
-}
-
-func TestHandleAction_StaticUnsupportedReturns501(t *testing.T) {
-	b := &liteActionBridge{}
-	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.StaticBrowser = &fakeStaticBrowser{}
-
-	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"press","ref":"e1","key":"Enter"}`)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.HandleAction(w, req)
-
-	if w.Code != 501 {
-		t.Fatalf("expected 501, got %d: %s", w.Code, w.Body.String())
-	}
-	if b.ensureChromeCalled {
-		t.Fatal("expected unsupported static action to avoid chrome initialization")
-	}
-}
-
-func TestHandleActions_StaticBatchSupportsClickAndType(t *testing.T) {
-	b := &liteActionBridge{}
-	staticBrowser := &fakeStaticBrowser{}
-	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
-	h.StaticBrowser = staticBrowser
-
-	body := `{
-		"actions": [
-			{"kind":"click","ref":"e1"},
-			{"kind":"type","ref":"e2","text":"hello"}
-		]
-	}`
-	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.HandleActions(w, req)
-
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if b.ensureChromeCalled {
-		t.Fatal("expected static batch actions to skip chrome initialization")
-	}
-
-	resp := struct {
-		Successful int `json:"successful"`
-		Failed     int `json:"failed"`
-	}{}
-	if err := json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&resp); err != nil && err != io.EOF {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Successful != 2 || resp.Failed != 0 {
-		t.Fatalf("expected 2 successful actions, got %+v", resp)
-	}
-	if len(staticBrowser.clickRefs) != 1 || staticBrowser.clickRefs[0] != "e1" {
-		t.Fatalf("unexpected click refs: %+v", staticBrowser.clickRefs)
-	}
-	if len(staticBrowser.typeCalls) != 1 || staticBrowser.typeCalls[0].ref != "e2" || staticBrowser.typeCalls[0].text != "hello" {
-		t.Fatalf("unexpected type calls: %+v", staticBrowser.typeCalls)
 	}
 }
 

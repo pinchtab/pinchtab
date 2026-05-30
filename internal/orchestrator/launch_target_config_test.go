@@ -127,7 +127,6 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 		DefaultBrowser:         config.BrowserChrome,
 		Headless:               true,
 		HeadlessSet:            true,
-		Engine:                 "lite",
 		AttachEnabled:          true,
 		AttachAllowHosts:       []string{"*"},
 		AttachAllowSchemes:     []string{"http", "ws"},
@@ -149,9 +148,6 @@ func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
 		t.Fatalf("unmarshal attach child config: %v", err)
 	}
 
-	if fc.Server.Engine != "lite" {
-		t.Errorf("Server.Engine = %q, want lite", fc.Server.Engine)
-	}
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("InstanceDefaults.Mode = %q, want headless", fc.InstanceDefaults.Mode)
 	}

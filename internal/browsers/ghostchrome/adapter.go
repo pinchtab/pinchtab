@@ -1,31 +1,9 @@
 package ghostchrome
 
 import (
-	"context"
 	"fmt"
 	"strings"
-
-	"github.com/pinchtab/pinchtab/internal/browsers"
 )
-
-// StaticFetcher is the subset of browserops.BrowserRuntime that Ghost needs.
-// Defined here to avoid an import cycle with internal/browserops.
-type StaticFetcher interface {
-	Navigate(ctx context.Context, url string) (StaticNavResult, error)
-	Text(ctx context.Context, tabID string) (StaticTextResult, error)
-}
-
-// StaticNavResult mirrors the fields Ghost needs from browserops.NavigateResult.
-type StaticNavResult struct {
-	TabID string
-	URL   string
-	Title string
-}
-
-// StaticTextResult mirrors the fields Ghost needs from browserops.TextResult.
-type StaticTextResult struct {
-	Text string
-}
 
 // QualityThreshold is the minimum quality score for accepting a Ghost result.
 const QualityThreshold = 60
@@ -73,56 +51,6 @@ func (r *GhostResult) FormatReason() string {
 		return r.SkipReason
 	}
 	return fmt.Sprintf("quality=%d needsBrowser=%t pageClass=%s", r.Quality, r.NeedsBrowser, r.PageClass)
-}
-
-// GhostAdapter wraps a static fetcher to provide the static first step
-// for ghost-chrome.
-type GhostAdapter struct{}
-
-// CanHandle checks whether Ghost can attempt to serve this request.
-func (a *GhostAdapter) CanHandle(intent browsers.RequestIntent) browsers.HandleDecision {
-	return ghostCanHandle(intent)
-}
-
-// Try attempts a static fetch using the provided fetcher.
-// It returns a GhostResult with content and quality signals.
-// The caller decides whether to accept or escalate to Chrome.
-func (a *GhostAdapter) Try(ctx context.Context, lite StaticFetcher, url string) *GhostResult {
-	if lite == nil {
-		return &GhostResult{SkipReason: "no static browser available"}
-	}
-
-	nav, err := lite.Navigate(ctx, url)
-	if err != nil {
-		return &GhostResult{SkipReason: fmt.Sprintf("ghost fetch failed: %v", err)}
-	}
-
-	// Get text content via the static browser's Text method.
-	text, err := lite.Text(ctx, nav.TabID)
-	if err != nil {
-		return &GhostResult{
-			URL:        nav.URL,
-			Title:      nav.Title,
-			SkipReason: fmt.Sprintf("ghost text extraction failed: %v", err),
-		}
-	}
-
-	result := &GhostResult{
-		OK:        true,
-		URL:       nav.URL,
-		Title:     nav.Title,
-		Content:   text.Text,
-		PageClass: "static",
-	}
-
-	result.Quality = EstimateQuality(result.Content)
-	result.IsThin = result.Quality < 20
-	result.NeedsBrowser = LooksLikeSPA(result.Content)
-	if result.NeedsBrowser {
-		result.PageClass = "spa"
-	}
-
-	return result
 }
 
 // SnapshotNode holds the minimal fields needed to assess a snapshot node's quality.

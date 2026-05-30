@@ -118,74 +118,8 @@ func (b *Browser) CanHandle(intent browsers.RequestIntent) browsers.HandleDecisi
 	return ghostCanHandle(intent)
 }
 
-// Attempt records a single browser that was considered during routing.
-type Attempt struct {
-	Browser  string
-	Accepted bool
-	Reason   string
-}
-
-// RouteResult carries the routing decision from ghost-chrome.
-type RouteResult struct {
-	UsedBrowser string       // "ghost" or "chrome"
-	Escalated   bool         // true if Ghost was tried but rejected
-	GhostResult *GhostResult // non-nil when Ghost was tried
-	Quality     int
-	Attempts    []Attempt
-}
-
-// RouteRequest holds the inputs for a routing decision.
-type RouteRequest struct {
-	Ctx    context.Context
-	Lite   StaticFetcher
-	URL    string
-	Intent browsers.RequestIntent
-}
-
-// Route orchestrates Ghost → Chrome escalation. Ghost is tried first for
-// request shapes it can handle; if the result passes ShouldAccept the Ghost
-// result is returned. Otherwise the request escalates to Chrome. Shapes
-// that Ghost cannot handle skip straight to Chrome with no Ghost attempt.
-func (b *Browser) Route(req RouteRequest) RouteResult {
-	ghost := &GhostAdapter{}
-	d := ghost.CanHandle(req.Intent)
-
-	// If Ghost can't handle this shape, go straight to Chrome.
-	if d.Decision != browsers.DecisionHandle {
-		return RouteResult{
-			UsedBrowser: "chrome",
-			Attempts: []Attempt{
-				{Browser: "ghost", Accepted: false, Reason: d.Reason},
-				{Browser: "chrome", Accepted: true},
-			},
-		}
-	}
-
-	// Try Ghost.
-	gr := ghost.Try(req.Ctx, req.Lite, req.URL)
-
-	if gr.ShouldAccept() {
-		return RouteResult{
-			UsedBrowser: "ghost",
-			GhostResult: gr,
-			Quality:     gr.Quality,
-			Attempts: []Attempt{
-				{Browser: "ghost", Accepted: true, Reason: gr.FormatReason()},
-			},
-		}
-	}
-
-	// Escalate to Chrome.
-	return RouteResult{
-		UsedBrowser: "chrome",
-		Escalated:   true,
-		GhostResult: gr,
-		Quality:     gr.Quality,
-		Attempts: []Attempt{
-			{Browser: "ghost", Accepted: false, Reason: gr.FormatReason()},
-			{Browser: "chrome", Accepted: true, Reason: "escalated from ghost"},
-		},
-	}
+func (Browser) NewRuntimeInstance(browserCtx context.Context, headless bool) browsers.RuntimeInstance {
+	return NewInstance(browserCtx, headless)
 }
 
 func init() { browsers.Register(&Browser{}) }

@@ -1,6 +1,7 @@
 package browsers
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ func (s *stubBrowser) ClassifyLaunchError(_ LaunchFailure) LaunchErrorKind { ret
 func (s *stubBrowser) CanHandle(_ RequestIntent) HandleDecision {
 	return HandleDecision{Decision: DecisionHandle}
 }
+func (s *stubBrowser) NewRuntimeInstance(_ context.Context, _ bool) RuntimeInstance { return nil }
 
 func stub(id string) Browser {
 	return &stubBrowser{id: id, displayName: id}

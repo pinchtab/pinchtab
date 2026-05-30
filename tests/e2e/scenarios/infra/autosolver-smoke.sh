@@ -6,7 +6,7 @@ source "${GROUP_DIR}/../../helpers/autosolver.sh"
 
 autosolver_use_medium_server
 
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   autosolver_run_score_case_allowing_failures \
     "autosolver: bot-detect baseline" \
     "bot-detect" \

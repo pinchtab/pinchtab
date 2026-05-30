@@ -17,6 +17,15 @@ var dialLiteAddress = func(ctx context.Context, network, addr string) (net.Conn,
 	return (&net.Dialer{}).DialContext(ctx, network, addr)
 }
 
+// OverrideDialForTest replaces the dial function used for network-guarded
+// connections. It returns a restore function that must be called to reset
+// the original. Exported for adapter-level tests in sibling packages.
+func OverrideDialForTest(fn func(ctx context.Context, network, addr string) (net.Conn, error)) func() {
+	old := dialLiteAddress
+	dialLiteAddress = fn
+	return func() { dialLiteAddress = old }
+}
+
 func (l *Browser) clientForNavigate(ctx context.Context) *http.Client {
 	policy := navigateNetworkPolicyFromContext(ctx)
 	if policy == nil {

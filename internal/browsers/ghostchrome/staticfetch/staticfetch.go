@@ -69,7 +69,7 @@ func (l *Browser) Navigate(ctx context.Context, url string) (*browserops.Navigat
 	if err != nil {
 		return nil, fmt.Errorf("lite navigate: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; PinchTab-Lite/1.0)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; PinchTab-StaticFetch/1.0)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*")
 
 	resp, err := l.clientForNavigate(ctx).Do(req)
@@ -234,6 +234,17 @@ func (l *Browser) Type(_ context.Context, tabID, ref, text string) error {
 
 	el.SetAttribute("value", text)
 	return nil
+}
+
+// TabURL returns the URL of a lite tab managed by the static browser.
+func (l *Browser) TabURL(tabID string) (string, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tab := l.tabs[tabID]
+	if tab == nil {
+		return "", false
+	}
+	return tab.url, true
 }
 
 // Close shuts down the static browser and releases resources.

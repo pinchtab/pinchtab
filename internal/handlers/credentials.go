@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/fetch"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -54,7 +52,7 @@ func (cs *credentialStore) Delete(tabID string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	delete(cs.credentials, tabID)
-	// Keep listeners[tabID] — the chromedp listener is bound to the tab's
+	// Keep listeners[tabID] — the bridge listener is bound to the tab's
 	// context and survives across clear/re-set cycles. Clearing the flag
 	// here would cause a second listener to be installed on re-set.
 }
@@ -140,11 +138,7 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 		// Clear credentials: disable fetch domain and remove stored credentials.
 		h.credentialStore.Delete(resolvedTabID)
 
-		if err := chromedp.Run(tCtx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				return fetch.Disable().Do(ctx)
-			}),
-		); err != nil {
+		if err := h.Bridge.DisableFetch(tCtx); err != nil {
 			httpx.Error(w, 500, fmt.Errorf("CDP fetch disable: %w", err))
 			return
 		}
@@ -164,11 +158,7 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 	})
 
 	// Enable Fetch domain with auth request interception.
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return fetch.Enable().WithHandleAuthRequests(true).Do(ctx)
-		}),
-	); err != nil {
+	if err := h.Bridge.EnableFetchWithAuth(tCtx); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP fetch enable: %w", err))
 		return
 	}
@@ -176,29 +166,20 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 	// Install event listener only once per tab. The listener reads credentials
 	// from the store dynamically, so updating creds doesn't need a new listener.
 	if h.credentialStore.MarkListenerIfAbsent(resolvedTabID) {
-		chromedp.ListenTarget(ctx, func(ev interface{}) {
-			switch e := ev.(type) {
-			case *fetch.EventAuthRequired:
+		h.Bridge.ListenAuthRequired(ctx, func(requestID string, isAuth bool) {
+			if isAuth {
 				go func() {
 					cred, ok := h.credentialStore.Get(resolvedTabID)
 					if !ok {
 						return
 					}
-					if err := chromedp.Run(ctx, chromedp.ActionFunc(func(innerCtx context.Context) error {
-						return fetch.ContinueWithAuth(e.RequestID, &fetch.AuthChallengeResponse{
-							Response: fetch.AuthChallengeResponseResponseProvideCredentials,
-							Username: cred.Username,
-							Password: cred.Password,
-						}).Do(innerCtx)
-					})); err != nil {
+					if err := h.Bridge.ContinueWithAuth(ctx, requestID, cred.Username, cred.Password); err != nil {
 						slog.Warn("credentials: ContinueWithAuth failed", "tab", resolvedTabID, "err", err)
 					}
 				}()
-			case *fetch.EventRequestPaused:
+			} else {
 				go func() {
-					if err := chromedp.Run(ctx, chromedp.ActionFunc(func(innerCtx context.Context) error {
-						return fetch.ContinueRequest(e.RequestID).Do(innerCtx)
-					})); err != nil {
+					if err := h.Bridge.ContinueRequest(ctx, requestID); err != nil {
 						slog.Warn("credentials: ContinueRequest failed", "tab", resolvedTabID, "err", err)
 					}
 				}()

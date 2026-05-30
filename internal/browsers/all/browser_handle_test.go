@@ -1,6 +1,7 @@
 package all_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -34,6 +35,7 @@ func (handleStub) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchE
 func (handleStub) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
 }
+func (handleStub) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance { return nil }
 
 // skipStub always returns DecisionSkip with a fixed reason.
 type skipStub struct{}
@@ -57,6 +59,7 @@ func (skipStub) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchErr
 func (skipStub) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionSkip, Reason: "not supported"}
 }
+func (skipStub) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance { return nil }
 
 // failStub always returns DecisionFail with a fixed reason.
 type failStub struct{}
@@ -80,6 +83,7 @@ func (failStub) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchErr
 func (failStub) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionFail, Reason: "fatal: missing dependency"}
 }
+func (failStub) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance { return nil }
 
 // Registration guards -- each stub is registered exactly once.
 var (

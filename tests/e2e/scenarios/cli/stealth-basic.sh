@@ -42,7 +42,7 @@ end_test
 start_test "bot-detect-cli: chrome.runtime exists"
 
 pt_ok eval "!!(window.chrome && window.chrome.runtime)"
-if [ "${PINCHTAB_E2E_PROVIDER:-chrome}" = "cloak" ]; then
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
   assert_output_contains "false" "chrome.runtime stripped by cloak native stealth"
 else
   assert_output_contains "true" "chrome.runtime"

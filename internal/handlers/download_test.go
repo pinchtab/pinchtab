@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/netguard"
@@ -30,14 +28,14 @@ func (m *downloadPolicyBridge) BrowserContext() context.Context {
 	return ctx
 }
 
-func (m *downloadPolicyBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *downloadPolicyBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately - no browser spawned
-	return ctx, tabID, nil
+	return bridge.NewTabHandle(ctx), tabID, nil
 }
 
-func (m *downloadPolicyBridge) ListTargets() ([]*target.Info, error) {
-	return []*target.Info{{TargetID: "tab1", Type: "page"}}, nil
+func (m *downloadPolicyBridge) ListTargets() ([]bridge.TabTarget, error) {
+	return []bridge.TabTarget{{TargetID: "tab1", Type: "page"}}, nil
 }
 
 func (m *downloadPolicyBridge) TabLockInfo(tabID string) *bridge.LockInfo {
@@ -46,6 +44,18 @@ func (m *downloadPolicyBridge) TabLockInfo(tabID string) *bridge.LockInfo {
 
 func (m *downloadPolicyBridge) GetTabPolicyState(tabID string) (bridge.TabPolicyState, bool) {
 	return m.policy, m.hasState
+}
+
+func (m *downloadPolicyBridge) CurrentURL(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *downloadPolicyBridge) GetCookies(ctx context.Context, urls []string) ([]bridge.CookieData, error) {
+	return nil, nil
+}
+
+func (m *downloadPolicyBridge) DownloadURL(ctx context.Context, dlURL string, opts bridge.DownloadOpts) (*bridge.DownloadResult, error) {
+	return &bridge.DownloadResult{Body: []byte("test"), MIMEType: "text/plain", StatusCode: 200}, nil
 }
 
 func stubDownloadHostResolution(t *testing.T, fn func(context.Context, string, string) ([]net.IP, error)) {
@@ -269,7 +279,7 @@ func TestValidateTabScopedDownloadURL(t *testing.T) {
 }
 
 func TestParseContentLengthHeader(t *testing.T) {
-	headers := network.Headers{
+	headers := map[string]interface{}{
 		"Content-Length": "12345",
 	}
 	size, ok := parseContentLengthHeader(headers)

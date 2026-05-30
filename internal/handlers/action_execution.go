@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/browserops"
-	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -44,9 +42,6 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 
 func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
 	req.Kind = bridge.CanonicalActionKind(req.Kind)
-	if h.shouldUseStaticAction(req) {
-		return h.executeStaticAction(ctx, req)
-	}
 
 	if err := h.ensureChrome(); err != nil {
 		return nil, "", fmt.Errorf("chrome initialization: %w", err)
@@ -60,72 +55,6 @@ func switchedTabFromActionResult(result map[string]any) string {
 		return strings.TrimSpace(switched)
 	}
 	return ""
-}
-
-func (h *Handlers) shouldUseStaticAction(req bridge.ActionRequest) bool {
-	kind := bridge.CanonicalActionKind(req.Kind)
-	if h.effectiveActionHumanize(req) && (kind == bridge.ActionClick || kind == bridge.ActionType || kind == bridge.ActionKeyboardType) {
-		return false
-	}
-	capability, ok := actionCapability(kind)
-	if !ok {
-		return h.StaticBrowser != nil
-	}
-	return h.useStaticBrowser(capability)
-}
-
-func (h *Handlers) effectiveActionHumanize(req bridge.ActionRequest) bool {
-	if req.Humanize != nil {
-		return *req.Humanize
-	}
-	if h != nil && h.Config != nil {
-		return h.Config.Humanize
-	}
-	return false
-}
-
-func (h *Handlers) executeStaticAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
-	if h.StaticBrowser == nil {
-		return nil, "", fmt.Errorf("static browser unavailable")
-	}
-	switch bridge.CanonicalActionKind(req.Kind) {
-	case bridge.ActionClick:
-		if req.Ref == "" {
-			return nil, "static", fmt.Errorf("static browser actions require ref from /snapshot")
-		}
-		if err := h.StaticBrowser.Click(ctx, req.TabID, req.Ref); err != nil {
-			return nil, "static", err
-		}
-		return map[string]any{"clicked": true}, "static", nil
-	case bridge.ActionType, bridge.ActionFill:
-		if req.Ref == "" {
-			return nil, "static", fmt.Errorf("static browser actions require ref from /snapshot")
-		}
-		text := req.Text
-		if req.Kind == bridge.ActionFill && text == "" {
-			text = req.Value
-		}
-		if text == "" {
-			return nil, "static", fmt.Errorf("text required for %s", req.Kind)
-		}
-		if err := h.StaticBrowser.Type(ctx, req.TabID, req.Ref, text); err != nil {
-			return nil, "static", err
-		}
-		return map[string]any{"typed": true, "len": len([]rune(text))}, "static", nil
-	default:
-		return nil, "static", fmt.Errorf("%w: %s", staticfetch.ErrStaticNotSupported, req.Kind)
-	}
-}
-
-func actionCapability(kind string) (browserops.Capability, bool) {
-	switch bridge.CanonicalActionKind(kind) {
-	case bridge.ActionClick:
-		return browserops.CapClick, true
-	case bridge.ActionType, bridge.ActionFill:
-		return browserops.CapType, true
-	default:
-		return "", false
-	}
 }
 
 const pointerRetryDelay = 50 * time.Millisecond

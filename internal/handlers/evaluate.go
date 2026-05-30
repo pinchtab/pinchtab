@@ -11,9 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -66,13 +65,8 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 	)
 
 	var result any
-	opts := []chromedp.EvaluateOption{}
-	if req.AwaitPromise {
-		opts = append(opts, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
-			return p.WithAwaitPromise(true)
-		})
-	}
-	if err := h.evalRuntime(tCtx, req.Expression, &result, opts...); err != nil {
+	opts := bridge.EvalOpts{AwaitPromise: req.AwaitPromise}
+	if err := h.evalRuntime(tCtx, req.Expression, &result, opts); err != nil {
 		errMsg := err.Error()
 		// Add helpful hints for common JavaScript errors
 		if strings.Contains(errMsg, "Cannot read properties of null") ||

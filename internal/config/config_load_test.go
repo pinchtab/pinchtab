@@ -354,24 +354,6 @@ func TestRuntimeConfigActivityStateDirFallsBackToStateDir(t *testing.T) {
 	}
 }
 
-func TestLoadConfigEngineFromFile(t *testing.T) {
-	clearConfigEnvVars(t)
-
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.json")
-	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
-	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
-
-	if err := os.WriteFile(configPath, []byte(`{"server":{"engine":"lite"}}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := Load()
-	if cfg.Engine != "lite" {
-		t.Fatalf("engine = %q, want lite", cfg.Engine)
-	}
-}
-
 func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T) {
 	cfg := &RuntimeConfig{
 		AllowEvaluate:   true,

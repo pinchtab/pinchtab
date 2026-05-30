@@ -50,8 +50,7 @@ type Instance struct {
 	CdpURL         string          `json:"cdpUrl,omitempty"` // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
 
-	BrowserProvider string `json:"-"`
-	Browser         string `json:"browser,omitempty"`
+	Browser string `json:"browser,omitempty"`
 
 	// FallbackFrom/FallbackReason are reserved for a future phase (always
 	// empty in P2.4a).

@@ -8,13 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -53,24 +50,18 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer tCancel()
 
-	var cookies []*network.Cookie
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if url == "" {
-				_ = chromedp.Location(&url).Do(ctx)
-			}
+	if url == "" {
+		url, _ = h.Bridge.CurrentURL(tCtx)
+	}
 
-			var err error
-			cookies, err = network.GetCookies().WithURLs([]string{url}).Do(ctx)
-			return err
-		}),
-	); err != nil {
+	cookies, err := h.Bridge.GetCookies(tCtx, []string{url})
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("get cookies: %w", err))
 		return
 	}
 
 	if name != "" {
-		filtered := make([]*network.Cookie, 0)
+		filtered := make([]bridge.CookieData, 0)
 		for _, c := range cookies {
 			if c.Name == name {
 				filtered = append(filtered, c)
@@ -90,7 +81,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 			"path":     c.Path,
 			"secure":   c.Secure,
 			"httpOnly": c.HTTPOnly,
-			"sameSite": c.SameSite.String(),
+			"sameSite": c.SameSite,
 		}
 		if c.Expires > 0 {
 			result[i]["expires"] = c.Expires
@@ -235,38 +226,17 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		params := network.SetCookie(cookie.Name, cookie.Value).
-			WithURL(req.URL).
-			WithHTTPOnly(cookie.HTTPOnly).
-			WithSecure(cookie.Secure)
-
-		if cookie.Domain != "" {
-			params = params.WithDomain(cookie.Domain)
-		}
-		if cookie.Path != "" {
-			params = params.WithPath(cookie.Path)
-		}
-		if cookie.Expires > 0 {
-			expires := cdp.TimeSinceEpoch(time.Unix(int64(cookie.Expires), 0))
-			params = params.WithExpires(&expires)
-		}
-
-		if cookie.SameSite != "" {
-			var sameSite network.CookieSameSite
-			switch strings.ToLower(cookie.SameSite) {
-			case "strict":
-				sameSite = network.CookieSameSiteStrict
-			case "lax":
-				sameSite = network.CookieSameSiteLax
-			case "none":
-				sameSite = network.CookieSameSiteNone
-			}
-			if sameSite != "" {
-				params = params.WithSameSite(sameSite)
-			}
-		}
-
-		if err := chromedp.Run(tCtx, params); err == nil {
+		if err := h.Bridge.SetCookie(tCtx, bridge.SetCookieParams{
+			Name:     cookie.Name,
+			Value:    cookie.Value,
+			URL:      req.URL,
+			Domain:   cookie.Domain,
+			Path:     cookie.Path,
+			Secure:   cookie.Secure,
+			HTTPOnly: cookie.HTTPOnly,
+			SameSite: cookie.SameSite,
+			Expires:  cookie.Expires,
+		}); err == nil {
 			successCount++
 		}
 	}

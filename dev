@@ -23,6 +23,9 @@ COMMANDS=(
   "run:🏃:Run the application"
   "check:🧪:All checks"
   "all:✅:check + test + e2e"
+  "full:✅:check + test + e2e-browsers + smoke-browsers"
+  "e2e-browsers:🐳:e2e extended across all 3 browsers"
+  "smoke-browsers:💨:e2e smoke across all 3 browsers (browser-sensitive only for cloak/ghost-chrome)"
   "test unit:🔬:Go unit tests"
   "test dashboard:🔬:Dashboard unit tests"
   "test plugin:🔬:Plugin unit tests"
@@ -151,6 +154,96 @@ run_e2e_runner() {
   done
 
   exec env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e "${runner_args[@]}"
+}
+
+# run_e2e_matrix TITLE  entry...
+#   Each entry is "label|suite|browser[|filter]".
+#   Uses indexed arrays (bash 3.2 compatible — no associative arrays).
+run_e2e_matrix() {
+  local title="$1"; shift
+  local -a mx_labels=() mx_statuses=() mx_tests=() mx_passed=() mx_failed=() mx_times=()
+  local mx_all_passed=true
+  local mx_idx=0
+
+  for entry in "$@"; do
+    local mx_label="" mx_suite="" mx_browser="" mx_filter=""
+    IFS='|' read -r mx_label mx_suite mx_browser mx_filter <<< "$entry"
+    mx_labels+=("$mx_label")
+
+    echo ""
+    echo "  ${ACCENT}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  ${ACCENT}${BOLD}🌐 ${mx_label}${NC}"
+    echo "  ${ACCENT}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Clear stale per-suite summaries so aggregation only counts this run.
+    rm -f tests/e2e/results/summary-*.txt 2>/dev/null
+
+    local mx_start=$SECONDS
+    local -a mx_args=(--suite "$mx_suite" --browser="$mx_browser")
+    if [ -n "$mx_filter" ]; then
+      mx_args+=(--filter "$mx_filter")
+    fi
+    if env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e "${mx_args[@]}"; then
+      mx_statuses+=("pass")
+    else
+      mx_statuses+=("fail")
+      mx_all_passed=false
+    fi
+    mx_times+=($(( SECONDS - mx_start )))
+
+    # Aggregate passed/failed from per-suite summary files (format: passed=N\nfailed=N).
+    local mx_p=0 mx_f=0 mx_found=false
+    for sf in tests/e2e/results/summary-*.txt; do
+      [ -f "$sf" ] || continue
+      local s_passed="" s_failed=""
+      s_passed=$(awk -F= '/^passed=/{print $2}' "$sf" 2>/dev/null)
+      s_failed=$(awk -F= '/^failed=/{print $2}' "$sf" 2>/dev/null)
+      if [ -n "$s_passed" ] || [ -n "$s_failed" ]; then
+        mx_p=$(( mx_p + ${s_passed:-0} ))
+        mx_f=$(( mx_f + ${s_failed:-0} ))
+        mx_found=true
+      fi
+    done
+    if $mx_found; then
+      mx_passed+=("$mx_p")
+      mx_failed+=("$mx_f")
+      mx_tests+=($(( mx_p + mx_f )))
+    else
+      mx_passed+=("?")
+      mx_failed+=("?")
+      mx_tests+=("?")
+    fi
+    mx_idx=$(( mx_idx + 1 ))
+  done
+
+  echo ""
+  echo "  ${ACCENT}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo "  ${ACCENT}${BOLD}📊 ${title}${NC}"
+  echo "  ${ACCENT}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  printf "  ${BOLD}%-30s %-8s %8s %8s %8s %8s${NC}\n" "Set / Browser" "Status" "Tests" "Passed" "Failed" "Time"
+  printf "  ${MUTED}%-30s %-8s %8s %8s %8s %8s${NC}\n" "─────────────────────────────" "────────" "────────" "────────" "────────" "────────"
+  local i=0
+  while [ $i -lt $mx_idx ]; do
+    local mx_icon mx_color
+    if [ "${mx_statuses[$i]}" = "pass" ]; then
+      mx_icon="✓" mx_color="$SUCCESS"
+    else
+      mx_icon="✗" mx_color="$ERROR"
+    fi
+    printf "  ${mx_color}%-30s %-8s${NC} %8s %8s %8s %7ds\n" \
+      "${mx_labels[$i]}" "$mx_icon" "${mx_tests[$i]}" "${mx_passed[$i]}" "${mx_failed[$i]}" "${mx_times[$i]}"
+    i=$(( i + 1 ))
+  done
+  echo ""
+
+  if $mx_all_passed; then
+    echo "  ${SUCCESS}${BOLD}All sets passed!${NC}"
+  else
+    echo "  ${ERROR}${BOLD}Some sets failed.${NC}"
+    return 1
+  fi
 }
 
 run_command() {
@@ -327,6 +420,42 @@ run_command() {
       bash scripts/check-plugin.sh || exit 1
       bash scripts/test.sh all || exit 1
       exec env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e --suite extended
+      ;;
+    "e2e-browsers")
+      echo "  ${ACCENT}${BOLD}🐳 e2e-browsers: extended (chrome, cloak, ghost-chrome)${NC}"
+      echo ""
+      run_e2e_matrix "E2E-browsers summary" \
+        "extended / chrome|extended|chrome" \
+        "extended / cloak|extended|cloak" \
+        "extended / ghost-chrome|extended|ghost-chrome" \
+        || exit 1
+      ;;
+    "full")
+      echo "  ${ACCENT}${BOLD}✅ full: check + test + e2e-browsers + smoke-browsers${NC}"
+      echo ""
+      bash scripts/check.sh || exit 1
+      bash scripts/check-dashboard.sh || exit 1
+      bash scripts/check-plugin.sh || exit 1
+      bash scripts/test.sh all || exit 1
+      run_e2e_matrix "E2E-browsers summary" \
+        "extended / chrome|extended|chrome" \
+        "extended / cloak|extended|cloak" \
+        "extended / ghost-chrome|extended|ghost-chrome" \
+        || exit 1
+      run_e2e_matrix "Smoke-browsers summary" \
+        "smoke / chrome|smoke|chrome" \
+        "smoke / cloak (multi-browser)|smoke|cloak|multi-browser" \
+        "smoke / ghost-chrome (multi-browser)|smoke|ghost-chrome|multi-browser" \
+        || exit 1
+      ;;
+    "smoke-browsers")
+      echo "  ${ACCENT}${BOLD}💨 smoke-browsers: e2e smoke (chrome full, cloak+ghost-chrome browser-sensitive)${NC}"
+      echo ""
+      run_e2e_matrix "Smoke-browsers summary" \
+        "smoke / chrome|smoke|chrome" \
+        "smoke / cloak (multi-browser)|smoke|cloak|multi-browser" \
+        "smoke / ghost-chrome (multi-browser)|smoke|ghost-chrome|multi-browser" \
+        || exit 1
       ;;
     "run")          exec bash scripts/run.sh ;;
     "doctor")       exec bash scripts/doctor.sh ;;

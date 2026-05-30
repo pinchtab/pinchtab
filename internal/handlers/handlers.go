@@ -9,9 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/contentguard"
@@ -34,7 +32,6 @@ type Handlers struct {
 	Matcher         semantic.ElementMatcher
 	IntentCache     *recovery.IntentCache
 	Recovery        *recovery.RecoveryEngine
-	StaticBrowser   browserops.BrowserRuntime // optional; nil ⇒ chrome-only (ghost-chrome static fetch)
 	IDPIGuard       idpi.Guard
 	ContentGuard    *contentguard.Scanner
 	NavGuard        *navguard.Validator
@@ -52,7 +49,7 @@ type Handlers struct {
 	// Optional dependency injection (for unit testing)
 	evalJS           func(ctx context.Context, expression string, out *string) error
 	autoSolverRunner func(ctx context.Context, tabID string) error
-	evalRuntime      func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error
+	evalRuntime      func(ctx context.Context, expression string, out any, opts bridge.EvalOpts) error
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -84,6 +81,10 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		recorder:        &recorder{},
 	}
 
+	h.recorder.captureFrame = func(ctx context.Context, quality int) ([]byte, error) {
+		return h.Bridge.CaptureScreenshot(ctx, "jpeg", quality, nil)
+	}
+
 	// Wire up the recovery engine with callbacks that delegate back to
 	// the handler's bridge without introducing circular imports.
 	h.Recovery = recovery.NewRecoveryEngine(
@@ -111,13 +112,13 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		},
 	)
 
-	// Default evalJS backed by chromedp for production
+	// Default evalJS backed by BridgeAPI for production
 	h.evalJS = func(ctx context.Context, expression string, out *string) error {
-		return chromedp.Run(ctx, chromedp.Evaluate(expression, out))
+		return h.Bridge.Evaluate(ctx, expression, out, bridge.EvalOpts{})
 	}
 	h.autoSolverRunner = h.runAutoSolver
-	h.evalRuntime = func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
-		return chromedp.Run(ctx, chromedp.Evaluate(expression, out, opts...))
+	h.evalRuntime = func(ctx context.Context, expression string, out any, opts bridge.EvalOpts) error {
+		return h.Bridge.Evaluate(ctx, expression, out, opts)
 	}
 
 	// Clean up .tmp export files orphaned by a previous crash.
@@ -230,19 +231,6 @@ func (h *Handlers) writeBridgeUnavailable(w http.ResponseWriter, err error) bool
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	httpx.ErrorCode(w, http.StatusServiceUnavailable, "browser_draining", err.Error(), true, map[string]any{"retryAfterSeconds": seconds})
 	return true
-}
-
-// useStaticBrowser returns true when the static browser should handle this operation.
-func (h *Handlers) useStaticBrowser(op browserops.Capability) bool {
-	if h.StaticBrowser == nil {
-		return false
-	}
-	switch op {
-	case browserops.CapScreenshot, browserops.CapPDF, browserops.CapEvaluate, browserops.CapCookies, browserops.CapCapture:
-		return false
-	default:
-		return true
-	}
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -141,7 +140,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		}
 		var bodyText string
 		scanCtx, scanCancel := context.WithTimeout(ctxTab, scanTimeout)
-		_ = chromedp.Run(scanCtx, chromedp.Evaluate(`document.body ? document.body.innerText : ""`, &bodyText))
+		_ = h.Bridge.Evaluate(scanCtx, `document.body ? document.body.innerText : ""`, &bodyText, bridge.EvalOpts{})
 		scanCancel()
 		sb.WriteString(bodyText)
 		if corpus := sb.String(); corpus != "" {

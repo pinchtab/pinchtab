@@ -16,7 +16,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
-	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/staticfetch"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -169,8 +168,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		resolvedBrowser = config.BrowserChrome
 	}
 
-	// Validate that the resolved browser can be unambiguously mapped to a target.
-	browserTarget, err := config.ResolveBrowserToTarget(h.Config, resolvedBrowser)
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg, err := h.resolveEffectiveConfig(resolvedBrowser)
 	if err != nil {
 		var ambErr *config.AmbiguousBrowserError
 		if errors.As(err, &ambErr) {
@@ -184,9 +183,6 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the effective config with target-specific overrides merged in.
-	effectiveCfg := h.resolveEffectiveConfig(browserTarget)
-
 	req.Browser = resolvedBrowser
 
 	// Validate kind — single endpoint returns 400 for bad input (unlike batch which returns 200 with errors)
@@ -199,30 +195,24 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActionRequest(r, req)
-	if !h.shouldUseStaticAction(req) {
-		if available := h.Bridge.AvailableActions(); len(available) > 0 {
-			known := false
-			for _, k := range available {
-				if k == req.Kind {
-					known = true
-					break
-				}
+	if available := h.Bridge.AvailableActions(); len(available) > 0 {
+		known := false
+		for _, k := range available {
+			if k == req.Kind {
+				known = true
+				break
 			}
-			if !known {
-				httpx.Error(w, 400, fmt.Errorf("unknown action kind: %s", req.Kind))
-				return
-			}
+		}
+		if !known {
+			httpx.Error(w, 400, fmt.Errorf("unknown action kind: %s", req.Kind))
+			return
 		}
 	}
 
-	// Resolve tab — skip for static actions (static browser manages its own tabs)
-	useStaticAction := h.shouldUseStaticAction(req)
+	// Resolve tab
 	var resolvedTabID string
 	var ctx context.Context
-	if useStaticAction {
-		ctx = r.Context()
-		resolvedTabID = req.TabID
-	} else {
+	{
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
@@ -267,7 +257,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	// Unified selector resolution: normalize legacy ref/selector fields
 	// and resolve browser/semantic selectors to node IDs when possible.
-	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, useStaticAction, &req)
+	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, &req)
 	if err != nil {
 		httpx.Error(w, selectorResolution.httpStatus(), err)
 		return
@@ -277,7 +267,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// Cache intent before execution so recovery can reconstruct the query.
 	// Only cache when the ref IS in the snapshot — otherwise we'd overwrite
 	// the richer /find-cached entry (which has the Query) with a blank one.
-	if !useStaticAction && req.Ref != "" && h.Recovery != nil && !refMissing {
+	if req.Ref != "" && h.Recovery != nil && !refMissing {
 		h.cacheActionIntent(resolvedTabID, req)
 	}
 
@@ -352,10 +342,6 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(actionErr, bridge.ErrUnexpectedNavigation) {
 			httpx.ErrorCode(w, 409, "navigation_changed", actionErr.Error(), false, nil)
-			return
-		}
-		if errors.Is(actionErr, staticfetch.ErrStaticNotSupported) {
-			httpx.ErrorCode(w, http.StatusNotImplemented, "not_supported", actionErr.Error(), false, nil)
 			return
 		}
 		if browserops.IsIDPIBlocked(actionErr) {
@@ -547,8 +533,8 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		resolvedBrowser = config.BrowserChrome
 	}
 
-	// Validate that the resolved browser can be unambiguously mapped to a target.
-	batchBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, resolvedBrowser)
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg, err := h.resolveEffectiveConfig(resolvedBrowser)
 	if err != nil {
 		var ambErr *config.AmbiguousBrowserError
 		if errors.As(err, &ambErr) {
@@ -562,26 +548,10 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
-	// Resolve the effective config with target-specific overrides merged in.
-	effectiveCfg := h.resolveEffectiveConfig(batchBrowserTarget)
-
-	// Use lite tab resolution only when every action can stay on the lite path.
-	allStatic := h.StaticBrowser != nil
-	if allStatic {
-		for _, action := range req.Actions {
-			if !h.shouldUseStaticAction(action) {
-				allStatic = false
-				break
-			}
-		}
-	}
 	var ctx context.Context
 	var resolvedTabID string
 	owner := resolveOwner(r, req.Owner)
-	if allStatic {
-		ctx = r.Context()
-		resolvedTabID = req.TabID
-	} else {
+	{
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
@@ -598,7 +568,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	for i, action := range req.Actions {
 		if action.TabID == "" {
 			action.TabID = resolvedTabID
-		} else if !allStatic && action.TabID != resolvedTabID {
+		} else if action.TabID != resolvedTabID {
 			var err error
 			ctx, resolvedTabID, err = h.tabContext(r, action.TabID)
 			if err != nil {
@@ -619,23 +589,20 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				continue
 			}
 		}
-		if !allStatic {
-			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
-				return
+		if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+			return
+		}
+		if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
+			results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
+			if req.StopOnError {
+				break
 			}
-			if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
-				results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
-				if req.StopOnError {
-					break
-				}
-				continue
-			}
+			continue
 		}
 
 		tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
-		useStaticAction := h.shouldUseStaticAction(action)
 
-		selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, resolvedTabID, useStaticAction, &action)
+		selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, resolvedTabID, &action)
 		if resolveErr != nil {
 			tCancel()
 			results = append(results, actionResult{
@@ -663,7 +630,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		// Cache intent before execution so recovery can reconstruct the query.
 		// Only cache when the ref IS in the snapshot to avoid overwriting
 		// the richer /find-cached entry (which has the Query).
-		if !useStaticAction && action.Ref != "" && h.Recovery != nil && !refMissing {
+		if action.Ref != "" && h.Recovery != nil && !refMissing {
 			h.cacheActionIntent(resolvedTabID, action)
 		}
 
@@ -732,7 +699,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			}
 		}
 		tCancel()
-		if err == nil && !allStatic {
+		if err == nil {
 			if switched := switchedTabFromActionResult(actionRes); switched != "" {
 				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
 				if switchErr != nil {
@@ -777,7 +744,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	}
 
 	successful := countSuccessful(results)
-	if !allStatic && successful > 0 {
+	if successful > 0 {
 		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
 	}
 
@@ -860,8 +827,8 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		macroResolvedBrowser = config.BrowserChrome
 	}
 
-	// Validate that the resolved browser can be unambiguously mapped to a target.
-	macroBrowserTarget, err := config.ResolveBrowserToTarget(h.Config, macroResolvedBrowser)
+	// Resolve the effective config with target-specific overrides merged in.
+	macroEffectiveCfg, err := h.resolveEffectiveConfig(macroResolvedBrowser)
 	if err != nil {
 		var ambErr *config.AmbiguousBrowserError
 		if errors.As(err, &ambErr) {
@@ -875,29 +842,14 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the effective config with target-specific overrides merged in.
-	macroEffectiveCfg := h.resolveEffectiveConfig(macroBrowserTarget)
-
 	stepTimeout := macroEffectiveCfg.ActionTimeout
 	if req.StepTimeout > 0 && req.StepTimeout <= 60 {
 		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
 	}
 
-	allStaticMacro := h.StaticBrowser != nil
-	if allStaticMacro {
-		for _, step := range req.Steps {
-			if !h.shouldUseStaticAction(step) {
-				allStaticMacro = false
-				break
-			}
-		}
-	}
 	var ctx context.Context
 	var resolvedTabID string
-	if allStaticMacro {
-		ctx = r.Context()
-		resolvedTabID = req.TabID
-	} else {
+	{
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
@@ -915,21 +867,18 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		if step.TabID == "" {
 			step.TabID = resolvedTabID
 		}
-		if !allStaticMacro {
-			if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
-				return
-			}
-			if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
-				results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
-				if req.StopOnError {
-					break
-				}
-				continue
-			}
+		if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+			return
 		}
-		useStaticAction := h.shouldUseStaticAction(step)
+		if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
+			results = append(results, actionResult{Index: i, Success: false, Error: err.Error()})
+			if req.StopOnError {
+				break
+			}
+			continue
+		}
 		selectorCtx, selectorCancel := context.WithTimeout(ctx, stepTimeout)
-		selectorResolution, resolveErr := h.resolveActionRequestSelector(selectorCtx, resolvedTabID, useStaticAction, &step)
+		selectorResolution, resolveErr := h.resolveActionRequestSelector(selectorCtx, resolvedTabID, &step)
 		selectorCancel()
 		if resolveErr != nil {
 			results = append(results, actionResult{
@@ -946,7 +895,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		// Cache intent before execution so recovery can reconstruct the query.
 		// Only cache when the ref IS in the snapshot to avoid overwriting
 		// the richer /find-cached entry (which has the Query).
-		if !useStaticAction && step.Ref != "" && h.Recovery != nil && !stepRefMissing {
+		if step.Ref != "" && h.Recovery != nil && !stepRefMissing {
 			h.cacheActionIntent(resolvedTabID, step)
 		}
 
@@ -1016,7 +965,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cancel()
-		if err == nil && !allStaticMacro {
+		if err == nil {
 			if switched := switchedTabFromActionResult(res); switched != "" {
 				nextCtx, nextTabID, switchErr := h.tabContext(r, switched)
 				if switchErr != nil {
@@ -1051,7 +1000,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	}
 
 	successful := countSuccessful(results)
-	if !allStaticMacro && successful > 0 {
+	if successful > 0 {
 		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
 	}
 

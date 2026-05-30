@@ -127,9 +127,6 @@ func Load() *RuntimeConfig {
 			ScanTimeoutSec: 5,
 		},
 
-		// Engine default (set via config.json only)
-		Engine: "chrome",
-
 		// Observability defaults
 		Observability: ObservabilityConfig{
 			Activity: ActivityConfig{
@@ -303,9 +300,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Server.StateDir != "" {
 		cfg.StateDir = fc.Server.StateDir
 	}
-	if fc.Server.Engine != "" {
-		cfg.Engine = fc.Server.Engine
-	}
 	if fc.Server.NetworkBufferSize != nil && *fc.Server.NetworkBufferSize > 0 {
 		cfg.NetworkBufferSize = ClampNetworkBufferSize(*fc.Server.NetworkBufferSize)
 	}
@@ -452,7 +446,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 
 	// Migration shim must run before consuming legacy provider/binary/cloak fields below.
-	if synthesized, conflict := migrateLegacyBrowserConfig(&fc.Browser); conflict {
+	if synthesized, conflict := migrateLegacyBrowserConfig(&fc.Browser, fc.Browsers.Default); conflict {
 		slog.Warn("config has both browser.targets and legacy browser.provider/binary/cloak set; explicit targets win, legacy fields ignored for target resolution")
 	} else if synthesized {
 		slog.Debug("migrated legacy browser config into browser.targets.default")
@@ -464,26 +458,10 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 
 	// Resolve the effective browser provider: browsers.default is the
-	// authoritative source; the deprecated server.engine field is a fallback.
-	// browser.provider is no longer supported (rejected at validation time).
+	// authoritative source. browser.provider and server.engine are no longer
+	// supported (rejected at validation time).
 	if fc.Browsers.Default != "" {
 		cfg.DefaultBrowser = fc.Browsers.Default
-		if fc.Server.Engine != "" {
-			slog.Warn("both server.engine and browsers.default are set; browsers.default takes precedence, server.engine is ignored",
-				"engine", fc.Server.Engine, "browsers.default", fc.Browsers.Default)
-		}
-	} else if fc.Server.Engine != "" {
-		// Deprecated: migrate server.engine → DefaultBrowser.
-		switch fc.Server.Engine {
-		case "chrome":
-			cfg.DefaultBrowser = BrowserChrome
-		case "lite", "auto":
-			cfg.DefaultBrowser = BrowserGhostChrome
-		default:
-			cfg.DefaultBrowser = BrowserChrome
-		}
-		slog.Warn("server.engine is deprecated; migrate to browsers.default in config.json",
-			"engine", fc.Server.Engine, "browsers.default", cfg.DefaultBrowser)
 	} else {
 		cfg.DefaultBrowser = "chrome"
 	}

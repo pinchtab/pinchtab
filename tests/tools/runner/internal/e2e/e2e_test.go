@@ -53,7 +53,7 @@ func TestDryRunExtendedPlan(t *testing.T) {
 	out := stdout.String()
 	for _, want := range []string{
 		"suite:    extended",
-		"docker compose -f tests/e2e/docker-compose-multi.yml up -d pinchtab pinchtab-secure pinchtab-medium pinchtab-full pinchtab-retain pinchtab-lite pinchtab-bridge fixtures",
+		"docker compose -f tests/e2e/docker-compose-multi.yml up -d pinchtab pinchtab-secure pinchtab-medium pinchtab-full pinchtab-retain pinchtab-ghostchrome pinchtab-bridge fixtures",
 		"run --rm --no-deps",
 		"E2E_READY_TARGETS=E2E_SERVER E2E_SECURE_SERVER",
 		"E2E_SUMMARY_TITLE=PinchTab E2E API Extended Suite",
@@ -64,7 +64,7 @@ func TestDryRunExtendedPlan(t *testing.T) {
 		"runner-cli /bin/bash /e2e/run.sh scenario=actions-basic.sh",
 		"scenario=actions-extended.sh",
 		"E2E_SUMMARY_TITLE=PinchTab E2E Infra Extended Suite",
-		"E2E_READY_TARGETS=E2E_SERVER E2E_SECURE_SERVER E2E_MEDIUM_SERVER E2E_FULL_SERVER E2E_LITE_SERVER E2E_BRIDGE_URL|60|E2E_BRIDGE_TOKEN",
+		"E2E_READY_TARGETS=E2E_SERVER E2E_SECURE_SERVER E2E_MEDIUM_SERVER E2E_FULL_SERVER E2E_SERVER_GHOSTCHROME E2E_BRIDGE_URL|60|E2E_BRIDGE_TOKEN",
 		"scenario=browser-config-basic.sh",
 		"scenario=network-basic.sh",
 		"scenario=orchestrator-extended.sh",
@@ -635,7 +635,7 @@ func TestDryRunCloakProviderDoesNotRequireImage(t *testing.T) {
 		"browser: cloak",
 		"docker compose -f tests/e2e/docker-compose.yml -f " + quotedOverride + " build fixtures runner-api runner-cli",
 		"docker compose -f tests/e2e/docker-compose.yml -f " + quotedOverride + " up -d --no-build --force-recreate pinchtab fixtures",
-		"PINCHTAB_E2E_PROVIDER=cloak",
+		"PINCHTAB_E2E_BROWSER=cloak",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dry-run output missing %q:\n%s", want, out)
@@ -711,7 +711,7 @@ func TestDryRunSmokePlan(t *testing.T) {
 		"runner-cli /bin/bash /e2e/run.sh scenario=system-smoke.sh scenario=tabs-smoke.sh",
 		"docker compose -f tests/e2e/docker-compose-multi.yml restart pinchtab",
 		"E2E_SUMMARY_TITLE=PinchTab E2E Infra Smoke Suite",
-		"runner-api /bin/bash /e2e/run.sh scenario=autosolver-smoke.sh scenario=dashboard-smoke.sh scenario=orchestrator-smoke.sh scenario=security-smoke.sh",
+		"runner-api /bin/bash /e2e/run.sh scenario=autosolver-smoke.sh scenario=browser-routing-smoke.sh scenario=dashboard-smoke.sh scenario=orchestrator-smoke.sh scenario=security-smoke.sh",
 		"== E2E Docker Smoke tests (host) ==",
 		"docker build --load -t pinchtab-release-smoke:dry-run .",
 		"docker build --load --platform linux/amd64 -f tests/tools/docker/chrome-cft-smoke.Dockerfile -t pinchtab-chrome-cft-smoke:dry-run .",
@@ -821,7 +821,7 @@ func TestDryRunChromeProviderShowsChromeInPlan(t *testing.T) {
 	out := stdout.String()
 	for _, want := range []string{
 		"browser:  chrome",
-		"PINCHTAB_E2E_PROVIDER=chrome",
+		"PINCHTAB_E2E_BROWSER=chrome",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dry-run output missing %q:\n%s", want, out)
@@ -843,9 +843,9 @@ func TestDryRunProviderMatrixShowsBothProviders(t *testing.T) {
 		"browser matrix [1/3]: chrome",
 		"browser matrix [2/3]: cloak",
 		"browser matrix [3/3]: ghost-chrome",
-		"PINCHTAB_E2E_PROVIDER=chrome",
-		"PINCHTAB_E2E_PROVIDER=cloak",
-		"PINCHTAB_E2E_PROVIDER=ghost-chrome",
+		"PINCHTAB_E2E_BROWSER=chrome",
+		"PINCHTAB_E2E_BROWSER=cloak",
+		"PINCHTAB_E2E_BROWSER=ghost-chrome",
 		"Browser matrix completed: all 3 browsers passed",
 	} {
 		if !strings.Contains(out, want) {

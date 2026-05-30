@@ -10,8 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/state"
 )
@@ -245,38 +244,17 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 
 	cookiesRestored := 0
-	if len(sf.Cookies) > 0 {
-		if err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-			for _, c := range sf.Cookies {
-				params := network.SetCookie(c.Name, c.Value).
-					WithDomain(c.Domain).
-					WithPath(c.Path).
-					WithSecure(c.Secure).
-					WithHTTPOnly(c.HTTPOnly)
-
-				if c.SameSite != "" {
-					var sameSite network.CookieSameSite
-					switch c.SameSite {
-					case "Strict":
-						sameSite = network.CookieSameSiteStrict
-					case "Lax":
-						sameSite = network.CookieSameSiteLax
-					case "None":
-						sameSite = network.CookieSameSiteNone
-					}
-					if sameSite != "" {
-						params = params.WithSameSite(sameSite)
-					}
-				}
-
-				if err := chromedp.Run(tCtx, params); err == nil {
-					cookiesRestored++
-				}
-			}
-			return nil
-		})); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("restore cookies: %w", err))
-			return
+	for _, c := range sf.Cookies {
+		if err := h.Bridge.SetRawCookie(tCtx, bridge.RawSetCookieParams{
+			Name:     c.Name,
+			Value:    c.Value,
+			Domain:   c.Domain,
+			Path:     c.Path,
+			Secure:   c.Secure,
+			HTTPOnly: c.HTTPOnly,
+			SameSite: c.SameSite,
+		}); err == nil {
+			cookiesRestored++
 		}
 	}
 
@@ -286,7 +264,7 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 			keyJSON, _ := json.Marshal(k)
 			valueJSON, _ := json.Marshal(v)
 			script := fmt.Sprintf(`localStorage.setItem(%s, %s)`, string(keyJSON), string(valueJSON))
-			if err := chromedp.Run(tCtx, chromedp.Evaluate(script, nil)); err == nil {
+			if err := h.Bridge.Evaluate(tCtx, script, nil, bridge.EvalOpts{}); err == nil {
 				storageRestored++
 			}
 		}
@@ -294,7 +272,7 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 			keyJSON, _ := json.Marshal(k)
 			valueJSON, _ := json.Marshal(v)
 			script := fmt.Sprintf(`sessionStorage.setItem(%s, %s)`, string(keyJSON), string(valueJSON))
-			if err := chromedp.Run(tCtx, chromedp.Evaluate(script, nil)); err == nil {
+			if err := h.Bridge.Evaluate(tCtx, script, nil, bridge.EvalOpts{}); err == nil {
 				storageRestored++
 			}
 		}
@@ -321,12 +299,8 @@ func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string
 	tCtx, tCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer tCancel()
 
-	var cookies []*network.Cookie
-	if err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var err error
-		cookies, err = network.GetCookies().Do(ctx)
-		return err
-	})); err != nil {
+	cookies, err := h.Bridge.GetRawCookies(tCtx)
+	if err != nil {
 		return nil, fmt.Errorf("get cookies: %w", err)
 	}
 
@@ -366,7 +340,7 @@ func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string
 	`
 
 	var storageJSON string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(storageScript, &storageJSON)); err != nil {
+	if err := h.Bridge.Evaluate(tCtx, storageScript, &storageJSON, bridge.EvalOpts{}); err != nil {
 		return nil, fmt.Errorf("evaluate storage: %w", err)
 	}
 
@@ -392,7 +366,7 @@ func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string
 			Path:     c.Path,
 			Secure:   c.Secure,
 			HTTPOnly: c.HTTPOnly,
-			SameSite: c.SameSite.String(),
+			SameSite: c.SameSite,
 			Expires:  c.Expires,
 		}
 	}
@@ -527,7 +501,7 @@ func (h *Handlers) HandleTabState(w http.ResponseWriter, r *http.Request) {
 
 	if targets, err := h.Bridge.ListTargets(); err == nil {
 		for _, t := range targets {
-			if string(t.TargetID) == resolvedTabID {
+			if t.TargetID == resolvedTabID {
 				resp.URL = t.URL
 				resp.Title = t.Title
 				break

@@ -41,18 +41,13 @@ func (o *Orchestrator) RouteForRequest(r *http.Request) (string, int, error) {
 
 	requestedBrowser := ExtractRequestedBrowser(r)
 	if requestedBrowser != "" {
-		// Resolve the public "browser" (provider name) to an internal target.
-		resolvedTarget, err := config.ResolveBrowserToTarget(o.runtimeCfg, requestedBrowser)
-		if err != nil {
-			return "", http.StatusBadRequest, err
+		if _, err := config.ParseBrowser(requestedBrowser, nil); err != nil {
+			return "", http.StatusBadRequest, fmt.Errorf("unknown browser %q", requestedBrowser)
 		}
-		if resolvedTarget != "" {
-			if target := o.FirstRunningURLForTarget(resolvedTarget); target != "" {
-				return target, 0, nil
-			}
-			return o.launchAndWaitForRequestRoute(autoLaunchProfileName(resolvedTarget), requestedBrowser)
+		if url := o.FirstRunningURLForBrowser(requestedBrowser); url != "" {
+			return url, 0, nil
 		}
-		// No targets configured (legacy path) — fall through to default routing.
+		return o.launchAndWaitForRequestRoute(autoLaunchProfileName(requestedBrowser), requestedBrowser)
 	}
 
 	target, status, err := o.FirstRunningURLForRequest(r)
@@ -165,16 +160,12 @@ func (o *Orchestrator) WrapShorthand(fallback http.HandlerFunc) http.HandlerFunc
 // routeByTabOwner handles precedence rule 1. Returns true if a response was
 // already written (either a successful proxy or an error).
 func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, tabID string) bool {
-	requestedTarget, status, err := o.requestedBrowserTargetForRoute(r)
-	if err != nil {
-		httpx.Error(w, status, err)
-		return true
-	}
+	requestedBrowser := ExtractRequestedBrowser(r)
 
 	// Fast path via locator cache.
 	if o.instanceMgr != nil {
 		if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil && inst != nil {
-			if writeBrowserTargetConflict(w, tabID, inst, requestedTarget) {
+			if writeBrowserConflict(w, tabID, inst, requestedBrowser) {
 				return true
 			}
 			if !o.allowCrossInstance(w, r, inst.ID) {
@@ -189,7 +180,7 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 		if o.instanceMgr != nil {
 			o.instanceMgr.Locator.Register(tabID, internal.ID)
 		}
-		if writeBrowserTargetConflict(w, tabID, &internal.Instance, requestedTarget) {
+		if writeBrowserConflict(w, tabID, &internal.Instance, requestedBrowser) {
 			return true
 		}
 		if !o.allowCrossInstance(w, r, internal.ID) {
@@ -203,7 +194,7 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 	// — preserves legacy ergonomics for users running `--tab` against a
 	// just-created tab whose id has not propagated to the dashboard yet.
 	if only := o.singleRunningInstance(); only != nil {
-		if writeBrowserTargetConflict(w, tabID, &only.Instance, requestedTarget) {
+		if writeBrowserConflict(w, tabID, &only.Instance, requestedBrowser) {
 			return true
 		}
 		o.proxyToInstanceForRoute(w, r, &only.Instance, tabID, RoutingDecisionFallback)
@@ -215,34 +206,24 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 	return true
 }
 
-func (o *Orchestrator) requestedBrowserTargetForRoute(r *http.Request) (string, int, error) {
-	requested := ExtractRequestedBrowser(r)
-	if requested == "" {
-		return "", 0, nil
+func writeBrowserConflict(w http.ResponseWriter, tabID string, inst *bridge.Instance, requestedBrowser string) bool {
+	if requestedBrowser == "" || inst == nil || inst.Browser == "" {
+		return false
 	}
-	// The public param is "browser" (provider name); resolve to target name.
-	targetName, err := config.ResolveBrowserToTarget(o.runtimeCfg, requested)
-	if err != nil {
-		return "", http.StatusBadRequest, err
-	}
-	return targetName, 0, nil
-}
-
-func writeBrowserTargetConflict(w http.ResponseWriter, tabID string, inst *bridge.Instance, requestedTarget string) bool {
-	if requestedTarget == "" || inst == nil || inst.Target == "" || inst.Target == requestedTarget {
+	if config.NormalizeBrowser(inst.Browser) == config.NormalizeBrowser(requestedBrowser) {
 		return false
 	}
 	detail := fmt.Sprintf("instance %q has browser %q; cannot route with browser %q",
-		inst.ID, inst.BrowserProvider, requestedTarget)
+		inst.ID, inst.Browser, requestedBrowser)
 	if tabID != "" {
 		detail = fmt.Sprintf("tab %q is owned by instance with browser %q; cannot route with browser %q",
-			tabID, inst.BrowserProvider, requestedTarget)
+			tabID, inst.Browser, requestedBrowser)
 	}
 	meta := map[string]any{
 		"instanceId":       inst.ID,
-		"instanceBrowser":  inst.BrowserProvider,
-		"requestedBrowser": requestedTarget,
-		"instanceProvider": inst.BrowserProvider,
+		"instanceBrowser":  inst.Browser,
+		"requestedBrowser": requestedBrowser,
+		"instanceProvider": inst.Browser,
 	}
 	if tabID != "" {
 		meta["tabId"] = tabID
@@ -303,13 +284,9 @@ func (o *Orchestrator) routeToInstanceID(w http.ResponseWriter, r *http.Request,
 		}
 		return false
 	}
-	requestedTarget, status, err := o.requestedBrowserTargetForRoute(r)
-	if err != nil {
-		httpx.Error(w, status, err)
-		return true
-	}
-	if requestedTarget != "" {
-		if internal.Target == "" || internal.Target != requestedTarget {
+	requestedBrowser := ExtractRequestedBrowser(r)
+	if requestedBrowser != "" {
+		if internal.Browser == "" || config.NormalizeBrowser(internal.Browser) != config.NormalizeBrowser(requestedBrowser) {
 			return false
 		}
 	}

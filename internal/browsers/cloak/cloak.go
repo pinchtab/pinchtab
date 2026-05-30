@@ -151,4 +151,8 @@ func (Browser) GeoAlignment(geo browsers.GeoConfig) browsers.GeoStrategy {
 	}
 }
 
+func (Browser) NewRuntimeInstance(browserCtx context.Context, _ bool) browsers.RuntimeInstance {
+	return NewInstance(browserCtx)
+}
+
 func init() { browsers.Register(&Browser{}) }

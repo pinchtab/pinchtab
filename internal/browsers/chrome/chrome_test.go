@@ -46,6 +46,7 @@ func TestCapabilities(t *testing.T) {
 		browsers.CapExtensions,
 		browsers.CapDownloads,
 		browsers.CapNetworkInterception,
+		browsers.CapEventScreencast,
 	}
 
 	for _, c := range want {

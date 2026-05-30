@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -37,7 +37,7 @@ func TestHandleCount_NoTab(t *testing.T) {
 
 func TestHandleCount_ValidCount(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
-	h.evalRuntime = func(ctx context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
+	h.evalRuntime = func(ctx context.Context, expression string, out any, opts bridge.EvalOpts) error {
 		// Verify the expression is safely constructed
 		if !strings.Contains(expression, "document.querySelectorAll") {
 			t.Fatalf("expected querySelectorAll expression, got %s", expression)

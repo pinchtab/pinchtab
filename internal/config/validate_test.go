@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -1055,6 +1056,9 @@ func (testStubBrowser) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.La
 }
 func (testStubBrowser) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
 	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
+}
+func (testStubBrowser) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance {
+	return nil
 }
 
 var registerStubOnce sync.Once

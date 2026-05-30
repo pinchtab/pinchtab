@@ -111,16 +111,10 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 500, fmt.Errorf("selector screenshot: %w", err))
 			return
 		}
-	} else if beyondViewport {
-		docW, docH, err := documentSize(tCtx)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("document size: %w", err))
-			return
-		}
-		clip = &page.Viewport{X: 0, Y: 0, Width: docW, Height: docH, Scale: 1}
 	}
+	// beyondViewport (when no selector clip) is handled inside
+	// bridge.CaptureScreenshot via opts.BeyondViewport below.
 
-	var buf []byte
 	quality := 80
 	if q := r.URL.Query().Get("quality"); q != "" {
 		if qn, err := strconv.Atoi(q); err == nil {
@@ -128,12 +122,12 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	format := page.CaptureScreenshotFormatJpeg
+	format := "jpeg"
 	contentType := "image/jpeg"
 	ext := ".jpg"
 
 	if r.URL.Query().Get("format") == "png" {
-		format = page.CaptureScreenshotFormatPng
+		format = "png"
 		contentType = "image/png"
 		ext = ".png"
 	}
@@ -144,8 +138,16 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			scale = bridge.ClampScale(sf)
 		}
 	}
-	buf, err = bridge.CaptureScreenshot(tCtx, bridge.ScreenshotOpts{
-		Format:         format,
+	cdpFormat := page.CaptureScreenshotFormatJpeg
+	if format == "png" {
+		cdpFormat = page.CaptureScreenshotFormatPng
+	}
+	// Route through the shared bridge.CaptureScreenshot engine: it carries the
+	// scale/beyondViewport clip synthesis and the provider-runtime fixes
+	// (BringToFront + WithFromSurface(false)) so capture works on chrome and
+	// cloak alike; tCtx already targets the active provider's CDP session.
+	buf, err := bridge.CaptureScreenshot(tCtx, bridge.ScreenshotOpts{
+		Format:         cdpFormat,
 		Quality:        quality,
 		Clip:           clip,
 		BeyondViewport: beyondViewport,
@@ -175,7 +177,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{
 			"path":      filePath,
 			"size":      len(buf),
-			"format":    string(format),
+			"format":    format,
 			"timestamp": timestamp,
 		})
 		return
@@ -190,7 +192,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, 200, map[string]any{
-		"format": string(format),
+		"format": format,
 		"base64": base64.StdEncoding.EncodeToString(buf),
 	})
 }

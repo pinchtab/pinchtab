@@ -140,8 +140,7 @@ func (p LaunchPlanner) LaunchWithFallback(
 		}
 
 		attemptOpts := opts
-		attemptOpts.ResolvedTarget = resolved.Name
-		attemptOpts.BrowserProvider = resolved.Provider
+		attemptOpts.Browser = resolved.Provider
 
 		inst, launchErr := p.Launcher.Launch(name, port, headless, attemptOpts)
 		if launchErr != nil {

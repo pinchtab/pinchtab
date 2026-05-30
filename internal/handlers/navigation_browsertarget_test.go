@@ -47,7 +47,7 @@ func newOrchWithTab(tabID string, inst *bridge.Instance) *fakeOrchestrator {
 // field in the JSON body is silently ignored now that the field has been removed
 // from the public NavigateRequest.
 func TestHandleNavigate_BrowserTargetIgnored(t *testing.T) {
-	orch := newOrchWithTab("tab1", &bridge.Instance{ID: "inst1", Browser: config.BrowserChrome, BrowserProvider: config.BrowserChrome})
+	orch := newOrchWithTab("tab1", &bridge.Instance{ID: "inst1", Browser: config.BrowserChrome})
 	h := New(&mockBridge{}, &config.RuntimeConfig{
 		DefaultTarget: "chrome-default",
 		Targets: config.BrowserTargetsConfig{

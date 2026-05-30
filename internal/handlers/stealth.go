@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
@@ -50,49 +48,52 @@ func (h *Handlers) HandleFingerprintRotate(w http.ResponseWriter, r *http.Reques
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			err := emulation.SetUserAgentOverride(fp.UserAgent).
-				WithPlatform(fp.Platform).
-				WithAcceptLanguage(fp.Language).
-				Do(ctx)
-			if err != nil {
-				return fmt.Errorf("setUserAgentOverride: %w", err)
-			}
-			if fp.Language != "" {
-				if err := emulation.SetLocaleOverride().WithLocale(fp.Language).Do(ctx); err != nil {
-					return fmt.Errorf("setLocaleOverride: %w", err)
-				}
-			}
-			if timezoneID := timezoneIDFromOffset(fp.TimezoneOffset); timezoneID != "" {
-				if err := emulation.SetTimezoneOverride(timezoneID).Do(ctx); err != nil {
-					return fmt.Errorf("setTimezoneOverride: %w", err)
-				}
-			}
-			if fp.ScreenWidth > 0 && fp.ScreenHeight > 0 {
-				if err := emulation.SetDeviceMetricsOverride(int64(fp.ScreenWidth), int64(fp.ScreenHeight), 1, false).
-					WithScreenWidth(int64(fp.ScreenWidth)).
-					WithScreenHeight(int64(fp.ScreenHeight)).
-					Do(ctx); err != nil {
-					return fmt.Errorf("setDeviceMetricsOverride: %w", err)
-				}
-			}
-			return nil
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if fp.Platform == "" {
-				return nil
-			}
-			overlayScript := fingerprintRotatePlatformOverlayScript(fp.Platform)
-			if _, err := page.AddScriptToEvaluateOnNewDocument(overlayScript).Do(ctx); err != nil {
-				return fmt.Errorf("add platform overlay: %w", err)
-			}
-			return nil
-		}),
-		chromedp.Evaluate(fingerprintRotatePlatformOverlayScript(fp.Platform), nil),
-	); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("CDP UA override: %w", err))
+	// Set user agent override
+	if err := h.Bridge.SetUserAgentOverride(tCtx, bridge.UserAgentOverrideParams{
+		UserAgent:      fp.UserAgent,
+		Platform:       fp.Platform,
+		AcceptLanguage: fp.Language,
+	}); err != nil {
+		httpx.Error(w, 500, fmt.Errorf("setUserAgentOverride: %w", err))
 		return
+	}
+	if fp.Language != "" {
+		if err := h.Bridge.SetLocaleOverride(tCtx, fp.Language); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("setLocaleOverride: %w", err))
+			return
+		}
+	}
+	if timezoneID := timezoneIDFromOffset(fp.TimezoneOffset); timezoneID != "" {
+		if err := h.Bridge.SetTimezoneOverride(tCtx, timezoneID); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("setTimezoneOverride: %w", err))
+			return
+		}
+	}
+	if fp.ScreenWidth > 0 && fp.ScreenHeight > 0 {
+		if err := h.Bridge.SetDeviceMetricsOverride(tCtx, bridge.DeviceMetricsOverrideParams{
+			Width:             int64(fp.ScreenWidth),
+			Height:            int64(fp.ScreenHeight),
+			DeviceScaleFactor: 1,
+			Mobile:            false,
+			ScreenWidth:       int64(fp.ScreenWidth),
+			ScreenHeight:      int64(fp.ScreenHeight),
+		}); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("setDeviceMetricsOverride: %w", err))
+			return
+		}
+	}
+	// Add platform overlay script for new documents
+	if fp.Platform != "" {
+		overlayScript := fingerprintRotatePlatformOverlayScript(fp.Platform)
+		if _, err := h.Bridge.AddScriptToEvaluateOnNewDocument(tCtx, overlayScript); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("add platform overlay: %w", err))
+			return
+		}
+		// Also evaluate the overlay script in the current page
+		if err := h.Bridge.Evaluate(tCtx, overlayScript, nil, bridge.EvalOpts{}); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("evaluate platform overlay: %w", err))
+			return
+		}
 	}
 
 	if tracker, ok := h.Bridge.(interface{ SetFingerprintRotateActive(string, bool) }); ok {

@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,9 +16,16 @@ import (
 const (
 	maxConcurrentStreamRequestsPerHost = 8
 	rateLimitWindow                    = 10 * time.Second
-	rateLimitMaxReq                    = 300
+	defaultRateLimitMaxReq             = 3000
 	evictionInterval                   = 30 * time.Second
 )
+
+var rateLimitMaxReq = func() int {
+	if v, err := strconv.Atoi(os.Getenv("PINCHTAB_RATE_LIMIT_MAX")); err == nil && v > 0 {
+		return v
+	}
+	return defaultRateLimitMaxReq
+}()
 
 var (
 	streamMu          sync.Mutex

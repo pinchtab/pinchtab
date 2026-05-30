@@ -6,21 +6,19 @@
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GROUP_DIR}/../../helpers/api.sh"
 
-EXPECTED_PROVIDER="${PINCHTAB_E2E_PROVIDER:-chrome}"
+EXPECTED_BROWSER="${PINCHTAB_E2E_BROWSER:-chrome}"
 
 # ─────────────────────────────────────────────────────────────────
 start_test "activity metadata: navigate with browser param records route"
 
-pt_post "/navigate?browser=chrome" -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-assert_ok "navigate with browser=chrome"
+pt_post "/navigate?browser=${EXPECTED_BROWSER}" -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate with browser=${EXPECTED_BROWSER}"
 
-# Small delay to let activity be recorded.
 sleep 1
 
 pt_get "/api/activity?limit=5"
 assert_ok "get recent activity"
 
-# Find the navigate event and check route metadata.
 ROUTE_EVENT=$(echo "$RESULT" | jq '[.events[] | select(.path == "/navigate" and .route != null)] | first // empty' 2>/dev/null)
 if [ -z "$ROUTE_EVENT" ] || [ "$ROUTE_EVENT" = "null" ] || [ "$ROUTE_EVENT" = "" ]; then
   soft_pass_assert "no navigate event with route in recent activity (may need more events)"
@@ -29,10 +27,10 @@ else
   USED_BROWSER=$(echo "$ROUTE_EVENT" | jq -r '.route.usedProvider // empty')
   ESCALATED=$(echo "$ROUTE_EVENT" | jq -r '.route.escalated // empty')
 
-  if [ "$REQ_BROWSER" = "chrome" ]; then
-    pass_assert "activity route.requestedProvider=chrome"
+  if [ "$REQ_BROWSER" = "${EXPECTED_BROWSER}" ]; then
+    pass_assert "activity route.requestedProvider=${EXPECTED_BROWSER}"
   else
-    soft_pass_assert "requestedProvider=$REQ_BROWSER (expected chrome)"
+    soft_pass_assert "requestedProvider=$REQ_BROWSER (expected ${EXPECTED_BROWSER})"
   fi
 
   if [ -n "$USED_BROWSER" ] && [ "$USED_BROWSER" != "null" ]; then
@@ -56,8 +54,8 @@ start_test "activity metadata: text request records browser in activity"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate to form"
 
-pt_get "/text?browser=${EXPECTED_PROVIDER}"
-assert_ok "text with browser=${EXPECTED_PROVIDER}"
+pt_get "/text?browser=${EXPECTED_BROWSER}"
+assert_ok "text with browser=${EXPECTED_BROWSER}"
 
 sleep 1
 
@@ -69,10 +67,10 @@ if [ -z "$TEXT_EVENT" ] || [ "$TEXT_EVENT" = "null" ] || [ "$TEXT_EVENT" = "" ];
   soft_pass_assert "no text event with route in activity (provider may not record route for text)"
 else
   REQ=$(echo "$TEXT_EVENT" | jq -r '.route.requestedProvider // empty')
-  if [ "$REQ" = "$EXPECTED_PROVIDER" ]; then
-    pass_assert "text activity route.requestedProvider=${EXPECTED_PROVIDER}"
+  if [ "$REQ" = "$EXPECTED_BROWSER" ]; then
+    pass_assert "text activity route.requestedProvider=${EXPECTED_BROWSER}"
   else
-    soft_pass_assert "text requestedProvider=$REQ (expected ${EXPECTED_PROVIDER})"
+    soft_pass_assert "text requestedProvider=$REQ (expected ${EXPECTED_BROWSER})"
   fi
 fi
 
@@ -100,7 +98,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "activity metadata: route attempts array present when routed"
 
-pt_post "/navigate?browser=chrome" -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
+pt_post "/navigate?browser=${EXPECTED_BROWSER}" -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate with explicit browser"
 
 sleep 1

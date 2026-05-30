@@ -67,13 +67,15 @@ func (b *Bridge) ensureAtLeastOnePageTarget(browserCtx context.Context) error {
 		return listErr
 	}))
 	if err != nil {
-		return err
+		return fmt.Errorf("list targets: %w", err)
 	}
 	for _, t := range targets {
 		if t.Type == "page" {
 			return nil
 		}
 	}
-	_, _, _, err = b.CreateTab("about:blank")
-	return err
+	if _, _, _, err = b.CreateTab("about:blank"); err != nil {
+		return fmt.Errorf("create fallback tab: %w", err)
+	}
+	return nil
 }

@@ -63,7 +63,7 @@ assert_ok "text with empty browser param succeeds"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "browser selection: chrome explicit matches default"
+start_test "browser selection: explicit provider matches default"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
@@ -72,15 +72,15 @@ pt_get /text
 assert_ok "text without browser param"
 TEXT_DEFAULT="$RESULT"
 
-pt_get "/text?browser=chrome"
-assert_ok "text with browser=chrome"
-TEXT_CHROME="$RESULT"
+EXPECTED_BROWSER="${PINCHTAB_E2E_BROWSER:-chrome}"
+pt_get "/text?browser=${EXPECTED_BROWSER}"
+assert_ok "text with browser=${EXPECTED_BROWSER}"
+TEXT_EXPLICIT="$RESULT"
 
-# Both should return text content from the same page.
 DEFAULT_TEXT=$(echo "$TEXT_DEFAULT" | jq -r '.text // empty' 2>/dev/null | head -c 200)
-CHROME_TEXT=$(echo "$TEXT_CHROME" | jq -r '.text // empty' 2>/dev/null | head -c 200)
-if [ -n "$DEFAULT_TEXT" ] && [ "$DEFAULT_TEXT" = "$CHROME_TEXT" ]; then
-  pass_assert "chrome explicit matches default text"
+EXPLICIT_TEXT=$(echo "$TEXT_EXPLICIT" | jq -r '.text // empty' 2>/dev/null | head -c 200)
+if [ -n "$DEFAULT_TEXT" ] && [ "$DEFAULT_TEXT" = "$EXPLICIT_TEXT" ]; then
+  pass_assert "explicit provider matches default text"
 else
   soft_pass_assert "text content may differ slightly between calls"
 fi

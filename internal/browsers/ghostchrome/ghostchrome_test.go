@@ -2,7 +2,6 @@ package ghostchrome
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/browsers"
@@ -100,143 +99,6 @@ func TestValidateTargetAcceptsEmpty(t *testing.T) {
 	}
 }
 
-func TestBrowser_Route_GhostAccepted(t *testing.T) {
-	b := &Browser{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://example.com", Title: "Example"},
-		textResult: &StaticTextResult{Text: strings.Repeat("word ", 250)},
-	}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   stub,
-		URL:    "https://example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeStaticRead},
-	})
-	if r.UsedBrowser != "ghost" {
-		t.Errorf("UsedBrowser = %q, want ghost", r.UsedBrowser)
-	}
-	if r.Escalated {
-		t.Error("Escalated = true, want false")
-	}
-	if r.Quality < 60 {
-		t.Errorf("Quality = %d, want >= 60", r.Quality)
-	}
-	if r.GhostResult == nil {
-		t.Fatal("GhostResult is nil, want non-nil")
-	}
-	if len(r.Attempts) != 1 {
-		t.Fatalf("len(Attempts) = %d, want 1", len(r.Attempts))
-	}
-	if !r.Attempts[0].Accepted {
-		t.Error("Attempts[0].Accepted = false, want true")
-	}
-	if r.Attempts[0].Browser != "ghost" {
-		t.Errorf("Attempts[0].Browser = %q, want ghost", r.Attempts[0].Browser)
-	}
-}
-
-func TestBrowser_Route_GhostEscalated_LowQuality(t *testing.T) {
-	b := &Browser{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://example.com", Title: "Empty"},
-		textResult: &StaticTextResult{Text: ""},
-	}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   stub,
-		URL:    "https://example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeStaticRead},
-	})
-	if r.UsedBrowser != "chrome" {
-		t.Errorf("UsedBrowser = %q, want chrome", r.UsedBrowser)
-	}
-	if !r.Escalated {
-		t.Error("Escalated = false, want true")
-	}
-	if len(r.Attempts) != 2 {
-		t.Fatalf("len(Attempts) = %d, want 2", len(r.Attempts))
-	}
-	if r.Attempts[0].Accepted {
-		t.Error("Attempts[0].Accepted = true, want false (ghost rejected)")
-	}
-	if !r.Attempts[1].Accepted {
-		t.Error("Attempts[1].Accepted = false, want true (chrome accepted)")
-	}
-}
-
-func TestBrowser_Route_GhostEscalated_SPA(t *testing.T) {
-	b := &Browser{}
-	stub := &stubFetcher{
-		navResult:  &StaticNavResult{URL: "https://spa.example.com", Title: "SPA"},
-		textResult: &StaticTextResult{Text: `Loading... <div id="__next"></div>`},
-	}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   stub,
-		URL:    "https://spa.example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeStaticRead},
-	})
-	if r.UsedBrowser != "chrome" {
-		t.Errorf("UsedBrowser = %q, want chrome", r.UsedBrowser)
-	}
-	if !r.Escalated {
-		t.Error("Escalated = false, want true")
-	}
-	if r.GhostResult == nil {
-		t.Fatal("GhostResult is nil, want non-nil")
-	}
-	if !r.GhostResult.NeedsBrowser {
-		t.Error("GhostResult.NeedsBrowser = false, want true")
-	}
-}
-
-func TestBrowser_Route_SkipsGhost_Interactive(t *testing.T) {
-	b := &Browser{}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   &stubFetcher{},
-		URL:    "https://example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeInteraction},
-	})
-	if r.UsedBrowser != "chrome" {
-		t.Errorf("UsedBrowser = %q, want chrome", r.UsedBrowser)
-	}
-	if r.Escalated {
-		t.Error("Escalated = true, want false (Ghost was never tried)")
-	}
-	if r.GhostResult != nil {
-		t.Error("GhostResult is non-nil, want nil (Ghost was skipped)")
-	}
-	if len(r.Attempts) < 1 {
-		t.Fatal("expected at least one attempt")
-	}
-	if r.Attempts[0].Browser != "ghost" {
-		t.Errorf("Attempts[0].Browser = %q, want ghost", r.Attempts[0].Browser)
-	}
-	if r.Attempts[0].Accepted {
-		t.Error("Attempts[0].Accepted = true, want false (ghost rejected)")
-	}
-}
-
-func TestBrowser_Route_SkipsGhost_StateChanging(t *testing.T) {
-	b := &Browser{}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   &stubFetcher{},
-		URL:    "https://example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeStaticRead, StateChanging: true},
-	})
-	if r.UsedBrowser != "chrome" {
-		t.Errorf("UsedBrowser = %q, want chrome", r.UsedBrowser)
-	}
-	if r.Escalated {
-		t.Error("Escalated = true, want false (Ghost was never tried)")
-	}
-	if r.GhostResult != nil {
-		t.Error("GhostResult is non-nil, want nil (Ghost was skipped)")
-	}
-}
-
 func TestGhostChromeHandleDecisionsCheck(t *testing.T) {
 	b := &Browser{}
 	checks := b.DoctorChecks(browsers.TargetConfig{})
@@ -263,27 +125,5 @@ func TestGhostChromeHandleDecisionsCheck(t *testing.T) {
 	wantDetail := "static shapes handled, interactive shapes skipped, state-changing safety enforced"
 	if result.Detail != wantDetail {
 		t.Errorf("handle_decisions detail = %q, want %q", result.Detail, wantDetail)
-	}
-}
-
-func TestBrowser_Route_NilLite(t *testing.T) {
-	b := &Browser{}
-	r := b.Route(RouteRequest{
-		Ctx:    context.Background(),
-		Lite:   nil,
-		URL:    "https://example.com",
-		Intent: browsers.RequestIntent{Shape: browsers.ShapeStaticRead},
-	})
-	if r.UsedBrowser != "chrome" {
-		t.Errorf("UsedBrowser = %q, want chrome", r.UsedBrowser)
-	}
-	if !r.Escalated {
-		t.Error("Escalated = false, want true")
-	}
-	if r.GhostResult == nil {
-		t.Fatal("GhostResult is nil, want non-nil")
-	}
-	if r.GhostResult.SkipReason == "" {
-		t.Error("GhostResult.SkipReason is empty, want non-empty")
 	}
 }

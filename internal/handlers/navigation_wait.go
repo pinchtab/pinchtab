@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 func (h *Handlers) waitForNavigationState(ctx context.Context, waitFor, waitSelector string) error {
@@ -16,22 +16,23 @@ func (h *Handlers) waitForNavigationState(ctx context.Context, waitFor, waitSele
 		return nil
 	case "dom":
 		var ready string
-		return chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &ready))
+		return h.Bridge.Evaluate(ctx, `document.readyState`, &ready, bridge.EvalOpts{})
 	case "selector":
 		if waitSelector == "" {
 			return fmt.Errorf("waitSelector required when waitFor=selector")
 		}
-		return chromedp.Run(ctx, chromedp.WaitVisible(waitSelector, chromedp.ByQuery))
+		return h.Bridge.WaitVisible(ctx, waitSelector)
 	case "networkidle":
 		// Approximation for "network idle": require fully loaded readyState and no URL changes.
 		var lastURL string
 		idleChecks := 0
 		for i := 0; i < 12; i++ {
-			var ready, curURL string
-			if err := chromedp.Run(ctx,
-				chromedp.Evaluate(`document.readyState`, &ready),
-				chromedp.Location(&curURL),
-			); err != nil {
+			var ready string
+			if err := h.Bridge.Evaluate(ctx, `document.readyState`, &ready, bridge.EvalOpts{}); err != nil {
+				return err
+			}
+			curURL, err := h.Bridge.CurrentURL(ctx)
+			if err != nil {
 				return err
 			}
 			if ready == "complete" && curURL == lastURL {
