@@ -107,6 +107,8 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 
 	// Clean up .tmp export files orphaned by a previous crash.
 	go CleanupStaleTmpExports(cfg.StateDir)
+	// Clean up decoded base64 upload staging dirs left by older runs.
+	go CleanupStaleUploads(cfg.StateDir)
 
 	return h
 }

@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -329,5 +331,139 @@ func TestHandleUpload_Disabled(t *testing.T) {
 	h.HandleUpload(w, req)
 	if w.Code != 403 {
 		t.Errorf("expected 403 when upload disabled, got %d", w.Code)
+	}
+}
+
+// Regression: decoded base64 uploads must persist past the handler so the browser
+// can read them LAZILY at form-submit time (a separate later request). They are
+// kept on success and removed only on a pre-attach failure; never written into
+// the process working directory.
+func TestHandleUpload_StagedFilesCleanedOnFailureNotCWD(t *testing.T) {
+	tmpDir := t.TempDir()
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowUpload: true, StateDir: tmpDir}, nil, nil, nil)
+	png := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+	body := fmt.Sprintf(`{"selector":"input[type=file]","files":[%q]}`, png)
+	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 (failTab) after decode, got %d", w.Code)
+	}
+	// The decode succeeded but the upload never attached to a tab → staged dir
+	// must be cleaned up.
+	entries, _ := os.ReadDir(filepath.Join(tmpDir, "uploads"))
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "pinchtab-upload-") {
+			t.Fatalf("staged upload dir leaked on failure: %s", e.Name())
+		}
+	}
+	// Must never create an "uploads" dir in the process working directory.
+	if _, err := os.Stat("uploads"); err == nil {
+		_ = os.RemoveAll("uploads")
+		t.Fatalf("upload handler created ./uploads in the working directory")
+	}
+}
+
+func TestHandleUpload_SuccessSchedulesStagedCleanup(t *testing.T) {
+	origSetUploadFileInputFiles := setUploadFileInputFiles
+	origCleanupStagedUploadDirAfter := cleanupStagedUploadDirAfter
+	t.Cleanup(func() {
+		setUploadFileInputFiles = origSetUploadFileInputFiles
+		cleanupStagedUploadDirAfter = origCleanupStagedUploadDirAfter
+	})
+
+	var attachedPaths []string
+	setUploadFileInputFiles = func(_ context.Context, selector string, paths []string) error {
+		if selector != "input[type=file]" {
+			t.Fatalf("selector = %q, want default file input", selector)
+		}
+		attachedPaths = append([]string(nil), paths...)
+		for _, path := range attachedPaths {
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("staged file was not readable before attach: %v", err)
+			}
+		}
+		return nil
+	}
+
+	var cleanupDir string
+	var cleanupAfter time.Duration
+	cleanupStagedUploadDirAfter = func(dir string, after time.Duration) {
+		cleanupDir = dir
+		cleanupAfter = after
+		_ = os.RemoveAll(dir)
+	}
+
+	tmpDir := t.TempDir()
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowUpload: true, StateDir: tmpDir}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(`{"files":["aGVsbG8="]}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(attachedPaths) != 1 {
+		t.Fatalf("attached paths = %d, want 1", len(attachedPaths))
+	}
+	if cleanupDir == "" {
+		t.Fatal("successful upload did not schedule staged cleanup")
+	}
+	if cleanupAfter != uploadStagedRetention {
+		t.Fatalf("cleanup delay = %s, want %s", cleanupAfter, uploadStagedRetention)
+	}
+	if !strings.HasPrefix(filepath.Base(cleanupDir), "pinchtab-upload-") {
+		t.Fatalf("cleanup dir %q does not use staged upload prefix", cleanupDir)
+	}
+	if filepath.Dir(cleanupDir) != filepath.Join(tmpDir, "uploads") {
+		t.Fatalf("cleanup dir %q not under state uploads dir", cleanupDir)
+	}
+	if _, err := os.Stat(cleanupDir); !os.IsNotExist(err) {
+		t.Fatalf("scheduled cleanup did not remove staged dir in test: %v", err)
+	}
+}
+
+func TestNewCleansStaleUploadStagingDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	uploadsDir := filepath.Join(tmpDir, "uploads")
+	staleDir := filepath.Join(uploadsDir, "pinchtab-upload-stale")
+	freshDir := filepath.Join(uploadsDir, "pinchtab-upload-fresh")
+	userDir := filepath.Join(uploadsDir, "user-managed")
+
+	for _, dir := range []string{staleDir, freshDir, userDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "upload-0.txt"), []byte("hello"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	old := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(staleDir, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = New(&mockBridge{}, &config.RuntimeConfig{StateDir: tmpDir}, nil, nil, nil)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		_, err := os.Stat(staleDir)
+		if os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stale upload staging dir was not cleaned: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if _, err := os.Stat(freshDir); err != nil {
+		t.Fatalf("fresh upload staging dir should be kept: %v", err)
+	}
+	if _, err := os.Stat(userDir); err != nil {
+		t.Fatalf("non-staged upload sandbox dir should be kept: %v", err)
 	}
 }
