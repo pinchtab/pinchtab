@@ -647,6 +647,7 @@ if [ $# -gt 0 ]; then
       ;;
     *) run_command "$1" ;;
   esac
+  exit 0
 fi
 
 # No args → interactive picker

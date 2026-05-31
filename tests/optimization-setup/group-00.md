@@ -4,7 +4,7 @@ A fresh user is told to "install PinchTab and run `pinchtab nav <url>`" — the 
 
 **Do not** run `./pinchtab config init` or `./pinchtab server` manually. The whole point of group 0 is to verify the auto-flow handles them. Likewise do not create a session — the CLI uses the token from the auto-created config.
 
-The setup section in `subagent-context.md` already exported `PINCHTAB_CONFIG=~/.pinchtab/coldstart-config-<timestamp>.json` to a non-existent path. Step 0.1 is the very first command you run against the binary.
+The setup section in `subagent-context.md` already exported `PINCHTAB_CONFIG=~/.pinchtab/setup-config-<timestamp>.json` to a non-existent path. Step 0.1 is the very first command you run against the binary.
 
 ### 0.1 Cold nav auto-creates config and starts server
 Run a single navigation against the fixture server with no preceding `pinchtab` calls:

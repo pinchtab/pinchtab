@@ -62,4 +62,6 @@ tests/tools/browserbench/results/
 tests/tools/scripts/runner
 skills/agent-browser
 tests/stealth-score/results/
-tests/stealth-score/.tmp/
+# Per-lane ephemeral state written by up.sh / setup scripts (provider configs,
+# generated compose overrides, etc.) — never commit.
+tests/**/.tmp/
