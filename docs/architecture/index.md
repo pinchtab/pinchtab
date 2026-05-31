@@ -24,8 +24,9 @@ The current managed implementation is bridge-backed. Any direct-CDP-only managed
 
 Related architecture specs:
 
-- [Browser Targets](./browser-targets.md): proposed multi-browser target model for
-  selecting Chrome, CloakBrowser, and future providers per request.
+- [Browser Abstraction](./browser-abstraction.md): the multi-browser target model
+  for selecting Chrome, CloakBrowser, and future providers per request (see the
+  Target Architecture section).
 
 ## System Overview
 

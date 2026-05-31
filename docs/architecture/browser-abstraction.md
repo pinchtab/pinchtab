@@ -2,7 +2,6 @@
 
 Status: partially implemented (BridgeAPI encapsulation complete; browser registry extraction in progress)
 Owner: bridge
-Related: [browser-targets.md](browser-targets.md)
 
 ## Problem
 

@@ -1,4 +1,4 @@
-# Lite Engine: Chrome-Free DOM Capture using Gost-DOM
+# Lite Engine
 
 > **Deprecated:** This document describes the legacy engine model (`chrome`/`lite`/`auto`).
 > The engine has been replaced by the **browser provider** model. Use `browsers.default`

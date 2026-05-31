@@ -1,4 +1,4 @@
-# AutoSolver Architecture
+# AutoSolver
 
 ## Overview
 
