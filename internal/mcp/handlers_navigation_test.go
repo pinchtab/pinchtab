@@ -511,3 +511,24 @@ func TestHandleGetTextMaxCharsZeroIgnored(t *testing.T) {
 		t.Errorf("maxChars should not be sent when not specified, got %s", text)
 	}
 }
+
+func TestHandleCaptureForwardsBrowser(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("JPEGBYTES"))
+	var captureQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureQuery = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"image": map[string]any{"format": "jpeg", "base64": encoded},
+		})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_capture", map[string]any{"browser": "cloak"}, srv)
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	if got := captureQuery.Get("browser"); got != "cloak" {
+		t.Fatalf("capture browser = %q, want cloak; query=%v", got, captureQuery)
+	}
+}

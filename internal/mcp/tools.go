@@ -61,6 +61,8 @@ func allTools() []mcp.Tool {
 			mcp.WithBoolean("beyondViewport", mcp.Description("Capture the full scrollable document instead of just the visible viewport. Coordinate space becomes 'document'; bounding boxes use page coords.")),
 			mcp.WithBoolean("requirePair", mcp.Description("Return 409 if the main frame navigates during the capture window (loaderId changes).")),
 			mcp.WithBoolean("noAnimations", mcp.Description("Inject prefers-reduced-motion CSS for the capture window")),
+			mcp.WithString("browser",
+				mcp.Description("Browser to use for this request (e.g. chrome, cloak). The static ghost-chrome runtime cannot paint, so it falls back to chrome.")),
 		),
 		mcp.NewTool("pinchtab_get_text",
 			mcp.WithDescription("Extract readable text content from the current page. Inherits the current frame scope for the tab unless no frame is selected."),

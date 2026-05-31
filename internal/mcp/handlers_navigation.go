@@ -282,6 +282,9 @@ func handleCapture(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 		if v, ok := optBool(r, "noAnimations"); ok && v {
 			q.Set("noAnimations", "true")
 		}
+		if browser := optString(r, "browser"); browser != "" {
+			q.Set("browser", browser)
+		}
 
 		body, code, err := c.Get(ctx, "/capture", q)
 		if err != nil {

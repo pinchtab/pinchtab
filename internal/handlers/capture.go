@@ -3,17 +3,24 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // HandleCapture returns a screenshot and an accessibility snapshot from the
@@ -42,11 +49,70 @@ import (
 func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tabID := q.Get("tabId")
+
+	// Browser resolution: request > session > instance > global default > chrome.
+	requestBrowser := strings.TrimSpace(q.Get("browser"))
+	var sessionBrowser string
+	if sess, ok := session.FromRequest(r); ok && sess != nil {
+		sessionBrowser = sess.Browser
+	}
+	var instanceBrowser string
+	if tabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
+
+	browser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
+	if browser != config.BrowserChrome {
+		if _, err := config.ParseBrowser(browser, h.Config.BrowsersAvailable); err != nil {
+			httpx.Error(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	// /capture pairs a screenshot with an accessibility snapshot from the same
+	// DOM epoch — a visual operation. The static (ghost-chrome) runtime cannot
+	// paint, so it skips ShapeVisual and we fall back to Chrome.
+	handleDecision, err := checkBrowserCanHandle(browser, browsers.RequestIntent{
+		Shape: browsers.ShapeVisual,
+	})
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if handleDecision.Decision == browsers.DecisionSkip {
+		browser = config.BrowserChrome
+	}
+
+	// Resolve the effective config with target-specific overrides merged in.
+	effectiveCfg, err := h.resolveEffectiveConfig(browser)
+	if err != nil {
+		var ambErr *config.AmbiguousBrowserError
+		if errors.As(err, &ambErr) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
+				"browser": ambErr.Browser,
+				"targets": ambErr.Targets,
+			})
+		} else {
+			httpx.Error(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
 	h.recordReadRequest(r, "capture", tabID)
 
-	// /capture is Chrome-only: it pairs a screenshot with an accessibility
-	// snapshot from the same DOM epoch, which the static (ghost-chrome) runtime
-	// cannot produce. Go straight to chrome.
+	captureRoute := browserops.SingleBrowserRoute("chrome")
+	captureRoute.Attempts = append(captureRoute.Attempts, browserops.RouteAttempt{
+		Browser:  browser,
+		Accepted: handleDecision.Decision == browsers.DecisionHandle,
+		Reason:   handleDecision.Reason,
+	})
+	if requestBrowser != "" {
+		captureRoute.RequestedBrowser = requestBrowser
+	}
+	h.recordActivity(r, activity.Update{Route: captureRoute})
+
 	if err := h.ensureChrome(); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
@@ -122,7 +188,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 

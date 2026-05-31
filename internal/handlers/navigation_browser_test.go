@@ -108,6 +108,23 @@ func TestHandleSnapshot_BrowserParam_Invalid_Returns400(t *testing.T) {
 	}
 }
 
+func TestHandleCapture_BrowserParam_Invalid_Returns400(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		BrowsersAvailable: []string{"chrome"},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/capture?browser=invalid", nil)
+	w := httptest.NewRecorder()
+	h.HandleCapture(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid browser, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unknown browser") {
+		t.Fatalf("expected 'unknown browser' in error, got %s", w.Body.String())
+	}
+}
+
 func TestHandleAction_BrowserParam_Invalid_Returns400(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{
 		BrowsersAvailable: []string{"chrome"},
