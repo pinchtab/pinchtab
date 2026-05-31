@@ -11,10 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/dom"
-	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -36,18 +32,6 @@ const (
 )
 
 var (
-	setUploadFileInputFiles = func(ctx context.Context, selector string, paths []string) error {
-		return chromedp.Run(ctx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				nodeID, err := resolveSelector(ctx, selector)
-				if err != nil {
-					return fmt.Errorf("selector %q: %w", selector, err)
-				}
-				return dom.SetFileInputFiles(paths).WithNodeID(nodeID).Do(ctx)
-			}),
-		)
-	}
-
 	cleanupStagedUploadDirAfter = func(dir string, after time.Duration) {
 		if dir == "" {
 			return
@@ -205,7 +189,13 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
-	if err := setUploadFileInputFiles(tCtx, req.Selector, allPaths); err != nil {
+	nodeID, err := h.Bridge.ResolveSelectorToNodeID(tCtx, req.Selector)
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("upload: selector %q: %w", req.Selector, err))
+		return
+	}
+
+	if err := h.Bridge.SetFileInputFiles(tCtx, nodeID, allPaths); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("upload: %w", err))
 		return
 	}
@@ -244,42 +234,6 @@ func (h *Handlers) HandleTabUpload(w http.ResponseWriter, r *http.Request) {
 	req.URL = &u
 
 	h.HandleUpload(w, req)
-}
-
-// resolveSelector finds a DOM node by a unified selector string and returns its NodeID.
-// Supports CSS (default), XPath (xpath: prefix or // auto-detect), and text (text: prefix).
-func resolveSelector(ctx context.Context, sel string) (cdp.NodeID, error) {
-	// Determine the JavaScript expression based on selector type.
-	var expr string
-	switch {
-	case strings.HasPrefix(sel, "xpath:"):
-		xpath := sel[len("xpath:"):]
-		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, xpath)
-	case strings.HasPrefix(sel, "//") || strings.HasPrefix(sel, "(//"):
-		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, sel)
-	case strings.HasPrefix(sel, "text:"):
-		text := sel[len("text:"):]
-		expr = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%q))return w.currentNode.parentElement}return null})()`, text)
-	case strings.HasPrefix(sel, "css:"):
-		css := sel[len("css:"):]
-		expr = fmt.Sprintf(`document.querySelector(%q)`, css)
-	default:
-		// Bare selector: treat as CSS (backward compatible).
-		expr = fmt.Sprintf(`document.querySelector(%q)`, sel)
-	}
-
-	val, _, err := runtime.Evaluate(expr).Do(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("evaluate: %w", err)
-	}
-	if val.ObjectID == "" {
-		return 0, fmt.Errorf("no element matches selector")
-	}
-	node, err := dom.RequestNode(val.ObjectID).Do(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("request node: %w", err)
-	}
-	return node, nil
 }
 
 func validateUploadSandboxPath(baseDir, rawPath string, maxFileBytes int) (string, int64, error) {

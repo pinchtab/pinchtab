@@ -26,6 +26,29 @@ func (m *uploadLockBridge) TabLockInfo(tabID string) *bridge.LockInfo {
 	return m.lock
 }
 
+type recordingUploadBridge struct {
+	mockBridge
+	selector      string
+	nodeID        int64
+	attachedPaths []string
+}
+
+func (m *recordingUploadBridge) ResolveSelectorToNodeID(_ context.Context, selector string) (int64, error) {
+	m.selector = selector
+	return 42, nil
+}
+
+func (m *recordingUploadBridge) SetFileInputFiles(_ context.Context, nodeID int64, paths []string) error {
+	m.nodeID = nodeID
+	m.attachedPaths = append([]string(nil), paths...)
+	for _, path := range m.attachedPaths {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("staged file was not readable before attach: %w", err)
+		}
+	}
+	return nil
+}
+
 func TestHandleUpload_BadJSON(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{AllowUpload: true}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/upload", bytes.NewReader([]byte("not json")))
@@ -366,26 +389,10 @@ func TestHandleUpload_StagedFilesCleanedOnFailureNotCWD(t *testing.T) {
 }
 
 func TestHandleUpload_SuccessSchedulesStagedCleanup(t *testing.T) {
-	origSetUploadFileInputFiles := setUploadFileInputFiles
 	origCleanupStagedUploadDirAfter := cleanupStagedUploadDirAfter
 	t.Cleanup(func() {
-		setUploadFileInputFiles = origSetUploadFileInputFiles
 		cleanupStagedUploadDirAfter = origCleanupStagedUploadDirAfter
 	})
-
-	var attachedPaths []string
-	setUploadFileInputFiles = func(_ context.Context, selector string, paths []string) error {
-		if selector != "input[type=file]" {
-			t.Fatalf("selector = %q, want default file input", selector)
-		}
-		attachedPaths = append([]string(nil), paths...)
-		for _, path := range attachedPaths {
-			if _, err := os.Stat(path); err != nil {
-				t.Fatalf("staged file was not readable before attach: %v", err)
-			}
-		}
-		return nil
-	}
 
 	var cleanupDir string
 	var cleanupAfter time.Duration
@@ -396,7 +403,8 @@ func TestHandleUpload_SuccessSchedulesStagedCleanup(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	h := New(&mockBridge{}, &config.RuntimeConfig{AllowUpload: true, StateDir: tmpDir}, nil, nil, nil)
+	uploadBridge := &recordingUploadBridge{}
+	h := New(uploadBridge, &config.RuntimeConfig{AllowUpload: true, StateDir: tmpDir}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(`{"files":["aGVsbG8="]}`)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -405,8 +413,14 @@ func TestHandleUpload_SuccessSchedulesStagedCleanup(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if len(attachedPaths) != 1 {
-		t.Fatalf("attached paths = %d, want 1", len(attachedPaths))
+	if uploadBridge.selector != "input[type=file]" {
+		t.Fatalf("selector = %q, want default file input", uploadBridge.selector)
+	}
+	if uploadBridge.nodeID != 42 {
+		t.Fatalf("nodeID = %d, want 42", uploadBridge.nodeID)
+	}
+	if len(uploadBridge.attachedPaths) != 1 {
+		t.Fatalf("attached paths = %d, want 1", len(uploadBridge.attachedPaths))
 	}
 	if cleanupDir == "" {
 		t.Fatal("successful upload did not schedule staged cleanup")
