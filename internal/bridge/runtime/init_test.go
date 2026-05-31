@@ -155,6 +155,12 @@ func TestBuildChromeArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *testi
 		DefaultBrowser: config.BrowserChrome,
 		ChromeVersion:  "144.0.0.0",
 		ExtensionPaths: []string{},
+		// Headless is PinchTab's default deployment mode and is also the mode in
+		// which the launch contract pins --user-agent: under headless Chrome the
+		// native UA leaks "HeadlessChrome/" and its UA-CH is already degraded, so
+		// pinning is a net win. In headed mode the contract intentionally leaves
+		// --user-agent off to keep Chrome's native, self-consistent UA + UA-CH.
+		Headless: true,
 	}
 
 	args := BuildChromeArgs(cfg, 9222)
