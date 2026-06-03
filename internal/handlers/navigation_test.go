@@ -80,7 +80,6 @@ func TestHandleTab_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
 func TestValidateNavigateURL_RejectsUnsupportedSchemes(t *testing.T) {
 	for _, rawURL := range []string{
 		"javascript:alert(1)",
-		"file:///etc/passwd",
 		"chrome://settings",
 		"data:text/html,hello",
 	} {
@@ -138,10 +137,11 @@ func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted
 	}
 }
 
-func TestValidateNavigateURL_AllowsHTTPHTTPSAndBareHostnames(t *testing.T) {
+func TestValidateNavigateURL_AllowsHTTPHTTPSFileAndBareHostnames(t *testing.T) {
 	for _, rawURL := range []string{
 		"https://pinchtab.com",
 		"http://pinchtab.test",
+		"file:///tmp/pinchtab.html",
 		"pinchtab.com",
 		"about:blank",
 	} {
@@ -158,7 +158,7 @@ func TestValidateNavigateURL_RejectsOverlongURL(t *testing.T) {
 	}
 }
 
-func TestHandleNavigate_RejectsUnsupportedSchemeBeforeCreateTab(t *testing.T) {
+func TestHandleNavigate_AllowsFileSchemeBeforeCreateTab(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 
@@ -166,14 +166,11 @@ func TestHandleNavigate_RejectsUnsupportedSchemeBeforeCreateTab(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleNavigate(w, req)
 
-	if w.Code != 400 {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme navigate to proceed, got %d: %s", w.Code, w.Body.String())
 	}
-	if len(m.createTabURLs) != 0 {
-		t.Fatalf("CreateTab should not be called for rejected schemes, got %v", m.createTabURLs)
-	}
-	if !strings.Contains(w.Body.String(), "invalid URL scheme") {
-		t.Fatalf("expected invalid URL scheme error, got %s", w.Body.String())
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for file scheme navigation")
 	}
 }
 
@@ -416,7 +413,7 @@ func TestHandleTab_CloseActionUnsupported(t *testing.T) {
 }
 
 func TestHandleTab_RejectsUnsupportedScheme(t *testing.T) {
-	for _, scheme := range []string{"file:///etc/passwd", "javascript:alert(1)", "chrome://settings"} {
+	for _, scheme := range []string{"javascript:alert(1)", "chrome://settings"} {
 		m := &mockBridge{}
 		h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 		body := `{"action":"new","url":"` + scheme + `"}`
@@ -429,6 +426,22 @@ func TestHandleTab_RejectsUnsupportedScheme(t *testing.T) {
 		if len(m.createTabURLs) != 0 {
 			t.Errorf("scheme %q: CreateTab should not be called but was", scheme)
 		}
+	}
+}
+
+func TestHandleTab_AllowsFileScheme(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	body := `{"action":"new","url":"file:///etc/passwd"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme tab creation to proceed, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for file scheme tab creation")
 	}
 }
 

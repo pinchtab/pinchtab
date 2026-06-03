@@ -117,7 +117,7 @@ func validateNavigateURL(raw string) error {
 	}
 
 	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
+	case "http", "https", "file":
 		return nil
 	default:
 		return fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
