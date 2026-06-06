@@ -70,9 +70,17 @@ cfg = {
         "allowedDomains": [fixtures_host, "127.0.0.1", "localhost", "::1"],
         "downloadAllowedDomains": [fixtures_host],
         # 127.0.0.1/32 alone blocks fixtures that resolve to the Docker bridge
-        # network (e.g. 172.18.x) even when the host is in allowedDomains;
-        # trust the RFC1918 range the container networks use.
-        "trustedResolveCIDRs": ["127.0.0.1/32", "172.16.0.0/12"],
+        # network even when the host is in allowedDomains. Docker can assign
+        # any RFC1918 range to a user-defined network (172.16/12 is the legacy
+        # bridge default, but compose networks routinely land on 192.168.0.0/20
+        # on macOS Docker Desktop, and custom networks use 10.0.0.0/8). Trust
+        # all three to keep tests stable across Docker hosts.
+        "trustedResolveCIDRs": [
+            "127.0.0.1/32",
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+        ],
     },
     "profiles": {
         "baseDir": "/data/profiles",
@@ -147,9 +155,15 @@ cfg = {
         "allowStateExport": True,
         "allowedDomains": [fixtures_host, "127.0.0.1", "localhost", "::1"],
         "downloadAllowedDomains": [fixtures_host],
-        # See write_provider_config: trust the Docker bridge range so fixtures
-        # resolving to 172.18.x are not blocked by the private-IP guard.
-        "trustedResolveCIDRs": ["127.0.0.1/32", "172.16.0.0/12"],
+        # See write_provider_config above: Docker can assign any RFC1918 range
+        # to a user-defined network; trust all three so fixtures aren't blocked
+        # by the private-IP guard.
+        "trustedResolveCIDRs": [
+            "127.0.0.1/32",
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+        ],
     },
     "profiles": {
         "baseDir": "/data/profiles",
