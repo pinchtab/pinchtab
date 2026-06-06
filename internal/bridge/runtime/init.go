@@ -223,14 +223,15 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		// silently ignored and the compositor has no backend, which
 		// manifests as Page.captureScreenshot/printToPDF hanging.
 		opts = append(opts, chromedp.Flag("enable-unsafe-swiftshader", true))
-		// Collapse the GPU process into the browser process. Saves one
-		// OS process and ~50-150MB per Chrome instance, and avoids the
-		// GPU-process sandbox negotiation in our --no-sandbox containers.
-		// Trade-off: a GPU code crash takes the browser with it. Disabled
-		// automatically after a crash so the failure doesn't repeat.
-		if !cfg.DisableInProcessGPU {
-			opts = append(opts, chromedp.Flag("in-process-gpu", true))
-		}
+		// --in-process-gpu used to be enabled here as a perf optimization
+		// (saves one OS process and ~50-150MB per instance). Chrome stable
+		// patch updates have repeatedly regressed it for the headless=new
+		// + swiftshader combo: a GPU code crash takes the browser with it
+		// ~500ms after init, surfacing as `context canceled` on the first
+		// CreateTab. We now leave it off by default. Users who know their
+		// Chrome build is healthy and want the memory savings can opt in
+		// via `browser.extraFlags = "--in-process-gpu"`. DisableInProcessGPU
+		// is still honored as a kill switch by the crash-recovery path.
 	} else {
 		opts = append(opts, chromedp.Flag("headless", false))
 	}
@@ -256,7 +257,13 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 		opts = append(opts, chromedp.Flag("tz", cfg.Timezone))
 	}
 
-	opts = appendExecAllocatorFlags(opts, config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags))
+	extraFlags := config.AllowedChromeExtraFlags(cfg.ChromeExtraFlags)
+	if cfg.DisableInProcessGPU {
+		// Kill switch from the crash-recovery path: strip a user-supplied
+		// --in-process-gpu so a crash loop can't repeat after retry.
+		extraFlags = stripInProcessGPUFlag(extraFlags)
+	}
+	opts = appendExecAllocatorFlags(opts, extraFlags)
 	for _, flag := range appendChromeCompatibilityFlags(nil) {
 		opts = appendExecAllocatorFlag(opts, flag)
 	}
@@ -406,6 +413,18 @@ func applyStartupStealth(ctx context.Context, cfg *config.RuntimeConfig, bundle 
 		return nil
 	}
 	return injectedScript(ctx, script)
+}
+
+func stripInProcessGPUFlag(flags []string) []string {
+	out := flags[:0]
+	for _, f := range flags {
+		name := strings.SplitN(f, "=", 2)[0]
+		if strings.EqualFold(name, "--in-process-gpu") {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 func missingBrowserBinaryError(cfg *config.RuntimeConfig) error {

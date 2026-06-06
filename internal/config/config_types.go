@@ -48,7 +48,7 @@ type RuntimeConfig struct {
 	// Browser/instance settings
 	Headless            bool
 	HeadlessSet         bool // true when explicitly set via config or flag
-	DisableInProcessGPU bool // runtime-only: set after a GPU crash to avoid repeating the failure
+	DisableInProcessGPU bool // runtime-only: kill switch for --in-process-gpu when a user opted in via browser.extraFlags and the browser then crashed
 	NoRestore           bool
 	ProfileDir          string
 	ProfilesBaseDir     string

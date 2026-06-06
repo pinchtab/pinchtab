@@ -135,7 +135,7 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		if b.BrowserCtx.Err() == nil {
 			return nil
 		}
-		slog.Warn("chrome context cancelled, re-initializing without in-process-gpu")
+		slog.Warn("chrome browser context cancelled, re-initializing")
 		b.initialized = false
 		b.BrowserCtx = nil
 		b.BrowserCancel = nil
