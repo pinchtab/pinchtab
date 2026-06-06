@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -40,11 +41,11 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	})
 }
 
-func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
+func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, cfg *config.RuntimeConfig) (map[string]any, string, error) {
 	req.Kind = bridge.CanonicalActionKind(req.Kind)
 
-	if err := h.ensureChrome(); err != nil {
-		return nil, "", fmt.Errorf("chrome initialization: %w", err)
+	if err := h.ensureBrowser(cfg); err != nil {
+		return nil, "", fmt.Errorf("browser initialization: %w", err)
 	}
 	result, err := h.Bridge.ExecuteAction(ctx, req.Kind, req)
 	return result, "", err

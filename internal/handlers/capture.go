@@ -113,11 +113,11 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r, activity.Update{Route: captureRoute})
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(effectiveCfg); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("browser initialization: %w", err))
 		return
 	}
 

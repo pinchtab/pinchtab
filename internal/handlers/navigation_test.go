@@ -51,8 +51,8 @@ func TestHandleNavigate_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
 	if len(m.createTabURLs) != 0 {
 		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
 	}
-	if !strings.Contains(w.Body.String(), "chrome initialization") {
-		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "browser initialization") {
+		t.Fatalf("expected browser initialization error, got %s", w.Body.String())
 	}
 }
 
@@ -73,8 +73,8 @@ func TestHandleTab_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
 	if len(m.createTabURLs) != 0 {
 		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
 	}
-	if !strings.Contains(w.Body.String(), "chrome initialization") {
-		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "browser initialization") {
+		t.Fatalf("expected browser initialization error, got %s", w.Body.String())
 	}
 }
 

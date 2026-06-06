@@ -54,7 +54,7 @@ type findResponse struct {
 // @Response 404 application/json Tab not found
 // @Response 500 application/json Snapshot or matching error
 func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

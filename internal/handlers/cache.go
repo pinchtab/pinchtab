@@ -11,7 +11,7 @@ import (
 // HandleCacheClear clears the browser's HTTP disk cache.
 // POST /cache/clear
 func (h *Handlers) HandleCacheClear(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		httpx.Error(w, http.StatusServiceUnavailable, err)
 		return
 	}
@@ -33,7 +33,7 @@ func (h *Handlers) HandleCacheClear(w http.ResponseWriter, r *http.Request) {
 // HandleCacheStatus checks if the browser cache can be cleared.
 // GET /cache/status
 func (h *Handlers) HandleCacheStatus(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		httpx.Error(w, http.StatusServiceUnavailable, err)
 		return
 	}

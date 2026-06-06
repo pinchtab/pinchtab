@@ -74,7 +74,7 @@ func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind in
 	tabID := r.URL.Query().Get("tabId")
 	h.recordReadRequest(r, string(kind), tabID)
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

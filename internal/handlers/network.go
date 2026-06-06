@@ -155,7 +155,7 @@ func populateLiveBodyResult(result map[string]any, body string, base64Encoded bo
 // @Response 200 application/json List of network entries
 // @Response 404 application/json Tab not found
 func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}
@@ -229,7 +229,7 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 // @Response 200 application/json Network entry details
 // @Response 404 application/json Request not found
 func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}
@@ -369,7 +369,7 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 	// (e.g. httptest.ResponseRecorder doesn't support this).
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

@@ -154,17 +154,26 @@ type restartStatusProvider interface {
 	RestartStatus() (bool, time.Duration)
 }
 
-// ensureChrome ensures Chrome is initialized before handling requests that need it
-func (h *Handlers) ensureChrome() error {
-	return h.Bridge.EnsureChrome(h.Config)
+type ensureBrowserProvider interface {
+	EnsureBrowser(cfg *config.RuntimeConfig) error
 }
 
-func (h *Handlers) ensureChromeOrRespond(w http.ResponseWriter) bool {
-	if err := h.ensureChrome(); err != nil {
+func (h *Handlers) ensureBrowser(cfg *config.RuntimeConfig) error {
+	if cfg == nil {
+		cfg = h.Config
+	}
+	if provider, ok := h.Bridge.(ensureBrowserProvider); ok {
+		return provider.EnsureBrowser(cfg)
+	}
+	return h.Bridge.EnsureChrome(cfg)
+}
+
+func (h *Handlers) ensureBrowserOrRespond(w http.ResponseWriter, cfg *config.RuntimeConfig) bool {
+	if err := h.ensureBrowser(cfg); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return false
 		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("browser initialization: %w", err))
 		return false
 	}
 	return true

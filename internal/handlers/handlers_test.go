@@ -27,6 +27,7 @@ type mockBridge struct {
 	frameScopes       map[string]bridge.FrameScope
 	ensureChromeErr   error
 	ensureChromeCall  int
+	ensureChromeCfg   *config.RuntimeConfig
 	dialogManager     *bridge.DialogManager
 	executeActionErr  error
 	autoCloseArmed    []string
@@ -91,6 +92,7 @@ func (m *mockBridge) CancelAutoClose(tabID string) {
 
 func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	m.ensureChromeCall++
+	m.ensureChromeCfg = cfg
 	return m.ensureChromeErr
 }
 

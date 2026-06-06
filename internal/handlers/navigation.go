@@ -191,7 +191,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r, activity.Update{Route: navRoute})
 
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 

@@ -141,7 +141,7 @@ func (h *Handlers) HandleClearCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		httpx.Error(w, http.StatusServiceUnavailable, err)
 		return
 	}

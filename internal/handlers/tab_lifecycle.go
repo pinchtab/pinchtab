@@ -53,7 +53,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if !h.ensureChromeOrRespond(w) {
+		if !h.ensureBrowserOrRespond(w, h.Config) {
 			return
 		}
 
@@ -105,7 +105,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
 			return
 		}
-		if !h.ensureChromeOrRespond(w) {
+		if !h.ensureBrowserOrRespond(w, h.Config) {
 			return
 		}
 		if err := h.Bridge.FocusTab(req.TabID); err != nil {
@@ -165,7 +165,7 @@ func (h *Handlers) HandleClose(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) closeTab(w http.ResponseWriter, r *http.Request, tabID string) {
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 	if tabID == "" {

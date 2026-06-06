@@ -22,7 +22,7 @@ import (
 //
 // @Endpoint GET /screenshot
 func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

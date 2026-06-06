@@ -123,12 +123,23 @@ func (b *Bridge) StealthStatus() *stealth.Status {
 	return stealth.StatusFromBundle(b.StealthBundle, b.Config, b.stealthLaunchMode)
 }
 
-func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+func (b *Bridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
 	b.initMu.Lock()
 	defer b.initMu.Unlock()
 
+	if cfg == nil {
+		cfg = b.Config
+	}
+	if cfg == nil {
+		return fmt.Errorf("runtime config is required")
+	}
+
 	if b.draining {
 		return ErrBrowserDraining
+	}
+
+	if !b.initialized || b.BrowserCtx == nil || b.BrowserCtx.Err() != nil {
+		b.prepareConfigForLaunch(cfg)
 	}
 
 	if b.initialized && b.BrowserCtx != nil {
@@ -238,8 +249,24 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
+func (b *Bridge) prepareConfigForLaunch(cfg *config.RuntimeConfig) {
+	if cfg == nil || b.Config == cfg {
+		return
+	}
+	b.Config = cfg
+	b.StealthBundle = nil
+	if b.netMonitor != nil {
+		b.netMonitor.ConfigureBodyRetention(cfg.RetainNetworkBodies, cfg.RetainNetworkBodyMaxBytes)
+	}
+}
+
+// EnsureChrome is the compatibility alias for older callers.
+func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+	return b.EnsureBrowser(cfg)
+}
+
 // RestartBrowser performs a soft restart: drains in-flight requests, tears
-// down Chrome contexts, and re-initializes via EnsureChrome.
+// down browser contexts, and re-initializes via EnsureBrowser.
 func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	if cfg == nil {
 		cfg = b.Config
@@ -325,7 +352,7 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	b.drainUntil = time.Time{}
 	b.initMu.Unlock()
 
-	if err := b.EnsureChrome(cfg); err != nil {
+	if err := b.EnsureBrowser(cfg); err != nil {
 		return err
 	}
 	b.CleanupSavedStateBackup()

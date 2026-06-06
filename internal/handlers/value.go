@@ -26,7 +26,7 @@ func (h *Handlers) HandleGetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

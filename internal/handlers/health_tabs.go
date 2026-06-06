@@ -28,7 +28,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}
@@ -58,7 +58,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

@@ -177,7 +177,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		// - First request to an instance triggers lazy Chrome initialization (8-20+ seconds)
 		// - Navigation can take up to 60s (NavigateTimeout in bridge config)
 		// - Proxied requests (e.g., POST /tabs/{tabId}/navigate) must wait for:
-		//   1. Instance /health handler to initialize Chrome (via ensureChrome())
+		//   1. Instance /health handler to initialize the browser
 		//   2. Tab operations to complete (navigate, snapshot, actions, etc.)
 		// - Short timeout (<5s) would break first-request scenarios
 		// See: internal/orchestrator/health.go (monitor), internal/bridge/init.go (InitChrome)

@@ -283,7 +283,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			tCtx, resolvedTabID, req.Ref, req.Kind,
 			func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 				req.NodeID = nodeID
-				res, _, err := h.executeAction(ctx, req)
+				res, _, err := h.executeAction(ctx, req, effectiveCfg)
 				return res, err
 			},
 		)
@@ -297,7 +297,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 404, fmt.Errorf("ref %s not found - take a /snapshot first", req.Ref))
 		return
 	} else {
-		result, actionBackend, actionErr = h.executeAction(tCtx, req)
+		result, actionBackend, actionErr = h.executeAction(tCtx, req, effectiveCfg)
 		if actionErr != nil && shouldRetryPointerAction(req, actionErr) {
 			if req.Ref != "" && shouldRetryStaleRef(actionErr) {
 				recordStaleRefRetry()
@@ -310,7 +310,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			}
 			h.refreshActionNodeIDFromSelector(tCtx, &req)
 			time.Sleep(pointerRetryDelay)
-			result, actionBackend, actionErr = h.executeAction(tCtx, req)
+			result, actionBackend, actionErr = h.executeAction(tCtx, req, effectiveCfg)
 		}
 		// Semantic self-healing: if stale-ref retry still failed, attempt
 		// recovery via the semantic matcher.
@@ -320,7 +320,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 				recovery.ClassifyFailure(actionErr),
 				func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 					req.NodeID = nodeID
-					res, _, err := h.executeAction(ctx, req)
+					res, _, err := h.executeAction(ctx, req, effectiveCfg)
 					return res, err
 				},
 			)
@@ -643,7 +643,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				tCtx, resolvedTabID, action.Ref, action.Kind,
 				func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 					action.NodeID = nodeID
-					res, _, err := h.executeAction(ctx, action)
+					res, _, err := h.executeAction(ctx, action, effectiveCfg)
 					return res, err
 				},
 			)
@@ -664,7 +664,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 			}
 			continue
 		} else {
-			actionRes, _, err = h.executeAction(tCtx, action)
+			actionRes, _, err = h.executeAction(tCtx, action, effectiveCfg)
 			if err != nil && shouldRetryPointerAction(action, err) {
 				if action.Ref != "" && shouldRetryStaleRef(err) {
 					recordStaleRefRetry()
@@ -677,7 +677,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 				}
 				h.refreshActionNodeIDFromSelector(tCtx, &action)
 				time.Sleep(pointerRetryDelay)
-				actionRes, _, err = h.executeAction(tCtx, action)
+				actionRes, _, err = h.executeAction(tCtx, action, effectiveCfg)
 			}
 			// Semantic self-healing for batched actions.
 			if err != nil && action.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, action.Ref) {
@@ -686,7 +686,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 					recovery.ClassifyFailure(err),
 					func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 						action.NodeID = nodeID
-						res, _, err := h.executeAction(ctx, action)
+						res, _, err := h.executeAction(ctx, action, effectiveCfg)
 						return res, err
 					},
 				)
@@ -909,7 +909,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				tCtx, resolvedTabID, step.Ref, step.Kind,
 				func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 					step.NodeID = nodeID
-					res, _, err := h.executeAction(ctx, step)
+					res, _, err := h.executeAction(ctx, step, macroEffectiveCfg)
 					return res, err
 				},
 			)
@@ -930,7 +930,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		} else {
-			res, _, err = h.executeAction(tCtx, step)
+			res, _, err = h.executeAction(tCtx, step, macroEffectiveCfg)
 			if err != nil && shouldRetryPointerAction(step, err) {
 				if step.Ref != "" && shouldRetryStaleRef(err) {
 					recordStaleRefRetry()
@@ -943,7 +943,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 				}
 				h.refreshActionNodeIDFromSelector(tCtx, &step)
 				time.Sleep(pointerRetryDelay)
-				res, _, err = h.executeAction(tCtx, step)
+				res, _, err = h.executeAction(tCtx, step, macroEffectiveCfg)
 			}
 			// Semantic self-healing for macro steps.
 			if err != nil && step.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, step.Ref) {
@@ -952,7 +952,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 					recovery.ClassifyFailure(err),
 					func(ctx context.Context, kind string, nodeID int64) (map[string]any, error) {
 						step.NodeID = nodeID
-						res, _, err := h.executeAction(ctx, step)
+						res, _, err := h.executeAction(ctx, step, macroEffectiveCfg)
 						return res, err
 					},
 				)

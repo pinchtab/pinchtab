@@ -62,13 +62,30 @@ func NewBridgeAdapter(chromeBridge bridge.BridgeAPI, cfg *config.RuntimeConfig) 
 	lite := staticfetch.NewBrowser()
 	chromeAdapter := &chromeActionAdapter{BridgeAPI: chromeBridge}
 	proxy := ghostchrome.NewBridgeProxy(chromeAdapter, lite, func() error {
-		return chromeBridge.EnsureChrome(cfg)
+		return ensureBrowser(chromeBridge, cfg)
 	})
 	return &BridgeAdapter{
 		BridgeAPI: chromeBridge,
 		proxy:     proxy,
 		cfg:       cfg,
 	}
+}
+
+func ensureBrowser(b bridge.BridgeAPI, cfg *config.RuntimeConfig) error {
+	if provider, ok := b.(interface {
+		EnsureBrowser(*config.RuntimeConfig) error
+	}); ok {
+		return provider.EnsureBrowser(cfg)
+	}
+	return b.EnsureChrome(cfg)
+}
+
+func (a *BridgeAdapter) EnsureBrowser(cfg *config.RuntimeConfig) error {
+	return ensureBrowser(a.BridgeAPI, cfg)
+}
+
+func (a *BridgeAdapter) EnsureChrome(cfg *config.RuntimeConfig) error {
+	return a.EnsureBrowser(cfg)
 }
 
 func (a *BridgeAdapter) TabContext(tabID string) (*bridge.TabHandle, string, error) {

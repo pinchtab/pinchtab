@@ -33,7 +33,7 @@ func (h *Handlers) HandleTabReload(w http.ResponseWriter, r *http.Request) {
 
 // HandleBack navigates the current (or specified) tab back in history.
 func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
@@ -60,7 +60,7 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 
 // HandleForward navigates the current (or specified) tab forward in history.
 func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
@@ -87,7 +87,7 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 
 // HandleReload reloads the current (or specified) tab.
 func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")

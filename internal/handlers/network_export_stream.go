@@ -30,7 +30,7 @@ import (
 // @Response 200 text/event-stream  SSE progress events
 // @Response 423 application/json   Tab is locked
 func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return
 		}

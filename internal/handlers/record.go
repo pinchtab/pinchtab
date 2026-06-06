@@ -589,7 +589,7 @@ func (h *Handlers) HandleRecordStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 

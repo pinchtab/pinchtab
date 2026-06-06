@@ -108,7 +108,7 @@ func (h *Handlers) requireRouteContext(w http.ResponseWriter, r *http.Request, t
 			false, map[string]any{"setting": "security.allowNetworkIntercept"})
 		return nil, "", false
 	}
-	if err := h.ensureChrome(); err != nil {
+	if err := h.ensureBrowser(h.Config); err != nil {
 		if h.writeBridgeUnavailable(w, err) {
 			return nil, "", false
 		}
