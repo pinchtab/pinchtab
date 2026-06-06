@@ -122,7 +122,7 @@ func TestEnsureCloakImageBuildsByDefault(t *testing.T) {
 	}
 	calls := string(raw)
 	for _, want := range []string{
-		"build -f " + dockerfilePath + " -t " + defaultCloakImage + " " + repoRoot,
+		"build --load -f " + dockerfilePath + " -t " + defaultCloakImage + " " + repoRoot,
 	} {
 		if !strings.Contains(calls, want) {
 			t.Fatalf("docker calls missing %q:\n%s", want, calls)

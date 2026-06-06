@@ -204,7 +204,7 @@ func (r *Runner) ensureCloakImage(image string) error {
 	code := r.runLoggedCommand(
 		"building Cloak provider image",
 		stackOutput,
-		[]string{"docker", "build", "-f", dockerfilePath, "-t", image, r.repoRoot},
+		[]string{"docker", "build", "--load", "-f", dockerfilePath, "-t", image, r.repoRoot},
 	)
 	if code != 0 {
 		return fmt.Errorf("build Cloak provider image failed (exit %d)", code)
