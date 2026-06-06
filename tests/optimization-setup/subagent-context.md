@@ -62,19 +62,29 @@ Use `./pinchtab` CLI commands for everything — never use `./scripts/pt` (that 
 
 ## Provider switch (only if `PROVIDER` is not `chrome`)
 
-Step 0.1 always tests the auto-flow with the default provider (chrome). After step 0.1 succeeds and before continuing to the remaining steps, switch the active browser provider using **only documented commands**:
+Step 0.1 always tests the auto-flow with the default provider (chrome). After step 0.1 succeeds and before continuing to the remaining steps, switch the active browser provider using **only documented commands** — including any install steps the docs prescribe. Installing a provider binary is part of what a fresh user actually does, so it is part of what this test measures.
 
-- `cloak`: `./pinchtab config set browsers.default cloak` (and any required provider config — discover via failure rather than reading internal code).
-- `ghost-chrome`: `./pinchtab config set browsers.default ghost-chrome`.
-- `chrome`: skip — already the default.
+### `cloak`
 
-This sub-step is itself part of what the setup test measures: a fresh user must be able to switch the provider via the documented CLI without diving into internals. If you cannot complete the switch with documented commands alone, record that as a setup failure.
+The CloakBrowser binary is not bundled with PinchTab and must be installed by the user. The documented install path is in `docs/guides/cloakbrowser.md`:
 
-Host prerequisites for non-chrome providers:
-- `cloak` requires CloakBrowser installed at the path documented in `skills/pinchtab/SKILL.md`.
-- `ghost-chrome` uses the host's Chrome installation (same as `chrome`).
+1. Install the CloakBrowser package and fetch the binary using the documented commands (Python or JS path — whichever the docs list).
+2. Capture the absolute path the installer reports for the `chrome` executable.
+3. Switch PinchTab to the cloak provider and point it at that binary using `./pinchtab config set`:
+   - `browsers.default` → `cloak`
+   - `browser.binary` → the absolute path from step 2
+   - Any other cloak-specific fields the docs say are required (e.g. `browser.cloak.fingerprintSeed`)
+4. Re-run a quick sanity nav (`./pinchtab nav http://localhost:$FIXTURE_PORT/`) to confirm the provider switch took effect.
 
-If the required binary is missing, that's a legitimate setup failure — record it; do not patch around it.
+If `pip install cloakbrowser` (or the equivalent JS install) fails — e.g. no network, package missing for this OS/arch, or the binary download errors — record that as a real setup failure with the exact error and the doc reference you followed. **Do not** patch around it (do not `brew install`, do not download from a different source, do not skip to chrome). The point of the test is to surface friction in the documented onboarding path.
+
+### `ghost-chrome`
+
+Uses the host's Chrome installation (same as `chrome`). Switch via `./pinchtab config set browsers.default ghost-chrome` and verify the provider switch took effect with a sanity nav.
+
+### `chrome`
+
+Skip this section — already the default.
 
 ## Running steps
 
