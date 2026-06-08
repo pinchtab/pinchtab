@@ -96,10 +96,17 @@ func findChromeBinary() string {
 	var candidates []string
 	switch goruntime.GOOS {
 	case "darwin":
+		// Prefer browsers dedicated to automation so we don't hijack the
+		// user's primary Google Chrome. On macOS, launching the primary
+		// Chrome.app executable registers "Google Chrome" with LaunchServices;
+		// the user can then no longer open their normal Chrome (the OS just
+		// activates our windowless automation instance). Keep the daily
+		// Google Chrome as a last resort. See issue #583.
 		candidates = []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
 			"/Applications/Chromium.app/Contents/MacOS/Chromium",
 			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 		}
 	case "windows":
 		candidates = []string{
