@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,7 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestRunDoctorBrowserShowsOverviewForUnknownTarget(t *testing.T) {
+// M7 regression: an unknown target/browser must return an error (non-zero
+// exit) so scripts can rely on the documented exit contract, while a bare
+// KNOWN browser ID still gets the focused overview.
+func TestRunDoctorBrowserUnknownTargetReturnsError(t *testing.T) {
 	writeDoctorTestConfig(t, func(fc *config.FileConfig) {
 		fc.Browser.Targets = config.BrowserTargetsConfig{
 			"chrome": {Provider: config.BrowserChrome},
@@ -21,15 +25,20 @@ func TestRunDoctorBrowserShowsOverviewForUnknownTarget(t *testing.T) {
 
 	var out bytes.Buffer
 	err := runDoctorBrowser(doctorTestCommand(&out), []string{"nonexistent"})
-	if err != nil {
-		t.Fatalf("runDoctorBrowser() unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for unknown browser/target")
 	}
-	output := out.String()
-	if !strings.Contains(output, "not a known provider") {
-		t.Fatalf("expected unknown browser message, got %q", output)
+	var coded *commandExitError
+	if !errors.As(err, &coded) || coded.ExitCode() == 0 {
+		t.Fatalf("expected non-zero commandExitError, got %v", err)
 	}
-	if !strings.Contains(output, "Known browsers:") {
-		t.Fatalf("expected known browsers list, got %q", output)
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Fatalf("error should name the unknown target: %v", err)
+	}
+
+	out.Reset()
+	if err := runDoctorBrowser(doctorTestCommand(&out), []string{"cloak"}); err != nil {
+		t.Fatalf("bare known browser ID should show the focused overview: %v", err)
 	}
 }
 

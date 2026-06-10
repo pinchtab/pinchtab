@@ -265,3 +265,16 @@ func TestWriteJSON_Structure(t *testing.T) {
 		t.Errorf("summary wrong: %+v", report.Summary)
 	}
 }
+
+// M7 regression: durationMs must marshal milliseconds, not raw nanoseconds.
+func TestCheckResultMarshalsDurationInMilliseconds(t *testing.T) {
+	r := CheckResult{Name: "x", Status: StatusPass, Duration: 1500 * time.Millisecond}
+	r.DurationMS = r.Duration.Milliseconds()
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"durationMs":1500`) {
+		t.Fatalf("expected durationMs in milliseconds, got %s", data)
+	}
+}

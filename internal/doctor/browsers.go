@@ -52,8 +52,8 @@ func ReportBrowsers(ctx context.Context, cfg *config.RuntimeConfig) BrowsersRepo
 	configured := cfgBrowsersAvailable(cfg)
 	defaultBrowser := cfgDefaultBrowser(cfg)
 
-	// Build a union of configured + known browser IDs, preserving order:
-	// configured first, then any known-only IDs.
+	// Build a deduplicated union of configured + known browser IDs; the
+	// sort below makes the report order deterministic.
 	seen := map[string]bool{}
 	var union []string
 	for _, id := range configured {
@@ -70,8 +70,6 @@ func ReportBrowsers(ctx context.Context, cfg *config.RuntimeConfig) BrowsersRepo
 	}
 	sort.Strings(union)
 
-	env := buildDoctorEnv(cfg)
-
 	infos := make([]BrowserInfo, 0, len(union))
 	for _, id := range union {
 		info := BrowserInfo{
@@ -84,6 +82,7 @@ func ReportBrowsers(ctx context.Context, cfg *config.RuntimeConfig) BrowsersRepo
 		if ok {
 			info.Registered = true
 
+			env := doctorEnvForBrowser(cfg, id)
 			for _, dc := range b.DoctorChecks(browsers.TargetConfig{Provider: id}) {
 				r := dc.Fn(ctx, env)
 				info.Checks = append(info.Checks, CheckResult{
@@ -189,4 +188,35 @@ func errMsg(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// doctorEnvForBrowser resolves the provider's effective config (its target's
+// binary/cloak settings) before building the check env — checking cloak
+// against the global chrome binary yields meaningless PASS/FAIL results.
+// Providers without a configured target fall back to the global config.
+func doctorEnvForBrowser(cfg *config.RuntimeConfig, browserID string) *browsers.DoctorEnv {
+	if cfg == nil {
+		return nil
+	}
+	matches := config.TargetsForBrowser(cfg, browserID)
+	name := ""
+	switch len(matches) {
+	case 0:
+	case 1:
+		name = matches[0]
+	default:
+		dt := config.ResolveDefaultTarget(cfg)
+		for _, m := range matches {
+			if m == dt {
+				name = dt
+				break
+			}
+		}
+	}
+	if name != "" {
+		if resolved, err := config.ResolveExplicitBrowserTarget(cfg, name); err == nil {
+			return buildDoctorEnv(resolved.Config)
+		}
+	}
+	return buildDoctorEnv(cfg)
 }

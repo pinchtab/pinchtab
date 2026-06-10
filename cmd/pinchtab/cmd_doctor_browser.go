@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/doctor"
@@ -42,11 +43,16 @@ func runDoctorBrowser(cmd *cobra.Command, args []string) error {
 
 	target := strings.TrimSpace(args[0])
 
-	// If the argument is a bare browser ID (not a configured target),
-	// show the overview focused on that browser.
+	// A bare known browser ID (not a configured target) gets the overview
+	// focused on that browser; anything else is an error so scripts can
+	// rely on the documented exit contract.
 	resolved, err := config.ResolveExplicitBrowserTarget(cfg, target)
 	if err != nil {
-		return runDoctorBrowserOverview(cmd, cfg, target)
+		id := strings.ToLower(target)
+		if _, known := browsers.Get(id); known {
+			return runDoctorBrowserOverview(cmd, cfg, id)
+		}
+		return newCommandExitError(2, fmt.Errorf("pinchtab doctor browser: unknown browser or target %q: %w", target, err))
 	}
 
 	cfg = resolved.Config

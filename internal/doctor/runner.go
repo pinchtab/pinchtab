@@ -20,12 +20,15 @@ const (
 )
 
 type CheckResult struct {
-	Name     string        `json:"name"`
-	Status   CheckStatus   `json:"status"`
-	Detail   string        `json:"detail"`
-	Err      error         `json:"-"`
-	ErrMsg   string        `json:"error,omitempty"`
-	Duration time.Duration `json:"durationMs"`
+	Name   string      `json:"name"`
+	Status CheckStatus `json:"status"`
+	Detail string      `json:"detail"`
+	Err    error       `json:"-"`
+	ErrMsg string      `json:"error,omitempty"`
+	// Duration is for human-facing output; DurationMS is its JSON shape —
+	// a raw time.Duration would marshal nanoseconds under a "Ms" key.
+	Duration   time.Duration `json:"-"`
+	DurationMS int64         `json:"durationMs"`
 }
 
 type CheckFunc func(ctx context.Context, cfg *config.RuntimeConfig) CheckResult
@@ -143,6 +146,7 @@ func Run(ctx context.Context, cfg *config.RuntimeConfig, checkFilter string) []C
 		if r.Duration == 0 {
 			r.Duration = time.Since(start)
 		}
+		r.DurationMS = r.Duration.Milliseconds()
 		if r.Err != nil && r.ErrMsg == "" {
 			r.ErrMsg = r.Err.Error()
 		}

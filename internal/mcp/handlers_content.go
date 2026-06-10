@@ -20,9 +20,6 @@ func handleEval(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		if browser := optString(r, "browser"); browser != "" {
-			payload["browser"] = browser
-		}
 		body, code, err := c.Post(ctx, "/evaluate", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -46,9 +43,6 @@ func handlePDF(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallT
 		if pr := optString(r, "pageRanges"); pr != "" {
 			q.Set("pageRanges", pr)
 		}
-		if browser := optString(r, "browser"); browser != "" {
-			q.Set("browser", browser)
-		}
 		body, code, err := c.Get(ctx, "/pdf", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -66,9 +60,6 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		payload := map[string]any{"query": query}
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
-		}
-		if browser := optString(r, "browser"); browser != "" {
-			payload["browser"] = browser
 		}
 		body, code, err := c.Post(ctx, "/find", payload)
 		if err != nil {

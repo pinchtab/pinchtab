@@ -341,3 +341,25 @@ func TestReportBrowsers_NeverModifiesConfig(t *testing.T) {
 		t.Errorf("DefaultBrowser changed: %q -> %q", origDefault, cfg.DefaultBrowser)
 	}
 }
+
+// M7 regression: each provider's doctor checks must run against ITS
+// target-resolved binary — checking cloak against the global chrome binary
+// yields meaningless results.
+func TestDoctorEnvForBrowser_ResolvesTargetBinary(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		BrowserBinary: "/usr/bin/chrome",
+		Targets: config.BrowserTargetsConfig{
+			"cloak-1": {Provider: config.BrowserCloak, Binary: "/opt/cloak/bin"},
+		},
+	}
+
+	env := doctorEnvForBrowser(cfg, "cloak")
+	if env == nil || env.Binary != "/opt/cloak/bin" {
+		t.Fatalf("cloak env should carry the target binary, got %+v", env)
+	}
+
+	env = doctorEnvForBrowser(cfg, "chrome")
+	if env == nil || env.Binary != "/usr/bin/chrome" {
+		t.Fatalf("provider without a target should fall back to the global binary, got %+v", env)
+	}
+}
