@@ -5,13 +5,13 @@ import (
 	"net/netip"
 )
 
-// Validator carries pre-parsed security configuration for navigation URL, target,
-// and remote-IP validation. It is safe for concurrent use when fields are not mutated
-// after construction.
+// Validator carries pre-parsed security configuration for navigation target
+// validation. Handlers construct one per call because trusted CIDRs come from
+// the per-request (target-scoped) effective config; remote-IP validation uses
+// the standalone ValidateRemoteIP function. It is safe for concurrent use when
+// fields are not mutated after construction.
 type Validator struct {
 	TrustedResolveCIDRs []*net.IPNet
-	TrustedProxyCIDRs   []*net.IPNet
-	IDPIDomainAllowed   func(rawURL string) bool // nil = no IDPI check
 }
 
 // ValidatedTarget is the result of ValidateTarget. It signals which runtime

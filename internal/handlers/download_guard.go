@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,7 +18,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
-var errDownloadTooLarge = errors.New("download response too large")
+// Aliased to the bridge sentinel so errors from either layer classify identically.
+var errDownloadTooLarge = bridge.ErrDownloadTooLarge
 
 type downloadURLGuard struct {
 	allowedDomains []string
@@ -148,9 +148,6 @@ type downloadRequestGuard struct {
 	validator    *downloadURLGuard
 	maxRedirects int
 	redirects    atomic.Int32
-
-	mu         sync.Mutex
-	blockedErr error
 }
 
 func newDownloadRequestGuard(validator *downloadURLGuard, maxRedirects int) *downloadRequestGuard {
@@ -176,20 +173,6 @@ func (g *downloadRequestGuard) Validate(rawURL string, redirected bool) error {
 		}
 	}
 	return nil
-}
-
-func (g *downloadRequestGuard) NoteBlocked(err error) {
-	g.mu.Lock()
-	if g.blockedErr == nil {
-		g.blockedErr = err
-	}
-	g.mu.Unlock()
-}
-
-func (g *downloadRequestGuard) BlockedError() error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.blockedErr
 }
 
 func downloadTooLargeError(size int64, maxBytes int) error {

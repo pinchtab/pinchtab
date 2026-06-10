@@ -19,8 +19,9 @@ type providerSetup struct {
 	Setup func(t *testing.T, cfg *config.RuntimeConfig) *Handlers
 }
 
-// navigateProviders returns the four provider paths for /navigate tests.
-// All four share the same navguard+IDPI code paths before any Browser or
+// navigateProviders returns the provider paths for /navigate security tests
+// (chrome and cloak — ghost-chrome has no parity coverage here yet, a known
+// gap). Both share the same navguard+IDPI code paths before any Browser or
 // Chrome call is made, so the security checks are exercised uniformly.
 func navigateProviders() []providerSetup {
 	return []providerSetup{
@@ -164,13 +165,7 @@ func TestSecurityParity_Navigate_TrustedResolveCIDRBypassesPrivateIP(t *testing.
 		return []net.IP{net.ParseIP("10.0.0.5")}, nil
 	})
 
-	// Only test chrome/cloak providers here. Ghost-chrome providers pass the
-	// SSRF check (which is the point of this test) but then try to actually
-	// connect to the hostname via Browser, which times out since the
-	// host does not exist. Chrome/cloak use the mockBridge and return immediately.
-	chromeAndCloak := navigateProviders()[:2]
-
-	for _, p := range chromeAndCloak {
+	for _, p := range navigateProviders() {
 		t.Run(p.Name, func(t *testing.T) {
 			cfg := &config.RuntimeConfig{
 				TrustedResolveCIDRs: []string{"10.0.0.0/8"},

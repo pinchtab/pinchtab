@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -119,5 +120,44 @@ func TestResolveEffectiveConfig_AmbiguousBrowser(t *testing.T) {
 	}
 	if ambErr.Browser != "cloak" {
 		t.Fatalf("AmbiguousBrowserError.Browser = %q, want cloak", ambErr.Browser)
+	}
+}
+
+// M6 regression: a target that exists but fails to resolve must surface an
+// error — silently substituting the global config would run the request with
+// the wrong binary/proxy/fingerprint.
+func TestResolveEffectiveConfig_BrokenTargetErrorsInsteadOfGlobalFallback(t *testing.T) {
+	// "Bad-Name" violates the target-name grammar (^[a-z][a-z0-9-]{0,31}$),
+	// which loads with only a warning but fails explicit resolution.
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		Targets: config.BrowserTargetsConfig{
+			"Bad-Name": {Provider: config.BrowserCloak, Binary: "/opt/cloak/bin"},
+		},
+	}, nil, nil, nil)
+
+	cfg, err := h.resolveEffectiveConfig(config.BrowserCloak)
+	if err == nil {
+		t.Fatalf("expected resolution error for broken target, got cfg=%+v", cfg)
+	}
+	if !strings.Contains(err.Error(), "Bad-Name") {
+		t.Fatalf("error should name the broken target: %v", err)
+	}
+}
+
+// The legitimate fallbacks stay: no target configured for the provider means
+// the global config, not an error.
+func TestResolveEffectiveConfig_NoTargetForProviderFallsBack(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		Targets: config.BrowserTargetsConfig{
+			"cloak-1": {Provider: config.BrowserCloak},
+		},
+	}, nil, nil, nil)
+
+	cfg, err := h.resolveEffectiveConfig(config.BrowserChrome)
+	if err != nil {
+		t.Fatalf("no-target-for-provider should fall back, got error: %v", err)
+	}
+	if cfg != h.Config {
+		t.Fatal("expected the global config on fallback")
 	}
 }

@@ -92,6 +92,8 @@ func validateNavigateURL(raw string) error {
 }
 
 // validateNavigateTarget delegates to navguard's target validation logic.
+// Per-call Validator construction is intentional: trusted CIDRs come from the
+// per-request (target-scoped) effective config, not a static startup value.
 func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResolveCIDRs []*net.IPNet) (*navguard.ValidatedTarget, error) {
 	v := &navguard.Validator{TrustedResolveCIDRs: trustedResolveCIDRs}
 	return v.ValidateTarget(context.Background(), raw, allowExplicitInternal)

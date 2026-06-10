@@ -14,8 +14,10 @@ import (
 )
 
 // ValidateTarget resolves a navigation URL's target host and enforces SSRF
-// protections. It uses the Validator's TrustedResolveCIDRs and IDPIDomainAllowed.
-// allowExplicitInternal overrides the private-IP block for explicitly allowed domains.
+// protections using the Validator's TrustedResolveCIDRs. IDPI domain
+// allowlisting happens upstream: callers compute allowExplicitInternal from
+// the IDPI allowlist (handlers derive it via idpi Guard.DomainAllowed) and it
+// overrides the private-IP block for explicitly allowed domains.
 func (v *Validator) ValidateTarget(ctx context.Context, raw string, allowExplicitInternal bool) (*ValidatedTarget, error) {
 	return ValidateTarget(ctx, raw, allowExplicitInternal, v.TrustedResolveCIDRs)
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/pinchtab/internal/ids"
-	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -34,7 +33,6 @@ type Handlers struct {
 	Recovery        *recovery.RecoveryEngine
 	IDPIGuard       idpi.Guard
 	ContentGuard    *contentguard.Scanner
-	NavGuard        *navguard.Validator
 	CurrentTabs     *CurrentTabStore
 	Version         string // build version injected at startup
 	clipboard       clipboardStore
@@ -70,11 +68,6 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		ContentGuard: &contentguard.Scanner{
 			Guard:       idpiGuard,
 			WrapEnabled: cfg.IDPI.WrapContent,
-		},
-		NavGuard: &navguard.Validator{
-			TrustedResolveCIDRs: navguard.ParseCIDRs(cfg.TrustedResolveCIDRs),
-			TrustedProxyCIDRs:   navguard.BuildTrustedProxyCIDRs(cfg.TrustLoopbackProxy, cfg.TrustedProxyCIDRs),
-			IDPIDomainAllowed:   idpiGuard.DomainAllowed,
 		},
 		CurrentTabs:     NewCurrentTabStore(),
 		credentialStore: newCredentialStore(),
@@ -238,6 +231,9 @@ func (h *Handlers) writeBridgeUnavailable(w http.ResponseWriter, err error) bool
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("POST /ensure-browser", h.HandleEnsureBrowser)
+	// Back-compat alias: older orchestrators retry lazy init via the
+	// pre-rename path; without it a version-skewed pair 404s.
+	mux.HandleFunc("POST /ensure-chrome", h.HandleEnsureBrowser)
 	mux.HandleFunc("POST /browser/restart", h.HandleBrowserRestart)
 	mux.HandleFunc("GET /tabs", h.HandleTabs)
 	mux.HandleFunc("POST /tabs/{id}/navigate", h.HandleTabNavigate)

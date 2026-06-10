@@ -140,6 +140,12 @@ func NormalizeRemoteIP(raw string) string {
 func ValidateRemoteIPAddress(raw string) error {
 	raw = NormalizeRemoteIP(raw)
 	if raw == "" {
+		// Accepted by design: CDP reports no remote IP for cache- and
+		// service-worker-served responses, so erroring here would break
+		// legitimate cached navigations. This post-connect check is the last
+		// of several layers (URL validation, resolve-time checks with pinned
+		// IPs, dial-time enforcement on the static path); the residual
+		// exposure is a cached/SW response for an already-validated target.
 		return nil
 	}
 	ip := net.ParseIP(raw)

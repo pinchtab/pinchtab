@@ -141,6 +141,9 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	if sess, ok := session.FromRequest(r); ok && sess != nil {
 		sessionBrowser = sess.Browser
 	}
+	if h.rejectBrowserConflictWithRunning(w, requestBrowser, sessionBrowser) {
+		return
+	}
 	var instanceBrowser string
 	if req.TabID != "" && h.Orchestrator != nil {
 		if inst, ok := h.Orchestrator.FindInstanceByTab(req.TabID); ok && inst != nil && inst.Browser != "" {
@@ -503,9 +506,20 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	if len(req.Actions) > 0 {
 		requestBrowser = strings.TrimSpace(req.Actions[0].Browser)
 	}
+	// A batch executes on one browser; differing values on later actions
+	// would be silently ignored — reject them instead.
+	for i, a := range req.Actions {
+		if b := strings.TrimSpace(a.Browser); b != "" && !strings.EqualFold(b, requestBrowser) {
+			httpx.Error(w, 400, fmt.Errorf("mixed browser values in a batch are not supported: actions[0]=%q, actions[%d]=%q", requestBrowser, i, b))
+			return
+		}
+	}
 	var sessionBrowser string
 	if sess, ok := session.FromRequest(r); ok && sess != nil {
 		sessionBrowser = sess.Browser
+	}
+	if h.rejectBrowserConflictWithRunning(w, requestBrowser, sessionBrowser) {
+		return
 	}
 	var instanceBrowser string
 	if req.TabID != "" && h.Orchestrator != nil {
@@ -796,6 +810,14 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	var macroRequestBrowser string
 	if len(req.Steps) > 0 {
 		macroRequestBrowser = strings.TrimSpace(req.Steps[0].Browser)
+	}
+	// A macro executes on one browser; differing values on later steps
+	// would be silently ignored — reject them instead.
+	for i, s := range req.Steps {
+		if b := strings.TrimSpace(s.Browser); b != "" && !strings.EqualFold(b, macroRequestBrowser) {
+			httpx.Error(w, 400, fmt.Errorf("mixed browser values in a macro are not supported: steps[0]=%q, steps[%d]=%q", macroRequestBrowser, i, b))
+			return
+		}
 	}
 	var macroSessionBrowser string
 	if sess, ok := session.FromRequest(r); ok && sess != nil {

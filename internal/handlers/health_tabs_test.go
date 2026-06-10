@@ -390,6 +390,8 @@ func (m *MockBridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
+func (m *MockBridge) RunningBrowser() (string, bool) { return "", false }
+
 func (m *MockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	if m.ensureBrowserErr != "" {
 		return fmt.Errorf("%s", m.ensureBrowserErr)

@@ -67,3 +67,55 @@ func TestHandleNavigate_BrowserTargetIgnored(t *testing.T) {
 		t.Fatalf("expected browserTarget to be ignored (no 409), got 409 body=%s", w.Body.String())
 	}
 }
+
+// A plain tabId navigate against a tab owned by a non-default-browser instance
+// must resolve to the instance's browser instead of 409ing (H5 regression).
+func TestHandleNavigate_InstanceBrowserResolvedFromTab(t *testing.T) {
+	orch := newOrchWithTab("tab1", &bridge.Instance{ID: "inst1", Browser: config.BrowserCloak})
+	m := &mockBridge{navigateResult: &bridge.NavigateResult{
+		TabID: "tab1",
+		URL:   "http://localhost:3000/",
+		Title: "Cloak Page",
+	}}
+	h := New(m, &config.RuntimeConfig{
+		DefaultBrowser:    config.BrowserChrome,
+		BrowsersAvailable: []string{config.BrowserChrome, config.BrowserCloak},
+	}, nil, nil, orch)
+
+	body := []byte(`{"tabId":"tab1","url":"http://localhost:3000"}`)
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code == http.StatusConflict {
+		t.Fatalf("plain tabId navigate 409ed against its own instance browser: %s", w.Body.String())
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// An explicit browser param that disagrees with the owning instance still 409s,
+// and the payload no longer duplicates instanceBrowser as instanceProvider.
+func TestHandleNavigate_ExplicitBrowserConflictStill409(t *testing.T) {
+	orch := newOrchWithTab("tab1", &bridge.Instance{ID: "inst1", Browser: config.BrowserCloak})
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		DefaultBrowser:    config.BrowserChrome,
+		BrowsersAvailable: []string{config.BrowserChrome, config.BrowserCloak},
+	}, nil, nil, orch)
+
+	body := []byte(`{"tabId":"tab1","url":"http://localhost:3000","browser":"chrome"}`)
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for explicit conflicting browser, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("instanceBrowser")) {
+		t.Fatalf("409 payload missing instanceBrowser: %s", w.Body.String())
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte("instanceProvider")) {
+		t.Fatalf("409 payload still contains duplicate instanceProvider key: %s", w.Body.String())
+	}
+}

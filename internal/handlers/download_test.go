@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -420,5 +421,26 @@ func TestHandleDownload_RejectsURLOutsideAllowedDomains(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "downloadAllowedDomains") {
 		t.Fatalf("expected allowlist error in response, got %s", w.Body.String())
+	}
+}
+
+// M12 regression: status mapping is driven by errors.Is on the bridge
+// sentinels, surviving arbitrary extra wrapping — not by message substrings.
+func TestDownloadErrorSentinelsClassifyThroughWrapping(t *testing.T) {
+	tooLarge := fmt.Errorf("navigate to download URL: %w",
+		fmt.Errorf("%w: received 10 bytes, max 5", bridge.ErrDownloadTooLarge))
+	if !errors.Is(tooLarge, bridge.ErrDownloadTooLarge) {
+		t.Fatal("wrapped too-large error should match the sentinel")
+	}
+	rec := httptest.NewRecorder()
+	if !writeDownloadGuardError(rec, tooLarge, 5) {
+		t.Fatal("guard writer should classify the sentinel error")
+	}
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", rec.Code)
+	}
+
+	if !errors.Is(fmt.Errorf("ctx: %w", bridge.ErrDownloadTimeout), bridge.ErrDownloadTimeout) {
+		t.Fatal("wrapped timeout error should match the sentinel")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -597,5 +598,39 @@ func TestHandleMacro_Disabled(t *testing.T) {
 	h.HandleMacro(w, req)
 	if w.Code != 403 {
 		t.Errorf("expected 403 when macro disabled, got %d", w.Code)
+	}
+}
+
+// L7(f): differing browser values across batch actions would be silently
+// ignored (only actions[0] is consulted) — they must 400 instead.
+func TestHandleBatchActions_MixedBrowsersRejected(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{
+		BrowsersAvailable: []string{config.BrowserChrome, config.BrowserCloak},
+	}, nil, nil, nil)
+
+	body := []byte(`{"actions":[{"kind":"click","ref":"e1","browser":"chrome"},{"kind":"click","ref":"e2","browser":"cloak"}]}`)
+	req := httptest.NewRequest("POST", "/actions", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleActions(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("mixed browsers should 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "mixed browser") {
+		t.Fatalf("error should name the mixed-browser problem: %s", w.Body.String())
+	}
+}
+
+// L7(d): the pre-rename lazy-init path must keep serving for old orchestrators.
+func TestEnsureChromeAliasServes(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, func() {})
+
+	req := httptest.NewRequest("POST", "/ensure-chrome", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code == http.StatusNotFound {
+		t.Fatal("/ensure-chrome back-compat alias must not 404")
 	}
 }

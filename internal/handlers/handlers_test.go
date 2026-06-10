@@ -33,6 +33,14 @@ type mockBridge struct {
 	autoCloseArmed    []string
 	autoCloseCanceled []string
 	availableActions  []string
+	navigateResult    *bridge.NavigateResult
+	navigateErr       error
+	closedTabs        []string
+	runningBrowser    string
+
+	staticFirstNavigate bool
+	staticEscalate      *bridge.StaticEscalateError
+	navigateParams      []bridge.NavigateParams
 }
 
 func (m *mockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
@@ -73,6 +81,7 @@ func (m *mockBridge) CloseTab(tabID string) error {
 	if tabID == "fail" {
 		return fmt.Errorf("close failed")
 	}
+	m.closedTabs = append(m.closedTabs, tabID)
 	return nil
 }
 
@@ -96,6 +105,10 @@ func (m *mockBridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
 	return m.ensureBrowserErr
 }
 
+func (m *mockBridge) RunningBrowser() (string, bool) {
+	return m.runningBrowser, m.runningBrowser != ""
+}
+
 func (m *mockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	return nil
 }
@@ -104,9 +117,21 @@ func (m *mockBridge) GetRefCache(tabID string) *bridge.RefCache        { return 
 func (m *mockBridge) SetRefCache(tabID string, cache *bridge.RefCache) {}
 func (m *mockBridge) DeleteRefCache(tabID string)                      {}
 
-func (m *mockBridge) Navigate(_ context.Context, url string, _ bridge.NavigateParams) (*bridge.NavigateResult, error) {
+func (m *mockBridge) Navigate(_ context.Context, url string, params bridge.NavigateParams) (*bridge.NavigateResult, error) {
+	m.navigateParams = append(m.navigateParams, params)
+	if params.NoEscalate && m.staticEscalate != nil {
+		return nil, m.staticEscalate
+	}
+	if m.navigateErr != nil {
+		return nil, m.navigateErr
+	}
+	if m.navigateResult != nil {
+		return m.navigateResult, nil
+	}
 	return nil, fmt.Errorf("not implemented in test mock")
 }
+
+func (m *mockBridge) StaticFirstNavigate() bool { return m.staticFirstNavigate }
 
 func (m *mockBridge) Snapshot(_ context.Context, _ string, _ string, _ bridge.ContentParams) (*bridge.SnapshotResult, error) {
 	return nil, fmt.Errorf("not implemented in test mock")

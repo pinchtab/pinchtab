@@ -10,13 +10,7 @@ import (
 )
 
 // ValidateRemoteIP checks that the response RemoteIPAddress is a public IP or
-// falls within trusted CIDRs / pre-resolved IPs. It uses the Validator's
-// TrustedProxyCIDRs.
-func (v *Validator) ValidateRemoteIP(raw string, trustedResolved []netip.Addr) error {
-	return ValidateRemoteIP(raw, v.TrustedProxyCIDRs, trustedResolved)
-}
-
-// ValidateRemoteIP is the standalone (non-method) remote IP validator.
+// falls within trusted CIDRs / pre-resolved IPs.
 func ValidateRemoteIP(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.Addr) error {
 	normalized := netguard.NormalizeRemoteIP(raw)
 	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {

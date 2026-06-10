@@ -100,8 +100,16 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	if sess, ok := session.FromRequest(r); ok && sess != nil {
 		sessionBrowser = sess.Browser
 	}
+	if h.rejectBrowserConflictWithRunning(w, requestBrowser, sessionBrowser) {
+		return
+	}
+	tabID := strings.TrimSpace(req.TabID)
 	var instanceBrowser string
-	// Instance browser lookup is done later when we have a tabID (for existing tabs)
+	if tabID != "" && h.Orchestrator != nil {
+		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil && inst.Browser != "" {
+			instanceBrowser = inst.Browser
+		}
+	}
 
 	resolvedBrowser := config.ResolveBrowser(requestBrowser, sessionBrowser, instanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
 	if resolvedBrowser != config.BrowserChrome {
@@ -111,6 +119,10 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// intentBrowser is the pre-downgrade resolution: the ownership conflict
+	// check below must compare against what was asked for, not what the
+	// DecisionSkip fallback executes on (ghost-chrome reads run on chrome).
+	intentBrowser := resolvedBrowser
 	handleDecision, err := checkBrowserCanHandle(resolvedBrowser, browsers.RequestIntent{
 		Shape: browsers.ShapeRenderedRead,
 	})
@@ -138,18 +150,18 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabID := strings.TrimSpace(req.TabID)
-	if resolvedBrowser != "" && tabID != "" && h.Orchestrator != nil {
+	// With instance browser feeding resolution above, this only fires when an
+	// explicit request/session browser disagrees with the owning instance.
+	if intentBrowser != "" && tabID != "" && h.Orchestrator != nil {
 		if inst, ok := h.Orchestrator.FindInstanceByTab(tabID); ok && inst != nil {
-			if inst.Browser != "" && config.NormalizeBrowser(inst.Browser) != config.NormalizeBrowser(resolvedBrowser) {
+			if inst.Browser != "" && config.NormalizeBrowser(inst.Browser) != config.NormalizeBrowser(intentBrowser) {
 				httpx.ErrorCode(w, http.StatusConflict, "browser_conflict",
 					fmt.Sprintf("tab %q is owned by instance with browser %q; cannot navigate with browser %q",
-						tabID, inst.Browser, resolvedBrowser),
+						tabID, inst.Browser, intentBrowser),
 					false, map[string]any{
 						"tabId":            tabID,
 						"instanceBrowser":  inst.Browser,
-						"requestedBrowser": resolvedBrowser,
-						"instanceProvider": inst.Browser,
+						"requestedBrowser": intentBrowser,
 					})
 				return
 			}
@@ -191,10 +203,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r, activity.Update{Route: navRoute})
 
-	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
-		return
-	}
-
 	explicitTabID := strings.TrimSpace(req.TabID) != ""
 	scopedCurrentForNavigate := false
 	identifiedCaller := !currentTabScopeFromRequest(r).IsGlobal()
@@ -217,6 +225,59 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	// scoped current tab.
 	if req.TabID == "" {
 		req.NewTab = true
+	}
+
+	// Static-first phase: a ghost-chrome-capable bridge can serve a fresh
+	// navigate from its static browser without launching Chrome at all
+	// (parity with main's lite mode). Only new-tab navigates qualify —
+	// existing tabs already imply a running browser. On escalation, the
+	// Chrome path below runs with SkipStatic so the fetch isn't repeated.
+	//
+	// Timeout budget is PER PHASE, not shared: the static attempt gets
+	// NavigateTimeout (default 30s), and on escalation the Chrome navigate
+	// gets a fresh budget of its own — worst case a navigate takes up to
+	// twice the configured timeout. Sharing one budget would let a slow
+	// static fetch starve the Chrome attempt that exists to rescue it.
+	skipStatic := false
+	var staticEscRoute *browserops.RouteMetadata
+	if sf, ok := h.Bridge.(staticFirstNavigator); ok && sf.StaticFirstNavigate() && req.NewTab {
+		phase1Timeout := effectiveCfg.NavigateTimeout
+		if phase1Timeout <= 0 {
+			phase1Timeout = 30 * time.Second
+		}
+		phase1Ctx, phase1Cancel := context.WithTimeout(r.Context(), phase1Timeout)
+		navResult, navErr := h.Bridge.Navigate(phase1Ctx, req.URL, bridge.NavigateParams{
+			MaxRedirects: effectiveCfg.MaxRedirects,
+			NoEscalate:   true,
+		})
+		phase1Cancel()
+		if navErr == nil && navResult != nil && navResult.TabID != "" {
+			if navResult.Route != nil {
+				navRoute = navResult.Route
+			}
+			h.setCurrentTabForRequest(r, navResult.TabID)
+			h.recordResolvedURL(r, navResult.URL)
+			httpx.JSON(w, 200, map[string]any{"tabId": navResult.TabID, "url": navResult.URL, "title": navResult.Title, "route": navRoute})
+			return
+		}
+		skipStatic = true
+		var esc *bridge.StaticEscalateError
+		if errors.As(navErr, &esc) && esc.Route != nil {
+			staticEscRoute = esc.Route
+		}
+	}
+
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
+		return
+	}
+
+	if staticEscRoute != nil {
+		// Merge the static attempt with the Chrome escalation, mirroring the
+		// adapter's internal-escalation metadata shape.
+		staticEscRoute.Escalated = true
+		staticEscRoute.Attempts = append(staticEscRoute.Attempts,
+			browserops.RouteAttempt{Browser: "chrome", Accepted: true, Reason: "escalated"})
+		navRoute = staticEscRoute
 	}
 
 	titleWait := time.Duration(0)
@@ -275,6 +336,7 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 			DismissBanners: req.DismissBanners,
 			Route:          navRoute,
 			MaxRedirects:   effectiveCfg.MaxRedirects,
+			SkipStatic:     skipStatic,
 		})
 		return
 	}
@@ -345,6 +407,18 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	h.Bridge.DeleteRefCache(resolvedTabID)
 	h.clearTabFrameScope(resolvedTabID)
 
+	// The ghost-chrome adapter may serve a navigate from a static tab instead
+	// of the tab this handler drove; its result is authoritative. The static
+	// document is fully loaded by construction, so waitFor/waitSelector are
+	// already satisfied, and the remaining post-steps are Chrome-tab CDP ops
+	// that would run against a tab that never navigated.
+	if navResult != nil && navResult.TabID != "" && navResult.TabID != resolvedTabID {
+		h.setCurrentTabForRequest(r, navResult.TabID)
+		h.recordResolvedURL(r, navResult.URL)
+		httpx.JSON(w, 200, map[string]any{"tabId": navResult.TabID, "url": navResult.URL, "title": navResult.Title, "route": navRoute})
+		return
+	}
+
 	if err := h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector); err != nil {
 		httpx.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
 		return
@@ -373,6 +447,15 @@ type navigateBrowserOptions struct {
 	DismissBanners bool
 	Route          *browserops.RouteMetadata
 	MaxRedirects   int
+	// SkipStatic: the handler already ran (and failed) the static-first
+	// phase; the bridge must go straight to Chrome.
+	SkipStatic bool
+}
+
+// staticFirstNavigator is probed on the bridge to enable the deferred-launch
+// two-phase navigate (NoEscalate, then SkipStatic on escalation).
+type staticFirstNavigator interface {
+	StaticFirstNavigate() bool
 }
 
 func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request, opts navigateBrowserOptions) {
@@ -399,8 +482,12 @@ func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request,
 
 	navResult, navErr := h.Bridge.Navigate(tCtx, opts.URL, bridge.NavigateParams{
 		MaxRedirects: opts.MaxRedirects,
+		SkipStatic:   opts.SkipStatic,
 	})
 	if navErr != nil {
+		// The blank tab never carried the requested URL; keeping it around on
+		// failure only burns a MaxTabs slot until eviction.
+		_ = h.Bridge.CloseTab(newTabID)
 		if navGuard != nil {
 			if blockedErr := navGuard.blocked(); blockedErr != nil {
 				httpx.Error(w, http.StatusForbidden, blockedErr)
@@ -419,6 +506,22 @@ func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request,
 	}
 	if navResult != nil && navResult.Route != nil {
 		opts.Route = navResult.Route
+	}
+
+	// Static-first path served the navigate from its own tab: respond with
+	// that tab and drop the unused blank Chrome tab created above. See the
+	// matching branch in HandleNavigate for why post-steps are skipped.
+	if navResult != nil && navResult.TabID != "" && navResult.TabID != newTabID {
+		_ = h.Bridge.CloseTab(newTabID)
+		h.setCurrentTabForRequest(r, navResult.TabID)
+		h.recordResolvedTab(r, navResult.TabID)
+		h.recordResolvedURL(r, navResult.URL)
+		resp := map[string]any{"tabId": navResult.TabID, "url": navResult.URL, "title": navResult.Title}
+		if opts.Route != nil {
+			resp["route"] = opts.Route
+		}
+		httpx.JSON(w, 200, resp)
+		return
 	}
 
 	if err := h.waitForNavigationState(tCtx, opts.WaitFor, opts.WaitSelector); err != nil {

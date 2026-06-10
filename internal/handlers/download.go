@@ -129,11 +129,6 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		if bErr := requestGuard.BlockedError(); bErr != nil {
-			if writeDownloadGuardError(w, bErr, maxDownloadBytes) {
-				return
-			}
-		}
 		// Chrome aborts navigation for binary downloads (.gz, etc.).
 		// Fall back to a direct Go HTTP fetch using the browser's cookies.
 		if isNavigationAborted(err) {
@@ -160,13 +155,13 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 422, fmt.Errorf("download: %w", err))
 			return
 		}
-		if strings.Contains(err.Error(), "download response too large") {
+		if errors.Is(err, bridge.ErrDownloadTooLarge) {
 			httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "download_too_large", err.Error(), false, map[string]any{
 				"maxBytes": maxDownloadBytes,
 			})
 			return
 		}
-		if strings.Contains(err.Error(), "timed out") {
+		if errors.Is(err, bridge.ErrDownloadTimeout) {
 			httpx.Error(w, 504, fmt.Errorf("download timed out"))
 			return
 		}

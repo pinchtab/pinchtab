@@ -71,6 +71,9 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	if sess, ok := session.FromRequest(r); ok && sess != nil {
 		sessionBrowser = sess.Browser
 	}
+	if h.rejectBrowserConflictWithRunning(w, requestBrowser, sessionBrowser) {
+		return
+	}
 	var instanceBrowser string
 	tabID := r.URL.Query().Get("tabId")
 	if tabID != "" && h.Orchestrator != nil {

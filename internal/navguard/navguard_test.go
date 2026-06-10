@@ -280,20 +280,19 @@ func TestParseCIDRs_TreatsBareIPsAsSingleHosts(t *testing.T) {
 	}
 }
 
-// --- IDPIDomainAllowed + RemoteIP Scenario Tests ---
+// --- Domain-allowed + RemoteIP Scenario Tests ---
 
 func TestValidateTarget_DomainAllowedCallbackPermitsPrivateIP(t *testing.T) {
-	// When IDPIDomainAllowed returns true for the URL,
-	// navigation to a private IP is permitted via allowExplicitInternal.
+	// Callers compute allowExplicitInternal from the IDPI domain allowlist
+	// (handlers use idpi Guard.DomainAllowed); modeled here as a local callback.
 	stubHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("192.168.1.100")}, nil
 	})
 
-	v := &Validator{
-		IDPIDomainAllowed: func(rawURL string) bool { return true },
-	}
+	domainAllowed := func(rawURL string) bool { return true }
+	v := &Validator{}
 	rawURL := "https://allowed.corp.example.com/internal"
-	allowInternal := v.IDPIDomainAllowed(rawURL)
+	allowInternal := domainAllowed(rawURL)
 	target, err := v.ValidateTarget(context.Background(), rawURL, allowInternal)
 	if err != nil {
 		t.Fatalf("expected domain-allowed callback to permit private IP, got %v", err)
@@ -311,20 +310,19 @@ func TestValidateTarget_DomainAllowedCallbackPermitsPrivateIP(t *testing.T) {
 }
 
 func TestValidateTarget_DomainNotAllowedBlocksPrivateIP(t *testing.T) {
-	// When IDPIDomainAllowed returns false for the URL AND no trusted CIDRs,
+	// When the caller's domain allowlist says no AND no trusted CIDRs,
 	// navigation to a private IP is blocked.
 	stubHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("192.168.1.100")}, nil
 	})
 
-	v := &Validator{
-		IDPIDomainAllowed: func(rawURL string) bool { return false },
-	}
+	domainAllowed := func(rawURL string) bool { return false }
+	v := &Validator{}
 	rawURL := "https://untrusted.example.com/internal"
-	allowInternal := v.IDPIDomainAllowed(rawURL)
+	allowInternal := domainAllowed(rawURL)
 	_, err := v.ValidateTarget(context.Background(), rawURL, allowInternal)
 	if err == nil {
-		t.Fatal("expected private IP to be blocked when IDPIDomainAllowed=false and no trusted CIDRs")
+		t.Fatal("expected private IP to be blocked when the domain is not allowlisted and no trusted CIDRs")
 	}
 }
 

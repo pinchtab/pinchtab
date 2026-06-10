@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -138,10 +140,19 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 		// Clear credentials: disable fetch domain and remove stored credentials.
 		h.credentialStore.Delete(resolvedTabID)
 
-		if err := h.Bridge.DisableFetch(tCtx); err != nil {
+		if proxyAuthConfigured(h.Config) {
+			// Proxy auth shares the Fetch domain; keep it enabled with auth
+			// handling instead of disabling, and hand pause dispatch back to
+			// the proxy-auth listener.
+			if err := h.Bridge.EnableFetchWithAuth(tCtx); err != nil {
+				httpx.Error(w, 500, fmt.Errorf("CDP fetch re-enable for proxy auth: %w", err))
+				return
+			}
+		} else if err := h.Bridge.DisableFetch(tCtx); err != nil {
 			httpx.Error(w, 500, fmt.Errorf("CDP fetch disable: %w", err))
 			return
 		}
+		h.setFetchPauseSuppressed(resolvedTabID, false)
 
 		h.recordActivity(r, activity.Update{Action: "emulation.credentials", TabID: resolvedTabID})
 
@@ -161,6 +172,12 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 		httpx.Error(w, 500, fmt.Errorf("CDP fetch enable: %w", err))
 		return
 	}
+	// The credentials listener continues paused requests itself; quiet the
+	// proxy-auth listener's blanket continue while this session is active.
+	// Precedence on auth challenges is racy by design: the proxy-auth
+	// listener answers proxy-source challenges, this listener answers via
+	// stored credentials; a double answer logs a debug error harmlessly.
+	h.setFetchPauseSuppressed(resolvedTabID, true)
 
 	// Install event listener only once per tab. The listener reads credentials
 	// from the store dynamically, so updating creds doesn't need a new listener.
@@ -192,4 +209,23 @@ func (h *Handlers) setCredentials(w http.ResponseWriter, r *http.Request, req cr
 		"username": username,
 		"status":   "applied",
 	})
+}
+
+// fetchPauseSuppressor is probed on the bridge for Fetch-domain coordination
+// with the proxy-auth listener. The ghost-chrome adapter does not promote
+// this method (interface-embedded *Bridge), so suppression is skipped there —
+// acceptable: routes/credentials + proxy auth on ghost-chrome is an edge of
+// an edge, and the failure mode is a raced duplicate continue, not a hang.
+type fetchPauseSuppressor interface {
+	SetFetchPauseSuppressed(tabID string, v bool)
+}
+
+func (h *Handlers) setFetchPauseSuppressed(tabID string, v bool) {
+	if sup, ok := h.Bridge.(fetchPauseSuppressor); ok {
+		sup.SetFetchPauseSuppressed(tabID, v)
+	}
+}
+
+func proxyAuthConfigured(cfg *config.RuntimeConfig) bool {
+	return cfg != nil && bridgeruntime.ProxyAuthEnabled(cfg.Proxy)
 }
