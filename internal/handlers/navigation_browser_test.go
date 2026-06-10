@@ -566,6 +566,28 @@ func TestHandleNavigate_ExplicitBrowserConflictsWithRunning_409(t *testing.T) {
 	}
 }
 
+// An unknown browser name must fail validation (400) even when a different
+// browser is running — a 409 advising "restart with --browser nonexistent"
+// points the caller at a browser that doesn't exist.
+func TestHandleNavigate_UnknownBrowserWithRunningBrowser_400Not409(t *testing.T) {
+	m := &mockBridge{runningBrowser: config.BrowserGhostChrome}
+	h := New(m, &config.RuntimeConfig{
+		BrowsersAvailable: []string{config.BrowserGhostChrome},
+	}, nil, nil, nil)
+
+	body := []byte(`{"url":"http://localhost:3000","browser":"nonexistent_xyz"}`)
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown browser should 400 before the running-browser conflict check, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unknown browser") {
+		t.Fatalf("400 payload should name the unknown browser error: %s", w.Body.String())
+	}
+}
+
 func TestHandleNavigate_ImplicitBrowserIgnoresRunningMismatch(t *testing.T) {
 	// Default chrome resolution against a running cloak server must not 409 —
 	// only explicit intent conflicts.

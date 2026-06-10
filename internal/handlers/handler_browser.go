@@ -23,6 +23,14 @@ func (h *Handlers) rejectBrowserConflictWithRunning(w http.ResponseWriter, reque
 	if explicit == "" || h.Bridge == nil {
 		return false
 	}
+	// Unknown names must fail validation (400) before the conflict check:
+	// NormalizeBrowser coerces unknowns to chrome, so comparing them against
+	// the running browser would emit a 409 advising a restart with a browser
+	// that doesn't exist.
+	if _, err := config.ParseBrowser(explicit, h.Config.BrowsersAvailable); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return true
+	}
 	running, ok := h.Bridge.RunningBrowser()
 	if !ok || running == "" {
 		return false
