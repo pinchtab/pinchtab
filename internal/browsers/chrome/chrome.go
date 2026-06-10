@@ -149,9 +149,12 @@ func (Browser) BuildLaunchArgs(cfg browsers.LaunchConfig) ([]string, []string, e
 	)
 
 	if cfg.Headless {
+		// No --disable-gpu here: under --headless=new the compositor needs a
+		// GPU backend (swiftshader, enabled below); disabling the GPU process
+		// leaves Page.captureScreenshot/printToPDF with no backend and they
+		// hang past the action timeout.
 		args = append(args,
 			"--headless=new",
-			"--disable-gpu",
 			"--disable-vulkan",
 			"--use-angle=swiftshader",
 			"--enable-unsafe-swiftshader",

@@ -193,7 +193,7 @@ func sortedKeysLocked() []string {
 	return out
 }
 
-// resetForTesting clears the global registry. Exported only for tests.
+// resetForTesting clears the global registry for this package's tests.
 func resetForTesting() {
 	mu.Lock()
 	defer mu.Unlock()

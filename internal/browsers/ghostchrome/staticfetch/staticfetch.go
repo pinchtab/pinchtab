@@ -244,6 +244,26 @@ func (l *Browser) TabURL(tabID string) (string, bool) {
 	return tab.url, true
 }
 
+// CloseTab releases a single tab's window and bookkeeping. Unknown IDs are a
+// no-op so callers can close defensively; reports whether a tab was removed.
+func (l *Browser) CloseTab(tabID string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	tab := l.tabs[tabID]
+	if tab == nil {
+		return false
+	}
+	if tab.window != nil {
+		tab.window.Close()
+	}
+	delete(l.tabs, tabID)
+	if l.current == tabID {
+		l.current = ""
+	}
+	return true
+}
+
 // Close shuts down the static browser and releases resources.
 func (l *Browser) Close() error {
 	l.mu.Lock()
@@ -494,6 +514,15 @@ func stripScripts(r io.Reader) (io.Reader, error) {
 			tn, _ := z.TagName()
 			if string(tn) == "script" {
 				inScript = false
+				continue
+			}
+			buf.Write(z.Raw())
+		case nethtml.SelfClosingTagToken:
+			// `<script src="x"/>`: browsers don't honor self-closing script,
+			// but gost-dom's reader may — skip it so no script element can
+			// reach the JS-less DOM.
+			tn, _ := z.TagName()
+			if string(tn) == "script" {
 				continue
 			}
 			buf.Write(z.Raw())

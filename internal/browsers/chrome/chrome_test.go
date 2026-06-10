@@ -210,7 +210,6 @@ func TestBuildLaunchArgsHeadlessAppendsFlags(t *testing.T) {
 
 	for _, want := range []string{
 		"--headless=new",
-		"--disable-gpu",
 		"--disable-vulkan",
 		"--use-angle=swiftshader",
 		"--enable-unsafe-swiftshader",
@@ -220,8 +219,14 @@ func TestBuildLaunchArgsHeadlessAppendsFlags(t *testing.T) {
 		}
 	}
 
-	if len(args) != 30 {
-		t.Fatalf("expected 30 args (23 base + 5 headless + 1 --disable-extensions + 1 --window-size), got %d: %v", len(args), args)
+	// --disable-gpu must NOT appear: under --headless=new it removes the
+	// compositor's GPU backend and capture/print CDP calls hang.
+	if slices.Contains(args, "--disable-gpu") {
+		t.Error("headless args must not contain --disable-gpu")
+	}
+
+	if len(args) != 29 {
+		t.Fatalf("expected 29 args (23 base + 4 headless + 1 --disable-extensions + 1 --window-size), got %d: %v", len(args), args)
 	}
 }
 
@@ -374,7 +379,6 @@ func TestBuildLaunchArgsParityWithRepresentativeConfigs(t *testing.T) {
 			"--disable-metrics-reporting",
 			"--password-store=basic",
 			"--headless=new",
-			"--disable-gpu",
 			"--disable-vulkan",
 			"--use-angle=swiftshader",
 			"--enable-unsafe-swiftshader",

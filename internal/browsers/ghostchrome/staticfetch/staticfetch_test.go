@@ -419,3 +419,58 @@ func TestNormalizeWhitespace(t *testing.T) {
 		}
 	}
 }
+
+func TestStaticBrowser_CloseTab(t *testing.T) {
+	ts := newTestServer(testPage)
+	defer ts.Close()
+
+	lite := NewBrowser()
+	defer func() { _ = lite.Close() }()
+
+	res, err := lite.Navigate(context.Background(), ts.URL)
+	if err != nil {
+		t.Fatalf("Navigate: %v", err)
+	}
+
+	if !lite.CloseTab(res.TabID) {
+		t.Fatal("CloseTab should report removal of an existing tab")
+	}
+	if _, ok := lite.TabURL(res.TabID); ok {
+		t.Fatal("tab should be gone after CloseTab")
+	}
+	if lite.CloseTab(res.TabID) {
+		t.Fatal("CloseTab should be a no-op for already-closed tabs")
+	}
+
+	// Closing the current tab clears the current pointer.
+	if _, err := lite.Text(context.Background(), ""); err == nil {
+		t.Fatal("expected error reading current tab after it was closed")
+	}
+}
+
+// L5 regression: self-closing script tags previously fell through the
+// tokenizer's default branch and reached gost-dom (no JS runtime).
+func TestStaticBrowser_SelfClosingScriptStripped(t *testing.T) {
+	page := `<!DOCTYPE html><html><head><title>SC</title><script src="/x.js"/></head>` +
+		`<body><p>visible content</p><br/></body></html>`
+	ts := newTestServer(page)
+	defer ts.Close()
+
+	lite := NewBrowser()
+	defer func() { _ = lite.Close() }()
+
+	res, err := lite.Navigate(context.Background(), ts.URL)
+	if err != nil {
+		t.Fatalf("Navigate with self-closing script: %v", err)
+	}
+	text, err := lite.Text(context.Background(), res.TabID)
+	if err != nil {
+		t.Fatalf("Text: %v", err)
+	}
+	if !strings.Contains(text.Text, "visible content") {
+		t.Fatalf("benign content (incl. after <br/>) should survive stripping, got %q", text.Text)
+	}
+	if strings.Contains(text.Text, "x.js") {
+		t.Fatalf("script content leaked into text: %q", text.Text)
+	}
+}

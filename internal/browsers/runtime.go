@@ -152,12 +152,9 @@ type PDFParams struct {
 // RuntimeInstance defines post-launch browser operations. Each browser
 // provider (chrome, cloak, ghost-chrome) implements this interface to
 // own its runtime behavior. The Bridge delegates operations to the
-// active RuntimeInstance.
-//
-// Future implementations:
-//
-//	var _ RuntimeInstance = (*chrome.Instance)(nil)
-//	var _ RuntimeInstance = (*cloak.Instance)(nil)
+// active RuntimeInstance. Implementations live in the provider
+// sub-packages (chrome.Instance, cloak.Instance, ghostchrome.Instance);
+// compile-time assertions can't live here without inverting the imports.
 type RuntimeInstance interface {
 	// Visual capture
 	CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"sync"
 	"testing"
 
@@ -450,4 +451,28 @@ func startTestHTTPServer(t *testing.T) *httptest.Server {
 </body>
 </html>`)
 	}))
+}
+
+// L4 regression: the merged action set is map-built; its order must be
+// deterministic because handlers interpolate it into error messages.
+func TestAvailableActions_DeterministicSortedOrder(t *testing.T) {
+	mb := newMockChromeBridge()
+	mb.availableActions = []string{ActionScroll, ActionClick, ActionPress}
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	p := NewBridgeProxy(mb, lite, nil)
+
+	first := p.AvailableActions()
+	if !sort.StringsAreSorted(first) {
+		t.Fatalf("actions not sorted: %v", first)
+	}
+	second := p.AvailableActions()
+	if len(first) != len(second) {
+		t.Fatalf("lengths differ across calls: %v vs %v", first, second)
+	}
+	for i := range first {
+		if first[i] != second[i] {
+			t.Fatalf("order differs across calls: %v vs %v", first, second)
+		}
+	}
 }

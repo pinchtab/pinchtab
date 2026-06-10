@@ -1,6 +1,8 @@
 package runtimekit
 
 import (
+	"log/slog"
+	"os"
 	goruntime "runtime"
 	"strings"
 
@@ -92,18 +94,25 @@ func FindBrowserBinary(browserID string) string {
 }
 
 func BaseFlagArgs(browserID string, headless bool) []string {
-	args, _, _ := browsers.MustGet(browserID).BuildLaunchArgs(browsers.LaunchConfig{Headless: headless})
+	args, _, err := browsers.MustGet(browserID).BuildLaunchArgs(browsers.LaunchConfig{Headless: headless})
+	if err != nil {
+		slog.Warn("base flag args build failed", "browser", browserID, "err", err)
+	}
 	return args
 }
 
+// CloakBrowserFlagArgs extracts the --fingerprint* flags for the configured
+// cloak settings. Only fingerprint flags survive the filter below, so the
+// sandbox decision feeding BuildLaunchArgs never reaches the output.
 func CloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
 	if cfg == nil || !config.IsCloakBrowser(cfg.DefaultBrowser) {
 		return nil
 	}
 	args, _, err := browsers.MustGet(config.BrowserCloak).BuildLaunchArgs(
-		LaunchConfigFromRuntime(cfg, "", 0, ChromeNeedsNoSandbox(goruntime.GOOS, 0, false)),
+		LaunchConfigFromRuntime(cfg, "", 0, ChromeNeedsNoSandbox(goruntime.GOOS, os.Geteuid(), false)),
 	)
 	if err != nil {
+		slog.Warn("cloak fingerprint flag build failed", "err", err)
 		return nil
 	}
 	out := make([]string, 0, len(args))

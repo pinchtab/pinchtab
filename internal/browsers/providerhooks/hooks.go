@@ -60,3 +60,22 @@ func Shutdown(browserID string) {
 	}
 	hooks.Shutdown()
 }
+
+// ShutdownAll runs every registered provider's shutdown cleanup. Used at
+// signal time so no provider's browser processes can be orphaned regardless
+// of which browser is the configured default. Hooks are copied out under the
+// lock and invoked outside it; they must be idempotent (the built-in ones are
+// process sweeps).
+func ShutdownAll() {
+	mu.RLock()
+	fns := make([]func(), 0, len(registry))
+	for _, hooks := range registry {
+		if hooks.Shutdown != nil {
+			fns = append(fns, hooks.Shutdown)
+		}
+	}
+	mu.RUnlock()
+	for _, fn := range fns {
+		fn()
+	}
+}

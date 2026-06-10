@@ -3,6 +3,7 @@ package ghostchrome
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"sync"
 
 	"github.com/pinchtab/pinchtab/internal/browserops"
@@ -156,10 +157,25 @@ func (p *BridgeProxy) ExecuteAction(ctx context.Context, kind string, req Action
 	return p.chrome.ExecuteAction(ctx, kind, req)
 }
 
+// ReleaseTab scrubs all per-tab proxy state: the lite→Chrome mapping, the
+// escalation mutex, and the static tab itself. Deleting the escalation mutex
+// while another goroutine holds it is safe: the held mutex keeps working, and
+// a racing newcomer gets a fresh mutex, re-checks state under it, and finds
+// the tab gone (tab-not-found).
+func (p *BridgeProxy) ReleaseTab(tabID string) {
+	p.tabMap.clear(tabID)
+	p.escalationMu.Delete(tabID)
+	if p.lite != nil {
+		p.lite.CloseTab(tabID)
+	}
+}
+
 // canHandleStaticAction returns true when a static browser action is
 // feasible: the action kind is click or type/fill, the request targets
 // an element by ref (not a CSS selector), AND the tab exists in the
-// static browser (not an escalated Chrome tab).
+// static browser. Escalated tabs are closed in the static browser once
+// their ref cache is built (see BridgeAdapter.TabContext), so they fail
+// the TabURL check and route to Chrome.
 func (p *BridgeProxy) canHandleStaticAction(kind string, ref string, tabID string) bool {
 	if p.lite == nil || ref == "" {
 		return false
@@ -198,6 +214,9 @@ func (p *BridgeProxy) AvailableActions() []string {
 	for a := range set {
 		result = append(result, a)
 	}
+	// Deterministic order: handlers interpolate this into "valid values:"
+	// error messages, which must not vary per call.
+	sort.Strings(result)
 	return result
 }
 

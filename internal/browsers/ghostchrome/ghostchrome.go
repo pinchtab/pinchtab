@@ -1,6 +1,8 @@
-// Package ghostchrome registers a Ghost+Chrome stub browser provider.
-// It delegates capability and discovery queries to the Chrome base but
-// refuses to launch, serving as a placeholder for future implementation.
+// Package ghostchrome registers the ghost-chrome browser provider: a
+// static-first browser that serves reads from a lightweight gost-dom fetcher
+// and escalates to Chrome when a page needs rendering. Launch args, binary
+// discovery, and capability queries delegate to the Chrome base; the
+// static-first routing lives in the bridgekit sub-package.
 package ghostchrome
 
 import (

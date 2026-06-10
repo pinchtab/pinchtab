@@ -145,7 +145,14 @@ func fingerprintFlagsCheck(ctx context.Context, cfg interface{}) browsers.Doctor
 	launchCfg := browsers.LaunchConfig{
 		Cloak: env.Cloak,
 	}
-	allArgs, _, _ := Browser{}.BuildLaunchArgs(launchCfg)
+	allArgs, _, err := Browser{}.BuildLaunchArgs(launchCfg)
+	if err != nil {
+		return browsers.DoctorCheckResult{
+			Status: browsers.DoctorFail,
+			Detail: fmt.Sprintf("building fingerprint flags failed: %v", err),
+			Err:    err,
+		}
+	}
 	// Extract only fingerprint flags.
 	var fpFlags []string
 	for _, a := range allArgs {

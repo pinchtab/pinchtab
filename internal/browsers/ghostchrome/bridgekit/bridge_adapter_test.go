@@ -2,6 +2,7 @@ package bridgekit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -184,6 +185,9 @@ func TestAdapterNavigate_StaticAccepted(t *testing.T) {
 	if result.Route.Escalated {
 		t.Error("should not be escalated")
 	}
+	if _, ok := lite.TabURL(result.TabID); !ok {
+		t.Error("accepted static tab must stay alive — it is the response tab")
+	}
 }
 
 func TestAdapterNavigate_ThinContentEscalates(t *testing.T) {
@@ -222,6 +226,11 @@ func TestAdapterNavigate_ThinContentEscalates(t *testing.T) {
 	}
 	if len(result.Route.Attempts) < 2 {
 		t.Errorf("expected at least 2 attempts, got %d", len(result.Route.Attempts))
+	}
+	// The rejected static tab (first navigate → lite-1) was never exposed to
+	// the caller and must be released on escalation.
+	if _, ok := lite.TabURL("lite-1"); ok {
+		t.Error("escalation should close the rejected static tab")
 	}
 }
 
@@ -797,5 +806,219 @@ func TestStaticSnapshotIDPIWarning(t *testing.T) {
 	}
 	if result.Warning != "suspicious pattern in snapshot" {
 		t.Errorf("Warning = %q, want %q", result.Warning, "suspicious pattern in snapshot")
+	}
+}
+
+// ---------- escalation lifecycle tests ----------
+
+// escalatingChromeBridge fails TabContext for unknown IDs, forcing the proxy
+// down the lite-escalation path; CreateTab registers the new Chrome tab.
+type escalatingChromeBridge struct {
+	knownTabs    map[string]bool
+	actionCalled bool
+}
+
+func (m *escalatingChromeBridge) TabContext(tabID string) (context.Context, string, error) {
+	if m.knownTabs[tabID] {
+		return context.Background(), tabID, nil
+	}
+	return nil, "", fmt.Errorf("tab not found: %s", tabID)
+}
+
+func (m *escalatingChromeBridge) CreateTab(string) (string, context.Context, context.CancelFunc, error) {
+	if m.knownTabs == nil {
+		m.knownTabs = map[string]bool{}
+	}
+	m.knownTabs["chrome-tab"] = true
+	return "chrome-tab", context.Background(), func() {}, nil
+}
+
+func (m *escalatingChromeBridge) ExecuteAction(context.Context, string, ghostchrome.ActionRequest) (map[string]any, error) {
+	m.actionCalled = true
+	return map[string]any{"success": true}, nil
+}
+
+func (m *escalatingChromeBridge) AvailableActions() []string { return nil }
+
+// escalatingChromeAPI satisfies the bridge.BridgeAPI surface the adapter
+// touches during escalation, CloseTab, and action fallback.
+type escalatingChromeAPI struct {
+	bridge.BridgeAPI // nil — panics on unimplemented methods
+	esc              *escalatingChromeBridge
+	closedTabs       []string
+}
+
+func (c *escalatingChromeAPI) GetRefCache(string) *bridge.RefCache  { return nil }
+func (c *escalatingChromeAPI) SetRefCache(string, *bridge.RefCache) {}
+
+func (c *escalatingChromeAPI) CloseTab(tabID string) error {
+	c.closedTabs = append(c.closedTabs, tabID)
+	delete(c.esc.knownTabs, tabID)
+	return nil
+}
+
+func (c *escalatingChromeAPI) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
+	return c.esc.ExecuteAction(ctx, kind, ghostchrome.ActionRequest{})
+}
+
+func newEscalatingAdapter(t *testing.T, lite *staticfetch.Browser) (*BridgeAdapter, *escalatingChromeBridge, *escalatingChromeAPI) {
+	t.Helper()
+	esc := &escalatingChromeBridge{}
+	api := &escalatingChromeAPI{esc: esc}
+	proxy := ghostchrome.NewBridgeProxy(esc, lite, func() error { return nil })
+	return &BridgeAdapter{BridgeAPI: api, proxy: proxy}, esc, api
+}
+
+func TestAdapterTabContext_EscalationRetiresStaticTab(t *testing.T) {
+	ts := newRichTestServer()
+	defer ts.Close()
+
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	adapter, esc, _ := newEscalatingAdapter(t, lite)
+
+	res, err := lite.Navigate(context.Background(), ts.URL)
+	if err != nil {
+		t.Fatalf("static Navigate: %v", err)
+	}
+
+	_, resolvedID, err := adapter.TabContext(res.TabID)
+	if err != nil {
+		t.Fatalf("TabContext: %v", err)
+	}
+	if resolvedID != "chrome-tab" {
+		t.Fatalf("resolvedID = %q, want chrome-tab", resolvedID)
+	}
+	if _, ok := lite.TabURL(res.TabID); ok {
+		t.Fatal("escalated lite tab must be retired from the static browser")
+	}
+
+	// Post-escalation actions must hit Chrome, not the dead static DOM.
+	out, err := adapter.ExecuteAction(context.Background(), ghostchrome.ActionClick, bridge.ActionRequest{
+		TabID: res.TabID, Ref: "e1",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if !esc.actionCalled {
+		t.Fatal("action should route to Chrome after escalation")
+	}
+	if clicked, ok := out["clicked"]; ok && clicked == true {
+		t.Fatal("action was served by the static DOM after escalation")
+	}
+}
+
+func TestAdapterCloseTab_EscalatedTab_NoResurrection(t *testing.T) {
+	ts := newRichTestServer()
+	defer ts.Close()
+
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	adapter, _, api := newEscalatingAdapter(t, lite)
+
+	res, err := lite.Navigate(context.Background(), ts.URL)
+	if err != nil {
+		t.Fatalf("static Navigate: %v", err)
+	}
+	if _, _, err := adapter.TabContext(res.TabID); err != nil {
+		t.Fatalf("TabContext (escalate): %v", err)
+	}
+
+	if err := adapter.CloseTab(res.TabID); err != nil {
+		t.Fatalf("CloseTab: %v", err)
+	}
+	if len(api.closedTabs) != 1 || api.closedTabs[0] != "chrome-tab" {
+		t.Fatalf("closedTabs = %v, want [chrome-tab]", api.closedTabs)
+	}
+
+	// The closed tab must stay closed: no re-escalation from stale state.
+	if _, _, err := adapter.TabContext(res.TabID); err == nil {
+		t.Fatal("closed escalated tab resurrected via stale mapping")
+	}
+}
+
+func TestAdapterCloseTab_UnescalatedLiteTab_NoChromeInvolved(t *testing.T) {
+	ts := newRichTestServer()
+	defer ts.Close()
+
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	adapter, _, api := newEscalatingAdapter(t, lite)
+
+	res, err := lite.Navigate(context.Background(), ts.URL)
+	if err != nil {
+		t.Fatalf("static Navigate: %v", err)
+	}
+
+	if err := adapter.CloseTab(res.TabID); err != nil {
+		t.Fatalf("CloseTab: %v", err)
+	}
+	if _, ok := lite.TabURL(res.TabID); ok {
+		t.Fatal("lite tab should be gone after CloseTab")
+	}
+	if len(api.closedTabs) != 0 {
+		t.Fatalf("Chrome CloseTab should not be called for unescalated lite tabs, got %v", api.closedTabs)
+	}
+}
+
+// H1b: NoEscalate returns the typed escalation signal instead of internally
+// falling through to Chrome, and releases the rejected static tab.
+func TestAdapterNavigate_NoEscalateReturnsTypedError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>tiny</body></html>`))
+	}))
+	defer ts.Close()
+
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	mock := &mockChromeBridge{}
+	adapter := newTestAdapter(t, lite, mock)
+
+	_, err := adapter.Navigate(context.Background(), ts.URL, bridge.NavigateParams{
+		AllowInternal: true,
+		MaxRedirects:  -1,
+		NoEscalate:    true,
+	})
+	var esc *bridge.StaticEscalateError
+	if !errors.As(err, &esc) {
+		t.Fatalf("expected StaticEscalateError, got %v", err)
+	}
+	if esc.Route == nil || len(esc.Route.Attempts) != 1 || esc.Route.Attempts[0].Accepted {
+		t.Fatalf("escalation route should carry the rejected static attempt, got %+v", esc.Route)
+	}
+	if mock.navigateCalled {
+		t.Fatal("NoEscalate must not fall through to Chrome")
+	}
+	if _, ok := lite.TabURL("lite-1"); ok {
+		t.Fatal("rejected static tab must be released in NoEscalate mode")
+	}
+}
+
+// H1b: SkipStatic bypasses the static fetch entirely (the handler already
+// ran it) and goes straight to Chrome.
+func TestAdapterNavigate_SkipStaticGoesStraightToChrome(t *testing.T) {
+	ts := newRichTestServer() // would static-accept if the fetch ran
+	defer ts.Close()
+
+	lite := staticfetch.NewBrowser()
+	defer func() { _ = lite.Close() }()
+	mock := &mockChromeBridge{
+		navigateResult: &bridge.NavigateResult{URL: ts.URL, Title: "Chrome"},
+	}
+	adapter := newTestAdapter(t, lite, mock)
+
+	if _, err := adapter.Navigate(context.Background(), ts.URL, bridge.NavigateParams{
+		AllowInternal: true,
+		MaxRedirects:  -1,
+		SkipStatic:    true,
+	}); err != nil {
+		t.Fatalf("Navigate: %v", err)
+	}
+	if !mock.navigateCalled {
+		t.Fatal("SkipStatic should delegate to Chrome")
+	}
+	if _, ok := lite.TabURL("lite-1"); ok {
+		t.Fatal("SkipStatic must not run the static fetch")
 	}
 }
