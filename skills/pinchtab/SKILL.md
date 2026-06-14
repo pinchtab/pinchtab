@@ -35,7 +35,7 @@ CLI-first browser skill. Use `pinchtab` commands.
    - `--mode` and `--humanize` are mutually exclusive.
 4. For read-only observation: `pinchtab text` when you won't act on refs.
 
-**Key optimization**: Use `--snap-diff` on `click`, `fill`, `select`, `back`, `forward`, `reload` to get only added/changed/removed elements — most token-efficient for multi-step flows. Use `--snap` when you need the full snapshot (e.g., first navigation, or after major page changes). Use `--text` when you need prose content for verification (skips snap, returns page text directly).
+**Key optimization**: Use `--snap-diff` on `nav`, `click`, `fill`, `select`, `press`, `scroll`, `back`, `forward`, `reload` to get only added/changed/removed elements — most token-efficient for multi-step flows. Use `--snap` when you need the full snapshot (e.g., first navigation, or after major page changes). `--text` is available on `click`, `fill`, `select`, `press`, `back`, `forward`, `reload` (but NOT on `nav` or `scroll`) when you need prose content for verification (skips snap, returns page text directly). `dblclick` does not support any observation flag — run a separate `snap` after.
 
 `--snap-diff` returns the same compact format as `snap`, but with change markers and a header showing counts:
 ```
@@ -64,7 +64,7 @@ Rules: only `nav <url>` auto-starts the default local server; `snap`, `text`, `h
 - Do not save screenshots, PDFs, or downloads to arbitrary paths — use a user-specified path or a safe temporary/workspace directory.
 - Do not use PinchTab to inspect unrelated local files, browser secrets, stored credentials, or system configuration outside the task.
 - Cookie access is disabled by default; do not inspect, change, or clear cookies without explicit user approval.
-- Network exports (`pinchtab network-export`) may contain private URLs, auth tokens, and response bodies. Omit `--body` for sensitive sessions. Delete or redact export files after use.
+- Network captures (`pinchtab network`, optionally `pinchtab network <requestId> --body`) may contain private URLs, auth tokens, and response bodies. Omit `--body` for sensitive sessions. Delete or redact exported data after use.
 
 ## Selectors
 
@@ -105,7 +105,7 @@ Key settings agents may need to change:
 - `security.allowEvaluate`: enable `eval` command (`true`/`false`)
 - `security.allowScreencast`: enable `record` commands (`true`/`false`)
 - `security.allowedDomains`: list of allowed hostnames (e.g. `["localhost", "127.0.0.1"]`)
-- `instanceDefaults.headless`: run Chrome headless (`true`) or headed (`false`)
+- `instanceDefaults.mode`: `"headless"` or `"headed"` (string, not boolean)
 
 After changing config with the server running, restart to apply: `pinchtab server restart`.
 
@@ -188,12 +188,29 @@ pinchtab press <key>                                # Enter, Tab, Escape, ...
 pinchtab hover <selector>
 pinchtab select <selector> <value|text>             # flags: --snap, --snap-diff, --text; matches value attr, falls back to visible text
 pinchtab scroll <pixels|direction|selector>         # `scroll 1500`, `scroll down`, `scroll '#footer'`
+pinchtab check <selector> | uncheck <selector>      # toggle checkboxes / radios
+pinchtab focus <selector>                           # move keyboard focus
+pinchtab scrollintoview <selector>                  # scroll element into view
+pinchtab dialog accept | dismiss [--text "..."]     # standalone dialog handling (besides click --dialog-action)
+pinchtab keyboard type <text> | inserttext <text>   # low-level keystroke text entry
+pinchtab keydown <key> | keyup <key>                # individual key events
+```
+
+DOM inspection helpers (skip a snap when you only need one value):
+
+```bash
+pinchtab title | url | html                         # page metadata / serialized HTML
+pinchtab value <selector>                           # form-field value
+pinchtab attr <selector> <name>                     # arbitrary attribute
+pinchtab count <selector>                           # querySelectorAll length
+pinchtab box <selector>                             # getBoundingClientRect
+pinchtab visible <selector> | enabled <selector> | checked <selector>
 ```
 
 Rules:
 
 - Default output is `OK`; use `--json` for recovery metadata. Errors go to stderr as `ERROR: <cmd>: <reason>`.
-- **Prefer `--snap-diff`** with `click`, `fill`, `select`, `back`, `forward`, `reload` — returns `OK` + only changed elements. Use `--snap` when you need the full snapshot (first nav, major page change).
+- **Prefer `--snap-diff`** with `click`, `fill`, `select`, `press`, `scroll`, `back`, `forward`, `reload` — returns `OK` + only changed elements. Use `--snap` when you need the full snapshot (first nav, major page change). `dblclick` has no observation flags — chain a separate `snap` after.
 - Prefer `fill` for form entry; `type` only when the site depends on keystroke events.
 - Click behavior: omit `--mode` for the normal click path, use `click --mode dom` for `element.click()`, or `click --mode dispatch` for synthetic click events.
 - Treat `click --mode dom` and `click --mode dispatch` as broad low-level escape hatches; bypassing occlusion is the common case.
@@ -211,14 +228,14 @@ Use for async DOM settling (spinners, toasts, XHR).
 
 ```bash
 pinchtab wait <selector>                            # default: visible; --state hidden to wait for disappear
-pinchtab wait --text "..." | --not-text "..."       # text appear / disappear
+pinchtab wait --text "..." | --not-text "..."       # text appear / disappear (polls document.body.innerText)
 pinchtab wait --url "**/dashboard"                  # glob: **, *, ?
-pinchtab wait --load ready-state|content-loaded|network-idle
-pinchtab wait --fn "window.dataReady === true"      # requires security.allowEvaluate
+pinchtab wait --load ready-state|content-loaded|network-idle [--idleFor <ms>]
+pinchtab wait --fn "window.dataReady === true"      # requires security.allowEvaluate: true (else 403 evaluate_disabled)
 pinchtab wait 500                                   # fixed ms delay (last resort, max 30000ms)
 ```
 
-Timeout 10s default, 30s max via `--timeout <ms>`. Prefer `--not-text`/`--state hidden` over polling.
+Timeout 10s default, 30s max via `--timeout <ms>`. All non-`ms` wait modes poll internally every ~250ms. For dynamic SPA content (iframes, shadow DOM, virtualized lists) where `document.body.innerText` is unreliable, prefer `wait <selector> --state hidden|visible` over `--text`/`--not-text`. `--idleFor <ms>` tunes the quiet-period for `--load network-idle` (default 500ms, max 10000).
 
 ### Export, debug, verification
 

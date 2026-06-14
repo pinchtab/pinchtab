@@ -20,9 +20,6 @@ curl -X POST http://localhost:9867/profiles/<ID>/start
 curl -X POST http://localhost:9867/profiles/<ID>/start \
   -H 'Content-Type: application/json' \
   -d '{"port": "9868", "headless": true}'
-
-# Short alias
-curl -X POST http://localhost:9867/start/<ID>
 ```
 
 Returns instance info including allocated `port`. Use that port for all subsequent API calls.
@@ -31,9 +28,6 @@ Returns instance info including allocated `port`. Use that port for all subseque
 
 ```bash
 curl -X POST http://localhost:9867/profiles/<ID>/stop
-
-# Short alias
-curl -X POST http://localhost:9867/stop/<ID>
 ```
 
 ## Check instance status
@@ -60,11 +54,20 @@ curl -X POST http://localhost:9867/instances/start \
 
 ## CLI usage with profiles
 
-The CLI doesn't have profile subcommands yet — use `curl` for profile management.
-Once a profile instance is running, point the CLI at it using the `--server` flag:
+CLI subcommands are available — use these instead of `curl` when possible:
 
 ```bash
-# Get the instance port, then use CLI
+pinchtab profiles                                   # list profiles
+pinchtab instance start --profile <name>            # start (auto-allocates port)
+pinchtab instance navigate <id> <url>
+pinchtab instance stop <id>
+pinchtab instance restart <id>
+pinchtab instance logs <id>
+```
+
+Once a profile instance is running, the CLI auto-routes to it; you can also target it explicitly:
+
+```bash
 pinchtab --server http://localhost:9868 snap -i
 ```
 
