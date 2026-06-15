@@ -96,11 +96,19 @@ func TestProfileManagerImportNormalizesSourcePath(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
 	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
 
-	cwd, err := os.Getwd()
+	originalCwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	relSource, err := filepath.Rel(cwd, src)
+	if err := os.Chdir(srcRoot); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCwd)
+	})
+
+	relSource := "chrome-src"
+	normalizedSource, err := filepath.Abs(relSource)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +121,7 @@ func TestProfileManagerImportNormalizesSourcePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(importMarker), filepath.Clean(src); got != want {
+	if got, want := string(importMarker), filepath.Clean(normalizedSource); got != want {
 		t.Fatalf("expected normalized source %q, got %q", want, got)
 	}
 }

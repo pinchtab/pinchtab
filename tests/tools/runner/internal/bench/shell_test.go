@@ -1,12 +1,21 @@
 package bench
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
+func requireUnixShell(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("persistent shell benchmark tests require /bin/bash")
+	}
+}
+
 func TestShellEcho(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -26,6 +35,7 @@ func TestShellEcho(t *testing.T) {
 }
 
 func TestShellNonZeroExit(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +55,7 @@ func TestShellNonZeroExit(t *testing.T) {
 }
 
 func TestShellTimeout(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -61,6 +72,7 @@ func TestShellTimeout(t *testing.T) {
 }
 
 func TestShellEnvPersistence(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +100,7 @@ func TestShellEnvPersistence(t *testing.T) {
 }
 
 func TestShellLargeOutput(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -137,6 +150,7 @@ func TestFormatToolResult(t *testing.T) {
 }
 
 func TestShellAutoReset(t *testing.T) {
+	requireUnixShell(t)
 	ps, err := NewPersistentShell(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
