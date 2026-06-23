@@ -155,6 +155,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		AllowDownload:             false,
 		AllowCookies:              false,
 		AllowNetworkIntercept:     false,
+		AllowFileScheme:           false,
 		RetainNetworkBodies:       false,
 		RetainNetworkBodyMaxBytes: 256 * 1024,
 		AllowedDomains:            append([]string(nil), defaultLocalAllowedDomains...),
@@ -384,6 +385,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Security.AllowNetworkIntercept != nil {
 		cfg.AllowNetworkIntercept = *fc.Security.AllowNetworkIntercept
+	}
+	if fc.Security.AllowFileScheme != nil {
+		cfg.AllowFileScheme = *fc.Security.AllowFileScheme
 	}
 	cfg.DownloadAllowedDomains = append([]string(nil), fc.Security.DownloadAllowedDomains...)
 	if fc.Security.DownloadMaxBytes != nil {

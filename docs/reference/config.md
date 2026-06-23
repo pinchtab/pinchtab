@@ -227,6 +227,7 @@ Current nested file-config shape:
     "allowScreencast": false,
     "allowDownload": false,
     "allowCookies": false,
+    "allowFileScheme": false,
     "allowedDomains": ["127.0.0.1", "localhost", "::1"],
     "downloadAllowedDomains": [],
     "downloadMaxBytes": 20971520,

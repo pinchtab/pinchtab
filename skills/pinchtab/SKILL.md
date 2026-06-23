@@ -105,6 +105,7 @@ Key settings agents may need to change:
 - `security.allowEvaluate`: enable `eval` command (`true`/`false`)
 - `security.allowScreencast`: enable `record` commands (`true`/`false`)
 - `security.allowedDomains`: list of allowed hostnames (e.g. `["localhost", "127.0.0.1"]`)
+- `security.allowFileScheme`: allow `nav` to open `file://` local files (`true`/`false`, default `false`; grants local file read and is not constrained by `allowedDomains`)
 - `instanceDefaults.mode`: `"headless"` or `"headed"` (string, not boolean)
 
 After changing config with the server running, restart to apply: `pinchtab server restart`.

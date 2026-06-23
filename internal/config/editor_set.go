@@ -523,6 +523,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowUpload = &b
 	case "allowNetworkIntercept":
 		s.AllowNetworkIntercept = &b
+	case "allowFileScheme":
+		s.AllowFileScheme = &b
 	case "enableActionGuards":
 		s.EnableActionGuards = &b
 	case "trustLoopbackProxy":

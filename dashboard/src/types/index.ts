@@ -151,6 +151,7 @@ export interface BackendSecurityConfig {
   allowCookies: boolean;
   allowUpload: boolean;
   allowNetworkIntercept: boolean;
+  allowFileScheme: boolean;
   allowedDomains: string[];
   trustedProxyCIDRs: string[];
   trustedResolveCIDRs: string[];
@@ -302,6 +303,7 @@ export const defaultBackendConfig: BackendConfig = {
     allowCookies: false,
     allowUpload: false,
     allowNetworkIntercept: false,
+    allowFileScheme: false,
     allowedDomains: ["127.0.0.1", "localhost", "::1"],
     trustedProxyCIDRs: [],
     trustedResolveCIDRs: [],

@@ -122,6 +122,7 @@ export function useSettingsController(): UseSettingsControllerResult {
         backendConfig.security.allowDownload,
         backendConfig.security.allowCookies,
         backendConfig.security.allowUpload,
+        backendConfig.security.allowFileScheme,
       ].some(Boolean)
     : false;
   const apiTokenMissing = !backendState?.tokenConfigured;

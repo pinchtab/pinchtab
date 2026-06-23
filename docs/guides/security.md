@@ -194,6 +194,7 @@ Some endpoint families expose much more power than normal navigation and inspect
 - `security.allowDownload`
 - `security.allowCookies`
 - `security.allowUpload`
+- `security.allowFileScheme`
 
 Why they are considered dangerous:
 
@@ -203,6 +204,7 @@ Why they are considered dangerous:
 - `download` can fetch and persist remote content. When `security.downloadAllowedDomains` is set, listed domains bypass private-IP SSRF checks (intended for internal hosts such as Docker services). `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - `cookies` can read, write, or clear browser session tokens for the current page
 - `upload` can push local files into browser flows
+- `allowFileScheme` permits navigation to `file://` URLs. Because a `file://` URL has no host, it is **not** subject to `allowedDomains` or the SSRF/private-IP guard, so enabling it grants read access (via snapshot/screenshot/scrape) to any local file the server process can read. It stays blocked when a strict-mode `allowedDomains` allowlist is active. Enable only on trusted, single-tenant hosts. `javascript:`, `chrome://`, and `data:` remain rejected regardless.
 
 These are not the same as authentication.
 

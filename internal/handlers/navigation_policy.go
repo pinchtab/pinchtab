@@ -84,8 +84,8 @@ func installNavigateRuntimeGuardWithBridge(b bridge.BridgeAPI, tCtx context.Cont
 
 type validatedNavigateTarget = navguard.ValidatedTarget
 
-func validateNavigateURL(raw string) error {
-	return navguard.ValidateURL(raw)
+func validateNavigateURL(raw string, allowFile bool) error {
+	return navguard.ValidateURLAllowingFile(raw, allowFile)
 }
 
 // Per-call Validator construction is intentional: trusted CIDRs come from the

@@ -58,6 +58,46 @@ func TestValidateURL_RejectsEmpty(t *testing.T) {
 	}
 }
 
+func TestValidateURLAllowingFile_GatesFileScheme(t *testing.T) {
+	const fileURL = "file:///tmp/pinchtab.html"
+
+	if err := ValidateURLAllowingFile(fileURL, false); err == nil {
+		t.Fatal("ValidateURLAllowingFile(file, false) should reject file:// scheme")
+	}
+	if err := ValidateURL(fileURL); err == nil {
+		t.Fatal("ValidateURL should reject file:// scheme by default")
+	}
+
+	if err := ValidateURLAllowingFile(fileURL, true); err != nil {
+		t.Fatalf("ValidateURLAllowingFile(file, true) error = %v", err)
+	}
+
+	for _, rawURL := range []string{"https://pinchtab.com", "http://pinchtab.test", "pinchtab.com", "about:blank"} {
+		if err := ValidateURLAllowingFile(rawURL, true); err != nil {
+			t.Fatalf("ValidateURLAllowingFile(%q, true) error = %v", rawURL, err)
+		}
+	}
+
+	for _, rawURL := range []string{"javascript:alert(1)", "chrome://settings", "data:text/html,hello"} {
+		if err := ValidateURLAllowingFile(rawURL, true); err == nil {
+			t.Fatalf("ValidateURLAllowingFile(%q, true) should still reject", rawURL)
+		}
+	}
+}
+
+func TestIsFileURL(t *testing.T) {
+	for _, rawURL := range []string{"file:///etc/passwd", "FILE:///tmp/x.html"} {
+		if !IsFileURL(rawURL) {
+			t.Fatalf("IsFileURL(%q) = false, want true", rawURL)
+		}
+	}
+	for _, rawURL := range []string{"https://pinchtab.com", "http://pinchtab.test", "about:blank", "pinchtab.com"} {
+		if IsFileURL(rawURL) {
+			t.Fatalf("IsFileURL(%q) = true, want false", rawURL)
+		}
+	}
+}
+
 func TestValidateTarget_AllowsLocalHosts(t *testing.T) {
 	v := &Validator{}
 	for _, rawURL := range []string{

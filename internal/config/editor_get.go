@@ -330,6 +330,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatBoolPtr(s.AllowCookies), nil
 	case "allowNetworkIntercept":
 		return formatBoolPtr(s.AllowNetworkIntercept), nil
+	case "allowFileScheme":
+		return formatBoolPtr(s.AllowFileScheme), nil
 	case "allowedDomains":
 		return strings.Join(s.AllowedDomains, ","), nil
 	case "downloadAllowedDomains":

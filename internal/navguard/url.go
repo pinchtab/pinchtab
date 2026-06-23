@@ -19,6 +19,10 @@ func (v *Validator) ValidateURL(raw string) error {
 // ValidateURL is the standalone (non-method) URL validator, usable without a
 // Validator instance.
 func ValidateURL(raw string) error {
+	return ValidateURLAllowingFile(raw, false)
+}
+
+func ValidateURLAllowingFile(raw string, allowFile bool) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return fmt.Errorf("url required")
@@ -41,9 +45,22 @@ func ValidateURL(raw string) error {
 	switch strings.ToLower(parsed.Scheme) {
 	case "http", "https":
 		return nil
+	case "file":
+		if allowFile {
+			return nil
+		}
+		return fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
 	default:
 		return fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
 	}
+}
+
+func IsFileURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(parsed.Scheme, "file")
 }
 
 // ExtractHost extracts the hostname from a raw URL string.

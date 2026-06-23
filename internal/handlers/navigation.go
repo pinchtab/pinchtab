@@ -16,6 +16,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 )
 
 // HandleNavigate navigates a tab to a URL or creates a new tab.
@@ -191,7 +192,8 @@ func (h *Handlers) resolveNavigateBrowser(w http.ResponseWriter, r *http.Request
 // target resolution, recording the navigate request on both the blocked and
 // accepted paths. On success it returns the resolved target and trusted-proxy CIDRs.
 func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Request, tabID, url string, effectiveCfg *config.RuntimeConfig) (navTargets, bool) {
-	if err := validateNavigateURL(url); err != nil {
+	allowFile := effectiveCfg != nil && effectiveCfg.AllowFileScheme
+	if err := validateNavigateURL(url, allowFile); err != nil {
 		httpx.Error(w, 400, err)
 		return navTargets{}, false
 	}
@@ -204,6 +206,14 @@ func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Reques
 	}
 	if domainResult.Threat {
 		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
+	}
+
+	// file:// has no network target, so SSRF/private-IP resolution does not apply.
+	// It has already passed the explicit-opt-in scheme gate and the IDPI domain
+	// guard above (strict-mode allowlists block it via the empty-host path).
+	if allowFile && navguard.IsFileURL(url) {
+		h.recordNavigateRequest(r, tabID, url)
+		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(effectiveCfg)}, true
 	}
 
 	trustedResolveCIDRs := parseCIDRs(effectiveCfg.TrustedResolveCIDRs)

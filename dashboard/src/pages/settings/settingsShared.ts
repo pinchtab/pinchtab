@@ -109,6 +109,11 @@ export const securityEndpointRows = [
     "Allow network interception",
     "Lets agents install rules to abort or fulfill (mock) HTTP requests on a tab. When on, response forgery is FORBIDDEN on hosts in 'Allowed websites' below and PERMITTED elsewhere. Forging responses on hosts you've authorized the agent to use (e.g. your bank) is the highest-risk outcome — that's why allowlisted hosts are protected, not the reverse. OPTIONS preflights are skipped by default to avoid breaking CORS.",
   ],
+  [
+    "allowFileScheme",
+    "Allow file:// navigation",
+    "Lets agents open local file:// URLs. A file:// URL has no host, so it is NOT limited by 'Allowed websites' below and bypasses SSRF/private-IP protection — enabling it grants read access (via snapshot/screenshot/scrape) to any local file the server process can read. It stays blocked while a strict-mode allowlist is active. Enable only on trusted, single-tenant machines.",
+  ],
 ] as const satisfies ReadonlyArray<
   | readonly [SecurityEndpointKey, string]
   | readonly [SecurityEndpointKey, string, string]

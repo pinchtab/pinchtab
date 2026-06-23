@@ -31,6 +31,7 @@ High-impact capabilities are **disabled by default** and require explicit config
 | File downloads | **Disabled** | `security.allowDownloads` |
 | File uploads | **Disabled** | `security.allowUploads` |
 | Network interception | **Disabled** | `security.allowNetworkIntercept` |
+| `file://` navigation | **Disabled** | `security.allowFileScheme`; grants read access to local files the server can read, and `file://` has no host so it is **not** constrained by `allowedDomains` or the SSRF guard — enable only on trusted, single-tenant hosts |
 | Challenge solving (autoSolver) | **Disabled** | `autoSolver.enabled`; requires explicit opt-in per deployment |
 | Stealth level | **Light** (minimal) | `instanceDefaults.stealthLevel`; `light` applies only basic fingerprint normalization — anti-bot bypass requires `medium` or `full`, which must be set explicitly |
 | Navigation domains | **Local-only allowlist** | `security.allowedDomains` (restrict or expand deliberately) |
@@ -95,7 +96,7 @@ For maximum confidence, use the npm package (`npm install -g pinchtab`) or Docke
 PinchTab runs a separate Chrome process with:
 
 - Isolated profile directory (default: `~/.pinchtab`)
-- No access to your user's home files (unless you explicitly navigate to `file://` URLs)
+- No access to your user's home files — `file://` navigation is rejected unless `security.allowFileScheme` is explicitly enabled
 - Standard Chrome security model (site isolation, CSP, etc.)
 
 Use `profiles.baseDir`, `profiles.defaultProfile`, or `PINCHTAB_CONFIG` if you need to control where PinchTab stores browser state.

@@ -63,6 +63,8 @@ pinchtab nav https://pinchtab.com --tab <tabId>
 | `--block-ads` | Block ads for this navigation |
 | `--print-tab-id` | Print only the tab ID |
 
+Only `http`/`https` URLs are accepted by default. `file://` (for opening a local HTML file) is rejected unless the server is started with `security.allowFileScheme` enabled — and even then it is blocked when a strict-mode domain allowlist is active, since `file://` has no host. `javascript:`, `chrome://`, and `data:` are always rejected.
+
 ### `pinchtab tab` (not `tabs`)
 Manage browser tabs.
 

@@ -85,8 +85,24 @@ func TestValidateNavigateURL_RejectsUnsupportedSchemes(t *testing.T) {
 		"chrome://settings",
 		"data:text/html,hello",
 	} {
-		if err := validateNavigateURL(rawURL); err == nil {
+		if err := validateNavigateURL(rawURL, false); err == nil {
 			t.Fatalf("validateNavigateURL(%q) should reject unsupported schemes", rawURL)
+		}
+	}
+}
+
+func TestValidateNavigateURL_GatesFileScheme(t *testing.T) {
+	const fileURL = "file:///tmp/pinchtab.html"
+	if err := validateNavigateURL(fileURL, false); err == nil {
+		t.Fatal("validateNavigateURL(file, false) should reject file:// when not opted in")
+	}
+	if err := validateNavigateURL(fileURL, true); err != nil {
+		t.Fatalf("validateNavigateURL(file, true) error = %v", err)
+	}
+	// The opt-in is scoped to file:// only; other schemes stay rejected.
+	for _, rawURL := range []string{"javascript:alert(1)", "chrome://settings", "data:text/html,hello"} {
+		if err := validateNavigateURL(rawURL, true); err == nil {
+			t.Fatalf("validateNavigateURL(%q, true) should still reject", rawURL)
 		}
 	}
 }
@@ -192,7 +208,7 @@ func TestValidateNavigateURL_AllowsHTTPHTTPSAndBareHostnames(t *testing.T) {
 		"pinchtab.com",
 		"about:blank",
 	} {
-		if err := validateNavigateURL(rawURL); err != nil {
+		if err := validateNavigateURL(rawURL, false); err != nil {
 			t.Fatalf("validateNavigateURL(%q) error = %v", rawURL, err)
 		}
 	}
@@ -200,7 +216,7 @@ func TestValidateNavigateURL_AllowsHTTPHTTPSAndBareHostnames(t *testing.T) {
 
 func TestValidateNavigateURL_RejectsOverlongURL(t *testing.T) {
 	rawURL := "https://pinchtab.com/" + strings.Repeat("a", navguard.MaxURLLen)
-	if err := validateNavigateURL(rawURL); err == nil {
+	if err := validateNavigateURL(rawURL, false); err == nil {
 		t.Fatal("validateNavigateURL should reject overlong urls")
 	}
 }
@@ -221,6 +237,56 @@ func TestHandleNavigate_RejectsUnsupportedSchemeBeforeCreateTab(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "invalid URL scheme") {
 		t.Fatalf("expected invalid URL scheme error, got %s", w.Body.String())
+	}
+}
+
+func TestHandleNavigate_AllowsFileSchemeWhenEnabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{AllowFileScheme: true}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"file:///tmp/pinchtab.html"}`)))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme navigate to proceed past validation, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for opted-in file scheme navigation")
+	}
+}
+
+func TestHandleTab_AllowsFileSchemeWhenEnabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{AllowFileScheme: true}, nil, nil, nil)
+
+	body := `{"action":"new","url":"file:///tmp/pinchtab.html"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme tab creation to proceed, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for opted-in file scheme tab creation")
+	}
+}
+
+func TestHandleTab_RejectsFileSchemeWhenDisabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+
+	body := `{"action":"new","url":"file:///etc/passwd"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("expected 400 for file scheme when AllowFileScheme is off, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called for rejected file scheme, got %v", m.createTabURLs)
 	}
 }
 
