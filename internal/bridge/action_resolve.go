@@ -403,8 +403,19 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 		if (idx < 0 || idx >= items.length) return null;
 		return items[idx];
 	};
+	const deepQueryAll = (selector) => {
+		const out = [];
+		const visit = (scope) => {
+			if (!scope || !scope.querySelectorAll) return;
+			const elements = Array.from(scope.querySelectorAll("*"));
+			out.push(...Array.from(scope.querySelectorAll(selector)));
+			for (const el of elements) if (el.shadowRoot) visit(el.shadowRoot);
+		};
+		visit(root);
+		return out;
+	};
 	const textCandidates = (query) => {
-		const elements = Array.from((root.body || root.documentElement || root).querySelectorAll("*"));
+		const elements = deepQueryAll("*");
 		const exact = [];
 		for (const el of elements) {
 			const text = normalize(el.textContent || "");
@@ -435,7 +446,7 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 	try {
 		switch (kind) {
 		case "css":
-			return pick(Array.from(root.querySelectorAll(value)));
+			return pick(deepQueryAll(value));
 		case "xpath": {
 			const result = root.evaluate(value, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 			const items = [];
