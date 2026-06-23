@@ -44,19 +44,6 @@ func (h *Handlers) selectorFrameID(tabID string) string {
 	return scope.FrameID
 }
 
-func (h *Handlers) scopeSnapshotNodesByFrame(nodes []bridge.RawAXNode, frameID string) []bridge.RawAXNode {
-	if frameID == "" {
-		return nodes
-	}
-	filtered := make([]bridge.RawAXNode, 0, len(nodes))
-	for _, node := range nodes {
-		if node.FrameID == frameID {
-			filtered = append(filtered, node)
-		}
-	}
-	return filtered
-}
-
 func (h *Handlers) resolveSelectorNodeID(ctx context.Context, tabID, raw string) (int64, error) {
 	return h.resolveSelectorNodeIDInFrame(ctx, tabID, raw, "")
 }
@@ -271,13 +258,13 @@ func (h *Handlers) resolveFrameScope(ctx context.Context, tabID, target string) 
 		}
 	}
 
-	frameTree, err := bridge.FetchFrameTree(ctx)
+	fc, err := bridge.FetchFrameContext(ctx)
 	if err != nil {
 		return bridge.FrameScope{}, false, fmt.Errorf("frame tree: %w", err)
 	}
-	rootFrameID := frameTree.Frame.ID
-	frames := bridge.FrameMap(frameTree)
-	ownerMap := bridge.FrameOwnerMap(ctx, frameTree)
+	rootFrameID := fc.Tree.Frame.ID
+	frames := fc.Frames
+	ownerMap := fc.Owners
 	if hasRefScope {
 		if refScope.FrameID == rootFrameID {
 			return bridge.FrameScope{}, false, fmt.Errorf("ref %q is not an iframe owner; pass an iframe ref, a CSS selector, or the frame URL/name", sel.Value)
@@ -394,15 +381,5 @@ func (h *Handlers) HandleFrame(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleTabFrame(w http.ResponseWriter, r *http.Request) {
-	tabID := strings.TrimSpace(r.PathValue("id"))
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("missing tab id"))
-		return
-	}
-
-	wrapped := r.Clone(r.Context())
-	q := wrapped.URL.Query()
-	q.Set("tabId", tabID)
-	wrapped.URL.RawQuery = q.Encode()
-	h.HandleFrame(w, wrapped)
+	h.withPathTabID(w, r, h.HandleFrame)
 }

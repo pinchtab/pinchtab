@@ -3,9 +3,19 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
+)
+
+type ScreenshotFormat = page.CaptureScreenshotFormat
+type ScreenshotClip = page.Viewport
+
+const (
+	ScreenshotFormatJpeg = page.CaptureScreenshotFormatJpeg
+	ScreenshotFormatPng  = page.CaptureScreenshotFormatPng
 )
 
 // MinScale / MaxScale bound the bitmap rescale factor. Anything outside is
@@ -139,6 +149,24 @@ func scaledScreenshotClip(opts ScreenshotOpts, viewportWidth, viewportHeight, do
 	}
 }
 
+// captureFromSurface decides the Page.captureScreenshot fromSurface flag.
+//
+// fromSurface=false reads the renderer's current view directly instead of
+// waiting for a fresh compositor surface frame. On idle pages in headed browsers
+// (e.g. Cloak) the surface stops swapping frames, so the default fromSurface=true
+// blocks until the action deadline (~30s); reading from the view avoids that for
+// plain captures. But capture-beyond-viewport and any render-time rescale
+// (clip.Scale != 1) both need the page recomposited at a new size, which only
+// happens with fromSurface=true — forcing it off there silently drops the
+// scale/beyond-viewport effect. So keep it off only for the plain/native-scale
+// path.
+func captureFromSurface(beyondViewport bool, clip *page.Viewport) bool {
+	if beyondViewport {
+		return true
+	}
+	return clip != nil && clip.Scale != 0 && clip.Scale != 1
+}
+
 // CaptureScreenshot runs Page.captureScreenshot with the supplied options.
 // Quality is applied only for JPEG; clip and beyondViewport are mutually
 // exclusive (clip wins) — the same rule the handler enforces on input.
@@ -166,9 +194,20 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 		clip = scaledScreenshotClip(opts, viewportWidth, viewportHeight, documentWidth, documentHeight)
 	}
 
+	fromSurface := captureFromSurface(opts.BeyondViewport, clip)
+
 	var buf []byte
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		shot := page.CaptureScreenshot().WithFormat(opts.Format)
+		// Wake the target's renderer before capturing. Background / non-foreground
+		// tabs (common once target-aware orchestration spreads tabs across
+		// providers) throttle their compositor and stop painting, so
+		// captureScreenshot blocks until the action deadline (~30s). A best-effort
+		// BringToFront resumes painting for the target we are about to capture; the
+		// error is ignored so providers whose CDP proxy does not implement it
+		// (e.g. Cloak) still capture normally.
+		_ = page.BringToFront().Do(ctx)
+
+		shot := page.CaptureScreenshot().WithFormat(opts.Format).WithFromSurface(fromSurface)
 		if clip != nil {
 			shot = shot.WithClip(clip)
 		}
@@ -183,4 +222,131 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 		return inner
 	}))
 	return buf, err
+}
+
+// ScreenshotClipForNode returns a page-coordinate clip for a backend node ID.
+// Handlers use this bridge-owned helper so CDP details stay out of the handler
+// layer.
+func ScreenshotClipForNode(ctx context.Context, nodeID int64) (*ScreenshotClip, error) {
+	// Bring target element into view before computing clip coordinates.
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{
+			"backendNodeId": nodeID,
+		}, nil)
+	})); err != nil {
+		return nil, fmt.Errorf("scroll into view: %w", err)
+	}
+
+	var resolveResult json.RawMessage
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+			"backendNodeId": nodeID,
+		}, &resolveResult)
+	})); err != nil {
+		return nil, fmt.Errorf("resolve node: %w", err)
+	}
+
+	var resolved struct {
+		Object struct {
+			ObjectID string `json:"objectId"`
+		} `json:"object"`
+	}
+	if err := json.Unmarshal(resolveResult, &resolved); err != nil {
+		return nil, fmt.Errorf("parse resolved node: %w", err)
+	}
+	if resolved.Object.ObjectID == "" {
+		return nil, fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
+	}
+
+	const boxFn = `function() {
+		const rect = this.getBoundingClientRect();
+		let x = rect.left + (window.scrollX || window.pageXOffset || 0);
+		let y = rect.top + (window.scrollY || window.pageYOffset || 0);
+		try {
+			let current = window;
+			while (current && current.parent && current !== current.parent) {
+				const frameEl = current.frameElement;
+				if (!frameEl) {
+					break;
+				}
+				const parent = current.parent;
+				const frameRect = frameEl.getBoundingClientRect();
+				x += frameRect.left + (parent.scrollX || parent.pageXOffset || 0);
+				y += frameRect.top + (parent.scrollY || parent.pageYOffset || 0);
+				current = parent;
+			}
+		} catch (e) {
+			// Cross-origin ancestors can block frame traversal. Keep the deepest
+			// reachable page coordinates in that case.
+		}
+		return { x, y, width: rect.width, height: rect.height };
+	}`
+
+	var callResult json.RawMessage
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": boxFn,
+			"objectId":            resolved.Object.ObjectID,
+			"returnByValue":       true,
+		}, &callResult)
+	})); err != nil {
+		return nil, fmt.Errorf("read element box: %w", err)
+	}
+
+	var boxCall struct {
+		Result struct {
+			Value struct {
+				X      float64 `json:"x"`
+				Y      float64 `json:"y"`
+				Width  float64 `json:"width"`
+				Height float64 `json:"height"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(callResult, &boxCall); err != nil {
+		return nil, fmt.Errorf("parse element box: %w", err)
+	}
+
+	box := boxCall.Result.Value
+	if box.Width <= 0 || box.Height <= 0 {
+		return nil, fmt.Errorf("element box is empty (width=%.2f height=%.2f)", box.Width, box.Height)
+	}
+	return &ScreenshotClip{
+		X:      box.X,
+		Y:      box.Y,
+		Width:  box.Width,
+		Height: box.Height,
+		Scale:  1,
+	}, nil
+}
+
+// CaptureScreenshot is the provider-aware entry point used across the BridgeAPI
+// (screencast polling, recorder, annotated capture). It delegates to the shared
+// package-level CaptureScreenshot engine so every provider gets the same
+// rendering path, including the BringToFront + WithFromSurface(false) fixes that
+// keep headed browsers (e.g. Cloak) from blocking on an idle compositor surface.
+func (b *Bridge) CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error) {
+	cdpFormat := page.CaptureScreenshotFormatJpeg
+	if format == "png" {
+		cdpFormat = page.CaptureScreenshotFormatPng
+	}
+	var vp *page.Viewport
+	if clip != nil {
+		vp = &page.Viewport{
+			X:      clip.X,
+			Y:      clip.Y,
+			Width:  clip.Width,
+			Height: clip.Height,
+			Scale:  clip.Scale,
+		}
+	}
+	buf, err := CaptureScreenshot(ctx, ScreenshotOpts{
+		Format:  cdpFormat,
+		Quality: quality,
+		Clip:    vp,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("screenshot: %w", err)
+	}
+	return buf, nil
 }

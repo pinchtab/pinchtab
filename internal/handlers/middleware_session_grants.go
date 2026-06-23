@@ -53,7 +53,7 @@ func sessionAdminRoute(method, path string) bool {
 		return true
 	case method == http.MethodPost && path == "/shutdown":
 		return true
-	case method == http.MethodPost && (path == "/browser/restart" || path == "/ensure-chrome"):
+	case method == http.MethodPost && (path == "/browser/restart" || path == "/ensure-browser"):
 		return true
 	case method == http.MethodPost && path == "/fingerprint/rotate":
 		return true

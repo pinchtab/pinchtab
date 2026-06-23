@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -78,15 +77,12 @@ func (h *Handlers) setOffline(w http.ResponseWriter, r *http.Request, req offlin
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := network.OverrideNetworkState(req.Offline, req.Latency, req.DownloadThroughput, req.UploadThroughput).
-				Do(ctx); err != nil {
-				return fmt.Errorf("overrideNetworkState: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetNetworkConditions(tCtx, bridge.NetworkConditions{
+		Offline:            req.Offline,
+		Latency:            req.Latency,
+		DownloadThroughput: req.DownloadThroughput,
+		UploadThroughput:   req.UploadThroughput,
+	}); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP network offline emulation: %w", err))
 		return
 	}

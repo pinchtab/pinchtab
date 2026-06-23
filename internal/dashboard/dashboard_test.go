@@ -104,7 +104,6 @@ func TestDashboardHandleSSE_StreamingDeadlineUnsupportedReturnsProblem(t *testin
 func TestDashboardBroadcastSystemEvent(t *testing.T) {
 	d := NewDashboard(nil)
 
-	// Create a test handler and register it
 	mux := http.NewServeMux()
 	d.RegisterHandlers(mux)
 

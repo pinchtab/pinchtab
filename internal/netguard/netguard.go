@@ -81,11 +81,11 @@ func ResolveAndValidatePublicIPs(ctx context.Context, host string) ([]netip.Addr
 	}
 
 	if ip := net.ParseIP(host); ip != nil {
-		addr, err := publicAddr(ip)
-		if err != nil {
-			return nil, err
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, ErrPrivateInternalIP
 		}
-		return []netip.Addr{addr}, nil
+		return ValidateResolvedPublicAddrs([]netip.Addr{addr})
 	}
 
 	ips, err := ResolveHostIPs(ctx, "ip", host)
@@ -93,11 +93,29 @@ func ResolveAndValidatePublicIPs(ctx context.Context, host string) ([]netip.Addr
 		return nil, ErrResolveHost
 	}
 
+	addrs := make([]netip.Addr, 0, len(ips))
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, ErrPrivateInternalIP
+		}
+		addrs = append(addrs, addr)
+	}
+	return ValidateResolvedPublicAddrs(addrs)
+}
+
+func ValidateResolvedPublicAddrs(ips []netip.Addr) ([]netip.Addr, error) {
+	if len(ips) == 0 {
+		return nil, ErrResolveHost
+	}
 	seen := make(map[netip.Addr]struct{}, len(ips))
 	out := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		addr, err := publicAddr(ip)
-		if err != nil {
+	for _, addr := range ips {
+		if !addr.IsValid() {
+			return nil, ErrPrivateInternalIP
+		}
+		addr = addr.Unmap()
+		if err := ValidatePublicIP(net.IP(addr.AsSlice())); err != nil {
 			return nil, err
 		}
 		if _, ok := seen[addr]; ok {
@@ -122,6 +140,12 @@ func NormalizeRemoteIP(raw string) string {
 func ValidateRemoteIPAddress(raw string) error {
 	raw = NormalizeRemoteIP(raw)
 	if raw == "" {
+		// Accepted by design: CDP reports no remote IP for cache- and
+		// service-worker-served responses, so erroring here would break
+		// legitimate cached navigations. This post-connect check is the last
+		// of several layers (URL validation, resolve-time checks with pinned
+		// IPs, dial-time enforcement on the static path); the residual
+		// exposure is a cached/SW response for an already-validated target.
 		return nil
 	}
 	ip := net.ParseIP(raw)
@@ -181,12 +205,4 @@ func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
 		}
 	}
 	return false
-}
-
-func publicAddr(ip net.IP) (netip.Addr, error) {
-	if err := ValidatePublicIP(ip); err != nil {
-		return netip.Addr{}, err
-	}
-	addr, _ := netip.AddrFromSlice(ip)
-	return addr.Unmap(), nil
 }

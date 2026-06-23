@@ -1,4 +1,4 @@
-# Remote Bridge With Orchestrator
+# Remote Bridge
 
 Use this guide when:
 

@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -88,18 +86,7 @@ func (h *Handlers) setGeolocation(w http.ResponseWriter, r *http.Request, req ge
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := emulation.SetGeolocationOverride().
-				WithLatitude(req.Latitude).
-				WithLongitude(req.Longitude).
-				WithAccuracy(req.Accuracy).
-				Do(ctx); err != nil {
-				return fmt.Errorf("setGeolocationOverride: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetGeolocation(tCtx, req.Latitude, req.Longitude, req.Accuracy); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP geolocation override: %w", err))
 		return
 	}

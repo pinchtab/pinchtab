@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -59,12 +58,10 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If a solver name is provided in the path, use it.
 	if name := r.PathValue("name"); name != "" {
 		req.Solver = name
 	}
 
-	// Validate solver name early.
 	if req.Solver != "" {
 		if !h.isAvailableAutoSolver(req.Solver) {
 			httpx.ErrorCode(w, 400, "unknown_solver",
@@ -183,32 +180,9 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 // @Endpoint POST /tabs/{id}/solve
 // @Description Solve a browser challenge on a specific tab
 func (h *Handlers) HandleTabSolve(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	body := map[string]any{}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	body["tabId"] = tabID
-	payload, err := json.Marshal(body)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
-		return
-	}
-
-	cloned := r.Clone(r.Context())
-	cloned.Body = io.NopCloser(bytes.NewReader(payload))
-	cloned.ContentLength = int64(len(payload))
-	cloned.Header = r.Header.Clone()
-	cloned.Header.Set("Content-Type", "application/json")
-	h.HandleSolve(w, cloned)
+	// Reject (not silently overwrite) a body tabId that disagrees with the
+	// path id; the path id is canonical and forwarded to HandleSolve.
+	h.withPathTabIDBody(w, r, h.HandleSolve)
 }
 
 // HandleListSolvers returns the list of registered solver names.

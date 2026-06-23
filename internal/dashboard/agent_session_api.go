@@ -7,18 +7,20 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // SessionAPI handles CRUD operations for sessions.
 type SessionAPI struct {
-	store *session.Store
+	store             *session.Store
+	browsersAvailable []string
 }
 
 // NewSessionAPI creates a new session API handler.
-func NewSessionAPI(store *session.Store) *SessionAPI {
-	return &SessionAPI{store: store}
+func NewSessionAPI(store *session.Store, browsersAvailable []string) *SessionAPI {
+	return &SessionAPI{store: store, browsersAvailable: browsersAvailable}
 }
 
 // RegisterHandlers registers session API routes.
@@ -37,6 +39,7 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AgentID string `json:"agentId"`
 		Label   string `json:"label,omitempty"`
+		Browser string `json:"browser,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "invalid request body", false, nil)
@@ -46,8 +49,14 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", false, nil)
 		return
 	}
+	if req.Browser != "" {
+		if _, err := config.ParseBrowser(req.Browser, a.browsersAvailable); err != nil {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_browser", err.Error(), false, nil)
+			return
+		}
+	}
 
-	sessionID, token, err := a.store.Create(req.AgentID, req.Label)
+	sessionID, token, err := a.store.Create(req.AgentID, req.Label, req.Browser)
 	if err != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "create_failed", "failed to create session", false, nil)
 		return
@@ -61,7 +70,7 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Action:    "sessions",
 	})
 
-	httpx.JSON(w, http.StatusCreated, map[string]any{
+	resp := map[string]any{
 		"id":           sessionID,
 		"agentId":      sess.AgentID,
 		"label":        sess.Label,
@@ -69,7 +78,11 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		"createdAt":    sess.CreatedAt,
 		"expiresAt":    sess.ExpiresAt,
 		"status":       sess.Status,
-	})
+	}
+	if sess.Browser != "" {
+		resp["browser"] = sess.Browser
+	}
+	httpx.JSON(w, http.StatusCreated, resp)
 }
 
 func (a *SessionAPI) handleList(w http.ResponseWriter, _ *http.Request) {

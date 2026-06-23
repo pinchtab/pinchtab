@@ -201,6 +201,11 @@ func TestProxyToURL_UsesAttachedBridgeOriginAndAuth(t *testing.T) {
 
 	o := NewOrchestrator(t.TempDir())
 	o.client = backend.Client()
+	backendURL, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatalf("parse backend URL: %v", err)
+	}
+	allowAttachForTest(o, []string{"http"}, []string{backendURL.Hostname()})
 	attached, _, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
 	if err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)

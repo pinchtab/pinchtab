@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -41,7 +42,7 @@ type Update struct {
 	TabID       string
 	URL         string
 	Action      string
-	Engine      string
+	Route       *browserops.RouteMetadata
 	Ref         string
 }
 
@@ -148,8 +149,8 @@ func EnrichRequest(r *http.Request, update Update) {
 	if update.Action != "" {
 		state.event.Action = update.Action
 	}
-	if update.Engine != "" {
-		state.event.Engine = update.Engine
+	if update.Route != nil {
+		state.event.Route = update.Route
 	}
 	if update.Ref != "" {
 		state.event.Ref = update.Ref

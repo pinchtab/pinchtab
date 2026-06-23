@@ -58,15 +58,16 @@ type Args struct {
 	TerseSummary    bool
 }
 
-// Defaults matches the literal defaults in the TypeScript runner. Keep this in
-// sync with parseArgs() in run-api-benchmark.ts.
+// defaultArgs holds the resolved defaults for the benchmark loop. Values that
+// also apply to BrowserBench live as shared constants in shared_flags.go so the
+// two entrypoints can't drift; loop-only defaults stay inline here.
 func defaultArgs() Args {
 	return Args{
-		MaxTokens:      4096,
-		Temperature:    0,
+		MaxTokens:      defaultMaxTokens,
+		Temperature:    defaultTemperature,
 		MaxTurns:       300,
 		MaxIdleTurns:   25,
-		TimeoutSeconds: 120,
+		TimeoutSeconds: defaultTimeoutSeconds,
 		TurnDelayMs:    1500,
 	}
 }
@@ -83,17 +84,17 @@ Subcommand options:
   --report-file PATH
 
 Benchmark loop options:
-  --provider anthropic|openai|fake
-  --model MODEL
-  --groups 0,1,2,3
+` + usageLineProvider +
+	usageLineModel +
+	`  --groups 0,1,2,3
   --profile common10
-  --max-tokens N
-  --temperature N
-  --max-turns N
-  --max-idle-turns N
-  --timeout-seconds N
-  --turn-delay-ms N
-  --report-file PATH
+` + usageLineMaxTokens +
+	usageLineTemperature +
+	usageLineMaxTurns +
+	`  --max-idle-turns N
+` + usageLineTimeoutSeconds +
+	usageLineTurnDelayMs +
+	`  --report-file PATH
   --skip-init
   --no-prompt-caching
   --finalize
@@ -129,17 +130,13 @@ func ParseArgs(argv []string) (Args, error) {
 			}
 			a.Lane = Lane(v)
 		case "--provider":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseStringFlag(next, &i, arg, func(v string) { a.Provider = Provider(v) }); err != nil {
 				return a, err
 			}
-			a.Provider = Provider(v)
 		case "--model":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseStringFlag(next, &i, arg, func(v string) { a.Model = v }); err != nil {
 				return a, err
 			}
-			a.Model = v
 		case "--groups":
 			v, err := next(&i, arg)
 			if err != nil {
@@ -151,77 +148,37 @@ func ParseArgs(argv []string) (Args, error) {
 			}
 			a.Groups = groups
 		case "--profile":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseStringFlag(next, &i, arg, func(v string) { a.Profile = v }); err != nil {
 				return a, err
 			}
-			a.Profile = v
 		case "--max-tokens":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.MaxTokens = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--max-tokens: %w", perr)
-			}
-			a.MaxTokens = n
 		case "--temperature":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseFloatFlag(next, &i, arg, func(f float64) { a.Temperature = f }); err != nil {
 				return a, err
 			}
-			f, perr := strconv.ParseFloat(v, 64)
-			if perr != nil {
-				return a, fmt.Errorf("--temperature: %w", perr)
-			}
-			a.Temperature = f
 		case "--max-turns":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.MaxTurns = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--max-turns: %w", perr)
-			}
-			a.MaxTurns = n
 		case "--max-idle-turns":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.MaxIdleTurns = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--max-idle-turns: %w", perr)
-			}
-			a.MaxIdleTurns = n
 		case "--timeout-seconds":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.TimeoutSeconds = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--timeout-seconds: %w", perr)
-			}
-			a.TimeoutSeconds = n
 		case "--turn-delay-ms":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.TurnDelayMs = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--turn-delay-ms: %w", perr)
-			}
-			a.TurnDelayMs = n
 		case "--report-file":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseStringFlag(next, &i, arg, func(v string) { a.ReportFile = v }); err != nil {
 				return a, err
 			}
-			a.ReportFile = v
 		case "--skip-init":
 			a.SkipInit = true
 		case "--no-prompt-caching":
@@ -235,31 +192,17 @@ func ParseArgs(argv []string) (Args, error) {
 		case "--verbose", "-v":
 			a.Verbose = true
 		case "--index-file":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseStringFlag(next, &i, arg, func(v string) { a.IndexFile = v }); err != nil {
 				return a, err
 			}
-			a.IndexFile = v
 		case "--max-input-tokens":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.MaxInputTokens = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--max-input-tokens: %w", perr)
-			}
-			a.MaxInputTokens = n
 		case "--max-output-tokens":
-			v, err := next(&i, arg)
-			if err != nil {
+			if err := parseIntFlag(next, &i, arg, func(n int) { a.MaxOutputTokens = n }); err != nil {
 				return a, err
 			}
-			n, perr := strconv.Atoi(v)
-			if perr != nil {
-				return a, fmt.Errorf("--max-output-tokens: %w", perr)
-			}
-			a.MaxOutputTokens = n
 		case "-h", "--help", "help":
 			return a, errHelp
 		default:

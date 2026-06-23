@@ -1,17 +1,13 @@
 package actions
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
-// StateList lists all saved state files.
 func StateCurrent(client *http.Client, base, token string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	params := url.Values{}
@@ -19,41 +15,17 @@ func StateCurrent(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("tabId", tabID)
 	}
 
-	result := apiclient.DoGetRaw(client, base, token, "/state", params)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to read current browser state")
-		os.Exit(1)
-	}
-
-	var buf map[string]any
-	if err := json.Unmarshal(result, &buf); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	out, _ := json.MarshalIndent(buf, "", "  ")
-	fmt.Println(string(out))
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state", params), 1, "Failed to read current browser state")
+	buf := decodeMap(result, 1, "Failed to parse response")
+	printIndented(buf)
 }
 
-// StateList lists all saved state files.
 func StateList(client *http.Client, base, token string) {
-	result := apiclient.DoGetRaw(client, base, token, "/state/list", nil)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to list state files")
-		os.Exit(1)
-	}
-
-	var buf map[string]any
-	if err := json.Unmarshal(result, &buf); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	out, _ := json.MarshalIndent(buf, "", "  ")
-	fmt.Println(string(out))
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/list", nil), 1, "Failed to list state files")
+	buf := decodeMap(result, 1, "Failed to parse response")
+	printIndented(buf)
 }
 
-// StateSave captures the current browser state and saves it to disk.
 func StateSave(client *http.Client, base, token string, cmd *cobra.Command) {
 	name, _ := cmd.Flags().GetString("name")
 	encrypt, _ := cmd.Flags().GetBool("encrypt")
@@ -67,22 +39,16 @@ func StateSave(client *http.Client, base, token string, cmd *cobra.Command) {
 		body["tabId"] = tabID
 	}
 
-	result := apiclient.DoPost(client, base, token, "/state/save", body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to save state")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoPost(client, base, token, "/state/save", body), 1, "Failed to save state")
 }
 
-// StateLoad restores a saved state into the browser.
-// Supports exact name or prefix-based loading (most recent match).
+// StateLoad supports exact name or prefix-based loading (most recent match).
 func StateLoad(client *http.Client, base, token string, cmd *cobra.Command) {
 	name, _ := cmd.Flags().GetString("name")
 	tabID, _ := cmd.Flags().GetString("tab")
 
 	if name == "" {
-		fmt.Fprintln(os.Stderr, "Error: --name is required")
-		os.Exit(1)
+		exitErr(1, "Error: --name is required")
 	}
 
 	body := map[string]any{
@@ -92,59 +58,35 @@ func StateLoad(client *http.Client, base, token string, cmd *cobra.Command) {
 		body["tabId"] = tabID
 	}
 
-	result := apiclient.DoPost(client, base, token, "/state/load", body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to load state")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoPost(client, base, token, "/state/load", body), 1, "Failed to load state")
 }
 
-// StateShow shows full details of a saved state file.
 func StateShow(client *http.Client, base, token string, cmd *cobra.Command) {
 	name, _ := cmd.Flags().GetString("name")
 	if name == "" {
-		fmt.Fprintln(os.Stderr, "Error: --name is required")
-		os.Exit(1)
+		exitErr(1, "Error: --name is required")
 	}
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	result := apiclient.DoGetRaw(client, base, token, "/state/show", params)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to show state")
-		os.Exit(1)
-	}
-
-	var buf map[string]any
-	if err := json.Unmarshal(result, &buf); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	out, _ := json.MarshalIndent(buf, "", "  ")
-	fmt.Println(string(out))
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/show", params), 1, "Failed to show state")
+	buf := decodeMap(result, 1, "Failed to parse response")
+	printIndented(buf)
 }
 
-// StateDelete removes a saved state file by name.
 func StateDelete(client *http.Client, base, token string, cmd *cobra.Command) {
 	name, _ := cmd.Flags().GetString("name")
 	if name == "" {
-		fmt.Fprintln(os.Stderr, "Error: --name is required")
-		os.Exit(1)
+		exitErr(1, "Error: --name is required")
 	}
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	result := apiclient.DoDelete(client, base, token, "/state", params)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to delete state")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoDelete(client, base, token, "/state", params), 1, "Failed to delete state")
 }
 
-// StateClean removes state files older than the given number of hours.
 func StateClean(client *http.Client, base, token string, cmd *cobra.Command) {
 	hours, _ := cmd.Flags().GetInt("older-than")
 
@@ -152,9 +94,5 @@ func StateClean(client *http.Client, base, token string, cmd *cobra.Command) {
 		"olderThanHours": hours,
 	}
 
-	result := apiclient.DoPost(client, base, token, "/state/clean", body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to clean state files")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoPost(client, base, token, "/state/clean", body), 1, "Failed to clean state files")
 }

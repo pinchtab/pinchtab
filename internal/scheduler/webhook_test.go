@@ -98,7 +98,6 @@ func TestSendWebhookSuccess(t *testing.T) {
 		t.Fatal("webhook was never received")
 	}
 
-	// Verify headers.
 	if ct := gotHeaders.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("expected application/json, got %s", ct)
 	}
@@ -115,7 +114,6 @@ func TestSendWebhookSuccess(t *testing.T) {
 		t.Fatalf("expected webhook dial to use pinned IP, got %q", dialedAddr.Load().(string))
 	}
 
-	// Verify body is a valid task snapshot.
 	var snap Task
 	if err := json.Unmarshal(gotBody, &snap); err != nil {
 		t.Fatalf("unmarshal body: %v", err)

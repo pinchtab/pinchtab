@@ -2,7 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 func copyStringSlice(items []string) []string {
@@ -21,6 +24,90 @@ func intPtrIfPositive(v int) *int {
 	}
 	n := v
 	return &n
+}
+
+func intPtrIfNonNegative(v int) *int {
+	if v < 0 {
+		return nil
+	}
+	n := v
+	return &n
+}
+
+func boolPtrValue(v bool) *bool {
+	b := v
+	return &b
+}
+
+func cloakBrowserConfigJSONFromFile(c CloakBrowserConfig) *cloakBrowserConfigJSON {
+	if !hasCloakBrowserConfig(c) {
+		return nil
+	}
+	return &cloakBrowserConfigJSON{
+		FingerprintSeed:           c.FingerprintSeed,
+		Platform:                  c.Platform,
+		Locale:                    c.Locale,
+		Timezone:                  c.Timezone,
+		WebRTCIP:                  c.WebRTCIP,
+		FontsDir:                  c.FontsDir,
+		StorageQuotaMB:            c.StorageQuotaMB,
+		DisableDefaultStealthArgs: c.DisableDefaultStealthArgs,
+	}
+}
+
+// browserProxyJSONFromFile returns nil when proxy is disabled so omitempty drops the field.
+func browserProxyJSONFromFile(p BrowserProxyConfig) *BrowserProxyConfig {
+	if p.IsZero() {
+		return nil
+	}
+	out := BrowserProxyConfig{
+		Server:   p.Server,
+		Username: p.Username,
+		Password: p.Password,
+	}
+	if len(p.BypassList) > 0 {
+		out.BypassList = append([]string(nil), p.BypassList...)
+	}
+	if p.Geo != nil && !p.Geo.IsZero() {
+		geoCopy := *p.Geo
+		out.Geo = &geoCopy
+	}
+	return &out
+}
+
+func cloakBrowserConfigFromRuntime(cfg *RuntimeConfig) CloakBrowserConfig {
+	if cfg == nil {
+		return CloakBrowserConfig{}
+	}
+	c := cfg.Cloak
+	providerHasNativeStealth := false
+	if b, ok := browsers.Get(strings.ToLower(cfg.DefaultBrowser)); ok {
+		providerHasNativeStealth = b.Capabilities().Has(browsers.CapNativeStealth)
+	}
+	hasRuntimeCloak := providerHasNativeStealth ||
+		c.FingerprintSeed != "" ||
+		c.Platform != "" ||
+		c.Locale != "" ||
+		c.Timezone != "" ||
+		c.WebRTCIP != "" ||
+		c.FontsDir != "" ||
+		c.StorageQuotaMB > 0 ||
+		!c.DisableDefaultStealthArgs
+	out := CloakBrowserConfig{
+		FingerprintSeed: c.FingerprintSeed,
+		Platform:        c.Platform,
+		Locale:          c.Locale,
+		Timezone:        c.Timezone,
+		WebRTCIP:        c.WebRTCIP,
+		FontsDir:        c.FontsDir,
+	}
+	if c.StorageQuotaMB > 0 || providerHasNativeStealth {
+		out.StorageQuotaMB = intPtrIfNonNegative(c.StorageQuotaMB)
+	}
+	if hasRuntimeCloak {
+		out.DisableDefaultStealthArgs = boolPtrValue(c.DisableDefaultStealthArgs)
+	}
+	return out
 }
 
 // tabPolicyDefaultsFromRuntime emits a TabPolicyDefaults block when the runtime
@@ -52,16 +139,36 @@ func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
 	return out
 }
 
+// browsersConfigJSONFromFile copies the browsers block for serialization. The
+// retired Config map is still copied for round-trip byte fidelity even though
+// validation rejects it — we warn, we don't destroy user input.
+func browsersConfigJSONFromFile(bc BrowsersConfig) *BrowsersConfig {
+	if bc.Default == "" && len(bc.Available) == 0 && len(bc.Config) == 0 {
+		return nil
+	}
+	out := &BrowsersConfig{
+		Default:   bc.Default,
+		Available: copyStringSlice(bc.Available),
+	}
+	if len(bc.Config) > 0 {
+		out.Config = make(map[string]BrowserItemConfig, len(bc.Config))
+		for k, v := range bc.Config {
+			out.Config[k] = v
+		}
+	}
+	return out
+}
+
 func (fc FileConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fileConfigJSON{
 		Schema:        fc.Schema,
 		ConfigVersion: fc.ConfigVersion,
+		Browsers:      browsersConfigJSONFromFile(fc.Browsers),
 		Server: serverConfigJSON{
 			Port:                      fc.Server.Port,
 			Bind:                      fc.Server.Bind,
 			Token:                     fc.Server.Token,
 			StateDir:                  fc.Server.StateDir,
-			Engine:                    fc.Server.Engine,
 			NetworkBufferSize:         fc.Server.NetworkBufferSize,
 			RetainNetworkBodies:       fc.Server.RetainNetworkBodies,
 			RetainNetworkBodyMaxBytes: fc.Server.RetainNetworkBodyMaxBytes,
@@ -69,11 +176,17 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			CookieSecure:              fc.Server.CookieSecure,
 		},
 		Browser: browserConfigJSON{
-			ChromeVersion:    fc.Browser.ChromeVersion,
-			ChromeBinary:     fc.Browser.ChromeBinary,
-			ChromeDebugPort:  fc.Browser.ChromeDebugPort,
-			ChromeExtraFlags: fc.Browser.ChromeExtraFlags,
-			ExtensionPaths:   copyStringSlice(fc.Browser.ExtensionPaths),
+			Provider:          fc.Browser.Provider, // removed; kept for round-trip fidelity, omitted when empty via omitempty
+			BrowserVersion:    fc.Browser.BrowserVersion,
+			BrowserBinary:     fc.Browser.BrowserBinary,
+			BrowserDebugPort:  fc.Browser.BrowserDebugPort,
+			BrowserExtraFlags: fc.Browser.BrowserExtraFlags,
+			Cloak:             cloakBrowserConfigJSONFromFile(fc.Browser.Cloak),
+			ExtensionPaths:    copyStringSlice(fc.Browser.ExtensionPaths),
+			Proxy:             browserProxyJSONFromFile(fc.Browser.Proxy),
+			DefaultTarget:     fc.Browser.DefaultTarget,
+			FallbackOrder:     fc.Browser.FallbackOrder,
+			Targets:           fc.Browser.Targets,
 		},
 		InstanceDefaults: instanceDefaultsConfigJSON{
 			Mode:              fc.InstanceDefaults.Mode,
@@ -115,9 +228,10 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			TrustedResolveCIDRs:    copyStringSlice(fc.Security.TrustedResolveCIDRs),
 			TrustLoopbackProxy:     fc.Security.TrustLoopbackProxy,
 			Attach: attachJSON{
-				Enabled:      fc.Security.Attach.Enabled,
-				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
-				AllowSchemes: copyStringSlice(fc.Security.Attach.AllowSchemes),
+				Enabled:          fc.Security.Attach.Enabled,
+				AllowHosts:       copyStringSlice(fc.Security.Attach.AllowHosts),
+				AllowSchemes:     copyStringSlice(fc.Security.Attach.AllowSchemes),
+				ForwardProxyAuth: fc.Security.Attach.ForwardProxyAuth,
 			},
 			IDPI: idpiConfigJSON{
 				Enabled:         fc.Security.IDPI.Enabled,
@@ -235,8 +349,6 @@ func (fc *FileConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// FileConfigFromRuntime converts the effective runtime configuration back into a
-// nested file configuration shape.
 func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	if cfg == nil {
 		return DefaultFileConfig()
@@ -269,6 +381,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	maxRedirects := cfg.MaxRedirects
 	trustLoopbackProxy := cfg.TrustLoopbackProxy
 	attachEnabled := cfg.AttachEnabled
+	attachForwardProxyAuth := cfg.AttachForwardProxyAuth
 	start := cfg.InstancePortStart
 	end := cfg.InstancePortEnd
 	restartMaxRestarts := cfg.RestartMaxRestarts
@@ -314,6 +427,19 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	retainBodies := cfg.RetainNetworkBodies
 	retainBodyMaxBytes := cfg.RetainNetworkBodyMaxBytes
 
+	// Always emit browsers.default; stop writing the deprecated browser.provider
+	// field. Write the value verbatim (unknown values are kept raw by config load
+	// so the load-time warning + chrome fallback still fire — don't normalize and
+	// silently rewrite them); only an empty value falls back to chrome.
+	browsersDefault := cfg.DefaultBrowser
+	if browsersDefault == "" {
+		browsersDefault = BrowserChrome
+	}
+	browsersBlock := BrowsersConfig{
+		Default:   browsersDefault,
+		Available: append([]string(nil), cfg.BrowsersAvailable...),
+	}
+
 	fc := FileConfig{
 		Schema: CurrentConfigSchemaURL(),
 		Server: ServerConfig{
@@ -321,7 +447,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			Bind:                      cfg.Bind,
 			Token:                     cfg.Token,
 			StateDir:                  cfg.StateDir,
-			Engine:                    cfg.Engine,
 			NetworkBufferSize:         netBufSize,
 			RetainNetworkBodies:       &retainBodies,
 			RetainNetworkBodyMaxBytes: &retainBodyMaxBytes,
@@ -329,11 +454,17 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			CookieSecure:              cfg.CookieSecure,
 		},
 		Browser: BrowserConfig{
-			ChromeVersion:    cfg.ChromeVersion,
-			ChromeBinary:     cfg.ChromeBinary,
-			ChromeDebugPort:  intPtrIfPositive(cfg.ChromeDebugPort),
-			ChromeExtraFlags: cfg.ChromeExtraFlags,
-			ExtensionPaths:   append([]string(nil), cfg.ExtensionPaths...),
+			// Provider intentionally omitted — deprecated in favor of browsers.default.
+			BrowserVersion:    cfg.BrowserVersion,
+			BrowserBinary:     cfg.BrowserBinary,
+			BrowserDebugPort:  intPtrIfPositive(cfg.BrowserDebugPort),
+			BrowserExtraFlags: cfg.BrowserExtraFlags,
+			Cloak:             cloakBrowserConfigFromRuntime(cfg),
+			ExtensionPaths:    append([]string(nil), cfg.ExtensionPaths...),
+			Proxy:             cloneBrowserProxyConfig(cfg.Proxy),
+			DefaultTarget:     cfg.DefaultTarget,
+			FallbackOrder:     append([]string(nil), cfg.FallbackOrder...),
+			Targets:           cloneBrowserTargetsConfig(cfg.Targets),
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              mode,
@@ -374,9 +505,10 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			TrustedResolveCIDRs:    append([]string(nil), cfg.TrustedResolveCIDRs...),
 			TrustLoopbackProxy:     &trustLoopbackProxy,
 			Attach: AttachConfig{
-				Enabled:      &attachEnabled,
-				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
-				AllowSchemes: append([]string(nil), cfg.AttachAllowSchemes...),
+				Enabled:          &attachEnabled,
+				AllowHosts:       append([]string(nil), cfg.AttachAllowHosts...),
+				AllowSchemes:     append([]string(nil), cfg.AttachAllowSchemes...),
+				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
 			IDPI: cfg.IDPI,
 		},
@@ -461,7 +593,42 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				},
 			},
 		},
+		Browsers: browsersBlock,
 	}
 
+	reconcileDefaultTargetProvider(&fc.Browser, browsersDefault, cfg)
+
 	return fc
+}
+
+// reconcileDefaultTargetProvider keeps the serialized default browser target
+// consistent with browsers.default, which is the authoritative provider source.
+// config.Load() eagerly synthesizes a "default" target from the legacy chrome
+// fields, so when a caller later overrides DefaultBrowser (for example the
+// orchestrator selecting cloak for a child instance) without rewriting Targets,
+// the stale target would otherwise shadow browsers.default on reload because
+// explicit targets win over the legacy fields. Only the lone auto-synthesized
+// "default" target is reconciled; user-authored targets (single or multi) are
+// left intact — rewriting them would flip the user's provider and wipe
+// target-scoped binary/flags/cloak/proxy with global runtime values.
+func reconcileDefaultTargetProvider(bc *BrowserConfig, browsersDefault string, cfg *RuntimeConfig) {
+	if bc == nil || cfg == nil || !cfg.TargetsSynthesized || len(bc.Targets) != 1 {
+		return
+	}
+	target, ok := bc.Targets[DefaultBrowserTargetName]
+	if !ok {
+		return
+	}
+	want := NormalizeBrowser(browsersDefault)
+	if NormalizeBrowser(target.Provider) == want {
+		return
+	}
+	// browsers.default won; rewrite the default target from the authoritative
+	// runtime fields so the round-trip preserves the selected provider.
+	target.Provider = want
+	target.Binary = cfg.BrowserBinary
+	target.ExtraFlags = cfg.BrowserExtraFlags
+	target.Cloak = cloakBrowserConfigFromRuntime(cfg)
+	target.Proxy = cloneBrowserProxyConfig(cfg.Proxy)
+	bc.Targets[DefaultBrowserTargetName] = target
 }

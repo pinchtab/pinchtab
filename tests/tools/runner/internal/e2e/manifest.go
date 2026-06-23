@@ -25,7 +25,7 @@ var composeServiceOrder = []string{
 	"pinchtab-medium",
 	"pinchtab-full",
 	"pinchtab-retain",
-	"pinchtab-lite",
+	"pinchtab-ghostchrome",
 	"pinchtab-bridge",
 	"fixtures",
 }
@@ -37,7 +37,7 @@ var readyTargetOrder = []string{
 	"E2E_MEDIUM_SERVER",
 	"E2E_FULL_SERVER",
 	"E2E_RETAIN_SERVER",
-	"E2E_LITE_SERVER",
+	"E2E_SERVER_GHOSTCHROME",
 	"E2E_BRIDGE_URL|60|E2E_BRIDGE_TOKEN",
 }
 

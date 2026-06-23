@@ -50,7 +50,18 @@ func ExtractExplicitTabID(r *http.Request) (string, TabIDSource) {
 	return "", TabIDSourceNone
 }
 
+func ExtractRequestedBrowser(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.URL.Query().Get("browser"))
+}
+
 func peekBodyTabID(r *http.Request) string {
+	return peekBodyStringField(r, "tabId")
+}
+
+func peekBodyStringField(r *http.Request, field string) string {
 	if r == nil || r.Body == nil || r.Body == http.NoBody {
 		return ""
 	}
@@ -79,11 +90,17 @@ func peekBodyTabID(r *http.Request) string {
 		return ""
 	}
 
-	var probe struct {
-		TabID string `json:"tabId"`
-	}
+	var probe map[string]any
 	if err := json.Unmarshal(buf, &probe); err != nil {
 		return ""
 	}
-	return strings.TrimSpace(probe.TabID)
+	raw, ok := probe[field]
+	if !ok {
+		return ""
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }

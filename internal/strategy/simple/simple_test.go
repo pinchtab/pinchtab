@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -16,10 +17,35 @@ import (
 
 type mockRunner struct {
 	portAvail bool
+	cmds      []*mockCmd
+}
+
+type mockCmd struct {
+	done chan struct{}
+	once sync.Once
+}
+
+func newMockCmd() *mockCmd {
+	return &mockCmd{done: make(chan struct{})}
+}
+
+func (m *mockCmd) Wait() error {
+	<-m.done
+	return nil
+}
+
+func (m *mockCmd) PID() int { return 1234 }
+
+func (m *mockCmd) Cancel() {
+	m.once.Do(func() {
+		close(m.done)
+	})
 }
 
 func (m *mockRunner) Run(context.Context, string, []string, []string, io.Writer, io.Writer) (orchestrator.Cmd, error) {
-	return nil, nil
+	cmd := newMockCmd()
+	m.cmds = append(m.cmds, cmd)
+	return cmd, nil
 }
 
 func (m *mockRunner) InspectPort(string) orchestrator.PortInspection {
@@ -92,6 +118,61 @@ func TestStrategy_ProxyToFirst_NoOrch_Returns503(t *testing.T) {
 
 	if rec.Code != 503 {
 		t.Errorf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *testing.T) {
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = oldTransport })
+
+	runner := &mockRunner{portAvail: true}
+	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), runner)
+	orch.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	t.Cleanup(func() {
+		for _, inst := range orch.List() {
+			_ = orch.Stop(inst.ID)
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
+
+	s := &Strategy{orch: orch}
+	target, status, err := s.ensureRunning(req)
+	if err != nil {
+		t.Fatalf("ensureRunning status=%d err=%v", status, err)
+	}
+	if target == "" {
+		t.Fatal("target URL is empty")
+	}
+	instances := orch.List()
+	if len(instances) != 1 {
+		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
+	}
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want cloak", instances[0].Browser)
+	}
+	if instances[0].ProfileName != "default-cloak" {
+		t.Fatalf("ProfileName = %q, want default-cloak", instances[0].ProfileName)
 	}
 }
 

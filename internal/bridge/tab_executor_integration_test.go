@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// --- Integration Tests ---
-
 func TestTabExecutor_MultiTabSimulation(t *testing.T) {
 	// Simulate 3 tabs executing independently
 	te := NewTabExecutor(4)
@@ -93,8 +91,6 @@ func TestTabExecutor_PanicIsolation(t *testing.T) {
 	}
 }
 
-// --- Stress Tests ---
-
 func TestTabExecutor_StressHighConcurrency(t *testing.T) {
 	te := NewTabExecutor(4)
 	var completed int32
@@ -163,8 +159,6 @@ func TestTabExecutor_StressSameTabConcurrent(t *testing.T) {
 		t.Errorf("expected 30 executions, got %d", n)
 	}
 }
-
-// --- TabManager Integration ---
 
 func TestTabManager_ExecuteWithoutExecutor(t *testing.T) {
 	tm := &TabManager{

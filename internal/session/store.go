@@ -23,6 +23,7 @@ type Session struct {
 	ID          string        `json:"id"`
 	AgentID     string        `json:"agentId"`
 	Label       string        `json:"label,omitempty"`
+	Browser     string        `json:"browser,omitempty"`
 	TokenHash   [32]byte      `json:"-"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	LastSeenAt  time.Time     `json:"lastSeenAt"`
@@ -57,10 +58,21 @@ type LifecycleHook func(LifecycleEvent)
 
 // Store manages authenticated sessions with persistence.
 type Store struct {
-	mu       sync.Mutex
-	sessions map[string]*Session // keyed by session ID
-	cfg      Config
-	now      func() time.Time
+	mu            sync.Mutex
+	sessions      map[string]*Session   // keyed by session ID
+	byTokenHash   map[[32]byte]*Session // secondary index: token hash → session (mirrors `sessions`)
+	cfg           Config
+	now           func() time.Time
+	lastTouchSave time.Time // last time a LastSeen-only update was flushed (debounce gate)
+
+	// Persistence is split off the data lock: a snapshot is built under mu (with
+	// a monotonic saveSeq), then marshalled + written under saveMu so routine
+	// session traffic isn't serialized behind disk I/O. writtenSeq (guarded by
+	// saveMu) lets a writer skip a snapshot older than one already on disk, so a
+	// stale snapshot can never clobber a fresher one.
+	saveMu     sync.Mutex
+	saveSeq    uint64 // guarded by mu
+	writtenSeq uint64 // guarded by saveMu
 
 	// hooksMu protects lifecycleHooks. Held only for very short reads /
 	// writes so it never blocks anything else. Separate from `mu` so a
@@ -68,6 +80,11 @@ type Store struct {
 	hooksMu        sync.RWMutex
 	lifecycleHooks []LifecycleHook
 }
+
+// touchPersistInterval bounds how often a LastSeen-only update is flushed to
+// disk; in-memory LastSeenAt is always current, so this only delays durability
+// of the idle-timeout clock by < interval (negligible vs the multi-day idle timeout).
+const touchPersistInterval = 30 * time.Second
 
 const (
 	DefaultIdleTimeout = 7 * 24 * time.Hour
@@ -95,9 +112,9 @@ func (s *Store) OnLifecycle(fn LifecycleHook) {
 	s.hooksMu.Unlock()
 }
 
-// dispatchLifecycle fires the given events to every registered hook,
-// each in its own goroutine. Must be called after the store lock has
-// been released — never under s.mu.
+// dispatchLifecycle fires the given events to every registered hook, each hook
+// in its own goroutine. Must be called after the store lock has been released —
+// never under s.mu.
 func (s *Store) dispatchLifecycle(events []LifecycleEvent) {
 	if s == nil || len(events) == 0 {
 		return
@@ -109,20 +126,26 @@ func (s *Store) dispatchLifecycle(events []LifecycleEvent) {
 	if len(hooks) == 0 {
 		return
 	}
-	for _, evt := range events {
-		evt := evt
-		for _, fn := range hooks {
-			fn := fn
-			go fn(evt)
-		}
+	// One goroutine per hook (not per event × hook): bounds a revoke/prune burst
+	// to the small, fixed number of hooks and delivers events to each hook in
+	// order. Hooks still run concurrently with one another. events is built fresh
+	// per call and not mutated after dispatch, so the goroutines share it read-only.
+	for _, fn := range hooks {
+		fn := fn
+		go func() {
+			for _, evt := range events {
+				fn(evt)
+			}
+		}()
 	}
 }
 
 // NewStore creates a new session store.
 func NewStore(cfg Config) *Store {
 	s := &Store{
-		sessions: make(map[string]*Session),
-		now:      time.Now,
+		sessions:    make(map[string]*Session),
+		byTokenHash: make(map[[32]byte]*Session),
+		now:         time.Now,
 	}
 	s.applyConfig(cfg)
 	s.loadPersisted()
@@ -144,7 +167,7 @@ func (s *Store) applyConfig(cfg Config) {
 
 // Create generates a new session and returns the session ID and
 // plaintext token. The token is returned exactly once and is never stored.
-func (s *Store) Create(agentID, label string) (sessionID, sessionToken string, err error) {
+func (s *Store) Create(agentID, label, browser string) (sessionID, sessionToken string, err error) {
 	if s == nil {
 		return "", "", fmt.Errorf("store is nil")
 	}
@@ -163,6 +186,7 @@ func (s *Store) Create(agentID, label string) (sessionID, sessionToken string, e
 		ID:          id,
 		AgentID:     strings.TrimSpace(agentID),
 		Label:       strings.TrimSpace(label),
+		Browser:     strings.TrimSpace(browser),
 		TokenHash:   hashToken(token),
 		CreatedAt:   now,
 		LastSeenAt:  now,
@@ -173,8 +197,12 @@ func (s *Store) Create(agentID, label string) (sessionID, sessionToken string, e
 
 	s.mu.Lock()
 	s.sessions[id] = session
-	s.saveLocked()
+	s.byTokenHash[session.TokenHash] = session
+	job, persist := s.snapshotLocked()
 	s.mu.Unlock()
+	if persist {
+		s.writeSnapshot(job)
+	}
 
 	return id, token, nil
 }
@@ -206,35 +234,40 @@ func (s *Store) authenticate(token string, touch bool) (*Session, bool) {
 		match      *Session
 		ok         bool
 		expiredEvt *LifecycleEvent
+		job        snapshotJob
+		persist    bool
 	)
 
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		for _, sess := range s.sessions {
-			if sess.Status != StatusActive {
-				continue
-			}
-			if subtle.ConstantTimeCompare(hash[:], sess.TokenHash[:]) != 1 {
-				continue
-			}
-			if s.isExpired(sess, now) {
-				sess.Status = StatusExpired
-				s.saveLocked()
-				expiredEvt = &LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonExpired}
-				return
-			}
-			if touch {
-				sess.LastSeenAt = now
-				s.saveLocked()
-			}
-			match = sess
-			ok = true
+		sess, found := s.byTokenHash[hash]
+		if !found || sess.Status != StatusActive {
 			return
 		}
+		// Defense-in-depth: the map key already matched, but keep a constant-time
+		// compare on the single candidate so the final match path is timing-safe.
+		if subtle.ConstantTimeCompare(hash[:], sess.TokenHash[:]) != 1 {
+			return
+		}
+		if s.isExpired(sess, now) {
+			sess.Status = StatusExpired
+			job, persist = s.snapshotLocked()
+			expiredEvt = &LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonExpired}
+			return
+		}
+		if touch {
+			sess.LastSeenAt = now
+			job, persist = s.maybeSnapshotTouchLocked(now)
+		}
+		match = sess
+		ok = true
 	}()
 
+	if persist {
+		s.writeSnapshot(job)
+	}
 	if expiredEvt != nil {
 		s.dispatchLifecycle([]LifecycleEvent{*expiredEvt})
 	}
@@ -250,23 +283,33 @@ func (s *Store) Touch(sessionID string) bool {
 	now := s.now()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	sess, ok := s.sessions[strings.TrimSpace(sessionID)]
 	if !ok || sess.Status != StatusActive {
+		s.mu.Unlock()
 		return false
 	}
 	if s.isExpired(sess, now) {
 		sess.Status = StatusExpired
-		s.saveLocked()
+		job, persist := s.snapshotLocked()
+		s.mu.Unlock()
+		if persist {
+			s.writeSnapshot(job)
+		}
 		return false
 	}
 	sess.LastSeenAt = now
-	s.saveLocked()
+	job, persist := s.maybeSnapshotTouchLocked(now)
+	s.mu.Unlock()
+	if persist {
+		s.writeSnapshot(job)
+	}
 	return true
 }
 
-// Get returns a session by its public ID.
+// Get returns a defensive copy of a session by its public ID. Callers must not
+// be able to mutate store-owned state outside the store lock, so the Grants
+// slice is cloned rather than aliased.
 func (s *Store) Get(sessionID string) (*Session, bool) {
 	if s == nil {
 		return nil, false
@@ -277,10 +320,13 @@ func (s *Store) Get(sessionID string) (*Session, bool) {
 	if !ok {
 		return nil, false
 	}
-	return sess, true
+	cp := *sess
+	cp.Grants = append([]string(nil), sess.Grants...)
+	return &cp, true
 }
 
-// List returns all sessions.
+// List returns defensive copies of all sessions. Each element's Grants slice is
+// cloned so callers cannot mutate store-owned state through the returned values.
 func (s *Store) List() []Session {
 	if s == nil {
 		return nil
@@ -290,9 +336,32 @@ func (s *Store) List() []Session {
 
 	out := make([]Session, 0, len(s.sessions))
 	for _, sess := range s.sessions {
-		out = append(out, *sess)
+		cp := *sess
+		cp.Grants = append([]string(nil), sess.Grants...)
+		out = append(out, cp)
 	}
 	return out
+}
+
+// SetGrants replaces a session's capability grants and persists the change. The
+// input is cloned so the store owns the slice. Returns false if no such session.
+func (s *Store) SetGrants(sessionID string, grants []string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	sess, ok := s.sessions[strings.TrimSpace(sessionID)]
+	if !ok {
+		s.mu.Unlock()
+		return false
+	}
+	sess.Grants = append([]string(nil), grants...)
+	job, persist := s.snapshotLocked()
+	s.mu.Unlock()
+	if persist {
+		s.writeSnapshot(job)
+	}
+	return true
 }
 
 // Revoke marks a session as revoked.
@@ -301,7 +370,11 @@ func (s *Store) Revoke(sessionID string) bool {
 		return false
 	}
 
-	var event LifecycleEvent
+	var (
+		event   LifecycleEvent
+		job     snapshotJob
+		persist bool
+	)
 	revoked := func() bool {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -311,12 +384,15 @@ func (s *Store) Revoke(sessionID string) bool {
 			return false
 		}
 		sess.Status = StatusRevoked
-		s.saveLocked()
+		job, persist = s.snapshotLocked()
 		event = LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonRevoked}
 		return true
 	}()
 	if !revoked {
 		return false
+	}
+	if persist {
+		s.writeSnapshot(job)
 	}
 	s.dispatchLifecycle([]LifecycleEvent{event})
 	return true
@@ -330,8 +406,11 @@ func (s *Store) UpdateConfig(cfg Config) {
 	s.mu.Lock()
 	s.applyConfig(cfg)
 	events := s.pruneExpiredLocked()
-	s.saveLocked()
+	job, persist := s.snapshotLocked()
 	s.mu.Unlock()
+	if persist {
+		s.writeSnapshot(job)
+	}
 	s.dispatchLifecycle(events)
 }
 
@@ -370,18 +449,18 @@ func (s *Store) pruneExpiredLocked() []LifecycleEvent {
 	for id, sess := range s.sessions {
 		if sess.Status == StatusRevoked {
 			delete(s.sessions, id)
+			delete(s.byTokenHash, sess.TokenHash)
 			events = append(events, LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonPruned})
 			continue
 		}
 		if s.isExpired(sess, now) {
 			delete(s.sessions, id)
+			delete(s.byTokenHash, sess.TokenHash)
 			events = append(events, LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonPruned})
 		}
 	}
 	return events
 }
-
-// persistence types
 
 type persistedStore struct {
 	SavedAt  time.Time          `json:"savedAt"`
@@ -392,12 +471,57 @@ type persistedSession struct {
 	ID         string    `json:"id"`
 	AgentID    string    `json:"agentId"`
 	Label      string    `json:"label,omitempty"`
+	Browser    string    `json:"browser,omitempty"`
 	TokenHash  string    `json:"tokenHash"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
 	ExpiresAt  time.Time `json:"expiresAt,omitempty"`
 	Status     string    `json:"status"`
 	Grants     []string  `json:"grants,omitempty"`
+}
+
+// toPersisted maps an in-memory Session to its on-disk record.
+func (sess *Session) toPersisted() persistedSession {
+	return persistedSession{
+		ID:         sess.ID,
+		AgentID:    sess.AgentID,
+		Label:      sess.Label,
+		Browser:    sess.Browser,
+		TokenHash:  hex.EncodeToString(sess.TokenHash[:]),
+		CreatedAt:  sess.CreatedAt,
+		LastSeenAt: sess.LastSeenAt,
+		ExpiresAt:  sess.ExpiresAt,
+		Status:     sess.Status,
+		// Clone Grants: snapshots are marshalled outside s.mu, so the record must
+		// not alias store-owned slices that a concurrent SetGrants could mutate.
+		Grants: append([]string(nil), sess.Grants...),
+	}
+}
+
+// toSession maps an on-disk record back to an in-memory Session, decoding and
+// validating the token hash. ok=false means the record is malformed and should
+// be skipped. idleTimeout is injected from store config (not persisted).
+func (rec persistedSession) toSession(idleTimeout time.Duration) (*Session, bool) {
+	tokenHash, err := hex.DecodeString(strings.TrimSpace(rec.TokenHash))
+	if err != nil || len(tokenHash) != sha256.Size {
+		return nil, false
+	}
+	var hash [32]byte
+	copy(hash[:], tokenHash)
+
+	return &Session{
+		ID:          rec.ID,
+		AgentID:     rec.AgentID,
+		Label:       rec.Label,
+		Browser:     rec.Browser,
+		TokenHash:   hash,
+		CreatedAt:   rec.CreatedAt,
+		LastSeenAt:  rec.LastSeenAt,
+		ExpiresAt:   rec.ExpiresAt,
+		IdleTimeout: idleTimeout,
+		Status:      rec.Status,
+		Grants:      append([]string(nil), rec.Grants...),
+	}, true
 }
 
 func (s *Store) loadPersisted() {
@@ -419,24 +543,9 @@ func (s *Store) loadPersisted() {
 
 	now := s.now()
 	for _, rec := range persisted.Sessions {
-		tokenHash, err := hex.DecodeString(strings.TrimSpace(rec.TokenHash))
-		if err != nil || len(tokenHash) != sha256.Size {
+		sess, ok := rec.toSession(s.cfg.IdleTimeout)
+		if !ok {
 			continue
-		}
-		var hash [32]byte
-		copy(hash[:], tokenHash)
-
-		sess := &Session{
-			ID:          rec.ID,
-			AgentID:     rec.AgentID,
-			Label:       rec.Label,
-			TokenHash:   hash,
-			CreatedAt:   rec.CreatedAt,
-			LastSeenAt:  rec.LastSeenAt,
-			ExpiresAt:   rec.ExpiresAt,
-			IdleTimeout: s.cfg.IdleTimeout,
-			Status:      rec.Status,
-			Grants:      rec.Grants,
 		}
 		if sess.Status != StatusActive {
 			continue
@@ -445,33 +554,59 @@ func (s *Store) loadPersisted() {
 			continue
 		}
 		s.sessions[sess.ID] = sess
+		s.byTokenHash[sess.TokenHash] = sess
 	}
 }
 
-func (s *Store) saveLocked() {
-	if s.cfg.PersistPath == "" {
-		return
-	}
+// snapshotJob is a self-contained persistence snapshot stamped with a sequence,
+// built under s.mu and written outside it.
+type snapshotJob struct {
+	snapshot persistedStore
+	seq      uint64
+}
 
+// snapshotLocked builds a self-contained value-copy snapshot of every session
+// and stamps it with a monotonic sequence. Caller must hold s.mu. ok=false when
+// persistence is disabled (no PersistPath), in which case there is nothing to write.
+func (s *Store) snapshotLocked() (snapshotJob, bool) {
+	if s.cfg.PersistPath == "" {
+		return snapshotJob{}, false
+	}
+	s.saveSeq++
 	snapshot := persistedStore{
 		SavedAt:  s.now().UTC(),
 		Sessions: make([]persistedSession, 0, len(s.sessions)),
 	}
 	for _, sess := range s.sessions {
-		snapshot.Sessions = append(snapshot.Sessions, persistedSession{
-			ID:         sess.ID,
-			AgentID:    sess.AgentID,
-			Label:      sess.Label,
-			TokenHash:  hex.EncodeToString(sess.TokenHash[:]),
-			CreatedAt:  sess.CreatedAt,
-			LastSeenAt: sess.LastSeenAt,
-			ExpiresAt:  sess.ExpiresAt,
-			Status:     sess.Status,
-			Grants:     sess.Grants,
-		})
+		snapshot.Sessions = append(snapshot.Sessions, sess.toPersisted())
 	}
+	return snapshotJob{snapshot: snapshot, seq: s.saveSeq}, true
+}
 
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+// maybeSnapshotTouchLocked builds a snapshot for a LastSeen-only update at most
+// once per touchPersistInterval. Caller must hold s.mu; the resulting write
+// happens after the lock is released. The next real mutation's snapshot
+// opportunistically flushes any debounced LastSeen for all sessions.
+func (s *Store) maybeSnapshotTouchLocked(now time.Time) (snapshotJob, bool) {
+	if now.Sub(s.lastTouchSave) < touchPersistInterval {
+		return snapshotJob{}, false
+	}
+	s.lastTouchSave = now
+	return s.snapshotLocked()
+}
+
+// writeSnapshot marshals and atomically writes a snapshot outside s.mu. Writers
+// serialize on saveMu; a snapshot older than one already written is skipped so a
+// stale snapshot can never clobber a fresher one.
+func (s *Store) writeSnapshot(job snapshotJob) {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+	if job.seq <= s.writtenSeq {
+		return
+	}
+	s.writtenSeq = job.seq
+
+	data, err := json.MarshalIndent(job.snapshot, "", "  ")
 	if err != nil {
 		return
 	}

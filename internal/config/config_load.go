@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 var configHintOnce sync.Once
@@ -34,10 +37,110 @@ func EmitDefaultConfigHint() {
 	})
 }
 
-// Load returns the RuntimeConfig with precedence: env vars > config file > defaults.
+// parsedConfigFile is the side-effect-free result of resolving + reading +
+// parsing the config file.
+type parsedConfigFile struct {
+	Path           string
+	DefaultPath    string
+	EnvOverride    bool
+	Found          bool  // file read succeeded
+	ReadErr        error // os.ReadFile error (incl. not-exist); nil when Found
+	Legacy         bool
+	FC             *FileConfig
+	ParseErr       error   // json unmarshal error (legacy or nested)
+	UnknownFields  error   // non-fatal: unrecognized nested fields
+	ValidationErrs []error // non-fatal: ValidateFileConfig
+}
+
+func resolveConfigPath() (path, defaultPath string, envOverride bool) {
+	defaultPath = filepath.Join(userConfigDir(), "config.json")
+	path = envOr("PINCHTAB_CONFIG", defaultPath)
+	return path, defaultPath, os.Getenv("PINCHTAB_CONFIG") != ""
+}
+
+// ConfigFilePath returns the effective config file path (honoring PINCHTAB_CONFIG),
+// i.e. the path LoadFileConfig reads — exposed so callers can stat it for change
+// detection without performing a full load.
+func ConfigFilePath() string {
+	path, _, _ := resolveConfigPath()
+	return path
+}
+
+// readAndParseConfigFile resolves, reads, detects legacy format, and parses the
+// config file with no side effects (no logging, no os.Exit). Callers decide how
+// to surface the outcome.
+func readAndParseConfigFile() parsedConfigFile {
+	path, defaultPath, override := resolveConfigPath()
+	res := parsedConfigFile{Path: path, DefaultPath: defaultPath, EnvOverride: override}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		res.ReadErr = err
+		return res
+	}
+	res.Found = true
+
+	if isLegacyConfig(data) {
+		res.Legacy = true
+		var lc legacyFileConfig
+		if err := json.Unmarshal(data, &lc); err != nil {
+			res.ParseErr = err
+			return res
+		}
+		res.FC = convertLegacyConfig(&lc)
+	} else {
+		fc := &FileConfig{}
+		if err := json.Unmarshal(data, fc); err != nil {
+			res.ParseErr = err
+			return res
+		}
+		res.FC = fc
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.DisallowUnknownFields()
+		if ufErr := dec.Decode(&FileConfig{}); ufErr != nil {
+			res.UnknownFields = ufErr
+		}
+	}
+	if res.FC != nil {
+		res.ValidationErrs = ValidateFileConfig(res.FC)
+	}
+	return res
+}
+
+// LoadDiagnostic is a non-fatal config-load message for the caller to emit.
+type LoadDiagnostic struct {
+	Level   slog.Level
+	Message string
+	Attrs   []any // slog key/value pairs
+}
+
+// Load returns the RuntimeConfig with precedence: env vars > config file >
+// defaults. It is a thin wrapper over LoadConfig that emits the load diagnostics
+// via slog and terminates the process on a fatal config error.
 func Load() *RuntimeConfig {
+	cfg, diags, err := LoadConfig()
+	for _, d := range diags {
+		switch d.Level {
+		case slog.LevelDebug:
+			slog.Debug(d.Message, d.Attrs...)
+		case slog.LevelInfo:
+			slog.Info(d.Message, d.Attrs...)
+		default:
+			slog.Warn(d.Message, d.Attrs...)
+		}
+	}
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
+	return cfg
+}
+
+// LoadConfig builds the RuntimeConfig (env > file > defaults) with no logging and
+// no os.Exit. It returns the config, ordered diagnostics for the caller to log,
+// and a fatal error (e.g. missing port) for the caller to act on.
+func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 	cfg := &RuntimeConfig{
-		// Server defaults
 		Bind:              "127.0.0.1",
 		Port:              defaultPort,
 		InstancePortStart: 9868,
@@ -46,7 +149,6 @@ func Load() *RuntimeConfig {
 		StateDir:          userConfigDir(),
 		CookieSecure:      nil,
 
-		// Security defaults
 		AllowEvaluate:             false,
 		AllowMacro:                false,
 		AllowScreencast:           false,
@@ -69,21 +171,22 @@ func Load() *RuntimeConfig {
 		UploadMaxTotalBytes:       DefaultUploadMaxTotalBytes,
 		MaxRedirects:              -1, // Unlimited by default; set to N to limit redirect hops
 
-		// Browser / instance defaults
 		Headless:           true,
 		NoRestore:          false,
 		ProfileDir:         "",
 		ProfilesBaseDir:    "",
 		DefaultProfile:     "default",
-		ChromeVersion:      "144.0.7559.133",
+		BrowserVersion:     "144.0.7559.133",
 		Timezone:           "",
 		BlockImages:        false,
 		BlockMedia:         false,
 		BlockAds:           false,
 		MaxTabs:            20,
 		MaxParallelTabs:    0,
-		ChromeBinary:       "", // Set via config.json only
-		ChromeExtraFlags:   "",
+		DefaultBrowser:     BrowserChrome,
+		BrowserBinary:      "", // Set via config.json only
+		BrowserExtraFlags:  "",
+		Cloak:              CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true},
 		ExtensionPaths:     []string{defaultExtensionsDir(userConfigDir())},
 		UserAgent:          "",
 		NoAnimations:       false,
@@ -94,13 +197,11 @@ func Load() *RuntimeConfig {
 		TabCloseDelay:      5 * time.Minute,
 		TabRestore:         false,
 
-		// Timeout defaults
 		ActionTimeout:   30 * time.Second,
 		NavigateTimeout: 60 * time.Second,
 		ShutdownTimeout: 10 * time.Second,
 		WaitNavDelay:    1 * time.Second,
 
-		// Orchestrator defaults
 		Strategy:           "always-on",
 		AllocationPolicy:   "fcfs",
 		RestartMaxRestarts: 20,
@@ -108,12 +209,10 @@ func Load() *RuntimeConfig {
 		RestartMaxBackoff:  60 * time.Second,
 		RestartStableAfter: 5 * time.Minute,
 
-		// Attach defaults
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
-		AttachAllowSchemes: []string{"ws", "wss"},
+		AttachAllowSchemes: []string{"ws", "wss", "http", "https"},
 
-		// IDPI defaults
 		IDPI: IDPIConfig{
 			Enabled:        true,
 			StrictMode:     true,
@@ -122,10 +221,6 @@ func Load() *RuntimeConfig {
 			ScanTimeoutSec: 5,
 		},
 
-		// Engine default (set via config.json only)
-		Engine: "chrome",
-
-		// Observability defaults
 		Observability: ObservabilityConfig{
 			Activity: ActivityConfig{
 				Enabled:        true,
@@ -135,7 +230,6 @@ func Load() *RuntimeConfig {
 			},
 		},
 
-		// Session defaults
 		Sessions: SessionsRuntimeConfig{
 			Agent: AgentSessionRuntimeConfig{
 				Enabled:     true,
@@ -153,7 +247,6 @@ func Load() *RuntimeConfig {
 			},
 		},
 
-		// AutoSolver defaults (disabled by default)
 		AutoSolver: AutoSolverConfig{
 			Enabled:           false,
 			AutoTrigger:       true,
@@ -163,67 +256,70 @@ func Load() *RuntimeConfig {
 			SolverTimeoutSec:  30,
 			RetryBaseDelayMs:  500,
 			RetryMaxDelayMs:   10000,
-			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			Solvers:           []string{"cloudflare", "semantic"},
 			LLMFallback:       false,
 		},
 	}
 	finalizeProfileConfig(cfg)
 
-	// Load config file (supports both legacy flat and new nested format)
-	defaultConfigPath := filepath.Join(userConfigDir(), "config.json")
-	configPath := envOr("PINCHTAB_CONFIG", defaultConfigPath)
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			slog.Warn("failed to read config file", "path", configPath, "error", err)
+	var diags []LoadDiagnostic
+	res := readAndParseConfigFile()
+	if !res.Found {
+		if res.ReadErr != nil && !os.IsNotExist(res.ReadErr) {
+			diags = append(diags, LoadDiagnostic{slog.LevelWarn, "failed to read config file", []any{"path", res.Path, "error", res.ReadErr}})
 		}
-		return cfg
+		return cfg, diags, nil
 	}
 
-	slog.Debug("loading config file", "path", configPath)
+	diags = append(diags, LoadDiagnostic{slog.LevelDebug, "loading config file", []any{"path", res.Path}})
 
-	var fc *FileConfig
-
-	if isLegacyConfig(data) {
-		var lc legacyFileConfig
-		if err := json.Unmarshal(data, &lc); err != nil {
-			slog.Warn("failed to parse legacy config", "path", configPath, "error", err)
-			return cfg
+	if res.ParseErr != nil {
+		if res.Legacy {
+			diags = append(diags, LoadDiagnostic{slog.LevelWarn, "failed to parse legacy config", []any{"path", res.Path, "error", res.ParseErr}})
+		} else {
+			diags = append(diags, LoadDiagnostic{slog.LevelWarn, "failed to parse config", []any{"path", res.Path, "error", res.ParseErr}})
 		}
-		fc = convertLegacyConfig(&lc)
-		slog.Info("loaded legacy flat config, consider migrating to nested format", "path", configPath)
-	} else {
-		fc = &FileConfig{}
-		if err := json.Unmarshal(data, fc); err != nil {
-			slog.Warn("failed to parse config", "path", configPath, "error", err)
-			return cfg
-		}
-		// Warn about unrecognized fields (non-fatal, config still loads).
-		dec := json.NewDecoder(bytes.NewReader(data))
-		dec.DisallowUnknownFields()
-		if ufErr := dec.Decode(&FileConfig{}); ufErr != nil {
-			slog.Warn("config has unrecognized fields that will be ignored", "path", configPath, "error", ufErr)
-		}
+		return cfg, diags, nil
+	}
+	if res.Legacy {
+		diags = append(diags, LoadDiagnostic{slog.LevelInfo, "loaded legacy flat config, consider migrating to nested format", []any{"path", res.Path}})
+	}
+	if res.UnknownFields != nil {
+		diags = append(diags, LoadDiagnostic{slog.LevelWarn, "config has unrecognized fields that will be ignored", []any{"path", res.Path, "error", res.UnknownFields}})
+	}
+	for _, e := range res.ValidationErrs {
+		diags = append(diags, LoadDiagnostic{slog.LevelWarn, "config validation error", []any{"path", res.Path, "error", e}})
 	}
 
-	// Validate file config and log warnings
-	if errs := ValidateFileConfig(fc); len(errs) > 0 {
-		for _, e := range errs {
-			slog.Warn("config validation error", "path", configPath, "error", e)
-		}
-	}
-
-	// Apply file config (only if env var NOT set)
-	applyFileConfig(cfg, fc)
+	applyFileConfig(cfg, res.FC)
 	finalizeProfileConfig(cfg)
 
 	if cfg.Port == "" {
-		slog.Error("server port is not configured — set server.port in config.json")
-		os.Exit(1)
+		return cfg, diags, fmt.Errorf("server port is not configured — set server.port in config.json")
 	}
 
-	return cfg
+	return cfg, diags, nil
+}
+
+// ConfigFileStatus reports on-disk config state without invoking Load (used by `pinchtab doctor`).
+type ConfigFileStatus struct {
+	Path        string
+	DefaultPath string
+	EnvOverride bool
+	Found       bool
+	ParseErr    error
+}
+
+// InspectConfigFile reports config-file load status with no side effects.
+func InspectConfigFile() ConfigFileStatus {
+	res := readAndParseConfigFile()
+	return ConfigFileStatus{
+		Path:        res.Path,
+		DefaultPath: res.DefaultPath,
+		EnvOverride: res.EnvOverride,
+		Found:       res.Found,
+		ParseErr:    res.ParseErr,
+	}
 }
 
 func envOr(key, fallback string) string {
@@ -246,7 +342,6 @@ func finalizeProfileConfig(cfg *RuntimeConfig) {
 }
 
 func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
-	// Server
 	if fc.Server.Port != "" {
 		cfg.Port = fc.Server.Port
 	}
@@ -258,9 +353,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Server.StateDir != "" {
 		cfg.StateDir = fc.Server.StateDir
-	}
-	if fc.Server.Engine != "" {
-		cfg.Engine = fc.Server.Engine
 	}
 	if fc.Server.NetworkBufferSize != nil && *fc.Server.NetworkBufferSize > 0 {
 		cfg.NetworkBufferSize = ClampNetworkBufferSize(*fc.Server.NetworkBufferSize)
@@ -275,7 +367,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.TrustProxyHeaders = *fc.Server.TrustProxyHeaders
 	}
 	cfg.CookieSecure = fc.Server.CookieSecure
-	// Security
 	if fc.Security.AllowEvaluate != nil {
 		cfg.AllowEvaluate = *fc.Security.AllowEvaluate
 	}
@@ -328,11 +419,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.MaxRedirects != nil {
 		cfg.MaxRedirects = *fc.Security.MaxRedirects
 	}
-	if fc.Security.Attach.Enabled != nil {
-		cfg.AttachEnabled = *fc.Security.Attach.Enabled
-	}
-	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
-	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
+	// Attach fields (Enabled/ForwardProxyAuth/AllowHosts/AllowSchemes) are applied
+	// once, below, with conditional AllowHosts/AllowSchemes so omitting them in the
+	// file keeps the seeded defaults instead of clobbering them with an empty list.
 	cfg.TrustedProxyCIDRs = append([]string(nil), fc.Security.TrustedProxyCIDRs...)
 	cfg.TrustedResolveCIDRs = append([]string(nil), fc.Security.TrustedResolveCIDRs...)
 	if fc.Security.TrustLoopbackProxy != nil {
@@ -390,7 +479,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.Sessions.Dashboard.RequireElevation = *fc.Sessions.Dashboard.RequireElevation
 	}
 
-	// Agent sessions
 	if fc.Sessions.Agent.Enabled != nil {
 		cfg.Sessions.Agent.Enabled = *fc.Sessions.Agent.Enabled
 	}
@@ -404,24 +492,93 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.Sessions.Agent.MaxLifetime = time.Duration(*fc.Sessions.Agent.MaxLifetimeSec) * time.Second
 	}
 
-	// Browser
-	if fc.Browser.ChromeVersion != "" {
-		cfg.ChromeVersion = fc.Browser.ChromeVersion
+	// Migration shim must run before consuming legacy provider/binary/cloak fields below.
+	synthesized, conflict := migrateLegacyBrowserConfig(&fc.Browser, fc.Browsers.Default)
+	if conflict {
+		slog.Warn("config has both browser.targets and legacy browser.binary/extraFlags/cloak/proxy set; targets are used as authored (no legacy synthesis), but the legacy fields still seed the base runtime config that target resolution overlays per-field")
+	} else if synthesized {
+		slog.Debug("migrated legacy browser config into browser.targets.default")
 	}
-	if fc.Browser.ChromeBinary != "" {
-		cfg.ChromeBinary = fc.Browser.ChromeBinary
+	// Assigned unconditionally — unlike most fields below, which only apply
+	// when present, a reload must be able to REMOVE targets: stale routing
+	// (and the proxy credentials inside targets) staying live after the user
+	// deleted them is dangerous. Absent blocks clear to zero values; the
+	// migration shim above re-synthesizes targets for legacy-only files first.
+	cfg.Targets = cloneBrowserTargetsConfig(fc.Browser.Targets)
+	cfg.DefaultTarget = fc.Browser.DefaultTarget
+	cfg.FallbackOrder = append([]string(nil), fc.Browser.FallbackOrder...)
+	cfg.TargetsSynthesized = synthesized && len(fc.Browser.Targets) > 0
+
+	// Resolve the effective browser provider: browsers.default is the
+	// authoritative source. browser.provider and server.engine are no longer
+	// supported (rejected at validation time), so a target synthesized from
+	// those legacy fields must not select the provider either. A USER-AUTHORED
+	// default target, however, is the user's provider choice — forcing chrome
+	// would contradict it and destructively "reconcile" it on the next
+	// FileConfigFromRuntime round-trip.
+	if fc.Browsers.Default != "" {
+		// Store the canonical lowercased form so logs, the doctor header, and
+		// FileConfigFromRuntime round-trips stay consistent ("Cloak" -> "cloak").
+		// Keep an unknown value as-is (don't NormalizeBrowser) so the warning
+		// below and the launch-time chrome fallback still apply.
+		cfg.DefaultBrowser = strings.ToLower(strings.TrimSpace(fc.Browsers.Default))
+		// Launch paths coerce unknown providers to chrome via
+		// NormalizeBrowser; name that consequence loudly at load time.
+		if _, ok := browsers.Get(strings.ToLower(strings.TrimSpace(fc.Browsers.Default))); !ok {
+			slog.Warn("browsers.default is not a known browser; launches will fall back to chrome",
+				"configured", fc.Browsers.Default, "known", browsers.IDs())
+		}
+	} else if name := ResolveDefaultTarget(cfg); name != "" && !cfg.TargetsSynthesized && cfg.Targets[name].Provider != "" {
+		cfg.DefaultBrowser = NormalizeBrowser(cfg.Targets[name].Provider)
+	} else {
+		cfg.DefaultBrowser = "chrome"
 	}
-	if fc.Browser.ChromeDebugPort != nil && *fc.Browser.ChromeDebugPort > 0 {
-		cfg.ChromeDebugPort = *fc.Browser.ChromeDebugPort
+
+	// Apply native-stealth default when the winning provider supports it.
+	if b, ok := browsers.Get(strings.ToLower(cfg.DefaultBrowser)); ok && b.Capabilities().Has(browsers.CapNativeStealth) && fc.Browser.Cloak.DisableDefaultStealthArgs == nil {
+		cfg.Cloak.DisableDefaultStealthArgs = true
 	}
-	if fc.Browser.ChromeExtraFlags != "" {
-		cfg.ChromeExtraFlags = SanitizeChromeExtraFlags(fc.Browser.ChromeExtraFlags)
+
+	if fc.Browser.BrowserVersion != "" {
+		cfg.BrowserVersion = fc.Browser.BrowserVersion
+	}
+	if fc.Browser.BrowserBinary != "" {
+		cfg.BrowserBinary = fc.Browser.BrowserBinary
+	}
+	if fc.Browser.BrowserDebugPort != nil && *fc.Browser.BrowserDebugPort > 0 {
+		cfg.BrowserDebugPort = *fc.Browser.BrowserDebugPort
+	}
+	if fc.Browser.BrowserExtraFlags != "" {
+		cfg.BrowserExtraFlags = SanitizeBrowserExtraFlags(fc.Browser.BrowserExtraFlags)
+	}
+	applyCloakBrowserConfigToRuntime(cfg, fc.Browser.Cloak)
+	// Assigned unconditionally (see Targets above): removing browser.proxy
+	// from the file must clear the runtime proxy — leaving stale credentials
+	// live in a long-running process is worse than the asymmetry with the
+	// presence-guarded fields around this one.
+	cfg.Proxy = BrowserProxyConfig{
+		Server:     fc.Browser.Proxy.Server,
+		BypassList: append([]string(nil), fc.Browser.Proxy.BypassList...),
+		Username:   fc.Browser.Proxy.Username,
+		Password:   fc.Browser.Proxy.Password,
+	}
+	if fc.Browser.Proxy.Geo != nil {
+		geoCopy := *fc.Browser.Proxy.Geo
+		cfg.Proxy.Geo = &geoCopy
 	}
 	if fc.Browser.ExtensionPaths != nil {
 		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
 	}
 
-	// Instance defaults — resolve headless bool into mode string.
+	if len(fc.Browsers.Available) > 0 {
+		cfg.BrowsersAvailable = make([]string, len(fc.Browsers.Available))
+		copy(cfg.BrowsersAvailable, fc.Browsers.Available)
+	} else if cfg.DefaultBrowser != "" {
+		cfg.BrowsersAvailable = []string{cfg.DefaultBrowser}
+	} else {
+		cfg.BrowsersAvailable = []string{"chrome"}
+	}
+
 	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode == "" {
 		if *fc.InstanceDefaults.Headless {
 			fc.InstanceDefaults.Mode = "headless"
@@ -491,7 +648,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.DialogAutoAccept = *fc.InstanceDefaults.DialogAutoAccept
 	}
 
-	// Profiles
 	if fc.Profiles.BaseDir != "" {
 		cfg.ProfilesBaseDir = fc.Profiles.BaseDir
 	}
@@ -500,7 +656,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.ProfileDir = ""
 
-	// Multi-instance
 	if fc.MultiInstance.Strategy != "" {
 		cfg.Strategy = fc.MultiInstance.Strategy
 	}
@@ -513,7 +668,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.MultiInstance.InstancePortEnd != nil {
 		cfg.InstancePortEnd = *fc.MultiInstance.InstancePortEnd
 	}
-	// Restart
 	if fc.MultiInstance.Restart.MaxRestarts != nil {
 		cfg.RestartMaxRestarts = *fc.MultiInstance.Restart.MaxRestarts
 	}
@@ -527,9 +681,11 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.RestartStableAfter = time.Duration(*fc.MultiInstance.Restart.StableAfterSec) * time.Second
 	}
 
-	// Attach
 	if fc.Security.Attach.Enabled != nil {
 		cfg.AttachEnabled = *fc.Security.Attach.Enabled
+	}
+	if fc.Security.Attach.ForwardProxyAuth != nil {
+		cfg.AttachForwardProxyAuth = *fc.Security.Attach.ForwardProxyAuth
 	}
 	if len(fc.Security.Attach.AllowHosts) > 0 {
 		cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
@@ -538,7 +694,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	}
 
-	// Timeouts
 	if fc.Timeouts.ActionSec > 0 {
 		cfg.ActionTimeout = time.Duration(fc.Timeouts.ActionSec) * time.Second
 	}
@@ -552,7 +707,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.WaitNavDelay = time.Duration(fc.Timeouts.WaitNavMs) * time.Millisecond
 	}
 
-	// Scheduler
 	if fc.Scheduler.Enabled != nil {
 		cfg.Scheduler.Enabled = *fc.Scheduler.Enabled
 	}
@@ -578,7 +732,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.Scheduler.WorkerCount = *fc.Scheduler.WorkerCount
 	}
 
-	// AutoSolver
 	if fc.AutoSolver.Enabled != nil {
 		cfg.AutoSolver.Enabled = *fc.AutoSolver.Enabled
 	}
@@ -641,4 +794,34 @@ func ApplyFileConfigToRuntime(cfg *RuntimeConfig, fc *FileConfig) {
 
 	applyFileConfig(cfg, fc)
 	finalizeProfileConfig(cfg)
+}
+
+func applyCloakBrowserConfigToRuntime(cfg *RuntimeConfig, cloak CloakBrowserConfig) {
+	if cfg == nil {
+		return
+	}
+	if cloak.FingerprintSeed != "" {
+		cfg.Cloak.FingerprintSeed = cloak.FingerprintSeed
+	}
+	if cloak.Platform != "" {
+		cfg.Cloak.Platform = cloak.Platform
+	}
+	if cloak.Locale != "" {
+		cfg.Cloak.Locale = cloak.Locale
+	}
+	if cloak.Timezone != "" {
+		cfg.Cloak.Timezone = cloak.Timezone
+	}
+	if cloak.WebRTCIP != "" {
+		cfg.Cloak.WebRTCIP = cloak.WebRTCIP
+	}
+	if cloak.FontsDir != "" {
+		cfg.Cloak.FontsDir = filepath.Clean(cloak.FontsDir)
+	}
+	if cloak.StorageQuotaMB != nil {
+		cfg.Cloak.StorageQuotaMB = *cloak.StorageQuotaMB
+	}
+	if cloak.DisableDefaultStealthArgs != nil {
+		cfg.Cloak.DisableDefaultStealthArgs = *cloak.DisableDefaultStealthArgs
+	}
 }

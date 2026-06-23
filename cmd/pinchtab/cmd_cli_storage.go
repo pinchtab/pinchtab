@@ -59,21 +59,16 @@ var storageClearCmd = &cobra.Command{
 func init() {
 	storageCmd.AddCommand(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
 
-	// Shared tab flag
 	addTabFlag(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
 
-	// get flags
 	storageGetCmd.Flags().String("type", "", "Storage type: local, session (default: both)")
 	storageGetCmd.Flags().String("key", "", "Specific key to retrieve")
 
-	// set flags
 	storageSetCmd.Flags().String("type", "local", "Storage type: local or session")
 
-	// delete flags
 	storageDeleteCmd.Flags().String("type", "local", "Storage type: local or session")
 	storageDeleteCmd.Flags().String("key", "", "Key to remove (omit to clear entire store)")
 
-	// clear flags
 	storageClearCmd.Flags().String("type", "local", "Storage type: local or session")
 	storageClearCmd.Flags().Bool("all", false, "Clear both localStorage and sessionStorage")
 }

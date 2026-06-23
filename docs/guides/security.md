@@ -25,7 +25,8 @@ The default security posture is:
 - `instanceDefaults.stealthLevel = "light"` (minimal fingerprint normalization only; anti-bot bypass requires explicit opt-in to `medium` or `full`)
 - `security.attach.enabled = false`
 - `security.attach.allowHosts = ["127.0.0.1", "localhost", "::1"]`
-- `security.attach.allowSchemes = ["ws", "wss"]`
+- `security.attach.allowSchemes = ["ws", "wss", "http", "https"]`
+- `security.attach.forwardProxyAuth = false`
 - `security.allowedDomains = ["127.0.0.1", "localhost", "::1"]`
 - `security.trustedProxyCIDRs = []`
 - `security.trustedResolveCIDRs = []`
@@ -222,7 +223,8 @@ Attach is an advanced feature for registering an externally managed Chrome insta
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     }
   }
 }
@@ -234,12 +236,30 @@ If you enable attach:
 - prefer local-only hosts unless external Chrome targets or remote bridges are intentional
 - only attach to browsers and CDP endpoints you trust
 - `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable attach host with an allowed scheme. Use it only on isolated, operator-controlled networks.
+- keep `forwardProxyAuth` disabled unless the attached browser process and CDP transport are trusted; enabling it permits PinchTab to send configured proxy credentials over the CDP WebSocket.
 
-If you use `POST /instances/attach-bridge`, `security.attach.allowSchemes` must also include `http` or `https`.
+There are two attach endpoints with different trust shapes:
+
+- `POST /instances/attach` — attach an existing **CDP browser** by `cdpUrl`.
+  PinchTab spawns a child `pinchtab bridge --cdp-attach ...` process that wraps
+  the external endpoint and registers the bridge's local HTTP URL (not the
+  raw `ws://` CDP URL) as the routable instance URL. The CDP URL is preserved
+  as metadata and **redacted in logs**.
+- `POST /instances/attach-bridge` — attach an already-running **PinchTab
+  bridge** by its HTTP `baseUrl`. The orchestrator runs a `/health` check
+  before registering it.
+
+Scheme allowlist rules:
+
+- `ws`, `wss` — required for CDP attach using a browser WebSocket URL
+- `http`, `https` — required for CDP attach using an HTTP DevTools origin
+  *and* for `POST /instances/attach-bridge`
 
 `security.attach.allowSchemes` and `security.attach.enabled` still apply when `allowHosts` contains `"*"`, but host allowlisting no longer provides protection in that configuration.
 
-For `attach-bridge`, `baseUrl` should be a bare bridge origin such as `http://bridge.internal:9868`. Do not include credentials, query strings, fragments, or a path.
+For `attach-bridge`, `baseUrl` should be a bare bridge origin such as `http://bridge.internal:9868`. Do not include credentials, query strings, fragments, or a path. For CDP attach via HTTP, only the bare origin or a `/json/version` path is accepted.
+
+Stopping a CDP-attached instance shuts down the child PinchTab bridge but never kills the external browser process — PinchTab does not own that process.
 
 ## IDPI
 
@@ -289,6 +309,7 @@ For navigation trust overrides:
 - `security.trustedResolveCIDRs` lets a hostname resolve to a non-public IP during navigation preflight. This is intended for operator-controlled DNS or proxy setups such as internal proxies, lab networks, or benchmark ranges
 - `security.trustedProxyCIDRs` trusts browser-reported remote IPs from known internal proxies during runtime navigation checks
 - keep both lists narrow. Broad ranges such as `10.0.0.0/8` reduce SSRF protections and should only be used when the full network segment is intentionally trusted
+- known limitation: responses served from the browser cache or a service worker report no remote IP, so the runtime remote-IP check passes them through by design; the resolve-time checks remain the primary gate for those navigations
 
 Supported domain patterns are:
 
@@ -333,7 +354,8 @@ For a secure local setup:
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     },
     "idpi": {
       "enabled": true,
@@ -383,3 +405,14 @@ For automated agents, use **agent sessions** instead of sharing the server beare
 **Important:** Agent sessions are designed for trusted environments. The session management API (`/sessions`) has no per-agent authorization — any bearer-authenticated caller can manage all sessions. Do not expose these endpoints to untrusted networks.
 
 See [Reference: Agent Sessions](../reference/sessions.md) for configuration and API details.
+
+## Related guides
+
+- [cloakbrowser.md](cloakbrowser.md) — browser-specific fingerprint flags
+  and the licensing/distribution policy for CloakBrowser binaries
+- [attach-chrome.md](attach-chrome.md) — attach an externally managed Chrome
+  or CloakBrowser via CDP, and the attach policy fields summarized above
+- [docker.md](docker.md) — container deployment, the headless-only design,
+  and the local CloakBrowser smoke image
+- [headed-mode.md](headed-mode.md) — manual headed setup (not supported in
+  the bundled image or in CI)

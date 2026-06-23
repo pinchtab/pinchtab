@@ -1,4 +1,4 @@
-# Scheduler Architecture
+# Scheduler
 
 This page describes how PinchTab's optional scheduler works internally.
 

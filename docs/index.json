@@ -13,6 +13,7 @@
     "guides/contributing.md",
     "guides/security.md",
     "guides/mcp-agents.md",
+    "guides/cloakbrowser.md",
     "guides/attach-chrome.md",
     "guides/remote-bridge-orchestrator.md",
     "guides/tailscale-bridge-orchestrator.md",
@@ -21,6 +22,7 @@
     "guides/memory-monitoring.md",
     "guides/data-storage.md",
     "guides/docker.md",
+    "guides/headed-mode.md",
     "guides/raspberry-pi.md"
   ],
   "architecture": [

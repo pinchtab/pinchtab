@@ -45,7 +45,7 @@ describe("InstanceLogsPanel", () => {
 
   it("updates rendered logs from the subscription stream", async () => {
     fetchInstanceLogs.mockResolvedValue("");
-    let onLogs: ((logs: string) => void) | undefined;
+    let onLogs: ((logs: string, reset: boolean) => void) | undefined;
 
     subscribeToInstanceLogs.mockImplementation((_id, handlers) => {
       onLogs = handlers.onLogs;
@@ -59,14 +59,20 @@ describe("InstanceLogsPanel", () => {
     });
 
     await act(async () => {
-      onLogs?.("streamed logs");
+      onLogs?.("snapshot", true);
     });
 
-    expect(screen.getByText("streamed logs")).toBeInTheDocument();
+    expect(screen.getByText("snapshot")).toBeInTheDocument();
+
+    await act(async () => {
+      onLogs?.("+more", false);
+    });
+
+    expect(screen.getByText("snapshot+more")).toBeInTheDocument();
   });
 
   it("keeps streamed logs when the initial fetch resolves late", async () => {
-    let onLogs: ((logs: string) => void) | undefined;
+    let onLogs: ((logs: string, reset: boolean) => void) | undefined;
     let resolveInitialFetch: ((value: string) => void) | undefined;
 
     fetchInstanceLogs.mockImplementation(
@@ -87,7 +93,7 @@ describe("InstanceLogsPanel", () => {
     });
 
     await act(async () => {
-      onLogs?.("fresh stream logs");
+      onLogs?.("fresh stream logs", true);
     });
 
     await act(async () => {

@@ -55,11 +55,7 @@ func (h *Handlers) applySemanticActionSelectorInFrame(ctx context.Context, tabID
 }
 
 func (h *Handlers) semanticDescriptorsForTabInFrame(ctx context.Context, tabID, frameID string) ([]semantic.ElementDescriptor, error) {
-	nodes := h.resolveSnapshotNodes(tabID)
-	if len(nodes) == 0 {
-		h.refreshRefCache(ctx, tabID)
-		nodes = h.resolveSnapshotNodes(tabID)
-	}
+	nodes := h.resolveOrRefreshSnapshotNodes(ctx, tabID)
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("semantic selector: no snapshot available; navigate or snapshot first")
 	}

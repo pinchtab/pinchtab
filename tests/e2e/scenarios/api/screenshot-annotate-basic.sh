@@ -29,7 +29,12 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "screenshot annotate: annotation fields"
 
-# Re-use the form fixture from the previous step.
+# Load the fixture directly so this check is independent from the previous
+# annotated capture. Some browser providers can defer compositor work after a
+# capture; this test only owns the annotation-field contract.
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+assert_ok "navigate to form fixture for field check"
+
 pt_get "/screenshot?annotate=true&format=png"
 assert_ok "annotated screenshot for field check"
 

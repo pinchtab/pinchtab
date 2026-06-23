@@ -69,5 +69,27 @@ describe("TabsChart", () => {
         container.querySelector(".recharts-responsive-container"),
       ).toBeInTheDocument();
     });
+
+    it("plots memory-only samples whose timestamps are absent from tab data", () => {
+      // No tab data at all — only memory samples at two timestamps. These used to
+      // be dropped (mergedData anchored to tab/server data); with the union
+      // timeline they form rows, so the chart renders instead of the empty state.
+      const { container } = render(
+        <TabsChart
+          data={[]}
+          memoryData={[
+            { timestamp: Date.now() - 30000, inst_1: 120 },
+            { timestamp: Date.now(), inst_1: 130 },
+          ]}
+          instances={mockInstances}
+          selectedInstanceId={null}
+          onSelectInstance={() => {}}
+        />,
+      );
+      expect(
+        container.querySelector(".recharts-responsive-container"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Collecting data...")).not.toBeInTheDocument();
+    });
   });
 });

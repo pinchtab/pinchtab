@@ -1,19 +1,14 @@
 package handlers
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -43,25 +38,16 @@ import (
 func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tabID := q.Get("tabId")
-	h.recordReadRequest(r, "capture", tabID)
 
-	// /capture is Chrome-only; the engine routing rule ensures
-	// useLite never returns true here, so we go straight to chrome.
-	if h.useLite(engine.CapCapture, "") {
-		// Defensive: if someone changes the rule and lite ends up routed here,
-		// surface a precise error rather than crashing on a missing impl.
-		httpx.Error(w, http.StatusNotImplemented,
-			fmt.Errorf("capture is not supported by the lite engine"))
+	// /capture pairs a screenshot with an accessibility snapshot from the same
+	// DOM epoch — a visual operation. The static (ghost-chrome) runtime cannot
+	// paint, so it skips ShapeVisual and we fall back to Chrome.
+	effectiveCfg, _, ok := h.resolveReadRouting(w, r, tabID, "capture", browsers.ShapeVisual)
+	if !ok {
 		return
 	}
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
 
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 
@@ -116,25 +102,19 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	format := page.CaptureScreenshotFormatJpeg
+	format := bridge.ScreenshotFormatJpeg
 	ext := ".jpg"
 	if q.Get("format") == "png" {
-		format = page.CaptureScreenshotFormatPng
+		format = bridge.ScreenshotFormatPng
 		ext = ".png"
 	}
 
-	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+	resolvedTabID, tCtx, cancel, ok := h.resolveReadContext(w, r, tabID, effectiveCfg.ActionTimeout)
+	if !ok {
 		return
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	defer cancel()
 
 	opts := bridge.CaptureOpts{
 		Image: bridge.ScreenshotOpts{
@@ -163,7 +143,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.ScopeBackendNodeID = nodeID
-		clip, cErr := screenshotClipForNode(tCtx, nodeID)
+		clip, cErr := bridge.ScreenshotClipForNode(tCtx, nodeID)
 		if cErr != nil {
 			httpx.Error(w, 500, fmt.Errorf("selector clip: %w", cErr))
 			return
@@ -200,8 +180,6 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		DomEpoch: result.DomEpoch,
 	})
 
-	// Image output: file (default) writes bytes to disk and returns a path;
-	// inline returns base64; raw returns the bytes as the response body.
 	imageInfo := map[string]any{
 		"format":           result.ImageFormat,
 		"bytes":            len(result.ImageBytes),
@@ -225,14 +203,8 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 
 	switch output {
 	case "file":
-		captureDir := filepath.Join(h.Config.StateDir, "captures")
-		if err := os.MkdirAll(captureDir, 0750); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("create capture dir: %w", err))
-			return
-		}
-		ts := time.Now().Format("20060102-150405")
-		filePath := filepath.Join(captureDir, fmt.Sprintf("cap-%s%s", ts, ext))
-		if err := os.WriteFile(filePath, result.ImageBytes, 0600); err != nil {
+		filePath, _, err := saveBinaryToStateDir(h.Config.StateDir, "captures", "cap", ext, result.ImageBytes)
+		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("write capture: %w", err))
 			return
 		}
@@ -243,14 +215,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		// Raw output skips the JSON envelope and returns image bytes only.
 		// The snapshot half is dropped; this mode is for clients that already
 		// have a separate /snapshot call. It exists mostly as a debug aid.
-		contentType := "image/jpeg"
-		if result.ImageFormat == "png" {
-			contentType = "image/png"
-		}
-		w.Header().Set("Content-Type", contentType)
-		if _, err := w.Write(result.ImageBytes); err != nil {
-			slog.Error("capture raw write", "err", err)
-		}
+		writeRawImage(w, result.ImageBytes, imageContentType(result.ImageFormat), "capture raw write")
 		return
 	default:
 		httpx.Error(w, 400, fmt.Errorf("unknown output %q (expected file|inline|raw)", output))
@@ -289,20 +254,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, resp)
 }
 
-// HandleTabCapture is the /tabs/{id}/capture variant — same handler, path-bound tab.
-//
 // @Endpoint GET /tabs/{id}/capture
 func (h *Handlers) HandleTabCapture(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-	h.HandleCapture(w, req)
+	h.withPathTabID(w, r, h.HandleCapture)
 }

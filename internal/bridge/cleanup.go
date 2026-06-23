@@ -4,23 +4,21 @@ package bridge
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// CleanupOrphanedChromeProcesses kills Chrome processes left behind by
-// previous PinchTab runs and removes temporary profile directories.
 // Call on startup before launching Chrome.
 func CleanupOrphanedChromeProcesses(profileDir string) {
-	// 1. Kill Chrome processes using the configured profile dir
-	// (from a previous crashed run that didn't shut down cleanly)
+	// Kill Chrome left over from a previous crashed run that didn't shut down
+	// cleanly.
 	if profileDir != "" {
 		killed := killChromeByProfileDir(profileDir)
 		if killed > 0 {
@@ -28,7 +26,7 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 		}
 	}
 
-	// 2. Find and clean up temp profile dirs from previous headless fallbacks
+	// Clean up temp profile dirs from previous headless fallbacks.
 	tmpDir := os.TempDir()
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
@@ -50,12 +48,10 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 	}
 }
 
-// KillAllPinchtabChrome kills all Chrome processes spawned by PinchTab.
 // Matches both persistent profiles (--user-data-dir=.../profiles/...) and
-// temp profiles (--user-data-dir=.../pinchtab-profile-*).
-// Called on server shutdown — one ps scan, immediate SIGKILL.
+// temp profiles (--user-data-dir=.../pinchtab-profile-*). Called on server
+// shutdown — one ps scan, immediate SIGKILL.
 func KillAllPinchtabChrome() int {
-	// Find Chrome processes using either temp or persistent pinchtab profiles
 	var pids []int
 	tempPids := findPIDsByNeedle("pinchtab-profile")
 	persistPids := findPIDsByNeedle(".pinchtab/profiles")
@@ -79,16 +75,16 @@ func KillAllPinchtabChrome() int {
 	return len(pids)
 }
 
-// findChromePIDsByProfileDir returns PIDs of Chrome processes using the given profile directory.
+// Test seam: overridden to simulate process presence without /proc or ps.
+var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
+
 func findChromePIDsByProfileDir(profileDir string) []int {
-	needle := fmt.Sprintf("--user-data-dir=%s", profileDir)
-	if pids := findPIDsByNeedle(needle); len(pids) > 0 {
+	if pids := findChromePIDsByUserDataDirViaProc(profileDir); pids != nil {
 		return pids
 	}
-	return nil
+	return findChromePIDsByUserDataDirViaPS(profileDir)
 }
 
-// findPIDsByNeedle searches process command lines for a substring.
 // Tries /proc first (Linux, always available even in minimal containers),
 // then falls back to ps (macOS, BSDs).
 func findPIDsByNeedle(needle string) []int {
@@ -98,7 +94,6 @@ func findPIDsByNeedle(needle string) []int {
 	return findPIDsViaPS(needle)
 }
 
-// findPIDsViaProc reads /proc/*/cmdline to find matching processes.
 // Returns nil (not empty slice) if /proc is not available.
 func findPIDsViaProc(needle string) []int {
 	entries, err := os.ReadDir("/proc")
@@ -130,7 +125,72 @@ func findPIDsViaProc(needle string) []int {
 	return pids
 }
 
-// findPIDsViaPS uses `ps -axo pid=,args=` to find matching processes.
+func findChromePIDsByUserDataDirViaProc(profileDir string) []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil // /proc not available (macOS, some BSDs)
+	}
+
+	want := "--user-data-dir=" + profileDir
+	var pids []int
+	self := os.Getpid()
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 || pid == self {
+			continue
+		}
+		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		if cmdlineHasExactArg(bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0}), want) {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+func cmdlineHasExactArg(args [][]byte, want string) bool {
+	for _, arg := range args {
+		if string(arg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func findChromePIDsByUserDataDirViaPS(profileDir string) []int {
+	cmd := exec.Command("ps", "-axo", "pid=,args=")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	pattern := regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta("--user-data-dir="+profileDir) + `(?:\s|$)`)
+	lines := bytes.Split(out, []byte{'\n'})
+	var pids []int
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(string(rawLine))
+		if line == "" || !pattern.MatchString(line) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil || pid <= 0 {
+			continue
+		}
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 func findPIDsViaPS(needle string) []int {
 	cmd := exec.Command("ps", "-axo", "pid=,args=")
 	out, err := cmd.Output()
@@ -161,28 +221,22 @@ func findPIDsViaPS(needle string) []int {
 	return pids
 }
 
-// killChromeByProfileDir finds Chrome processes using the given profile
-// directory, sends SIGTERM, waits briefly, then SIGKILL any survivors.
-// Returns the number of processes killed.
+// Sends SIGTERM, waits briefly, then SIGKILL any survivors.
 func killChromeByProfileDir(profileDir string) int {
-	pids := findChromePIDsByProfileDir(profileDir)
+	pids := findChromePIDsByProfileDirFunc(profileDir)
 	if len(pids) == 0 {
 		return 0
 	}
 
-	// SIGTERM first
 	for _, pid := range pids {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
 	}
 
-	// Give Chrome 500ms to shut down gracefully
 	time.Sleep(500 * time.Millisecond)
 
-	// SIGKILL any survivors
 	killed := 0
 	for _, pid := range pids {
 		if err := syscall.Kill(pid, 0); err != nil {
-			// Process already dead
 			killed++
 			continue
 		}
@@ -193,4 +247,18 @@ func killChromeByProfileDir(profileDir string) int {
 	}
 
 	return killed
+}
+
+// Sends SIGTERM without escalating to SIGKILL.
+func terminateChromeByProfileDir(profileDir string) int {
+	pids := findChromePIDsByProfileDirFunc(profileDir)
+	if len(pids) == 0 {
+		return 0
+	}
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, syscall.SIGTERM); err == nil {
+			slog.Info("cleanup: SIGTERM chrome process", "pid", pid)
+		}
+	}
+	return len(pids)
 }

@@ -1,6 +1,6 @@
-import { describe, it, beforeEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
-import { getLastTabId, setLastTabId, resolveProfile, isLocalHost, formatDiscoveredBaseUrl } from "./session.ts";
+import { getLastTabId, setLastTabId, resolveProfile, isLocalHost, formatDiscoveredBaseUrl, ensureReady, invalidateReadiness } from "./session.ts";
 
 describe("tab session state", () => {
   beforeEach(() => {
@@ -113,5 +113,67 @@ describe("formatDiscoveredBaseUrl", () => {
   it("normalizes wildcard binds to local loopback", () => {
     assert.strictEqual(formatDiscoveredBaseUrl("0.0.0.0", 9867), "http://127.0.0.1:9867");
     assert.strictEqual(formatDiscoveredBaseUrl("::", 9867), "http://[::1]:9867");
+  });
+});
+
+describe("readiness cache", () => {
+  const cfg = { baseUrl: "http://localhost:9999", token: "t" };
+  let originalFetch: typeof globalThis.fetch;
+  let healthCalls = 0;
+  let instancesCalls = 0;
+
+  beforeEach(() => {
+    invalidateReadiness(cfg);
+    healthCalls = 0;
+    instancesCalls = 0;
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any) => {
+      const u = String(url);
+      if (u.includes("/instances")) {
+        instancesCalls++;
+        return new Response(JSON.stringify([{ id: "i1", status: "running" }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (u.includes("/health")) {
+        healthCalls++;
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as any;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    invalidateReadiness(cfg);
+  });
+
+  it("probes on the first call and serves subsequent ones from cache", async () => {
+    const r1 = await ensureReady(cfg);
+    assert.strictEqual(r1.ok, true);
+    assert.ok(healthCalls >= 1, "first call probes /health");
+    assert.ok(instancesCalls >= 1, "first call probes /instances");
+
+    const healthAfterFirst = healthCalls;
+    const instancesAfterFirst = instancesCalls;
+
+    const r2 = await ensureReady(cfg);
+    assert.strictEqual(r2.ok, true);
+    assert.strictEqual(healthCalls, healthAfterFirst, "cached: no extra /health probe");
+    assert.strictEqual(instancesCalls, instancesAfterFirst, "cached: no extra /instances probe");
+  });
+
+  it("re-probes after the latch is invalidated", async () => {
+    await ensureReady(cfg);
+    const healthAfterFirst = healthCalls;
+
+    invalidateReadiness(cfg);
+
+    await ensureReady(cfg);
+    assert.ok(healthCalls > healthAfterFirst, "re-probes after invalidation");
   });
 });

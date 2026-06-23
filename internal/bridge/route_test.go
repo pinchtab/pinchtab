@@ -1,9 +1,12 @@
 package bridge
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/chromedp/chromedp"
 )
 
 func TestGlobMatch(t *testing.T) {
@@ -62,6 +65,27 @@ func TestRouteManager_AddRemove_NoCDP(t *testing.T) {
 	}
 	if len(rm.List("tab1")) != 0 {
 		t.Errorf("expected 0 remaining, got %d", len(rm.List("tab1")))
+	}
+}
+
+// AddRule optimistically claims fetchEnabled under the lock to close the
+// concurrent-same-tab double-enable window; a failed fetch.Enable must roll
+// that claim back so a retry can still enable interception.
+func TestRouteManager_AddRule_FailedEnableRollsBackFetchEnabled(t *testing.T) {
+	rm := NewRouteManager(nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // force the fetch.Enable CDP call to fail promptly
+
+	err := rm.AddRule(ctx, "tab1", RouteRule{Pattern: "*", Action: RouteActionAbort})
+	if err == nil {
+		t.Fatal("expected fetch.enable to fail on a cancelled context")
+	}
+
+	rm.mu.Lock()
+	s := rm.perTab["tab1"]
+	rm.mu.Unlock()
+	if s != nil && s.fetchEnabled {
+		t.Error("fetchEnabled should be rolled back to false after a failed enable")
 	}
 }
 
@@ -395,10 +419,6 @@ func TestRouteManager_FulfillForgeryPermittedFor_UnparseableURLDenied(t *testing
 	}
 }
 
-// Cross-tab dispatch sanity check: rules on tab1 must not match URLs queried
-// against tab2. (chromedp's per-target listener dispatch already isolates
-// events at the wire level; this asserts the manager-level filter hasn't
-// regressed to a global lookup.)
 // Fulfill rules without an explicit Method should NOT match an OPTIONS
 // preflight — fulfilling it without ACAO/ACAM/ACAH headers breaks the real
 // request, and would also let a future custom-headers feature smuggle CORS
@@ -496,6 +516,10 @@ func TestNormalizeHTTPMethod(t *testing.T) {
 	}
 }
 
+// Cross-tab dispatch sanity check: rules on tab1 must not match URLs queried
+// against tab2. (chromedp's per-target listener dispatch already isolates
+// events at the wire level; this asserts the manager-level filter hasn't
+// regressed to a global lookup.)
 func TestRouteManager_Match_PerTabIsolation(t *testing.T) {
 	rm := NewRouteManager(nil)
 	rm.mu.Lock()
@@ -698,5 +722,52 @@ func TestRouteManager_AddRule_Validation(t *testing.T) {
 	}
 	if err := rm.AddRule(t.Context(), "tab1", RouteRule{Pattern: "x", Action: "bogus"}); err == nil {
 		t.Error("expected error for invalid action")
+	}
+}
+
+// M16: route teardown must release the proxy-auth pause suppression even
+// when Fetch was never enabled (no CDP call path).
+func TestRouteManager_TeardownReleasesPauseSuppression(t *testing.T) {
+	rm := NewRouteManager(nil)
+	var calls []string
+	rm.SetFetchAuthCoordination(
+		func() bool { return true },
+		func(tabID string, v bool) { calls = append(calls, fmt.Sprintf("%s=%v", tabID, v)) },
+	)
+
+	rm.mu.Lock()
+	rm.perTab["tab1"] = &tabRouteState{rules: []RouteRule{
+		{Pattern: "*.png", Action: RouteActionAbort},
+	}}
+	rm.mu.Unlock()
+
+	if _, err := rm.Remove(t.Context(), "tab1", ""); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != "tab1=false" {
+		t.Fatalf("teardown should unsuppress exactly once, got %v", calls)
+	}
+}
+
+// M16: a failed Fetch enable must roll the suppression back so the
+// proxy-auth listener resumes continuing paused requests.
+func TestRouteManager_FailedEnableRollsBackSuppression(t *testing.T) {
+	rm := NewRouteManager(nil)
+	var calls []string
+	rm.SetFetchAuthCoordination(
+		func() bool { return true },
+		func(tabID string, v bool) { calls = append(calls, fmt.Sprintf("%s=%v", tabID, v)) },
+	)
+
+	// A canceled chromedp context makes fetch.Enable fail deterministically.
+	parent, cancel := chromedp.NewContext(context.Background())
+	cancel()
+
+	err := rm.AddRule(parent, "tab1", RouteRule{Pattern: "*.png", Action: RouteActionAbort})
+	if err == nil {
+		t.Fatal("expected enable failure on dead chromedp context")
+	}
+	if len(calls) != 2 || calls[0] != "tab1=true" || calls[1] != "tab1=false" {
+		t.Fatalf("expected suppress-then-rollback, got %v", calls)
 	}
 }

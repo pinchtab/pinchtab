@@ -11,7 +11,6 @@ func detectIntentByTitle(title string) *Intent {
 		return challenge
 	}
 
-	// Cloudflare challenge patterns
 	cfPatterns := []string{"just a moment", "attention required", "checking your browser"}
 	for _, p := range cfPatterns {
 		if strings.Contains(lower, p) {
@@ -24,7 +23,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Generic CAPTCHA patterns
 	captchaPatterns := []string{"captcha", "verify you are human", "robot", "bot detection"}
 	for _, p := range captchaPatterns {
 		if strings.Contains(lower, p) {
@@ -36,7 +34,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Login patterns
 	loginPatterns := []string{"log in", "login", "sign in", "signin"}
 	for _, p := range loginPatterns {
 		if strings.Contains(lower, p) {
@@ -48,7 +45,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Signup patterns
 	signupPatterns := []string{"sign up", "signup", "register", "create account", "join"}
 	for _, p := range signupPatterns {
 		if strings.Contains(lower, p) {
@@ -60,7 +56,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Onboarding patterns
 	onboardingPatterns := []string{"getting started", "welcome", "onboarding", "complete your profile", "step 1"}
 	for _, p := range onboardingPatterns {
 		if strings.Contains(lower, p) {
@@ -72,7 +67,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Navigation/task-flow patterns
 	navigationPatterns := []string{"continue", "next step", "choose option", "select plan", "wizard"}
 	for _, p := range navigationPatterns {
 		if strings.Contains(lower, p) {
@@ -84,7 +78,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Generic form-filling patterns
 	formPatterns := []string{"application form", "contact form", "checkout", "survey", "questionnaire"}
 	for _, p := range formPatterns {
 		if strings.Contains(lower, p) {
@@ -96,7 +89,6 @@ func detectIntentByTitle(title string) *Intent {
 		}
 	}
 
-	// Blocked/access-denied patterns
 	blockedPatterns := []string{"access denied", "forbidden", "blocked", "unauthorized"}
 	for _, p := range blockedPatterns {
 		if strings.Contains(lower, p) {

@@ -78,13 +78,40 @@ func TestPrintAgentHintsDoesNotTreatAuthFailureAsRunning(t *testing.T) {
 	cfg.Token = "wrong-token"
 
 	output := captureStdout(t, func() {
-		printAgentHints(cfg)
+		printAgentHintsWithHealth(cfg)
 	})
 	if !strings.Contains(output, "protected listener") {
 		t.Fatalf("expected protected listener status, got\n%s", output)
 	}
 	if strings.Contains(output, "pinchtab nav <url>") {
 		t.Fatalf("protected listener should not show running-server next steps\n%s", output)
+	}
+}
+
+func TestPrintAgentHintsDoesNotProbeHealth(t *testing.T) {
+	var probed bool
+	srv := newLocalhostHealthServerWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		probed = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"status":"ok","mode":"dashboard","version":"dev"}`)
+	})
+	defer srv.Close()
+
+	_, port, err := net.SplitHostPort(srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort() error = %v", err)
+	}
+	cfg := testRuntimeConfig()
+	cfg.Port = port
+
+	output := captureStdout(t, func() {
+		printAgentHints(cfg)
+	})
+	if probed {
+		t.Fatal("bare-help path probed localhost; it must not contact the server")
+	}
+	if !strings.Contains(output, string(healthSnapshotStopped)) {
+		t.Fatalf("expected %q status without probing, got\n%s", healthSnapshotStopped, output)
 	}
 }
 

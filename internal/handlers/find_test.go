@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/selector"
@@ -25,18 +24,18 @@ type findMockBridge struct {
 	refCache *bridge.RefCache
 }
 
-func (m *findMockBridge) EnsureChrome(cfg *config.RuntimeConfig) error   { return nil }
+func (m *findMockBridge) EnsureBrowser(cfg *config.RuntimeConfig) error  { return nil }
 func (m *findMockBridge) RestartBrowser(cfg *config.RuntimeConfig) error { return nil }
 
-func (m *findMockBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *findMockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if m.failTab {
 		return nil, "", fmt.Errorf("tab not found")
 	}
-	return context.Background(), "tab1", nil
+	return bridge.NewTabHandle(context.Background()), "tab1", nil
 }
 
-func (m *findMockBridge) ListTargets() ([]*target.Info, error) {
-	return []*target.Info{{TargetID: "tab1", Type: "page"}}, nil
+func (m *findMockBridge) ListTargets() ([]bridge.TabTarget, error) {
+	return []bridge.TabTarget{{TargetID: "tab1", Type: "page"}}, nil
 }
 
 func (m *findMockBridge) GetRefCache(tabID string) *bridge.RefCache {
@@ -62,8 +61,24 @@ func (m *findMockBridge) GetBrowserMemoryMetrics() (*bridge.MemoryMetrics, error
 func (m *findMockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
 	return &bridge.MemoryMetrics{}, nil
 }
+func (m *findMockBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
+	return nil
+}
+
 func (m *findMockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
+}
+
+func (m *findMockBridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *findMockBridge) EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts bridge.EvalOpts) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *findMockBridge) DescribeNode(ctx context.Context, backendNodeID int64) (*bridge.NodeInfo, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func newFindTestHandler(cache *bridge.RefCache, failTab bool) *Handlers {
@@ -270,7 +285,6 @@ func TestHandleFind_ResponseMetrics(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	// Verify new Phase 2 response fields.
 	if resp.ElementCount != 2 {
 		t.Errorf("expected element_count=2, got %d", resp.ElementCount)
 	}

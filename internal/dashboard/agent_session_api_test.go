@@ -21,7 +21,7 @@ func newTestSessionStore() *session.Store {
 
 func newTestSessionMux(store *session.Store) *http.ServeMux {
 	mux := http.NewServeMux()
-	NewSessionAPI(store).RegisterHandlers(mux)
+	NewSessionAPI(store, nil).RegisterHandlers(mux)
 	return mux
 }
 
@@ -96,8 +96,8 @@ func TestAgentSessionAPI_List(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	_, _, _ = store.Create("agent-1", "first")
-	_, _, _ = store.Create("agent-2", "second")
+	_, _, _ = store.Create("agent-1", "first", "")
+	_, _, _ = store.Create("agent-2", "second", "")
 
 	req := httptest.NewRequest("GET", "/sessions", nil)
 	w := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestAgentSessionAPI_Get(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	id, _, _ := store.Create("agent-1", "my-session")
+	id, _, _ := store.Create("agent-1", "my-session", "")
 
 	req := httptest.NewRequest("GET", "/sessions/"+id, nil)
 	w := httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestAgentSessionAPI_Me(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	sessionID, token, _ := store.Create("agent-1", "my-session")
+	sessionID, token, _ := store.Create("agent-1", "my-session", "")
 	sess, ok := store.Get(sessionID)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
@@ -227,7 +227,7 @@ func TestAgentSessionAPI_Revoke(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	id, token, _ := store.Create("agent-1", "")
+	id, token, _ := store.Create("agent-1", "", "")
 
 	req := httptest.NewRequest("POST", "/sessions/"+id+"/revoke", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-token")
@@ -238,7 +238,6 @@ func TestAgentSessionAPI_Revoke(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	// Token should no longer authenticate
 	if sess, ok := store.Authenticate(token); ok || sess != nil {
 		t.Fatal("expected token to be invalidated after revoke")
 	}
@@ -262,7 +261,7 @@ func TestAgentSessionAPI_Revoke_SessionOwnerAllowed(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	id, token, _ := store.Create("agent-1", "")
+	id, token, _ := store.Create("agent-1", "", "")
 	sess, ok := store.Get(id)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
@@ -283,12 +282,12 @@ func TestAgentSessionAPI_Revoke_SessionCallerCannotRevokeOtherSession(t *testing
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	id, token, _ := store.Create("agent-1", "")
+	id, token, _ := store.Create("agent-1", "", "")
 	sess, ok := store.Get(id)
 	if !ok || sess == nil {
 		t.Fatal("expected session to exist")
 	}
-	otherID, _, _ := store.Create("agent-2", "")
+	otherID, _, _ := store.Create("agent-2", "", "")
 
 	req := httptest.NewRequest("POST", "/sessions/"+otherID+"/revoke", nil)
 	req.Header.Set("Authorization", "Session "+token)
@@ -305,7 +304,7 @@ func TestAgentSessionAPI_Revoke_RejectsUnauthenticatedCaller(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)
 
-	id, _, _ := store.Create("agent-1", "")
+	id, _, _ := store.Create("agent-1", "", "")
 
 	req := httptest.NewRequest("POST", "/sessions/"+id+"/revoke", nil)
 	w := httptest.NewRecorder()
@@ -313,6 +312,52 @@ func TestAgentSessionAPI_Revoke_RejectsUnauthenticatedCaller(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestAgentSessionAPI_Create_WithBrowser(t *testing.T) {
+	store := newTestSessionStore()
+	mux := http.NewServeMux()
+	NewSessionAPI(store, []string{"chrome"}).RegisterHandlers(mux)
+
+	req := httptest.NewRequest("POST", "/sessions", strings.NewReader(`{"agentId":"agent-1","browser":"chrome"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusCreated)
+	}
+	resp := decodeSessionResponse(t, w)
+	if resp["browser"] != "chrome" {
+		t.Fatalf("browser = %q, want chrome", resp["browser"])
+	}
+
+	id, ok := resp["id"].(string)
+	if !ok || id == "" {
+		t.Fatal("expected id in response")
+	}
+	sess, found := store.Get(id)
+	if !found {
+		t.Fatal("expected session to exist in store")
+	}
+	if sess.Browser != "chrome" {
+		t.Fatalf("stored browser = %q, want chrome", sess.Browser)
+	}
+}
+
+func TestAgentSessionAPI_Create_InvalidBrowser(t *testing.T) {
+	store := newTestSessionStore()
+	mux := http.NewServeMux()
+	NewSessionAPI(store, []string{"chrome"}).RegisterHandlers(mux)
+
+	req := httptest.NewRequest("POST", "/sessions", strings.NewReader(`{"agentId":"agent-1","browser":"invalid"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 

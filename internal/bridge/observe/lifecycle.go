@@ -10,7 +10,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// WaitForReadyState polls document.readyState until "complete" or ceiling.
 // Lighter than WaitForQuietWindow — use when "load event fired" is enough.
 func WaitForReadyState(ctx context.Context, ceiling time.Duration) (string, error) {
 	if ceiling <= 0 {
@@ -65,6 +64,14 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 	})); err != nil {
 		return 0, err
 	}
+	defer func() {
+		// Disable the lifecycle-event stream we enabled so it doesn't persist for
+		// the tab's lifetime. WaitForQuietWindow is the sole enabler/consumer, so
+		// unconditional disable is safe; best-effort (ctx may be ending).
+		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			return page.SetLifecycleEventsEnabled(false).Do(ctx)
+		}))
+	}()
 
 	var (
 		mu        sync.Mutex
@@ -85,6 +92,8 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 
 	start := time.Now()
 	deadline := start.Add(ceiling)
+	// Poll ~4x per quiet window so the "no event for `quiet`" check stays
+	// responsive, with a 10ms floor to avoid busy-spinning when quiet is small.
 	pollInterval := quiet / 4
 	if pollInterval < 10*time.Millisecond {
 		pollInterval = 10 * time.Millisecond

@@ -1,6 +1,13 @@
 # Subagent Context
 
-You are running PinchTab optimization tasks. You will be given a set of group files, each containing numbered steps to execute using the PinchTab browser automation tool.
+You are running PinchTab optimization tasks against a specific browser **provider** (chrome or cloak).
+
+You will be given:
+- The active PROVIDER
+- Your report file path
+- The range of groups you are responsible for
+
+You will be given a set of group files, each containing numbered steps to execute using the PinchTab browser automation tool.
 
 ## What to read
 
@@ -48,6 +55,32 @@ For failures:
 - Keep answers factual — do not self-grade in the answer payload.
 - **Quote actual output, don't paraphrase.** The answer field must include the literal text or marker from the tool output. For example, if the server returns `status: ok`, write `status: ok` in the answer — not "Server responded with ok". Verification patterns match against exact substrings, so paraphrasing causes false failures.
 - **Always include `UPPER_CASE_MARKER` strings verbatim.** Fixture pages embed verification markers like `SUGGESTIONS_VISIBLE_COUNT_2`, `VERIFY_HOME_LOADED_12345`, `SCROLL_MIDDLE_MARKER`, etc. When you see these in the page content or tool output, copy them exactly into your answer — they are the primary tokens that automated verification matches against.
+
+## Provider & Environment
+
+The benchmark can run against different browser providers:
+
+- `chrome` (default)
+- `cloak` (CloakBrowser for stealth / anti-detection testing)
+
+You will be told the active `PROVIDER` when you are launched.
+
+**Critical:** Before running any `./scripts/pt` command, export the correct container and token:
+
+```bash
+export PINCHTAB_CONTAINER=optimization-pinchtab     # for cloak runs
+# or
+export PINCHTAB_CONTAINER=tools-pinchtab-1          # for normal compose chrome runs
+
+export PINCHTAB_TOKEN=benchmark-token
+
+# Then all commands go through the wrapper:
+./scripts/pt nav https://...
+./scripts/pt --tab "$TAB" click e5
+...
+```
+
+The wrapper (`./scripts/pt`) respects these two environment variables and forwards them into the container. Always set them in your shell at the start of the session and after any subshell.
 
 ## Execution approach
 

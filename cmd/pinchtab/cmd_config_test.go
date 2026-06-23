@@ -105,8 +105,8 @@ func TestConfigSetAllowsDashPrefixedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFileConfig() error = %v", err)
 	}
-	if saved.Browser.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
-		t.Fatalf("ChromeExtraFlags = %q, want %q", saved.Browser.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	if saved.Browser.BrowserExtraFlags != "--disable-gpu --ash-no-nudges" {
+		t.Fatalf("BrowserExtraFlags = %q, want %q", saved.Browser.BrowserExtraFlags, "--disable-gpu --ash-no-nudges")
 	}
 }
 
@@ -140,8 +140,8 @@ func TestConfigSetRejectsUnsafeChromeExtraFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFileConfig() error = %v", err)
 	}
-	if saved.Browser.ChromeExtraFlags != "" {
-		t.Fatalf("ChromeExtraFlags = %q, want empty string after declining unsafe save", saved.Browser.ChromeExtraFlags)
+	if saved.Browser.BrowserExtraFlags != "" {
+		t.Fatalf("BrowserExtraFlags = %q, want empty string after declining unsafe save", saved.Browser.BrowserExtraFlags)
 	}
 }
 
@@ -366,6 +366,22 @@ func TestConfigSetHintsRestartWhenServerRunning(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "pinchtab server restart") {
 		t.Fatalf("expected 'pinchtab server restart' in hint, got %q", stderr)
+	}
+}
+
+func TestIsSensitiveConfigPath(t *testing.T) {
+	cases := map[string]bool{
+		"server.token":                            true,
+		"instanceDefaults.proxy.password":         true,
+		"autosolver.credentials.capsolver.apiKey": true,
+		"cloak.fontsDir":                          false,
+		"strategy":                                false,
+		"":                                        false,
+	}
+	for path, want := range cases {
+		if got := isSensitiveConfigPath(path); got != want {
+			t.Errorf("isSensitiveConfigPath(%q) = %v, want %v", path, got, want)
+		}
 	}
 }
 

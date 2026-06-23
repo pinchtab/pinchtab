@@ -11,8 +11,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// ── Request validation tests ───────────────────────────────────────────
-
 func TestHandleWait_InvalidJSON(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`not json`)))
@@ -32,8 +30,6 @@ func TestHandleWait_EmptyBody(t *testing.T) {
 		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
-
-// ── Fixed duration (ms) tests ──────────────────────────────────────────
 
 func TestHandleWait_FixedMs(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
@@ -106,8 +102,6 @@ func TestHandleWait_FixedMsClampedAt30s(t *testing.T) {
 	}
 }
 
-// ── Timeout clamping tests ─────────────────────────────────────────────
-
 func TestWaitRequest_TimeoutClamping(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -130,8 +124,6 @@ func TestWaitRequest_TimeoutClamping(t *testing.T) {
 		})
 	}
 }
-
-// ── Mode detection tests ───────────────────────────────────────────────
 
 func TestWaitRequest_Mode(t *testing.T) {
 	tests := []struct {
@@ -156,8 +148,6 @@ func TestWaitRequest_Mode(t *testing.T) {
 		})
 	}
 }
-
-// ── Selector wait (needs browser — tests validation only) ──────────────
 
 func TestHandleWait_SelectorNoTab(t *testing.T) {
 	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
@@ -305,8 +295,6 @@ func TestHandleWait_InvalidLoadState(t *testing.T) {
 	}
 }
 
-// ── Tab-scoped wait tests ──────────────────────────────────────────────
-
 func TestHandleTabWait_MissingTabID(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/tabs//wait", bytes.NewReader([]byte(`{"ms":50}`)))
@@ -345,8 +333,6 @@ func TestHandleTabWait_FixedMs(t *testing.T) {
 		t.Error("expected waited=true")
 	}
 }
-
-// ── Response format tests ──────────────────────────────────────────────
 
 func TestWaitResponse_Format(t *testing.T) {
 	resp := waitResponse{
@@ -397,8 +383,6 @@ func TestWaitResponse_ErrorFormat(t *testing.T) {
 		t.Error("expected error field")
 	}
 }
-
-// ── JS builder tests ───────────────────────────────────────────────────
 
 func TestBuildSelectorJS_CSS(t *testing.T) {
 	js, match := buildSelectorJS("#results", "")
@@ -474,8 +458,6 @@ func TestBuildURLMatchJS(t *testing.T) {
 	}
 }
 
-// ── Route registration test ────────────────────────────────────────────
-
 func TestWaitRouteRegistered(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	mux := httptest.NewServer(nil).Config.Handler
@@ -488,8 +470,6 @@ func TestWaitRouteRegistered(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────
 
 func intPtr(v int) *int {
 	return &v

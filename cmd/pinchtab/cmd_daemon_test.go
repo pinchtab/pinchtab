@@ -22,6 +22,25 @@ func TestPrintDaemonStatusJSONShape(t *testing.T) {
 	}
 }
 
+func TestCollectDaemonStatusInvariants(t *testing.T) {
+	st := collectDaemonStatus()
+
+	// PID and ServicePath are only meaningful when running/installed; they must
+	// stay empty otherwise so the renderers don't print stale rows.
+	if !st.Running && st.PID != "" {
+		t.Fatalf("PID should be empty when not running, got %q", st.PID)
+	}
+	if !st.Installed && st.ServicePath != "" {
+		t.Fatalf("ServicePath should be empty when not installed, got %q", st.ServicePath)
+	}
+	// A manager error short-circuits collection before any probing fields are set.
+	if st.ManagerError != "" {
+		if st.PID != "" || st.ServicePath != "" || st.PreflightError != "" {
+			t.Fatalf("expected no probe fields when ManagerError set, got %+v", st)
+		}
+	}
+}
+
 func TestPrintDaemonOverviewIncludesStatusAndHints(t *testing.T) {
 	output := captureStdout(t, func() {
 		printDaemonOverview()

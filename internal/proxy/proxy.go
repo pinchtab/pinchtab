@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -75,7 +74,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 	}
 
 	if isWebSocketUpgrade(proxyReq) {
-		handlers.ProxyWebSocket(w, proxyReq, targetURL.String())
+		ProxyWebSocket(w, proxyReq, targetURL.String())
 		return
 	}
 
@@ -144,7 +143,7 @@ func isSmallJSON(resp *http.Response) bool {
 
 // HTTP forwards an HTTP request to targetURL, streaming the response
 // back to w. If the request is a WebSocket upgrade, it delegates to
-// handlers.ProxyWebSocket instead.
+// ProxyWebSocket instead.
 func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {

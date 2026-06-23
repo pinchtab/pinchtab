@@ -15,9 +15,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Capture is the CLI shim for `pinchtab capture`. Default output is the
-// agent-friendly terse form (image path + epoch/pairing/viewport line +
-// compact snapshot). --json dumps the full server envelope.
+// Capture defaults to the agent-friendly terse form (image path +
+// epoch/pairing/viewport line + compact snapshot); --json dumps the full
+// server envelope.
 func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	params := url.Values{}
 	params.Set("output", "inline")

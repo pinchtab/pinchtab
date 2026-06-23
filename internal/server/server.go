@@ -15,7 +15,8 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/authn"
-	"github.com/pinchtab/pinchtab/internal/bridge"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
+	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -27,8 +28,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/pinchtab/internal/strategy"
-
-	// Register strategies
 	_ "github.com/pinchtab/pinchtab/internal/strategy/alwayson"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/autorestart"
 	_ "github.com/pinchtab/pinchtab/internal/strategy/explicit"
@@ -41,8 +40,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}
 
-	// Clean up orphaned Chrome processes from previous crashed runs
-	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
+	providerhooks.CleanupProfile(config.NormalizeBrowser(cfg.DefaultBrowser), cfg.ProfileDir)
 
 	dashPort := cfg.Port
 	startedAt := time.Now()
@@ -73,7 +71,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	configAPI.SetSessionManager(sessions)
 	authAPI := dashboard.NewAuthAPI(cfg, sessions)
 
-	// API sessions
 	sessionStore := session.NewStore(session.Config{
 		Enabled:     cfg.Sessions.Agent.Enabled,
 		Mode:        cfg.Sessions.Agent.Mode,
@@ -83,10 +80,9 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	})
 	var sessionAPI *dashboard.SessionAPI
 	if sessionStore.Enabled() {
-		sessionAPI = dashboard.NewSessionAPI(sessionStore)
+		sessionAPI = dashboard.NewSessionAPI(sessionStore, cfg.BrowsersAvailable)
 	}
 
-	// Wire up instance events to SSE broadcast
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
 		dash.BroadcastSystemEvent(dashboard.SystemEvent{
 			Type:     evt.Type,
@@ -333,10 +329,10 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	doShutdown := func() {
 		shutdownOnce.Do(func() {
 			slog.Info("shutting down dashboard...")
-			// Kill all Chrome processes under our profiles dir immediately.
-			// This runs before strategy.Stop() to ensure cleanup happens
-			// even if launchd SIGKILL arrives during graceful shutdown.
-			bridge.KillAllPinchtabChrome()
+			// launchd may SIGKILL us shortly after SIGTERM; kill browser
+			// processes first so a mid-teardown SIGKILL can't orphan them.
+			// The hooks are idempotent process sweeps.
+			providerhooks.ShutdownAll()
 			if err := activeStrategy.Stop(); err != nil {
 				slog.Warn("strategy stop failed", "err", err)
 			}
@@ -346,7 +342,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			syncCancel()
 			maintenanceCancel()
 			dash.Shutdown()
-			orch.Shutdown()
+			gracefulShutdownWithCap(orch, bridgeShutdownTotalCap)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := srv.Shutdown(ctx); err != nil {
@@ -365,9 +361,9 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		sig := make(chan os.Signal, 2)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
-		// Kill Chrome immediately on signal — synchronous, before anything else.
-		// launchd may SIGKILL us shortly after SIGTERM, so this must happen first.
-		bridge.KillAllPinchtabChrome()
+		// Synchronous kill before the goroutine hop: the supervisor may not
+		// grant us even the scheduling delay of go doShutdown().
+		providerhooks.ShutdownAll()
 		go doShutdown()
 		<-sig
 		slog.Warn("force shutdown requested")
@@ -379,5 +375,25 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
+	}
+}
+
+const bridgeShutdownTotalCap = 8 * time.Second
+
+func gracefulShutdownWithCap(orch *orchestrator.Orchestrator, cap time.Duration) bool {
+	if orch == nil {
+		return true
+	}
+	done := make(chan struct{})
+	go func() {
+		orch.Shutdown()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(cap):
+		slog.Warn("graceful bridge shutdown exceeded cap, escalating", "cap", cap)
+		return false
 	}
 }

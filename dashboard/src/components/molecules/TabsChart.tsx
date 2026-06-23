@@ -49,17 +49,36 @@ function formatMetricValue(value: number, maximumFractionDigits = 0): string {
   );
 }
 
+type SeriesKind = "tabs" | "mem" | "heap";
+
+interface SeriesDescriptor {
+  dataKey: string;
+  instanceId: string;
+  kind: SeriesKind;
+  displayName: string;
+  suffix: string;
+  color: string;
+}
+
+const HEAP_COLOR = "#94a3b8";
+
+function formatSeriesValue(kind: SeriesKind, value: number): string {
+  return kind === "tabs"
+    ? formatMetricValue(value)
+    : `${formatMetricValue(value, 1)}MB`;
+}
+
 /* ── Glassmorphism Tooltip ── */
 function GlassTooltip({
   active,
   payload,
   label,
-  instances,
+  seriesByKey,
 }: {
   active?: TooltipContentProps<number, string>["active"];
   payload?: TooltipContentProps<number, string>["payload"];
   label?: TooltipContentProps<number, string>["label"];
-  instances: { id: string; profileName: string }[];
+  seriesByKey: Map<string, SeriesDescriptor>;
 }) {
   if (!active || !payload?.length) return null;
 
@@ -91,18 +110,13 @@ function GlassTooltip({
       </div>
       {payload.map((entry) => {
         const nameStr = String(entry.dataKey);
-        const isMemory = nameStr.endsWith("_mem");
-        const isHeap = nameStr === "goHeapMB";
-        const instId = isMemory ? nameStr.replace("_mem", "") : nameStr;
-        const inst = instances.find((i) => i.id === instId);
-        const displayName = isHeap
-          ? "Server Heap"
-          : inst?.profileName || instId;
-        const suffix = isMemory ? " (mem)" : isHeap ? "" : " (tabs)";
-        const formattedVal =
-          isMemory || isHeap
-            ? `${formatMetricValue(Number(entry.value), 1)}MB`
-            : formatMetricValue(Number(entry.value));
+        const s = seriesByKey.get(nameStr);
+        const displayName = s?.displayName ?? nameStr;
+        const suffix = s?.suffix ?? " (tabs)";
+        const formattedVal = formatSeriesValue(
+          s?.kind ?? "tabs",
+          Number(entry.value),
+        );
 
         return (
           <div
@@ -208,31 +222,77 @@ export default function TabsChart({
     return colors;
   }, [instances]);
 
-  const mergedData = useMemo(() => {
-    const memByTime = new Map((memoryData || []).map((m) => [m.timestamp, m]));
-    const serverByTime = new Map(
-      (serverData || []).map((s) => [s.timestamp, s]),
-    );
-    const baseData =
-      data.length > 0
-        ? data
-        : (serverData || []).map((s) => ({ timestamp: s.timestamp }));
-
-    return baseData.map((d) => {
-      const merged: Record<string, number> = { timestamp: d.timestamp };
-      for (const [key, val] of Object.entries(d)) {
-        if (key !== "timestamp") merged[key] = val as number;
-      }
-      const mem = memByTime.get(d.timestamp);
-      if (mem) {
-        for (const [key, val] of Object.entries(mem)) {
-          if (key !== "timestamp") merged[`${key}_mem`] = val;
-        }
-      }
-      const srv = serverByTime.get(d.timestamp);
-      if (srv) merged.goHeapMB = srv.goHeapMB;
-      return merged;
+  const series = useMemo<SeriesDescriptor[]>(() => {
+    const list: SeriesDescriptor[] = [];
+    instances.forEach((inst) => {
+      const color = instanceColors[inst.id] || COLORS[0];
+      const displayName = inst.profileName || inst.id;
+      list.push({
+        dataKey: inst.id,
+        instanceId: inst.id,
+        kind: "tabs",
+        displayName,
+        suffix: " (tabs)",
+        color,
+      });
+      list.push({
+        dataKey: `${inst.id}_mem`,
+        instanceId: inst.id,
+        kind: "mem",
+        displayName,
+        suffix: " (mem)",
+        color,
+      });
     });
+    list.push({
+      dataKey: "goHeapMB",
+      instanceId: "",
+      kind: "heap",
+      displayName: "Server Heap",
+      suffix: "",
+      color: HEAP_COLOR,
+    });
+    return list;
+  }, [instances, instanceColors]);
+
+  const seriesByKey = useMemo(
+    () => new Map(series.map((s) => [s.dataKey, s])),
+    [series],
+  );
+
+  const mergedData = useMemo(() => {
+    // Build rows from the union of all three sources' timestamps so memory- or
+    // server-only samples (timestamps absent from tab data) still appear on the
+    // timeline instead of being dropped.
+    const byTime = new Map<number, Record<string, number>>();
+    const rowFor = (ts: number) => {
+      let row = byTime.get(ts);
+      if (!row) {
+        row = { timestamp: ts };
+        byTime.set(ts, row);
+      }
+      return row;
+    };
+
+    for (const d of data) {
+      const row = rowFor(d.timestamp);
+      for (const [key, val] of Object.entries(d)) {
+        if (key !== "timestamp") row[key] = val as number;
+      }
+    }
+    for (const m of memoryData || []) {
+      const row = rowFor(m.timestamp);
+      for (const [key, val] of Object.entries(m)) {
+        if (key !== "timestamp") row[`${key}_mem`] = val as number;
+      }
+    }
+    for (const s of serverData || []) {
+      rowFor(s.timestamp).goHeapMB = s.goHeapMB;
+    }
+
+    return Array.from(byTime.values()).sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
   }, [data, memoryData, serverData]);
 
   // Current values for header badges
@@ -240,37 +300,36 @@ export default function TabsChart({
     if (mergedData.length === 0) return null;
     const latest = mergedData[mergedData.length - 1];
     const vals: Array<{ label: string; value: string; color: string }> = [];
-    instances.forEach((inst) => {
-      const v = latest[inst.id];
-      if (v !== undefined) {
+    for (const s of series) {
+      const raw = latest[s.dataKey];
+      if (raw === undefined) continue;
+      const num = Number(raw);
+      if (s.kind === "tabs") {
         vals.push({
-          label: inst.profileName,
-          value: `${formatMetricValue(Number(v))} tabs`,
-          color: instanceColors[inst.id] || COLORS[0],
+          label: s.displayName,
+          value: `${formatMetricValue(num)} tabs`,
+          color: s.color,
+        });
+      } else if (s.kind === "mem") {
+        vals.push({
+          label: `${s.displayName} mem`,
+          value: `${formatMetricValue(num, 1)}MB`,
+          color: s.color,
+        });
+      } else {
+        vals.push({
+          label: "Heap",
+          value: `${formatMetricValue(num, 1)}MB`,
+          color: s.color,
         });
       }
-      const memV = latest[`${inst.id}_mem`];
-      if (memV !== undefined) {
-        vals.push({
-          label: `${inst.profileName} mem`,
-          value: `${formatMetricValue(Number(memV), 1)}MB`,
-          color: instanceColors[inst.id] || COLORS[0],
-        });
-      }
-    });
-    if (latest.goHeapMB !== undefined) {
-      vals.push({
-        label: "Heap",
-        value: `${formatMetricValue(Number(latest.goHeapMB), 1)}MB`,
-        color: "#94a3b8",
-      });
     }
     return vals;
-  }, [mergedData, instances, instanceColors]);
+  }, [mergedData, series]);
 
   const tooltipContent: NonNullable<TooltipProps<number, string>["content"]> = (
     props: TooltipContentProps<number, string>,
-  ) => <GlassTooltip {...props} instances={instances} />;
+  ) => <GlassTooltip {...props} seriesByKey={seriesByKey} />;
 
   if (mergedData.length < 2) {
     return (

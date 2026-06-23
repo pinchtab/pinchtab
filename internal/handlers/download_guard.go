@@ -8,11 +8,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -20,7 +18,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
-var errDownloadTooLarge = errors.New("download response too large")
+// Aliased to the bridge sentinel so errors from either layer classify identically.
+var errDownloadTooLarge = bridge.ErrDownloadTooLarge
 
 type downloadURLGuard struct {
 	allowedDomains []string
@@ -149,9 +148,6 @@ type downloadRequestGuard struct {
 	validator    *downloadURLGuard
 	maxRedirects int
 	redirects    atomic.Int32
-
-	mu         sync.Mutex
-	blockedErr error
 }
 
 func newDownloadRequestGuard(validator *downloadURLGuard, maxRedirects int) *downloadRequestGuard {
@@ -179,25 +175,11 @@ func (g *downloadRequestGuard) Validate(rawURL string, redirected bool) error {
 	return nil
 }
 
-func (g *downloadRequestGuard) NoteBlocked(err error) {
-	g.mu.Lock()
-	if g.blockedErr == nil {
-		g.blockedErr = err
-	}
-	g.mu.Unlock()
-}
-
-func (g *downloadRequestGuard) BlockedError() error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.blockedErr
-}
-
 func downloadTooLargeError(size int64, maxBytes int) error {
 	return fmt.Errorf("%w: received %d bytes, max %d", errDownloadTooLarge, size, maxBytes)
 }
 
-func parseContentLengthHeader(headers network.Headers) (int64, bool) {
+func parseContentLengthHeader(headers map[string]interface{}) (int64, bool) {
 	for key, raw := range headers {
 		if !strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
 			continue
@@ -213,6 +195,11 @@ func parseContentLengthHeader(headers network.Headers) (int64, bool) {
 		return size, true
 	}
 	return 0, false
+}
+
+// parseContentLengthHeaderGeneric is a type-compatible alias for bridge callbacks.
+func parseContentLengthHeaderGeneric(headers map[string]interface{}) (int64, bool) {
+	return parseContentLengthHeader(headers)
 }
 
 func writeDownloadGuardError(w http.ResponseWriter, err error, maxBytes int) bool {

@@ -16,6 +16,7 @@ var scrollByCoordinateAction = ScrollByCoordinate
 var mouseMoveByCoordinateAction = MouseMoveByCoordinate
 var mouseDownByCoordinateAction = MouseDownByCoordinate
 var mouseUpByCoordinateAction = MouseUpByCoordinate
+var clickElementAction = ClickElement
 var clickByNodeIDAction = ClickByNodeID
 var jsClickByBackendNodeAction = JSClickByBackendNode
 var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
@@ -171,6 +172,55 @@ func submitFormIfButton(ctx context.Context, selector string) (bool, error) {
 	return submitted, err
 }
 
+// settle finalizes the popup auto-switch from a deferred call in the click
+// handlers: on success it adopts/focuses any opened tab and augments result; on
+// error it cancels — without restore when the error is a blocking dialog, so
+// the popup isn't torn down mid-dialog. nil-safe so handlers can defer it
+// unconditionally. Centralizes the finish/cancel branching that actionClick,
+// actionDoubleClick, and actionHumanizedClick would otherwise each copy.
+func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, err error) map[string]any {
+	if s == nil {
+		return result
+	}
+	if err == nil {
+		return s.finish(ctx, result)
+	}
+	var dialogErr *ErrDialogBlocking
+	if errors.As(err, &dialogErr) {
+		s.cancelWithoutRestore()
+	} else {
+		s.cancel(ctx)
+	}
+	return result
+}
+
+// armDialogAutoHandler arms a one-shot dialog auto-handler when the request
+// names a DialogAction and the tab has a dialog manager. It returns the manager
+// (possibly nil) and whether a handler was armed. Shared by actionClick and
+// actionHumanizedClick.
+func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*DialogManager, bool) {
+	dm := b.GetDialogManager()
+	if req.DialogAction != "" && req.TabID != "" && dm != nil {
+		dm.ArmAutoHandler(req.TabID, req.DialogAction, req.DialogText)
+		return dm, true
+	}
+	return dm, false
+}
+
+// dialogBlocking returns a populated *ErrDialogBlocking when a blocking dialog
+// is pending on the tab, or nil otherwise. Shared by the click handlers' dialog
+// poll loops so the pending-check and error construction stay identical.
+func dialogBlocking(dm *DialogManager, tabID string) error {
+	pending := dm.GetPending(tabID)
+	if pending == nil {
+		return nil
+	}
+	return &ErrDialogBlocking{
+		DialogType:    pending.Type,
+		DialogMessage: pending.Message,
+	}
+}
+
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
@@ -179,33 +229,13 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	// Arm popup-aware auto-switch: if this click opens a new tab, we adopt
 	// + focus it and surface the new tab ID on the response.
 	auto := b.beginAutoSwitch(req)
-	defer func() {
-		if auto == nil {
-			return
-		}
-		if err == nil {
-			result = auto.finish(ctx, result)
-		} else {
-			var dialogErr *ErrDialogBlocking
-			if errors.As(err, &dialogErr) {
-				auto.cancelWithoutRestore()
-			} else {
-				auto.cancel(ctx)
-			}
-		}
-	}()
+	defer func() { result = auto.settle(ctx, result, err) }()
 
 	// Arm a one-shot dialog auto-handler if the caller expects the click
 	// to open a native JS dialog. Without this, the click would hang
 	// waiting for the dialog to be handled from a separate request.
-	dm := b.GetDialogManager()
-	armedDialog := false
-	if req.DialogAction != "" && req.TabID != "" && dm != nil {
-		dm.ArmAutoHandler(req.TabID, req.DialogAction, req.DialogText)
-		armedDialog = true
-	}
+	dm, armedDialog := b.armDialogAutoHandler(req)
 
-	// If no dialog-action was provided, detect blocking dialogs early and fail fast.
 	detectDialog := !armedDialog && req.TabID != "" && dm != nil
 	var clickCtx context.Context
 	var clickCancel context.CancelFunc
@@ -216,7 +246,6 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		clickCtx = ctx
 	}
 
-	// Channel to receive click result
 	type clickResult struct {
 		err error
 	}
@@ -262,7 +291,6 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		resultCh <- clickResult{err: err}
 	}()
 
-	// Poll for blocking dialogs while click is running
 	if detectDialog {
 		ticker := time.NewTicker(dialogAutoHandlePollInterval)
 		defer ticker.Stop()
@@ -277,12 +305,9 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 				}
 				return map[string]any{"clicked": true}, nil
 			case <-ticker.C:
-				if pending := dm.GetPending(req.TabID); pending != nil {
+				if e := dialogBlocking(dm, req.TabID); e != nil {
 					clickCancel()
-					return nil, &ErrDialogBlocking{
-						DialogType:    pending.Type,
-						DialogMessage: pending.Message,
-					}
+					return nil, e
 				}
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -290,7 +315,6 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		}
 	}
 
-	// Wait for click result (dialog-action was provided or no tab ID)
 	res := <-resultCh
 	if res.err != nil {
 		return nil, res.err
@@ -329,21 +353,7 @@ func waitForArmedDialogSettle(dm *DialogManager, tabID string, timeout time.Dura
 
 func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
-	defer func() {
-		if auto == nil {
-			return
-		}
-		if err == nil {
-			result = auto.finish(ctx, result)
-		} else {
-			var dialogErr *ErrDialogBlocking
-			if errors.As(err, &dialogErr) {
-				auto.cancelWithoutRestore()
-			} else {
-				auto.cancel(ctx)
-			}
-		}
-	}()
+	defer func() { result = auto.settle(ctx, result, err) }()
 	if req.Selector != "" {
 		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
 		if nodeErr != nil {
@@ -579,21 +589,7 @@ func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]
 
 func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
-	defer func() {
-		if auto == nil {
-			return
-		}
-		if err == nil {
-			result = auto.finish(ctx, result)
-		} else {
-			var dialogErr *ErrDialogBlocking
-			if errors.As(err, &dialogErr) {
-				auto.cancelWithoutRestore()
-			} else {
-				auto.cancel(ctx)
-			}
-		}
-	}()
+	defer func() { result = auto.settle(ctx, result, err) }()
 	var backendNodeID cdp.BackendNodeID
 	switch {
 	case req.NodeID > 0:
@@ -614,12 +610,17 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 		return nil, fmt.Errorf("need selector, ref, or nodeId")
 	}
 
+	// If the caller expects this click to open a native JS dialog, arm a
+	// one-shot auto-handler so it gets accepted/dismissed instead of leaving the
+	// renderer blocked. Without this the humanized path can only ever report
+	// dialog_blocking. Mirrors actionClick's non-humanized branch.
+	dm, armedDialog := b.armDialogAutoHandler(req)
+
 	// Run the multi-step humanized click (bezier mouse-move + press + release) in
-	// a goroutine and poll for blocking dialogs. Without this, a dialog or
-	// dialog-like popup opened by the click would hang the renderer for the
-	// full action timeout. Mirrors the wrapping used by actionClick.
-	dm := b.GetDialogManager()
-	detectDialog := req.TabID != "" && dm != nil
+	// a goroutine. When no dialog-action was provided, poll for an unexpected
+	// blocking dialog so it surfaces as ErrDialogBlocking rather than hanging the
+	// renderer for the full action timeout.
+	detectDialog := !armedDialog && req.TabID != "" && dm != nil
 	clickCtx := ctx
 	var clickCancel context.CancelFunc
 	if detectDialog {
@@ -629,7 +630,7 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 
 	resultCh := make(chan error, 1)
 	go func() {
-		resultCh <- ClickElement(clickCtx, backendNodeID)
+		resultCh <- clickElementAction(clickCtx, backendNodeID)
 	}()
 
 	if detectDialog {
@@ -643,12 +644,9 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 				}
 				return map[string]any{"clicked": true, "human": true}, nil
 			case <-ticker.C:
-				if pending := dm.GetPending(req.TabID); pending != nil {
+				if e := dialogBlocking(dm, req.TabID); e != nil {
 					clickCancel()
-					return nil, &ErrDialogBlocking{
-						DialogType:    pending.Type,
-						DialogMessage: pending.Message,
-					}
+					return nil, e
 				}
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -658,6 +656,9 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 
 	if err := <-resultCh; err != nil {
 		return nil, err
+	}
+	if armedDialog {
+		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
 	}
 	return map[string]any{"clicked": true, "human": true}, nil
 }

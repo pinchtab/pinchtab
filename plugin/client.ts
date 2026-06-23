@@ -3,7 +3,28 @@ import type { PluginConfig, PluginRuntimeContext, ToolResult } from "./types.js"
 // Pinchtab isolates browser state per session token created by `POST /sessions`
 // with a distinct agentId. Without per-agent sessions every OpenClaw agent
 // shares the same browser context, so cookies/storage leak across them.
-const pinchtabSessionTokens = new Map<string, string>();
+//
+// Bounded like the agentSessions cache in session.ts: entries carry updatedAt
+// and are pruned by max-age + max-entries so a long-lived plugin process does
+// not retain stale agent tokens indefinitely.
+const pinchtabSessionTokens = new Map<string, { token: string; updatedAt: number }>();
+const pinchtabSessionMaxEntries = 256;
+const pinchtabSessionMaxAgeMs = 60 * 60 * 1000;
+
+function prunePinchtabSessions(): void {
+  const cutoff = Date.now() - pinchtabSessionMaxAgeMs;
+  for (const [key, entry] of pinchtabSessionTokens) {
+    if (entry.updatedAt < cutoff) pinchtabSessionTokens.delete(key);
+  }
+  if (pinchtabSessionTokens.size <= pinchtabSessionMaxEntries) return;
+  const ordered = [...pinchtabSessionTokens.entries()].sort(
+    (a, b) => a[1].updatedAt - b[1].updatedAt,
+  );
+  for (const [key] of ordered) {
+    if (pinchtabSessionTokens.size <= pinchtabSessionMaxEntries) break;
+    pinchtabSessionTokens.delete(key);
+  }
+}
 
 const SERVER_TOKEN_PATH_PREFIXES = ["/sessions", "/instances", "/profiles"];
 
@@ -33,7 +54,10 @@ async function ensurePinchtabSession(
   }
   if (forceRefresh) pinchtabSessionTokens.delete(agentId);
   const cached = pinchtabSessionTokens.get(agentId);
-  if (cached) return { kind: "ok", sessionToken: cached };
+  if (cached && Date.now() - cached.updatedAt < pinchtabSessionMaxAgeMs) {
+    return { kind: "ok", sessionToken: cached.token };
+  }
+  if (cached) pinchtabSessionTokens.delete(agentId); // aged out → re-create below
 
   const controller = new AbortController();
   const timeout = cfg.timeoutMs ?? cfg.timeout ?? 30000;
@@ -58,7 +82,8 @@ async function ensurePinchtabSession(
     const data = (await res.json().catch(() => null)) as { sessionToken?: string } | null;
     const sessionToken = data?.sessionToken;
     if (typeof sessionToken === "string" && sessionToken) {
-      pinchtabSessionTokens.set(agentId, sessionToken);
+      pinchtabSessionTokens.set(agentId, { token: sessionToken, updatedAt: Date.now() });
+      prunePinchtabSessions();
       return { kind: "ok", sessionToken };
     }
     return { kind: "error", error: `Pinchtab /sessions response missing sessionToken for agent ${agentId}` };

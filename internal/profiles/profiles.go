@@ -174,17 +174,14 @@ func (pm *ProfileManager) profileInfo(dirName string) (ProfileDetailedInfo, erro
 		profileName = dirName
 	}
 
-	changed := false
+	// Backfill in memory only — read paths (List/Get) must not mutate the
+	// filesystem. profileID is deterministic and FindByID tolerates an empty
+	// persisted ID, so persistence belongs to create/import/rename, not reads.
 	if meta.ID == "" {
 		meta.ID = profileID(profileName)
-		changed = true
 	}
 	if meta.Name == "" {
 		meta.Name = profileName
-		changed = true
-	}
-	if changed {
-		_ = writeProfileMeta(dir, meta)
 	}
 
 	return ProfileDetailedInfo{

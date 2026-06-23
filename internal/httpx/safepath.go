@@ -67,7 +67,6 @@ func safeLexicalPath(base, userPath string) (string, string, error) {
 		return "", "", fmt.Errorf("path %q contains invalid components", userPath)
 	}
 
-	// Join, clean, resolve to absolute.
 	joined := filepath.Join(absBase, userPath)
 	absPath, err := filepath.Abs(joined)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cfchallenge"
 	"github.com/pinchtab/pinchtab/internal/solver"
 )
 
@@ -110,10 +111,6 @@ func (s *CloudflareSolver) Solve(ctx context.Context, opts solver.Options) (*sol
 	return result, nil
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 type cfBoundingBox struct {
 	X      float64
 	Y      float64
@@ -122,10 +119,7 @@ type cfBoundingBox struct {
 }
 
 func isCFChallenge(title string) bool {
-	lower := strings.ToLower(title)
-	return strings.Contains(lower, "just a moment") ||
-		strings.Contains(lower, "attention required") ||
-		strings.Contains(lower, "checking your browser")
+	return cfchallenge.IsChallengeTitle(title)
 }
 
 func detectCFType(ctx context.Context) string {
@@ -134,7 +128,7 @@ func detectCFType(ctx context.Context) string {
 		return ""
 	}
 
-	for _, ct := range []string{"non-interactive", "managed", "interactive"} {
+	for _, ct := range cfchallenge.CTypeTokens {
 		if strings.Contains(content, fmt.Sprintf("cType: '%s'", ct)) {
 			return ct
 		}
@@ -142,7 +136,7 @@ func detectCFType(ctx context.Context) string {
 
 	var hasEmbedded bool
 	if err := chromedp.Run(ctx, chromedp.Evaluate(
-		`!!document.querySelector('script[src*="challenges.cloudflare.com/turnstile/v"]')`,
+		cfchallenge.EmbeddedTurnstileScriptJS,
 		&hasEmbedded,
 	)); err == nil && hasEmbedded {
 		return "embedded"
@@ -153,37 +147,7 @@ func detectCFType(ctx context.Context) string {
 
 func findTurnstileBox(ctx context.Context) (*cfBoundingBox, error) {
 	var rawBox map[string]float64
-	err := chromedp.Run(ctx, chromedp.Evaluate(`
-		(() => {
-			const patterns = [
-				'iframe[src*="challenges.cloudflare.com/cdn-cgi/challenge-platform"]',
-				'iframe[src*="challenges.cloudflare.com"]',
-			];
-			for (const sel of patterns) {
-				const iframe = document.querySelector(sel);
-				if (iframe) {
-					const r = iframe.getBoundingClientRect();
-					if (r.width > 0 && r.height > 0) {
-						return {x: r.x, y: r.y, width: r.width, height: r.height};
-					}
-				}
-			}
-			const containers = [
-				'#cf_turnstile div', '#cf-turnstile div', '.turnstile>div>div',
-				'.main-content p+div>div>div',
-			];
-			for (const sel of containers) {
-				const el = document.querySelector(sel);
-				if (el) {
-					const r = el.getBoundingClientRect();
-					if (r.width > 0 && r.height > 0) {
-						return {x: r.x, y: r.y, width: r.width, height: r.height};
-					}
-				}
-			}
-			return null;
-		})()
-	`, &rawBox))
+	err := chromedp.Run(ctx, chromedp.Evaluate(cfchallenge.TurnstileBoxJS, &rawBox))
 	if err != nil {
 		return nil, fmt.Errorf("evaluate turnstile box: %w", err)
 	}
@@ -215,7 +179,7 @@ func waitForCFSpinner(ctx context.Context, timeout time.Duration) {
 			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.body.innerText`, &text)); err != nil {
 				continue
 			}
-			if !strings.Contains(text, "Verifying you are human") {
+			if !strings.Contains(text, cfchallenge.SpinnerText) {
 				return
 			}
 		}

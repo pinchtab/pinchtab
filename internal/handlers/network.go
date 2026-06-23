@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,6 +35,50 @@ func parseBufferSize(r *http.Request) int {
 		}
 	}
 	return 0
+}
+
+// ensureBrowserReady runs the shared browser-init guard for network endpoints,
+// writing the bridge-unavailable or 500 response on failure. Returns false when
+// the caller should stop.
+func (h *Handlers) ensureBrowserReady(w http.ResponseWriter) bool {
+	if err := h.ensureBrowser(h.Config); err != nil {
+		if h.writeBridgeUnavailable(w, err) {
+			return false
+		}
+		httpx.Error(w, 500, fmt.Errorf("browser initialization: %w", err))
+		return false
+	}
+	return true
+}
+
+// resolveNetworkTab resolves the tabId query param to a tab context and enforces
+// the current-tab domain policy, writing the 404/policy response on failure.
+func (h *Handlers) resolveNetworkTab(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
+	tabID := r.URL.Query().Get("tabId")
+	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
+	if err != nil {
+		WriteTabContextError(w, err, 404)
+		return nil, "", false
+	}
+	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
+		return nil, "", false
+	}
+	return tabCtx, resolvedTabID, true
+}
+
+// ensureCaptureBuffer returns the tab's network buffer, lazily starting capture
+// if absent. nm must be non-nil; callers handle the nil-monitor case per their
+// own empty-result policy.
+func (h *Handlers) ensureCaptureBuffer(w http.ResponseWriter, r *http.Request, nm *bridge.NetworkMonitor, tabCtx context.Context, resolvedTabID string) (*bridge.NetworkBuffer, bool) {
+	buf := nm.GetBuffer(resolvedTabID)
+	if buf == nil {
+		if err := nm.StartCaptureWithSize(tabCtx, resolvedTabID, parseBufferSize(r)); err != nil {
+			httpx.Error(w, 500, fmt.Errorf("start network capture: %w", err))
+			return nil, false
+		}
+		buf = nm.GetBuffer(resolvedTabID)
+	}
+	return buf, true
 }
 
 func parseBoolQuery(value string) bool {
@@ -85,6 +130,10 @@ func waitForRetainedBody(buf *bridge.NetworkBuffer, requestID string, timeout ti
 	}
 	deadline := time.Now().Add(timeout)
 	for {
+		// Capture the change channel BEFORE reading state so a signal that fires
+		// between the read and the wait is not missed (it leaves the channel closed).
+		change := buf.BodyChangeChan()
+
 		entry, ok := buf.Get(requestID)
 		if !ok {
 			return bridge.NetworkEntry{}, false
@@ -92,14 +141,21 @@ func waitForRetainedBody(buf *bridge.NetworkBuffer, requestID string, timeout ti
 		if entry.BodyRetained || !entry.BodyPending || entry.BodyError != "" {
 			return entry, true
 		}
-		if time.Now().After(deadline) {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
 			return entry, true
 		}
-		remaining := time.Until(deadline)
-		if remaining > 25*time.Millisecond {
-			remaining = 25 * time.Millisecond
+
+		timer := time.NewTimer(remaining)
+		select {
+		case <-change:
+			timer.Stop()
+		case <-timer.C:
+			if latest, ok := buf.Get(requestID); ok {
+				return latest, true
+			}
+			return entry, true
 		}
-		time.Sleep(remaining)
 	}
 }
 
@@ -155,21 +211,12 @@ func populateLiveBodyResult(result map[string]any, body string, base64Encoded bo
 // @Response 200 application/json List of network entries
 // @Response 404 application/json Tab not found
 func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserReady(w) {
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	if !ok {
 		return
 	}
 
@@ -179,16 +226,9 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bufferSize := parseBufferSize(r)
-
-	// Lazily start capture if not already active for this tab
-	buf := nm.GetBuffer(resolvedTabID)
-	if buf == nil {
-		if err := nm.StartCaptureWithSize(tabCtx, resolvedTabID, bufferSize); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("start network capture: %w", err))
-			return
-		}
-		buf = nm.GetBuffer(resolvedTabID)
+	buf, ok := h.ensureCaptureBuffer(w, r, nm, tabCtx, resolvedTabID)
+	if !ok {
+		return
 	}
 
 	filter := bridge.NetworkFilter{
@@ -229,11 +269,7 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 // @Response 200 application/json Network entry details
 // @Response 404 application/json Request not found
 func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserReady(w) {
 		return
 	}
 
@@ -243,13 +279,8 @@ func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	if !ok {
 		return
 	}
 
@@ -276,7 +307,6 @@ func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
 		"tabId": resolvedTabID,
 	}
 
-	// Optionally include response body
 	if r.URL.Query().Get("body") == "true" && entry.Finished && !entry.Failed {
 		bodyMode := parseNetworkBodyMode(r)
 		if bodyMode == networkBodyModeRetainedPreferred && entry.BodyPending {
@@ -369,21 +399,12 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 	// (e.g. httptest.ResponseRecorder doesn't support this).
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserReady(w) {
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	if !ok {
 		return
 	}
 
@@ -393,16 +414,9 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bufferSize := parseBufferSize(r)
-
-	// Ensure capture is active
-	buf := nm.GetBuffer(resolvedTabID)
-	if buf == nil {
-		if err := nm.StartCaptureWithSize(tabCtx, resolvedTabID, bufferSize); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("start network capture: %w", err))
-			return
-		}
-		buf = nm.GetBuffer(resolvedTabID)
+	buf, ok := h.ensureCaptureBuffer(w, r, nm, tabCtx, resolvedTabID)
+	if !ok {
+		return
 	}
 
 	filter := bridge.NetworkFilter{
@@ -458,18 +472,7 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 //
 // @Endpoint GET /tabs/{id}/network
 func (h *Handlers) HandleTabNetwork(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-	h.HandleNetwork(w, req)
+	h.withPathTabID(w, r, h.HandleNetwork)
 }
 
 // HandleTabNetworkByID returns details for a specific request in a tab.
@@ -488,7 +491,6 @@ func (h *Handlers) HandleTabNetworkByID(w http.ResponseWriter, r *http.Request) 
 	u := *r.URL
 	u.RawQuery = q.Encode()
 	req.URL = &u
-	// Set the requestId path value by creating a new request with the path
 	h.HandleNetworkByID(w, req)
 }
 
@@ -496,16 +498,5 @@ func (h *Handlers) HandleTabNetworkByID(w http.ResponseWriter, r *http.Request) 
 //
 // @Endpoint GET /tabs/{id}/network/stream
 func (h *Handlers) HandleTabNetworkStream(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-	h.HandleNetworkStream(w, req)
+	h.withPathTabID(w, r, h.HandleNetworkStream)
 }

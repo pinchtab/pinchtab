@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
@@ -44,6 +46,111 @@ func newBackendInstance(t *testing.T, o *Orchestrator, instanceID string) (*http
 	return srv, gotPath
 }
 
+func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
+	alwaysAlive(t)
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"ok"}`))),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
+
+	target, status, err := o.RouteForRequest(req)
+	if err != nil {
+		t.Fatalf("RouteForRequest status=%d err=%v", status, err)
+	}
+	if target == "" {
+		t.Fatal("target URL is empty")
+	}
+	instances := o.List()
+	if len(instances) != 1 {
+		t.Fatalf("instances = %d, want 1: %+v", len(instances), instances)
+	}
+	if instances[0].Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want cloak", instances[0].Browser)
+	}
+	if instances[0].ProfileName != "default-cloak" {
+		t.Fatalf("ProfileName = %q, want default-cloak", instances[0].ProfileName)
+	}
+}
+
+func TestRouteForRequest_RejectsUnknownBrowser(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	newBackendInstance(t, o, "inst_chrome")
+	o.instances["inst_chrome"].Browser = config.BrowserChrome
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=chrme", nil)
+	_, status, err := o.RouteForRequest(req)
+	if err == nil {
+		t.Fatal("expected unknown browser error for typo")
+	}
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+}
+
+// A browser name the operator added to browsers.available (but which is not a
+// built-in) must pass RouteForRequest's parse gate, matching the launch path
+// (instance_launch.go threads the same configured list). With the old
+// nil-list call it was rejected. The routing then resolves via the normal
+// (NormalizeBrowser) path to a running instance.
+func TestRouteForRequest_AcceptsOperatorConfiguredBrowser(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		BrowsersAvailable: []string{"chrome", "custombrowser"},
+	})
+	newBackendInstance(t, o, "inst_chrome")
+	o.instances["inst_chrome"].Browser = config.BrowserChrome
+	o.syncInstanceToManager(&o.instances["inst_chrome"].Instance)
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=custombrowser", nil)
+	target, status, err := o.RouteForRequest(req)
+	if err != nil {
+		t.Fatalf("operator-configured browser should pass the parse gate, got status=%d err=%v", status, err)
+	}
+	if target == "" {
+		t.Fatal("expected non-empty target URL for operator-configured browser")
+	}
+}
+
+func TestRouteForRequest_AcceptsValidBrowsers(t *testing.T) {
+	alwaysAlive(t)
+	for _, browser := range []string{"chrome", "cloak", "ghost-chrome"} {
+		t.Run(browser, func(t *testing.T) {
+			o := NewOrchestrator(t.TempDir())
+			_, _ = newBackendInstance(t, o, "inst_"+browser)
+			o.instances["inst_"+browser].Browser = browser
+			o.syncInstanceToManager(&o.instances["inst_"+browser].Instance)
+
+			req := httptest.NewRequest(http.MethodPost, "/navigate?browser="+browser, nil)
+			target, status, err := o.RouteForRequest(req)
+			if err != nil {
+				t.Fatalf("RouteForRequest status=%d err=%v", status, err)
+			}
+			if target == "" {
+				t.Fatal("expected non-empty target URL for valid browser")
+			}
+		})
+	}
+}
+
 func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 	alwaysAlive(t)
 	o := NewOrchestrator(t.TempDir())
@@ -77,6 +184,41 @@ func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 	}
 	if *pathB != "/navigate" {
 		t.Fatalf("instance B path = %q, want /navigate", *pathB)
+	}
+}
+
+func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	_, pathB := newBackendInstance(t, o, "inst_b")
+	o.instances["inst_b"].Browser = config.BrowserChrome
+	o.syncInstanceToManager(&o.instances["inst_b"].Instance)
+	o.instanceMgr.Locator.Register("tab-x", "inst_b")
+
+	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("fallback should not run for tab-owner conflict")
+	})
+
+	r := httptest.NewRequest("POST", "/navigate?browser=cloak&tabId=tab-x", nil)
+	w := httptest.NewRecorder()
+
+	wrapped(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 body=%s", w.Code, w.Body.String())
+	}
+	if *pathB != "" {
+		t.Fatalf("conflicting target should not proxy to backend, got path %q", *pathB)
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("browser_conflict")) {
+		t.Fatalf("body = %s, want browser_conflict", w.Body.String())
 	}
 }
 
@@ -117,6 +259,42 @@ func TestWrapShorthand_TabNotFoundSingleInstanceFallsThrough(t *testing.T) {
 	}
 	if *gotPath != "/text" {
 		t.Fatalf("backend path = %q, want /text", *gotPath)
+	}
+}
+
+func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing.T) {
+	alwaysAlive(t)
+	o := NewOrchestrator(t.TempDir())
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	_, pathA := newBackendInstance(t, o, "inst_a")
+	o.instances["inst_a"].Browser = config.BrowserChrome
+	o.bindings.BindAgent("agent-1", "inst_a")
+
+	fallbackCalled := false
+	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
+		fallbackCalled = true
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	r := httptest.NewRequest("GET", "/text?browser=cloak", nil)
+	r.Header.Set(activity.HeaderAgentID, "agent-1")
+	w := httptest.NewRecorder()
+	wrapped(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 body=%s", w.Code, w.Body.String())
+	}
+	if !fallbackCalled {
+		t.Fatal("fallback should run so browserTarget selection can choose the requested target")
+	}
+	if *pathA != "" {
+		t.Fatalf("mismatched identity binding should not proxy to backend, got path %q", *pathA)
 	}
 }
 
@@ -254,5 +432,47 @@ func TestWrapShorthand_StaleBindingFallsThrough(t *testing.T) {
 	// actually served the request (inst_a), replacing the stale entry.
 	if got, ok := o.bindings.ResolveAgent("agent-1"); !ok || got != "inst_a" {
 		t.Fatalf("agent binding after stale fallthrough = %q, %v; want inst_a, true", got, ok)
+	}
+}
+
+// M8 regression: the auto-launch readiness poll must authenticate — children
+// inherit Server.Token and an unauthenticated poll loops on 401 until the
+// route times out with 503.
+func TestRouteForRequest_AutoLaunchReadinessPollAuthenticates(t *testing.T) {
+	alwaysAlive(t)
+	stubPortAvailability(t, func(int) bool { return true })
+	oldPoll := routeInstanceReadyPollInterval
+	routeInstanceReadyPollInterval = time.Millisecond
+	t.Cleanup(func() { routeInstanceReadyPollInterval = oldPoll })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		status := http.StatusUnauthorized
+		if req.Header.Get("Authorization") == "Bearer child-token" {
+			status = http.StatusOK
+		}
+		return &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		Token:         "child-token",
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate", nil)
+	target, status, err := o.RouteForRequest(req)
+	if err != nil {
+		t.Fatalf("RouteForRequest status=%d err=%v (poll likely unauthenticated)", status, err)
+	}
+	if target == "" {
+		t.Fatal("target URL is empty")
 	}
 }

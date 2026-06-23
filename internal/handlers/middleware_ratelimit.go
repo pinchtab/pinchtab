@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,9 +16,22 @@ import (
 const (
 	maxConcurrentStreamRequestsPerHost = 8
 	rateLimitWindow                    = 10 * time.Second
-	rateLimitMaxReq                    = 300
-	evictionInterval                   = 30 * time.Second
+	// 3000/10s (~300 req/s per client IP): agent-driven workloads
+	// (snapshot/action loops, the optimization suites) legitimately burst far
+	// past the older 300 cap. Bearer-token auth and the loopback-only default
+	// bind are the primary gates; this limiter is per-client defense-in-depth.
+	// Operators exposing the port beyond localhost can lower it via
+	// PINCHTAB_RATE_LIMIT_MAX (documented in docs/reference/config.md).
+	defaultRateLimitMaxReq = 3000
+	evictionInterval       = 30 * time.Second
 )
+
+var rateLimitMaxReq = func() int {
+	if v, err := strconv.Atoi(os.Getenv("PINCHTAB_RATE_LIMIT_MAX")); err == nil && v > 0 {
+		return v
+	}
+	return defaultRateLimitMaxReq
+}()
 
 var (
 	streamMu          sync.Mutex

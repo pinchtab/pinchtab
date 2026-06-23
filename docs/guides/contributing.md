@@ -252,8 +252,9 @@ go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
 ./dev e2e                                 # Run the default extended E2E suite
 ./dev e2e basic                           # Run API + CLI + Infra basic tests
-./dev e2e smoke                           # Run smoke scenarios + host Docker smoke checks
-./dev e2e smoke-docker                    # Run host Docker smoke checks only
+./dev smoke ci                            # Run CI smoke scenarios + host Docker smoke checks
+./dev smoke                               # Run all local smoke categories
+./dev smoke --browser=cloak              # Run all local CloakBrowser smoke categories
 ./dev e2e api                             # Run API basic tests
 ./dev e2e cli                             # Run CLI basic tests
 ./dev e2e infra                           # Run Infra basic tests
@@ -291,7 +292,7 @@ All dev scripts are accessible through `./dev`:
 | `e2e` | Run the default extended E2E suite |
 | `e2e basic` | Run the PR E2E suite (`api` + `cli` + `infra` basic tests) |
 | `e2e smoke` | Run smoke scenarios plus host Docker smoke checks |
-| `e2e smoke-docker` | Run only host Docker smoke checks |
+| `smoke cloakbrowser` | Run opt-in CloakBrowser Docker smoke using `tests/tools/docker/cloakbrowser-smoke.Dockerfile` |
 | `e2e api` | Run API basic tests |
 | `e2e cli` | Run CLI basic tests |
 | `e2e infra` | Run Infra basic tests |

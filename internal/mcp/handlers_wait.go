@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -89,8 +90,14 @@ func callWaitEndpoint(ctx context.Context, c *Client, r mcp.CallToolRequest, pay
 	if tabID := optString(r, "tabId"); tabID != "" {
 		payload["tabId"] = tabID
 	}
-
-	body, code, err := c.Post(ctx, "/wait", payload)
+	// Browser routing is query-based (orchestrator.ExtractRequestedBrowser reads
+	// r.URL.Query()), so forward `browser` in the query, not the body — a body
+	// value would be silently dropped by the router.
+	path := "/wait"
+	if browser := optString(r, "browser"); browser != "" {
+		path += "?browser=" + url.QueryEscape(browser)
+	}
+	body, code, err := c.Post(ctx, path, payload)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

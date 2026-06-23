@@ -36,7 +36,12 @@ With attach:
 
 The current codebase implements:
 
-- `POST /instances/attach`
+- `POST /instances/attach` — starts a child `pinchtab bridge --cdp-attach ...`
+  process that wraps the external browser. The bridge speaks the normal
+  PinchTab HTTP API; the orchestrator registers the bridge's HTTP URL (not
+  the raw `ws://` CDP URL) as the routable instance URL.
+- `POST /instances/attach-bridge` — registers an already-running PinchTab
+  bridge as an instance (unchanged).
 - attach policy in config under `security.attach`
 - attached-instance metadata in `GET /instances`
 
@@ -45,9 +50,27 @@ The attach request body is:
 ```json
 {
   "name": "shared-chrome",
-  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/..."
+  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/...",
+  "provider": "chrome",
+  "browser": "chrome-local"
 }
 ```
+
+`browser` is optional and accepts a provider name (`chrome`, `cloak`) or a
+configured target name from `browser.targets`. When `browser.targets` is
+configured, an omitted value attaches to the configured default target and the
+target's browser is used. If you also pass `provider`, it must agree with the
+`browser` value. Without browser targets,
+`provider` defaults to `chrome`; use `cloak` for a CloakBrowser endpoint
+(equivalent to `--browser cloak` on the CLI).
+
+Accepted `cdpUrl` shapes:
+
+- browser-level WebSocket URL: `ws://host:port/devtools/browser/<id>`
+- HTTP DevTools origin: `http://host:port` (resolved through `/json/version`)
+- HTTP `/json/version` URL
+
+Page-level URLs (`/devtools/page/...`) are rejected.
 
 There is currently no CLI attach command.
 
@@ -65,7 +88,8 @@ Example:
     "attach": {
       "enabled": true,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss"],
+      "forwardProxyAuth": false
     }
   }
 }
@@ -122,7 +146,8 @@ curl -X POST http://localhost:9867/instances/attach \
   -H "Content-Type: application/json" \
   -d '{
     "name": "shared-chrome",
-    "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/abc123"
+    "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/abc123",
+    "browser": "chrome-local"
   }'
 # Response
 {
@@ -134,7 +159,8 @@ curl -X POST http://localhost:9867/instances/attach \
   "headless": false,
   "status": "running",
   "attached": true,
-  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/abc123"
+  "cdpUrl": "ws://127.0.0.1:9222/devtools/browser/abc123",
+  "browser": "chrome"
 }
 ```
 
@@ -163,18 +189,24 @@ An attached instance appears in the normal instance list with:
 
 ## Ownership and lifecycle
 
-Attached instances are externally owned.
+Attached instances are externally owned, but PinchTab still owns a *bridge
+wrapper* around them.
 
 That means:
 
 - PinchTab did not launch the browser
-- PinchTab stores metadata about that browser as an instance
-- the external Chrome process remains outside PinchTab lifecycle ownership
+- PinchTab spawned a child `pinchtab bridge --cdp-attach ...` process that wraps
+  the external CDP endpoint and serves normal PinchTab routes
+- the external Chrome/CloakBrowser process remains outside PinchTab lifecycle
+  ownership
 
 In practical terms:
 
-- stopping the attached instance in PinchTab unregisters it from the server
-- it does not imply that PinchTab launched or can fully manage the external Chrome process
+- `POST /instances/{id}/stop` shuts down the child PinchTab bridge — the
+  external Chrome process is **left running**
+- routes like `/tabs`, `/snapshot`, `/action`, `/screenshot` go to the child
+  bridge, which talks CDP to the external browser through a
+  `chromedp.NewRemoteAllocator`
 
 ---
 
@@ -198,6 +230,7 @@ Recommended rules:
 - leave attach disabled unless you need it
 - keep `allowHosts` narrow
 - keep `allowSchemes` narrow
+- leave `forwardProxyAuth` disabled unless the attached browser process and CDP transport are trusted
 - set `PINCHTAB_TOKEN` when the server is reachable outside localhost
 - only attach to CDP endpoints you trust
 
@@ -237,3 +270,15 @@ curl -X POST http://localhost:9867/instances/start \
 # CLI Alternative
 pinchtab instance start
 ```
+
+---
+
+## Related guides
+
+- [cloakbrowser.md](cloakbrowser.md) — full CloakBrowser configuration and
+  the `--browser cloak` attach variant
+- [docker.md](docker.md) — running PinchTab (and the local CloakBrowser
+  smoke image) in containers
+- [headed-mode.md](headed-mode.md) — manual headed setup outside the
+  bundled image
+- [security.md](security.md) — attach policy details, IDPI, token handling

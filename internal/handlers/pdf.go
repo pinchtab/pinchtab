@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,8 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -57,12 +55,7 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 
@@ -70,20 +63,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	output := r.URL.Query().Get("output")
 	h.recordReadRequest(r, "pdf", tabID)
 
-	ctx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
+	_, tCtx, cancel, ok := h.resolveBinaryReadContext(w, r, tabID, h.Config.ActionTimeout)
+	if !ok {
 		return
 	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
-		return
-	}
+	defer cancel()
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
-
-	// Parse PDF parameters from PrintToPDFParams
 	landscape := r.URL.Query().Get("landscape") == "true"
 	preferCSSPageSize := r.URL.Query().Get("preferCSSPageSize") == "true"
 	displayHeaderFooter := r.URL.Query().Get("displayHeaderFooter") == "true"
@@ -149,60 +134,40 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		if scanTimeout <= 0 {
 			scanTimeout = 5 * time.Second
 		}
-		var pageTitle, pageURL, pageText string
 		scanCtx, scanCancel := context.WithTimeout(tCtx, scanTimeout)
 		defer scanCancel()
-		_ = chromedp.Run(scanCtx,
-			chromedp.Title(&pageTitle),
-			chromedp.Location(&pageURL),
-			chromedp.Evaluate(`document.body ? document.body.innerText : ""`, &pageText),
-		)
+		pageTitle, _ := h.Bridge.CurrentTitle(scanCtx)
+		pageURL, _ := h.Bridge.CurrentURL(scanCtx)
+		var pageText string
+		_ = h.Bridge.Evaluate(scanCtx, `document.body ? document.body.innerText : ""`, &pageText, bridge.EvalOpts{})
 		corpus := pageTitle + "\n" + pageURL + "\n" + pageText
-		if ir := h.IDPIGuard.ScanContent(corpus); ir.Threat {
-			if ir.Blocked {
-				httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", ir.Reason))
-				return
-			}
-			w.Header().Set("X-IDPI-Warning", ir.Reason)
-			if ir.Pattern != "" {
-				w.Header().Set("X-IDPI-Pattern", ir.Pattern)
-			}
+		scanResult := h.ContentGuard.ScanOnly(corpus)
+		if scanResult.Blocked {
+			httpx.Error(w, http.StatusForbidden, fmt.Errorf("idpi: %s", scanResult.BlockReason))
+			return
 		}
+		scanResult.SetHeaders(w)
 	}
 
-	var buf []byte
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			p := page.PrintToPDF().
-				WithPrintBackground(true).
-				WithScale(scale).
-				WithLandscape(landscape).
-				WithPaperWidth(paperWidth).
-				WithPaperHeight(paperHeight).
-				WithMarginTop(marginTop).
-				WithMarginBottom(marginBottom).
-				WithMarginLeft(marginLeft).
-				WithMarginRight(marginRight).
-				WithPreferCSSPageSize(preferCSSPageSize).
-				WithDisplayHeaderFooter(displayHeaderFooter).
-				WithGenerateTaggedPDF(generateTaggedPDF).
-				WithGenerateDocumentOutline(generateDocumentOutline)
-
-			if pageRanges != "" {
-				p = p.WithPageRanges(pageRanges)
-			}
-			if headerTemplate != "" {
-				p = p.WithHeaderTemplate(headerTemplate)
-			}
-			if footerTemplate != "" {
-				p = p.WithFooterTemplate(footerTemplate)
-			}
-
-			buf, _, err = p.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	buf, err := h.Bridge.PrintToPDF(tCtx, bridge.PDFParams{
+		Landscape:               landscape,
+		PrintBackground:         true,
+		Scale:                   scale,
+		PaperWidth:              paperWidth,
+		PaperHeight:             paperHeight,
+		MarginTop:               marginTop,
+		MarginBottom:            marginBottom,
+		MarginLeft:              marginLeft,
+		MarginRight:             marginRight,
+		PageRanges:              pageRanges,
+		PreferCSSPageSize:       preferCSSPageSize,
+		DisplayHeaderFooter:     displayHeaderFooter,
+		GenerateTaggedPDF:       generateTaggedPDF,
+		GenerateDocumentOutline: generateDocumentOutline,
+		HeaderTemplate:          headerTemplate,
+		FooterTemplate:          footerTemplate,
+	})
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("pdf: %w", err))
 		return
 	}
@@ -210,13 +175,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	if output == "file" {
 		savePath := r.URL.Query().Get("path")
 		if savePath == "" {
-			pdfDir := filepath.Join(h.Config.StateDir, "pdfs")
-			if err := os.MkdirAll(pdfDir, 0750); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("create pdf dir: %w", err))
+			p, _, err := saveBinaryToStateDir(h.Config.StateDir, "pdfs", "page", ".pdf", buf)
+			if err != nil {
+				httpx.Error(w, 500, fmt.Errorf("write pdf: %w", err))
 				return
 			}
-			timestamp := time.Now().Format("20060102-150405")
-			savePath = filepath.Join(pdfDir, fmt.Sprintf("page-%s.pdf", timestamp))
+			savePath = p
 		} else {
 			safe, err := httpx.SafeCreatePath(h.Config.StateDir, savePath)
 			if err != nil {
@@ -234,11 +198,10 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 				httpx.Error(w, 500, fmt.Errorf("create dir: %w", err))
 				return
 			}
-		}
-
-		if err := os.WriteFile(savePath, buf, 0600); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("write pdf: %w", err))
-			return
+			if err := os.WriteFile(savePath, buf, 0600); err != nil {
+				httpx.Error(w, 500, fmt.Errorf("write pdf: %w", err))
+				return
+			}
 		}
 
 		httpx.JSON(w, 200, map[string]any{
@@ -249,10 +212,7 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Query().Get("raw") == "true" {
-		w.Header().Set("Content-Type", "application/pdf")
-		if _, err := w.Write(buf); err != nil {
-			slog.Error("pdf write", "err", err)
-		}
+		writeRawImage(w, buf, "application/pdf", "pdf write")
 		return
 	}
 

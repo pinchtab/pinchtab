@@ -22,7 +22,6 @@ func Sanitize(rawURL string) (string, error) {
 		return "", fmt.Errorf("empty URL")
 	}
 
-	// If URL has an explicit scheme, pass it through unchanged
 	if strings.Contains(rawURL, "://") ||
 		strings.HasPrefix(rawURL, "javascript:") ||
 		strings.HasPrefix(rawURL, "vbscript:") ||

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -10,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/netguard"
@@ -30,14 +29,14 @@ func (m *downloadPolicyBridge) BrowserContext() context.Context {
 	return ctx
 }
 
-func (m *downloadPolicyBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *downloadPolicyBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately - no browser spawned
-	return ctx, tabID, nil
+	return bridge.NewTabHandle(ctx), tabID, nil
 }
 
-func (m *downloadPolicyBridge) ListTargets() ([]*target.Info, error) {
-	return []*target.Info{{TargetID: "tab1", Type: "page"}}, nil
+func (m *downloadPolicyBridge) ListTargets() ([]bridge.TabTarget, error) {
+	return []bridge.TabTarget{{TargetID: "tab1", Type: "page"}}, nil
 }
 
 func (m *downloadPolicyBridge) TabLockInfo(tabID string) *bridge.LockInfo {
@@ -48,6 +47,18 @@ func (m *downloadPolicyBridge) GetTabPolicyState(tabID string) (bridge.TabPolicy
 	return m.policy, m.hasState
 }
 
+func (m *downloadPolicyBridge) CurrentURL(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *downloadPolicyBridge) GetCookies(ctx context.Context, urls []string) ([]bridge.CookieData, error) {
+	return nil, nil
+}
+
+func (m *downloadPolicyBridge) DownloadURL(ctx context.Context, dlURL string, opts bridge.DownloadOpts) (*bridge.DownloadResult, error) {
+	return &bridge.DownloadResult{Body: []byte("test"), MIMEType: "text/plain", StatusCode: 200}, nil
+}
+
 func stubDownloadHostResolution(t *testing.T, fn func(context.Context, string, string) ([]net.IP, error)) {
 	t.Helper()
 	originalResolver := netguard.ResolveHostIPs
@@ -55,6 +66,34 @@ func stubDownloadHostResolution(t *testing.T, fn func(context.Context, string, s
 	t.Cleanup(func() {
 		netguard.ResolveHostIPs = originalResolver
 	})
+}
+
+type httpErrorDownloadBridge struct {
+	downloadPolicyBridge
+}
+
+func (m *httpErrorDownloadBridge) DownloadURL(ctx context.Context, dlURL string, opts bridge.DownloadOpts) (*bridge.DownloadResult, error) {
+	return &bridge.DownloadResult{StatusCode: 404, MIMEType: "text/html"}, fmt.Errorf("remote server returned HTTP 404")
+}
+
+// A remote HTTP-error status (4xx/5xx) on the download must map to 502, detected
+// from the structured StatusCode rather than sniffing the error string.
+func TestHandleDownload_RemoteHTTPErrorIs502(t *testing.T) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
+		if host == "example.com" {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return nil, errors.New("not found")
+	})
+
+	h := New(&httpErrorDownloadBridge{}, &config.RuntimeConfig{AllowDownload: true}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/download?url=https://example.com/file.txt", nil)
+	w := httptest.NewRecorder()
+	h.HandleDownload(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 for remote HTTP-error download, got %d: %s", w.Code, w.Body.String())
+	}
 }
 
 func TestHandleDownload_MissingURL(t *testing.T) {
@@ -269,7 +308,7 @@ func TestValidateTabScopedDownloadURL(t *testing.T) {
 }
 
 func TestParseContentLengthHeader(t *testing.T) {
-	headers := network.Headers{
+	headers := map[string]interface{}{
 		"Content-Length": "12345",
 	}
 	size, ok := parseContentLengthHeader(headers)
@@ -410,5 +449,26 @@ func TestHandleDownload_RejectsURLOutsideAllowedDomains(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "downloadAllowedDomains") {
 		t.Fatalf("expected allowlist error in response, got %s", w.Body.String())
+	}
+}
+
+// M12 regression: status mapping is driven by errors.Is on the bridge
+// sentinels, surviving arbitrary extra wrapping — not by message substrings.
+func TestDownloadErrorSentinelsClassifyThroughWrapping(t *testing.T) {
+	tooLarge := fmt.Errorf("navigate to download URL: %w",
+		fmt.Errorf("%w: received 10 bytes, max 5", bridge.ErrDownloadTooLarge))
+	if !errors.Is(tooLarge, bridge.ErrDownloadTooLarge) {
+		t.Fatal("wrapped too-large error should match the sentinel")
+	}
+	rec := httptest.NewRecorder()
+	if !writeDownloadGuardError(rec, tooLarge, 5) {
+		t.Fatal("guard writer should classify the sentinel error")
+	}
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", rec.Code)
+	}
+
+	if !errors.Is(fmt.Errorf("ctx: %w", bridge.ErrDownloadTimeout), bridge.ErrDownloadTimeout) {
+		t.Fatal("wrapped timeout error should match the sentinel")
 	}
 }

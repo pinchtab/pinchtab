@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 func TestHandleRecordStart_Disabled(t *testing.T) {
@@ -228,6 +233,73 @@ func TestRecorderStop_OwnerMatch(t *testing.T) {
 	}
 }
 
+// TestRecorderStop_CountsFrameCapturedAfterStopSignal is a race-focused
+// regression test: a frame whose capture is still in flight when stop() closes
+// stopCh must be counted. The gated captureFrame freezes the loop mid-capture
+// (holding no lock), so stop() reaches its frame-count read while that frame has
+// not yet incremented frameNum. The fix reads frameNum only after <-doneCh, so
+// the in-flight frame is included; the pre-drain snapshot reported 0.
+func TestRecorderStop_CountsFrameCapturedAfterStopSignal(t *testing.T) {
+	rec := &recorder{}
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	var captured atomic.Bool
+	rec.captureFrame = func(_ context.Context, _ int) ([]byte, error) {
+		// Only the first capture is gated and counts; any later tick errors out
+		// so the final frame count is deterministically 1.
+		if captured.Swap(true) {
+			return nil, fmt.Errorf("only one frame in this test")
+		}
+		started <- struct{}{}
+		<-release
+		return []byte("jpeg-bytes"), nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// High fps so a ticker tick fires (starting the gated capture) almost at once.
+	if err := rec.start(ctx, "tab1", "", "gif", 1000, 80, 1.0); err != nil {
+		t.Fatal(err)
+	}
+
+	<-started // capture loop is now blocked inside captureFrame, holding no lock
+
+	type stopRes struct {
+		r   RecordStopResult
+		err error
+	}
+	resCh := make(chan stopRes, 1)
+	go func() {
+		r, err := rec.stop("", "") // anonymous owner; output="" → discard path (no ffmpeg)
+		resCh <- stopRes{r, err}
+	}()
+
+	// Wait until stop() has entered the stopping phase. In the buggy code the
+	// frameNum snapshot happens under the same lock hold that sets stateStopping,
+	// so once we observe it the (stale) read has already occurred.
+	for {
+		rec.mu.Lock()
+		st := rec.state
+		rec.mu.Unlock()
+		if st == stateStopping {
+			break
+		}
+		runtime.Gosched()
+	}
+
+	close(release) // the in-flight frame completes (frameNum→1); loop then drains on stopCh
+
+	res := <-resCh
+	if res.r.Frames != 1 {
+		t.Fatalf("expected 1 frame (captured as stop fired), got %d (err=%v)", res.r.Frames, res.err)
+	}
+	if res.err != nil {
+		t.Fatalf("expected nil error on discard of 1 frame, got %v", res.err)
+	}
+}
+
 func TestRecorderStop_NoOwnerCanStopAnonymous(t *testing.T) {
 	rec := &recorder{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -240,6 +312,57 @@ func TestRecorderStop_NoOwnerCanStopAnonymous(t *testing.T) {
 	_, err := rec.stop("any-agent", "")
 	if err == nil || err.Error() != "no frames captured" {
 		t.Errorf("expected 'no frames captured', got %v", err)
+	}
+}
+
+func TestAuthenticatedOwner_SessionScopedIsolatesSameAgent(t *testing.T) {
+	// Regression: two sessions for the SAME agent must get DISTINCT owners so they
+	// cannot stop each other's recordings (previously both collapsed to the agent ID).
+	base := httptest.NewRequest("POST", "/record/start", nil)
+	r1 := session.WithSession(base, &session.Session{ID: "ses_1", AgentID: "agent-x"})
+	r2 := session.WithSession(base, &session.Session{ID: "ses_2", AgentID: "agent-x"})
+
+	o1, o2 := authenticatedOwner(r1), authenticatedOwner(r2)
+	if o1 == o2 {
+		t.Fatalf("same-agent distinct sessions collapsed to one owner: %q == %q", o1, o2)
+	}
+	if o1 != "session:ses_1" || o2 != "session:ses_2" {
+		t.Fatalf("expected session-scoped owners, got %q and %q", o1, o2)
+	}
+}
+
+func TestAuthenticatedOwner_SessionIDWinsOverAgentID(t *testing.T) {
+	r := session.WithSession(
+		httptest.NewRequest("POST", "/record/start", nil),
+		&session.Session{ID: "ses_9", AgentID: "agent-y"},
+	)
+	if got := authenticatedOwner(r); got != "session:ses_9" {
+		t.Fatalf("expected session:ses_9 (session ID wins), got %q", got)
+	}
+}
+
+func TestAuthenticatedOwner_AnonymousIsEmpty(t *testing.T) {
+	r := httptest.NewRequest("POST", "/record/start", nil)
+	if got := authenticatedOwner(r); got != "" {
+		t.Fatalf("expected empty owner for anonymous request, got %q", got)
+	}
+}
+
+func TestAuthenticatedOwner_TrustedProxyPrefersSessionHeader(t *testing.T) {
+	base := httptest.NewRequest("POST", "/record/start", nil)
+	base = base.WithContext(MarkTrustedInternalProxy(base.Context()))
+
+	withBoth := base.Clone(base.Context())
+	withBoth.Header.Set(activity.HeaderPTSessionID, "ses_p")
+	withBoth.Header.Set(activity.HeaderAgentID, "agent-p")
+	if got := authenticatedOwner(withBoth); got != "proxy-session:ses_p" {
+		t.Fatalf("expected proxy-session:ses_p (session header preferred), got %q", got)
+	}
+
+	agentOnly := base.Clone(base.Context())
+	agentOnly.Header.Set(activity.HeaderAgentID, "agent-p")
+	if got := authenticatedOwner(agentOnly); got != "proxy-agent:agent-p" {
+		t.Fatalf("expected proxy-agent:agent-p fallback, got %q", got)
 	}
 }
 

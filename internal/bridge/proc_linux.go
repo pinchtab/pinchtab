@@ -7,11 +7,11 @@ import (
 	"syscall"
 )
 
-// configureChromeProcess sets parent death signal on Linux so Chrome dies
+// configureBrowserProcess sets parent death signal on Linux so the browser dies
 // when the Go process exits unexpectedly.
-// Does NOT set Setpgid — Chrome stays in the parent's process group so the
+// Does NOT set Setpgid — the browser stays in the parent's process group so the
 // orchestrator can kill the entire bridge group at once.
-func configureChromeProcess(cmd *exec.Cmd) {
+func configureBrowserProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL,
 	}

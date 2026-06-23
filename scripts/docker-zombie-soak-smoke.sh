@@ -180,6 +180,36 @@ count_chrome() {
   ' 2>/dev/null || echo 0
 }
 
+# Count chrome-family processes reparented to PID 1 (dumb-init) — orphan
+# helpers whose original launcher exited without reaping them. crashpad_handler
+# is excluded because Chrome intentionally daemonizes it under PID 1.
+count_orphan_chrome_helpers() {
+  docker exec "$NAME" sh -c '
+    o=0
+    for d in /proc/[0-9]*; do
+      [ -f "$d/status" ] || continue
+      [ -f "$d/cmdline" ] || continue
+      cmdline=$(tr "\0" " " < "$d/cmdline" 2>/dev/null)
+      [ -z "$cmdline" ] && continue
+      printf "%s" "$cmdline" | grep -qiE "chrom|cloakbrowser" || continue
+      printf "%s" "$cmdline" | grep -q "chrome_crashpad_handler" && continue
+      name=$(awk "/^Name:/ {print \$2; exit}" "$d/status" 2>/dev/null)
+      [ "$name" = "chrome_crashpad" ] && continue
+      state=$(awk "/^State:/ {print \$2; exit}" "$d/status" 2>/dev/null)
+      ppid=$(awk "/^PPid:/ {print \$2; exit}" "$d/status" 2>/dev/null)
+      [ "$state" = "Z" ] && continue
+      [ "$ppid" = "1" ] && o=$((o + 1))
+    done
+    echo "$o"
+  ' 2>/dev/null || echo 0
+}
+
+count_active_instances() {
+  local body
+  body=$(pt_get /instances 2>/dev/null) || { echo ""; return 0; }
+  echo "$body" | jq -r '[.[]? | select(.status=="running")] | length' 2>/dev/null || echo ""
+}
+
 snapshot_processes() {
   local label="${1:-snapshot}"
   local outfile="${RESULTS_DIR}/ps_$(date +%s)_${label}.txt"
@@ -208,6 +238,28 @@ check_zombies() {
     return 1
   fi
   echo "OK   [$label]: 0 zombies"
+  record_pass
+  return 0
+}
+
+BASELINE_ORPHANS=0
+
+# Asserts orphan-helper count hasn't grown beyond the post-warmup baseline.
+# A non-zero baseline is normal: Chrome legitimately reparents some renderers/
+# zygotes to init by design — we only flag growth, not steady state.
+check_orphan_chrome() {
+  local label="$1"
+  local o
+  o=$(count_orphan_chrome_helpers)
+  local delta=$((o - BASELINE_ORPHANS))
+  if [ "$delta" -gt 0 ]; then
+    echo "FAIL [$label]: orphan chrome helpers grew +${delta} (baseline=$BASELINE_ORPHANS, current=$o)"
+    snapshot_processes "orphan_${label}" >/dev/null
+    record_fail "orphans: $label (+${delta})" "orphan chrome detected"
+    FAILED=1
+    return 1
+  fi
+  echo "OK   [$label]: orphan chrome helpers $o (baseline=$BASELINE_ORPHANS)"
   record_pass
   return 0
 }
@@ -453,7 +505,9 @@ log_phase "Phase A: Baseline capture"
 echo "Expectations: healthy container, zero zombies, responsive browser, stable baseline process tree."
 snapshot_processes "baseline"
 BASELINE_CHROME=$(count_chrome)
+BASELINE_ORPHANS=$(count_orphan_chrome_helpers)
 echo "Baseline chrome process count: $BASELINE_CHROME"
+echo "Baseline orphan helpers (chrome PPID=1, excl. crashpad): $BASELINE_ORPHANS"
 check_zombies "baseline" || true
 run_step "baseline navigate" navigate_url "$(fixture_url "form.html")" || true
 sleep 1
@@ -524,10 +578,12 @@ for i in $(seq 1 "$INSTANCE_CYCLES"); do
 
   snapshot_processes "instance_churn_${i}" >/dev/null || true
   check_zombies "instance_churn_${i}" || true
+  check_orphan_chrome "instance_churn_${i}" || true
 done
 
 snapshot_processes "post_instance_churn" >/dev/null
 check_drift "post_instance_churn" "$BASELINE_CHROME" "$DRIFT_MID" || true
+check_orphan_chrome "post_instance_churn" || true
 phase_summary "Phase C: Instance churn" "$DRIFT_MID"
 
 # ── Phase D: Restart / recovery churn ───────────────────────────
@@ -538,7 +594,8 @@ for i in $(seq 1 "$RESTART_CYCLES"); do
   echo "  Restart cycle $i/$RESTART_CYCLES"
   restart_container
   BASELINE_CHROME=$(count_chrome)
-  echo "  Re-baselined chrome count: $BASELINE_CHROME"
+  BASELINE_ORPHANS=$(count_orphan_chrome_helpers)
+  echo "  Re-baselined chrome count: $BASELINE_CHROME (orphans baseline: $BASELINE_ORPHANS)"
   post_restart_probe "restart_${i}"
   run_fixture_workload "restart_${i}"
 
@@ -571,9 +628,11 @@ log_phase "Phase F: Final verification"
 echo "Expectations: final zombie count zero, chrome drift bounded, service still healthy and controllable."
 FINAL_CHROME=$(count_chrome)
 FINAL_ZOMBIES=$(count_zombies)
+FINAL_ORPHANS=$(count_orphan_chrome_helpers)
 
 echo "Final chrome processes: $FINAL_CHROME (baseline: $BASELINE_CHROME)"
 echo "Final zombie count: $FINAL_ZOMBIES"
+echo "Final orphan helpers (chrome PPID=1, non-zombie): $FINAL_ORPHANS"
 
 if [ "$FINAL_ZOMBIES" -gt 0 ]; then
   echo "FAIL [final]: zombie count $FINAL_ZOMBIES (must be 0)"
@@ -583,6 +642,8 @@ else
   echo "OK   [final]: zero zombies"
   record_pass
 fi
+
+check_orphan_chrome "final" || true
 
 CHROME_DELTA=$((FINAL_CHROME - BASELINE_CHROME))
 if [ "$CHROME_DELTA" -gt "$DRIFT_FINAL" ]; then
@@ -607,6 +668,7 @@ echo "╠═══════════════════════�
 printf "║  %-20s  %28s  ║\n" "Assertions passed:" "$PASS_COUNT"
 printf "║  %-20s  %28s  ║\n" "Assertions failed:" "$FAIL_COUNT"
 printf "║  %-20s  %28s  ║\n" "Final zombie count:" "$FINAL_ZOMBIES"
+printf "║  %-20s  %28s  ║\n" "Final orphan helpers:" "$FINAL_ORPHANS"
 printf "║  %-20s  %28s  ║\n" "Chrome baseline:" "$BASELINE_CHROME"
 printf "║  %-20s  %28s  ║\n" "Chrome final:" "$FINAL_CHROME"
 printf "║  %-20s  %28s  ║\n" "Chrome drift:" "${CHROME_DELTA}"

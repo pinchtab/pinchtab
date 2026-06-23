@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -77,16 +75,7 @@ func (h *Handlers) setMedia(w http.ResponseWriter, r *http.Request, req mediaReq
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := emulation.SetEmulatedMedia().
-				WithFeatures([]*emulation.MediaFeature{{Name: req.Feature, Value: req.Value}}).
-				Do(ctx); err != nil {
-				return fmt.Errorf("setEmulatedMedia: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetEmulatedMedia(tCtx, req.Feature, req.Value); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP set emulated media: %w", err))
 		return
 	}

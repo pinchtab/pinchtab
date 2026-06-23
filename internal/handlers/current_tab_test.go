@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -37,7 +36,7 @@ func newScopedCurrentTabBridge() *scopedCurrentTabBridge {
 	}
 }
 
-func (b *scopedCurrentTabBridge) TabContext(tabID string) (context.Context, string, error) {
+func (b *scopedCurrentTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if tabID == "" {
 		tabID = b.globalTab
 	}
@@ -46,7 +45,7 @@ func (b *scopedCurrentTabBridge) TabContext(tabID string) (context.Context, stri
 	if !ok {
 		return nil, "", fmt.Errorf("tab not found")
 	}
-	return ctx, tabID, nil
+	return bridge.NewTabHandle(ctx), tabID, nil
 }
 
 func (b *scopedCurrentTabBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
@@ -70,26 +69,45 @@ func (b *scopedCurrentTabBridge) FocusTab(tabID string) error {
 	return nil
 }
 
-func (b *scopedCurrentTabBridge) EnsureChrome(*config.RuntimeConfig) error {
+func (b *scopedCurrentTabBridge) EnsureBrowser(*config.RuntimeConfig) error {
 	b.ensureCall++
 	return nil
 }
 
 func (b *scopedCurrentTabBridge) RestartBrowser(*config.RuntimeConfig) error { return nil }
 
-func (b *scopedCurrentTabBridge) ListTargets() ([]*target.Info, error) {
-	return []*target.Info{
-		{TargetID: target.ID("global"), Type: "page"},
-		{TargetID: target.ID("tab-agent"), Type: "page"},
-		{TargetID: target.ID("tab-session"), Type: "page"},
-		{TargetID: target.ID("tab-explicit"), Type: "page"},
+func (b *scopedCurrentTabBridge) ListTargets() ([]bridge.TabTarget, error) {
+	return []bridge.TabTarget{
+		{TargetID: "global", Type: "page"},
+		{TargetID: "tab-agent", Type: "page"},
+		{TargetID: "tab-session", Type: "page"},
+		{TargetID: "tab-explicit", Type: "page"},
 	}, nil
 }
 
+func (b *scopedCurrentTabBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
+	return nil
+}
 func (b *scopedCurrentTabBridge) AvailableActions() []string             { return nil }
 func (b *scopedCurrentTabBridge) TabLockInfo(string) *bridge.LockInfo    { return nil }
 func (b *scopedCurrentTabBridge) DeleteRefCache(string)                  {}
 func (b *scopedCurrentTabBridge) NetworkMonitor() *bridge.NetworkMonitor { return nil }
+
+func (b *scopedCurrentTabBridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *scopedCurrentTabBridge) EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts bridge.EvalOpts) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *scopedCurrentTabBridge) DescribeNode(ctx context.Context, backendNodeID int64) (*bridge.NodeInfo, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (b *scopedCurrentTabBridge) Navigate(ctx context.Context, url string, params bridge.NavigateParams) (*bridge.NavigateResult, error) {
+	return nil, fmt.Errorf("not implemented in test mock")
+}
 
 func newScopedCurrentTabHandler() (*Handlers, *scopedCurrentTabBridge) {
 	b := newScopedCurrentTabBridge()

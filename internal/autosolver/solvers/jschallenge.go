@@ -30,13 +30,12 @@ func (s *JSChallenge) CanHandle(_ context.Context, page autosolver.Page) (bool, 
 func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor autosolver.ActionExecutor) (*autosolver.Result, error) {
 	result := &autosolver.Result{SolverUsed: s.Name()}
 
-	// Step 1: wait briefly for JS anti-bot scripts to execute naturally.
+	// Wait briefly for JS anti-bot scripts to execute naturally.
 	if err := executor.WaitFor(ctx, "body", 2*time.Second); err != nil {
 		result.Error = fmt.Sprintf("wait for body: %v", err)
 		return result, err
 	}
 
-	// Step 2: click common continue/verify buttons if present.
 	for _, selector := range []string{
 		"button[type='submit']",
 		"button[name='verify']",
@@ -50,7 +49,6 @@ func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor 
 		_ = clickIfExists(ctx, executor, selector)
 	}
 
-	// Step 3: poll for resolution by challenge intent re-check.
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
 		html, err := page.HTML()
@@ -72,7 +70,6 @@ func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor 
 		}
 	}
 
-	// Final state snapshot.
 	result.FinalTitle = page.Title()
 	result.FinalURL = page.URL()
 	html, err := page.HTML()

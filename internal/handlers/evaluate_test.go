@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -104,17 +103,13 @@ func TestHandleEvaluateAwaitPromiseOption(t *testing.T) {
 				ActionTimeout: time.Second,
 			}, nil, nil, nil)
 
-			h.evalRuntime = func(_ context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
+			h.evalRuntime = func(_ context.Context, expression string, out any, opts bridge.EvalOpts) error {
 				if expression != `Promise.resolve("ok")` {
 					t.Fatalf("unexpected expression: %s", expression)
 				}
 
-				params := runtime.Evaluate(expression)
-				for _, opt := range opts {
-					params = opt(params)
-				}
-				if params.AwaitPromise != tt.wantAwait {
-					t.Fatalf("expected awaitPromise=%v, got %v", tt.wantAwait, params.AwaitPromise)
+				if opts.AwaitPromise != tt.wantAwait {
+					t.Fatalf("expected awaitPromise=%v, got %v", tt.wantAwait, opts.AwaitPromise)
 				}
 
 				ptr, ok := out.(*any)
@@ -149,15 +144,11 @@ func TestHandleTabEvaluateForwardsAwaitPromise(t *testing.T) {
 		ActionTimeout: time.Second,
 	}, nil, nil, nil)
 
-	h.evalRuntime = func(_ context.Context, expression string, out any, opts ...chromedp.EvaluateOption) error {
+	h.evalRuntime = func(_ context.Context, expression string, out any, opts bridge.EvalOpts) error {
 		if expression != `Promise.resolve(1)` {
 			t.Fatalf("unexpected expression: %s", expression)
 		}
-		params := runtime.Evaluate(expression)
-		for _, opt := range opts {
-			params = opt(params)
-		}
-		if !params.AwaitPromise {
+		if !opts.AwaitPromise {
 			t.Fatalf("expected awaitPromise to be forwarded for tab evaluate route")
 		}
 

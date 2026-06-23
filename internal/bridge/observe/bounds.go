@@ -7,9 +7,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// ViewportInfo describes the layout viewport at capture time. Populated by
-// FetchLayout and used by AnnotateBounds for coordinate translation and the
-// visibility heuristic.
 type ViewportInfo struct {
 	Width            float64
 	Height           float64
@@ -18,8 +15,7 @@ type ViewportInfo struct {
 	DevicePixelRatio float64
 }
 
-// FetchLayout returns the page's current layout viewport in CSS pixels. One
-// CDP round trip via Runtime.evaluate so this composes inside PairedCapture
+// One CDP round trip via Runtime.evaluate so this composes inside PairedCapture
 // without an extra Page.getLayoutMetrics call.
 func FetchLayout(ctx context.Context) (ViewportInfo, error) {
 	var out ViewportInfo
@@ -61,8 +57,7 @@ func FetchLayout(ctx context.Context) (ViewportInfo, error) {
 	return out, nil
 }
 
-// AnnotateBounds fills BoundingBox + Visible on each node whose NodeID is
-// non-zero. Each node costs one DOM.getBoxModel round trip; for the typical
+// Each node costs one DOM.getBoxModel round trip; for the typical
 // FilterInteractive snapshot of <50 nodes the total budget is ~250ms.
 //
 // DOM.getBoxModel returns document-relative CSS coordinates. pageCoords=true
@@ -143,12 +138,10 @@ func isVisible(b BoundingBox, pageCoords bool, vp ViewportInfo) bool {
 		// No viewport info to compare against; fall back to area test only.
 		return true
 	}
-	// Compute the viewport rect in the same coordinate space as the box.
 	var vx, vy float64
 	if pageCoords {
 		vx, vy = vp.ScrollX, vp.ScrollY
 	}
-	// Rect-rect intersection.
 	return b.X+b.W > vx &&
 		b.Y+b.H > vy &&
 		b.X < vx+vp.Width &&

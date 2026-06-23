@@ -109,7 +109,6 @@ func Reload(client *http.Client, base, token string, cmd *cobra.Command) {
 func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Command) string {
 	req := buildNavigateRequest(url, cmd)
 
-	// JSON output mode
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
 		result := postNavigate(client, base, token, req, true)
@@ -127,7 +126,6 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 		output.Hint("no session set — this tab is shared. Create one with: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id> --print-token)")
 	}
 
-	// If --snap or --snap-diff flag is set, fetch and output snapshot
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
 	if snap || snapDiff {

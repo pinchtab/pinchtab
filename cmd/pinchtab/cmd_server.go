@@ -48,12 +48,23 @@ var serverCmd = &cobra.Command{
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		cfg.VerboseStartup = verbose
 
+		browserName, _ := cmd.Flags().GetString("browser")
+		if browserName != "" {
+			browser, err := config.ParseBrowser(browserName, cfg.BrowsersAvailable)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
+				os.Exit(1)
+			}
+			cfg.DefaultBrowser = browser
+		}
+
 		if background, _ := cmd.Flags().GetBool("background"); background {
 			if err := runServerBackground(cfg, serverBackgroundOptions{
 				Yolo:       yolo,
 				Headed:     headed,
 				Verbose:    verbose,
 				Extensions: append([]string(nil), exts...),
+				Browser:    browserName,
 			}); err != nil {
 				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 				os.Exit(1)
@@ -70,6 +81,7 @@ func init() {
 	serverCmd.Flags().BoolP("headed", "H", false, "Start default instance in headed mode")
 	serverCmd.Flags().BoolP("yolo", "y", false, "Apply guards down preset (enables evaluate, macro, download, cookies)")
 	serverCmd.Flags().BoolP("verbose", "v", false, "Show full startup banner and logs")
+	serverCmd.Flags().String("browser", "", "Browser to use: chrome, cloak, or ghost-chrome (overrides config)")
 	serverCmd.Flags().BoolP("background", "b", false, "Spawn the server detached and return JSON with pid/url/token")
 	serverCmd.Flags().String("background-child", "", "Internal marker for background server ownership")
 	_ = serverCmd.Flags().MarkHidden("background-child")

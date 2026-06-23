@@ -21,14 +21,15 @@ const (
 )
 
 type Runner struct {
-	args     Args
-	suite    string
-	stdout   io.Writer
-	stderr   io.Writer
-	repoRoot string
-	compose  []string
-	logsMode string
-	overall  overallReportData
+	args      Args
+	suite     string
+	stdout    io.Writer
+	stderr    io.Writer
+	repoRoot  string
+	compose   []string
+	logsMode  string
+	overall   overallReportData
+	overrides *providerOverrides
 }
 
 type overallReportData struct {
@@ -90,12 +91,12 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 		logsMode = strings.TrimSpace(os.Getenv("E2E_LOGS"))
 	}
 	if logsMode == "" {
-		logsMode = "show"
+		logsMode = "compact"
 	}
 	switch logsMode {
-	case "show", "hide":
+	case "show", "hide", "compact":
 	default:
-		return nil, fmt.Errorf("--logs must be show or hide")
+		return nil, fmt.Errorf("--logs must be show, hide, or compact")
 	}
 
 	return &Runner{
@@ -111,6 +112,16 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 
 func (r *Runner) Run() int {
 	started := time.Now()
+	overrides, err := r.prepareProviderOverrides()
+	if err != nil {
+		_, _ = fmt.Fprintf(r.stderr, "e2e: %v\n", err)
+		return 1
+	}
+	r.overrides = overrides
+	if overrides != nil {
+		defer overrides.cleanup()
+		_, _ = fmt.Fprintf(r.stdout, "  browser: %s (image: %s)\n", overrides.provider, overrides.image)
+	}
 	code := r.run()
 	duration := time.Since(started)
 	r.printOverallSummary(duration)
@@ -144,8 +155,6 @@ func (r *Runner) run() int {
 		return r.runSmokeFiltered("security")
 	case "smoke-lifecycle":
 		return r.runSmokeFiltered("lifecycle")
-	case "smoke-docker":
-		return r.runDockerSmoke()
 	case "api":
 		return r.runSingle(apiSuite())
 	case "cli":
@@ -168,18 +177,55 @@ func (r *Runner) run() int {
 
 func (r *Runner) printPlanHeader() {
 	_, _ = fmt.Fprintln(r.stdout, "runner e2e (Go) - resolved plan")
-	_, _ = fmt.Fprintf(r.stdout, "  suite:  %s\n", r.suite)
-	_, _ = fmt.Fprintf(r.stdout, "  logs:   %s\n", r.logsMode)
+	_, _ = fmt.Fprintf(r.stdout, "  suite:    %s\n", r.suite)
+	_, _ = fmt.Fprintf(r.stdout, "  browser:  %s\n", r.args.Provider)
+	_, _ = fmt.Fprintf(r.stdout, "  logs:     %s\n", r.logsMode)
 	if r.args.Filter != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  filter: %s\n", r.args.Filter)
+		_, _ = fmt.Fprintf(r.stdout, "  filter:   %s\n", r.args.Filter)
 	}
 	if r.args.Test != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  test:   %s\n", r.args.Test)
+		_, _ = fmt.Fprintf(r.stdout, "  test:     %s\n", r.args.Test)
 	}
 	if r.args.Extra != "" {
-		_, _ = fmt.Fprintf(r.stdout, "  extra:  %s\n", r.args.Extra)
+		_, _ = fmt.Fprintf(r.stdout, "  extra:    %s\n", r.args.Extra)
 	}
 	_, _ = fmt.Fprintln(r.stdout, "")
+}
+
+// stackPlanRun configures a shared-stack suite run for bringUpAndRunPlans.
+type stackPlanRun struct {
+	stack string
+	plans []suitePlan
+	// restartAfter returns the services to restart after the plan at index i of
+	// n (nil/empty = no restart), letting each caller encode its own timing.
+	restartAfter func(plan suitePlan, index, total int) []string
+}
+
+// bringUpAndRunPlans builds+starts the shared stack for the plans' services,
+// then runs each plan in order, restarting services per cfg.restartAfter
+// between plans and printing a blank line after each. It returns per-plan exit
+// codes keyed by def.Name (only non-zero codes are stored), whether any restart
+// returned non-zero, and a non-zero setupCode if bringup failed. It does NOT
+// tear down the stack — the caller owns teardown semantics.
+func (r *Runner) bringUpAndRunPlans(cfg stackPlanRun) (codes map[string]int, restartFailed bool, setupCode int) {
+	services := servicesForPlans(cfg.plans, []string{"pinchtab", "fixtures"})
+	if code := r.bringUpSharedStack(cfg.stack, services); code != 0 {
+		return nil, false, code
+	}
+
+	codes = map[string]int{}
+	for i, plan := range cfg.plans {
+		if code := r.runSinglePlanWithCompose(plan, cfg.stack); code != 0 {
+			codes[plan.def.Name] = code
+		}
+		if svcs := cfg.restartAfter(plan, i, len(cfg.plans)); len(svcs) > 0 {
+			if rc := r.restartSharedStack(cfg.stack, svcs); rc != 0 {
+				restartFailed = true
+			}
+		}
+		_, _ = fmt.Fprintln(r.stdout, "")
+	}
+	return codes, restartFailed, 0
 }
 
 func (r *Runner) runBasic() int {
@@ -195,17 +241,21 @@ func (r *Runner) runBasic() int {
 		return 1
 	}
 
-	if code := r.bringUpSharedStack(stack, servicesForPlans(plans, []string{"pinchtab", "fixtures"})); code != 0 {
+	codes, _, setupCode := r.bringUpAndRunPlans(stackPlanRun{
+		stack: stack,
+		plans: plans,
+		restartAfter: func(suitePlan, int, int) []string {
+			return nil
+		},
+	})
+	if setupCode != 0 {
 		_ = r.composeDown(stack)
-		return code
+		return setupCode
 	}
 	defer r.composeDown(stack)
 
-	for _, plan := range plans {
-		if code := r.runSinglePlanWithCompose(plan, stack); code != 0 {
-			exitCodes[plan.def.Name] = code
-		}
-		_, _ = fmt.Fprintln(r.stdout, "")
+	for name, code := range codes {
+		exitCodes[name] = code
 	}
 
 	if exitCodes["api"] != 0 || exitCodes["cli"] != 0 || exitCodes["infra"] != 0 {
@@ -237,23 +287,24 @@ func (r *Runner) runExtended() int {
 		return 1
 	}
 
-	if code := r.bringUpSharedStack(stack, servicesForPlans(plans, []string{"pinchtab", "fixtures"})); code != 0 {
+	codes, _, setupCode := r.bringUpAndRunPlans(stackPlanRun{
+		stack: stack,
+		plans: plans,
+		restartAfter: func(plan suitePlan, _, _ int) []string {
+			if plan.def.Name == "cli-extended" || plan.def.Name == "infra-extended" {
+				return []string{"pinchtab"}
+			}
+			return nil
+		},
+	})
+	if setupCode != 0 {
 		_ = r.composeDown(stack)
-		return code
+		return setupCode
 	}
 	defer r.composeDown(stack)
 
-	for _, plan := range plans {
-		if code := r.runSinglePlanWithCompose(plan, stack); code != 0 {
-			exitCodes[plan.def.Name] = code
-			if plan.def.Name == "plugin" {
-				exitCodes["plugin"] = code
-			}
-		}
-		if plan.def.Name == "cli-extended" || plan.def.Name == "infra-extended" {
-			_ = r.restartSharedStack(stack, []string{"pinchtab"})
-		}
-		_, _ = fmt.Fprintln(r.stdout, "")
+	for name, code := range codes {
+		exitCodes[name] = code
 	}
 
 	if exitCodes["api-extended"] != 0 || exitCodes["cli-extended"] != 0 || exitCodes["infra-extended"] != 0 || exitCodes["plugin"] != 0 {
@@ -290,21 +341,25 @@ func (r *Runner) runSmoke() int {
 
 	failed := false
 	if len(plans) > 0 {
-		if code := r.bringUpSharedStack(stack, servicesForPlans(plans, []string{"pinchtab", "fixtures"})); code != 0 {
-			_ = r.composeDown(stack)
-			return code
-		}
-
-		for i, plan := range plans {
-			if code := r.runSinglePlanWithCompose(plan, stack); code != 0 {
-				failed = true
-			}
-			if plan.def.Name == "cli-smoke" && i < len(plans)-1 {
-				if code := r.restartSharedStack(stack, []string{"pinchtab"}); code != 0 {
-					failed = true
+		codes, restartFailed, setupCode := r.bringUpAndRunPlans(stackPlanRun{
+			stack: stack,
+			plans: plans,
+			restartAfter: func(plan suitePlan, i, n int) []string {
+				if plan.def.Name == "cli-smoke" && i < n-1 {
+					return []string{"pinchtab"}
 				}
-			}
-			_, _ = fmt.Fprintln(r.stdout, "")
+				return nil
+			},
+		})
+		if setupCode != 0 {
+			_ = r.composeDown(stack)
+			return setupCode
+		}
+		if len(codes) > 0 {
+			failed = true
+		}
+		if restartFailed {
+			failed = true
 		}
 		if code := r.composeDown(stack); code != 0 {
 			failed = true
@@ -326,19 +381,6 @@ func (r *Runner) runSmoke() int {
 		_, _ = fmt.Fprintln(r.stdout, "E2E smoke suites passed")
 	}
 	return 0
-}
-
-func (r *Runner) runDockerSmoke() int {
-	steps := r.selectedDockerSmokeSteps()
-	if len(steps) == 0 {
-		_, _ = fmt.Fprintf(r.stderr, "e2e: no docker smoke steps matched filter %q\n", r.args.Filter)
-		return 1
-	}
-	code := r.runDockerSmokeSteps(steps)
-	if code == 0 && !r.args.DryRun {
-		_, _ = fmt.Fprintln(r.stdout, "E2E docker smoke suite passed")
-	}
-	return code
 }
 
 func (r *Runner) runDockerSmokeSteps(steps []dockerSmokeStep) int {
@@ -568,15 +610,37 @@ func (r *Runner) planSuites(defs []suiteDef) ([]suitePlan, int) {
 }
 
 func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
-	if code := r.buildSharedStack(composeFile); code != 0 {
+	// Cloak pinchtab services are supplied by the provider override image.
+	// Build support images such as fixtures and runners, but keep compose from
+	// rebuilding the overridden pinchtab services.
+	skipPinchtabBuild := r.overrides != nil && r.overrides.provider == "cloak"
+	if skipPinchtabBuild {
+		if code := r.buildSharedStack(composeFile, cloakSupportBuildServices()...); code != 0 {
+			return code
+		}
+	} else {
+		if code := r.buildSharedStack(composeFile); code != 0 {
+			return code
+		}
+	}
+	args := []string{"up", "-d"}
+	if skipPinchtabBuild {
+		args = append(args, "--no-build", "--force-recreate")
+	}
+	args = append(args, services...)
+	if code := r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...)); code != 0 {
 		return code
 	}
-	args := append([]string{"up", "-d"}, services...)
-	return r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...))
+	if err := r.assertStealthStatus(composeFile); err != nil {
+		_, _ = fmt.Fprintf(r.stderr, "e2e: pre-suite stealth assertion failed: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
-func (r *Runner) buildSharedStack(composeFile string) int {
-	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, "build"))
+func (r *Runner) buildSharedStack(composeFile string, services ...string) int {
+	args := append([]string{"build"}, services...)
+	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, args...))
 	if code == 0 {
 		return 0
 	}
@@ -584,7 +648,12 @@ func (r *Runner) buildSharedStack(composeFile string) int {
 		return code
 	}
 	_, _ = fmt.Fprintln(r.stdout, "  build cache looked stale; retrying shared-stack build with --no-cache...")
-	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, "build", "--no-cache"))
+	retryArgs := append([]string{"build", "--no-cache"}, services...)
+	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, retryArgs...))
+}
+
+func cloakSupportBuildServices() []string {
+	return []string{"fixtures", "runner-api", "runner-cli"}
 }
 
 func (r *Runner) stackOutputHasBuildKitCacheFailure() bool {
@@ -623,6 +692,10 @@ func (r *Runner) suiteRunCommand(composeFile string, def suiteDef, scenarios []s
 }
 
 func (r *Runner) suiteEnvironment(def suiteDef, scenarios []scenarioMeta) []string {
+	provider := r.args.Provider
+	if provider == "" {
+		provider = "chrome"
+	}
 	return []string{
 		"E2E_HELPER=" + def.Helper,
 		"E2E_SCENARIO_DIR=" + def.ScenarioDir,
@@ -630,6 +703,7 @@ func (r *Runner) suiteEnvironment(def suiteDef, scenarios []scenarioMeta) []stri
 		"E2E_READY_TARGETS=" + strings.Join(readyTargetsForScenarios(def, scenarios), " "),
 		"E2E_TEST_FILTER=" + r.args.Test,
 		"E2E_SUMMARY_TITLE=" + suiteReportTitle(def),
+		"PINCHTAB_E2E_BROWSER=" + provider,
 	}
 }
 
@@ -657,6 +731,11 @@ func suiteReportTitle(def suiteDef) string {
 func (r *Runner) composeArgs(composeFile string, args ...string) []string {
 	out := append([]string{}, r.compose...)
 	out = append(out, "-f", composeFile)
+	if r.overrides != nil {
+		for _, override := range r.overrides.composeFiles {
+			out = append(out, "-f", override)
+		}
+	}
 	out = append(out, args...)
 	return out
 }
@@ -683,14 +762,14 @@ func (r *Runner) runLoggedCommand(label, outputFile string, command []string) in
 		return 0
 	}
 
-	if r.logsMode != "hide" {
+	if r.logsMode == "show" {
 		_, _ = fmt.Fprintf(r.stdout, "%s\n", label)
 		return r.runStreamingCommand(command, outputFile)
 	}
 	if outputFile == "" {
 		outputFile = stackOutput
 	}
-	return r.runHiddenCommand(label, outputFile, command)
+	return r.runCompactCommand(label, outputFile, command)
 }
 
 func (r *Runner) appendSuiteResult(def suiteDef, status string, duration time.Duration, name string) (err error) {
@@ -816,7 +895,7 @@ func (w *structuredEventTee) writeHumanLine(line []byte) error {
 	return err
 }
 
-func (r *Runner) runHiddenCommand(label, outputFile string, command []string) int {
+func (r *Runner) runCompactCommand(label, outputFile string, command []string) int {
 	outputPath := filepath.Join(r.repoRoot, outputFile)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		_, _ = fmt.Fprintf(r.stderr, "e2e: failed to prepare output path: %v\n", err)
@@ -833,7 +912,9 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 		}
 	}()
 
-	_, _ = fmt.Fprintf(r.stdout, "  %s...\n", label)
+	prog := newProgressLine(r.stdout)
+	prog.Update(fmt.Sprintf("  %s...", label))
+
 	cmd := exec.Command(command[0], command[1:]...) // #nosec G204 -- commands are constructed from fixed compose/script inputs.
 	cmd.Dir = r.repoRoot
 	cmd.Stdout = file
@@ -841,6 +922,7 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 	cmd.Stdin = os.Stdin
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
+		prog.Clear()
 		_, _ = fmt.Fprintf(r.stderr, "e2e: failed to start %s: %v\n", shellQuoteArgs(command), err)
 		return 1
 	}
@@ -848,37 +930,72 @@ func (r *Runner) runHiddenCommand(label, outputFile string, command []string) in
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	lastRunning := ""
-	heartbeat := 0
+	passed := 0
+	failed := 0
 	for {
 		select {
 		case err := <-done:
+			ticker.Stop()
+			passed, failed = r.countResults(outputFile)
 			if err == nil {
-				_, _ = fmt.Fprintf(r.stdout, "  %s: done\n", label)
+				if passed+failed > 0 {
+					prog.Complete(fmt.Sprintf("  %s: %d passed", label, passed))
+				} else {
+					prog.Complete(fmt.Sprintf("  %s: done", label))
+				}
 				return 0
 			}
 			if exitErr, ok := err.(*exec.ExitError); ok {
+				if passed+failed > 0 {
+					prog.Complete(fmt.Sprintf("  %s: %d passed, %d failed", label, passed, failed))
+				} else {
+					prog.Complete(fmt.Sprintf("  %s: failed (exit %d)", label, exitErr.ExitCode()))
+				}
 				return exitErr.ExitCode()
 			}
+			prog.Clear()
 			_, _ = fmt.Fprintf(r.stderr, "e2e: failed while running %s: %v\n", shellQuoteArgs(command), err)
 			return 1
 		case <-ticker.C:
+			p, f := r.countResults(outputFile)
+			passed, failed = p, f
 			name := r.readLastRunningName(outputFile)
+			if name != "" {
+				name = strings.TrimSuffix(name, ".sh")
+			}
 			if name != "" && name != lastRunning {
 				lastRunning = name
-				_, _ = fmt.Fprintf(r.stdout, "  running: %s\n", strings.TrimSuffix(name, ".sh"))
-				heartbeat = 0
-				continue
 			}
-			heartbeat++
-			if heartbeat >= 5 {
-				_, _ = fmt.Fprintf(r.stdout, "  %s...\n", label)
-				heartbeat = 0
+			total := passed + failed
+			if total > 0 && lastRunning != "" {
+				prog.Update(fmt.Sprintf("  %s [%d done] %s", label, total, lastRunning))
+			} else if lastRunning != "" {
+				prog.Update(fmt.Sprintf("  %s: %s", label, lastRunning))
 			}
 		}
 	}
+}
+
+func (r *Runner) countResults(outputFile string) (passed, failed int) {
+	file, err := os.Open(filepath.Join(r.repoRoot, outputFile))
+	if err != nil {
+		return 0, 0
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "E2E_RESULT\tpassed\t") {
+			passed++
+		} else if strings.HasPrefix(line, "E2E_RESULT\tfailed\t") {
+			failed++
+		}
+	}
+	return passed, failed
 }
 
 func (r *Runner) readLastRunningName(outputFile string) string {

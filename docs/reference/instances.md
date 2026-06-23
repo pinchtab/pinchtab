@@ -186,20 +186,57 @@ This is the fleet-wide tab listing endpoint. It is different from `GET /tabs`, w
 curl http://localhost:9867/instances/metrics
 ```
 
-## Attach An Existing Chrome
+## Attach An Existing Browser (CDP)
 
 ```bash
 curl -X POST http://localhost:9867/instances/attach \
   -H "Content-Type: application/json" \
-  -d '{"name":"shared-chrome","cdpUrl":"ws://127.0.0.1:9222/devtools/browser/..."}'
+  -d '{
+    "name":"shared-chrome",
+    "cdpUrl":"ws://127.0.0.1:9222/devtools/browser/...",
+    "provider":"chrome",
+    "browser":"chrome-local"
+  }'
 ```
+
+What this does:
+
+- spawns a child `pinchtab bridge --cdp-attach ...` process that wraps the
+  external CDP browser via `chromedp.NewRemoteAllocator`
+- registers the instance with `attached=true`, `attachType="cdp-bridge"`,
+  and the routable `url` set to the **HTTP bridge URL** (not the raw `ws://`
+  CDP URL)
+- preserves the original `cdpUrl` as metadata in the API response
+- routes `/tabs`, `/snapshot`, `/action`, `/screenshot`, etc. through the
+  child bridge
+
+Accepted `cdpUrl` shapes:
+
+- browser-level WebSocket URL: `ws://host:port/devtools/browser/<id>`
+- HTTP DevTools origin: `http://host:port` (resolved through `/json/version`)
+- HTTP `/json/version` URL
+
+Page-level URLs (`/devtools/page/...`) are rejected.
+
+`browser` is optional and accepts a provider name (`chrome`, `cloak`) or a
+configured target name from `browser.targets`. When `browser.targets` is
+configured, an omitted value attaches to the configured default target and the
+target's browser is used. If `provider` is also present, it must agree with
+the `browser` value. Without `browser.targets`,
+`provider` is `chrome` (default) or `cloak`; the cloak browser disables
+PinchTab JS overlays on the assumption that the external browser owns native
+fingerprint behavior.
 
 Notes:
 
 - there is no CLI attach command
 - attach is allowed only when enabled in config under `security.attach`
 - `security.attach.allowHosts` must allow the `cdpUrl` host
-- `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable CDP host with an allowed scheme. Use it only on isolated, operator-controlled networks.
+- if you pass an HTTP DevTools origin, `security.attach.allowSchemes` must
+  include `http` or `https`
+- stopping the attached instance shuts down the child PinchTab bridge but
+  leaves the external browser process running
+- `allowHosts: ["*"]` is a documented, non-default, security-reducing override
 
 ## Attach An Existing Bridge
 
@@ -209,13 +246,15 @@ curl -X POST http://localhost:9867/instances/attach-bridge \
   -d '{
     "name":"shared-bridge",
     "baseUrl":"http://10.0.12.24:9868",
-    "token":"bridge-secret-token"
+    "token":"bridge-secret-token",
+    "browser":"chrome-local"
   }'
 ```
 
 Notes:
 
 - `baseUrl` must be a bare bridge origin; do not include credentials, query strings, fragments, or a path
+- `browser` is optional and accepts a provider or target name; with `browser.targets` configured, an omitted value attaches to the default target
 - the orchestrator performs a health check before registering it
 - `security.attach.allowHosts` must allow the bridge host
 - `allowHosts: ["*"]` is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows any reachable bridge host with an allowed scheme. Use it only on isolated, operator-controlled networks.

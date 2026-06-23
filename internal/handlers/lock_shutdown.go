@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -79,86 +76,14 @@ func (h *Handlers) HandleTabUnlock(w http.ResponseWriter, r *http.Request) {
 //
 // @Endpoint POST /tabs/{id}/lock
 func (h *Handlers) HandleTabLockByID(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	body := map[string]any{}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	if rawTabID, ok := body["tabId"]; ok {
-		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
-			return
-		} else if provided != tabID {
-			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
-			return
-		}
-	}
-
-	body["tabId"] = tabID
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
-		return
-	}
-
-	req := r.Clone(r.Context())
-	req.Body = io.NopCloser(bytes.NewReader(payload))
-	req.ContentLength = int64(len(payload))
-	req.Header = r.Header.Clone()
-	req.Header.Set("Content-Type", "application/json")
-	h.HandleTabLock(w, req)
+	h.withPathTabIDBody(w, r, h.HandleTabLock)
 }
 
 // HandleTabUnlockByID unlocks a tab identified by path ID.
 //
 // @Endpoint POST /tabs/{id}/unlock
 func (h *Handlers) HandleTabUnlockByID(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	body := map[string]any{}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	if rawTabID, ok := body["tabId"]; ok {
-		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
-			return
-		} else if provided != tabID {
-			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
-			return
-		}
-	}
-
-	body["tabId"] = tabID
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
-		return
-	}
-
-	req := r.Clone(r.Context())
-	req.Body = io.NopCloser(bytes.NewReader(payload))
-	req.ContentLength = int64(len(payload))
-	req.Header = r.Header.Clone()
-	req.Header.Set("Content-Type", "application/json")
-	h.HandleTabUnlock(w, req)
+	h.withPathTabIDBody(w, r, h.HandleTabUnlock)
 }
 
 func (h *Handlers) HandleShutdown(shutdownFn func()) func(http.ResponseWriter, *http.Request) {

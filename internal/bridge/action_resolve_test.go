@@ -2,10 +2,27 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/selector"
 )
+
+// Only a genuine no-match must carry ErrSelectorNoMatch (→ 404); unsupported
+// kinds and internal routing errors must NOT (→ 5xx).
+func TestResolveUnifiedSelector_ErrorClassification(t *testing.T) {
+	ctx := context.Background()
+
+	if _, err := ResolveUnifiedSelectorInFrame(ctx, selector.Selector{Kind: selector.KindRef, Value: "e99"}, nil, ""); !errors.Is(err, ErrSelectorNoMatch) {
+		t.Errorf("ref-not-found should be ErrSelectorNoMatch (404), got %v", err)
+	}
+	if _, err := ResolveUnifiedSelectorInFrame(ctx, selector.Selector{Kind: selector.KindSemantic, Value: "Save"}, nil, ""); err == nil || errors.Is(err, ErrSelectorNoMatch) {
+		t.Errorf("semantic-at-resolver should be a non-no-match internal error (5xx), got %v", err)
+	}
+	if _, err := ResolveUnifiedSelectorInFrame(ctx, selector.Selector{Kind: "bogus", Value: "x"}, nil, ""); err == nil || errors.Is(err, ErrSelectorNoMatch) {
+		t.Errorf("unknown selector kind should be non-no-match (5xx), got %v", err)
+	}
+}
 
 func TestParseNthSelectorValue(t *testing.T) {
 	index, raw, err := parseNthSelectorValue("2:role:button Save")

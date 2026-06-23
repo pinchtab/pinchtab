@@ -4,10 +4,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// NormalizeSelector – legacy Ref promotion
-// ---------------------------------------------------------------------------
-
 func TestNormalizeSelector_RefPromotion(t *testing.T) {
 	// When Ref is set and Selector is empty, Ref should promote to Selector.
 	req := ActionRequest{Ref: "e5"}
@@ -27,10 +23,6 @@ func TestNormalizeSelector_RefPromotionVariousRefs(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// NormalizeSelector – Selector preserved
-// ---------------------------------------------------------------------------
 
 func TestNormalizeSelector_SelectorPreserved(t *testing.T) {
 	// When Selector is already set, it should not be overwritten.
@@ -59,10 +51,6 @@ func TestNormalizeSelector_SelectorPreservedVariousTypes(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// NormalizeSelector – Ref wins when both set
-// ---------------------------------------------------------------------------
-
 func TestNormalizeSelector_RefWinsWhenBothSet(t *testing.T) {
 	// When both Ref and Selector are set, Selector is already populated
 	// so NormalizeSelector leaves it as-is (Ref doesn't overwrite).
@@ -75,10 +63,6 @@ func TestNormalizeSelector_RefWinsWhenBothSet(t *testing.T) {
 		t.Errorf("after NormalizeSelector: Selector = %q, want %q", req.Selector, "#login")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// NormalizeSelector – empty fields
-// ---------------------------------------------------------------------------
 
 func TestNormalizeSelector_BothEmpty(t *testing.T) {
 	req := ActionRequest{}
@@ -98,10 +82,6 @@ func TestNormalizeSelector_EmptyRef(t *testing.T) {
 		t.Errorf("after NormalizeSelector: Selector = %q, want %q", req.Selector, ".btn")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// NormalizeSelector – idempotency
-// ---------------------------------------------------------------------------
 
 func TestNormalizeSelector_Idempotent(t *testing.T) {
 	// Calling NormalizeSelector multiple times should produce the same result.
@@ -133,10 +113,6 @@ func TestNormalizeSelector_Idempotent(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// NormalizeSelector – does not modify other fields
-// ---------------------------------------------------------------------------
 
 func TestNormalizeSelector_OtherFieldsUntouched(t *testing.T) {
 	req := ActionRequest{
@@ -178,10 +154,6 @@ func TestNormalizeSelector_OtherFieldsUntouched(t *testing.T) {
 		t.Errorf("Ref changed: %q", req.Ref)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// NormalizeSelector – non-ref values in Ref field (legacy edge case)
-// ---------------------------------------------------------------------------
 
 func TestNormalizeSelector_NonRefValueInRefField(t *testing.T) {
 	// Some legacy callers might put a CSS selector in the Ref field.

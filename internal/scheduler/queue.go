@@ -232,8 +232,6 @@ type AgentStats struct {
 	Inflight int `json:"inflight"`
 }
 
-// --- heap implementation ---
-
 // taskHeap implements container/heap for priority-then-FIFO ordering.
 type taskHeap []*Task
 

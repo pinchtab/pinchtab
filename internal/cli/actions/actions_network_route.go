@@ -1,11 +1,9 @@
 package actions
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -36,8 +34,7 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	method, _ := cmd.Flags().GetString("method")
 
 	if abort && body != "" {
-		fmt.Fprintln(os.Stderr, "Error: --abort and --body are mutually exclusive")
-		os.Exit(1)
+		exitErr(1, "Error: --abort and --body are mutually exclusive")
 	}
 
 	req := map[string]any{"pattern": pattern}
@@ -67,16 +64,11 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
 		path = fmt.Sprintf("/tabs/%s/network/route", url.PathEscape(tab))
 	}
-	result := apiclient.DoPostQuiet(client, base, token, path, req)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to install route")
-		os.Exit(1)
-	}
+	result := requireMap(apiclient.DoPostQuiet(client, base, token, path, req), 1, "Failed to install route")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		out, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(out))
+		printIndented(result)
 		return
 	}
 	fmt.Printf("route installed: %s (%s)\n", pattern, req["action"])
@@ -93,16 +85,11 @@ func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command,
 	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
 		path = fmt.Sprintf("/tabs/%s/network/route", url.PathEscape(tab))
 	}
-	result := apiclient.DoDelete(client, base, token, path, params)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to remove route(s)")
-		os.Exit(1)
-	}
+	result := requireMap(apiclient.DoDelete(client, base, token, path, params), 1, "Failed to remove route(s)")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		out, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(out))
+		printIndented(result)
 		return
 	}
 	if removed, ok := result["removed"].(float64); ok {

@@ -43,40 +43,36 @@ func profileID(name string) string {
 // filesystem usage and shell-adjacent process cleanup on Windows.
 func ValidateProfileName(name string) error {
 	if name == "" {
-		return fmt.Errorf("profile name cannot be empty")
+		return tagged(ErrInvalidProfileName, "profile name cannot be empty")
 	}
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {
-		return fmt.Errorf("profile name cannot be blank")
+		return tagged(ErrInvalidProfileName, "profile name cannot be blank")
 	}
 	if trimmed != name {
-		return fmt.Errorf("profile name cannot start or end with whitespace")
+		return tagged(ErrInvalidProfileName, "profile name cannot start or end with whitespace")
 	}
 	if strings.Contains(name, "..") {
-		return fmt.Errorf("profile name cannot contain '..'")
+		return tagged(ErrInvalidProfileName, "profile name cannot contain '..'")
 	}
 	if strings.ContainsAny(name, "/\\") {
-		return fmt.Errorf("profile name cannot contain '/' or '\\'")
+		return tagged(ErrInvalidProfileName, "profile name cannot contain '/' or '\\'")
 	}
 	if strings.HasSuffix(name, ".") {
-		return fmt.Errorf("profile name cannot end with '.'")
+		return tagged(ErrInvalidProfileName, "profile name cannot end with '.'")
 	}
 	for _, r := range name {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '-' || r == '_' || r == '.' {
 			continue
 		}
-		return fmt.Errorf("profile name contains invalid character %q", r)
+		return tagged(ErrInvalidProfileName, fmt.Sprintf("profile name contains invalid character %q", r))
 	}
 	base := name
 	if dot := strings.IndexRune(base, '.'); dot >= 0 {
 		base = base[:dot]
 	}
 	if _, reserved := reservedWindowsProfileNames[strings.ToUpper(base)]; reserved {
-		return fmt.Errorf("profile name cannot use reserved device name %q", base)
+		return tagged(ErrInvalidProfileName, fmt.Sprintf("profile name cannot use reserved device name %q", base))
 	}
 	return nil
-}
-
-func isProfileNameValidationError(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "profile name ")
 }

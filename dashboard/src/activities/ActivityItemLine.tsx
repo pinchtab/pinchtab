@@ -179,6 +179,23 @@ export default function ActivityItemLine({
         </span>
       )}
 
+      {event.route && (
+        <span className="flex shrink-0 items-center gap-1">
+          <span className="rounded-sm bg-white/6 px-1.5 py-0.5 text-[0.68rem] text-text-muted">
+            {event.route.usedProvider}
+          </span>
+          {event.route.escalated && (
+            <span
+              className="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[0.68rem] text-warning"
+              title={event.route.reason || "Browser was escalated"}
+            >
+              {"↑"} escalated
+              {event.route.reason ? `: ${event.route.reason}` : ""}
+            </span>
+          )}
+        </span>
+      )}
+
       {showTab &&
         event.tabId &&
         onFilterChange &&

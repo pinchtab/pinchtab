@@ -89,7 +89,7 @@ func (t *Task) SetState(next TaskState) error {
 		if t.StartedAt.IsZero() {
 			t.StartedAt = now
 		}
-	case StateDone, StateFailed, StateCancelled:
+	case StateDone, StateFailed, StateCancelled, StateRejected:
 		t.CompletedAt = now
 		if !t.StartedAt.IsZero() {
 			t.LatencyMs = now.Sub(t.StartedAt).Milliseconds()
@@ -106,9 +106,19 @@ func (t *Task) GetState() TaskState {
 }
 
 // Snapshot returns a read-consistent copy of the task for serialization.
+// The mutable Params map is cloned so callers can't mutate the live task's
+// payload through the returned copy. (Per-key clone: nested map/slice values
+// remain shared by reference — we don't deep-walk arbitrary any payloads.)
 func (t *Task) Snapshot() *Task {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	var params map[string]any
+	if t.Params != nil {
+		params = make(map[string]any, len(t.Params))
+		for k, v := range t.Params {
+			params[k] = v
+		}
+	}
 	return &Task{
 		ID:          t.ID,
 		AgentID:     t.AgentID,
@@ -116,7 +126,7 @@ func (t *Task) Snapshot() *Task {
 		TabID:       t.TabID,
 		Selector:    t.Selector,
 		Ref:         t.Ref,
-		Params:      t.Params,
+		Params:      params,
 		Priority:    t.Priority,
 		State:       t.State,
 		Deadline:    t.Deadline,

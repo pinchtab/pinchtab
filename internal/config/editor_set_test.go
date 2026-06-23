@@ -51,8 +51,16 @@ func TestSetConfigValue_BrowserAndInstanceDefaultsFields(t *testing.T) {
 		check   func(*FileConfig) bool
 		wantErr bool
 	}{
-		{"browser.version", "144.0.7559.133", func(fc *FileConfig) bool { return fc.Browser.ChromeVersion == "144.0.7559.133" }, false},
-		{"browser.binary", "/tmp/chrome", func(fc *FileConfig) bool { return fc.Browser.ChromeBinary == "/tmp/chrome" }, false},
+		{"browser.provider", "cloak", nil, true},
+		{"browser.version", "144.0.7559.133", func(fc *FileConfig) bool { return fc.Browser.BrowserVersion == "144.0.7559.133" }, false},
+		{"browser.binary", "/tmp/chrome", func(fc *FileConfig) bool { return fc.Browser.BrowserBinary == "/tmp/chrome" }, false},
+		{"browser.cloak.fingerprintSeed", "42069", func(fc *FileConfig) bool { return fc.Browser.Cloak.FingerprintSeed == "42069" }, false},
+		{"browser.cloak.storageQuotaMB", "2048", func(fc *FileConfig) bool { return *fc.Browser.Cloak.StorageQuotaMB == 2048 }, false},
+		{"browser.cloak.disableDefaultStealthArgs", "false", func(fc *FileConfig) bool {
+			return fc.Browser.Cloak.DisableDefaultStealthArgs != nil && !*fc.Browser.Cloak.DisableDefaultStealthArgs
+		}, false},
+		{"browser.cloak.storageQuotaMB", "large", nil, true},
+		{"browser.cloak.disableDefaultStealthArgs", "maybe", nil, true},
 		{"instanceDefaults.mode", "headed", func(fc *FileConfig) bool { return fc.InstanceDefaults.Mode == "headed" }, false},
 		{"instanceDefaults.maxTabs", "50", func(fc *FileConfig) bool { return *fc.InstanceDefaults.MaxTabs == 50 }, false},
 		{"instanceDefaults.stealthLevel", "full", func(fc *FileConfig) bool { return fc.InstanceDefaults.StealthLevel == "full" }, false},
@@ -62,6 +70,38 @@ func TestSetConfigValue_BrowserAndInstanceDefaultsFields(t *testing.T) {
 		{"instanceDefaults.noRestore", "maybe", nil, true},
 		{"instanceDefaults.maxTabs", "many", nil, true},
 		{"instanceDefaults.unknown", "value", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path+"="+tt.value, func(t *testing.T) {
+			fc := &FileConfig{}
+			err := SetConfigValue(fc, tt.path, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetConfigValue() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !tt.check(fc) {
+				t.Errorf("SetConfigValue() did not set value correctly")
+			}
+		})
+	}
+}
+
+func TestSetConfigValue_BrowsersFields(t *testing.T) {
+	tests := []struct {
+		path    string
+		value   string
+		check   func(*FileConfig) bool
+		wantErr bool
+	}{
+		{"browsers.default", "cloak", func(fc *FileConfig) bool { return fc.Browsers.Default == "cloak" }, false},
+		{"browsers.available", "chrome, cloak, ghost-chrome", func(fc *FileConfig) bool {
+			return len(fc.Browsers.Available) == 3 &&
+				fc.Browsers.Available[0] == "chrome" &&
+				fc.Browsers.Available[1] == "cloak" &&
+				fc.Browsers.Available[2] == "ghost-chrome"
+		}, false},
+		{"browsers.unknown", "value", nil, true},
 	}
 
 	for _, tt := range tests {
@@ -187,7 +227,11 @@ func TestSetConfigValue_AttachFields(t *testing.T) {
 		{"security.attach.allowSchemes", "ws,wss", func(fc *FileConfig) bool {
 			return len(fc.Security.Attach.AllowSchemes) == 2 && fc.Security.Attach.AllowSchemes[0] == "ws"
 		}, false},
+		{"security.attach.forwardProxyAuth", "true", func(fc *FileConfig) bool {
+			return fc.Security.Attach.ForwardProxyAuth != nil && *fc.Security.Attach.ForwardProxyAuth
+		}, false},
 		{"security.attach.enabled", "maybe", nil, true},
+		{"security.attach.forwardProxyAuth", "maybe", nil, true},
 		{"security.attach.unknown", "value", nil, true},
 	}
 
@@ -297,5 +341,56 @@ func TestSetConfigValue_InvalidPaths(t *testing.T) {
 				t.Errorf("SetConfigValue(%q) should have failed", path)
 			}
 		})
+	}
+}
+
+func TestSetGetBrowserTargetAndProxyFields(t *testing.T) {
+	fc := &FileConfig{}
+	sets := map[string]string{
+		"browser.defaultTarget":                          "cloak-eu",
+		"browser.fallbackOrder":                          "cloak-eu,chrome-local",
+		"browser.proxy.server":                           "http://proxy.example:8080",
+		"browser.proxy.geo.timezone":                     "Europe/Paris",
+		"browser.targets.cloak-eu.provider":              "cloak",
+		"browser.targets.cloak-eu.binary":                "/opt/cloak/bin",
+		"browser.targets.cloak-eu.cloak.fingerprintSeed": "42069",
+		"browser.targets.cloak-eu.proxy.password":        "secret",
+	}
+	for path, value := range sets {
+		if err := SetConfigValue(fc, path, value); err != nil {
+			t.Fatalf("SetConfigValue(%s): %v", path, err)
+		}
+	}
+	for path, want := range sets {
+		got, err := GetConfigValue(fc, path)
+		if err != nil {
+			t.Fatalf("GetConfigValue(%s): %v", path, err)
+		}
+		if got != want {
+			t.Fatalf("GetConfigValue(%s) = %q, want %q", path, got, want)
+		}
+	}
+
+	if err := SetConfigValue(fc, "browser.targets.cloak-eu.bogus", "x"); err == nil {
+		t.Fatal("unknown target field should error")
+	}
+	if err := SetConfigValue(fc, "browser.targets.Bad-Name.binary", "/x"); err == nil {
+		t.Fatal("invalid target name should error")
+	}
+	if _, err := GetConfigValue(fc, "browser.targets.missing.binary"); err == nil {
+		t.Fatal("missing target should error on get")
+	}
+}
+
+func TestSetBrowsersDefaultRejectsUnknownBrowser(t *testing.T) {
+	fc := &FileConfig{}
+	if err := SetConfigValue(fc, "browsers.default", "cloack"); err == nil {
+		t.Fatal("typo'd browsers.default should be rejected")
+	}
+	if err := SetConfigValue(fc, "browsers.default", "Cloak"); err != nil {
+		t.Fatalf("mixed-case known browser should normalize: %v", err)
+	}
+	if fc.Browsers.Default != "cloak" {
+		t.Fatalf("Default = %q, want normalized cloak", fc.Browsers.Default)
 	}
 }

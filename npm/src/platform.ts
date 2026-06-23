@@ -6,18 +6,22 @@ export interface Platform {
   arch: 'amd64' | 'arm64';
 }
 
-export function detectPlatform(): Platform {
-  const platform = process.platform as string;
-
+// detectPlatform maps Node's process.platform/process.arch to the goreleaser
+// binary triple. The values are injectable so tests can drive the full matrix
+// without re-declaring the mapping.
+export function detectPlatform(
+  platform: string = process.platform,
+  nodeArch: string = process.arch
+): Platform {
   // Only support x64 (amd64) and arm64
   let arch: 'amd64' | 'arm64';
-  if (process.arch === 'x64') {
+  if (nodeArch === 'x64') {
     arch = 'amd64';
-  } else if (process.arch === 'arm64') {
+  } else if (nodeArch === 'arm64') {
     arch = 'arm64';
   } else {
     throw new Error(
-      `Unsupported architecture: ${process.arch}. ` + `Only x64 (amd64) and arm64 are supported.`
+      `Unsupported architecture: ${nodeArch}. ` + `Only x64 (amd64) and arm64 are supported.`
     );
   }
 
@@ -87,4 +91,69 @@ export function getBinaryPath(binaryName: string, version?: string): string {
 
   // Fallback to version-less for backwards compat
   return path.join(getBinDir(), binaryName);
+}
+
+// readPackageVersion walks up from fromDir to the nearest package.json and
+// returns its version. Shared so the wrapper, SDK, and installer agree on which
+// versioned binary directory to look in.
+export function readPackageVersion(fromDir: string): string {
+  let dir = path.resolve(fromDir);
+
+  while (dir) {
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      if (typeof pkg.version === 'string' && pkg.version.trim() !== '') {
+        return pkg.version;
+      }
+    }
+
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+
+  throw new Error(`package.json with a version not found above ${fromDir}`);
+}
+
+// resolveManagedBinaryPath returns the path of the downloaded binary for the
+// current platform: the version-specific path when it exists, otherwise the
+// version-less path for backwards compatibility. It does NOT assert existence —
+// callers decide how to report a missing binary.
+export function resolveManagedBinaryPath(fromDir: string): string {
+  const binaryName = getBinaryName(detectPlatform());
+
+  let version: string | undefined;
+  try {
+    version = readPackageVersion(fromDir);
+  } catch {
+    // Fall back to the version-less path when no package.json version is found.
+  }
+
+  if (version) {
+    const versioned = getBinaryPath(binaryName, version);
+    if (fs.existsSync(versioned)) {
+      return versioned;
+    }
+  }
+
+  return getBinaryPath(binaryName);
+}
+
+// firstSubcommand returns the first non-flag argument, skipping the global
+// `--server <url>` / `--server=<url>` option so callers can detect the
+// subcommand (e.g. `mcp`) regardless of preceding flags.
+export function firstSubcommand(argv: string[]): string | null {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--server') {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--server=')) continue;
+    if (!arg.startsWith('-')) return arg;
+  }
+  return null;
 }

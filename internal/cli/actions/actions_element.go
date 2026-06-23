@@ -32,10 +32,8 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		body["button"] = button
 	}
 	if css != "" {
-		// Explicit --css flag: send as plain CSS selector
 		body["selector"] = css
 	} else if selectorArg != "" {
-		// Unified selector: parse and split into ref vs selector for the API
 		setSelectorBody(body, selectorArg)
 	} else if !hasXY {
 		cli.Fatal("Usage: pinchtab %s <selector> or pinchtab %s --css <selector> or pinchtab %s --x <num> --y <num>", kind, kind, kind)
@@ -99,13 +97,8 @@ func setSelectorBody(body map[string]any, s string) {
 	case selector.KindRef:
 		body["ref"] = sel.Value
 	case selector.KindCSS:
-		// CSS is the default kind — the original string either had a
-		// `css:` prefix or was auto-detected. Send the value without a
-		// prefix; the server will re-parse as CSS.
 		body["selector"] = sel.Value
 	default:
-		// text:, xpath:, semantic:, find: — preserve the original input
-		// so the server sees the correct kind prefix when it re-parses.
 		body["selector"] = s
 	}
 }
@@ -121,26 +114,22 @@ func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.C
 		path = "/tabs/" + tabID + "/action"
 	}
 
-	// Default to terse output; --json flag enables full JSON response
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
 		apiclient.DoPostWithHeaders(client, base, token, path, body, headers)
 		return
 	}
 
-	// Quiet mode: print simple success message
 	result := apiclient.DoPostQuietWithHeaders(client, base, token, path, body, headers)
 	kind, _ := body["kind"].(string)
 	printActionResult(kind, result)
 
-	// If --snap or --snap-diff flag is set, fetch and output snapshot
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
 	if snap || snapDiff {
 		fetchAndPrintSnapshot(client, base, token, tabID, snapDiff)
 	}
 
-	// If --text flag is set, fetch and output text content
 	text, _ := cmd.Flags().GetBool("text")
 	if text {
 		fetchAndPrintText(client, base, token, tabID)
@@ -175,13 +164,11 @@ func fetchAndPrintText(client *http.Client, base, token, tabID string) {
 }
 
 func printActionResult(kind string, result map[string]any) {
-	// Check for failure
 	if success, ok := result["success"].(bool); ok && !success {
 		errMsg := "unknown error"
 		if msg, ok := result["error"].(string); ok {
 			errMsg = msg
 		}
-		// Check for recovery hints
 		if recovery, ok := result["recovery"].(map[string]any); ok {
 			if failType, ok := recovery["failure_type"].(string); ok {
 				if failType == "stale" || failType == "navigation" {
@@ -401,11 +388,9 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 
 	switch kind {
 	case "type":
-		// First arg is a unified selector
 		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "fill":
-		// First arg is a unified selector
 		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "press":

@@ -32,6 +32,7 @@ func (m *jsMockPage) HTML() (string, error) {
 	m.idx++
 	return h, nil
 }
+func (m *jsMockPage) HTMLWithin(_ time.Duration) (string, error) { return m.HTML() }
 
 type jsMockExecutor struct {
 	clicks      int

@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -33,20 +31,14 @@ func (h *Handlers) HandleSetHeaders(w http.ResponseWriter, r *http.Request) {
 // HandleTabSetHeaders sets extra HTTP headers for a specific tab.
 // POST /tabs/{id}/emulation/headers
 func (h *Handlers) HandleTabSetHeaders(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("missing tab ID"))
-		return
-	}
-
 	var req headersRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
 
-	if req.TabID != "" && req.TabID != tabID {
-		httpx.Error(w, 400, fmt.Errorf("tabId in body %q does not match URL path %q", req.TabID, tabID))
+	tabID, ok := h.requirePathTabIDMatch(w, r, req.TabID)
+	if !ok {
 		return
 	}
 	req.TabID = tabID
@@ -72,19 +64,7 @@ func (h *Handlers) setHeaders(w http.ResponseWriter, r *http.Request, req header
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	hdrs := make(network.Headers, len(req.Headers))
-	for k, v := range req.Headers {
-		hdrs[k] = v
-	}
-
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := network.SetExtraHTTPHeaders(hdrs).Do(ctx); err != nil {
-				return fmt.Errorf("setExtraHTTPHeaders: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetExtraHTTPHeaders(tCtx, req.Headers); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP set extra HTTP headers: %w", err))
 		return
 	}

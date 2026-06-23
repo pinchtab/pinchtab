@@ -135,6 +135,7 @@ func DefaultFileConfig() FileConfig {
 	maxRedirects := -1
 	trustLoopbackProxy := false
 	attachEnabled := false
+	attachForwardProxyAuth := false
 	activityEnabled := true
 	activitySessionIdleSec := 1800
 	activityRetentionDays := 30
@@ -169,8 +170,11 @@ func DefaultFileConfig() FileConfig {
 			StateDir: userConfigDir(),
 		},
 		Browser: BrowserConfig{
-			ChromeVersion:  "144.0.7559.133",
+			BrowserVersion: "144.0.7559.133",
 			ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
+		},
+		Browsers: BrowsersConfig{
+			Default: BrowserChrome,
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              "headless",
@@ -199,9 +203,10 @@ func DefaultFileConfig() FileConfig {
 			MaxRedirects:           &maxRedirects,
 			TrustLoopbackProxy:     &trustLoopbackProxy,
 			Attach: AttachConfig{
-				Enabled:      &attachEnabled,
-				AllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
-				AllowSchemes: []string{"ws", "wss"},
+				Enabled:          &attachEnabled,
+				AllowHosts:       []string{"127.0.0.1", "localhost", "::1"},
+				AllowSchemes:     []string{"ws", "wss", "http", "https"},
+				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
 			IDPI: IDPIConfig{
 				Enabled:        true,
@@ -269,7 +274,7 @@ func DefaultFileConfig() FileConfig {
 			SolverTimeoutSec:  &autoSolverSolverTimeoutSec,
 			RetryBaseDelayMs:  &autoSolverRetryBaseDelayMs,
 			RetryMaxDelayMs:   &autoSolverRetryMaxDelayMs,
-			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			Solvers:           []string{"cloudflare", "semantic"},
 			LLMFallback:       &autoSolverLLMFallback,
 		},
 	}

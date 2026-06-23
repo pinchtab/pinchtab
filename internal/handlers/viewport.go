@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -79,17 +78,12 @@ func (h *Handlers) setViewport(w http.ResponseWriter, r *http.Request, req viewp
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			if err := emulation.SetDeviceMetricsOverride(int64(req.Width), int64(req.Height), req.DeviceScaleFactor, req.Mobile).
-				WithScreenWidth(int64(req.Width)).
-				WithScreenHeight(int64(req.Height)).
-				Do(ctx); err != nil {
-				return fmt.Errorf("setDeviceMetricsOverride: %w", err)
-			}
-			return nil
-		}),
-	); err != nil {
+	if err := h.Bridge.SetViewport(tCtx, bridge.ViewportParams{
+		Width:             int64(req.Width),
+		Height:            int64(req.Height),
+		DeviceScaleFactor: req.DeviceScaleFactor,
+		Mobile:            req.Mobile,
+	}); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("CDP viewport override: %w", err))
 		return
 	}

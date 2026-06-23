@@ -43,7 +43,6 @@ var namedKeyDefs = map[string]struct {
 	"F12":        {"F12", 123, ""},
 }
 
-// DispatchNamedKey sends CDP keyDown/keyUp for named keys (Enter, Tab, Escape, ArrowLeft …).
 // Unrecognised keys fall back to chromedp.KeyEvent.
 func DispatchNamedKey(ctx context.Context, key string) error {
 	def, ok := namedKeyDefs[key]
@@ -51,7 +50,6 @@ func DispatchNamedKey(ctx context.Context, key string) error {
 		return chromedp.Run(ctx, chromedp.KeyEvent(key))
 	}
 
-	// Normalise "Return" → "Enter" for the W3C key value.
 	w3cKey := key
 	if key == "Return" {
 		w3cKey = "Enter"

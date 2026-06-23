@@ -12,9 +12,10 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
+	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/engine"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 )
 
@@ -27,8 +28,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 		ProfileDir:   cfg.ProfileDir,
 	})
 
-	// Clean up orphaned Chrome processes from previous crashed runs
-	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
+	providerhooks.CleanupProfile(config.NormalizeBrowser(cfg.DefaultBrowser), cfg.ProfileDir)
 
 	bridgeInstance := bridge.New(context.Background(), nil, cfg)
 	actStore, err := activity.NewRecorder(activity.Config{
@@ -52,6 +52,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	mux := http.NewServeMux()
 	h := handlers.New(bridgeInstance, cfg, nil, nil, nil)
 	h.Version = version
+	h.StartBackgroundCleanup()
 	configureBridgeRouter(h, cfg)
 
 	shutdownOnce := &sync.Once{}
@@ -108,16 +109,10 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 }
 
 func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {
-	mode := engine.Mode(cfg.Engine)
-	if mode != engine.ModeLite && mode != engine.ModeAuto {
+	decorated := providerhooks.DecorateBridge(config.NormalizeBrowser(cfg.DefaultBrowser), h.Bridge, cfg)
+	if decorated == h.Bridge {
 		return
 	}
-
-	lite := engine.BuildLite(engine.BuildConfig{
-		Mode:        mode,
-		Guard:       h.IDPIGuard,
-		WrapContent: cfg.IDPI.Enabled && cfg.IDPI.WrapContent,
-	})
-	h.Router = engine.NewRouter(mode, lite)
-	slog.Info("engine router enabled", "mode", cfg.Engine, "rules", h.Router.Rules())
+	h.Bridge = decorated
+	slog.Info("browser bridge proxy enabled", "browser", config.NormalizeBrowser(cfg.DefaultBrowser))
 }

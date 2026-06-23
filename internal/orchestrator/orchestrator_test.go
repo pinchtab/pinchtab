@@ -2,7 +2,11 @@ package orchestrator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,9 +14,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -33,6 +42,14 @@ func stubPortAvailability(t *testing.T, fn func(int) bool) {
 	portAvailableFunc = fn
 	t.Cleanup(func() {
 		portAvailableFunc = old
+	})
+}
+
+func allowAttachForTest(o *Orchestrator, schemes, hosts []string) {
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowSchemes: schemes,
+		AttachAllowHosts:   hosts,
 	})
 }
 
@@ -150,8 +167,6 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 	}
 }
 
-// === Security Validation Tests ===
-
 func TestOrchestrator_Launch_RejectsPathTraversal(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
@@ -237,7 +252,7 @@ func TestOrchestrator_Launch_RejectsInvalidPort(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_Launch_ReservesDistinctChromeDebugPort(t *testing.T) {
+func TestOrchestrator_Launch_ReservesDistinctBrowserDebugPort(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
@@ -274,13 +289,13 @@ func TestOrchestrator_Launch_ReservesDistinctChromeDebugPort(t *testing.T) {
 	if err := json.Unmarshal(data, &fc); err != nil {
 		t.Fatalf("Unmarshal child config error = %v", err)
 	}
-	if fc.Browser.ChromeDebugPort == nil {
+	if fc.Browser.BrowserDebugPort == nil {
 		t.Fatal("child config missing browser.remoteDebuggingPort")
 	}
-	if *fc.Browser.ChromeDebugPort != 9901 {
-		t.Fatalf("chrome debug port = %d, want 9901", *fc.Browser.ChromeDebugPort)
+	if *fc.Browser.BrowserDebugPort != 9901 {
+		t.Fatalf("chrome debug port = %d, want 9901", *fc.Browser.BrowserDebugPort)
 	}
-	if *fc.Browser.ChromeDebugPort == 9900 {
+	if *fc.Browser.BrowserDebugPort == 9900 {
 		t.Fatal("chrome debug port should differ from bridge port")
 	}
 
@@ -293,7 +308,7 @@ func TestOrchestrator_Launch_ReservesDistinctChromeDebugPort(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctChromeDebugPort(t *testing.T) {
+func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctBrowserDebugPort(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
@@ -324,11 +339,11 @@ func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctChromeDebugPort(t *
 	if err := json.Unmarshal(data, &fc); err != nil {
 		t.Fatalf("Unmarshal child config error = %v", err)
 	}
-	if fc.Browser.ChromeDebugPort == nil {
+	if fc.Browser.BrowserDebugPort == nil {
 		t.Fatal("child config missing browser.remoteDebuggingPort")
 	}
-	if *fc.Browser.ChromeDebugPort == 9911 {
-		t.Fatalf("chrome debug port = %d, must differ from bridge port", *fc.Browser.ChromeDebugPort)
+	if *fc.Browser.BrowserDebugPort == 9911 {
+		t.Fatalf("chrome debug port = %d, must differ from bridge port", *fc.Browser.BrowserDebugPort)
 	}
 	if !o.portAllocator.IsAllocated(9911) {
 		t.Fatal("explicit bridge port should remain reserved in allocator while instance is active")
@@ -385,7 +400,7 @@ func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_Stop_ReleasesBridgeAndChromeDebugPorts(t *testing.T) {
+func TestOrchestrator_Stop_ReleasesBridgeAndBrowserDebugPorts(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return false }
 	defer func() { processAliveFunc = old }()
@@ -425,9 +440,24 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
+func stubAttachBridgeHealthy(t *testing.T) {
+	t.Helper()
+	old := waitForChildBridgeHealthyFunc
+	waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
+		o.mu.Lock()
+		inst.Status = "running"
+		o.mu.Unlock()
+		return nil
+	}
+	t.Cleanup(func() { waitForChildBridgeHealthyFunc = old })
+}
+
 func TestOrchestrator_Attach(t *testing.T) {
+	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
+	o.attachHealthCheckTimeout = 50 * time.Millisecond
 
 	cdpURL := "ws://localhost:9222/devtools/browser/abc123"
 	inst, err := o.Attach("my-external-chrome", cdpURL)
@@ -441,14 +471,19 @@ func TestOrchestrator_Attach(t *testing.T) {
 	if inst.CdpURL != cdpURL {
 		t.Errorf("expected CdpURL %q, got %q", cdpURL, inst.CdpURL)
 	}
-	if inst.Status != "running" {
-		t.Errorf("expected status running, got %s", inst.Status)
+	if inst.AttachType != "cdp-bridge" {
+		t.Errorf("expected AttachType cdp-bridge, got %q", inst.AttachType)
+	}
+	if !strings.HasPrefix(inst.URL, "http://") {
+		t.Errorf("expected http:// bridge URL, got %q", inst.URL)
+	}
+	if inst.URL == cdpURL {
+		t.Errorf("URL must not be the raw cdpUrl")
 	}
 	if inst.ProfileName != "my-external-chrome" {
 		t.Errorf("expected ProfileName %q, got %q", "my-external-chrome", inst.ProfileName)
 	}
 
-	// Check it appears in list
 	list := o.List()
 	if len(list) != 1 {
 		t.Fatalf("expected 1 instance in list, got %d", len(list))
@@ -458,24 +493,255 @@ func TestOrchestrator_Attach(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
+func TestOrchestrator_Attach_SpawnsChildBridgeWithCDPFlags(t *testing.T) {
+	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"127.0.0.1"})
+	o.attachHealthCheckTimeout = 30 * time.Millisecond
 
-	_, err := o.Attach("chrome1", "ws://localhost:9222/a")
+	cdpURL := "ws://127.0.0.1:9222/devtools/browser/abc"
+	if _, err := o.AttachWithProvider("ext-cloak", cdpURL, "cloak"); err != nil {
+		t.Fatalf("AttachWithProvider failed: %v", err)
+	}
+	if !runner.runCalled {
+		t.Fatal("expected runner.Run to be called for child bridge")
+	}
+	args := strings.Join(runner.args, " ")
+	if !strings.Contains(args, "bridge") {
+		t.Fatalf("expected child args to contain 'bridge': %v", runner.args)
+	}
+	if !strings.Contains(args, "--cdp-attach "+cdpURL) {
+		t.Fatalf("expected --cdp-attach flag with cdp url: %v", runner.args)
+	}
+	if !strings.Contains(args, "--browser-provider cloak") {
+		t.Fatalf("expected --browser-provider cloak: %v", runner.args)
+	}
+	if !strings.Contains(args, "--remote-browser-name ext-cloak") {
+		t.Fatalf("expected --remote-browser-name flag: %v", runner.args)
+	}
+}
+
+func TestOrchestrator_AttachWithProviderRejectsUnknownProvider(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"127.0.0.1"})
+
+	_, err := o.AttachWithProvider("ext-cloak", "ws://127.0.0.1:9222/devtools/browser/abc", "cloack")
+	if err == nil {
+		t.Fatal("expected unknown browser error")
+	}
+	if !strings.Contains(err.Error(), "unknown browser") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if runner.runCalled {
+		t.Fatal("invalid provider should be rejected before starting child bridge")
+	}
+}
+
+func TestOrchestrator_Attach_PreservesCdpURLMetadata(t *testing.T) {
+	stubAttachBridgeHealthy(t)
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"127.0.0.1"})
+	o.attachHealthCheckTimeout = 30 * time.Millisecond
+
+	cdpURL := "ws://127.0.0.1:9222/devtools/browser/xyz"
+	inst, err := o.Attach("ext", cdpURL)
+	if err != nil {
+		t.Fatalf("Attach failed: %v", err)
+	}
+	if inst.CdpURL != cdpURL {
+		t.Fatalf("CdpURL not preserved: got %q want %q", inst.CdpURL, cdpURL)
+	}
+	if inst.URL == cdpURL {
+		t.Fatal("instance URL must be the HTTP bridge URL, not the raw cdpUrl")
+	}
+	if !strings.HasPrefix(inst.URL, "http://") {
+		t.Fatalf("expected http:// bridge URL, got %q", inst.URL)
+	}
+}
+
+func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
+	stubAttachBridgeHealthy(t)
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
+	o.attachHealthCheckTimeout = 50 * time.Millisecond
+
+	_, err := o.Attach("chrome1", "ws://localhost:9222/devtools/browser/a")
 	if err != nil {
 		t.Fatalf("First attach failed: %v", err)
 	}
 
-	_, err = o.Attach("chrome1", "ws://localhost:9222/b")
+	_, err = o.Attach("chrome1", "ws://localhost:9222/devtools/browser/b")
 	if err == nil {
 		t.Error("expected error when attaching duplicate name")
+	}
+}
+
+func TestOrchestrator_Attach_HealthFailureTearsDownChild(t *testing.T) {
+	oldHealth := waitForChildBridgeHealthyFunc
+	waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
+		return fmt.Errorf("boom")
+	}
+	defer func() { waitForChildBridgeHealthyFunc = oldHealth }()
+
+	oldAlive := processAliveFunc
+	processAliveFunc = func(pid int) bool { return false }
+	defer func() { processAliveFunc = oldAlive }()
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
+	o.attachHealthCheckTimeout = 30 * time.Millisecond
+
+	_, err := o.Attach("unhealthy", "ws://localhost:9222/devtools/browser/a")
+	if err == nil {
+		t.Fatal("expected attach to fail when child bridge health fails")
+	}
+	if !strings.Contains(err.Error(), "did not become healthy") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := o.List(); len(got) != 0 {
+		t.Fatalf("unhealthy attach child was not removed: %+v", got)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_UsesBrowserTarget(t *testing.T) {
+	oldAlive := processAliveFunc
+	processAliveFunc = func(pid int) bool { return true }
+	defer func() { processAliveFunc = oldAlive }()
+
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	now := time.Now()
+	o.instances["chrome"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Browser: config.BrowserChrome, StartTime: now},
+		URL:      "http://chrome.local",
+		cmd:      &mockCmd{pid: 111, isAlive: true},
+	}
+	o.instances["cloak"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Browser: config.BrowserCloak, StartTime: now.Add(time.Second)},
+		URL:      "http://cloak.local",
+		cmd:      &mockCmd{pid: 222, isAlive: true},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
+
+	url, status, err := o.FirstRunningURLForRequest(req)
+	if err != nil {
+		t.Fatalf("FirstRunningURLForRequest error status=%d err=%v", status, err)
+	}
+	if url != "http://cloak.local" {
+		t.Fatalf("url = %q, want cloak target URL", url)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_UsesDefaultTargetWhenOmitted(t *testing.T) {
+	oldAlive := processAliveFunc
+	processAliveFunc = func(pid int) bool { return true }
+	defer func() { processAliveFunc = oldAlive }()
+
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "cloak",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	now := time.Now()
+	o.instances["chrome"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "chrome", URL: "http://chrome.local", Status: "running", Browser: config.BrowserChrome, StartTime: now},
+		URL:      "http://chrome.local",
+		cmd:      &mockCmd{pid: 111, isAlive: true},
+	}
+	o.instances["cloak"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "cloak", URL: "http://cloak.local", Status: "running", Browser: config.BrowserCloak, StartTime: now.Add(time.Second)},
+		URL:      "http://cloak.local",
+		cmd:      &mockCmd{pid: 222, isAlive: true},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/text", nil)
+	url, status, err := o.FirstRunningURLForRequest(req)
+	if err != nil {
+		t.Fatalf("FirstRunningURLForRequest error status=%d err=%v", status, err)
+	}
+	if url != "http://cloak.local" {
+		t.Fatalf("url = %q, want default target URL", url)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowser(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "cloak-1",
+		Targets: config.BrowserTargetsConfig{
+			"cloak-1": {Provider: config.BrowserCloak},
+		},
+	})
+	// "ghost" normalizes to "chrome" via NormalizeBrowser, but no target
+	// has provider "chrome" in this config → no match → 400.
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=ghost", nil)
+
+	_, status, err := o.FirstRunningURLForRequest(req)
+	if err == nil {
+		t.Fatal("expected unknown browser error")
+	}
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_RejectsUnknownBrowserNoTargets(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	// No targets configured — the no-targets fallback path must still reject unknowns.
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=chrme", nil)
+
+	_, status, err := o.FirstRunningURLForRequest(req)
+	if err == nil {
+		t.Fatal("expected unknown browser error for typo without targets")
+	}
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+}
+
+func TestOrchestrator_FirstRunningURLForRequest_RequestedTargetNotRunningConflicts(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		DefaultTarget: "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/navigate?browser=cloak", nil)
+
+	_, status, err := o.FirstRunningURLForRequest(req)
+	if err == nil {
+		t.Fatal("expected no-running browser error")
+	}
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", status)
 	}
 }
 
 func TestOrchestrator_AttachBridge(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"http"}, []string{"10.0.0.8"})
 
 	inst, created, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token")
 	if err != nil {
@@ -501,6 +767,7 @@ func TestOrchestrator_AttachBridge(t *testing.T) {
 func TestOrchestrator_AttachBridge_UpsertsExistingBridge(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"http"}, []string{"10.0.0.8", "10.0.0.9"})
 
 	first, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
 	if err != nil {
@@ -540,9 +807,88 @@ func TestOrchestrator_AttachBridge_UpsertsExistingBridge(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_AttachBridgeWithOptions_UpsertUpdatesBrowserTarget(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowSchemes: []string{"http"},
+		AttachAllowHosts:   []string{"10.0.0.8", "10.0.0.9"},
+		DefaultTarget:      "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{Browser: config.BrowserChrome})
+	if err != nil {
+		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
+	}
+	if first.Browser != config.BrowserChrome {
+		t.Fatalf("first browser = %q, want chrome", first.Browser)
+	}
+
+	second, created, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.9:9868", "bridge-token", AttachOptions{Browser: config.BrowserCloak})
+	if err != nil {
+		t.Fatalf("second AttachBridgeWithOptions failed: %v", err)
+	}
+	if created {
+		t.Fatal("expected upsert, not create")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
+	}
+	if second.Browser != config.BrowserCloak {
+		t.Fatalf("second browser = %q, want cloak", second.Browser)
+	}
+
+	list := o.List()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 instance in list, got %d", len(list))
+	}
+	if list[0].Browser != config.BrowserCloak {
+		t.Fatalf("listed browser = %q, want cloak", list[0].Browser)
+	}
+}
+
+func TestOrchestrator_AttachBridge_UpsertWithoutTargetPreservesExistingBrowserTarget(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowSchemes: []string{"http"},
+		AttachAllowHosts:   []string{"10.0.0.8", "10.0.0.9"},
+		DefaultTarget:      "chrome",
+		Targets: config.BrowserTargetsConfig{
+			"chrome": {Provider: config.BrowserChrome},
+			"cloak":  {Provider: config.BrowserCloak},
+		},
+	})
+
+	first, _, err := o.AttachBridgeWithOptions("bridge1", "http://10.0.0.8:9868", "bridge-token", AttachOptions{Browser: config.BrowserCloak})
+	if err != nil {
+		t.Fatalf("first AttachBridgeWithOptions failed: %v", err)
+	}
+	second, created, err := o.AttachBridge("bridge1", "http://10.0.0.9:9868", "bridge-token")
+	if err != nil {
+		t.Fatalf("second AttachBridge failed: %v", err)
+	}
+	if created {
+		t.Fatal("expected upsert, not create")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
+	}
+	if second.Browser != config.BrowserCloak {
+		t.Fatalf("Browser = %q, want preserved cloak", second.Browser)
+	}
+}
+
 func TestOrchestrator_AttachBridge_RejectsTokenMismatch(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"http"}, []string{"10.0.0.8", "10.0.0.9"})
 
 	_, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
 	if err != nil {
@@ -632,7 +978,7 @@ func TestValidateAttachURL_RejectsBridgeBaseURLWithPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for attach bridge URL with path")
 	}
-	if !strings.Contains(err.Error(), "must not include a path") {
+	if !strings.Contains(err.Error(), "bare origin or end with /json/version") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -649,7 +995,7 @@ func TestValidateAttachURL_RejectsBridgeBaseURLWithUserinfo(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for attach bridge URL with userinfo")
 	}
-	if !strings.Contains(err.Error(), "must not include userinfo") {
+	if !strings.Contains(err.Error(), "userinfo") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -670,7 +1016,7 @@ func TestValidateAttachURL_RejectsBridgeBaseURLWithQueryOrFragment(t *testing.T)
 		if err == nil {
 			t.Fatalf("expected error for attach bridge URL %q", raw)
 		}
-		if !strings.Contains(err.Error(), "must not include query or fragment") {
+		if !strings.Contains(err.Error(), "query or fragment") {
 			t.Fatalf("unexpected error for %q: %v", raw, err)
 		}
 	}
@@ -679,13 +1025,54 @@ func TestValidateAttachURL_RejectsBridgeBaseURLWithQueryOrFragment(t *testing.T)
 func TestOrchestrator_AttachBridge_NormalizesBaseURL(t *testing.T) {
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"http"}, []string{"10.0.0.8"})
 
-	inst, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868/?debug=1#frag", "bridge-token")
+	inst, _, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868/", "bridge-token")
 	if err != nil {
 		t.Fatalf("AttachBridge failed: %v", err)
 	}
 	if inst.URL != "http://10.0.0.8:9868" {
 		t.Fatalf("URL = %q, want %q", inst.URL, "http://10.0.0.8:9868")
+	}
+}
+
+func TestValidateAttachURL_AttachDisabled(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      false,
+		AttachAllowHosts:   []string{"*"},
+		AttachAllowSchemes: []string{"ws"},
+	})
+	err := o.validateAttachURL("ws://127.0.0.1:9222/devtools/browser/x")
+	if err == nil {
+		t.Fatal("expected error when attach is disabled")
+	}
+	if !strings.Contains(err.Error(), "disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateAttachURL_DisallowedHost(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"127.0.0.1"},
+		AttachAllowSchemes: []string{"ws"},
+	})
+	if err := o.validateAttachURL("ws://evil.example/devtools/browser/x"); err == nil {
+		t.Fatal("expected error for disallowed host")
+	}
+}
+
+func TestValidateAttachURL_DisallowedScheme(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		AttachEnabled:      true,
+		AttachAllowHosts:   []string{"*"},
+		AttachAllowSchemes: []string{"ws"},
+	})
+	if err := o.validateAttachURL("http://127.0.0.1:9222"); err == nil {
+		t.Fatal("expected error for disallowed scheme")
 	}
 }
 
@@ -730,6 +1117,67 @@ func TestOrchestrator_RegisterHandlers_CacheRoutes(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_LaunchWithOptions_BrowserFieldSet(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	inst, err := o.LaunchWithOptions("browser-test", "9050", true, LaunchOptions{
+		Browser: "cloak",
+	})
+	if err != nil {
+		t.Fatalf("Launch with Browser=cloak failed: %v", err)
+	}
+	if inst.Browser != "cloak" {
+		t.Fatalf("Browser = %q, want %q", inst.Browser, "cloak")
+	}
+}
+
+func TestOrchestrator_LaunchWithOptions_BrowserFieldEmpty(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	inst, err := o.LaunchWithOptions("browser-empty", "9051", true, LaunchOptions{})
+	if err != nil {
+		t.Fatalf("Launch with empty Browser failed: %v", err)
+	}
+	if inst.Browser != "" {
+		t.Fatalf("Browser = %q, want empty", inst.Browser)
+	}
+}
+
+func TestOrchestrator_LaunchWithOptions_BrowserFieldInvalid(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	_, err := o.LaunchWithOptions("browser-invalid", "9052", true, LaunchOptions{
+		Browser: "nonexistent-browser",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid browser, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid browser") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if runner.runCalled {
+		t.Fatal("runner should not have been called for invalid browser")
+	}
+}
+
 func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{})
@@ -761,5 +1209,158 @@ func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 		if !strings.Contains(w.Body.String(), tt.setting) {
 			t.Fatalf("%s %s expected setting %s in response, got %s", tt.method, tt.path, tt.setting, w.Body.String())
 		}
+	}
+}
+
+// With two targets sharing the chrome provider, an explicit TargetName must
+// promote that exact target's config into the child config — provider-based
+// re-derivation would pick the default target's binary.
+func TestLaunchWithOptions_TargetNamePromotesExactTarget(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	t.Cleanup(func() { processAliveFunc = old })
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{
+		InstancePortStart: 9900,
+		InstancePortEnd:   9910,
+		DefaultTarget:     "chrome-local",
+		Targets: config.BrowserTargetsConfig{
+			"chrome-local": {Provider: config.BrowserChrome, Binary: "/usr/bin/chrome-a"},
+			"backup":       {Provider: config.BrowserChrome, Binary: "/usr/bin/chrome-b"},
+		},
+	})
+
+	if _, err := o.LaunchWithOptions("p1", "", true, LaunchOptions{
+		Browser:    config.BrowserChrome,
+		TargetName: "backup",
+	}); err != nil {
+		t.Fatalf("LaunchWithOptions: %v", err)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	if cfgPath == "" {
+		t.Fatal("PINCHTAB_CONFIG missing from child env")
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q): %v", cfgPath, err)
+	}
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("unmarshal child config: %v", err)
+	}
+	if fc.Browser.BrowserBinary != "/usr/bin/chrome-b" {
+		t.Fatalf("child binary = %q, want backup's /usr/bin/chrome-b", fc.Browser.BrowserBinary)
+	}
+}
+
+// M9 regression: a failed attach spawn must release the name reservation so
+// a retry with the same name succeeds.
+func TestAttach_FailedSpawnReleasesNameReservation(t *testing.T) {
+	stubAttachBridgeHealthy(t)
+	runner := &mockRunner{portAvail: true, runErr: errors.New("spawn failed")}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
+	o.attachHealthCheckTimeout = 50 * time.Millisecond
+
+	if _, err := o.Attach("ext", "ws://localhost:9222/devtools/browser/a"); err == nil {
+		t.Fatal("expected attach to fail when the runner errors")
+	}
+	if n := len(o.List()); n != 0 {
+		t.Fatalf("failed attach left %d residual instances (stale reservation)", n)
+	}
+
+	o.runner = &mockRunner{portAvail: true}
+	if _, err := o.Attach("ext", "ws://localhost:9222/devtools/browser/a"); err != nil {
+		t.Fatalf("retry after failed attach should succeed: %v", err)
+	}
+}
+
+// slowAttachRunner widens the spawn window so the duplicate-name race is
+// deterministic: the second attach must fail on the reservation, not spawn.
+type slowAttachRunner struct {
+	mockRunner
+	delay time.Duration
+	runs  atomic.Int32
+}
+
+func (r *slowAttachRunner) Run(ctx context.Context, binary string, args []string, env []string, stdout, stderr io.Writer) (Cmd, error) {
+	r.runs.Add(1)
+	time.Sleep(r.delay)
+	return r.mockRunner.Run(ctx, binary, args, env, stdout, stderr)
+}
+
+// M9 regression: concurrent same-name attaches spawn at most one child.
+func TestAttach_ConcurrentDuplicateNameSpawnsOneChild(t *testing.T) {
+	stubAttachBridgeHealthy(t)
+	runner := &slowAttachRunner{mockRunner: mockRunner{portAvail: true}, delay: 50 * time.Millisecond}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
+	o.attachHealthCheckTimeout = 50 * time.Millisecond
+
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			_, err := o.Attach("shared", "ws://localhost:9222/devtools/browser/a")
+			errs <- err
+		}()
+	}
+	var failures int
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			failures++
+			if !strings.Contains(err.Error(), "already exists") {
+				t.Fatalf("unexpected attach error: %v", err)
+			}
+		}
+	}
+	if failures != 1 {
+		t.Fatalf("expected exactly one duplicate-name failure, got %d", failures)
+	}
+	if got := runner.runs.Load(); got != 1 {
+		t.Fatalf("expected exactly one child spawn, got %d", got)
+	}
+}
+
+// M9 regression: orphan cleanup must run even with an empty browser and nil
+// runtime config — it defaults to the chrome sweep instead of no-opping.
+func TestCleanupStoppedProfile_EmptyBrowserStillRunsCleanupHook(t *testing.T) {
+	var swept []string
+	providerhooks.Register("chrome", providerhooks.Hooks{CleanupProfile: func(p string) { swept = append(swept, p) }})
+	t.Cleanup(func() {
+		providerhooks.Register("chrome", providerhooks.Hooks{
+			CleanupProfile: bridge.CleanupOrphanedChromeProcesses,
+			Shutdown:       func() { bridge.KillAllPinchtabChrome() },
+		})
+	})
+
+	o := &Orchestrator{baseDir: t.TempDir()}
+	o.cleanupStoppedProfile("prof-x", "")
+	if len(swept) != 1 {
+		t.Fatalf("cleanup hook not invoked for empty browser + nil runtimeCfg: %v", swept)
+	}
+}
+
+// L7(h): a browser-specific lookup must not fall back to instances of
+// unknown provenance (empty Browser field).
+func TestFirstRunningURLForBrowser_SkipsBrowserlessInstances(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	t.Cleanup(func() { processAliveFunc = old })
+
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.instances["legacy"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "legacy", Status: "running", Port: "9001"},
+		URL:      "http://localhost:9001",
+	}
+
+	if url := o.FirstRunningURLForBrowser("cloak"); url != "" {
+		t.Fatalf("browser-specific lookup matched a browserless instance: %q", url)
+	}
+	if url := o.FirstRunningURLForBrowser(""); url == "" {
+		t.Fatal("non-specific lookup should still reach legacy instances")
 	}
 }

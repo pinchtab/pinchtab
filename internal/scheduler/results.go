@@ -63,11 +63,16 @@ func (rs *ResultStore) Store(t *Task) {
 	rs.mu.Unlock()
 }
 
-// Get returns the task by ID or nil if not found.
+// Get returns a snapshot copy of the task by ID, or nil if not found. A copy
+// (not the stored pointer) is returned so callers can't mutate stored state —
+// matching List's behavior.
 func (rs *ResultStore) Get(taskID string) *Task {
 	rs.mu.RLock()
 	defer rs.mu.RUnlock()
-	return rs.tasks[taskID]
+	if t := rs.tasks[taskID]; t != nil {
+		return t.Snapshot()
+	}
+	return nil
 }
 
 // List returns all stored tasks, optionally filtered.

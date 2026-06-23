@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -125,7 +126,7 @@ func sameOriginRequest(origin string, r *http.Request, trustProxy ...bool) bool 
 		return false
 	}
 	trust := len(trustProxy) > 0 && trustProxy[0]
-	return strings.EqualFold(parsed.Scheme, requestScheme(r, trust)) && strings.EqualFold(parsed.Host, requestHost(r, trust))
+	return strings.EqualFold(parsed.Scheme, authn.RequestScheme(r, trust)) && strings.EqualFold(parsed.Host, authn.RequestHost(r, trust))
 }
 
 func isWebSocketUpgrade(r *http.Request) bool {
@@ -136,49 +137,4 @@ func isWebSocketUpgrade(r *http.Request) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
-}
-
-func requestScheme(r *http.Request, trustProxy bool) string {
-	if r == nil {
-		return "http"
-	}
-	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
-			return strings.ToLower(strings.TrimSpace(strings.Split(forwarded, ",")[0]))
-		}
-		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
-			for _, part := range strings.Split(forwarded, ";") {
-				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-				if !ok || !strings.EqualFold(key, "proto") {
-					continue
-				}
-				return strings.ToLower(strings.Trim(value, `"`))
-			}
-		}
-	}
-	if r.TLS != nil {
-		return "https"
-	}
-	return "http"
-}
-
-func requestHost(r *http.Request, trustProxy bool) string {
-	if r == nil {
-		return ""
-	}
-	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwarded != "" {
-			return strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		}
-		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
-			for _, part := range strings.Split(forwarded, ";") {
-				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-				if !ok || !strings.EqualFold(key, "host") {
-					continue
-				}
-				return strings.Trim(value, `"`)
-			}
-		}
-	}
-	return strings.TrimSpace(r.Host)
 }

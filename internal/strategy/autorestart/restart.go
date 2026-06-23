@@ -117,7 +117,6 @@ func (s *Strategy) handleCrash(ctx context.Context, crashedID string) {
 	}
 	slog.Warn(s.logPrefix("instance crashed, scheduling restart"), args...)
 
-	// Emit restarting event.
 	if s.orch != nil {
 		s.orch.EmitEvent("instance.restarting", &bridge.Instance{
 			ID:     crashedID,
@@ -125,7 +124,6 @@ func (s *Strategy) handleCrash(ctx context.Context, crashedID string) {
 		})
 	}
 
-	// Wait for backoff period (respecting cancellation).
 	select {
 	case <-time.After(backoff):
 	case <-ctx.Done():

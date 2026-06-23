@@ -9,8 +9,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/instance/allocation"
 )
 
-// --- Test doubles ---
-
 type mockLauncher struct {
 	instances map[string]*bridgepkg.Instance
 	nextID    int
@@ -73,8 +71,6 @@ func (f *mockFetcher) AddTabForURL(instanceURL, tabID, url string) {
 	})
 }
 
-// --- Repository tests ---
-
 func TestRepository_LaunchAndGet(t *testing.T) {
 	launcher := newMockLauncher()
 	repo := instance.NewRepository(launcher)
@@ -119,7 +115,6 @@ func TestRepository_Running_FiltersNonRunning(t *testing.T) {
 	inst1, _ := repo.Launch("prof1", "9868", true)
 	_, _ = repo.Launch("prof2", "9869", true)
 
-	// Manually mark inst1 as stopped via Add.
 	stopped := *inst1
 	stopped.Status = "stopped"
 	repo.Add(&stopped)
@@ -130,8 +125,6 @@ func TestRepository_Running_FiltersNonRunning(t *testing.T) {
 	}
 }
 
-// --- Locator tests ---
-
 func TestLocator_CacheHit(t *testing.T) {
 	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
@@ -140,7 +133,6 @@ func TestLocator_CacheHit(t *testing.T) {
 
 	inst, _ := repo.Launch("default", "9868", true)
 
-	// Pre-register in cache.
 	locator.Register("tab_abc", inst.ID)
 
 	found, err := locator.FindInstanceByTabID("tab_abc")
@@ -160,7 +152,6 @@ func TestLocator_CacheMiss_QueriesBridges(t *testing.T) {
 
 	inst, _ := repo.Launch("default", "9868", true)
 
-	// Set up fetcher to return tabs for this instance.
 	fetcher.AddTab("9868", "tab_xyz", "https://pinchtab.com")
 
 	found, err := locator.FindInstanceByTabID("tab_xyz")
@@ -171,7 +162,6 @@ func TestLocator_CacheMiss_QueriesBridges(t *testing.T) {
 		t.Errorf("expected %s, got %s", inst.ID, found.ID)
 	}
 
-	// Should now be cached.
 	if locator.CacheSize() != 1 {
 		t.Errorf("expected cache size 1, got %d", locator.CacheSize())
 	}
@@ -267,8 +257,6 @@ func TestLocator_StaleCache_InstanceGone(t *testing.T) {
 	}
 }
 
-// --- Allocator tests ---
-
 func TestAllocator_FCFS(t *testing.T) {
 	launcher := newMockLauncher()
 	repo := instance.NewRepository(launcher)
@@ -316,32 +304,26 @@ func TestAllocator_NoRunningInstances(t *testing.T) {
 	}
 }
 
-// --- Manager facade tests ---
-
 func TestManager_DelegatesToComponents(t *testing.T) {
 	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
 	mgr := instance.NewManager(launcher, fetcher)
 
-	// Launch via manager → delegates to repo.
 	inst, err := mgr.Launch("default", "9868", true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Get via manager → delegates to repo.
 	got, ok := mgr.Get(inst.ID)
 	if !ok || got.ID != inst.ID {
 		t.Error("Get should delegate to repo")
 	}
 
-	// List via manager → delegates to repo.
 	list := mgr.List()
 	if len(list) != 1 {
 		t.Errorf("expected 1 instance, got %d", len(list))
 	}
 
-	// RegisterTab + FindInstanceByTabID → delegates to locator.
 	mgr.RegisterTab("tab_abc", inst.ID)
 	found, err := mgr.FindInstanceByTabID("tab_abc")
 	if err != nil {
@@ -351,7 +333,6 @@ func TestManager_DelegatesToComponents(t *testing.T) {
 		t.Error("FindInstanceByTabID should delegate to locator")
 	}
 
-	// Allocate → delegates to allocator.
 	alloc, err := mgr.Allocate()
 	if err != nil {
 		t.Fatal(err)
@@ -360,7 +341,6 @@ func TestManager_DelegatesToComponents(t *testing.T) {
 		t.Error("Allocate should delegate to allocator")
 	}
 
-	// Stop → delegates to repo + invalidates cache.
 	if err := mgr.Stop(inst.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +360,6 @@ func TestManager_StopInvalidatesTabCache(t *testing.T) {
 
 	_ = mgr.Stop(inst.ID)
 
-	// Tabs should be invalidated.
 	_, err := mgr.FindInstanceByTabID("tab_1")
 	if err == nil {
 		t.Error("expected error: tab cache should be invalidated after stop")

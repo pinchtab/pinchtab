@@ -29,6 +29,11 @@ type Page interface {
 	// Implementations should strip unnecessary whitespace and comments.
 	HTML() (string, error)
 
+	// HTMLWithin is HTML() bounded by timeout (0 = no bound). Implementations
+	// must cancel the underlying fetch when the deadline fires so callers do not
+	// leak workers under a stalled page.
+	HTMLWithin(timeout time.Duration) (string, error)
+
 	// Screenshot captures the current page as a PNG image.
 	Screenshot() ([]byte, error)
 }

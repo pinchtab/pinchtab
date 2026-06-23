@@ -1,25 +1,40 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestLoad_EngineFromConfig(t *testing.T) {
-	t.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "config.json"))
-	cfg := Load()
-	if cfg.Engine != "chrome" {
-		t.Fatalf("default engine = %q, want chrome", cfg.Engine)
+func TestValidate_BrowserProviderTriggersError(t *testing.T) {
+	fc := &FileConfig{
+		Browser: BrowserConfig{Provider: "cloak"},
 	}
+	errs := ValidateFileConfig(fc)
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "browser.provider is no longer supported") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected validation error for browser.provider, got: %v", errs)
+	}
+}
 
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"server":{"engine":"lite"}}`), 0600); err != nil {
-		t.Fatal(err)
+func TestValidate_ServerEngineTriggersError(t *testing.T) {
+	fc := &FileConfig{
+		Server: ServerConfig{Engine: "chrome"},
 	}
-	t.Setenv("PINCHTAB_CONFIG", configPath)
-	cfg = Load()
-	if cfg.Engine != "lite" {
-		t.Fatalf("file engine = %q, want lite", cfg.Engine)
+	errs := ValidateFileConfig(fc)
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "server.engine is no longer supported") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected validation error for server.engine, got: %v", errs)
 	}
 }

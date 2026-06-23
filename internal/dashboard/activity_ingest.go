@@ -47,9 +47,6 @@ func activityEventToLiveEvent(evt activity.Event) apiTypes.ActivityEvent {
 	if evt.Ref != "" {
 		details["ref"] = evt.Ref
 	}
-	if evt.Engine != "" {
-		details["engine"] = evt.Engine
-	}
 	if evt.Action != "" {
 		details["action"] = evt.Action
 	}
@@ -103,19 +100,27 @@ func (d *Dashboard) IngestPersistedAgentActivity(rec activity.Recorder, since ti
 	}
 
 	latest := since
-	batch := make([]apiTypes.ActivityEvent, 0, len(events))
 	for _, evt := range events {
 		if evt.Timestamp.After(latest) {
 			latest = evt.Timestamp
 		}
+	}
+	d.ingestActivityBatch(events)
+
+	return latest, nil
+}
+
+// ingestActivityBatch filters persisted activity to the trackable client subset,
+// converts to live events, and records them.
+func (d *Dashboard) ingestActivityBatch(events []activity.Event) {
+	batch := make([]apiTypes.ActivityEvent, 0, len(events))
+	for _, evt := range events {
 		if !shouldTrackPersistedAgentActivity(evt) {
 			continue
 		}
 		batch = append(batch, activityEventToLiveEvent(evt))
 	}
 	d.recordEvents(batch)
-
-	return latest, nil
 }
 
 // IngestTail reads only newly-appended events from the tail reader, avoiding
@@ -130,14 +135,7 @@ func (d *Dashboard) IngestTail(tr *activity.TailReader) (int, error) {
 		return 0, err
 	}
 
-	batch := make([]apiTypes.ActivityEvent, 0, len(events))
-	for _, evt := range events {
-		if !shouldTrackPersistedAgentActivity(evt) {
-			continue
-		}
-		batch = append(batch, activityEventToLiveEvent(evt))
-	}
-	d.recordEvents(batch)
+	d.ingestActivityBatch(events)
 
 	return len(events), nil
 }
@@ -158,13 +156,9 @@ func (d *Dashboard) rememberEventIDLocked(id string) {
 		return
 	}
 	d.seenEventIDs[id] = struct{}{}
-	d.seenEventLog = append(d.seenEventLog, id)
-	if len(d.seenEventLog) <= d.maxSeenIDs {
-		return
+	if evicted, didEvict := d.seenEventOrder.push(id); didEvict {
+		delete(d.seenEventIDs, evicted)
 	}
-	evicted := d.seenEventLog[0]
-	d.seenEventLog = d.seenEventLog[1:]
-	delete(d.seenEventIDs, evicted)
 }
 
 func normalizeEvent(evt apiTypes.ActivityEvent) apiTypes.ActivityEvent {
@@ -189,6 +183,17 @@ func (d *Dashboard) recordEvents(events []apiTypes.ActivityEvent) {
 	}
 
 	d.mu.Lock()
+	broadcast := d.cacheActivityEventsLocked(events)
+	chans := d.activitySubscribersLocked()
+	d.mu.Unlock()
+
+	broadcastActivityEvents(chans, broadcast)
+}
+
+// cacheActivityEventsLocked normalizes + dedupes events, updates agent summaries
+// and the recent-event ring, and returns the newly-accepted events to broadcast.
+// Caller must hold d.mu.
+func (d *Dashboard) cacheActivityEventsLocked(events []apiTypes.ActivityEvent) []apiTypes.ActivityEvent {
 	broadcast := make([]apiTypes.ActivityEvent, 0, len(events))
 	for _, raw := range events {
 		evt := normalizeEvent(raw)
@@ -197,22 +202,26 @@ func (d *Dashboard) recordEvents(events []apiTypes.ActivityEvent) {
 		}
 		d.rememberEventIDLocked(evt.ID)
 		d.upsertAgentLocked(evt)
-		if len(d.recentEvents) >= d.maxEvents {
-			copy(d.recentEvents, d.recentEvents[1:])
-			d.recentEvents[len(d.recentEvents)-1] = evt
-		} else {
-			d.recentEvents = append(d.recentEvents, evt)
-		}
+		d.recentEvents.push(evt)
 		broadcast = append(broadcast, evt)
 	}
+	return broadcast
+}
 
+// activitySubscribersLocked snapshots the current SSE subscriber channels.
+// Caller must hold d.mu.
+func (d *Dashboard) activitySubscribersLocked() []chan apiTypes.ActivityEvent {
 	chans := make([]chan apiTypes.ActivityEvent, 0, len(d.activityConns))
 	for ch := range d.activityConns {
 		chans = append(chans, ch)
 	}
-	d.mu.Unlock()
+	return chans
+}
 
-	for _, evt := range broadcast {
+// broadcastActivityEvents non-blockingly fans out events to each subscriber,
+// dropping when a subscriber's buffer is full.
+func broadcastActivityEvents(chans []chan apiTypes.ActivityEvent, events []apiTypes.ActivityEvent) {
+	for _, evt := range events {
 		for _, ch := range chans {
 			select {
 			case ch <- evt:

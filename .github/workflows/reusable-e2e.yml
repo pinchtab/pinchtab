@@ -15,6 +15,10 @@ on:
       timeout_minutes:
         required: true
         type: number
+      browser:
+        required: false
+        type: string
+        default: 'chrome'
       extra_scenarios:
         required: false
         type: string
@@ -107,7 +111,7 @@ jobs:
           rm -f tests/e2e/results/summary*.txt tests/e2e/results/report*.md tests/e2e/results/output*.log
 
           EXTRA="${{ inputs.extra_scenarios }}"
-          args=(e2e --suite "${{ inputs.suite }}" --logs hide)
+          args=(e2e --suite "${{ inputs.suite }}" --browser "${{ inputs.browser }}" --logs hide)
           if [ -n "$EXTRA" ]; then
             args+=(--extra "$EXTRA")
           fi
@@ -120,7 +124,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: e2e-results-${{ inputs.suite }}
+          name: e2e-results-${{ inputs.suite }}-${{ inputs.browser }}
           path: |
             tests/e2e/results/
           if-no-files-found: warn

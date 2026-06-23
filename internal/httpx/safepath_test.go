@@ -38,7 +38,6 @@ func TestSafePath(t *testing.T) {
 // TestSafePath_TempDir uses real temp directories so paths are valid on every OS
 // and never rely on hard-coded drive letters or mount points.
 func TestSafePath_TempDir(t *testing.T) {
-	// Create a real base directory with a nested child.
 	base := t.TempDir()
 	child := filepath.Join(base, "sub", "dir")
 	if err := os.MkdirAll(child, 0o755); err != nil {

@@ -1,0 +1,27 @@
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": "9999",
+    "token": "e2e-token"
+  },
+  "browsers": {
+    "default": "ghost-chrome"
+  },
+  "security": {
+    "allowEvaluate": false,
+    "allowDownload": false,
+    "allowUpload": false,
+    "allowStateExport": true,
+    "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "fixtures"
+    ],
+    "idpi": {
+      "enabled": true,
+      "strictMode": false,
+      "scanContent": true
+    }
+  }
+}

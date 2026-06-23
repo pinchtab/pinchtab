@@ -1,4 +1,23 @@
-import type { ActivityFilters, ActivityQuery } from "./types";
+import type {
+  ActivityFilters,
+  ActivityQuery,
+  DashboardActivityEvent,
+} from "./types";
+
+// Returns the precomputed numeric timestamp, falling back to parsing the
+// string for events that were not normalized through the workspace pipeline.
+export function eventTsMs(event: DashboardActivityEvent): number {
+  return event.tsMs ?? new Date(event.timestamp).getTime();
+}
+
+export function withClearedSessionFilter(
+  filters: ActivityFilters,
+): ActivityFilters {
+  return {
+    ...filters,
+    sessionId: "",
+  };
+}
 
 export const defaultActivityFilters: ActivityFilters = {
   agentId: "",

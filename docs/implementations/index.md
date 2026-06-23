@@ -4,7 +4,7 @@ This section covers implementation-focused documents: how specific subsystems wo
 
 Use these pages when you want lower-level detail than the architecture overview, but do not need full API reference material.
 
-- [Lite Engine](./lite-engine.md) — Chrome-free DOM capture using Gost-DOM
+- [Static Fetch (Lite Engine)](./lite-engine.md) — Chrome-free DOM capture using Gost-DOM (the lightweight HTTP+DOM path used by the `ghost-chrome` provider before escalating to Chrome; "lite engine" is deprecated terminology — see [terminology](../architecture/terminology.md))
 - [Managed Bridge vs Managed Direct CDP](./managed-bridge-vs-managed-direct-cdp.md)
 - [Chrome Profile Lock Recovery](./chrome-profile-lock-recovery.md)
 - [Chrome Files](./chrome-files.md)

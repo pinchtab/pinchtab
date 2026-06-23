@@ -1,8 +1,15 @@
 package config
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/chrome"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/cloak"
+	_ "github.com/pinchtab/pinchtab/internal/browsers/ghostchrome"
 )
 
 func TestValidateFileConfig_Valid(t *testing.T) {
@@ -416,7 +423,7 @@ func TestValidateFileConfig_MultipleErrors(t *testing.T) {
 	}
 }
 
-func TestValidateFileConfig_ChromeExtraFlags(t *testing.T) {
+func TestValidateFileConfig_BrowserExtraFlags(t *testing.T) {
 	tests := []struct {
 		name    string
 		flags   string
@@ -456,15 +463,136 @@ func TestValidateFileConfig_ChromeExtraFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := &FileConfig{
-				Browser: BrowserConfig{ChromeExtraFlags: tt.flags},
+				Browser: BrowserConfig{BrowserExtraFlags: tt.flags},
 			}
 			errs := ValidateFileConfig(fc)
 			hasErr := len(errs) > 0
 			if hasErr != tt.wantErr {
-				t.Fatalf("ChromeExtraFlags=%q: got error=%v, want %v (errs: %v)", tt.flags, hasErr, tt.wantErr, errs)
+				t.Fatalf("BrowserExtraFlags=%q: got error=%v, want %v (errs: %v)", tt.flags, hasErr, tt.wantErr, errs)
 			}
 			if tt.wantErr && !strings.Contains(errs[0].Error(), tt.wantMsg) {
 				t.Fatalf("expected error containing %q, got %v", tt.wantMsg, errs[0])
+			}
+		})
+	}
+}
+
+func TestValidateFileConfig_CloakBrowser(t *testing.T) {
+	quota := 2048
+	fontsDir := t.TempDir()
+	// Valid cloak config with browsers.default instead of browser.provider.
+	valid := &FileConfig{
+		Browsers: BrowsersConfig{Default: BrowserCloak},
+		Browser: BrowserConfig{
+			BrowserBinary: "/opt/cloakbrowser/chrome",
+			Cloak: CloakBrowserConfig{
+				FingerprintSeed: "42069",
+				Platform:        "windows",
+				Locale:          "en-GB",
+				Timezone:        "Europe/London",
+				WebRTCIP:        "auto",
+				FontsDir:        fontsDir,
+				StorageQuotaMB:  &quota,
+			},
+		},
+	}
+	for _, e := range ValidateFileConfig(valid) {
+		t.Fatalf("ValidateFileConfig(valid cloak config) unexpected error = %v", e)
+	}
+
+	// browser.provider presence triggers a hard error regardless of value.
+	providerFC := &FileConfig{Browser: BrowserConfig{Provider: "firefox"}}
+	providerErrs := ValidateFileConfig(providerFC)
+	found := false
+	for _, err := range providerErrs {
+		if strings.Contains(err.Error(), "browser.provider is no longer supported") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected browser.provider removal error, got: %v", providerErrs)
+	}
+
+	negativeQuota := -1
+	tests := []struct {
+		name string
+		fc   *FileConfig
+		want string
+	}{
+		{
+			name: "invalid platform",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{Platform: "ios"},
+			}},
+			want: "browser.cloak.platform",
+		},
+		{
+			name: "negative storage quota",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{StorageQuotaMB: &negativeQuota},
+			}},
+			want: "browser.cloak.storageQuotaMB",
+		},
+		{
+			name: "fingerprint seed whitespace",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{FingerprintSeed: "42 069"},
+			}},
+			want: "browser.cloak.fingerprintSeed",
+		},
+		{
+			name: "invalid timezone",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{Timezone: "Not/AZone"},
+			}},
+			want: "browser.cloak",
+		},
+		{
+			name: "invalid locale",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{Locale: "en-gb"},
+			}},
+			want: "browser.cloak",
+		},
+		{
+			name: "invalid webrtc ip",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{WebRTCIP: "not-an-ip"},
+			}},
+			want: "browser.cloak.webrtcIP",
+		},
+		{
+			name: "fonts dir must exist",
+			fc: &FileConfig{Browser: BrowserConfig{
+				BrowserBinary: "/opt/cloakbrowser/chrome",
+				Cloak:         CloakBrowserConfig{FontsDir: "/definitely/not/a/real/fonts/dir"},
+			}},
+			want: "browser.cloak.fontsDir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateFileConfig(tt.fc)
+			if len(errs) == 0 {
+				t.Fatalf("ValidateFileConfig() returned no errors, want %s", tt.want)
+			}
+			found := false
+			for _, err := range errs {
+				if strings.Contains(err.Error(), tt.want) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("ValidateFileConfig() errors = %v, want field %s", errs, tt.want)
 			}
 		})
 	}
@@ -482,7 +610,6 @@ func TestValidationError_Error(t *testing.T) {
 }
 
 func TestValidEnumValues(t *testing.T) {
-	// Test that the valid values match the validation functions
 	for _, level := range ValidStealthLevels() {
 		if !isValidStealthLevel(level) {
 			t.Errorf("ValidStealthLevels contains %q but isValidStealthLevel returns false", level)
@@ -512,9 +639,20 @@ func TestValidEnumValues(t *testing.T) {
 			t.Errorf("ValidAttachSchemes contains %q but isValidAttachScheme returns false", scheme)
 		}
 	}
-}
 
-// --- IDPI validation tests ---
+	for _, policy := range ValidLifecyclePolicies() {
+		if !isValidLifecyclePolicy(policy) {
+			t.Errorf("ValidLifecyclePolicies contains %q but isValidLifecyclePolicy returns false", policy)
+		}
+	}
+
+	// Known-bad values must be rejected by every membership check.
+	if isValidStealthLevel("bogus") || isValidEvictionPolicy("bogus") ||
+		isValidStrategy("bogus") || isValidAllocationPolicy("bogus") ||
+		isValidAttachScheme("bogus") || isValidLifecyclePolicy("bogus") {
+		t.Error("a bogus value was accepted by a membership check")
+	}
+}
 
 // TestValidateIDPIConfig_Disabled verifies that a disabled IDPI config produces
 // no errors regardless of what fields are set.
@@ -528,8 +666,6 @@ func TestValidateIDPIConfig_Disabled(t *testing.T) {
 	}
 }
 
-// TestValidateIDPIConfig_ValidConfig verifies that a well-formed enabled config
-// produces no errors.
 func TestValidateIDPIConfig_ValidConfig(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
 		Enabled:        true,
@@ -540,8 +676,6 @@ func TestValidateIDPIConfig_ValidConfig(t *testing.T) {
 	}
 }
 
-// TestValidateIDPIConfig_EmptyDomain verifies that an empty or whitespace-only
-// domain pattern is rejected.
 func TestValidateIDPIConfig_EmptyDomain(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -566,8 +700,6 @@ func TestValidateIDPIConfig_EmptyDomain(t *testing.T) {
 	}
 }
 
-// TestValidateIDPIConfig_DomainWithInternalWhitespace verifies that a domain
-// pattern containing internal spaces is rejected.
 func TestValidateIDPIConfig_DomainWithInternalWhitespace(t *testing.T) {
 	errs := validateIDPIConfig(IDPIConfig{
 		Enabled: true,
@@ -788,8 +920,6 @@ func TestValidateFileConfig_AutoSolverValidation(t *testing.T) {
 	}
 }
 
-// TestValidateIDPIConfig_EmptyCustomPattern verifies that an empty or
-// whitespace-only custom pattern is rejected.
 func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {
 	cases := []string{"", "  ", "\t"}
 	for _, p := range cases {
@@ -905,5 +1035,79 @@ func TestValidateFileConfig_TabPolicyBlock(t *testing.T) {
 				t.Errorf("got errs=%v, want error=%v", errs, tt.wantErr)
 			}
 		})
+	}
+}
+
+// testStubBrowser is a minimal Browser implementation for testing that
+// config validation accepts any registered provider without config code edits.
+type testStubBrowser struct{}
+
+func (testStubBrowser) ID() string                                                  { return "validationstub" }
+func (testStubBrowser) DisplayName() string                                         { return "ValidationStub" }
+func (testStubBrowser) Capabilities() browsers.CapabilitySet                        { return browsers.CapabilitySet{} }
+func (testStubBrowser) DiscoverBinary() browsers.BinaryDiscovery                    { return browsers.BinaryDiscovery{} }
+func (testStubBrowser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck { return nil }
+func (testStubBrowser) BuildLaunchArgs(_ browsers.LaunchConfig) ([]string, []string, error) {
+	return nil, nil, nil
+}
+func (testStubBrowser) SupportsRemoteCDP() bool { return false }
+func (testStubBrowser) GeoAlignment(_ browsers.GeoConfig) browsers.GeoStrategy {
+	return browsers.GeoStrategy{}
+}
+func (testStubBrowser) ValidateTarget(_ browsers.TargetConfig) error { return nil }
+func (testStubBrowser) ClassifyLaunchError(_ browsers.LaunchFailure) browsers.LaunchErrorKind {
+	return browsers.LaunchErrorUnknown
+}
+func (testStubBrowser) CanHandle(_ browsers.RequestIntent) browsers.HandleDecision {
+	return browsers.HandleDecision{Decision: browsers.DecisionHandle}
+}
+func (testStubBrowser) NewRuntimeInstance(_ context.Context, _ bool) browsers.RuntimeInstance {
+	return nil
+}
+
+var registerStubOnce sync.Once
+
+func TestValidationAcceptsRegisteredStubProvider(t *testing.T) {
+	// Register a stub provider that config code has never heard of.
+	registerStubOnce.Do(func() {
+		browsers.Register(&testStubBrowser{})
+	})
+
+	// As browsers.default: should not produce an "unknown browser" error.
+	fc := &FileConfig{Browsers: BrowsersConfig{Default: "validationstub"}}
+	errs := ValidateFileConfig(fc)
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "validationstub") && strings.Contains(e.Error(), "unknown") {
+			t.Fatalf("stub provider should be accepted as browsers.default; got error: %s", e.Error())
+		}
+	}
+
+	// browser.provider is rejected regardless of value.
+	fcLegacy := &FileConfig{Browser: BrowserConfig{Provider: "validationstub"}}
+	legacyErrs := ValidateFileConfig(fcLegacy)
+	found := false
+	for _, e := range legacyErrs {
+		if strings.Contains(e.Error(), "browser.provider is no longer supported") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected browser.provider removal error for stub provider, got: %v", legacyErrs)
+	}
+
+	// As a target provider: should not produce an "unknown provider" error.
+	fc2 := &FileConfig{
+		Browser: BrowserConfig{
+			Targets: BrowserTargetsConfig{
+				"stub-target": {Provider: "validationstub"},
+			},
+		},
+	}
+	errs2 := ValidateFileConfig(fc2)
+	for _, e := range errs2 {
+		if strings.Contains(e.Error(), "stub-target") && strings.Contains(e.Error(), "unknown") {
+			t.Fatalf("stub target provider should be accepted; got error: %s", e.Error())
+		}
 	}
 }

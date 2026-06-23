@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"gopkg.in/yaml.v3"
 )
@@ -61,43 +59,16 @@ import (
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 
-	// --- Lite engine fast path ---
 	tabID := r.URL.Query().Get("tabId")
-	h.recordReadRequest(r, "snapshot", tabID)
-	if h.useLite(engine.CapSnapshot, "") {
-		h.recordEngine(r, "lite")
-		result, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
-		if err != nil {
-			if engine.IsIDPIBlocked(err) {
-				httpx.Error(w, http.StatusForbidden, err)
-			} else {
-				httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
-			}
-			return
-		}
-		// Convert to bridge.A11yNode for API compatibility.
-		flat := make([]bridge.A11yNode, len(result.Nodes))
-		for i, n := range result.Nodes {
-			flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
-		}
-		w.Header().Set("X-Engine", "lite")
-		httpx.JSON(w, 200, map[string]any{"engine": "lite", "nodes": flat})
+	effectiveCfg, snapChromeRoute, ok := h.resolveReadRouting(w, r, tabID, "snapshot", browsers.ShapeStaticSnapshot)
+	if !ok {
 		return
 	}
 
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
-
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 
-	// filter and tabID already parsed above for lite path
 	doDiff := r.URL.Query().Get("diff") == "true"
 	format := r.URL.Query().Get("format")
 	output := r.URL.Query().Get("output")
@@ -119,18 +90,12 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+	resolvedTabID, tCtx, cancel, ok := h.resolveReadContext(w, r, tabID, effectiveCfg.ActionTimeout)
+	if !ok {
 		return
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	defer cancel()
 
 	if reqNoAnim && !h.Config.NoAnimations {
 		if err := bridge.DisableAnimationsOnce(tCtx); err != nil {
@@ -139,76 +104,79 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	nodes, err := bridge.FetchAXTree(tCtx)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("a11y tree: %w", err))
-		return
-	}
-	nodes = h.scopeSnapshotNodesByFrame(nodes, h.selectorFrameID(resolvedTabID))
-	treeResp := struct {
-		Nodes []bridge.RawAXNode `json:"nodes"`
-	}{Nodes: nodes}
-
+	var flat []bridge.A11yNode
+	var refs map[string]int64
+	var url, title string
 	var scopeNodeID int64
-	if selector != "" {
-		var scopeErr error
-		scopeNodeID, scopeErr = h.resolveSelectorNodeID(tCtx, resolvedTabID, selector)
-		if scopeErr != nil {
-			httpx.Error(w, 400, frameScopedSelectorError("selector", scopeErr))
+
+	frameScope := h.selectorFrameID(resolvedTabID)
+	if frameScope != "" || selector != "" {
+		// Frame-scoped or selector-scoped: inline AX tree fetch with scoping.
+		rawNodes, err := bridge.FetchAXTree(tCtx)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("a11y tree: %w", err))
 			return
 		}
+		rawNodes = bridge.FilterAXNodesByFrame(rawNodes, frameScope)
 
-		treeResp.Nodes = bridge.FilterSubtree(treeResp.Nodes, scopeNodeID)
+		if selector != "" {
+			var scopeErr error
+			scopeNodeID, scopeErr = h.resolveSelectorNodeID(tCtx, resolvedTabID, selector)
+			if scopeErr != nil {
+				httpx.Error(w, 400, frameScopedSelectorError("selector", scopeErr))
+				return
+			}
+			rawNodes = bridge.FilterSubtree(rawNodes, scopeNodeID)
+		}
+
+		flat, refs = bridge.BuildSnapshot(rawNodes, filter, maxDepth)
+		_ = bridge.EnrichA11yNodesWithDOMMetadata(tCtx, flat)
+		url, _ = h.Bridge.CurrentURL(tCtx)
+		title, _ = h.Bridge.CurrentTitle(tCtx)
+	} else {
+		// Unscoped: delegate to Bridge (enables ghost-chrome routing via BridgeAdapter).
+		result, err := h.Bridge.Snapshot(tCtx, resolvedTabID, filter, bridge.ContentParams{
+			MaxDepth: maxDepth,
+		})
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("snapshot: %w", err))
+			return
+		}
+		flat = result.Nodes
+		refs = result.Refs
+		url = result.URL
+		title = result.Title
+		if result.Route != nil {
+			snapChromeRoute = result.Route
+		}
 	}
 
-	flat, refs := bridge.BuildSnapshot(treeResp.Nodes, filter, maxDepth)
-	_ = bridge.EnrichA11yNodesWithDOMMetadata(tCtx, flat)
-
-	// Check if scoped snapshot returned 0 nodes but element exists in DOM
 	var scopedEmptyHint string
 	if len(flat) == 0 && selector != "" && scopeNodeID != 0 {
-		// Element was found (no scopeErr) but has no accessible children
-		// Use the resolved nodeID to get element info via CDP
 		var elemInfo string
-		err := chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-			var result map[string]any
-			if execErr := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
-				"backendNodeId": scopeNodeID,
-			}, &result); execErr != nil {
-				return execErr
-			}
-			if node, ok := result["node"].(map[string]any); ok {
-				tag := node["localName"]
-				nodeType := node["nodeName"]
-				childCount := 0
-				if cc, ok := node["childNodeCount"].(float64); ok {
-					childCount = int(cc)
-				}
-				attrs := ""
-				if attrList, ok := node["attributes"].([]any); ok {
-					for i := 0; i+1 < len(attrList); i += 2 {
-						switch attrList[i] {
-						case "id":
-							attrs += "#" + attrList[i+1].(string)
-						case "class":
-							classes := strings.Fields(attrList[i+1].(string))
-							if len(classes) > 0 {
-								attrs += "." + strings.Join(classes[:min(2, len(classes))], ".")
-							}
-						}
+		nodeInfo, descErr := h.Bridge.DescribeNode(tCtx, scopeNodeID)
+		if descErr == nil && nodeInfo != nil {
+			tag := nodeInfo.LocalName
+			childCount := nodeInfo.ChildNodeCount
+			attrs := ""
+			for i := 0; i+1 < len(nodeInfo.Attributes); i += 2 {
+				switch nodeInfo.Attributes[i] {
+				case "id":
+					attrs += "#" + nodeInfo.Attributes[i+1]
+				case "class":
+					classes := strings.Fields(nodeInfo.Attributes[i+1])
+					if len(classes) > 0 {
+						attrs += "." + strings.Join(classes[:min(2, len(classes))], ".")
 					}
 				}
-				if tag != nil {
-					elemInfo = fmt.Sprintf("<%s%s> with %d child nodes", tag, attrs, childCount)
-				} else if nodeType != nil {
-					elemInfo = fmt.Sprintf("<%s%s> with %d child nodes", nodeType, attrs, childCount)
-				}
 			}
-			return nil
-		}))
-		if err == nil && elemInfo != "" {
+			if tag != "" {
+				elemInfo = fmt.Sprintf("<%s%s> with %d child nodes", tag, attrs, childCount)
+			}
+		}
+		if elemInfo != "" {
 			scopedEmptyHint = fmt.Sprintf("Element exists in DOM (%s) but has no accessible nodes. Use `text --selector %s` or `eval` to extract content.", elemInfo, selector)
-		} else if err == nil {
+		} else if descErr == nil {
 			scopedEmptyHint = fmt.Sprintf("Element exists in DOM but has no accessible nodes. Use `text --selector %s` or `eval` to extract content.", selector)
 		}
 	}
@@ -231,11 +199,6 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		Nodes:   flat,
 	})
 
-	var url, title string
-	_ = chromedp.Run(tCtx,
-		chromedp.Location(&url),
-		chromedp.Title(&title),
-	)
 	h.recordResolvedURL(r, url)
 
 	// IDPI: scan accessibility-tree node names and values for injection patterns.
@@ -380,7 +343,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{
 			"url":     url,
 			"title":   title,
-			"engine":  "chrome",
+			"route":   snapChromeRoute,
 			"diff":    true,
 			"added":   added,
 			"changed": changed,
@@ -445,11 +408,11 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(yamlContent)
 	default:
 		resp := map[string]any{
-			"url":    url,
-			"title":  title,
-			"engine": "chrome",
-			"nodes":  flat,
-			"count":  len(flat),
+			"url":   url,
+			"title": title,
+			"route": snapChromeRoute,
+			"nodes": flat,
+			"count": len(flat),
 		}
 		if truncated {
 			resp["truncated"] = true
@@ -469,23 +432,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleTabSnapshot returns snapshot for a tab identified by path ID.
-//
 // @Endpoint GET /tabs/{id}/snapshot
 func (h *Handlers) HandleTabSnapshot(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-
-	h.HandleSnapshot(w, req)
+	h.withPathTabID(w, r, h.HandleSnapshot)
 }

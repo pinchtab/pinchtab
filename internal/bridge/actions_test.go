@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -350,19 +351,77 @@ func TestRemovedHumanActionKindsAreUnknown(t *testing.T) {
 	}
 }
 
-func TestExecuteAction_ClickRejectsModeAndHumanizeTogether(t *testing.T) {
-	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-	_, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
-		Kind:     ActionClick,
-		Ref:      "e5",
-		Mode:     "dom",
-		Humanize: boolPtr(true),
-	})
-	if err == nil {
-		t.Fatal("expected error when mode and humanize are both set")
+func TestExecuteAction_ClickRejectsModeAndEffectiveHumanizeTogether(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *config.RuntimeConfig
+		req    ActionRequest
+	}{
+		{
+			name:   "request humanize true",
+			config: &config.RuntimeConfig{},
+			req: ActionRequest{
+				Kind:     ActionClick,
+				Ref:      "e5",
+				Mode:     "dom",
+				Humanize: boolPtr(true),
+			},
+		},
+		{
+			name:   "instance humanize default",
+			config: &config.RuntimeConfig{Humanize: true},
+			req: ActionRequest{
+				Kind: ActionClick,
+				Ref:  "e5",
+				Mode: "dispatch",
+			},
+		},
 	}
-	if !strings.Contains(err.Error(), "mutually exclusive") {
-		t.Fatalf("expected mutually exclusive error, got: %v", err)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := New(context.TODO(), nil, tc.config)
+			_, err := b.ExecuteAction(context.Background(), ActionClick, tc.req)
+			if err == nil {
+				t.Fatal("expected error when mode and humanize are both set")
+			}
+			if !strings.Contains(err.Error(), "mutually exclusive") {
+				t.Fatalf("expected mutually exclusive error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestExecuteAction_ClickModeAllowedWhenHumanizeOverrideDisablesDefault(t *testing.T) {
+	origJSClick := jsClickByBackendNodeAction
+	t.Cleanup(func() {
+		jsClickByBackendNodeAction = origJSClick
+	})
+
+	called := false
+	jsClickByBackendNodeAction = func(ctx context.Context, nodeID int64) error {
+		called = true
+		if nodeID != 42 {
+			t.Fatalf("nodeID = %d, want 42", nodeID)
+		}
+		return nil
+	}
+
+	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
+		Kind:     ActionClick,
+		NodeID:   42,
+		Mode:     "dom",
+		Humanize: boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("expected raw mode click to be allowed when humanize=false overrides default, got: %v", err)
+	}
+	if !called {
+		t.Fatal("expected dom mode click path to run")
+	}
+	if clicked, _ := res["clicked"].(bool); !clicked {
+		t.Fatalf("expected clicked result, got %#v", res)
 	}
 }
 
@@ -398,6 +457,50 @@ func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "need selector") {
 		t.Fatalf("humanized click should require selector/ref/nodeId, got: %v", err)
+	}
+}
+
+func TestClickAction_HumanizedDialogActionArmsAutoHandler(t *testing.T) {
+	origClickElement := clickElementAction
+	t.Cleanup(func() {
+		clickElementAction = origClickElement
+	})
+
+	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	dm := b.GetDialogManager()
+
+	clickElementAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
+		if backendNodeID != 42 {
+			return errors.New("unexpected backend node id")
+		}
+		armed := dm.TakeAutoHandler("tab-dialog")
+		if armed == nil {
+			return errors.New("dialog auto-handler was not armed")
+		}
+		if armed.Action != "accept" || armed.Text != "typed response" {
+			return errors.New("dialog auto-handler had wrong action or text")
+		}
+		return nil
+	}
+
+	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
+		Kind:         ActionClick,
+		TabID:        "tab-dialog",
+		NodeID:       42,
+		DialogAction: "accept",
+		DialogText:   "typed response",
+	})
+	if err != nil {
+		t.Fatalf("humanized click with dialogAction returned error: %v", err)
+	}
+	if clicked, _ := res["clicked"].(bool); !clicked {
+		t.Fatalf("expected clicked result, got %#v", res)
+	}
+	if human, _ := res["human"].(bool); !human {
+		t.Fatalf("expected human=true result, got %#v", res)
+	}
+	if dm.HasAutoHandler("tab-dialog") {
+		t.Fatal("dialog auto-handler should be consumed or cleaned up after click")
 	}
 }
 
@@ -724,8 +827,6 @@ func TestUncheckAction_WithSelector_UsesCSSPath(t *testing.T) {
 	}
 }
 
-// ── Keyboard action tests ──────────────────────────────────────────────
-
 func TestKeyboardTypeAction_Registered(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 	if _, ok := b.Actions[ActionKeyboardType]; !ok {
@@ -837,8 +938,6 @@ func TestKeyUpAction_WithCancelledContext(t *testing.T) {
 		t.Fatal("expected error from cancelled context")
 	}
 }
-
-// ── ScrollIntoView action tests ────────────────────────────────────────
 
 func TestScrollIntoViewAction_Registered(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})

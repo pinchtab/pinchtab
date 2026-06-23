@@ -97,10 +97,26 @@ export interface BackendObservabilityConfig {
   activity: BackendActivityConfig;
 }
 
+export type BackendBrowserProvider = "chrome" | "cloak" | "ghost-chrome";
+
+export interface BackendCloakBrowserConfig {
+  fingerprintSeed: string;
+  platform: "" | "windows" | "macos" | "linux";
+  locale: string;
+  timezone: string;
+  webrtcIP: string;
+  fontsDir: string;
+  storageQuotaMB?: number;
+  disableDefaultStealthArgs?: boolean;
+}
+
 export interface BackendBrowserConfig {
+  provider: BackendBrowserProvider;
   version: string;
   binary: string;
+  remoteDebuggingPort?: number;
   extraFlags: string;
+  cloak: BackendCloakBrowserConfig;
   extensionPaths: string[];
 }
 
@@ -202,9 +218,15 @@ export interface BackendAutoSolverConfig {
   llmFallback: boolean;
 }
 
+export interface BackendBrowsersConfig {
+  default?: BackendBrowserProvider;
+  available?: string[];
+}
+
 export interface BackendConfig {
   server: BackendServerConfig;
   browser: BackendBrowserConfig;
+  browsers?: BackendBrowsersConfig;
   instanceDefaults: BackendInstanceDefaultsConfig;
   security: BackendSecurityConfig;
   profiles: BackendProfilesConfig;
@@ -233,10 +255,25 @@ export const defaultBackendConfig: BackendConfig = {
     cookieSecure: undefined,
   },
   browser: {
+    provider: "chrome",
     version: "144.0.7559.133",
     binary: "",
+    remoteDebuggingPort: undefined,
     extraFlags: "",
+    cloak: {
+      fingerprintSeed: "",
+      platform: "",
+      locale: "",
+      timezone: "",
+      webrtcIP: "",
+      fontsDir: "",
+      storageQuotaMB: undefined,
+      disableDefaultStealthArgs: true,
+    },
     extensionPaths: [],
+  },
+  browsers: {
+    default: "chrome",
   },
   instanceDefaults: {
     mode: "headless",
@@ -356,9 +393,23 @@ export function normalizeBackendConfig(
     browser: {
       ...defaultBackendConfig.browser,
       ...(input?.browser ?? {}),
+      provider:
+        input?.browser?.provider === "cloak"
+          ? "cloak"
+          : input?.browser?.provider === "ghost-chrome"
+            ? "ghost-chrome"
+            : "chrome",
+      cloak: {
+        ...defaultBackendConfig.browser.cloak,
+        ...(input?.browser?.cloak ?? {}),
+      },
       extensionPaths:
         input?.browser?.extensionPaths ??
         defaultBackendConfig.browser.extensionPaths,
+    },
+    browsers: {
+      ...defaultBackendConfig.browsers,
+      ...(input?.browsers ?? {}),
     },
     instanceDefaults: {
       ...defaultBackendConfig.instanceDefaults,

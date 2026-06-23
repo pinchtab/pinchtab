@@ -27,8 +27,6 @@ func NewManager(launcher InstanceLauncher, fetcher TabFetcher) *Manager {
 	}
 }
 
-// --- Lifecycle (delegates to Repository) ---
-
 // Launch starts a new instance.
 func (m *Manager) Launch(name, port string, headless bool) (*bridge.Instance, error) {
 	return m.Repo.Launch(name, port, headless)
@@ -55,8 +53,6 @@ func (m *Manager) Running() []bridge.Instance {
 	return m.Repo.Running()
 }
 
-// --- Discovery (delegates to Locator) ---
-
 // FindInstanceByTabID returns the instance that owns a tab.
 func (m *Manager) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 	return m.Locator.FindInstanceByTabID(tabID)
@@ -71,8 +67,6 @@ func (m *Manager) RegisterTab(tabID, instanceID string) {
 func (m *Manager) InvalidateTab(tabID string) {
 	m.Locator.Invalidate(tabID)
 }
-
-// --- Allocation (delegates to Allocator) ---
 
 // Allocate selects a running instance using the configured policy.
 func (m *Manager) Allocate() (*bridge.Instance, error) {

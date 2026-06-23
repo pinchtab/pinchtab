@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-// ActionFunc is the type for action handlers.
 type ActionFunc func(ctx context.Context, req ActionRequest) (map[string]any, error)
 
 // ActionRequest defines the parameters for a browser action.
@@ -95,6 +94,12 @@ type ActionRequest struct {
 	// DialogText is the optional prompt text used when DialogAction is
 	// "accept" on a prompt() dialog.
 	DialogText string `json:"dialogText,omitempty"`
+
+	// Browser specifies which browser to use for this request (e.g. "chrome",
+	// "cloak", "ghost-chrome"). Validated against configured + registry
+	// browsers. Recorded on route metadata but does not change actual
+	// routing yet.
+	Browser string `json:"browser,omitempty"`
 }
 
 type actionRequestAlias ActionRequest
@@ -148,7 +153,7 @@ func hasJSONKey(raw map[string]json.RawMessage, key string) bool {
 func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionRequest) (map[string]any, error) {
 	kind = CanonicalActionKind(kind)
 	req.Kind = CanonicalActionKind(req.Kind)
-	if kind == ActionClick && req.Humanize != nil && *req.Humanize && strings.TrimSpace(req.Mode) != "" {
+	if kind == ActionClick && b.effectiveHumanize(req) && strings.TrimSpace(req.Mode) != "" {
 		return nil, fmt.Errorf("mode and humanize are mutually exclusive")
 	}
 	fn, ok := b.Actions[kind]

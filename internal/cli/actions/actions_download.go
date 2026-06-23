@@ -38,7 +38,6 @@ func Download(client *http.Client, base, token string, args []string, output str
 
 	printDownloadResult(result)
 
-	// If -o flag set, decode base64 and save to file
 	if output != "" {
 		savedBytes, err := saveDownloadData(result, output)
 		if err != nil {

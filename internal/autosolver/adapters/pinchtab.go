@@ -43,10 +43,23 @@ func (p *PinchtabPage) Title() string {
 }
 
 func (p *PinchtabPage) HTML() (string, error) {
+	return p.HTMLWithin(0)
+}
+
+// HTMLWithin fetches the outer HTML bounded by timeout (0 = no bound). The
+// deadline is derived from the tab context so chromedp keeps the page target
+// AND cancels the in-flight CDP command when it fires — a stalled fetch returns
+// promptly without leaking a worker goroutine.
+func (p *PinchtabPage) HTMLWithin(timeout time.Duration) (string, error) {
+	ctx := p.ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(p.ctx, timeout)
+		defer cancel()
+	}
 	var html string
-	err := chromedp.Run(p.ctx, chromedp.Evaluate(
-		`document.documentElement.outerHTML`, &html))
-	if err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(
+		`document.documentElement.outerHTML`, &html)); err != nil {
 		return "", fmt.Errorf("get HTML: %w", err)
 	}
 	return html, nil

@@ -10,6 +10,7 @@ assert_ok "navigate to form.html"
 
 pt_get /snapshot
 assert_ok "snapshot to populate ref cache"
+FORM_SNAPSHOT="$RESULT"
 
 # Extract refs for various elements we will inspect.
 # form.html has: textbox (username), textbox (email), textbox (password),
@@ -34,6 +35,60 @@ else
 fi
 
 assert_json_eq "$RESULT" '.selector' 'input' "selector echoed back"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+# /count is a unified-selector counter, not CSS-only. Each family below
+# returns a true cardinality (css/xpath/text) or 0/1 for single-node
+# families (ref/first/last/nth).
+start_test "inspect: GET /count across selector families"
+
+# xpath: same input set as the css count above, via snapshotLength.
+pt_get "/count?selector=xpath:%2F%2Finput"
+assert_ok "count inputs by xpath"
+XPATH_COUNT=$(echo "$RESULT" | jq '.count')
+if [ "$XPATH_COUNT" -ge 3 ]; then
+  echo -e "  ${GREEN}✓${NC} xpath count >= 3 (got: $XPATH_COUNT)"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} xpath count < 3 (got: $XPATH_COUNT)"
+  ((ASSERTIONS_FAILED++)) || true
+fi
+
+# ref: a single element ⇒ count is 0 or 1.
+if assert_ref_found "$INPUT_REF" "textbox ref for /count"; then
+  pt_get "/count?selector=${INPUT_REF}"
+  assert_ok "count by ref"
+  assert_json_eq "$RESULT" '.count' '1' "ref count is 1"
+fi
+
+# ref to a non-existent element ⇒ count 0, not an error.
+pt_get "/count?selector=e999999"
+assert_ok "count by missing ref does not error"
+assert_json_eq "$RESULT" '.count' '0' "missing ref count is 0"
+
+# first:/last: wrap a CSS selector and select a single element ⇒ count 0 or 1.
+pt_get "/count?selector=first:input"
+assert_ok "count first:input"
+assert_json_eq "$RESULT" '.count' '1' "first:input count is 1"
+
+pt_get "/count?selector=last:input"
+assert_ok "count last:input"
+assert_json_eq "$RESULT" '.count' '1' "last:input count is 1"
+
+# text: counts distinct leaf-most elements whose text matches; the Submit
+# button text should resolve to at least one element.
+pt_get "/count?selector=text:Submit"
+assert_ok "count text:Submit"
+TEXT_COUNT=$(echo "$RESULT" | jq '.count')
+if [ "$TEXT_COUNT" -ge 1 ]; then
+  echo -e "  ${GREEN}✓${NC} text:Submit count >= 1 (got: $TEXT_COUNT)"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} text:Submit count < 1 (got: $TEXT_COUNT)"
+  ((ASSERTIONS_FAILED++)) || true
+fi
 
 end_test
 
@@ -132,12 +187,60 @@ assert_http_status "400" "missing ref returns 400"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+# The ref= param accepts unified selectors (CSS / #id / text:), not just
+# snapshot refs, via resolveElementNodeID. Guards the branch change that
+# widened these DOM helpers beyond refs. %23 is the URL-encoded '#'.
+start_test "inspect: DOM helpers accept a CSS selector via ref="
+
+pt_get "/visible?ref=%23username"
+assert_ok "/visible by #id selector"
+assert_json_eq "$RESULT" '.visible' 'true' "#username is visible"
+
+pt_get "/enabled?ref=%23username"
+assert_ok "/enabled by #id selector"
+assert_json_eq "$RESULT" '.enabled' 'true' "#username is enabled"
+
+pt_get "/checked?ref=%23terms"
+assert_ok "/checked by #id selector"
+assert_json_eq "$RESULT" '.checked' 'false' "#terms is not checked"
+
+pt_get "/attr?ref=%23username&name=type"
+assert_ok "/attr by #id selector"
+assert_json_eq "$RESULT" '.value' 'text' "#username type attribute is text"
+
+pt_get "/box?ref=%23submit-btn"
+assert_ok "/box by #id selector"
+assert_json_exists "$RESULT" '.box.width' "box width present for #submit-btn"
+
+pt_get "/value?ref=%23username"
+assert_ok "/value by #id selector"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+# A selector/ref matching no element is a client error (404), not a 500.
+# Branch change: genuine no-match maps to ErrElementNotFound (404) while
+# CDP/internal faults still surface as 5xx.
+start_test "inspect: unmatched selector returns 404 (not 500)"
+
+pt_get "/visible?ref=%23does-not-exist"
+assert_http_status "404" "/visible unmatched selector returns 404"
+
+pt_get "/attr?ref=%23does-not-exist&name=type"
+assert_http_status "404" "/attr unmatched selector returns 404"
+
+pt_get "/box?ref=%23does-not-exist"
+assert_http_status "404" "/box unmatched selector returns 404"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "inspect: password field values redacted in snapshot"
 
 # Type a value into the password field so there's something to redact.
-PASS_REF=$(find_ref_by_role_and_name "textbox" "Password:" "$RESULT")
+PASS_REF=$(find_ref_by_role_and_name "textbox" "Password:" "$FORM_SNAPSHOT")
 if [ -z "$PASS_REF" ] || [ "$PASS_REF" = "null" ]; then
-  PASS_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.name | test("password";"i")) | .ref] | first // empty')
+  PASS_REF=$(echo "$FORM_SNAPSHOT" | jq -r '[.nodes[] | select(.name | test("password";"i")) | .ref] | first // empty')
 fi
 
 if [ -n "$PASS_REF" ] && [ "$PASS_REF" != "null" ]; then

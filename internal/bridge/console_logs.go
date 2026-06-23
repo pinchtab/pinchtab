@@ -119,7 +119,6 @@ func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []LogEntry {
 	if limit > s.maxLines {
 		limit = s.maxLines
 	}
-	// Return most recent entries
 	start := count - limit
 	result := make([]LogEntry, limit)
 	copy(result, t.Console[start:])

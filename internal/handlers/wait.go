@@ -1,16 +1,13 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -129,43 +126,7 @@ func (h *Handlers) HandleWait(w http.ResponseWriter, r *http.Request) {
 //
 // @Endpoint POST /tabs/{id}/wait
 func (h *Handlers) HandleTabWait(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	body := map[string]any{}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	if rawTabID, ok := body["tabId"]; ok {
-		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
-			return
-		} else if provided != tabID {
-			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
-			return
-		}
-	}
-
-	body["tabId"] = tabID
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
-		return
-	}
-
-	cloned := r.Clone(r.Context())
-	cloned.Body = io.NopCloser(bytes.NewReader(payload))
-	cloned.ContentLength = int64(len(payload))
-	cloned.Header = r.Header.Clone()
-	cloned.Header.Set("Content-Type", "application/json")
-	h.HandleWait(w, cloned)
+	h.withPathTabIDBody(w, r, h.HandleWait)
 }
 
 func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req waitRequest) {
@@ -211,7 +172,6 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		return
 	}
 
-	// All other modes need a browser tab.
 	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
 		WriteTabContextError(w, err, 404)
@@ -262,32 +222,25 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		matchLabel = "fn"
 	}
 
-	// Poll loop
-	for {
+	err = pollUntil(tCtx, pollInterval, func() (bool, error) {
 		var result bool
-		evalErr := chromedp.Run(tCtx, chromedp.Evaluate(js, &result))
-		if evalErr == nil && result {
-			httpx.JSON(w, 200, waitResponse{
-				Waited:  true,
-				Elapsed: time.Since(start).Milliseconds(),
-				Match:   matchLabel,
-			})
-			return
-		}
-
-		select {
-		case <-tCtx.Done():
-			elapsed := time.Since(start).Milliseconds()
-			httpx.JSON(w, 200, waitResponse{
-				Waited:  false,
-				Elapsed: elapsed,
-				Error:   fmt.Sprintf("timeout after %dms waiting for %s", elapsed, mode),
-			})
-			return
-		case <-time.After(pollInterval):
-			// continue polling
-		}
+		evalErr := h.Bridge.Evaluate(tCtx, js, &result, bridge.EvalOpts{})
+		return evalErr == nil && result, nil
+	})
+	if err == nil {
+		httpx.JSON(w, 200, waitResponse{
+			Waited:  true,
+			Elapsed: time.Since(start).Milliseconds(),
+			Match:   matchLabel,
+		})
+		return
 	}
+	elapsed := time.Since(start).Milliseconds()
+	httpx.JSON(w, 200, waitResponse{
+		Waited:  false,
+		Elapsed: elapsed,
+		Error:   fmt.Sprintf("timeout after %dms waiting for %s", elapsed, mode),
+	})
 }
 
 // handleNetworkIdleWait polls the per-tab network monitor until in-flight
@@ -295,46 +248,55 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 // Falls back to a readyState=='complete' check if the monitor is unavailable
 // (e.g. tab created without network capture).
 func (h *Handlers) handleNetworkIdleWait(w http.ResponseWriter, ctx context.Context, start time.Time, tabID string, idleFor time.Duration) {
+	_, inflight, err := h.waitNetworkIdle(ctx, tabID, idleFor)
+	switch {
+	case errors.Is(err, errNetworkMonitorUnavailable):
+		httpx.JSON(w, 200, waitResponse{
+			Waited:  false,
+			Elapsed: time.Since(start).Milliseconds(),
+			Error:   "network monitor unavailable for tab",
+		})
+	case err != nil:
+		elapsed := time.Since(start).Milliseconds()
+		httpx.JSON(w, 200, waitResponse{
+			Waited:  false,
+			Elapsed: elapsed,
+			Error:   fmt.Sprintf("timeout after %dms waiting for network-idle (inflight=%d)", elapsed, inflight),
+		})
+	default:
+		httpx.JSON(w, 200, waitResponse{
+			Waited:  true,
+			Elapsed: time.Since(start).Milliseconds(),
+			Match:   "network-idle",
+		})
+	}
+}
+
+var errNetworkMonitorUnavailable = errors.New("network monitor unavailable for tab")
+
+// waitNetworkIdle polls the per-tab network monitor until in-flight requests have
+// stayed at zero for idleFor, or ctx is cancelled. It returns
+// errNetworkMonitorUnavailable when the tab has no network buffer, and the last
+// observed in-flight count alongside any cancellation error.
+func (h *Handlers) waitNetworkIdle(ctx context.Context, tabID string, idleFor time.Duration) (matched bool, inflight int, err error) {
 	mon := h.Bridge.NetworkMonitor()
 	var buf *bridge.NetworkBuffer
 	if mon != nil {
 		buf = mon.GetBuffer(tabID)
 	}
 	if buf == nil {
-		httpx.JSON(w, 200, waitResponse{
-			Waited:  false,
-			Elapsed: time.Since(start).Milliseconds(),
-			Error:   "network monitor unavailable for tab",
-		})
-		return
+		return false, 0, errNetworkMonitorUnavailable
 	}
 
-	ticker := time.NewTicker(networkIdlePoll)
-	defer ticker.Stop()
-
-	for {
+	err = pollUntil(ctx, networkIdlePoll, func() (bool, error) {
 		count, lastChange := buf.InflightStatus()
-		if count == 0 && time.Since(lastChange) >= idleFor {
-			httpx.JSON(w, 200, waitResponse{
-				Waited:  true,
-				Elapsed: time.Since(start).Milliseconds(),
-				Match:   "network-idle",
-			})
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			elapsed := time.Since(start).Milliseconds()
-			httpx.JSON(w, 200, waitResponse{
-				Waited:  false,
-				Elapsed: elapsed,
-				Error:   fmt.Sprintf("timeout after %dms waiting for network-idle (inflight=%d)", elapsed, count),
-			})
-			return
-		case <-ticker.C:
-		}
+		inflight = count
+		return count == 0 && time.Since(lastChange) >= idleFor, nil
+	})
+	if err != nil {
+		return false, inflight, err
 	}
+	return true, inflight, nil
 }
 
 // buildSelectorJS builds a JS expression for selector wait.
@@ -382,7 +344,6 @@ func buildSelectorJS(sel, state string) (string, string) {
 // buildURLMatchJS builds a JS expression that checks if the current URL matches a glob pattern.
 func buildURLMatchJS(pattern string) string {
 	// Convert glob to regex: ** → .*, * → [^/]*, ? → .
-	// For simplicity, we use a JS function that does basic glob matching.
 	return fmt.Sprintf(`(function(){
 		var p = %s;
 		var u = window.location.href;
@@ -396,7 +357,6 @@ func buildURLMatchJS(pattern string) string {
 	})()`, jsonStr(pattern))
 }
 
-// jsonStr returns a JSON-encoded string (with quotes).
 func jsonStr(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)

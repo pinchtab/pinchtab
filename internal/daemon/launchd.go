@@ -51,7 +51,7 @@ func (m *launchdManager) Start() (string, error) {
 	if err := ensureDaemonLogDir(m.env); err != nil {
 		return "", err
 	}
-	if _, err := runCommand(m.runner, "launchctl", "bootstrap", launchdDomainTarget(m.env), m.ServicePath()); err != nil && !strings.Contains(err.Error(), "already bootstrapped") {
+	if _, err := runCommand(m.runner, "launchctl", "bootstrap", launchdDomainTarget(m.env), m.ServicePath()); err != nil && !isLaunchdAlreadyBootstrapped(err) {
 		return "", err
 	}
 	if _, err := runCommand(m.runner, "launchctl", "kickstart", launchdDomainTarget(m.env)+"/"+pinchtabLaunchdLabel); err != nil {
@@ -148,15 +148,33 @@ func (m *launchdManager) ManualInstructions() string {
 	return b.String()
 }
 
+// launchctl error-message substrings treated as benign. "already bootstrapped"
+// is shared with isLaunchdAlreadyBootstrapped so the literal lives in one place.
+const (
+	launchdAlreadyBootstrapped = "already bootstrapped"
+	launchdExitStatus5         = "exit status 5"
+	launchdNoSuchProcess       = "No such process"
+	launchdNotFound            = "not found"
+)
+
+// isLaunchdAlreadyBootstrapped reports whether a launchctl error means the
+// service is already bootstrapped — for Start, that makes bootstrap an
+// effective no-op success. It is deliberately narrower than
+// isLaunchdIgnorableError (which also tolerates the teardown "service absent"
+// cases that a failed Start must NOT swallow).
+func isLaunchdAlreadyBootstrapped(err error) bool {
+	return err != nil && strings.Contains(err.Error(), launchdAlreadyBootstrapped)
+}
+
 func isLaunchdIgnorableError(err error) bool {
 	if err == nil {
 		return true
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "exit status 5") ||
-		strings.Contains(msg, "No such process") ||
-		strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "already bootstrapped")
+	return strings.Contains(msg, launchdExitStatus5) ||
+		strings.Contains(msg, launchdNoSuchProcess) ||
+		strings.Contains(msg, launchdNotFound) ||
+		strings.Contains(msg, launchdAlreadyBootstrapped)
 }
 
 func renderLaunchdPlist(execPath, configPath, homeDir, stdoutPath, stderrPath string) string {

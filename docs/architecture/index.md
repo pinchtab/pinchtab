@@ -22,6 +22,14 @@ PinchTab also supports an advanced attach path:
 
 The current managed implementation is bridge-backed. Any direct-CDP-only managed model is architectural discussion elsewhere, not the default runtime path in this codebase.
 
+Related architecture specs:
+
+- [Browser Abstraction](./browser-abstraction.md): the multi-browser target model
+  for selecting Chrome, CloakBrowser, and future providers per request (see the
+  Target Architecture section).
+- [Geo Provider](./geo-provider.md): proxy egress geo resolution, including the
+  proposed contract for a future HTTP-backed provider.
+
 ## System Overview
 
 ```mermaid

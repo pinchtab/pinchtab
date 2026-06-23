@@ -2,16 +2,22 @@ package bridge
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/contentguard"
+	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
 type TabEntry struct {
 	Ctx                   context.Context
 	Cancel                context.CancelFunc
 	Accessed              bool
-	CDPID                 string    // raw CDP target ID
-	CreatedAt             time.Time // when the tab was first created/registered
-	LastUsed              time.Time // last time the tab was accessed via TabContext
+	CDPID                 string // raw CDP target ID
+	CreatedAt             time.Time
+	LastUsed              time.Time
 	Policy                TabPolicyState
 	Watching              bool
 	ConsoleCaptureEnabled bool
@@ -84,4 +90,70 @@ type FrameScope struct {
 
 func (s FrameScope) Active() bool {
 	return s.FrameID != ""
+}
+
+type NavigateResult struct {
+	TabID string
+	URL   string
+	Title string
+	Route *browserops.RouteMetadata
+}
+
+// SnapshotResult is the bridge-level response from a snapshot operation.
+// It carries the rich A11yNode tree (not the simpler browserops.SnapshotNode)
+// together with ref-cache data so that handlers can store it via SetRefCache
+// without needing to call CDP directly.
+type SnapshotResult struct {
+	Nodes       []A11yNode
+	Refs        map[string]int64
+	Targets     map[string]RefTarget
+	URL         string
+	Title       string
+	Truncated   bool
+	Hint        string
+	IDPIWarning string
+	Route       *browserops.RouteMetadata
+}
+
+type TextResult struct {
+	Text        string
+	URL         string
+	Title       string
+	Truncated   bool
+	IDPIWarning string
+	Route       *browserops.RouteMetadata
+}
+
+type NavigateParams struct {
+	MaxRedirects       int
+	AllowInternal      bool
+	TrustedProxyCIDRs  []net.IPNet
+	TrustedResolvedIPs []net.IP
+	IDPIGuard          idpi.Guard
+	// NoEscalate makes a static-first bridge return *StaticEscalateError
+	// instead of internally escalating to Chrome. Handlers use it to defer
+	// the Chrome launch until the static path has proven insufficient.
+	NoEscalate bool
+	// SkipStatic bypasses the static-first attempt entirely (the handler
+	// already ran it via NoEscalate and is escalating).
+	SkipStatic bool
+}
+
+// StaticEscalateError signals that the static-first path cannot serve a
+// navigate (NavigateParams.NoEscalate mode) and the caller should launch
+// Chrome and retry with SkipStatic. Route carries the static attempt's
+// metadata so the caller can merge it with the Chrome attempt.
+type StaticEscalateError struct {
+	Quality int
+	Reason  string
+	Route   *browserops.RouteMetadata
+}
+
+func (e *StaticEscalateError) Error() string {
+	return fmt.Sprintf("static path cannot serve this navigate (quality %d): %s", e.Quality, e.Reason)
+}
+
+type ContentParams struct {
+	ContentGuard *contentguard.Scanner
+	MaxDepth     int // max AX tree depth for snapshots; 0 or -1 means unlimited
 }

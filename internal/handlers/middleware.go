@@ -68,7 +68,7 @@ func SecurityHeadersMiddleware(cfg *config.RuntimeConfig, next http.Handler) htt
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", defaultCSP)
 		trustProxy := cfg != nil && cfg.TrustProxyHeaders
-		if requestScheme(r, trustProxy) == "https" {
+		if authn.RequestIsHTTPS(r, trustProxy) {
 			w.Header().Set("Strict-Transport-Security", strictTransportSecurity)
 		}
 		next.ServeHTTP(w, r)

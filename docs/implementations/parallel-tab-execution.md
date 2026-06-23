@@ -42,7 +42,7 @@ HTTP POST /tabs/{id}/action  (e.g., Click button)
 Handler: HandleAction()
     │
     ▼
-Bridge.EnsureChrome()  [lazy init on first request]
+Bridge.EnsureBrowser()  [lazy init on first request]
     │
     ▼
 Bridge.TabContext(tabID)  [get chromedp.Context for tab]

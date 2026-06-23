@@ -1,6 +1,10 @@
-import type { Agent } from "../generated/types";
 import { useAppStore } from "../stores/useAppStore";
 import { isClientActivityEvent, subscribeToEvents } from "./api";
+import {
+  handoffFromSystemEvent,
+  mergeAgents,
+  resumeTabIdFromSystemEvent,
+} from "./realtimeReducers";
 
 interface RealtimeHandle {
   consumers: number;
@@ -14,48 +18,6 @@ const realtimeHandle: RealtimeHandle = {
   unsubscribe: null,
 };
 
-function sortAgents(agents: Agent[]): Agent[] {
-  return [...agents].sort(
-    (left, right) =>
-      new Date(right.lastActivity || right.connectedAt).getTime() -
-      new Date(left.lastActivity || left.connectedAt).getTime(),
-  );
-}
-
-function mergeAgents(current: Agent[], incoming: Agent[]): Agent[] {
-  const merged = new Map<string, Agent>();
-
-  for (const agent of current) {
-    merged.set(agent.id, agent);
-  }
-
-  for (const agent of incoming) {
-    const existing = merged.get(agent.id);
-    if (!existing) {
-      merged.set(agent.id, agent);
-      continue;
-    }
-
-    merged.set(agent.id, {
-      ...existing,
-      ...agent,
-      connectedAt:
-        new Date(existing.connectedAt).getTime() <
-        new Date(agent.connectedAt).getTime()
-          ? existing.connectedAt
-          : agent.connectedAt,
-      lastActivity:
-        new Date(existing.lastActivity || existing.connectedAt).getTime() >
-        new Date(agent.lastActivity || agent.connectedAt).getTime()
-          ? existing.lastActivity
-          : agent.lastActivity,
-      requestCount: Math.max(existing.requestCount, agent.requestCount),
-    });
-  }
-
-  return sortAgents([...merged.values()]);
-}
-
 function startDashboardRealtime(includeMemory: boolean) {
   realtimeHandle.unsubscribe?.();
   realtimeHandle.includeMemory = includeMemory;
@@ -67,35 +29,14 @@ function startDashboardRealtime(includeMemory: boolean) {
       },
       onSystem: (event) => {
         const state = useAppStore.getState();
-        if (event.type === "tab.handoff") {
-          const payload = (event.instance ?? {}) as Record<string, unknown>;
-          const tabId =
-            typeof payload.tabId === "string" ? payload.tabId : null;
-          if (!tabId) {
-            return;
-          }
-          state.addHandoffNotification({
-            tabId,
-            reason:
-              typeof payload.reason === "string"
-                ? payload.reason
-                : "manual_handoff",
-            hint: typeof payload.hint === "string" ? payload.hint : undefined,
-            source:
-              typeof payload.source === "string" ? payload.source : undefined,
-            url: typeof payload.url === "string" ? payload.url : undefined,
-            title:
-              typeof payload.title === "string" ? payload.title : undefined,
-            receivedAt: Date.now(),
-          });
+        const handoff = handoffFromSystemEvent(event);
+        if (handoff) {
+          state.addHandoffNotification(handoff);
           return;
         }
-        if (event.type === "tab.resume") {
-          const payload = (event.instance ?? {}) as Record<string, unknown>;
-          if (typeof payload.tabId === "string") {
-            state.dismissHandoffNotification(payload.tabId);
-          }
-          return;
+        const resumeTabId = resumeTabIdFromSystemEvent(event);
+        if (resumeTabId) {
+          state.dismissHandoffNotification(resumeTabId);
         }
       },
       onActivity: (event) => {

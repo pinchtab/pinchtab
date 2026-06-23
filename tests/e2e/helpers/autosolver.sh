@@ -132,6 +132,56 @@ assert_autosolver_score() {
   fi
 }
 
+assert_autosolver_score_allowing_failed_signals() {
+  local score_json="$1"
+  local details_json="$2"
+  local label="$3"
+  shift 3
+  local -a allowed=("$@")
+
+  local critical critical_total warnings warnings_total
+  critical=$(echo "$score_json" | jq -r '.critical // 0')
+  critical_total=$(echo "$score_json" | jq -r '.criticalTotal // 0')
+  warnings=$(echo "$score_json" | jq -r '.warnings // 0')
+  warnings_total=$(echo "$score_json" | jq -r '.warningsTotal // 0')
+  autosolver_log "$label" "score: critical=${critical}/${critical_total} warnings=${warnings}/${warnings_total} allowed-failures=${allowed[*]:-none}"
+
+  local unexpected="" allowed_seen="" signal permitted allowed_signal failed_count=0
+  while IFS= read -r signal; do
+    [ -n "$signal" ] || continue
+    failed_count=$((failed_count + 1))
+    permitted=0
+    for allowed_signal in "${allowed[@]}"; do
+      if [ "$signal" = "$allowed_signal" ]; then
+        permitted=1
+        break
+      fi
+    done
+    if [ "$permitted" -eq 1 ]; then
+      allowed_seen="${allowed_seen}${allowed_seen:+, }${signal}"
+    else
+      unexpected="${unexpected}${unexpected:+, }${signal}"
+    fi
+  done < <(echo "$details_json" | jq -r 'to_entries[] | select((.value.severity // "critical") == "critical" and ((.value.passed // false) | not)) | .key')
+
+  if [ "$critical" -lt "$critical_total" ] && [ "$failed_count" -eq 0 ]; then
+    fail_assert "[autosolver:${label}] failed but details did not identify critical signal(s)"
+    dump_autosolver_debug "$label"
+    return
+  fi
+
+  if [ -z "$unexpected" ]; then
+    if [ -n "$allowed_seen" ]; then
+      pass_assert "[autosolver:${label}] passed with provider-allowed signal gap(s): ${allowed_seen}"
+    else
+      pass_assert "[autosolver:${label}] passed (critical ${critical}/${critical_total})"
+    fi
+  else
+    fail_assert "[autosolver:${label}] failed unexpected critical signal(s): ${unexpected}"
+    dump_autosolver_debug "$label"
+  fi
+}
+
 autosolver_null_result() {
   [ "$AUTOSOLVER_RESULT" = "null" ] || [ -z "$AUTOSOLVER_RESULT" ]
 }
@@ -173,6 +223,45 @@ autosolver_run_score_case() {
       if [ "$#" -gt 0 ] && run_autosolver_and_extract "${label}-details" "$fixture" "$details_expr" 0; then
         if ! autosolver_null_result; then
           autosolver_log_signal_flags "$label" "$AUTOSOLVER_RESULT" "$@"
+        fi
+      fi
+    fi
+  else
+    fail_assert "[autosolver:${label}] evaluation failed"
+  fi
+
+  end_test
+}
+
+autosolver_run_score_case_allowing_failures() {
+  local test_name="$1"
+  local label="$2"
+  local fixture="$3"
+  local score_expr="$4"
+  local details_expr="$5"
+  local allowed_csv="$6"
+  shift 6
+  local -a allowed_failures=()
+  IFS=',' read -r -a allowed_failures <<< "$allowed_csv"
+
+  start_test "$test_name"
+
+  if run_autosolver_and_extract "$label" "$fixture" "$score_expr" 1; then
+    if autosolver_null_result; then
+      fail_assert "[autosolver:${label}] score not populated"
+      echo -e "  ${MUTED}page text: ${AUTOSOLVER_PAGE_TEXT:0:300}${NC}"
+    else
+      local score_json="$AUTOSOLVER_RESULT"
+      local details_json=""
+      if run_autosolver_and_extract "${label}-details" "$fixture" "$details_expr" 0; then
+        details_json="$AUTOSOLVER_RESULT"
+      fi
+      if autosolver_null_result || [ -z "$details_json" ]; then
+        fail_assert "[autosolver:${label}] details not populated"
+      else
+        assert_autosolver_score_allowing_failed_signals "$score_json" "$details_json" "$label" "${allowed_failures[@]}"
+        if [ "$#" -gt 0 ]; then
+          autosolver_log_signal_flags "$label" "$details_json" "$@"
         fi
       fi
     fi

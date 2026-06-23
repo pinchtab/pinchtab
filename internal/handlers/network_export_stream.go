@@ -1,16 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -30,11 +30,7 @@ import (
 // @Response 200 text/event-stream  SSE progress events
 // @Response 423 application/json   Tab is locked
 func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserReady(w) {
 		return
 	}
 
@@ -44,35 +40,8 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
-		return
-	}
-
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
-		return
-	}
-
-	h.recordReadRequest(r, "network-export-stream", resolvedTabID)
-
-	formatName := r.URL.Query().Get("format")
-	if formatName == "" {
-		formatName = "har"
-	}
-	factory := observe.GetFormat(formatName)
-	if factory == nil {
-		httpx.JSON(w, 400, map[string]any{
-			"code":      "unknown_format",
-			"error":     fmt.Sprintf("unknown format %q", formatName),
-			"available": observe.ListFormats(),
-		})
+	ec, ok := h.resolveExportContext(w, r, "network-export-stream")
+	if !ok {
 		return
 	}
 
@@ -82,216 +51,283 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	bufferSize := parseBufferSize(r)
-	buf := nm.GetBuffer(resolvedTabID)
-	if buf == nil {
-		if err := nm.StartCaptureWithSize(tabCtx, resolvedTabID, bufferSize); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("start capture: %w", err))
-			return
-		}
-		buf = nm.GetBuffer(resolvedTabID)
-	}
-
-	includeBody := r.URL.Query().Get("body") == "true"
-	redactHeaders := r.URL.Query().Get("redact") != "false"
-	filter := parseNetworkFilter(r)
-
-	// Path safety (#1)
-	exportDir := filepath.Join(h.Config.StateDir, "exports")
-	if err := os.MkdirAll(exportDir, 0750); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("create dir: %w", err))
+	buf, ok := h.ensureCaptureBuffer(w, r, nm, ec.tabCtx, ec.resolvedTabID)
+	if !ok {
 		return
 	}
 
-	safeName := filepath.Base(userPath)
-	safePath, err := httpx.SafeCreatePath(exportDir, safeName)
+	session, ok := h.startExportStream(w, r, ec, nm, buf, userPath)
+	if !ok {
+		return
+	}
+	session.run(r)
+}
+
+// exportStreamSession holds the per-connection state for a streaming export: the
+// SSE writer, the open temp file + encoder, the buffer subscriptions, and the
+// running entry count. Its methods split the controller into setup (startExportStream),
+// per-entry encode/emit (exportEntry), and finalization (finalize/sendDone).
+type exportStreamSession struct {
+	w             http.ResponseWriter
+	flusher       http.Flusher
+	enc           observe.ExportEncoder
+	f             *os.File
+	nm            *bridge.NetworkMonitor
+	tabCtx        context.Context
+	buf           *bridge.NetworkBuffer
+	filter        bridge.NetworkFilter
+	includeBody   bool
+	redactHeaders bool
+	absPath       string
+	tmpPath       string
+	bodySem       chan struct{}
+
+	subID           int
+	entryCh         <-chan bridge.NetworkEntry
+	completionSubID int
+	completions     <-chan string
+
+	count        int
+	finalizeOnce sync.Once
+}
+
+// pendingExport stashes an entry that arrived before its response finished, so the
+// loop can drain it on completion or at its deadline instead of head-of-line blocking.
+type pendingExport struct {
+	entry    bridge.NetworkEntry
+	deadline time.Time
+}
+
+// startExportStream opens the export target file + encoder, subscribes to the
+// buffer, and writes the SSE headers — returning a session ready to run. On any
+// setup failure it writes the response (cleaning up the temp file) and returns
+// ok=false. The browser-ready, path-required, prelude, and capture-bootstrap checks
+// run in the caller.
+func (h *Handlers) startExportStream(w http.ResponseWriter, r *http.Request, ec exportContext, nm *bridge.NetworkMonitor, buf *bridge.NetworkBuffer, userPath string) (*exportStreamSession, bool) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		httpx.Error(w, 500, fmt.Errorf("streaming not supported"))
+		return nil, false
+	}
+
+	absPath, tmpPath, f, status, err := h.resolveExportFile(userPath)
 	if err != nil {
-		httpx.Error(w, 400, fmt.Errorf("invalid path: %w", err))
-		return
-	}
-	absBase, _ := filepath.Abs(exportDir)
-	absPath, err := filepath.Abs(safePath)
-	if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-		httpx.Error(w, 400, fmt.Errorf("path escapes export directory"))
-		return
+		httpx.Error(w, status, err)
+		return nil, false
 	}
 
-	// Write to temp file, rename on finish (#8)
-	tmpPath := absPath + ".tmp"
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("create file: %w", err))
-		return
-	}
-
-	enc := factory("PinchTab", h.version())
+	enc := ec.factory("PinchTab", h.version())
 	if err := enc.Start(f); err != nil {
 		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		httpx.Error(w, 500, fmt.Errorf("start encoder: %w", err))
-		return
+		return nil, false
 	}
-
-	// Semaphore to throttle concurrent body fetches in streaming mode.
-	streamBodySem := make(chan struct{}, bodyFetchConcurrency)
 
 	subID, ch := buf.Subscribe()
-	defer buf.Unsubscribe(subID)
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		_ = enc.Finish()
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
-		httpx.Error(w, 500, fmt.Errorf("streaming not supported"))
-		return
-	}
+	completionSubID, completions := buf.SubscribeCompletions()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Set a hard deadline so forgotten streams don't leak resources.
-	streamDeadline := time.NewTimer(maxExportStreamDuration)
-	defer streamDeadline.Stop()
-
-	// Clear per-write deadline for long-lived SSE (#7), the stream timer above caps total duration.
+	// Clear the per-write deadline for long-lived SSE; the stream timer in run()
+	// caps total duration instead.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
-	count := 0
+	return &exportStreamSession{
+		w:               w,
+		flusher:         flusher,
+		enc:             enc,
+		f:               f,
+		nm:              nm,
+		tabCtx:          ec.tabCtx,
+		buf:             buf,
+		filter:          parseNetworkFilter(r),
+		includeBody:     r.URL.Query().Get("body") == "true",
+		redactHeaders:   r.URL.Query().Get("redact") != "false",
+		absPath:         absPath,
+		tmpPath:         tmpPath,
+		bodySem:         make(chan struct{}, bodyFetchConcurrency),
+		subID:           subID,
+		entryCh:         ch,
+		completionSubID: completionSubID,
+		completions:     completions,
+	}, true
+}
+
+// run drives the SSE event loop until the client disconnects, the stream channel
+// closes, or the max-duration deadline fires, finalizing the file on exit.
+func (s *exportStreamSession) run(r *http.Request) {
+	defer s.buf.Unsubscribe(s.subID)
+	defer s.buf.UnsubscribeCompletions(s.completionSubID)
+
+	// Hard deadline so forgotten streams don't leak resources.
+	streamDeadline := time.NewTimer(maxExportStreamDuration)
+	defer streamDeadline.Stop()
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
 
-	var finalizeOnce sync.Once
-	finalize := func() {
-		finalizeOnce.Do(func() {
-			_ = enc.Finish()
-			if err := f.Close(); err == nil {
-				// Atomic rename on success (#8)
-				if count > 0 {
-					_ = os.Rename(tmpPath, absPath)
-				} else {
-					_ = os.Remove(tmpPath)
-				}
-			} else {
-				_ = os.Remove(tmpPath)
-			}
-		})
-	}
-
-	// sendDone emits the final SSE event with the correct path (empty when no file was written).
-	sendDone := func() {
-		result := map[string]any{"entries": count}
-		if count > 0 {
-			result["path"] = absPath
-		}
-		data, _ := json.Marshal(result)
-		_, _ = fmt.Fprintf(w, "event: done\ndata: %s\n\n", data)
-		flusher.Flush()
-	}
+	// Entries arrive on requestWillBeSent before status/headers/timing are
+	// populated, so incomplete ones are stashed and drained as they finish instead
+	// of blocking the loop on a single slow request (head-of-line blocking).
+	pending := map[string]pendingExport{}
+	pendingTicker := time.NewTicker(200 * time.Millisecond)
+	defer pendingTicker.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
-			finalize()
-			// Don't write to ResponseWriter after client disconnect (#6)
+			s.finalize()
+			// Don't write to the ResponseWriter after client disconnect.
 			return
 
 		case <-streamDeadline.C:
-			finalize()
-			data, _ := json.Marshal(map[string]any{"entries": count, "reason": "max_duration_reached"})
-			_, _ = fmt.Fprintf(w, "event: timeout\ndata: %s\n\n", data)
-			sendDone()
+			if s.drainPending(pending) {
+				return
+			}
+			s.finalize()
+			data, _ := json.Marshal(map[string]any{"entries": s.count, "reason": "max_duration_reached"})
+			_, _ = fmt.Fprintf(s.w, "event: timeout\ndata: %s\n\n", data)
+			s.sendDone()
 			return
 
-		case entry, ok := <-ch:
+		case entry, ok := <-s.entryCh:
 			if !ok {
-				finalize()
-				sendDone()
+				if !s.drainPending(pending) {
+					s.finalize()
+					s.sendDone()
+				}
 				return
 			}
 
 			// The subscriber fires on requestWillBeSent (entry created) before
 			// responseReceived/loadingFinished populate status, headers, timing.
-			// Wait for the entry to be Finished before exporting it.
-			if !entry.Finished && !entry.Failed {
-				reqID := entry.RequestID
-				waitDeadline := time.After(10 * time.Second)
-				poll := time.NewTicker(200 * time.Millisecond)
-			waitDone:
-				for {
-					select {
-					case <-r.Context().Done():
-						poll.Stop()
-						finalize()
-						return
-					case <-waitDeadline:
-						poll.Stop()
-						if updated, found := buf.Get(reqID); found {
-							entry = updated
-						}
-						break waitDone
-					case <-poll.C:
-						if updated, found := buf.Get(reqID); found && (updated.Finished || updated.Failed) {
-							entry = updated
-							poll.Stop()
-							break waitDone
-						}
-					}
+			// Completed entries export immediately; incomplete ones are stashed and
+			// exported when their completion notification arrives (or at the deadline).
+			if entry.Finished || entry.Failed {
+				if s.exportEntry(entry) {
+					return
+				}
+			} else {
+				pending[entry.RequestID] = pendingExport{entry: entry, deadline: time.Now().Add(entryFinishWait)}
+			}
+
+		case reqID := <-s.completions:
+			// A request finished/failed: export the stashed entry now (with its
+			// latest buffered state) instead of waiting for a poll tick.
+			if p, ok := pending[reqID]; ok {
+				delete(pending, reqID)
+				entry := p.entry
+				if updated, found := s.buf.Get(reqID); found {
+					entry = updated
+				}
+				if s.exportEntry(entry) {
+					return
 				}
 			}
 
-			if !filter.Match(entry) {
-				continue
-			}
-			var body string
-			var b64 bool
-			if includeBody && entry.Finished && !entry.Failed {
-				// Throttle body fetches to avoid saturating the CDP connection.
-				streamBodySem <- struct{}{}
-				body, b64, _ = nm.GetResponseBody(tabCtx, entry.RequestID)
-				<-streamBodySem
-				if len(body) > maxExportBodyBytes {
-					body = ""
-					b64 = false
+		case <-pendingTicker.C:
+			// Deadline-only safety sweep: completions are delivered via the channel
+			// above, so this just flushes pending entries that never sent a
+			// completion (or whose notification was dropped under burst).
+			now := time.Now()
+			for reqID, p := range pending {
+				if !now.After(p.deadline) {
+					continue
+				}
+				entry := p.entry
+				if updated, found := s.buf.Get(reqID); found {
+					entry = updated
+				}
+				delete(pending, reqID)
+				if s.exportEntry(entry) {
+					return
 				}
 			}
-			export := observe.NetworkEntryToExport(entry, body, b64)
-			if redactHeaders {
-				export.Request.Headers = observe.RedactSensitiveHeaders(export.Request.Headers)
-				export.Response.Headers = observe.RedactSensitiveHeaders(export.Response.Headers)
-			}
-			if err := enc.Encode(export); err != nil {
-				finalize()
-				return
-			}
-			count++
-			data, _ := json.Marshal(map[string]any{"entries": count, "url": safetruncateURL(entry.URL)})
-			_, _ = fmt.Fprintf(w, "event: export\ndata: %s\n\n", data)
-			flusher.Flush()
 
 		case <-keepalive.C:
-			_, _ = fmt.Fprintf(w, ": keepalive\n\n")
-			flusher.Flush()
+			_, _ = fmt.Fprintf(s.w, ": keepalive\n\n")
+			s.flusher.Flush()
 		}
 	}
 }
 
+// exportEntry encodes one finished/failed entry and emits its SSE frame. It returns
+// true when encoding fails and the run loop should stop (the file is finalized).
+func (s *exportStreamSession) exportEntry(entry bridge.NetworkEntry) (stop bool) {
+	if !s.filter.Match(entry) {
+		return false
+	}
+	var body string
+	var b64 bool
+	if s.includeBody && entry.Finished && !entry.Failed {
+		// Throttle body fetches to avoid saturating the CDP connection.
+		s.bodySem <- struct{}{}
+		body, b64 = resolveExportBody(s.tabCtx, s.nm, entry)
+		<-s.bodySem
+	}
+	export := toExportEntry(entry, body, b64, s.redactHeaders)
+	if err := s.enc.Encode(export); err != nil {
+		s.finalize()
+		return true
+	}
+	s.count++
+	data, _ := json.Marshal(map[string]any{"entries": s.count, "url": safetruncateURL(entry.URL)})
+	_, _ = fmt.Fprintf(s.w, "event: export\ndata: %s\n\n", data)
+	s.flusher.Flush()
+	return false
+}
+
+// drainPending flushes any still-pending entries best-effort on graceful shutdown,
+// preferring the latest buffered copy. It returns true if encoding stopped the loop.
+func (s *exportStreamSession) drainPending(pending map[string]pendingExport) (stop bool) {
+	for reqID, p := range pending {
+		entry := p.entry
+		if updated, found := s.buf.Get(reqID); found {
+			entry = updated
+		}
+		delete(pending, reqID)
+		if s.exportEntry(entry) {
+			return true
+		}
+	}
+	return false
+}
+
+// finalize finishes the encoder and closes the file exactly once, renaming the temp
+// file into place when at least one entry was written and removing it otherwise.
+func (s *exportStreamSession) finalize() {
+	s.finalizeOnce.Do(func() {
+		_ = s.enc.Finish()
+		if err := s.f.Close(); err == nil {
+			if s.count > 0 {
+				_ = os.Rename(s.tmpPath, s.absPath)
+			} else {
+				_ = os.Remove(s.tmpPath)
+			}
+		} else {
+			_ = os.Remove(s.tmpPath)
+		}
+	})
+}
+
+// sendDone emits the final SSE event with the resulting path (empty when no file
+// was written).
+func (s *exportStreamSession) sendDone() {
+	result := map[string]any{"entries": s.count}
+	if s.count > 0 {
+		result["path"] = s.absPath
+	}
+	data, _ := json.Marshal(result)
+	_, _ = fmt.Fprintf(s.w, "event: done\ndata: %s\n\n", data)
+	s.flusher.Flush()
+}
+
 // HandleTabNetworkExportStream handles GET /tabs/{id}/network/export/stream.
 func (h *Handlers) HandleTabNetworkExportStream(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-	h.HandleNetworkExportStream(w, req)
+	h.withPathTabID(w, r, h.HandleNetworkExportStream)
 }
 
 // safetruncateURL truncates at a valid UTF-8 boundary (#21).

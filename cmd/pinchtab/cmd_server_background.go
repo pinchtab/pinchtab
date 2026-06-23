@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -37,6 +38,7 @@ type serverBackgroundOptions struct {
 	Headed     bool
 	Verbose    bool
 	Extensions []string
+	Browser    string
 }
 
 var readProcessCommand = defaultReadProcessCommand
@@ -73,28 +75,66 @@ var serverRestartCmd = &cobra.Command{
 	},
 }
 
-func runtimeStateDir() string {
+func stateDirForConfig(cfg *config.RuntimeConfig) string {
+	if cfg != nil && strings.TrimSpace(cfg.StateDir) != "" {
+		return strings.TrimSpace(cfg.StateDir)
+	}
 	return filepath.Dir(config.DefaultConfigPath())
 }
 
-func serverPIDFilePath() string {
-	return filepath.Join(runtimeStateDir(), "server.pid")
+func serverPIDFilePath(stateDir string) string {
+	return filepath.Join(stateDir, "server.pid")
 }
 
-func serverLogFilePath() string {
-	return filepath.Join(runtimeStateDir(), "server.log")
+func serverLogFilePath(stateDir string) string {
+	return filepath.Join(stateDir, "server.log")
+}
+
+func prepareServerSpawn() (binary, marker string, err error) {
+	binary, err = os.Executable()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve executable: %w", err)
+	}
+	marker, err = newBackgroundMarker()
+	if err != nil {
+		return "", "", fmt.Errorf("generate background marker: %w", err)
+	}
+	return binary, marker, nil
+}
+
+// spawnDetachedChild starts binary+args detached and returns the child PID; the
+// handle is released so the child outlives this process. out wires stdout/stderr
+// (nil → discard) — never assign a typed-nil *os.File to the exec.Cmd writer
+// fields, as that connects them to a nil file rather than /dev/null.
+func spawnDetachedChild(binary string, args []string, out *os.File) (int, error) {
+	c := exec.Command(binary, args...) // #nosec G204 -- binary is our own executable
+	c.Stdin = nil
+	if out != nil {
+		c.Stdout = out
+		c.Stderr = out
+	}
+	detachProcess(c)
+	if err := c.Start(); err != nil {
+		return 0, fmt.Errorf("spawn server: %w", err)
+	}
+	pid := c.Process.Pid
+	if err := c.Process.Release(); err != nil {
+		slog.Warn("failed to release server process", "err", err)
+	}
+	return pid, nil
 }
 
 func runServerBackground(cfg *config.RuntimeConfig, opts serverBackgroundOptions) error {
-	if info, ok := readServerPID(); ok {
+	stateDir := stateDirForConfig(cfg)
+	if info, ok := readServerPID(stateDir); ok {
 		if processAlive(info.PID) {
 			if err := verifyServerPIDInfo(info); err == nil {
 				return fmt.Errorf("server already running (pid %d); stop with: pinchtab server stop", info.PID)
 			} else {
-				return fmt.Errorf("background PID file at %s points to a live process that cannot be verified: %w", serverPIDFilePath(), err)
+				return fmt.Errorf("background PID file at %s points to a live process that cannot be verified: %w", serverPIDFilePath(stateDir), err)
 			}
 		}
-		_ = os.Remove(serverPIDFilePath())
+		_ = os.Remove(serverPIDFilePath(stateDir))
 	}
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%s", cfg.Port)
@@ -105,65 +145,44 @@ func runServerBackground(cfg *config.RuntimeConfig, opts serverBackgroundOptions
 		return fmt.Errorf("port already in use at %s, but it is not a healthy PinchTab server for this config", baseURL)
 	}
 
-	binary, err := os.Executable()
+	binary, marker, err := prepareServerSpawn()
 	if err != nil {
-		return fmt.Errorf("resolve executable: %w", err)
-	}
-	marker, err := newBackgroundMarker()
-	if err != nil {
-		return fmt.Errorf("generate background marker: %w", err)
+		return err
 	}
 
-	if err := os.MkdirAll(runtimeStateDir(), 0o755); err != nil {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
-	logF, err := os.OpenFile(serverLogFilePath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	logF, err := os.OpenFile(serverLogFilePath(stateDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("open log file: %w", err)
 	}
 
 	args := backgroundServerArgs(marker, opts)
-	c := exec.Command(binary, args...) // #nosec G204 -- binary is our own executable
-	c.Stdin = nil
-	c.Stdout = logF
-	c.Stderr = logF
-	detachProcess(c)
-
-	if err := c.Start(); err != nil {
+	pid, err := spawnDetachedChild(binary, args, logF)
+	if err != nil {
 		_ = logF.Close()
-		return fmt.Errorf("spawn server: %w", err)
-	}
-	pid := c.Process.Pid
-	if err := c.Process.Release(); err != nil {
-		// non-fatal
-		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.MutedStyle, fmt.Sprintf("warn: release child: %v", err)))
+		return err
 	}
 	_ = logF.Close()
 
-	if err := writeServerPID(serverPIDInfo{
-		PID:        pid,
-		Executable: binary,
-		Args:       append([]string(nil), args...),
-		URL:        baseURL,
-		Marker:     marker,
-		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
-	}); err != nil {
+	if err := recordServerPID(stateDir, pid, binary, args, baseURL, marker); err != nil {
 		return fmt.Errorf("write pid file: %w", err)
 	}
 
 	if !waitForServerWith(baseURL, marker, backgroundStartTimeout, isBackgroundServerReady) {
 		if !processAlive(pid) {
-			_ = os.Remove(serverPIDFilePath())
+			_ = os.Remove(serverPIDFilePath(stateDir))
 		}
-		return fmt.Errorf("server did not become healthy within %s; check logs at %s", backgroundStartTimeout, serverLogFilePath())
+		return fmt.Errorf("server did not become healthy within %s; check logs at %s", backgroundStartTimeout, serverLogFilePath(stateDir))
 	}
 
 	out := map[string]any{
 		"pid":     pid,
 		"url":     baseURL,
 		"token":   cfg.Token,
-		"logFile": serverLogFilePath(),
-		"pidFile": serverPIDFilePath(),
+		"logFile": serverLogFilePath(stateDir),
+		"pidFile": serverPIDFilePath(stateDir),
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -184,6 +203,9 @@ func backgroundServerArgs(marker string, opts serverBackgroundOptions) []string 
 	for _, ext := range opts.Extensions {
 		args = append(args, "-e", ext)
 	}
+	if opts.Browser != "" {
+		args = append(args, "--browser", opts.Browser)
+	}
 	return args
 }
 
@@ -200,20 +222,12 @@ func isUnauthenticatedPinchTabServerReady(baseURL string) bool {
 }
 
 func isPinchTabHealthReady(url, marker string) bool {
-	client := &http.Client{Timeout: 3 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return false
-	}
+	var headers map[string]string
 	if marker != "" {
-		req.Header.Set(backgroundHealthProbeHeader, marker)
+		headers = map[string]string{backgroundHealthProbeHeader: marker}
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	status, body, reachable := server.ProbeHealth(url, 3*time.Second, headers)
+	if !reachable || status != http.StatusOK {
 		return false
 	}
 
@@ -223,7 +237,7 @@ func isPinchTabHealthReady(url, marker string) bool {
 		Version string `json:"version"`
 		Marker  string `json:"marker"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+	if err := json.Unmarshal(body, &health); err != nil {
 		return false
 	}
 	if health.Status != "ok" || health.Mode != "dashboard" || strings.TrimSpace(health.Version) == "" {
@@ -245,13 +259,15 @@ func stopViaAPI() error {
 }
 
 func runServerStop() error {
-	info, ok := readServerPID()
+	cfg := loadConfig()
+	stateDir := stateDirForConfig(cfg)
+	info, ok := readServerPID(stateDir)
 	if !ok {
 		return stopViaAPI()
 	}
 	pid := info.PID
 	if !processAlive(pid) {
-		_ = os.Remove(serverPIDFilePath())
+		_ = os.Remove(serverPIDFilePath(stateDir))
 		return stopViaAPI()
 	}
 	if err := verifyServerPIDInfo(info); err != nil {
@@ -261,19 +277,39 @@ func runServerStop() error {
 		return fmt.Errorf("stop pid %d: %w", pid, err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
+	grace := gracefulStopTimeout(cfg)
+	if waitForExit(pid, grace) {
+		_ = os.Remove(serverPIDFilePath(stateDir))
+		fmt.Printf("Stopped background server (pid %d)\n", pid)
+		return nil
+	}
+
+	_ = forceKillProcess(pid)
+	if waitForExit(pid, 2*time.Second) {
+		_ = os.Remove(serverPIDFilePath(stateDir))
+		fmt.Printf("Force-stopped background server (pid %d) after %s grace\n", pid, grace)
+		return nil
+	}
+	return fmt.Errorf("background server (pid %d) did not exit after SIGTERM+SIGKILL; pid file left at %s", pid, serverPIDFilePath(stateDir))
+}
+
+func gracefulStopTimeout(cfg *config.RuntimeConfig) time.Duration {
+	d := 10 * time.Second
+	if cfg != nil && cfg.ShutdownTimeout > 0 {
+		d = cfg.ShutdownTimeout
+	}
+	return d + 2*time.Second
+}
+
+func waitForExit(pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if !processAlive(pid) {
-			break
+			return true
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	if processAlive(pid) {
-		return fmt.Errorf("background server (pid %d) did not exit within 5s; leaving pid file at %s", pid, serverPIDFilePath())
-	}
-	_ = os.Remove(serverPIDFilePath())
-	fmt.Printf("Stopped background server (pid %d)\n", pid)
-	return nil
+	return !processAlive(pid)
 }
 
 func newBackgroundMarker() (string, error) {
@@ -284,8 +320,8 @@ func newBackgroundMarker() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-func writeServerPID(info serverPIDInfo) error {
-	if err := os.MkdirAll(runtimeStateDir(), 0o755); err != nil {
+func writeServerPID(stateDir string, info serverPIDInfo) error {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 	data, err := json.MarshalIndent(info, "", "  ")
@@ -293,11 +329,26 @@ func writeServerPID(info serverPIDInfo) error {
 		return fmt.Errorf("marshal pid info: %w", err)
 	}
 	data = append(data, '\n')
-	return os.WriteFile(serverPIDFilePath(), data, 0o600)
+	return os.WriteFile(serverPIDFilePath(stateDir), data, 0o600)
 }
 
-func readServerPID() (serverPIDInfo, bool) {
-	data, err := os.ReadFile(serverPIDFilePath())
+// recordServerPID writes the PID record for a freshly spawned server child,
+// stamping the start time. Shared by the foreground auto-start and background
+// server paths (url is empty for the URL-less auto-start record); each caller
+// keeps its own write-error policy (best-effort vs fatal).
+func recordServerPID(stateDir string, pid int, binary string, args []string, url, marker string) error {
+	return writeServerPID(stateDir, serverPIDInfo{
+		PID:        pid,
+		Executable: binary,
+		Args:       append([]string(nil), args...),
+		URL:        url,
+		Marker:     marker,
+		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+	})
+}
+
+func readServerPID(stateDir string) (serverPIDInfo, bool) {
+	data, err := os.ReadFile(serverPIDFilePath(stateDir))
 	if err != nil {
 		return serverPIDInfo{}, false
 	}

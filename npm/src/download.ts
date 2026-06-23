@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as http from 'http';
 import * as https from 'https';
 import * as crypto from 'crypto';
 import { detectPlatform, getBinaryName, getBinaryPath } from './platform';
@@ -13,75 +14,90 @@ function getVersion(): string {
   return pkg.version;
 }
 
-function fetchUrl(url: string, maxRedirects = 5): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const attemptFetch = (currentUrl: string, redirectsRemaining: number) => {
-      let agent: https.Agent | undefined;
+// NOTE: HTTPS_PROXY / HTTP_PROXY are NOT honored — downloads go direct. A prior
+// buildProxyAgent() built an https.Agent({host,port}) that https.get(url, …)
+// silently overrode (the Agent's host/port were never used for tunneling), so
+// the proxy support was a no-op. It was removed rather than left as a misleading
+// stub; if real proxy tunneling is needed, route through an https-proxy-agent.
 
-      // Proxy support for corporate environments
-      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-      if (proxyUrl) {
-        try {
-          const proxy = new URL(proxyUrl);
-          const proxyPort = proxy.port ? parseInt(proxy.port, 10) : 8080;
-          agent = new https.Agent({
-            host: proxy.hostname,
-            port: proxyPort,
-            keepAlive: true,
-          });
-        } catch (_err) {
-          console.warn(`Warning: Invalid proxy URL ${proxyUrl}, ignoring`);
+// httpGetFollowingRedirects performs a GET that follows 301/302/307/308
+// redirects, then hands the final 200 response stream to onResponse. All
+// transport/HTTP errors go to onError. Shared by the checksum (buffered) and
+// binary (streamed-to-file) download paths so redirect behavior cannot drift
+// between them. `requestFn` defaults to https.get; it is injectable so tests can
+// drive the real logic against a local http server without TLS/network.
+export function httpGetFollowingRedirects(
+  url: string,
+  maxRedirects: number,
+  onResponse: (response: http.IncomingMessage) => void,
+  onError: (err: Error) => void,
+  requestFn: (
+    url: string,
+    options: http.RequestOptions,
+    callback: (res: http.IncomingMessage) => void
+  ) => http.ClientRequest = https.get
+): void {
+  const attempt = (currentUrl: string, redirectsRemaining: number) => {
+    const request = requestFn(currentUrl, {}, (response) => {
+      // Handle redirects (301, 302, 307, 308)
+      if ([301, 302, 307, 308].includes(response.statusCode || 0)) {
+        if (redirectsRemaining <= 0) {
+          onError(new Error(`Too many redirects from ${currentUrl}`));
+          return;
         }
+
+        let redirectUrl = response.headers.location;
+        if (!redirectUrl) {
+          onError(new Error(`Redirect without location header from ${currentUrl}`));
+          return;
+        }
+
+        // Resolve relative URLs
+        try {
+          redirectUrl = new URL(redirectUrl, currentUrl).toString();
+        } catch (_err) {
+          onError(new Error(`Invalid redirect URL from ${currentUrl}: ${redirectUrl}`));
+          return;
+        }
+
+        // Consume the response stream to avoid memory leaks
+        response.resume();
+        attempt(redirectUrl, redirectsRemaining - 1);
+        return;
       }
 
-      const request = https.get(currentUrl, agent ? { agent } : {}, (response) => {
-        // Handle redirects (301, 302, 307, 308)
-        if ([301, 302, 307, 308].includes(response.statusCode || 0)) {
-          if (redirectsRemaining <= 0) {
-            reject(new Error(`Too many redirects from ${currentUrl}`));
-            return;
-          }
+      if (response.statusCode === 404) {
+        onError(new Error(`Not found: ${currentUrl}`));
+        return;
+      }
 
-          let redirectUrl = response.headers.location;
-          if (!redirectUrl) {
-            reject(new Error(`Redirect without location header from ${currentUrl}`));
-            return;
-          }
+      if (response.statusCode !== 200) {
+        onError(new Error(`HTTP ${response.statusCode}: ${currentUrl}`));
+        return;
+      }
 
-          // Resolve relative URLs
-          try {
-            redirectUrl = new URL(redirectUrl, currentUrl).toString();
-          } catch (_err) {
-            reject(new Error(`Invalid redirect URL from ${currentUrl}: ${redirectUrl}`));
-            return;
-          }
+      onResponse(response);
+    });
 
-          // Consume the response stream to avoid memory leaks
-          response.resume();
-          attemptFetch(redirectUrl, redirectsRemaining - 1);
-          return;
-        }
+    request.on('error', onError);
+  };
 
-        if (response.statusCode === 404) {
-          reject(new Error(`Not found: ${currentUrl}`));
-          return;
-        }
+  attempt(url, maxRedirects);
+}
 
-        if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}: ${currentUrl}`));
-          return;
-        }
-
+function fetchUrl(url: string, maxRedirects = 5): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    httpGetFollowingRedirects(
+      url,
+      maxRedirects,
+      (response) => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk) => chunks.push(chunk));
         response.on('end', () => resolve(Buffer.concat(chunks)));
         response.on('error', reject);
-      });
-
-      request.on('error', reject);
-    };
-
-    attemptFetch(url, maxRedirects);
+      },
+      reject
+    );
   });
 }
 
@@ -112,12 +128,18 @@ async function downloadChecksums(version: string): Promise<Map<string, string>> 
   }
 }
 
-function verifySHA256(filePath: string, expectedHash: string): boolean {
-  const hash = crypto.createHash('sha256');
-  const data = fs.readFileSync(filePath);
-  hash.update(data);
-  const actualHash = hash.digest('hex');
-  return actualHash.toLowerCase() === expectedHash.toLowerCase();
+// verifySHA256 streams the file through the hash so large binaries are never
+// buffered whole in memory (readFileSync loaded the entire binary at once).
+function verifySHA256(filePath: string, expectedHash: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => {
+      resolve(hash.digest('hex').toLowerCase() === expectedHash.toLowerCase());
+    });
+  });
 }
 
 async function downloadBinary(
@@ -127,43 +149,34 @@ async function downloadBinary(
   const binaryName = getBinaryName(platform);
   const binaryPath = getBinaryPath(binaryName, version);
 
-  // Always verify existing binaries, even if they exist
-  // (guards against corrupted installs from previous failures)
-  if (fs.existsSync(binaryPath)) {
-    try {
-      const checksums = await downloadChecksums(version);
-      if (checksums.has(binaryName)) {
-        const expectedHash = checksums.get(binaryName)!;
-        if (verifySHA256(binaryPath, expectedHash)) {
-          console.log(`✓ Pinchtab binary verified: ${binaryPath}`);
-          return;
-        } else {
-          console.warn(`⚠ Existing binary failed checksum, re-downloading...`);
-          fs.unlinkSync(binaryPath);
-        }
-      }
-    } catch (_err) {
-      console.warn(`⚠ Could not verify existing binary, re-downloading...`);
-      try {
-        fs.unlinkSync(binaryPath);
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  // Fetch checksums
-  console.log(`Downloading Pinchtab ${version} for ${platform.os}-${platform.arch}...`);
+  // Fetch the checksum map once and reuse it for both the existing-binary
+  // verification and the post-download check (it was previously downloaded
+  // twice per install).
   const checksums = await downloadChecksums(version);
-
   if (!checksums.has(binaryName)) {
     throw new Error(
       `Binary not found in checksums: ${binaryName}. ` +
         `Available: ${Array.from(checksums.keys()).join(', ')}`
     );
   }
-
   const expectedHash = checksums.get(binaryName)!;
+
+  // Always verify existing binaries, even if they exist
+  // (guards against corrupted installs from previous failures)
+  if (fs.existsSync(binaryPath)) {
+    if (await verifySHA256(binaryPath, expectedHash)) {
+      console.log(`✓ Pinchtab binary verified: ${binaryPath}`);
+      return;
+    }
+    console.warn(`⚠ Existing binary failed checksum, re-downloading...`);
+    try {
+      fs.unlinkSync(binaryPath);
+    } catch {
+      // ignore
+    }
+  }
+
+  console.log(`Downloading Pinchtab ${version} for ${platform.os}-${platform.arch}...`);
   const downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${binaryName}`;
 
   // Ensure the managed install directory exists
@@ -180,97 +193,63 @@ async function downloadBinary(
     console.log(`Downloading from ${downloadUrl}...`);
 
     const file = fs.createWriteStream(tempPath);
-    let redirectCount = 0;
-    const maxRedirects = 5;
 
-    const performDownload = (url: string) => {
-      https
-        .get(url, (response) => {
-          // Handle redirects (301, 302, 307, 308)
-          if ([301, 302, 307, 308].includes(response.statusCode || 0)) {
-            if (redirectCount >= maxRedirects) {
-              fs.unlink(tempPath, () => {});
-              reject(new Error(`Too many redirects downloading ${downloadUrl}`));
-              return;
-            }
-
-            let redirectUrl = response.headers.location;
-            if (!redirectUrl) {
-              fs.unlink(tempPath, () => {});
-              reject(new Error(`Redirect without location header from ${url}`));
-              return;
-            }
-
-            // Resolve relative URLs
-            try {
-              redirectUrl = new URL(redirectUrl, url).toString();
-            } catch (_err) {
-              fs.unlink(tempPath, () => {});
-              reject(new Error(`Invalid redirect URL from ${url}: ${redirectUrl}`));
-              return;
-            }
-
-            redirectCount++;
-            response.resume(); // Consume response stream
-            performDownload(redirectUrl);
-            return;
-          }
-
-          if (response.statusCode !== 200) {
-            fs.unlink(tempPath, () => {});
-            reject(new Error(`HTTP ${response.statusCode}: ${url}`));
-            return;
-          }
-
-          response.pipe(file);
-
-          file.on('finish', () => {
-            file.close();
-
-            // Verify checksum before moving to final location
-            if (!verifySHA256(tempPath, expectedHash)) {
-              fs.unlink(tempPath, () => {});
-              reject(
-                new Error(
-                  `Checksum verification failed for ${binaryName}. ` +
-                    `Download may be corrupted. Please try again.`
-                )
-              );
-              return;
-            }
-
-            // Atomically move temp file to final location
-            try {
-              fs.renameSync(tempPath, binaryPath);
-            } catch (err) {
-              fs.unlink(tempPath, () => {});
-              reject(new Error(`Failed to finalize binary: ${(err as Error).message}`));
-              return;
-            }
-
-            // Make executable
-            try {
-              fs.chmodSync(binaryPath, 0o755);
-            } catch (err) {
-              // On Windows, chmod may fail but binary may still be usable
-              console.warn(
-                `⚠ Warning: could not set executable permissions: ${(err as Error).message}`
-              );
-            }
-
-            console.log(`✓ Verified and installed: ${binaryPath}`);
-            resolve();
-          });
-
-          file.on('error', (err) => {
-            fs.unlink(tempPath, () => {});
-            reject(err);
-          });
-        })
-        .on('error', reject);
+    // Any failure must drop the partial temp file before rejecting.
+    const failWithCleanup = (err: Error) => {
+      fs.unlink(tempPath, () => {});
+      reject(err);
     };
 
-    performDownload(downloadUrl);
+    httpGetFollowingRedirects(
+      downloadUrl,
+      5,
+      (response) => {
+        response.pipe(file);
+
+        file.on('finish', () => {
+          file.close();
+
+          // Verify checksum before moving to final location
+          verifySHA256(tempPath, expectedHash)
+            .then((ok) => {
+              if (!ok) {
+                failWithCleanup(
+                  new Error(
+                    `Checksum verification failed for ${binaryName}. ` +
+                      `Download may be corrupted. Please try again.`
+                  )
+                );
+                return;
+              }
+
+              // Atomically move temp file to final location
+              try {
+                fs.renameSync(tempPath, binaryPath);
+              } catch (err) {
+                failWithCleanup(new Error(`Failed to finalize binary: ${(err as Error).message}`));
+                return;
+              }
+
+              // Make executable
+              try {
+                fs.chmodSync(binaryPath, 0o755);
+              } catch (err) {
+                // On Windows, chmod may fail but binary may still be usable
+                console.warn(
+                  `⚠ Warning: could not set executable permissions: ${(err as Error).message}`
+                );
+              }
+
+              console.log(`✓ Verified and installed: ${binaryPath}`);
+              resolve();
+            })
+            .catch(failWithCleanup);
+        });
+
+        file.on('error', failWithCleanup);
+      },
+      failWithCleanup
+    );
   });
 }
 

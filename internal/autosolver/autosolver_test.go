@@ -7,17 +7,18 @@ import (
 	"time"
 )
 
-// --- Mock implementations ---
-
 type mockPage struct {
 	url   string
 	title string
 	html  string
 }
 
-func (m *mockPage) URL() string                 { return m.url }
-func (m *mockPage) Title() string               { return m.title }
-func (m *mockPage) HTML() (string, error)       { return m.html, nil }
+func (m *mockPage) URL() string           { return m.url }
+func (m *mockPage) Title() string         { return m.title }
+func (m *mockPage) HTML() (string, error) { return m.html, nil }
+func (m *mockPage) HTMLWithin(_ time.Duration) (string, error) {
+	return m.html, nil
+}
 func (m *mockPage) Screenshot() ([]byte, error) { return nil, nil }
 
 type mockExecutor struct {
@@ -132,8 +133,6 @@ type mockLLM struct {
 func (m *mockLLM) SuggestNextAction(_ context.Context, _ LLMRequest) (*LLMResponse, error) {
 	return m.resp, m.err
 }
-
-// --- Tests ---
 
 func TestSolve_NormalPage(t *testing.T) {
 	cfg := DefaultConfig()
@@ -717,4 +716,62 @@ func (s *trackingSolver) CanHandle(_ context.Context, _ Page) (bool, error) {
 func (s *trackingSolver) Solve(_ context.Context, _ Page, _ ActionExecutor) (*Result, error) {
 	*s.order = append(*s.order, s.name)
 	return &Result{Solved: s.solved}, nil
+}
+
+// The LLM path runs through the shared executeSuggestedAction executor, so its
+// type/click/navigate semantics match the semantic path (no divergent copy).
+
+// Regression: an LLM type action with a selector must resolve + click (focus)
+// the target field before typing — previously it typed without focusing.
+func TestExecuteAction_LLMTypeWithSelectorFocusesBeforeTyping(t *testing.T) {
+	ex := &mockExecutor{}
+	resp := &LLMResponse{Action: ActionType_, Selector: "#email", Text: "a@b.co"}
+	if err := executeAction(context.Background(), ex, resp); err != nil {
+		t.Fatalf("executeAction: %v", err)
+	}
+	if ex.evaluateCalled != 1 {
+		t.Errorf("expected selector resolve via Evaluate, got %d", ex.evaluateCalled)
+	}
+	if ex.clickCalled != 1 {
+		t.Errorf("expected field focus click before typing, got %d", ex.clickCalled)
+	}
+	if ex.typeCalled != 1 {
+		t.Errorf("expected type, got %d", ex.typeCalled)
+	}
+}
+
+func TestExecuteAction_LLMTypeWithoutSelectorTypesOnly(t *testing.T) {
+	ex := &mockExecutor{}
+	resp := &LLMResponse{Action: ActionType_, Text: "hello"}
+	if err := executeAction(context.Background(), ex, resp); err != nil {
+		t.Fatalf("executeAction: %v", err)
+	}
+	if ex.clickCalled != 0 || ex.evaluateCalled != 0 {
+		t.Errorf("expected no focus click without selector, got click=%d evaluate=%d", ex.clickCalled, ex.evaluateCalled)
+	}
+	if ex.typeCalled != 1 {
+		t.Errorf("expected type, got %d", ex.typeCalled)
+	}
+}
+
+func TestExecuteAction_LLMClickWithSelector(t *testing.T) {
+	ex := &mockExecutor{}
+	resp := &LLMResponse{Action: ActionClick, Selector: "#submit"}
+	if err := executeAction(context.Background(), ex, resp); err != nil {
+		t.Fatalf("executeAction: %v", err)
+	}
+	if ex.evaluateCalled != 1 || ex.clickCalled != 1 {
+		t.Errorf("expected resolve+click, got evaluate=%d click=%d", ex.evaluateCalled, ex.clickCalled)
+	}
+}
+
+func TestExecuteAction_LLMNavigate(t *testing.T) {
+	ex := &mockExecutor{}
+	resp := &LLMResponse{Action: ActionNavigate, URL: "https://example.com"}
+	if err := executeAction(context.Background(), ex, resp); err != nil {
+		t.Fatalf("executeAction: %v", err)
+	}
+	if ex.navigateCalled != 1 {
+		t.Errorf("expected navigate, got %d", ex.navigateCalled)
+	}
 }

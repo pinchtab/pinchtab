@@ -8,7 +8,6 @@ import (
 )
 
 func TestCheckServerAndGuide(t *testing.T) {
-	// Test successful connection
 	m := newMockServer()
 	m.response = `{"status":"ok"}`
 	defer m.close()
@@ -26,7 +25,6 @@ func TestCheckServerAndGuide(t *testing.T) {
 	defer m2.close()
 	client2 := m2.server.Client()
 
-	// Capture stderr
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w

@@ -18,7 +18,6 @@ Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" |
 Where-Object { $_.CommandLine -and $_.CommandLine.Contains($needle) } |
 Select-Object -ExpandProperty ProcessId`
 
-// findPIDsByPowerShell finds Chrome PIDs whose command line contains the needle.
 func findPIDsByPowerShell(needle string) []int {
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", findPIDsByPowerShellScript)
 	cmd.Env = append(os.Environ(), "PINCHTAB_NEEDLE="+needle)
@@ -43,7 +42,6 @@ func findPIDsByPowerShell(needle string) []int {
 	return pids
 }
 
-// taskkillPIDs force-kills processes and their children via taskkill /F /T.
 func taskkillPIDs(pids []int) int {
 	killed := 0
 	for _, pid := range pids {
@@ -56,16 +54,36 @@ func taskkillPIDs(pids []int) int {
 	return killed
 }
 
-// killChromeByProfileDir finds and kills Chrome processes using the given profile directory.
+// Test seam: overridden in tests.
+var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
+
+func findChromePIDsByProfileDir(profileDir string) []int {
+	return findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
+}
+
 func killChromeByProfileDir(profileDir string) int {
-	pids := findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
+	pids := findChromePIDsByProfileDirFunc(profileDir)
 	if len(pids) == 0 {
 		return 0
 	}
 	return taskkillPIDs(pids)
 }
 
-// KillAllPinchtabChrome kills all Chrome processes spawned by PinchTab.
+// taskkill without /F (no SIGKILL escalation).
+func terminateChromeByProfileDir(profileDir string) int {
+	pids := findChromePIDsByProfileDirFunc(profileDir)
+	if len(pids) == 0 {
+		return 0
+	}
+	for _, pid := range pids {
+		cmd := exec.Command("taskkill", "/PID", strconv.Itoa(pid))
+		if err := cmd.Run(); err == nil {
+			slog.Info("cleanup: taskkill chrome process", "pid", pid)
+		}
+	}
+	return len(pids)
+}
+
 func KillAllPinchtabChrome() int {
 	var pids []int
 	seen := make(map[int]bool)
@@ -88,7 +106,6 @@ func KillAllPinchtabChrome() int {
 	return killed
 }
 
-// CleanupOrphanedChromeProcesses kills orphaned Chrome processes on Windows.
 func CleanupOrphanedChromeProcesses(profileDir string) {
 	if profileDir == "" {
 		return

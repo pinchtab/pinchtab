@@ -135,13 +135,16 @@ pinchtab drag e5 400,320
 
 Use these for drag handles, canvas controls, precise hover choreography, or sites that require exact pointer sequencing.
 
-### `pinchtab scroll [ref]`
-Scroll the page or a specific element.
+### `pinchtab scroll <pixels|direction|selector>`
+Scroll the page or a specific element. Argument is positional — there is no `--pixels` flag.
 
 ```bash
-pinchtab scroll            # scroll page down 300px
-pinchtab scroll --pixels -300   # scroll up
-pinchtab scroll e20 --pixels 500
+pinchtab scroll 800            # scroll page down 800px
+pinchtab scroll -300           # scroll page up 300px
+pinchtab scroll down           # named direction (also up, top, bottom)
+pinchtab scroll '#footer'      # scroll a CSS selector into view
+pinchtab scroll e20            # scroll an element ref into view
+pinchtab scroll 800 --snap-diff
 ```
 
 ### `pinchtab select <ref> <value>`

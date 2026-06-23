@@ -86,24 +86,19 @@ func init() {
 	stateCmd.AddCommand(stateListCmd, stateSaveCmd, stateLoadCmd, stateShowCmd, stateDeleteCmd, stateCleanCmd)
 	addTabFlag(stateCmd)
 
-	// save flags
 	stateSaveCmd.Flags().String("name", "", "Name for the saved state (auto-generated if omitted)")
 	stateSaveCmd.Flags().Bool("encrypt", false, "Encrypt the state file (requires security.stateEncryptionKey in config)")
 	addTabFlag(stateSaveCmd)
 
-	// load flags
 	stateLoadCmd.Flags().String("name", "", "Exact name or prefix of the state file to load")
 	_ = stateLoadCmd.MarkFlagRequired("name")
 	addTabFlag(stateLoadCmd)
 
-	// show flags
 	stateShowCmd.Flags().String("name", "", "Name of the state file to inspect")
 	_ = stateShowCmd.MarkFlagRequired("name")
 
-	// delete flags
 	stateDeleteCmd.Flags().String("name", "", "Name of the state file to delete")
 	_ = stateDeleteCmd.MarkFlagRequired("name")
 
-	// clean flags
 	stateCleanCmd.Flags().Int("older-than", 24, "Remove files older than this many hours")
 }

@@ -7,8 +7,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
 func enabledCfg(extra ...func(*config.IDPIConfig)) config.IDPIConfig {
 	cfg := config.IDPIConfig{Enabled: true}
 	for _, fn := range extra {
@@ -20,8 +18,6 @@ func enabledCfg(extra ...func(*config.IDPIConfig)) config.IDPIConfig {
 func allowedDomains(domains ...string) []string {
 	return append([]string(nil), domains...)
 }
-
-// ─── CheckDomain ──────────────────────────────────────────────────────────────
 
 func TestCheckDomain_DisabledAlwaysPasses(t *testing.T) {
 	cfg := config.IDPIConfig{Enabled: false}
@@ -208,9 +204,6 @@ func TestDomainAllowed(t *testing.T) {
 	}
 }
 
-// ─── ScanContent ──────────────────────────────────────────────────────────────
-
-// --- Guard wiring tests (config flags + WrapContent format) ---
 // Content scanning correctness is tested in idpishield's own test suite.
 
 func newGuard(cfg config.IDPIConfig, allowedDomains ...string) Guard {

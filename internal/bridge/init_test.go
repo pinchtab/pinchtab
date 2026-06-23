@@ -10,8 +10,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
-	args := buildChromeArgs(&config.RuntimeConfig{}, 9222)
+func TestBuildBrowserArgsSuppressesCrashDialogs(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{}, 9222)
 
 	for _, want := range []string{
 		"--disable-session-crashed-bubble",
@@ -19,13 +19,13 @@ func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
 		"--noerrdialogs",
 	} {
 		if !slices.Contains(args, want) {
-			t.Fatalf("missing chrome arg %q in %v", want, args)
+			t.Fatalf("missing browser arg %q in %v", want, args)
 		}
 	}
 }
 
-func TestBuildChromeArgsIncludesStealthLaunchFlags(t *testing.T) {
-	args := buildChromeArgs(&config.RuntimeConfig{}, 9222)
+func TestBuildBrowserArgsIncludesStealthLaunchFlags(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{}, 9222)
 
 	for _, want := range []string{
 		"--enable-automation=false",
@@ -34,31 +34,35 @@ func TestBuildChromeArgsIncludesStealthLaunchFlags(t *testing.T) {
 		"--lang=en-US",
 	} {
 		if !slices.Contains(args, want) {
-			t.Fatalf("missing chrome arg %q in %v", want, args)
+			t.Fatalf("missing browser arg %q in %v", want, args)
 		}
 	}
 }
 
-func TestBuildChromeArgsHeadlessUsesSoftwareRendering(t *testing.T) {
-	args := buildChromeArgs(&config.RuntimeConfig{Headless: true}, 9222)
+func TestBuildBrowserArgsHeadlessUsesSoftwareRendering(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{Headless: true}, 9222)
 
 	for _, want := range []string{
 		"--headless=new",
-		"--disable-gpu",
 		"--disable-vulkan",
 		"--use-angle=swiftshader",
 		"--enable-unsafe-swiftshader",
 	} {
 		if !slices.Contains(args, want) {
-			t.Fatalf("missing headless chrome arg %q in %v", want, args)
+			t.Fatalf("missing headless browser arg %q in %v", want, args)
 		}
+	}
+	// --disable-gpu would remove the compositor backend that the swiftshader
+	// flags above provide; capture/print CDP calls then hang.
+	if slices.Contains(args, "--disable-gpu") {
+		t.Fatalf("headless args must not contain --disable-gpu: %v", args)
 	}
 }
 
-func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
+func TestBuildBrowserArgsIncludesGlobalUserAgent(t *testing.T) {
 	// HEADED + no custom UA: Chrome must run WITHOUT --user-agent so its
 	// native, complete high-entropy UA Client Hints are served.
-	args := buildChromeArgs(&config.RuntimeConfig{ChromeVersion: "144.0.7559.133"}, 9222)
+	args := buildBrowserArgs(&config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}, 9222)
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--user-agent=") {
 			t.Fatalf("did not expect a pinned user-agent in headed mode without a custom UA, got %v", args)
@@ -70,7 +74,7 @@ func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
 	// headless tell never reaches the page or workers. The native UA-CH is
 	// already degraded in headless, so the PR #580 UA-CH realism rationale
 	// does not apply here.
-	headless := buildChromeArgs(&config.RuntimeConfig{ChromeVersion: "144.0.7559.133", Headless: true}, 9222)
+	headless := buildBrowserArgs(&config.RuntimeConfig{BrowserVersion: "144.0.7559.133", Headless: true}, 9222)
 	var headlessUA string
 	for _, arg := range headless {
 		if strings.HasPrefix(arg, "--user-agent=") {
@@ -89,7 +93,7 @@ func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
 	}
 
 	// Explicit custom UA: it must be pinned (independent of headless).
-	custom := buildChromeArgs(&config.RuntimeConfig{ChromeVersion: "144.0.7559.133", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"}, 9222)
+	custom := buildBrowserArgs(&config.RuntimeConfig{BrowserVersion: "144.0.7559.133", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"}, 9222)
 	found := false
 	for _, arg := range custom {
 		if strings.HasPrefix(arg, "--user-agent=Mozilla/5.0") {
@@ -102,10 +106,10 @@ func TestBuildChromeArgsIncludesGlobalUserAgent(t *testing.T) {
 	}
 }
 
-func TestBuildChromeArgsSanitizesUnsafeAndReservedExtraFlags(t *testing.T) {
-	args := buildChromeArgs(&config.RuntimeConfig{
-		ChromeVersion:    "144.0.7559.133",
-		ChromeExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
+func TestBuildBrowserArgsSanitizesUnsafeAndReservedExtraFlags(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{
+		BrowserVersion:    "144.0.7559.133",
+		BrowserExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
 	}, 9222)
 
 	if !slices.Contains(args, "--disable-gpu") {
@@ -121,8 +125,8 @@ func TestBuildChromeArgsSanitizesUnsafeAndReservedExtraFlags(t *testing.T) {
 	}
 }
 
-func TestBuildChromeArgsSkipsMissingExtensionPaths(t *testing.T) {
-	args := buildChromeArgs(&config.RuntimeConfig{
+func TestBuildBrowserArgsSkipsMissingExtensionPaths(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{
 		ExtensionPaths: []string{filepath.Join(t.TempDir(), "missing-extension")},
 	}, 9222)
 
@@ -136,13 +140,13 @@ func TestBuildChromeArgsSkipsMissingExtensionPaths(t *testing.T) {
 	}
 }
 
-func TestBuildChromeArgsIncludesExistingExtensionPaths(t *testing.T) {
+func TestBuildBrowserArgsIncludesExistingExtensionPaths(t *testing.T) {
 	extensionDir := filepath.Join(t.TempDir(), "extensions", "example")
 	if err := os.MkdirAll(extensionDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	args := buildChromeArgs(&config.RuntimeConfig{
+	args := buildBrowserArgs(&config.RuntimeConfig{
 		ExtensionPaths: []string{extensionDir},
 	}, 9222)
 
@@ -158,8 +162,47 @@ func TestBuildChromeArgsIncludesExistingExtensionPaths(t *testing.T) {
 	}
 }
 
-func TestBaseChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
-	args := baseChromeFlagArgs()
+func TestBuildBrowserArgsIncludesProxyFlagsWhenConfigured(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{
+		Proxy: config.BrowserProxyConfig{
+			Server:     "http://proxy.example.com:8080",
+			BypassList: []string{"*.local", "127.0.0.1"},
+			Username:   "alice",
+			Password:   "s3cr3t",
+		},
+	}, 9222)
+
+	hasProxy, hasBypass := false, false
+	for _, a := range args {
+		if a == "--proxy-server=http://proxy.example.com:8080" {
+			hasProxy = true
+		}
+		if a == "--proxy-bypass-list=*.local;127.0.0.1" {
+			hasBypass = true
+		}
+		if strings.Contains(a, "alice") || strings.Contains(a, "s3cr3t") {
+			t.Fatalf("proxy credentials leaked into browser args: %q", a)
+		}
+	}
+	if !hasProxy {
+		t.Fatalf("expected --proxy-server flag in %v", args)
+	}
+	if !hasBypass {
+		t.Fatalf("expected --proxy-bypass-list flag in %v", args)
+	}
+}
+
+func TestBuildBrowserArgsOmitsProxyFlagsWhenDisabled(t *testing.T) {
+	args := buildBrowserArgs(&config.RuntimeConfig{}, 9222)
+	for _, a := range args {
+		if strings.HasPrefix(a, "--proxy-server=") || strings.HasPrefix(a, "--proxy-bypass-list=") {
+			t.Fatalf("did not expect proxy flag without config: %q", a)
+		}
+	}
+}
+
+func TestBaseBrowserFlagArgsDisablesMetricsReporting(t *testing.T) {
+	args := baseBrowserFlagArgs()
 	for _, want := range []string{"--disable-metrics-reporting", "--metrics-recording-only"} {
 		found := false
 		for _, arg := range args {
@@ -174,8 +217,8 @@ func TestBaseChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
 	}
 }
 
-func TestBaseChromeFlagArgsPreservesPopupBlockingAndSiteIsolation(t *testing.T) {
-	args := baseChromeFlagArgs()
+func TestBaseBrowserFlagArgsPreservesPopupBlockingAndSiteIsolation(t *testing.T) {
+	args := baseBrowserFlagArgs()
 	for _, forbidden := range []string{
 		"--disable-popup-blocking",
 		"--no-sandbox",

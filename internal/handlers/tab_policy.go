@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -47,8 +46,8 @@ func (h *Handlers) enforceCurrentTabDomainPolicy(w http.ResponseWriter, r *http.
 	lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	var currentURL string
-	if err := chromedp.Run(lookupCtx, chromedp.Location(&currentURL)); err != nil {
+	currentURL, err := h.Bridge.CurrentURL(lookupCtx)
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("resolve current tab url: %w", err))
 		return "", false
 	}
