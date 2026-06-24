@@ -195,6 +195,7 @@ describe("ScreencastTile", () => {
     const authFailure = vi
       .spyOn(api, "handleRealtimeAuthFailure")
       .mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
     const dropLatestSocket = async () => {
       const socket = webSocketInstances.at(-1) as {
