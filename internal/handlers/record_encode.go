@@ -18,7 +18,7 @@ import (
 	"strconv"
 )
 
-func encodeToFile(tmpDir, outputPath, format string, fps int, scale float64) error {
+func encodeToFile(tmpDir, outputPath, format string, fps int, scale float64) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), encodeTimeout)
 	defer cancel()
 
@@ -26,18 +26,18 @@ func encodeToFile(tmpDir, outputPath, format string, fps int, scale float64) err
 	case "gif":
 		return encodeGIFToFile(tmpDir, outputPath, fps, scale)
 	case "webm":
-		return encodeFFmpegToFile(ctx, tmpDir, outputPath, format, fps, scale, "libvpx", "-crf", "10", "-b:v", "1M")
+		return "", encodeFFmpegToFile(ctx, tmpDir, outputPath, format, fps, scale, "libvpx", "-crf", "10", "-b:v", "1M")
 	case "mp4":
-		return encodeFFmpegToFile(ctx, tmpDir, outputPath, format, fps, scale, "libx264", "-pix_fmt", "yuv420p", "-crf", "23")
+		return "", encodeFFmpegToFile(ctx, tmpDir, outputPath, format, fps, scale, "libx264", "-pix_fmt", "yuv420p", "-crf", "23")
 	default:
-		return fmt.Errorf("unsupported format: %s", format)
+		return "", fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
-func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) error {
+func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) (string, error) {
 	files, err := discoverFrames(tmpDir, maxGIFFrames)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	delay := 100 / fps
@@ -47,12 +47,13 @@ func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) error {
 
 	outFile, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return fmt.Errorf("create gif output: %w", err)
+		return "", fmt.Errorf("create gif output: %w", err)
 	}
 	defer func() { _ = outFile.Close() }()
 
 	g := &gif.GIF{LoopCount: 0}
 	var palettedBytes int64
+	truncated := false
 
 	for _, f := range files {
 		img, ok := loadFrame(f)
@@ -61,11 +62,15 @@ func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) error {
 		}
 
 		img = scaleFrameForGIF(img, scale)
-
 		bounds := img.Bounds()
 		pixels := bounds.Dx() * bounds.Dy()
-		if palettedBytes+int64(pixels) > maxGIFEncodeBytes {
+
+		// Honor the requested resolution; cap total frames (not per-frame size) so
+		// memory stays bounded. The first frame is always kept so a single large
+		// frame still produces a valid GIF.
+		if len(g.Image) > 0 && palettedBytes+int64(pixels) > maxGIFEncodeBytes {
 			slog.Info("GIF encode: memory budget reached, truncating", "frames", len(g.Image))
+			truncated = true
 			break
 		}
 
@@ -77,14 +82,23 @@ func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) error {
 	}
 
 	if len(g.Image) == 0 {
-		return fmt.Errorf("no frames to encode")
+		return "", fmt.Errorf("no frames to encode")
 	}
 
 	lw := &limitedWriter{w: outFile, max: int64(maxOutputBytes)}
 	if err := gif.EncodeAll(lw, g); err != nil {
-		return fmt.Errorf("gif encode: %w", err)
+		return "", fmt.Errorf("gif encode: %w", err)
 	}
-	return outFile.Close()
+
+	var warning string
+	if truncated {
+		warning = fmt.Sprintf(
+			"GIF was truncated to %d frames to stay within the ~%d MB in-memory budget at this "+
+				"resolution. Lower --scale or record to .mp4 or .webm for the full-length clip.",
+			len(g.Image), maxGIFEncodeBytes>>20)
+		slog.Warn("GIF encode: truncated to fit memory budget", "frames", len(g.Image))
+	}
+	return warning, outFile.Close()
 }
 
 // discoverFrames returns the sorted list of captured JPEG frame files in tmpDir,
@@ -115,18 +129,12 @@ func loadFrame(path string) (img image.Image, ok bool) {
 	return img, true
 }
 
-// scaleFrameForGIF applies the caller-requested scale, then enforces the GIF
-// per-frame pixel budget by downscaling oversized frames.
+// scaleFrameForGIF applies the caller-requested scale. At scale 1.0 the frame is
+// kept at full resolution — no forced downscale. Memory is bounded by the total
+// frame budget in encodeGIFToFile, not by shrinking individual frames.
 func scaleFrameForGIF(img image.Image, scale float64) image.Image {
 	if scale != 1.0 && scale > 0 {
-		img = scaleImage(img, scale)
-	}
-
-	bounds := img.Bounds()
-	pixels := bounds.Dx() * bounds.Dy()
-	if pixels > maxGIFFramePixels {
-		ratio := float64(maxGIFFramePixels) / float64(pixels)
-		img = scaleImage(img, ratio)
+		return scaleImage(img, scale)
 	}
 	return img
 }
@@ -153,6 +161,11 @@ func encodeFFmpegToFile(ctx context.Context, tmpDir, outputPath, format string, 
 	args = append(args, "-c:v", codec)
 	args = append(args, extraArgs...)
 	args = append(args, "-fs", strconv.Itoa(maxOutputBytes))
+	// The output path carries a ".encoding.tmp" suffix (see recorder.stop), so
+	// ffmpeg cannot infer the container from the extension. Name the muxer
+	// explicitly — "mp4"/"webm" are valid format names — or it aborts with
+	// "Unable to choose an output format" (issue #585).
+	args = append(args, "-f", format)
 	args = append(args, outputPath)
 
 	// #nosec G204 -- ffmpeg executable is fixed and args are built from validated,
