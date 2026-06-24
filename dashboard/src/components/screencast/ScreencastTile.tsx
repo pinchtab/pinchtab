@@ -79,6 +79,7 @@ export default function ScreencastTile({
             onClick={input.handleCanvasClick}
             onWheel={input.handleCanvasWheel}
             onKeyDown={input.handleKeyDown}
+            onKeyUp={input.handleKeyUp}
           />
         )}
 

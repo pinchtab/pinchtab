@@ -9,6 +9,8 @@ interface UseScreencastInputArgs {
   status: ScreencastStatus;
 }
 
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 export function useScreencastInput({
   canvasRef,
   tabId,
@@ -88,6 +90,10 @@ export function useScreencastInput({
       }
       e.preventDefault();
       try {
+        if (MODIFIER_KEYS.has(e.key)) {
+          await api.sendAction({ kind: "keydown", tabId, key: e.key });
+          return;
+        }
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
           await api.sendAction({
             kind: "keyboard-inserttext",
@@ -104,6 +110,19 @@ export function useScreencastInput({
     [status, tabId],
   );
 
+  const handleKeyUp = useCallback(
+    async (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (status !== "streaming" || !MODIFIER_KEYS.has(e.key)) return;
+      e.preventDefault();
+      try {
+        await api.sendAction({ kind: "keyup", tabId, key: e.key });
+      } catch (err) {
+        console.error("key input failed", err);
+      }
+    },
+    [status, tabId],
+  );
+
   // Prevent default wheel behavior on the canvas so the page doesn't scroll
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -113,5 +132,5 @@ export function useScreencastInput({
     return () => canvas.removeEventListener("wheel", prevent);
   }, [canvasRef]);
 
-  return { handleCanvasClick, handleCanvasWheel, handleKeyDown };
+  return { handleCanvasClick, handleCanvasWheel, handleKeyDown, handleKeyUp };
 }

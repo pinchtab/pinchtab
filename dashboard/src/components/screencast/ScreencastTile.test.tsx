@@ -172,6 +172,65 @@ describe("ScreencastTile", () => {
     expect(createImageBitmapMock).toHaveBeenCalledTimes(2);
   });
 
+  it("forwards modifier keys as keydown and keyup actions", async () => {
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    const bitmap = {
+      width: 640,
+      height: 360,
+      close: vi.fn(),
+    } as unknown as ImageBitmap;
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue(bitmap));
+    const sendAction = vi.spyOn(api, "sendAction").mockResolvedValue({});
+
+    render(
+      <ScreencastTile
+        instanceId="inst_123"
+        tabId="tab_456"
+        label="Example"
+        url="https://pinchtab.com"
+      />,
+    );
+
+    await waitFor(() => expect(webSocketMock).toHaveBeenCalledTimes(1));
+
+    const socket = webSocketInstances[0] as {
+      onmessage?: (event: MessageEvent<ArrayBuffer>) => void;
+    };
+    await act(async () => {
+      socket.onmessage?.({
+        data: new Uint8Array([1, 2, 3]).buffer,
+      } as MessageEvent<ArrayBuffer>);
+    });
+    await waitFor(() => expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0));
+
+    const canvas = document.querySelector("canvas");
+    expect(canvas).not.toBeNull();
+    fireEvent.keyDown(canvas!, { key: "Shift", code: "ShiftLeft" });
+    fireEvent.keyUp(canvas!, { key: "Shift", code: "ShiftLeft" });
+
+    await waitFor(() =>
+      expect(sendAction).toHaveBeenCalledWith({
+        kind: "keydown",
+        tabId: "tab_456",
+        key: "Shift",
+      }),
+    );
+    expect(sendAction).toHaveBeenCalledWith({
+      kind: "keyup",
+      tabId: "tab_456",
+      key: "Shift",
+    });
+    expect(sendAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "keyboard-inserttext",
+        text: "Shift",
+      }),
+    );
+  });
+
   it("reconnects when retry is clicked after the socket closes", async () => {
     render(
       <ScreencastTile
