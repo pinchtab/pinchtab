@@ -104,6 +104,18 @@ else
   fail_assert "2x-frame click left focus on '${ACTIVE}', want 'inp'"
 fi
 
+# Close the loop: the click focused the field, so typing (as the dashboard sends
+# it — insertText for printable chars) must land in that field. This is the exact
+# end-to-end path that was broken when clicks missed their target.
+TYPED_BODY=$(jq -nc --arg t "$SC_TAB_ID" '{kind:"keyboard-inserttext", tabId:$t, text:"Hello"}')
+pt_post /action "$TYPED_BODY" >/dev/null
+VAL=$(sc_eval 'document.getElementById("inp").value')
+if [ "$VAL" = "Hello" ]; then
+  pass_assert "typing after a scaled click lands in the focused input"
+else
+  fail_assert "typed text landed as '${VAL}', want 'Hello'"
+fi
+
 end_test
 
 # ─────────────────────────────────────────────────────────────────
