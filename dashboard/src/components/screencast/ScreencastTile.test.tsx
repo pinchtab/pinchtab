@@ -1,10 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../services/api";
 import ScreencastTile from "../screencast/ScreencastTile";
@@ -60,7 +54,7 @@ describe("ScreencastTile", () => {
     await waitFor(() => expect(webSocketMock).toHaveBeenCalledTimes(1));
 
     expect(webSocketMock).toHaveBeenCalledWith(
-      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=40&maxWidth=800&fps=1",
+      "wss://pinchtab.com/instances/inst_123/proxy/screencast?tabId=tab_456&quality=60&maxWidth=1280&fps=10",
     );
   });
 
@@ -172,7 +166,7 @@ describe("ScreencastTile", () => {
     expect(createImageBitmapMock).toHaveBeenCalledTimes(2);
   });
 
-  it("reconnects when retry is clicked after the socket closes", async () => {
+  it("auto-reconnects after the socket closes", async () => {
     render(
       <ScreencastTile
         instanceId="inst_123"
@@ -191,8 +185,8 @@ describe("ScreencastTile", () => {
       firstSocket.onclose?.({} as CloseEvent);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry connection" }));
-
+    // A dropped socket reconnects on its own (short backoff) — no manual retry —
+    // so a transient blip never leaves the user stuck on a "connection lost" overlay.
     await waitFor(() => expect(webSocketMock).toHaveBeenCalledTimes(2));
   });
 });
