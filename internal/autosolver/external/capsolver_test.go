@@ -54,7 +54,11 @@ func TestDetectCaptchaType(t *testing.T) {
 		`<div class="cf-turnstile" data-sitekey="x"></div>`:                 "turnstile",
 		`<div id="arkose" data-pkey="ABC"></div>`:                           "funcaptcha",
 		`<script src="https://lnkd-api.arkoselabs.com/v2/api.js"></script>`: "funcaptcha",
-		`<p>nothing here</p>`:                                               "",
+		// v3: render=<key> with no data-sitekey widget.
+		`<script src="https://www.google.com/recaptcha/api.js?render=6Lc_V3_KEY"></script>`: "recaptcha-v3",
+		// v2 wins when a data-sitekey widget is present, even alongside render=explicit.
+		`<div class="g-recaptcha" data-sitekey="x"></div><script src="https://www.google.com/recaptcha/api.js?render=explicit"></script>`: "recaptcha",
+		`<p>nothing here</p>`: "",
 	}
 	for html, want := range cases {
 		if got := detectCaptchaType(html); got != want {
@@ -77,6 +81,24 @@ func TestExtractSitekey(t *testing.T) {
 	if got := extractSitekey(`<iframe src="https://x.arkoselabs.com/fc/gt2/?pk=0152B4EB-D2DC-460A-89A1-629838B529C9"></iframe>`, "funcaptcha"); got != "0152B4EB-D2DC-460A-89A1-629838B529C9" {
 		t.Errorf("funcaptcha pk= url = %q", got)
 	}
+	// v3 sitekey lives in the api.js ?render= param, not data-sitekey.
+	if got := extractSitekey(`<script src="https://www.google.com/recaptcha/api.js?onload=cb&render=6Lc_V3_KEY"></script>`, "recaptcha-v3"); got != "6Lc_V3_KEY" {
+		t.Errorf("recaptcha-v3 render sitekey = %q", got)
+	}
+}
+
+func TestExtractRecaptchaAction(t *testing.T) {
+	cases := map[string]string{
+		`<script>grecaptcha.execute('6Lc', {action: 'login'})</script>`: "login",
+		`grecaptcha.enterprise.execute("6Lc",{action:"submit_form"})`:   "submit_form",
+		`<button data-action="checkout"></button>`:                      "checkout", // attribute fallback
+		`<p>no action here</p>`:                                         "",         // optional → empty
+	}
+	for html, want := range cases {
+		if got := extractRecaptchaAction(html); got != want {
+			t.Errorf("extractRecaptchaAction(%q) = %q, want %q", html, got, want)
+		}
+	}
 }
 
 func TestExtractArkoseSubdomain(t *testing.T) {
@@ -88,10 +110,11 @@ func TestExtractArkoseSubdomain(t *testing.T) {
 
 func TestCapsolverTaskType(t *testing.T) {
 	cases := map[string]string{
-		"recaptcha":  "ReCaptchaV2TaskProxyLess",
-		"hcaptcha":   "HCaptchaTaskProxyLess",
-		"turnstile":  "AntiTurnstileTaskProxyLess",
-		"funcaptcha": "FunCaptchaTaskProxyLess",
+		"recaptcha":    "ReCaptchaV2TaskProxyLess",
+		"recaptcha-v3": "ReCaptchaV3TaskProxyLess",
+		"hcaptcha":     "HCaptchaTaskProxyLess",
+		"turnstile":    "AntiTurnstileTaskProxyLess",
+		"funcaptcha":   "FunCaptchaTaskProxyLess",
 	}
 	for in, want := range cases {
 		got, ok := capsolverTaskType(in)
@@ -240,6 +263,42 @@ func TestSolveRecaptcha(t *testing.T) {
 		t.Errorf("recaptcha task should not set websitePublicKey")
 	}
 	if !strings.Contains(exec.lastInject, "RECAP-TOKEN") {
+		t.Errorf("token not injected: %q", exec.lastInject)
+	}
+}
+
+func TestSolveRecaptchaV3(t *testing.T) {
+	var task capsolverTask
+	srv := mockCapsolver(t, "V3-TOKEN", &task)
+	defer srv.Close()
+
+	c := NewCapsolver(CapsolverConfig{APIKey: "k", BaseURL: srv.URL})
+	page := &fakePage{
+		url:  "https://ex.com/login",
+		html: `<script src="https://www.google.com/recaptcha/api.js?render=6Lc_V3_KEY"></script><script>grecaptcha.execute('6Lc_V3_KEY', {action: 'login'});</script>`,
+	}
+	exec := &fakeExecutor{}
+
+	res, err := c.Solve(context.Background(), page, exec)
+	if err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	if !res.Solved {
+		t.Fatalf("expected solved, got error=%q", res.Error)
+	}
+	if task.Type != "ReCaptchaV3TaskProxyLess" {
+		t.Errorf("task type = %q", task.Type)
+	}
+	if task.WebsiteKey != "6Lc_V3_KEY" {
+		t.Errorf("websiteKey = %q (want render sitekey)", task.WebsiteKey)
+	}
+	if task.PageAction != "login" {
+		t.Errorf("pageAction = %q (want login)", task.PageAction)
+	}
+	if task.WebsitePublicKey != "" {
+		t.Errorf("v3 task should not set websitePublicKey")
+	}
+	if !strings.Contains(exec.lastInject, "V3-TOKEN") {
 		t.Errorf("token not injected: %q", exec.lastInject)
 	}
 }

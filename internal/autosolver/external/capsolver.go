@@ -26,8 +26,8 @@ type CapsolverConfig struct {
 }
 
 // Capsolver implements autosolver.Solver using the Capsolver API.
-// It supports reCAPTCHA v2, hCaptcha, Cloudflare Turnstile, and Arkose
-// Labs FunCaptcha.
+// It supports reCAPTCHA v2, reCAPTCHA v3, hCaptcha, Cloudflare Turnstile,
+// and Arkose Labs FunCaptcha.
 type Capsolver struct {
 	config CapsolverConfig
 	client *http.Client
@@ -99,28 +99,42 @@ func (c *Capsolver) Solve(ctx context.Context, page autosolver.Page, executor au
 		return result, fmt.Errorf("unsupported captcha type: %s", captchaType)
 	}
 
-	// FunCaptcha additionally needs the Arkose API JS subdomain and — for
-	// modern deployments (LinkedIn) — the per-session data blob. The blob,
-	// public key, and service URL are captured at document-start by the bridge's
-	// Arkose hook (window.__ptArkose); prefer those live values over static HTML.
-	arkoseSubdomain := ""
-	blob := ""
-	if captchaType == "funcaptcha" {
-		arkoseSubdomain = extractArkoseSubdomain(html)
+	task := capsolverTask{Type: taskType, WebsiteURL: page.URL()}
+	switch captchaType {
+	case "funcaptcha":
+		// FunCaptcha additionally needs the Arkose API JS subdomain and — for
+		// modern deployments (LinkedIn) — the per-session data blob. The blob,
+		// public key, and service URL are captured at document-start by the
+		// bridge's Arkose hook (window.__ptArkose); prefer those live values
+		// over static HTML.
+		task.WebsitePublicKey = key
+		task.FuncaptchaApiJSSubdomain = extractArkoseSubdomain(html)
+		blob := ""
 		if ac := readArkoseCapture(ctx, executor); ac != nil {
-			if ac.Blob != "" {
-				blob = ac.Blob
-			}
 			if ac.PK != "" {
-				key = ac.PK
+				task.WebsitePublicKey = ac.PK
 			}
 			if ac.Surl != "" {
-				arkoseSubdomain = ac.Surl
+				task.FuncaptchaApiJSSubdomain = ac.Surl
+			}
+			blob = ac.Blob
+		}
+		if blob != "" {
+			// map[string]string can't fail to marshal; err branch is unreachable.
+			if b, err := json.Marshal(map[string]string{"blob": blob}); err == nil {
+				task.Data = string(b)
 			}
 		}
+	case "recaptcha-v3":
+		// v3 has no widget — the sitekey comes from ?render= and the task needs
+		// the action passed to grecaptcha.execute (best-effort; optional).
+		task.WebsiteKey = key
+		task.PageAction = extractRecaptchaAction(html)
+	default:
+		task.WebsiteKey = key
 	}
 
-	token, err := c.solveRemote(ctx, captchaType, taskType, page.URL(), key, arkoseSubdomain, blob)
+	token, err := c.solveRemote(ctx, task)
 	if err != nil {
 		result.Error = err.Error()
 		return result, err
@@ -144,6 +158,8 @@ func capsolverTaskType(captchaType string) (string, bool) {
 	switch captchaType {
 	case "recaptcha":
 		return "ReCaptchaV2TaskProxyLess", true
+	case "recaptcha-v3":
+		return "ReCaptchaV3TaskProxyLess", true
 	case "hcaptcha":
 		return "HCaptchaTaskProxyLess", true
 	case "turnstile":
@@ -160,8 +176,12 @@ func capsolverTaskType(captchaType string) (string, bool) {
 type capsolverTask struct {
 	Type       string `json:"type"`
 	WebsiteURL string `json:"websiteURL"`
-	// reCAPTCHA / hCaptcha / Turnstile use websiteKey (data-sitekey).
+	// reCAPTCHA / hCaptcha / Turnstile use websiteKey (data-sitekey, or the
+	// ?render= sitekey for reCAPTCHA v3).
 	WebsiteKey string `json:"websiteKey,omitempty"`
+	// PageAction is the reCAPTCHA v3 action (the value passed to
+	// grecaptcha.execute). Optional — CapSolver applies a default when absent.
+	PageAction string `json:"pageAction,omitempty"`
 	// FunCaptcha uses websitePublicKey (data-pkey) + the Arkose API subdomain,
 	// and (for modern deployments like LinkedIn) the per-session data blob,
 	// passed as a JSON-encoded string e.g. {"blob":"…"}.
@@ -194,21 +214,9 @@ type capsolverResponse struct {
 	Solution         capsolverSolution `json:"solution"`
 }
 
-// solveRemote runs the full create → poll cycle and returns the token.
-func (c *Capsolver) solveRemote(ctx context.Context, captchaType, taskType, pageURL, key, arkoseSubdomain, blob string) (string, error) {
-	task := capsolverTask{Type: taskType, WebsiteURL: pageURL}
-	if captchaType == "funcaptcha" {
-		task.WebsitePublicKey = key
-		task.FuncaptchaApiJSSubdomain = arkoseSubdomain
-		if blob != "" {
-			if b, err := json.Marshal(map[string]string{"blob": blob}); err == nil {
-				task.Data = string(b)
-			}
-		}
-	} else {
-		task.WebsiteKey = key
-	}
-
+// solveRemote runs the full create → poll cycle for a prebuilt task and
+// returns the token. The caller (Solve) populates the type-specific fields.
+func (c *Capsolver) solveRemote(ctx context.Context, task capsolverTask) (string, error) {
 	var created capsolverResponse
 	if err := c.postJSON(ctx, "/createTask", capsolverCreateRequest{ClientKey: c.config.APIKey, Task: task}, &created); err != nil {
 		return "", fmt.Errorf("capsolver createTask: %w", err)
@@ -329,7 +337,7 @@ func (c *Capsolver) postJSON(ctx context.Context, path string, body, out interfa
 func injectToken(ctx context.Context, executor autosolver.ActionExecutor, captchaType, token string) error {
 	var js string
 	switch captchaType {
-	case "recaptcha":
+	case "recaptcha", "recaptcha-v3":
 		js = recaptchaInjectJS
 	case "hcaptcha":
 		js = hcaptchaInjectJS
@@ -411,9 +419,10 @@ const funcaptchaInjectJS = `function(token){
 // detectCaptchaType classifies the CAPTCHA on a page from its HTML, or "" if
 // none is recognized. FunCaptcha is matched first because Arkose embeds often
 // also pull in a reCAPTCHA-like script; its markers (arkoselabs, data-pkey) are
-// specific enough that the ordering rarely misfires. Note: reCAPTCHA v2 and v3
-// both report as "recaptcha" and the solver submits a V2 task, so a v3-only page
-// (grecaptcha.execute, no checkbox) is detected but not correctly solvable yet.
+// specific enough that the ordering rarely misfires. reCAPTCHA splits into
+// "recaptcha" (v2 checkbox/invisible) and "recaptcha-v3" — see classifyRecaptcha.
+// Enterprise reCAPTCHA (recaptcha/enterprise.js) is not yet distinguished and
+// falls through to the v2 path.
 func detectCaptchaType(html string) string {
 	lower := strings.ToLower(html)
 	switch {
@@ -425,10 +434,25 @@ func detectCaptchaType(html string) string {
 	case strings.Contains(lower, "h-captcha") || strings.Contains(lower, "hcaptcha"):
 		return "hcaptcha"
 	case strings.Contains(lower, "g-recaptcha") || strings.Contains(lower, "recaptcha"):
-		return "recaptcha"
+		return classifyRecaptcha(html)
 	default:
 		return ""
 	}
+}
+
+// classifyRecaptcha separates reCAPTCHA v3 from v2. v2 (checkbox or invisible)
+// renders a widget carrying data-sitekey; v3 has no widget — it loads
+// api.js?render=<sitekey> and calls grecaptcha.execute(). We report v3 only when
+// a render sitekey is present AND there is no v2 data-sitekey widget, so a v2
+// page is never downgraded. render=explicit is the v2 programmatic-render flag,
+// not a sitekey, so it stays v2.
+func classifyRecaptcha(html string) string {
+	if !siteKeyAttrRe.MatchString(html) {
+		if m := recaptchaRenderRe.FindStringSubmatch(html); len(m) > 1 && !strings.EqualFold(m[1], "explicit") {
+			return "recaptcha-v3"
+		}
+	}
+	return "recaptcha"
 }
 
 var (
@@ -439,20 +463,47 @@ var (
 	// Case-insensitive so extraction matches detectCaptchaType (which lowercases);
 	// tolerant of either quote style and whitespace around '='.
 	siteKeyAttrRe = regexp.MustCompile(`(?i)data-sitekey\s*=\s*["']([^"']+)["']`)
+	// reCAPTCHA v3: the sitekey rides the api.js script URL as ?…render=<key>.
+	// Tolerates other query params before render= (e.g. ?onload=cb&render=key).
+	recaptchaRenderRe = regexp.MustCompile(`(?i)recaptcha/(?:enterprise|api)\.js\?[^"'>]*\brender=([0-9A-Za-z_-]+)`)
+	// reCAPTCHA v3 action: the value passed to grecaptcha.execute(key, {action:…}).
+	recaptchaActionRe = regexp.MustCompile(`(?i)grecaptcha(?:\.enterprise)?\s*\.\s*execute\s*\(\s*["'][^"']*["']\s*,\s*\{[^}]*?action\s*:\s*["']([^"']+)["']`)
+	// Fallback for the v3 action when it's declared as an HTML attribute.
+	dataActionRe = regexp.MustCompile(`(?i)data-action\s*=\s*["']([^"']+)["']`)
 )
 
 func extractSitekey(html, captchaType string) string {
-	if captchaType == "funcaptcha" {
+	switch captchaType {
+	case "funcaptcha":
 		for _, re := range []*regexp.Regexp{pkeyAttrRe, arkosePkURLRe, publicKeyJSONRe} {
 			if m := re.FindStringSubmatch(html); len(m) > 1 {
 				return m[1]
 			}
 		}
 		return ""
+	case "recaptcha-v3":
+		// v3 has no data-sitekey widget; the key is in the api.js ?render= param.
+		if m := recaptchaRenderRe.FindStringSubmatch(html); len(m) > 1 {
+			return m[1]
+		}
+		return ""
+	default:
+		// reCAPTCHA v2 / hCaptcha / Turnstile all expose data-sitekey.
+		if m := siteKeyAttrRe.FindStringSubmatch(html); len(m) > 1 {
+			return m[1]
+		}
+		return ""
 	}
+}
 
-	// reCAPTCHA / hCaptcha / Turnstile all expose data-sitekey.
-	if m := siteKeyAttrRe.FindStringSubmatch(html); len(m) > 1 {
+// extractRecaptchaAction returns the action passed to grecaptcha.execute for a
+// reCAPTCHA v3 page, or "" if none is found (the action is optional — CapSolver
+// applies a default). Falls back to a data-action attribute.
+func extractRecaptchaAction(html string) string {
+	if m := recaptchaActionRe.FindStringSubmatch(html); len(m) > 1 {
+		return m[1]
+	}
+	if m := dataActionRe.FindStringSubmatch(html); len(m) > 1 {
 		return m[1]
 	}
 	return ""
