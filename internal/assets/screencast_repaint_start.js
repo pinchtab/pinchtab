@@ -35,6 +35,6 @@
   state.host = host;
   state.element = el;
   state.mount = mount;
-  state.timer = setInterval(tick, 250);
+  state.timer = setInterval(tick, 100);
   return state.refs;
 })()

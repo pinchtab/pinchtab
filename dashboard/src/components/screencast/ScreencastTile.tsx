@@ -19,9 +19,9 @@ export default function ScreencastTile({
   tabId,
   label,
   url,
-  quality = 40,
-  maxWidth = 800,
-  fps = 1,
+  quality = 60,
+  maxWidth = 1280,
+  fps = 10,
   showTitle = true,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

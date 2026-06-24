@@ -3,7 +3,7 @@ import type { Settings } from "../../generated/types";
 import type { AppState } from "../useAppStore";
 
 const defaultSettings: Settings = {
-  screencast: { fps: 1, quality: 40, maxWidth: 800 },
+  screencast: { fps: 10, quality: 60, maxWidth: 1280 },
   stealth: "light",
   browser: { blockImages: false, blockMedia: false, noAnimations: false },
   monitoring: { memoryMetrics: false, pollInterval: 30 },

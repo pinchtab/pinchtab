@@ -23,6 +23,8 @@ export function useScreencastStream({
   canvasRef,
 }: UseScreencastStreamArgs) {
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<number | undefined>(undefined);
   const [status, setStatus] = useState<ScreencastStatus>("connecting");
   const [fpsDisplay, setFpsDisplay] = useState("—");
   const [sizeDisplay, setSizeDisplay] = useState("—");
@@ -37,6 +39,7 @@ export function useScreencastStream({
     setStatus("connecting");
     setHasFrame(false);
     setFallbackUrl(null);
+    reconnectAttemptsRef.current = 0; // fresh tab → fresh reconnect budget
   }, [tabId, fps]);
 
   // Clean up static preview URL on unmount or tab change
@@ -114,6 +117,8 @@ export function useScreencastStream({
 
         hasRenderedFrame = true;
         window.clearTimeout(fallbackTimer);
+        // A frame arrived: the stream is healthy, so clear the reconnect backoff.
+        reconnectAttemptsRef.current = 0;
         setHasFrame(true);
         setStatus("streaming");
       } catch (err) {
@@ -151,23 +156,37 @@ export function useScreencastStream({
       }
     };
 
-    socket.onerror = () => {
-      if (!disposed) {
+    // A dropped screencast socket is usually transient (the capture pipeline
+    // hiccupped, the tab briefly navigated, a proxy blip). Auto-reconnect with a
+    // short backoff instead of dropping the user into a permanent "connection
+    // lost" overlay. Only after repeated failures do we surface an error and run
+    // the auth-failure path, since a persistently rejected socket may mean the
+    // session is no longer valid.
+    const MAX_RECONNECT_ATTEMPTS = 6;
+    let dropHandled = false;
+    const handleDrop = () => {
+      if (disposed || dropHandled) return;
+      dropHandled = true;
+      if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
         setStatus("error");
         void api.handleRealtimeAuthFailure();
+        return;
       }
+      const attempt = reconnectAttemptsRef.current++;
+      const delay = Math.min(250 * 2 ** attempt, 4000); // 250ms → … → 4s cap
+      setStatus("connecting");
+      reconnectTimerRef.current = window.setTimeout(() => {
+        if (!disposed) setRetryKey((p) => p + 1);
+      }, delay);
     };
 
-    socket.onclose = () => {
-      if (!disposed) {
-        setStatus("error");
-        void api.handleRealtimeAuthFailure();
-      }
-    };
+    socket.onerror = handleDrop;
+    socket.onclose = handleDrop;
 
     return () => {
       disposed = true;
       window.clearTimeout(fallbackTimer);
+      window.clearTimeout(reconnectTimerRef.current);
       socket.close();
       socketRef.current = null;
     };
