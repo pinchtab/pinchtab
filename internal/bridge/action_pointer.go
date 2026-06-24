@@ -221,7 +221,25 @@ func dialogBlocking(dm *DialogManager, tabID string) error {
 	}
 }
 
+// scaleScreencastCoords rescales req.X/Y from the screencast frame pixel space
+// (req.FrameW/FrameH) into the live CSS viewport. Dashboard input maps a click on
+// the frame to frame-pixel coordinates; on HiDPI the frame is larger than the CSS
+// viewport (e.g. 2x), so without this the click would land at the wrong position
+// and miss its target. No-op when FrameW/FrameH are unset (coords already CSS px).
+func scaleScreencastCoords(ctx context.Context, req *ActionRequest) {
+	if !req.HasXY || req.FrameW <= 0 || req.FrameH <= 0 {
+		return
+	}
+	vw, vh := fetchViewportSize(ctx)
+	if vw <= 0 || vh <= 0 {
+		return
+	}
+	req.X = req.X * vw / req.FrameW
+	req.Y = req.Y * vh / req.FrameH
+}
+
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+	scaleScreencastCoords(ctx, &req)
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
 	}
@@ -522,6 +540,7 @@ func (b *Bridge) actionMouseWheel(ctx context.Context, req ActionRequest) (map[s
 }
 
 func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	scaleScreencastCoords(ctx, &req)
 	if req.NodeID > 0 {
 		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, req.NodeID)
 	}

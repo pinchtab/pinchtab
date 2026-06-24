@@ -24,6 +24,10 @@ export function useScreencastInput({
       return {
         x: ((e.clientX - rect.left) / rect.width) * canvas.width,
         y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+        // Tell the server which frame size these coords are in, so it can scale
+        // them into the live CSS viewport (the frame is larger on HiDPI).
+        frameW: canvas.width,
+        frameH: canvas.height,
       };
     },
     [canvasRef],
@@ -41,6 +45,8 @@ export function useScreencastInput({
           x: Math.round(coords.x),
           y: Math.round(coords.y),
           hasXY: true,
+          frameW: coords.frameW,
+          frameH: coords.frameH,
         });
       } catch (err) {
         console.error("click failed", err);
@@ -61,6 +67,8 @@ export function useScreencastInput({
           x: Math.round(coords.x),
           y: Math.round(coords.y),
           scrollY: Math.round(e.deltaY),
+          frameW: coords.frameW,
+          frameH: coords.frameH,
         });
       } catch (err) {
         console.error("scroll failed", err);
