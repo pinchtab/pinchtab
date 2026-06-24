@@ -28,6 +28,7 @@ func (p *fakePage) Screenshot() ([]byte, error)              { return nil, nil }
 type fakeExecutor struct {
 	lastInject string // last non-read Evaluate expr (the token injection)
 	arkoseJSON string // value returned for the window.__ptArkose read
+	userAgent  string // value returned for the navigator.userAgent read
 }
 
 func (e *fakeExecutor) Click(context.Context, float64, float64) error        { return nil }
@@ -38,6 +39,12 @@ func (e *fakeExecutor) Evaluate(_ context.Context, expr string, result interface
 	if strings.Contains(expr, "window.__ptArkose?") { // the capture read, not the token injection
 		if sp, ok := result.(*string); ok {
 			*sp = e.arkoseJSON
+		}
+		return nil
+	}
+	if strings.Contains(expr, "navigator.userAgent") { // the UA read
+		if sp, ok := result.(*string); ok {
+			*sp = e.userAgent
 		}
 		return nil
 	}
@@ -313,7 +320,7 @@ func TestSolveFuncaptcha(t *testing.T) {
 		url:  "https://www.linkedin.com/checkpoint",
 		html: `<div data-pkey="0152B4EB-D2DC-460A-89A1-629838B529C9"></div><script src="https://lnkd-api.arkoselabs.com/v2/api.js"></script>`,
 	}
-	exec := &fakeExecutor{}
+	exec := &fakeExecutor{userAgent: "Mozilla/5.0 (TestUA)"}
 
 	res, err := c.Solve(context.Background(), page, exec)
 	if err != nil {
@@ -324,6 +331,9 @@ func TestSolveFuncaptcha(t *testing.T) {
 	}
 	if task.Type != "FunCaptchaTaskProxyLess" {
 		t.Errorf("task type = %q", task.Type)
+	}
+	if task.UserAgent != "Mozilla/5.0 (TestUA)" {
+		t.Errorf("browser UA should be forwarded; got %q", task.UserAgent)
 	}
 	if task.WebsitePublicKey != "0152B4EB-D2DC-460A-89A1-629838B529C9" {
 		t.Errorf("websitePublicKey = %q", task.WebsitePublicKey)

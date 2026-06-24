@@ -125,6 +125,8 @@ func (c *Capsolver) Solve(ctx context.Context, page autosolver.Page, executor au
 				task.Data = string(b)
 			}
 		}
+		// Match the solve UA to the browser's so Arkose accepts the token.
+		task.UserAgent = readUserAgent(ctx, executor)
 	case "recaptcha-v3":
 		// v3 has no widget — the sitekey comes from ?render= and the task needs
 		// the action passed to grecaptcha.execute (best-effort; optional).
@@ -188,6 +190,10 @@ type capsolverTask struct {
 	WebsitePublicKey         string `json:"websitePublicKey,omitempty"`
 	FuncaptchaApiJSSubdomain string `json:"funcaptchaApiJSSubdomain,omitempty"`
 	Data                     string `json:"data,omitempty"`
+	// UserAgent is forwarded for FunCaptcha so CapSolver solves under the same
+	// UA the browser uses — Arkose binds the token to the UA, so a mismatch is a
+	// common cause of an otherwise-valid token being rejected. Optional.
+	UserAgent string `json:"userAgent,omitempty"`
 }
 
 type capsolverCreateRequest struct {
@@ -290,6 +296,15 @@ func readArkoseCapture(ctx context.Context, executor autosolver.ActionExecutor) 
 		return nil
 	}
 	return &ac
+}
+
+// readUserAgent reads navigator.userAgent from the live page; "" if unavailable.
+func readUserAgent(ctx context.Context, executor autosolver.ActionExecutor) string {
+	var ua string
+	if err := executor.Evaluate(ctx, "navigator.userAgent", &ua); err != nil {
+		return ""
+	}
+	return ua
 }
 
 // pickToken returns the solve token regardless of which field CapSolver used.
