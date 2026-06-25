@@ -615,7 +615,15 @@ func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
 	// rebuilding the overridden pinchtab services.
 	skipPinchtabBuild := r.overrides != nil && r.overrides.provider == "cloak"
 	if skipPinchtabBuild {
-		if code := r.buildSharedStack(composeFile, cloakSupportBuildServices()...); code != 0 {
+		buildServices := cloakSupportBuildServices()
+		// keepStockProvider services (e.g. pinchtab-ghostchrome) stay pinned to
+		// the stock e2e-pinchtab:latest image even in the cloak lane. If the
+		// suite brings any of them up, that image must exist or `up --no-build`
+		// fails with "No such image", so build the stock pinchtab service too.
+		if needsStockPinchtabImage(services) {
+			buildServices = append(buildServices, "pinchtab")
+		}
+		if code := r.buildSharedStack(composeFile, buildServices...); code != 0 {
 			return code
 		}
 	} else {
@@ -654,6 +662,20 @@ func (r *Runner) buildSharedStack(composeFile string, services ...string) int {
 
 func cloakSupportBuildServices() []string {
 	return []string{"fixtures", "runner-api", "runner-cli"}
+}
+
+// needsStockPinchtabImage reports whether any service being brought up is a
+// keepStockProvider service that stays pinned to e2e-pinchtab:latest. Such
+// services require the stock pinchtab image even in the cloak lane.
+func needsStockPinchtabImage(services []string) bool {
+	for _, svc := range services {
+		for _, def := range pinchtabServiceTable {
+			if def.name == svc && def.keepStockProvider {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *Runner) stackOutputHasBuildKitCacheFailure() bool {

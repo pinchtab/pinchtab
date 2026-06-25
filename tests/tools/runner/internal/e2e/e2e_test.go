@@ -620,6 +620,36 @@ func TestBringUpSharedStackCloakBuildsSupportImagesOnly(t *testing.T) {
 	}
 }
 
+func TestBringUpSharedStackCloakBuildsStockImageForGhostChrome(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	r := &Runner{
+		args:     Args{DryRun: true},
+		stdout:   &stdout,
+		stderr:   &stderr,
+		compose:  []string{"docker", "compose"},
+		logsMode: "hide",
+		overrides: &providerOverrides{
+			provider:     "cloak",
+			image:        defaultCloakImage,
+			composeFiles: []string{"/tmp/docker-compose.cloak.yml"},
+		},
+	}
+
+	// pinchtab-ghostchrome is keepStockProvider: it stays on e2e-pinchtab:latest
+	// even under cloak, so the stock pinchtab image must be built or the
+	// `up --no-build` fails with "No such image: e2e-pinchtab:latest".
+	services := []string{"pinchtab", "pinchtab-ghostchrome", "fixtures"}
+	if code := r.bringUpSharedStack("compose.yml", services); code != 0 {
+		t.Fatalf("bringUpSharedStack returned %d, stderr: %s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	want := "docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml build fixtures runner-api runner-cli pinchtab"
+	if !strings.Contains(out, want) {
+		t.Fatalf("cloak build must include stock pinchtab when ghostchrome is present, missing %q:\n%s", want, out)
+	}
+}
+
 func TestDryRunCloakProviderDoesNotRequireImage(t *testing.T) {
 	t.Setenv("E2E_LOGS", "")
 	var stdout, stderr bytes.Buffer
