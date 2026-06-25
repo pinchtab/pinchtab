@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>E2E Test - Upload (Open Shadow Root)</title>
+</head>
+<body>
+  <h1>Upload Shadow Root Test</h1>
+
+  <!-- The file input lives inside a custom element's OPEN shadow root, so a plain
+       document.querySelector('#shadow-file') returns null. The upload selector
+       resolver must walk open shadow roots (deepQueryAll) to find it (#591). -->
+  <upload-widget></upload-widget>
+
+  <div id="status">files:0</div>
+
+  <script>
+    window.__uploadedNames = "";
+    class UploadWidget extends HTMLElement {
+      constructor() {
+        super();
+        const root = this.attachShadow({ mode: "open" });
+        const input = document.createElement("input");
+        input.type = "file";
+        input.id = "shadow-file";
+        input.name = "file";
+        input.multiple = true;
+        root.appendChild(input);
+        input.addEventListener("change", () => {
+          document.getElementById("status").textContent = "files:" + input.files.length;
+          window.__uploadedNames = Array.from(input.files).map((f) => f.name).join(",");
+        });
+      }
+    }
+    customElements.define("upload-widget", UploadWidget);
+  </script>
+</body>
+</html>

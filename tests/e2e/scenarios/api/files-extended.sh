@@ -59,6 +59,24 @@ assert_contains "$RESULT" "too many files" "too many files message returned"
 
 end_test
 
+# ─────────────────────────────────────────────────────────────────
+start_test "upload: selector inside open shadow root (#591)"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/upload-shadow.html\"}"
+assert_ok "navigate to upload-shadow.html"
+
+# The file input is nested in a custom element's open shadow root, so a plain
+# document.querySelector('#shadow-file') returns null — the selector resolver
+# must walk open shadow roots (deepQueryAll) to find it.
+pt_post /upload '{"selector":"#shadow-file","files":["data:text/plain;base64,SGVsbG8="]}'
+assert_ok "upload resolves a selector inside an open shadow root"
+
+# Confirm the file actually landed on the shadow-root input.
+pt_post /evaluate '{"expression":"document.querySelector(\"upload-widget\").shadowRoot.getElementById(\"shadow-file\").files.length"}'
+assert_json_eq "$RESULT" ".result" "1" "file landed on the shadow-root input"
+
+end_test
+
 # Migrated from: tests/integration/pdf_test.go (PD1-PD12)
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/table.html\"}"
