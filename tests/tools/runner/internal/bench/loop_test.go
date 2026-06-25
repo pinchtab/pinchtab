@@ -10,6 +10,7 @@ import (
 )
 
 func TestLoopWithFakeRunner(t *testing.T) {
+	requireUnixShell(t)
 	dir := t.TempDir()
 	reportFile := filepath.Join(dir, "report.json")
 	commandLog := filepath.Join(dir, "commands.ndjson")
@@ -82,6 +83,7 @@ func TestLoopWithFakeRunner(t *testing.T) {
 }
 
 func TestLoopIdleTurnLimit(t *testing.T) {
+	requireUnixShell(t)
 	dir := t.TempDir()
 	reportFile := filepath.Join(dir, "report.json")
 	commandLog := filepath.Join(dir, "commands.ndjson")
@@ -131,6 +133,7 @@ func TestLoopIdleTurnLimit(t *testing.T) {
 }
 
 func TestLoopMaxTurns(t *testing.T) {
+	requireUnixShell(t)
 	dir := t.TempDir()
 	reportFile := filepath.Join(dir, "report.json")
 
@@ -202,6 +205,7 @@ func TestAppendCommandLog(t *testing.T) {
 }
 
 func TestLoopBudgetLimit(t *testing.T) {
+	requireUnixShell(t)
 	dir := t.TempDir()
 	reportFile := filepath.Join(dir, "report.json")
 
