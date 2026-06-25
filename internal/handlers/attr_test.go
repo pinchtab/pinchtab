@@ -52,11 +52,11 @@ func TestHandleGetAttr_NoSnapshotCache(t *testing.T) {
 	req := httptest.NewRequest("GET", "/attr?ref=e5&name=href", nil)
 	w := httptest.NewRecorder()
 	h.HandleGetAttr(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "no snapshot cache") {
-		t.Fatalf("expected snapshot cache error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "not found") {
+		t.Fatalf("expected not-found error, got %s", w.Body.String())
 	}
 }
 
@@ -71,11 +71,11 @@ func TestHandleGetAttr_RefNotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/attr?ref=e99&name=href", nil)
 	w := httptest.NewRecorder()
 	h.HandleGetAttr(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "ref not found: e99") {
-		t.Fatalf("expected ref not found error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "e99") {
+		t.Fatalf("expected not-found error mentioning e99, got %s", w.Body.String())
 	}
 }
 

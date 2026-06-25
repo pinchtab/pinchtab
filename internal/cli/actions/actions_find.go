@@ -30,7 +30,6 @@ func Find(client *http.Client, base, token string, query string, cmd *cobra.Comm
 		path = "/tabs/" + tabID + "/find"
 	}
 
-	// --ref-only: just print the best ref
 	if refOnly {
 		result := apiclient.DoPostQuiet(client, base, token, path, body)
 		if ref, ok := result["best_ref"].(string); ok && ref != "" {
@@ -40,7 +39,6 @@ func Find(client *http.Client, base, token string, query string, cmd *cobra.Comm
 		cli.Fatal("No element found")
 	}
 
-	// --json: full JSON output
 	if jsonOutput {
 		apiclient.DoPost(client, base, token, path, body)
 		return

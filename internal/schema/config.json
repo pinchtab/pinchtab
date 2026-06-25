@@ -49,6 +49,9 @@
     },
     "autoSolver": {
       "$ref": "#/definitions/autoSolver"
+    },
+    "browsers": {
+      "$ref": "#/definitions/browsers"
     }
   },
   "definitions": {
@@ -62,6 +65,17 @@
       "type": [
         "integer",
         "null"
+      ]
+    },
+    "nullableNonNegativeInteger": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "nullableString": {
@@ -163,7 +177,9 @@
             "lite",
             "auto"
           ],
-          "default": "chrome"
+          "default": "chrome",
+          "description": "Deprecated: use browsers.default instead. Values are mapped automatically at startup.",
+          "deprecated": true
         },
         "networkBufferSize": {
           "anyOf": [
@@ -204,6 +220,17 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Removed: use browsers.default instead. Presence triggers a validation error.",
+          "deprecated": true,
+          "enum": [
+            "",
+            "chrome",
+            "cloak"
+          ],
+          "default": "chrome"
+        },
         "version": {
           "type": "string",
           "default": "144.0.7559.133"
@@ -217,8 +244,72 @@
         "extraFlags": {
           "type": "string"
         },
+        "cloak": {
+          "$ref": "#/definitions/cloakBrowser"
+        },
         "extensionPaths": {
           "$ref": "#/definitions/stringArray"
+        },
+        "proxy": {
+          "$ref": "#/definitions/browserProxy"
+        },
+        "defaultTarget": {
+          "type": "string",
+          "description": "Name of the target used when no browser is requested."
+        },
+        "fallbackOrder": {
+          "$ref": "#/definitions/stringArray",
+          "description": "Target names tried in order when an implicit launch fails."
+        },
+        "targets": {
+          "type": "object",
+          "description": "Named browser targets keyed by target name.",
+          "additionalProperties": {
+            "$ref": "#/definitions/browserTarget"
+          }
+        }
+      }
+    },
+    "cloakBrowser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fingerprintSeed": {
+          "type": "string",
+          "pattern": "^\\S*$",
+          "description": "Deterministic CloakBrowser fingerprint seed. Empty lets CloakBrowser generate a fresh identity."
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^\\S*$"
+        },
+        "timezone": {
+          "type": "string",
+          "pattern": "^\\S*$"
+        },
+        "webrtcIP": {
+          "type": "string",
+          "pattern": "^\\S*$",
+          "description": "Explicit WebRTC replacement IP, or auto when CloakBrowser should resolve the proxy exit IP."
+        },
+        "fontsDir": {
+          "type": "string"
+        },
+        "storageQuotaMB": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "disableDefaultStealthArgs": {
+          "$ref": "#/definitions/nullableBoolean",
+          "description": "When true, PinchTab does not add its JS stealth overlays or automation-hiding launch flags for CloakBrowser."
         }
       }
     },
@@ -503,8 +594,15 @@
           },
           "default": [
             "ws",
-            "wss"
+            "wss",
+            "http",
+            "https"
           ]
+        },
+        "forwardProxyAuth": {
+          "$ref": "#/definitions/nullableBoolean",
+          "default": false,
+          "description": "Allow forwarding configured proxy authentication credentials over remote CDP attach. Disabled by default because the attached browser is outside PinchTab's process trust boundary."
         }
       }
     },
@@ -910,6 +1008,110 @@
         },
         "email": {
           "type": "string"
+        }
+      }
+    },
+    "browsers": {
+      "type": "object",
+      "description": "Phase 1 browser configuration.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Default browser for new instances.",
+          "enum": [
+            "chrome",
+            "ghost-chrome",
+            "cloak"
+          ],
+          "default": "chrome"
+        },
+        "available": {
+          "type": "array",
+          "description": "Available browser names.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "chrome",
+              "ghost-chrome",
+              "cloak"
+            ]
+          }
+        }
+      }
+    },
+    "browserProxy": {
+      "type": "object",
+      "description": "Upstream proxy for browser traffic. Credentials are delivered via CDP, never on the command line.",
+      "additionalProperties": false,
+      "properties": {
+        "server": {
+          "type": "string",
+          "description": "Proxy server URL (e.g. http://proxy.example:8080)."
+        },
+        "bypassList": {
+          "$ref": "#/definitions/stringArray",
+          "description": "Hosts that bypass the proxy."
+        },
+        "username": {
+          "type": "string",
+          "description": "Proxy username."
+        },
+        "password": {
+          "type": "string",
+          "description": "Proxy password. Redacted in API responses."
+        },
+        "geo": {
+          "type": "object",
+          "description": "Geo alignment hints applied when the proxy egress is in another region.",
+          "additionalProperties": false,
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "IANA timezone matching the proxy egress (e.g. Europe/Paris)."
+            },
+            "locale": {
+              "type": "string",
+              "description": "BCP-47 locale matching the proxy egress (e.g. fr-FR)."
+            },
+            "webrtcIP": {
+              "type": "string",
+              "description": "Public IP to expose via WebRTC instead of the local address."
+            },
+            "countryISO": {
+              "type": "string",
+              "description": "ISO 3166-1 alpha-2 country code of the proxy egress."
+            }
+          }
+        }
+      }
+    },
+    "browserTarget": {
+      "type": "object",
+      "description": "A named browser target: a provider plus per-target overrides.",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Browser provider for this target.",
+          "enum": [
+            "chrome",
+            "ghost-chrome",
+            "cloak"
+          ]
+        },
+        "binary": {
+          "type": "string",
+          "description": "Path to the browser binary for this target."
+        },
+        "extraFlags": {
+          "type": "string",
+          "description": "Additional space-separated browser flags for this target."
+        },
+        "cloak": {
+          "$ref": "#/definitions/cloakBrowser"
+        },
+        "proxy": {
+          "$ref": "#/definitions/browserProxy"
         }
       }
     }

@@ -606,8 +606,6 @@ func TestProfileListIncludesUseWhen(t *testing.T) {
 	}
 }
 
-// === Security Validation Tests ===
-
 func TestValidateProfileName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -767,7 +765,6 @@ func TestProfileHandlerCreateReturns409OnDuplicate(t *testing.T) {
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 
-	// Create first profile
 	body := `{"name":"duplicate-test"}`
 	req := httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -778,7 +775,6 @@ func TestProfileHandlerCreateReturns409OnDuplicate(t *testing.T) {
 		t.Fatalf("first create failed: %d %s", w.Code, w.Body.String())
 	}
 
-	// Try to create duplicate
 	req = httptest.NewRequest("POST", "/profiles/create", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -792,7 +788,6 @@ func TestProfileHandlerCreateReturns409OnDuplicate(t *testing.T) {
 func TestProfileImportRejectsPathTraversal(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
 
-	// Create a valid source directory
 	src := filepath.Join(t.TempDir(), "chrome-src")
 	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
 	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
@@ -894,6 +889,169 @@ func TestProfileRenameRejectsPathTraversal(t *testing.T) {
 				t.Errorf("Rename to %q should have returned error", name)
 			}
 		})
+	}
+}
+
+func TestProfileListDoesNotCreateMetaFile(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	// Build a profile directory on disk without any profile.json meta file.
+	profDir := filepath.Join(dir, profileID("no-meta"))
+	if err := os.MkdirAll(filepath.Join(profDir, "Default"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	metaPath := filepath.Join(profDir, "profile.json")
+	if _, err := os.Stat(metaPath); !os.IsNotExist(err) {
+		t.Fatalf("precondition: profile.json should not exist, stat err=%v", err)
+	}
+
+	profiles, err := pm.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(profiles))
+	}
+	// The read path must still backfill ID/Name in memory.
+	if profiles[0].ID == "" {
+		t.Errorf("expected backfilled ID in memory, got empty")
+	}
+	if profiles[0].Name == "" {
+		t.Errorf("expected backfilled Name in memory, got empty")
+	}
+
+	if _, err := os.Stat(metaPath); !os.IsNotExist(err) {
+		t.Fatalf("List() must not create profile.json on disk, stat err=%v", err)
+	}
+}
+
+func TestProfileReadPathDoesNotMutateMetaFile(t *testing.T) {
+	dir := t.TempDir()
+	pm := NewProfileManager(dir)
+
+	// Profile dir with a meta file that is missing ID and Name.
+	profDir := filepath.Join(dir, profileID("partial-meta"))
+	if err := os.MkdirAll(filepath.Join(profDir, "Default"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := filepath.Join(profDir, "profile.json")
+	// Meta with an explicit ID (so FindByID resolves) but no Name, exercising
+	// the in-memory Name backfill on the read path.
+	id := profileID("partial-meta")
+	original := []byte(`{"id":"` + id + `","useWhen":"keep me","description":"unchanged"}`)
+	if err := os.WriteFile(metaPath, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Backdate mtime so any rewrite would be detectable.
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(metaPath, past, past); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := pm.List(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pm.FindByID(id); err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+
+	after, err := os.Stat(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("read path rewrote profile.json: mtime changed from %v to %v", before.ModTime(), after.ModTime())
+	}
+
+	contents, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != string(original) {
+		t.Errorf("read path mutated profile.json contents: got %q, want %q", contents, original)
+	}
+}
+
+func TestProfileHandlerGetByID(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	if err := pm.CreateWithMeta("gettable", ProfileMeta{
+		UseWhen:     "for testing get",
+		Description: "a gettable profile",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	id := profileID("gettable")
+
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	req := httptest.NewRequest("GET", "/profiles/"+id, nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	bodyBytes := w.Body.Bytes()
+
+	var resp profileResponse
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.ID != id {
+		t.Errorf("expected id %q, got %q", id, resp.ID)
+	}
+	if resp.Name != "gettable" {
+		t.Errorf("expected name gettable, got %q", resp.Name)
+	}
+	if resp.Path == "" {
+		t.Errorf("expected path to be present")
+	}
+	if !resp.PathExists {
+		t.Errorf("expected pathExists=true")
+	}
+	if resp.UseWhen != "for testing get" {
+		t.Errorf("expected useWhen 'for testing get', got %q", resp.UseWhen)
+	}
+	if resp.Description != "a gettable profile" {
+		t.Errorf("expected description 'a gettable profile', got %q", resp.Description)
+	}
+
+	// Assert the additive fields are present in the emitted JSON.
+	var raw map[string]any
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		t.Fatalf("unmarshal raw response: %v", err)
+	}
+	for _, key := range []string{"lastUsed", "running"} {
+		if _, ok := raw[key]; !ok {
+			t.Errorf("expected JSON field %q to be emitted, got keys %v", key, raw)
+		}
+	}
+	if running, ok := raw["running"].(bool); !ok || running {
+		t.Errorf("expected running=false, got %v", raw["running"])
+	}
+}
+
+func TestProfileHandlerGetByIDNotFound(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	req := httptest.NewRequest("GET", "/profiles/does-not-exist", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 404 {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -38,6 +38,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const { setInstances } = useAppStore();
   const [port, setPort] = useState("");
   const [headless, setHeadless] = useState(false);
+  const [browser, setBrowser] = useState<string>("");
   const [launchError, setLaunchError] = useState("");
   const [launchLoading, setLaunchLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
@@ -55,6 +56,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
 
     setPort("");
     setHeadless(false);
+    setBrowser("");
     setLaunchError("");
     setLaunchLoading(false);
     setCopyFeedback("");
@@ -67,10 +69,11 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
       profileId: profile.id,
       mode: headless ? undefined : "headed",
       port: normalizedPort,
+      browser: browser || undefined,
     };
 
     return `curl -X POST http://localhost:9867/instances/start -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '${JSON.stringify(payload)}'`;
-  }, [headless, normalizedPort, profile]);
+  }, [browser, headless, normalizedPort, profile]);
 
   const handleLaunch = async () => {
     if (!profile || launchLoading) return;
@@ -91,6 +94,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
         profileId: profile.id,
         port: normalizedPort,
         mode: headless ? undefined : "headed",
+        browser: browser || undefined,
       };
 
       await api.launchInstance(payload);
@@ -175,6 +179,20 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           />
           Headless (best for Docker/VPS)
         </label>
+
+        <div>
+          <label className="mb-1 block text-xs text-text-muted">Browser</label>
+          <select
+            value={browser}
+            onChange={(e) => setBrowser(e.target.value)}
+            className="w-full rounded border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-text-primary"
+          >
+            <option value="">Server default</option>
+            <option value="chrome">Chrome</option>
+            <option value="cloak">CloakBrowser</option>
+            <option value="ghost-chrome">Ghost + Chrome</option>
+          </select>
+        </div>
 
         <div>
           <label className="mb-1 block text-xs text-text-muted">

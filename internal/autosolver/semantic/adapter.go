@@ -34,7 +34,6 @@ func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*auto
 		return challenge, nil
 	}
 
-	// Cloudflare challenge indicators
 	cfIndicators := []string{"just a moment", "attention required", "checking your browser"}
 	for _, indicator := range cfIndicators {
 		if strings.Contains(title, indicator) {
@@ -47,7 +46,6 @@ func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*auto
 		}
 	}
 
-	// CAPTCHA indicators (via URL or title patterns)
 	captchaIndicators := []string{"captcha", "challenge", "verify", "recaptcha", "hcaptcha"}
 	for _, indicator := range captchaIndicators {
 		if strings.Contains(title, indicator) || strings.Contains(strings.ToLower(url), indicator) {
@@ -59,7 +57,6 @@ func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*auto
 		}
 	}
 
-	// Login page detection via semantic matching if matcher is available.
 	if a.matcher != nil {
 		intent, err := a.detectViaSemanticMatch(ctx, page)
 		if err == nil && intent != nil {
@@ -67,7 +64,6 @@ func (a *Adapter) DetectIntent(ctx context.Context, page autosolver.Page) (*auto
 		}
 	}
 
-	// Fallback to title-based heuristics for login/signup.
 	loginPatterns := []string{"log in", "login", "sign in"}
 	for _, p := range loginPatterns {
 		if strings.Contains(title, p) {
@@ -145,7 +141,6 @@ func (a *Adapter) FindElement(ctx context.Context, page autosolver.Page, query s
 		return nil, err
 	}
 
-	// Build minimal element descriptors from interactive element patterns.
 	descs := extractDescriptors(html)
 	if len(descs) == 0 {
 		return nil, nil
@@ -212,7 +207,6 @@ func (a *Adapter) SuggestAction(ctx context.Context, page autosolver.Page, inten
 	}
 }
 
-// suggestCaptchaAction finds the captcha widget and suggests clicking it.
 func (a *Adapter) suggestCaptchaAction(ctx context.Context, page autosolver.Page, intent *autosolver.Intent) (*autosolver.SuggestedAction, error) {
 	match, err := a.FindElement(ctx, page, "captcha checkbox verify button")
 	if err != nil || match == nil {
@@ -231,7 +225,6 @@ func (a *Adapter) suggestCaptchaAction(ctx context.Context, page autosolver.Page
 	}, nil
 }
 
-// suggestLoginAction finds the first empty input field and suggests focusing it.
 func (a *Adapter) suggestLoginAction(ctx context.Context, page autosolver.Page) (*autosolver.SuggestedAction, error) {
 	match, err := a.FindElement(ctx, page, "username email input field")
 	if err != nil || match == nil {
@@ -248,7 +241,6 @@ func (a *Adapter) suggestLoginAction(ctx context.Context, page autosolver.Page) 
 	}, nil
 }
 
-// suggestSignupAction finds the first registration field.
 func (a *Adapter) suggestSignupAction(ctx context.Context, page autosolver.Page) (*autosolver.SuggestedAction, error) {
 	match, err := a.FindElement(ctx, page, "name email registration input field")
 	if err != nil || match == nil {
@@ -316,7 +308,6 @@ func (a *Adapter) suggestFormAction(ctx context.Context, page autosolver.Page) (
 // detectViaSemanticMatch uses the semantic matcher to classify page
 // elements and infer the page intent.
 func (a *Adapter) detectViaSemanticMatch(ctx context.Context, page autosolver.Page) (*autosolver.Intent, error) {
-	// Search for login-related elements
 	match, err := a.FindElement(ctx, page, "login submit button")
 	if err == nil && match != nil && match.Score > 0.6 {
 		return &autosolver.Intent{
@@ -326,7 +317,6 @@ func (a *Adapter) detectViaSemanticMatch(ctx context.Context, page autosolver.Pa
 		}, nil
 	}
 
-	// Search for signup-related elements
 	match, err = a.FindElement(ctx, page, "register create account button")
 	if err == nil && match != nil && match.Score > 0.6 {
 		return &autosolver.Intent{
@@ -372,8 +362,6 @@ func (a *Adapter) detectViaSemanticMatch(ctx context.Context, page autosolver.Pa
 func extractDescriptors(html string) []semantic.ElementDescriptor {
 	var descs []semantic.ElementDescriptor
 
-	// Extract interactive elements by scanning for common patterns.
-	// A full implementation would use the a11y tree from the bridge.
 	patterns := []struct {
 		searchTag string
 		selTag    string
@@ -397,7 +385,6 @@ func extractDescriptors(html string) []semantic.ElementDescriptor {
 			}
 			idx += pos + len(p.searchTag)
 
-			// Extract a rough name from surrounding text.
 			end := strings.Index(lower[idx:], ">")
 			if end == -1 {
 				break
@@ -461,7 +448,6 @@ func escapeAttrValue(v string) string {
 	return v
 }
 
-// extractAttr extracts an HTML attribute value from a tag snippet.
 func extractAttr(snippet, attr string) string {
 	lower := strings.ToLower(snippet)
 	idx := strings.Index(lower, attr+"=")

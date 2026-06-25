@@ -64,8 +64,7 @@ func RunMergeReports(argv []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	var allSteps []map[string]any
-	seen := make(map[string]bool)
+	seenSteps := make(map[string]map[string]any)
 
 	for _, f := range files {
 		data, err := os.ReadFile(f)
@@ -91,12 +90,14 @@ func RunMergeReports(argv []string, stdout, stderr io.Writer) int {
 				s, _ := step["step"].(float64)
 				id = fmt.Sprintf("%d.%d", int(g), int(s))
 			}
-			if !seen[id] {
-				seen[id] = true
-				allSteps = append(allSteps, step)
-			}
+			seenSteps[id] = step
 		}
 		_, _ = fmt.Fprintf(stdout, "Loaded %d steps from %s\n", len(steps), filepath.Base(f))
+	}
+
+	allSteps := make([]map[string]any, 0, len(seenSteps))
+	for _, step := range seenSteps {
+		allSteps = append(allSteps, step)
 	}
 
 	// Sort by group.step

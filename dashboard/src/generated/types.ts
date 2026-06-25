@@ -8,7 +8,6 @@ These types are exported to TypeScript via tygo.
 */
 
 /**
- * Profile represents a browser profile stored on disk.
  * Matches internal/bridge/api.go ProfileInfo
  */
 export interface Profile {
@@ -34,7 +33,6 @@ export interface SecurityPolicy {
   allowedDomains?: string[];
 }
 /**
- * Instance represents a running browser instance.
  * Matches internal/bridge/api.go Instance
  */
 export interface Instance {
@@ -52,10 +50,14 @@ export interface Instance {
   attachType?: string;
   cdpUrl?: string; // CDP WebSocket URL (for CDP-attached instances)
   securityPolicy?: SecurityPolicy;
+  browser?: string;
+  /**
+   * FallbackFrom/FallbackReason are reserved for a future phase (always
+   * empty in P2.4a).
+   */
+  fallbackFrom?: string;
+  fallbackReason?: string;
 }
-/**
- * Agent represents a connected AI agent.
- */
 export interface Agent {
   id: string;
   name?: string;
@@ -63,16 +65,10 @@ export interface Agent {
   lastActivity?: string;
   requestCount: number /* int */;
 }
-/**
- * AgentDetail returns agent-centric dashboard data for a single agent.
- */
 export interface AgentDetail {
   agent: Agent;
   events: ActivityEvent[];
 }
-/**
- * ActivityEvent represents an action in the activity feed.
- */
 export interface ActivityEvent {
   id: string;
   agentId: string;
@@ -86,9 +82,20 @@ export interface ActivityEvent {
   timestamp: string;
   details?: { [key: string]: any };
 }
-/**
- * ActivityLogEvent represents a queryable backend activity record.
- */
+export interface RouteAttempt {
+  provider: string;
+  accepted: boolean;
+  reason?: string;
+}
+export interface RouteMetadata {
+  requestedProvider: string;
+  usedProvider: string;
+  escalated: boolean;
+  reason?: string;
+  quality?: number /* int */;
+  fallbackAttempts?: number /* int */;
+  attempts?: RouteAttempt[];
+}
 export interface ActivityLogEvent {
   timestamp: string;
   source: string;
@@ -106,35 +113,23 @@ export interface ActivityLogEvent {
   tabId?: string;
   url?: string;
   action?: string;
-  engine?: string;
+  route?: RouteMetadata;
   ref?: string;
 }
-/**
- * ActivityLogResponse is returned by the /api/activity endpoint.
- */
 export interface ActivityLogResponse {
   events: ActivityLogEvent[];
   count: number /* int */;
 }
-/**
- * ScreencastSettings configures live tab previews.
- */
 export interface ScreencastSettings {
   fps: number /* int */;
   quality: number /* int */;
   maxWidth: number /* int */;
 }
-/**
- * BrowserSettings configures browser behavior.
- */
 export interface BrowserSettings {
   blockImages: boolean;
   blockMedia: boolean;
   noAnimations: boolean;
 }
-/**
- * Settings contains all dashboard settings.
- */
 export interface Settings {
   screencast: ScreencastSettings;
   stealth: string; // light/medium/full
@@ -142,22 +137,13 @@ export interface Settings {
   monitoring: MonitoringSettings;
   agents: AgentSettings;
 }
-/**
- * AgentSettings controls agent reasoning output visibility.
- */
 export interface AgentSettings {
   reasoningMode: string; // "tool_calls" (default), "progress", "both"
 }
-/**
- * MonitoringSettings controls dashboard monitoring features.
- */
 export interface MonitoringSettings {
   memoryMetrics: boolean; // Enable per-tab memory aggregation (can be heavy)
   pollInterval: number /* int */; // Poll interval in seconds (default 30)
 }
-/**
- * ServerInfo contains health/status information.
- */
 export interface ServerInfo {
   version: string;
   uptime: number /* int64 */;
@@ -165,34 +151,22 @@ export interface ServerInfo {
   instances: number /* int */;
   agents: number /* int */;
 }
-/**
- * CreateProfileRequest is the request body for creating a profile.
- */
 export interface CreateProfileRequest {
   name: string;
   description?: string;
   useWhen?: string;
 }
-/**
- * CreateProfileResponse is returned after creating a profile.
- */
 export interface CreateProfileResponse {
   status: string;
   id: string;
   name: string;
 }
-/**
- * InstanceTab represents a browser tab in an instance.
- */
 export interface InstanceTab {
   id: string;
   instanceId: string;
   url: string;
   title: string;
 }
-/**
- * InstanceMetrics represents memory metrics for an instance.
- */
 export interface InstanceMetrics {
   instanceId: string;
   profileName: string;
@@ -203,11 +177,9 @@ export interface InstanceMetrics {
   nodes: number /* int64 */;
   listeners: number /* int64 */;
 }
-/**
- * LaunchInstanceRequest is the request body for launching an instance.
- */
 export interface LaunchInstanceRequest {
   profileId?: string; // profile ID (prof_XXXXXXXX) or existing profile name
   mode?: string; // "headed" or empty for headless
   port?: string; // port number as string
+  browser?: string; // browser override (chrome, cloak, ghost-chrome)
 }

@@ -131,3 +131,33 @@ func TestLaunchdManagerLogsFallsBackToLegacyPath(t *testing.T) {
 		t.Fatalf("tail call = %v, want %q", runner.calls, expected)
 	}
 }
+
+func TestLaunchdErrorClassification(t *testing.T) {
+	bootstrapped := errors.New("Bootstrap failed: 5: Input/output error (service already bootstrapped)")
+	absent := errors.New("Boot-out failed: 5: No such process")
+	exit5 := errors.New("launchctl: exit status 5")
+	notFound := errors.New("service not found")
+	unrelated := errors.New("permission denied")
+
+	// isLaunchdAlreadyBootstrapped: only the bootstrapped message; narrower than
+	// the ignorable bundle (must NOT swallow the teardown "absent" cases).
+	if !isLaunchdAlreadyBootstrapped(bootstrapped) {
+		t.Error("isLaunchdAlreadyBootstrapped should match the bootstrapped message")
+	}
+	for _, err := range []error{absent, exit5, notFound, unrelated, nil} {
+		if isLaunchdAlreadyBootstrapped(err) {
+			t.Errorf("isLaunchdAlreadyBootstrapped should be false for %v", err)
+		}
+	}
+
+	// isLaunchdIgnorableError: the full teardown bundle (incl. bootstrapped),
+	// and nil is benign.
+	for _, err := range []error{nil, bootstrapped, absent, exit5, notFound} {
+		if !isLaunchdIgnorableError(err) {
+			t.Errorf("isLaunchdIgnorableError should be true for %v", err)
+		}
+	}
+	if isLaunchdIgnorableError(unrelated) {
+		t.Error("isLaunchdIgnorableError should be false for an unrelated error")
+	}
+}

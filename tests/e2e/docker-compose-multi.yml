@@ -87,15 +87,15 @@ services:
       - "127.0.0.1:9993:9999"
     healthcheck: *pinchtab-healthcheck
 
-  pinchtab-lite:
+  pinchtab-ghostchrome:
     <<: *pinchtab-base
     environment:
-      PINCHTAB_CONFIG: /data/e2e-config/pinchtab-lite.json
+      PINCHTAB_CONFIG: /data/e2e-config/pinchtab-ghostchrome.json
     volumes:
-      - ./config/pinchtab-lite.json:/fixture-config/pinchtab-lite.json:ro
+      - ./config/pinchtab-ghostchrome.json:/fixture-config/pinchtab-ghostchrome.json:ro
     ports:
       - "127.0.0.1:9997:9999"
-    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-lite.json /data/e2e-config/pinchtab-lite.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab bridge"]
+    command: ["/bin/sh", "-lc", "mkdir -p /data/e2e-config && cp /fixture-config/pinchtab-ghostchrome.json /data/e2e-config/pinchtab-ghostchrome.json && exec /usr/local/bin/docker-entrypoint.sh pinchtab bridge"]
     healthcheck: *pinchtab-healthcheck
 
   pinchtab-bridge:
@@ -162,7 +162,7 @@ services:
         condition: service_healthy
       pinchtab-retain:
         condition: service_healthy
-      pinchtab-lite:
+      pinchtab-ghostchrome:
         condition: service_healthy
       pinchtab-bridge:
         condition: service_healthy
@@ -175,7 +175,7 @@ services:
       - E2E_MEDIUM_SERVER=http://pinchtab-medium:9999
       - E2E_FULL_SERVER=http://pinchtab-full:9999
       - E2E_RETAIN_SERVER=http://pinchtab-retain:9999
-      - E2E_LITE_SERVER=http://pinchtab-lite:9999
+      - E2E_SERVER_GHOSTCHROME=http://pinchtab-ghostchrome:9999
       - E2E_SERVER_TOKEN=e2e-token
       - E2E_BRIDGE_URL=http://pinchtab-bridge:9999
       - E2E_BRIDGE_TOKEN=e2e-bridge-token

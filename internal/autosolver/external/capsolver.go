@@ -74,7 +74,6 @@ func (c *Capsolver) Solve(ctx context.Context, page autosolver.Page, executor au
 		return result, fmt.Errorf("capsolver API key not configured")
 	}
 
-	// Step 1: Detect CAPTCHA type from page HTML.
 	html, err := page.HTML()
 	if err != nil {
 		result.Error = fmt.Sprintf("get HTML: %v", err)
@@ -87,14 +86,12 @@ func (c *Capsolver) Solve(ctx context.Context, page autosolver.Page, executor au
 		return result, fmt.Errorf("no supported CAPTCHA detected on page")
 	}
 
-	// Step 2: Extract sitekey from page.
 	sitekey := extractSitekey(html, captchaType)
 	if sitekey == "" {
 		result.Error = "sitekey not found"
 		return result, fmt.Errorf("could not extract sitekey from page")
 	}
 
-	// Step 3: Submit task to Capsolver API.
 	// TODO: Implement HTTP client for Capsolver API v1.
 	// POST /createTask with task type + sitekey + page URL.
 	_ = sitekey
@@ -104,7 +101,6 @@ func (c *Capsolver) Solve(ctx context.Context, page autosolver.Page, executor au
 	return result, fmt.Errorf("capsolver: API client not yet implemented — skeleton only")
 }
 
-// detectCaptchaType identifies the CAPTCHA provider from page HTML.
 func detectCaptchaType(html string) string {
 	lower := strings.ToLower(html)
 	switch {
@@ -119,7 +115,6 @@ func detectCaptchaType(html string) string {
 	}
 }
 
-// extractSitekey attempts to pull the CAPTCHA sitekey from HTML attributes.
 func extractSitekey(html, captchaType string) string {
 	var attrNames []string
 	switch captchaType {

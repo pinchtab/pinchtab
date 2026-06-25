@@ -1,4 +1,4 @@
-# Benchmark: Deep Dive
+# Benchmark
 
 This document compares two agent-driven browser surfaces — **PinchTab** and
 **agent-browser** — on a shared benchmark task set, driven through our API

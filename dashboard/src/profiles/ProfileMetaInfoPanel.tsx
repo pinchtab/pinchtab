@@ -23,11 +23,13 @@ function MetaBlock({
 export default function ProfileMetaInfoPanel({ profile, instance }: Props) {
   const accountText = profile.accountEmail || profile.accountName || "";
   const sizeText = profile.sizeMB ? `${profile.sizeMB.toFixed(0)} MB` : "—";
-  const browserType = instance?.attached
+  const browserEngine = instance?.browser || "chrome";
+  const browserMode = instance?.attached
     ? "Attached via CDP"
     : instance?.headless
       ? "Headless"
       : "Headed";
+  const browserType = `${browserEngine} / ${browserMode}`;
 
   return (
     <MetaBlock label="Profile panel">

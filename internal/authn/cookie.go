@@ -50,29 +50,5 @@ func sessionCookieSecure(r *http.Request, trustProxy bool, cookieSecure *bool) b
 }
 
 func RequestIsHTTPS(r *http.Request, trustProxy bool) bool {
-	return requestScheme(r, trustProxy) == "https"
-}
-
-func requestScheme(r *http.Request, trustProxy bool) string {
-	if r == nil {
-		return "http"
-	}
-	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
-			return strings.ToLower(strings.TrimSpace(strings.Split(forwarded, ",")[0]))
-		}
-		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
-			for _, part := range strings.Split(forwarded, ";") {
-				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-				if !ok || !strings.EqualFold(key, "proto") {
-					continue
-				}
-				return strings.ToLower(strings.Trim(value, `"`))
-			}
-		}
-	}
-	if r.TLS != nil {
-		return "https"
-	}
-	return "http"
+	return RequestScheme(r, trustProxy) == "https"
 }

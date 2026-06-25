@@ -27,7 +27,7 @@ func TestHandleFingerprintRotate_InvalidJSON(t *testing.T) {
 }
 
 func TestGenerateFingerprint_Windows(t *testing.T) {
-	h := Handlers{Config: &config.RuntimeConfig{ChromeVersion: "120.0.0.0"}}
+	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "120.0.0.0"}}
 	fp := h.generateFingerprint(fingerprintRequest{OS: "windows"})
 	if fp.Platform != "Win32" {
 		t.Errorf("expected Win32, got %q", fp.Platform)
@@ -44,7 +44,7 @@ func TestGenerateFingerprint_Windows(t *testing.T) {
 }
 
 func TestGenerateFingerprint_Mac(t *testing.T) {
-	h := Handlers{Config: &config.RuntimeConfig{ChromeVersion: "120.0.0.0"}}
+	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "120.0.0.0"}}
 	fp := h.generateFingerprint(fingerprintRequest{OS: "mac"})
 	if fp.Platform != "MacIntel" {
 		t.Errorf("expected MacIntel, got %q", fp.Platform)
@@ -52,7 +52,7 @@ func TestGenerateFingerprint_Mac(t *testing.T) {
 }
 
 func TestGenerateFingerprint_Random(t *testing.T) {
-	h := Handlers{Config: &config.RuntimeConfig{ChromeVersion: "120.0.0.0"}}
+	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "120.0.0.0"}}
 	fp := h.generateFingerprint(fingerprintRequest{OS: "random"})
 	validPlatforms := map[string]bool{"Win32": true, "MacIntel": true}
 	if !validPlatforms[fp.Platform] {
@@ -61,7 +61,7 @@ func TestGenerateFingerprint_Random(t *testing.T) {
 }
 
 func TestGenerateFingerprint_WithBrowser(t *testing.T) {
-	h := Handlers{Config: &config.RuntimeConfig{ChromeVersion: "120.0.0.0"}}
+	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "120.0.0.0"}}
 	fp := h.generateFingerprint(fingerprintRequest{OS: "windows", Browser: "chrome"})
 	if fp.UserAgent == "" {
 		t.Error("expected non-empty user agent")
@@ -69,7 +69,7 @@ func TestGenerateFingerprint_WithBrowser(t *testing.T) {
 }
 
 func TestGenerateFingerprint_Config(t *testing.T) {
-	cfg := &config.RuntimeConfig{ChromeVersion: "120.0.0.0"}
+	cfg := &config.RuntimeConfig{BrowserVersion: "120.0.0.0"}
 	h := Handlers{Config: cfg}
 
 	fp := h.generateFingerprint(fingerprintRequest{OS: "windows", Browser: "chrome"})
@@ -84,7 +84,7 @@ func TestGenerateFingerprint_Config(t *testing.T) {
 // Chrome/144.0.0.0 followed by a rotated UA of Chrome/144.0.7559.133 trips
 // the "Chrome version preserved" E2E contract (system-basic.sh).
 func TestGenerateFingerprint_MatchesLaunchPinnedUAReduction(t *testing.T) {
-	cfg := &config.RuntimeConfig{ChromeVersion: "144.0.7559.133", Headless: true}
+	cfg := &config.RuntimeConfig{BrowserVersion: "144.0.7559.133", Headless: true}
 	bundle := stealth.NewBundle(cfg, 1)
 	launchUA := bundle.LaunchUserAgent()
 	if launchUA == "" {

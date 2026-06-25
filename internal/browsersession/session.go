@@ -18,6 +18,9 @@ const (
 	DefaultSessionElevationWindow = 15 * time.Minute
 )
 
+// touchPersistInterval bounds how often a LastSeen-only update is flushed to disk.
+const touchPersistInterval = 30 * time.Second
+
 type Config struct {
 	IdleTimeout                   time.Duration
 	MaxLifetime                   time.Duration
@@ -37,6 +40,7 @@ type Manager struct {
 	persistPath                   string
 	persistElevationAcrossRestart bool
 	now                           func() time.Time
+	lastTouchSave                 time.Time // last LastSeen-only flush (debounce gate)
 }
 
 type sessionState struct {
@@ -91,7 +95,10 @@ func (m *Manager) Create(token string) (string, error) {
 	return id, nil
 }
 
-func (m *Manager) Validate(sessionID, token string) bool {
+// withValidSession runs the shared auth prelude (trim/hash/lock/lookup/expiry,
+// deleting + persisting an invalid session) and, on success, invokes apply under
+// m.mu to mutate state and persist. Returns false on any validation failure.
+func (m *Manager) withValidSession(sessionID, token string, apply func(id string, now time.Time, state sessionState) bool) bool {
 	if m == nil {
 		return false
 	}
@@ -115,67 +122,32 @@ func (m *Manager) Validate(sessionID, token string) bool {
 		m.saveLocked()
 		return false
 	}
-	state.LastSeen = now
-	m.sessions[sessionID] = state
-	m.saveLocked()
-	return true
+	return apply(sessionID, now, state)
+}
+
+func (m *Manager) Validate(sessionID, token string) bool {
+	return m.withValidSession(sessionID, token, func(id string, now time.Time, state sessionState) bool {
+		state.LastSeen = now
+		m.sessions[id] = state
+		m.saveTouchLocked(now)
+		return true
+	})
 }
 
 func (m *Manager) Elevate(sessionID, token string) bool {
-	if m == nil {
-		return false
-	}
-	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
-		return false
-	}
-
-	now := m.now()
-	expected := hashToken(token)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	state, ok := m.sessions[sessionID]
-	if !ok {
-		return false
-	}
-	if !m.sessionValid(state, now, expected) {
-		delete(m.sessions, sessionID)
+	return m.withValidSession(sessionID, token, func(id string, now time.Time, state sessionState) bool {
+		state.LastSeen = now
+		state.ElevatedUntil = now.Add(m.elevationWindow)
+		m.sessions[id] = state
 		m.saveLocked()
-		return false
-	}
-	state.LastSeen = now
-	state.ElevatedUntil = now.Add(m.elevationWindow)
-	m.sessions[sessionID] = state
-	m.saveLocked()
-	return true
+		return true
+	})
 }
 
 func (m *Manager) IsElevated(sessionID, token string) bool {
-	if m == nil {
-		return false
-	}
-	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
-		return false
-	}
-
-	now := m.now()
-	expected := hashToken(token)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	state, ok := m.sessions[sessionID]
-	if !ok {
-		return false
-	}
-	if !m.sessionValid(state, now, expected) {
-		delete(m.sessions, sessionID)
-		return false
-	}
-	return !state.ElevatedUntil.IsZero() && !now.After(state.ElevatedUntil)
+	return m.withValidSession(sessionID, token, func(id string, now time.Time, state sessionState) bool {
+		return !state.ElevatedUntil.IsZero() && !now.After(state.ElevatedUntil)
+	})
 }
 
 func (m *Manager) Revoke(sessionID string) {
@@ -325,6 +297,17 @@ func (m *Manager) loadPersisted() {
 		loaded[recordID] = state
 	}
 	m.sessions = loaded
+	m.saveLocked()
+}
+
+// saveTouchLocked persists a LastSeen-only update at most once per
+// touchPersistInterval. Caller holds m.mu. The next real mutation's saveLocked()
+// opportunistically flushes any debounced LastSeen for all sessions.
+func (m *Manager) saveTouchLocked(now time.Time) {
+	if now.Sub(m.lastTouchSave) < touchPersistInterval {
+		return
+	}
+	m.lastTouchSave = now
 	m.saveLocked()
 }
 

@@ -5,6 +5,7 @@ type fileConfigJSON struct {
 	ConfigVersion    string                      `json:"configVersion,omitempty"`
 	Server           serverConfigJSON            `json:"server"`
 	Browser          browserConfigJSON           `json:"browser"`
+	Browsers         *BrowsersConfig             `json:"browsers,omitempty"`
 	InstanceDefaults instanceDefaultsConfigJSON  `json:"instanceDefaults"`
 	Security         securityConfigJSON          `json:"security"`
 	Profiles         profilesConfigJSON          `json:"profiles"`
@@ -21,7 +22,6 @@ type serverConfigJSON struct {
 	Bind                      string `json:"bind"`
 	Token                     string `json:"token"`
 	StateDir                  string `json:"stateDir"`
-	Engine                    string `json:"engine"`
 	NetworkBufferSize         *int   `json:"networkBufferSize,omitempty"`
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`
 	RetainNetworkBodyMaxBytes *int   `json:"retainNetworkBodyMaxBytes,omitempty"`
@@ -30,11 +30,29 @@ type serverConfigJSON struct {
 }
 
 type browserConfigJSON struct {
-	ChromeVersion    string   `json:"version"`
-	ChromeBinary     string   `json:"binary"`
-	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
-	ChromeExtraFlags string   `json:"extraFlags"`
-	ExtensionPaths   []string `json:"extensionPaths"`
+	Provider          string                  `json:"provider,omitempty"`
+	BrowserVersion    string                  `json:"version"`
+	BrowserBinary     string                  `json:"binary"`
+	BrowserDebugPort  *int                    `json:"remoteDebuggingPort,omitempty"`
+	BrowserExtraFlags string                  `json:"extraFlags"`
+	Cloak             *cloakBrowserConfigJSON `json:"cloak,omitempty"`
+	ExtensionPaths    []string                `json:"extensionPaths"`
+	// Pointer so omitempty drops the field for legacy configs (byte-identical round-trip).
+	Proxy         *BrowserProxyConfig  `json:"proxy,omitempty"`
+	DefaultTarget string               `json:"defaultTarget,omitempty"`
+	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
+	Targets       BrowserTargetsConfig `json:"targets,omitempty"`
+}
+
+type cloakBrowserConfigJSON struct {
+	FingerprintSeed           string `json:"fingerprintSeed,omitempty"`
+	Platform                  string `json:"platform,omitempty"`
+	Locale                    string `json:"locale,omitempty"`
+	Timezone                  string `json:"timezone,omitempty"`
+	WebRTCIP                  string `json:"webrtcIP,omitempty"`
+	FontsDir                  string `json:"fontsDir,omitempty"`
+	StorageQuotaMB            *int   `json:"storageQuotaMB,omitempty"`
+	DisableDefaultStealthArgs *bool  `json:"disableDefaultStealthArgs,omitempty"`
 }
 
 type instanceDefaultsConfigJSON struct {
@@ -66,6 +84,7 @@ type securityConfigJSON struct {
 	AllowDownload          *bool          `json:"allowDownload"`
 	AllowCookies           *bool          `json:"allowCookies"`
 	AllowNetworkIntercept  *bool          `json:"allowNetworkIntercept"`
+	AllowFileScheme        *bool          `json:"allowFileScheme"`
 	AllowedDomains         []string       `json:"allowedDomains"`
 	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
 	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
@@ -87,9 +106,10 @@ type securityConfigJSON struct {
 }
 
 type attachJSON struct {
-	Enabled      *bool    `json:"enabled"`
-	AllowHosts   []string `json:"allowHosts"`
-	AllowSchemes []string `json:"allowSchemes"`
+	Enabled          *bool    `json:"enabled"`
+	AllowHosts       []string `json:"allowHosts"`
+	AllowSchemes     []string `json:"allowSchemes"`
+	ForwardProxyAuth *bool    `json:"forwardProxyAuth"`
 }
 
 type idpiConfigJSON struct {

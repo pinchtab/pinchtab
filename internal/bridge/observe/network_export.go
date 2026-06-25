@@ -8,10 +8,6 @@ import (
 	"sync"
 )
 
-// ---------------------------------------------------------------------------
-// ExportEncoder — pluggable format interface
-// ---------------------------------------------------------------------------
-
 // ExportEncoder streams network entries to an io.Writer in a specific format.
 // Implementations are registered via RegisterFormat and created per-export.
 // Not concurrent-safe; callers serialize Start → Encode* → Finish.
@@ -35,10 +31,6 @@ type ExportEncoder interface {
 
 // ExportEncoderFactory creates a new encoder for a single export session.
 type ExportEncoderFactory func(creatorName, creatorVersion string) ExportEncoder
-
-// ---------------------------------------------------------------------------
-// Format registry
-// ---------------------------------------------------------------------------
 
 var (
 	formatsMu sync.RWMutex
@@ -71,10 +63,6 @@ func ListFormats() []string {
 	sort.Strings(names)
 	return names
 }
-
-// ---------------------------------------------------------------------------
-// ExportEntry — canonical intermediate for all formats
-// ---------------------------------------------------------------------------
 
 // ExportEntry is the normalized representation of a network request/response.
 // All export formats encode from this struct.
@@ -136,10 +124,6 @@ type NameValuePair struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
-
-// ---------------------------------------------------------------------------
-// Conversion: NetworkEntry → ExportEntry
-// ---------------------------------------------------------------------------
 
 // NetworkEntryToExport converts a captured NetworkEntry to the canonical ExportEntry.
 // body and base64Encoded are provided when response bodies are fetched on demand.

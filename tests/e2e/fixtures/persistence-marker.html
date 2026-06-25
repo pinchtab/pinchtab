@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Persistence Marker</title>
+</head>
+<body>
+  <!--
+    Deterministic profile-persistence probe used by the
+    docker-browser-parity-smoke `--profile-persistence` leg.
+
+    On load:
+      1. Read localStorage['pinchtab-marker'] and the document cookie
+         `pinchtab-marker`.
+      2. If either is missing, generate a UUID (crypto.randomUUID with a
+         non-crypto fallback for older Chromium builds) and write BOTH:
+           - localStorage['pinchtab-marker'] = <uuid>
+           - document.cookie = "pinchtab-marker=<uuid>; path=/; SameSite=Lax"
+      3. Render the final value inside <div id="marker" role="status">.
+
+    Scope notes:
+      - localStorage and the cookie are tested across container restarts
+        (Docker named volume mounted at /data).
+      - sessionStorage is NOT persisted across restarts and is therefore
+        NOT exercised here — the page intentionally never touches it.
+      - No external resources, no async work; the rendered text is the
+        authoritative round-trip value.
+  -->
+  <h1>Persistence Marker</h1>
+  <div id="marker" role="status">pending</div>
+  <script>
+    (function () {
+      function readCookie(name) {
+        var parts = document.cookie ? document.cookie.split(';') : [];
+        for (var i = 0; i < parts.length; i++) {
+          var kv = parts[i].trim().split('=');
+          if (kv[0] === name) return kv.slice(1).join('=');
+        }
+        return '';
+      }
+
+      function makeUUID() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return window.crypto.randomUUID();
+        }
+        // Fallback (RFC4122 v4-ish; sufficient for a smoke marker).
+        var hex = '0123456789abcdef';
+        var out = '';
+        for (var i = 0; i < 32; i++) {
+          var r = Math.floor(Math.random() * 16);
+          if (i === 12) r = 4;
+          if (i === 16) r = (r & 0x3) | 0x8;
+          out += hex.charAt(r);
+          if (i === 7 || i === 11 || i === 15 || i === 19) out += '-';
+        }
+        return out;
+      }
+
+      var existingLS = '';
+      try { existingLS = window.localStorage.getItem('pinchtab-marker') || ''; }
+      catch (_) { existingLS = ''; }
+      var existingCK = readCookie('pinchtab-marker');
+
+      var value;
+      if (existingLS && existingCK && existingLS === existingCK) {
+        value = existingLS;
+      } else if (existingLS) {
+        value = existingLS;
+      } else if (existingCK) {
+        value = existingCK;
+      } else {
+        value = makeUUID();
+      }
+
+      try { window.localStorage.setItem('pinchtab-marker', value); }
+      catch (_) { /* localStorage may be unavailable; render anyway */ }
+      document.cookie = 'pinchtab-marker=' + value + '; path=/; SameSite=Lax';
+
+      document.getElementById('marker').textContent = value;
+    })();
+  </script>
+</body>
+</html>

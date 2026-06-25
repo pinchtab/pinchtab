@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apiTypes "github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -50,13 +51,34 @@ func RegisterHandlers(mux *http.ServeMux, rec Recorder) {
 				TabID:       event.TabID,
 				URL:         event.URL,
 				Action:      event.Action,
-				Engine:      event.Engine,
+				Route:       convertRoute(event.Route),
 				Ref:         event.Ref,
 			})
 		}
 
 		httpx.JSON(w, http.StatusOK, resp)
 	})
+}
+
+func convertRoute(r *browserops.RouteMetadata) *apiTypes.RouteMetadata {
+	if r == nil {
+		return nil
+	}
+	out := &apiTypes.RouteMetadata{
+		RequestedBrowser: r.RequestedBrowser,
+		UsedBrowser:      r.UsedBrowser,
+		Escalated:        r.Escalated,
+		Reason:           r.Reason,
+		Quality:          r.Quality,
+	}
+	for _, a := range r.Attempts {
+		out.Attempts = append(out.Attempts, apiTypes.RouteAttempt{
+			Browser:  a.Browser,
+			Accepted: a.Accepted,
+			Reason:   a.Reason,
+		})
+	}
+	return out
 }
 
 func filterFromRequest(r *http.Request) (Filter, error) {
@@ -71,7 +93,6 @@ func filterFromRequest(r *http.Request) (Filter, error) {
 		ProfileName: strings.TrimSpace(q.Get("profileName")),
 		TabID:       strings.TrimSpace(q.Get("tabId")),
 		Action:      strings.TrimSpace(q.Get("action")),
-		Engine:      strings.TrimSpace(q.Get("engine")),
 		PathPrefix:  strings.TrimSpace(q.Get("pathPrefix")),
 	}
 

@@ -38,7 +38,6 @@ func Evaluate(client *http.Client, base, token string, args []string, cmd *cobra
 		case nil:
 			fmt.Println("null")
 		default:
-			// Object or array: compact JSON
 			if data, err := json.Marshal(v); err == nil {
 				fmt.Println(string(data))
 			} else {

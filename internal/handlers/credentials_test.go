@@ -10,6 +10,42 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
+func TestCredentialStoreGetReturnsCopy(t *testing.T) {
+	cs := newCredentialStore()
+	cs.Set("tab1", &credentialPair{Username: "u", Password: "p"})
+
+	got, ok := cs.Get("tab1")
+	if !ok {
+		t.Fatal("Get: credentials not found")
+	}
+	// Mutating the returned value must not affect the stored credentials.
+	got.Username = "tampered"
+
+	again, _ := cs.Get("tab1")
+	if again.Username != "u" {
+		t.Errorf("Get leaked store state: stored username = %q, want \"u\"", again.Username)
+	}
+}
+
+func TestCredentialStoreRemoveTab(t *testing.T) {
+	cs := newCredentialStore()
+	cs.Set("tab1", &credentialPair{Username: "u", Password: "p"})
+	if !cs.MarkListenerIfAbsent("tab1") {
+		t.Fatal("MarkListenerIfAbsent: expected first mark to install")
+	}
+
+	cs.RemoveTab("tab1")
+
+	if _, ok := cs.Get("tab1"); ok {
+		t.Error("RemoveTab left credentials for the closed tab")
+	}
+	// Listener flag must be cleared too: a future tab reusing the ID should be
+	// treated as needing a fresh listener.
+	if !cs.MarkListenerIfAbsent("tab1") {
+		t.Error("RemoveTab did not clear the listeners flag")
+	}
+}
+
 func TestHandleSetCredentials_Valid(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 

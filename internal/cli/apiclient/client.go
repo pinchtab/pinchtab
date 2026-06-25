@@ -1,73 +1,45 @@
 package apiclient
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 )
 
-func DoGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
-	u := base + path
-	if len(params) > 0 {
-		u += "?" + params.Encode()
-	}
-	req, _ := http.NewRequest("GET", u, nil)
-	setClientHeaders(req, token)
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		handleAPIError(resp.StatusCode, body)
-		os.Exit(1)
-	}
-
+// doAndRender runs the request with the standard fatal-on-transport-error +
+// exit-on-HTTP-error policy, then pretty-prints and decodes the body.
+func doAndRender(client *http.Client, token string, r request) map[string]any {
+	status, body := mustRequest(client, token, r)
+	exitOnAPIError(status, body)
 	return printAndDecode(body)
 }
 
+func DoGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
+	return doAndRender(client, token, request{method: "GET", url: buildURL(base, path, params)})
+}
+
 func DoGetRaw(client *http.Client, base, token, path string, params url.Values) []byte {
-	u := base + path
-	if len(params) > 0 {
-		u += "?" + params.Encode()
-	}
-	req, _ := http.NewRequest("GET", u, nil)
-	setClientHeaders(req, token)
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-		return nil
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", resp.StatusCode, string(body))
+	status, body := mustRequest(client, token, request{method: "GET", url: buildURL(base, path, params)})
+	if status >= 400 {
+		fmt.Fprintf(os.Stderr, "Error %d: %s\n", status, string(body))
 		os.Exit(1)
 	}
 	return body
 }
 
 // DoGetRawAndPrint fetches and prints the raw response body (for --snap flag).
+// Best-effort: it reports errors to stderr but does not exit.
 func DoGetRawAndPrint(client *http.Client, base, token, pathWithQuery string) {
-	req, _ := http.NewRequest("GET", base+pathWithQuery, nil)
-	setClientHeaders(req, token)
-	resp, err := client.Do(req)
+	status, body, err := doRequest(client, token, request{method: "GET", url: base + pathWithQuery})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "snapshot failed: %v\n", err)
 		return
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "snapshot error %d: %s\n", resp.StatusCode, string(body))
+	if status >= 400 {
+		fmt.Fprintf(os.Stderr, "snapshot error %d: %s\n", status, string(body))
 		return
 	}
 	fmt.Println(string(body))
@@ -110,127 +82,29 @@ func DoPostQuietWithHeaders(client *http.Client, base, token, path string, body 
 }
 
 func doPostQuietWithStatus(client *http.Client, base, token, path string, body map[string]any, headers map[string]string) (int, []byte, map[string]any) {
-	data, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	setClientHeaders(req, token)
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
+	status, respBody := mustRequest(client, token, request{method: "POST", url: base + path, body: body, headers: headers})
 
 	var result map[string]any
-	if resp.StatusCode < 400 {
+	if status < 400 {
 		// Object responses populate result; array/scalar responses leave it nil.
 		// Callers that need a map should branch on result == nil.
 		_ = json.Unmarshal(respBody, &result)
 	}
-	return resp.StatusCode, respBody, result
-}
-
-func PrintAndDecode(body []byte) map[string]any {
-	return printAndDecode(body)
-}
-
-func ExitWithAPIError(statusCode int, body []byte) {
-	handleAPIError(statusCode, body)
-	os.Exit(1)
+	return status, respBody, result
 }
 
 func DoPostWithHeaders(client *http.Client, base, token, path string, body map[string]any, headers map[string]string) map[string]any {
-	data, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	setClientHeaders(req, token)
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		handleAPIError(resp.StatusCode, respBody)
-		os.Exit(1)
-	}
-
-	return printAndDecode(respBody)
+	return doAndRender(client, token, request{method: "POST", url: base + path, body: body, headers: headers})
 }
 
 // DoDelete sends a DELETE request with an optional JSON body (e.g. for ?name= query params, pass nil body and handle params in path).
 func DoDelete(client *http.Client, base, token, path string, params url.Values) map[string]any {
-	u := base + path
-	if len(params) > 0 {
-		u += "?" + params.Encode()
-	}
-	req, _ := http.NewRequest("DELETE", u, nil)
-	setClientHeaders(req, token)
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		handleAPIError(resp.StatusCode, respBody)
-		os.Exit(1)
-	}
-
-	return printAndDecode(respBody)
+	return doAndRender(client, token, request{method: "DELETE", url: buildURL(base, path, params)})
 }
 
 // DoDeleteJSON sends a DELETE request with a JSON body.
 func DoDeleteJSON(client *http.Client, base, token, path string, body map[string]any) map[string]any {
-	data, _ := json.Marshal(body)
-	req, _ := http.NewRequest("DELETE", base+path, bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	setClientHeaders(req, token)
-	resp, err := client.Do(req)
-	if err != nil {
-		fatal("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		handleAPIError(resp.StatusCode, respBody)
-		os.Exit(1)
-	}
-
-	return printAndDecode(respBody)
-}
-
-// printAndDecode pretty-prints the body when it is JSON, falls back to
-// raw output otherwise, and returns the parsed map (if any) for the
-// suggestion logic. It only warns on genuine JSON decode errors — inherently
-// non-JSON responses like /snapshot's compact text format pass silently.
-func printAndDecode(body []byte) map[string]any {
-	var buf bytes.Buffer
-	isJSON := json.Indent(&buf, body, "", "  ") == nil
-	if isJSON {
-		fmt.Println(buf.String())
-	} else {
-		fmt.Println(string(body))
-	}
-	if !isJSON {
-		return nil
-	}
-	var result map[string]any
-	if err := json.Unmarshal(body, &result); err == nil {
-		return result
-	}
-	// Body is valid JSON but not an object (array, string, number, etc.).
-	// That's fine — many endpoints return arrays. Don't warn.
-	return nil
+	return doAndRender(client, token, request{method: "DELETE", url: base + path, body: body})
 }
 
 // ResolveInstanceBase fetches the named instance from the orchestrator and returns
@@ -249,53 +123,4 @@ func ResolveInstanceBase(orchBase, token, instanceID, bind string) string {
 		fatal("instance %q has no port assigned (is it still starting?)", instanceID)
 	}
 	return fmt.Sprintf("http://%s:%s", bind, inst.Port)
-}
-
-func setClientHeaders(req *http.Request, token string) {
-	req.Header.Set("X-PinchTab-Source", "client")
-	if token == "" {
-		return
-	}
-	if strings.HasPrefix(token, "ses_") {
-		req.Header.Set("Authorization", "Session "+token)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-}
-
-// handleAPIError parses and displays API error responses with hints
-func handleAPIError(statusCode int, body []byte) {
-	var errResp struct {
-		Error   string         `json:"error"`
-		Code    string         `json:"code"`
-		Details map[string]any `json:"details"`
-	}
-
-	if err := json.Unmarshal(body, &errResp); err != nil {
-		// Fallback to raw output if not valid JSON
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, string(body))
-		return
-	}
-
-	// Print main error
-	if errResp.Error != "" {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, errResp.Error)
-	} else {
-		fmt.Fprintf(os.Stderr, "Error %d: %s\n", statusCode, string(body))
-	}
-
-	// Print hint and remedy if present
-	if errResp.Details != nil {
-		if hint, ok := errResp.Details["hint"].(string); ok && hint != "" {
-			fmt.Fprintf(os.Stderr, "\n💡 %s\n", hint)
-		}
-		if remedy, ok := errResp.Details["remedy"].(string); ok && remedy != "" {
-			fmt.Fprintf(os.Stderr, "   Remedy: %s\n", remedy)
-		}
-	}
-}
-
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
 }

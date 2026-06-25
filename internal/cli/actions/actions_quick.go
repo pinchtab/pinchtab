@@ -2,11 +2,11 @@ package actions
 
 import (
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/cli"
-	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"net/http"
 	"net/url"
-	"time"
+
+	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 func Quick(client *http.Client, base, token string, args []string) {
@@ -16,23 +16,22 @@ func Quick(client *http.Client, base, token string, args []string) {
 
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, fmt.Sprintf("Navigating to %s...", args[0])))
 
-	// Navigate
-	navBody := map[string]any{"url": args[0]}
+	// Let the server settle the page before we snapshot, reusing navigation's
+	// own readiness contract (waitForNavigationState). "networkidle" requires a
+	// complete readyState plus a stable URL and is bounded server-side (~3s
+	// ceiling), so it returns promptly on fast pages and replaces the old fixed
+	// 1s sleep without regressing slow ones.
+	navBody := map[string]any{"url": args[0], "waitFor": "networkidle"}
 	navResult := apiclient.DoPost(client, base, token, "/navigate", navBody)
-
-	// Small delay for page to stabilize
-	time.Sleep(1 * time.Second)
 
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Page structure"))
 
-	// Snapshot with interactive filter
 	snapParams := url.Values{}
 	snapParams.Set("filter", "interactive")
 	snapParams.Set("compact", "true")
 	apiclient.DoGet(client, base, token, "/snapshot", snapParams)
 
-	// Extract info from navigation result
 	if title, ok := navResult["title"].(string); ok {
 		fmt.Println()
 		fmt.Printf("%s %s\n", cli.StyleStdout(cli.MutedStyle, "Title:"), cli.StyleStdout(cli.ValueStyle, title))

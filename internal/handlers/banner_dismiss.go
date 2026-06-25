@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 // bannerDismissJS is a best-effort routine that clears cookie/consent/login
@@ -18,9 +18,8 @@ import (
 //     Permissive labels are tried first because rejection paths often gate
 //     further interaction behind another modal.
 //  2. Phase 2 — if no button matched, hard-remove DOM nodes whose id, class,
-//     or aria-label contains "cookie"/"consent", plus role=dialog modals and
-//     fixed/absolute "overlay" containers. Re-enables document scrolling that
-//     banners commonly lock with overflow:hidden.
+//     or aria-label contains "cookie"/"consent". Re-enables document scrolling
+//     that banners commonly lock with overflow:hidden.
 //
 // The script is wrapped in try/catch and bounded to a short timeout from the
 // caller so it can never wedge a navigation response.
@@ -57,8 +56,7 @@ const bannerDismissJS = `(() => {
 
     // Phase 2: hard-remove obvious overlay containers.
     const sel = '[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i],' +
-                '[aria-label*="cookie" i], [aria-label*="consent" i],' +
-                '[class*="overlay" i], [role="dialog"], [aria-modal="true"]';
+                '[aria-label*="cookie" i], [aria-label*="consent" i]';
     const removed = [];
     document.querySelectorAll(sel).forEach((el) => {
       if (el === document.body || el === document.documentElement) return;
@@ -82,15 +80,11 @@ const bannerDismissJS = `(() => {
   }
 })();`
 
-// bannerDismissTimeout caps how long the dismissal script can run end-to-end.
-// Hard upper bound — if the page is unresponsive we silently skip.
+// bannerDismissTimeout is a hard upper bound — if the page is unresponsive we silently skip.
 const bannerDismissTimeout = 750 * time.Millisecond
 
-// dismissBanners runs the dismissal script on the current page of the given
-// chromedp context. Errors are swallowed: dismissal is purely best-effort.
-//
-// Pass enabled=false to no-op (lets call-sites wire the helper unconditionally
-// and decide based on the request flag).
+// dismissBanners runs the dismissal script best-effort; errors are swallowed.
+// Pass enabled=false to no-op so call-sites can wire it unconditionally.
 func (h *Handlers) dismissBanners(ctx context.Context, tabID string, enabled bool) {
 	if !enabled || ctx == nil || tabID == "" {
 		return
@@ -100,7 +94,7 @@ func (h *Handlers) dismissBanners(ctx context.Context, tabID string, enabled boo
 	defer cancel()
 
 	var result string
-	if err := chromedp.Run(tCtx, chromedp.Evaluate(bannerDismissJS, &result)); err != nil {
+	if err := h.Bridge.Evaluate(tCtx, bannerDismissJS, &result, bridge.EvalOpts{}); err != nil {
 		slog.Debug("banner dismiss skipped", "tab_id", tabID, "error", err)
 		return
 	}

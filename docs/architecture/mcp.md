@@ -1,4 +1,4 @@
-# MCP Server Architecture
+# MCP Server
 
 This page describes how the PinchTab MCP server is structured internally and how it integrates with the rest of the stack.
 

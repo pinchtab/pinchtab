@@ -145,3 +145,21 @@ func TestExtractExplicitTabID_LongOKBody(t *testing.T) {
 		t.Fatalf("got %q, want tail", got)
 	}
 }
+
+func TestExtractRequestedBrowser_Query(t *testing.T) {
+	r := httptest.NewRequest("GET", "/navigate?browser=cloak", nil)
+	if got := ExtractRequestedBrowser(r); got != "cloak" {
+		t.Fatalf("got %q, want cloak", got)
+	}
+}
+
+func TestExtractRequestedBrowser_IgnoresBody(t *testing.T) {
+	body := []byte(`{"url":"about:blank","browser":"cloak"}`)
+	r := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.ContentLength = int64(len(body))
+
+	if got := ExtractRequestedBrowser(r); got != "" {
+		t.Fatalf("got %q, want empty (body browser field should be ignored)", got)
+	}
+}

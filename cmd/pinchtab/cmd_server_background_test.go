@@ -169,7 +169,6 @@ func TestStopViaAPIShutdownEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Extract port from test server URL.
 	port := strings.TrimPrefix(srv.URL, "http://127.0.0.1:")
 
 	err := server.ShutdownServer(port, "")

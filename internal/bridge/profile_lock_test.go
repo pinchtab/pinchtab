@@ -4,15 +4,81 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestIsChromeProfileLockError(t *testing.T) {
+func TestQuarantineCorruptedProfile(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	profileDir := filepath.Join(tmp, "default")
+	if err := os.MkdirAll(filepath.Join(profileDir, "Default"), 0755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	marker := filepath.Join(profileDir, "Default", "Preferences")
+	if err := os.WriteFile(marker, []byte("original"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	quarantinePath, err := quarantineCorruptedProfile(profileDir)
+	if err != nil {
+		t.Fatalf("quarantineCorruptedProfile: %v", err)
+	}
+	if quarantinePath == "" {
+		t.Fatal("expected non-empty quarantine path")
+	}
+	if !strings.HasPrefix(quarantinePath, profileDir+".quarantine-") {
+		t.Fatalf("quarantine path %q should start with %q.quarantine-", quarantinePath, profileDir)
+	}
+
+	// Original marker must live in the quarantined copy, not the new empty dir.
+	if _, err := os.Stat(filepath.Join(quarantinePath, "Default", "Preferences")); err != nil {
+		t.Fatalf("expected marker preserved in quarantine: %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("expected fresh profile dir empty, but original marker still present: err=%v", err)
+	}
+
+	// Fresh profile dir must exist and be writable.
+	info, err := os.Stat(profileDir)
+	if err != nil {
+		t.Fatalf("expected recreated profile dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory at %s", profileDir)
+	}
+}
+
+func TestQuarantineCorruptedProfile_MissingDir(t *testing.T) {
+	t.Parallel()
+
+	path, err := quarantineCorruptedProfile(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err != nil {
+		t.Fatalf("missing dir should not error: %v", err)
+	}
+	if path != "" {
+		t.Fatalf("missing dir should return empty quarantine path, got %q", path)
+	}
+}
+
+func TestQuarantineCorruptedProfile_EmptyPath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := quarantineCorruptedProfile(""); err == nil {
+		t.Fatal("expected error for empty profile dir")
+	}
+	if _, err := quarantineCorruptedProfile("   "); err == nil {
+		t.Fatal("expected error for blank profile dir")
+	}
+}
+
+func TestIsProfileLockError(t *testing.T) {
 	t.Parallel()
 
 	msg := "chrome failed to start: [2046:2046:0309/221021.856597:ERROR:chrome/browser/process_singleton_posix.cc:363] The profile appears to be in use by another Chromium process"
-	if !isChromeProfileLockError(msg) {
+	if !isProfileLockError(msg) {
 		t.Fatal("expected profile lock error to be detected")
 	}
 }
@@ -49,7 +115,7 @@ func TestExtractChromeProfileLockPID(t *testing.T) {
 	}
 }
 
-func TestClearStaleChromeProfileLockRemovesSingletonFiles(t *testing.T) {
+func TestClearStaleProfileLocksRemovesSingletonFiles(t *testing.T) {
 	profileDir := t.TempDir()
 	for _, name := range chromeSingletonFiles {
 		if err := os.WriteFile(filepath.Join(profileDir, name), []byte("x"), 0644); err != nil {
@@ -75,9 +141,9 @@ func TestClearStaleChromeProfileLockRemovesSingletonFiles(t *testing.T) {
 		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
-	removed, err := clearStaleChromeProfileLock(profileDir, "")
+	removed, err := clearStaleProfileLocks(profileDir, "")
 	if err != nil {
-		t.Fatalf("clearStaleChromeProfileLock() error = %v", err)
+		t.Fatalf("clearStaleProfileLocks() error = %v", err)
 	}
 	if !removed {
 		t.Fatal("expected singleton files to be removed")
@@ -90,7 +156,7 @@ func TestClearStaleChromeProfileLockRemovesSingletonFiles(t *testing.T) {
 	}
 }
 
-func TestClearStaleChromeProfileLockLeavesActiveProfileUntouched(t *testing.T) {
+func TestClearStaleProfileLocksLeavesActiveProfileUntouched(t *testing.T) {
 	profileDir := t.TempDir()
 	lockPath := filepath.Join(profileDir, chromeSingletonFiles[0])
 	if err := os.WriteFile(lockPath, []byte("x"), 0644); err != nil {
@@ -115,9 +181,9 @@ func TestClearStaleChromeProfileLockLeavesActiveProfileUntouched(t *testing.T) {
 		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
-	removed, err := clearStaleChromeProfileLock(profileDir, "")
+	removed, err := clearStaleProfileLocks(profileDir, "")
 	if err != nil {
-		t.Fatalf("clearStaleChromeProfileLock() error = %v", err)
+		t.Fatalf("clearStaleProfileLocks() error = %v", err)
 	}
 	if removed {
 		t.Fatal("expected active profile lock to remain in place")
@@ -127,7 +193,7 @@ func TestClearStaleChromeProfileLockLeavesActiveProfileUntouched(t *testing.T) {
 	}
 }
 
-func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
+func TestClearStaleProfileLocksFallsBackToPIDProbe(t *testing.T) {
 	profileDir := t.TempDir()
 	lockPath := filepath.Join(profileDir, chromeSingletonFiles[0])
 	if err := os.WriteFile(lockPath, []byte("x"), 0644); err != nil {
@@ -155,9 +221,9 @@ func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
 		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
-	removed, err := clearStaleChromeProfileLock(profileDir, "another Chromium process (36)")
+	removed, err := clearStaleProfileLocks(profileDir, "another Chromium process (36)")
 	if err != nil {
-		t.Fatalf("clearStaleChromeProfileLock() error = %v", err)
+		t.Fatalf("clearStaleProfileLocks() error = %v", err)
 	}
 	if !removed {
 		t.Fatal("expected singleton file to be removed after stale pid probe")
@@ -248,5 +314,79 @@ func TestIsProfileOwnedByRunningPinchtabKeepsLockWhenChromeUsesProfile(t *testin
 	owned, pid := isProfileOwnedByRunningPinchtab(profileDir)
 	if !owned || pid != 1234 {
 		t.Fatalf("expected profile with active chrome to stay locked, got owned=%v pid=%d", owned, pid)
+	}
+}
+
+// M11 regression: quarantine must wait for the dying browser to release the
+// profile before renaming, proceed anyway after the bounded wait times out,
+// and recreate the dir with 0700.
+func TestQuarantineCorruptedProfile_WaitsForBrowserExit(t *testing.T) {
+	profileDir := filepath.Join(t.TempDir(), "profile")
+	if err := os.MkdirAll(profileDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	oldFind := findChromePIDsByProfileDirFunc
+	oldWait := quarantineExitWait
+	oldPoll := chromeExitPollInterval
+	quarantineExitWait = 20 * time.Millisecond
+	chromeExitPollInterval = 5 * time.Millisecond
+	calls := 0
+	findChromePIDsByProfileDirFunc = func(dir string) []int {
+		calls++
+		if calls < 2 {
+			return []int{4242} // first poll: browser still holds the profile
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		findChromePIDsByProfileDirFunc = oldFind
+		quarantineExitWait = oldWait
+		chromeExitPollInterval = oldPoll
+	})
+
+	quarantinePath, err := quarantineCorruptedProfile(profileDir)
+	if err != nil {
+		t.Fatalf("quarantineCorruptedProfile: %v", err)
+	}
+	if calls < 2 {
+		t.Fatalf("expected quarantine to poll for browser exit, polls=%d", calls)
+	}
+	if quarantinePath == "" {
+		t.Fatal("expected quarantine to proceed after the browser exited")
+	}
+	info, err := os.Stat(profileDir)
+	if err != nil {
+		t.Fatalf("recreated profile dir missing: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Fatalf("recreated profile dir perms = %o, want 0700", perm)
+	}
+}
+
+func TestQuarantineCorruptedProfile_ProceedsAfterWaitTimeout(t *testing.T) {
+	profileDir := filepath.Join(t.TempDir(), "profile")
+	if err := os.MkdirAll(profileDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	oldFind := findChromePIDsByProfileDirFunc
+	oldWait := quarantineExitWait
+	oldPoll := chromeExitPollInterval
+	quarantineExitWait = 10 * time.Millisecond
+	chromeExitPollInterval = 2 * time.Millisecond
+	findChromePIDsByProfileDirFunc = func(dir string) []int { return []int{4242} } // never exits
+	t.Cleanup(func() {
+		findChromePIDsByProfileDirFunc = oldFind
+		quarantineExitWait = oldWait
+		chromeExitPollInterval = oldPoll
+	})
+
+	quarantinePath, err := quarantineCorruptedProfile(profileDir)
+	if err != nil {
+		t.Fatalf("quarantine should proceed (with a warning) after the wait times out: %v", err)
+	}
+	if quarantinePath == "" {
+		t.Fatal("expected a quarantine path despite the timed-out wait")
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 // SetConfigValue sets a dotted path in FileConfig (e.g., "server.port", "instanceDefaults.mode").
@@ -20,6 +22,8 @@ func SetConfigValue(fc *FileConfig, path string, value string) error {
 		return setServerField(&fc.Server, field, value)
 	case "browser":
 		return setBrowserField(&fc.Browser, field, value)
+	case "browsers":
+		return setBrowsersField(&fc.Browsers, field, value)
 	case "instanceDefaults":
 		return setInstanceDefaultsField(&fc.InstanceDefaults, field, value)
 	case "security":
@@ -35,7 +39,7 @@ func SetConfigValue(fc *FileConfig, path string, value string) error {
 	case "sessions":
 		return setSessionsField(&fc.Sessions, field, value)
 	default:
-		return fmt.Errorf("unknown section %q (valid: server, browser, instanceDefaults, security, profiles, multiInstance, timeouts, observability, sessions)", section)
+		return fmt.Errorf("unknown section %q (valid: server, browser, browsers, instanceDefaults, security, profiles, multiInstance, timeouts, observability, sessions)", section)
 	}
 }
 
@@ -74,15 +78,150 @@ func setServerField(s *ServerConfig, field, value string) error {
 }
 
 func setBrowserField(b *BrowserConfig, field, value string) error {
+	if strings.HasPrefix(field, "cloak.") {
+		return setCloakBrowserField(&b.Cloak, strings.TrimPrefix(field, "cloak."), value)
+	}
+	if strings.HasPrefix(field, "proxy.") {
+		return setBrowserProxyField(&b.Proxy, strings.TrimPrefix(field, "proxy."), value)
+	}
+	if strings.HasPrefix(field, "targets.") {
+		return setBrowserTargetField(&b.Targets, strings.TrimPrefix(field, "targets."), value)
+	}
 	switch field {
+	case "provider":
+		return fmt.Errorf("browser.provider is no longer supported; use browsers.default")
 	case "version":
-		b.ChromeVersion = value
+		b.BrowserVersion = value
 	case "binary":
-		b.ChromeBinary = value
+		b.BrowserBinary = value
 	case "extraFlags":
-		b.ChromeExtraFlags = value
+		b.BrowserExtraFlags = value
+	case "defaultTarget":
+		b.DefaultTarget = value
+	case "fallbackOrder":
+		b.FallbackOrder = parseCSVList(value)
 	default:
 		return fmt.Errorf("unknown field browser.%s", field)
+	}
+	return nil
+}
+
+func setBrowsersField(b *BrowsersConfig, field, value string) error {
+	switch field {
+	case "default":
+		id := strings.ToLower(strings.TrimSpace(value))
+		if _, ok := browsers.Get(id); !ok {
+			return fmt.Errorf("unknown browser %q (known: %v)", value, browsers.IDs())
+		}
+		b.Default = id
+	case "available":
+		b.Available = parseCSVList(value)
+	default:
+		return fmt.Errorf("unknown field browsers.%s", field)
+	}
+	return nil
+}
+
+func setBrowserProxyField(p *BrowserProxyConfig, field, value string) error {
+	if strings.HasPrefix(field, "geo.") {
+		if p.Geo == nil {
+			p.Geo = &BrowserProxyGeoConfig{}
+		}
+		switch strings.TrimPrefix(field, "geo.") {
+		case "timezone":
+			p.Geo.Timezone = value
+		case "locale":
+			p.Geo.Locale = value
+		case "webrtcIP":
+			p.Geo.WebRTCIP = value
+		case "countryISO":
+			p.Geo.CountryISO = value
+		default:
+			return fmt.Errorf("unknown field proxy.%s", field)
+		}
+		return nil
+	}
+	switch field {
+	case "server":
+		p.Server = value
+	case "bypassList":
+		p.BypassList = parseCSVList(value)
+	case "username":
+		p.Username = value
+	case "password":
+		p.Password = value
+	default:
+		return fmt.Errorf("unknown field proxy.%s", field)
+	}
+	return nil
+}
+
+func setBrowserTargetField(targets *BrowserTargetsConfig, path, value string) error {
+	name, field, ok := strings.Cut(path, ".")
+	if !ok || name == "" || field == "" {
+		return fmt.Errorf("invalid browser.targets path %q (expected targets.<name>.<field>)", path)
+	}
+	if !IsValidBrowserTargetName(name) {
+		return fmt.Errorf("invalid browser target name %q (must match ^[a-z][a-z0-9-]{0,31}$)", name)
+	}
+	if *targets == nil {
+		*targets = BrowserTargetsConfig{}
+	}
+	t := (*targets)[name]
+	switch {
+	case strings.HasPrefix(field, "cloak."):
+		if err := setCloakBrowserField(&t.Cloak, strings.TrimPrefix(field, "cloak."), value); err != nil {
+			return err
+		}
+	case strings.HasPrefix(field, "proxy."):
+		if err := setBrowserProxyField(&t.Proxy, strings.TrimPrefix(field, "proxy."), value); err != nil {
+			return err
+		}
+	case field == "provider":
+		id := strings.ToLower(strings.TrimSpace(value))
+		if _, ok := browsers.Get(id); !ok {
+			return fmt.Errorf("unknown browser %q (known: %v)", value, browsers.IDs())
+		}
+		t.Provider = id
+	case field == "binary":
+		t.Binary = value
+	case field == "extraFlags":
+		t.ExtraFlags = value
+	default:
+		return fmt.Errorf("unknown field browser.targets.%s.%s", name, field)
+	}
+	(*targets)[name] = t
+	return nil
+}
+
+func setCloakBrowserField(c *CloakBrowserConfig, field, value string) error {
+	switch field {
+	case "fingerprintSeed":
+		c.FingerprintSeed = value
+	case "platform":
+		c.Platform = value
+	case "locale":
+		c.Locale = value
+	case "timezone":
+		c.Timezone = value
+	case "webrtcIP":
+		c.WebRTCIP = value
+	case "fontsDir":
+		c.FontsDir = value
+	case "storageQuotaMB":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("browser.cloak.storageQuotaMB must be a number: %w", err)
+		}
+		c.StorageQuotaMB = &n
+	case "disableDefaultStealthArgs":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("browser.cloak.disableDefaultStealthArgs must be true or false: %w", err)
+		}
+		c.DisableDefaultStealthArgs = &b
+	default:
+		return fmt.Errorf("unknown field browser.cloak.%s", field)
 	}
 	return nil
 }
@@ -384,6 +523,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowUpload = &b
 	case "allowNetworkIntercept":
 		s.AllowNetworkIntercept = &b
+	case "allowFileScheme":
+		s.AllowFileScheme = &b
 	case "enableActionGuards":
 		s.EnableActionGuards = &b
 	case "trustLoopbackProxy":
@@ -488,6 +629,12 @@ func setAttachField(a *AttachConfig, field, value string) error {
 		a.AllowHosts = parseCSVList(value)
 	case "allowSchemes":
 		a.AllowSchemes = parseCSVList(value)
+	case "forwardProxyAuth":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("security.attach.forwardProxyAuth: %w", err)
+		}
+		a.ForwardProxyAuth = &b
 	default:
 		return fmt.Errorf("unknown field security.attach.%s", field)
 	}

@@ -52,7 +52,6 @@ func (p *Provider) SuggestNextAction(ctx context.Context, req autosolver.LLMRequ
 		return nil, fmt.Errorf("llm: API key not configured for provider %q", p.config.Provider)
 	}
 
-	// Build the prompt.
 	prompt := buildPrompt(req)
 
 	// TODO: Implement actual LLM API call based on p.config.Provider.
@@ -62,7 +61,6 @@ func (p *Provider) SuggestNextAction(ctx context.Context, req autosolver.LLMRequ
 	return nil, fmt.Errorf("llm: provider %q not yet implemented — skeleton only", p.config.Provider)
 }
 
-// buildPrompt creates a structured prompt for the LLM.
 func buildPrompt(req autosolver.LLMRequest) string {
 	prompt := fmt.Sprintf(`You are a browser automation assistant. Analyze the following page and suggest the next action.
 

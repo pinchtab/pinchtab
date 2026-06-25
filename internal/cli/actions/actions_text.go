@@ -34,7 +34,6 @@ func Text(client *http.Client, base, token string, cmd *cobra.Command, args []st
 		params.Set("frameId", v)
 	}
 
-	// Handle element selector - positional arg takes precedence over --selector flag
 	selectorStr := ""
 	if len(args) > 0 {
 		selectorStr = args[0]
@@ -50,20 +49,17 @@ func Text(client *http.Client, base, token string, cmd *cobra.Command, args []st
 		}
 	}
 
-	// Default to terse output (just text); --json for full response
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
 		apiclient.DoGet(client, base, token, "/text", params)
 		return
 	}
 
-	// Terse mode: print just the text content
 	body := apiclient.DoGetRaw(client, base, token, "/text", params)
 	var result struct {
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		// Not JSON, print raw
 		output.Value(string(body))
 		return
 	}

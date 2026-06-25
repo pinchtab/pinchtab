@@ -9,6 +9,27 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
+func TestLLMProviderForAutoSolver(t *testing.T) {
+	// LLM provider configured → instantiated (wires the llmFallback switch).
+	h := &Handlers{Config: &config.RuntimeConfig{
+		AutoSolver: config.AutoSolverConfig{LLMProvider: "openai"},
+	}}
+	if h.llmProviderForAutoSolver() == nil {
+		t.Error("expected non-nil LLM provider when LLMProvider is set")
+	}
+
+	// No provider configured → nil (LLM branch stays inert, as before).
+	h = &Handlers{Config: &config.RuntimeConfig{}}
+	if h.llmProviderForAutoSolver() != nil {
+		t.Error("expected nil LLM provider when LLMProvider is empty")
+	}
+
+	// nil Config → nil.
+	if (&Handlers{}).llmProviderForAutoSolver() != nil {
+		t.Error("expected nil LLM provider with nil Config")
+	}
+}
+
 func TestShouldAutoSolve(t *testing.T) {
 	tests := []struct {
 		name    string

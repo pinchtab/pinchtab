@@ -31,7 +31,6 @@ func NewLocator(repo *Repository, fetcher TabFetcher) *Locator {
 // FindInstanceByTabID returns the instance that owns the given tab.
 // Fast path: cache hit (O(1)). Slow path: queries all bridges.
 func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
-	// Fast path: check cache.
 	l.mu.RLock()
 	instID, ok := l.cache[tabID]
 	l.mu.RUnlock()
@@ -45,7 +44,6 @@ func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 		l.Invalidate(tabID)
 	}
 
-	// Slow path: query all running bridges.
 	running := l.repo.Running()
 	for _, inst := range running {
 		url := inst.URL

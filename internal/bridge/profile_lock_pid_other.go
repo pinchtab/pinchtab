@@ -37,12 +37,10 @@ func killProcesses(processes []chromeProfileProcess) error {
 		if pid <= 0 {
 			continue
 		}
-		// Try SIGTERM first, then SIGKILL if it doesn't work?
-		// Given we are in a "stale recovery" path, being aggressive is often better
-		// to ensure the next startup succeeds.
+		// Straight to SIGKILL: in this stale-recovery path, being aggressive
+		// is better to ensure the next startup succeeds.
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
-	// Give a small amount of time for processes to actually exit
 	time.Sleep(100 * time.Millisecond)
 	return nil
 }
@@ -51,8 +49,6 @@ func isPinchTabProcess(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	// On Linux/macOS, we can check the process name or args.
-	// A simple check is to see if the command contains "pinchtab".
 	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "args=") // #nosec G204 -- pid is an int, not user-controlled string
 	out, err := cmd.Output()
 	if err != nil {

@@ -257,6 +257,48 @@ describe("useAppStore", () => {
       expect(agentEventsById.agent_1).toBeUndefined();
       expect(agentEventsById.agent_21).toBeDefined();
     });
+
+    it("ignores a duplicate appended event without rewriting history", () => {
+      const event = {
+        id: "evt_dup",
+        agentId: "agent_dup",
+        channel: "progress",
+        type: "progress",
+        method: "POST",
+        path: "/api/agents/agent_dup/events",
+        timestamp: "2024-01-01T00:00:00Z",
+      } as any;
+      useAppStore.getState().appendAgentEvent(event);
+      const before = useAppStore.getState().agentEventsById;
+      useAppStore.getState().appendAgentEvent(event);
+      const after = useAppStore.getState().agentEventsById;
+      // Same reference proves the early return state (no re-merge / re-sort).
+      expect(after).toBe(before);
+      expect(after.agent_dup).toHaveLength(1);
+    });
+
+    it("hydrates events in timestamp order regardless of input order", () => {
+      const make = (id: string, timestamp: string) =>
+        ({
+          id,
+          agentId: "agent_order",
+          channel: "progress",
+          type: "progress",
+          method: "POST",
+          path: "/p",
+          timestamp,
+        }) as any;
+      useAppStore.getState().hydrateAgentEvents("agent_order", [
+        make("evt_b", "2024-01-01T00:03:00Z"),
+        make("evt_a", "2024-01-01T00:01:00Z"),
+        make("evt_b", "2024-01-01T00:03:00Z"), // duplicate id, dropped
+      ]);
+      expect(
+        useAppStore
+          .getState()
+          .agentEventsById.agent_order.map((event) => event.id),
+      ).toEqual(["evt_a", "evt_b"]);
+    });
   });
 
   describe("settings", () => {
@@ -316,6 +358,117 @@ describe("useAppStore", () => {
       const memory = { inst_1: 85.5, inst_2: 120.3 };
       useAppStore.getState().setCurrentMemory(memory);
       expect(useAppStore.getState().currentMemory).toEqual(memory);
+    });
+  });
+
+  describe("applyMonitoringSnapshot", () => {
+    const snapshot = {
+      timestamp: 1000,
+      instances: [
+        { id: "A", status: "running" },
+        { id: "B", status: "running" },
+        { id: "C", status: "stopped" },
+      ],
+      tabs: [
+        { id: "t1", instanceId: "A" },
+        { id: "t2", instanceId: "A" },
+        { id: "t3", instanceId: "B" },
+        { id: "t4", instanceId: "C" },
+      ],
+      metrics: [
+        { instanceId: "A", jsHeapUsedMB: 10 },
+        { instanceId: "A", jsHeapUsedMB: 99 }, // duplicate: first wins
+        { instanceId: "B", jsHeapUsedMB: 20 },
+      ],
+      serverMetrics: {
+        goHeapAllocMB: 42,
+        goNumGoroutine: 7,
+        rateBucketHosts: 3,
+      },
+    } as any;
+
+    it("indexes tabs/metrics per running instance and includes memory", () => {
+      useAppStore.getState().applyMonitoringSnapshot(snapshot, true);
+      const s = useAppStore.getState();
+
+      // Only running instances (C excluded); tab order preserved.
+      expect(s.currentTabs).toEqual({
+        A: [
+          { id: "t1", instanceId: "A" },
+          { id: "t2", instanceId: "A" },
+        ],
+        B: [{ id: "t3", instanceId: "B" }],
+      });
+      // First metrics entry wins for the duplicate (10, not 99).
+      expect(s.currentMemory).toEqual({ A: 10, B: 20 });
+      expect(s.currentMetrics).toEqual({
+        A: { instanceId: "A", jsHeapUsedMB: 10 },
+        B: { instanceId: "B", jsHeapUsedMB: 20 },
+      });
+
+      const tabData = s.tabsChartData;
+      expect(tabData[tabData.length - 1]).toEqual({
+        timestamp: 1000,
+        A: 2,
+        B: 1,
+      });
+      const memData = s.memoryChartData;
+      expect(memData[memData.length - 1]).toEqual({
+        timestamp: 1000,
+        A: 10,
+        B: 20,
+      });
+      const serverData = s.serverChartData;
+      expect(serverData[serverData.length - 1]).toEqual({
+        timestamp: 1000,
+        goHeapMB: 42,
+        goroutines: 7,
+        rateBucketHosts: 3,
+      });
+      expect(s.instances).toEqual(snapshot.instances);
+    });
+
+    it("skips metrics entirely when memory is not included", () => {
+      useAppStore.getState().applyMonitoringSnapshot(snapshot, false);
+      const s = useAppStore.getState();
+
+      expect(s.currentTabs).toEqual({
+        A: [
+          { id: "t1", instanceId: "A" },
+          { id: "t2", instanceId: "A" },
+        ],
+        B: [{ id: "t3", instanceId: "B" }],
+      });
+      expect(s.currentMemory).toEqual({});
+      expect(s.currentMetrics).toEqual({});
+      expect(s.memoryChartData).toHaveLength(0);
+      const tabData = s.tabsChartData;
+      expect(tabData[tabData.length - 1]).toEqual({
+        timestamp: 1000,
+        A: 2,
+        B: 1,
+      });
+    });
+
+    it("does not append a tabs chart point when no instance is running", () => {
+      const idle = {
+        timestamp: 2000,
+        instances: [{ id: "C", status: "stopped" }],
+        tabs: [],
+        metrics: [],
+        serverMetrics: {
+          goHeapAllocMB: 1,
+          goNumGoroutine: 1,
+          rateBucketHosts: 1,
+        },
+      } as any;
+      useAppStore.getState().applyMonitoringSnapshot(idle, true);
+      const s = useAppStore.getState();
+
+      expect(s.tabsChartData).toHaveLength(0);
+      expect(s.memoryChartData).toHaveLength(0);
+      // The server chart point is always appended.
+      expect(s.serverChartData).toHaveLength(1);
     });
   });
 });

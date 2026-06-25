@@ -396,9 +396,13 @@ if (navigator.connection) {
 })();
 
 if (!(window.devicePixelRatio > 0)) {
+  const winProto = Object.getPrototypeOf(window) || Window.prototype;
   try {
-    Object.defineProperty(window, 'devicePixelRatio', { get: () => 1, configurable: true });
-  } catch (e) {}
+    delete window.devicePixelRatio;
+    Object.defineProperty(winProto, 'devicePixelRatio', { get: () => 1, configurable: true });
+  } catch (e) {
+    try { Object.defineProperty(window, 'devicePixelRatio', { get: () => 1, configurable: true }); } catch (e2) {}
+  }
 }
 
 // BATTERY API - Headless often lacks this
@@ -668,10 +672,15 @@ installFunctionToStringMask(Function.prototype);
   const numericWindowValue = (value) => {
     return Number.isFinite(value) ? value : 0;
   };
+
+  const winProto = Object.getPrototypeOf(window) || Window.prototype;
   const defineWindowMetric = (name, value) => {
     try {
-      Object.defineProperty(window, name, { get: () => value, configurable: true });
-    } catch (e) {}
+      delete window[name];
+      Object.defineProperty(winProto, name, { get: () => value, configurable: true });
+    } catch (e) {
+      try { Object.defineProperty(window, name, { get: () => value, configurable: true }); } catch (e2) {}
+    }
   };
 
   const screenX = Math.max(numericWindowValue(window.screenX), numericWindowValue(window.screenLeft));

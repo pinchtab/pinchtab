@@ -6,6 +6,8 @@ interface Props {
   emptyMessage?: string;
 }
 
+const MAX_LOG_CHARS = 256 * 1024;
+
 export default function InstanceLogsPanel({
   instanceId,
   emptyMessage = "No instance logs available.",
@@ -56,9 +58,14 @@ export default function InstanceLogsPanel({
     }
 
     return api.subscribeToInstanceLogs(instanceId, {
-      onLogs: (nextLogs) => {
+      onLogs: (chunk, reset) => {
         streamVersionRef.current += 1;
-        setLogs(nextLogs);
+        setLogs((prev) => {
+          const next = reset ? chunk : prev + chunk;
+          return next.length > MAX_LOG_CHARS
+            ? next.slice(next.length - MAX_LOG_CHARS)
+            : next;
+        });
       },
     });
   }, [instanceId]);

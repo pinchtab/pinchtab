@@ -10,11 +10,15 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 func (b *Bridge) installWorkerStealthParity(ctx context.Context) {
 	if b == nil || b.Config == nil {
+		return
+	}
+	if config.PinchTabStealthDefaultsDisabled(b.Config) {
 		return
 	}
 
@@ -34,6 +38,10 @@ func (b *Bridge) installWorkerStealthParity(ctx context.Context) {
 }
 
 func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, targetType string) {
+	if b == nil || config.PinchTabStealthDefaultsDisabled(b.Config) {
+		return
+	}
+
 	workerCtx, cancel := chromedp.NewContext(parent, chromedp.WithTargetID(targetID))
 	defer cancel()
 
@@ -45,7 +53,7 @@ func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, 
 		ua = b.StealthBundle.LaunchUserAgent()
 	}
 
-	persona := workerStealthPersona(ua, b.Config.ChromeVersion)
+	persona := workerStealthPersona(ua, b.Config.BrowserVersion)
 
 	if err := chromedp.Run(runCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {

@@ -2,54 +2,29 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-// HandleText extracts readable text from the current tab.
-//
 // @Endpoint GET /text
 func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
-	// --- Lite engine fast path ---
 	tabID := r.URL.Query().Get("tabId")
-	h.recordReadRequest(r, "text", tabID)
-	if h.useLite(engine.CapText, "") {
-		h.recordEngine(r, "lite")
-		result, err := h.Router.Lite().Text(r.Context(), tabID)
-		if err != nil {
-			if engine.IsIDPIBlocked(err) {
-				httpx.Error(w, http.StatusForbidden, err)
-			} else {
-				httpx.Error(w, 500, fmt.Errorf("lite text: %w", err))
-			}
-			return
-		}
-		w.Header().Set("X-Engine", "lite")
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte(result.Text))
+	effectiveCfg, textRoute, ok := h.resolveReadRouting(w, r, tabID, "text", browsers.ShapeRenderedRead)
+	if !ok {
 		return
 	}
 
-	h.recordEngine(r, "chrome")
-	w.Header().Set("X-Engine", "chrome")
-
-	// Ensure Chrome is initialized
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 
@@ -62,112 +37,90 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
+	resolvedTabID, tCtx, cancel, ok := h.resolveReadContext(w, r, tabID, effectiveCfg.ActionTimeout)
+	if !ok {
 		return
 	}
 	defer h.armAutoCloseIfEnabled(resolvedTabID)
+	defer cancel()
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
-	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
-
-	// Resolve the target frame. Explicit ?frameId= wins; otherwise fall back
-	// to the currently-scoped frame on this tab (as set by /frame). Empty
-	// means "top-level document" and preserves the prior behaviour.
-	targetFrameID := r.URL.Query().Get("frameId")
-	if targetFrameID == "" {
-		if scope, ok := h.currentFrameScope(resolvedTabID); ok {
-			targetFrameID = scope.FrameID
-		}
-	}
+	targetFrameID := h.resolveTargetFrameID(r, resolvedTabID)
 
 	// Auto-wait: if the document is still loading, wait for readyState to
 	// reach at least "interactive" before extracting text. Prevents empty or
 	// partial results when text is called before the page finishes loading.
-	waitForReadyState(tCtx)
+	h.waitForReadyState(tCtx)
 
-	// Handle element selector - extract text from specific element instead of full page
 	selectorParam := r.URL.Query().Get("selector")
 	refParam := r.URL.Query().Get("ref")
 	if selectorParam != "" || refParam != "" {
-		text, err := h.extractElementText(tCtx, resolvedTabID, selectorParam, refParam)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("element text extract: %w", err))
-			return
-		}
-		var url, title string
-		_ = chromedp.Run(tCtx,
-			chromedp.Location(&url),
-			chromedp.Title(&title),
-		)
-		h.recordResolvedURL(r, url)
-		httpx.JSON(w, 200, map[string]any{
-			"url":   url,
-			"title": title,
-			"text":  text,
-		})
+		h.writeElementText(w, r, tCtx, resolvedTabID, selectorParam, refParam)
 		return
 	}
 
+	text, err := h.extractDocumentText(tCtx, mode, targetFrameID)
+	if err != nil {
+		httpx.Error(w, 500, err)
+		return
+	}
+	h.writeTextResponse(w, r, tCtx, text, maxChars, format, textRoute)
+}
+
+// writeElementText extracts text for a single selector/ref-targeted element and
+// writes the {url,title,text} JSON response.
+func (h *Handlers) writeElementText(w http.ResponseWriter, r *http.Request, tCtx context.Context, resolvedTabID, selectorParam, refParam string) {
+	text, err := h.extractElementText(tCtx, resolvedTabID, selectorParam, refParam)
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("element text extract: %w", err))
+		return
+	}
+	url, _ := h.Bridge.CurrentURL(tCtx)
+	title, _ := h.Bridge.CurrentTitle(tCtx)
+	h.recordResolvedURL(r, url)
+	httpx.JSON(w, 200, map[string]any{
+		"url":   url,
+		"title": title,
+		"text":  text,
+	})
+}
+
+// extractDocumentText reads the document's text (readability unless mode=="raw")
+// across all reachable frames, or scoped to targetFrameID when set. The
+// cross-frame path silently skips cross-origin frames and never errors.
+func (h *Handlers) extractDocumentText(tCtx context.Context, mode, targetFrameID string) (string, error) {
 	script := `document.body.innerText`
 	if mode != "raw" {
 		script = assets.ReadabilityJS
 	}
-
-	var text string
 	if targetFrameID == "" {
-		// Cross-frame path: collect text from all reachable frames (same
-		// as snap, which auto-flattens same-origin iframes). Cross-origin
-		// frames are silently skipped because createIsolatedWorld fails.
-		text = h.extractTextAllFrames(tCtx, script)
-	} else {
-		// Frame-scoped path — evaluate in the frame's isolated world so the
-		// expression sees the iframe's `document`, not the parent's.
-		var err error
-		text, err = h.evalTextInFrame(tCtx, script, targetFrameID)
-		if err != nil {
-			httpx.Error(w, 500, err)
-			return
-		}
+		return h.extractTextAllFrames(tCtx, script), nil
 	}
+	// Frame-scoped path — evaluate in the frame's isolated world so the
+	// expression sees the iframe's `document`, not the parent's.
+	return h.evalTextInFrame(tCtx, script, targetFrameID)
+}
 
+// writeTextResponse truncates, IDPI-scans, and writes the document text as
+// plain text (format text/plain) or the JSON envelope.
+func (h *Handlers) writeTextResponse(w http.ResponseWriter, r *http.Request, tCtx context.Context, text string, maxChars int, format string, route *browserops.RouteMetadata) {
 	truncated := false
 	if maxChars > -1 && len(text) > maxChars {
 		text = text[:maxChars]
 		truncated = true
 	}
 
-	var url, title string
-	_ = chromedp.Run(tCtx,
-		chromedp.Location(&url),
-		chromedp.Title(&title),
-	)
+	url, _ := h.Bridge.CurrentURL(tCtx)
+	title, _ := h.Bridge.CurrentTitle(tCtx)
 	h.recordResolvedURL(r, url)
 
-	// IDPI: scan extracted text for injection patterns before it reaches the caller.
-	idpiResult := h.IDPIGuard.ScanContent(text)
-	if idpiResult.Blocked {
-		httpx.Error(w, http.StatusForbidden,
-			fmt.Errorf("content blocked by IDPI scanner: %s", idpiResult.Reason))
+	// IDPI: scan extracted text for injection patterns and optionally wrap.
+	result := h.ContentGuard.Scan(text, url)
+	if result.Blocked {
+		httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked by IDPI scanner: %s", result.BlockReason))
 		return
 	}
-	if idpiResult.Threat {
-		w.Header().Set("X-IDPI-Warning", idpiResult.Reason)
-		if idpiResult.Pattern != "" {
-			w.Header().Set("X-IDPI-Pattern", idpiResult.Pattern)
-		}
-	}
-
-	// IDPI: wrap plain-text content in <untrusted_web_content> delimiters so
-	// downstream LLMs treat it as data, not instructions.
-	if h.Config.IDPI.Enabled && h.Config.IDPI.WrapContent {
-		text = h.IDPIGuard.WrapContent(text, url)
-	}
+	result.SetHeaders(w)
+	text = result.Text
 
 	if format == "text" || format == "plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -181,32 +134,17 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		"title":     title,
 		"text":      text,
 		"truncated": truncated,
+		"route":     route,
 	}
-	if idpiResult.Threat {
-		resp["idpiWarning"] = idpiResult.Reason
+	if result.Warning != "" {
+		resp["idpiWarning"] = result.Warning
 	}
 	httpx.JSON(w, 200, resp)
 }
 
-// HandleTabText extracts text for a tab identified by path ID.
-//
 // @Endpoint GET /tabs/{id}/text
 func (h *Handlers) HandleTabText(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-
-	h.HandleText(w, req)
+	h.withPathTabID(w, r, h.HandleText)
 }
 
 // extractTextAllFrames evaluates the text script in every reachable frame and
@@ -217,14 +155,14 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 	if err != nil {
 		// Fallback: top frame only.
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 
 	ids := observe.FrameIDs(frameTree)
 	if len(ids) == 0 {
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 
@@ -238,7 +176,7 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 	}
 	if len(parts) == 0 {
 		var text string
-		_ = chromedp.Run(ctx, chromedp.Evaluate(script, &text))
+		_ = h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{})
 		return text
 	}
 	return strings.Join(parts, "\n\n")
@@ -247,47 +185,16 @@ func (h *Handlers) extractTextAllFrames(ctx context.Context, script string) stri
 // evalTextInFrame evaluates a text-extraction script in a specific frame's
 // isolated world and returns the result string.
 func (h *Handlers) evalTextInFrame(ctx context.Context, script, frameID string) (string, error) {
-	execID, err := bridge.FrameExecutionContextID(ctx, frameID)
-	if err != nil {
-		return "", fmt.Errorf("resolve frame context: %w", err)
-	}
-	if execID == 0 {
-		// Top frame — use the simpler chromedp path.
-		var text string
-		if err := chromedp.Run(ctx, chromedp.Evaluate(script, &text)); err != nil {
-			return "", fmt.Errorf("text extract: %w", err)
+	var text string
+	if err := h.Bridge.EvaluateInFrame(ctx, frameID, script, &text, bridge.EvalOpts{}); err != nil {
+		if frameID != "" {
+			return "", fmt.Errorf("text extract (frame %s): %w", frameID, err)
 		}
-		return text, nil
+		return "", fmt.Errorf("text extract: %w", err)
 	}
-	var raw json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    script,
-			"returnByValue": true,
-			"contextId":     execID,
-		}, &raw)
-	}))
-	if err != nil {
-		return "", fmt.Errorf("text extract (frame %s): %w", frameID, err)
-	}
-	var er struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &er); err != nil {
-		return "", fmt.Errorf("text extract parse: %w", err)
-	}
-	if er.ExceptionDetails != nil && er.ExceptionDetails.Text != "" {
-		return "", fmt.Errorf("text extract (frame %s): %s", frameID, er.ExceptionDetails.Text)
-	}
-	return er.Result.Value, nil
+	return text, nil
 }
 
-// extractElementText extracts innerText from a specific element by selector or ref.
 func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref string) (string, error) {
 	var text string
 
@@ -302,35 +209,9 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 		}
 		nodeID := target.BackendNodeID
 
-		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-			var objRes struct {
-				Object struct {
-					ObjectID string `json:"objectId"`
-				} `json:"object"`
-			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-				"backendNodeId": nodeID,
-			}, &objRes); err != nil {
-				return err
-			}
-			if objRes.Object.ObjectID == "" {
-				return fmt.Errorf("could not resolve node")
-			}
-			var callRes struct {
-				Result struct {
-					Value string `json:"value"`
-				} `json:"result"`
-			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-				"functionDeclaration": `function() { return this.innerText || this.textContent || ''; }`,
-				"objectId":            objRes.Object.ObjectID,
-				"returnByValue":       true,
-			}, &callRes); err != nil {
-				return err
-			}
-			text = callRes.Result.Value
-			return nil
-		}))
+		err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
+			`function() { return this.innerText || this.textContent || ''; }`,
+			nil, &text)
 		if err != nil {
 			return "", err
 		}
@@ -354,7 +235,7 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, selector)
 	}
 
-	if err := chromedp.Run(ctx, chromedp.Evaluate(script, &text)); err != nil {
+	if err := h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{}); err != nil {
 		return "", err
 	}
 	if text == "" {
@@ -363,28 +244,16 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 	return text, nil
 }
 
-func waitForReadyState(ctx context.Context) {
-	var state string
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
-		return
-	}
-	if state != "loading" {
-		return
-	}
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-deadline:
-			return
-		case <-time.After(100 * time.Millisecond):
-			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
-				return
-			}
-			if state != "loading" {
-				return
-			}
+func (h *Handlers) waitForReadyState(ctx context.Context) {
+	wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	// An eval error or a non-loading state both stop the wait, matching the
+	// original loop which returned (silently) on either condition.
+	_ = pollUntil(wctx, 100*time.Millisecond, func() (bool, error) {
+		var state string
+		if err := h.Bridge.Evaluate(wctx, `document.readyState`, &state, bridge.EvalOpts{}); err != nil {
+			return true, nil
 		}
-	}
+		return state != "loading", nil
+	})
 }

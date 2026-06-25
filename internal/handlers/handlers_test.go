@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -26,28 +25,45 @@ type mockBridge struct {
 	lastErrorLimit    int
 	fingerprintTabs   map[string]bool
 	frameScopes       map[string]bridge.FrameScope
-	ensureChromeErr   error
-	ensureChromeCall  int
+	ensureBrowserErr  error
+	ensureBrowserCall int
+	ensureBrowserCfg  *config.RuntimeConfig
 	dialogManager     *bridge.DialogManager
 	executeActionErr  error
 	autoCloseArmed    []string
 	autoCloseCanceled []string
+	availableActions  []string
+	navigateResult    *bridge.NavigateResult
+	navigateErr       error
+	closedTabs        []string
+	runningBrowser    string
+
+	staticFirstNavigate bool
+	staticEscalate      *bridge.StaticEscalateError
+	navigateParams      []bridge.NavigateParams
+
+	evaluateCalls int
+	evaluateExprs []string
+	evaluateFn    func(expression string, result any) error
 }
 
-func (m *mockBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *mockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if m.failTab {
 		return nil, "", fmt.Errorf("tab not found")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	return ctx, "tab1", nil
+	return bridge.NewTabHandle(ctx), "tab1", nil
 }
 
-func (m *mockBridge) ListTargets() ([]*target.Info, error) {
-	return []*target.Info{{TargetID: "tab1", Type: "page"}}, nil
+func (m *mockBridge) ListTargets() ([]bridge.TabTarget, error) {
+	return []bridge.TabTarget{{TargetID: "tab1", Type: "page"}}, nil
 }
 
 func (m *mockBridge) AvailableActions() []string {
+	if m.availableActions != nil {
+		return m.availableActions
+	}
 	return []string{bridge.ActionClick, bridge.ActionType}
 }
 
@@ -69,6 +85,7 @@ func (m *mockBridge) CloseTab(tabID string) error {
 	if tabID == "fail" {
 		return fmt.Errorf("close failed")
 	}
+	m.closedTabs = append(m.closedTabs, tabID)
 	return nil
 }
 
@@ -86,16 +103,47 @@ func (m *mockBridge) CancelAutoClose(tabID string) {
 	m.autoCloseCanceled = append(m.autoCloseCanceled, tabID)
 }
 
-func (m *mockBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
-	m.ensureChromeCall++
-	return m.ensureChromeErr
+func (m *mockBridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
+	m.ensureBrowserCall++
+	m.ensureBrowserCfg = cfg
+	return m.ensureBrowserErr
+}
+
+func (m *mockBridge) RunningBrowser() (string, bool) {
+	return m.runningBrowser, m.runningBrowser != ""
 }
 
 func (m *mockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
-func (m *mockBridge) DeleteRefCache(tabID string) {}
+func (m *mockBridge) GetRefCache(tabID string) *bridge.RefCache        { return nil }
+func (m *mockBridge) SetRefCache(tabID string, cache *bridge.RefCache) {}
+func (m *mockBridge) DeleteRefCache(tabID string)                      {}
+
+func (m *mockBridge) Navigate(_ context.Context, url string, params bridge.NavigateParams) (*bridge.NavigateResult, error) {
+	m.navigateParams = append(m.navigateParams, params)
+	if params.NoEscalate && m.staticEscalate != nil {
+		return nil, m.staticEscalate
+	}
+	if m.navigateErr != nil {
+		return nil, m.navigateErr
+	}
+	if m.navigateResult != nil {
+		return m.navigateResult, nil
+	}
+	return nil, fmt.Errorf("not implemented in test mock")
+}
+
+func (m *mockBridge) StaticFirstNavigate() bool { return m.staticFirstNavigate }
+
+func (m *mockBridge) Snapshot(_ context.Context, _ string, _ string, _ bridge.ContentParams) (*bridge.SnapshotResult, error) {
+	return nil, fmt.Errorf("not implemented in test mock")
+}
+
+func (m *mockBridge) Text(_ context.Context, _ string, _ bridge.ContentParams) (*bridge.TextResult, error) {
+	return nil, fmt.Errorf("not implemented in test mock")
+}
 
 func (m *mockBridge) TabLockInfo(tabID string) *bridge.LockInfo { return nil }
 
@@ -140,6 +188,27 @@ func (m *mockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
 
 func (m *mockBridge) ClearErrorLogs(tabID string) {}
 
+func (m *mockBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
+	m.evaluateCalls++
+	m.evaluateExprs = append(m.evaluateExprs, expression)
+	if m.evaluateFn != nil {
+		return m.evaluateFn(expression, result)
+	}
+	return nil
+}
+
+func (m *mockBridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *mockBridge) EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts bridge.EvalOpts) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *mockBridge) DescribeNode(ctx context.Context, backendNodeID int64) (*bridge.NodeInfo, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (m *mockBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {
 	return task(ctx)
 }
@@ -172,6 +241,84 @@ func (m *mockBridge) SetFingerprintRotateActive(tabID string, active bool) {
 
 func (m *mockBridge) FingerprintRotateActive(tabID string) bool {
 	return m.fingerprintTabs != nil && m.fingerprintTabs[tabID]
+}
+
+func (m *mockBridge) SetViewport(ctx context.Context, params bridge.ViewportParams) error {
+	return nil
+}
+
+func (m *mockBridge) SetGeolocation(ctx context.Context, lat, lng, accuracy float64) error {
+	return nil
+}
+
+func (m *mockBridge) SetEmulatedMedia(ctx context.Context, feature, value string) error {
+	return nil
+}
+
+func (m *mockBridge) SetNetworkConditions(ctx context.Context, params bridge.NetworkConditions) error {
+	return nil
+}
+
+func (m *mockBridge) SetExtraHTTPHeaders(ctx context.Context, headers map[string]string) error {
+	return nil
+}
+
+func (m *mockBridge) GetCookies(ctx context.Context, urls []string) ([]bridge.CookieData, error) {
+	return nil, nil
+}
+
+func (m *mockBridge) SetCookie(ctx context.Context, params bridge.SetCookieParams) error {
+	return nil
+}
+
+func (m *mockBridge) CurrentURL(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *mockBridge) CurrentTitle(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func (m *mockBridge) PrintToPDF(ctx context.Context, params bridge.PDFParams) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockBridge) SetFileInputFiles(ctx context.Context, nodeID int64, paths []string) error {
+	return nil
+}
+
+func (m *mockBridge) ResolveSelectorToNodeID(ctx context.Context, selector string) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockBridge) DownloadURL(ctx context.Context, dlURL string, opts bridge.DownloadOpts) (*bridge.DownloadResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockBridge) EnableFetchWithAuth(ctx context.Context) error                          { return nil }
+func (m *mockBridge) DisableFetch(ctx context.Context) error                                 { return nil }
+func (m *mockBridge) ListenAuthRequired(ctx context.Context, handler func(string, bool))     {}
+func (m *mockBridge) ContinueWithAuth(ctx context.Context, requestID, u, p string) error     { return nil }
+func (m *mockBridge) ContinueRequest(ctx context.Context, requestID string) error            { return nil }
+func (m *mockBridge) SetFetchPauseSuppressed(tabID string, v bool)                           {}
+func (m *mockBridge) GoBack(ctx context.Context) (bool, error)                               { return false, nil }
+func (m *mockBridge) GoForward(ctx context.Context) (bool, error)                            { return false, nil }
+func (m *mockBridge) Reload(ctx context.Context) error                                       { return nil }
+func (m *mockBridge) WaitVisible(ctx context.Context, selector string) error                 { return nil }
+func (m *mockBridge) EnableNetwork(ctx context.Context) error                                { return nil }
+func (m *mockBridge) ListenNetworkEvents(ctx context.Context, h2 bridge.NetworkEventHandler) {}
+func (m *mockBridge) SetRawCookie(ctx context.Context, p bridge.RawSetCookieParams) error    { return nil }
+func (m *mockBridge) GetRawCookies(ctx context.Context) ([]bridge.RawCookie, error)          { return nil, nil }
+func (m *mockBridge) SetUserAgentOverride(ctx context.Context, p bridge.UserAgentOverrideParams) error {
+	return nil
+}
+func (m *mockBridge) SetLocaleOverride(ctx context.Context, locale string) error { return nil }
+func (m *mockBridge) SetTimezoneOverride(ctx context.Context, tz string) error   { return nil }
+func (m *mockBridge) SetDeviceMetricsOverride(ctx context.Context, p bridge.DeviceMetricsOverrideParams) error {
+	return nil
+}
+func (m *mockBridge) AddScriptToEvaluateOnNewDocument(ctx context.Context, source string) (string, error) {
+	return "", nil
 }
 
 func TestHandlers(t *testing.T) {
@@ -320,7 +467,6 @@ func TestHandleNavigate(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, cfg, nil, nil, nil)
 
-	// 1. Valid POST request
 	body := `{"url": "https://pinchtab.com"}`
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()
@@ -331,7 +477,6 @@ func TestHandleNavigate(t *testing.T) {
 		t.Errorf("unexpected status %d: %s", w.Code, w.Body.String())
 	}
 
-	// 2. Valid GET request (ergonomic alias path style)
 	req = httptest.NewRequest("GET", "/nav?url=https%3A%2F%2Fpinchtab.com", nil)
 	w = httptest.NewRecorder()
 	h.HandleNavigate(w, req)
@@ -339,7 +484,6 @@ func TestHandleNavigate(t *testing.T) {
 		t.Errorf("unexpected status for GET navigate %d: %s", w.Code, w.Body.String())
 	}
 
-	// 3. Missing URL
 	req = httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{}`)))
 	w = httptest.NewRecorder()
 	h.HandleNavigate(w, req)
@@ -359,7 +503,6 @@ func TestHandleTab(t *testing.T) {
 	m := &mockBridge{}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 
-	// New Tab
 	body := `{"action": "new", "url": "about:blank"}`
 	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
 	w := httptest.NewRecorder()

@@ -66,11 +66,18 @@ func ApplyTargetEmulation(ctx context.Context, cfg *config.RuntimeConfig, userAg
 		return nil
 	}
 
+	if config.PinchTabStealthDefaultsDisabled(cfg) {
+		// Native Cloak does its own source-level fingerprinting; PinchTab's
+		// page/worker emulation overrides would conflict. Self-defend in case a
+		// future caller forgets to guard (all current callers already do).
+		return nil
+	}
+
 	if err := emulation.SetAutomationOverride(false).Do(ctx); err != nil {
 		return fmt.Errorf("automation override: %w", err)
 	}
 
-	if localeOverride := BuildLocaleOverride(userAgent, cfg.ChromeVersion); localeOverride != nil {
+	if localeOverride := BuildLocaleOverride(userAgent, cfg.BrowserVersion); localeOverride != nil {
 		if err := localeOverride.Do(ctx); err != nil {
 			return fmt.Errorf("locale override: %w", err)
 		}
@@ -84,7 +91,7 @@ func ApplyTargetEmulation(ctx context.Context, cfg *config.RuntimeConfig, userAg
 	// full_version field) an empty uaFullVersion — whereas the native hints are
 	// correct and self-consistent.
 	if strings.TrimSpace(userAgent) != "" {
-		if uaOverride := BuildUserAgentOverride(userAgent, cfg.ChromeVersion); uaOverride != nil {
+		if uaOverride := BuildUserAgentOverride(userAgent, cfg.BrowserVersion); uaOverride != nil {
 			if err := uaOverride.Do(ctx); err != nil {
 				return fmt.Errorf("user agent override: %w", err)
 			}

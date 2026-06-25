@@ -1,4 +1,4 @@
-# AutoSolver Architecture
+# AutoSolver
 
 ## Overview
 
@@ -163,7 +163,7 @@ The core loop executes this chain per attempt:
     "solverTimeoutSec": 30,
     "retryBaseDelayMs": 500,
     "retryMaxDelayMs": 10000,
-    "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
+    "solvers": ["cloudflare", "semantic"],
     "llmProvider": "openai",
     "llmFallback": false,
     "external": {

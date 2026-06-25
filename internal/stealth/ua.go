@@ -31,12 +31,12 @@ type BrowserPersona struct {
 	UserAgentData     UserAgentDataProfile `json:"userAgentData"`
 }
 
-// ReducedChromeVersion returns the UA-reduced (v100+) "<major>.0.0.0" form
+// ReducedBrowserVersion returns the UA-reduced (v100+) "<major>.0.0.0" form
 // of a Chrome version string. navigator.userAgent in real Chrome never carries
 // the full build — exposing it is a fingerprint tell. The full build still
 // lives in the high-entropy UA Client Hints. Falls back to the default major
 // when chromeVersion is empty so all callers agree on a single value.
-func ReducedChromeVersion(chromeVersion string) string {
+func ReducedBrowserVersion(chromeVersion string) string {
 	major := chromeVersion
 	if i := strings.Index(chromeVersion, "."); i > 0 {
 		major = chromeVersion[:i]
@@ -66,7 +66,7 @@ func ResolveUserAgent(userAgent, chromeVersion string) string {
 }
 
 func BuildPersona(userAgent, chromeVersion string) BrowserPersona {
-	reduced := ReducedChromeVersion(chromeVersion)
+	reduced := ReducedBrowserVersion(chromeVersion)
 	major := reduced
 	if i := strings.Index(reduced, "."); i > 0 {
 		major = reduced[:i]

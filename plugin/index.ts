@@ -23,7 +23,7 @@ function toRuntimeContext(ctx: PluginToolContext): PluginRuntimeContext {
   };
 }
 
-export default definePluginEntry({
+const pinchtabPlugin: ReturnType<typeof definePluginEntry> = definePluginEntry({
   id: "pinchtab",
   name: "PinchTab",
   description: "Browser control for AI agents via PinchTab.",
@@ -61,3 +61,5 @@ export default definePluginEntry({
     }
   },
 });
+
+export default pinchtabPlugin;

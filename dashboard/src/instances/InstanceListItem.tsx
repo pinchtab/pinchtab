@@ -47,7 +47,7 @@ export default function InstanceListItem({
             {instance.profileName}
           </h3>
           <div className="dashboard-mono text-xs text-text-muted">
-            :{instance.port} · {tabCount} tabs
+            :{instance.port} · {instance.browser || "chrome"} · {tabCount} tabs
             {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
           </div>
         </div>

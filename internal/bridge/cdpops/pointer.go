@@ -37,10 +37,38 @@ func validatePointerCoordinates(x, y float64) error {
 	return nil
 }
 
-func dispatchMouseEvent(ctx context.Context, payload map[string]any) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+// mouseEventAction returns a chromedp.Action that dispatches one
+// Input.dispatchMouseEvent with the given payload. Node-targeted click
+// sequences assemble several of these into a single chromedp.Run batch so the
+// trusted-CDP move/press/release steps stop being hand-rolled per call site.
+func mouseEventAction(payload map[string]any) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", payload, nil)
-	}))
+	})
+}
+
+// mousePressReleaseActions returns the left-button press/release pair at (x,y)
+// for the given clickCount (1 = single click, 2 = double click), the part
+// shared verbatim by ClickByNodeID and DoubleClickByNodeID.
+func mousePressReleaseActions(x, y float64, clickCount int) []chromedp.Action {
+	return []chromedp.Action{
+		mouseEventAction(map[string]any{
+			"type":       "mousePressed",
+			"button":     "left",
+			"clickCount": clickCount,
+			"x":          x, "y": y,
+		}),
+		mouseEventAction(map[string]any{
+			"type":       "mouseReleased",
+			"button":     "left",
+			"clickCount": clickCount,
+			"x":          x, "y": y,
+		}),
+	}
+}
+
+func dispatchMouseEvent(ctx context.Context, payload map[string]any) error {
+	return chromedp.Run(ctx, mouseEventAction(payload))
 }
 
 func dispatchRealMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {
@@ -106,25 +134,9 @@ func dispatchSyntheticMouseMove(ctx context.Context, x, y float64, button input.
 }
 
 func dispatchSyntheticMouseMoveOnNode(ctx context.Context, nodeID int64, button input.MouseButton, buttons int64) error {
-	var resolveResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &resolveResult)
-	})); err != nil {
-		return fmt.Errorf("DOM.resolveNode: %w", err)
-	}
-
-	var resolved struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(resolveResult, &resolved); err != nil {
+	objectID, err := resolveBackendNodeObjectID(ctx, nodeID)
+	if err != nil {
 		return err
-	}
-	if strings.TrimSpace(resolved.Object.ObjectID) == "" {
-		return fmt.Errorf("element not found in DOM (backendNodeId=%d)", nodeID)
 	}
 
 	const fn = `function(button, buttons) {
@@ -144,7 +156,7 @@ func dispatchSyntheticMouseMoveOnNode(ctx context.Context, nodeID int64, button 
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
 			"functionDeclaration": fn,
-			"objectId":            resolved.Object.ObjectID,
+			"objectId":            objectID,
 			"arguments": []map[string]any{
 				{"value": mouseButtonCode(button)},
 				{"value": buttons},
@@ -171,7 +183,19 @@ func MouseMoveByCoordinate(ctx context.Context, x, y float64) error {
 	return dispatchMouseMove(ctx, x, y, input.None, 0)
 }
 
-func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) error {
+// Modifiers is the CDP key-modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8)
+// held during a pointer dispatch. Input.dispatchMouseEvent accepts this value
+// verbatim under "modifiers", enabling gestures like Shift+click and
+// Cmd/Ctrl+click. The bits below mirror that encoding for the JS WheelEvent
+// path, which needs booleans instead.
+const (
+	modAlt   = 1
+	modCtrl  = 2
+	modMeta  = 4
+	modShift = 8
+)
+
+func MouseDownByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -179,12 +203,13 @@ func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) err
 		"type":       "mousePressed",
 		"button":     normalizeMouseButton(button),
 		"clickCount": 1,
+		"modifiers":  modifiers,
 		"x":          x,
 		"y":          y,
 	})
 }
 
-func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error {
+func MouseUpByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -192,12 +217,13 @@ func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error
 		"type":       "mouseReleased",
 		"button":     normalizeMouseButton(button),
 		"clickCount": 1,
+		"modifiers":  modifiers,
 		"x":          x,
 		"y":          y,
 	})
 }
 
-func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -206,30 +232,34 @@ func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY in
 	// longer reliably fires `wheel` JS listeners and can stall on the
 	// compositor ack chain. Dispatch a real WheelEvent at the point under
 	// the cursor so listeners run, then scroll the window if no listener
-	// called preventDefault().
+	// called preventDefault(). Held modifiers (Shift for horizontal scroll,
+	// Ctrl for zoom intent) are reflected on the event init.
 	expr := fmt.Sprintf(`(function() {
 		var dx = %d, dy = %d, cx = %f, cy = %f;
 		var target = document.elementFromPoint(cx, cy) || document.documentElement;
 		var ev = new WheelEvent('wheel', {
 			deltaX: dx, deltaY: dy,
 			clientX: cx, clientY: cy,
+			altKey: %t, ctrlKey: %t, metaKey: %t, shiftKey: %t,
 			bubbles: true, cancelable: true
 		});
 		if (target.dispatchEvent(ev)) {
 			window.scrollBy(dx, dy);
 		}
-	})()`, deltaX, deltaY, x, y)
+	})()`, deltaX, deltaY, x, y,
+		modifiers&modAlt != 0, modifiers&modCtrl != 0,
+		modifiers&modMeta != 0, modifiers&modShift != 0)
 	return chromedp.Run(ctx, chromedp.Evaluate(expr, nil))
 }
 
-func ClickByCoordinate(ctx context.Context, x, y float64) error {
+func ClickByCoordinate(ctx context.Context, x, y float64, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
-	if err := MouseDownByCoordinate(ctx, x, y, "left"); err != nil {
+	if err := MouseDownByCoordinate(ctx, x, y, "left", modifiers); err != nil {
 		return err
 	}
-	return MouseUpByCoordinate(ctx, x, y, "left")
+	return MouseUpByCoordinate(ctx, x, y, "left", modifiers)
 }
 
 func ClickByNodeID(ctx context.Context, nodeID int64) error {
@@ -238,43 +268,20 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 		return err
 	}
 
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type": "mouseMoved",
-				"x":    x, "y": y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mousePressed",
-				"button":     "left",
-				"clickCount": 1,
-				"x":          x, "y": y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mouseReleased",
-				"button":     "left",
-				"clickCount": 1,
-				"x":          x, "y": y,
-			}, nil)
-		}),
-		// CDP mouse events don't trigger default browser navigation on <a>
-		// elements. For links, fire a JS-level .click() so the browser
-		// follows the href.
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return jsClickIfLink(ctx, nodeID)
-		}),
-	)
+	actions := []chromedp.Action{
+		mouseEventAction(map[string]any{"type": "mouseMoved", "x": x, "y": y}),
+	}
+	actions = append(actions, mousePressReleaseActions(x, y, 1)...)
+	// CDP mouse events don't trigger default browser navigation on <a>
+	// elements. For links, fire a JS-level .click() so the browser
+	// follows the href.
+	actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
+		return jsClickIfLink(ctx, nodeID)
+	}))
+	return chromedp.Run(ctx, actions...)
 }
 
-// jsClickIfLink fires element.click() via JS if the node is an <a> with an
-// href. CDP Input.dispatchMouseEvent doesn't trigger the browser's default
-// link-navigation behavior, so this ensures anchor clicks actually navigate.
 func jsClickIfLink(ctx context.Context, nodeID int64) error {
-	// Resolve backend node to a remote object so we can call functions on it.
 	var resolved json.RawMessage
 	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
 		"backendNodeId": nodeID,
@@ -340,30 +347,15 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 		return err
 	}
 
-	return chromedp.Run(ctx,
+	actions := []chromedp.Action{
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mousePressed",
-				"button":     "left",
-				"clickCount": 2,
-				"x":          x, "y": y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mouseReleased",
-				"button":     "left",
-				"clickCount": 2,
-				"x":          x, "y": y,
-			}, nil)
-		}),
-	)
+	}
+	actions = append(actions, mousePressReleaseActions(x, y, 2)...)
+	return chromedp.Run(ctx, actions...)
 }
 
-// DragByNodeID drags an element by (dx, dy) pixels using mousePressed → mouseMoved → mouseReleased.
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int) error {
 	x, y, err := PointerPointForNode(ctx, nodeID, true)
 	if err != nil {
@@ -412,8 +404,8 @@ func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	return MouseMoveByCoordinate(ctx, x, y)
 }
 
-func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
-	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY)
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY, modifiers)
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
@@ -523,53 +515,42 @@ func resolveBackendNodeObjectID(ctx context.Context, backendNodeID int64) (strin
 	return out.Object.ObjectID, nil
 }
 
+// callFunctionOnBackendNode resolves the backend node to a Runtime object and
+// invokes fn against it via Runtime.callFunctionOn. The JS click variants share
+// this resolve-then-invoke wrapper and differ only in the fn they pass, so a
+// future fix to the JS fallback path lands here once.
+func callFunctionOnBackendNode(ctx context.Context, backendNodeID int64, fn string) error {
+	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
+	if err != nil {
+		return err
+	}
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": fn,
+			"objectId":            objectID,
+		}, nil)
+	}))
+}
+
 // JSClickByBackendNode performs a click via Runtime.callFunctionOn rather
 // than synthesized CDP Input.dispatchMouseEvent. Headless Chromium's CDP
 // path can stall ~5s waiting on the renderer ack chain for press/release;
 // the JS path runs the same handler chain (mousedown, mouseup, click) plus
 // the browser's default action (el.click()) without the ack tax.
 func JSClickByBackendNode(ctx context.Context, backendNodeID int64) error {
-	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
-	if err != nil {
-		return err
-	}
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": jsClickFn,
-			"objectId":            objectID,
-		}, nil)
-	}))
+	return callFunctionOnBackendNode(ctx, backendNodeID, jsClickFn)
 }
 
 // JSDispatchClickByBackendNode dispatches synthetic pointer/mouse events on the
 // target element without invoking element.click(). This bypasses occlusion while
 // staying closer to the browser event sequence than a DOM click.
 func JSDispatchClickByBackendNode(ctx context.Context, backendNodeID int64) error {
-	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
-	if err != nil {
-		return err
-	}
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": jsDispatchClickFn,
-			"objectId":            objectID,
-		}, nil)
-	}))
+	return callFunctionOnBackendNode(ctx, backendNodeID, jsDispatchClickFn)
 }
 
-// JSDoubleClickByBackendNode is the dblclick counterpart of JSClickByBackendNode.
 func JSDoubleClickByBackendNode(ctx context.Context, backendNodeID int64) error {
 	if _, _, err := PointerPointForNode(ctx, backendNodeID, true); err != nil {
 		return err
 	}
-	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
-	if err != nil {
-		return err
-	}
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": jsDoubleClickFn,
-			"objectId":            objectID,
-		}, nil)
-	}))
+	return callFunctionOnBackendNode(ctx, backendNodeID, jsDoubleClickFn)
 }

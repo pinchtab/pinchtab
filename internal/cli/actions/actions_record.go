@@ -1,7 +1,9 @@
 package actions
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"github.com/spf13/cobra"
 )
 
@@ -91,32 +94,38 @@ func RecordStop(client *http.Client, base, token string) {
 		fmt.Sprintf("Encoding %d frames...", result.Frames)))
 
 	serverPath := result.Path
-	for i := 0; i < 300; i++ {
-		time.Sleep(time.Second)
-		statusRaw := apiclient.DoGetRaw(client, base, token, "/record/status", nil)
-		if statusRaw == nil {
-			continue
+	err = readiness.WaitForRecordEncode(context.Background(), func() ([]byte, error) {
+		raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil)
+		if raw == nil {
+			return nil, errors.New("no status response")
 		}
-		var s struct {
-			State string `json:"state"`
-			Error string `json:"error"`
+		return raw, nil
+	})
+	switch {
+	case errors.Is(err, readiness.ErrNotReady):
+		cli.Fatal("Encoding timed out — file may be at %s", serverPath)
+	case err != nil:
+		cli.Fatal("Encoding failed: %s", strings.TrimPrefix(err.Error(), "encode failed: "))
+	}
+
+	var warning string
+	if raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil); raw != nil {
+		var st struct {
+			Warning string `json:"warning"`
 		}
-		if json.Unmarshal(statusRaw, &s) != nil {
-			continue
-		}
-		if s.State == "finished" || s.State == "idle" {
-			if s.Error != "" {
-				cli.Fatal("Encoding failed: %s", s.Error)
-			}
-			if err := os.Rename(serverPath, outFile); err != nil {
-				cli.Fatal("Failed to move %s → %s: %v", serverPath, outFile, err)
-			}
-			fmt.Println(cli.StyleStdout(cli.SuccessStyle,
-				fmt.Sprintf("Saved → %s", outFile)))
-			return
+		if json.Unmarshal(raw, &st) == nil {
+			warning = st.Warning
 		}
 	}
-	cli.Fatal("Encoding timed out — file may be at %s", serverPath)
+
+	if err := os.Rename(serverPath, outFile); err != nil {
+		cli.Fatal("Failed to move %s → %s: %v", serverPath, outFile, err)
+	}
+	fmt.Println(cli.StyleStdout(cli.SuccessStyle,
+		fmt.Sprintf("Saved → %s", outFile)))
+	if warning != "" {
+		fmt.Println(cli.StyleStdout(cli.WarningStyle, "Warning: "+warning))
+	}
 }
 
 func RecordStatus(client *http.Client, base, token string) {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
@@ -33,8 +34,8 @@ func TestHandleNavigate_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandleNavigate_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
-	m := &mockBridge{ensureChromeErr: fmt.Errorf("bridge init failed")}
+func TestHandleNavigate_EnsureBrowserFailureStopsBeforeCreateTab(t *testing.T) {
+	m := &mockBridge{ensureBrowserErr: fmt.Errorf("bridge init failed")}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"about:blank"}`)))
@@ -44,19 +45,19 @@ func TestHandleNavigate_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
 	if w.Code != 500 {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
-	if m.ensureChromeCall != 1 {
-		t.Fatalf("expected EnsureChrome to be called once, got %d", m.ensureChromeCall)
+	if m.ensureBrowserCall != 1 {
+		t.Fatalf("expected EnsureBrowser to be called once, got %d", m.ensureBrowserCall)
 	}
 	if len(m.createTabURLs) != 0 {
-		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
+		t.Fatalf("CreateTab should not be called when EnsureBrowser fails, got %v", m.createTabURLs)
 	}
-	if !strings.Contains(w.Body.String(), "chrome initialization") {
-		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "browser initialization") {
+		t.Fatalf("expected browser initialization error, got %s", w.Body.String())
 	}
 }
 
-func TestHandleTab_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
-	m := &mockBridge{ensureChromeErr: fmt.Errorf("bridge init failed")}
+func TestHandleTab_EnsureBrowserFailureStopsBeforeCreateTab(t *testing.T) {
+	m := &mockBridge{ensureBrowserErr: fmt.Errorf("bridge init failed")}
 	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
 
 	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(`{"action":"new","url":"about:blank"}`)))
@@ -66,14 +67,14 @@ func TestHandleTab_EnsureChromeFailureStopsBeforeCreateTab(t *testing.T) {
 	if w.Code != 500 {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
-	if m.ensureChromeCall != 1 {
-		t.Fatalf("expected EnsureChrome to be called once, got %d", m.ensureChromeCall)
+	if m.ensureBrowserCall != 1 {
+		t.Fatalf("expected EnsureBrowser to be called once, got %d", m.ensureBrowserCall)
 	}
 	if len(m.createTabURLs) != 0 {
-		t.Fatalf("CreateTab should not be called when EnsureChrome fails, got %v", m.createTabURLs)
+		t.Fatalf("CreateTab should not be called when EnsureBrowser fails, got %v", m.createTabURLs)
 	}
-	if !strings.Contains(w.Body.String(), "chrome initialization") {
-		t.Fatalf("expected chrome initialization error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "browser initialization") {
+		t.Fatalf("expected browser initialization error, got %s", w.Body.String())
 	}
 }
 
@@ -84,8 +85,24 @@ func TestValidateNavigateURL_RejectsUnsupportedSchemes(t *testing.T) {
 		"chrome://settings",
 		"data:text/html,hello",
 	} {
-		if err := validateNavigateURL(rawURL); err == nil {
+		if err := validateNavigateURL(rawURL, false); err == nil {
 			t.Fatalf("validateNavigateURL(%q) should reject unsupported schemes", rawURL)
+		}
+	}
+}
+
+func TestValidateNavigateURL_GatesFileScheme(t *testing.T) {
+	const fileURL = "file:///tmp/pinchtab.html"
+	if err := validateNavigateURL(fileURL, false); err == nil {
+		t.Fatal("validateNavigateURL(file, false) should reject file:// when not opted in")
+	}
+	if err := validateNavigateURL(fileURL, true); err != nil {
+		t.Fatalf("validateNavigateURL(file, true) error = %v", err)
+	}
+	// The opt-in is scoped to file:// only; other schemes stay rejected.
+	for _, rawURL := range []string{"javascript:alert(1)", "chrome://settings", "data:text/html,hello"} {
+		if err := validateNavigateURL(rawURL, true); err == nil {
+			t.Fatalf("validateNavigateURL(%q, true) should still reject", rawURL)
 		}
 	}
 }
@@ -102,7 +119,7 @@ func TestValidateNavigateTarget_AllowsLocalHosts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("validateNavigateTarget(%q) error = %v", rawURL, err)
 		}
-		if target == nil || !target.allowInternal {
+		if target == nil || !target.AllowInternal {
 			t.Fatalf("validateNavigateTarget(%q) should allow local targets", rawURL)
 		}
 	}
@@ -124,6 +141,46 @@ func TestValidateNavigateTarget_RejectsResolvedPrivateIP(t *testing.T) {
 	}
 }
 
+func TestValidateNavigateTarget_AllowsDualStackPublicResolution(t *testing.T) {
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{
+			net.ParseIP("2606:2800:220:1:248:1893:25c8:1946"),
+			net.ParseIP("93.184.216.34"),
+		}, nil
+	})
+
+	if _, err := validateNavigateTarget("https://dual.example/app", false, nil); err != nil {
+		t.Fatalf("validateNavigateTarget should allow public dual-stack resolution: %v", err)
+	}
+}
+
+func TestValidateNavigateTarget_RejectsMixedPublicPrivateDualStackResolution(t *testing.T) {
+	tests := []struct {
+		name string
+		ips  []net.IP
+	}{
+		{
+			name: "private-v6-first",
+			ips:  []net.IP{net.ParseIP("fd00::10"), net.ParseIP("93.184.216.34")},
+		},
+		{
+			name: "public-v4-first",
+			ips:  []net.IP{net.ParseIP("93.184.216.34"), net.ParseIP("fd00::10")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+				return tt.ips, nil
+			})
+
+			if _, err := validateNavigateTarget("https://mixed.example/app", false, nil); err == nil {
+				t.Fatal("validateNavigateTarget should reject mixed public/private DNS answers")
+			}
+		})
+	}
+}
+
 func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted(t *testing.T) {
 	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("172.18.0.5")}, nil
@@ -133,8 +190,14 @@ func TestValidateNavigateTarget_AllowsResolvedPrivateIPWhenExplicitlyAllowlisted
 	if err != nil {
 		t.Fatalf("validateNavigateTarget should allow explicitly allowlisted private targets: %v", err)
 	}
-	if target == nil || !target.allowInternal {
-		t.Fatal("validateNavigateTarget should mark explicitly allowlisted private targets as allowed")
+	if target == nil {
+		t.Fatal("validateNavigateTarget returned nil target")
+	}
+	if target.AllowInternal {
+		t.Fatal("allowlisted private targets should not disable redirect/internal-IP runtime guards")
+	}
+	if len(target.TrustedResolvedIP) != 1 || target.TrustedResolvedIP[0] != netip.MustParseAddr("172.18.0.5") {
+		t.Fatalf("trustedResolvedIP = %v, want [172.18.0.5]", target.TrustedResolvedIP)
 	}
 }
 
@@ -145,15 +208,15 @@ func TestValidateNavigateURL_AllowsHTTPHTTPSAndBareHostnames(t *testing.T) {
 		"pinchtab.com",
 		"about:blank",
 	} {
-		if err := validateNavigateURL(rawURL); err != nil {
+		if err := validateNavigateURL(rawURL, false); err != nil {
 			t.Fatalf("validateNavigateURL(%q) error = %v", rawURL, err)
 		}
 	}
 }
 
 func TestValidateNavigateURL_RejectsOverlongURL(t *testing.T) {
-	rawURL := "https://pinchtab.com/" + strings.Repeat("a", maxNavigateURLLen)
-	if err := validateNavigateURL(rawURL); err == nil {
+	rawURL := "https://pinchtab.com/" + strings.Repeat("a", navguard.MaxURLLen)
+	if err := validateNavigateURL(rawURL, false); err == nil {
 		t.Fatal("validateNavigateURL should reject overlong urls")
 	}
 }
@@ -174,6 +237,56 @@ func TestHandleNavigate_RejectsUnsupportedSchemeBeforeCreateTab(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "invalid URL scheme") {
 		t.Fatalf("expected invalid URL scheme error, got %s", w.Body.String())
+	}
+}
+
+func TestHandleNavigate_AllowsFileSchemeWhenEnabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{AllowFileScheme: true}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"file:///tmp/pinchtab.html"}`)))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme navigate to proceed past validation, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for opted-in file scheme navigation")
+	}
+}
+
+func TestHandleTab_AllowsFileSchemeWhenEnabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{AllowFileScheme: true}, nil, nil, nil)
+
+	body := `{"action":"new","url":"file:///tmp/pinchtab.html"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 200 && w.Code != 500 {
+		t.Fatalf("expected file scheme tab creation to proceed, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) == 0 {
+		t.Fatal("expected CreateTab to be called for opted-in file scheme tab creation")
+	}
+}
+
+func TestHandleTab_RejectsFileSchemeWhenDisabled(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+
+	body := `{"action":"new","url":"file:///etc/passwd"}`
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("expected 400 for file scheme when AllowFileScheme is off, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.createTabURLs) != 0 {
+		t.Fatalf("CreateTab should not be called for rejected file scheme, got %v", m.createTabURLs)
 	}
 }
 
@@ -202,11 +315,11 @@ func TestValidateNavigateTarget_AllowsPrivateIPWithTrustedResolveCIDR(t *testing
 	if err != nil {
 		t.Fatalf("expected trusted CIDR to allow private IP, got %v", err)
 	}
-	if target == nil || target.allowInternal {
+	if target == nil || target.AllowInternal {
 		t.Fatal("trusted CIDR override should not set allowInternal (runtime guard should still be active)")
 	}
-	if len(target.trustedResolvedIP) != 1 || target.trustedResolvedIP[0] != netip.MustParseAddr("10.0.0.5") {
-		t.Fatalf("expected exact trusted resolved IPs to be captured, got %v", target.trustedResolvedIP)
+	if len(target.TrustedResolvedIP) != 1 || target.TrustedResolvedIP[0] != netip.MustParseAddr("10.0.0.5") {
+		t.Fatalf("expected exact trusted resolved IPs to be captured, got %v", target.TrustedResolvedIP)
 	}
 }
 
@@ -339,7 +452,7 @@ func TestHandleNavigate_AllowsResolvedPrivateIPWhenIDPIAllowlisted(t *testing.T)
 
 func TestHandleNavigate_RejectsOverlongURL(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
-	longURL := "https://pinchtab.com/" + strings.Repeat("a", maxNavigateURLLen)
+	longURL := "https://pinchtab.com/" + strings.Repeat("a", navguard.MaxURLLen)
 
 	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"`+longURL+`"}`)))
 	w := httptest.NewRecorder()

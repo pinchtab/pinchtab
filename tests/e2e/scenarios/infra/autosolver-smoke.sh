@@ -6,17 +6,34 @@ source "${GROUP_DIR}/../../helpers/autosolver.sh"
 
 autosolver_use_medium_server
 
-autosolver_run_score_case \
-  "autosolver: bot-detect baseline" \
-  "bot-detect" \
-  "bot-detect.html" \
-  "JSON.stringify(window.__botDetectScore || null)" \
-  "JSON.stringify(window.__botDetectResults || {})" \
-  "webdriver_value" \
-  "plugins_present" \
-  "chrome_runtime" \
-  "no_cdp_traces" \
-  "ua_not_headless"
+if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
+  autosolver_run_score_case_allowing_failures \
+    "autosolver: bot-detect baseline" \
+    "bot-detect" \
+    "bot-detect.html" \
+    "JSON.stringify(window.__botDetectScore || null)" \
+    "JSON.stringify(window.__botDetectResults || {})" \
+    "chrome_runtime,useragentdata_exists,useragentdata_highentropy" \
+    "webdriver_value" \
+    "plugins_present" \
+    "chrome_runtime" \
+    "useragentdata_exists" \
+    "useragentdata_highentropy" \
+    "no_cdp_traces" \
+    "ua_not_headless"
+else
+  autosolver_run_score_case \
+    "autosolver: bot-detect baseline" \
+    "bot-detect" \
+    "bot-detect.html" \
+    "JSON.stringify(window.__botDetectScore || null)" \
+    "JSON.stringify(window.__botDetectResults || {})" \
+    "webdriver_value" \
+    "plugins_present" \
+    "chrome_runtime" \
+    "no_cdp_traces" \
+    "ua_not_headless"
+fi
 
 autosolver_run_score_case \
   "autosolver: cdp-detect baseline" \

@@ -2,12 +2,57 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	security := h.endpointSecurityStates()
+
+	paths := map[string]map[string]any{}
+	addOp := func(path, method string, op map[string]any) {
+		m := paths[path]
+		if m == nil {
+			m = map[string]any{}
+			paths[path] = m
+		}
+		m[strings.ToLower(method)] = op
+	}
+
+	operationFor := func(ep routes.Endpoint) map[string]any {
+		op := map[string]any{"summary": ep.Summary}
+		if ep.Capability != routes.CapNone {
+			if st, ok := security[string(ep.Capability)]; ok {
+				op["description"] = st.Message
+				op["x-pinchtab-enabled"] = st.Enabled
+			}
+		}
+		return op
+	}
+
+	// Baseline: every catalog route. Root entry unless the endpoint is registered
+	// only in its /tabs/{id}/... form, plus the tab-scoped variant where applicable.
+	for _, ep := range routes.Core() {
+		if !tabOnlyRoutes[ep.Route()] {
+			addOp(ep.Path, ep.Method, operationFor(ep))
+		}
+		if ep.TabScoped {
+			addOp("/tabs/{id}"+ep.Path, ep.Method, operationFor(ep))
+		}
+	}
+
+	// Non-catalog meta/docs/alias routes (registered outside the catalog loop).
+	// Management routes (/ensure-*, /shutdown, /openapi.json) stay undocumented.
+	addOp("/health", "GET", map[string]any{"summary": "Health"})
+	addOp("/browser/restart", "POST", map[string]any{"summary": "Soft restart the browser process without restarting the bridge"})
+	addOp("/tabs", "GET", map[string]any{"summary": "List tabs"})
+	addOp("/help", "GET", map[string]any{"summary": "Alias for /openapi.json"})
+	addOp("/navigate", "GET", map[string]any{"summary": "Navigate (query params)"})
+	addOp("/action", "GET", map[string]any{"summary": "Single action (query params)"})
+
+	// Per-operation extras layered onto the generated ops.
 	evaluateRequestBody := map[string]any{
 		"required": true,
 		"content": map[string]any{
@@ -33,6 +78,20 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 			},
 		},
 	}
+	for _, p := range []string{"/evaluate", "/tabs/{id}/evaluate"} {
+		if op, ok := paths[p]["post"].(map[string]any); ok {
+			op["requestBody"] = evaluateRequestBody
+		}
+	}
+	if op, ok := paths["/text"]["get"].(map[string]any); ok {
+		op["parameters"] = []map[string]any{
+			{"name": "maxChars", "in": "query", "schema": map[string]string{"type": "integer"}},
+			{"name": "format", "in": "query", "schema": map[string]string{"type": "string"}},
+			{"name": "mode", "in": "query", "schema": map[string]string{"type": "string"}},
+			{"name": "frameId", "in": "query", "schema": map[string]string{"type": "string"}},
+		}
+	}
+
 	httpx.JSON(w, 200, map[string]any{
 		"openapi": "3.0.0",
 		"info": map[string]any{
@@ -40,155 +99,6 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 			"version": "0.7.x-local",
 		},
 		"x-pinchtab-security": security,
-		"paths": map[string]any{
-			"/health":            map[string]any{"get": map[string]any{"summary": "Health"}},
-			"/browser/restart":   map[string]any{"post": map[string]any{"summary": "Soft restart the browser process without restarting the bridge"}},
-			"/tabs":              map[string]any{"get": map[string]any{"summary": "List tabs"}},
-			"/tabs/{id}/close":   map[string]any{"post": map[string]any{"summary": "Close a specific tab"}},
-			"/tabs/{id}/handoff": map[string]any{"post": map[string]any{"summary": "Pause tab automation for human handoff"}, "get": map[string]any{"summary": "Get tab handoff status"}},
-			"/tabs/{id}/resume":  map[string]any{"post": map[string]any{"summary": "Resume tab automation after handoff"}},
-			"/metrics":           map[string]any{"get": map[string]any{"summary": "Runtime metrics"}},
-			"/help":              map[string]any{"get": map[string]any{"summary": "Alias for /openapi.json"}},
-			"/text":              map[string]any{"get": map[string]any{"summary": "Extract text", "parameters": []map[string]any{{"name": "maxChars", "in": "query", "schema": map[string]string{"type": "integer"}}, {"name": "format", "in": "query", "schema": map[string]string{"type": "string"}}, {"name": "mode", "in": "query", "schema": map[string]string{"type": "string"}}, {"name": "frameId", "in": "query", "schema": map[string]string{"type": "string"}}}}},
-			"/navigate":          map[string]any{"post": map[string]any{"summary": "Navigate"}, "get": map[string]any{"summary": "Navigate (query params)"}},
-			"/nav":               map[string]any{"get": map[string]any{"summary": "Navigate alias"}},
-			"/close":             map[string]any{"post": map[string]any{"summary": "Close a tab by tabId, or the current/default tab when omitted"}},
-			"/action":            map[string]any{"post": map[string]any{"summary": "Single action"}, "get": map[string]any{"summary": "Single action (query params)"}},
-			"/actions":           map[string]any{"post": map[string]any{"summary": "Batch actions"}},
-			"/snapshot":          map[string]any{"get": map[string]any{"summary": "Accessibility snapshot"}},
-			"/capture":           map[string]any{"get": map[string]any{"summary": "Paired screenshot + accessibility snapshot from the same DOM epoch"}},
-			"/tabs/{id}/capture": map[string]any{"get": map[string]any{"summary": "Paired screenshot + snapshot for a specific tab"}},
-			"/evaluate": map[string]any{"post": map[string]any{
-				"summary":            "Run JavaScript in the current tab",
-				"description":        security["evaluate"].Message,
-				"requestBody":        evaluateRequestBody,
-				"x-pinchtab-enabled": security["evaluate"].Enabled,
-			}},
-			"/tabs/{id}/evaluate": map[string]any{"post": map[string]any{
-				"summary":            "Run JavaScript in a specific tab",
-				"description":        security["evaluate"].Message,
-				"requestBody":        evaluateRequestBody,
-				"x-pinchtab-enabled": security["evaluate"].Enabled,
-			}},
-			"/macro": map[string]any{"post": map[string]any{
-				"summary":            "Macro action pipeline",
-				"description":        security["macro"].Message,
-				"x-pinchtab-enabled": security["macro"].Enabled,
-			}},
-			"/download": map[string]any{"get": map[string]any{
-				"summary":            "Download a URL using the browser session",
-				"description":        security["download"].Message,
-				"x-pinchtab-enabled": security["download"].Enabled,
-			}},
-			"/tabs/{id}/download": map[string]any{"get": map[string]any{
-				"summary":            "Download a URL with a specific tab context",
-				"description":        security["download"].Message,
-				"x-pinchtab-enabled": security["download"].Enabled,
-			}},
-			"/upload": map[string]any{"post": map[string]any{
-				"summary":            "Set files on a file input",
-				"description":        security["upload"].Message,
-				"x-pinchtab-enabled": security["upload"].Enabled,
-			}},
-			"/tabs/{id}/upload": map[string]any{"post": map[string]any{
-				"summary":            "Set files on a file input in a specific tab",
-				"description":        security["upload"].Message,
-				"x-pinchtab-enabled": security["upload"].Enabled,
-			}},
-			"/screencast": map[string]any{"get": map[string]any{
-				"summary":            "Stream live tab frames",
-				"description":        security["screencast"].Message,
-				"x-pinchtab-enabled": security["screencast"].Enabled,
-			}},
-			"/screencast/tabs": map[string]any{"get": map[string]any{
-				"summary":            "List tabs available for live capture",
-				"description":        security["screencast"].Message,
-				"x-pinchtab-enabled": security["screencast"].Enabled,
-			}},
-			"/record/start": map[string]any{"post": map[string]any{
-				"summary":            "Start recording browser activity to video",
-				"description":        security["screencast"].Message,
-				"x-pinchtab-enabled": security["screencast"].Enabled,
-			}},
-			"/record/stop": map[string]any{"post": map[string]any{
-				"summary":            "Stop recording and return encoded file",
-				"description":        security["screencast"].Message,
-				"x-pinchtab-enabled": security["screencast"].Enabled,
-			}},
-			"/record/status": map[string]any{"get": map[string]any{
-				"summary":            "Check recording status",
-				"description":        security["screencast"].Message,
-				"x-pinchtab-enabled": security["screencast"].Enabled,
-			}},
-			"/storage": map[string]any{
-				"get": map[string]any{
-					"summary":            "Get localStorage/sessionStorage items (current origin only)",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-				"post": map[string]any{
-					"summary":            "Set a storage item",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-				"delete": map[string]any{
-					"summary":            "Delete storage items or clear storage",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-			},
-			"/tabs/{id}/storage": map[string]any{
-				"get": map[string]any{
-					"summary":            "Get localStorage/sessionStorage items for a specific tab",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-				"post": map[string]any{
-					"summary":            "Set a storage item for a specific tab",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-				"delete": map[string]any{
-					"summary":            "Delete storage items for a specific tab",
-					"description":        security["stateExport"].Message,
-					"x-pinchtab-enabled": security["stateExport"].Enabled,
-				},
-			},
-			// CapStateExport-gated endpoints
-			"/state": map[string]any{"get": map[string]any{
-				"summary":            "Read current browser state for a tab",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}, "delete": map[string]any{
-				"summary":            "Delete a saved state file",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-			"/state/list": map[string]any{"get": map[string]any{
-				"summary":            "List saved state files",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-			"/state/show": map[string]any{"get": map[string]any{
-				"summary":            "Show state file details",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-			"/state/save": map[string]any{"post": map[string]any{
-				"summary":            "Save browser state (cookies, storage, metadata)",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-			"/state/load": map[string]any{"post": map[string]any{
-				"summary":            "Load and restore browser state",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-			"/state/clean": map[string]any{"post": map[string]any{
-				"summary":            "Clean old state files",
-				"description":        security["stateExport"].Message,
-				"x-pinchtab-enabled": security["stateExport"].Enabled,
-			}},
-		},
+		"paths":               paths,
 	})
 }

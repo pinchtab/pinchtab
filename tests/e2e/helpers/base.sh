@@ -146,6 +146,15 @@ skip_assert() {
   ((ASSERTIONS_SKIPPED++)) || true
 }
 
+# skip_test marks the current test as skipped with a reason; it does not
+# increment failures. Must be paired with end_test as usual. The recorded
+# duration counts only the time up to the skip call.
+skip_test() {
+  local reason="${1:-skipped}"
+  echo -e "  ${YELLOW}⚠ skipped:${NC} ${reason}"
+  ((ASSERTIONS_SKIPPED++)) || true
+}
+
 soft_pass_assert() {
   echo -e "  ${YELLOW}~${NC} ${1:-}"
   ((ASSERTIONS_PASSED++)) || true

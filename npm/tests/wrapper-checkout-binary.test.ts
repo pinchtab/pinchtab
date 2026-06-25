@@ -4,30 +4,21 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { findRepoRoot } from '../src/platform';
 
 function getTestRepoRoot(): string {
-  let dir = path.resolve(__dirname);
-
-  while (dir) {
-    if (
-      fs.existsSync(path.join(dir, 'go.mod')) &&
-      fs.existsSync(path.join(dir, 'cmd', 'pinchtab'))
-    ) {
-      return dir;
-    }
-
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
+  const root = findRepoRoot(__dirname);
+  if (!root) {
+    throw new Error(`Could not find repo root from ${__dirname}`);
   }
-
-  throw new Error(`Could not find repo root from ${__dirname}`);
+  return root;
 }
 
 const repoRoot = getTestRepoRoot();
 const sourceWrapperPath = path.join(repoRoot, 'npm', 'bin', 'pinchtab');
+// The wrapper requires the compiled shared helpers (dist/src/platform.js), so a
+// fake checkout must stage them too — published packages ship dist/ alongside bin/.
+const compiledPlatformPath = path.join(repoRoot, 'npm', 'dist', 'src', 'platform.js');
 const tempRoots: string[] = [];
 
 function createFakeCheckout(stdoutText: string, recordPath: string) {
@@ -36,8 +27,10 @@ function createFakeCheckout(stdoutText: string, recordPath: string) {
 
   fs.mkdirSync(path.join(tempRoot, 'cmd', 'pinchtab'), { recursive: true });
   fs.mkdirSync(path.join(tempRoot, 'npm', 'bin'), { recursive: true });
+  fs.mkdirSync(path.join(tempRoot, 'npm', 'dist', 'src'), { recursive: true });
   fs.writeFileSync(path.join(tempRoot, 'go.mod'), 'module test/pinchtab\n');
   fs.copyFileSync(sourceWrapperPath, path.join(tempRoot, 'npm', 'bin', 'pinchtab'));
+  fs.copyFileSync(compiledPlatformPath, path.join(tempRoot, 'npm', 'dist', 'src', 'platform.js'));
 
   const contents = `#!/usr/bin/env node
 const fs = require('fs');

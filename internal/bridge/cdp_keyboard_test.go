@@ -58,6 +58,52 @@ func TestDispatchNamedKey_NonPrintableNoInsertText(t *testing.T) {
 	}
 }
 
+// TestDispatchNamedKey_ModifiersNotTyped is the regression test for issue #588:
+// modifier keys (Shift/Control/Alt/Meta) must be recognised named keys with an
+// empty insertText so they dispatch keyDown/keyUp events instead of falling
+// through to chromedp.KeyEvent, which would type the literal name (e.g. "Shift")
+// into the focused field.
+func TestDispatchNamedKey_ModifiersNotTyped(t *testing.T) {
+	for _, k := range []string{"Shift", "Control", "Alt", "Meta"} {
+		def, ok := namedKeyDefs[k]
+		if !ok {
+			t.Errorf("modifier %q must be a recognised named key (else it gets typed as text)", k)
+			continue
+		}
+		if def.insertText != "" {
+			t.Errorf("modifier %q must have empty insertText, got %q (would type literal text)", k, def.insertText)
+		}
+		if def.code == "" || def.virtualKey == 0 {
+			t.Errorf("modifier %q must carry a code and virtualKey, got code=%q vk=%d", k, def.code, def.virtualKey)
+		}
+	}
+}
+
+// TestPrintableShortcutKey verifies the code/virtual-key mapping used to dispatch
+// keyboard chords (Ctrl+C, Cmd+A, …) on printable keys.
+func TestPrintableShortcutKey(t *testing.T) {
+	cases := []struct {
+		key      string
+		wantCode string
+		wantVK   int64
+		wantOK   bool
+	}{
+		{"c", "KeyC", 67, true}, // Ctrl+C
+		{"a", "KeyA", 65, true}, // Cmd/Ctrl+A
+		{"C", "KeyC", 67, true}, // already-uppercase maps the same
+		{"5", "Digit5", 53, true},
+		{"Enter", "", 0, false}, // multi-char → not a printable shortcut key
+		{"-", "", 0, false},     // unmapped punctuation
+	}
+	for _, tc := range cases {
+		code, vk, ok := printableShortcutKey(tc.key)
+		if ok != tc.wantOK || code != tc.wantCode || vk != tc.wantVK {
+			t.Errorf("printableShortcutKey(%q) = (%q,%d,%v), want (%q,%d,%v)",
+				tc.key, code, vk, ok, tc.wantCode, tc.wantVK, tc.wantOK)
+		}
+	}
+}
+
 // TestDispatchNamedKey_ReturnAlias verifies that "Return" is an alias for
 // Enter and produces the same CDP parameters.
 func TestDispatchNamedKey_ReturnAlias(t *testing.T) {
@@ -76,7 +122,7 @@ func TestDispatchNamedKey_FallbackOnCancelledCtx(t *testing.T) {
 	cancel()
 
 	// "a" is not in namedKeyDefs → falls back to chromedp.KeyEvent
-	err := DispatchNamedKey(ctx, "a")
+	err := DispatchNamedKey(ctx, "a", 0)
 	if err == nil {
 		t.Error("expected error dispatching key on cancelled context")
 	}
@@ -88,7 +134,7 @@ func TestDispatchNamedKey_KnownKeyOnCancelledCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := DispatchNamedKey(ctx, "Enter")
+	err := DispatchNamedKey(ctx, "Enter", 0)
 	if err == nil {
 		t.Error("expected error dispatching Enter on cancelled context")
 	}

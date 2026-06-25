@@ -1,22 +1,64 @@
 package profiles
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
+
+type profileResponse struct {
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Path              string    `json:"path"`
+	PathExists        bool      `json:"pathExists"`
+	Created           time.Time `json:"created"`
+	LastUsed          time.Time `json:"lastUsed"`
+	DiskUsage         int64     `json:"diskUsage"`
+	SizeMB            float64   `json:"sizeMB"`
+	Running           bool      `json:"running"`
+	Source            string    `json:"source"`
+	ChromeProfileName string    `json:"chromeProfileName"`
+	AccountEmail      string    `json:"accountEmail"`
+	AccountName       string    `json:"accountName"`
+	HasAccount        bool      `json:"hasAccount"`
+	UseWhen           string    `json:"useWhen"`
+	Description       string    `json:"description"`
+}
+
+func newProfileResponse(p bridge.ProfileInfo) profileResponse {
+	return profileResponse{
+		ID:                p.ID,
+		Name:              p.Name,
+		Path:              p.Path,
+		PathExists:        p.PathExists,
+		Created:           p.Created,
+		LastUsed:          p.LastUsed,
+		DiskUsage:         p.DiskUsage,
+		SizeMB:            float64(p.DiskUsage) / (1024 * 1024),
+		Running:           p.Running,
+		Source:            p.Source,
+		ChromeProfileName: p.ChromeProfileName,
+		AccountEmail:      p.AccountEmail,
+		AccountName:       p.AccountName,
+		HasAccount:        p.HasAccount,
+		UseWhen:           p.UseWhen,
+		Description:       p.Description,
+	}
+}
 
 func profileMutationStatus(err error) int {
 	switch {
 	case err == nil:
 		return http.StatusOK
-	case isProfileNameValidationError(err):
+	case errors.Is(err, ErrInvalidProfileName):
 		return http.StatusBadRequest
-	case strings.Contains(err.Error(), "already exists"):
+	case errors.Is(err, ErrProfileExists), errors.Is(err, ErrProfileDirExists):
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError
@@ -47,28 +89,10 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 
 	showAll := r.URL.Query().Get("all") == "true"
 	if !showAll {
-		filtered := []map[string]any{}
+		filtered := []profileResponse{}
 		for _, p := range profiles {
 			if !p.Temporary {
-				sizeMB := float64(p.DiskUsage) / (1024 * 1024)
-				filtered = append(filtered, map[string]any{
-					"id":                p.ID,
-					"name":              p.Name,
-					"path":              p.Path,
-					"pathExists":        p.PathExists,
-					"created":           p.Created,
-					"lastUsed":          p.LastUsed,
-					"diskUsage":         p.DiskUsage,
-					"sizeMB":            sizeMB,
-					"running":           p.Running,
-					"source":            p.Source,
-					"chromeProfileName": p.ChromeProfileName,
-					"accountEmail":      p.AccountEmail,
-					"accountName":       p.AccountName,
-					"hasAccount":        p.HasAccount,
-					"useWhen":           p.UseWhen,
-					"description":       p.Description,
-				})
+				filtered = append(filtered, newProfileResponse(p))
 			}
 		}
 		httpx.JSON(w, 200, filtered)
@@ -181,37 +205,15 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var foundProfile map[string]any
-
 	for _, p := range profiles {
 		if p.ID != id && p.Name != id {
 			continue
 		}
-		foundProfile = map[string]any{
-			"id":                p.ID,
-			"name":              p.Name,
-			"path":              p.Path,
-			"pathExists":        p.PathExists,
-			"created":           p.Created,
-			"diskUsage":         p.DiskUsage,
-			"sizeMB":            float64(p.DiskUsage) / (1024 * 1024),
-			"source":            p.Source,
-			"chromeProfileName": p.ChromeProfileName,
-			"accountEmail":      p.AccountEmail,
-			"accountName":       p.AccountName,
-			"hasAccount":        p.HasAccount,
-			"useWhen":           p.UseWhen,
-			"description":       p.Description,
-		}
-		break
-	}
-
-	if foundProfile == nil {
-		httpx.Error(w, 404, fmt.Errorf("profile %q not found", id))
+		httpx.JSON(w, 200, newProfileResponse(p))
 		return
 	}
 
-	httpx.JSON(w, 200, foundProfile)
+	httpx.Error(w, 404, fmt.Errorf("profile %q not found", id))
 }
 
 func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -108,6 +109,91 @@ func TestSaveLoadEncrypted(t *testing.T) {
 	_, err = Load(path, "wrong-key")
 	if err == nil {
 		t.Error("Load with wrong key should fail")
+	}
+}
+
+func TestSaveLoadEncryptedFlagPersisted(t *testing.T) {
+	dir := t.TempDir()
+	key := "round-trip-key"
+
+	sf := &StateFile{Name: "enc-flag", SavedAt: time.Now().Truncate(time.Second), Storage: map[string]OriginStorage{}}
+	path, err := Save(dir, sf, key)
+	if err != nil {
+		t.Fatalf("Save encrypted: %v", err)
+	}
+	if !strings.HasSuffix(path, ".json.enc") {
+		t.Errorf("encrypted save path = %q, want .json.enc suffix", path)
+	}
+
+	loaded, err := Load(path, key)
+	if err != nil {
+		t.Fatalf("Load encrypted: %v", err)
+	}
+	if !loaded.Encrypted {
+		t.Error("loaded.Encrypted = false, want true for an encrypted state file")
+	}
+
+	// Plaintext: Encrypted must round-trip as false.
+	plain := &StateFile{Name: "plain-flag", SavedAt: time.Now().Truncate(time.Second), Storage: map[string]OriginStorage{}}
+	ppath, err := Save(dir, plain, "")
+	if err != nil {
+		t.Fatalf("Save plaintext: %v", err)
+	}
+	ploaded, err := Load(ppath, "")
+	if err != nil {
+		t.Fatalf("Load plaintext: %v", err)
+	}
+	if ploaded.Encrypted {
+		t.Error("loaded.Encrypted = true, want false for a plaintext state file")
+	}
+}
+
+func TestListEncryptedEntryMetadata(t *testing.T) {
+	dir := t.TempDir()
+	key := "list-enc-key"
+
+	enc := &StateFile{Name: "enc-entry", SavedAt: time.Now().Truncate(time.Second), Origins: []string{"https://enc.example.com"}, Storage: map[string]OriginStorage{}}
+	if _, err := Save(dir, enc, key); err != nil {
+		t.Fatalf("Save encrypted: %v", err)
+	}
+	plain := &StateFile{Name: "plain-entry", SavedAt: time.Now().Truncate(time.Second), Origins: []string{"https://plain.example.com"}, Storage: map[string]OriginStorage{}}
+	if _, err := Save(dir, plain, ""); err != nil {
+		t.Fatalf("Save plaintext: %v", err)
+	}
+
+	entries, err := List(dir)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(entries))
+	}
+
+	byName := map[string]StateEntry{}
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+
+	encEntry, ok := byName["enc-entry"]
+	if !ok {
+		t.Fatal("encrypted entry missing from List")
+	}
+	if !encEntry.Encrypted {
+		t.Error("encrypted entry: Encrypted = false, want true (derived from .json.enc extension)")
+	}
+
+	plainEntry, ok := byName["plain-entry"]
+	if !ok {
+		t.Fatal("plaintext entry missing from List")
+	}
+	if plainEntry.Encrypted {
+		t.Error("plaintext entry: Encrypted = true, want false")
+	}
+	if len(plainEntry.Origins) != 1 || plainEntry.Origins[0] != "https://plain.example.com" {
+		t.Errorf("plaintext entry Origins = %v, want [https://plain.example.com]", plainEntry.Origins)
+	}
+	if plainEntry.SavedAt.IsZero() {
+		t.Error("plaintext entry SavedAt is zero, want populated from JSON metadata")
 	}
 }
 

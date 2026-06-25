@@ -10,9 +10,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// CaptureOpts controls a paired screenshot + accessibility capture. The image
-// half is delegated to CaptureScreenshot; the snapshot half mirrors the
-// /snapshot handler's BuildSnapshot path.
 type CaptureOpts struct {
 	Image              ScreenshotOpts
 	Filter             string // snapshot filter ("" or FilterInteractive)
@@ -33,16 +30,12 @@ type CaptureOpts struct {
 	WithBounds bool
 }
 
-// Wait values understood by PairedCapture.
 const (
 	WaitNone   = "none"
 	WaitLoad   = "load"
 	WaitStable = "stable"
 )
 
-// PairedResult is the in-process return shape of PairedCapture. The HTTP
-// handler turns this into the over-the-wire JSON; the field set is chosen to
-// keep that translation mechanical.
 type PairedResult struct {
 	URL        string
 	Title      string
@@ -101,7 +94,6 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 		_, _ = WaitForReadyState(ctx, 2*time.Second)
 	}
 
-	// Pre-capture frame info — root frame id + loader id.
 	pre, err := FetchFrameTree(ctx)
 	if err != nil {
 		return nil, err
@@ -126,13 +118,12 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	}
 	res.ImageBytes = imgBytes
 
-	// AX tree → flat node list with refs. Mirrors HandleSnapshot's pipeline.
 	rawNodes, err := FetchAXTree(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if opts.ScopeFrameID != "" {
-		rawNodes = filterAXNodesByFrame(rawNodes, opts.ScopeFrameID)
+		rawNodes = FilterAXNodesByFrame(rawNodes, opts.ScopeFrameID)
 	}
 	if opts.ScopeBackendNodeID != 0 {
 		rawNodes = FilterSubtree(rawNodes, opts.ScopeBackendNodeID)
@@ -142,7 +133,6 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	res.Nodes = flat
 	res.Refs = refs
 
-	// URL + title for response metadata.
 	_ = chromedp.Run(ctx,
 		chromedp.Location(&res.URL),
 		chromedp.Title(&res.Title),
@@ -195,11 +185,10 @@ func projectBoundsToClip(nodes []A11yNode, clip page.Viewport) {
 	}
 }
 
-// filterAXNodesByFrame mirrors handlers.scopeSnapshotNodesByFrame: drop any
-// AX node whose FrameID does not match the active frame scope. Lives here so
-// PairedCapture can honor /frame state without the handler having to
-// post-process the result.
-func filterAXNodesByFrame(nodes []RawAXNode, frameID string) []RawAXNode {
+// FilterAXNodesByFrame keeps only nodes whose FrameID matches frameID; an empty
+// frameID returns nodes unchanged. Shared by paired capture and the handler
+// snapshot/annotated-screenshot flows so frame-scoped filtering cannot drift.
+func FilterAXNodesByFrame(nodes []RawAXNode, frameID string) []RawAXNode {
 	if frameID == "" {
 		return nodes
 	}

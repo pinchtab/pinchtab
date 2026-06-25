@@ -5,25 +5,25 @@ import (
 	"strings"
 )
 
-// AllowedChromeExtraFlags returns the subset of browser.extraFlags that are
+// AllowedBrowserExtraFlags returns the subset of browser.extraFlags that are
 // allowed to reach the browser process after security and ownership checks.
-func AllowedChromeExtraFlags(raw string) []string {
-	allowed, _ := assessChromeExtraFlags(raw)
+func AllowedBrowserExtraFlags(raw string) []string {
+	allowed, _ := assessBrowserExtraFlags(raw)
 	return allowed
 }
 
-// SanitizeChromeExtraFlags rewrites browser.extraFlags to contain only the
+// SanitizeBrowserExtraFlags rewrites browser.extraFlags to contain only the
 // allowed subset. Invalid, unsafe, and reserved flags are dropped.
-func SanitizeChromeExtraFlags(raw string) string {
-	return strings.Join(AllowedChromeExtraFlags(raw), " ")
+func SanitizeBrowserExtraFlags(raw string) string {
+	return strings.Join(AllowedBrowserExtraFlags(raw), " ")
 }
 
-func validateChromeExtraFlags(raw string) []error {
-	_, errs := assessChromeExtraFlags(raw)
+func validateBrowserExtraFlags(raw string) []error {
+	_, errs := assessBrowserExtraFlags(raw)
 	return errs
 }
 
-func assessChromeExtraFlags(raw string) ([]string, []error) {
+func assessBrowserExtraFlags(raw string) ([]string, []error) {
 	fields := strings.Fields(raw)
 	allowed := make([]string, 0, len(fields))
 	var errs []error
@@ -53,7 +53,7 @@ func validateChromeExtraFlag(flag string) error {
 	if reservedField, ok := reservedChromeExtraFlagFields[lowerName]; ok {
 		return chromeExtraFlagsError(flag, fmt.Sprintf("is owned by PinchTab launch config; use %s instead", reservedField))
 	}
-	if msg, ok := disallowedChromeExtraFlags[lowerName]; ok {
+	if msg, ok := disallowedBrowserExtraFlags[lowerName]; ok {
 		return chromeExtraFlagsError(flag, msg)
 	}
 	if lowerName == "--disable-features" && disablesSiteIsolation(value) {
@@ -107,7 +107,7 @@ var reservedChromeExtraFlagFields = map[string]string{
 	"--window-size":                             "the built-in runtime window model",
 }
 
-var disallowedChromeExtraFlags = map[string]string{
+var disallowedBrowserExtraFlags = map[string]string{
 	"--allow-running-insecure-content":      "weakens browser security and is not allowed",
 	"--disable-site-isolation-for-policy":   "weakens browser security and is not allowed",
 	"--disable-site-isolation-trials":       "weakens browser security and is not allowed",

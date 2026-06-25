@@ -192,6 +192,47 @@ func TestCapabilityEndpointsGrouping(t *testing.T) {
 	}
 }
 
+// TestEveryGatedCapabilityHasMeta ensures no capability can appear in the
+// catalog without centralized gate metadata — the orchestrator and bridge
+// handlers both rely on Meta() to render the disabled response.
+func TestEveryGatedCapabilityHasMeta(t *testing.T) {
+	for cap := range CapabilityEndpoints() {
+		if _, ok := Meta(cap); !ok {
+			t.Errorf("capability %q is used in the catalog but has no Meta()", cap)
+		}
+	}
+	if _, ok := Meta(CapNone); ok {
+		t.Error("CapNone must not have gate metadata")
+	}
+}
+
+// TestCapabilityMetaContract locks the externally-observable gate strings: the
+// disabled error code and config setting are part of the API contract, so this
+// guards against an accidental rename that would break clients string-matching
+// them.
+func TestCapabilityMetaContract(t *testing.T) {
+	want := map[Capability]CapabilityMeta{
+		CapEvaluate:         {CapEvaluate, "evaluate", "security.allowEvaluate", "evaluate_disabled"},
+		CapMacro:            {CapMacro, "macro", "security.allowMacro", "macro_disabled"},
+		CapScreencast:       {CapScreencast, "screencast", "security.allowScreencast", "screencast_disabled"},
+		CapDownload:         {CapDownload, "download", "security.allowDownload", "download_disabled"},
+		CapCookies:          {CapCookies, "cookies", "security.allowCookies", "cookies_disabled"},
+		CapUpload:           {CapUpload, "upload", "security.allowUpload", "upload_disabled"},
+		CapStateExport:      {CapStateExport, "stateExport", "security.allowStateExport", "state_export_disabled"},
+		CapNetworkIntercept: {CapNetworkIntercept, "networkIntercept", "security.allowNetworkIntercept", "network_intercept_disabled"},
+	}
+	for cap, expected := range want {
+		got, ok := Meta(cap)
+		if !ok {
+			t.Errorf("Meta(%q) missing", cap)
+			continue
+		}
+		if got != expected {
+			t.Errorf("Meta(%q) = %+v, want %+v", cap, got, expected)
+		}
+	}
+}
+
 func TestAllEndpointsHaveMethodAndPath(t *testing.T) {
 	for _, ep := range Core() {
 		if ep.Method == "" {

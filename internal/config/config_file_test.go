@@ -21,17 +21,24 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.Server.CookieSecure != nil {
 		t.Errorf("DefaultFileConfig.Server.CookieSecure = %v, want nil for auto-detect", formatBoolPtr(fc.Server.CookieSecure))
 	}
+	if fc.Browsers.Default != BrowserChrome {
+		t.Errorf("DefaultFileConfig.Browsers.Default = %v, want %s", fc.Browsers.Default, BrowserChrome)
+	}
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("DefaultFileConfig.InstanceDefaults.Mode = %v, want headless", fc.InstanceDefaults.Mode)
 	}
 	if fc.MultiInstance.Strategy != "always-on" {
 		t.Errorf("DefaultFileConfig.MultiInstance.Strategy = %v, want always-on", fc.MultiInstance.Strategy)
 	}
-	if len(fc.Security.Attach.AllowSchemes) != 2 || fc.Security.Attach.AllowSchemes[0] != "ws" || fc.Security.Attach.AllowSchemes[1] != "wss" {
-		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want [ws wss]", fc.Security.Attach.AllowSchemes)
+	wantSchemes := []string{"ws", "wss", "http", "https"}
+	if strings.Join(fc.Security.Attach.AllowSchemes, ",") != strings.Join(wantSchemes, ",") {
+		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want %v", fc.Security.Attach.AllowSchemes, wantSchemes)
 	}
 	if fc.Security.Attach.Enabled == nil || *fc.Security.Attach.Enabled {
 		t.Errorf("DefaultFileConfig.Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(fc.Security.Attach.Enabled))
+	}
+	if fc.Security.Attach.ForwardProxyAuth == nil || *fc.Security.Attach.ForwardProxyAuth {
+		t.Errorf("DefaultFileConfig.Security.Attach.ForwardProxyAuth = %v, want explicit false", formatBoolPtr(fc.Security.Attach.ForwardProxyAuth))
 	}
 	wantExtensionsDir := defaultExtensionsDir(userConfigDir())
 	if len(fc.Browser.ExtensionPaths) != 1 || fc.Browser.ExtensionPaths[0] != wantExtensionsDir {
@@ -194,7 +201,65 @@ func TestConfigSchemaURLUsesClosestOlderOrEqualPublishedSchema(t *testing.T) {
 	}
 }
 
-// TestIsLegacyConfig tests the format detection logic.
+func TestFileConfigFromRuntime_PreservesBrowserTargets(t *testing.T) {
+	quota := 256
+	disableStealth := true
+	cfg := &RuntimeConfig{
+		DefaultBrowser: BrowserChrome,
+		DefaultTarget:  "chrome-local",
+		FallbackOrder:  []string{"cloak-primary"},
+		Targets: BrowserTargetsConfig{
+			"chrome-local": {
+				Provider:   BrowserChrome,
+				Binary:     "/usr/bin/chrome",
+				ExtraFlags: "--ash-no-nudges",
+				Proxy: BrowserProxyConfig{
+					Server:     "http://proxy.example:8080",
+					BypassList: []string{"localhost"},
+					Geo:        &BrowserProxyGeoConfig{Timezone: "UTC"},
+				},
+			},
+			"cloak-primary": {
+				Provider: BrowserCloak,
+				Binary:   "/opt/cloak/chrome",
+				Cloak: CloakBrowserConfig{
+					StorageQuotaMB:            &quota,
+					DisableDefaultStealthArgs: &disableStealth,
+				},
+			},
+		},
+	}
+
+	fc := FileConfigFromRuntime(cfg)
+	if fc.Browser.DefaultTarget != "chrome-local" {
+		t.Fatalf("DefaultTarget = %q, want chrome-local", fc.Browser.DefaultTarget)
+	}
+	if got := strings.Join(fc.Browser.FallbackOrder, ","); got != "cloak-primary" {
+		t.Fatalf("FallbackOrder = %q, want cloak-primary", got)
+	}
+	if len(fc.Browser.Targets) != 2 {
+		t.Fatalf("Targets len = %d, want 2", len(fc.Browser.Targets))
+	}
+	if fc.Browser.Targets["chrome-local"].Proxy.BypassList[0] != "localhost" {
+		t.Fatalf("proxy bypass not preserved: %+v", fc.Browser.Targets["chrome-local"].Proxy)
+	}
+	if fc.Browser.Targets["cloak-primary"].Cloak.StorageQuotaMB == nil ||
+		*fc.Browser.Targets["cloak-primary"].Cloak.StorageQuotaMB != 256 {
+		t.Fatalf("cloak target quota not preserved: %+v", fc.Browser.Targets["cloak-primary"].Cloak)
+	}
+
+	fc.Browser.FallbackOrder[0] = "mutated"
+	target := fc.Browser.Targets["chrome-local"]
+	target.Proxy.BypassList[0] = "mutated"
+	fc.Browser.Targets["chrome-local"] = target
+	if cfg.FallbackOrder[0] != "cloak-primary" {
+		t.Fatalf("runtime fallbackOrder shared with file config: %+v", cfg.FallbackOrder)
+	}
+	if cfg.Targets["chrome-local"].Proxy.BypassList[0] != "localhost" {
+		t.Fatalf("runtime target proxy shared with file config: %+v", cfg.Targets["chrome-local"].Proxy)
+	}
+}
+
 func TestIsLegacyConfig(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -248,7 +313,6 @@ func TestIsLegacyConfig(t *testing.T) {
 	}
 }
 
-// TestConvertLegacyConfig tests the legacy to nested conversion.
 func TestConvertLegacyConfig(t *testing.T) {
 	h := false
 	maxTabs := 25
@@ -308,7 +372,6 @@ func TestTabPolicyDefaultsFromRuntime(t *testing.T) {
 	}
 }
 
-// TestDefaultFileConfigJSON tests that DefaultFileConfig serializes correctly.
 func TestDefaultFileConfigJSON(t *testing.T) {
 	fc := DefaultFileConfig()
 	data, err := json.MarshalIndent(fc, "", "  ")
@@ -316,7 +379,6 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 		t.Fatalf("failed to marshal DefaultFileConfig: %v", err)
 	}
 
-	// Verify it can be parsed back
 	var parsed FileConfig
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("failed to unmarshal DefaultFileConfig output: %v", err)
@@ -377,6 +439,9 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	if parsed.Security.Attach.Enabled == nil || *parsed.Security.Attach.Enabled {
 		t.Errorf("round-trip Security.Attach.Enabled = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.Enabled))
 	}
+	if parsed.Security.Attach.ForwardProxyAuth == nil || *parsed.Security.Attach.ForwardProxyAuth {
+		t.Errorf("round-trip Security.Attach.ForwardProxyAuth = %v, want explicit false", formatBoolPtr(parsed.Security.Attach.ForwardProxyAuth))
+	}
 	if parsed.Observability.Activity.StateDir != "" {
 		t.Errorf("round-trip Observability.Activity.StateDir = %q, want empty string", parsed.Observability.Activity.StateDir)
 	}
@@ -432,6 +497,19 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 	}
 
 	browser := raw["browser"].(map[string]any)
+	if _, ok := browser["provider"]; ok {
+		t.Fatal("browser.provider should not be emitted in JSON (deprecated in favor of browsers.default)")
+	}
+	if browsersRaw, ok := raw["browsers"]; !ok {
+		t.Fatal("browsers block missing from JSON")
+	} else if browsersMap, ok := browsersRaw.(map[string]any); !ok {
+		t.Fatal("browsers block is not an object")
+	} else if def, ok := browsersMap["default"]; !ok || def != BrowserChrome {
+		t.Fatalf("browsers.default = %#v, want chrome", def)
+	}
+	if _, ok := browser["cloak"]; ok {
+		t.Fatal("browser.cloak should not be emitted for default chrome provider")
+	}
 	if ext, ok := browser["extensionPaths"]; !ok {
 		t.Fatal("browser.extensionPaths missing from JSON")
 	} else if items, ok := ext.([]any); !ok || len(items) != 0 {
@@ -473,6 +551,83 @@ func TestFileConfigJSONPreservesExplicitZeroValues(t *testing.T) {
 	}
 	if raw, ok := security["uploadMaxTotalBytes"]; !ok || int(raw.(float64)) != DefaultUploadMaxTotalBytes {
 		t.Fatalf("security.uploadMaxTotalBytes = %#v, want %d", raw, DefaultUploadMaxTotalBytes)
+	}
+}
+
+func TestFileConfigJSONEmitsCloakBrowserConfig(t *testing.T) {
+	disableDefaultStealthArgs := true
+	fc := DefaultFileConfig()
+	fc.Browser.Provider = BrowserCloak
+	fc.Browser.BrowserBinary = "/opt/cloakbrowser/chrome"
+	fc.Browser.Cloak = CloakBrowserConfig{
+		FingerprintSeed:           "42069",
+		Platform:                  "windows",
+		DisableDefaultStealthArgs: &disableDefaultStealthArgs,
+	}
+
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal(FileConfig JSON) error = %v", err)
+	}
+	browser := raw["browser"].(map[string]any)
+	cloak, ok := browser["cloak"].(map[string]any)
+	if !ok {
+		t.Fatal("browser.cloak missing from JSON")
+	}
+	if cloak["fingerprintSeed"] != "42069" {
+		t.Fatalf("browser.cloak.fingerprintSeed = %#v, want 42069", cloak["fingerprintSeed"])
+	}
+	if cloak["platform"] != "windows" {
+		t.Fatalf("browser.cloak.platform = %#v, want windows", cloak["platform"])
+	}
+}
+
+func TestFileConfigJSONEmitsExplicitCloakFalseOnChromeProvider(t *testing.T) {
+	disableDefaultStealthArgs := false
+	fc := DefaultFileConfig()
+	fc.Browser.Provider = BrowserChrome
+	fc.Browser.Cloak = CloakBrowserConfig{DisableDefaultStealthArgs: &disableDefaultStealthArgs}
+
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+	if !strings.Contains(string(data), `"disableDefaultStealthArgs":false`) {
+		t.Fatalf("explicit false cloak setting not preserved in JSON: %s", data)
+	}
+}
+
+func TestFileConfigFromRuntimeEmitsCloakStorageQuotaZeroForCloakProvider(t *testing.T) {
+	fc := FileConfigFromRuntime(&RuntimeConfig{
+		DefaultBrowser: BrowserCloak,
+		BrowserBinary:  "/opt/cloakbrowser/chrome",
+		Cloak: CloakBrowserRuntimeConfig{
+			StorageQuotaMB:            0,
+			DisableDefaultStealthArgs: true,
+		},
+	})
+	if fc.Browser.Cloak.StorageQuotaMB == nil || *fc.Browser.Cloak.StorageQuotaMB != 0 {
+		t.Fatalf("StorageQuotaMB = %v, want explicit 0", fc.Browser.Cloak.StorageQuotaMB)
+	}
+}
+
+// An unknown browsers.default must be written verbatim (config load keeps it raw
+// so the load-time warning + chrome fallback still fire); marshal must not
+// normalize it to chrome. An empty value falls back to chrome.
+func TestFileConfigFromRuntime_DefaultBrowserVerbatim(t *testing.T) {
+	if got := FileConfigFromRuntime(&RuntimeConfig{DefaultBrowser: "foo"}).Browsers.Default; got != "foo" {
+		t.Errorf("unknown DefaultBrowser = %q, want verbatim \"foo\" (not normalized)", got)
+	}
+	if got := FileConfigFromRuntime(&RuntimeConfig{DefaultBrowser: ""}).Browsers.Default; got != BrowserChrome {
+		t.Errorf("empty DefaultBrowser = %q, want chrome fallback", got)
+	}
+	if got := FileConfigFromRuntime(&RuntimeConfig{DefaultBrowser: BrowserCloak}).Browsers.Default; got != BrowserCloak {
+		t.Errorf("known DefaultBrowser = %q, want cloak", got)
 	}
 }
 

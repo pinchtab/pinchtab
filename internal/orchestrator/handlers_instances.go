@@ -1,7 +1,9 @@
 package orchestrator
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,11 +17,13 @@ import (
 )
 
 type startInstanceRequest struct {
-	ProfileID      string                 `json:"profileId,omitempty"`
-	Mode           string                 `json:"mode,omitempty"`
-	Port           string                 `json:"port,omitempty"`
-	ExtensionPaths []string               `json:"extensionPaths,omitempty"`
-	SecurityPolicy *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+	ProfileID       string                 `json:"profileId,omitempty"`
+	Mode            string                 `json:"mode,omitempty"`
+	Port            string                 `json:"port,omitempty"`
+	ExtensionPaths  []string               `json:"extensionPaths,omitempty"`
+	SecurityPolicy  *bridge.SecurityPolicy `json:"securityPolicy,omitempty"`
+	Browser         string                 `json:"browser,omitempty"`
+	FallbackTargets []string               `json:"fallbackTargets,omitempty"`
 }
 
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
@@ -36,13 +40,7 @@ func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request)
 	active := instanceIsActive(inst)
 	o.mu.RUnlock()
 
-	if active && copyInst.Status == "stopped" {
-		copyInst.Status = "running"
-	}
-	if !active &&
-		(copyInst.Status == "starting" || copyInst.Status == "running" || copyInst.Status == "stopping") {
-		copyInst.Status = "stopped"
-	}
+	copyInst.Status = effectiveInstanceStatus(copyInst.Status, active)
 
 	httpx.JSON(w, 200, copyInst)
 }
@@ -123,7 +121,7 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 	}
 
 	if active {
-		targetURL, targetErr := o.instancePathURL(inst, "/ensure-chrome", "")
+		targetURL, targetErr := o.instancePathURL(inst, "/ensure-browser", "")
 		if targetErr != nil {
 			httpx.Error(w, 502, targetErr)
 			return
@@ -141,8 +139,7 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 		SecurityPolicy: inst.requestedSecurityPolicy,
 	})
 	if err != nil {
-		statusCode := classifyLaunchError(err)
-		httpx.Error(w, statusCode, err)
+		writeLaunchError(w, err)
 		return
 	}
 	authn.AuditLog(r, "instance.started", "instanceId", started.ID, "profileName", profileName)
@@ -173,7 +170,7 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 	}
 
 	id := r.PathValue("id")
-	initial, err := o.Logs(id)
+	initial, offset, _, err := o.LogsSince(id, 0)
 	if err != nil {
 		httpx.Error(w, 404, err)
 		return
@@ -184,8 +181,8 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	writeLogs := func(logs string) bool {
-		data, err := json.Marshal(map[string]string{"logs": logs})
+	writeLog := func(chunk string, reset bool) bool {
+		data, err := json.Marshal(map[string]any{"logs": chunk, "reset": reset})
 		if err != nil {
 			return false
 		}
@@ -196,24 +193,24 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 		return true
 	}
 
-	if !writeLogs(initial) {
+	if !writeLog(initial, true) {
 		return
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	last := initial
+	last := offset
 	for {
 		select {
 		case <-ticker.C:
-			current, err := o.Logs(id)
+			chunk, newOffset, reset, err := o.LogsSince(id, last)
 			if err != nil {
 				return
 			}
-			if current != last {
-				last = current
-				if !writeLogs(current) {
+			if chunk != "" {
+				last = newOffset
+				if !writeLog(chunk, reset) {
 					return
 				}
 				continue
@@ -261,23 +258,51 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 			return
 		}
 	} else {
-		profileName = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+		var rnd [4]byte
+		_, _ = rand.Read(rnd[:])
+		profileName = fmt.Sprintf("instance-%d-%x", time.Now().UnixNano(), rnd)
 	}
 
 	headless := req.Mode != "headed"
 
-	inst, err := o.LaunchWithOptions(profileName, req.Port, headless, LaunchOptions{
+	opts := LaunchOptions{
 		ExtensionPaths: req.ExtensionPaths,
 		SecurityPolicy: req.SecurityPolicy,
-	})
+		Browser:        req.Browser,
+	}
+
+	inst, err := o.LaunchWithTargetSelection(profileName, req.Port, headless, req.Browser, req.FallbackTargets, opts)
 	if err != nil {
-		statusCode := classifyLaunchError(err)
-		httpx.Error(w, statusCode, err)
+		writeLaunchError(w, err)
 		return
 	}
 
 	authn.AuditLog(r, auditEvent, "instanceId", inst.ID, "profileName", profileName)
 	httpx.JSON(w, 201, inst)
+}
+
+// writeLaunchError maps launch / fallback errors to 400 (unknown target), 502 (exhaustion), or the legacy classifier.
+func writeLaunchError(w http.ResponseWriter, err error) {
+	var unknown *UnknownBrowserError
+	if errors.As(err, &unknown) {
+		httpx.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	var exhausted *FallbackExhaustedError
+	if errors.As(err, &exhausted) {
+		attempts := make([]map[string]string, 0, len(exhausted.Attempts))
+		for _, a := range exhausted.Attempts {
+			attempts = append(attempts, map[string]string{
+				"target": a.Target,
+				"reason": string(a.Reason),
+			})
+		}
+		httpx.ErrorCode(w, http.StatusBadGateway, "browser_target_unavailable", err.Error(), true, map[string]any{
+			"attempts": attempts,
+		})
+		return
+	}
+	httpx.Error(w, classifyLaunchError(err), err)
 }
 
 func validateStartInstanceSecurityPolicy(policy *bridge.SecurityPolicy) error {
@@ -337,8 +362,10 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 
 func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		CdpURL string `json:"cdpUrl"`
-		Name   string `json:"name,omitempty"`
+		CdpURL   string `json:"cdpUrl"`
+		Name     string `json:"name,omitempty"`
+		Provider string `json:"provider,omitempty"`
+		Browser  string `json:"browser,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -351,26 +378,42 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Validate attach is enabled and URL is allowed
-	if err := o.validateAttachURL(req.CdpURL); err != nil {
-		httpx.Error(w, 403, err)
+	if req.Browser != "" && req.Provider != "" {
+		normBrowser := config.NormalizeBrowser(req.Browser)
+		normProvider := config.NormalizeBrowser(req.Provider)
+		if normBrowser != normProvider {
+			httpx.Error(w, 400, fmt.Errorf("browser provider %q conflicts with browserTarget %q provider %q", req.Provider, req.Browser, normBrowser))
+			return
+		}
+	}
+
+	attachBrowser := req.Browser
+	if attachBrowser == "" && req.Provider != "" {
+		attachBrowser = req.Provider
+	}
+
+	if attachBrowser != "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+		matches := config.TargetsForBrowser(o.runtimeCfg, attachBrowser)
+		if len(matches) == 0 {
+			httpx.Error(w, 400, fmt.Errorf("no browser target configured for browser %q", attachBrowser))
+			return
+		}
+	}
+
+	attachOpts, ok := o.prepareAttachOptions(w, attachBrowser, config.BrowserChrome, req.CdpURL)
+	if !ok {
 		return
 	}
 
-	// Generate name if not provided
-	name := req.Name
-	if name == "" {
-		name = fmt.Sprintf("attached-%d", time.Now().UnixNano())
-	}
+	name := defaultAttachName(req.Name, "attached")
 
-	inst, err := o.Attach(name, req.CdpURL)
+	inst, err := o.AttachWithOptions(name, req.CdpURL, attachOpts)
 	if err != nil {
-		httpx.Error(w, classifyLaunchError(err), err)
+		writeLaunchError(w, err)
 		return
 	}
 
-	authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "cdp")
-	httpx.JSON(w, 201, inst)
+	auditAndRespondAttach(w, r, inst, 201, "instance.attached", "cdp-bridge")
 }
 
 func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request) {
@@ -378,6 +421,7 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		BaseURL string `json:"baseUrl"`
 		Name    string `json:"name,omitempty"`
 		Token   string `json:"token,omitempty"`
+		Browser string `json:"browser,omitempty"`
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -388,8 +432,9 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		httpx.Error(w, 400, fmt.Errorf("baseUrl is required"))
 		return
 	}
-	if err := o.validateAttachURL(req.BaseURL); err != nil {
-		httpx.Error(w, 403, err)
+
+	attachOpts, ok := o.prepareAttachOptions(w, req.Browser, "", req.BaseURL)
+	if !ok {
 		return
 	}
 	if err := o.probeAttachBridge(req.BaseURL, req.Token); err != nil {
@@ -397,26 +442,50 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	name := req.Name
-	if name == "" {
-		name = fmt.Sprintf("bridge-%d", time.Now().UnixNano())
-	}
+	name := defaultAttachName(req.Name, "bridge")
 
-	inst, created, err := o.AttachBridge(name, req.BaseURL, req.Token)
+	inst, created, err := o.AttachBridgeWithOptions(name, req.BaseURL, req.Token, attachOpts)
 	if err != nil {
-		httpx.Error(w, classifyLaunchError(err), err)
+		writeLaunchError(w, err)
 		return
 	}
 	if created {
-		authn.AuditLog(r, "instance.attached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "bridge")
-		httpx.JSON(w, 201, inst)
+		auditAndRespondAttach(w, r, inst, 201, "instance.attached", "bridge")
 	} else {
-		authn.AuditLog(r, "instance.reattached", "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", "bridge")
-		httpx.JSON(w, 200, inst)
+		auditAndRespondAttach(w, r, inst, 200, "instance.reattached", "bridge")
 	}
 }
 
-// probeAttachBridge checks that a remote bridge is reachable.
+// prepareAttachOptions resolves attach options for the given browser/default and
+// validates the attach URL. ok=false means an error response was already written
+// (400 for option resolution, 403 for an unsafe URL).
+func (o *Orchestrator) prepareAttachOptions(w http.ResponseWriter, browser, defaultProvider, attachURL string) (AttachOptions, bool) {
+	opts, err := o.resolveAttachOptions(AttachOptions{Browser: browser}, defaultProvider)
+	if err != nil {
+		httpx.Error(w, 400, err)
+		return AttachOptions{}, false
+	}
+	if err := o.validateAttachURL(attachURL); err != nil {
+		httpx.Error(w, 403, err)
+		return AttachOptions{}, false
+	}
+	return opts, true
+}
+
+// defaultAttachName returns name, or a synthesized "<prefix>-<nanos>" when empty.
+func defaultAttachName(name, prefix string) string {
+	if name == "" {
+		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	}
+	return name
+}
+
+// auditAndRespondAttach audit-logs the attach and writes the instance JSON.
+func auditAndRespondAttach(w http.ResponseWriter, r *http.Request, inst *bridge.Instance, status int, auditAction, attachType string) {
+	authn.AuditLog(r, auditAction, "instanceId", inst.ID, "instanceName", inst.ProfileName, "attachType", attachType)
+	httpx.JSON(w, status, inst)
+}
+
 // The baseURL MUST have been validated by validateAttachURL before calling this.
 func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
 	targetBaseURL, err := o.validatedHealthProbeBaseURL(strings.TrimRight(baseURL, "/"), "", healthProbePolicyAttachAllowlist)
@@ -442,7 +511,6 @@ func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
 	return nil
 }
 
-// validateAttachURL checks if attach is enabled and the external URL is allowed.
 func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	if o.runtimeCfg == nil {
 		return fmt.Errorf("attach not configured")
@@ -457,7 +525,6 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 		return fmt.Errorf("invalid attach URL: %w", err)
 	}
 
-	// Validate scheme
 	schemeAllowed := false
 	for _, allowed := range o.runtimeCfg.AttachAllowSchemes {
 		if parsed.Scheme == allowed {
@@ -470,18 +537,18 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	}
 
 	if parsed.Scheme == "http" || parsed.Scheme == "https" {
-		if parsed.Path != "" && parsed.Path != "/" {
-			return fmt.Errorf("bridge baseUrl must not include a path")
+		// CDP attach allows /json/version; attach-bridge requires bare origin.
+		if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/json/version" {
+			return fmt.Errorf("HTTP attach URL must be the bare origin or end with /json/version")
 		}
 		if parsed.User != nil {
-			return fmt.Errorf("bridge baseUrl must not include userinfo")
+			return fmt.Errorf("attach URL must not include userinfo")
 		}
 		if parsed.RawQuery != "" || parsed.Fragment != "" {
-			return fmt.Errorf("bridge baseUrl must not include query or fragment")
+			return fmt.Errorf("attach URL must not include query or fragment")
 		}
 	}
 
-	// Validate host
 	host := parsed.Hostname()
 	if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
 		return fmt.Errorf("host %q not allowed (allowed: %v)", host, o.runtimeCfg.AttachAllowHosts)

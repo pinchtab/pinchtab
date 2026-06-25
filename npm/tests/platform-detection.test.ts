@@ -18,72 +18,20 @@
 import { test, describe } from 'node:test';
 import * as assert from 'node:assert';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
-import { findRepoRoot, getCheckoutBinaryPath } from '../src/platform';
+import {
+  detectPlatform,
+  findRepoRoot,
+  getBinaryName,
+  getCheckoutBinaryPath,
+  Platform,
+} from '../src/platform';
 
 function getTestRepoRoot(): string {
-  let dir = path.resolve(__dirname);
-
-  while (dir) {
-    if (
-      fs.existsSync(path.join(dir, 'go.mod')) &&
-      fs.existsSync(path.join(dir, 'cmd', 'pinchtab'))
-    ) {
-      return dir;
-    }
-
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
+  const repoRoot = findRepoRoot(__dirname);
+  if (!repoRoot) {
+    throw new Error(`Could not find repo root from ${__dirname}`);
   }
-
-  throw new Error(`Could not find repo root from ${__dirname}`);
-}
-
-/**
- * Extracted detectPlatform logic from postinstall.js
- * (duplicated here for isolated testing)
- */
-function detectPlatform(platform: string, arch: string) {
-  // Only support x64 and arm64
-  let mappedArch: string;
-  if (arch === 'x64') {
-    mappedArch = 'amd64';
-  } else if (arch === 'arm64') {
-    mappedArch = 'arm64';
-  } else {
-    throw new Error(`Unsupported architecture: ${arch}. Only x64 (amd64) and arm64 are supported.`);
-  }
-
-  const osMap: Record<string, string> = {
-    darwin: 'darwin',
-    linux: 'linux',
-    win32: 'windows',
-  };
-
-  const detectedOS = osMap[platform];
-  if (!detectedOS) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-
-  return { os: detectedOS, arch: mappedArch };
-}
-
-interface PlatformResult {
-  os: string;
-  arch: string;
-}
-
-function getBinaryName(platform: PlatformResult): string {
-  const { os, arch } = platform;
-  const archName = arch === 'arm64' ? 'arm64' : 'amd64';
-
-  if (os === 'windows') {
-    return `pinchtab-${os}-${archName}.exe`;
-  }
-  return `pinchtab-${os}-${archName}`;
+  return repoRoot;
 }
 
 describe('Platform Detection', () => {
@@ -150,40 +98,19 @@ describe('Platform Detection', () => {
   });
 
   describe('getBinaryName', () => {
-    test('darwin-amd64 → pinchtab-darwin-amd64', () => {
-      const platform = { os: 'darwin', arch: 'amd64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-darwin-amd64');
-    });
+    const cases: Array<[Platform, string]> = [
+      [{ os: 'darwin', arch: 'amd64' }, 'pinchtab-darwin-amd64'],
+      [{ os: 'darwin', arch: 'arm64' }, 'pinchtab-darwin-arm64'],
+      [{ os: 'linux', arch: 'amd64' }, 'pinchtab-linux-amd64'],
+      [{ os: 'linux', arch: 'arm64' }, 'pinchtab-linux-arm64'],
+      [{ os: 'windows', arch: 'amd64' }, 'pinchtab-windows-amd64.exe'],
+      [{ os: 'windows', arch: 'arm64' }, 'pinchtab-windows-arm64.exe'],
+    ];
 
-    test('darwin-arm64 → pinchtab-darwin-arm64', () => {
-      const platform = { os: 'darwin', arch: 'arm64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-darwin-arm64');
-    });
-
-    test('linux-amd64 → pinchtab-linux-amd64', () => {
-      const platform = { os: 'linux', arch: 'amd64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-linux-amd64');
-    });
-
-    test('linux-arm64 → pinchtab-linux-arm64', () => {
-      const platform = { os: 'linux', arch: 'arm64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-linux-arm64');
-    });
-
-    test('windows-amd64 → pinchtab-windows-amd64.exe', () => {
-      const platform = { os: 'windows', arch: 'amd64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-windows-amd64.exe');
-    });
-
-    test('windows-arm64 → pinchtab-windows-arm64.exe', () => {
-      const platform = { os: 'windows', arch: 'arm64' };
-      const name = getBinaryName(platform);
-      assert.strictEqual(name, 'pinchtab-windows-arm64.exe');
+    cases.forEach(([platform, expected]) => {
+      test(`${platform.os}-${platform.arch} → ${expected}`, () => {
+        assert.strictEqual(getBinaryName(platform), expected);
+      });
     });
   });
 

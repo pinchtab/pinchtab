@@ -48,6 +48,35 @@ func newPinnedWebhookClient(target *validatedCallbackTarget) *http.Client {
 	}
 }
 
+// webhookDispatcher fires terminal-task webhooks asynchronously while bounding
+// the number of concurrent deliveries.
+type webhookDispatcher struct {
+	sem  chan struct{}
+	send func(string, *Task)
+}
+
+func newWebhookDispatcher(max int) *webhookDispatcher {
+	return &webhookDispatcher{
+		sem:  make(chan struct{}, max),
+		send: sendWebhook,
+	}
+}
+
+func (d *webhookDispatcher) fire(t *Task) {
+	if t.CallbackURL == "" || !t.GetState().IsTerminal() {
+		return
+	}
+	select {
+	case d.sem <- struct{}{}:
+		go func() {
+			defer func() { <-d.sem }()
+			d.send(t.CallbackURL, t)
+		}()
+	default:
+		slog.Warn("webhook: too many in-flight deliveries, dropping", "task", t.ID)
+	}
+}
+
 // sendWebhook delivers a task snapshot to the configured callbackUrl.
 // Delivery is best-effort: failures are logged but do not affect task state.
 func sendWebhook(callbackURL string, t *Task) {

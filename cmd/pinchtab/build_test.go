@@ -18,7 +18,6 @@ type GoReleaserConfig struct {
 
 // TestBinaryPermutations verifies all expected binary permutations are configured in goreleaser
 func TestBinaryPermutations(t *testing.T) {
-	// Find .goreleaser.yml in repo root (2 levels up from cmd/pinchtab/)
 	repoRoot := filepath.Join("..", "..", ".goreleaser.yml")
 	data, err := os.ReadFile(repoRoot)
 	if err != nil {
@@ -36,7 +35,6 @@ func TestBinaryPermutations(t *testing.T) {
 
 	build := cfg.Builds[0]
 
-	// Expected OS/arch combinations
 	expectedOS := map[string]bool{
 		"linux":   true,
 		"darwin":  true,
@@ -48,7 +46,6 @@ func TestBinaryPermutations(t *testing.T) {
 		"arm64": true,
 	}
 
-	// Verify all expected OS are configured
 	for os := range expectedOS {
 		found := false
 		for _, configOS := range build.GOOS {
@@ -62,7 +59,6 @@ func TestBinaryPermutations(t *testing.T) {
 		}
 	}
 
-	// Verify all expected architectures are configured
 	for arch := range expectedArch {
 		found := false
 		for _, configArch := range build.GOARCH {
@@ -76,7 +72,6 @@ func TestBinaryPermutations(t *testing.T) {
 		}
 	}
 
-	// Calculate expected binary count
 	totalExpected := len(expectedOS) * len(expectedArch)
 	totalConfigured := len(build.GOOS) * len(build.GOARCH)
 

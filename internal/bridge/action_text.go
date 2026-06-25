@@ -65,7 +65,7 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 			return nil, err
 		}
 	}
-	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key)
+	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key, req.Modifiers)
 }
 
 func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -109,7 +109,6 @@ func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map
 		return nil, fmt.Errorf("text required for keyboard-type")
 	}
 
-	// Promote to the humanized typing path when humanize=true was opted into.
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedType(ctx, req)
 	}
@@ -180,7 +179,6 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 	runes := []rune(text)
 	edgeChars := keyboardTypeBatchedEdgeChars
 
-	// If string is short enough, just type the whole thing
 	if len(runes) <= edgeChars*2 {
 		return b.keyboardTypePerChar(ctx, text)
 	}
@@ -189,12 +187,10 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 	middle := string(runes[edgeChars : len(runes)-edgeChars])
 	tail := string(runes[len(runes)-edgeChars:])
 
-	// Type first 5 characters with key events
 	if _, err := b.keyboardTypePerChar(ctx, head); err != nil {
 		return nil, err
 	}
 
-	// Insert middle portion
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
 			"text": middle,
@@ -204,7 +200,6 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 		return nil, err
 	}
 
-	// Type last 5 characters with key events
 	if _, err := b.keyboardTypePerChar(ctx, tail); err != nil {
 		return nil, err
 	}

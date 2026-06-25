@@ -78,8 +78,8 @@ func TestEnsureConfigRecoversExistingSecuritySettings(t *testing.T) {
 	if cfg.Server.Port != "9999" {
 		t.Fatalf("port = %q, want 9999", cfg.Server.Port)
 	}
-	if cfg.Browser.ChromeBinary != "/custom/chrome" {
-		t.Fatalf("chrome binary = %q, want /custom/chrome", cfg.Browser.ChromeBinary)
+	if cfg.Browser.BrowserBinary != "/custom/chrome" {
+		t.Fatalf("chrome binary = %q, want /custom/chrome", cfg.Browser.BrowserBinary)
 	}
 	if cfg.Security.AllowEvaluate == nil || !*cfg.Security.AllowEvaluate {
 		t.Fatal("expected allowEvaluate to be preserved as true")

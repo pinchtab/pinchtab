@@ -25,6 +25,10 @@ const maxExportStreamDuration = 30 * time.Minute
 // bodyFetchConcurrency limits parallel CDP GetResponseBody calls to avoid tying up the tab.
 const bodyFetchConcurrency = 4
 
+// entryFinishWait caps how long a live-stream entry may stay pending while waiting for
+// responseReceived/loadingFinished before it is exported best-effort.
+const entryFinishWait = 10 * time.Second
+
 // staleTmpAge is the minimum age of a .tmp file before it's considered orphaned.
 const staleTmpAge = 5 * time.Minute
 
@@ -66,55 +70,25 @@ func CleanupStaleTmpExports(stateDir string) {
 // @Param type    string query Resource type filter
 // @Param limit   string query Maximum entries to export
 //
-// @Response 200 application/har+json|application/x-ndjson  Exported data (streamed)
+// @Response 200 application/har+json|application/x-ndjson  Exported data (encoded incrementally, in capture order)
 // @Response 200 application/json                           File save result when output=file
 // @Response 400 application/json                           Invalid format or parameters
 // @Response 423 application/json                           Tab is locked
 // @Response 500 application/json                           Export error
 func (h *Handlers) HandleNetworkExport(w http.ResponseWriter, r *http.Request) {
-	if err := h.ensureChrome(); err != nil {
-		if h.writeBridgeUnavailable(w, err) {
-			return
-		}
-		httpx.Error(w, 500, fmt.Errorf("chrome initialization: %w", err))
+	if !h.ensureBrowserReady(w) {
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
-		return
-	}
-
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
-		return
-	}
-
-	h.recordReadRequest(r, "network-export", resolvedTabID)
-
-	formatName := r.URL.Query().Get("format")
-	if formatName == "" {
-		formatName = "har"
-	}
-	factory := observe.GetFormat(formatName)
-	if factory == nil {
-		httpx.JSON(w, 400, map[string]any{
-			"code":      "unknown_format",
-			"error":     fmt.Sprintf("unknown export format %q", formatName),
-			"available": observe.ListFormats(),
-		})
+	ec, ok := h.resolveExportContext(w, r, "network-export")
+	if !ok {
 		return
 	}
 
 	nm := h.Bridge.NetworkMonitor()
 	if nm == nil {
-		enc := factory("PinchTab", h.version())
+		// No monitor: emit an empty document so callers still get a valid export.
+		enc := ec.factory("PinchTab", h.version())
 		w.Header().Set("Content-Type", enc.ContentType())
 		if err := enc.Start(w); err != nil {
 			return
@@ -123,14 +97,9 @@ func (h *Handlers) HandleNetworkExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bufferSize := parseBufferSize(r)
-	buf := nm.GetBuffer(resolvedTabID)
-	if buf == nil {
-		if err := nm.StartCaptureWithSize(tabCtx, resolvedTabID, bufferSize); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("start capture: %w", err))
-			return
-		}
-		buf = nm.GetBuffer(resolvedTabID)
+	buf, ok := h.ensureCaptureBuffer(w, r, nm, ec.tabCtx, ec.resolvedTabID)
+	if !ok {
+		return
 	}
 
 	filter := parseNetworkFilter(r)
@@ -143,75 +112,202 @@ func (h *Handlers) HandleNetworkExport(w http.ResponseWriter, r *http.Request) {
 	redactHeaders := r.URL.Query().Get("redact") != "false"
 	output := r.URL.Query().Get("output")
 
-	// Timeout + client disconnect for body fetches (#4, #5)
-	fetchCtx, fetchCancel := context.WithTimeout(tabCtx, h.Config.ActionTimeout)
+	fetchCtx, fetchCancel := context.WithTimeout(ec.tabCtx, h.Config.ActionTimeout)
 	defer fetchCancel()
 	go httpx.CancelOnClientDone(r.Context(), fetchCancel)
 
-	// Convert entries with throttled body fetches to avoid tying up the tab context.
-	exportEntries := make([]observe.ExportEntry, len(entries))
-	bodySem := make(chan struct{}, bodyFetchConcurrency)
-	var wg sync.WaitGroup
+	enc := ec.factory("PinchTab", h.version())
 
-	for i, entry := range entries {
-		needBody := includeBody && entry.Finished && !entry.Failed
-		if needBody {
-			wg.Add(1)
-			bodySem <- struct{}{}
-			go func(idx int, ent bridge.NetworkEntry) {
-				defer wg.Done()
-				defer func() { <-bodySem }()
-				body, b64, _ := nm.GetResponseBody(fetchCtx, ent.RequestID)
-				if len(body) > maxExportBodyBytes {
-					body = ""
-					b64 = false
-				}
-				e := observe.NetworkEntryToExport(ent, body, b64)
-				if redactHeaders {
-					e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
-					e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
-				}
-				exportEntries[idx] = e
-			}(i, entry)
-		} else {
-			e := observe.NetworkEntryToExport(entry, "", false)
-			if redactHeaders {
-				e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
-				e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
-			}
-			exportEntries[i] = e
-		}
-	}
-	wg.Wait()
-
-	enc := factory("PinchTab", h.version())
-
+	// Entries are encoded incrementally in capture order as their bodies resolve;
+	// streamExportEntries caps in-memory entries at bodyFetchConcurrency rather than
+	// buffering the whole []observe.ExportEntry before encoding.
 	if output == "file" {
-		if err := h.writeExportFile(w, r, enc, exportEntries, formatName); err != nil {
+		if err := h.writeExportFile(w, r, enc, ec.formatName, func(emit func(observe.ExportEntry) error) error {
+			return h.streamExportEntries(fetchCtx, nm, entries, includeBody, redactHeaders, emit)
+		}); err != nil {
 			httpx.Error(w, 500, fmt.Errorf("write file: %w", err))
 		}
 		return
 	}
 
-	// Stream to response
 	w.Header().Set("Content-Type", enc.ContentType())
 	if err := enc.Start(w); err != nil {
 		return
 	}
-	for _, entry := range exportEntries {
-		if err := enc.Encode(entry); err != nil {
-			return
-		}
+	if err := h.streamExportEntries(fetchCtx, nm, entries, includeBody, redactHeaders, enc.Encode); err != nil {
+		return
 	}
 	_ = enc.Finish()
 }
 
+// exportContext is the resolved prelude shared by the two export endpoints.
+type exportContext struct {
+	tabCtx        context.Context
+	resolvedTabID string
+	factory       observe.ExportEncoderFactory
+	formatName    string
+}
+
+// resolveExportContext runs the post-browser export prelude shared by
+// /network/export and /network/export/stream: tab resolution + domain policy,
+// tab-lease enforcement, read-request bookkeeping, and export-format resolution.
+// The caller runs the browser-ready guard (and, for the streaming variant, the
+// path-required check) first so each endpoint keeps its own ordering. On any
+// failure it writes the response and returns ok=false.
+func (h *Handlers) resolveExportContext(w http.ResponseWriter, r *http.Request, label string) (exportContext, bool) {
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	if !ok {
+		return exportContext{}, false
+	}
+
+	owner := resolveOwner(r, "")
+	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
+		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
+		return exportContext{}, false
+	}
+
+	h.recordReadRequest(r, label, resolvedTabID)
+
+	formatName := r.URL.Query().Get("format")
+	if formatName == "" {
+		formatName = "har"
+	}
+	factory := observe.GetFormat(formatName)
+	if factory == nil {
+		httpx.JSON(w, 400, map[string]any{
+			"code":      "unknown_format",
+			"error":     fmt.Sprintf("unknown export format %q", formatName),
+			"available": observe.ListFormats(),
+		})
+		return exportContext{}, false
+	}
+
+	return exportContext{tabCtx: tabCtx, resolvedTabID: resolvedTabID, factory: factory, formatName: formatName}, true
+}
+
+// resolveExportBody returns the response body and base64 flag for an export entry,
+// preferring the body already retained in the capture buffer (no CDP round-trip,
+// and it survives the resource being evicted from Chrome) and only falling back to
+// a live GetResponseBody fetch when nothing is retained.
+func resolveExportBody(ctx context.Context, nm *bridge.NetworkMonitor, entry bridge.NetworkEntry) (string, bool) {
+	if entry.BodyRetained {
+		return clampExportBody(entry.ResponseBody, entry.Base64Encoded)
+	}
+	body, b64, _ := nm.GetResponseBody(ctx, entry.RequestID)
+	return clampExportBody(body, b64)
+}
+
+// streamExportEntries converts entries to ExportEntry values and invokes emit for
+// each, in the original capture order, fetching response bodies through a bounded
+// concurrent pipeline. A producer goroutine cannot run more than bodyFetchConcurrency
+// entries ahead of the consumer, so at most that many entries are materialized in
+// memory at once — a large capture is never buffered whole. It returns the first
+// emit error after draining outstanding fetches so no goroutine leaks.
+func (h *Handlers) streamExportEntries(
+	ctx context.Context,
+	nm *bridge.NetworkMonitor,
+	entries []bridge.NetworkEntry,
+	includeBody, redactHeaders bool,
+	emit func(observe.ExportEntry) error,
+) error {
+	results := make([]chan observe.ExportEntry, len(entries))
+	for i := range results {
+		results[i] = make(chan observe.ExportEntry, 1)
+	}
+
+	// A slot is acquired before a body fetch starts and released by the consumer
+	// once it has encoded that entry, capping in-flight (fetched-but-unencoded)
+	// entries — and therefore memory — at bodyFetchConcurrency.
+	sem := make(chan struct{}, bodyFetchConcurrency)
+	go func() {
+		var wg sync.WaitGroup
+		for i, entry := range entries {
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(idx int, ent bridge.NetworkEntry) {
+				defer wg.Done()
+				var body string
+				var b64 bool
+				if includeBody && ent.Finished && !ent.Failed {
+					body, b64 = resolveExportBody(ctx, nm, ent)
+				}
+				results[idx] <- toExportEntry(ent, body, b64, redactHeaders)
+			}(i, entry)
+		}
+		wg.Wait()
+	}()
+
+	var emitErr error
+	for i := range results {
+		entry := <-results[i]
+		if emitErr == nil {
+			if err := emit(entry); err != nil {
+				emitErr = err
+			}
+		}
+		// Always release the slot, even after an emit error, so producers blocked
+		// on sem can finish (drain to avoid leaking goroutines).
+		<-sem
+	}
+	return emitErr
+}
+
+// resolveExportFile sanitizes userPath into the server-controlled exports dir
+// (filepath.Base + SafeCreatePath + abs-prefix containment), creates the dir,
+// and opens the .tmp file 0600. status is the HTTP code for err (400 for
+// path/sanitization failures, 500 for filesystem failures). This is the ONLY
+// path both export writers may use — do not re-implement it.
+func (h *Handlers) resolveExportFile(userPath string) (absPath, tmpPath string, f *os.File, status int, err error) {
+	exportDir := filepath.Join(h.Config.StateDir, "exports")
+	if err = os.MkdirAll(exportDir, 0750); err != nil {
+		return "", "", nil, 500, fmt.Errorf("create dir: %w", err)
+	}
+	safeName := filepath.Base(userPath)
+	safePath, err := httpx.SafeCreatePath(exportDir, safeName)
+	if err != nil {
+		return "", "", nil, 400, fmt.Errorf("invalid path: %w", err)
+	}
+	absBase, _ := filepath.Abs(exportDir)
+	absPath, err = filepath.Abs(safePath)
+	if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
+		return "", "", nil, 400, fmt.Errorf("path escapes export directory")
+	}
+	tmpPath = absPath + ".tmp"
+	f, err = os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", "", nil, 500, fmt.Errorf("create file: %w", err)
+	}
+	return absPath, tmpPath, f, 200, nil
+}
+
+// clampExportBody drops a response body that exceeds the export size cap.
+func clampExportBody(body string, b64 bool) (string, bool) {
+	if len(body) > maxExportBodyBytes {
+		return "", false
+	}
+	return body, b64
+}
+
+// toExportEntry converts a captured entry to an export entry, redacting
+// sensitive request/response headers when redactHeaders is set.
+func toExportEntry(entry bridge.NetworkEntry, body string, b64, redactHeaders bool) observe.ExportEntry {
+	e := observe.NetworkEntryToExport(entry, body, b64)
+	if redactHeaders {
+		e.Request.Headers = observe.RedactSensitiveHeaders(e.Request.Headers)
+		e.Response.Headers = observe.RedactSensitiveHeaders(e.Response.Headers)
+	}
+	return e
+}
+
+// writeExportFile encodes an export to a temp file via encodeAll (which pushes
+// each ExportEntry through emit), then atomically renames it into place. encodeAll
+// drives the incremental producer so entries are never buffered whole in memory.
 func (h *Handlers) writeExportFile(
 	w http.ResponseWriter,
 	r *http.Request,
 	enc observe.ExportEncoder,
-	entries []observe.ExportEntry,
 	formatName string,
+	encodeAll func(emit func(observe.ExportEntry) error) error,
 ) error {
 	userPath := r.URL.Query().Get("path")
 	if userPath == "" {
@@ -219,45 +315,33 @@ func (h *Handlers) writeExportFile(
 		userPath = fmt.Sprintf("network-%s%s", ts, enc.FileExtension())
 	}
 
-	// Path safety: use SafeCreatePath + containment check (#1)
-	exportDir := filepath.Join(h.Config.StateDir, "exports")
-	if err := os.MkdirAll(exportDir, 0750); err != nil {
-		return fmt.Errorf("create dir: %w", err)
-	}
-
-	safeName := filepath.Base(userPath)
-	finalPath, err := httpx.SafeCreatePath(exportDir, safeName)
+	absPath, tmpPath, f, _, err := h.resolveExportFile(userPath)
 	if err != nil {
-		return fmt.Errorf("invalid path: %w", err)
-	}
-	absBase, _ := filepath.Abs(exportDir)
-	absPath, err := filepath.Abs(finalPath)
-	if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-		return fmt.Errorf("path escapes export directory")
+		return err
 	}
 
-	tmpPath := absPath + ".tmp"
-
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+	cleanup := func() {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 	}
 
 	if err := enc.Start(f); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
+		cleanup()
 		return err
 	}
-	for _, entry := range entries {
+	count := 0
+	if err := encodeAll(func(entry observe.ExportEntry) error {
 		if err := enc.Encode(entry); err != nil {
-			_ = f.Close()
-			_ = os.Remove(tmpPath)
 			return err
 		}
+		count++
+		return nil
+	}); err != nil {
+		cleanup()
+		return err
 	}
 	if err := enc.Finish(); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
+		cleanup()
 		return err
 	}
 	if err := f.Close(); err != nil {
@@ -272,7 +356,7 @@ func (h *Handlers) writeExportFile(
 
 	httpx.JSON(w, 200, map[string]any{
 		"path":    absPath,
-		"entries": len(entries),
+		"entries": count,
 		"format":  formatName,
 	})
 	return nil
@@ -280,18 +364,7 @@ func (h *Handlers) writeExportFile(
 
 // HandleTabNetworkExport handles GET /tabs/{id}/network/export.
 func (h *Handlers) HandleTabNetworkExport(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-	h.HandleNetworkExport(w, req)
+	h.withPathTabID(w, r, h.HandleNetworkExport)
 }
 
 func parseNetworkFilter(r *http.Request) bridge.NetworkFilter {

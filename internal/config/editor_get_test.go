@@ -8,7 +8,7 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 	triples := []struct {
 		path  string
 		value string
-		want  string // what GetConfigValue should return
+		want  string
 	}{
 		{"server.port", "8080", "8080"},
 		{"server.bind", "0.0.0.0", "0.0.0.0"},
@@ -21,8 +21,19 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"observability.activity.retentionDays", "14", "14"},
 		{"observability.activity.events.dashboard", "true", "true"},
 		{"observability.activity.events.mcp", "false", "false"},
+		// browser.provider is no longer supported; tested separately below.
 		{"browser.version", "120.0", "120.0"},
 		{"browser.binary", "/usr/bin/chrome", "/usr/bin/chrome"},
+		{"browsers.default", "cloak", "cloak"},
+		{"browsers.available", "chrome,cloak,ghost-chrome", "chrome,cloak,ghost-chrome"},
+		{"browser.cloak.fingerprintSeed", "42069", "42069"},
+		{"browser.cloak.platform", "windows", "windows"},
+		{"browser.cloak.locale", "en-GB", "en-GB"},
+		{"browser.cloak.timezone", "Europe/London", "Europe/London"},
+		{"browser.cloak.webrtcIP", "auto", "auto"},
+		{"browser.cloak.fontsDir", "/opt/fonts", "/opt/fonts"},
+		{"browser.cloak.storageQuotaMB", "2048", "2048"},
+		{"browser.cloak.disableDefaultStealthArgs", "false", "false"},
 		{"instanceDefaults.mode", "headed", "headed"},
 		{"instanceDefaults.noRestore", "true", "true"},
 		{"instanceDefaults.blockImages", "false", "false"},
@@ -136,8 +147,10 @@ func TestGetConfigValue_NilPointerReturnsEmpty(t *testing.T) {
 
 func TestGetConfigValue_AttachSlices(t *testing.T) {
 	fc := &FileConfig{}
+	forwardProxyAuth := true
 	fc.Security.Attach.AllowHosts = []string{"127.0.0.1", "localhost"}
 	fc.Security.Attach.AllowSchemes = []string{"ws", "wss"}
+	fc.Security.Attach.ForwardProxyAuth = &forwardProxyAuth
 
 	hosts, err := GetConfigValue(fc, "security.attach.allowHosts")
 	if err != nil {
@@ -153,6 +166,14 @@ func TestGetConfigValue_AttachSlices(t *testing.T) {
 	}
 	if schemes != "ws,wss" {
 		t.Errorf("allowSchemes = %q, want %q", schemes, "ws,wss")
+	}
+
+	forward, err := GetConfigValue(fc, "security.attach.forwardProxyAuth")
+	if err != nil {
+		t.Fatalf("GetConfigValue(security.attach.forwardProxyAuth) error = %v", err)
+	}
+	if forward != "true" {
+		t.Errorf("forwardProxyAuth = %q, want %q", forward, "true")
 	}
 }
 

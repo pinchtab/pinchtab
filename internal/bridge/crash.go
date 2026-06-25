@@ -85,7 +85,6 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 		return
 	}
 
-	// Listen for target crashes on browser context
 	chromedp.ListenTarget(b.BrowserCtx, func(ev interface{}) {
 		switch e := ev.(type) {
 		case *inspector.EventTargetCrashed:
@@ -161,7 +160,6 @@ func (b *Bridge) GetCrashLogs() []string {
 
 	var logs []string
 
-	// Check if last exit was unclean
 	if WasUncleanExit(b.Config.ProfileDir) {
 		logs = append(logs, "Previous session ended with unclean exit (crash detected)")
 	}

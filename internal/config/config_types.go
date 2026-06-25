@@ -7,7 +7,6 @@ const defaultPort = "9867"
 // RuntimeConfig holds all runtime settings used throughout the application.
 // This is the single source of truth for configuration at runtime.
 type RuntimeConfig struct {
-	// Server settings
 	Bind              string
 	Port              string
 	InstancePortStart int // Starting port for instances (default 9868)
@@ -19,13 +18,13 @@ type RuntimeConfig struct {
 	VerboseStartup    bool  // Show full banner and slog output on server start
 	BackgroundMarker  string
 
-	// Security settings
 	AllowEvaluate         bool
 	AllowMacro            bool
 	AllowScreencast       bool
 	AllowDownload         bool
 	AllowCookies          bool
 	AllowNetworkIntercept bool
+	AllowFileScheme       bool
 	// AllowedDomains is the unified per-instance allowlist sourced from
 	// security.allowedDomains in the file config.
 	AllowedDomains         []string
@@ -45,24 +44,23 @@ type RuntimeConfig struct {
 	TrustedResolveCIDRs    []string // CIDRs/IPs allowed when a navigation target resolves to non-public addresses
 	TrustLoopbackProxy     bool     // when true, navigation responses with a loopback RemoteIPAddress (e.g. system HTTP/SOCKS proxy on 127.0.0.1) are not blocked; default false
 
-	// Browser/instance settings
 	Headless            bool
 	HeadlessSet         bool // true when explicitly set via config or flag
-	DisableInProcessGPU bool // runtime-only: set after a GPU crash to avoid repeating the failure
+	DisableInProcessGPU bool // runtime-only: kill switch for --in-process-gpu when a user opted in via browser.extraFlags and the browser then crashed
 	NoRestore           bool
 	ProfileDir          string
 	ProfilesBaseDir     string
 	DefaultProfile      string
-	ChromeVersion       string
+	BrowserVersion      string
 	Timezone            string
 	BlockImages         bool
 	BlockMedia          bool
 	BlockAds            bool
 	MaxTabs             int
 	MaxParallelTabs     int // 0 = auto-detect from runtime.NumCPU
-	ChromeBinary        string
-	ChromeDebugPort     int
-	ChromeExtraFlags    string
+	BrowserBinary       string
+	BrowserDebugPort    int
+	BrowserExtraFlags   string
 	// CDPAttachURL: when set, the bridge skips launching its own Chrome and
 	// connects to an already-running Chrome whose browser-level CDP
 	// WebSocket URL is provided here (e.g.
@@ -70,7 +68,19 @@ type RuntimeConfig struct {
 	// agent to drive the user's actual Chrome (extensions, profile, signed-in
 	// state) rather than a fresh isolated profile. Cleanup never kills the
 	// external Chrome — pinchtab only owns the CDP connection.
-	CDPAttachURL       string
+	CDPAttachURL      string
+	Cloak             CloakBrowserRuntimeConfig
+	Proxy             BrowserProxyConfig
+	DefaultBrowser    string
+	BrowsersAvailable []string
+	Targets           BrowserTargetsConfig
+	DefaultTarget     string
+	FallbackOrder     []string
+	// TargetsSynthesized marks Targets as auto-migrated from legacy
+	// browser.binary/cloak/proxy fields rather than user-authored; only
+	// synthesized targets may be rewritten by provider reconciliation on
+	// serialization. Load-time bookkeeping, never serialized.
+	TargetsSynthesized bool
 	ExtensionPaths     []string
 	UserAgent          string
 	NoAnimations       bool
@@ -81,7 +91,6 @@ type RuntimeConfig struct {
 	TabCloseDelay      time.Duration // applies when TabLifecyclePolicy == "close_idle" (default 5m when enabled)
 	TabRestore         bool          // restore previously open tabs from sessions.json on startup (default false)
 
-	// Timeout settings
 	ActionTimeout   time.Duration
 	NavigateTimeout time.Duration
 	ShutdownTimeout time.Duration
@@ -95,21 +104,19 @@ type RuntimeConfig struct {
 	RestartMaxBackoff  time.Duration // Maximum restart backoff cap (0 = strategy default)
 	RestartStableAfter time.Duration // Stable runtime window that resets the restart counter (0 = strategy default)
 
-	// Attach settings
-	AttachEnabled      bool
-	AttachAllowHosts   []string
-	AttachAllowSchemes []string
+	AttachEnabled          bool
+	AttachAllowHosts       []string
+	AttachAllowSchemes     []string
+	AttachForwardProxyAuth bool
 
-	// IDPI (Indirect Prompt Injection defense) settings
+	// RemoteCDPURL: when set, bridge attaches to an external browser via CDP instead of launching Chrome. Not persisted.
+	RemoteCDPURL      string
+	RemoteBrowserName string
+
 	IDPI IDPIConfig
 
-	// Dialog settings
 	DialogAutoAccept bool
 
-	// Engine mode: "chrome" (default), "lite", or "auto"
-	Engine string
-
-	// Network monitoring
 	NetworkBufferSize         int  // Per-tab network buffer size (default 100)
 	RetainNetworkBodies       bool // When true, opportunistically retain response bodies in the per-tab network buffer
 	RetainNetworkBodyMaxBytes int  // Max retained response-body bytes per entry when RetainNetworkBodies is enabled
@@ -117,13 +124,10 @@ type RuntimeConfig struct {
 	// Scheduler settings (dashboard mode only)
 	Scheduler SchedulerConfig
 
-	// Observability settings
 	Observability ObservabilityConfig
 
-	// Session settings
 	Sessions SessionsRuntimeConfig
 
-	// AutoSolver settings
 	AutoSolver AutoSolverConfig
 }
 
@@ -256,13 +260,16 @@ type FileConfig struct {
 	Observability    ObservabilityFileConfig `json:"observability,omitempty"`
 	Sessions         SessionsFileConfig      `json:"sessions,omitempty"`
 	AutoSolver       AutoSolverFileConfig    `json:"autoSolver,omitempty"`
+	Browsers         BrowsersConfig          `json:"browsers,omitempty"`
 }
 
 type ServerConfig struct {
-	Port                      string `json:"port,omitempty"`
-	Bind                      string `json:"bind,omitempty"`
-	Token                     string `json:"token,omitempty"`
-	StateDir                  string `json:"stateDir,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Bind     string `json:"bind,omitempty"`
+	Token    string `json:"token,omitempty"`
+	StateDir string `json:"stateDir,omitempty"`
+	// Engine is no longer supported. Kept for JSON parsing so old configs get a
+	// validation error instead of silently ignoring the field.
 	Engine                    string `json:"engine,omitempty"`
 	NetworkBufferSize         *int   `json:"networkBufferSize,omitempty"`
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`
@@ -293,11 +300,74 @@ type DashboardSessionFileConfig struct {
 }
 
 type BrowserConfig struct {
-	ChromeVersion    string   `json:"version,omitempty"`
-	ChromeBinary     string   `json:"binary,omitempty"`
-	ChromeDebugPort  *int     `json:"remoteDebuggingPort,omitempty"`
-	ChromeExtraFlags string   `json:"extraFlags,omitempty"`
-	ExtensionPaths   []string `json:"extensionPaths,omitempty"`
+	// Removed: presence triggers a validation error. Keep for JSON backward compat.
+	Provider          string             `json:"provider,omitempty"`
+	BrowserVersion    string             `json:"version,omitempty"`
+	BrowserBinary     string             `json:"binary,omitempty"`
+	BrowserDebugPort  *int               `json:"remoteDebuggingPort,omitempty"`
+	BrowserExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak             CloakBrowserConfig `json:"cloak,omitempty"`
+	ExtensionPaths    []string           `json:"extensionPaths,omitempty"`
+
+	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
+
+	DefaultTarget string               `json:"defaultTarget,omitempty"`
+	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
+	Targets       BrowserTargetsConfig `json:"targets,omitempty"`
+}
+
+// BrowserTargetsConfig maps target name -> target config. Names must match `^[a-z][a-z0-9-]{0,31}$`.
+type BrowserTargetsConfig map[string]BrowserTargetConfig
+
+// BrowserTargetConfig is a single named browser target. See docs/architecture/browser-abstraction.md.
+type BrowserTargetConfig struct {
+	Provider   string             `json:"provider,omitempty"`
+	Binary     string             `json:"binary,omitempty"`
+	ExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
+	// Proxy, when Server is non-empty, replaces the global BrowserConfig.Proxy entirely (no merge).
+	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
+}
+
+type CloakBrowserConfig struct {
+	FingerprintSeed           string `json:"fingerprintSeed,omitempty"`
+	Platform                  string `json:"platform,omitempty"`
+	Locale                    string `json:"locale,omitempty"`
+	Timezone                  string `json:"timezone,omitempty"`
+	WebRTCIP                  string `json:"webrtcIP,omitempty"`
+	FontsDir                  string `json:"fontsDir,omitempty"`
+	StorageQuotaMB            *int   `json:"storageQuotaMB,omitempty"`
+	DisableDefaultStealthArgs *bool  `json:"disableDefaultStealthArgs,omitempty"`
+}
+
+type CloakBrowserRuntimeConfig struct {
+	FingerprintSeed           string
+	Platform                  string
+	Locale                    string
+	Timezone                  string
+	WebRTCIP                  string
+	FontsDir                  string
+	StorageQuotaMB            int
+	DisableDefaultStealthArgs bool
+}
+
+// BrowsersConfig is the Phase 1 top-level browsers block that declares
+// available browser providers and per-browser configuration overrides.
+type BrowsersConfig struct {
+	Default   string                       `json:"default,omitempty"`
+	Available []string                     `json:"available,omitempty"`
+	Config    map[string]BrowserItemConfig `json:"config,omitempty"`
+}
+
+// BrowserItemConfig holds the retired browsers.config per-browser overrides.
+// The block was never applied anywhere and is superseded by browser.targets;
+// it is parsed only so validation can reject it with guidance and so existing
+// files round-trip byte-for-byte.
+type BrowserItemConfig struct {
+	Binary     string             `json:"binary,omitempty"`
+	ExtraFlags string             `json:"extraFlags,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
+	Proxy      BrowserProxyConfig `json:"proxy,omitempty"`
 }
 
 type InstanceDefaultsConfig struct {
@@ -340,6 +410,7 @@ type SecurityConfig struct {
 	AllowDownload          *bool        `json:"allowDownload,omitempty"`
 	AllowCookies           *bool        `json:"allowCookies,omitempty"`
 	AllowNetworkIntercept  *bool        `json:"allowNetworkIntercept,omitempty"`
+	AllowFileScheme        *bool        `json:"allowFileScheme,omitempty"`
 	AllowedDomains         []string     `json:"allowedDomains,omitempty"`
 	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
 	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
@@ -377,9 +448,10 @@ type MultiInstanceRestartConfig struct {
 }
 
 type AttachConfig struct {
-	Enabled      *bool    `json:"enabled,omitempty"`
-	AllowHosts   []string `json:"allowHosts,omitempty"`
-	AllowSchemes []string `json:"allowSchemes,omitempty"`
+	Enabled          *bool    `json:"enabled,omitempty"`
+	AllowHosts       []string `json:"allowHosts,omitempty"`
+	AllowSchemes     []string `json:"allowSchemes,omitempty"`
+	ForwardProxyAuth *bool    `json:"forwardProxyAuth,omitempty"`
 }
 
 type TimeoutsConfig struct {

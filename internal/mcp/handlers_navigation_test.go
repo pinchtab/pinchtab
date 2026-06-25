@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -83,6 +84,39 @@ func TestHandleNavigateAnyScheme(t *testing.T) {
 		if r.IsError {
 			t.Errorf("expected %q to succeed, got error: %s", u, resultText(t, r))
 		}
+	}
+}
+
+func TestHandleNavigateSnapUsesReturnedTab(t *testing.T) {
+	var snapshotQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/navigate":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tabId": "tab-new",
+				"url":   "https://example.com",
+			})
+		case "/snapshot":
+			snapshotQuery = r.URL.Query()
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"snapshot": true,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_navigate", map[string]any{
+		"url":  "https://example.com",
+		"snap": true,
+	}, srv)
+	if r.IsError {
+		t.Fatalf("navigate returned error: %s", resultText(t, r))
+	}
+
+	if got := snapshotQuery.Get("tabId"); got != "tab-new" {
+		t.Fatalf("snapshot tabId = %q, want tab-new; query=%v", got, snapshotQuery)
 	}
 }
 
@@ -210,6 +244,10 @@ func TestHandleScreenshot(t *testing.T) {
 	}
 	if !strings.Contains(text, `"beyondViewport"`) {
 		t.Errorf("expected beyondViewport query param, got %s", text)
+	}
+	// Inline output is requested explicitly, not left to the server default.
+	if !strings.Contains(text, `"output"`) || !strings.Contains(text, "inline") {
+		t.Errorf("expected output=inline query param, got %s", text)
 	}
 }
 
@@ -475,5 +513,26 @@ func TestHandleGetTextMaxCharsZeroIgnored(t *testing.T) {
 	text := resultText(t, r)
 	if strings.Contains(text, `"maxChars"`) {
 		t.Errorf("maxChars should not be sent when not specified, got %s", text)
+	}
+}
+
+func TestHandleCaptureForwardsBrowser(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("JPEGBYTES"))
+	var captureQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureQuery = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"image": map[string]any{"format": "jpeg", "base64": encoded},
+		})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_capture", map[string]any{"browser": "cloak"}, srv)
+	if r.IsError {
+		t.Fatalf("unexpected error: %s", resultText(t, r))
+	}
+	if got := captureQuery.Get("browser"); got != "cloak" {
+		t.Fatalf("capture browser = %q, want cloak; query=%v", got, captureQuery)
 	}
 }

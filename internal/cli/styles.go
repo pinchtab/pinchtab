@@ -51,7 +51,6 @@ func Fatal(format string, args ...any) {
 }
 
 func SetupUsage(root *cobra.Command) {
-	// Custom template using the shared ANSI-ready styles.
 	headerStyle := HeadingStyle.Render
 	cmdStyle := CommandStyle.Render
 

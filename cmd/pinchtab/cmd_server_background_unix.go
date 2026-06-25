@@ -11,3 +11,7 @@ func processAlive(pid int) bool {
 func stopProcess(pid int) error {
 	return syscall.Kill(pid, syscall.SIGTERM)
 }
+
+func forceKillProcess(pid int) error {
+	return syscall.Kill(pid, syscall.SIGKILL)
+}

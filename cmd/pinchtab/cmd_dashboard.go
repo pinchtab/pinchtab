@@ -41,7 +41,6 @@ func runDashboardCommand(cfgPort, cfgBind, cfgToken string, noOpen bool, portOve
 	host := resolveHost(cfgBind)
 	url := fmt.Sprintf("http://%s:%s", host, port)
 
-	// Health check
 	if !isDashboardReachable(host, port) {
 		fmt.Println(cli.StyleStdout(cli.WarningStyle, "  Dashboard doesn't appear to be running."))
 		fmt.Printf("  Start with %s or %s\n\n",
@@ -61,7 +60,6 @@ func runDashboardCommand(cfgPort, cfgBind, cfgToken string, noOpen bool, portOve
 		}
 	}
 
-	// Open browser
 	if !noOpen {
 		if err := openBrowser(url); err == nil {
 			fmt.Println(cli.StyleStdout(cli.SuccessStyle, "  Opened in your browser."))

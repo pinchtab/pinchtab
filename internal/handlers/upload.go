@@ -11,12 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/dom"
-	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 type uploadRequest struct {
@@ -36,18 +33,6 @@ const (
 )
 
 var (
-	setUploadFileInputFiles = func(ctx context.Context, selector string, paths []string) error {
-		return chromedp.Run(ctx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				nodeID, err := resolveSelector(ctx, selector)
-				if err != nil {
-					return fmt.Errorf("selector %q: %w", selector, err)
-				}
-				return dom.SetFileInputFiles(paths).WithNodeID(nodeID).Do(ctx)
-			}),
-		)
-	}
-
 	cleanupStagedUploadDirAfter = func(dir string, after time.Duration) {
 		if dir == "" {
 			return
@@ -78,9 +63,7 @@ var (
 // staging dirs are retained briefly for lazy browser reads, then cleaned.
 func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowUpload {
-		httpx.ErrorCode(w, 403, "upload_disabled", httpx.DisabledEndpointMessage("upload", "security.allowUpload"), false, map[string]any{
-			"setting": "security.allowUpload",
-		})
+		h.writeCapabilityDisabled(w, routes.CapUpload)
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
@@ -205,7 +188,16 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
-	if err := setUploadFileInputFiles(tCtx, req.Selector, allPaths); err != nil {
+	nodeID, err := h.Bridge.ResolveSelectorToNodeID(tCtx, req.Selector)
+	if err != nil {
+		// A selector that doesn't resolve is a client error, not a server fault —
+		// match the element-targeting handlers' 4xx convention.
+		err = fmt.Errorf("%w: upload selector %q: %v", ErrElementNotFound, req.Selector, err)
+		httpx.Error(w, statusForElementErr(err), err)
+		return
+	}
+
+	if err := h.Bridge.SetFileInputFiles(tCtx, nodeID, allPaths); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("upload: %w", err))
 		return
 	}
@@ -225,61 +217,9 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleTabUpload uploads files for a tab identified by path ID.
-//
 // @Endpoint POST /tabs/{id}/upload
 func (h *Handlers) HandleTabUpload(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	q := r.URL.Query()
-	q.Set("tabId", tabID)
-
-	req := r.Clone(r.Context())
-	u := *r.URL
-	u.RawQuery = q.Encode()
-	req.URL = &u
-
-	h.HandleUpload(w, req)
-}
-
-// resolveSelector finds a DOM node by a unified selector string and returns its NodeID.
-// Supports CSS (default), XPath (xpath: prefix or // auto-detect), and text (text: prefix).
-func resolveSelector(ctx context.Context, sel string) (cdp.NodeID, error) {
-	// Determine the JavaScript expression based on selector type.
-	var expr string
-	switch {
-	case strings.HasPrefix(sel, "xpath:"):
-		xpath := sel[len("xpath:"):]
-		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, xpath)
-	case strings.HasPrefix(sel, "//") || strings.HasPrefix(sel, "(//"):
-		expr = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue})()`, sel)
-	case strings.HasPrefix(sel, "text:"):
-		text := sel[len("text:"):]
-		expr = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%q))return w.currentNode.parentElement}return null})()`, text)
-	case strings.HasPrefix(sel, "css:"):
-		css := sel[len("css:"):]
-		expr = fmt.Sprintf(`document.querySelector(%q)`, css)
-	default:
-		// Bare selector: treat as CSS (backward compatible).
-		expr = fmt.Sprintf(`document.querySelector(%q)`, sel)
-	}
-
-	val, _, err := runtime.Evaluate(expr).Do(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("evaluate: %w", err)
-	}
-	if val.ObjectID == "" {
-		return 0, fmt.Errorf("no element matches selector")
-	}
-	node, err := dom.RequestNode(val.ObjectID).Do(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("request node: %w", err)
-	}
-	return node, nil
+	h.withPathTabID(w, r, h.HandleUpload)
 }
 
 func validateUploadSandboxPath(baseDir, rawPath string, maxFileBytes int) (string, int64, error) {
@@ -342,13 +282,11 @@ func decodeFileData(input string) ([]byte, string, error) {
 	var b64 string
 
 	if strings.HasPrefix(input, "data:") {
-		// data:image/png;base64,iVBOR...
 		parts := strings.SplitN(input, ",", 2)
 		if len(parts) != 2 {
 			return nil, "", fmt.Errorf("invalid data URL")
 		}
 		b64 = parts[1]
-		// Extract mime for extension.
 		meta := strings.TrimPrefix(parts[0], "data:")
 		mime := strings.SplitN(meta, ";", 2)[0]
 		ext = mimeToExt(mime)
@@ -358,7 +296,6 @@ func decodeFileData(input string) ([]byte, string, error) {
 
 	data, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		// Try URL-safe encoding.
 		data, err = base64.URLEncoding.DecodeString(b64)
 		if err != nil {
 			return nil, "", fmt.Errorf("base64 decode: %w", err)

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,9 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -30,83 +27,22 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case tabActionNew:
-		var target *validatedNavigateTarget
-		trustedResolveCIDRs := parseCIDRs(h.Config.TrustedResolveCIDRs)
-		trustedCIDRs := buildNavigateTrustedProxyCIDRs(h.Config)
+		// A URL-bearing "new" converges onto the shared /navigate pipeline so it
+		// gets the same browser routing, static-first phase, waitFor/banner/auto-
+		// solve post-steps, and {tabId,url,title,route} response. A blank/about:blank
+		// "new" stays on the lightweight create-only path.
 		if req.URL != "" && req.URL != "about:blank" {
-			if err := validateNavigateURL(req.URL); err != nil {
-				httpx.Error(w, 400, err)
-				return
-			}
-			domainResult := h.IDPIGuard.CheckDomain(req.URL)
-			if domainResult.Blocked {
-				httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
-				return
-			}
-			if domainResult.Threat {
-				w.Header().Set("X-IDPI-Warning", domainResult.Reason)
-			}
-			var err error
-			target, err = validateNavigateTarget(req.URL, h.IDPIGuard.DomainAllowed(req.URL), trustedResolveCIDRs)
-			if err != nil {
-				httpx.Error(w, http.StatusForbidden, err)
-				return
-			}
-		}
-
-		if !h.ensureChromeOrRespond(w) {
+			h.navigateToURL(w, r, navigateRequest{URL: req.URL, NewTab: true})
 			return
 		}
-
-		// Create a blank tab first so the requested URL becomes the first
-		// real history entry.
-		newTabID, ctx, _, err := h.Bridge.CreateTab("")
-		if err != nil {
-			httpx.Error(w, 500, err)
-			return
-		}
-
-		if req.URL != "" && req.URL != "about:blank" {
-			tCtx, tCancel := context.WithTimeout(ctx, h.Config.NavigateTimeout)
-			defer tCancel()
-			go httpx.CancelOnClientDone(r.Context(), tCancel)
-			navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
-			if err != nil {
-				_ = h.Bridge.CloseTab(newTabID)
-				httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
-				return
-			}
-			if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
-				if navGuard != nil {
-					if blockedErr := navGuard.blocked(); blockedErr != nil {
-						_ = h.Bridge.CloseTab(newTabID)
-						httpx.Error(w, http.StatusForbidden, blockedErr)
-						return
-					}
-				}
-				_ = h.Bridge.CloseTab(newTabID)
-				code := 500
-				if errors.Is(err, bridge.ErrTooManyRedirects) {
-					code = 422
-				}
-				navigateErrorWithHint(w, code, err, req.URL)
-				return
-			}
-		}
-
-		var curURL, title string
-		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
-
-		h.setCurrentTabForRequest(r, newTabID)
-		h.recordActivity(r, activity.Update{Action: "tab.new", TabID: newTabID, URL: curURL})
-		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
+		h.createBlankTab(w, r)
 
 	case "focus":
 		if req.TabID == "" {
 			httpx.Error(w, 400, fmt.Errorf("tabId required"))
 			return
 		}
-		if !h.ensureChromeOrRespond(w) {
+		if !h.ensureBrowserOrRespond(w, h.Config) {
 			return
 		}
 		if err := h.Bridge.FocusTab(req.TabID); err != nil {
@@ -122,6 +58,29 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 	default:
 		httpx.Error(w, 400, fmt.Errorf("action must be 'new' or 'focus'; use /close to close a tab"))
 	}
+}
+
+// createBlankTab creates a new blank tab without navigating — the no-URL /
+// about:blank form of POST /tab {"action":"new"}. The URL form converges onto the
+// shared navigate pipeline (navigateToURL); this path has no URL to validate,
+// route, or navigate, so it reports {tabId,url,title} and a tab.new activity.
+func (h *Handlers) createBlankTab(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
+		return
+	}
+
+	newTabID, ctx, _, err := h.Bridge.CreateTab("")
+	if err != nil {
+		httpx.Error(w, 500, err)
+		return
+	}
+
+	curURL, _ := h.Bridge.CurrentURL(ctx)
+	title, _ := h.Bridge.CurrentTitle(ctx)
+
+	h.setCurrentTabForRequest(r, newTabID)
+	h.recordActivity(r, activity.Update{Action: "tab.new", TabID: newTabID, URL: curURL})
+	httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
 }
 
 // HandleTabClose closes the tab identified by the path. It is the tab-scoped
@@ -166,7 +125,7 @@ func (h *Handlers) HandleClose(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) closeTab(w http.ResponseWriter, r *http.Request, tabID string) {
-	if !h.ensureChromeOrRespond(w) {
+	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 	if tabID == "" {

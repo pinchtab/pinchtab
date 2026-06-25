@@ -12,11 +12,20 @@ type LaunchContract struct {
 }
 
 func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract {
+	if config.PinchTabStealthDefaultsDisabled(cfg) {
+		return LaunchContract{
+			Flags: map[string]bool{
+				"nativeCloakBrowser":          true,
+				"pinchtabStealthArgsDisabled": true,
+			},
+		}
+	}
+
 	persona := BrowserPersona{}
 	customUA := ""
 	headless := false
 	if cfg != nil {
-		persona = BuildPersona(cfg.UserAgent, cfg.ChromeVersion)
+		persona = BuildPersona(cfg.UserAgent, cfg.BrowserVersion)
 		customUA = strings.TrimSpace(cfg.UserAgent)
 		headless = cfg.Headless
 	}
@@ -45,15 +54,20 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 		args = append(args, "--lang="+persona.Language)
 	}
 
+	flags := map[string]bool{
+		"automationControlledDisabled": true,
+		"enableAutomationFalse":        true,
+		"downlinkMaxFlag":              true,
+		"globalUserAgent":              pinUA,
+		"globalLanguage":               persona.Language != "",
+	}
+	if config.CloakBrowserActive(cfg) {
+		flags["nativeCloakBrowser"] = true
+	}
+
 	return LaunchContract{
-		Args: args,
-		Flags: map[string]bool{
-			"automationControlledDisabled": true,
-			"enableAutomationFalse":        true,
-			"downlinkMaxFlag":              true,
-			"globalUserAgent":              pinUA,
-			"globalLanguage":               persona.Language != "",
-		},
+		Args:  args,
+		Flags: flags,
 	}
 }
 

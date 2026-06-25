@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Wait sends a wait request to the server.
 func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
 	body := map[string]any{}
 
@@ -35,7 +34,7 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 	case fnFlag != "":
 		body["fn"] = fnFlag
 	case len(args) > 0:
-		// Check if arg is a number (ms wait) or a selector
+		// Bare arg is overloaded: a number means a ms wait, anything else a selector.
 		if ms, err := strconv.Atoi(args[0]); err == nil {
 			body["ms"] = ms
 		} else {

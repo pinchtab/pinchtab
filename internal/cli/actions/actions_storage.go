@@ -1,11 +1,8 @@
 package actions
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -24,20 +21,9 @@ func StorageGet(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("tabId", tab)
 	}
 
-	result := apiclient.DoGetRaw(client, base, token, "/storage", params)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to get storage")
-		os.Exit(1)
-	}
-
-	var buf map[string]any
-	if err := json.Unmarshal(result, &buf); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
-	}
-
-	out, _ := json.MarshalIndent(buf, "", "  ")
-	fmt.Println(string(out))
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/storage", params), 1, "Failed to get storage")
+	buf := decodeMap(result, 1, "Failed to parse response")
+	printIndented(buf)
 }
 
 // StorageSet sets a single localStorage or sessionStorage item.
@@ -57,11 +43,7 @@ func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key
 		body["tabId"] = tabID
 	}
 
-	result := apiclient.DoPost(client, base, token, "/storage", body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to set storage item")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoPost(client, base, token, "/storage", body), 1, "Failed to set storage item")
 }
 
 // StorageDelete removes a storage item, clears a store, or clears both (--all).
@@ -89,11 +71,7 @@ func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command) 
 		body["tabId"] = tabID
 	}
 
-	result := apiclient.DoDeleteJSON(client, base, token, "/storage", body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "Failed to delete storage")
-		os.Exit(1)
-	}
+	requireMap(apiclient.DoDeleteJSON(client, base, token, "/storage", body), 1, "Failed to delete storage")
 }
 
 // StorageClear clears storage (alias: passes type=all or the given type).

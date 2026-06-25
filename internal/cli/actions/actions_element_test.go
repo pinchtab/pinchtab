@@ -619,8 +619,6 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-// ── Keyboard command tests ─────────────────────────────────────────────
-
 func TestKeyboardType(t *testing.T) {
 	m := newMockServer()
 	defer m.close()
@@ -639,7 +637,6 @@ func TestKeyboardType(t *testing.T) {
 	if body["text"] != "hello world" {
 		t.Errorf("expected text='hello world', got %v", body["text"])
 	}
-	// Should not have selector or ref
 	if _, has := body["selector"]; has {
 		t.Error("keyboard-type should not have selector")
 	}

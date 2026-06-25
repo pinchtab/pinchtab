@@ -113,9 +113,10 @@ func filterEnvWithPrefixes(env []string, prefixes ...string) []string {
 }
 
 type ringBuffer struct {
-	mu   sync.Mutex
-	data []byte
-	max  int
+	mu           sync.Mutex
+	data         []byte
+	max          int
+	totalWritten uint64
 }
 
 func newRingBuffer(max int) *ringBuffer {
@@ -129,6 +130,7 @@ func (rb *ringBuffer) Write(p []byte) (int, error) {
 	if len(rb.data) > rb.max {
 		rb.data = rb.data[len(rb.data)-rb.max:]
 	}
+	rb.totalWritten += uint64(len(p))
 	return len(p), nil
 }
 
@@ -136,4 +138,36 @@ func (rb *ringBuffer) String() string {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 	return string(rb.data)
+}
+
+// since returns log bytes written after the given absolute offset, the new
+// absolute offset (totalWritten), and reset=true when offset fell behind the
+// evicted window (caller must replace, not append). chunk is "" when nothing new.
+func (rb *ringBuffer) since(offset uint64) (chunk string, newOffset uint64, reset bool) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	end := rb.totalWritten
+	start := end - uint64(len(rb.data))
+	if offset < start {
+		return string(rb.data), end, true
+	}
+	if offset >= end {
+		return "", end, false
+	}
+	return string(rb.data[offset-start:]), end, false
+}
+
+func tailChildLog(rb *ringBuffer, maxLines int) string {
+	if rb == nil || maxLines <= 0 {
+		return ""
+	}
+	raw := strings.TrimRight(rb.String(), "\n")
+	if raw == "" {
+		return ""
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.Join(lines, "\n")
 }

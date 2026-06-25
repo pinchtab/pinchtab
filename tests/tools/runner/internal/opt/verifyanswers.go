@@ -238,7 +238,6 @@ func RunVerifyAnswers(argv []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	// Load all steps, deduplicate by ID (keep first seen)
 	type stepData struct {
 		ID     string `json:"id"`
 		Answer string `json:"answer"`
@@ -259,9 +258,7 @@ func RunVerifyAnswers(argv []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		for _, s := range report.Steps {
-			if _, exists := seen[s.ID]; !exists {
-				seen[s.ID] = s
-			}
+			seen[s.ID] = s
 		}
 	}
 

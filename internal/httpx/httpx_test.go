@@ -21,7 +21,6 @@ func TestStatusWriter(t *testing.T) {
 		t.Errorf("expected recorded code 404, got %d", w.Code)
 	}
 
-	// Test default code
 	w2 := httptest.NewRecorder()
 	sw2 := &StatusWriter{ResponseWriter: w2, Code: 200}
 	_, _ = sw2.Write([]byte("ok"))

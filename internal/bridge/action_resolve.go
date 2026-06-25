@@ -3,14 +3,22 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/selector"
 )
+
+// ErrSelectorNoMatch marks a resolution failure where the selector was valid
+// but matched no element (a client-side "not found"), as distinct from a
+// CDP/transport fault, an unsupported selector kind, or an internal routing
+// error — which must surface as 5xx, not 404. Callers classify with errors.Is.
+var ErrSelectorNoMatch = errors.New("selector matched no element")
 
 type FrameElementMeta struct {
 	TagName string `json:"tagName"`
@@ -31,31 +39,7 @@ func FrameExecutionContextID(ctx context.Context, frameID string) (int64, error)
 }
 
 func frameExecutionContextID(ctx context.Context, frameID string) (int64, error) {
-	if frameID == "" {
-		return 0, nil
-	}
-
-	var worldResult json.RawMessage
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Page.createIsolatedWorld", map[string]any{
-			"frameId":   frameID,
-			"worldName": "pinchtab-frame-scope",
-		}, &worldResult)
-	}))
-	if err != nil {
-		return 0, fmt.Errorf("create isolated world for frame %q: %w", frameID, err)
-	}
-
-	var resp struct {
-		ExecutionContextID int64 `json:"executionContextId"`
-	}
-	if err := json.Unmarshal(worldResult, &resp); err != nil {
-		return 0, err
-	}
-	if resp.ExecutionContextID == 0 {
-		return 0, fmt.Errorf("frame %q has no execution context", frameID)
-	}
-	return resp.ExecutionContextID, nil
+	return bridgecdpops.FrameExecutionContextID(ctx, frameID)
 }
 
 func frameDocumentObjectID(ctx context.Context, frameID string) (string, error) {
@@ -168,7 +152,7 @@ func resolveNodeInFrame(ctx context.Context, frameID, functionDeclaration string
 		return 0, err
 	}
 	if call.Result.ObjectID == "" || call.Result.Subtype == "null" || call.Result.Type == "undefined" {
-		return 0, fmt.Errorf("no element found")
+		return 0, fmt.Errorf("%w", ErrSelectorNoMatch)
 	}
 
 	return backendNodeIDFromObjectID(ctx, call.Result.ObjectID)
@@ -215,8 +199,6 @@ func resolveElementMetaInFrame(ctx context.Context, frameID, functionDeclaration
 	return meta, nil
 }
 
-// ResolveXPathToNodeID resolves an XPath expression to a backend node ID
-// using CDP's DOM.performSearch + DOM.getSearchResults.
 func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 	var backendNodeID int64
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
@@ -226,7 +208,6 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 			return fmt.Errorf("get document: %w", err)
 		}
 
-		// Perform XPath search.
 		var searchResult json.RawMessage
 		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.performSearch", map[string]any{
 			"query": xpath,
@@ -242,10 +223,9 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 			return err
 		}
 		if sr.ResultCount == 0 {
-			return fmt.Errorf("xpath %q: no elements found", xpath)
+			return fmt.Errorf("xpath %q: %w", xpath, ErrSelectorNoMatch)
 		}
 
-		// Get the first result.
 		var getResult json.RawMessage
 		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getSearchResults", map[string]any{
 			"searchId":  sr.SearchID,
@@ -265,7 +245,6 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 			return fmt.Errorf("xpath %q: no node IDs returned", xpath)
 		}
 
-		// Convert DOM NodeID → BackendNodeID.
 		var descResult json.RawMessage
 		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
 			"nodeId": gr.NodeIDs[0],
@@ -283,7 +262,6 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 		}
 		backendNodeID = desc.Node.BackendNodeID
 
-		// Clean up the search.
 		_ = chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.discardSearchResults", map[string]any{
 			"searchId": sr.SearchID,
 		}, nil)
@@ -293,8 +271,16 @@ func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
 	return backendNodeID, err
 }
 
-// ResolveTextToNodeID finds the first element whose visible text content
-// contains the given string and returns its backend node ID.
+// jsNormalizeHelper is the shared text-normalization snippet injected into both
+// findTextFn and resolveSelectorAtFn so the two embedded JS programs can't drift
+// apart. It lowercases, collapses runs of whitespace to a single space, and
+// trims — identical in both call sites. Indentation here is cosmetic (JS ignores
+// it); only the runtime behavior matters.
+const jsNormalizeHelper = `const normalize = (value) => String(value || "")
+		.toLowerCase()
+		.replace(/\s+/g, " ")
+		.trim();`
+
 func ResolveTextToNodeID(ctx context.Context, text string) (int64, error) {
 	return ResolveTextToNodeIDInFrame(ctx, "", text)
 }
@@ -317,10 +303,7 @@ func ResolveTextToNodeIDInFrame(ctx context.Context, frameID, text string) (int6
 			const root = this.body || this.documentElement;
 			if (!root) return null;
 
-			const normalize = (value) => String(value || "")
-				.toLowerCase()
-				.replace(/\s+/g, " ")
-				.trim();
+			` + jsNormalizeHelper + `
 			const semanticWeight = (el) => {
 				const tag = (el.tagName || "").toLowerCase();
 				if (tag === "button" || tag === "a" || tag === "input") return 0.25;
@@ -401,10 +384,7 @@ func ResolveTextToNodeIDInFrame(ctx context.Context, frameID, text string) (int6
 
 const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 	const root = this;
-	const normalize = (input) => String(input || "")
-		.toLowerCase()
-		.replace(/\s+/g, " ")
-		.trim();
+	` + jsNormalizeHelper + `
 	const needle = normalize(value);
 	const unique = (items) => {
 		const seen = new Set();
@@ -489,7 +469,7 @@ func resolveSelectorAtInFrame(ctx context.Context, frameID string, sel selector.
 			{"value": fromEnd},
 		})
 		if err != nil {
-			return fmt.Errorf("%s %q: no element found", sel.Kind, sel.Value)
+			return fmt.Errorf("%s %q: %w", sel.Kind, sel.Value, ErrSelectorNoMatch)
 		}
 		backendNodeID = nid
 		return nil
@@ -539,7 +519,6 @@ func resolveNestedSelectorAtInFrame(ctx context.Context, frameID string, raw str
 	}
 }
 
-// ResolveCSSToNodeID resolves a CSS selector to a backend node ID.
 func ResolveCSSToNodeID(ctx context.Context, css string) (int64, error) {
 	return ResolveCSSToNodeIDInFrame(ctx, "", css)
 }
@@ -575,7 +554,7 @@ func ResolveCSSToNodeIDInFrame(ctx context.Context, frameID, css string) (int64,
 				return err
 			}
 			if qr.NodeID == 0 {
-				return fmt.Errorf("css %q: no element found", css)
+				return fmt.Errorf("css %q: %w", css, ErrSelectorNoMatch)
 			}
 
 			var descResult json.RawMessage
@@ -675,7 +654,7 @@ func ResolveUnifiedSelectorInFrame(ctx context.Context, sel selector.Selector, r
 				return target.BackendNodeID, nil
 			}
 		}
-		return 0, fmt.Errorf("ref %s not found in snapshot cache", sel.Value)
+		return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
 
 	case selector.KindCSS:
 		return ResolveCSSToNodeIDInFrame(ctx, frameID, sel.Value)
@@ -711,10 +690,6 @@ func ResolveUnifiedSelectorInFrame(ctx context.Context, sel selector.Selector, r
 	}
 }
 
-// ResolveUnifiedSelector resolves a parsed selector to a backend node ID.
-// For ref selectors, the refCache is consulted. For CSS, XPath, and text
-// selectors, CDP is used directly. Semantic and structured semantic locators
-// are not resolved here; they require the semantic matcher at a higher layer.
 func ResolveUnifiedSelector(ctx context.Context, sel selector.Selector, refCache *RefCache) (int64, error) {
 	return ResolveUnifiedSelectorInFrame(ctx, sel, refCache, "")
 }

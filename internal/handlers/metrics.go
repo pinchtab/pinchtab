@@ -28,7 +28,6 @@ func SnapshotMetrics() map[string]any {
 	bucketHosts := len(rateBuckets)
 	rateMu.Unlock()
 
-	// Go runtime metrics
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 

@@ -1,11 +1,7 @@
 package main
 
 import (
-	"io"
 	"net"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,76 +14,28 @@ func init() {
 	registerManagementCommands()
 }
 
-func registerBrowserCommands() {
-	setCommandGroup("browser",
-		quickCmd,
-		navCmd,
-		backCmd,
-		forwardCmd,
-		reloadCmd,
-		snapCmd,
-		frameCmd,
-		clickCmd,
-		dblclickCmd,
-		dragCmd,
-		typeCmd,
-		screenshotCmd,
-		captureCmd,
-		tabsCmd,
-		pressCmd,
-		fillCmd,
-		hoverCmd,
-		mouseCmd,
-		focusCmd,
-		scrollCmd,
-		evalCmd,
-		pdfCmd,
-		textCmd,
-		titleCmd,
-		urlCmd,
-		htmlCmd,
-		stylesCmd,
-		valueCmd,
-		attrCmd,
-		countCmd,
-		boxCmd,
-		visibleCmd,
-		enabledCmd,
-		checkedCmd,
-		downloadCmd,
-		uploadCmd,
-		findCmd,
-		selectCmd,
-		checkCmd,
-		uncheckCmd,
-		networkCmd,
-		waitCmd,
-		keyboardCmd,
-		keydownCmd,
-		keyupCmd,
-		scrollintoviewCmd,
-		dialogCmd,
-		consoleCmd,
-		errorsCmd,
-		clipboardCmd,
-		cacheCmd,
-		cookiesCmd,
-		setCmd,
-		storageCmd,
-		stateCmd,
-		closeCmd,
-		tabCloseCmd,
-		handoffCmd,
-		tabHandoffCmd,
-		resumeCmd,
-		tabResumeCmd,
-		handoffStatusCmd,
-		tabHandoffStatusCmd,
-		recordCmd,
-	)
+// browserRootCommands is the canonical ordered list of top-level browser
+// shorthand commands, registered on the root and assigned the "browser" group.
+func browserRootCommands() []*cobra.Command {
+	return []*cobra.Command{
+		quickCmd, navCmd, backCmd, forwardCmd, reloadCmd, snapCmd, frameCmd, clickCmd,
+		dblclickCmd, dragCmd, typeCmd, screenshotCmd, captureCmd, tabsCmd, pressCmd, fillCmd,
+		hoverCmd, mouseCmd, focusCmd, scrollCmd, evalCmd, pdfCmd, textCmd, titleCmd, urlCmd,
+		htmlCmd, stylesCmd, valueCmd, attrCmd, countCmd, boxCmd, visibleCmd, enabledCmd, checkedCmd,
+		downloadCmd, uploadCmd, findCmd, selectCmd, checkCmd, uncheckCmd, networkCmd, waitCmd,
+		keyboardCmd, keydownCmd, keyupCmd, scrollintoviewCmd, dialogCmd, consoleCmd, errorsCmd,
+		clipboardCmd, cacheCmd, cookiesCmd, setCmd, storageCmd, stateCmd, closeCmd, handoffCmd,
+		resumeCmd, handoffStatusCmd, recordCmd,
+	}
+}
 
-	// These commands carry GroupID="browser" (set by setCommandGroup above).
-	// Add the same group to tabsCmd so cobra accepts grouped tab subcommands.
+func registerBrowserCommands() {
+	rootCmds := browserRootCommands()
+	setCommandGroup("browser", rootCmds...)
+	// Tab subcommands live under tabsCmd but need the browser group too.
+	setCommandGroup("browser", tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
+
+	// tabsCmd needs the same group registered so cobra accepts grouped tab subcommands.
 	tabsCmd.AddGroup(&cobra.Group{ID: "browser", Title: "Browser"})
 	tabsCmd.AddCommand(tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
 	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
@@ -99,68 +47,7 @@ func registerBrowserCommands() {
 
 	configureBrowserFlags()
 
-	addRootCommands(
-		quickCmd,
-		navCmd,
-		backCmd,
-		forwardCmd,
-		reloadCmd,
-		snapCmd,
-		frameCmd,
-		clickCmd,
-		dblclickCmd,
-		dragCmd,
-		typeCmd,
-		screenshotCmd,
-		captureCmd,
-		tabsCmd,
-		pressCmd,
-		fillCmd,
-		hoverCmd,
-		mouseCmd,
-		focusCmd,
-		scrollCmd,
-		evalCmd,
-		pdfCmd,
-		textCmd,
-		titleCmd,
-		urlCmd,
-		htmlCmd,
-		stylesCmd,
-		valueCmd,
-		attrCmd,
-		countCmd,
-		boxCmd,
-		visibleCmd,
-		enabledCmd,
-		checkedCmd,
-		downloadCmd,
-		uploadCmd,
-		findCmd,
-		selectCmd,
-		checkCmd,
-		uncheckCmd,
-		networkCmd,
-		waitCmd,
-		keyboardCmd,
-		keydownCmd,
-		keyupCmd,
-		scrollintoviewCmd,
-		dialogCmd,
-		consoleCmd,
-		errorsCmd,
-		clipboardCmd,
-		cacheCmd,
-		cookiesCmd,
-		setCmd,
-		storageCmd,
-		stateCmd,
-		closeCmd,
-		handoffCmd,
-		resumeCmd,
-		handoffStatusCmd,
-		recordCmd,
-	)
+	addRootCommands(rootCmds...)
 }
 
 func registerManagementCommands() {
@@ -178,48 +65,30 @@ func configureBrowserFlags() {
 	uploadCmd.Flags().StringP("selector", "s", "", "CSS selector for file input")
 	downloadCmd.Flags().StringP("output", "o", "", "Save downloaded file to path")
 
-	clickCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(clickCmd, "click")
+	addPointerActionFlags(clickCmd, "click")
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
 	clickCmd.Flags().Bool("dismiss-banners", false, "Dismiss cookie/consent banners after a wait-nav click (no-op without --wait-nav)")
-	clickCmd.Flags().Bool("snap", false, "Output interactive snapshot after action")
-	clickCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after action (changes only)")
-	clickCmd.Flags().Bool("text", false, "Output page text after action (for verification)")
+	addPostActionFlags(clickCmd, "action", true)
 	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
 	clickCmd.Flags().String("mode", "", "Click delivery mode override: dom | dispatch")
-	clickCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
-	dblclickCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(dblclickCmd, "dblclick")
-	dblclickCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+	addPointerActionFlags(dblclickCmd, "dblclick")
 
-	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(hoverCmd, "hover")
-	hoverCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+	addPointerActionFlags(hoverCmd, "hover")
 
-	mouseMoveCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(mouseMoveCmd, bridge.ActionMouseMove)
-	mouseMoveCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+	addPointerActionFlags(mouseMoveCmd, bridge.ActionMouseMove)
 
-	mouseDownCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(mouseDownCmd, bridge.ActionMouseDown)
+	addPointerActionFlags(mouseDownCmd, bridge.ActionMouseDown)
 	mouseDownCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
-	mouseDownCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
-	mouseUpCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(mouseUpCmd, bridge.ActionMouseUp)
+	addPointerActionFlags(mouseUpCmd, bridge.ActionMouseUp)
 	mouseUpCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
-	mouseUpCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
-	mouseWheelCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPointFlags(mouseWheelCmd, bridge.ActionMouseWheel)
-	mouseWheelCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+	addPointerActionFlags(mouseWheelCmd, bridge.ActionMouseWheel)
 
 	typeCmd.Flags().Bool("humanize", false, "Use humanized per-character keypress timing (overrides instance config)")
-	pressCmd.Flags().Bool("snap", false, "Output interactive snapshot after key press")
-	pressCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after key press (changes only)")
-	pressCmd.Flags().Bool("text", false, "Output page text after key press (for verification)")
+	addPostActionFlags(pressCmd, "key press", true)
 	mouseWheelCmd.Flags().Int("dx", 0, "Wheel delta X")
 	mouseWheelCmd.Flags().Int("dy", 0, "Wheel delta Y")
 
@@ -245,6 +114,10 @@ func configureBrowserFlags() {
 	screenshotCmd.Flags().Bool("annotate", false, "Overlay numbered ref boxes on interactive elements (or on --selector matches). Prints a [n] ref legend to stdout.")
 	screenshotCmd.Flags().String("format", "", "Image format: 'jpeg' (default) or 'png'")
 	screenshotCmd.Flags().Bool("beyond-viewport", false, "Capture the entire scrollable document, not just the visible viewport. Ignored when --selector is set.")
+	// Back-compat: --css-1x was removed (replaced by --scale). Keep it as a
+	// deprecated no-op so old scripts get a notice instead of a hard error.
+	screenshotCmd.Flags().Bool("css-1x", false, "deprecated: use --scale")
+	_ = screenshotCmd.Flags().MarkDeprecated("css-1x", "css-1x was removed; use --scale to rescale output")
 
 	captureCmd.Flags().StringP("output", "o", "", "Save the captured image to this local file path (default: capture-<ts>.jpg)")
 	captureCmd.Flags().StringP("selector", "s", "", "Scope: clips screenshot and filters snapshot subtree to the same element")
@@ -315,30 +188,18 @@ func configureBrowserFlags() {
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
 	navCmd.Flags().Bool("block-ads", false, "Block ads")
-	navCmd.Flags().Bool("snap", false, "Output interactive snapshot after navigation")
-	navCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after navigation (changes only)")
+	addPostActionFlags(navCmd, "navigation", false)
 	navCmd.Flags().Bool("dismiss-banners", false, "After landing, click any visible cookie/consent dismissal button or remove obvious overlay containers")
 
-	backCmd.Flags().Bool("snap", false, "Output interactive snapshot after navigation")
-	backCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after navigation (changes only)")
-	backCmd.Flags().Bool("text", false, "Output page text after navigation (for verification)")
+	addPostActionFlags(backCmd, "navigation", true)
 	backCmd.Flags().Bool("dismiss-banners", false, "After landing, dismiss cookie/consent banners")
-	forwardCmd.Flags().Bool("snap", false, "Output interactive snapshot after navigation")
-	forwardCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after navigation (changes only)")
-	forwardCmd.Flags().Bool("text", false, "Output page text after navigation (for verification)")
+	addPostActionFlags(forwardCmd, "navigation", true)
 	forwardCmd.Flags().Bool("dismiss-banners", false, "After landing, dismiss cookie/consent banners")
-	reloadCmd.Flags().Bool("snap", false, "Output interactive snapshot after reload")
-	reloadCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after reload (changes only)")
-	reloadCmd.Flags().Bool("text", false, "Output page text after reload (for verification)")
+	addPostActionFlags(reloadCmd, "reload", true)
 	reloadCmd.Flags().Bool("dismiss-banners", false, "After reload, dismiss cookie/consent banners")
-	fillCmd.Flags().Bool("snap", false, "Output interactive snapshot after fill")
-	fillCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after fill (changes only)")
-	fillCmd.Flags().Bool("text", false, "Output page text after fill (for verification)")
-	selectCmd.Flags().Bool("snap", false, "Output interactive snapshot after select")
-	selectCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after select (changes only)")
-	selectCmd.Flags().Bool("text", false, "Output page text after select (for verification)")
-	scrollCmd.Flags().Bool("snap", false, "Output interactive snapshot after scroll")
-	scrollCmd.Flags().Bool("snap-diff", false, "Output snapshot diff after scroll (changes only)")
+	addPostActionFlags(fillCmd, "fill", true)
+	addPostActionFlags(selectCmd, "select", true)
+	addPostActionFlags(scrollCmd, "scroll", false)
 
 	addTabFlag(
 		navCmd,
@@ -406,7 +267,6 @@ func configureBrowserFlags() {
 		cmd.Flags().String("status", "", "Optional resume status note (e.g. completed, failed)")
 	}
 
-	// Add --json flag to action commands (default is terse output)
 	addJSONFlag(
 		clickCmd,
 		dblclickCmd,
@@ -500,6 +360,8 @@ func configureManagementFlags() {
 	startInstanceCmd.Flags().String("port", "", "Port number")
 	startInstanceCmd.Flags().StringArray("extension", nil, "Load browser extension (repeatable)")
 	startInstanceCmd.Flags().StringArray("allow-domain", nil, "Add an instance-scoped IDPI allowed domain (repeatable)")
+	startInstanceCmd.Flags().String("browser", "", "Named browser target to use (e.g. chrome, cloak)")
+	startInstanceCmd.Flags().StringArray("browser-fallback", nil, "Named browser target to fall back to if the primary fails (repeatable; overrides config browser.fallbackOrder)")
 
 	activityCmd.PersistentFlags().Int("limit", 200, "Maximum number of events to return")
 	activityCmd.PersistentFlags().Int("age-sec", 0, "Only include events from the last N seconds")
@@ -529,18 +391,6 @@ func addRootCommands(cmds ...*cobra.Command) {
 // (PINCHTAB_SESSION, --agent-id, or PINCHTAB_AGENT_ID) leave --tab unset so the
 // server-side scoped current-tab store is authoritative. If no state file is
 // set, the server picks the active tab as before.
-// resolveTabArg returns the tab ID from args[0] when present, otherwise it
-// falls back to the persisted state file written by `nav`.
-func resolveTabArg(args []string) string {
-	if len(args) > 0 && args[0] != "" {
-		return args[0]
-	}
-	if !useLocalTabStateFile() {
-		return ""
-	}
-	return readTabStateFile()
-}
-
 func addTabFlag(cmds ...*cobra.Command) {
 	for _, cmd := range cmds {
 		cmd.Flags().String("tab", "", "Tab ID")
@@ -554,108 +404,6 @@ func addTabFlag(cmds ...*cobra.Command) {
 	}
 }
 
-func defaultTabFlagFromState(cmd *cobra.Command) {
-	if cmd == nil || !useLocalTabStateFile() {
-		return
-	}
-	flag := cmd.Flags().Lookup("tab")
-	if flag == nil || flag.Changed || flag.Value.String() != "" {
-		return
-	}
-	tabID := readTabStateFile()
-	if tabID == "" {
-		return
-	}
-	if !probeTabExists(tabID) {
-		_ = os.Remove(tabStateFile())
-		return
-	}
-	_ = cmd.Flags().Set("tab", tabID)
-	flag.Changed = false
-}
-
-func useLocalTabStateFile() bool {
-	if strings.TrimSpace(os.Getenv("PINCHTAB_SESSION")) != "" {
-		return false
-	}
-	return resolveCLIAgentID() == ""
-}
-
-// tabStateFile returns the path to the tab state file.
-func tabStateFile() string {
-	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-		return dir + "/pinchtab/current-tab"
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home + "/.local/state/pinchtab/current-tab"
-	}
-	return "/tmp/pinchtab-current-tab"
-}
-
-// readTabStateFile reads the persisted tab ID from the state file.
-func readTabStateFile() string {
-	data, err := os.ReadFile(tabStateFile())
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
-// WriteTabStateFile persists the tab ID to the state file for subsequent commands.
-func WriteTabStateFile(tabID string) {
-	if tabID == "" || !useLocalTabStateFile() {
-		return
-	}
-	path := tabStateFile()
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	_ = os.WriteFile(path, []byte(tabID+"\n"), 0644)
-}
-
-// ClearTabStateFileIfCurrent clears the current-tab state when the saved tab is
-// known to have been closed.
-func ClearTabStateFileIfCurrent(tabID string) {
-	if tabID == "" || !useLocalTabStateFile() || readTabStateFile() != tabID {
-		return
-	}
-	_ = os.Remove(tabStateFile())
-}
-
-// probeTabExists checks whether a cached tab ID still exists on the server.
-// Returns true if the tab is valid, the server is unreachable (it may auto-start
-// later), or the check is inconclusive. Returns false only on a definitive 404.
-func probeTabExists(tabID string) bool {
-	base := resolveBaseURL("http://127.0.0.1:9867")
-	token := resolveToken()
-
-	// Fast path: if the port isn't listening, skip the HTTP probe entirely.
-	// This avoids a 2s timeout on every CLI command when the server is down.
-	if !portIsListening(base) {
-		return true
-	}
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	req, err := http.NewRequest("GET", base+"/tabs/"+tabID+"/title", nil)
-	if err != nil {
-		return true
-	}
-	req.Header.Set("X-PinchTab-Source", "client")
-	if token != "" {
-		if strings.HasPrefix(token, "ses_") {
-			req.Header.Set("Authorization", "Session "+token)
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return true
-	}
-	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return resp.StatusCode != http.StatusNotFound
-}
-
-// portIsListening does a fast TCP dial to check if anything is listening.
 func portIsListening(baseURL string) bool {
 	host := strings.TrimPrefix(baseURL, "http://")
 	host = strings.TrimPrefix(host, "https://")
@@ -676,4 +424,23 @@ func addJSONFlag(cmds ...*cobra.Command) {
 func addPointFlags(cmd *cobra.Command, action string) {
 	cmd.Flags().Float64("x", 0, "X coordinate for "+action)
 	cmd.Flags().Float64("y", 0, "Y coordinate for "+action)
+}
+
+// addPointerActionFlags adds the css-selector, point-coordinate, and humanize
+// flags shared by pointer actions. Callers add any action-specific flags after.
+func addPointerActionFlags(cmd *cobra.Command, action string) {
+	cmd.Flags().String("css", "", "CSS selector instead of ref")
+	addPointFlags(cmd, action)
+	cmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+}
+
+// addPostActionFlags registers the standard post-action output flags (snap,
+// snap-diff, and optionally text) with descriptions interpolated from verb, so
+// the bundle is defined once instead of repeated across browser commands.
+func addPostActionFlags(cmd *cobra.Command, verb string, withText bool) {
+	cmd.Flags().Bool("snap", false, "Output interactive snapshot after "+verb)
+	cmd.Flags().Bool("snap-diff", false, "Output snapshot diff after "+verb+" (changes only)")
+	if withText {
+		cmd.Flags().Bool("text", false, "Output page text after "+verb+" (for verification)")
+	}
 }

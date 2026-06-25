@@ -31,7 +31,6 @@ func CheckServerAndGuide(client *http.Client, base, token string) bool {
 			fmt.Fprintln(os.Stderr, "Learn more: https://github.com/pinchtab/pinchtab#quick-start")
 			return false
 		}
-		// Other connection errors
 		fmt.Fprintf(os.Stderr, "Cannot connect to Pinchtab server: %v\n", err)
 		return false
 	}
@@ -94,7 +93,6 @@ type refInfo struct {
 func extractRefs(data map[string]any) []refInfo {
 	var refs []refInfo
 
-	// Handle different snapshot formats
 	if elements, ok := data["elements"].([]any); ok {
 		for _, elem := range elements {
 			if m, ok := elem.(map[string]any); ok {

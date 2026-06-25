@@ -44,10 +44,6 @@ type Result struct {
 	Token         string `json:"token,omitempty"`
 }
 
-// ---------------------------------------------------------------------------
-// Registry
-// ---------------------------------------------------------------------------
-
 var (
 	registry = make(map[string]Solver)
 	order    []string // insertion order for deterministic auto-detect
@@ -102,7 +98,6 @@ func Solve(ctx context.Context, name string, opts Options) (*Result, error) {
 		return s.Solve(ctx, opts)
 	}
 
-	// Auto-detect: try each registered solver in order.
 	mu.RLock()
 	names := make([]string, len(order))
 	copy(names, order)
@@ -120,7 +115,6 @@ func Solve(ctx context.Context, name string, opts Options) (*Result, error) {
 		return s.Solve(ctx, opts)
 	}
 
-	// No challenge detected on the current page.
 	var title string
 	return &Result{Solved: true, Title: title}, nil
 }

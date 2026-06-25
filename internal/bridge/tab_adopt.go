@@ -38,7 +38,7 @@ func (tm *TabManager) tabBlockPatterns() []string {
 
 func (tm *TabManager) setupManagedTarget(ctx context.Context, tabID, rawCDPID string) bool {
 	if tm.onTabSetup != nil {
-		tm.onTabSetup(ctx)
+		tm.onTabSetup(ctx, tabID)
 	}
 	if blockPatterns := tm.tabBlockPatterns(); len(blockPatterns) > 0 {
 		if err := SetResourceBlocking(ctx, blockPatterns); err != nil {
@@ -112,7 +112,12 @@ func (tm *TabManager) adoptExistingTarget(targetID target.ID, enforceLimit bool)
 		if entry == nil || entry.Ctx == nil {
 			return "", fmt.Errorf("tab %s has no active context", tabID)
 		}
-		tm.markAccessed(tabID)
+		tm.mu.Lock()
+		tm.accessed[tabID] = true
+		if entry != nil {
+			entry.LastUsed = time.Now()
+		}
+		tm.mu.Unlock()
 		return tabID, nil
 	}
 
@@ -136,7 +141,9 @@ func (tm *TabManager) adoptExistingTarget(targetID target.ID, enforceLimit bool)
 		ConsoleCaptureEnabled: consoleEnabled,
 	}
 	tm.accessed[tabID] = true
-	tm.currentTab = tabID
+	if _, hasValid := tm.tabs[tm.currentTab]; !hasValid {
+		tm.currentTab = tabID
+	}
 	tm.mu.Unlock()
 
 	tm.startTabPolicyWatcher(tabID, ctx)

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,7 +30,6 @@ func TestEnvOr(t *testing.T) {
 
 func TestLoadConfigDefaults(t *testing.T) {
 	clearConfigEnvVars(t)
-	// Point to non-existent config to test pure defaults
 	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
 	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
 
@@ -52,6 +54,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.CookieSecure != nil {
 		t.Errorf("default CookieSecure = %v, want nil for auto-detect", *cfg.CookieSecure)
+	}
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("default DefaultBrowser = %v, want %s", cfg.DefaultBrowser, BrowserChrome)
+	}
+	if !cfg.Cloak.DisableDefaultStealthArgs {
+		t.Errorf("default Cloak.DisableDefaultStealthArgs = false, want true")
 	}
 	wantExtensionsDir := defaultExtensionsDir(userConfigDir())
 	if len(cfg.ExtensionPaths) != 1 || cfg.ExtensionPaths[0] != wantExtensionsDir {
@@ -87,8 +95,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AttachEnabled {
 		t.Errorf("default AttachEnabled = %v, want false", cfg.AttachEnabled)
 	}
-	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "ws" || cfg.AttachAllowSchemes[1] != "wss" {
-		t.Errorf("default AttachAllowSchemes = %v, want [ws wss]", cfg.AttachAllowSchemes)
+	if cfg.AttachForwardProxyAuth {
+		t.Errorf("default AttachForwardProxyAuth = %v, want false", cfg.AttachForwardProxyAuth)
+	}
+	wantAttachSchemes := []string{"ws", "wss", "http", "https"}
+	if strings.Join(cfg.AttachAllowSchemes, ",") != strings.Join(wantAttachSchemes, ",") {
+		t.Errorf("default AttachAllowSchemes = %v, want %v", cfg.AttachAllowSchemes, wantAttachSchemes)
 	}
 	if !cfg.IDPI.Enabled {
 		t.Errorf("default IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
@@ -164,9 +176,39 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadConfigDefaultSolvers asserts the default autosolver backend list
+// advertises only the implemented backends (cloudflare + semantic) and does
+// NOT include the skeleton-only capsolver/twocaptcha external backends.
+func TestLoadConfigDefaultSolvers(t *testing.T) {
+	clearConfigEnvVars(t)
+	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
+	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
+
+	cfg := Load()
+
+	has := func(name string) bool {
+		for _, s := range cfg.AutoSolver.Solvers {
+			if s == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, want := range []string{"cloudflare", "semantic"} {
+		if !has(want) {
+			t.Errorf("default AutoSolver.Solvers = %v, want it to contain %q", cfg.AutoSolver.Solvers, want)
+		}
+	}
+	for _, unwanted := range []string{"capsolver", "twocaptcha"} {
+		if has(unwanted) {
+			t.Errorf("default AutoSolver.Solvers = %v, must NOT contain skeleton backend %q", cfg.AutoSolver.Solvers, unwanted)
+		}
+	}
+}
+
 func TestLoadConfigTokenEnvOverride(t *testing.T) {
 	clearConfigEnvVars(t)
-	// Point to non-existent config to isolate env var testing
 	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
 	_ = os.Setenv("PINCHTAB_TOKEN", "secret")
 	defer func() {
@@ -175,14 +217,12 @@ func TestLoadConfigTokenEnvOverride(t *testing.T) {
 	}()
 
 	cfg := Load()
-	// Port and Bind use defaults (no env var override anymore)
 	if cfg.Port != "9867" {
 		t.Errorf("default Port = %v, want 9867", cfg.Port)
 	}
 	if cfg.Bind != "127.0.0.1" {
 		t.Errorf("default Bind = %v, want 127.0.0.1", cfg.Bind)
 	}
-	// Token still supports env var override
 	if cfg.Token != "secret" {
 		t.Errorf("env Token = %v, want secret", cfg.Token)
 	}
@@ -217,7 +257,6 @@ func TestConfigFileWithNestedValues(t *testing.T) {
 		_ = os.Unsetenv("PINCHTAB_CONFIG")
 	}()
 
-	// Config file says port 8888 and strategy explicit
 	nestedConfig := `{
 		"server": {
 			"port": "8888"
@@ -235,7 +274,6 @@ func TestConfigFileWithNestedValues(t *testing.T) {
 
 	cfg := Load()
 
-	// Config file values should be used
 	if cfg.Port != "8888" {
 		t.Errorf("config file Port = %v, want 8888", cfg.Port)
 	}
@@ -343,21 +381,30 @@ func TestRuntimeConfigActivityStateDirFallsBackToStateDir(t *testing.T) {
 	}
 }
 
-func TestLoadConfigEngineFromFile(t *testing.T) {
-	clearConfigEnvVars(t)
+// When the file omits security.attach.allowHosts/allowSchemes, the seeded
+// runtime defaults must survive (not be clobbered with an empty list). A file
+// that sets them still overrides.
+func TestApplyFileConfigToRuntime_OmittedAttachListsKeepDefaults(t *testing.T) {
+	cfg := &RuntimeConfig{
+		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
+		AttachAllowSchemes: []string{"ws", "wss", "http", "https"},
+	}
+	fc := FileConfig{}
+	ApplyFileConfigToRuntime(cfg, &fc)
 
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.json")
-	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
-	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
-
-	if err := os.WriteFile(configPath, []byte(`{"server":{"engine":"lite"}}`), 0644); err != nil {
-		t.Fatal(err)
+	if strings.Join(cfg.AttachAllowSchemes, ",") != "ws,wss,http,https" {
+		t.Errorf("omitted attach.allowSchemes should keep defaults, got %v", cfg.AttachAllowSchemes)
+	}
+	if strings.Join(cfg.AttachAllowHosts, ",") != "127.0.0.1,localhost,::1" {
+		t.Errorf("omitted attach.allowHosts should keep defaults, got %v", cfg.AttachAllowHosts)
 	}
 
-	cfg := Load()
-	if cfg.Engine != "lite" {
-		t.Fatalf("engine = %q, want lite", cfg.Engine)
+	cfg2 := &RuntimeConfig{AttachAllowSchemes: []string{"ws", "wss", "http", "https"}}
+	fc2 := FileConfig{}
+	fc2.Security.Attach.AllowSchemes = []string{"https"}
+	ApplyFileConfigToRuntime(cfg2, &fc2)
+	if strings.Join(cfg2.AttachAllowSchemes, ",") != "https" {
+		t.Errorf("file attach.allowSchemes should override default, got %v", cfg2.AttachAllowSchemes)
 	}
 }
 
@@ -418,6 +465,9 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	}
 	if cfg.AttachEnabled {
 		t.Errorf("ApplyFileConfigToRuntime AttachEnabled = %v, want false", cfg.AttachEnabled)
+	}
+	if cfg.AttachForwardProxyAuth {
+		t.Errorf("ApplyFileConfigToRuntime AttachForwardProxyAuth = %v, want false", cfg.AttachForwardProxyAuth)
 	}
 	if !cfg.IDPI.Enabled {
 		t.Errorf("ApplyFileConfigToRuntime IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
@@ -530,9 +580,10 @@ func TestApplyFileConfigToRuntime_CopiesAttachConfig(t *testing.T) {
 	fc := &FileConfig{
 		Security: SecurityConfig{
 			Attach: AttachConfig{
-				Enabled:      &enabled,
-				AllowHosts:   []string{"127.0.0.1", "pinchtab-bridge"},
-				AllowSchemes: []string{"http", "https"},
+				Enabled:          &enabled,
+				AllowHosts:       []string{"127.0.0.1", "pinchtab-bridge"},
+				AllowSchemes:     []string{"http", "https"},
+				ForwardProxyAuth: &enabled,
 			},
 		},
 	}
@@ -549,6 +600,9 @@ func TestApplyFileConfigToRuntime_CopiesAttachConfig(t *testing.T) {
 	}
 	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "http" {
 		t.Fatalf("ApplyFileConfigToRuntime AttachAllowSchemes = %v, want copied schemes", cfg.AttachAllowSchemes)
+	}
+	if !cfg.AttachForwardProxyAuth {
+		t.Fatalf("ApplyFileConfigToRuntime AttachForwardProxyAuth = %v, want true", cfg.AttachForwardProxyAuth)
 	}
 }
 
@@ -677,18 +731,70 @@ func TestApplyFileConfigToRuntime_CookieSecure(t *testing.T) {
 	}
 }
 
-func TestApplyFileConfigToRuntime_SanitizesChromeExtraFlags(t *testing.T) {
+func TestApplyFileConfigToRuntime_SanitizesBrowserExtraFlags(t *testing.T) {
 	cfg := &RuntimeConfig{}
 	fc := &FileConfig{
 		Browser: BrowserConfig{
-			ChromeExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
+			BrowserExtraFlags: "--disable-gpu --user-agent=Bad/1.0 --disable-web-security --ash-no-nudges",
 		},
 	}
 
 	ApplyFileConfigToRuntime(cfg, fc)
 
-	if cfg.ChromeExtraFlags != "--disable-gpu --ash-no-nudges" {
-		t.Fatalf("ChromeExtraFlags = %q, want %q", cfg.ChromeExtraFlags, "--disable-gpu --ash-no-nudges")
+	if cfg.BrowserExtraFlags != "--disable-gpu --ash-no-nudges" {
+		t.Fatalf("BrowserExtraFlags = %q, want %q", cfg.BrowserExtraFlags, "--disable-gpu --ash-no-nudges")
+	}
+}
+
+func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
+	quota := 2048
+	disableDefaultStealthArgs := false
+	cfg := &RuntimeConfig{Cloak: CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true}}
+	fc := &FileConfig{
+		Browsers: BrowsersConfig{Default: BrowserCloak},
+		Browser: BrowserConfig{
+			BrowserBinary: "/opt/cloakbrowser/chrome",
+			Cloak: CloakBrowserConfig{
+				FingerprintSeed:           "42069",
+				Platform:                  "windows",
+				Locale:                    "en-GB",
+				Timezone:                  "Europe/London",
+				WebRTCIP:                  "auto",
+				FontsDir:                  "/opt/fonts",
+				StorageQuotaMB:            &quota,
+				DisableDefaultStealthArgs: &disableDefaultStealthArgs,
+			},
+		},
+	}
+
+	ApplyFileConfigToRuntime(cfg, fc)
+
+	if cfg.DefaultBrowser != BrowserCloak {
+		t.Fatalf("DefaultBrowser = %q, want %q", cfg.DefaultBrowser, BrowserCloak)
+	}
+	if cfg.BrowserBinary != "/opt/cloakbrowser/chrome" {
+		t.Fatalf("BrowserBinary = %q, want configured binary", cfg.BrowserBinary)
+	}
+	if cfg.Cloak.FingerprintSeed != "42069" ||
+		cfg.Cloak.Platform != "windows" ||
+		cfg.Cloak.Locale != "en-GB" ||
+		cfg.Cloak.Timezone != "Europe/London" ||
+		cfg.Cloak.WebRTCIP != "auto" ||
+		cfg.Cloak.FontsDir != "/opt/fonts" ||
+		cfg.Cloak.StorageQuotaMB != quota ||
+		cfg.Cloak.DisableDefaultStealthArgs {
+		t.Fatalf("Cloak settings not applied: %+v", cfg.Cloak)
+	}
+
+	defaultCfg := &RuntimeConfig{}
+	ApplyFileConfigToRuntime(defaultCfg, &FileConfig{
+		Browsers: BrowsersConfig{Default: BrowserCloak},
+		Browser: BrowserConfig{
+			BrowserBinary: "/opt/cloakbrowser/chrome",
+		},
+	})
+	if !defaultCfg.Cloak.DisableDefaultStealthArgs {
+		t.Fatal("Cloak.DisableDefaultStealthArgs = false for cloak provider with no override, want true")
 	}
 }
 
@@ -767,7 +873,90 @@ func TestApplyFileConfigToRuntime_AutoSolverSettings(t *testing.T) {
 	}
 }
 
-// clearConfigEnvVars unsets all config-related env vars for clean tests.
+func TestLoadConfig_BrowserProviderAloneNoLongerMapsToDefault(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"browser": {
+			"provider": "cloak"
+		}
+	}`)
+
+	cfg := Load()
+
+	// browser.provider is no longer supported; it should be ignored at load time
+	// and the default chrome provider is used.
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome (browser.provider ignored)", cfg.DefaultBrowser)
+	}
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("DefaultBrowser = %q, want %s (browser.provider ignored)", cfg.DefaultBrowser, BrowserChrome)
+	}
+}
+
+func TestLoadConfig_DefaultBrowserUsedEvenWithProviderPresent(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"browser": {
+			"binary": "/opt/cloakbrowser/chrome"
+		},
+		"browsers": {
+			"default": "chrome"
+		}
+	}`)
+
+	cfg := Load()
+
+	// browsers.default is the only supported way to set the browser.
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome", cfg.DefaultBrowser)
+	}
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("DefaultBrowser = %q, want %s", cfg.DefaultBrowser, BrowserChrome)
+	}
+}
+
+func TestFileConfigFromRuntime_UsesDefaultBrowser(t *testing.T) {
+	cfg := &RuntimeConfig{
+		DefaultBrowser:    "chrome",
+		BrowsersAvailable: []string{"chrome"},
+		BrowserVersion:    "100.0.0.0",
+		ExtensionPaths:    []string{},
+	}
+
+	fc := FileConfigFromRuntime(cfg)
+
+	if fc.Browser.Provider != "" {
+		t.Errorf("FileConfigFromRuntime should not set browser.provider, got %q", fc.Browser.Provider)
+	}
+
+	if fc.Browsers.Default != "chrome" {
+		t.Errorf("FileConfigFromRuntime Browsers.Default = %q, want chrome", fc.Browsers.Default)
+	}
+
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatalf("json.Marshal(FileConfig) error = %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	browser, ok := raw["browser"].(map[string]any)
+	if !ok {
+		t.Fatal("missing browser block in JSON output")
+	}
+	if _, ok := browser["provider"]; ok {
+		t.Fatal("browser.provider should not appear in marshaled JSON")
+	}
+	browsersBlock, ok := raw["browsers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing browsers block in JSON output")
+	}
+	if def := browsersBlock["default"]; def != "chrome" {
+		t.Errorf("browsers.default in JSON = %v, want chrome", def)
+	}
+}
+
 func clearConfigEnvVars(t *testing.T) {
 	t.Helper()
 	envVars := []string{
@@ -787,6 +976,99 @@ func writeTestConfig(t *testing.T, body string) {
 	}
 	_ = os.Setenv("PINCHTAB_CONFIG", path)
 	t.Cleanup(func() { _ = os.Unsetenv("PINCHTAB_CONFIG") })
+}
+
+// Pins the precedence contract when both legacy browser fields and explicit
+// browser.targets are set: targets are kept as authored (no legacy synthesis),
+// the legacy fields still seed the base runtime config, and target resolution
+// overlays target fields per-field on top of that base.
+func TestLoadConfig_LegacyAndTargetsBothSet_PrecedenceContract(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"browser": {
+			"binary": "/legacy/bin/chrome",
+			"extraFlags": "--disable-gpu",
+			"proxy": {"server": "http://legacy-proxy.example:8080"},
+			"defaultTarget": "default",
+			"targets": {
+				"default": {
+					"provider": "chrome",
+					"binary": "/target/bin/chrome",
+					"proxy": {"server": "http://target-proxy.example:9090"}
+				}
+			}
+		}
+	}`)
+
+	var warned bool
+	logs := captureConfigSlog(t, func() {
+		cfg := Load()
+
+		if cfg.TargetsSynthesized {
+			t.Errorf("TargetsSynthesized = true, want false (explicit targets must not be marked as migrated)")
+		}
+		target, ok := cfg.Targets["default"]
+		if !ok {
+			t.Fatalf("Targets missing authored default entry: %v", cfg.Targets)
+		}
+		if target.Binary != "/target/bin/chrome" {
+			t.Errorf("target Binary = %q, want authored /target/bin/chrome", target.Binary)
+		}
+
+		// Legacy fields seed the BASE runtime config.
+		if cfg.BrowserBinary != "/legacy/bin/chrome" {
+			t.Errorf("base BrowserBinary = %q, want legacy /legacy/bin/chrome", cfg.BrowserBinary)
+		}
+		if cfg.BrowserExtraFlags != "--disable-gpu" {
+			t.Errorf("base BrowserExtraFlags = %q, want legacy --disable-gpu", cfg.BrowserExtraFlags)
+		}
+		if cfg.Proxy.Server != "http://legacy-proxy.example:8080" {
+			t.Errorf("base Proxy.Server = %q, want legacy proxy", cfg.Proxy.Server)
+		}
+
+		// A user-authored default target supplies the provider.
+		if cfg.DefaultBrowser != BrowserChrome {
+			t.Errorf("DefaultBrowser = %q, want %s from the authored target", cfg.DefaultBrowser, BrowserChrome)
+		}
+
+		// Target resolution overlays target fields on the legacy-seeded base.
+		resolved, err := ResolveDefaultBrowserTarget(cfg)
+		if err != nil {
+			t.Fatalf("ResolveDefaultBrowserTarget returned %v", err)
+		}
+		if resolved.Legacy {
+			t.Errorf("resolved.Legacy = true, want false with explicit targets")
+		}
+		if resolved.Config.BrowserBinary != "/target/bin/chrome" {
+			t.Errorf("resolved Binary = %q, want target /target/bin/chrome", resolved.Config.BrowserBinary)
+		}
+		if resolved.Config.Proxy.Server != "http://target-proxy.example:9090" {
+			t.Errorf("resolved Proxy.Server = %q, want target proxy", resolved.Config.Proxy.Server)
+		}
+		// Fields the target omits fall back to the legacy base.
+		if resolved.Config.BrowserExtraFlags != "--disable-gpu" {
+			t.Errorf("resolved BrowserExtraFlags = %q, want legacy --disable-gpu fallback", resolved.Config.BrowserExtraFlags)
+		}
+	})
+	warned = strings.Contains(logs, "config has both browser.targets and legacy")
+	if !warned {
+		t.Errorf("expected conflict warning in logs, got: %s", logs)
+	}
+	if strings.Contains(logs, "legacy fields ignored") {
+		t.Errorf("warning still claims legacy fields are ignored; they seed the base runtime config: %s", logs)
+	}
+}
+
+// captureConfigSlog redirects the default slog logger to a buffer for the
+// duration of fn and returns everything logged.
+func captureConfigSlog(t *testing.T, fn func()) string {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(old)
+	fn()
+	return buf.String()
 }
 
 func TestLoadConfig_TabLifecycleDefaults(t *testing.T) {
@@ -839,7 +1121,6 @@ func TestLoadConfig_LegacyTabEvictionPolicyStillHonored(t *testing.T) {
 	if cfg.TabEvictionPolicy != "close_oldest" {
 		t.Errorf("legacy tabEvictionPolicy not honored; got %q", cfg.TabEvictionPolicy)
 	}
-	// Lifecycle defaults preserved (default is keep).
 	if cfg.TabLifecyclePolicy != "keep" {
 		t.Errorf("legacy-only config should leave lifecycle at default keep; got %q", cfg.TabLifecyclePolicy)
 	}
@@ -875,5 +1156,140 @@ func TestLoadConfig_TabCloseDelayPreservesDefaultWhenAbsent(t *testing.T) {
 	cfg := Load()
 	if cfg.TabCloseDelay != 5*time.Minute {
 		t.Errorf("TabCloseDelay = %v, want 5m default", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_DefaultBrowsersNeverIncludesHighTrust(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{}`)
+
+	cfg := Load()
+
+	if len(cfg.BrowsersAvailable) != 1 || cfg.BrowsersAvailable[0] != "chrome" {
+		t.Fatalf("BrowsersAvailable = %v, want [chrome]", cfg.BrowsersAvailable)
+	}
+
+	// Verify no high-trust browsers leaked into the default set.
+	highTrust := []string{"cloak", "ghost-chrome"}
+	for _, ht := range highTrust {
+		for _, b := range cfg.BrowsersAvailable {
+			if b == ht {
+				t.Errorf("high-trust browser %q must not appear in default BrowsersAvailable", ht)
+			}
+		}
+	}
+
+	if cfg.DefaultBrowser != "chrome" {
+		t.Errorf("DefaultBrowser = %q, want chrome", cfg.DefaultBrowser)
+	}
+}
+
+// M3 regression: a reload must be able to REMOVE targets and proxy — stale
+// routing and credentials must not survive deletion from the file.
+func TestApplyFileConfig_ReloadClearsRemovedProxyAndTargets(t *testing.T) {
+	cfg := &RuntimeConfig{}
+
+	withBlocks := &FileConfig{
+		Browser: BrowserConfig{
+			DefaultTarget: "cloak-1",
+			FallbackOrder: []string{"cloak-1"},
+			Targets: BrowserTargetsConfig{
+				"cloak-1": {Provider: BrowserCloak, Binary: "/opt/cloak/bin"},
+			},
+			Proxy: BrowserProxyConfig{
+				Server:   "http://proxy.example:8080",
+				Username: "user",
+				Password: "secret",
+			},
+		},
+	}
+	applyFileConfig(cfg, withBlocks)
+	if len(cfg.Targets) == 0 || cfg.Proxy.IsZero() {
+		t.Fatalf("setup failed: targets=%v proxy=%+v", cfg.Targets, cfg.Proxy.Redacted())
+	}
+
+	without := &FileConfig{}
+	applyFileConfig(cfg, without)
+
+	if len(cfg.Targets) != 0 {
+		t.Fatalf("targets not cleared on reload: %v", cfg.Targets)
+	}
+	if cfg.DefaultTarget != "" || len(cfg.FallbackOrder) != 0 {
+		t.Fatalf("defaultTarget/fallbackOrder not cleared: %q %v", cfg.DefaultTarget, cfg.FallbackOrder)
+	}
+	if cfg.TargetsSynthesized {
+		t.Fatal("TargetsSynthesized should clear with the targets")
+	}
+	if !cfg.Proxy.IsZero() {
+		t.Fatalf("proxy (and credentials) not cleared on reload: %+v", cfg.Proxy.Redacted())
+	}
+}
+
+func TestApplyFileConfig_ReloadLegacyOnlyStillSynthesizesTargets(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	applyFileConfig(cfg, &FileConfig{
+		Browser: BrowserConfig{
+			Targets: BrowserTargetsConfig{"cloak-1": {Provider: BrowserCloak}},
+		},
+	})
+
+	legacyOnly := &FileConfig{
+		Browser: BrowserConfig{BrowserBinary: "/usr/bin/chrome"},
+	}
+	applyFileConfig(cfg, legacyOnly)
+
+	if len(cfg.Targets) == 0 {
+		t.Fatal("legacy-only reload should re-synthesize targets via the migration shim")
+	}
+	if !cfg.TargetsSynthesized {
+		t.Fatal("re-synthesized targets should be marked synthesized")
+	}
+	if _, ok := cfg.Targets[DefaultBrowserTargetName]; !ok {
+		t.Fatalf("expected synthesized default target, got %v", cfg.Targets)
+	}
+}
+
+func hasDiagnostic(diags []LoadDiagnostic, level slog.Level, message string) bool {
+	for _, d := range diags {
+		if d.Level == level && d.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
+// LoadConfig is the side-effect-free loader: it returns the config plus
+// diagnostics for the caller to log, and never logs or os.Exits itself.
+func TestLoadConfig_ValidFileReturnsConfigAndDiagnostics(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{"server":{"port":"8888"}}`)
+
+	cfg, diags, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil", err)
+	}
+	if cfg == nil || cfg.Port != "8888" {
+		t.Fatalf("LoadConfig() Port = %v, want 8888", cfg.Port)
+	}
+	if !hasDiagnostic(diags, slog.LevelDebug, "loading config file") {
+		t.Errorf("expected a debug 'loading config file' diagnostic, got %+v", diags)
+	}
+}
+
+// A malformed config file is non-fatal: LoadConfig returns the defaults config,
+// a warn diagnostic, and a nil error (the previous Load() logged + continued).
+func TestLoadConfig_MalformedFileWarnsWithoutError(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{ this is not valid json`)
+
+	cfg, diags, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil (parse failure is non-fatal)", err)
+	}
+	if cfg == nil || cfg.Port != "9867" {
+		t.Fatalf("LoadConfig() Port = %v, want default 9867 when the file fails to parse", cfg.Port)
+	}
+	if !hasDiagnostic(diags, slog.LevelWarn, "failed to parse config") {
+		t.Errorf("expected a warn 'failed to parse config' diagnostic, got %+v", diags)
 	}
 }

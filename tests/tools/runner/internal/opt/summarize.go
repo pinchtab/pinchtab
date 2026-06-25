@@ -47,7 +47,6 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Load baseline reference if provided
 	var baselineRef map[string]any
 	if baselineFile != "" {
 		data, err := os.ReadFile(baselineFile)
@@ -145,7 +144,6 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		baselineOps = countBaselineOps()
 	}
 
-	// Parse browser ops and agent durations from transcripts
 	ptRe := regexp.MustCompile(`\./scripts/pt\s+(\w+)`)
 	var totalOps int
 	cmdTypes := make(map[string]int)
@@ -217,7 +215,6 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// Build rows for a single combined table
 	type row struct {
 		metric, baseline, agent string
 	}
@@ -299,7 +296,6 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		)
 	}
 
-	// Compute column widths
 	colW := [3]int{len("Metric"), len("Baseline"), len("Agent")}
 	for _, r := range rows {
 		if r.metric == "" {
@@ -334,7 +330,6 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintln(stdout, hLine)
 
-	// Ops breakdown (compact, one line)
 	if hasTranscripts {
 		type kv struct {
 			k string

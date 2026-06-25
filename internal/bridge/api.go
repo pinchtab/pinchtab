@@ -7,19 +7,26 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/runtimetypes"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
-// BridgeAPI abstracts browser tab operations for handler testing.
+type TabTarget struct {
+	TargetID string `json:"targetId"`
+	URL      string `json:"url"`
+	Title    string `json:"title"`
+	Type     string `json:"type"`
+}
+
 var ErrBrowserDraining = errors.New("browser restart in progress; retry shortly")
 
 type BridgeAPI interface {
 	BrowserContext() context.Context
-	TabContext(tabID string) (ctx context.Context, resolvedID string, err error)
-	ListTargets() ([]*target.Info, error)
+	TabContext(tabID string) (ctx *TabHandle, resolvedID string, err error)
+	ListTargets() ([]TabTarget, error)
 	CreateTab(url string) (tabID string, ctx context.Context, cancel context.CancelFunc, err error)
 	CloseTab(tabID string) error
 	FocusTab(tabID string) error
@@ -27,7 +34,6 @@ type BridgeAPI interface {
 	// ScheduleAutoClose (re)arms the per-tab idle close timer when the
 	// lifecycle policy is "close_idle". No-op otherwise.
 	ScheduleAutoClose(tabID string)
-	// CancelAutoClose stops the per-tab idle close timer if any.
 	CancelAutoClose(tabID string)
 
 	GetRefCache(tabID string) *RefCache
@@ -45,46 +51,174 @@ type BridgeAPI interface {
 	Lock(tabID, owner string, ttl time.Duration) error
 	Unlock(tabID, owner string) error
 
-	EnsureChrome(cfg *config.RuntimeConfig) error
+	EnsureBrowser(cfg *config.RuntimeConfig) error
 	RestartBrowser(cfg *config.RuntimeConfig) error
+	// RunningBrowser reports the provider of the live browser process, or
+	// ("", false) when nothing is running. EnsureBrowser ignores the requested
+	// config once initialized, so handlers use this to reject explicit
+	// browser params that the running process cannot honor.
+	RunningBrowser() (string, bool)
 	StealthStatus() *stealth.Status
 
-	// Memory metrics
 	GetMemoryMetrics(tabID string) (*MemoryMetrics, error)
 	GetBrowserMemoryMetrics() (*MemoryMetrics, error)
 	GetAggregatedMemoryMetrics() (*MemoryMetrics, error)
 
-	// Crash monitoring
 	GetCrashLogs() []string
 
-	// Network monitoring
 	NetworkMonitor() *NetworkMonitor
 
-	// Network request interception (Fetch domain).
 	AddRouteRule(tabID string, rule RouteRule) error
 	RemoveRouteRule(tabID, pattern string) (int, error)
 	ListRouteRules(tabID string) ([]RouteRule, error)
 
-	// Dialog management
 	GetDialogManager() *DialogManager
 
-	// Console and error logs
 	GetConsoleLogs(tabID string, limit int) []LogEntry
 	ClearConsoleLogs(tabID string)
 	GetErrorLogs(tabID string, limit int) []ErrorEntry
 	ClearErrorLogs(tabID string)
 
-	// Cache management
+	Navigate(ctx context.Context, url string, params NavigateParams) (*NavigateResult, error)
+
+	Snapshot(ctx context.Context, tabID string, filter string, params ContentParams) (*SnapshotResult, error)
+
+	Text(ctx context.Context, tabID string, params ContentParams) (*TextResult, error)
+
 	ClearCache(ctx context.Context) error
 	CanClearCache(ctx context.Context) (bool, error)
 
-	// Cookie management
 	ClearCookies(ctx context.Context) error
+
+	Evaluate(ctx context.Context, expression string, result any, opts EvalOpts) error
+
+	// CallFunctionOnNode resolves a backend node ID to a Runtime object,
+	// then calls the given JavaScript function on it. args may be nil.
+	// The result is unmarshaled from the CDP returnByValue response.
+	CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error
+
+	// EvaluateInFrame evaluates a JavaScript expression in the given
+	// frame's execution context. If frameID is empty, behaves like Evaluate.
+	EvaluateInFrame(ctx context.Context, frameID string, expression string, result any, opts EvalOpts) error
+
+	DescribeNode(ctx context.Context, backendNodeID int64) (*NodeInfo, error)
+
+	CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error)
+
+	StartScreencast(ctx context.Context, opts ScreencastOpts) (*ScreencastStream, error)
+
+	SetViewport(ctx context.Context, params ViewportParams) error
+	SetGeolocation(ctx context.Context, lat, lng, accuracy float64) error
+	SetEmulatedMedia(ctx context.Context, feature, value string) error
+
+	SetNetworkConditions(ctx context.Context, params NetworkConditions) error
+	SetExtraHTTPHeaders(ctx context.Context, headers map[string]string) error
+	GetCookies(ctx context.Context, urls []string) ([]CookieData, error)
+	SetCookie(ctx context.Context, params SetCookieParams) error
+
+	CurrentURL(ctx context.Context) (string, error)
+	CurrentTitle(ctx context.Context) (string, error)
+
+	PrintToPDF(ctx context.Context, params PDFParams) ([]byte, error)
+
+	SetFileInputFiles(ctx context.Context, nodeID int64, paths []string) error
+	ResolveSelectorToNodeID(ctx context.Context, selector string) (int64, error)
+
+	DownloadURL(ctx context.Context, dlURL string, opts DownloadOpts) (*DownloadResult, error)
+
+	EnableFetchWithAuth(ctx context.Context) error
+	DisableFetch(ctx context.Context) error
+	ListenAuthRequired(ctx context.Context, handler func(requestID string, isAuth bool))
+	ContinueWithAuth(ctx context.Context, requestID, username, password string) error
+	ContinueRequest(ctx context.Context, requestID string) error
+	// SetFetchPauseSuppressed toggles per-tab suppression of the proxy-auth
+	// listener's blanket ContinueRequest while the credentials handler owns
+	// request-pause dispatch. Declared here (not probed) so decorated bridges
+	// forward it instead of silently dropping the suppression contract.
+	SetFetchPauseSuppressed(tabID string, v bool)
+
+	GoBack(ctx context.Context) (didNavigate bool, err error)
+	GoForward(ctx context.Context) (didNavigate bool, err error)
+	Reload(ctx context.Context) error
+
+	WaitVisible(ctx context.Context, selector string) error
+
+	EnableNetwork(ctx context.Context) error
+	ListenNetworkEvents(ctx context.Context, handler NetworkEventHandler)
+
+	SetRawCookie(ctx context.Context, params RawSetCookieParams) error
+	GetRawCookies(ctx context.Context) ([]RawCookie, error)
+
+	SetUserAgentOverride(ctx context.Context, params UserAgentOverrideParams) error
+	SetLocaleOverride(ctx context.Context, locale string) error
+	SetTimezoneOverride(ctx context.Context, timezoneID string) error
+	SetDeviceMetricsOverride(ctx context.Context, params DeviceMetricsOverrideParams) error
+	AddScriptToEvaluateOnNewDocument(ctx context.Context, source string) (string, error)
 }
+
+// Browser-runtime DTOs are defined once in internal/runtimetypes and aliased
+// here so bridge and the browsers RuntimeInstance speak one set of structs.
+// Construct ScreencastStream via runtimetypes.NewScreencastStreamWithDone (the
+// bridge screencast loop owns and closes the done channel itself).
+type (
+	EvalOpts          = runtimetypes.EvalOpts
+	NodeInfo          = runtimetypes.NodeInfo
+	ScreencastOpts    = runtimetypes.ScreencastOpts
+	ScreencastStream  = runtimetypes.ScreencastStream
+	CookieData        = runtimetypes.CookieData
+	SetCookieParams   = runtimetypes.SetCookieParams
+	ViewportParams    = runtimetypes.ViewportParams
+	NetworkConditions = runtimetypes.NetworkConditions
+	DownloadOpts      = runtimetypes.DownloadOpts
+	DownloadResult    = runtimetypes.DownloadResult
+	PDFParams         = runtimetypes.PDFParams
+)
 
 type LockInfo = bridgetabs.LockInfo
 
-// ProfileService abstracts profile management operations.
+type NetworkEventHandler struct {
+	OnRequestWillBeSent func(frameID, requestID string, resourceType string)
+	OnResponseReceived  func(requestID string, remoteIPAddress string)
+}
+
+// RawSetCookieParams holds parameters for setting a cookie via CDP network domain,
+// used by state.go to restore cookies from state files without importing cdproto.
+type RawSetCookieParams struct {
+	Name     string
+	Value    string
+	Domain   string
+	Path     string
+	Secure   bool
+	HTTPOnly bool
+	SameSite string // "Strict", "Lax", "None", or ""
+}
+
+type RawCookie struct {
+	Name     string  `json:"name"`
+	Value    string  `json:"value"`
+	Domain   string  `json:"domain"`
+	Path     string  `json:"path"`
+	Expires  float64 `json:"expires"`
+	Secure   bool    `json:"secure"`
+	HTTPOnly bool    `json:"httpOnly"`
+	SameSite string  `json:"sameSite"`
+}
+
+type UserAgentOverrideParams struct {
+	UserAgent      string
+	Platform       string
+	AcceptLanguage string
+}
+
+type DeviceMetricsOverrideParams struct {
+	Width             int64
+	Height            int64
+	DeviceScaleFactor float64
+	Mobile            bool
+	ScreenWidth       int64
+	ScreenHeight      int64
+}
+
 type ProfileService interface {
 	RegisterHandlers(mux *http.ServeMux)
 	List() ([]ProfileInfo, error)
@@ -97,7 +231,6 @@ type ProfileService interface {
 	RecordAction(profile string, record ActionRecord)
 }
 
-// OrchestratorService abstracts instance orchestration operations.
 type OrchestratorService interface {
 	RegisterHandlers(mux *http.ServeMux)
 	Launch(name, port string, headless bool, extensionPaths []string) (*Instance, error)
@@ -107,18 +240,17 @@ type OrchestratorService interface {
 	Logs(id string) (string, error)
 	FirstRunningURL() string
 	AllTabs() []InstanceTab
+	FindInstanceByTab(tabID string) (*Instance, bool)
 	ScreencastURL(instanceID, tabID string) string
 	Shutdown()
 	ForceShutdown()
 }
 
-// Common types used across packages (migrated from main)
-
 type ProfileInfo struct {
 	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`
-	Path              string    `json:"path,omitempty"`       // File system path to profile directory
-	PathExists        bool      `json:"pathExists,omitempty"` // Whether the path exists on disk
+	Path              string    `json:"path,omitempty"`
+	PathExists        bool      `json:"pathExists,omitempty"`
 	Created           time.Time `json:"created"`
 	LastUsed          time.Time `json:"lastUsed"`
 	DiskUsage         int64     `json:"diskUsage"`
@@ -173,20 +305,27 @@ func normalizeInstanceMode(mode string, headless bool) string {
 }
 
 type Instance struct {
-	ID             string          `json:"id"`                   // Hash-based ID: inst_XXXXXXXX
-	ProfileID      string          `json:"profileId"`            // Hash-based profile ID: prof_XXXXXXXX
-	ProfileName    string          `json:"profileName"`          // Human-readable profile name (for display only)
-	Port           string          `json:"port"`                 // Internal: instance port
-	URL            string          `json:"url,omitempty"`        // Canonical base URL for bridge-backed instances
-	Mode           string          `json:"mode"`                 // API mode: "headless" or "headed"
-	Headless       bool            `json:"headless"`             // Mode: headless vs headed
-	Status         string          `json:"status"`               // Status: starting/running/stopping/stopped/error
-	StartTime      time.Time       `json:"startTime"`            // When instance was created
+	ID             string          `json:"id"`            // Hash-based ID: inst_XXXXXXXX
+	ProfileID      string          `json:"profileId"`     // Hash-based profile ID: prof_XXXXXXXX
+	ProfileName    string          `json:"profileName"`   // Human-readable profile name (for display only)
+	Port           string          `json:"port"`          // Internal: instance port
+	URL            string          `json:"url,omitempty"` // Canonical base URL for bridge-backed instances
+	Mode           string          `json:"mode"`          // API mode: "headless" or "headed"
+	Headless       bool            `json:"headless"`      // Mode: headless vs headed
+	Status         string          `json:"status"`        // Status: starting/running/stopping/stopped/error
+	StartTime      time.Time       `json:"startTime"`
 	Error          string          `json:"error,omitempty"`      // Error message if status=error
 	Attached       bool            `json:"attached"`             // True if attached rather than locally launched
 	AttachType     string          `json:"attachType,omitempty"` // "cdp" or "bridge" for attached instances
 	CdpURL         string          `json:"cdpUrl,omitempty"`     // CDP WebSocket URL (for CDP-attached instances)
 	SecurityPolicy *SecurityPolicy `json:"securityPolicy,omitempty"`
+
+	Browser string `json:"browser,omitempty"`
+
+	// FallbackFrom/FallbackReason: omitempty keeps successful-launch
+	// Instance JSON byte-identical to pre-P2.4a output.
+	FallbackFrom   string `json:"fallbackFrom,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
 }
 
 func (i Instance) MarshalJSON() ([]byte, error) {
@@ -202,5 +341,3 @@ type InstanceTab struct {
 	URL        string `json:"url"`
 	Title      string `json:"title"`
 }
-
-// test

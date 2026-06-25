@@ -124,7 +124,7 @@ func TestClientPostNilPayload(t *testing.T) {
 }
 
 func TestClientPostStreamReturnsReadableBody(t *testing.T) {
-	payload := strings.Repeat("X", 64*1024) // 64 KB — exceeds the 10 MB LimitReader test boundary
+	payload := strings.Repeat("X", 64*1024)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		_, _ = io.WriteString(w, payload)

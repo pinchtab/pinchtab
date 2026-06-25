@@ -8,14 +8,11 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/engine"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
 
-// cacheActionIntent stores the element's semantic identity in the
-// IntentCache so the recovery engine can reconstruct a query if the
-// ref becomes stale.
 func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	if h.Recovery == nil || req.Ref == "" {
 		return
@@ -26,11 +23,10 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 		return
 	}
 	desc := semantic.ElementDescriptor{Ref: req.Ref}
-	// Try to enrich from the current snapshot cache.
 	if cache := h.Bridge.GetRefCache(tabID); cache != nil {
-		for _, enriched := range semanticDescriptorsFromNodes(cache.Nodes) {
-			if enriched.Ref == req.Ref {
-				desc = enriched
+		for i := range cache.Nodes {
+			if cache.Nodes[i].Ref == req.Ref {
+				desc = descriptorFromNode(cache.Nodes[i])
 				break
 			}
 		}
@@ -41,17 +37,71 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	})
 }
 
-func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
+func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, cfg *config.RuntimeConfig) (map[string]any, string, error) {
 	req.Kind = bridge.CanonicalActionKind(req.Kind)
-	if h.shouldUseLiteAction(req) {
-		return h.executeLiteAction(ctx, req)
-	}
 
-	if err := h.ensureChrome(); err != nil {
-		return nil, "", fmt.Errorf("chrome initialization: %w", err)
+	if err := h.ensureBrowser(cfg); err != nil {
+		return nil, "", fmt.Errorf("browser initialization: %w", err)
 	}
 	result, err := h.Bridge.ExecuteAction(ctx, req.Kind, req)
 	return result, "", err
+}
+
+// executeActionResilient runs one resolved action with pointer-retry, stale-ref
+// cache refresh, and semantic self-healing. When refMissing is set it goes
+// recovery-first (Recovery.Attempt); otherwise it executes then heals on
+// failure. Callers must handle the refMissing-without-recovery case (404 /
+// per-step failure) before calling — refMissing=true assumes h.Recovery != nil.
+// req.NodeID is mutated in place, as the inline action/batch/macro paths did.
+func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
+	if refMissing {
+		rr, recRes, recErr := h.Recovery.Attempt(
+			ctx, resolvedTabID, req.Ref, req.Kind,
+			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
+				req.NodeID = nodeID
+				res, _, err := h.executeAction(c, *req, cfg)
+				return res, err
+			},
+		)
+		if recErr != nil {
+			return nil, "", &rr, fmt.Errorf("ref %s not found and recovery failed: %w", req.Ref, recErr)
+		}
+		return recRes, "", &rr, nil
+	}
+
+	result, backend, err := h.executeAction(ctx, *req, cfg)
+	if err != nil && shouldRetryPointerAction(*req, err) {
+		if req.Ref != "" && shouldRetryStaleRef(err) {
+			recordStaleRefRetry()
+			h.refreshRefCache(ctx, resolvedTabID)
+			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil {
+				if target, ok := cache.Lookup(req.Ref); ok {
+					req.NodeID = target.BackendNodeID
+				}
+			}
+		}
+		h.refreshActionNodeIDFromSelector(ctx, req)
+		time.Sleep(pointerRetryDelay)
+		result, backend, err = h.executeAction(ctx, *req, cfg)
+	}
+
+	var rr *recovery.RecoveryResult
+	if err != nil && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
+		r2, recRes, recErr := h.Recovery.AttemptWithClassification(
+			ctx, resolvedTabID, req.Ref, req.Kind,
+			recovery.ClassifyFailure(err),
+			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
+				req.NodeID = nodeID
+				res, _, e := h.executeAction(c, *req, cfg)
+				return res, e
+			},
+		)
+		rr = &r2
+		if recErr == nil {
+			result, err = recRes, nil
+		}
+	}
+	return result, backend, rr, err
 }
 
 func switchedTabFromActionResult(result map[string]any) string {
@@ -59,72 +109,6 @@ func switchedTabFromActionResult(result map[string]any) string {
 		return strings.TrimSpace(switched)
 	}
 	return ""
-}
-
-func (h *Handlers) shouldUseLiteAction(req bridge.ActionRequest) bool {
-	kind := bridge.CanonicalActionKind(req.Kind)
-	if h.effectiveActionHumanize(req) && (kind == bridge.ActionClick || kind == bridge.ActionType || kind == bridge.ActionKeyboardType) {
-		return false
-	}
-	capability, ok := actionCapability(kind)
-	if !ok {
-		return h.Router != nil && h.Router.Mode() == engine.ModeLite
-	}
-	return h.useLite(capability, "")
-}
-
-func (h *Handlers) effectiveActionHumanize(req bridge.ActionRequest) bool {
-	if req.Humanize != nil {
-		return *req.Humanize
-	}
-	if h != nil && h.Config != nil {
-		return h.Config.Humanize
-	}
-	return false
-}
-
-func (h *Handlers) executeLiteAction(ctx context.Context, req bridge.ActionRequest) (map[string]any, string, error) {
-	if h.Router == nil || h.Router.Lite() == nil {
-		return nil, "", fmt.Errorf("lite engine unavailable")
-	}
-	switch bridge.CanonicalActionKind(req.Kind) {
-	case bridge.ActionClick:
-		if req.Ref == "" {
-			return nil, "lite", fmt.Errorf("lite mode actions require ref from /snapshot")
-		}
-		if err := h.Router.Lite().Click(ctx, req.TabID, req.Ref); err != nil {
-			return nil, "lite", err
-		}
-		return map[string]any{"clicked": true}, "lite", nil
-	case bridge.ActionType, bridge.ActionFill:
-		if req.Ref == "" {
-			return nil, "lite", fmt.Errorf("lite mode actions require ref from /snapshot")
-		}
-		text := req.Text
-		if req.Kind == bridge.ActionFill && text == "" {
-			text = req.Value
-		}
-		if text == "" {
-			return nil, "lite", fmt.Errorf("text required for %s", req.Kind)
-		}
-		if err := h.Router.Lite().Type(ctx, req.TabID, req.Ref, text); err != nil {
-			return nil, "lite", err
-		}
-		return map[string]any{"typed": true, "len": len([]rune(text))}, "lite", nil
-	default:
-		return nil, "lite", fmt.Errorf("%w: %s", engine.ErrLiteNotSupported, req.Kind)
-	}
-}
-
-func actionCapability(kind string) (engine.Capability, bool) {
-	switch bridge.CanonicalActionKind(kind) {
-	case bridge.ActionClick:
-		return engine.CapClick, true
-	case bridge.ActionType, bridge.ActionFill:
-		return engine.CapType, true
-	default:
-		return "", false
-	}
 }
 
 const pointerRetryDelay = 50 * time.Millisecond
@@ -137,7 +121,6 @@ func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
 	switch kind {
 	case bridge.ActionClick, bridge.ActionDoubleClick, bridge.ActionHover, bridge.ActionDrag,
 		bridge.ActionMouseDown, bridge.ActionMouseUp, bridge.ActionMouseWheel:
-		// pointer action kinds
 	default:
 		return false
 	}
@@ -170,7 +153,7 @@ func shouldRetryStaleRef(err error) bool {
 		return true
 	}
 	// Fallback string matching is still needed for stale failures that can bypass
-	// bridge.ExecuteAction classification (for example, lite-engine paths or other
+	// bridge.ExecuteAction classification (for example, static paths or other
 	// non-bridge error surfaces that return raw backend-node messages).
 	e := strings.ToLower(err.Error())
 	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") || strings.Contains(e, "no node")

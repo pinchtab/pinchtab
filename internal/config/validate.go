@@ -3,11 +3,17 @@ package config
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config/geo"
 )
 
-// ValidationError represents a configuration validation error.
 type ValidationError struct {
 	Field   string
 	Message string
@@ -21,7 +27,6 @@ func (e ValidationError) Error() string {
 func ValidateFileConfig(fc *FileConfig) []error {
 	var errs []error
 
-	// Server validation
 	if fc.Server.Port != "" {
 		if err := validatePort(fc.Server.Port, "server.port"); err != nil {
 			errs = append(errs, err)
@@ -48,6 +53,18 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
+
+	if fc.Server.Engine != "" {
+		errs = append(errs, fmt.Errorf("server.engine is no longer supported; use browsers.default instead"))
+	}
+	if fc.Browser.Provider != "" {
+		errs = append(errs, fmt.Errorf("browser.provider is no longer supported; use browsers.default instead (e.g. \"browsers\": {\"default\": %q})", fc.Browser.Provider))
+	}
+	errs = append(errs, validateCloakBrowserConfig(fc.Browser.Cloak)...)
+	errs = append(errs, ValidateBrowserProxy("browser.proxy", fc.Browser.Proxy)...)
+	errs = append(errs, ValidateBrowserTargets(fc.Browser)...)
+	errs = append(errs, validateBrowsersBlock(*fc)...)
+
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
 			errs = append(errs, ValidationError{
@@ -90,7 +107,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Instance defaults validation
 	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode != "" {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.headless",
@@ -152,7 +168,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Multi-instance validation
 	if fc.MultiInstance.Strategy != "" {
 		if !isValidStrategy(fc.MultiInstance.Strategy) {
 			errs = append(errs, ValidationError{
@@ -170,7 +185,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
-	// Attach validation
 	for _, scheme := range fc.Security.Attach.AllowSchemes {
 		if !isValidAttachScheme(scheme) {
 			errs = append(errs, ValidationError{
@@ -180,11 +194,10 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
-	if fc.Browser.ChromeExtraFlags != "" {
-		errs = append(errs, validateChromeExtraFlags(fc.Browser.ChromeExtraFlags)...)
+	if fc.Browser.BrowserExtraFlags != "" {
+		errs = append(errs, validateBrowserExtraFlags(fc.Browser.BrowserExtraFlags)...)
 	}
 
-	// IDPI validation
 	errs = append(errs, validateIDPIConfig(fc.Security.IDPI, effectiveSecurityAllowedDomains(fc.Security))...)
 	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
 	errs = append(errs, validateTrustedCIDRList("security.trustedProxyCIDRs", fc.Security.TrustedProxyCIDRs)...)
@@ -202,7 +215,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Timeouts validation
 	if fc.Timeouts.ActionSec < 0 {
 		errs = append(errs, ValidationError{
 			Field:   "timeouts.actionSec",
@@ -328,7 +340,6 @@ func validatePort(port string, field string) error {
 }
 
 func validateBind(bind string, field string) error {
-	// Accept common bind addresses
 	validBinds := map[string]bool{
 		"127.0.0.1": true,
 		"0.0.0.0":   true,
@@ -339,81 +350,125 @@ func validateBind(bind string, field string) error {
 	if validBinds[bind] {
 		return nil
 	}
-	// Basic IP format check (not exhaustive, just sanity)
-	// If it contains a dot, assume it's an IPv4 attempt
-	// If it contains a colon, assume it's an IPv6 attempt
-	// This is intentionally loose — the OS will reject truly invalid addresses
+	// Intentionally loose — the OS will reject truly invalid addresses.
 	return nil
 }
 
-func isValidStealthLevel(level string) bool {
-	switch level {
-	case "light", "medium", "full":
-		return true
-	default:
-		return false
+var cloakFingerprintSeedRegex = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
+func validateCloakBrowserConfig(cloak CloakBrowserConfig) []error {
+	return validateCloakBrowserConfigAt("browser.cloak", cloak)
+}
+
+func validateCloakBrowserConfigAt(fieldPrefix string, cloak CloakBrowserConfig) []error {
+	var errs []error
+	if cloak.Platform != "" && !isValidCloakPlatform(cloak.Platform) {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".platform",
+			Message: fmt.Sprintf("invalid value %q (must be windows, macos, or linux)", cloak.Platform),
+		})
 	}
+	if cloak.StorageQuotaMB != nil && *cloak.StorageQuotaMB < 0 {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".storageQuotaMB",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *cloak.StorageQuotaMB),
+		})
+	}
+	if seed := strings.TrimSpace(cloak.FingerprintSeed); seed != "" && !cloakFingerprintSeedRegex.MatchString(seed) {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".fingerprintSeed",
+			Message: "must be 1-128 characters of letters, numbers, dot, underscore, colon, or hyphen",
+		})
+	}
+	if err := geo.Validate(geo.Info{Timezone: cloak.Timezone, Locale: cloak.Locale}); err != nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix,
+			Message: err.Error(),
+		})
+	}
+	if ip := strings.TrimSpace(cloak.WebRTCIP); ip != "" && !strings.EqualFold(ip, "auto") && net.ParseIP(ip) == nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".webrtcIP",
+			Message: fmt.Sprintf("webrtcIP %q must be \"auto\" or a valid IP address", cloak.WebRTCIP),
+		})
+	}
+	if dir := strings.TrimSpace(cloak.FontsDir); dir != "" {
+		clean := filepath.Clean(dir)
+		if clean != dir {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be a clean path (got %q, clean form is %q)", dir, clean),
+			})
+		} else if st, err := os.Stat(dir); err != nil {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be an existing directory: %v", err),
+			})
+		} else if !st.IsDir() {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: "must be an existing directory",
+			})
+		}
+	}
+	return errs
+}
+
+// Enumerated config option sets are defined exactly once here; both the
+// isValid* membership checks and the exported Valid*() lists derive from these
+// slices so the two can't drift apart.
+var (
+	cloakPlatforms     = []string{"windows", "macos", "linux"}
+	stealthLevels      = []string{"light", "medium", "full"}
+	evictionPolicies   = []string{"reject", "close_oldest", "close_lru"}
+	lifecyclePolicies  = []string{"keep", "close_idle"}
+	strategies         = []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
+	allocationPolicies = []string{"fcfs", "round_robin", "random"}
+	attachSchemes      = []string{"ws", "wss", "http", "https"}
+)
+
+func isValidCloakPlatform(platform string) bool {
+	return slices.Contains(cloakPlatforms, strings.ToLower(strings.TrimSpace(platform)))
+}
+
+func isValidStealthLevel(level string) bool {
+	return slices.Contains(stealthLevels, level)
 }
 
 func isValidEvictionPolicy(policy string) bool {
-	switch policy {
-	case "reject", "close_oldest", "close_lru":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(evictionPolicies, policy)
 }
 
 func isValidLifecyclePolicy(policy string) bool {
-	switch policy {
-	case "keep", "close_idle":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(lifecyclePolicies, policy)
 }
 
 func ValidLifecyclePolicies() []string {
-	return []string{"keep", "close_idle"}
+	return slices.Clone(lifecyclePolicies)
 }
 
 func isValidStrategy(strategy string) bool {
-	switch strategy {
-	case "simple", "explicit", "simple-autorestart", "always-on", "no-instance":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(strategies, strategy)
 }
 
 func isValidAllocationPolicy(policy string) bool {
-	switch policy {
-	case "fcfs", "round_robin", "random":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(allocationPolicies, policy)
 }
 
 func isValidAttachScheme(scheme string) bool {
-	switch scheme {
-	case "ws", "wss", "http", "https":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(attachSchemes, scheme)
 }
 
 func ValidStealthLevels() []string {
-	return []string{"light", "medium", "full"}
+	return slices.Clone(stealthLevels)
 }
 
 func ValidEvictionPolicies() []string {
-	return []string{"reject", "close_oldest", "close_lru"}
+	return slices.Clone(evictionPolicies)
 }
 
 func ValidStrategies() []string {
-	return []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
+	return slices.Clone(strategies)
 }
 
 // validateIDPIConfig validates the security.idpi sub-section.
@@ -514,12 +569,57 @@ func validatePositiveIntLimit(field string, value *int, max int) []error {
 	return nil
 }
 
-// ValidAllocationPolicies returns all valid allocation policy values.
 func ValidAllocationPolicies() []string {
-	return []string{"fcfs", "round_robin", "random"}
+	return slices.Clone(allocationPolicies)
 }
 
-// ValidAttachSchemes returns all valid attach URL schemes.
 func ValidAttachSchemes() []string {
-	return []string{"ws", "wss", "http", "https"}
+	return slices.Clone(attachSchemes)
+}
+
+func validateBrowsersBlock(fc FileConfig) []error {
+	bc := fc.Browsers
+	if bc.Default == "" && len(bc.Available) == 0 && len(bc.Config) == 0 {
+		return nil
+	}
+
+	var errs []error
+
+	// Validate default is a known browser. The registry is keyed by lowercase
+	// IDs; trim+lowercase like target validation does so "Cloak" validates
+	// the same everywhere.
+	if bc.Default != "" {
+		if _, ok := browsers.Get(strings.ToLower(strings.TrimSpace(bc.Default))); !ok {
+			errs = append(errs, fmt.Errorf("browsers.default: unknown browser %q (known: %v)", bc.Default, browsers.IDs()))
+		}
+	}
+
+	for i, name := range bc.Available {
+		if _, ok := browsers.Get(strings.ToLower(strings.TrimSpace(name))); !ok {
+			errs = append(errs, fmt.Errorf("browsers.available[%d]: unknown browser %q (known: %v)", i, name, browsers.IDs()))
+		}
+	}
+
+	if bc.Default != "" && len(bc.Available) > 0 {
+		found := false
+		wantDefault := strings.ToLower(strings.TrimSpace(bc.Default))
+		for _, name := range bc.Available {
+			if strings.ToLower(strings.TrimSpace(name)) == wantDefault {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("browsers.default %q is not in browsers.available %v", bc.Default, bc.Available))
+		}
+	}
+
+	// browsers.config was accepted but never applied anywhere; reject it with
+	// guidance (mirroring the browser.provider retirement) rather than letting
+	// the overrides be silently ignored.
+	if len(bc.Config) > 0 {
+		errs = append(errs, fmt.Errorf("browsers.config is no longer supported; use browser.targets.<name> instead (e.g. \"browser\": {\"targets\": {\"cloak\": {\"binary\": \"/opt/cloak/bin\"}}})"))
+	}
+
+	return errs
 }

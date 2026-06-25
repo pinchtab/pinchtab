@@ -29,6 +29,29 @@ func TestClampScale(t *testing.T) {
 	}
 }
 
+func TestCaptureFromSurface(t *testing.T) {
+	cases := []struct {
+		name           string
+		beyondViewport bool
+		clip           *page.Viewport
+		want           bool
+	}{
+		{name: "plain viewport capture", want: false},
+		{name: "beyond viewport forces surface", beyondViewport: true, want: true},
+		{name: "native-scale clip stays off", clip: &page.Viewport{Scale: 1}, want: false},
+		{name: "zero-scale clip treated as native", clip: &page.Viewport{Scale: 0}, want: false},
+		{name: "downscaled clip forces surface", clip: &page.Viewport{Scale: 0.25}, want: true},
+		{name: "upscaled clip forces surface", clip: &page.Viewport{Scale: 2}, want: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := captureFromSurface(c.beyondViewport, c.clip); got != c.want {
+				t.Fatalf("captureFromSurface(%v, %+v) = %v, want %v", c.beyondViewport, c.clip, got, c.want)
+			}
+		})
+	}
+}
+
 func TestProjectBoundsToClip(t *testing.T) {
 	nodes := []A11yNode{
 		{

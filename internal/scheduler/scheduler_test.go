@@ -25,7 +25,6 @@ func (m *mockResolver) ResolveTabInstance(tabID string) (string, error) {
 func newTestScheduler(t *testing.T) (*Scheduler, *httptest.Server) {
 	t.Helper()
 
-	// Mock executor that returns success.
 	executor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
@@ -33,7 +32,6 @@ func newTestScheduler(t *testing.T) (*Scheduler, *httptest.Server) {
 		}
 	}))
 
-	// Extract port from executor URL.
 	parts := strings.Split(executor.URL, ":")
 	port := parts[len(parts)-1]
 
@@ -208,7 +206,6 @@ func TestSchedulerDispatchAndComplete(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	// Wait for task to complete.
 	deadline := time.After(5 * time.Second)
 	for {
 		select {

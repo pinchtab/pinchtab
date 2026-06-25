@@ -47,6 +47,12 @@ func FetchFrameTree(ctx context.Context) (RawFrameTree, error) {
 	return bridgeobserve.FetchFrameTree(ctx)
 }
 
+type FrameContext = bridgeobserve.FrameContext
+
+func FetchFrameContext(ctx context.Context) (FrameContext, error) {
+	return bridgeobserve.FetchFrameContext(ctx)
+}
+
 func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time.Duration, error) {
 	return bridgeobserve.WaitForQuietWindow(ctx, quiet, ceiling)
 }

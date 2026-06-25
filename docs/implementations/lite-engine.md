@@ -1,5 +1,10 @@
 # Lite Engine
 
+> **Deprecated:** This document describes the legacy engine model (`chrome`/`lite`/`auto`).
+> The engine has been replaced by the **browser provider** model. Use `browsers.default`
+> in your config with providers: `chrome`, `cloak`, or `ghost-chrome`.
+> See [terminology](../architecture/terminology.md) for details.
+
 PinchTab includes a **Lite Engine** that performs DOM capture — navigate, snapshot,
 text extraction, click, and type — without requiring Chrome or Chromium.  It is
 powered by [Gost-DOM](https://github.com/gost-dom/browser) (v0.11.0, MIT), a headless

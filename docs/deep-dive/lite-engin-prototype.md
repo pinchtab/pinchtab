@@ -1,4 +1,9 @@
-# Lite Engine: Chrome-Free DOM Capture using Gost-DOM
+# Lite Engine
+
+> **Deprecated:** This document describes the legacy engine model (`chrome`/`lite`/`auto`).
+> The engine has been replaced by the **browser provider** model. Use `browsers.default`
+> in your config with providers: `chrome`, `cloak`, or `ghost-chrome`.
+> See [terminology](../architecture/terminology.md) for details.
 
 **Branch:** `feat/lite-engine-gostdom`
 **Issue:** [#201](https://github.com/pinchtab/pinchtab/issues/201)
@@ -84,7 +89,7 @@ No handler, config, or CMD changes needed.
 |------|--------|
 | `internal/config/config_types.go` | Added `Engine` field to RuntimeConfig + ServerConfig |
 | `internal/handlers/handlers.go` | Added `Router *engine.Router` field, `useLite()` helper |
-| `internal/handlers/navigation.go` | Lite fast path before ensureChrome |
+| `internal/handlers/navigation.go` | Lite fast path before ensureBrowser |
 | `internal/handlers/snapshot.go` | Lite fast path with SnapshotNode → A11yNode conversion |
 | `internal/handlers/text.go` | Lite fast path returning plain text |
 | `cmd/pinchtab/cmd_bridge.go` | Resolves engine mode (`resolveBridgeEngine`) from CLI flag and config |

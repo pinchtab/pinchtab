@@ -1,12 +1,14 @@
 package autorestart
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 )
 
@@ -24,44 +26,45 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+s.config.StatusPath, s.handleStatus)
 }
 
-// proxyToManaged ensures the managed instance is running, then proxies.
 func (s *Strategy) proxyToManaged(w http.ResponseWriter, r *http.Request) {
-	target, err := s.ensureRunning()
+	target, status, err := s.ensureRunning(r)
 	if err != nil {
-		httpx.Error(w, 503, err)
+		if status == 0 {
+			status = 503
+		}
+		httpx.Error(w, status, err)
 		return
 	}
-	activity.EnrichRouteActivity(r)
-	strategy.EnrichForTarget(r, s.orch, target)
-	s.orch.ProxyToTarget(w, r, target+r.URL.Path)
+	strategy.EnrichAndProxy(s.orch, w, r, target)
 }
 
 // ensureRunning returns the URL of the managed instance, waiting briefly for
 // the initial launch / a restart to finish before giving up.
-func (s *Strategy) ensureRunning() (string, error) {
+func (s *Strategy) ensureRunning(r *http.Request) (string, int, error) {
 	if s.orch == nil {
-		return "", fmt.Errorf("no orchestrator configured")
+		return "", 503, fmt.Errorf("no orchestrator configured")
 	}
-	if target := s.orch.FirstRunningURL(); target != "" {
-		return target, nil
-	}
-	deadline := time.Now().Add(instanceReadyWait)
-	for time.Now().Before(deadline) {
-		time.Sleep(200 * time.Millisecond)
-		if target := s.orch.FirstRunningURL(); target != "" {
-			return target, nil
+	var lastStatus int
+	target, err := readiness.WaitUntil(context.Background(), instanceReadyWait, 200*time.Millisecond,
+		func() (string, bool, error) {
+			t, status, err := s.orch.FirstRunningURLForRequest(r)
+			if err != nil {
+				lastStatus = status
+				return "", false, err
+			}
+			return t, t != "", nil
+		})
+	if err != nil {
+		if errors.Is(err, readiness.ErrNotReady) {
+			return "", 503, fmt.Errorf("instance not ready after %s (may be restarting)", instanceReadyWait)
 		}
+		return "", lastStatus, err
 	}
-	return "", fmt.Errorf("instance not ready after %s (may be restarting)", instanceReadyWait)
+	return target, 0, nil
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
-	if target == "" {
-		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
-		return
-	}
-	s.orch.ProxyToTarget(w, r, target+"/tabs")
+	strategy.ProxyTabsToFirst(s.orch, w, r)
 }
 
 func (s *Strategy) handleStatus(w http.ResponseWriter, r *http.Request) {

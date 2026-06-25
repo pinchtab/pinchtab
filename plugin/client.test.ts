@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert";
 import { isRefToken, normalizeActionParams, looksLikeStaleRef, pinchtabFetch, textResult, imageResult, resourceResult, clearPinchtabSessionCache } from "./client.ts";
 
@@ -326,6 +326,110 @@ describe("pinchtabFetch session failure modes", () => {
     );
     assert.strictEqual(snapshotCalls, 2, "exactly one retry, no infinite loop");
     assert.strictEqual(result.error, "401 ");
+  });
+});
+
+describe("pinchtabFetch session cache bounding", () => {
+  const originalFetch = globalThis.fetch;
+  const maxEntries = 256; // mirrors pinchtabSessionMaxEntries in client.ts (not exported)
+  const maxAgeMs = 60 * 60 * 1000; // mirrors pinchtabSessionMaxAgeMs in client.ts (not exported)
+  let sessionPostsByAgent: Map<string, number>;
+
+  function installFetchStub(): void {
+    sessionPostsByAgent = new Map();
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.endsWith("/sessions") && method === "POST") {
+        const agentId = JSON.parse(String(init?.body ?? "{}")).agentId as string;
+        const count = (sessionPostsByAgent.get(agentId) ?? 0) + 1;
+        sessionPostsByAgent.set(agentId, count);
+        return new Response(JSON.stringify({ sessionToken: `tok_${agentId}_${count}` }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+  }
+
+  beforeEach(() => {
+    clearPinchtabSessionCache();
+    installFetchStub();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    clearPinchtabSessionCache();
+    mock.timers.reset();
+  });
+
+  const cfg = { baseUrl: "http://localhost:9867", token: "server-token" };
+
+  it("evicts the oldest agent's session once the cap is exceeded, but retains the newest", async () => {
+    // Drive maxEntries distinct agents through the public API; each gets one
+    // /sessions POST and is then cached. The cache is exactly full (== cap).
+    for (let i = 0; i < maxEntries; i++) {
+      await pinchtabFetch(cfg, "/snapshot", {}, { agentId: `agent_${i}` });
+    }
+    // Every agent so far should have created exactly one session.
+    assert.strictEqual(sessionPostsByAgent.size, maxEntries);
+    for (const [, count] of sessionPostsByAgent) assert.strictEqual(count, 1);
+
+    // One more distinct agent pushes size to cap+1 → prune evicts the single
+    // oldest-by-updatedAt entry (agent_0, inserted first).
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "agent_overflow" });
+    assert.strictEqual(sessionPostsByAgent.get("agent_overflow"), 1);
+
+    // The newest agent is still cached: re-calling reuses its token (no new POST).
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "agent_overflow" });
+    assert.strictEqual(sessionPostsByAgent.get("agent_overflow"), 1, "newest agent retained");
+
+    // The oldest agent (agent_0) was evicted: re-calling forces a fresh session.
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "agent_0" });
+    assert.strictEqual(sessionPostsByAgent.get("agent_0"), 2, "oldest agent evicted → re-created");
+
+    // A middle agent that was never the oldest survivor stays cached (no new POST).
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: `agent_${maxEntries - 1}` });
+    assert.strictEqual(sessionPostsByAgent.get(`agent_${maxEntries - 1}`), 1, "recent agent retained");
+  });
+
+  it("evicts exactly one entry per single-entry overflow (stays bounded at the cap)", async () => {
+    for (let i = 0; i < maxEntries; i++) {
+      await pinchtabFetch(cfg, "/snapshot", {}, { agentId: `a_${i}` });
+    }
+    // Overflow by one: only the single oldest (a_0) is evicted; a_1 survives.
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "extra" });
+
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "a_1" });
+    assert.strictEqual(sessionPostsByAgent.get("a_1"), 1, "second-oldest survives a one-entry overflow");
+
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "a_0" });
+    assert.strictEqual(sessionPostsByAgent.get("a_0"), 2, "only the single oldest entry was evicted");
+  });
+
+  it("ages out a cached session older than the max age (Date-mocked) and re-creates it", async () => {
+    // Mock only the Date API so Date.now() is controllable; the real setTimeout
+    // used by ensurePinchtabSession's abort controller is left untouched and the
+    // fetch stub resolves synchronously, so no timers need to fire.
+    mock.timers.enable({ apis: ["Date"] });
+    mock.timers.setTime(1_000_000);
+
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "stale" });
+    assert.strictEqual(sessionPostsByAgent.get("stale"), 1);
+
+    // Still within max age → cached token reused, no new POST.
+    mock.timers.tick(maxAgeMs - 1);
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "stale" });
+    assert.strictEqual(sessionPostsByAgent.get("stale"), 1, "fresh entry reused within max age");
+
+    // Cross the max-age boundary → entry is treated as aged out and re-created.
+    mock.timers.tick(2);
+    await pinchtabFetch(cfg, "/snapshot", {}, { agentId: "stale" });
+    assert.strictEqual(sessionPostsByAgent.get("stale"), 2, "aged-out entry re-created past max age");
   });
 });
 

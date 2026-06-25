@@ -5,6 +5,13 @@ set -euo pipefail
 : "${PINCHTAB_TOKEN:?missing PINCHTAB_TOKEN}"
 : "${FIXTURES_URL:?missing FIXTURES_URL}"
 
+# Agent model for the smoke scenarios. claude-sonnet-4-5 was retired upstream and
+# is no longer in the live model catalog, so openclaw rejects it as an unknown
+# model. Default to the current Sonnet; override with SMOKE_AGENT_MODEL to pin a
+# different one (must be a model the configured API key can actually access).
+AGENT_MODEL="${SMOKE_AGENT_MODEL:-anthropic/claude-sonnet-4-6}"
+export SMOKE_AGENT_MODEL="$AGENT_MODEL"
+
 if [[ -n "${ANTHROPIC_API_KEY:-}" && ! -f /root/.openclaw/openclaw.json ]]; then
   echo "bootstrapping openclaw config from ANTHROPIC_API_KEY..."
   openclaw onboard \
@@ -52,7 +59,7 @@ JSON
     openclaw agents add "$agent" \
       --workspace "/root/workspace-$agent" \
       --agent-dir "/root/.openclaw/agents/$agent/agent" \
-      --model anthropic/claude-sonnet-4-5 \
+      --model "$AGENT_MODEL" \
       --non-interactive \
       >>/artifacts/onboard.log 2>&1 || {
         echo "openclaw agents add $agent failed:" >&2
@@ -77,7 +84,7 @@ if anthropic_key:
     auth_order = obj.setdefault('auth', {}).setdefault('order', {})
     auth_order['anthropic'] = ['anthropic-default']
     agents = obj.setdefault('agents', {}).setdefault('defaults', {})
-    agents['model'] = 'anthropic/claude-sonnet-4-5'
+    agents['model'] = os.environ.get('SMOKE_AGENT_MODEL', 'anthropic/claude-sonnet-4-6')
 plugins = obj.setdefault('plugins', {}).setdefault('entries', {})
 plugins.setdefault('pinchtab', {})['enabled'] = True
 pinchtab_cfg = plugins.setdefault('pinchtab', {}).setdefault('config', {})
@@ -125,10 +132,19 @@ if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   node -e "
     const key = process.env.ANTHROPIC_API_KEY;
     console.log('key length:', key.length, 'prefix:', key.slice(0, 14));
+    console.log('configured agent model:', process.env.SMOKE_AGENT_MODEL);
     fetch('https://api.anthropic.com/v1/models', {
       headers: {'x-api-key': key, 'anthropic-version': '2023-06-01'}
-    }).then(r => r.text().then(t => console.log('status:', r.status, 'body:', t.slice(0, 200))))
-      .catch(e => console.log('error:', e.message));
+    }).then(async r => {
+      const t = await r.text();
+      console.log('status:', r.status);
+      try {
+        const ids = (JSON.parse(t).data || []).map(m => m.id);
+        console.log('available models:', ids.join(', '));
+      } catch {
+        console.log('body:', t.slice(0, 200));
+      }
+    }).catch(e => console.log('error:', e.message));
   " 2>&1 | tee /artifacts/anthropic-probe.log
 fi
 

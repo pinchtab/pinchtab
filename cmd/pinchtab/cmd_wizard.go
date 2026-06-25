@@ -29,7 +29,6 @@ func runSecurityWizard(cfg *config.FileConfig, configPath string, isNew bool) bo
 	return runUpgradeNotice(cfg, configPath)
 }
 
-// runNonInteractiveSetup prints a summary and applies defaults silently.
 func runNonInteractiveSetup(cfg *config.FileConfig, configPath string, isNew bool) bool {
 	if isNew {
 		fmt.Println()
@@ -52,7 +51,6 @@ func runNonInteractiveSetup(cfg *config.FileConfig, configPath string, isNew boo
 	return true
 }
 
-// runFullWizard runs the interactive first-run wizard.
 func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "🛡️  Know your config"))
@@ -62,31 +60,17 @@ func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 	fmt.Println()
 	printSeparator()
 
-	// Guard Up
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "1. Guard UP (recommended)"))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Only sites running on this machine can be automated."))
 	fmt.Println()
-	printSetting("domains", cli.StyleStdout(cli.ValueStyle, strings.Join(getAllowedDomains(cfg), ", ")))
-	printSetting("evaluate", cli.StyleStdout(cli.SuccessStyle, "disabled"))
-	printSetting("download", cli.StyleStdout(cli.SuccessStyle, "disabled"))
-	printSetting("upload", cli.StyleStdout(cli.SuccessStyle, "disabled"))
-	printSetting("macros", cli.StyleStdout(cli.SuccessStyle, "disabled"))
-	printSetting("screencast", cli.StyleStdout(cli.SuccessStyle, "disabled"))
-	printSetting("IDPI", cli.StyleStdout(cli.SuccessStyle, "strict"))
+	printPosture(guardUpPosture)
 	fmt.Println()
 
-	// Guard Down
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "2. Guard DOWN (development)"))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "All features enabled, any site can be automated. Use for local dev only."))
 	fmt.Println()
-	printSetting("domains", cli.StyleStdout(cli.WarningStyle, "all"))
-	printSetting("evaluate", cli.StyleStdout(cli.WarningStyle, "enabled"))
-	printSetting("download", cli.StyleStdout(cli.WarningStyle, "enabled"))
-	printSetting("upload", cli.StyleStdout(cli.WarningStyle, "enabled"))
-	printSetting("macros", cli.StyleStdout(cli.WarningStyle, "enabled"))
-	printSetting("screencast", cli.StyleStdout(cli.WarningStyle, "enabled"))
-	printSetting("IDPI", cli.StyleStdout(cli.WarningStyle, "off"))
+	printPosture(guardDownPosture)
 	fmt.Println()
 	printSeparator()
 	fmt.Println()
@@ -101,12 +85,11 @@ func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 
 	switch picked {
 	case "up":
-		applyGuardUp(cfg)
+		applyPosture(cfg, guardUpPosture)
 	case "down":
-		applyGuardDown(cfg)
+		applyPosture(cfg, guardDownPosture)
 	}
 
-	// Dashboard access
 	printSeparator()
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Dashboard"))
@@ -118,7 +101,6 @@ func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 	}
 	fmt.Println()
 
-	// Save
 	cfg.ConfigVersion = config.CurrentConfigVersion
 	if err := config.SaveFileConfig(cfg, configPath); err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("failed to save config: %v", err)))
@@ -131,7 +113,6 @@ func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 	return true
 }
 
-// runUpgradeNotice shows a brief notice for config upgrades.
 func runUpgradeNotice(cfg *config.FileConfig, configPath string) bool {
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "🛡️  Config update (v"+config.CurrentConfigVersion+")"))
@@ -152,40 +133,88 @@ func runUpgradeNotice(cfg *config.FileConfig, configPath string) bool {
 	return true
 }
 
-// ─── Guard Presets ───────────────────────────────────────────────
-
-func applyGuardUp(cfg *config.FileConfig) {
-	f := false
-	cfg.Security.AllowEvaluate = &f
-	cfg.Security.AllowDownload = &f
-	cfg.Security.AllowCookies = &f
-	cfg.Security.AllowUpload = &f
-	cfg.Security.AllowMacro = &f
-	cfg.Security.AllowScreencast = &f
-	cfg.Security.IDPI.Enabled = true
-	cfg.Security.IDPI.StrictMode = true
-	cfg.Security.IDPI.ScanContent = true
-	cfg.Security.IDPI.WrapContent = true
-	cfg.Security.AllowedDomains = []string{"127.0.0.1", "localhost", "::1"}
-	cfg.Server.Bind = "127.0.0.1"
+// securityPosture is the single source of truth for a wizard security choice:
+// both the printed summary (printPosture) and the saved config (applyPosture) are
+// derived from it, so they cannot drift.
+type securityPosture struct {
+	allowEvaluate   bool
+	allowDownload   bool
+	allowCookies    bool
+	allowUpload     bool
+	allowMacro      bool
+	allowScreencast bool
+	idpiOn          bool     // drives IDPI Enabled/StrictMode/ScanContent/WrapContent
+	allowedDomains  []string // nil → "all"
+	bind            string   // "" → leave Server.Bind unchanged
 }
 
-func applyGuardDown(cfg *config.FileConfig) {
-	t := true
-	cfg.Security.AllowEvaluate = &t
-	cfg.Security.AllowDownload = &t
-	cfg.Security.AllowCookies = &t
-	cfg.Security.AllowUpload = &t
-	cfg.Security.AllowMacro = &t
-	cfg.Security.AllowScreencast = &t
-	cfg.Security.IDPI.Enabled = false
-	cfg.Security.IDPI.StrictMode = false
-	cfg.Security.IDPI.ScanContent = false
-	cfg.Security.IDPI.WrapContent = false
-	cfg.Security.AllowedDomains = nil
+var guardUpPosture = securityPosture{
+	idpiOn:         true,
+	allowedDomains: []string{"127.0.0.1", "localhost", "::1"},
+	bind:           "127.0.0.1",
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────
+var guardDownPosture = securityPosture{
+	allowEvaluate:   true,
+	allowDownload:   true,
+	allowCookies:    true,
+	allowUpload:     true,
+	allowMacro:      true,
+	allowScreencast: true,
+	idpiOn:          false,
+	allowedDomains:  nil,
+	bind:            "",
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func applyPosture(cfg *config.FileConfig, p securityPosture) {
+	cfg.Security.AllowEvaluate = boolPtr(p.allowEvaluate)
+	cfg.Security.AllowDownload = boolPtr(p.allowDownload)
+	cfg.Security.AllowCookies = boolPtr(p.allowCookies)
+	cfg.Security.AllowUpload = boolPtr(p.allowUpload)
+	cfg.Security.AllowMacro = boolPtr(p.allowMacro)
+	cfg.Security.AllowScreencast = boolPtr(p.allowScreencast)
+	cfg.Security.IDPI.Enabled = p.idpiOn
+	cfg.Security.IDPI.StrictMode = p.idpiOn
+	cfg.Security.IDPI.ScanContent = p.idpiOn
+	cfg.Security.IDPI.WrapContent = p.idpiOn
+	cfg.Security.AllowedDomains = append([]string(nil), p.allowedDomains...)
+	if p.bind != "" {
+		cfg.Server.Bind = p.bind
+	}
+}
+
+func printPosture(p securityPosture) {
+	printSetting("domains", styledDomains(p.allowedDomains))
+	printSetting("evaluate", styledToggle(p.allowEvaluate))
+	printSetting("download", styledToggle(p.allowDownload))
+	printSetting("upload", styledToggle(p.allowUpload))
+	printSetting("macros", styledToggle(p.allowMacro))
+	printSetting("screencast", styledToggle(p.allowScreencast))
+	printSetting("IDPI", styledIDPI(p.idpiOn))
+}
+
+func styledToggle(allowed bool) string {
+	if allowed {
+		return cli.StyleStdout(cli.WarningStyle, "enabled")
+	}
+	return cli.StyleStdout(cli.SuccessStyle, "disabled")
+}
+
+func styledIDPI(on bool) string {
+	if on {
+		return cli.StyleStdout(cli.SuccessStyle, "strict")
+	}
+	return cli.StyleStdout(cli.WarningStyle, "off")
+}
+
+func styledDomains(domains []string) string {
+	if len(domains) == 0 {
+		return cli.StyleStdout(cli.WarningStyle, "all")
+	}
+	return cli.StyleStdout(cli.ValueStyle, strings.Join(domains, ", "))
+}
 
 func getAllowedDomains(cfg *config.FileConfig) []string {
 	if len(cfg.Security.AllowedDomains) > 0 {
@@ -214,5 +243,3 @@ func orDefault(val, fallback string) string {
 	}
 	return val
 }
-
-// copyToClipboard is defined in cmd_config.go

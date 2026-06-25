@@ -3,7 +3,6 @@ import { Select } from "../components/atoms";
 import { SidebarPanel, SidebarPanelHeader } from "../components/molecules";
 import { useAppStore } from "../stores/useAppStore";
 import * as api from "../services/api";
-import type { InstanceTab } from "../types";
 import { fetchActivity } from "./api";
 import {
   ActivityFilterActions,
@@ -16,21 +15,9 @@ import {
   defaultActivityFilters,
   sameActivityFilters,
 } from "./helpers";
+import { useAllTabs } from "./hooks/useAllTabs";
+import { normalizeDashboardActivityEvent } from "./selectors";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
-
-const ANONYMOUS_AGENT_ID = "anonymous";
-
-function normalizeDashboardActivityEvent(
-  event: DashboardActivityEvent,
-): DashboardActivityEvent {
-  const source = (event.source || "").trim().toLowerCase();
-  const agentId = (event.agentId || "").trim();
-  return {
-    ...event,
-    source,
-    agentId: source === "client" && !agentId ? ANONYMOUS_AGENT_ID : agentId,
-  };
-}
 
 interface Props {
   initialFilters?: Partial<ActivityFilters>;
@@ -56,7 +43,7 @@ export default function ActivityExplorer({
     ...lockedFilters,
   });
   const [events, setEvents] = useState<DashboardActivityEvent[]>([]);
-  const [tabs, setTabs] = useState<InstanceTab[]>([]);
+  const tabs = useAllTabs();
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -103,25 +90,6 @@ export default function ActivityExplorer({
       return sameActivityFilters(current, next) ? current : next;
     });
   }, [initialFilters, lockedFilters]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .fetchAllTabs()
-      .then((response) => {
-        if (!cancelled) {
-          setTabs(response);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTabs([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

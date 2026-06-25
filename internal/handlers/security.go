@@ -1,12 +1,39 @@
 package handlers
 
-import "github.com/pinchtab/pinchtab/internal/httpx"
+import (
+	"net/http"
+
+	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
+)
 
 type endpointSecurityState struct {
 	Enabled bool     `json:"enabled"`
 	Setting string   `json:"setting"`
 	Message string   `json:"message"`
 	Paths   []string `json:"paths"`
+}
+
+// writeCapabilityDisabled emits the standard 403 for a capability-gated endpoint
+// using the centralized routes.Meta metadata, so the disabled error code,
+// setting path, and message are defined once rather than restated at each gate.
+func (h *Handlers) writeCapabilityDisabled(w http.ResponseWriter, cap routes.Capability) {
+	meta, _ := routes.Meta(cap)
+	httpx.ErrorCode(w, http.StatusForbidden, meta.DisabledCode,
+		httpx.DisabledEndpointMessage(meta.Label, meta.Setting), false,
+		map[string]any{"setting": meta.Setting})
+}
+
+// capState builds the /security projection for a capability-gated endpoint
+// family, sourcing the setting path and message from the centralized metadata.
+func capState(cap routes.Capability, enabled bool, paths []string) endpointSecurityState {
+	meta, _ := routes.Meta(cap)
+	return endpointSecurityState{
+		Enabled: enabled,
+		Setting: meta.Setting,
+		Message: httpx.DisabledEndpointMessage(meta.Label, meta.Setting),
+		Paths:   paths,
+	}
 }
 
 func (h *Handlers) macroEnabled() bool {
@@ -35,67 +62,36 @@ func (h *Handlers) networkInterceptEnabled() bool {
 
 func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 	return map[string]endpointSecurityState{
-		"evaluate": {
-			Enabled: h.evaluateEnabled(),
-			Setting: "security.allowEvaluate",
-			Message: httpx.DisabledEndpointMessage("evaluate", "security.allowEvaluate"),
-			Paths:   []string{"POST /evaluate", "POST /tabs/{id}/evaluate"},
-		},
-		"macro": {
-			Enabled: h.macroEnabled(),
-			Setting: "security.allowMacro",
-			Message: httpx.DisabledEndpointMessage("macro", "security.allowMacro"),
-			Paths:   []string{"POST /macro"},
-		},
-		"screencast": {
-			Enabled: h.screencastEnabled(),
-			Setting: "security.allowScreencast",
-			Message: httpx.DisabledEndpointMessage("screencast", "security.allowScreencast"),
-			Paths:   []string{"GET /screencast", "GET /screencast/tabs", "POST /record/start", "POST /record/stop", "GET /record/status", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"},
-		},
-		"download": {
-			Enabled: h.downloadEnabled(),
-			Setting: "security.allowDownload",
-			Message: httpx.DisabledEndpointMessage("download", "security.allowDownload"),
-			Paths:   []string{"GET /download", "GET /tabs/{id}/download"},
-		},
-		"cookies": {
-			Enabled: h.cookiesEnabled(),
-			Setting: "security.allowCookies",
-			Message: httpx.DisabledEndpointMessage("cookies", "security.allowCookies"),
-			Paths:   []string{"GET /cookies", "POST /cookies", "DELETE /cookies", "GET /tabs/{id}/cookies", "POST /tabs/{id}/cookies", "DELETE /tabs/{id}/cookies"},
-		},
-		"upload": {
-			Enabled: h.uploadEnabled(),
-			Setting: "security.allowUpload",
-			Message: httpx.DisabledEndpointMessage("upload", "security.allowUpload"),
-			Paths:   []string{"POST /upload", "POST /tabs/{id}/upload"},
-		},
+		"evaluate": capState(routes.CapEvaluate, h.evaluateEnabled(),
+			[]string{"POST /evaluate", "POST /tabs/{id}/evaluate"}),
+		"macro": capState(routes.CapMacro, h.macroEnabled(),
+			[]string{"POST /macro"}),
+		"screencast": capState(routes.CapScreencast, h.screencastEnabled(),
+			[]string{"GET /screencast", "GET /screencast/tabs", "POST /record/start", "POST /record/stop", "GET /record/status", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"}),
+		"download": capState(routes.CapDownload, h.downloadEnabled(),
+			[]string{"GET /download", "GET /tabs/{id}/download"}),
+		"cookies": capState(routes.CapCookies, h.cookiesEnabled(),
+			[]string{"GET /cookies", "POST /cookies", "DELETE /cookies", "GET /tabs/{id}/cookies", "POST /tabs/{id}/cookies", "DELETE /tabs/{id}/cookies"}),
+		"upload": capState(routes.CapUpload, h.uploadEnabled(),
+			[]string{"POST /upload", "POST /tabs/{id}/upload"}),
+		// clipboard has no capability gate in the route catalog, so its metadata stays local.
 		"clipboard": {
 			Enabled: h.clipboardEnabled(),
 			Setting: "security.allowClipboard",
 			Message: httpx.DisabledEndpointMessage("clipboard", "security.allowClipboard"),
 			Paths:   []string{"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste"},
 		},
-		"stateExport": {
-			Enabled: h.stateExportEnabled(),
-			Setting: "security.allowStateExport",
-			Message: httpx.DisabledEndpointMessage("stateExport", "security.allowStateExport"),
-			Paths: []string{
+		"stateExport": capState(routes.CapStateExport, h.stateExportEnabled(),
+			[]string{
 				"GET /storage", "POST /storage", "DELETE /storage",
 				"GET /tabs/{id}/storage", "POST /tabs/{id}/storage", "DELETE /tabs/{id}/storage",
 				"GET /state", "GET /state/list", "GET /state/show", "POST /state/save",
 				"POST /state/load", "DELETE /state", "POST /state/clean",
-			},
-		},
-		"networkIntercept": {
-			Enabled: h.networkInterceptEnabled(),
-			Setting: "security.allowNetworkIntercept",
-			Message: httpx.DisabledEndpointMessage("networkIntercept", "security.allowNetworkIntercept"),
-			Paths: []string{
+			}),
+		"networkIntercept": capState(routes.CapNetworkIntercept, h.networkInterceptEnabled(),
+			[]string{
 				"GET /network/route", "POST /network/route", "DELETE /network/route",
 				"GET /tabs/{id}/network/route", "POST /tabs/{id}/network/route", "DELETE /tabs/{id}/network/route",
-			},
-		},
+			}),
 	}
 }

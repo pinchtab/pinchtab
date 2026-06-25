@@ -1,4 +1,4 @@
-# A Tailscale Bridge Story: One Orchestrator, Remote Browsers
+# One Orchestrator, Remote Browsers
 
 There is a simple distributed PinchTab shape that turns out to be very practical:
 

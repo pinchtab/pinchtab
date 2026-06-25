@@ -7,19 +7,36 @@ import (
 	"path/filepath"
 )
 
-func (pm *ProfileManager) Import(name, sourcePath string) error {
+// preflightProfileDestination validates name, ensures no existing profile or
+// destination directory collides, and returns the derived profile id and
+// destination path. Callers must hold pm.mu. dirConflictMsg formats the
+// directory-collision message (receiving the profile name); pass nil to reuse
+// the name-collision wording.
+func (pm *ProfileManager) preflightProfileDestination(name string, dirConflictMsg func(string) string) (id, dest string, err error) {
 	if err := ValidateProfileName(name); err != nil {
-		return err
+		return "", "", err
 	}
+	if _, err := pm.findProfileDirByName(name); err == nil {
+		return "", "", tagged(ErrProfileExists, fmt.Sprintf("profile %q already exists", name))
+	}
+	id = profileID(name)
+	dest = filepath.Join(pm.baseDir, id)
+	if _, err := os.Stat(dest); err == nil {
+		if dirConflictMsg != nil {
+			return "", "", tagged(ErrProfileDirExists, dirConflictMsg(name))
+		}
+		return "", "", tagged(ErrProfileExists, fmt.Sprintf("profile %q already exists", name))
+	}
+	return id, dest, nil
+}
+
+func (pm *ProfileManager) Import(name, sourcePath string) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if _, err := pm.findProfileDirByName(name); err == nil {
-		return fmt.Errorf("profile %q already exists", name)
-	}
-	dest := filepath.Join(pm.baseDir, profileID(name))
-	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("profile %q already exists", name)
+	_, dest, err := pm.preflightProfileDestination(name, nil)
+	if err != nil {
+		return err
 	}
 
 	resolvedSourcePath, err := resolveImportSourcePath(sourcePath)
@@ -73,24 +90,18 @@ func (pm *ProfileManager) ImportWithMeta(name, sourcePath string, meta ProfileMe
 }
 
 func (pm *ProfileManager) Create(name string) error {
-	if err := ValidateProfileName(name); err != nil {
-		return err
-	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if _, err := pm.findProfileDirByName(name); err == nil {
-		return fmt.Errorf("profile %q already exists", name)
-	}
-	dest := filepath.Join(pm.baseDir, profileID(name))
-	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("profile %q already exists", name)
+	id, dest, err := pm.preflightProfileDestination(name, nil)
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Join(dest, "Default"), 0755); err != nil {
 		return err
 	}
 	return writeProfileMeta(dest, ProfileMeta{
-		ID:   profileID(name),
+		ID:   id,
 		Name: name,
 	})
 }
@@ -219,17 +230,15 @@ func (pm *ProfileManager) Rename(oldName, newName string) error {
 		return err
 	}
 
-	if _, err := pm.findProfileDirByName(newName); err == nil {
-		return fmt.Errorf("profile %q already exists", newName)
-	}
-
-	newDir := filepath.Join(pm.baseDir, profileID(newName))
-	if _, err := os.Stat(newDir); err == nil {
-		return fmt.Errorf("profile directory for %q already exists", newName)
+	newID, newDir, err := pm.preflightProfileDestination(newName, func(n string) string {
+		return fmt.Sprintf("profile directory for %q already exists", n)
+	})
+	if err != nil {
+		return err
 	}
 
 	meta := readProfileMeta(oldDir)
-	meta.ID = profileID(newName)
+	meta.ID = newID
 	meta.Name = newName
 	if err := writeProfileMeta(oldDir, meta); err != nil {
 		return fmt.Errorf("failed to update profile metadata: %w", err)

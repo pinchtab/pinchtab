@@ -277,6 +277,8 @@ func TestHandleNetworkByIDRetainedPreferredReturnsBodyAfterPendingResolves(t *te
 			entry.BodyRetained = true
 			entry.BodyPending = false
 		})
+		// Mirror maybeRetainBody: signal so the waiter wakes immediately.
+		buf.SignalBodyChange()
 	}()
 
 	req := httptest.NewRequest("GET", "/network/pending-1?body=true&bodyMode=retained-preferred&timeoutMs=250", nil)
@@ -352,6 +354,50 @@ func TestHandleNetworkByIDRetainedPreferredTimeoutReturnsPendingState(t *testing
 	}
 	if entryMap["bodyPending"] != true {
 		t.Fatalf("expected nested entry bodyPending=true, got %v", entryMap["bodyPending"])
+	}
+}
+
+func TestWaitForRetainedBodyWakesOnSignal(t *testing.T) {
+	buf := bridge.NewNetworkBuffer(10)
+	buf.Add(bridge.NetworkEntry{RequestID: "r1", Finished: true, BodyPending: true})
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		buf.Update("r1", func(e *bridge.NetworkEntry) {
+			e.BodyRetained = true
+			e.BodyPending = false
+		})
+		buf.SignalBodyChange()
+	}()
+
+	start := time.Now()
+	// Generous 2s budget: if the signal weren't wired, this would block the full 2s.
+	entry, ok := waitForRetainedBody(buf, "r1", 2*time.Second)
+	elapsed := time.Since(start)
+
+	if !ok || !entry.BodyRetained {
+		t.Fatalf("expected retained body, got ok=%v entry=%+v", ok, entry)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("waitForRetainedBody did not wake promptly on signal (took %v)", elapsed)
+	}
+}
+
+func TestWaitForRetainedBodyTimeoutReturnsCurrentEntry(t *testing.T) {
+	buf := bridge.NewNetworkBuffer(10)
+	buf.Add(bridge.NetworkEntry{RequestID: "r1", Finished: true, BodyPending: true})
+
+	entry, ok := waitForRetainedBody(buf, "r1", 30*time.Millisecond)
+	if !ok {
+		t.Fatal("expected ok=true on timeout with a present entry")
+	}
+	if entry.BodyRetained || !entry.BodyPending {
+		t.Fatalf("expected the unresolved pending entry at timeout, got %+v", entry)
+	}
+
+	// Missing request: no entry to return.
+	if _, ok := waitForRetainedBody(buf, "missing", 10*time.Millisecond); ok {
+		t.Fatal("expected ok=false for a missing request")
 	}
 }
 
@@ -526,7 +572,6 @@ func TestHandleNetworkClear_All(t *testing.T) {
 		t.Errorf("expected cleared=true, all=true, got cleared=%v, all=%v", resp.Cleared, resp.All)
 	}
 
-	// Verify buffers are empty
 	buf1 := nm.GetBuffer("tab1")
 	buf2 := nm.GetBuffer("tab2")
 	if buf1 != nil && buf1.Len() != 0 {
@@ -645,11 +690,11 @@ func (m *networkFailTabBridge) NetworkMonitor() *bridge.NetworkMonitor {
 	return m.nm
 }
 
-func (m *networkFailTabBridge) TabContext(tabID string) (context.Context, string, error) {
+func (m *networkFailTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	return nil, "", fmt.Errorf("tab not found")
 }
 
-func (m *networkFailTabBridge) EnsureChrome(cfg *config.RuntimeConfig) error {
+func (m *networkFailTabBridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
 	return nil
 }
 

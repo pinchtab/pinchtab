@@ -21,13 +21,11 @@ func Network(client *http.Client, base, token string, cmd *cobra.Command, args [
 		return
 	}
 
-	// Check for --clear flag
 	if v, _ := cmd.Flags().GetBool("clear"); v {
 		NetworkClear(client, base, token, cmd)
 		return
 	}
 
-	// Check for --stream flag
 	if v, _ := cmd.Flags().GetBool("stream"); v {
 		NetworkStream(client, base, token, cmd)
 		return

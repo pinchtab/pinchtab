@@ -57,7 +57,6 @@ func TestHandleDialog_NoPendingDialog(t *testing.T) {
 	req := httptest.NewRequest("POST", "/dialog", bytes.NewReader([]byte(`{"action":"accept"}`)))
 	w := httptest.NewRecorder()
 	h.HandleDialog(w, req)
-	// Should return 400 because no dialog is pending
 	if w.Code != 400 {
 		t.Errorf("expected 400 for no pending dialog, got %d: %s", w.Code, w.Body.String())
 	}
@@ -68,7 +67,6 @@ func TestHandleDialog_AcceptAction(t *testing.T) {
 	req := httptest.NewRequest("POST", "/dialog", bytes.NewReader([]byte(`{"action":"accept"}`)))
 	w := httptest.NewRecorder()
 	h.HandleDialog(w, req)
-	// With no pending dialog, should get 400
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
@@ -128,7 +126,6 @@ func TestHandleDialog_AcceptWithText(t *testing.T) {
 	req := httptest.NewRequest("POST", "/dialog", bytes.NewReader([]byte(`{"action":"accept","text":"hello"}`)))
 	w := httptest.NewRecorder()
 	h.HandleDialog(w, req)
-	// No pending dialog, so 400
 	if w.Code != 400 {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
@@ -141,7 +138,6 @@ func TestDialogManagerFromMockBridge(t *testing.T) {
 		t.Fatal("expected non-nil DialogManager from mockBridge")
 	}
 
-	// Verify it works
 	dm.SetPending("tab1", &bridge.DialogState{Type: "alert", Message: "test"})
 	got := dm.GetPending("tab1")
 	if got == nil || got.Type != "alert" {

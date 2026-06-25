@@ -82,7 +82,6 @@ type RawFrameTree struct {
 	ChildFrames []RawFrameTree `json:"childFrames"`
 }
 
-// FrameIDs returns every frame id in a frame tree, including descendants.
 func FrameIDs(tree RawFrameTree) []string {
 	ids := make([]string, 0, 1+len(tree.ChildFrames))
 	var walk func(RawFrameTree)
@@ -98,7 +97,6 @@ func FrameIDs(tree RawFrameTree) []string {
 	return ids
 }
 
-// FrameMap returns frame metadata keyed by frame id.
 func FrameMap(tree RawFrameTree) map[string]RawFrame {
 	frames := make(map[string]RawFrame, 1+len(tree.ChildFrames))
 	var walk func(RawFrameTree)
@@ -114,7 +112,6 @@ func FrameMap(tree RawFrameTree) map[string]RawFrame {
 	return frames
 }
 
-// FrameOwnerMap returns iframe owner backend node IDs keyed by child frame id.
 func FrameOwnerMap(ctx context.Context, tree RawFrameTree) map[string]int64 {
 	owners := make(map[string]int64, len(tree.ChildFrames))
 	var walk func(RawFrameTree)
@@ -155,16 +152,42 @@ func FetchFrameTree(ctx context.Context) (RawFrameTree, error) {
 	return frameResp.FrameTree, nil
 }
 
-// FetchAXTree returns the merged accessibility tree for the current page and any child frames.
+// FrameContext bundles the request-scoped frame metadata derived from a single
+// Page.getFrameTree fetch: the raw tree, the id→frame map, and the
+// child-frame-id→owner-backend-node map. It is the shared substrate for both
+// FetchAXTree's per-frame merge and frame-scope resolution in the handlers, so
+// the getFrameTree + per-child GetFrameOwner sequence is issued once per call.
+type FrameContext struct {
+	Tree   RawFrameTree
+	Frames map[string]RawFrame
+	Owners map[string]int64
+}
+
+// FetchFrameContext fetches the frame tree once and derives the frame and owner
+// maps from it. It returns the error from the underlying tree fetch unchanged;
+// callers that can tolerate a missing tree (e.g. FetchAXTree's single-frame
+// fallback) handle that error themselves.
+func FetchFrameContext(ctx context.Context) (FrameContext, error) {
+	tree, err := FetchFrameTree(ctx)
+	if err != nil {
+		return FrameContext{}, err
+	}
+	return FrameContext{
+		Tree:   tree,
+		Frames: FrameMap(tree),
+		Owners: FrameOwnerMap(ctx, tree),
+	}, nil
+}
+
 func FetchAXTree(ctx context.Context) ([]RawAXNode, error) {
-	frameTree, err := FetchFrameTree(ctx)
+	fc, err := FetchFrameContext(ctx)
 	if err != nil {
 		return fetchAXTreeForFrame(ctx, "")
 	}
 
-	frameMap := FrameMap(frameTree)
-	ownerMap := FrameOwnerMap(ctx, frameTree)
-	ids := FrameIDs(frameTree)
+	frameMap := fc.Frames
+	ownerMap := fc.Owners
+	ids := FrameIDs(fc.Tree)
 	if len(ids) == 0 {
 		return fetchAXTreeForFrame(ctx, "")
 	}
@@ -278,9 +301,8 @@ var ContextRoles = map[string]bool{
 
 const FilterInteractive = "interactive"
 
-// isAXNodeHidden checks whether a raw accessibility node has properties
-// indicating it is hidden from the user (aria-hidden, display:none, etc.).
-// Chrome's accessibility tree marks these via the "hidden" boolean property.
+// Chrome's accessibility tree marks aria-hidden/display:none nodes via the
+// "hidden" boolean property.
 func isAXNodeHidden(n RawAXNode) bool {
 	for _, prop := range n.Properties {
 		if prop.Name == "hidden" && prop.Value.String() == "true" {
@@ -333,7 +355,6 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 			hiddenNodes[n.NodeID] = true
 		}
 	}
-	// Propagate: if a parent is hidden, all descendants inherit hidden status.
 	isHidden := func(nodeID string) bool {
 		cur := nodeID
 		for range maxAncestorWalk {
@@ -538,10 +559,12 @@ func FilterSubtree(nodes []RawAXNode, scopeBackendID int64) []RawAXNode {
 
 	include := make(map[string]bool)
 	include[scopeAXID] = true
+	// Head-index BFS: advance a cursor while appending children rather than
+	// re-slicing (queue = queue[1:]) on every pop. include dedupes, so the queue
+	// is bounded by the subtree size.
 	queue := []string{scopeAXID}
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
+	for head := 0; head < len(queue); head++ {
+		cur := queue[head]
 		for _, cid := range childMap[cur] {
 			if !include[cid] {
 				include[cid] = true

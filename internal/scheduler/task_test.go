@@ -5,6 +5,35 @@ import (
 	"time"
 )
 
+func TestSnapshotClonesParams(t *testing.T) {
+	task := &Task{ID: "tsk_1", State: StateQueued, Params: map[string]any{"a": 1}}
+	snap := task.Snapshot()
+
+	// Mutating the snapshot's Params must not affect the live task.
+	snap.Params["a"] = 999
+	snap.Params["b"] = 2
+
+	if task.Params["a"] != 1 {
+		t.Errorf("live Params[a] = %v, want 1 (snapshot mutation leaked)", task.Params["a"])
+	}
+	if _, ok := task.Params["b"]; ok {
+		t.Error("snapshot added key b leaked into live task Params")
+	}
+}
+
+func TestSetStateStampsRejected(t *testing.T) {
+	task := &Task{ID: "tsk_1", State: StateQueued}
+	if err := task.SetState(StateRejected); err != nil {
+		t.Fatalf("Queued→Rejected should be valid: %v", err)
+	}
+	if task.GetState() != StateRejected {
+		t.Errorf("state = %q, want rejected", task.GetState())
+	}
+	if task.CompletedAt.IsZero() {
+		t.Error("rejected task CompletedAt is zero, want stamped")
+	}
+}
+
 func TestTaskStateIsTerminal(t *testing.T) {
 	terminal := []TaskState{StateDone, StateFailed, StateCancelled, StateRejected}
 	for _, s := range terminal {

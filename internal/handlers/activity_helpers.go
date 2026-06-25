@@ -24,10 +24,6 @@ func (h *Handlers) tabContext(r *http.Request, tabID string) (context.Context, s
 
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
 	if err != nil && !explicitTab && !scope.IsGlobal() {
-		// The stored pointer references a tab the bridge no longer knows
-		// about: drop the pointer and surface the canonical empty-pointer
-		// error so the caller sees 409 no_current_tab rather than a stale
-		// "tab not found" 404.
 		h.CurrentTabs.Clear(scope)
 		return nil, "", noCurrentTabError(scope.Description())
 	}
@@ -78,10 +74,6 @@ func (h *Handlers) recordReadRequest(r *http.Request, action, tabID string) {
 
 func (h *Handlers) recordResolvedURL(r *http.Request, url string) {
 	h.recordActivity(r, activity.Update{URL: url})
-}
-
-func (h *Handlers) recordEngine(r *http.Request, engine string) {
-	h.recordActivity(r, activity.Update{Engine: engine})
 }
 
 func (h *Handlers) recordResolvedTab(r *http.Request, tabID string) {

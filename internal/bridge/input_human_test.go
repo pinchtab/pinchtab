@@ -2,8 +2,12 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
 )
 
 func TestSetHumanRandSeed(t *testing.T) {
@@ -87,5 +91,39 @@ func TestClickElement_RequiresMinContentLength(t *testing.T) {
 	err := ClickElement(ctx, 0)
 	if err == nil {
 		t.Error("expected error without browser connection")
+	}
+}
+
+func TestClickElement_ScrollsBeforeReadingBoxModel(t *testing.T) {
+	origScroll := scrollIntoViewIfNeededAction
+	origBoxModel := boxModelForBackendNodeAction
+	t.Cleanup(func() {
+		scrollIntoViewIfNeededAction = origScroll
+		boxModelForBackendNodeAction = origBoxModel
+	})
+
+	stop := errors.New("stop after box lookup")
+	var calls []string
+	scrollIntoViewIfNeededAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
+		if backendNodeID != 99 {
+			t.Fatalf("scroll backendNodeID = %d, want 99", backendNodeID)
+		}
+		calls = append(calls, "scroll")
+		return errors.New("scroll failed but should be best-effort")
+	}
+	boxModelForBackendNodeAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) (*dom.BoxModel, error) {
+		if backendNodeID != 99 {
+			t.Fatalf("box backendNodeID = %d, want 99", backendNodeID)
+		}
+		calls = append(calls, "box")
+		return nil, stop
+	}
+
+	err := ClickElement(context.Background(), 99)
+	if !errors.Is(err, stop) {
+		t.Fatalf("ClickElement error = %v, want %v", err, stop)
+	}
+	if len(calls) != 2 || calls[0] != "scroll" || calls[1] != "box" {
+		t.Fatalf("calls = %v, want [scroll box]", calls)
 	}
 }

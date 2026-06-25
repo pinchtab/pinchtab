@@ -25,6 +25,13 @@ func NavigatePage(ctx context.Context, url string) error {
 		return err
 	}
 
+	return waitForReadyStateAfterNavigation(ctx)
+}
+
+// waitForReadyStateAfterNavigation polls document.readyState every 200ms until it
+// reaches "interactive" or "complete", returning nil; it returns ctx.Err() if the
+// context ends first. readyState eval errors are ignored and retried.
+func waitForReadyStateAfterNavigation(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -34,7 +41,7 @@ func NavigatePage(ctx context.Context, url string) error {
 			return ctx.Err()
 		case <-ticker.C:
 			var state string
-			err = chromedp.Run(ctx, chromedp.Evaluate("document.readyState", &state))
+			err := chromedp.Run(ctx, chromedp.Evaluate("document.readyState", &state))
 			if err == nil && (state == "interactive" || state == "complete") {
 				return nil
 			}
@@ -94,21 +101,7 @@ func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects
 		return err
 	}
 
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			var state string
-			err := chromedp.Run(ctx, chromedp.Evaluate("document.readyState", &state))
-			if err == nil && (state == "interactive" || state == "complete") {
-				return nil
-			}
-		}
-	}
+	return waitForReadyStateAfterNavigation(ctx)
 }
 
 // ShouldReplaceBlankHistoryEntry reports whether the first navigation should replace an untouched about:blank entry.
@@ -158,21 +151,7 @@ func navigateAndWait(ctx context.Context, url string, replaceInitialBlank bool) 
 		return err
 	}
 
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			var state string
-			err := chromedp.Run(ctx, chromedp.Evaluate("document.readyState", &state))
-			if err == nil && (state == "interactive" || state == "complete") {
-				return nil
-			}
-		}
-	}
+	return waitForReadyStateAfterNavigation(ctx)
 }
 
 func WaitForTitle(ctx context.Context, timeout time.Duration) (string, error) {

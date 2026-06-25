@@ -139,6 +139,10 @@ Supported environment variables:
 
 - `PINCHTAB_CONFIG`: choose the config file path
 - `PINCHTAB_TOKEN`: override the API token at runtime
+- `PINCHTAB_RATE_LIMIT_MAX`: per-client request cap per 10-second window
+  (default 3000, sized for agent-driven snapshot/action bursts). Lower it
+  (e.g. to 300) when exposing the port beyond localhost. Child instances
+  inherit it from the orchestrator's environment.
 
 For remote CLI targeting, use the root `--server` flag instead of config.
 
@@ -173,7 +177,6 @@ Current nested file-config shape:
     "bind": "127.0.0.1",
     "token": "your-secret-token",
     "stateDir": "/path/to/state",
-    "engine": "chrome",
     "networkBufferSize": 100,
     "retainNetworkBodies": false,
     "retainNetworkBodyMaxBytes": 262144,
@@ -183,7 +186,18 @@ Current nested file-config shape:
   "browser": {
     "version": "144.0.7559.133",
     "binary": "/path/to/chrome",
+    "remoteDebuggingPort": null,
     "extraFlags": "--disable-gpu",
+    "cloak": {
+      "fingerprintSeed": "42069",
+      "platform": "windows",
+      "locale": "en-GB",
+      "timezone": "Europe/London",
+      "webrtcIP": "auto",
+      "fontsDir": "/path/to/fonts",
+      "storageQuotaMB": 2048,
+      "disableDefaultStealthArgs": true
+    },
     "extensionPaths": ["/path/to/pinchtab/extensions"]
   },
   "instanceDefaults": {
@@ -213,6 +227,7 @@ Current nested file-config shape:
     "allowScreencast": false,
     "allowDownload": false,
     "allowCookies": false,
+    "allowFileScheme": false,
     "allowedDomains": ["127.0.0.1", "localhost", "::1"],
     "downloadAllowedDomains": [],
     "downloadMaxBytes": 20971520,
@@ -228,7 +243,8 @@ Current nested file-config shape:
     "attach": {
       "enabled": false,
       "allowHosts": ["127.0.0.1", "localhost", "::1"],
-      "allowSchemes": ["ws", "wss"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     },
     "idpi": {
       "enabled": true,
@@ -271,7 +287,7 @@ Current nested file-config shape:
     "solverTimeoutSec": 30,
     "retryBaseDelayMs": 500,
     "retryMaxDelayMs": 10000,
-    "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
+    "solvers": ["cloudflare", "semantic"],
     "llmProvider": "",
     "llmFallback": false,
     "external": {
@@ -341,6 +357,63 @@ Notes:
 The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the
 config file.
+
+### Browser Selection
+
+The CLI uses `--browser <name>` to select a browser. In the config file the
+equivalent field is `browsers.default`:
+
+```json
+{
+  "browsers": { "default": "cloak" }
+}
+```
+
+`browsers.default` selects the local browser backend:
+
+- `chrome` is the default and uses the normal Chrome/Chromium launch path.
+- `ghost-chrome` serves static-friendly reads from a lightweight fetcher and
+  escalates to Chrome when a page needs rendering.
+- `cloak` uses a user-installed CloakBrowser Chromium binary from `browser.binary`.
+
+`browsers.available` optionally restricts which browsers requests may select.
+For multiple named configurations of the same provider (different binaries,
+proxies, or fingerprints), use `browser.targets` with `browser.defaultTarget`
+and `browser.fallbackOrder` — see [Terminology](../architecture/terminology.md).
+The legacy `browser.provider` field is no longer supported and is rejected at
+validation time.
+
+When the selected browser is `cloak`, `browser.binary` (or the target's
+`binary`) must point at the local CloakBrowser Chromium executable. PinchTab
+does not download, bundle, or redistribute the CloakBrowser binary.
+
+`browser.cloak` maps supported CloakBrowser fingerprint settings to native launch
+flags:
+
+- `fingerprintSeed` -> `--fingerprint`
+- `platform` -> `--fingerprint-platform`
+- `locale` -> `--fingerprint-locale`
+- `timezone` -> `--fingerprint-timezone`
+- `webrtcIP` -> `--fingerprint-webrtc-ip`
+- `fontsDir` -> `--fingerprint-fonts-dir`
+- `storageQuotaMB` -> `--fingerprint-storage-quota`
+
+`disableDefaultStealthArgs` defaults to true for CloakBrowser targets. When set,
+PinchTab keeps its process, profile, tab, extension, and action-control behavior,
+but does not add its own JS stealth overlays or automation-hiding launch flags.
+Set it to false only when you intentionally want PinchTab's legacy stealth layer
+on top of CloakBrowser's native patches.
+
+Advanced CloakBrowser flags can still go through `browser.extraFlags` when they
+are not PinchTab-owned lifecycle flags.
+
+`browser.proxy.geo` is a CloakBrowser fingerprint-alignment hint. When a proxy
+server and geo block are configured for a CloakBrowser target, PinchTab maps the
+geo values into native CloakBrowser fingerprint flags unless the target already
+sets the corresponding `browser.cloak` field. The stock `chrome` browser does
+not derive `--lang`, `TZ`, or WebRTC launch settings from proxy geo data.
+
+### Browser Extra Flags
 
 `browser.extraFlags` is validated and sanitized. It is only for user-safe Chrome flags that do not weaken browser security and do not override PinchTab-owned launch behavior.
 
@@ -437,7 +510,6 @@ They do not expose every field in those sections, and they do not support `sched
 
 Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 
-- `server.engine`
 - `server.networkBufferSize`
 - `browser.extensionPaths`
 - `instanceDefaults.dialogAutoAccept`
@@ -519,13 +591,16 @@ headers correctly.
     "attach": {
       "enabled": true,
       "allowHosts": ["127.0.0.1", "localhost", "chrome.internal"],
-      "allowSchemes": ["ws", "wss", "http", "https"]
+      "allowSchemes": ["ws", "wss", "http", "https"],
+      "forwardProxyAuth": false
     }
   }
 }
 ```
 
 `security.attach.allowHosts` is an allowlist. If you set it to `["*"]`, PinchTab accepts any reachable attach host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
+
+`security.attach.forwardProxyAuth` controls whether PinchTab may send configured proxy authentication credentials over remote CDP attach. It defaults to `false`; enable it only when the attached browser process and CDP transport are trusted.
 
 ### Activity Retention
 
@@ -594,6 +669,7 @@ Valid enum values:
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |
+| `security.attach.forwardProxyAuth` | `true`, `false` |
 
 ## Notes
 

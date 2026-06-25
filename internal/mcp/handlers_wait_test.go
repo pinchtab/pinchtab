@@ -59,6 +59,23 @@ func TestHandleWaitForSelector(t *testing.T) {
 	}
 }
 
+// browser must be forwarded as a query param (routing is query-based), not the
+// body — otherwise browser=cloak is silently dropped by the router.
+func TestHandleWaitForSelectorForwardsBrowser(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_wait_for_selector", map[string]any{
+		"selector": ".loaded",
+		"browser":  "cloak",
+	}, srv)
+
+	text := resultText(t, r)
+	if !strings.Contains(text, "query") || !strings.Contains(text, "browser") || !strings.Contains(text, "cloak") {
+		t.Errorf("expected forwarded browser=cloak in query, got %s", text)
+	}
+}
+
 func TestHandleWaitForSelectorMissing(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()

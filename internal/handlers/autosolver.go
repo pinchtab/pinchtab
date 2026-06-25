@@ -10,6 +10,7 @@ import (
 	coreautosolver "github.com/pinchtab/pinchtab/internal/autosolver"
 	"github.com/pinchtab/pinchtab/internal/autosolver/adapters"
 	"github.com/pinchtab/pinchtab/internal/autosolver/external"
+	autosolverllm "github.com/pinchtab/pinchtab/internal/autosolver/llm"
 	autosolversemantic "github.com/pinchtab/pinchtab/internal/autosolver/semantic"
 	autosolvers "github.com/pinchtab/pinchtab/internal/autosolver/solvers"
 )
@@ -22,6 +23,10 @@ const (
 	// missed challenge doesn't block the request path. Explicit POST /solve
 	// still uses the fully configured MaxAttempts.
 	autoTriggerMaxAttempts = 2
+
+	// autoDetectHTMLTimeout bounds the detection HTML fetch on every nav/action
+	// so a stuck CDP call is cancelled rather than leaking a worker.
+	autoDetectHTMLTimeout = 5 * time.Second
 
 	// autoTriggerRunBudget caps the total time an auto-trigger run can take
 	// end-to-end (detection + retries). Safety valve for slow pages or solvers.
@@ -83,11 +88,10 @@ func (h *Handlers) runAutoSolver(ctx context.Context, tabID string) error {
 		return err
 	}
 
-	// Detection is the cheap path that runs on every nav/action — keep it
-	// short so normal pages return almost immediately.
-	detectCtx, detectCancel := context.WithTimeout(ctx, 5*time.Second)
-	html, err := fetchHTMLWithTimeout(detectCtx, page)
-	detectCancel()
+	// Detection is the cheap path that runs on every nav/action — bound the HTML
+	// fetch so a stuck CDP call is cancelled (no leaked worker), keeping normal
+	// pages fast.
+	html, err := page.HTMLWithin(autoDetectHTMLTimeout)
 	if err != nil {
 		return err
 	}
@@ -126,28 +130,6 @@ func (h *Handlers) runAutoSolver(ctx context.Context, tabID string) error {
 	}
 
 	return nil
-}
-
-// fetchHTMLWithTimeout runs page.HTML() but aborts if ctx fires first. Since
-// Page.HTML has no context argument, we run it in a goroutine and select on
-// ctx — a stuck CDP call will leak the goroutine until the call itself
-// unblocks, but the caller returns promptly.
-func fetchHTMLWithTimeout(ctx context.Context, page coreautosolver.Page) (string, error) {
-	type result struct {
-		html string
-		err  error
-	}
-	ch := make(chan result, 1)
-	go func() {
-		html, err := page.HTML()
-		ch <- result{html: html, err: err}
-	}()
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case r := <-ch:
-		return r.html, r.err
-	}
 }
 
 // autoHandoffAfterFailure flips the tab into paused_handoff so action routes
@@ -229,13 +211,28 @@ func (h *Handlers) normalizedAutoSolverConfig() coreautosolver.Config {
 	return cfg
 }
 
+// llmProviderForAutoSolver returns the configured LLM provider, or nil when no
+// provider is configured. The provider is a skeleton today (returns
+// "not yet implemented"); wiring it gated on LLMProvider makes the llmFallback
+// switch live so it lights up automatically once a real client is implemented.
+func (h *Handlers) llmProviderForAutoSolver() coreautosolver.LLMProvider {
+	if h == nil || h.Config == nil {
+		return nil
+	}
+	provider := strings.TrimSpace(h.Config.AutoSolver.LLMProvider)
+	if provider == "" {
+		return nil
+	}
+	return autosolverllm.NewProvider(autosolverllm.ProviderConfig{Provider: provider})
+}
+
 func (h *Handlers) buildAutoSolver(cfg coreautosolver.Config, includeSemantic bool) *coreautosolver.AutoSolver {
 	var semanticEngine coreautosolver.SemanticEngine
 	if includeSemantic {
 		semanticEngine = autosolversemantic.NewAdapter(h.Matcher)
 	}
 
-	as := coreautosolver.New(cfg, semanticEngine, nil)
+	as := coreautosolver.New(cfg, semanticEngine, h.llmProviderForAutoSolver())
 	as.Registry().MustRegister(&autosolvers.Cloudflare{})
 	as.Registry().MustRegister(&autosolvers.JSChallenge{})
 
@@ -280,7 +277,7 @@ func (h *Handlers) availableAutoSolverNames() []string {
 		seen[configured] = struct{}{}
 	}
 
-	for _, fallback := range []string{"cloudflare", "semantic", "jschallenge", "capsolver", "twocaptcha"} {
+	for _, fallback := range []string{"cloudflare", "semantic", "jschallenge"} {
 		if !available[fallback] {
 			continue
 		}

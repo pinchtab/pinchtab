@@ -35,7 +35,16 @@ FROM alpine:3.23
 LABEL org.opencontainers.image.source="https://github.com/pinchtab/pinchtab"
 LABEL org.opencontainers.image.description="High-performance browser automation bridge"
 
-# Chromium and its runtime dependencies for headless operation
+# Chromium and its runtime dependencies for headless operation.
+#
+# This image is intentionally headless-only: no X11, Wayland, Xvfb, or display
+# server packages are installed. Headed mode (a visible browser window) is not
+# supported inside this image and PinchTab will refuse / fail to launch headed
+# instances here. Keeping the image headless-only keeps it small, CI-friendly,
+# and avoids dragging in a graphical stack that has no use in containers.
+#
+# For manual local headed workflows on a developer workstation see
+# docs/guides/headed-mode.md.
 RUN apk add --no-cache \
     chromium \
     nss \

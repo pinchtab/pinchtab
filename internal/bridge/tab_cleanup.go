@@ -132,6 +132,14 @@ func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
 	if tm.routeMgr != nil {
 		tm.routeMgr.RemoveTab(resolvedTabID)
 	}
+	// Snapshot under the lock, then invoke unlocked: a hook must be free to call
+	// back into the TabManager without deadlocking on tm.mu.
+	tm.mu.RLock()
+	hooks := tm.onTabRemovedHooks
+	tm.mu.RUnlock()
+	for _, hook := range hooks {
+		hook(resolvedTabID)
+	}
 	// Notify listeners (e.g. session persistence) that a tab disappeared,
 	// regardless of whether the trigger was a deliberate CloseTab, an eviction,
 	// the auto-close lifecycle timer, or Chrome reporting the target gone

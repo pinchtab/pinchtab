@@ -1,12 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
@@ -50,43 +47,7 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 //
 // @Endpoint POST /tabs/{id}/dialog
 func (h *Handlers) HandleTabDialog(w http.ResponseWriter, r *http.Request) {
-	tabID := r.PathValue("id")
-	if tabID == "" {
-		httpx.Error(w, 400, fmt.Errorf("tab id required"))
-		return
-	}
-
-	body := map[string]any{}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-		return
-	}
-
-	if rawTabID, ok := body["tabId"]; ok {
-		if provided, ok := rawTabID.(string); !ok || provided == "" {
-			httpx.Error(w, 400, fmt.Errorf("invalid tabId"))
-			return
-		} else if provided != tabID {
-			httpx.Error(w, 400, fmt.Errorf("tabId in body does not match path id"))
-			return
-		}
-	}
-
-	body["tabId"] = tabID
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("encode: %w", err))
-		return
-	}
-
-	req := r.Clone(r.Context())
-	req.Body = io.NopCloser(bytes.NewReader(payload))
-	req.ContentLength = int64(len(payload))
-	req.Header = r.Header.Clone()
-	req.Header.Set("Content-Type", "application/json")
-	h.HandleDialog(w, req)
+	h.withPathTabIDBody(w, r, h.HandleDialog)
 }
 
 func (h *Handlers) handleDialogAction(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, accept bool, promptText string) {

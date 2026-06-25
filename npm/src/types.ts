@@ -38,4 +38,6 @@ export interface PinchtabOptions {
   timeout?: number;
   port?: number;
   token?: string;
+  /** Max time (ms) to wait for a graceful shutdown before SIGKILL. Default 10000. */
+  shutdownTimeout?: number;
 }

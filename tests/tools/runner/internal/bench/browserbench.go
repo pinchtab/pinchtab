@@ -76,13 +76,12 @@ type BrowserBenchRow struct {
 }
 
 func defaultBrowserBenchArgs() BrowserBenchArgs {
-	base := defaultArgs()
 	return BrowserBenchArgs{
 		CSVFile:         defaultBrowserBenchCSV,
-		MaxTokens:       base.MaxTokens,
-		Temperature:     base.Temperature,
+		MaxTokens:       defaultMaxTokens,
+		Temperature:     defaultTemperature,
 		MaxTurns:        80,
-		TimeoutSeconds:  base.TimeoutSeconds,
+		TimeoutSeconds:  defaultTimeoutSeconds,
 		TurnDelayMs:     750,
 		MaxInputTokens:  0,
 		MaxOutputTokens: 0,
@@ -104,119 +103,61 @@ func parseBrowserBenchArgs(argv []string) (BrowserBenchArgs, error) {
 		case "--help", "-h":
 			return a, errBrowserBenchHelp
 		case "--provider":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseStringFlag(next, &i, argv[i], func(v string) { a.Provider = Provider(v) }); err != nil {
 				return a, err
 			}
-			a.Provider = Provider(v)
 		case "--model":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseStringFlag(next, &i, argv[i], func(v string) { a.Model = v }); err != nil {
 				return a, err
 			}
-			a.Model = v
 		case "--csv-file":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseStringFlag(next, &i, argv[i], func(v string) { a.CSVFile = v }); err != nil {
 				return a, err
 			}
-			a.CSVFile = v
 		case "--output":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseStringFlag(next, &i, argv[i], func(v string) { a.Output = v }); err != nil {
 				return a, err
 			}
-			a.Output = v
 		case "--tasks":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.Tasks = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--tasks: %w", err)
-			}
-			a.Tasks = n
 		case "--task-id":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseStringFlag(next, &i, argv[i], func(v string) { a.TaskID = v }); err != nil {
 				return a, err
 			}
-			a.TaskID = v
 		case "--skip-init":
 			a.SkipInit = true
 		case "--verbose", "-v":
 			a.Verbose = true
 		case "--max-tokens":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.MaxTokens = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--max-tokens: %w", err)
-			}
-			a.MaxTokens = n
 		case "--temperature":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseFloatFlag(next, &i, argv[i], func(f float64) { a.Temperature = f }); err != nil {
 				return a, err
 			}
-			f, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				return a, fmt.Errorf("--temperature: %w", err)
-			}
-			a.Temperature = f
 		case "--max-turns":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.MaxTurns = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--max-turns: %w", err)
-			}
-			a.MaxTurns = n
 		case "--timeout-seconds":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.TimeoutSeconds = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--timeout-seconds: %w", err)
-			}
-			a.TimeoutSeconds = n
 		case "--turn-delay-ms":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.TurnDelayMs = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--turn-delay-ms: %w", err)
-			}
-			a.TurnDelayMs = n
 		case "--max-input-tokens":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.MaxInputTokens = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--max-input-tokens: %w", err)
-			}
-			a.MaxInputTokens = n
 		case "--max-output-tokens":
-			v, err := next(&i, argv[i])
-			if err != nil {
+			if err := parseIntFlag(next, &i, argv[i], func(n int) { a.MaxOutputTokens = n }); err != nil {
 				return a, err
 			}
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return a, fmt.Errorf("--max-output-tokens: %w", err)
-			}
-			a.MaxOutputTokens = n
 		default:
 			return a, fmt.Errorf("unknown flag %q", argv[i])
 		}
@@ -233,19 +174,19 @@ func writeBrowserBenchUsage(w io.Writer) {
   runner browserbench [options]
 
 Options:
-  --provider anthropic|openai|fake
-  --model MODEL
-  --csv-file PATH_OR_URL        BrowserBench CSV (default: Halluminate raw CSV)
+`+usageLineProvider+
+		usageLineModel+
+		`  --csv-file PATH_OR_URL        BrowserBench CSV (default: Halluminate raw CSV)
   --output PATH                 Output CSV path (default: timestamped in tests/tools/browserbench/results)
   --tasks N                     Limit number of tasks
   --task-id ID                  Run only one task_id
   --skip-init                   Reuse existing benchmark container
-  --max-tokens N
-  --temperature N
-  --max-turns N
-  --timeout-seconds N
-  --turn-delay-ms N
-  --max-input-tokens N
+`+usageLineMaxTokens+
+		usageLineTemperature+
+		usageLineMaxTurns+
+		usageLineTimeoutSeconds+
+		usageLineTurnDelayMs+
+		`  --max-input-tokens N
   --max-output-tokens N
   --verbose, -v
 
@@ -476,43 +417,34 @@ func runBrowserBenchAgentLoop(task BrowserBenchTask, provider string, shell *Per
 	systemPrompt := browserBenchSystemPrompt(filepath.Dir(filepath.Dir(resolveToolsDir())))
 	out := NewOutputWriter(stdout, args.Verbose)
 
-	for turn := 1; turn <= args.MaxTurns; turn++ {
-		if turn > 1 && args.TurnDelayMs > 0 {
-			time.Sleep(time.Duration(args.TurnDelayMs) * time.Millisecond)
-		}
-		usage := runner.Usage()
-		if args.MaxInputTokens > 0 && usage.InputTokens+usage.CacheCreationInputTokens+usage.CacheReadInputTokens >= args.MaxInputTokens {
-			return "", fmt.Errorf("input token budget exceeded")
-		}
-		if args.MaxOutputTokens > 0 && usage.OutputTokens >= args.MaxOutputTokens {
-			return "", fmt.Errorf("output token budget exceeded")
-		}
+	outcome := runTurnLoop(turnLoopConfig{
+		maxTurns:        args.MaxTurns,
+		turnDelayMs:     args.TurnDelayMs,
+		timeoutSeconds:  args.TimeoutSeconds,
+		maxInputTokens:  args.MaxInputTokens,
+		maxOutputTokens: args.MaxOutputTokens,
+		spinnerMessage:  "Solving BrowserBench task...",
+		systemPrompt:    systemPrompt,
+		commandLog:      commandLogPath,
+		provider:        provider,
+		compactionSummary: func() string {
+			return "BrowserBench task in progress. Continue from the current browser state until you can answer with FINAL_ANSWER."
+		},
+		onToolResults: nil,
+	}, runner, shell, out, conversation)
 
-		out.Turn(turn, args.MaxTurns)
-		spinner := out.StartSpinner("Solving BrowserBench task...")
-		response, err := runner.Send(systemPrompt, conversation)
-		spinner.Stop()
-		if err != nil {
-			return "", err
-		}
-
-		newUsage := runner.Usage()
-		out.APICall(runner.Provider(), runner.Model(),
-			newUsage.InputTokens-usage.InputTokens,
-			newUsage.OutputTokens-usage.OutputTokens,
-			newUsage.CacheCreationInputTokens-usage.CacheCreationInputTokens,
-			newUsage.CacheReadInputTokens-usage.CacheReadInputTokens)
-
-		toolCalls := runner.ExtractToolCalls(response, time.Duration(args.TimeoutSeconds)*time.Second)
-		if len(toolCalls) == 0 {
-			return runner.ExtractFinalText(response), nil
-		}
-		results := executeToolCallsVerbose(shell, toolCalls, commandLogPath, out)
-		conversation = runner.AppendToolResults(conversation, response, results)
-		conversation = CompactConversation(provider, conversation, "BrowserBench task in progress. Continue from the current browser state until you can answer with FINAL_ANSWER.")
+	switch outcome.stop {
+	case stopFinal:
+		return outcome.finalText, nil
+	case stopBudgetInput:
+		return "", fmt.Errorf("input token budget exceeded")
+	case stopBudgetOutput:
+		return "", fmt.Errorf("output token budget exceeded")
+	case stopAPIError:
+		return "", outcome.err
+	default: // stopMaxTurns
+		return "", fmt.Errorf("max turns reached (%d)", args.MaxTurns)
 	}
-
-	return "", fmt.Errorf("max turns reached (%d)", args.MaxTurns)
 }
 
 func browserBenchSystemPrompt(repoRoot string) string {

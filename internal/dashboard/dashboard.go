@@ -50,14 +50,16 @@ type Dashboard struct {
 	serverMetrics  ServerMetricsProvider
 	childAuthToken string
 
-	agents       map[string]*apiTypes.Agent
-	recentEvents []apiTypes.ActivityEvent
-	maxEvents    int
-	seenEventIDs map[string]struct{}
-	seenEventLog []string
-	maxSeenIDs   int
+	agents         map[string]*apiTypes.Agent
+	recentEvents   *ringBuffer[apiTypes.ActivityEvent]
+	seenEventIDs   map[string]struct{}
+	seenEventOrder *ringBuffer[string]
 
 	mu sync.RWMutex
+
+	now        func() time.Time // injectable clock (default time.Now)
+	monCacheMu sync.Mutex
+	monCache   map[bool]monitoringPayload // marshaled monitoring snapshot keyed by includeMemory
 }
 
 func NewDashboard(cfg *DashboardConfig) *Dashboard {
@@ -90,11 +92,11 @@ func NewDashboard(cfg *DashboardConfig) *Dashboard {
 		cancel:         cancel,
 		childAuthToken: envWithFallback("PINCHTAB_TOKEN", "BRIDGE_TOKEN"),
 		agents:         make(map[string]*apiTypes.Agent),
-		recentEvents:   make([]apiTypes.ActivityEvent, 0, 200),
-		maxEvents:      200,
+		recentEvents:   newRingBuffer[apiTypes.ActivityEvent](200),
 		seenEventIDs:   make(map[string]struct{}),
-		seenEventLog:   make([]string, 0, 2000),
-		maxSeenIDs:     2000,
+		seenEventOrder: newRingBuffer[string](2000),
+		now:            time.Now,
+		monCache:       make(map[bool]monitoringPayload),
 	}
 }
 
@@ -159,9 +161,7 @@ func (d *Dashboard) AgentCount() int {
 func (d *Dashboard) RecentEvents() []apiTypes.ActivityEvent {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	out := make([]apiTypes.ActivityEvent, len(d.recentEvents))
-	copy(out, d.recentEvents)
-	return out
+	return d.recentEvents.snapshot()
 }
 
 // EventsForAgent returns buffered events for a single agent filtered by mode.
@@ -170,12 +170,12 @@ func (d *Dashboard) EventsForAgent(agentID, mode string) []apiTypes.ActivityEven
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	out := make([]apiTypes.ActivityEvent, 0, len(d.recentEvents))
-	for _, evt := range d.recentEvents {
+	out := make([]apiTypes.ActivityEvent, 0, d.recentEvents.len())
+	d.recentEvents.forEach(func(evt apiTypes.ActivityEvent) {
 		if evt.AgentID != agentID || !matchesMode(mode, evt.Channel) {
-			continue
+			return
 		}
 		out = append(out, evt)
-	}
+	})
 	return out
 }

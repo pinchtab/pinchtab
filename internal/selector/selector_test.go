@@ -4,41 +4,32 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// Parse – explicit prefixes
-// ---------------------------------------------------------------------------
-
 func TestParse_ExplicitPrefixes(t *testing.T) {
 	tests := []struct {
 		input string
 		kind  Kind
 		value string
 	}{
-		// CSS
 		{"css:#login", KindCSS, "#login"},
 		{"css:.btn.primary", KindCSS, ".btn.primary"},
 		{"css:div > span", KindCSS, "div > span"},
 		{"css:input[type=text]", KindCSS, "input[type=text]"},
 		{"css:*", KindCSS, "*"},
 
-		// XPath
 		{"xpath://div[@id='main']", KindXPath, "//div[@id='main']"},
 		{"xpath:(//button)[1]", KindXPath, "(//button)[1]"},
 		{"xpath://a[contains(@href,'login')]", KindXPath, "//a[contains(@href,'login')]"},
 
-		// Text
 		{"text:Submit", KindText, "Submit"},
 		{"text:Log in", KindText, "Log in"},
 		{"text:", KindText, ""},
 		{"text:with:colon", KindText, "with:colon"},
 
-		// Semantic / find
 		{"find:login button", KindSemantic, "login button"},
 		{"semantic:login button", KindSemantic, "login button"},
 		{"find:the search input field", KindSemantic, "the search input field"},
 		{"find:", KindSemantic, ""},
 
-		// Locator prefixes
 		{"role:button Save", KindRole, "button Save"},
 		{"label:Email", KindLabel, "Email"},
 		{"placeholder:Search", KindPlaceholder, "Search"},
@@ -49,7 +40,6 @@ func TestParse_ExplicitPrefixes(t *testing.T) {
 		{"last:text:Submit", KindLast, "text:Submit"},
 		{"nth:2:role:button Save", KindNth, "2:role:button Save"},
 
-		// Ref (explicit prefix)
 		{"ref:e5", KindRef, "e5"},
 		{"ref:e0", KindRef, "e0"},
 		{"ref:e99999", KindRef, "e99999"},
@@ -67,47 +57,36 @@ func TestParse_ExplicitPrefixes(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Parse – auto-detection (no prefix)
-// ---------------------------------------------------------------------------
-
 func TestParse_AutoDetect(t *testing.T) {
 	tests := []struct {
 		input string
 		kind  Kind
 		value string
 	}{
-		// Refs
 		{"e0", KindRef, "e0"},
 		{"e5", KindRef, "e5"},
 		{"e42", KindRef, "e42"},
 		{"e123", KindRef, "e123"},
 		{"e99999", KindRef, "e99999"},
 
-		// CSS auto-detect: # prefix
 		{"#login", KindCSS, "#login"},
 		{"#my-id", KindCSS, "#my-id"},
 
-		// CSS auto-detect: . prefix
 		{".btn", KindCSS, ".btn"},
 		{".btn.primary", KindCSS, ".btn.primary"},
 
-		// CSS auto-detect: [ prefix
 		{"[type=file]", KindCSS, "[type=file]"},
 		{"[data-testid='foo']", KindCSS, "[data-testid='foo']"},
 
-		// CSS auto-detect: compound selectors
 		{"button.submit", KindCSS, "button.submit"},
 		{"div > span", KindCSS, "div > span"},
 		{"input[name='email']", KindCSS, "input[name='email']"},
 		{"ul li:first-child", KindCSS, "ul li:first-child"},
 		{"a:hover", KindCSS, "a:hover"},
 
-		// XPath auto-detect: //
 		{"//div[@class='main']", KindXPath, "//div[@class='main']"},
 		{"//a", KindXPath, "//a"},
 
-		// XPath auto-detect: (//
 		{"(//button)[1]", KindXPath, "(//button)[1]"},
 		{"(//div[@class='x'])[last()]", KindXPath, "(//div[@class='x'])[last()]"},
 
@@ -132,10 +111,6 @@ func TestParse_AutoDetect(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Parse – empty / whitespace
-// ---------------------------------------------------------------------------
-
 func TestParse_Empty(t *testing.T) {
 	s := Parse("")
 	if !s.IsEmpty() {
@@ -156,7 +131,6 @@ func TestParse_WhitespaceOnly(t *testing.T) {
 }
 
 func TestParse_WhitespaceTrimming(t *testing.T) {
-	// Leading/trailing whitespace should be trimmed before parsing
 	tests := []struct {
 		input string
 		kind  Kind
@@ -180,10 +154,6 @@ func TestParse_WhitespaceTrimming(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Parse – edge cases
-// ---------------------------------------------------------------------------
 
 func TestParse_EdgeCases(t *testing.T) {
 	tests := []struct {
@@ -278,10 +248,6 @@ func TestParse_EdgeCases(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// IsRef
-// ---------------------------------------------------------------------------
-
 func TestIsRef(t *testing.T) {
 	refs := []string{"e0", "e5", "e42", "e123", "e9999", "e1234567890"}
 	for _, r := range refs {
@@ -301,10 +267,6 @@ func TestIsRef(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Selector.String() – canonical representation
-// ---------------------------------------------------------------------------
 
 func TestSelector_String(t *testing.T) {
 	tests := []struct {
@@ -340,10 +302,6 @@ func TestSelector_String(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Selector.IsEmpty()
-// ---------------------------------------------------------------------------
-
 func TestSelector_IsEmpty(t *testing.T) {
 	if !(Selector{}).IsEmpty() {
 		t.Error("zero-value Selector should be empty")
@@ -355,10 +313,6 @@ func TestSelector_IsEmpty(t *testing.T) {
 		t.Error("Selector with value should not be empty")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Selector.Validate()
-// ---------------------------------------------------------------------------
 
 func TestSelector_Validate(t *testing.T) {
 	valid := []Selector{
@@ -383,15 +337,12 @@ func TestSelector_Validate(t *testing.T) {
 		}
 	}
 
-	// Empty selector
 	if err := (Selector{}).Validate(); err == nil {
 		t.Error("Validate(empty) should fail")
 	}
-	// Empty value with kind set
 	if err := (Selector{Kind: KindCSS}).Validate(); err == nil {
 		t.Error("Validate(kind=css, value='') should fail")
 	}
-	// Unknown kind
 	if err := (Selector{Kind: "bogus", Value: "x"}).Validate(); err == nil {
 		t.Error("Validate(bogus kind) should fail")
 	}
@@ -435,12 +386,7 @@ func TestSelector_SemanticQuery(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// From* constructors
-// ---------------------------------------------------------------------------
-
 func TestFromConstructors(t *testing.T) {
-	// Non-empty values
 	if s := FromRef("e5"); s.Kind != KindRef || s.Value != "e5" {
 		t.Errorf("FromRef(\"e5\"): %+v", s)
 	}
@@ -457,7 +403,6 @@ func TestFromConstructors(t *testing.T) {
 		t.Errorf("FromSemantic(\"btn\"): %+v", s)
 	}
 
-	// Empty values → empty selector
 	empties := []struct {
 		name string
 		fn   func(string) Selector
@@ -474,10 +419,6 @@ func TestFromConstructors(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Parse roundtrip: Parse → String → Parse should be stable
-// ---------------------------------------------------------------------------
 
 func TestParse_Roundtrip(t *testing.T) {
 	inputs := []string{
@@ -512,12 +453,7 @@ func TestParse_Roundtrip(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Parse – prefix priority (explicit prefix wins over auto-detect)
-// ---------------------------------------------------------------------------
-
 func TestParse_PrefixPriority(t *testing.T) {
-	// "css://div" should be CSS, not XPath (explicit prefix wins)
 	s := Parse("css://div")
 	if s.Kind != KindCSS {
 		t.Errorf("Parse(\"css://div\").Kind = %q, want css", s.Kind)
@@ -526,7 +462,6 @@ func TestParse_PrefixPriority(t *testing.T) {
 		t.Errorf("Parse(\"css://div\").Value = %q, want \"//div\"", s.Value)
 	}
 
-	// "ref:embed" should be ref, not CSS
 	s = Parse("ref:embed")
 	if s.Kind != KindRef {
 		t.Errorf("Parse(\"ref:embed\").Kind = %q, want ref", s.Kind)
@@ -535,7 +470,6 @@ func TestParse_PrefixPriority(t *testing.T) {
 		t.Errorf("Parse(\"ref:embed\").Value = %q, want \"embed\"", s.Value)
 	}
 
-	// "text:#login" should be text, not CSS
 	s = Parse("text:#login")
 	if s.Kind != KindText {
 		t.Errorf("Parse(\"text:#login\").Kind = %q, want text", s.Kind)
@@ -544,7 +478,6 @@ func TestParse_PrefixPriority(t *testing.T) {
 		t.Errorf("Parse(\"text:#login\").Value = %q, want \"#login\"", s.Value)
 	}
 
-	// "xpath:e5" should be xpath, not ref
 	s = Parse("xpath:e5")
 	if s.Kind != KindXPath {
 		t.Errorf("Parse(\"xpath:e5\").Kind = %q, want xpath", s.Kind)

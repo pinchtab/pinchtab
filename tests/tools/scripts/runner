@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# ./scripts/runner — self-building wrapper around the Go-based step recorder.
+#
+# Builds tests/tools/runner into scripts/.runner.bin on first use (and after
+# any source change), then execs it with all args forwarded. The compiled
+# binary is gitignored; this shim is what's checked in so a fresh clone
+# can record steps without a manual `go build` step.
+#
+# Forwarded subcommands include `step-end`, `record-step`, `verify-step`,
+# `opt merge-reports`, `opt inject-usage`, `opt summarize`, and the lane
+# loop drivers. See `runner/main.go` for the full surface.
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SRC_DIR="$TOOLS_DIR/runner"
+BIN="$SCRIPT_DIR/.runner.bin"
+
+needs_build=0
+if [ ! -x "$BIN" ]; then
+  needs_build=1
+else
+  # Rebuild if any .go file is newer than the cached binary.
+  newest_src=$(find "$SRC_DIR" -name '*.go' -type f -newer "$BIN" -print -quit 2>/dev/null || true)
+  if [ -n "$newest_src" ]; then
+    needs_build=1
+  fi
+fi
+
+if [ "$needs_build" = "1" ]; then
+  if ! command -v go >/dev/null 2>&1; then
+    echo "scripts/runner: 'go' not found on PATH; cannot build $BIN" >&2
+    echo "Install Go (https://go.dev/dl/) or build manually with:" >&2
+    echo "  (cd $TOOLS_DIR && go build -o scripts/.runner.bin ./runner)" >&2
+    exit 127
+  fi
+  echo "scripts/runner: building $BIN ..." >&2
+  (cd "$TOOLS_DIR" && go build -o "$BIN" ./runner) || {
+    echo "scripts/runner: build failed" >&2
+    exit 1
+  }
+fi
+
+exec "$BIN" "$@"

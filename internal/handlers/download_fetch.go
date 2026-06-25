@@ -11,22 +11,13 @@ import (
 	"path"
 	"strconv"
 	"strings"
-
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
 )
 
 // fetchDirectWithCookies performs a Go HTTP fetch with browser cookies.
 // Fallback for when Chrome navigation aborts (e.g. .gz files).
 func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx context.Context, dlURL string, validator *downloadURLGuard, maxBytes int) (body []byte, contentType string, statusCode int, err error) {
-	var browserCookies []*network.Cookie
-	if fetchErr := chromedp.Run(browserCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			browserCookies, err = network.GetCookies().WithURLs([]string{dlURL}).Do(ctx)
-			return err
-		}),
-	); fetchErr != nil {
+	browserCookies, fetchErr := h.Bridge.GetCookies(browserCtx, []string{dlURL})
+	if fetchErr != nil {
 		slog.Debug("download fallback: failed to get browser cookies", "err", fetchErr)
 	}
 

@@ -2,56 +2,19 @@
 
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
-const os = require('os');
 const fs = require('fs');
 
-function findRepoRoot() {
-  const repoRoot = path.join(__dirname, '..', '..');
-  if (
-    fs.existsSync(path.join(repoRoot, 'go.mod')) &&
-    fs.existsSync(path.join(repoRoot, 'cmd', 'pinchtab'))
-  ) {
-    return repoRoot;
-  }
-  return null;
-}
+// The pure arg-parsing and platform/binary-resolution helpers live in
+// TypeScript (src/platform.ts), compiled to dist/src/platform.js and shipped in
+// the published package, so the wrapper, SDK, and tests share one source of
+// truth. In a source checkout the build runs via `prepare`; the wrapper only
+// needs these helpers when resolving the managed binary, which the checkout
+// path below never reaches.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const platform = require('../dist/src/platform');
 
 function getCheckoutBinaryPath() {
-  const repoRoot = findRepoRoot();
-  if (!repoRoot) {
-    return null;
-  }
-  return path.join(repoRoot, 'pinchtab-dev');
-}
-
-function getBinaryName() {
-  const platform = process.platform;
-  let arch;
-  if (process.arch === 'x64') {
-    arch = 'amd64';
-  } else if (process.arch === 'arm64') {
-    arch = 'arm64';
-  } else {
-    throw new Error(
-      `Unsupported architecture: ${process.arch}. Only x64 (amd64) and arm64 are supported.`
-    );
-  }
-
-  if (platform === 'darwin') {
-    return `pinchtab-darwin-${arch}`;
-  } else if (platform === 'linux') {
-    return `pinchtab-linux-${arch}`;
-  } else if (platform === 'win32') {
-    return `pinchtab-windows-${arch}.exe`;
-  }
-
-  throw new Error(`Unsupported platform: ${platform}`);
-}
-
-function getVersion() {
-  const pkgPath = path.join(__dirname, '..', 'package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  return pkg.version;
+  return platform.getCheckoutBinaryPath(__dirname);
 }
 
 function getBinaryPath() {
@@ -59,16 +22,7 @@ function getBinaryPath() {
   if (checkoutBinaryPath) {
     return checkoutBinaryPath;
   }
-
-  // Try version-specific path first: ~/.pinchtab/bin/0.7.0/pinchtab-darwin-arm64
-  const version = getVersion();
-  const versionedPath = path.join(os.homedir(), '.pinchtab', 'bin', version, getBinaryName());
-  if (fs.existsSync(versionedPath)) {
-    return versionedPath;
-  }
-
-  // Fallback to version-less for backwards compat
-  return path.join(os.homedir(), '.pinchtab', 'bin', getBinaryName());
+  return platform.resolveManagedBinaryPath(__dirname);
 }
 
 // Handle `pinchtab skill update` at the Node.js level (no Go binary needed)
@@ -151,17 +105,7 @@ if (!fs.existsSync(binaryPath)) {
 // Note: Node still exists as the parent PID — this is not a true exec —
 // but removing the async event loop and signal forwarding is sufficient
 // for the known failure modes.
-function firstSubcommand(argv) {
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg === '--server') { i += 1; continue; }
-    if (arg.startsWith('--server=')) continue;
-    if (!arg.startsWith('-')) return arg;
-  }
-  return null;
-}
-
-if (firstSubcommand(args) === 'mcp') {
+if (platform.firstSubcommand(args) === 'mcp') {
   const result = spawnSync(binaryPath, args, {
     stdio: 'inherit',
     shell: false,

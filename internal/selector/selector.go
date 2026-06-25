@@ -130,7 +130,6 @@ func Parse(s string) Selector {
 		return Selector{}
 	}
 
-	// Explicit prefixes
 	if after, ok := cutPrefix(s, "css:"); ok {
 		return Selector{Kind: KindCSS, Value: after}
 	}
@@ -177,17 +176,14 @@ func Parse(s string) Selector {
 		return Selector{Kind: KindRef, Value: after}
 	}
 
-	// Auto-detect: XPath
 	if strings.HasPrefix(s, "//") || strings.HasPrefix(s, "(//") {
 		return Selector{Kind: KindXPath, Value: s}
 	}
 
-	// Auto-detect: Ref (e.g. e5, e123)
 	if IsRef(s) {
 		return Selector{Kind: KindRef, Value: s}
 	}
 
-	// Everything else is CSS (backward compatible default)
 	return Selector{Kind: KindCSS, Value: s}
 }
 
@@ -310,7 +306,6 @@ func splitNthSelectorValue(value string) (int, string, bool) {
 	return index, rawSelector, true
 }
 
-// cutPrefix is a helper for strings.CutPrefix (available in Go 1.20+).
 func cutPrefix(s, prefix string) (string, bool) {
 	if strings.HasPrefix(s, prefix) {
 		return s[len(prefix):], true
