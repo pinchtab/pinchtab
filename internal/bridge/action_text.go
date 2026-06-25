@@ -65,7 +65,7 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 			return nil, err
 		}
 	}
-	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key)
+	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key, req.Modifiers)
 }
 
 func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (map[string]any, error) {

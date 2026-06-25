@@ -183,7 +183,19 @@ func MouseMoveByCoordinate(ctx context.Context, x, y float64) error {
 	return dispatchMouseMove(ctx, x, y, input.None, 0)
 }
 
-func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) error {
+// Modifiers is the CDP key-modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8)
+// held during a pointer dispatch. Input.dispatchMouseEvent accepts this value
+// verbatim under "modifiers", enabling gestures like Shift+click and
+// Cmd/Ctrl+click. The bits below mirror that encoding for the JS WheelEvent
+// path, which needs booleans instead.
+const (
+	modAlt   = 1
+	modCtrl  = 2
+	modMeta  = 4
+	modShift = 8
+)
+
+func MouseDownByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -191,12 +203,13 @@ func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) err
 		"type":       "mousePressed",
 		"button":     normalizeMouseButton(button),
 		"clickCount": 1,
+		"modifiers":  modifiers,
 		"x":          x,
 		"y":          y,
 	})
 }
 
-func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error {
+func MouseUpByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -204,12 +217,13 @@ func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error
 		"type":       "mouseReleased",
 		"button":     normalizeMouseButton(button),
 		"clickCount": 1,
+		"modifiers":  modifiers,
 		"x":          x,
 		"y":          y,
 	})
 }
 
-func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
@@ -218,30 +232,34 @@ func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY in
 	// longer reliably fires `wheel` JS listeners and can stall on the
 	// compositor ack chain. Dispatch a real WheelEvent at the point under
 	// the cursor so listeners run, then scroll the window if no listener
-	// called preventDefault().
+	// called preventDefault(). Held modifiers (Shift for horizontal scroll,
+	// Ctrl for zoom intent) are reflected on the event init.
 	expr := fmt.Sprintf(`(function() {
 		var dx = %d, dy = %d, cx = %f, cy = %f;
 		var target = document.elementFromPoint(cx, cy) || document.documentElement;
 		var ev = new WheelEvent('wheel', {
 			deltaX: dx, deltaY: dy,
 			clientX: cx, clientY: cy,
+			altKey: %t, ctrlKey: %t, metaKey: %t, shiftKey: %t,
 			bubbles: true, cancelable: true
 		});
 		if (target.dispatchEvent(ev)) {
 			window.scrollBy(dx, dy);
 		}
-	})()`, deltaX, deltaY, x, y)
+	})()`, deltaX, deltaY, x, y,
+		modifiers&modAlt != 0, modifiers&modCtrl != 0,
+		modifiers&modMeta != 0, modifiers&modShift != 0)
 	return chromedp.Run(ctx, chromedp.Evaluate(expr, nil))
 }
 
-func ClickByCoordinate(ctx context.Context, x, y float64) error {
+func ClickByCoordinate(ctx context.Context, x, y float64, modifiers int) error {
 	if err := validatePointerCoordinates(x, y); err != nil {
 		return err
 	}
-	if err := MouseDownByCoordinate(ctx, x, y, "left"); err != nil {
+	if err := MouseDownByCoordinate(ctx, x, y, "left", modifiers); err != nil {
 		return err
 	}
-	return MouseUpByCoordinate(ctx, x, y, "left")
+	return MouseUpByCoordinate(ctx, x, y, "left", modifiers)
 }
 
 func ClickByNodeID(ctx context.Context, nodeID int64) error {
@@ -386,8 +404,8 @@ func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	return MouseMoveByCoordinate(ctx, x, y)
 }
 
-func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
-	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY)
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY, modifiers)
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {

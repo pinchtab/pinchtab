@@ -40,7 +40,11 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 
 	quality := queryParamInt(r, "quality", 30)
 	maxWidth := queryParamInt(r, "maxWidth", 800)
-	everyNth := queryParamInt(r, "everyNthFrame", 4)
+	// everyNthFrame=1 sends every compositor frame; the requested fps still throttles
+	// the rate. A higher skip (the old default of 4) caps the live tab well below the
+	// requested fps and makes interactive control feel unresponsive (issue: dashboard
+	// Live tab too laggy to type into).
+	everyNth := queryParamInt(r, "everyNthFrame", 1)
 	fps := queryParamInt(r, "fps", 1)
 	if fps > 30 {
 		fps = 30

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test - Key Modifiers</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 32px; line-height: 1.4; }
+    #typed { font-size: 24px; width: 600px; padding: 8px; }
+    #state-json { margin-top: 20px; padding: 12px; border-radius: 10px;
+                  background: #111827; color: #d1fae5; white-space: pre-wrap; max-width: 720px; }
+  </style>
+</head>
+<body>
+  <h1>Key Modifiers Fixture</h1>
+  <p>Verifies modifier keys are forwarded as keydown/keyup events and never typed
+     as literal text (issue #588).</p>
+
+  <input id="typed" type="text" placeholder="click me, then press keys">
+  <p style="font-size:22px">Field value: <b id="mirror" style="color:#b91c1c">(empty)</b></p>
+  <div id="state-json">[]</div>
+
+  <script>
+    // keyState records each key event as "down:<key>" / "up:<key>" so a test can
+    // assert modifiers ARE forwarded as key events. The #typed value proves they
+    // are NOT inserted as text.
+    window.keyState = [];
+    const input = document.getElementById('typed');
+    const out = document.getElementById('state-json');
+    const mirror = document.getElementById('mirror');
+    const record = (prefix) => (e) => {
+      window.keyState.push(prefix + ':' + e.key);
+      out.textContent = JSON.stringify(window.keyState);
+    };
+    document.addEventListener('keydown', record('down'));
+    document.addEventListener('keyup', record('up'));
+    input.addEventListener('input', () => {
+      mirror.textContent = input.value === '' ? '(empty)' : input.value;
+    });
+  </script>
+</body>
+</html>

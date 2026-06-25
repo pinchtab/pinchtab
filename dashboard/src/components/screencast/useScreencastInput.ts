@@ -9,6 +9,23 @@ interface UseScreencastInputArgs {
   status: ScreencastStatus;
 }
 
+// CDP modifier bitmask: Alt=1, Ctrl=2, Meta=4, Shift=8. Shared by the keyboard
+// and pointer paths so held-modifier gestures (Shift+click, Cmd/Ctrl+click,
+// Ctrl+C) reach the page with the same encoding.
+function modifierBitmask(e: {
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}): number {
+  return (
+    (e.altKey ? 1 : 0) |
+    (e.ctrlKey ? 2 : 0) |
+    (e.metaKey ? 4 : 0) |
+    (e.shiftKey ? 8 : 0)
+  );
+}
+
 export function useScreencastInput({
   canvasRef,
   tabId,
@@ -24,6 +41,10 @@ export function useScreencastInput({
       return {
         x: ((e.clientX - rect.left) / rect.width) * canvas.width,
         y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+        // Tell the server which frame size these coords are in, so it can scale
+        // them into the live CSS viewport (the frame is larger on HiDPI).
+        frameW: canvas.width,
+        frameH: canvas.height,
       };
     },
     [canvasRef],
@@ -41,6 +62,9 @@ export function useScreencastInput({
           x: Math.round(coords.x),
           y: Math.round(coords.y),
           hasXY: true,
+          frameW: coords.frameW,
+          frameH: coords.frameH,
+          modifiers: modifierBitmask(e),
         });
       } catch (err) {
         console.error("click failed", err);
@@ -61,6 +85,9 @@ export function useScreencastInput({
           x: Math.round(coords.x),
           y: Math.round(coords.y),
           scrollY: Math.round(e.deltaY),
+          frameW: coords.frameW,
+          frameH: coords.frameH,
+          modifiers: modifierBitmask(e),
         });
       } catch (err) {
         console.error("scroll failed", err);
@@ -87,15 +114,20 @@ export function useScreencastInput({
         return;
       }
       e.preventDefault();
+      // Forwarded with `press` so keyboard chords (Ctrl+C, Cmd+A, Shift+Arrow)
+      // reach the page.
+      const modifiers = modifierBitmask(e);
       try {
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          // Printable character with no command modifier (Shift-for-caps is
+          // already reflected in e.key) → insert as text.
           await api.sendAction({
             kind: "keyboard-inserttext",
             tabId,
             text: e.key,
           });
         } else {
-          await api.sendAction({ kind: "press", tabId, key: e.key });
+          await api.sendAction({ kind: "press", tabId, key: e.key, modifiers });
         }
       } catch (err) {
         console.error("key input failed", err);

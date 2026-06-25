@@ -161,6 +161,43 @@ assert_output_contains "OK" "keyup response"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab press modifier keys are not typed as text (issue #588)"
+
+pt_ok nav "${FIXTURES_URL}/key-modifiers.html"
+pt_ok click --css "#typed"
+
+# Reset the input and the recorded key log.
+pt_ok eval "document.querySelector('#typed').value=''; window.keyState=[]; 'reset'"
+
+# Press each modifier. Before the fix these fell through to chromedp.KeyEvent and
+# the literal name (e.g. "Shift") was typed into the focused input.
+pt_ok press Shift
+pt_ok press Control
+pt_ok press Alt
+pt_ok press Meta
+
+# The focused input must remain empty — no modifier name was inserted as text.
+pt_ok eval "document.querySelector('#typed').value"
+assert_output_not_contains "Shift" "Shift must not be typed as text"
+assert_output_not_contains "Control" "Control must not be typed as text"
+assert_output_not_contains "Alt" "Alt must not be typed as text"
+assert_output_not_contains "Meta" "Meta must not be typed as text"
+
+# …but the modifiers ARE forwarded as real keydown/keyup events (issue #588 expected).
+pt_ok eval "JSON.stringify(window.keyState)"
+assert_output_contains "down:Shift" "Shift forwarded as keydown"
+assert_output_contains "up:Shift" "Shift forwarded as keyup"
+assert_output_contains "down:Control" "Control forwarded as keydown"
+
+# Control: a printable key still types into the input.
+pt_ok eval "document.querySelector('#typed').value=''; 'reset'"
+pt_ok press a
+pt_ok eval "document.querySelector('#typed').value"
+assert_output_contains "a" "printable key still types after the modifier fix"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab keyboard type <text>"
 
 pt_ok nav "${FIXTURES_URL}/form.html"

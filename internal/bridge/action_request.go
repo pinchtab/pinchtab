@@ -53,6 +53,19 @@ type ActionRequest struct {
 	Button string  `json:"button,omitempty"`
 	Mode   string  `json:"mode,omitempty"`
 
+	// FrameW/FrameH are the pixel dimensions of the screencast frame the caller
+	// mapped the coordinates against (the dashboard maps a click to frame-pixel
+	// space). When set, X/Y are scaled from that frame space into the live CSS
+	// viewport before dispatch, so a HiDPI frame (e.g. 2x the CSS viewport) does
+	// not land clicks at twice their intended position. Zero means X/Y are
+	// already CSS pixels.
+	FrameW float64 `json:"frameW,omitempty"`
+	FrameH float64 `json:"frameH,omitempty"`
+
+	// Modifiers is the CDP key-modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8)
+	// held during a press, enabling keyboard chords such as Ctrl+C or Shift+Arrow.
+	Modifiers int `json:"modifiers,omitempty"`
+
 	ScrollX int `json:"scrollX"`
 	ScrollY int `json:"scrollY"`
 	// DeltaX/DeltaY are explicit mouse-wheel deltas for low-level

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test - Screencast Click Targets</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%;
+                 font-family: sans-serif; background: #fafafa; overflow: hidden; }
+    .t { position: absolute; width: 120px; height: 56px; box-sizing: border-box;
+         border: 2px solid #2d6cdf; border-radius: 8px; background: #e8f0fe;
+         color: #17315f; display: flex; align-items: center; justify-content: center;
+         font-size: 16px; font-weight: 700; cursor: pointer; user-select: none; }
+    /* Targets spread across corners, edges, and centre. Right/bottom anchored
+       ones adapt to the viewport; the test reads each rect at runtime. */
+    #tl { top: 16px;  left: 16px; }
+    #tr { top: 16px;  right: 16px; }
+    #ml { top: 45%;   left: 16px; }
+    #c  { top: 45%;   left: 50%; transform: translateX(-50%); }
+    #mr { top: 45%;   right: 16px; }
+    #bl { bottom: 16px; left: 16px; }
+    #br { bottom: 16px; right: 16px; }
+    #inp { position: absolute; top: 72%; left: 50%; transform: translateX(-50%);
+           width: 240px; height: 48px; font-size: 18px; box-sizing: border-box; }
+    #status { position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+              font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+  <button class="t" id="tl">TL</button>
+  <button class="t" id="tr">TR</button>
+  <button class="t" id="ml">ML</button>
+  <button class="t" id="c">C</button>
+  <button class="t" id="mr">MR</button>
+  <button class="t" id="bl">BL</button>
+  <button class="t" id="br">BR</button>
+  <input class="t" id="inp" placeholder="type here">
+  <div id="status">no click yet</div>
+
+  <script>
+    // Records which element a (coordinate-mapped) click actually landed on, so an
+    // e2e can verify the dashboard's frame-pixel → CSS-viewport scaling lands
+    // clicks on the intended target across different frame scales and positions.
+    window.__lastClick = "";
+    window.__lastFocus = "";
+    const status = document.getElementById("status");
+    document.querySelectorAll(".t").forEach((el) => {
+      el.addEventListener("click", () => {
+        window.__lastClick = el.id;
+        status.textContent = "clicked " + el.id;
+      });
+      el.addEventListener("focus", () => { window.__lastFocus = el.id; });
+    });
+  </script>
+</body>
+</html>

@@ -30,6 +30,11 @@ func (b *Bridge) StartScreencast(ctx context.Context, opts ScreencastOpts) (*Scr
 }
 
 func (b *Bridge) shouldUsePollingScreencast() bool {
+	// Headless uses polling: headless Page.startScreencast does not reliably emit
+	// frames (no foreground compositor), so the polling CaptureScreenshot loop is
+	// the dependable path — and since each capture is the cost ceiling regardless,
+	// event-driven buys no throughput here. Polling is also used for providers whose
+	// CDP proxy lacks startScreencast (e.g. Cloak).
 	if b.Config != nil && b.Config.Headless {
 		return true
 	}
@@ -180,17 +185,33 @@ func (b *Bridge) startScreencastPolling(ctx context.Context, opts ScreencastOpts
 		ticker := time.NewTicker(frameInterval)
 		defer ticker.Stop()
 
-		var frames int
+		// A single capture failure is usually transient — the target is briefly busy
+		// navigating, painting, or handling a click. Aborting the stream on the first
+		// error drops the dashboard into a "connection lost" overlay mid-interaction.
+		// Skip the bad frame and keep streaming; only give up after many consecutive
+		// failures (or context cancellation), which indicates the target is really gone.
+		const maxConsecutiveErrors = 30
+		var frames, consecutiveErrors int
 		for {
 			select {
 			case <-ticker.C:
 				t1 := time.Now()
 				frame, err := capture(ctx)
 				if err != nil {
-					slog.Warn("screencast polling: CaptureScreenshot failed",
-						"err", err, "frame", frames, "elapsed", time.Since(t1))
-					return
+					if ctx.Err() != nil {
+						return // tab/context gone — stop cleanly
+					}
+					consecutiveErrors++
+					slog.Debug("screencast polling: capture failed, skipping frame",
+						"err", err, "consecutive", consecutiveErrors, "elapsed", time.Since(t1))
+					if consecutiveErrors >= maxConsecutiveErrors {
+						slog.Warn("screencast polling: too many consecutive capture failures, stopping",
+							"consecutive", consecutiveErrors)
+						return
+					}
+					continue
 				}
+				consecutiveErrors = 0
 				frames++
 				if frames <= 3 || frames%30 == 0 {
 					slog.Debug("screencast polling: frame captured",

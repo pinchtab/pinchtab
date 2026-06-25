@@ -11,10 +11,8 @@ import (
 
 const (
 	maxRecordDuration = 5 * time.Minute
-	maxRecordFrames   = 9000 // 5min × 30fps
-	maxGIFFrames      = 600  // ~2min at 5fps
-	maxGIFFramePixels = 1280 * 720
-	maxGIFEncodeBytes = 256 << 20 // 256 MB total paletted frame budget
+	maxRecordFrames   = 9000      // 5min × 30fps
+	maxGIFFrames      = 600       // ~2min at 5fps
 	maxTempBytes      = 1 << 30   // 1 GB disk
 	maxOutputBytes    = 256 << 20 // 256 MB encoded
 	encodeTimeout     = 2 * time.Minute
@@ -23,6 +21,12 @@ const (
 	maxQuality        = 100
 	maxScale          = 1.0
 )
+
+// maxGIFEncodeBytes bounds the total in-memory paletted GIF frame data. It is the
+// real GIF safeguard now that --scale is honored at full resolution: oversized
+// captures simply fit fewer frames before truncation rather than being downscaled.
+// A var (not const) so tests can lower it to exercise budget truncation.
+var maxGIFEncodeBytes int64 = 256 << 20 // 256 MB
 
 type recorderState int
 
@@ -68,6 +72,7 @@ type RecordingStatus struct {
 	FPS        int     `json:"fps,omitempty"`
 	OutputPath string  `json:"outputPath,omitempty"`
 	Error      string  `json:"error,omitempty"`
+	Warning    string  `json:"warning,omitempty"`
 }
 
 type recorder struct {
@@ -89,6 +94,7 @@ type recorder struct {
 	doneCh       chan struct{}
 	outputPath   string // final destination set by stop(); encoding writes here
 	encodeErr    error  // set by background encode goroutine
+	encodeWarn   string // non-fatal encode warning (e.g. GIF truncated to fit budget)
 	captureFrame func(ctx context.Context, quality int) ([]byte, error)
 }
 
@@ -206,7 +212,7 @@ func (rec *recorder) stop(callerOwner, outputPath string) (RecordStopResult, err
 
 	go func() {
 		tmpOut := outputPath + ".encoding.tmp"
-		encErr := encodeToFile(tmpDir, tmpOut, format, fps, scale)
+		warn, encErr := encodeToFile(tmpDir, tmpOut, format, fps, scale)
 		if encErr == nil {
 			encErr = os.Rename(tmpOut, outputPath)
 			if encErr != nil {
@@ -218,6 +224,7 @@ func (rec *recorder) stop(callerOwner, outputPath string) (RecordStopResult, err
 
 		rec.mu.Lock()
 		rec.encodeErr = encErr
+		rec.encodeWarn = warn
 		rec.state = stateFinished
 		if rec.tabCancel != nil {
 			rec.tabCancel()
@@ -265,6 +272,7 @@ func (rec *recorder) cleanup() {
 	rec.owner = ""
 	rec.outputPath = ""
 	rec.encodeErr = nil
+	rec.encodeWarn = ""
 }
 
 func (rec *recorder) activeFormat() string {
@@ -293,6 +301,7 @@ func (rec *recorder) status() RecordingStatus {
 		if rec.encodeErr != nil {
 			s.Error = rec.encodeErr.Error()
 		}
+		s.Warning = rec.encodeWarn
 		return s
 	}
 	return RecordingStatus{

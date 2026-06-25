@@ -125,7 +125,7 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 	})
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 50 || y != 75 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (50, 75)", x, y)
@@ -158,6 +158,66 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 	}
 }
 
+func TestClickAction_ForwardsModifiers(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origClick := clickByCoordinateAction
+	t.Cleanup(func() { clickByCoordinateAction = origClick })
+
+	var gotModifiers int
+	called := false
+	clickByCoordinateAction = func(ctx context.Context, x, y float64, modifiers int) error {
+		called = true
+		gotModifiers = modifiers
+		return nil
+	}
+
+	// Shift+click from the screencast UI: modifier bitmask 8 must reach the
+	// CDP pointer dispatch so the page sees a held Shift.
+	if _, err := b.Actions[ActionClick](context.Background(), ActionRequest{
+		HasXY:     true,
+		X:         40,
+		Y:         60,
+		Modifiers: 8,
+	}); err != nil {
+		t.Fatalf("click returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected coordinate click path to be used")
+	}
+	if gotModifiers != 8 {
+		t.Fatalf("click modifiers = %d, want 8 (Shift)", gotModifiers)
+	}
+}
+
+func TestMouseWheelAction_ForwardsModifiers(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+
+	origScroll := scrollByCoordinateAction
+	t.Cleanup(func() { scrollByCoordinateAction = origScroll })
+
+	var gotModifiers int
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+		gotModifiers = modifiers
+		return nil
+	}
+
+	// Shift+wheel (horizontal scroll intent): the bitmask must reach the wheel
+	// dispatch.
+	if _, err := b.Actions[ActionMouseWheel](context.Background(), ActionRequest{
+		HasXY:     true,
+		X:         10,
+		Y:         20,
+		DeltaY:    120,
+		Modifiers: 8,
+	}); err != nil {
+		t.Fatalf("mouse wheel returned error: %v", err)
+	}
+	if gotModifiers != 8 {
+		t.Fatalf("wheel modifiers = %d, want 8 (Shift)", gotModifiers)
+	}
+}
+
 func TestMouseActions_TrackCurrentPointerPosition(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 
@@ -177,7 +237,7 @@ func TestMouseActions_TrackCurrentPointerPosition(t *testing.T) {
 		}
 		return nil
 	}
-	mouseUpByCoordinateAction = func(ctx context.Context, x, y float64, button string) error {
+	mouseUpByCoordinateAction = func(ctx context.Context, x, y float64, button string, modifiers int) error {
 		upCalled = true
 		if x != 15 || y != 25 {
 			t.Fatalf("up coordinates = (%v, %v), want (15, 25)", x, y)
@@ -213,7 +273,7 @@ func TestMouseDownAction_UsesTrackedPointerWhenTargetMissing(t *testing.T) {
 		mouseDownByCoordinateAction = origDown
 	})
 
-	mouseDownByCoordinateAction = func(ctx context.Context, x, y float64, button string) error {
+	mouseDownByCoordinateAction = func(ctx context.Context, x, y float64, button string, modifiers int) error {
 		if x != 33 || y != 44 {
 			t.Fatalf("down coordinates = (%v, %v), want (33, 44)", x, y)
 		}
@@ -245,7 +305,7 @@ func TestMouseWheelAction_UsesViewportCenterWhenPointerMissing(t *testing.T) {
 		return 300, 200, nil
 	}
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 300 || y != 200 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (300, 200)", x, y)
@@ -660,7 +720,7 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 	})
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 12.5 || y != 34.5 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (12.5, 34.5)", x, y)
@@ -707,7 +767,7 @@ func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
 	}
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY int) error {
+	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 400 || y != 300 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (400, 300)", x, y)
@@ -746,7 +806,7 @@ func TestScrollAction_PropagatesViewportCenterError(t *testing.T) {
 	scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		return 0, 0, context.Canceled
 	}
-	scrollByCoordinateAction = func(context.Context, float64, float64, int, int) error {
+	scrollByCoordinateAction = func(context.Context, float64, float64, int, int, int) error {
 		t.Fatal("wheel dispatch should not be called when viewport center resolution fails")
 		return nil
 	}

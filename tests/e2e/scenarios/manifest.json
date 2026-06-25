@@ -25,6 +25,9 @@
     "api/auto-switch-smoke.sh": {
       "tags": ["tabs", "actions", "auto-switch", "smoke"]
     },
+    "api/screencast-input-basic.sh": {
+      "tags": ["actions", "screencast", "input", "coordinates", "multi-browser", "pr"]
+    },
     "api/network-route-extended.sh": {
       "services": ["pinchtab", "pinchtab-full", "fixtures"],
       "ready": ["E2E_SERVER", "E2E_FULL_SERVER"],

@@ -108,11 +108,24 @@ func RecordStop(client *http.Client, base, token string) {
 		cli.Fatal("Encoding failed: %s", strings.TrimPrefix(err.Error(), "encode failed: "))
 	}
 
+	var warning string
+	if raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil); raw != nil {
+		var st struct {
+			Warning string `json:"warning"`
+		}
+		if json.Unmarshal(raw, &st) == nil {
+			warning = st.Warning
+		}
+	}
+
 	if err := os.Rename(serverPath, outFile); err != nil {
 		cli.Fatal("Failed to move %s → %s: %v", serverPath, outFile, err)
 	}
 	fmt.Println(cli.StyleStdout(cli.SuccessStyle,
 		fmt.Sprintf("Saved → %s", outFile)))
+	if warning != "" {
+		fmt.Println(cli.StyleStdout(cli.WarningStyle, "Warning: "+warning))
+	}
 }
 
 func RecordStatus(client *http.Client, base, token string) {

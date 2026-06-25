@@ -51,8 +51,8 @@ func PointerPointForNode(ctx context.Context, nodeID int64, requireTopMost bool)
 	return bridgecdpops.PointerPointForNode(ctx, nodeID, requireTopMost)
 }
 
-func ClickByCoordinate(ctx context.Context, x, y float64) error {
-	return bridgecdpops.ClickByCoordinate(ctx, x, y)
+func ClickByCoordinate(ctx context.Context, x, y float64, modifiers int) error {
+	return bridgecdpops.ClickByCoordinate(ctx, x, y, modifiers)
 }
 
 func ClickByNodeID(ctx context.Context, nodeID int64) error {
@@ -91,20 +91,20 @@ func MouseMoveByCoordinate(ctx context.Context, x, y float64) error {
 	return bridgecdpops.MouseMoveByCoordinate(ctx, x, y)
 }
 
-func MouseDownByCoordinate(ctx context.Context, x, y float64, button string) error {
-	return bridgecdpops.MouseDownByCoordinate(ctx, x, y, button)
+func MouseDownByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
+	return bridgecdpops.MouseDownByCoordinate(ctx, x, y, button, modifiers)
 }
 
-func MouseUpByCoordinate(ctx context.Context, x, y float64, button string) error {
-	return bridgecdpops.MouseUpByCoordinate(ctx, x, y, button)
+func MouseUpByCoordinate(ctx context.Context, x, y float64, button string, modifiers int) error {
+	return bridgecdpops.MouseUpByCoordinate(ctx, x, y, button, modifiers)
 }
 
-func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
-	return bridgecdpops.MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY)
+func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	return bridgecdpops.MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY, modifiers)
 }
 
-func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY int) error {
-	return bridgecdpops.ScrollByCoordinate(ctx, x, y, deltaX, deltaY)
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	return bridgecdpops.ScrollByCoordinate(ctx, x, y, deltaX, deltaY, modifiers)
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
