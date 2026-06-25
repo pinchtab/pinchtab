@@ -644,9 +644,18 @@ func TestBringUpSharedStackCloakBuildsStockImageForGhostChrome(t *testing.T) {
 	}
 
 	out := stdout.String()
-	want := "docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml build fixtures runner-api runner-cli pinchtab"
-	if !strings.Contains(out, want) {
-		t.Fatalf("cloak build must include stock pinchtab when ghostchrome is present, missing %q:\n%s", want, out)
+	for _, want := range []string{
+		"docker compose -f compose.yml build pinchtab",
+		"docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml build fixtures runner-api runner-cli",
+		"docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml up -d --no-build --force-recreate pinchtab pinchtab-ghostchrome fixtures",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("cloak ghostchrome flow missing %q:\n%s", want, out)
+		}
+	}
+	bad := "docker compose -f compose.yml -f /tmp/docker-compose.cloak.yml build fixtures runner-api runner-cli pinchtab"
+	if strings.Contains(out, bad) {
+		t.Fatalf("stock pinchtab image must be built without cloak override:\n%s", out)
 	}
 }
 

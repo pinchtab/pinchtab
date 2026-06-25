@@ -615,15 +615,17 @@ func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
 	// rebuilding the overridden pinchtab services.
 	skipPinchtabBuild := r.overrides != nil && r.overrides.provider == "cloak"
 	if skipPinchtabBuild {
-		buildServices := cloakSupportBuildServices()
 		// keepStockProvider services (e.g. pinchtab-ghostchrome) stay pinned to
 		// the stock e2e-pinchtab:latest image even in the cloak lane. If the
 		// suite brings any of them up, that image must exist or `up --no-build`
-		// fails with "No such image", so build the stock pinchtab service too.
+		// fails with "No such image". Build that stock image via the base compose
+		// only so the cloak override cannot retag it to the provider image.
 		if needsStockPinchtabImage(services) {
-			buildServices = append(buildServices, "pinchtab")
+			if code := r.buildSharedStackWithOverrides(composeFile, false, "pinchtab"); code != 0 {
+				return code
+			}
 		}
-		if code := r.buildSharedStack(composeFile, buildServices...); code != 0 {
+		if code := r.buildSharedStack(composeFile, cloakSupportBuildServices()...); code != 0 {
 			return code
 		}
 	} else {
@@ -647,8 +649,12 @@ func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
 }
 
 func (r *Runner) buildSharedStack(composeFile string, services ...string) int {
+	return r.buildSharedStackWithOverrides(composeFile, true, services...)
+}
+
+func (r *Runner) buildSharedStackWithOverrides(composeFile string, includeOverrides bool, services ...string) int {
 	args := append([]string{"build"}, services...)
-	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, args...))
+	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgsWithOverrides(composeFile, includeOverrides, args...))
 	if code == 0 {
 		return 0
 	}
@@ -657,7 +663,7 @@ func (r *Runner) buildSharedStack(composeFile string, services ...string) int {
 	}
 	_, _ = fmt.Fprintln(r.stdout, "  build cache looked stale; retrying shared-stack build with --no-cache...")
 	retryArgs := append([]string{"build", "--no-cache"}, services...)
-	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, retryArgs...))
+	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgsWithOverrides(composeFile, includeOverrides, retryArgs...))
 }
 
 func cloakSupportBuildServices() []string {
@@ -751,9 +757,13 @@ func suiteReportTitle(def suiteDef) string {
 }
 
 func (r *Runner) composeArgs(composeFile string, args ...string) []string {
+	return r.composeArgsWithOverrides(composeFile, true, args...)
+}
+
+func (r *Runner) composeArgsWithOverrides(composeFile string, includeOverrides bool, args ...string) []string {
 	out := append([]string{}, r.compose...)
 	out = append(out, "-f", composeFile)
-	if r.overrides != nil {
+	if includeOverrides && r.overrides != nil {
 		for _, override := range r.overrides.composeFiles {
 			out = append(out, "-f", override)
 		}
