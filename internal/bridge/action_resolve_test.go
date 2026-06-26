@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/selector"
@@ -21,6 +22,18 @@ func TestResolveUnifiedSelector_ErrorClassification(t *testing.T) {
 	}
 	if _, err := ResolveUnifiedSelectorInFrame(ctx, selector.Selector{Kind: "bogus", Value: "x"}, nil, ""); err == nil || errors.Is(err, ErrSelectorNoMatch) {
 		t.Errorf("unknown selector kind should be non-no-match (5xx), got %v", err)
+	}
+}
+
+func TestResolveSelectorAtFnSearchesOpenShadowRoots(t *testing.T) {
+	if !strings.Contains(resolveSelectorAtFn, "shadowRoot") {
+		t.Fatal("selector resolver should walk open shadow roots")
+	}
+	if !strings.Contains(resolveSelectorAtFn, "return pick(deepQueryAll(value))") {
+		t.Fatal("css selectors should use deepQueryAll")
+	}
+	if strings.Contains(resolveSelectorAtFn, "return pick(Array.from(root.querySelectorAll(value)))") {
+		t.Fatal("css selectors should not use document-only querySelectorAll")
 	}
 }
 

@@ -403,8 +403,19 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 		if (idx < 0 || idx >= items.length) return null;
 		return items[idx];
 	};
+	const deepQueryAll = (selector) => {
+		const out = [];
+		const visit = (scope) => {
+			if (!scope || !scope.querySelectorAll) return;
+			const elements = Array.from(scope.querySelectorAll("*"));
+			out.push(...Array.from(scope.querySelectorAll(selector)));
+			for (const el of elements) if (el.shadowRoot) visit(el.shadowRoot);
+		};
+		visit(root);
+		return out;
+	};
 	const textCandidates = (query) => {
-		const elements = Array.from((root.body || root.documentElement || root).querySelectorAll("*"));
+		const elements = deepQueryAll("*");
 		const exact = [];
 		for (const el of elements) {
 			const text = normalize(el.textContent || "");
@@ -435,7 +446,7 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 	try {
 		switch (kind) {
 		case "css":
-			return pick(Array.from(root.querySelectorAll(value)));
+			return pick(deepQueryAll(value));
 		case "xpath": {
 			const result = root.evaluate(value, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 			const items = [];
@@ -524,69 +535,12 @@ func ResolveCSSToNodeID(ctx context.Context, css string) (int64, error) {
 }
 
 func ResolveCSSToNodeIDInFrame(ctx context.Context, frameID, css string) (int64, error) {
-	if frameID == "" {
-		var backendNodeID int64
-		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-			var docResult json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.getDocument", map[string]any{"depth": 0}, &docResult); err != nil {
-				return fmt.Errorf("get document: %w", err)
-			}
-			var doc struct {
-				Root struct {
-					NodeID int64 `json:"nodeId"`
-				} `json:"root"`
-			}
-			if err := json.Unmarshal(docResult, &doc); err != nil {
-				return err
-			}
-
-			var qResult json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.querySelector", map[string]any{
-				"nodeId":   doc.Root.NodeID,
-				"selector": css,
-			}, &qResult); err != nil {
-				return fmt.Errorf("querySelector: %w", err)
-			}
-			var qr struct {
-				NodeID int64 `json:"nodeId"`
-			}
-			if err := json.Unmarshal(qResult, &qr); err != nil {
-				return err
-			}
-			if qr.NodeID == 0 {
-				return fmt.Errorf("css %q: %w", css, ErrSelectorNoMatch)
-			}
-
-			var descResult json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
-				"nodeId": qr.NodeID,
-			}, &descResult); err != nil {
-				return fmt.Errorf("describe node: %w", err)
-			}
-			var desc struct {
-				Node struct {
-					BackendNodeID int64 `json:"backendNodeId"`
-				} `json:"node"`
-			}
-			if err := json.Unmarshal(descResult, &desc); err != nil {
-				return err
-			}
-			backendNodeID = desc.Node.BackendNodeID
-			return nil
-		}))
-		return backendNodeID, err
-	}
-
-	var backendNodeID int64
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		nid, err := resolveNodeInFrame(ctx, frameID, `function(selector) { return this.querySelector(selector); }`, []map[string]any{{"value": css}})
-		if err != nil {
-			return fmt.Errorf("css %q: %w", css, err)
-		}
-		backendNodeID = nid
-		return nil
-	}))
-	return backendNodeID, err
+	// Resolve through the deep selector walker (resolveSelectorAtFn → deepQueryAll)
+	// so a CSS selector matches the first element even when it is nested in an open
+	// shadow root, not just the light DOM (issue #591). For light-DOM pages this
+	// returns the same first match as document.querySelector, and it works for both
+	// the main frame (frameID == "") and sub-frames.
+	return resolveSelectorAtInFrame(ctx, frameID, selector.Selector{Kind: selector.KindCSS, Value: css}, 0, false)
 }
 
 func ResolveXPathToNodeIDInFrame(ctx context.Context, frameID, xpath string) (int64, error) {
