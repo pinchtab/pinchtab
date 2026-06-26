@@ -14,6 +14,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
+// primaryChromeAppMacOS is the user's daily Google Chrome executable. On macOS,
+// launching it for headless automation collides with LaunchServices and can stop
+// the user's normal Chrome from opening (issue #583), so PinchTab prefers a
+// dedicated automation browser and only falls back to this as a last resort.
+const primaryChromeAppMacOS = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
 var binaryNames = []string{
 	"google-chrome",
 	"google-chrome-stable",
@@ -42,10 +48,19 @@ func CommonPaths(goos string) []string {
 			"/opt/google/chrome/chrome",
 		}
 	case "darwin":
+		// Prefer a dedicated automation browser over the user's daily Google
+		// Chrome. On macOS, launching /Applications/Google Chrome.app directly
+		// with --headless=new makes LaunchServices treat Chrome as already
+		// running, so the user's next Dock/Spotlight launch just activates the
+		// windowless automation process instead of opening a real window
+		// (see issue #583). Chrome for Testing / Chromium / Canary have a
+		// distinct app identity and avoid the collision; the daily Chrome is a
+		// last resort.
 		return []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
 			"/Applications/Chromium.app/Contents/MacOS/Chromium",
 			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+			primaryChromeAppMacOS,
 		}
 	case "windows":
 		return []string{
@@ -99,6 +114,18 @@ func (Browser) Capabilities() browsers.CapabilitySet {
 		browsers.CapNetworkInterception,
 		browsers.CapEventScreencast,
 	)
+}
+
+// ResolvesToPrimaryChromeMacOS reports whether, absent an explicit binary
+// override, Chrome discovery would launch the user's daily Google Chrome on
+// macOS — the configuration that triggers the issue #583 LaunchServices
+// collision (automation blocks the user's normal Chrome from opening).
+func ResolvesToPrimaryChromeMacOS(binaryOverride string) bool {
+	if runtime.GOOS != "darwin" || strings.TrimSpace(binaryOverride) != "" {
+		return false
+	}
+	d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
+	return d.Found == primaryChromeAppMacOS
 }
 
 func (Browser) DiscoverBinary() browsers.BinaryDiscovery {

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/browsers/runtimekit"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/spf13/cobra"
@@ -33,11 +35,49 @@ func runCLIEnsuringServer(command string, fn func(cliRuntime)) {
 
 func runCLIWithServerCheck(cfg *config.RuntimeConfig, command string, fn func(cliRuntime)) {
 	rt := newCLIRuntime(cfg)
+	// Only preflight when this command would auto-start the local server. For a
+	// remote --server the browser lives on that host, so local discovery is moot.
+	if canAutoStartServerForCLI(cfg, rt.base) {
+		if err := preflightBrowserBinary(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	if err := ensureServerForCLI(cfg, rt.base, rt.token, command); err != nil {
 		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 		os.Exit(1)
 	}
 	fn(rt)
+}
+
+// preflightBrowserBinary fails fast with an actionable message when the active
+// provider has no usable browser, instead of letting the launch silently retry
+// and surface only the bridge's generic "instance not ready after 10s" timeout.
+// It mirrors the launch-time resolution in bridge/runtime.InitBrowser (explicit
+// browser.binary wins over discovery) so it can't diverge from what actually runs.
+func preflightBrowserBinary(cfg *config.RuntimeConfig) error {
+	if cfg == nil || strings.TrimSpace(cfg.CDPAttachURL) != "" {
+		return nil // attaching to an external CDP endpoint; no local binary needed
+	}
+	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	if _, ok := browsers.Get(browserID); !ok {
+		return nil // unknown provider — let the normal path report it
+	}
+	if override := strings.TrimSpace(cfg.BrowserBinary); override != "" {
+		if info, err := os.Stat(override); err != nil || info.IsDir() {
+			return fmt.Errorf("configured browser.binary does not point at a usable executable: %s\n"+
+				"       Point it at an existing browser binary, or unset it to use auto-discovery. "+
+				"Run `pinchtab doctor` for details", override)
+		}
+		return nil
+	}
+	if runtimekit.FindBrowserBinary(browserID) == "" {
+		return fmt.Errorf("no %s browser found on this machine.\n"+
+			"       Install one (e.g. Google Chrome for Testing, or `apt-get install -y chromium` "+
+			"on Debian/Ubuntu) or set browser.binary in your config.\n"+
+			"       Run `pinchtab doctor` for the full diagnosis", browserID)
+	}
+	return nil
 }
 
 func newCLIRuntime(cfg *config.RuntimeConfig) cliRuntime {

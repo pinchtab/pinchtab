@@ -26,6 +26,17 @@ browsers, manage tabs, and perform interactive tasks.`,
 	},
 }
 
+// versionCmd mirrors --version as a subcommand, since `pinchtab version` is a
+// common first instinct and cobra only wires up the --version flag by default.
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the PinchTab version",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("pinchtab %s\n", version)
+	},
+}
+
 // maybeRunWizard checks if the security wizard should run and triggers it.
 func maybeRunWizard() {
 	fileCfg, configPath, err := config.LoadFileConfig()
@@ -103,6 +114,8 @@ func init() {
 	configGroup := &cobra.Group{ID: "config", Title: "Configuration & Setup"}
 
 	rootCmd.AddGroup(primaryGroup, browserGroup, mgmtGroup, configGroup)
+
+	rootCmd.AddCommand(versionCmd)
 
 	cli.SetupUsage(rootCmd)
 }

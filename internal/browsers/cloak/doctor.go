@@ -70,25 +70,38 @@ func (Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	}
 }
 
-func cloakPresenceCheck(ctx context.Context, _ interface{}) browsers.DoctorCheckResult {
+func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
 	if runtime.GOOS == "windows" {
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorSkip,
 			Detail: "cloakbrowser discovery not implemented on windows",
 		}
 	}
-	d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
-	if d.Found == "" {
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorFail,
-			Detail: "cloakbrowser not found; set browser.binary or install CloakBrowser. probed: " + strings.Join(d.Probed, ", "),
+	// An explicit browser.binary override is what the runtime launches, so resolve
+	// against it before falling back to discovery. The CloakBrowser installer drops
+	// its Chromium in a versioned dir that isn't on the static probe list, so without
+	// this a perfectly working configured binary reports a false FAIL while the
+	// binary_* checks below it pass.
+	override := ""
+	if env, ok := cfg.(*browsers.DoctorEnv); ok && env != nil {
+		override = strings.TrimSpace(env.Binary)
+	}
+	found := override
+	if found == "" {
+		d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
+		found = d.Found
+		if found == "" {
+			return browsers.DoctorCheckResult{
+				Status: browsers.DoctorFail,
+				Detail: "cloakbrowser not found; set browser.binary or install CloakBrowser. probed: " + strings.Join(d.Probed, ", "),
+			}
 		}
 	}
-	line, err := browserprobe.RunVersion(ctx, d.Found)
+	line, err := browserprobe.RunVersion(ctx, found)
 	if err != nil {
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s: --version failed: %v", d.Found, err),
+			Detail: fmt.Sprintf("%s: --version failed: %v", found, err),
 			Err:    err,
 		}
 	}
@@ -96,18 +109,18 @@ func cloakPresenceCheck(ctx context.Context, _ interface{}) browsers.DoctorCheck
 	if token == "" {
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s: could not parse version from %q", d.Found, line),
+			Detail: fmt.Sprintf("%s: could not parse version from %q", found, line),
 		}
 	}
 	if browserprobe.CompareSemver(token, cloakMinVersion) < 0 {
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s -> %s (< required %s)", d.Found, token, cloakMinVersion),
+			Detail: fmt.Sprintf("%s -> %s (< required %s)", found, token, cloakMinVersion),
 		}
 	}
 	return browsers.DoctorCheckResult{
 		Status: browsers.DoctorPass,
-		Detail: fmt.Sprintf("%s -> %s (>= %s)", d.Found, token, cloakMinVersion),
+		Detail: fmt.Sprintf("%s -> %s (>= %s)", found, token, cloakMinVersion),
 	}
 }
 

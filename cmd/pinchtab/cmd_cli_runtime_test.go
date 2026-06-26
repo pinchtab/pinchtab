@@ -3,6 +3,9 @@ package main
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -185,6 +188,47 @@ func TestRunCLIWithInjectsAgentIDHeaders(t *testing.T) {
 	if got := gotRequest.Header.Get("X-Agent-Id"); got != wantAgentID {
 		t.Fatalf("X-Agent-Id = %q, want %q", got, wantAgentID)
 	}
+}
+
+// TestPreflightBrowserBinary covers the fail-fast no-browser diagnosis that
+// replaces the bridge's opaque "instance not ready after 10s" 503 on the
+// documented `pinchtab nav` cold start.
+func TestPreflightBrowserBinary(t *testing.T) {
+	existing := filepath.Join(t.TempDir(), "chrome")
+	if err := os.WriteFile(existing, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("missing override fails fast with guidance", func(t *testing.T) {
+		err := preflightBrowserBinary(&config.RuntimeConfig{
+			DefaultBrowser: "chrome",
+			BrowserBinary:  filepath.Join(t.TempDir(), "does-not-exist"),
+		})
+		if err == nil {
+			t.Fatal("expected error for a missing browser.binary override")
+		}
+		if !strings.Contains(err.Error(), "browser.binary") || !strings.Contains(err.Error(), "doctor") {
+			t.Errorf("error should name browser.binary and point at doctor; got: %v", err)
+		}
+	})
+
+	t.Run("existing override passes", func(t *testing.T) {
+		if err := preflightBrowserBinary(&config.RuntimeConfig{
+			DefaultBrowser: "chrome",
+			BrowserBinary:  existing,
+		}); err != nil {
+			t.Errorf("expected nil for an existing override binary; got %v", err)
+		}
+	})
+
+	t.Run("external CDP attach skips local binary check", func(t *testing.T) {
+		if err := preflightBrowserBinary(&config.RuntimeConfig{
+			DefaultBrowser: "chrome",
+			CDPAttachURL:   "http://127.0.0.1:9222",
+		}); err != nil {
+			t.Errorf("expected nil when attaching to external CDP; got %v", err)
+		}
+	})
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
