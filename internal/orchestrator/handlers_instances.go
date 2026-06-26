@@ -17,6 +17,7 @@ type startInstanceRequest struct {
 	Mode           string   `json:"mode,omitempty"`
 	Port           string   `json:"port,omitempty"`
 	ExtensionPaths []string `json:"extensionPaths,omitempty"`
+	StealthLevel   string   `json:"stealthLevel,omitempty"`
 }
 
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
@@ -229,7 +230,7 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 
 	headless := req.Mode != "headed"
 
-	inst, err := o.Launch(profileName, req.Port, headless, req.ExtensionPaths)
+	inst, err := o.LaunchWithOptions(profileName, req.Port, headless, req.ExtensionPaths, LaunchOptions{StealthLevel: req.StealthLevel})
 	if err != nil {
 		statusCode := classifyLaunchError(err)
 		httpx.Error(w, statusCode, err)

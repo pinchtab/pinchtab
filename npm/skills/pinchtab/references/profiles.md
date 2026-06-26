@@ -16,10 +16,10 @@ Returns array of profiles with `id`, `name`, `accountEmail`, `useWhen`, etc.
 # Auto-allocate port (recommended)
 curl -X POST http://localhost:9867/profiles/<ID>/start
 
-# With specific port and headless mode
+# With specific port, headless mode, and per-run stealth override
 curl -X POST http://localhost:9867/profiles/<ID>/start \
   -H 'Content-Type: application/json' \
-  -d '{"port": "9868", "headless": true}'
+  -d '{"port": "9868", "headless": true, "stealthLevel": "full"}'
 
 # Short alias
 curl -X POST http://localhost:9867/start/<ID>
@@ -46,12 +46,16 @@ curl http://localhost:9867/profiles/<ID>/instance
 curl http://localhost:9867/profiles/My%20Profile/instance
 ```
 
-## Launch by name
+## Start by existing profile
 
 ```bash
-curl -X POST http://localhost:9867/instances/launch \
+curl -X POST http://localhost:9867/profiles \
   -H 'Content-Type: application/json' \
-  -d '{"name": "work", "port": "9868"}'
+  -d '{"name": "work"}'
+
+curl -X POST http://localhost:9867/instances/start \
+  -H 'Content-Type: application/json' \
+  -d '{"profileId": "work", "port": "9868"}'
 ```
 
 ## CLI usage with profiles

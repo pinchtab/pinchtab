@@ -223,6 +223,7 @@ func configureManagementFlags() {
 	startInstanceCmd.Flags().String("profile", "", "Profile to use")
 	startInstanceCmd.Flags().String("mode", "", "Instance mode")
 	startInstanceCmd.Flags().String("port", "", "Port number")
+	startInstanceCmd.Flags().String("stealth-level", "", "Stealth level for this instance: light, medium, or full")
 	startInstanceCmd.Flags().StringArray("extension", nil, "Load browser extension (repeatable)")
 
 	activityCmd.PersistentFlags().Int("limit", 200, "Maximum number of events to return")

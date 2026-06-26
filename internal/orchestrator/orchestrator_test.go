@@ -7,12 +7,14 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
 func envMap(items []string) map[string]string {
@@ -660,5 +662,106 @@ func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 		if !strings.Contains(w.Body.String(), tt.setting) {
 			t.Fatalf("%s %s expected setting %s in response, got %s", tt.method, tt.path, tt.setting, w.Body.String())
 		}
+	}
+}
+
+func TestOrchestrator_Launch_PerRequestStealthLevelOverridesRuntimeDefault(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{StealthLevel: "light"})
+
+	if _, err := o.LaunchWithOptions("discovery-bank-luke", "9001", true, nil, LaunchOptions{StealthLevel: "full"}); err != nil {
+		t.Fatalf("LaunchWithOptions failed: %v", err)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+	if got := fc.InstanceDefaults.StealthLevel; got != "full" {
+		t.Fatalf("stealthLevel = %q, want full", got)
+	}
+}
+
+func TestOrchestrator_HandleStartByProfileHonorsStealthLevel(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	baseDir := t.TempDir()
+	pm := profiles.NewProfileManager(baseDir)
+	if err := pm.Create("rcs-luke"); err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(baseDir, runner)
+	o.SetProfileManager(pm)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{StealthLevel: "light"})
+
+	mux := http.NewServeMux()
+	o.RegisterHandlers(mux)
+	req := httptest.NewRequest("POST", "/profiles/rcs-luke/start", strings.NewReader(`{"headless":true,"stealthLevel":"full"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+	if got := fc.InstanceDefaults.StealthLevel; got != "full" {
+		t.Fatalf("stealthLevel = %q, want full", got)
+	}
+}
+
+func TestOrchestrator_Launch_ProfileStealthLevelOverridesRuntimeDefault(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	defer func() { processAliveFunc = old }()
+	stubPortAvailability(t, func(int) bool { return true })
+
+	baseDir := t.TempDir()
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(baseDir, runner)
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{StealthLevel: "light"})
+	if err := os.WriteFile(filepath.Join(baseDir, "discovery-bank-luke.json"), []byte(`{"stealthLevel":"full"}`), 0644); err != nil {
+		t.Fatalf("write profile override: %v", err)
+	}
+
+	if _, err := o.Launch("discovery-bank-luke", "9001", true, nil); err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+
+	cfgPath := envMap(runner.env)["PINCHTAB_CONFIG"]
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", cfgPath, err)
+	}
+	var fc config.FileConfig
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatalf("Unmarshal child config error = %v", err)
+	}
+	if got := fc.InstanceDefaults.StealthLevel; got != "full" {
+		t.Fatalf("stealthLevel = %q, want full", got)
 	}
 }

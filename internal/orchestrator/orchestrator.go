@@ -77,6 +77,10 @@ func (o *Orchestrator) EmitEvent(eventType string, inst *bridge.Instance) {
 	o.emitEvent(eventType, inst)
 }
 
+type LaunchOptions struct {
+	StealthLevel string
+}
+
 type InstanceInternal struct {
 	bridge.Instance
 	URL   string
@@ -241,6 +245,10 @@ func installStableBinary(src, dst string) error {
 }
 
 func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths []string) (*bridge.Instance, error) {
+	return o.LaunchWithOptions(name, port, headless, extensionPaths, LaunchOptions{})
+}
+
+func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, extensionPaths []string, opts LaunchOptions) (*bridge.Instance, error) {
 	// Validate profile name to prevent path traversal attacks
 	if err := profiles.ValidateProfileName(name); err != nil {
 		return nil, err
@@ -324,7 +332,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 		return nil, fmt.Errorf("create state dir: %w", err)
 	}
 
-	childConfigPath, err := o.writeChildConfig(port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths)
+	childConfigPath, err := o.writeChildConfig(name, port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths, opts.StealthLevel)
 	if err != nil {
 		return nil, fmt.Errorf("write child config: %w", err)
 	}
@@ -370,7 +378,7 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 	return &inst.Instance, nil
 }
 
-func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string) (string, error) {
+func (o *Orchestrator) writeChildConfig(profileName, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, stealthLevel string) (string, error) {
 	fc := config.FileConfigFromRuntime(o.runtimeCfg)
 	fc.Server.Port = port
 	fc.Server.StateDir = instanceStateDir
@@ -381,6 +389,13 @@ func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, i
 		fc.InstanceDefaults.Mode = "headless"
 	} else {
 		fc.InstanceDefaults.Mode = "headed"
+	}
+	resolvedStealthLevel, err := o.resolveProfileStealthLevel(profileName, profilePath, stealthLevel)
+	if err != nil {
+		return "", err
+	}
+	if resolvedStealthLevel != "" {
+		fc.InstanceDefaults.StealthLevel = resolvedStealthLevel
 	}
 
 	if len(extensionPaths) > 0 {
@@ -410,6 +425,56 @@ func (o *Orchestrator) writeChildConfig(port string, cdpPort int, profilePath, i
 		return "", err
 	}
 	return configPath, nil
+}
+
+func normalizeStealthLevel(level string) (string, error) {
+	level = strings.ToLower(strings.TrimSpace(level))
+	if level == "" {
+		return "", nil
+	}
+	switch level {
+	case "light", "medium", "full":
+		return level, nil
+	default:
+		return "", fmt.Errorf("invalid stealthLevel %q (must be light, medium, or full)", level)
+	}
+}
+
+func readStealthLevelOverride(path string) (string, bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	var doc struct {
+		StealthLevel string `json:"stealthLevel"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return "", true, fmt.Errorf("read stealth override %s: %w", path, err)
+	}
+	level, err := normalizeStealthLevel(doc.StealthLevel)
+	if err != nil {
+		return "", true, fmt.Errorf("read stealth override %s: %w", path, err)
+	}
+	return level, level != "", nil
+}
+
+func (o *Orchestrator) resolveProfileStealthLevel(profileName, profilePath, requestLevel string) (string, error) {
+	if level, err := normalizeStealthLevel(requestLevel); err != nil || level != "" {
+		return level, err
+	}
+	baseDir := filepath.Dir(profilePath)
+	for _, path := range []string{
+		filepath.Join(baseDir, profileName+".json"),
+		filepath.Join(profilePath, "profile.json"),
+	} {
+		if level, ok, err := readStealthLevelOverride(path); err != nil || ok {
+			return level, err
+		}
+	}
+	return "", nil
 }
 
 func intPtr(v int) *int {

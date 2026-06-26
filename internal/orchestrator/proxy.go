@@ -310,7 +310,7 @@ func (o *Orchestrator) applyInstanceAuth(req *http.Request, inst *InstanceIntern
 // classifyLaunchError returns appropriate HTTP status code for launch errors.
 func classifyLaunchError(err error) int {
 	msg := err.Error()
-	if strings.Contains(msg, "cannot contain") || strings.Contains(msg, "cannot be empty") {
+	if strings.Contains(msg, "cannot contain") || strings.Contains(msg, "cannot be empty") || strings.Contains(msg, "invalid stealthLevel") {
 		return 400 // Bad Request - validation error
 	}
 	if strings.Contains(msg, "already") || strings.Contains(msg, "in use") {

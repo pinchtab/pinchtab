@@ -157,6 +157,7 @@ pinchtab instance start                 # Start an instance
 pinchtab instance start --profile <id-or-name>
 pinchtab instance start --mode headed
 pinchtab instance start --port <n>
+pinchtab instance start --stealth-level full
 pinchtab instance start --extension /path/to/ext
 pinchtab instance stop <id>             # Stop an instance
 pinchtab instance logs <id>             # Show instance logs

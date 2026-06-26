@@ -30,8 +30,9 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Port     string `json:"port,omitempty"`
-		Headless bool   `json:"headless"`
+		Port         string `json:"port,omitempty"`
+		Headless     bool   `json:"headless"`
+		StealthLevel string `json:"stealthLevel,omitempty"`
 	}
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
@@ -40,7 +41,7 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	inst, err := o.Launch(name, req.Port, req.Headless, nil)
+	inst, err := o.LaunchWithOptions(name, req.Port, req.Headless, nil, LaunchOptions{StealthLevel: req.StealthLevel})
 	if err != nil {
 		statusCode := classifyLaunchError(err)
 		httpx.Error(w, statusCode, err)

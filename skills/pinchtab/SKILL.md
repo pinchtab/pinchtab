@@ -142,11 +142,11 @@ pinchtab instance start --profile work --mode headed
 pinchtab --server http://localhost:9868 nav https://mail.google.com
 ```
 
-If the login is already stored in that profile, you can switch to headless later:
+If the login is already stored in that profile, you can switch to headless later. Use `--stealth-level full` only for sites that need the stronger fingerprint bundle:
 
 ```bash
 pinchtab instance stop inst_ea2e747f
-pinchtab instance start --profile work --mode headless
+pinchtab instance start --profile work --mode headless --stealth-level full
 ```
 
 ### 3. Create a dedicated auth profile over HTTP

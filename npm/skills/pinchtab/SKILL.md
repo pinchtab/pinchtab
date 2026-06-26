@@ -142,11 +142,11 @@ pinchtab instance start --profile work --mode headed
 pinchtab --server http://localhost:9868 nav https://mail.google.com
 ```
 
-If the login is already stored in that profile, you can switch to headless later:
+If the login is already stored in that profile, you can switch to headless later. Use `--stealth-level full` only for sites that need the stronger fingerprint bundle:
 
 ```bash
 pinchtab instance stop inst_ea2e747f
-pinchtab instance start --profile work --mode headless
+pinchtab instance start --profile work --mode headless --stealth-level full
 ```
 
 ### 3. Create a dedicated auth profile over HTTP
@@ -184,9 +184,12 @@ Use this when the agent cannot call the CLI directly.
 
 ```bash
 curl http://localhost:9867/health
-curl -X POST http://localhost:9867/instances/launch \
+curl -X POST http://localhost:9867/profiles \
   -H "Content-Type: application/json" \
-  -d '{"name":"work","headless":true}'
+  -d '{"name":"work"}'
+curl -X POST http://localhost:9867/instances/start \
+  -H "Content-Type: application/json" \
+  -d '{"profileId":"work","mode":"headless"}'
 curl -X POST http://localhost:9868/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","selector":"e5"}'

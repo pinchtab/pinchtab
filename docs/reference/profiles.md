@@ -129,7 +129,7 @@ Start the active instance for a profile:
 ```bash
 curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
-  -d '{"headless":true}'
+  -d '{"headless":true,"stealthLevel":"full"}'
 # Response
 {
   "id": "inst_ea2e747f",
@@ -153,7 +153,7 @@ curl -X POST http://localhost:9867/profiles/prof_278be873/stop
 }
 ```
 
-For these orchestrator routes, the path can be a profile ID or profile name.
+For these orchestrator routes, the path can be a profile ID or profile name. `stealthLevel` is optional and overrides `instanceDefaults.stealthLevel` for this launch only; valid values are `light`, `medium`, and `full`.
 
 ## Check Whether A Profile Has A Running Instance
 

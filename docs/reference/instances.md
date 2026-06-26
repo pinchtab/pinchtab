@@ -127,10 +127,10 @@ You can also start an instance from a profile-oriented route:
 ```bash
 curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
-  -d '{"headless":false,"port":"9999"}'
+  -d '{"headless":false,"port":"9999","stealthLevel":"full"}'
 ```
 
-This route accepts a profile ID or profile name in the path. Unlike `/instances/start` and `/instances/launch`, its request body uses `headless` instead of `mode`.
+This route accepts a profile ID or profile name in the path. Unlike `/instances/start` and `/instances/launch`, its request body uses `headless` instead of `mode`. Pass `stealthLevel` (`light`, `medium`, or `full`) to override the configured default for this launch.
 
 ## Open A Tab In An Instance
 
