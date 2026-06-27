@@ -33,6 +33,21 @@ func runCLIEnsuringServer(command string, fn func(cliRuntime)) {
 	runCLIWithServerCheck(loadConfig(), command, fn)
 }
 
+// runCLIEnsuringServerNoBrowser auto-starts the local control plane if needed but
+// skips the browser preflight, for commands that need the server but not a browser
+// instance (e.g. session create). Without this, the documented "create a session
+// first" step fails cold with a raw "connection refused" on a fresh machine, since
+// only browser commands auto-start the server.
+func runCLIEnsuringServerNoBrowser(command string, fn func(cliRuntime)) {
+	cfg := loadConfig()
+	rt := newCLIRuntime(cfg)
+	if err := ensureServerForCLI(cfg, rt.base, rt.token, command); err != nil {
+		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
+		os.Exit(1)
+	}
+	fn(rt)
+}
+
 func runCLIWithServerCheck(cfg *config.RuntimeConfig, command string, fn func(cliRuntime)) {
 	rt := newCLIRuntime(cfg)
 	// Only preflight when this command would auto-start the local server. For a

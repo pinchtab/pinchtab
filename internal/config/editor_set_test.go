@@ -2,6 +2,30 @@ package config
 
 import "testing"
 
+func TestSetConfigValue_AllowedDomainsValidation(t *testing.T) {
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"example.com", false},
+		{"localhost,127.0.0.1,example.com", false},
+		{"*.example.com", false},
+		{"…,example.com", true},        // literal placeholder pasted from a hint
+		{"127.0.0.1,…", true},          // placeholder anywhere in the list
+		{"has space.com", true},        // malformed
+		{"http://example.com/x", true}, // URL, not a host
+	}
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			fc := &FileConfig{}
+			err := SetConfigValue(fc, "security.allowedDomains", tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetConfigValue(allowedDomains=%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestSetConfigValue_ServerFields(t *testing.T) {
 	tests := []struct {
 		path    string

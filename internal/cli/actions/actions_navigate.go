@@ -123,7 +123,7 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 	}
 
 	if !isIdentifiedCaller() {
-		output.Hint("no session set — this tab is shared. Create one with: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id> --print-token)")
+		output.Hint("no session set — this tab is shared. Create one with: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id>)")
 	}
 
 	snap, _ := cmd.Flags().GetBool("snap")

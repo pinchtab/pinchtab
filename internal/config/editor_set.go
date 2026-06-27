@@ -441,7 +441,11 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		return setIDPIField(s, strings.TrimPrefix(field, "idpi."), value)
 	}
 	if field == "allowedDomains" {
-		s.AllowedDomains = parseCSVList(value)
+		domains := parseCSVList(value)
+		if err := validateAllowlistEntries(domains); err != nil {
+			return err
+		}
+		s.AllowedDomains = domains
 		return nil
 	}
 	if field == "downloadAllowedDomains" {

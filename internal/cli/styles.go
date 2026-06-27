@@ -64,7 +64,8 @@ func SetupUsage(root *cobra.Command) {
 {{range .Groups}}{{$group := .ID}}
   {{.Title}}:
 {{range $.Commands}}{{if eq .GroupID $group}}{{if not .Hidden}}    %s  {{.Short}}
-{{end}}{{end}}{{end}}{{end}}
+{{end}}{{end}}{{end}}{{end}}{{range $.Commands}}{{if and (eq .GroupID "") .IsAvailableCommand}}    %s  {{.Short}}
+{{end}}{{end}}
 {{if .HasAvailableLocalFlags}}
 %s:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
@@ -76,6 +77,7 @@ func SetupUsage(root *cobra.Command) {
 `,
 		headerStyle("Usage"),
 		headerStyle("Commands"),
+		cmdStyle("{{rpad .Name .NamePadding}}"),
 		cmdStyle("{{rpad .Name .NamePadding}}"),
 		headerStyle("Flags"),
 		headerStyle("Examples")))

@@ -116,7 +116,7 @@ func (h *Handlers) writeTextResponse(w http.ResponseWriter, r *http.Request, tCt
 	// IDPI: scan extracted text for injection patterns and optionally wrap.
 	result := h.ContentGuard.Scan(text, url)
 	if result.Blocked {
-		httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked by IDPI scanner: %s", result.BlockReason))
+		httpx.Error(w, http.StatusForbidden, fmt.Errorf("content blocked by IDPI scanner: %s%s", result.BlockReason, idpiScannerHint()))
 		return
 	}
 	result.SetHeaders(w)

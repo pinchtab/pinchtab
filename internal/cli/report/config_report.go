@@ -27,6 +27,12 @@ func HandleConfigShow(cfg *config.RuntimeConfig) {
 	fmt.Printf("  Allowed Domains: %v\n", cfg.AllowedDomains)
 	fmt.Println()
 	fmt.Println(styleStdout(headingStyle, "Browser / Instance Defaults"))
+	fmt.Printf("  Provider:       %s\n", cfg.DefaultBrowser)
+	binary := cfg.BrowserBinary
+	if binary == "" {
+		binary = "(auto-discovered)"
+	}
+	fmt.Printf("  Binary:         %s\n", binary)
 	fmt.Printf("  Headless:       %v\n", cfg.Headless)
 	fmt.Printf("  No Restore:     %v\n", cfg.NoRestore)
 	fmt.Printf("  Profile Dir:    %s\n", cfg.ProfileDir)

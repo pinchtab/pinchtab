@@ -196,8 +196,18 @@ func idpiAllowlistHint(url string) string {
 	if !ok || strings.TrimSpace(host) == "" {
 		return ""
 	}
-	return fmt.Sprintf(". To allow it, add the host: `pinchtab config set security.allowedDomains \"…,%s\"` "+
-		"then `pinchtab server restart` — this widens what automation may reach (see docs/guides/security.md)", host)
+	return fmt.Sprintf(". To allow it, run: pinchtab config set security.allowedDomains "+
+		"\"$(pinchtab config get security.allowedDomains),%s\" then: pinchtab server restart "+
+		"(this widens what automation may reach — see docs/guides/security.md)", host)
+}
+
+// idpiScannerHint appends remediation to an IDPI content-scanner block, which
+// otherwise states only the cause. Unlike the domain allowlist, a scanner block
+// can be a false positive on legitimate pages, so the fix is to relax strict mode
+// (still scans and wraps, just warns instead of hard-blocking).
+func idpiScannerHint() string {
+	return ". To read pages like this, set strict mode off: `pinchtab config set security.idpi.strictMode false` " +
+		"then `pinchtab server restart` — content is still scanned and wrapped, just warned instead of blocked (see docs/guides/security.md)"
 }
 
 // validateNavigateTargets runs URL validation, the IDPI domain guard, and SSRF
