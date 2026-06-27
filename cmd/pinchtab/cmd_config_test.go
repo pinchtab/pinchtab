@@ -207,6 +207,38 @@ func TestConfigShowIncludesTrustLoopbackProxy(t *testing.T) {
 	}
 }
 
+func TestConfigShowIncludesIDPIAndAllowedDomains(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	t.Setenv("PINCHTAB_TOKEN", "")
+
+	fc := config.DefaultFileConfig()
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"config", "show"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+
+	// The browsing allowlist is the most security-relevant setting a user edits;
+	// it must be visible in `config show` so an edit can be confirmed there.
+	if !strings.Contains(output, "Allowed Domains:") {
+		t.Errorf("config show output missing 'Allowed Domains:'; got %q", output)
+	}
+	if !strings.Contains(output, "IDPI:") {
+		t.Errorf("config show output missing 'IDPI:'; got %q", output)
+	}
+	if !strings.Contains(output, "localhost") {
+		t.Errorf("expected default allowlist (localhost) in output; got %q", output)
+	}
+}
+
 func TestConfigGetMasksServerToken(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv("PINCHTAB_CONFIG", configPath)

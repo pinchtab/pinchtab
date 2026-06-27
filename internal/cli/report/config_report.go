@@ -23,6 +23,8 @@ func HandleConfigShow(cfg *config.RuntimeConfig) {
 	fmt.Printf("  Cookies:        %v\n", cfg.AllowCookies)
 	fmt.Printf("  Upload:         %v\n", cfg.AllowUpload)
 	fmt.Printf("  Trust Loopback Proxy: %v\n", cfg.TrustLoopbackProxy)
+	fmt.Printf("  IDPI:           %v\n", cfg.IDPI.Enabled)
+	fmt.Printf("  Allowed Domains: %v\n", cfg.AllowedDomains)
 	fmt.Println()
 	fmt.Println(styleStdout(headingStyle, "Browser / Instance Defaults"))
 	fmt.Printf("  Headless:       %v\n", cfg.Headless)
