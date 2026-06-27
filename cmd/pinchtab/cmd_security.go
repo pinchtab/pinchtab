@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -42,7 +43,31 @@ func init() {
 	rootCmd.AddCommand(securityCmd)
 }
 
+// printEnforcedDriftWarning flags when a server is running but was started with
+// a different config than what's now on disk — i.e. the posture printed below is
+// the user's intent, not necessarily what the live server enforces. The IDPI
+// guard and allowlist are snapshotted at boot, so an edit without a restart left
+// the running server enforcing stale policy with nothing signalling it; this is
+// that signal.
+func printEnforcedDriftWarning(cfg *config.RuntimeConfig) {
+	if cfg == nil {
+		return
+	}
+	snap, state := fetchHealthSnapshotWithToken(cfg.Port, resolveCLIToken(cfg))
+	if state != healthSnapshotRunning || snap == nil || !snap.RestartRequired {
+		return
+	}
+	fmt.Println(cli.StyleStdout(cli.WarningStyle,
+		"  ⚠ The running server started with a different config — the settings below are not all in effect yet."))
+	if len(snap.RestartReasons) > 0 {
+		fmt.Printf("    Pending (needs restart): %s\n", strings.Join(snap.RestartReasons, ", "))
+	}
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "    Apply with: pinchtab server restart"))
+	fmt.Println()
+}
+
 func printSecurityOverview(cfg *config.RuntimeConfig) {
+	printEnforcedDriftWarning(cfg)
 	posture := cli.AssessSecurityPosture(cfg)
 	recommended := cli.RecommendedSecurityDefaultLines(cfg)
 	warnings := cli.AssessSecurityWarnings(cfg)

@@ -150,6 +150,22 @@ func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
 	}
 }
 
+func TestRestartReasonsIncludeSecurityPolicy(t *testing.T) {
+	cfg := config.DefaultFileConfig()
+	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api.boot = cfg
+
+	// Editing the allowlist changes the boot-snapshotted IDPI/security policy, so
+	// it must register as restart-required (the running guard won't pick it up).
+	next := cfg
+	next.Security.AllowedDomains = append(append([]string(nil), cfg.Security.AllowedDomains...), "example.com")
+
+	reasons := api.restartReasonsFor(next)
+	if !slices.Contains(reasons, "Security policy") {
+		t.Fatalf("restartReasonsFor() = %v, want Security policy", reasons)
+	}
+}
+
 func TestHandleGetConfigRedactsToken(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"

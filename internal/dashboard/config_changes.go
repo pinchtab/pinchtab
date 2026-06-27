@@ -77,8 +77,16 @@ func changedTargetProxyNames(current, next config.BrowserTargetsConfig) []string
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
-	reasons := make([]string, 0, 5)
+	reasons := make([]string, 0, 6)
 
+	// The IDPI guard, allowlist, and sensitive-endpoint policy are snapshotted
+	// from the boot config when the server starts and are not rebuilt on a config
+	// edit, so any change to the security block only takes effect after a restart.
+	// Surfacing it here is what lets `pinchtab security`/`health` warn that the
+	// running server is enforcing stale policy instead of silently diverging.
+	if !reflect.DeepEqual(c.boot.Security, next.Security) {
+		reasons = append(reasons, "Security policy")
+	}
 	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
 	}

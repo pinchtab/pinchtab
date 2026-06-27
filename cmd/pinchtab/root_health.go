@@ -13,10 +13,12 @@ import (
 // healthSnapshot is the subset of the /health response the landing banner and
 // `pinchtab health` care about.
 type healthSnapshot struct {
-	Status   string `json:"status"`
-	Mode     string `json:"mode"`
-	Version  string `json:"version"`
-	Security *struct {
+	Status          string   `json:"status"`
+	Mode            string   `json:"mode"`
+	Version         string   `json:"version"`
+	RestartRequired bool     `json:"restartRequired"`
+	RestartReasons  []string `json:"restartReasons"`
+	Security        *struct {
 		Level                     string   `json:"level"`
 		AllowedDomains            []string `json:"allowedDomains"`
 		IDPIEnabled               bool     `json:"idpiEnabled"`
@@ -51,7 +53,18 @@ func formatAllowedDomains(domains []string) string {
 // It is the only function here that performs network I/O, so callers that just
 // need to print help/landing text can avoid the probe latency entirely.
 func fetchHealthSnapshot(port string) (*healthSnapshot, healthSnapshotState) {
-	status, body, reachable := server.ProbeHealth(fmt.Sprintf("http://localhost:%s/health", port), 500*time.Millisecond, nil)
+	return fetchHealthSnapshotWithToken(port, "")
+}
+
+// fetchHealthSnapshotWithToken is fetchHealthSnapshot with optional auth, so it
+// can read fields like restartRequired from a server that requires auth on
+// /health (the unauthenticated probe would just see a protected listener).
+func fetchHealthSnapshotWithToken(port, token string) (*healthSnapshot, healthSnapshotState) {
+	var headers map[string]string
+	if strings.TrimSpace(token) != "" {
+		headers = map[string]string{"Authorization": "Bearer " + token}
+	}
+	status, body, reachable := server.ProbeHealth(fmt.Sprintf("http://localhost:%s/health", port), 500*time.Millisecond, headers)
 	if !reachable {
 		return nil, healthSnapshotStopped
 	}
