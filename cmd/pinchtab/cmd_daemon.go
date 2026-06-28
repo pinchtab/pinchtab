@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/pinchtab/pinchtab/internal/browsers/chrome"
+	"github.com/pinchtab/pinchtab/internal/browsers/runtimekit"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/daemon"
@@ -84,15 +85,16 @@ func handleDaemonInstall(manager daemon.Manager) {
 		printDaemonActionError(manager, fmt.Sprintf("daemon install failed: %v", err))
 	}
 	fmt.Println(cli.StyleStdout(cli.SuccessStyle, "  [ok] ") + message)
-	warnPrimaryChromeMacOS(fileCfg)
+	warnPrimaryChromeMacOS(loadConfig())
 	printDaemonFollowUp()
 }
 
 // warnPrimaryChromeMacOS surfaces the issue #583 collision at install time:
 // on macOS, auto-launching the user's daily Google Chrome for headless
 // automation can stop their normal Chrome from opening a window.
-func warnPrimaryChromeMacOS(fileCfg *config.FileConfig) {
-	if fileCfg == nil || !chrome.ResolvesToPrimaryChromeMacOS(fileCfg.BrowserBinary()) {
+func warnPrimaryChromeMacOS(cfg *config.RuntimeConfig) {
+	effective := runtimekit.ResolveEffectiveBrowser(cfg)
+	if effective.ID != config.BrowserChrome || !chrome.IsPrimaryChromeBinaryMacOS(effective.Binary) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.WarningStyle,

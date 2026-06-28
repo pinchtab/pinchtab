@@ -57,6 +57,21 @@ func TestIsServerHealthy_SendsAuthHeader(t *testing.T) {
 	}
 }
 
+func TestIsServerHealthy_SendsSessionAuthHeader(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Session ses_testtoken" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	if !isServerHealthy(ts.URL, "ses_testtoken") {
+		t.Fatal("expected healthy server with session token to return true")
+	}
+}
+
 func TestWaitForServer_ImmediatelyHealthy(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -50,8 +50,8 @@ func ensureServerWithAutoStart(baseURL, token, command string, allowAutoStart bo
 
 func isServerHealthy(baseURL, token string) bool {
 	headers := map[string]string{}
-	if token != "" {
-		headers["Authorization"] = "Bearer " + token
+	if auth := server.AuthorizationHeaderValue(token); auth != "" {
+		headers["Authorization"] = auth
 	}
 	status, _, reachable := server.ProbeHealth(baseURL+"/health", 3*time.Second, headers)
 	return reachable && status < 500

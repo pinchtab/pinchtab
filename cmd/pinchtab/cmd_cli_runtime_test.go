@@ -207,8 +207,8 @@ func TestPreflightBrowserBinary(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for a missing browser.binary override")
 		}
-		if !strings.Contains(err.Error(), "browser.binary") || !strings.Contains(err.Error(), "doctor") {
-			t.Errorf("error should name browser.binary and point at doctor; got: %v", err)
+		if !strings.Contains(err.Error(), "browser executable") || !strings.Contains(err.Error(), "doctor") {
+			t.Errorf("error should describe the configured browser executable and point at doctor; got: %v", err)
 		}
 	})
 
@@ -218,6 +218,20 @@ func TestPreflightBrowserBinary(t *testing.T) {
 			BrowserBinary:  existing,
 		}); err != nil {
 			t.Errorf("expected nil for an existing override binary; got %v", err)
+		}
+	})
+
+	t.Run("default target binary passes", func(t *testing.T) {
+		if err := preflightBrowserBinary(&config.RuntimeConfig{
+			DefaultBrowser: config.BrowserChrome,
+			Targets: config.BrowserTargetsConfig{
+				"only": {
+					Provider: config.BrowserCloak,
+					Binary:   existing,
+				},
+			},
+		}); err != nil {
+			t.Errorf("expected nil for an existing default-target binary; got %v", err)
 		}
 	})
 

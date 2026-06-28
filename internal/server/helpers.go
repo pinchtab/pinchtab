@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -35,10 +36,21 @@ func ProbeHealth(url string, timeout time.Duration, headers map[string]string) (
 	return resp.StatusCode, b, true
 }
 
+func AuthorizationHeaderValue(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if strings.HasPrefix(token, "ses_") {
+		return "Session " + token
+	}
+	return "Bearer " + token
+}
+
 func CheckPinchTabRunning(port, token string) bool {
 	headers := map[string]string{}
-	if token != "" {
-		headers["Authorization"] = "Bearer " + token
+	if auth := AuthorizationHeaderValue(token); auth != "" {
+		headers["Authorization"] = auth
 	}
 	status, _, reachable := ProbeHealth(fmt.Sprintf("http://localhost:%s/health", port), 500*time.Millisecond, headers)
 	return reachable && status == 200
@@ -91,8 +103,8 @@ func ShutdownServer(port, token string) error {
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if auth := AuthorizationHeaderValue(token); auth != "" {
+		req.Header.Set("Authorization", auth)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/browsers/runtimekit"
-	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // BrowserUnavailableReason reports whether the request's target browser has no
@@ -18,36 +17,36 @@ import (
 // opaque-503 cold start surfaced by install-UX testing, on the API path as well
 // as the CLI.
 //
-// It deliberately speaks only to the simple default/single-provider case. An
-// explicit per-request browser, a multi-target config, or a CDP attach all fall
-// through (return false) so existing behavior and HTTP error mapping are
-// unchanged. It mirrors the launch-time resolution in bridge/runtime.InitBrowser
-// (explicit browser.binary wins over discovery) so it can't diverge from what
-// the instance would actually try to launch.
+// It deliberately avoids explicit per-request browser overrides, since those may
+// select a different target/provider than the instance's default launch path.
+// For the normal implicit path it mirrors the launch-time resolution in
+// bridge/runtime.InitBrowser, including default-target promotion, so it can't
+// diverge from what the instance would actually try to launch.
 func (o *Orchestrator) BrowserUnavailableReason(r *http.Request) (string, bool) {
 	if o == nil || o.runtimeCfg == nil {
 		return "", false
 	}
-	if ExtractRequestedBrowser(r) != "" || len(o.runtimeCfg.Targets) > 0 {
+	if ExtractRequestedBrowser(r) != "" {
 		return "", false
 	}
 	if strings.TrimSpace(o.runtimeCfg.CDPAttachURL) != "" {
 		return "", false // attaching to an external CDP endpoint; no local binary needed
 	}
-	provider := config.NormalizeBrowser(o.runtimeCfg.DefaultBrowser)
+	effective := runtimekit.ResolveEffectiveBrowser(o.runtimeCfg)
+	provider := effective.ID
 	if _, ok := browsers.Get(provider); !ok {
 		return "", false
 	}
-	if override := strings.TrimSpace(o.runtimeCfg.BrowserBinary); override != "" {
+	if override := strings.TrimSpace(effective.Binary); override != "" {
 		if info, err := os.Stat(override); err != nil || info.IsDir() {
-			return fmt.Sprintf("configured browser.binary does not point at a usable executable: %s — "+
-				"set it to a real browser or unset it for auto-discovery (run `pinchtab doctor`)", override), true
+			return fmt.Sprintf("configured browser executable does not point at a usable executable: %s — "+
+				"set the active browser config to a real browser or unset it for auto-discovery (run `pinchtab doctor`)", override), true
 		}
 		return "", false
 	}
-	if runtimekit.FindBrowserBinary(provider) == "" {
+	if effective.Binary == "" {
 		return fmt.Sprintf("no %s browser found on this host — install Chrome/Chromium "+
-			"(e.g. `apt-get install -y chromium`) or set browser.binary (run `pinchtab doctor`)", provider), true
+			"(e.g. `apt-get install -y chromium`) or set a browser binary in config (run `pinchtab doctor`)", provider), true
 	}
 	return "", false
 }

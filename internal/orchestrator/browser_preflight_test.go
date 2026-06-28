@@ -43,6 +43,21 @@ func TestBrowserUnavailableReason(t *testing.T) {
 		}
 	})
 
+	t.Run("default target binary is available", func(t *testing.T) {
+		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+			DefaultBrowser: config.BrowserChrome,
+			Targets: config.BrowserTargetsConfig{
+				"only": {
+					Provider: config.BrowserCloak,
+					Binary:   existing,
+				},
+			},
+		}}
+		if _, unavailable := o.BrowserUnavailableReason(req("/text?url=http://x/")); unavailable {
+			t.Error("an existing default-target binary should be available")
+		}
+	})
+
 	t.Run("explicit per-request browser falls through", func(t *testing.T) {
 		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
 			DefaultBrowser: "chrome",

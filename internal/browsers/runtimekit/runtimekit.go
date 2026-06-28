@@ -17,6 +17,12 @@ type ProviderLaunchPlan struct {
 	Binary  string
 }
 
+type EffectiveBrowser struct {
+	ID     string
+	Binary string
+	Config *config.RuntimeConfig
+}
+
 func RuntimeProxyConfig(cfg *config.RuntimeConfig) browsers.ProxyConfig {
 	if cfg == nil {
 		return browsers.ProxyConfig{}
@@ -90,6 +96,26 @@ func FindBrowserBinary(browserID string) string {
 		return ""
 	}
 	return b.DiscoverBinary().Found
+}
+
+func ResolveEffectiveBrowser(cfg *config.RuntimeConfig) EffectiveBrowser {
+	if cfg == nil {
+		return EffectiveBrowser{}
+	}
+	effectiveCfg := cfg
+	if resolved, err := config.ResolveDefaultBrowserTarget(cfg); err == nil && resolved != nil && resolved.Config != nil {
+		effectiveCfg = resolved.Config
+	}
+	browserID := config.NormalizeBrowser(effectiveCfg.DefaultBrowser)
+	binary := strings.TrimSpace(effectiveCfg.BrowserBinary)
+	if binary == "" {
+		binary = FindBrowserBinary(browserID)
+	}
+	return EffectiveBrowser{
+		ID:     browserID,
+		Binary: binary,
+		Config: effectiveCfg,
+	}
 }
 
 func BaseFlagArgs(browserID string, headless bool) []string {

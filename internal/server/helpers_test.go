@@ -6,6 +6,26 @@ import (
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
+func TestAuthorizationHeaderValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+		want  string
+	}{
+		{name: "empty", token: "", want: ""},
+		{name: "bearer token", token: "server-token", want: "Bearer server-token"},
+		{name: "session token", token: "ses_token123", want: "Session ses_token123"},
+		{name: "trimmed session token", token: "  ses_token123  ", want: "Session ses_token123"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AuthorizationHeaderValue(tt.token); got != tt.want {
+				t.Fatalf("AuthorizationHeaderValue(%q) = %q, want %q", tt.token, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestDefaultProxyShorthandsAreCatalogRoutes guards against the default-proxy
 // allowlist drifting from the shared route catalog: every forwarded route must
 // be a real catalog route (or the management GET /tabs handled separately), so a

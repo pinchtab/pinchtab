@@ -61,8 +61,8 @@ func fetchHealthSnapshot(port string) (*healthSnapshot, healthSnapshotState) {
 // /health (the unauthenticated probe would just see a protected listener).
 func fetchHealthSnapshotWithToken(port, token string) (*healthSnapshot, healthSnapshotState) {
 	var headers map[string]string
-	if strings.TrimSpace(token) != "" {
-		headers = map[string]string{"Authorization": "Bearer " + token}
+	if auth := server.AuthorizationHeaderValue(token); auth != "" {
+		headers = map[string]string{"Authorization": auth}
 	}
 	status, body, reachable := server.ProbeHealth(fmt.Sprintf("http://localhost:%s/health", port), 500*time.Millisecond, headers)
 	if !reachable {

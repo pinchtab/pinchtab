@@ -74,22 +74,23 @@ func preflightBrowserBinary(cfg *config.RuntimeConfig) error {
 	if cfg == nil || strings.TrimSpace(cfg.CDPAttachURL) != "" {
 		return nil // attaching to an external CDP endpoint; no local binary needed
 	}
-	browserID := config.NormalizeBrowser(cfg.DefaultBrowser)
+	effective := runtimekit.ResolveEffectiveBrowser(cfg)
+	browserID := effective.ID
 	if _, ok := browsers.Get(browserID); !ok {
 		return nil // unknown provider — let the normal path report it
 	}
-	if override := strings.TrimSpace(cfg.BrowserBinary); override != "" {
+	if override := strings.TrimSpace(effective.Binary); override != "" {
 		if info, err := os.Stat(override); err != nil || info.IsDir() {
-			return fmt.Errorf("configured browser.binary does not point at a usable executable: %s\n"+
-				"       Point it at an existing browser binary, or unset it to use auto-discovery. "+
+			return fmt.Errorf("configured browser executable does not point at a usable executable: %s\n"+
+				"       Point the active browser config at an existing browser binary, or unset it to use auto-discovery. "+
 				"Run `pinchtab doctor` for details", override)
 		}
 		return nil
 	}
-	if runtimekit.FindBrowserBinary(browserID) == "" {
+	if effective.Binary == "" {
 		return fmt.Errorf("no %s browser found on this machine.\n"+
 			"       Install one (e.g. Google Chrome for Testing, or `apt-get install -y chromium` "+
-			"on Debian/Ubuntu) or set browser.binary in your config.\n"+
+			"on Debian/Ubuntu) or set a browser binary in your config.\n"+
 			"       Run `pinchtab doctor` for the full diagnosis", browserID)
 	}
 	return nil
