@@ -2,6 +2,9 @@ package chrome_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -144,6 +147,31 @@ func TestCommonPathsPerOS(t *testing.T) {
 		if !found {
 			t.Errorf("CommonPaths(%q) missing path containing %q; got %v", tt.goos, tt.want, paths)
 		}
+	}
+}
+
+func TestCommonPathsDarwinPrefersDedicatedBrowser(t *testing.T) {
+	paths := chrome.CommonPaths("darwin")
+	if len(paths) == 0 {
+		t.Fatal("darwin CommonPaths empty")
+	}
+
+	primary := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+	cft := "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+
+	// The user's daily Chrome must be the LAST resort (issue #583): launching it
+	// for automation collides with macOS LaunchServices.
+	if got := paths[len(paths)-1]; got != primary {
+		t.Errorf("expected primary Chrome to be last; got last = %q in %v", got, paths)
+	}
+
+	primaryIdx := indexOf(paths, primary)
+	cftIdx := indexOf(paths, cft)
+	if cftIdx < 0 {
+		t.Fatalf("expected Chrome for Testing in darwin CommonPaths; got %v", paths)
+	}
+	if cftIdx >= primaryIdx {
+		t.Errorf("Chrome for Testing (%d) must be preferred over primary Chrome (%d)", cftIdx, primaryIdx)
 	}
 }
 
@@ -543,6 +571,41 @@ func TestChrome_ValidateTarget(t *testing.T) {
 	if err := b.ValidateTarget(browsers.TargetConfig{Binary: "/usr/bin/chrome"}); err != nil {
 		t.Errorf("ValidateTarget(binary) = %v, want nil", err)
 	}
+}
+
+// TestChromePresentHonorsBrowserBinaryOverride guards the issue #583 follow-up:
+// a configured browser.binary that sits off the static discovery path must PASS
+// chrome_present (it's what the runtime launches), not report a false "no
+// chrome/chromium found" FAIL while the binary_* checks pass right below it.
+func TestChromePresentHonorsBrowserBinaryOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chrome_present is skipped on windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fakechrome")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho 'Chromium 149.0.0.0'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	check := findCheckByID(t, (&chrome.Browser{}).DoctorChecks(browsers.TargetConfig{}), "chrome_present")
+	res := check.Fn(context.Background(), &browsers.DoctorEnv{Binary: fake})
+	if res.Status != browsers.DoctorPass {
+		t.Fatalf("chrome_present with override status = %v, want DoctorPass; detail: %s", res.Status, res.Detail)
+	}
+	if !strings.Contains(res.Detail, fake) {
+		t.Errorf("expected detail to reference the override path %q; got %q", fake, res.Detail)
+	}
+}
+
+func findCheckByID(t *testing.T, checks []browsers.DoctorCheck, id string) browsers.DoctorCheck {
+	t.Helper()
+	for _, c := range checks {
+		if c.ID == id {
+			return c
+		}
+	}
+	t.Fatalf("check %q not found", id)
+	return browsers.DoctorCheck{}
 }
 
 func TestChromeHandleDecisionsCheck(t *testing.T) {

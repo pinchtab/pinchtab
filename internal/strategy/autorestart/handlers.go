@@ -44,6 +44,19 @@ func (s *Strategy) ensureRunning(r *http.Request) (string, int, error) {
 	if s.orch == nil {
 		return "", 503, fmt.Errorf("no orchestrator configured")
 	}
+	// Fail fast when nothing is running yet *because* no browser is resolvable:
+	// return the real cause now instead of polling for 10s into a generic
+	// "instance not ready" timeout. This generalizes the CLI nav preflight to the
+	// HTTP API and any command. The browser probe only runs when the instance
+	// isn't already up, so steady-state proxied requests are untouched.
+	if t, _, err := s.orch.FirstRunningURLForRequest(r); err == nil && t != "" {
+		return t, 0, nil
+	} else if err == nil {
+		if reason, unavailable := s.orch.BrowserUnavailableReason(r); unavailable {
+			return "", http.StatusServiceUnavailable, errors.New(reason)
+		}
+	}
+
 	var lastStatus int
 	target, err := readiness.WaitUntil(context.Background(), instanceReadyWait, 200*time.Millisecond,
 		func() (string, bool, error) {

@@ -2,6 +2,9 @@ package cloak_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -758,6 +761,43 @@ func TestCloak_CanHandle_StateChanging(t *testing.T) {
 	got := b.CanHandle(browsers.RequestIntent{Shape: browsers.ShapeStaticRead, StateChanging: true})
 	if got.Decision != browsers.DecisionHandle {
 		t.Errorf("CanHandle(state-changing).Decision = %q, want %q", got.Decision, browsers.DecisionHandle)
+	}
+}
+
+// TestCloakPresentHonorsBrowserBinaryOverride is the original report: the
+// CloakBrowser installer drops its Chromium in a versioned dir that isn't on the
+// static probe list, so a configured browser.binary must PASS cloakbrowser_present
+// rather than report a false "cloakbrowser not found" FAIL.
+func TestCloakPresentHonorsBrowserBinaryOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("cloakbrowser_present is skipped on windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "chromium-145.0.0.0", "chrome")
+	if err := os.MkdirAll(filepath.Dir(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho 'Chromium 145.0.0.0'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := (&cloak.Browser{}).DoctorChecks(browsers.TargetConfig{})
+	var present *browsers.DoctorCheck
+	for i := range checks {
+		if checks[i].ID == "cloakbrowser_present" {
+			present = &checks[i]
+			break
+		}
+	}
+	if present == nil {
+		t.Fatal("cloakbrowser_present check not found")
+	}
+	res := present.Fn(context.Background(), &browsers.DoctorEnv{Binary: fake})
+	if res.Status != browsers.DoctorPass {
+		t.Fatalf("cloakbrowser_present with override status = %v, want DoctorPass; detail: %s", res.Status, res.Detail)
+	}
+	if !strings.Contains(res.Detail, fake) {
+		t.Errorf("expected detail to reference the override path %q; got %q", fake, res.Detail)
 	}
 }
 

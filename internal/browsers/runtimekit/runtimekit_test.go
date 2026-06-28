@@ -170,6 +170,28 @@ func TestFindBrowserBinary_UnknownProvider(t *testing.T) {
 	}
 }
 
+func TestResolveEffectiveBrowser_PromotesDefaultTargetBinary(t *testing.T) {
+	cfg := &config.RuntimeConfig{
+		DefaultBrowser: config.BrowserChrome,
+		Targets: config.BrowserTargetsConfig{
+			"only": {
+				Provider: config.BrowserCloak,
+				Binary:   "/opt/cloak/chrome",
+			},
+		},
+	}
+	got := ResolveEffectiveBrowser(cfg)
+	if got.ID != config.BrowserCloak {
+		t.Fatalf("ID = %q, want %q", got.ID, config.BrowserCloak)
+	}
+	if got.Binary != "/opt/cloak/chrome" {
+		t.Fatalf("Binary = %q, want %q", got.Binary, "/opt/cloak/chrome")
+	}
+	if got.Config == nil || got.Config.BrowserBinary != "/opt/cloak/chrome" {
+		t.Fatalf("resolved config missing target binary: %+v", got.Config)
+	}
+}
+
 func TestBaseFlagArgs_Chrome(t *testing.T) {
 	args := BaseFlagArgs("chrome", false)
 	if len(args) == 0 {

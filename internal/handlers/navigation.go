@@ -188,6 +188,28 @@ func (h *Handlers) resolveNavigateBrowser(w http.ResponseWriter, r *http.Request
 	return routing, true
 }
 
+// idpiAllowlistHint appends a copy-pasteable remediation to an IDPI domain-block
+// error so the user isn't left knowing only the cause. Widening the allowlist
+// reduces isolation, so the hint says so and points at the security guide.
+func idpiAllowlistHint(url string) string {
+	host, ok := navguard.ExtractHost(url)
+	if !ok || strings.TrimSpace(host) == "" {
+		return ""
+	}
+	return fmt.Sprintf(". To allow it, run: pinchtab config set security.allowedDomains "+
+		"\"$(pinchtab config get security.allowedDomains),%s\" then: pinchtab server restart "+
+		"(this widens what automation may reach — see docs/guides/security.md)", host)
+}
+
+// idpiScannerHint appends remediation to an IDPI content-scanner block, which
+// otherwise states only the cause. Unlike the domain allowlist, a scanner block
+// can be a false positive on legitimate pages, so the fix is to relax strict mode
+// (still scans and wraps, just warns instead of hard-blocking).
+func idpiScannerHint() string {
+	return ". To read pages like this, set strict mode off: `pinchtab config set security.idpi.strictMode false` " +
+		"then `pinchtab server restart` — content is still scanned and wrapped, just warned instead of blocked (see docs/guides/security.md)"
+}
+
 // validateNavigateTargets runs URL validation, the IDPI domain guard, and SSRF
 // target resolution, recording the navigate request on both the blocked and
 // accepted paths. On success it returns the resolved target and trusted-proxy CIDRs.
@@ -201,7 +223,7 @@ func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Reques
 	domainResult := h.IDPIGuard.CheckDomain(url)
 	if domainResult.Blocked {
 		h.recordNavigateRequest(r, tabID, url)
-		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason))
+		httpx.Error(w, http.StatusForbidden, fmt.Errorf("navigation blocked by IDPI: %s%s", domainResult.Reason, idpiAllowlistHint(url)))
 		return navTargets{}, false
 	}
 	if domainResult.Threat {
@@ -377,11 +399,19 @@ func (h *Handlers) executeNavigate(w http.ResponseWriter, r *http.Request, req n
 	blockPatterns := navigateBlockPatterns(req, effectiveCfg)
 
 	newTabOpts := func() navigateBrowserOptions {
+		// A brand-new tab that can't load within the ceiling is far more often a
+		// wedged/out-of-memory renderer than a genuinely slow page, so cap the
+		// default new-tab budget to fail fast instead of hanging the full navigate
+		// timeout (~60s). An explicit --timeout still wins.
+		newTabTimeout := navTimeout
+		if req.Timeout <= 0 && newTabTimeout > newTabNavCeiling {
+			newTabTimeout = newTabNavCeiling
+		}
 		return navigateBrowserOptions{
 			URL:            req.URL,
 			WaitFor:        req.WaitFor,
 			WaitSelector:   req.WaitSelector,
-			NavTimeout:     navTimeout,
+			NavTimeout:     newTabTimeout,
 			TitleWait:      titleWait,
 			Target:         targets.target,
 			TrustedCIDRs:   targets.trustedCIDRs,
@@ -487,6 +517,12 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 				return
 			}
 		}
+		if ex.isNewTab && errors.Is(navErr, context.DeadlineExceeded) {
+			httpx.Error(w, http.StatusServiceUnavailable, fmt.Errorf(
+				"new tab did not load in time — the browser may be out of memory or overloaded; "+
+					"close tabs or restart the instance with `pinchtab server restart`"))
+			return
+		}
 		navigateErrorWithHint(w, classifyNavigateError(navErr), navErr, ex.url)
 		return
 	}
@@ -586,6 +622,11 @@ type navigateBrowserOptions struct {
 type staticFirstNavigator interface {
 	StaticFirstNavigate() bool
 }
+
+// newTabNavCeiling caps the default time a new-tab navigation will wait before
+// failing, so an out-of-memory / wedged renderer surfaces quickly instead of
+// hanging the full NavigateTimeout. Explicit per-request timeouts override it.
+const newTabNavCeiling = 30 * time.Second
 
 func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request, opts navigateBrowserOptions) {
 	// Create a blank tab first so the requested URL becomes the first

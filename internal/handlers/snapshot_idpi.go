@@ -44,7 +44,7 @@ func (h *Handlers) scanSnapshotIDPI(w http.ResponseWriter, flat []bridge.A11yNod
 	idpi := h.IDPIGuard.ScanContent(sb.String())
 	if idpi.Blocked {
 		httpx.Error(w, http.StatusForbidden,
-			fmt.Errorf("snapshot blocked by IDPI scanner: %s", idpi.Reason))
+			fmt.Errorf("snapshot blocked by IDPI scanner: %s%s", idpi.Reason, idpiScannerHint()))
 		out.Blocked = true
 		return out
 	}

@@ -190,6 +190,8 @@ PinchTab's primary tested operator workflow is local macOS and Linux.
 
 Windows binaries are published, but Windows support is currently limited and best-effort because the project does not have the same level of automated and manual coverage there. On Windows, prefer running `pinchtab server` or `pinchtab bridge` directly instead of relying on the daemon workflow.
 
+On **macOS**, prefer a dedicated automation browser (Google Chrome for Testing or Chromium) over your daily Google Chrome. Driving your primary Chrome headless can prevent it from opening a normal window while PinchTab is running. PinchTab now prefers a dedicated browser automatically, and `pinchtab doctor browsers` warns if automation would fall back to your primary Chrome — install Chrome for Testing or set `browser.binary` to a separate build. See [docs/reference/config.md](docs/reference/config.md).
+
 ### Shell Completion
 
 Generate and install shell completions after `pinchtab` is on your `PATH`:

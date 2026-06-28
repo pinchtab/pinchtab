@@ -23,8 +23,16 @@ func HandleConfigShow(cfg *config.RuntimeConfig) {
 	fmt.Printf("  Cookies:        %v\n", cfg.AllowCookies)
 	fmt.Printf("  Upload:         %v\n", cfg.AllowUpload)
 	fmt.Printf("  Trust Loopback Proxy: %v\n", cfg.TrustLoopbackProxy)
+	fmt.Printf("  IDPI:           %v\n", cfg.IDPI.Enabled)
+	fmt.Printf("  Allowed Domains: %v\n", cfg.AllowedDomains)
 	fmt.Println()
 	fmt.Println(styleStdout(headingStyle, "Browser / Instance Defaults"))
+	fmt.Printf("  Provider:       %s\n", cfg.DefaultBrowser)
+	binary := cfg.BrowserBinary
+	if binary == "" {
+		binary = "(auto-discovered)"
+	}
+	fmt.Printf("  Binary:         %s\n", binary)
 	fmt.Printf("  Headless:       %v\n", cfg.Headless)
 	fmt.Printf("  No Restore:     %v\n", cfg.NoRestore)
 	fmt.Printf("  Profile Dir:    %s\n", cfg.ProfileDir)

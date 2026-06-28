@@ -67,9 +67,9 @@ That default is a convenience for trusted automation, not a sandbox. If you need
 ## CLI Usage
 
 ```bash
-# Create a new session (prints token to stdout with --print-token)
-pinchtab session create --agent-id agent-1 --print-token
-export PINCHTAB_SESSION=$(pinchtab session create --agent-id agent-1 --print-token)
+# Create a new session (prints the session token to stdout; use --json for a full JSON object)
+pinchtab session create --agent-id agent-1
+export PINCHTAB_SESSION=$(pinchtab session create --agent-id agent-1)
 
 # CLI automatically uses session auth when PINCHTAB_SESSION is set
 pinchtab snap

@@ -387,6 +387,17 @@ When the selected browser is `cloak`, `browser.binary` (or the target's
 `binary`) must point at the local CloakBrowser Chromium executable. PinchTab
 does not download, bundle, or redistribute the CloakBrowser binary.
 
+On **macOS**, prefer a dedicated automation browser over your daily Google
+Chrome. Launching `/Applications/Google Chrome.app` headless makes macOS treat
+Chrome as already running, so opening your normal Chrome from the Dock just
+activates the windowless automation process and no window appears (issue #583).
+PinchTab's discovery now prefers Google Chrome for Testing, Chromium, then Chrome
+Canary, and only falls back to your primary Chrome as a last resort. If only your
+daily Chrome is installed, install [Google Chrome for
+Testing](https://developer.chrome.com/blog/chrome-for-testing) or set
+`browser.binary` to a separate Chrome/Chromium build. `pinchtab doctor browsers`
+warns when automation would use your primary Chrome.
+
 `browser.cloak` maps supported CloakBrowser fingerprint settings to native launch
 flags:
 

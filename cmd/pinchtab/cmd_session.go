@@ -24,7 +24,7 @@ func init() {
 			sessionToken := os.Getenv("PINCHTAB_SESSION")
 			if sessionToken == "" {
 				fmt.Fprintln(os.Stderr, "Error: no session set")
-				output.Hint("create one: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id> --print-token)")
+				output.Hint("create one: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id>)")
 				os.Exit(1)
 			}
 			runCLI(func(rt cliRuntime) {
@@ -58,7 +58,10 @@ func init() {
 			if label != "" {
 				body["label"] = label
 			}
-			runCLI(func(rt cliRuntime) {
+			// Auto-start the control plane first: the documented "create a session
+			// before any browser command" order otherwise fails cold on a fresh
+			// machine (only browser commands start the server).
+			runCLIEnsuringServerNoBrowser("session create", func(rt cliRuntime) {
 				if jsonOutput {
 					apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions", body)
 					return
