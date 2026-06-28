@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -13,6 +14,18 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
+)
+
+const (
+	// tabCreateTimeout bounds the CDP target creation for a new tab. Creating a
+	// target is near-instant on a healthy browser, so a long stall means the
+	// browser is unhealthy (e.g. resource exhaustion) — fail fast instead of
+	// waiting tens of seconds.
+	tabCreateTimeout = 10 * time.Second
+	// tabCreateNavTimeout bounds the initial load of a freshly created tab. Kept
+	// well below the full navigate timeout so a wedged renderer (e.g. after an
+	// out-of-memory event) surfaces quickly rather than hanging ~60s.
+	tabCreateNavTimeout = 20 * time.Second
 )
 
 type TabSetupFunc func(ctx context.Context, tabID string)
@@ -150,7 +163,7 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 
 	// target.CreateTarget works for both local and remote (CDP_URL) allocators.
 	var targetID target.ID
-	createCtx, createCancel := context.WithTimeout(tm.browserCtx, 30*time.Second)
+	createCtx, createCancel := context.WithTimeout(tm.browserCtx, tabCreateTimeout)
 	if err := chromedp.Run(createCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
@@ -159,6 +172,9 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		}),
 	); err != nil {
 		createCancel()
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", nil, nil, fmt.Errorf("create tab: browser did not open a new tab within %s — it may be out of memory or overloaded (close tabs or restart the instance)", tabCreateTimeout)
+		}
 		return "", nil, nil, fmt.Errorf("create target: %w", err)
 	}
 	createCancel()
@@ -186,12 +202,15 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	}
 
 	if url != "" && url != "about:blank" {
-		navCtx, navCancel := context.WithTimeout(ctx, 30*time.Second)
+		navCtx, navCancel := context.WithTimeout(ctx, tabCreateNavTimeout)
 		if err := chromedp.Run(navCtx, chromedp.Navigate(url)); err != nil {
 			navCancel()
 			cancel()
 			if execCtx, execErr := browserExecutorContext(tm.browserCtx); execErr == nil {
 				_ = target.CloseTarget(targetID).Do(execCtx)
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return "", nil, nil, fmt.Errorf("navigate new tab: page did not load within %s — the browser may be out of memory or overloaded (close tabs or restart the instance)", tabCreateNavTimeout)
 			}
 			return "", nil, nil, fmt.Errorf("navigate: %w", err)
 		}

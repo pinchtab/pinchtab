@@ -399,11 +399,19 @@ func (h *Handlers) executeNavigate(w http.ResponseWriter, r *http.Request, req n
 	blockPatterns := navigateBlockPatterns(req, effectiveCfg)
 
 	newTabOpts := func() navigateBrowserOptions {
+		// A brand-new tab that can't load within the ceiling is far more often a
+		// wedged/out-of-memory renderer than a genuinely slow page, so cap the
+		// default new-tab budget to fail fast instead of hanging the full navigate
+		// timeout (~60s). An explicit --timeout still wins.
+		newTabTimeout := navTimeout
+		if req.Timeout <= 0 && newTabTimeout > newTabNavCeiling {
+			newTabTimeout = newTabNavCeiling
+		}
 		return navigateBrowserOptions{
 			URL:            req.URL,
 			WaitFor:        req.WaitFor,
 			WaitSelector:   req.WaitSelector,
-			NavTimeout:     navTimeout,
+			NavTimeout:     newTabTimeout,
 			TitleWait:      titleWait,
 			Target:         targets.target,
 			TrustedCIDRs:   targets.trustedCIDRs,
@@ -509,6 +517,12 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 				return
 			}
 		}
+		if ex.isNewTab && errors.Is(navErr, context.DeadlineExceeded) {
+			httpx.Error(w, http.StatusServiceUnavailable, fmt.Errorf(
+				"new tab did not load in time — the browser may be out of memory or overloaded; "+
+					"close tabs or restart the instance with `pinchtab server restart`"))
+			return
+		}
 		navigateErrorWithHint(w, classifyNavigateError(navErr), navErr, ex.url)
 		return
 	}
@@ -608,6 +622,11 @@ type navigateBrowserOptions struct {
 type staticFirstNavigator interface {
 	StaticFirstNavigate() bool
 }
+
+// newTabNavCeiling caps the default time a new-tab navigation will wait before
+// failing, so an out-of-memory / wedged renderer surfaces quickly instead of
+// hanging the full NavigateTimeout. Explicit per-request timeouts override it.
+const newTabNavCeiling = 30 * time.Second
 
 func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request, opts navigateBrowserOptions) {
 	// Create a blank tab first so the requested URL becomes the first
