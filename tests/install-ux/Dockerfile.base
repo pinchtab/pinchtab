@@ -1,0 +1,5 @@
+# No-browser base for the install-UX personas that start on a fresh machine with
+# no browser installed (S-B, S-D). curl + ca-certificates only.
+FROM debian:stable-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
