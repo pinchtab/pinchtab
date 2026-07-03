@@ -139,3 +139,21 @@ describe('MCP wrapper integration', () => {
     assert.ok(response.result?.serverInfo, 'expected serverInfo in response');
   });
 });
+
+describe('readPackageVersion', () => {
+  test('finds the package root version from a dist/src-style compiled directory', () => {
+    const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pinchtab-pkg-layout-'));
+    try {
+      const compiledDir = path.join(packageRoot, 'dist', 'src');
+      fs.mkdirSync(compiledDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageRoot, 'package.json'),
+        JSON.stringify({ name: 'pinchtab', version: '0.14.0-test' })
+      );
+
+      assert.strictEqual(readPackageVersion(compiledDir), '0.14.0-test');
+    } finally {
+      fs.rmSync(packageRoot, { recursive: true, force: true });
+    }
+  });
+});

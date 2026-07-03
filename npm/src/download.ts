@@ -3,15 +3,13 @@ import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
 import * as crypto from 'crypto';
-import { detectPlatform, getBinaryName, getBinaryPath } from './platform';
+import { detectPlatform, getBinaryName, getBinaryPath, readPackageVersion } from './platform';
 
 const GITHUB_REPO = 'pinchtab/pinchtab';
 
-// Read version from package.json at build time
+// Resolve the published package version even when compiled code lives under dist/src.
 function getVersion(): string {
-  const pkgPath = path.join(__dirname, '..', 'package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  return pkg.version;
+  return readPackageVersion(__dirname);
 }
 
 // NOTE: HTTPS_PROXY / HTTP_PROXY are NOT honored — downloads go direct. A prior
