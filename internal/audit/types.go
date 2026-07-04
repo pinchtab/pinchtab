@@ -84,20 +84,21 @@ type InteractiveElement struct {
 }
 
 // BrowserTimingMetrics holds browser-level performance timings for a page,
-// in milliseconds unless noted otherwise.
+// in milliseconds unless noted otherwise. JSON field names match the
+// GET /timing endpoint.
 type BrowserTimingMetrics struct {
 	// TimeToFirstByte is the navigation time-to-first-byte.
-	TimeToFirstByte float64 `json:"timeToFirstByte,omitempty"`
+	TimeToFirstByte float64 `json:"ttfbMs,omitempty"`
 	// DOMContentLoaded is the DOMContentLoaded event time.
-	DOMContentLoaded float64 `json:"domContentLoaded,omitempty"`
+	DOMContentLoaded float64 `json:"domContentLoadedMs,omitempty"`
 	// Load is the load event time.
-	Load float64 `json:"load,omitempty"`
+	Load float64 `json:"loadMs,omitempty"`
 	// FirstContentfulPaint is the FCP Core Web Vital.
-	FirstContentfulPaint float64 `json:"firstContentfulPaint,omitempty"`
+	FirstContentfulPaint float64 `json:"fcpMs,omitempty"`
 	// LargestContentfulPaint is the LCP Core Web Vital.
-	LargestContentfulPaint float64 `json:"largestContentfulPaint,omitempty"`
+	LargestContentfulPaint float64 `json:"lcpMs,omitempty"`
 	// CumulativeLayoutShift is the CLS Core Web Vital (unitless score).
-	CumulativeLayoutShift float64 `json:"cumulativeLayoutShift,omitempty"`
+	CumulativeLayoutShift float64 `json:"cls,omitempty"`
 }
 
 // VisualDiffResult is the outcome of comparing a page screenshot against a

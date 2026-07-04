@@ -36,6 +36,15 @@ const TimingScript = `(() => {
   const whenLoaded = document.readyState === 'complete'
     ? Promise.resolve()
     : new Promise((resolve) => window.addEventListener('load', resolve, { once: true }));
+  const whenLoadTimed = () => new Promise((resolve) => {
+    const started = performance.now();
+    const check = () => {
+      const nav = performance.getEntriesByType('navigation')[0];
+      if ((nav && nav.loadEventEnd > 0) || performance.now() - started > 2000) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
   const whenPainted = () => new Promise((resolve) => {
     try {
       const po = new PerformanceObserver(() => { po.disconnect(); resolve(); });
@@ -52,6 +61,7 @@ const TimingScript = `(() => {
     } catch (err) { resolve(entries); }
   });
   return whenLoaded
+    .then(whenLoadTimed)
     .then(whenPainted)
     .then(() => new Promise((resolve) => setTimeout(resolve, 60)))
     .then(() => Promise.all([collect('largest-contentful-paint'), collect('layout-shift')]))
