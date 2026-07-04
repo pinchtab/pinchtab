@@ -25,7 +25,7 @@ func browserRootCommands() []*cobra.Command {
 		downloadCmd, uploadCmd, findCmd, selectCmd, checkCmd, uncheckCmd, networkCmd, waitCmd,
 		keyboardCmd, keydownCmd, keyupCmd, scrollintoviewCmd, dialogCmd, consoleCmd, errorsCmd,
 		clipboardCmd, cacheCmd, cookiesCmd, setCmd, storageCmd, stateCmd, closeCmd, handoffCmd,
-		resumeCmd, handoffStatusCmd, recordCmd,
+		resumeCmd, handoffStatusCmd, recordCmd, auditCmd,
 	}
 }
 
@@ -354,6 +354,14 @@ func configureBrowserFlags() {
 	consoleCmd.Flags().String("limit", "", "Maximum entries to return")
 	errorsCmd.Flags().Bool("clear", false, "Clear error logs")
 	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
+
+	auditCmd.Flags().Bool("sitemap", false, "Treat the URL as a sitemap.xml and audit the discovered pages")
+	auditCmd.Flags().Int("sample-size", 0, "Cap the number of audited pages (0 = no cap)")
+	auditCmd.Flags().Bool("screenshot", true, "Capture page screenshots")
+	auditCmd.Flags().Bool("network-monitor", true, "Collect network requests and broken assets")
+	auditCmd.Flags().String("output-dir", "", "Write report.json and screenshots/ to this directory")
+	auditCmd.Flags().Int("concurrency", 0, "Pages audited in parallel (default 2, max 8)")
+	auditCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
 
 	addTabFlag(consoleCmd, errorsCmd)
 }

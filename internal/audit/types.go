@@ -162,6 +162,11 @@ type PageResult struct {
 	Title string `json:"title,omitempty"`
 	// StatusCode is the HTTP status of the page navigation, when known.
 	StatusCode int `json:"statusCode,omitempty"`
+	// Error describes a navigation or collection failure; empty on success.
+	Error string `json:"error,omitempty"`
+	// Screenshot is the base64-encoded PNG when captured inline; consumers
+	// writing artifacts move it to Browser.ScreenshotPath.
+	Screenshot string `json:"screenshot,omitempty"`
 	// Seaportal holds SeaPortal per-page summary fields passed through
 	// verbatim when the input was a SeaPortal results file.
 	Seaportal map[string]any `json:"seaportal,omitempty"`

@@ -11,26 +11,27 @@ import (
 	"github.com/pinchtab/pinchtab/internal/audit"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 )
 
 const auditCollectTimeout = 60 * time.Second
 
-type auditPageRequest struct {
-	URL     string `json:"url"`
-	Options *struct {
-		Screenshot *bool `json:"screenshot"`
-		Network    *bool `json:"network"`
-		Console    *bool `json:"console"`
-		A11y       *bool `json:"a11y"`
-		Timing     *bool `json:"timing"`
-		Elements   *bool `json:"elements"`
-	} `json:"options"`
+// auditPageOptionsBody is the JSON options shape shared by POST /audit/page
+// and POST /audit. Unset fields keep their defaults (all collectors on).
+type auditPageOptionsBody struct {
+	Screenshot *bool `json:"screenshot"`
+	Network    *bool `json:"network"`
+	Console    *bool `json:"console"`
+	A11y       *bool `json:"a11y"`
+	Timing     *bool `json:"timing"`
+	Elements   *bool `json:"elements"`
 }
 
-func (req auditPageRequest) pageOptions() audit.PageOptions {
+func (o *auditPageOptionsBody) pageOptions() audit.PageOptions {
 	opts := audit.DefaultPageOptions()
-	if req.Options == nil {
+	if o == nil {
 		return opts
 	}
 	apply := func(dst *bool, src *bool) {
@@ -38,13 +39,18 @@ func (req auditPageRequest) pageOptions() audit.PageOptions {
 			*dst = *src
 		}
 	}
-	apply(&opts.Screenshot, req.Options.Screenshot)
-	apply(&opts.Network, req.Options.Network)
-	apply(&opts.Console, req.Options.Console)
-	apply(&opts.A11y, req.Options.A11y)
-	apply(&opts.Timing, req.Options.Timing)
-	apply(&opts.Elements, req.Options.Elements)
+	apply(&opts.Screenshot, o.Screenshot)
+	apply(&opts.Network, o.Network)
+	apply(&opts.Console, o.Console)
+	apply(&opts.A11y, o.A11y)
+	apply(&opts.Timing, o.Timing)
+	apply(&opts.Elements, o.Elements)
 	return opts
+}
+
+type auditPageRequest struct {
+	URL     string                `json:"url"`
+	Options *auditPageOptionsBody `json:"options"`
 }
 
 // @Endpoint POST /audit/page
@@ -72,14 +78,43 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	httpx.JSON(w, 200, h.auditPage(r.Context(), req.URL, req.Options.pageOptions(), routing.EffectiveCfg, targets))
+}
+
+// validateAuditTarget is the non-writing sibling of validateNavigateTargets
+// for batch audits: the same URL/IDPI/SSRF validation, but failures come back
+// as errors so the caller can turn them into per-page report entries.
+func (h *Handlers) validateAuditTarget(url string, cfg *config.RuntimeConfig) (navTargets, error) {
+	allowFile := cfg != nil && cfg.AllowFileScheme
+	if err := validateNavigateURL(url, allowFile); err != nil {
+		return navTargets{}, err
+	}
+	domainResult := h.IDPIGuard.CheckDomain(url)
+	if domainResult.Blocked {
+		return navTargets{}, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason)
+	}
+	if allowFile && navguard.IsFileURL(url) {
+		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg)}, nil
+	}
+	target, err := validateNavigateTarget(url, h.IDPIGuard.DomainAllowed(url), parseCIDRs(cfg.TrustedResolveCIDRs))
+	if err != nil {
+		return navTargets{}, err
+	}
+	return navTargets{target: target, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg)}, nil
+}
+
+// auditPage navigates a fresh tab to url and assembles the single-page
+// audit. Per-page failures are data, not crashes: navigation errors come
+// back as a structured entry with the error field set. The tab is always
+// closed before returning.
+func (h *Handlers) auditPage(clientCtx context.Context, url string, opts audit.PageOptions, cfg *config.RuntimeConfig, targets navTargets) audit.PageAudit {
 	tabID, tabCtx, _, err := h.Bridge.CreateTab("")
 	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("new tab: %w", err))
-		return
+		return audit.NewPageAuditError(url, fmt.Errorf("new tab: %w", err))
 	}
 	defer func() { _ = h.Bridge.CloseTab(tabID) }()
 
-	navTimeout := routing.EffectiveCfg.NavigateTimeout
+	navTimeout := cfg.NavigateTimeout
 	if navTimeout <= 0 {
 		navTimeout = 30 * time.Second
 	}
@@ -88,28 +123,23 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 
 	navGuard, err := installNavigateRuntimeGuardWithBridge(h.Bridge, navCtx, navCancel, targets.target, targets.trustedCIDRs)
 	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
-		return
+		return audit.NewPageAuditError(url, fmt.Errorf("navigation guard: %w", err))
 	}
 
-	// Per-page failures are data, not crashes: navigation errors come back
-	// as a structured entry with the error field set, never a 5xx.
-	if _, navErr := h.Bridge.Navigate(navCtx, req.URL, bridge.NavigateParams{MaxRedirects: routing.EffectiveCfg.MaxRedirects}); navErr != nil {
+	if _, navErr := h.Bridge.Navigate(navCtx, url, bridge.NavigateParams{MaxRedirects: cfg.MaxRedirects}); navErr != nil {
 		if navGuard != nil {
 			if blockedErr := navGuard.blocked(); blockedErr != nil {
 				navErr = blockedErr
 			}
 		}
-		httpx.JSON(w, 200, audit.NewPageAuditError(req.URL, navErr))
-		return
+		return audit.NewPageAuditError(url, navErr)
 	}
 
 	// Chrome renders net-level failures (connection refused, DNS) as an
 	// error page without failing the navigation; detect it and report the
 	// underlying net error from the network capture as page data.
 	if cur, urlErr := h.Bridge.CurrentURL(navCtx); urlErr == nil && strings.HasPrefix(cur, "chrome-error://") {
-		httpx.JSON(w, 200, audit.NewPageAuditError(req.URL, h.documentNetError(tabID, req.URL)))
-		return
+		return audit.NewPageAuditError(url, h.documentNetError(tabID, url))
 	}
 
 	// Paint metrics only fire on visible pages.
@@ -117,13 +147,12 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 
 	cCtx, cCancel := context.WithTimeout(tabCtx, auditCollectTimeout)
 	defer cCancel()
-	go httpx.CancelOnClientDone(r.Context(), cCancel)
+	go httpx.CancelOnClientDone(clientCtx, cCancel)
 
 	// Let late subresources (async fetches, images) land before collecting.
 	_, _ = observe.WaitForQuietWindow(cCtx, 500*time.Millisecond, 5*time.Second)
 
-	pageAudit := audit.EnrichPage(req.URL, req.pageOptions(), h.auditCollectors(cCtx, tabID))
-	httpx.JSON(w, 200, pageAudit)
+	return audit.EnrichPage(url, opts, h.auditCollectors(cCtx, tabID))
 }
 
 // documentNetError recovers the document request's net error from the
