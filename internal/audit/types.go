@@ -170,6 +170,8 @@ type PageResult struct {
 	// Seaportal holds SeaPortal per-page summary fields passed through
 	// verbatim when the input was a SeaPortal results file.
 	Seaportal map[string]any `json:"seaportal,omitempty"`
+	// SecurityFindings are the page-level security-surface findings.
+	SecurityFindings []SecurityFinding `json:"securityFindings,omitempty"`
 	// Browser is the browser-enriched data for the page.
 	Browser BrowserPageData `json:"browser"`
 }

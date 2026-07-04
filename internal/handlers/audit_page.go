@@ -27,6 +27,7 @@ type auditPageOptionsBody struct {
 	A11y       *bool `json:"a11y"`
 	Timing     *bool `json:"timing"`
 	Elements   *bool `json:"elements"`
+	Security   *bool `json:"security"`
 }
 
 func (o *auditPageOptionsBody) pageOptions() audit.PageOptions {
@@ -45,6 +46,7 @@ func (o *auditPageOptionsBody) pageOptions() audit.PageOptions {
 	apply(&opts.A11y, o.A11y)
 	apply(&opts.Timing, o.Timing)
 	apply(&opts.Elements, o.Elements)
+	apply(&opts.Security, o.Security)
 	return opts
 }
 
@@ -210,6 +212,11 @@ func (h *Handlers) auditCollectors(tCtx context.Context, tabID string) audit.Col
 			return observe.CollectTiming(func(expression string, result any) error {
 				return h.Bridge.Evaluate(tCtx, expression, result, bridge.EvalOpts{AwaitPromise: true})
 			})
+		},
+		Forms: func() ([]audit.FormFact, error) {
+			var forms []audit.FormFact
+			err := h.Bridge.Evaluate(tCtx, audit.FormFactsScript, &forms, bridge.EvalOpts{})
+			return forms, err
 		},
 	}
 }

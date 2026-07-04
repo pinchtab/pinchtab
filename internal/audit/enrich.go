@@ -16,11 +16,12 @@ type PageOptions struct {
 	A11y       bool `json:"a11y"`
 	Timing     bool `json:"timing"`
 	Elements   bool `json:"elements"`
+	Security   bool `json:"security"`
 }
 
 // DefaultPageOptions enables every collector.
 func DefaultPageOptions() PageOptions {
-	return PageOptions{Screenshot: true, Network: true, Console: true, A11y: true, Timing: true, Elements: true}
+	return PageOptions{Screenshot: true, Network: true, Console: true, A11y: true, Timing: true, Elements: true, Security: true}
 }
 
 // Collectors are the browser-backed data sources EnrichPage composes. Hooks
@@ -33,6 +34,7 @@ type Collectors struct {
 	Snapshot   func() ([]observe.A11yNode, error)
 	PageFacts  func() (PageFacts, error)
 	Timing     func() (*observe.TimingMetrics, error)
+	Forms      func() ([]FormFact, error)
 }
 
 // PageAudit is the audit result for one page. Collector failures are data,
@@ -48,6 +50,8 @@ type PageAudit struct {
 	Screenshot string `json:"screenshot,omitempty"`
 	// A11yFindings are the accessibility rule violations behind AccessibilityScore.
 	A11yFindings []A11yFinding `json:"a11yFindings,omitempty"`
+	// SecurityFindings are the page's rule-based security-surface findings.
+	SecurityFindings []SecurityFinding `json:"securityFindings,omitempty"`
 	BrowserPageData
 }
 
@@ -123,6 +127,18 @@ func EnrichPage(url string, opts PageOptions, c Collectors) PageAudit {
 		} else {
 			pa.Screenshot = base64.StdEncoding.EncodeToString(png)
 		}
+	}
+
+	if opts.Security {
+		var forms []FormFact
+		if c.Forms != nil {
+			var err error
+			if forms, err = c.Forms(); err != nil {
+				fail("security", err)
+				forms = nil
+			}
+		}
+		pa.SecurityFindings = EvaluateSecurity(url, pa.Title, pa.NetworkRequests, forms)
 	}
 
 	pa.Error = strings.Join(errs, "; ")

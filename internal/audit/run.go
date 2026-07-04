@@ -168,17 +168,21 @@ func RunAudit(input AuditInput, seaportalPages []SeaportalPage, opts RunOptions,
 	}
 	report.Pages = results
 	report.SummaryScore = summaryScore(plans, results)
+	for _, pr := range results {
+		report.SecurityFindings = append(report.SecurityFindings, pr.SecurityFindings...)
+	}
 	return report, nil
 }
 
 // ToPageResult converts a single-page audit into the report page shape.
 func (pa PageAudit) ToPageResult() PageResult {
 	return PageResult{
-		URL:        pa.URL,
-		Title:      pa.Title,
-		Error:      pa.Error,
-		Screenshot: pa.Screenshot,
-		Browser:    pa.BrowserPageData,
+		URL:              pa.URL,
+		Title:            pa.Title,
+		Error:            pa.Error,
+		Screenshot:       pa.Screenshot,
+		SecurityFindings: pa.SecurityFindings,
+		Browser:          pa.BrowserPageData,
 	}
 }
 
