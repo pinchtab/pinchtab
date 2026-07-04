@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- No intentional defects: renders document.cookie into #cookies so
+     cookie-injection e2e scenarios can assert what the page can read. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Page that renders document.cookie into the DOM.">
+  <link rel="icon" href="data:,">
+  <title>Cookie Echo — Audit Fixture Site</title>
+</head>
+<body>
+  <h1>Cookie echo</h1>
+  <p>The current cookies visible to this page are:</p>
+  <pre id="cookies"></pre>
+  <p><a href="index.html">Home</a></p>
+  <script>
+    document.getElementById('cookies').textContent = document.cookie;
+  </script>
+</body>
+</html>

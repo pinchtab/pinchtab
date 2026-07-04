@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Intentional defects: loading this page yields EXACTLY 3 asset 404s
+     (assets/missing.css, assets/missing.js, assets/missing.png) plus 1
+     failed fetch() to assets/missing.json (HTTP 404, for xhr/API-failure
+     detection). The data: favicon suppresses the implicit /favicon.ico
+     request so no other request on this page fails. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Page referencing exactly three missing assets and one missing fetch target.">
+  <link rel="icon" href="data:,">
+  <title>Broken Assets — Audit Fixture Site</title>
+  <link rel="stylesheet" href="assets/missing.css">
+  <script src="assets/missing.js"></script>
+</head>
+<body>
+  <h1>Broken assets</h1>
+  <p>This page references three assets that do not exist and fetches one missing JSON path.</p>
+  <img src="assets/missing.png" alt="intentionally missing image">
+  <a href="index.html">Home</a>
+  <script>
+    fetch('assets/missing.json')
+      .then((res) => { document.body.dataset.fetchStatus = String(res.status); })
+      .catch(() => { document.body.dataset.fetchStatus = 'error'; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Intentional defect: a login form with a password input whose action is
+     a plain http:// URL (insecure password post, for security-surface
+     detection). The action stays on the fixtures host so the site never
+     references an external domain; it is never actually submitted. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Login form posting a password over insecure http.">
+  <link rel="icon" href="data:,">
+  <title>Forms — Audit Fixture Site</title>
+</head>
+<body>
+  <h1>Forms</h1>
+  <p>This page has a login form that posts a password to an insecure http action.</p>
+  <form action="http://fixtures/audit-site/login" method="post">
+    <label for="user">Username</label>
+    <input id="user" name="user" type="text" autocomplete="username">
+    <label for="pass">Password</label>
+    <input id="pass" name="pass" type="password" autocomplete="current-password">
+    <button type="submit">Sign in</button>
+  </form>
+  <p><a href="index.html">Home</a></p>
+</body>
+</html>
