@@ -123,6 +123,7 @@ var coreEndpoints = []Endpoint{
 
 	{"GET", "/metrics", "Runtime metrics", CapNone, true},
 	{"GET", "/timing", "Page timing and Core Web Vitals", CapNone, true},
+	{"GET", "/a11y/audit", "Accessibility findings and score", CapNone, true},
 
 	{"GET", "/network", "Network log", CapNone, true},
 	{"GET", "/network/stream", "Network SSE stream", CapNone, true},
