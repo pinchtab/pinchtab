@@ -30,6 +30,10 @@ var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 	"formatCLS":       formatCLS,
 	"sortedKeys":      sortedKeys,
 	"pageErrors":      pageConsoleErrors,
+	// Screenshot sources are our own artifact paths or data: URIs built by
+	// BuildPDFHTML, so they are trusted; html/template would otherwise
+	// reject data: URLs.
+	"safeURL": func(s string) template.URL { return template.URL(s) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -91,7 +95,7 @@ var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 {{end}}</ol>{{end}}
 
 {{if .Screenshots}}<h2>Screenshots</h2>
-{{range .R.Pages}}{{if .Browser.ScreenshotPath}}<h3>{{pageLabel .}}</h3><img class="screenshot" src="{{.Browser.ScreenshotPath}}" alt="Screenshot of {{pageLabel .}}">{{end}}{{end}}{{end}}
+{{range .R.Pages}}{{if .Browser.ScreenshotPath}}<h3>{{pageLabel .}}</h3><img class="screenshot" src="{{safeURL .Browser.ScreenshotPath}}" alt="Screenshot of {{pageLabel .}}">{{end}}{{end}}{{end}}
 </body>
 </html>
 `))

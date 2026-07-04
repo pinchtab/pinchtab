@@ -4,7 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,17 +187,28 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 	format := renderFormat(cmd)
 
 	if dir, _ := cmd.Flags().GetString("output-dir"); dir != "" {
+		var typedForPDF audit.AuditReport
+		if format == auditreport.FormatPDF {
+			// Captured before artifact writing strips the inline screenshots.
+			typedForPDF = typedAuditReport(report)
+		}
 		if err := writeAuditArtifacts(dir, report); err != nil {
 			fmt.Fprintf(os.Stderr, "write artifacts: %v\n", err)
 			os.Exit(1)
 		}
-		if format != auditreport.FormatJSON {
+		switch {
+		case format == auditreport.FormatPDF:
+			exportAuditPDF(client, base, token, dir, typedForPDF)
+		case format != auditreport.FormatJSON:
 			if err := renderAuditReportFile(dir, report, format); err != nil {
 				fmt.Fprintf(os.Stderr, "render report: %v\n", err)
 				os.Exit(1)
 			}
 		}
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
+	} else if format == auditreport.FormatPDF {
+		fmt.Fprintln(os.Stderr, "--format pdf requires --output-dir")
+		os.Exit(1)
 	} else if format != auditreport.FormatJSON {
 		rendered, err := auditreport.Render(typedAuditReport(report), format)
 		if err != nil {
@@ -230,6 +243,72 @@ func typedAuditReport(report map[string]any) audit.AuditReport {
 	var typed audit.AuditReport
 	_ = json.Unmarshal(data, &typed)
 	return typed
+}
+
+// exportAuditPDF prints the report to <dir>/report.pdf through the server.
+// Graceful-degradation contract: report.json is already on disk by the time
+// this runs; a print failure surfaces as a warning and a non-zero exit
+// (pdf being the sole requested format).
+func exportAuditPDF(client *http.Client, base, token, dir string, report audit.AuditReport) {
+	pdf, err := auditreport.ExportPDF(report, serverPDFPrinter(client, base, token))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: PDF export failed: %v (report.json was still written)\n", err)
+		os.Exit(1)
+	}
+	path := filepath.Join(dir, "report.pdf")
+	if err := os.WriteFile(path, pdf, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: write %s: %v (report.json was still written)\n", path, err)
+		os.Exit(1)
+	}
+}
+
+// serverPDFPrinter prints self-contained HTML through the running server:
+// a fresh tab, content injected via the evaluate capability, exported with
+// GET /pdf.
+func serverPDFPrinter(client *http.Client, base, token string) auditreport.PDFPrinter {
+	return func(html []byte) ([]byte, error) {
+		status, _, tab := apiclient.DoPostQuietWithStatus(client, base, token, "/tab", map[string]any{"action": "new"})
+		tabID, _ := tab["tabId"].(string)
+		if status >= 400 || tabID == "" {
+			return nil, fmt.Errorf("create print tab: HTTP %d", status)
+		}
+		defer func() {
+			_, _, _ = apiclient.DoPostQuietWithStatus(client, base, token, "/close", map[string]any{"tabId": tabID})
+		}()
+
+		doc, _ := json.Marshal(string(html))
+		status, body, _ := apiclient.DoPostQuietWithStatus(client, base, token, "/evaluate", map[string]any{
+			"tabId":      tabID,
+			"expression": fmt.Sprintf("document.open(); document.write(%s); document.close(); true", doc),
+		})
+		if status >= 400 {
+			return nil, fmt.Errorf("inject report HTML (requires the evaluate capability): HTTP %d: %s", status, strings.TrimSpace(string(body)))
+		}
+		return fetchRawPDF(client, base, token, tabID)
+	}
+}
+
+func fetchRawPDF(client *http.Client, base, token, tabID string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, base+"/pdf?raw=true&tabId="+url.QueryEscape(tabID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("print pdf: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read pdf: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("print pdf: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	return data, nil
 }
 
 // renderAuditReportFile writes report.md / report.html next to report.json.

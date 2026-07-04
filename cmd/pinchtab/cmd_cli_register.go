@@ -364,7 +364,7 @@ func configureBrowserFlags() {
 	auditCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
 	auditCmd.Flags().String("seaportal-report", "", "Audit pages from a SeaPortal results JSON file (array of Result objects)")
 	auditCmd.Flags().Bool("enrich-all", false, "Browser-enrich every seaportal page, ignoring browserRecommended routing")
-	auditCmd.Flags().String("format", "json", "Report format: json, md, or html (md/html written next to report.json, or printed without --output-dir)")
+	auditCmd.Flags().String("format", "json", "Report format: json, md, html, or pdf (pdf needs --output-dir and the evaluate capability; on print failure report.json is still written and the exit code is non-zero)")
 	auditCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
 	auditCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
 	auditCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
