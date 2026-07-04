@@ -25,7 +25,7 @@ func browserRootCommands() []*cobra.Command {
 		downloadCmd, uploadCmd, findCmd, selectCmd, checkCmd, uncheckCmd, networkCmd, waitCmd,
 		keyboardCmd, keydownCmd, keyupCmd, scrollintoviewCmd, dialogCmd, consoleCmd, errorsCmd,
 		clipboardCmd, cacheCmd, cookiesCmd, setCmd, storageCmd, stateCmd, closeCmd, handoffCmd,
-		resumeCmd, handoffStatusCmd, recordCmd, auditCmd,
+		resumeCmd, handoffStatusCmd, recordCmd, auditCmd, compareCmd,
 	}
 }
 
@@ -364,6 +364,13 @@ func configureBrowserFlags() {
 	auditCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
 	auditCmd.Flags().String("seaportal-report", "", "Audit pages from a SeaPortal results JSON file (array of Result objects)")
 	auditCmd.Flags().Bool("enrich-all", false, "Browser-enrich every seaportal page, ignoring browserRecommended routing")
+
+	compareCmd.Flags().String("pages", "", "Comma-separated relative paths to compare (default: the base URLs)")
+	compareCmd.Flags().Bool("visual-diff", true, "Capture screenshots and compute visual diffs")
+	compareCmd.Flags().String("output-dir", "", "Write report.json and diffs/ to this directory")
+	compareCmd.Flags().Int("concurrency", 0, "Pages audited in parallel per side (default 2, max 8)")
+	compareCmd.Flags().Bool("json", false, "Print the comparison report JSON to stdout")
+	compareCmd.Flags().Bool("fail-on-diff", false, "Exit non-zero when any visual or data diff exists")
 
 	addTabFlag(consoleCmd, errorsCmd)
 }
