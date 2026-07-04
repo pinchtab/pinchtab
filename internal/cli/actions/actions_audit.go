@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/audit"
@@ -29,8 +30,118 @@ func mustBool(cmd *cobra.Command, name string) bool {
 	return v
 }
 
+// applyRunAuth resolves --profile routing and injects --cookie /
+// --cookies-file cookies before the run. Isolation approach: injected
+// cookies live in the shared browser jar, so the returned cleanup clears
+// the jar after the run (documented on the audit/compare help).
+func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, scopeURL string) (string, func()) {
+	if profile := mustString(cmd, "profile"); profile != "" {
+		base = resolveProfileBase(client, base, token, profile)
+	}
+	cookies := loadRunCookies(cmd)
+	if len(cookies) == 0 {
+		return base, func() {}
+	}
+	if scopeURL == "" {
+		fmt.Fprintln(os.Stderr, "cookie injection requires a URL target")
+		os.Exit(1)
+	}
+	setRunCookies(client, base, token, scopeURL, cookies)
+	return base, func() { clearRunCookies(client, base, token) }
+}
+
+func loadRunCookies(cmd *cobra.Command) []audit.Cookie {
+	flags, _ := cmd.Flags().GetStringArray("cookie")
+	var fileData []byte
+	if path := mustString(cmd, "cookies-file"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read cookies file: %v\n", err)
+			os.Exit(1)
+		}
+		fileData = data
+	}
+	cookies, err := audit.CollectCookies(flags, fileData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	return cookies
+}
+
+// setRunCookies injects cookies through POST /cookies, using a throwaway
+// blank tab for the required tab context so it works on a fresh browser.
+func setRunCookies(client *http.Client, base, token, url string, cookies []audit.Cookie) {
+	tab := apiclient.DoPostQuiet(client, base, token, "/tab", map[string]any{"action": "new"})
+	tabID, _ := tab["tabId"].(string)
+	body := map[string]any{"url": url, "cookies": cookies}
+	if tabID != "" {
+		body["tabId"] = tabID
+	}
+	apiclient.DoPostQuiet(client, base, token, "/cookies", body)
+	if tabID != "" {
+		apiclient.DoPostQuiet(client, base, token, "/close", map[string]any{"tabId": tabID})
+	}
+}
+
+// clearRunCookies clears the browser cookie jar, quietly and best-effort.
+func clearRunCookies(client *http.Client, base, token string) {
+	req, err := http.NewRequest(http.MethodDelete, base+"/cookies", nil)
+	if err != nil {
+		return
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if resp, err := client.Do(req); err == nil {
+		_ = resp.Body.Close()
+	}
+}
+
+// resolveProfileBase routes the run at the instance owning the named
+// profile: the orchestrator base for the default-routed instance, or the
+// instance's own URL otherwise.
+func resolveProfileBase(client *http.Client, base, token, profile string) string {
+	raw := apiclient.DoGetRaw(client, base, token, "/instances", nil)
+	var instances []struct {
+		ID          string `json:"id"`
+		ProfileName string `json:"profileName"`
+		Status      string `json:"status"`
+		URL         string `json:"url"`
+	}
+	if err := json.Unmarshal(raw, &instances); err != nil {
+		fmt.Fprintf(os.Stderr, "parse instances: %v\n", err)
+		os.Exit(1)
+	}
+	for _, inst := range instances {
+		if inst.ProfileName != profile || inst.Status != "running" {
+			continue
+		}
+		if inst.ID == defaultInstanceID(client, base, token) {
+			return base
+		}
+		return strings.TrimSuffix(inst.URL, "/")
+	}
+	fmt.Fprintf(os.Stderr, "no running instance for profile %q (start one: pinchtab instance start --profile %s)\n", profile, profile)
+	os.Exit(1)
+	return ""
+}
+
+func defaultInstanceID(client *http.Client, base, token string) string {
+	raw := apiclient.DoGetRaw(client, base, token, "/health", nil)
+	var health struct {
+		DefaultInstance struct {
+			ID string `json:"id"`
+		} `json:"defaultInstance"`
+	}
+	_ = json.Unmarshal(raw, &health)
+	return health.DefaultInstance.ID
+}
+
 // Audit runs a multi-page site audit via POST /audit and writes artifacts.
 func Audit(client *http.Client, base, token string, cmd *cobra.Command, target string) {
+	base, cleanupCookies := applyRunAuth(client, base, token, cmd, target)
+
 	body := map[string]any{}
 	switch {
 	case mustString(cmd, "seaportal-report") != "":
@@ -63,6 +174,7 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 
 	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
 	raw := apiclient.DoPostRaw(longClient, base, token, "/audit", body)
+	cleanupCookies()
 
 	var report map[string]any
 	if err := json.Unmarshal(raw, &report); err != nil {

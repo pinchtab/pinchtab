@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- No intentional defects: renders document.cookie into #cookies so
-     cookie-injection e2e scenarios can assert what the page can read. -->
+<!-- No intentional defects: renders document.cookie into #cookies and
+     logs it to the console so cookie-injection e2e scenarios can assert
+     what the page can read (audit reports capture console logs). -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -15,6 +16,7 @@
   <p><a href="index.html">Home</a></p>
   <script>
     document.getElementById('cookies').textContent = document.cookie;
+    console.log('cookies: ' + document.cookie);
   </script>
 </body>
 </html>

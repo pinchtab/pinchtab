@@ -21,6 +21,8 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 	visual := mustBool(cmd, "visual-diff")
 	concurrency, _ := cmd.Flags().GetInt("concurrency")
 
+	base, cleanupCookies := applyRunAuth(client, base, token, cmd, liveBase)
+
 	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
 	runSide := func(siteBase string) audit.AuditReport {
 		body := map[string]any{
@@ -41,6 +43,7 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 
 	liveReport := runSide(liveBase)
 	stagingReport := runSide(stagingBase)
+	cleanupCookies()
 
 	outcome, err := audit.ComparePages(liveBase, stagingBase, liveReport, stagingReport)
 	if err != nil {

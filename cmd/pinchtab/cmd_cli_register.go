@@ -365,6 +365,9 @@ func configureBrowserFlags() {
 	auditCmd.Flags().String("seaportal-report", "", "Audit pages from a SeaPortal results JSON file (array of Result objects)")
 	auditCmd.Flags().Bool("enrich-all", false, "Browser-enrich every seaportal page, ignoring browserRecommended routing")
 	auditCmd.Flags().String("format", "json", "Report format: json, md, or html (md/html written next to report.json, or printed without --output-dir)")
+	auditCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	auditCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	auditCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
 
 	compareCmd.Flags().String("pages", "", "Comma-separated relative paths to compare (default: the base URLs)")
 	compareCmd.Flags().Bool("visual-diff", true, "Capture screenshots and compute visual diffs")
@@ -373,6 +376,9 @@ func configureBrowserFlags() {
 	compareCmd.Flags().Bool("json", false, "Print the comparison report JSON to stdout")
 	compareCmd.Flags().Bool("fail-on-diff", false, "Exit non-zero when any visual or data diff exists")
 	compareCmd.Flags().String("format", "json", "Report format: json, md, or html")
+	compareCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	compareCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	compareCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
 
 	addTabFlag(consoleCmd, errorsCmd)
 }
