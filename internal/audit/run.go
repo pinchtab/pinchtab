@@ -18,8 +18,8 @@ const (
 
 // RunOptions configures a multi-page audit run.
 type RunOptions struct {
-	// SampleSize caps the number of audited pages, 0 = no cap. (Per-group
-	// sampling lands with page grouping; this is a plain truncation.)
+	// SampleSize caps how many pages each template group contributes
+	// (see SamplePages), 0 = no cap.
 	SampleSize int
 	// Concurrency is the number of pages audited in parallel, clamped to
 	// [1, MaxConcurrency].
@@ -102,10 +102,7 @@ func RunAudit(input AuditInput, opts RunOptions, discover SitemapFetcher, auditP
 		urls = discovered
 	}
 
-	plan := PlanURLs(urls)
-	if opts.SampleSize > 0 && len(plan) > opts.SampleSize {
-		plan = plan[:opts.SampleSize]
-	}
+	plan := SamplePages(PlanURLs(urls), opts.SampleSize, nil)
 	if len(plan) == 0 {
 		return AuditReport{}, errors.New("no URLs to audit")
 	}

@@ -176,7 +176,7 @@ func TestRunAuditSitemapMode(t *testing.T) {
 func TestRunAuditSampleSizeAndEmpty(t *testing.T) {
 	auditor, _, _ := fakeAuditor()
 	report, err := RunAudit(
-		AuditInput{URLs: []string{"http://x/1", "http://x/2", "http://x/3"}},
+		AuditInput{URLs: []string{"http://x/p1.html", "http://x/p2.html", "http://x/p3.html"}},
 		RunOptions{SampleSize: 2},
 		nil, auditor,
 	)
@@ -184,7 +184,7 @@ func TestRunAuditSampleSizeAndEmpty(t *testing.T) {
 		t.Fatalf("RunAudit: %v", err)
 	}
 	if len(report.Pages) != 2 {
-		t.Errorf("pages = %d, want 2 (sample size)", len(report.Pages))
+		t.Errorf("pages = %d, want 2 (template group sampled)", len(report.Pages))
 	}
 
 	if _, err := RunAudit(AuditInput{}, RunOptions{}, nil, auditor); err == nil {

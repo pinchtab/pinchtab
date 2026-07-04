@@ -356,7 +356,7 @@ func configureBrowserFlags() {
 	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
 
 	auditCmd.Flags().Bool("sitemap", false, "Treat the URL as a sitemap.xml and audit the discovered pages")
-	auditCmd.Flags().Int("sample-size", 0, "Cap the number of audited pages (0 = no cap)")
+	auditCmd.Flags().Int("sample-size", 0, "Pages audited per template group, e.g. /products/p1..pN (0 = all pages; deterministic picks)")
 	auditCmd.Flags().Bool("screenshot", true, "Capture page screenshots")
 	auditCmd.Flags().Bool("network-monitor", true, "Collect network requests and broken assets")
 	auditCmd.Flags().String("output-dir", "", "Write report.json and screenshots/ to this directory")
