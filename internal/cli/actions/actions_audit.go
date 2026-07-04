@@ -140,8 +140,29 @@ func defaultInstanceID(client *http.Client, base, token string) string {
 	return health.DefaultInstance.ID
 }
 
+// validateAuditFlags rejects invalid flag combinations pre-flight, before
+// any server work starts — a full audit must never run just to report a bad
+// invocation.
+func validateAuditFlags(cmd *cobra.Command) error {
+	format := renderFormat(cmd)
+	switch format {
+	case auditreport.FormatJSON, auditreport.FormatMarkdown, auditreport.FormatHTML, auditreport.FormatPDF:
+	default:
+		return fmt.Errorf("unsupported --format %q (json, md, html, or pdf)", format)
+	}
+	if format == auditreport.FormatPDF && mustString(cmd, "output-dir") == "" {
+		return fmt.Errorf("--format pdf requires --output-dir")
+	}
+	return nil
+}
+
 // Audit runs a multi-page site audit via POST /audit and writes artifacts.
 func Audit(client *http.Client, base, token string, cmd *cobra.Command, target string) {
+	if err := validateAuditFlags(cmd); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	base, cleanupCookies := applyRunAuth(client, base, token, cmd, target)
 
 	body := map[string]any{}
@@ -206,9 +227,6 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 			}
 		}
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
-	} else if format == auditreport.FormatPDF {
-		fmt.Fprintln(os.Stderr, "--format pdf requires --output-dir")
-		os.Exit(1)
 	} else if format != auditreport.FormatJSON {
 		rendered, err := auditreport.Render(typedAuditReport(report), format)
 		if err != nil {
