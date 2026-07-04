@@ -24,10 +24,12 @@ Filters:
   browser-parity       Alias for cloakbrowser
   cdp-attach           Run CDP attach smoke
   live-detection       Run advisory live detection smoke
+  npm-install          Package + install the npm wrapper in a clean container
 
 Defaults:
   ./dev smoke          Runs Docker smoke categories for supported providers:
-                       browser parity, CDP attach, and live detection
+                       browser parity, CDP attach, and live detection, plus the
+                       provider-independent npm install e2e
 
 Special cloakbrowser flags:
   --multi-target
@@ -60,7 +62,7 @@ append_unique() {
 
 is_named_smoke_filter() {
   case "$1" in
-    cloakbrowser|browser-parity|cdp-attach|live-detection)
+    cloakbrowser|browser-parity|cdp-attach|live-detection|npm-install)
       return 0
       ;;
     *)
@@ -74,7 +76,7 @@ append_smoke_filter() {
     cloakbrowser|browser-parity)
       append_unique "browser-parity"
       ;;
-    cdp-attach|live-detection)
+    cdp-attach|live-detection|npm-install)
       append_unique "$1"
       ;;
     *)
@@ -182,7 +184,7 @@ while [ "$#" -gt 0 ]; do
     cloakbrowser|browser-parity)
       append_smoke_filter "$1"
       ;;
-    cdp-attach|live-detection)
+    cdp-attach|live-detection|npm-install)
       append_smoke_filter "$1"
       ;;
     chrome|cloak|all)
@@ -253,6 +255,11 @@ run_live_detection() {
   run_step "$2" "Live detection smoke (${selected_provider})" bash scripts/docker-live-detection-smoke.sh --browser="$selected_provider"
 }
 
+run_npm_install() {
+  # Provider-agnostic: packages + installs the npm wrapper in a clean container.
+  run_step "$1" "npm install e2e (clean container)" bash scripts/docker-npm-install-smoke.sh
+}
+
 failures=0
 
 run_or_record() {
@@ -281,6 +288,9 @@ if [ "${#filters[@]}" -eq 0 ]; then
       run_or_record run_live_detection cloak 1
       ;;
   esac
+  # Provider-independent; runs once regardless of the selected browser. Allowed
+  # to skip (exit 77) when docker/network/release prerequisites are missing.
+  run_or_record run_npm_install 1
 else
   for filter in "${filters[@]}"; do
     case "$filter" in
@@ -297,6 +307,9 @@ else
         else
           run_or_record run_live_detection "$provider" 0
         fi
+        ;;
+      npm-install)
+        run_or_record run_npm_install 0
         ;;
       *)
         echo "${ERROR}unknown smoke filter: $filter${NC}" >&2
