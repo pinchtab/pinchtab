@@ -451,6 +451,26 @@
         "library",
         "smoke"
       ]
+    },
+    "api/audit-repro-extended.sh": {
+      "tags": [
+        "audit",
+        "repro",
+        "golden"
+      ]
+    },
+    "api/audit-errors-extended.sh": {
+      "tags": [
+        "audit",
+        "errors"
+      ]
+    },
+    "cli/compare-basic.sh": {
+      "tags": [
+        "compare",
+        "audit",
+        "visualdiff"
+      ]
     }
   }
 }
