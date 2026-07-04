@@ -320,6 +320,7 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "POST /cookies", root: h.HandleSetCookies, tab: h.HandleTabSetCookies},
 		{pattern: "DELETE /cookies", root: h.HandleClearCookies, tab: h.HandleTabClearCookies},
 		{pattern: "GET /metrics", root: h.HandleMetrics, tab: h.HandleTabMetrics},
+		{pattern: "GET /timing", root: h.HandleTiming, tab: h.HandleTabTiming},
 		{pattern: "GET /network", root: h.HandleNetwork, tab: h.HandleTabNetwork},
 		{pattern: "GET /network/stream", root: h.HandleNetworkStream, tab: h.HandleTabNetworkStream},
 		{pattern: "GET /network/export", root: h.HandleNetworkExport, tab: h.HandleTabNetworkExport},

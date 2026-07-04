@@ -122,6 +122,7 @@ var coreEndpoints = []Endpoint{
 	{"DELETE", "/cookies", "Clear all cookies", CapCookies, true},
 
 	{"GET", "/metrics", "Runtime metrics", CapNone, true},
+	{"GET", "/timing", "Page timing and Core Web Vitals", CapNone, true},
 
 	{"GET", "/network", "Network log", CapNone, true},
 	{"GET", "/network/stream", "Network SSE stream", CapNone, true},
