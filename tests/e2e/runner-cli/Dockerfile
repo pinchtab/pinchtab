@@ -18,6 +18,9 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pinchtab ./cmd/pinchtab
 
+# Library-mode example program, exercised by the library-mode smoke scenario
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/enrich-example ./docs/examples/enrich
+
 # ── Runner image ──────────────────────────────────────────────────────────────
 FROM alpine:3.23
 
@@ -33,9 +36,10 @@ RUN apk add --no-cache \
     coreutils \
     ca-certificates
 
-# Copy the freshly-built binary from the build stage
+# Copy the freshly-built binaries from the build stage
 COPY --from=build /out/pinchtab /usr/local/bin/pinchtab
-RUN chmod +x /usr/local/bin/pinchtab
+COPY --from=build /out/enrich-example /usr/local/bin/enrich-example
+RUN chmod +x /usr/local/bin/pinchtab /usr/local/bin/enrich-example
 
 # Sanity-check: bail early with a clear message if the binary is broken/missing
 RUN pinchtab --version 2>/dev/null || { echo "ERROR: pinchtab binary not runnable after build"; exit 1; }
