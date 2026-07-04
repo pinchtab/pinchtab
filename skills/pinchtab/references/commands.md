@@ -246,6 +246,34 @@ pinchtab network <requestId> --body
 
 ---
 
+## Audit Commands
+
+### `pinchtab audit`
+Browser-level site audit: screenshots, console errors, broken assets, interactive elements, accessibility score, Core Web Vitals, security findings.
+
+```bash
+pinchtab audit https://example.com --output-dir ./audit          # report.json + screenshots/
+pinchtab audit https://example.com/sitemap.xml --sitemap --sample-size 2 --output-dir ./audit
+pinchtab audit https://example.com --json                        # AuditReport JSON to stdout
+pinchtab audit https://example.com --format md --output-dir ./audit   # + report.md (html/pdf too)
+pinchtab audit https://example.com --cookie session=abc123       # authenticated; jar cleared after the run
+pinchtab audit --seaportal-report results.json                   # ingest SeaPortal results; browserRecommended routing
+```
+
+Pages that fail to load stay in the report with an `error` field; the run exits 0.
+
+### `pinchtab compare`
+Audit the same pages on two site versions and diff them visually and by data.
+
+```bash
+pinchtab compare https://example.com https://staging.example.com --pages /,pricing --output-dir ./cmp
+pinchtab compare https://example.com https://staging.example.com --fail-on-diff   # CI gate: non-zero exit on any diff
+```
+
+Changed pairs write annotated diff images under `diffs/`. Full reference: `docs/audit.md`.
+
+---
+
 ## Fleet / Multi-Profile Commands
 
 ### `pinchtab profiles`

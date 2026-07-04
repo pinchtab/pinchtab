@@ -109,6 +109,21 @@ For example, an agent request like:
 
 can automatically select the appropriate profile and perform the action.
 
+### Site audits and visual comparison
+
+PinchTab can audit whole sites at the browser level — screenshots, console
+errors, broken assets, accessibility score, Core Web Vitals, and security
+findings — and compare two site versions visually before a release:
+
+```bash
+pinchtab audit https://example.com --output-dir ./audit          # report.json + screenshots/
+pinchtab audit https://example.com/sitemap.xml --sitemap --sample-size 2 --output-dir ./audit
+pinchtab compare https://example.com https://staging.example.com --fail-on-diff   # CI gate
+```
+
+See [docs/audit.md](docs/audit.md) for the full command reference, report
+anatomy, and CI examples.
+
 ### Local container isolation
 
 If you prefer stronger isolation, PinchTab can run inside Docker.

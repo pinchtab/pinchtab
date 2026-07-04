@@ -249,6 +249,20 @@ pinchtab record stop                                    # stop, encode, and save
 pinchtab record status                                  # check active recording
 ```
 
+### Site audit & compare
+
+```bash
+pinchtab audit <url> --output-dir ./audit                                        # full browser audit → report.json + screenshots/
+pinchtab audit <sitemap-url> --sitemap --sample-size 2 --output-dir ./audit      # whole site, bounded per page template
+pinchtab audit <url> --json                                                      # print the AuditReport JSON (agent-friendly)
+pinchtab audit <url> --format md --output-dir ./audit                            # also write human-readable report.md (html/pdf too)
+pinchtab audit <url> --cookie session=abc123                                     # authenticated audit; cookie jar cleared after the run
+pinchtab compare <live-url> <staging-url> --pages /,pricing --output-dir ./cmp   # per-page visual + data diffs → diffs/*.png
+pinchtab compare <live-url> <staging-url> --fail-on-diff                         # CI gate: exit 0 = match, non-zero = differences
+```
+
+Reports capture console errors, broken assets, interactive elements, accessibility score + findings, Core Web Vitals, and rule-based security findings per page. Pages that fail to load stay in the report with an `error` field (the run still exits 0). Full reference: [docs/audit.md](https://pinchtab.com/docs/audit).
+
 ### Advanced (explicit opt-in only)
 
 These operations are high-impact and gated by security policy. Do not use unless the task specifically requires them and simpler commands are insufficient.
