@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/audit"
+	auditreport "github.com/pinchtab/pinchtab/internal/audit/report"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
@@ -68,12 +70,28 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		os.Exit(1)
 	}
 
+	format := renderFormat(cmd)
+
 	if dir, _ := cmd.Flags().GetString("output-dir"); dir != "" {
 		if err := writeAuditArtifacts(dir, report); err != nil {
 			fmt.Fprintf(os.Stderr, "write artifacts: %v\n", err)
 			os.Exit(1)
 		}
+		if format != auditreport.FormatJSON {
+			if err := renderAuditReportFile(dir, report, format); err != nil {
+				fmt.Fprintf(os.Stderr, "render report: %v\n", err)
+				os.Exit(1)
+			}
+		}
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
+	} else if format != auditreport.FormatJSON {
+		rendered, err := auditreport.Render(typedAuditReport(report), format)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "render report: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(rendered))
+		return
 	}
 
 	if v, _ := cmd.Flags().GetBool("json"); v {
@@ -82,6 +100,33 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		return
 	}
 	printAuditSummary(report)
+}
+
+// renderFormat reads the --format flag, defaulting to json.
+func renderFormat(cmd *cobra.Command) string {
+	f := mustString(cmd, "format")
+	if f == "" {
+		return auditreport.FormatJSON
+	}
+	return f
+}
+
+// typedAuditReport converts the generic report map (possibly mutated by
+// artifact writing) back into the typed schema for rendering.
+func typedAuditReport(report map[string]any) audit.AuditReport {
+	data, _ := json.Marshal(report)
+	var typed audit.AuditReport
+	_ = json.Unmarshal(data, &typed)
+	return typed
+}
+
+// renderAuditReportFile writes report.md / report.html next to report.json.
+func renderAuditReportFile(dir string, report map[string]any, format string) error {
+	rendered, err := auditreport.Render(typedAuditReport(report), format)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "report."+format), rendered, 0o644)
 }
 
 // writeAuditArtifacts writes report.json and screenshots/ under dir. Inline

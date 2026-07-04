@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/audit"
+	auditreport "github.com/pinchtab/pinchtab/internal/audit/report"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
@@ -55,10 +56,27 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
 	}
 
+	format := renderFormat(cmd)
+	if format != auditreport.FormatJSON {
+		rendered, err := auditreport.RenderComparison(outcome.Report, format)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "render report: %v\n", err)
+			os.Exit(1)
+		}
+		if dir, _ := cmd.Flags().GetString("output-dir"); dir != "" {
+			if err := os.WriteFile(filepath.Join(dir, "report."+format), rendered, 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "write rendered report: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println(string(rendered))
+		}
+	}
+
 	if mustBool(cmd, "json") {
 		out, _ := json.MarshalIndent(outcome.Report, "", "  ")
 		fmt.Println(string(out))
-	} else {
+	} else if format == auditreport.FormatJSON {
 		printCompareSummary(outcome.Report)
 	}
 
