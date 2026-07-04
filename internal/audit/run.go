@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"sync"
@@ -24,7 +23,10 @@ type RunOptions struct {
 	// Concurrency is the number of pages audited in parallel, clamped to
 	// [1, MaxConcurrency].
 	Concurrency int
-	// Page selects the collectors for every page.
+	// EnrichAll browser-enriches every seaportal page, overriding the
+	// per-page BrowserRecommended routing.
+	EnrichAll bool
+	// Page selects the collectors for every enriched page.
 	Page PageOptions
 }
 
@@ -52,27 +54,6 @@ func PlanURLs(urls []string) []string {
 	return plan
 }
 
-type sitemapURLSet struct {
-	URLs []struct {
-		Loc string `xml:"loc"`
-	} `xml:"url"`
-}
-
-// ParseSitemap extracts the <loc> URLs from a sitemap.xml document.
-func ParseSitemap(data []byte) ([]string, error) {
-	var set sitemapURLSet
-	if err := xml.Unmarshal(data, &set); err != nil {
-		return nil, fmt.Errorf("parse sitemap: %w", err)
-	}
-	urls := make([]string, 0, len(set.URLs))
-	for _, u := range set.URLs {
-		if u.Loc != "" {
-			urls = append(urls, u.Loc)
-		}
-	}
-	return urls, nil
-}
-
 // clampConcurrency normalizes a requested concurrency into [1, MaxConcurrency].
 func clampConcurrency(n int) int {
 	switch {
@@ -85,41 +66,93 @@ func clampConcurrency(n int) int {
 	}
 }
 
-// RunAudit audits every planned URL and assembles the versioned AuditReport.
-// The entry URL (first in the plan) is always audited first, synchronously;
-// the rest run with bounded concurrency. Page failures are report data, not
-// errors — RunAudit only errors when there is nothing to audit.
-func RunAudit(input AuditInput, opts RunOptions, discover SitemapFetcher, auditPage PageAuditor) (AuditReport, error) {
+// pagePlan is one planned page of a run: where to go, whether the browser
+// enriches it, and the seaportal metadata to merge into its report entry.
+type pagePlan struct {
+	url    string
+	enrich bool
+	sp     *SeaportalPage
+}
+
+// planRun resolves the input into the ordered page plan. Seaportal pages
+// route through BrowserRecommended (overridden by EnrichAll); URL-list and
+// sitemap inputs enrich everything.
+func planRun(input *AuditInput, seaportalPages []SeaportalPage, opts RunOptions, discover SitemapFetcher) ([]pagePlan, error) {
+	if len(seaportalPages) > 0 {
+		input.SeaportalFormat = SeaportalReportFormat
+		meta := make(map[string]*SeaportalPage, len(seaportalPages))
+		urls := make([]string, 0, len(seaportalPages))
+		for i := range seaportalPages {
+			sp := &seaportalPages[i]
+			if meta[sp.URL] == nil {
+				meta[sp.URL] = sp
+				urls = append(urls, sp.URL)
+			}
+		}
+		plan := SamplePages(urls, opts.SampleSize, nil)
+		plans := make([]pagePlan, len(plan))
+		for i, u := range plan {
+			sp := meta[u]
+			plans[i] = pagePlan{url: u, enrich: sp.BrowserRecommended || opts.EnrichAll, sp: sp}
+		}
+		return plans, nil
+	}
+
 	urls := input.URLs
 	if len(urls) == 0 && input.SitemapURL != "" {
 		if discover == nil {
-			return AuditReport{}, errors.New("sitemap input requires a sitemap fetcher")
+			return nil, errors.New("sitemap input requires a sitemap fetcher")
 		}
 		discovered, err := discover(input.SitemapURL)
 		if err != nil {
-			return AuditReport{}, fmt.Errorf("sitemap discovery: %w", err)
+			return nil, fmt.Errorf("sitemap discovery: %w", err)
 		}
 		urls = discovered
 	}
 
 	plan := SamplePages(PlanURLs(urls), opts.SampleSize, nil)
-	if len(plan) == 0 {
+	plans := make([]pagePlan, len(plan))
+	for i, u := range plan {
+		plans[i] = pagePlan{url: u, enrich: true}
+	}
+	return plans, nil
+}
+
+// RunAudit audits every planned page and assembles the versioned
+// AuditReport. The entry page (first in the plan) is always processed first,
+// synchronously; the rest run with bounded concurrency. Page failures are
+// report data, not errors — RunAudit only errors when there is nothing to
+// audit.
+func RunAudit(input AuditInput, seaportalPages []SeaportalPage, opts RunOptions, discover SitemapFetcher, auditPage PageAuditor) (AuditReport, error) {
+	plans, err := planRun(&input, seaportalPages, opts, discover)
+	if err != nil {
+		return AuditReport{}, err
+	}
+	if len(plans) == 0 {
 		return AuditReport{}, errors.New("no URLs to audit")
 	}
 
 	concurrency := clampConcurrency(opts.Concurrency)
-	results := make([]PageAudit, len(plan))
-	results[0] = auditPage(plan[0], opts.Page)
+	results := make([]PageResult, len(plans))
+	exec := func(i int) {
+		p := plans[i]
+		if !p.enrich {
+			results[i] = seaportalOnlyResult(p)
+			return
+		}
+		results[i] = mergeSeaportal(auditPage(p.url, opts.Page).ToPageResult(), p.sp)
+	}
 
+	exec(0)
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
-	for i := 1; i < len(plan); i++ {
+	for i := 1; i < len(plans); i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = auditPage(plan[i], opts.Page)
+			exec(i)
 		}(i)
 	}
 	wg.Wait()
@@ -133,11 +166,8 @@ func RunAudit(input AuditInput, opts RunOptions, discover SitemapFetcher, auditP
 		NetworkMonitor: opts.Page.Network,
 		Concurrency:    concurrency,
 	}
-	report.Pages = make([]PageResult, len(results))
-	for i, pa := range results {
-		report.Pages[i] = pa.ToPageResult()
-	}
-	report.SummaryScore = summaryScore(results)
+	report.Pages = results
+	report.SummaryScore = summaryScore(plans, results)
 	return report, nil
 }
 
@@ -152,15 +182,42 @@ func (pa PageAudit) ToPageResult() PageResult {
 	}
 }
 
-// summaryScore is the mean accessibility score across pages that were
-// audited without error, 0 when none were.
-func summaryScore(results []PageAudit) int {
+// seaportalOnlyResult is the report entry for a page seaportal marked as not
+// needing the browser: its HTTP-extraction summary without browser data.
+func seaportalOnlyResult(p pagePlan) PageResult {
+	return PageResult{
+		URL:        p.url,
+		Title:      p.sp.Title,
+		StatusCode: p.sp.StatusCode,
+		Seaportal:  p.sp.Summary,
+	}
+}
+
+// mergeSeaportal embeds the seaportal summary into an enriched page entry,
+// filling title/status where the browser did not provide them.
+func mergeSeaportal(pr PageResult, sp *SeaportalPage) PageResult {
+	if sp == nil {
+		return pr
+	}
+	pr.Seaportal = sp.Summary
+	if pr.Title == "" {
+		pr.Title = sp.Title
+	}
+	if pr.StatusCode == 0 {
+		pr.StatusCode = sp.StatusCode
+	}
+	return pr
+}
+
+// summaryScore is the mean accessibility score across browser-enriched
+// pages that were audited without error, 0 when none were.
+func summaryScore(plans []pagePlan, results []PageResult) int {
 	sum, n := 0, 0
-	for _, pa := range results {
-		if pa.Error != "" {
+	for i, pr := range results {
+		if !plans[i].enrich || pr.Error != "" {
 			continue
 		}
-		sum += pa.AccessibilityScore
+		sum += pr.Browser.AccessibilityScore
 		n++
 	}
 	if n == 0 {

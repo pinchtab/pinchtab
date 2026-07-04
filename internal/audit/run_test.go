@@ -19,27 +19,6 @@ func TestPlanURLs(t *testing.T) {
 	}
 }
 
-func TestParseSitemap(t *testing.T) {
-	data := []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>http://fixtures/a.html</loc></url>
-  <url><loc>http://fixtures/b.html</loc></url>
-  <url><loc></loc></url>
-</urlset>`)
-	got, err := ParseSitemap(data)
-	if err != nil {
-		t.Fatalf("ParseSitemap: %v", err)
-	}
-	want := []string{"http://fixtures/a.html", "http://fixtures/b.html"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ParseSitemap = %v, want %v", got, want)
-	}
-
-	if _, err := ParseSitemap([]byte("not xml at all <")); err == nil {
-		t.Error("ParseSitemap should error on malformed XML")
-	}
-}
-
 func fakeAuditor() (PageAuditor, *[]string, *sync.Mutex) {
 	var mu sync.Mutex
 	var calls []string
@@ -55,6 +34,7 @@ func TestRunAuditOrderingAndDedupe(t *testing.T) {
 	auditor, calls, _ := fakeAuditor()
 	report, err := RunAudit(
 		AuditInput{URLs: []string{"http://x/home", "http://x/a", "http://x/home", "http://x/b"}},
+		nil,
 		RunOptions{Concurrency: 1},
 		nil, auditor,
 	)
@@ -92,6 +72,7 @@ func TestRunAuditEntryFirstSynchronously(t *testing.T) {
 	}
 	if _, err := RunAudit(
 		AuditInput{URLs: []string{"http://x/entry", "http://x/a", "http://x/b", "http://x/c"}},
+		nil,
 		RunOptions{Concurrency: 4},
 		nil, auditor,
 	); err != nil {
@@ -116,7 +97,7 @@ func TestRunAuditConcurrencyBound(t *testing.T) {
 	for i := range 20 {
 		urls = append(urls, "http://x/p"+string(rune('a'+i)))
 	}
-	report, err := RunAudit(AuditInput{URLs: urls}, RunOptions{Concurrency: 3}, nil, auditor)
+	report, err := RunAudit(AuditInput{URLs: urls}, nil, RunOptions{Concurrency: 3}, nil, auditor)
 	if err != nil {
 		t.Fatalf("RunAudit: %v", err)
 	}
@@ -135,7 +116,7 @@ func TestRunAuditConcurrencyYieldsSameURLSet(t *testing.T) {
 	urls := []string{"http://x/1", "http://x/2", "http://x/3", "http://x/4", "http://x/5"}
 	pageSet := func(concurrency int) map[string]bool {
 		auditor, _, _ := fakeAuditor()
-		report, err := RunAudit(AuditInput{URLs: urls}, RunOptions{Concurrency: concurrency}, nil, auditor)
+		report, err := RunAudit(AuditInput{URLs: urls}, nil, RunOptions{Concurrency: concurrency}, nil, auditor)
 		if err != nil {
 			t.Fatalf("RunAudit(concurrency=%d): %v", concurrency, err)
 		}
@@ -158,7 +139,7 @@ func TestRunAuditSitemapMode(t *testing.T) {
 		}
 		return []string{"http://x/a", "http://x/b"}, nil
 	}
-	report, err := RunAudit(AuditInput{SitemapURL: "http://x/sitemap.xml"}, RunOptions{}, discover, auditor)
+	report, err := RunAudit(AuditInput{SitemapURL: "http://x/sitemap.xml"}, nil, RunOptions{}, discover, auditor)
 	if err != nil {
 		t.Fatalf("RunAudit: %v", err)
 	}
@@ -166,7 +147,7 @@ func TestRunAuditSitemapMode(t *testing.T) {
 		t.Errorf("pages = %d, want 2", len(report.Pages))
 	}
 
-	if _, err := RunAudit(AuditInput{SitemapURL: "http://x/sitemap.xml"}, RunOptions{}, func(string) ([]string, error) {
+	if _, err := RunAudit(AuditInput{SitemapURL: "http://x/sitemap.xml"}, nil, RunOptions{}, func(string) ([]string, error) {
 		return nil, errors.New("fetch failed")
 	}, auditor); err == nil {
 		t.Error("RunAudit should surface sitemap fetch errors")
@@ -177,6 +158,7 @@ func TestRunAuditSampleSizeAndEmpty(t *testing.T) {
 	auditor, _, _ := fakeAuditor()
 	report, err := RunAudit(
 		AuditInput{URLs: []string{"http://x/p1.html", "http://x/p2.html", "http://x/p3.html"}},
+		nil,
 		RunOptions{SampleSize: 2},
 		nil, auditor,
 	)
@@ -187,7 +169,7 @@ func TestRunAuditSampleSizeAndEmpty(t *testing.T) {
 		t.Errorf("pages = %d, want 2 (template group sampled)", len(report.Pages))
 	}
 
-	if _, err := RunAudit(AuditInput{}, RunOptions{}, nil, auditor); err == nil {
+	if _, err := RunAudit(AuditInput{}, nil, RunOptions{}, nil, auditor); err == nil {
 		t.Error("RunAudit with no input should error")
 	}
 }
@@ -201,6 +183,7 @@ func TestRunAuditErrorsAreData(t *testing.T) {
 	}
 	report, err := RunAudit(
 		AuditInput{URLs: []string{"http://x/up", "http://x/down"}},
+		nil,
 		RunOptions{},
 		nil, auditor,
 	)

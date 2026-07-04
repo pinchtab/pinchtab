@@ -17,12 +17,35 @@ import (
 // per-request client timeout, which a site audit easily exceeds.
 const auditTimeout = 10 * time.Minute
 
+func mustString(cmd *cobra.Command, name string) string {
+	v, _ := cmd.Flags().GetString(name)
+	return v
+}
+
+func mustBool(cmd *cobra.Command, name string) bool {
+	v, _ := cmd.Flags().GetBool(name)
+	return v
+}
+
 // Audit runs a multi-page site audit via POST /audit and writes artifacts.
 func Audit(client *http.Client, base, token string, cmd *cobra.Command, target string) {
 	body := map[string]any{}
-	if v, _ := cmd.Flags().GetBool("sitemap"); v {
+	switch {
+	case mustString(cmd, "seaportal-report") != "":
+		path := mustString(cmd, "seaportal-report")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read seaportal report: %v\n", err)
+			os.Exit(1)
+		}
+		body["seaportalResults"] = json.RawMessage(data)
+		body["seaportalFile"] = path
+		if v, _ := cmd.Flags().GetBool("enrich-all"); v {
+			body["enrichAll"] = true
+		}
+	case mustBool(cmd, "sitemap"):
 		body["sitemapUrl"] = target
-	} else {
+	default:
 		body["urls"] = []string{target}
 	}
 

@@ -362,6 +362,8 @@ func configureBrowserFlags() {
 	auditCmd.Flags().String("output-dir", "", "Write report.json and screenshots/ to this directory")
 	auditCmd.Flags().Int("concurrency", 0, "Pages audited in parallel (default 2, max 8)")
 	auditCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
+	auditCmd.Flags().String("seaportal-report", "", "Audit pages from a SeaPortal results JSON file (array of Result objects)")
+	auditCmd.Flags().Bool("enrich-all", false, "Browser-enrich every seaportal page, ignoring browserRecommended routing")
 
 	addTabFlag(consoleCmd, errorsCmd)
 }

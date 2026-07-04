@@ -183,6 +183,9 @@ type AuditInput struct {
 	SitemapURL string `json:"sitemapUrl,omitempty"`
 	// SeaportalFile is the path to a SeaPortal results JSON file.
 	SeaportalFile string `json:"seaportalFile,omitempty"`
+	// SeaportalFormat versions the ingested seaportal payload
+	// (SeaportalReportFormat); empty for non-seaportal inputs.
+	SeaportalFormat string `json:"seaportalFormat,omitempty"`
 }
 
 // AuditOptions are the run options an audit was executed with.

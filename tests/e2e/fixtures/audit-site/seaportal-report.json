@@ -1,0 +1,44 @@
+[
+  {
+    "url": "http://fixtures/audit-site/index.html",
+    "title": "Audit Fixture Site",
+    "description": "Deterministic audit fixture site for PinchTab e2e tests.",
+    "confidence": 60,
+    "statusCode": 200,
+    "quality": 0.7,
+    "profile": {
+      "class": "hydrated",
+      "decision": "browser-needed",
+      "browserRecommended": true,
+      "confidence": 60
+    }
+  },
+  {
+    "url": "http://fixtures/audit-site/clean.html",
+    "title": "Clean Page — Audit Fixture Site",
+    "description": "Defect-free control page for audit e2e scenarios.",
+    "confidence": 95,
+    "statusCode": 200,
+    "quality": 0.9,
+    "profile": {
+      "class": "static",
+      "decision": "static-high-confidence",
+      "browserRecommended": false,
+      "confidence": 95
+    }
+  },
+  {
+    "url": "http://fixtures/audit-site/broken-assets.html",
+    "title": "Broken Assets — Audit Fixture Site",
+    "description": "Page referencing exactly three missing assets and one missing fetch.",
+    "confidence": 55,
+    "statusCode": 200,
+    "quality": 0.6,
+    "profile": {
+      "class": "hydrated",
+      "decision": "browser-needed",
+      "browserRecommended": true,
+      "confidence": 55
+    }
+  }
+]

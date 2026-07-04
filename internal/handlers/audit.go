@@ -1,25 +1,25 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/audit"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-const maxSitemapBytes = 5 << 20
-
 type auditRequest struct {
-	URLs        []string              `json:"urls"`
-	SitemapURL  string                `json:"sitemapUrl"`
-	Options     *auditPageOptionsBody `json:"options"`
-	Concurrency int                   `json:"concurrency"`
-	SampleSize  int                   `json:"sampleSize"`
+	URLs             []string              `json:"urls"`
+	SitemapURL       string                `json:"sitemapUrl"`
+	SeaportalResults json.RawMessage       `json:"seaportalResults"`
+	SeaportalFile    string                `json:"seaportalFile"`
+	EnrichAll        bool                  `json:"enrichAll"`
+	Options          *auditPageOptionsBody `json:"options"`
+	Concurrency      int                   `json:"concurrency"`
+	SampleSize       int                   `json:"sampleSize"`
 }
 
 // @Endpoint POST /audit
@@ -29,9 +29,18 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 		return
 	}
-	if len(req.URLs) == 0 && req.SitemapURL == "" {
-		httpx.Error(w, 400, fmt.Errorf("urls or sitemapUrl required"))
+	if len(req.URLs) == 0 && req.SitemapURL == "" && len(req.SeaportalResults) == 0 {
+		httpx.Error(w, 400, fmt.Errorf("urls, sitemapUrl, or seaportalResults required"))
 		return
+	}
+
+	var seaportalPages []audit.SeaportalPage
+	if len(req.SeaportalResults) > 0 {
+		var err error
+		if seaportalPages, err = audit.ParseSeaportalReport(req.SeaportalResults); err != nil {
+			httpx.Error(w, 400, err)
+			return
+		}
 	}
 
 	routing, ok := h.resolveNavigateBrowser(w, r, "", "")
@@ -51,10 +60,12 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	report, err := audit.RunAudit(
-		audit.AuditInput{URLs: req.URLs, SitemapURL: req.SitemapURL},
+		audit.AuditInput{URLs: req.URLs, SitemapURL: req.SitemapURL, SeaportalFile: req.SeaportalFile},
+		seaportalPages,
 		audit.RunOptions{
 			SampleSize:  req.SampleSize,
 			Concurrency: req.Concurrency,
+			EnrichAll:   req.EnrichAll,
 			Page:        req.Options.pageOptions(),
 		},
 		h.fetchSitemap(routing.EffectiveCfg),
@@ -68,25 +79,13 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 // fetchSitemap returns a SitemapFetcher that applies the same URL/IDPI/SSRF
-// validation as page navigation before fetching over plain HTTP.
+// validation as page navigation, then discovers pages through
+// seaportal.FlattenSitemap (recursive sitemap-index support).
 func (h *Handlers) fetchSitemap(cfg *config.RuntimeConfig) audit.SitemapFetcher {
 	return func(sitemapURL string) ([]string, error) {
 		if _, err := h.validateAuditTarget(sitemapURL, cfg); err != nil {
 			return nil, err
 		}
-		client := &http.Client{Timeout: 15 * time.Second}
-		resp, err := client.Get(sitemapURL)
-		if err != nil {
-			return nil, fmt.Errorf("fetch sitemap: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("fetch sitemap: HTTP %d", resp.StatusCode)
-		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxSitemapBytes))
-		if err != nil {
-			return nil, fmt.Errorf("read sitemap: %w", err)
-		}
-		return audit.ParseSitemap(data)
+		return audit.FlattenSitemapURLs(context.Background(), sitemapURL)
 	}
 }
