@@ -64,6 +64,32 @@ func TestLaunch_Mocked(t *testing.T) {
 	}
 }
 
+func TestLaunch_ForwardsChromeNoSandboxCompatEnvVar(t *testing.T) {
+	old := portAvailableFunc
+	portAvailableFunc = func(int) bool { return true }
+	defer func() { portAvailableFunc = old }()
+
+	t.Setenv("PINCHTAB_CHROME_NO_SANDBOX", "1")
+
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	if _, err := o.Launch("test-prof", "9999", true, nil); err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+
+	found := false
+	for _, kv := range runner.env {
+		if kv == "PINCHTAB_CHROME_NO_SANDBOX=1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected child env to include PINCHTAB_CHROME_NO_SANDBOX=1, got %v", runner.env)
+	}
+}
+
 func TestLaunch_PortConflict(t *testing.T) {
 	old := portAvailableFunc
 	portAvailableFunc = func(int) bool { return true }

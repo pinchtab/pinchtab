@@ -341,6 +341,16 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, exten
 		"PINCHTAB_PORT":   port,
 		"PINCHTAB_CONFIG": childConfigPath,
 	}
+	// filterEnvWithPrefixes strips ALL PINCHTAB_-prefixed vars from the parent
+	// environment before spawning the per-instance child process, so runtime
+	// container-compatibility overrides (e.g. the no-sandbox flag needed under
+	// containerd/CRI-O, which lack a Docker-only /.dockerenv marker) must be
+	// explicitly re-forwarded here or every profile-managed instance silently
+	// loses them, even though the top-level always-on bridge process (which
+	// inherits the full container env directly) keeps working fine.
+	if v := os.Getenv(config.ChromeNoSandboxEnvVar()); v != "" {
+		envOverrides[config.ChromeNoSandboxEnvVar()] = v
+	}
 	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
 
 	logBuf := newRingBuffer(256 * 1024)
