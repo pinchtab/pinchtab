@@ -43,7 +43,8 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    dumb-init
+    dumb-init \
+    curl
 
 # Non-root user; /data is the persistent volume mount point
 RUN adduser -D -h /data -g '' pinchtab && \
