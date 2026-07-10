@@ -213,6 +213,10 @@ pinchtab screenshot -q <0-100>          # JPEG quality
 pinchtab screenshot -s <selector>       # Capture a specific element by selector
 pinchtab screenshot --scale 0.5         # Half-size output (quarter the pixels)
 pinchtab screenshot --beyond-viewport   # Capture the full scrollable document (ignored with -s)
+pinchtab screenshot --annotate          # Bake numbered ref boxes into the image (for vision models)
+pinchtab annotate                       # Inject a persistent, clickable overlay on the LIVE page
+pinchtab annotate -s <selector>         # Scope the overlay to elements within a selector
+pinchtab annotate --clear               # Remove the persistent overlay
 pinchtab capture                        # Paired screenshot + accessibility snapshot from the same DOM epoch
 pinchtab capture -o <path>              # Save the paired image to a chosen path
 pinchtab capture --beyond-viewport      # Capture the full document; bounds in page coords

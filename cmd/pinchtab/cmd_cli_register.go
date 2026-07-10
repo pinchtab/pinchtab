@@ -19,7 +19,7 @@ func init() {
 func browserRootCommands() []*cobra.Command {
 	return []*cobra.Command{
 		quickCmd, navCmd, backCmd, forwardCmd, reloadCmd, snapCmd, frameCmd, clickCmd,
-		dblclickCmd, dragCmd, typeCmd, screenshotCmd, captureCmd, tabsCmd, pressCmd, fillCmd,
+		dblclickCmd, dragCmd, typeCmd, screenshotCmd, annotateCmd, captureCmd, tabsCmd, pressCmd, fillCmd,
 		hoverCmd, mouseCmd, focusCmd, scrollCmd, evalCmd, pdfCmd, textCmd, titleCmd, urlCmd,
 		htmlCmd, stylesCmd, valueCmd, attrCmd, countCmd, boxCmd, visibleCmd, enabledCmd, checkedCmd,
 		downloadCmd, uploadCmd, findCmd, selectCmd, checkCmd, uncheckCmd, networkCmd, waitCmd,
@@ -118,6 +118,10 @@ func configureBrowserFlags() {
 	// deprecated no-op so old scripts get a notice instead of a hard error.
 	screenshotCmd.Flags().Bool("css-1x", false, "deprecated: use --scale")
 	_ = screenshotCmd.Flags().MarkDeprecated("css-1x", "css-1x was removed; use --scale to rescale output")
+
+	annotateCmd.Flags().StringP("selector", "s", "", "Scope the overlay to elements within this selector (ref/CSS/XPath/text)")
+	annotateCmd.Flags().String("tab", "", "Tab ID")
+	annotateCmd.Flags().Bool("clear", false, "Remove the persistent annotation overlay instead of injecting it")
 
 	captureCmd.Flags().StringP("output", "o", "", "Save the captured image to this local file path (default: capture-<ts>.jpg)")
 	captureCmd.Flags().StringP("selector", "s", "", "Scope: clips screenshot and filters snapshot subtree to the same element")

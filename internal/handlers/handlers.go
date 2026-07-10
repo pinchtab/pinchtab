@@ -288,6 +288,7 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "GET /frame", root: h.HandleFrame, tab: h.HandleTabFrame},
 		{pattern: "POST /frame", root: h.HandleFrame, tab: h.HandleTabFrame},
 		{pattern: "GET /screenshot", root: h.HandleScreenshot, tab: h.HandleTabScreenshot},
+		{pattern: "GET /annotate", root: h.HandleAnnotate, tab: h.HandleTabAnnotate},
 		{pattern: "GET /capture", root: h.HandleCapture, tab: h.HandleTabCapture},
 		{pattern: "GET /text", root: h.HandleText, tab: h.HandleTabText},
 		{pattern: "GET /title", root: h.HandleTitle, tab: h.HandleTabTitle},

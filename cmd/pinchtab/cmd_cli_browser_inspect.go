@@ -42,6 +42,16 @@ var screenshotCmd = &cobra.Command{
 	},
 }
 
+var annotateCmd = &cobra.Command{
+	Use:   "annotate",
+	Short: "Inject a persistent, clickable annotation overlay on the live page (--clear to remove)",
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.Annotate(rt.client, rt.base, rt.token, cmd)
+		})
+	},
+}
+
 var captureCmd = &cobra.Command{
 	Use:     "capture",
 	Aliases: []string{"cap"},

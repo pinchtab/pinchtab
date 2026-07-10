@@ -61,7 +61,7 @@ func CheckPinchTabRunning(port, token string) bool {
 // is deliberately narrow (not the full shorthand surface); every entry must be a
 // real catalog route, enforced by TestDefaultProxyShorthandsAreCatalogRoutes.
 var DefaultProxyShorthands = []string{
-	"GET /snapshot", "GET /screenshot", "GET /text",
+	"GET /snapshot", "GET /screenshot", "GET /annotate", "GET /text",
 	"POST /navigate", "POST /action", "POST /actions", "POST /evaluate",
 	"POST /tab", "POST /lock", "POST /unlock",
 	"GET /cookies", "POST /cookies", "DELETE /cookies",
