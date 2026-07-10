@@ -41,6 +41,16 @@ func (h *Handlers) HandleAnnotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate the selector up front so a bad selector surfaces as a 400 (user
+	// error), matching the /screenshot and /capture convention, rather than the
+	// generic 500 the collector would otherwise produce.
+	if selector != "" {
+		if _, sErr := h.resolveSelectorNodeID(tCtx, resolvedTabID, selector); sErr != nil {
+			httpx.Error(w, 400, frameScopedSelectorError("selector", sErr))
+			return
+		}
+	}
+
 	// Reuse the screenshot annotation collector: it records refs in the tab's
 	// ref cache (so a follow-up `click e5` resolves the same node) and returns
 	// viewport-relative rects. We keep every candidate — not just the visible

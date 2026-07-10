@@ -97,6 +97,35 @@ fi
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "annotate: a zero-result refresh clears the stale overlay"
+
+# Regression: a refresh that finds nothing to annotate must still remove the
+# previous overlay, not leave its boxes on screen. Inject first, then re-scope
+# to a subtree with no interactive elements (the first <label>, which has no
+# interactive descendants) and assert the count is zero AND the overlay is gone.
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
+pt_get "/annotate"
+assert_ok "annotate inject before zero-result refresh"
+
+pt_get "/annotate?selector=label"
+assert_ok "annotate zero-result refresh"
+assert_result_eq '.annotated' '0' 'zero-result scope reports annotated=0'
+
+pt_post /evaluate -d "{\"expression\":\"document.getElementById('${OVERLAY_ID}') === null\"}"
+assert_ok "evaluate stale-overlay probe"
+assert_result_eq '.result' 'true' 'stale overlay removed on zero-result refresh'
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "annotate: bad selector is a 400, not a 500"
+
+pt_get "/annotate?selector=%23definitely-not-here"
+assert_http_status "400" "bad selector returns 400"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "annotate: clear removes the overlay"
 
 # Re-inject first (the click test may have navigated the ref's target away).

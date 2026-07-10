@@ -120,7 +120,6 @@ func configureBrowserFlags() {
 	_ = screenshotCmd.Flags().MarkDeprecated("css-1x", "css-1x was removed; use --scale to rescale output")
 
 	annotateCmd.Flags().StringP("selector", "s", "", "Scope the overlay to elements within this selector (ref/CSS/XPath/text)")
-	annotateCmd.Flags().String("tab", "", "Tab ID")
 	annotateCmd.Flags().Bool("clear", false, "Remove the persistent annotation overlay instead of injecting it")
 
 	captureCmd.Flags().StringP("output", "o", "", "Save the captured image to this local file path (default: capture-<ts>.jpg)")
@@ -213,6 +212,7 @@ func configureBrowserFlags() {
 		snapCmd,
 		frameCmd,
 		screenshotCmd,
+		annotateCmd,
 		pdfCmd,
 		findCmd,
 		textCmd,

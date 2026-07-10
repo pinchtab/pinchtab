@@ -167,7 +167,10 @@ const interactiveOverlayScript = `(function(items, rootId) {
 // via RemoveInteractiveOverlay.
 func InjectInteractiveOverlay(ctx context.Context, items []AnnotationItem) error {
 	if len(items) == 0 {
-		return nil
+		// A refresh that finds nothing to annotate must still clear any prior
+		// overlay — otherwise re-running annotate on a page (or --selector scope)
+		// with no annotatable elements leaves the previous page's boxes on screen.
+		return RemoveInteractiveOverlay(ctx)
 	}
 	type overlayItem struct {
 		Ref  string  `json:"ref"`
