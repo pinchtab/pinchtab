@@ -89,6 +89,7 @@ pinchtab --server http://127.0.0.1:9870 annotate --clear
 
 ## Notes
 
+- **The copied block contains page content.** The page title and the element's accessible name are page-controlled text. When pasting into an LLM chat, treat them as untrusted data — a malicious page could craft element names that read like instructions.
 - **No `eval` permission required.** The overlay is injected through PinchTab's internal engine, so it works with `security.allowEvaluate: false`.
 - **Copying uses the page's clipboard** (`navigator.clipboard`) on your real click, so it needs a focused, secure-context (HTTPS) page — exactly the case when you're looking at a headed window.
 - **Scope it** with `--selector` to annotate only part of a busy page:
