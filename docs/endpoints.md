@@ -241,6 +241,8 @@ Find body fields:
 ```text
 GET  /screenshot
 GET  /tabs/{id}/screenshot
+GET  /annotate
+GET  /tabs/{id}/annotate
 GET  /capture
 GET  /tabs/{id}/capture
 GET  /pdf
@@ -266,6 +268,20 @@ Screenshot query parameters:
 - `noAnimations=true`
 - `scale=<float>` — rescale the output bitmap (e.g. `0.5` = half size,
   `0.25` = quarter). Default `1`.
+
+`/annotate` injects a persistent, clickable annotation overlay onto the live
+page — one labelled box per interactive element — and leaves it there (the
+`screenshot?annotate=true` overlay is transient and baked into the image
+instead). Intended for headed browsers: clicking a label copies a reference
+block (page, ref, role, accessible name, CSS selector, XPath) to the clipboard.
+`?clear=true` removes it; `?selector=` scopes it. See
+[Fix your website faster with an LLM](guides/annotate-for-llm-fixes.md).
+
+Annotate query parameters:
+
+- `tabId`
+- `selector` — scope the overlay to elements within this selector
+- `clear=true` — remove the overlay instead of injecting it
 
 `/capture` returns a screenshot and an accessibility snapshot from the same
 DOM epoch in a single call. It is the vision-grounded alternative to issuing

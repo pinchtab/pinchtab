@@ -23,6 +23,7 @@
     "guides/data-storage.md",
     "guides/docker.md",
     "guides/headed-mode.md",
+    "guides/annotate-for-llm-fixes.md",
     "guides/raspberry-pi.md"
   ],
   "architecture": [

@@ -85,6 +85,7 @@ var coreEndpoints = []Endpoint{
 	{"GET", "/frame", "Get current frame scope", CapNone, true},
 	{"POST", "/frame", "Set current frame scope", CapNone, true},
 	{"GET", "/screenshot", "Page screenshot", CapNone, true},
+	{"GET", "/annotate", "Inject or clear the persistent clickable annotation overlay", CapNone, true},
 	{"GET", "/capture", "Paired screenshot + accessibility snapshot from the same DOM epoch", CapNone, true},
 	{"GET", "/text", "Extract page text", CapNone, true},
 	{"GET", "/title", "Read page title", CapNone, true},
