@@ -23,7 +23,7 @@ func TestSafeRecordPath_RejectsRelativePath(t *testing.T) {
 }
 
 func TestSafeRecordPath_RejectsBadExtension(t *testing.T) {
-	_, err := safeRecordPath("/tmp/output.txt")
+	_, err := safeRecordPath(filepath.Join(t.TempDir(), "output.txt"))
 	if err == nil || !strings.Contains(err.Error(), "unsupported extension") {
 		t.Fatalf("expected extension error, got %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -495,6 +496,9 @@ func TestWriteGitHubActionsMetadataAddsRunnerFailureWithoutSuiteResults(t *testi
 }
 
 func TestBuildSharedStackRetriesNoCacheOnBuildKitSnapshotFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("compose retry test uses a POSIX shell script stub")
+	}
 	tmp := t.TempDir()
 	callsPath := filepath.Join(tmp, "calls.txt")
 	scriptPath := filepath.Join(tmp, "compose.sh")
@@ -547,6 +551,9 @@ exit 0
 }
 
 func TestBuildSharedStackDoesNotRetryNonCacheFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("compose retry test uses a POSIX shell script stub")
+	}
 	tmp := t.TempDir()
 	callsPath := filepath.Join(tmp, "calls.txt")
 	scriptPath := filepath.Join(tmp, "compose.sh")
