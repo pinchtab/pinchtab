@@ -2,11 +2,26 @@ package idpi
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pinchtab/idpishield"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
+
+var benignScannerPhrases = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{
+		pattern:     regexp.MustCompile(`(?i)\btake\s+actions\s+such\s+as\s+create,\s*update,?\s+or\s+delete\s+records\s+on\s+behalf\s+of\s+(?:the\s+)?user\b`),
+		replacement: "take actions such as create, update or modify records on behalf of user",
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)\byou\s+are\s+now\s+viewing\b`),
+		replacement: "currently viewing",
+	},
+}
 
 // ShieldGuard uses the idpishield library for all IDPI scanning:
 // content analysis, domain checking, and content wrapping.
@@ -49,7 +64,7 @@ func (g *ShieldGuard) ScanContent(text string) CheckResult {
 		return CheckResult{}
 	}
 
-	result := g.shield.Assess(text, "")
+	result := g.shield.Assess(normalizeBenignScannerPhrases(text), "")
 
 	cr := CheckResult{
 		Threat:  result.Blocked || len(result.Patterns) > 0,
@@ -62,6 +77,16 @@ func (g *ShieldGuard) ScanContent(text string) CheckResult {
 	}
 
 	return cr
+}
+
+// normalizeBenignScannerPhrases removes two narrow UI-prose collisions from
+// idpishield's broad en-dd-004 and en-rh-001 patterns. It intentionally leaves
+// standalone and mixed malicious directives untouched for the scanner to detect.
+func normalizeBenignScannerPhrases(text string) string {
+	for _, phrase := range benignScannerPhrases {
+		text = phrase.pattern.ReplaceAllString(text, phrase.replacement)
+	}
+	return text
 }
 
 func (g *ShieldGuard) CheckDomain(rawURL string) CheckResult {
