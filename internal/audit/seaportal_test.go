@@ -7,6 +7,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	seaportal "github.com/pinchtab/seaportal"
 )
 
 func TestParseSeaportalReport(t *testing.T) {
@@ -50,7 +52,7 @@ func TestFlattenSitemapURLsAgainstFixture(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	urls, err := FlattenSitemapURLs(context.Background(), srv.URL+"/sitemap.xml")
+	urls, err := FlattenSitemapURLs(context.Background(), srv.URL+"/sitemap.xml", nil)
 	if err != nil {
 		t.Fatalf("FlattenSitemapURLs: %v", err)
 	}
@@ -59,6 +61,13 @@ func TestFlattenSitemapURLsAgainstFixture(t *testing.T) {
 	}
 	if urls[0] != "http://fixtures/audit-site/index.html" {
 		t.Errorf("first url = %q", urls[0])
+	}
+
+	// The security policy gates the sitemap fetch itself: the httptest
+	// server sits on 127.0.0.1, so BlockPrivateIPs must stop the flatten.
+	if _, err := FlattenSitemapURLs(context.Background(), srv.URL+"/sitemap.xml",
+		&seaportal.SecurityPolicy{BlockPrivateIPs: true}); err == nil {
+		t.Error("blocked sitemap fetch must surface an error")
 	}
 }
 

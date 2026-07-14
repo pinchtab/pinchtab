@@ -56,10 +56,13 @@ func ParseSeaportalReport(data []byte) ([]SeaportalPage, error) {
 }
 
 // FlattenSitemapURLs discovers page URLs from a sitemap (recursively for
-// sitemap indexes) via seaportal.FlattenSitemap.
-func FlattenSitemapURLs(ctx context.Context, sitemapURL string) ([]string, error) {
+// sitemap indexes) via seaportal.FlattenSitemap. security gates every
+// sitemap fetch — child sitemaps of an index are attacker-controlled URLs,
+// so only the root sitemap URL being pre-validated is not enough.
+func FlattenSitemapURLs(ctx context.Context, sitemapURL string, security *seaportal.SecurityPolicy) ([]string, error) {
 	entries, err := seaportal.FlattenSitemap(ctx, sitemapURL, seaportal.FlattenSitemapOptions{
-		Timeout: 15 * time.Second,
+		Timeout:  15 * time.Second,
+		Security: security,
 	})
 	if err != nil {
 		return nil, err

@@ -324,6 +324,7 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "GET /a11y/audit", root: h.HandleA11yAudit, tab: h.HandleTabA11yAudit},
 		{pattern: "POST /audit/page", root: h.HandleAuditPage},
 		{pattern: "POST /audit", root: h.HandleAudit},
+		{pattern: "POST /scrape", root: h.HandleScrape},
 		{pattern: "GET /network", root: h.HandleNetwork, tab: h.HandleTabNetwork},
 		{pattern: "GET /network/stream", root: h.HandleNetworkStream, tab: h.HandleTabNetworkStream},
 		{pattern: "GET /network/export", root: h.HandleNetworkExport, tab: h.HandleTabNetworkExport},

@@ -16,7 +16,17 @@ import (
 	"github.com/pinchtab/pinchtab/internal/navguard"
 )
 
-const auditCollectTimeout = 60 * time.Second
+const (
+	auditCollectTimeout = 60 * time.Second
+	// auditRunTimeout is how far POST /audit extends the response write
+	// deadline past the server's default WriteTimeout: a multi-page run
+	// (navigation + collectors per page, bounded concurrency) legitimately
+	// takes minutes. Matches the CLI's client-side audit timeout.
+	auditRunTimeout = 10 * time.Minute
+	// auditPageDeadline covers a single-page audit: navigation plus the
+	// collector window, with headroom.
+	auditPageDeadline = 3 * time.Minute
+)
 
 // auditPageOptionsBody is the JSON options shape shared by POST /audit/page
 // and POST /audit. Unset fields keep their defaults (all collectors on).
@@ -80,6 +90,7 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	httpx.ExtendWriteDeadline(w, auditPageDeadline)
 	httpx.JSON(w, 200, h.auditPage(r.Context(), req.URL, req.Options.pageOptions(), routing.EffectiveCfg, targets))
 }
 

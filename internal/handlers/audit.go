@@ -51,6 +51,9 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A multi-page audit legitimately outlives the server's WriteTimeout.
+	httpx.ExtendWriteDeadline(w, auditRunTimeout)
+
 	auditor := func(url string, opts audit.PageOptions) audit.PageAudit {
 		targets, err := h.validateAuditTarget(url, routing.EffectiveCfg)
 		if err != nil {
@@ -80,12 +83,13 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 
 // fetchSitemap returns a SitemapFetcher that applies the same URL/IDPI/SSRF
 // validation as page navigation, then discovers pages through
-// seaportal.FlattenSitemap (recursive sitemap-index support).
+// seaportal.FlattenSitemap (recursive sitemap-index support). The crawl
+// guard also gates every child-sitemap fetch inside the flattening.
 func (h *Handlers) fetchSitemap(cfg *config.RuntimeConfig) audit.SitemapFetcher {
 	return func(sitemapURL string) ([]string, error) {
 		if _, err := h.validateAuditTarget(sitemapURL, cfg); err != nil {
 			return nil, err
 		}
-		return audit.FlattenSitemapURLs(context.Background(), sitemapURL)
+		return audit.FlattenSitemapURLs(context.Background(), sitemapURL, h.crawlGuard(cfg).Policy())
 	}
 }
