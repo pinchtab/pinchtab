@@ -2,10 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,6 +35,7 @@ func Load() *RuntimeConfig {
 		UploadMaxFileBytes:     DefaultUploadMaxFileBytes,
 		UploadMaxTotalBytes:    DefaultUploadMaxTotalBytes,
 		MaxRedirects:           -1, // Unlimited by default; set to N to limit redirect hops
+		TransactionPolicy:      TransactionPolicyConfig{},
 
 		// Browser / instance defaults
 		Headless:          true,
@@ -129,10 +132,18 @@ func Load() *RuntimeConfig {
 		}
 	}
 
-	// Validate file config and log warnings
+	// Validate file config and log warnings. A transaction policy must not start
+	// partially configured, but unrelated validation warnings remain non-fatal.
 	if errs := ValidateFileConfig(fc); len(errs) > 0 {
+		invalidTransactionPolicy := false
 		for _, e := range errs {
 			slog.Warn("config validation error", "path", configPath, "error", e)
+			if validationErr, ok := e.(ValidationError); ok && strings.HasPrefix(validationErr.Field, "security.transactionPolicy") {
+				invalidTransactionPolicy = true
+			}
+		}
+		if invalidTransactionPolicy {
+			panic(fmt.Sprintf("invalid security.transactionPolicy in %s", configPath))
 		}
 	}
 
@@ -241,6 +252,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	cfg.AttachAllowHosts = append([]string(nil), fc.Security.Attach.AllowHosts...)
 	cfg.AttachAllowSchemes = append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	cfg.TrustedProxyCIDRs = append([]string(nil), fc.Security.TrustedProxyCIDRs...)
+	cfg.TransactionPolicy = fc.Security.TransactionPolicy
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
 	if fc.Observability.Activity.Enabled != nil {
@@ -406,6 +418,10 @@ func ApplyFileConfigToRuntime(cfg *RuntimeConfig, fc *FileConfig) {
 		return
 	}
 
+	// Transaction policy is restart-only. The configuration API may persist it,
+	// but must not turn a network guard on or off in a running process.
+	transactionPolicy := cfg.TransactionPolicy
 	applyFileConfig(cfg, fc)
+	cfg.TransactionPolicy = transactionPolicy
 	finalizeProfileConfig(cfg)
 }

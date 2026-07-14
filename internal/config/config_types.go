@@ -29,6 +29,7 @@ type RuntimeConfig struct {
 	UploadMaxTotalBytes    int
 	MaxRedirects           int      // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
 	TrustedProxyCIDRs      []string // CIDRs/IPs whose RemoteIPAddress is trusted in navigation responses (e.g. internal proxy)
+	TransactionPolicy      TransactionPolicyConfig
 
 	// Browser/instance settings
 	Headless          bool
@@ -88,6 +89,26 @@ type RuntimeConfig struct {
 
 	// Observability settings
 	Observability ObservabilityConfig
+}
+
+// TransactionPolicyConfig controls MV3 network blocking for configured supplier hosts.
+// It is compiled for managed browser launch only; changes take effect on restart.
+type TransactionPolicyConfig struct {
+	Enabled    bool                    `json:"enabled,omitempty"`
+	Hosts      []string                `json:"hosts,omitempty"`
+	DenyRules  []TransactionPolicyRule `json:"denyRules,omitempty"`
+	AllowRules []TransactionPolicyRule `json:"allowRules,omitempty"`
+}
+
+// TransactionPolicyRule matches an HTTP method and a DNR-safe URL path prefix.
+// PathSegment optionally requires one exact unescaped path segment. QueryParam
+// and QueryValue optionally narrow the match to one exact unescaped query pair.
+type TransactionPolicyRule struct {
+	Method      string `json:"method,omitempty"`
+	PathPrefix  string `json:"pathPrefix,omitempty"`
+	PathSegment string `json:"pathSegment,omitempty"`
+	QueryParam  string `json:"queryParam,omitempty"`
+	QueryValue  string `json:"queryValue,omitempty"`
 }
 
 // IDPIConfig holds the configuration for the Indirect Prompt Injection (IDPI)
@@ -182,22 +203,23 @@ type ProfilesConfig struct {
 }
 
 type SecurityConfig struct {
-	AllowEvaluate          *bool        `json:"allowEvaluate,omitempty"`
-	AllowMacro             *bool        `json:"allowMacro,omitempty"`
-	AllowScreencast        *bool        `json:"allowScreencast,omitempty"`
-	AllowDownload          *bool        `json:"allowDownload,omitempty"`
-	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
-	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
-	AllowUpload            *bool        `json:"allowUpload,omitempty"`
-	AllowClipboard         *bool        `json:"allowClipboard,omitempty"`
-	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
-	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
-	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`
-	UploadMaxTotalBytes    *int         `json:"uploadMaxTotalBytes,omitempty"`
-	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
-	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
-	Attach                 AttachConfig `json:"attach,omitempty"`
-	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
+	AllowEvaluate          *bool                   `json:"allowEvaluate,omitempty"`
+	AllowMacro             *bool                   `json:"allowMacro,omitempty"`
+	AllowScreencast        *bool                   `json:"allowScreencast,omitempty"`
+	AllowDownload          *bool                   `json:"allowDownload,omitempty"`
+	DownloadAllowedDomains []string                `json:"downloadAllowedDomains,omitempty"`
+	DownloadMaxBytes       *int                    `json:"downloadMaxBytes,omitempty"`
+	AllowUpload            *bool                   `json:"allowUpload,omitempty"`
+	AllowClipboard         *bool                   `json:"allowClipboard,omitempty"`
+	UploadMaxRequestBytes  *int                    `json:"uploadMaxRequestBytes,omitempty"`
+	UploadMaxFiles         *int                    `json:"uploadMaxFiles,omitempty"`
+	UploadMaxFileBytes     *int                    `json:"uploadMaxFileBytes,omitempty"`
+	UploadMaxTotalBytes    *int                    `json:"uploadMaxTotalBytes,omitempty"`
+	MaxRedirects           *int                    `json:"maxRedirects,omitempty"`
+	TrustedProxyCIDRs      []string                `json:"trustedProxyCIDRs,omitempty"`
+	Attach                 AttachConfig            `json:"attach,omitempty"`
+	IDPI                   IDPIConfig              `json:"idpi,omitempty"`
+	TransactionPolicy      TransactionPolicyConfig `json:"transactionPolicy,omitempty"`
 }
 
 type MultiInstanceConfig struct {

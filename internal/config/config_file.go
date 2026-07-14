@@ -70,6 +70,7 @@ func DefaultFileConfig() FileConfig {
 				AllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 				AllowSchemes: []string{"ws", "wss"},
 			},
+			TransactionPolicy: TransactionPolicyConfig{Enabled: false, Hosts: []string{}, DenyRules: []TransactionPolicyRule{}, AllowRules: []TransactionPolicyRule{}},
 			IDPI: IDPIConfig{
 				Enabled:        true,
 				AllowedDomains: append([]string(nil), defaultLocalAllowedDomains...),
@@ -163,22 +164,23 @@ type profilesConfigJSON struct {
 }
 
 type securityConfigJSON struct {
-	AllowEvaluate          *bool          `json:"allowEvaluate"`
-	AllowMacro             *bool          `json:"allowMacro"`
-	AllowScreencast        *bool          `json:"allowScreencast"`
-	AllowDownload          *bool          `json:"allowDownload"`
-	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
-	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
-	AllowUpload            *bool          `json:"allowUpload"`
-	AllowClipboard         *bool          `json:"allowClipboard"`
-	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
-	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
-	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
-	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
-	MaxRedirects           *int           `json:"maxRedirects"`
-	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
-	Attach                 attachJSON     `json:"attach"`
-	IDPI                   idpiConfigJSON `json:"idpi"`
+	AllowEvaluate          *bool                   `json:"allowEvaluate"`
+	AllowMacro             *bool                   `json:"allowMacro"`
+	AllowScreencast        *bool                   `json:"allowScreencast"`
+	AllowDownload          *bool                   `json:"allowDownload"`
+	DownloadAllowedDomains []string                `json:"downloadAllowedDomains"`
+	DownloadMaxBytes       *int                    `json:"downloadMaxBytes"`
+	AllowUpload            *bool                   `json:"allowUpload"`
+	AllowClipboard         *bool                   `json:"allowClipboard"`
+	UploadMaxRequestBytes  *int                    `json:"uploadMaxRequestBytes"`
+	UploadMaxFiles         *int                    `json:"uploadMaxFiles"`
+	UploadMaxFileBytes     *int                    `json:"uploadMaxFileBytes"`
+	UploadMaxTotalBytes    *int                    `json:"uploadMaxTotalBytes"`
+	MaxRedirects           *int                    `json:"maxRedirects"`
+	TrustedProxyCIDRs      []string                `json:"trustedProxyCIDRs"`
+	Attach                 attachJSON              `json:"attach"`
+	IDPI                   idpiConfigJSON          `json:"idpi"`
+	TransactionPolicy      TransactionPolicyConfig `json:"transactionPolicy"`
 }
 
 type attachJSON struct {
@@ -304,6 +306,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
 				AllowSchemes: copyStringSlice(fc.Security.Attach.AllowSchemes),
 			},
+			TransactionPolicy: fc.Security.TransactionPolicy,
 			IDPI: idpiConfigJSON{
 				Enabled:         fc.Security.IDPI.Enabled,
 				AllowedDomains:  copyStringSlice(fc.Security.IDPI.AllowedDomains),
@@ -457,7 +460,8 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
 				AllowSchemes: append([]string(nil), cfg.AttachAllowSchemes...),
 			},
-			IDPI: cfg.IDPI,
+			IDPI:              cfg.IDPI,
+			TransactionPolicy: cfg.TransactionPolicy,
 		},
 		Profiles: ProfilesConfig{
 			BaseDir:        cfg.ProfilesBaseDir,

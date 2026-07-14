@@ -151,6 +151,10 @@ func ValidateFileConfig(fc *FileConfig) []error {
 
 	// IDPI validation
 	errs = append(errs, validateIDPIConfig(fc.Security.IDPI)...)
+	errs = append(errs, validateTransactionPolicyConfig(fc.Security.TransactionPolicy)...)
+	if fc.Security.TransactionPolicy.Enabled && len(fc.Browser.ExtensionPaths) != 0 {
+		errs = append(errs, ValidationError{Field: "browser.extensionPaths", Message: "must be empty when security.transactionPolicy is enabled"})
+	}
 	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
 	errs = append(errs, validatePositiveIntLimit("security.downloadMaxBytes", fc.Security.DownloadMaxBytes, MaxDownloadMaxBytes)...)
 	errs = append(errs, validatePositiveIntLimit("security.uploadMaxRequestBytes", fc.Security.UploadMaxRequestBytes, MaxUploadMaxRequestBytes)...)
@@ -326,6 +330,116 @@ func validateIDPIConfig(cfg IDPIConfig) []error {
 	}
 
 	return errs
+}
+
+// validateTransactionPolicyConfig validates the request guard only when enabled.
+func validateTransactionPolicyConfig(cfg TransactionPolicyConfig) []error {
+	if !cfg.Enabled {
+		return nil
+	}
+	var errs []error
+	if len(cfg.Hosts) == 0 {
+		errs = append(errs, ValidationError{Field: "security.transactionPolicy.hosts", Message: "must contain at least one host when enabled"})
+	}
+	if len(cfg.DenyRules) == 0 {
+		errs = append(errs, ValidationError{Field: "security.transactionPolicy.denyRules", Message: "must contain at least one rule when enabled"})
+	}
+	for _, host := range cfg.Hosts {
+		host = strings.TrimSpace(host)
+		if !validTransactionHost(host) {
+			errs = append(errs, ValidationError{Field: "security.transactionPolicy.hosts", Message: "host must be an exact DNS hostname or IPv4 address without a scheme, port, wildcard, trailing dot, path, or whitespace"})
+		}
+	}
+	for _, group := range []struct {
+		field string
+		rules []TransactionPolicyRule
+		allow bool
+	}{{"security.transactionPolicy.denyRules", cfg.DenyRules, false}, {"security.transactionPolicy.allowRules", cfg.AllowRules, true}} {
+		for _, rule := range group.rules {
+			method := strings.ToUpper(strings.TrimSpace(rule.Method))
+			if !isValidTransactionMethod(method) {
+				errs = append(errs, ValidationError{Field: group.field, Message: fmt.Sprintf("invalid method %q", rule.Method)})
+			}
+			if !validTransactionPathPrefix(rule.PathPrefix) {
+				errs = append(errs, ValidationError{Field: group.field, Message: fmt.Sprintf("pathPrefix %q must be an unescaped absolute path made of unreserved ASCII characters", rule.PathPrefix)})
+			}
+			if rule.PathSegment != "" && !validTransactionToken(rule.PathSegment) {
+				errs = append(errs, ValidationError{Field: group.field, Message: "pathSegment must be one unescaped unreserved path segment"})
+			}
+			if (rule.QueryParam == "") != (rule.QueryValue == "") {
+				errs = append(errs, ValidationError{Field: group.field, Message: "queryParam and queryValue must be set together"})
+			}
+			if (rule.QueryParam != "" && !validTransactionToken(rule.QueryParam)) || (rule.QueryValue != "" && !validTransactionToken(rule.QueryValue)) {
+				errs = append(errs, ValidationError{Field: group.field, Message: "queryParam/queryValue must be unescaped unreserved ASCII"})
+			}
+			if group.allow && isUnsafeTransactionMethod(method) && strings.Trim(strings.TrimSpace(rule.PathPrefix), "/") == "" && rule.QueryParam == "" {
+				errs = append(errs, ValidationError{Field: group.field, Message: "unsafe root-wide allow requires an exact query condition"})
+			}
+		}
+	}
+	return errs
+}
+
+func validTransactionHost(host string) bool {
+	if host == "" || len(host) > 253 || strings.HasSuffix(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validTransactionPathPrefix(value string) bool {
+	if !strings.HasPrefix(value, "/") || strings.Contains(value, "//") {
+		return false
+	}
+	for _, segment := range strings.Split(strings.Trim(value, "/"), "/") {
+		if segment == "" {
+			continue
+		}
+		if segment == "." || segment == ".." || !validTransactionToken(segment) {
+			return false
+		}
+	}
+	return true
+}
+
+func validTransactionToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("-._~", r)) {
+			return false
+		}
+	}
+	return true
+}
+
+func isUnsafeTransactionMethod(method string) bool {
+	switch method {
+	case "GET", "HEAD", "OPTIONS":
+		return false
+	default:
+		return true
+	}
+}
+
+func isValidTransactionMethod(method string) bool {
+	switch method {
+	case "*", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateAllowedDomainList(field string, domains []string) []error {

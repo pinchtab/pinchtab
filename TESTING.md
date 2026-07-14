@@ -40,6 +40,17 @@ go test ./...
 
 Unit tests are standard Go tests that validate individual packages and functions without launching a full server.
 
+### Transaction-policy browser proof
+
+The MV3 transaction-policy browser test is deliberately environment-gated because it needs an unpacked-extension-capable Chromium or Chrome for Testing binary; it is not claimed as a CI check. Run it explicitly with:
+
+```bash
+PINCHTAB_TEST_TRANSACTION_POLICY_CHROME=/path/to/chrome \
+  go test -tags=integration ./internal/bridge/runtime -run TestTransactionPolicyDNRIntegration -count=1
+```
+
+The fixture asserts HTTP and WebSocket evidence with server counters. Its TLS/WSS variant is not run against the self-signed local fixture because production launch flags intentionally reject certificate-bypass flags; WSS URL coverage remains unit-tested in the generated DNR rules.
+
 ## E2E Tests
 
 End-to-end tests launch a real pinchtab server with Chrome and run e2e-level tests against it.
