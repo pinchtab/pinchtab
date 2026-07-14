@@ -39,6 +39,9 @@ services:
         aliases:
           - fixtures
           - pivot-target
+          # Dedicated host whose nginx vhost roots at the scrape-site/ subdir,
+          # so a seaportal crawl of http://scrapesite/ finds the scrape fixture.
+          - scrapesite
     healthcheck:
       # Verify BOTH that nginx is up AND that the custom config is the one
       # actually loaded. /get is a synthetic endpoint defined only in

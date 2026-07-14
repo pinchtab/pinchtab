@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- JS-only application page: the initial HTML is an empty shell, so a plain
+     HTTP fetch extracts almost nothing (thin content) and the scraper should
+     route this page to a real browser. Once JavaScript runs, #app is filled
+     with a full article that browser extraction recovers — the report should
+     then mark this page source=browser. readability strips <script>, so the
+     article text below is NOT visible to static HTTP extraction. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="A JavaScript-rendered page on the scrape fixture site.">
+  <link rel="icon" href="data:,">
+  <title>App — Scrape Fixture Site</title>
+</head>
+<body>
+  <nav aria-label="Site pages"><a href="index.html">Home</a></nav>
+  <main>
+    <div id="app">Loading…</div>
+  </main>
+  <script>
+    // Build the real content in the browser, the way a single-page app would.
+    // This runs on parse, so the DOM carries the article well before the
+    // scraper reads outerHTML.
+    document.getElementById('app').innerHTML = [
+      '<article>',
+      '<h1>Rendered by JavaScript</h1>',
+      '<p>This page had no readable content in its initial HTML response. A plain',
+      ' HTTP fetch of it sees only a loading placeholder, which is why the scraper',
+      ' should decide the page needs a real browser and route it accordingly.</p>',
+      '<p>Everything in this article was produced by client-side JavaScript after',
+      ' the document loaded. When PinchTab renders the page in a real browser and',
+      ' extracts the resulting DOM, this text becomes the page content and the',
+      ' report records the content source as browser rather than HTTP.</p>',
+      '<p>The paragraphs are intentionally long so that browser extraction has a',
+      ' substantial article to recover, comfortably above the threshold that the',
+      ' readability pass needs to treat this as the main content of the page.</p>',
+      '<p>This is the single page on the scrape fixture site that exercises the',
+      ' browser-enrichment half of the pipeline end to end: thin over HTTP, whole',
+      ' once JavaScript has run.</p>',
+      '</article>',
+    ].join('');
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Static content page: full text in the initial HTML, so HTTP extraction is
+     sufficient and the report should mark this page source=http. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="About the scrape fixture site.">
+  <link rel="icon" href="data:,">
+  <title>About — Scrape Fixture Site</title>
+</head>
+<body>
+  <nav aria-label="Site pages"><a href="index.html">Home</a></nav>
+  <main>
+    <article>
+      <h1>About this fixture</h1>
+      <p>The scrape fixture site is a deterministic set of pages used by the
+         end-to-end tests for the PinchTab scrape command. It is served by the
+         same nginx container that serves the other fixtures, and its pages never
+         change between runs, which keeps the assertions stable.</p>
+      <p>This particular page is entirely server-rendered. Everything you can
+         read here is delivered in the first HTTP response, with no client-side
+         rendering involved. That makes it a good control case: the scraper's
+         HTTP extraction should capture the full text, the routing logic should
+         decide that no browser is needed, and the page should appear in the
+         report with its content source recorded as HTTP.</p>
+      <p>Keeping a few plain pages alongside the JavaScript-only application page
+         lets a single scrape run demonstrate both halves of the pipeline at once:
+         cheap HTTP extraction where it is enough, and browser rendering only
+         where it is actually required.</p>
+    </article>
+  </main>
+</body>
+</html>

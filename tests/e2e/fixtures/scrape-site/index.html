@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- scrape-site homepage: rich static content that HTTP extraction handles on
+     its own (no browser needed). Nav links let the crawler discover every
+     page. This site deliberately mixes static pages with one JS-only page
+     (app.html) so the scrape scenario can exercise HTTP-first extraction plus
+     browser-enrichment routing. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Deterministic scrape fixture site for PinchTab e2e tests.">
+  <link rel="icon" href="data:,">
+  <title>Scrape Fixture Site</title>
+</head>
+<body>
+  <header>Scrape fixture site</header>
+  <nav aria-label="Site pages">
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="guide.html">Guide</a></li>
+      <li><a href="app.html">App (JS-rendered)</a></li>
+    </ul>
+  </nav>
+  <main>
+    <article>
+      <h1>The scrape fixture site</h1>
+      <p>This site exists so the PinchTab scrape command can be tested against a
+         small but realistic tree of pages. The homepage, the about page, and the
+         guide are ordinary server-rendered HTML: their full text is present in
+         the initial response, so a plain HTTP fetch extracts everything and no
+         browser is required to read them.</p>
+      <p>One page is different on purpose. The application page ships an empty
+         shell and builds its real content in the browser with JavaScript, the
+         way a single-page app would. A plain HTTP fetch of that page sees almost
+         nothing, so the scraper should route it to a real browser, render it,
+         and recover the content that JavaScript produced.</p>
+      <p>Because every page links to every other page, the crawler can discover
+         the whole site starting from this homepage without needing a sitemap.
+         The content here is intentionally verbose so that HTTP extraction clears
+         the thin-content threshold and this page stays HTTP-sourced in the
+         report rather than being sent to the browser.</p>
+    </article>
+  </main>
+</body>
+</html>
