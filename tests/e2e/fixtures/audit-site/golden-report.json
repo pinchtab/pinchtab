@@ -9,6 +9,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -115,14 +116,14 @@
             "url": "http://fixtures/audit-site/assets/missing.js"
           },
           {
-            "resourceType": "image",
-            "status": 404,
-            "url": "http://fixtures/audit-site/assets/missing.png"
-          },
-          {
             "resourceType": "fetch",
             "status": 404,
             "url": "http://fixtures/audit-site/assets/missing.json"
+          },
+          {
+            "resourceType": "image",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.png"
           }
         ],
         "consoleLogs": [],
@@ -175,6 +176,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [
           {
             "level": "log",
@@ -214,6 +216,7 @@
     {
       "browser": {
         "accessibilityScore": 70,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -261,6 +264,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -299,6 +303,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -351,6 +356,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [
           {
             "level": "log",
@@ -382,6 +388,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -408,6 +415,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -434,6 +442,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -460,6 +469,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {
@@ -486,6 +496,7 @@
     {
       "browser": {
         "accessibilityScore": 100,
+        "brokenAssets": [],
         "consoleLogs": [],
         "interactiveElements": [
           {

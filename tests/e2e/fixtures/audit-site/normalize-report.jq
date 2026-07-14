@@ -4,8 +4,8 @@
 # Normalized away: the run timestamp, the run input (carries the caller's
 # FIXTURES_URL host), all timing metrics, screenshot payloads/paths, console
 # timestamps/sources, and network entry fields that vary per run (timings,
-# sizes, request ids); network entries are sorted by URL because subresource
-# completion order is nondeterministic.
+# sizes, request ids); network entries and broken assets are sorted by URL
+# because subresource completion order is nondeterministic (more so under load).
 #
 # Regenerate the golden report (from a runner shell against the e2e stack):
 #   curl -s -H "Authorization: Bearer $E2E_SERVER_TOKEN" -X POST "$E2E_SERVER/audit" \
@@ -22,4 +22,5 @@
     | .browser.networkRequests = ((.browser.networkRequests // [])
         | map({url: .url, method: .method, status: .status, resourceType: .resourceType})
         | sort_by(.url))
+    | .browser.brokenAssets = ((.browser.brokenAssets // []) | sort_by(.url))
   )
