@@ -344,5 +344,22 @@ func allTools() []mcp.Tool {
 			mcp.WithString("text", mcp.Description("Text to enter for prompt dialogs (only used with accept)")),
 			mcp.WithString("tabId", mcp.Description("Target tab ID")),
 		),
+
+		mcp.NewTool("pinchtab_scrape",
+			mcp.WithDescription("Scrape a whole site into a page tree of markdown. Pages are discovered and extracted over plain HTTP first (SeaPortal: sitemap/link crawl, URL-pattern sampling); only pages whose HTTP extraction is thin, blocked, or failed are re-rendered in the real browser, so JS-only content still lands. Each page records its content source (http|browser) and routing verdict. For a LARGE site, first call with preview=true for a cheap outline (titles, sizes, snippets, routing verdicts — no bodies, no browser), then expand the pages you want with only=<comma-separated urls>. Full reports can be large, so prefer preview then only over scraping everything."),
+			mcp.WithString("url", mcp.Required(), mcp.Description("Site URL to crawl (discovery seeds from this host's root)")),
+			mcp.WithBoolean("preview", mcp.Description("Outline only: page tree, sizes (charCount), and snippets — no browser rendering or full bodies. Survey a large site before expanding.")),
+			mcp.WithString("only", mcp.Description("Comma-separated URLs to expand at full fidelity instead of crawling — the drill-down after a preview")),
+			mcp.WithNumber("maxPages", mcp.Description("Maximum pages sampled across the site (default 50)")),
+			mcp.WithNumber("maxPerPattern", mcp.Description("Maximum pages sampled per URL-pattern group (default 8)")),
+			mcp.WithString("include", mcp.Description("Comma-separated regexes; only crawl URLs matching one")),
+			mcp.WithString("exclude", mcp.Description("Comma-separated regexes; skip URLs matching one")),
+			mcp.WithNumber("concurrency", mcp.Description("Pages browser-rendered in parallel (default 2, max 8)")),
+			mcp.WithBoolean("enrichAll", mcp.Description("Browser-render every reachable page, ignoring routing")),
+			mcp.WithBoolean("noBrowser", mcp.Description("HTTP crawl only; record routing verdicts without browser rendering")),
+			mcp.WithNumber("timeoutSeconds", mcp.Description("Overall HTTP crawl timeout in seconds (default 60)")),
+			mcp.WithString("browser",
+				mcp.Description("Browser to use for enrichment (e.g. chrome, cloak, ghost-chrome).")),
+		),
 	}
 }

@@ -61,5 +61,7 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		"pinchtab_record_status": handleRecordStatus(c),
 
 		"pinchtab_dialog": handleDialog(c),
+
+		"pinchtab_scrape": handleScrape(c),
 	}
 }
