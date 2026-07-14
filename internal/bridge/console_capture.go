@@ -121,12 +121,22 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 		}
 	})
 
-	go func() {
-		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
-			return runtime.Enable().Do(c)
-		}))
-	}()
+	// Enable the Runtime domain synchronously before returning. Doing this in
+	// a detached goroutine raced page load: under CPU contention the page's
+	// synchronous console.* calls fired before Runtime.enable landed, and
+	// Chrome only dispatches consoleAPICalled events after the domain is
+	// enabled — so early console/exception entries were silently dropped.
+	// Bounded so a wedged target cannot stall tab creation.
+	enableCtx, cancel := context.WithTimeout(ctx, runtimeEnableTimeout)
+	defer cancel()
+	_ = chromedp.Run(enableCtx, chromedp.ActionFunc(func(c context.Context) error {
+		return runtime.Enable().Do(c)
+	}))
 }
+
+// runtimeEnableTimeout bounds the synchronous Runtime.enable in
+// setupConsoleCapture; enabling normally takes a couple of milliseconds.
+const runtimeEnableTimeout = 5 * time.Second
 
 func (tm *TabManager) shouldEagerlyCaptureConsole() bool {
 	if tm == nil || tm.config == nil {
