@@ -263,6 +263,19 @@ pinchtab compare <live-url> <staging-url> --fail-on-diff                        
 
 Reports capture console errors, broken assets, interactive elements, accessibility score + findings, Core Web Vitals, and rule-based security findings per page. Pages that fail to load stay in the report with an `error` field (the run still exits 0). Full reference: [docs/audit.md](https://pinchtab.com/docs/audit).
 
+### Site scrape
+
+```bash
+pinchtab scrape <url> --output-dir ./scrape                # HTTP-first crawl → report.json; browser-renders only thin/blocked/JS pages
+pinchtab scrape <url> --format md --output-dir ./scrape    # also write report.md digest (page tree + per-page content)
+pinchtab scrape <url> --json                               # print the full scrape report JSON (agent-friendly)
+pinchtab scrape <url> --preview                            # cheap outline of a large site: titles, sizes, snippets, routing verdicts — no browser, no bodies
+pinchtab scrape <url> --only <page-url> --only <page-url2> # expand exactly these pages at full fidelity (drill down after --preview)
+pinchtab scrape <url> --no-browser                         # HTTP crawl only; still records which pages need the browser
+```
+
+Turns a whole site into a page tree of markdown. Each page records its content `source` (`http` or `browser`) and the routing verdict; pages that fail in both engines stay in the report with an `error` field (the run still exits 0). For a large site, `--preview` first for a token-cheap survey, then `--only <urls>` to expand what matters. Full reference: [docs/scrape.md](https://pinchtab.com/docs/scrape).
+
 ### Advanced (explicit opt-in only)
 
 These operations are high-impact and gated by security policy. Do not use unless the task specifically requires them and simpler commands are insufficient.

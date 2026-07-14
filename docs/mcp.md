@@ -81,12 +81,13 @@ pinchtab --server http://remote:9867 mcp
 
 ## Available Tools
 
-PinchTab currently exposes 38 tools:
+PinchTab currently exposes 39 tools:
 
 - Navigation: 5
 - Interaction: 9
 - Keyboard: 4
 - Content: 3
+- Site: 1
 - Tab management: 5
 - Wait utilities: 6
 - Network: 5
@@ -124,6 +125,10 @@ PinchTab currently exposes 38 tools:
 - `pinchtab_eval`
 - `pinchtab_pdf`
 - `pinchtab_find`
+
+### Site
+
+- `pinchtab_scrape` — crawl a site to markdown (HTTP-first, browser-enrich thin/JS pages). Use `preview=true` for a cheap outline, then expand chosen URLs with `only`.
 
 ### Tab Management
 
