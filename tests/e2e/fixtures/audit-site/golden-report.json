@@ -14,73 +14,61 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e7",
             "role": "link",
             "visible": true
           },
           {
             "name": "Broken assets",
-            "ref": "e11",
             "role": "link",
             "visible": true
           },
           {
             "name": "Console errors",
-            "ref": "e15",
             "role": "link",
             "visible": true
           },
           {
             "name": "Accessibility issues",
-            "ref": "e19",
             "role": "link",
             "visible": true
           },
           {
             "name": "Clean page",
-            "ref": "e23",
             "role": "link",
             "visible": true
           },
           {
             "name": "Forms",
-            "ref": "e27",
             "role": "link",
             "visible": true
           },
           {
             "name": "Cookie echo",
-            "ref": "e31",
             "role": "link",
             "visible": true
           },
           {
             "name": "Product 1",
-            "ref": "e35",
             "role": "link",
             "visible": true
           },
           {
             "name": "Product 2",
-            "ref": "e39",
             "role": "link",
             "visible": true
           },
           {
             "name": "Product 3",
-            "ref": "e43",
             "role": "link",
             "visible": true
           },
           {
             "name": "Product 4",
-            "ref": "e47",
             "role": "link",
             "visible": true
           },
           {
             "name": "Product 5",
-            "ref": "e51",
             "role": "link",
             "visible": true
           }
@@ -130,7 +118,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e7",
             "role": "link",
             "visible": true
           }
@@ -180,21 +167,20 @@
         "consoleLogs": [
           {
             "level": "log",
-            "message": "audit-fixture log message "
+            "message": "audit-fixture log message"
           },
           {
             "level": "warning",
-            "message": "audit-fixture warn message "
+            "message": "audit-fixture warn message"
           },
           {
             "level": "error",
-            "message": "audit-fixture error message "
+            "message": "audit-fixture error message"
           }
         ],
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e5",
             "role": "link",
             "visible": true
           }
@@ -220,23 +206,19 @@
         "consoleLogs": [],
         "interactiveElements": [
           {
-            "ref": "e6",
             "role": "textbox",
             "visible": true
           },
           {
-            "ref": "e7",
             "role": "link",
             "visible": true
           },
           {
-            "ref": "e8",
             "role": "button",
             "visible": true
           },
           {
             "name": "Home",
-            "ref": "e10",
             "role": "link",
             "visible": true
           }
@@ -269,19 +251,16 @@
         "interactiveElements": [
           {
             "name": "Search",
-            "ref": "e8",
             "role": "textbox",
             "visible": true
           },
           {
             "name": "Search",
-            "ref": "e9",
             "role": "button",
             "visible": true
           },
           {
             "name": "Home",
-            "ref": "e12",
             "role": "link",
             "visible": true
           }
@@ -308,25 +287,21 @@
         "interactiveElements": [
           {
             "name": "Username",
-            "ref": "e8",
             "role": "textbox",
             "visible": true
           },
           {
             "name": "Password",
-            "ref": "e11",
             "role": "textbox",
             "visible": true
           },
           {
             "name": "Sign in",
-            "ref": "e12",
             "role": "button",
             "visible": true
           },
           {
             "name": "Home",
-            "ref": "e15",
             "role": "link",
             "visible": true
           }
@@ -360,13 +335,12 @@
         "consoleLogs": [
           {
             "level": "log",
-            "message": "cookies:  "
+            "message": "cookies:"
           }
         ],
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
@@ -393,7 +367,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
@@ -420,7 +393,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
@@ -447,7 +419,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
@@ -474,7 +445,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
@@ -501,7 +471,6 @@
         "interactiveElements": [
           {
             "name": "Home",
-            "ref": "e6",
             "role": "link",
             "visible": true
           }
