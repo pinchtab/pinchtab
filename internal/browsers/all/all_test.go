@@ -104,9 +104,13 @@ func TestCloakCapabilitySupersetOfChrome(t *testing.T) {
 	cloakCaps := browsers.MustGet("cloak").Capabilities()
 
 	// Cloak intentionally lacks CapEventScreencast because its CDP proxy
-	// does not support Page.startScreencast — polling is used instead.
+	// does not support Page.startScreencast — polling is used instead — and
+	// CapRuntimeConsoleEvents because its native patches suppress Runtime
+	// domain events (bot-detection hardening); the bridge uses the Console
+	// domain fallback instead.
 	chromeOnly := map[browsers.BrowserCapability]bool{
-		browsers.CapEventScreencast: true,
+		browsers.CapEventScreencast:      true,
+		browsers.CapRuntimeConsoleEvents: true,
 	}
 
 	for _, c := range chromeCaps {

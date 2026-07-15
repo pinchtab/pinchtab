@@ -20,6 +20,12 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 	execContextSources := make(map[runtime.ExecutionContextID]string)
 	var execContextMu sync.RWMutex
 
+	// Browsers whose native stealth patches suppress Runtime domain events
+	// (no CapRuntimeConsoleEvents) record through the Console domain side
+	// session instead; the chromedp listener below must then stay silent so
+	// the buffered replay Runtime.enable still emits is not double-recorded.
+	recordViaRuntime := tm.runtimeConsoleEventsSupported()
+
 	chromedp.ListenTarget(ctx, func(ev any) {
 		switch ev := ev.(type) {
 		case *runtime.EventExecutionContextCreated:
@@ -41,6 +47,9 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			execContextMu.Unlock()
 
 		case *runtime.EventConsoleAPICalled:
+			if !recordViaRuntime {
+				return
+			}
 			var msg string
 			for _, arg := range ev.Args {
 				if len(arg.Value) > 0 {
@@ -83,6 +92,9 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			})
 
 		case *runtime.EventExceptionThrown:
+			if !recordViaRuntime {
+				return
+			}
 			msg := ev.ExceptionDetails.Text
 			if ev.ExceptionDetails.Exception != nil && ev.ExceptionDetails.Exception.Description != "" {
 				msg += ": " + ev.ExceptionDetails.Exception.Description
@@ -132,6 +144,10 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 	_ = chromedp.Run(enableCtx, chromedp.ActionFunc(func(c context.Context) error {
 		return runtime.Enable().Do(c)
 	}))
+
+	if !recordViaRuntime {
+		go tm.runConsoleDomainFallback(ctx, rawCDPID)
+	}
 }
 
 // runtimeEnableTimeout bounds the synchronous Runtime.enable in

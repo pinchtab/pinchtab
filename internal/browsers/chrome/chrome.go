@@ -113,6 +113,7 @@ func (Browser) Capabilities() browsers.CapabilitySet {
 		browsers.CapDownloads,
 		browsers.CapNetworkInterception,
 		browsers.CapEventScreencast,
+		browsers.CapRuntimeConsoleEvents,
 	)
 }
 

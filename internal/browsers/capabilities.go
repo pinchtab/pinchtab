@@ -13,6 +13,12 @@ const (
 	CapDownloads           BrowserCapability = "downloads"
 	CapNetworkInterception BrowserCapability = "networkInterception"
 	CapEventScreencast     BrowserCapability = "eventScreencast"
+	// CapRuntimeConsoleEvents marks browsers whose CDP Runtime domain delivers
+	// consoleAPICalled/exceptionThrown events after navigations. Stealth-patched
+	// builds (e.g. Cloak) natively suppress these events because Runtime.enable
+	// is a bot-detection vector; the bridge falls back to the deprecated Console
+	// domain on a side session for such browsers.
+	CapRuntimeConsoleEvents BrowserCapability = "runtimeConsoleEvents"
 )
 
 // CapabilitySet is an immutable set of BrowserCapability values.
