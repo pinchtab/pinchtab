@@ -33,5 +33,8 @@ func (h *Handlers) HandleTabGetChecked(w http.ResponseWriter, r *http.Request) {
 
 // getElementChecked resolves a unified selector to a DOM node and checks whether it is checked.
 func (h *Handlers) getElementChecked(ctx context.Context, tabID, sel string) (bool, error) {
-	return callOnResolvedElement[bool](h, ctx, tabID, sel, `function() { return !!this.checked; }`, nil)
+	return callOnResolvedElement[bool](h, ctx, tabID, sel, `function() {
+		if (typeof this.checked === "boolean") return this.checked;
+		return (this.getAttribute && this.getAttribute("role") === "checkbox" && this.getAttribute("aria-checked") === "true");
+	}`, nil)
 }

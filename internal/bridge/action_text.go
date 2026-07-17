@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/chromedp/chromedp"
@@ -36,25 +37,52 @@ func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]
 }
 
 func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	result := textEntryResult("filled", req.Text)
 	if req.Selector != "" {
-		return textEntryResult("filled", req.Text), chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
+		if err := chromedp.Run(ctx,
+			chromedp.Focus(req.Selector, chromedp.ByQuery),
+			chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery),
+		); err != nil {
+			return nil, err
+		}
+		return finishFill(ctx, result, req.Submit)
 	}
 	if req.NodeID > 0 {
 		if err := FillByNodeID(ctx, req.NodeID, req.Text); err != nil {
 			return nil, err
 		}
-		result := textEntryResult("filled", req.Text)
 		if actual, err := ReadInputValue(ctx, req.NodeID); err == nil && req.Text != "" && actual != req.Text {
 			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
 		}
-		return result, nil
+		return finishFill(ctx, result, req.Submit)
 	}
 	return nil, fmt.Errorf("need selector or ref")
+}
+
+func finishFill(ctx context.Context, result map[string]any, submit bool) (map[string]any, error) {
+	if !submit {
+		return result, nil
+	}
+	if err := DispatchNamedKey(ctx, "Enter", 0); err != nil {
+		return nil, fmt.Errorf("submit filled field: %w", err)
+	}
+	result["submitted"] = true
+	return result, nil
 }
 
 func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Key == "" {
 		return nil, fmt.Errorf("key required for press")
+	}
+	key, chordModifiers, chord, err := parsePressChord(req.Key)
+	if err != nil {
+		return nil, err
+	}
+	if chord {
+		if req.Modifiers != 0 {
+			return nil, fmt.Errorf("press chord %q also supplied modifiers; use one chord form", req.Key)
+		}
+		req.Key, req.Modifiers = key, chordModifiers
 	}
 	if req.NodeID > 0 {
 		if err := focusBackendNode(ctx, req.NodeID); err != nil {
@@ -66,6 +94,41 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 		}
 	}
 	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key, req.Modifiers)
+}
+
+func parsePressChord(value string) (key string, modifiers int, chord bool, err error) {
+	if !strings.Contains(value, "+") || value == "+" {
+		return value, 0, false, nil
+	}
+	parts := strings.Split(value, "+")
+	if len(parts) < 2 || strings.TrimSpace(parts[len(parts)-1]) == "" {
+		return "", 0, true, fmt.Errorf(
+			"invalid press chord %q; use modifiers such as Ctrl+A or Shift+ArrowLeft", value,
+		)
+	}
+	seen := 0
+	for _, raw := range parts[:len(parts)-1] {
+		var bit int
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case "alt", "option":
+			bit = 1
+		case "ctrl", "control":
+			bit = 2
+		case "meta", "cmd", "command", "super", "win":
+			bit = 4
+		case "shift":
+			bit = 8
+		default:
+			return "", 0, true, fmt.Errorf(
+				"invalid press chord modifier %q; use Ctrl, Alt, Shift, or Meta", strings.TrimSpace(raw),
+			)
+		}
+		if seen&bit != 0 {
+			return "", 0, true, fmt.Errorf("duplicate press chord modifier %q", strings.TrimSpace(raw))
+		}
+		seen |= bit
+	}
+	return strings.TrimSpace(parts[len(parts)-1]), seen, true, nil
 }
 
 func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (map[string]any, error) {

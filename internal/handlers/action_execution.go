@@ -13,6 +13,117 @@ import (
 	"github.com/pinchtab/semantic/recovery"
 )
 
+const (
+	postSubmitPollTimeout  = 3 * time.Second
+	postSubmitPollInterval = 250 * time.Millisecond
+)
+
+var readTopmostSubmitModal = bridge.TopmostModalNodeIDInFrame
+
+type submitStateSnapshot struct {
+	URL        string `json:"url"`
+	DialogOpen bool   `json:"dialogOpen"`
+}
+
+type submitPostState struct {
+	Status         string              `json:"status"`
+	Signal         string              `json:"signal"`
+	Dispatch       string              `json:"dispatch"`
+	ActionTimedOut bool                `json:"actionTimedOut"`
+	ElapsedMS      int64               `json:"elapsedMs"`
+	Before         submitStateSnapshot `json:"before"`
+	After          submitStateSnapshot `json:"after"`
+}
+
+func (h *Handlers) captureSubmitState(ctx context.Context, tabID string) (submitStateSnapshot, error) {
+	currentURL, err := h.Bridge.CurrentURL(ctx)
+	if err != nil {
+		return submitStateSnapshot{}, fmt.Errorf("read current URL: %w", err)
+	}
+	_, dialogOpen, err := readTopmostSubmitModal(ctx, h.selectorFrameID(tabID))
+	if err != nil {
+		return submitStateSnapshot{}, fmt.Errorf("read topmost dialog: %w", err)
+	}
+	return submitStateSnapshot{
+		URL:        strings.TrimSpace(currentURL),
+		DialogOpen: dialogOpen,
+	}, nil
+}
+
+func submitTransitionSignal(before, after submitStateSnapshot) string {
+	if before.URL != after.URL {
+		return "url_changed"
+	}
+	if before.DialogOpen && !after.DialogOpen {
+		return "dialog_closed"
+	}
+	return ""
+}
+
+func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, actionTimedOut bool, started time.Time) submitPostState {
+	return submitPostState{
+		Status:         "pending",
+		Signal:         "no_terminal_change",
+		Dispatch:       dispatch,
+		ActionTimedOut: actionTimedOut,
+		ElapsedMS:      time.Since(started).Milliseconds(),
+		Before:         before,
+		After:          after,
+	}
+}
+
+// pollSubmitPostState observes only conservative terminal signals. The caller
+// supplies a fresh bounded child of the live tab context, never the action
+// context that may already have reached its deadline.
+func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
+	started := time.Now()
+	after := before
+	observedPostState := false
+	var lastReadErr error
+	ticker := time.NewTicker(postSubmitPollInterval)
+	defer ticker.Stop()
+
+	for {
+		observed, err := h.captureSubmitState(ctx, tabID)
+		if err == nil {
+			observedPostState = true
+			lastReadErr = nil
+			after = observed
+			if signal := submitTransitionSignal(before, after); signal != "" {
+				return submitPostState{
+					Status:         "succeeded",
+					Signal:         signal,
+					Dispatch:       dispatch,
+					ActionTimedOut: actionTimedOut,
+					ElapsedMS:      time.Since(started).Milliseconds(),
+					Before:         before,
+					After:          after,
+				}, nil
+			}
+		} else {
+			lastReadErr = err
+		}
+
+		select {
+		case <-ctx.Done():
+			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return submitPostState{}, fmt.Errorf("post-submit observation canceled: %w", ctx.Err())
+			}
+			if !observedPostState {
+				if lastReadErr == nil {
+					lastReadErr = ctx.Err()
+				}
+				return submitPostState{}, fmt.Errorf("post-submit state was never observable: %w", lastReadErr)
+			}
+			if lastReadErr != nil && !errors.Is(lastReadErr, context.DeadlineExceeded) {
+				return submitPostState{}, fmt.Errorf("post-submit observation failed: %w", lastReadErr)
+			}
+			return pendingSubmitPostState(before, after, dispatch, actionTimedOut, started), nil
+		case <-ticker.C:
+		}
+	}
+}
+
 func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	if h.Recovery == nil || req.Ref == "" {
 		return
@@ -54,7 +165,11 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, 
 // per-step failure) before calling — refMissing=true assumes h.Recovery != nil.
 // req.NodeID is mutated in place, as the inline action/batch/macro paths did.
 func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
+	submitClick := bridge.IsSubmitClick(req.Kind, *req)
 	if refMissing {
+		if submitClick {
+			return nil, "", nil, fmt.Errorf("click submit target is unresolved; automatic recovery is disabled")
+		}
 		rr, recRes, recErr := h.Recovery.Attempt(
 			ctx, resolvedTabID, req.Ref, req.Kind,
 			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
@@ -70,7 +185,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 	}
 
 	result, backend, err := h.executeAction(ctx, *req, cfg)
-	if err != nil && shouldRetryPointerAction(*req, err) {
+	if err != nil && !submitClick && shouldRetryPointerAction(*req, err) {
 		if req.Ref != "" && shouldRetryStaleRef(err) {
 			recordStaleRefRetry()
 			h.refreshRefCache(ctx, resolvedTabID)
@@ -86,7 +201,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 	}
 
 	var rr *recovery.RecoveryResult
-	if err != nil && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
+	if err != nil && !submitClick && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
 		r2, recRes, recErr := h.Recovery.AttemptWithClassification(
 			ctx, resolvedTabID, req.Ref, req.Kind,
 			recovery.ClassifyFailure(err),

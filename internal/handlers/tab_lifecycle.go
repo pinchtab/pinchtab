@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,11 +15,16 @@ import (
 
 const tabActionNew = "new"
 
+type browserContextTabCreator interface {
+	CreateTabInBrowserContext(url, browserContextID string) (string, context.Context, context.CancelFunc, error)
+}
+
 func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Action string `json:"action"`
-		TabID  string `json:"tabId"`
-		URL    string `json:"url"`
+		Action           string `json:"action"`
+		TabID            string `json:"tabId"`
+		URL              string `json:"url"`
+		BrowserContextID string `json:"browserContextId"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -35,7 +41,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			h.navigateToURL(w, r, navigateRequest{URL: req.URL, NewTab: true})
 			return
 		}
-		h.createBlankTab(w, r)
+		h.createBlankTab(w, r, strings.TrimSpace(req.BrowserContextID))
 
 	case "focus":
 		if req.TabID == "" {
@@ -64,12 +70,42 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 // about:blank form of POST /tab {"action":"new"}. The URL form converges onto the
 // shared navigate pipeline (navigateToURL); this path has no URL to validate,
 // route, or navigate, so it reports {tabId,url,title} and a tab.new activity.
-func (h *Handlers) createBlankTab(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) createBlankTab(w http.ResponseWriter, r *http.Request, browserContextID string) {
 	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
 
-	newTabID, ctx, _, err := h.Bridge.CreateTab("")
+	var (
+		newTabID string
+		ctx      context.Context
+		err      error
+	)
+	if browserContextID == "" {
+		newTabID, ctx, _, err = h.Bridge.CreateTab("")
+	} else {
+		contextExists := false
+		targets, listErr := h.Bridge.ListTargets()
+		if listErr != nil {
+			httpx.Error(w, 503, fmt.Errorf("list browser contexts: %w", listErr))
+			return
+		}
+		for _, candidate := range targets {
+			if candidate.BrowserContextID == browserContextID {
+				contextExists = true
+				break
+			}
+		}
+		if !contextExists {
+			httpx.Error(w, 400, fmt.Errorf("browserContextId is not owned by an attached page"))
+			return
+		}
+		creator, ok := h.Bridge.(browserContextTabCreator)
+		if !ok {
+			httpx.Error(w, 501, fmt.Errorf("browser-context tab creation is unavailable"))
+			return
+		}
+		newTabID, ctx, _, err = creator.CreateTabInBrowserContext("", browserContextID)
+	}
 	if err != nil {
 		httpx.Error(w, 500, err)
 		return
@@ -80,7 +116,12 @@ func (h *Handlers) createBlankTab(w http.ResponseWriter, r *http.Request) {
 
 	h.setCurrentTabForRequest(r, newTabID)
 	h.recordActivity(r, activity.Update{Action: "tab.new", TabID: newTabID, URL: curURL})
-	httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
+	markCreatedTab(w, newTabID)
+	response := map[string]any{"tabId": newTabID, "url": curURL, "title": title}
+	if browserContextID != "" {
+		response["browserContextId"] = browserContextID
+	}
+	httpx.JSON(w, 200, response)
 }
 
 // HandleTabClose closes the tab identified by the path. It is the tab-scoped

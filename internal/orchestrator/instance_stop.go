@@ -16,6 +16,14 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
+var (
+	shutdownRequestTimeout      = 4 * time.Second
+	registeredBridgeStopTimeout = 5 * time.Second
+	gracefulProcessStopTimeout  = 5 * time.Second
+	termProcessStopTimeout      = 3 * time.Second
+	killProcessStopTimeout      = 2 * time.Second
+)
+
 func (o *Orchestrator) Stop(id string) error {
 	o.mu.Lock()
 	inst, ok := o.instances[id]
@@ -32,16 +40,10 @@ func (o *Orchestrator) Stop(id string) error {
 	o.mu.Unlock()
 
 	if inst.cmd == nil {
-		if inst.AttachType == "bridge" {
-			reqCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			defer cancel()
-			targetURL, targetErr := o.instancePathURL(inst, "/shutdown", "")
-			if targetErr == nil {
-				req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
-				o.applyInstanceAuth(req, inst)
-				if resp, err := o.client.Do(req); err == nil {
-					_ = resp.Body.Close()
-				}
+		if inst.AttachType == "bridge" || inst.AttachType == "cdp-bridge" {
+			if err := o.stopRegisteredBridge(inst); err != nil {
+				o.setStopError(id, err.Error())
+				return err
 			}
 		}
 		o.markStopped(id)
@@ -50,7 +52,7 @@ func (o *Orchestrator) Stop(id string) error {
 
 	pid := inst.cmd.PID()
 
-	reqCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	reqCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
 	defer cancel()
 	if targetURL, targetErr := o.instancePathURL(inst, "/shutdown", ""); targetErr == nil {
 		req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
@@ -62,7 +64,7 @@ func (o *Orchestrator) Stop(id string) error {
 	}
 
 	if pid > 0 {
-		if waitForProcessExit(pid, 5*time.Second) {
+		if waitForProcessExit(pid, gracefulProcessStopTimeout) {
 			o.markStopped(id)
 			return nil
 		}
@@ -70,7 +72,7 @@ func (o *Orchestrator) Stop(id string) error {
 		if err := killProcessGroup(pid, sigTERM); err != nil {
 			slog.Warn("failed to send SIGTERM to instance", "id", id, "pid", pid, "err", err)
 		}
-		if waitForProcessExit(pid, 3*time.Second) {
+		if waitForProcessExit(pid, termProcessStopTimeout) {
 			o.markStopped(id)
 			return nil
 		}
@@ -83,7 +85,7 @@ func (o *Orchestrator) Stop(id string) error {
 	inst.cmd.Cancel()
 
 	if pid > 0 {
-		if waitForProcessExit(pid, 2*time.Second) {
+		if waitForProcessExit(pid, killProcessStopTimeout) {
 			o.markStopped(id)
 			return nil
 		}
@@ -93,6 +95,60 @@ func (o *Orchestrator) Stop(id string) error {
 
 	o.markStopped(id)
 	return nil
+}
+
+func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
+	shutdownURL, err := o.instancePathURL(inst, "/shutdown", "")
+	if err != nil {
+		return fmt.Errorf("cannot stop registered bridge %q: %w", inst.ID, err)
+	}
+	requestCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
+	request, requestErr := http.NewRequestWithContext(requestCtx, http.MethodPost, shutdownURL.String(), nil)
+	if requestErr == nil {
+		o.applyInstanceAuth(request, inst)
+		response, doErr := o.client.Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+			if response.StatusCode < 200 || response.StatusCode >= 300 {
+				requestErr = fmt.Errorf("shutdown returned HTTP %d", response.StatusCode)
+			}
+		}
+		if doErr != nil {
+			requestErr = doErr
+		}
+	}
+	cancel()
+
+	if o.waitForBridgeEndpointExit(inst, registeredBridgeStopTimeout) {
+		return nil
+	}
+	if requestErr != nil {
+		return fmt.Errorf("registered bridge %q did not stop: %w", inst.ID, requestErr)
+	}
+	return fmt.Errorf("registered bridge %q acknowledged shutdown but its endpoint is still reachable", inst.ID)
+}
+
+func (o *Orchestrator) waitForBridgeEndpointExit(inst *InstanceInternal, timeout time.Duration) bool {
+	healthURL, err := o.instancePathURL(inst, "/health", "")
+	if err != nil {
+		return false
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		probeCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		request, _ := http.NewRequestWithContext(probeCtx, http.MethodGet, healthURL.String(), nil)
+		o.applyInstanceAuth(request, inst)
+		response, probeErr := o.client.Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		cancel()
+		if probeErr != nil {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
 }
 
 func (o *Orchestrator) StopProfile(name string) error {

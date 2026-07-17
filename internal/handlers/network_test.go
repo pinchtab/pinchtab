@@ -51,7 +51,36 @@ func (m *networkMockBridge) NetworkMonitor() *bridge.NetworkMonitor {
 
 func newNetworkTestHandler(nm *bridge.NetworkMonitor) *Handlers {
 	b := &networkMockBridge{nm: nm}
-	return New(b, &config.RuntimeConfig{}, nil, nil, nil)
+	return New(b, &config.RuntimeConfig{AllowNetworkIntercept: true}, nil, nil, nil)
+}
+
+func TestNetworkDetailAndClearRequireNetworkIntercept(t *testing.T) {
+	h := New(&networkMockBridge{nm: bridge.NewNetworkMonitor(100)}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/network/request-1"},
+		{http.MethodGet, "/tabs/tab1/network/request-1"},
+		{http.MethodPost, "/network/clear"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403: %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), "network_intercept_disabled") ||
+				!strings.Contains(w.Body.String(), "security.allowNetworkIntercept") {
+				t.Fatalf("disabled response missing catalog metadata: %s", w.Body.String())
+			}
+		})
+	}
 }
 
 func seedBuffer(nm *bridge.NetworkMonitor, tabID string) {

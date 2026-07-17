@@ -16,6 +16,15 @@ import (
 type SessionAPI struct {
 	store             *session.Store
 	browsersAvailable []string
+	sessionTabIDs     func(string) []string
+}
+
+// SetSessionTabSource wires the orchestrator's successful-creation ledger into
+// revoke responses without coupling the dashboard package to the orchestrator.
+func (a *SessionAPI) SetSessionTabSource(source func(string) []string) {
+	if a != nil {
+		a.sessionTabIDs = source
+	}
 }
 
 // NewSessionAPI creates a new session API handler.
@@ -137,9 +146,16 @@ func (a *SessionAPI) handleRevoke(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusForbidden, "forbidden", "not allowed to revoke this session", false, nil)
 		return
 	}
+	remainingTabIDs := []string{}
+	if a.sessionTabIDs != nil {
+		remainingTabIDs = append(remainingTabIDs, a.sessionTabIDs(id)...)
+	}
 	if !a.store.Revoke(id) {
 		httpx.ErrorCode(w, http.StatusNotFound, "session_not_found", "session not found", false, nil)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"status":          "ok",
+		"remainingTabIds": remainingTabIDs,
+	})
 }

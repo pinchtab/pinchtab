@@ -40,6 +40,12 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 	}
 
 	if kind == "click" {
+		if submit, _ := cmd.Flags().GetBool("submit"); submit {
+			body["submit"] = true
+		}
+		if dismiss, _ := cmd.Flags().GetBool("dismiss-known-interstitials"); dismiss {
+			body["dismissKnownInterstitials"] = true
+		}
 		waitNav, _ := cmd.Flags().GetBool("wait-nav")
 		if waitNav {
 			body["waitNav"] = true
@@ -178,6 +184,21 @@ func printActionResult(kind string, result map[string]any) {
 		}
 		output.Error(kind, errMsg, output.ExitNotFound)
 		return
+	}
+	if actionResult, ok := result["result"].(map[string]any); ok {
+		if postState, ok := actionResult["postState"].(map[string]any); ok {
+			status, _ := postState["status"].(string)
+			signal, _ := postState["signal"].(string)
+			switch status {
+			case "pending":
+				output.Value("PENDING")
+				output.Hint("submit post-state is still pending; do not retry automatically")
+				return
+			case "succeeded":
+				output.Value("SUCCEEDED " + signal)
+				return
+			}
+		}
 	}
 
 	output.Success()
@@ -393,6 +414,9 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 	case "fill":
 		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
+		if submit, _ := cmd.Flags().GetBool("submit"); submit {
+			body["submit"] = true
+		}
 	case "press":
 		if len(args) >= 2 {
 			setSelectorBody(body, args[0])

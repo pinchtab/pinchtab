@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -468,6 +469,9 @@ func TestHandleNavigate_AdapterServedTab_ExistingTab_ReturnsAdapterResult(t *tes
 	if resp["title"] != "Static Page" {
 		t.Fatalf("title = %v, want adapter title", resp["title"])
 	}
+	if got := w.Header().Get(activity.HeaderPTTabCreated); got != "" {
+		t.Fatalf("existing-tab navigate marked tab created: %q", got)
+	}
 }
 
 func TestHandleNavigate_AdapterServedTab_NewTab_ClosesUnusedBlankTab(t *testing.T) {
@@ -498,6 +502,12 @@ func TestHandleNavigate_AdapterServedTab_NewTab_ClosesUnusedBlankTab(t *testing.
 	}
 	if len(m.closedTabs) != 1 || m.closedTabs[0] != "tab_abc12345" {
 		t.Fatalf("closedTabs = %v, want the unused blank tab [tab_abc12345]", m.closedTabs)
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "lite-1" {
+		t.Fatalf("created tab header = %q, want lite-1", got)
+	}
+	if got := w.Header().Get(activity.HeaderPTTabCreated); got != "true" {
+		t.Fatalf("created marker header = %q, want true", got)
 	}
 }
 
@@ -665,6 +675,12 @@ func TestHandleNavigate_StaticFirstServesWithoutChromeLaunch(t *testing.T) {
 	}
 	if len(m.createTabURLs) != 0 {
 		t.Fatalf("a Chrome tab was created for a static-served navigate: %v", m.createTabURLs)
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "lite-1" {
+		t.Fatalf("created tab header = %q, want lite-1", got)
+	}
+	if got := w.Header().Get(activity.HeaderPTTabCreated); got != "true" {
+		t.Fatalf("created marker header = %q, want true", got)
 	}
 }
 

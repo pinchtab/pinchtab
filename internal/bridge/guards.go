@@ -50,7 +50,7 @@ func classifyActionError(err error) error {
 }
 
 func shouldCheckUnexpectedNavigation(req ActionRequest) bool {
-	return !req.WaitNav
+	return !req.WaitNav && !IsSubmitClick(req.Kind, req)
 }
 
 func checkUnexpectedNavigation(before, after string) error {

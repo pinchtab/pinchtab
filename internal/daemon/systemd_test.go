@@ -107,3 +107,20 @@ func TestSystemdUserManagerLogsFallsBackToJournalctl(t *testing.T) {
 		t.Fatalf("journalctl call = %v, want %q", runner.calls, expected)
 	}
 }
+
+func TestSystemdUserManagerRestartUsesExactlyOneManagerCommand(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeCommandRunner{}
+	manager := &systemdUserManager{
+		env:    environment{homeDir: root, osName: "linux"},
+		runner: runner,
+	}
+
+	if _, err := manager.Restart(); err != nil {
+		t.Fatalf("Restart returned error: %v", err)
+	}
+	want := []string{"systemctl --user restart pinchtab.service"}
+	if strings.Join(runner.calls, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("restart calls = %v, want %v", runner.calls, want)
+	}
+}

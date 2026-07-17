@@ -243,6 +243,37 @@ func TestAgentSessionAPI_Revoke(t *testing.T) {
 	}
 }
 
+func TestAgentSessionAPI_RevokeReturnsRemainingOwnedTabIDs(t *testing.T) {
+	store := newTestSessionStore()
+	id, _, _ := store.Create("agent-1", "", "")
+	api := NewSessionAPI(store, nil)
+	api.SetSessionTabSource(func(gotID string) []string {
+		if gotID != id {
+			t.Fatalf("tab source session id = %q, want %q", gotID, id)
+		}
+		if _, ok := store.Get(id); !ok {
+			t.Fatal("tab source must be read before the session is revoked")
+		}
+		return []string{"tab-a", "tab-b"}
+	})
+	mux := http.NewServeMux()
+	api.RegisterHandlers(mux)
+
+	req := httptest.NewRequest("POST", "/sessions/"+id+"/revoke", nil)
+	req.Header.Set("Authorization", "Bearer dashboard-token")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	resp := decodeSessionResponse(t, w)
+	tabs, ok := resp["remainingTabIds"].([]any)
+	if !ok || len(tabs) != 2 || tabs[0] != "tab-a" || tabs[1] != "tab-b" {
+		t.Fatalf("remainingTabIds = %#v, want [tab-a tab-b]", resp["remainingTabIds"])
+	}
+}
+
 func TestAgentSessionAPI_Revoke_NotFound(t *testing.T) {
 	store := newTestSessionStore()
 	mux := newTestSessionMux(store)

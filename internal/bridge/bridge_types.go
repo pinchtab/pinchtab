@@ -125,7 +125,12 @@ type TextResult struct {
 }
 
 type NavigateParams struct {
-	MaxRedirects       int
+	MaxRedirects int
+	// DispatchOnly sends Page.navigate and returns after Chrome accepts it,
+	// without waiting for load/ready state. The caller must poll the explicit
+	// tab for readiness. This is used for headed background tabs whose SPA load
+	// event can remain pending indefinitely without ever activating the window.
+	DispatchOnly       bool
 	AllowInternal      bool
 	TrustedProxyCIDRs  []net.IPNet
 	TrustedResolvedIPs []net.IP

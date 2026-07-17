@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
@@ -26,6 +27,31 @@ func NavigatePage(ctx context.Context, url string) error {
 	}
 
 	return waitForReadyStateAfterNavigation(ctx)
+}
+
+// DispatchNavigation wakes a headed background renderer without activating its
+// OS window, sends one navigation command, and returns as soon as the target
+// accepts it. Callers retain the tab context and poll readiness separately.
+// Focus emulation is intentionally fail-closed: falling back to Page.bringToFront
+// would violate the background-open contract.
+func DispatchNavigation(ctx context.Context, url string) error {
+	replaceInitialBlank, err := shouldReplaceInitialBlankNavigation(ctx)
+	if err != nil {
+		return fmt.Errorf("inspect initial navigation: %w", err)
+	}
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(execCtx context.Context) error {
+		return dispatchBackgroundNavigation(execCtx, url, replaceInitialBlank)
+	}))
+}
+
+func dispatchBackgroundNavigation(ctx context.Context, url string, replaceInitialBlank bool) error {
+	if err := emulation.SetFocusEmulationEnabled(true).Do(ctx); err != nil {
+		return fmt.Errorf("enable background focus emulation: %w", err)
+	}
+	if err := page.SetWebLifecycleState(page.SetWebLifecycleStateStateActive).Do(ctx); err != nil {
+		return fmt.Errorf("activate background web lifecycle: %w", err)
+	}
+	return startNavigation(ctx, url, replaceInitialBlank)
 }
 
 // waitForReadyStateAfterNavigation polls document.readyState every 200ms until it

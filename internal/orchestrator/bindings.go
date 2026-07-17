@@ -16,11 +16,12 @@ import (
 // have no lifecycle signal, so agent bindings are bounded by an idle TTL and
 // an LRU cap to prevent unbounded growth.
 type Bindings struct {
-	mu        sync.RWMutex
-	session   map[string]string    // sessionID → instanceID
-	agent     map[string]string    // agentID   → instanceID
-	agentSeen map[string]time.Time // agentID   → last access
-	now       func() time.Time
+	mu          sync.RWMutex
+	session     map[string]string            // sessionID → instanceID
+	sessionTabs map[string]map[string]string // sessionID → tabID → instanceID
+	agent       map[string]string            // agentID   → instanceID
+	agentSeen   map[string]time.Time         // agentID   → last access
+	now         func() time.Time
 }
 
 // NewBindings returns an empty bindings table. Pass nil for `now` to use
@@ -30,10 +31,11 @@ func NewBindings(now func() time.Time) *Bindings {
 		now = time.Now
 	}
 	return &Bindings{
-		session:   make(map[string]string),
-		agent:     make(map[string]string),
-		agentSeen: make(map[string]time.Time),
-		now:       now,
+		session:     make(map[string]string),
+		sessionTabs: make(map[string]map[string]string),
+		agent:       make(map[string]string),
+		agentSeen:   make(map[string]time.Time),
+		now:         now,
 	}
 }
 
@@ -75,6 +77,58 @@ func (b *Bindings) BindSession(id, instanceID string) {
 	b.mu.Unlock()
 }
 
+// OwnSessionTab records a tab created for a session after the bridge confirms
+// the creation succeeded. A tab is listed under only the session that created it.
+func (b *Bindings) OwnSessionTab(sessionID, instanceID, tabID string) {
+	if b == nil || sessionID == "" || instanceID == "" || tabID == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for id, tabs := range b.sessionTabs {
+		if id != sessionID {
+			delete(tabs, tabID)
+			if len(tabs) == 0 {
+				delete(b.sessionTabs, id)
+			}
+		}
+	}
+	if b.sessionTabs[sessionID] == nil {
+		b.sessionTabs[sessionID] = make(map[string]string)
+	}
+	b.sessionTabs[sessionID][tabID] = instanceID
+}
+
+// ReleaseTab removes a closed tab from every session ownership set.
+func (b *Bindings) ReleaseTab(tabID string) {
+	if b == nil || tabID == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for id, tabs := range b.sessionTabs {
+		delete(tabs, tabID)
+		if len(tabs) == 0 {
+			delete(b.sessionTabs, id)
+		}
+	}
+}
+
+// SessionTabIDs returns a stable snapshot of tabs created for a session.
+func (b *Bindings) SessionTabIDs(sessionID string) []string {
+	if b == nil || sessionID == "" {
+		return []string{}
+	}
+	b.mu.RLock()
+	ids := make([]string, 0, len(b.sessionTabs[sessionID]))
+	for tabID := range b.sessionTabs[sessionID] {
+		ids = append(ids, tabID)
+	}
+	b.mu.RUnlock()
+	sort.Strings(ids)
+	return ids
+}
+
 // BindAgent associates an agent id with an instance and updates its idle
 // timestamp.
 func (b *Bindings) BindAgent(id, instanceID string) {
@@ -94,6 +148,7 @@ func (b *Bindings) ClearSession(id string) {
 	}
 	b.mu.Lock()
 	delete(b.session, id)
+	delete(b.sessionTabs, id)
 	b.mu.Unlock()
 }
 
@@ -119,6 +174,16 @@ func (b *Bindings) ClearInstance(instanceID string) {
 	for id, target := range b.session {
 		if target == instanceID {
 			delete(b.session, id)
+		}
+	}
+	for sessionID, tabs := range b.sessionTabs {
+		for tabID, target := range tabs {
+			if target == instanceID {
+				delete(tabs, tabID)
+			}
+		}
+		if len(tabs) == 0 {
+			delete(b.sessionTabs, sessionID)
 		}
 	}
 	for id, target := range b.agent {

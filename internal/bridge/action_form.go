@@ -4,9 +4,63 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
+
+const checkableStateJS = `function() {
+	var tag = this.tagName ? this.tagName.toLowerCase() : "";
+	var type = (this.type || "").toLowerCase();
+	if (tag === "input" && (type === "checkbox" || type === "radio")) {
+		return {kind: type, state: this.checked ? "true" : "false"};
+	}
+	var role = (this.getAttribute && this.getAttribute("role") || "").toLowerCase();
+	if (role === "checkbox") {
+		var aria = (this.getAttribute("aria-checked") || "").toLowerCase();
+		if (aria === "true" || aria === "false" || aria === "mixed") {
+			return {kind: "aria-checkbox", state: aria};
+		}
+		return {error: "role=checkbox requires aria-checked=true, false, or mixed"};
+	}
+	return {error: "element is not a checkbox, radio, or role=checkbox control (got " + tag + "[type=" + type + "][role=" + role + "])"};
+}`
+
+type checkableState struct {
+	Error string `json:"error"`
+	Kind  string `json:"kind"`
+	State string `json:"state"`
+}
+
+func readCheckableState(ctx context.Context, objectID string) (checkableState, error) {
+	var callResult json.RawMessage
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": checkableStateJS,
+			"objectId":            objectID,
+			"returnByValue":       true,
+		}, &callResult)
+	}))
+	if err != nil {
+		return checkableState{}, err
+	}
+	var response struct {
+		Result struct {
+			Value json.RawMessage `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(callResult, &response); err != nil {
+		return checkableState{}, err
+	}
+	var state checkableState
+	if err := json.Unmarshal(response.Result.Value, &state); err != nil {
+		return checkableState{}, err
+	}
+	if state.Error != "" {
+		return checkableState{}, fmt.Errorf("%s", state.Error)
+	}
+	return state, nil
+}
 
 func (b *Bridge) actionFocus(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Selector != "" {
@@ -112,53 +166,18 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 		return nil, err
 	}
 
-	// Validate element is a checkbox or radio, and read current checked state.
-	var isChecked bool
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		js := `function() {
-			var tag = this.tagName ? this.tagName.toLowerCase() : "";
-			var type = (this.type || "").toLowerCase();
-			if (tag !== "input" || (type !== "checkbox" && type !== "radio")) {
-				return {error: "element is not a checkbox or radio input (got " + tag + "[type=" + type + "])"};
-			}
-			return {checked: this.checked};
-		}`
-		var callResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": js,
-			"objectId":            objectID,
-			"returnByValue":       true,
-		}, &callResult); err != nil {
-			return err
-		}
-		var cr struct {
-			Result struct {
-				Value json.RawMessage `json:"value"`
-			} `json:"result"`
-		}
-		if err := json.Unmarshal(callResult, &cr); err != nil {
-			return err
-		}
-		var val struct {
-			Error   string `json:"error"`
-			Checked bool   `json:"checked"`
-		}
-		if err := json.Unmarshal(cr.Result.Value, &val); err != nil {
-			return err
-		}
-		if val.Error != "" {
-			return fmt.Errorf("%s", val.Error)
-		}
-		isChecked = val.Checked
-		return nil
-	}))
+	state, err := readCheckableState(ctx, objectID)
 	if err != nil {
 		return nil, err
+	}
+	desired := "false"
+	if wantChecked {
+		desired = "true"
 	}
 
 	// Click only if state needs to change. Use the JS-dispatch path so the
 	// toggle isn't gated on the headless=new CDP renderer ack chain.
-	if isChecked != wantChecked {
+	if state.State != desired {
 		if req.NodeID > 0 {
 			if err := JSClickByBackendNode(ctx, req.NodeID); err != nil {
 				return nil, err
@@ -174,5 +193,29 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 		}
 	}
 
-	return map[string]any{"checked": wantChecked}, nil
+	// Framework-backed ARIA controls often update state on the next task. Poll
+	// briefly and report the observed value instead of claiming the requested
+	// state without proof.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		observed, observeErr := readCheckableState(ctx, objectID)
+		if observeErr == nil && observed.State == desired {
+			return map[string]any{
+				"checked":     wantChecked,
+				"controlType": observed.Kind,
+				"verified":    true,
+			}, nil
+		}
+		if time.Now().After(deadline) {
+			if observeErr != nil {
+				return nil, fmt.Errorf("verify checked state: %w", observeErr)
+			}
+			return nil, fmt.Errorf("checked state remained %q after requesting %q", observed.State, desired)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
 }

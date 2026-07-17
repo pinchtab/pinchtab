@@ -391,11 +391,19 @@ func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *h
 	// a successful proxy response so failed requests never create or move
 	// routing state.
 	if o.bindings != nil && targetInstanceID != "" {
-		if id := sessionIDForRouting(origReq); id != "" {
-			o.bindings.BindSession(id, targetInstanceID)
+		if sessionID := sessionIDForRouting(origReq); sessionID != "" {
+			o.bindings.BindSession(sessionID, targetInstanceID)
+			if strings.EqualFold(strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabCreated)), "true") {
+				if tabID := strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)); tabID != "" {
+					o.bindings.OwnSessionTab(sessionID, targetInstanceID, tabID)
+				}
+			}
 		}
 		if id := strings.TrimSpace(origReq.Header.Get(activity.HeaderAgentID)); id != "" {
 			o.bindings.BindAgent(id, targetInstanceID)
+		}
+		if tabID := closedTabID(origReq, resp); tabID != "" {
+			o.bindings.ReleaseTab(tabID)
 		}
 	}
 
@@ -405,6 +413,20 @@ func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *h
 	if o.tabsCache != nil && targetInstanceID != "" && tabsCacheRequestAffectsTabs(origReq, resp) {
 		o.tabsCache.Invalidate(targetInstanceID)
 	}
+}
+
+func closedTabID(req *http.Request, resp *http.Response) string {
+	if req == nil || resp == nil || req.Method != http.MethodPost {
+		return ""
+	}
+	path := strings.TrimSpace(req.URL.Path)
+	if path != "/close" && !(strings.HasPrefix(path, "/tabs/") && strings.HasSuffix(path, "/close")) {
+		return ""
+	}
+	if tabID := strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)); tabID != "" {
+		return tabID
+	}
+	return tabClosePathID(req)
 }
 
 // tabsCacheRequestAffectsTabs reports whether a successful response should

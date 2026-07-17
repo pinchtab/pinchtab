@@ -15,10 +15,11 @@ import (
 )
 
 type TabTarget struct {
-	TargetID string `json:"targetId"`
-	URL      string `json:"url"`
-	Title    string `json:"title"`
-	Type     string `json:"type"`
+	TargetID         string `json:"targetId"`
+	URL              string `json:"url"`
+	Title            string `json:"title"`
+	Type             string `json:"type"`
+	BrowserContextID string `json:"browserContextId,omitempty"`
 }
 
 var ErrBrowserDraining = errors.New("browser restart in progress; retry shortly")

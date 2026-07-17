@@ -62,6 +62,9 @@ func TestShouldCheckUnexpectedNavigation(t *testing.T) {
 	if shouldCheckUnexpectedNavigation(ActionRequest{WaitNav: true}) {
 		t.Fatal("WaitNav=true should disable navigation guard")
 	}
+	if shouldCheckUnexpectedNavigation(ActionRequest{Kind: ActionClick, Submit: true}) {
+		t.Fatal("click submit should treat navigation as an expected post-state")
+	}
 }
 
 func TestReadActionURL_NoChromeDPContext(t *testing.T) {

@@ -19,6 +19,36 @@ func TestBindings_SessionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBindings_SessionTabsAreIsolatedAndReleased(t *testing.T) {
+	b := NewBindings(nil)
+	b.OwnSessionTab("ses_1", "inst_a", "tab_b")
+	b.OwnSessionTab("ses_1", "inst_a", "tab_a")
+	b.OwnSessionTab("ses_2", "inst_b", "tab_c")
+
+	if got := b.SessionTabIDs("ses_1"); len(got) != 2 || got[0] != "tab_a" || got[1] != "tab_b" {
+		t.Fatalf("ses_1 tabs = %v, want [tab_a tab_b]", got)
+	}
+	if got := b.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab_c" {
+		t.Fatalf("ses_2 tabs = %v, want [tab_c]", got)
+	}
+
+	b.ReleaseTab("tab_a")
+	if got := b.SessionTabIDs("ses_1"); len(got) != 1 || got[0] != "tab_b" {
+		t.Fatalf("ses_1 tabs after close = %v, want [tab_b]", got)
+	}
+	if got := b.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab_c" {
+		t.Fatalf("closing ses_1 tab changed ses_2 tabs: %v", got)
+	}
+
+	b.ClearSession("ses_1")
+	if got := b.SessionTabIDs("ses_1"); len(got) != 0 {
+		t.Fatalf("cleared session tabs = %v, want empty", got)
+	}
+	if got := b.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab_c" {
+		t.Fatalf("clearing ses_1 changed ses_2 tabs: %v", got)
+	}
+}
+
 func TestBindings_AgentResolveBumpsIdle(t *testing.T) {
 	t0 := time.Unix(1_700_000_000, 0)
 	clock := t0
@@ -86,6 +116,8 @@ func TestBindings_ClearInstanceDropsEveryReference(t *testing.T) {
 	b.BindSession("ses_2", "inst_b")
 	b.BindAgent("agent-1", "inst_a")
 	b.BindAgent("agent-2", "inst_b")
+	b.OwnSessionTab("ses_1", "inst_a", "tab-a")
+	b.OwnSessionTab("ses_2", "inst_b", "tab-b")
 
 	b.ClearInstance("inst_a")
 
@@ -101,6 +133,12 @@ func TestBindings_ClearInstanceDropsEveryReference(t *testing.T) {
 	if _, ok := b.ResolveAgent("agent-2"); !ok {
 		t.Fatal("agent for surviving instance should remain")
 	}
+	if got := b.SessionTabIDs("ses_1"); len(got) != 0 {
+		t.Fatalf("tabs for cleared instance = %v, want empty", got)
+	}
+	if got := b.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab-b" {
+		t.Fatalf("tabs for surviving instance = %v, want [tab-b]", got)
+	}
 }
 
 func TestBindings_NilSafe(t *testing.T) {
@@ -114,6 +152,11 @@ func TestBindings_NilSafe(t *testing.T) {
 		t.Fatal("nil should resolve nothing")
 	}
 	b.ClearInstance("anything")
+	b.OwnSessionTab("a", "b", "c")
+	b.ReleaseTab("c")
+	if got := b.SessionTabIDs("a"); len(got) != 0 {
+		t.Fatalf("nil SessionTabIDs = %v, want empty", got)
+	}
 	b.PruneAgents(time.Hour, 1)
 }
 

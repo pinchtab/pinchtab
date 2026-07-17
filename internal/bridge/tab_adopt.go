@@ -36,9 +36,20 @@ func (tm *TabManager) tabBlockPatterns() []string {
 	return blockPatterns
 }
 
-func (tm *TabManager) setupManagedTarget(ctx context.Context, tabID, rawCDPID string) bool {
+func (tm *TabManager) setupManagedTarget(ctx context.Context, tabID, rawCDPID string) (bool, error) {
 	if tm.onTabSetup != nil {
-		tm.onTabSetup(ctx, tabID)
+		var err error
+		if chromedp.FromContext(ctx) == nil {
+			// Preserve the direct-executor seam used by focused unit tests.
+			err = tm.onTabSetup(ctx, tabID)
+		} else {
+			err = chromedp.Run(ctx, chromedp.ActionFunc(func(execCtx context.Context) error {
+				return tm.onTabSetup(execCtx, tabID)
+			}))
+		}
+		if err != nil {
+			return false, err
+		}
 	}
 	if blockPatterns := tm.tabBlockPatterns(); len(blockPatterns) > 0 {
 		if err := SetResourceBlocking(ctx, blockPatterns); err != nil {
@@ -61,7 +72,7 @@ func (tm *TabManager) setupManagedTarget(ctx context.Context, tabID, rawCDPID st
 	if consoleEnabled {
 		tm.setupConsoleCapture(ctx, rawCDPID)
 	}
-	return consoleEnabled
+	return consoleEnabled, nil
 }
 
 func (tm *TabManager) enforceAdoptTabLimit() error {
@@ -128,7 +139,11 @@ func (tm *TabManager) adoptExistingTarget(targetID target.ID, enforceLimit bool)
 	}
 
 	ctx, cancel := chromedp.NewContext(tm.browserCtx, chromedp.WithTargetID(targetID))
-	consoleEnabled := tm.setupManagedTarget(ctx, tabID, rawCDPID)
+	consoleEnabled, err := tm.setupManagedTarget(ctx, tabID, rawCDPID)
+	if err != nil {
+		cancel()
+		return "", fmt.Errorf("setup tab %s: %w", tabID, err)
+	}
 	now := time.Now()
 
 	tm.mu.Lock()

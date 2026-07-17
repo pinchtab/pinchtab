@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -48,6 +49,21 @@ func (h *Handlers) enforceCurrentTabDomainPolicy(w http.ResponseWriter, r *http.
 
 	currentURL, err := h.Bridge.CurrentURL(lookupCtx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			httpx.ErrorCode(
+				w,
+				http.StatusServiceUnavailable,
+				"tab_unresponsive",
+				fmt.Sprintf("tab %s is busy, suspended, or unresponsive; activate it or open a fresh tab, then retry the same explicit tab", tabID),
+				true,
+				map[string]any{
+					"tabId":               tabID,
+					"classification":      "suspended_or_busy",
+					"requiresStateChange": true,
+				},
+			)
+			return "", false
+		}
 		httpx.Error(w, 500, fmt.Errorf("resolve current tab url: %w", err))
 		return "", false
 	}

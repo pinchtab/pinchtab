@@ -13,7 +13,9 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/selector"
 )
 
 // @Endpoint GET /text
@@ -50,30 +52,64 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	// reach at least "interactive" before extracting text. Prevents empty or
 	// partial results when text is called before the page finishes loading.
 	h.waitForReadyState(tCtx)
-
 	selectorParam := r.URL.Query().Get("selector")
 	refParam := r.URL.Query().Get("ref")
-	if selectorParam != "" || refParam != "" {
-		h.writeElementText(w, r, tCtx, resolvedTabID, selectorParam, refParam)
-		return
-	}
+	ghostRoute := textRoute != nil && textRoute.UsedBrowser == config.BrowserGhostChrome
+	for attempt := 0; attempt < 2; attempt++ {
+		var modalNodeID int64
+		var modalOpen bool
+		var err error
+		if !ghostRoute {
+			modalNodeID, modalOpen, err = bridge.TopmostModalNodeID(tCtx, targetFrameID)
+			if err != nil {
+				httpx.Error(w, selectorResolutionHTTPStatus(err), fmt.Errorf("resolve topmost dialog: %w", err))
+				return
+			}
+		}
 
-	text, err := h.extractDocumentText(tCtx, mode, targetFrameID)
-	if err != nil {
-		httpx.Error(w, 500, err)
+		var text string
+		if selectorParam != "" || refParam != "" {
+			text, err = h.extractElementText(tCtx, resolvedTabID, selectorParam, refParam, modalNodeID)
+		} else if modalOpen {
+			err = h.Bridge.CallFunctionOnNode(tCtx, modalNodeID,
+				`function() { return this.innerText || this.textContent || ''; }`, nil, &text)
+		} else {
+			text, err = h.extractDocumentText(tCtx, mode, targetFrameID)
+		}
+
+		stable := true
+		if !ghostRoute {
+			afterNodeID, afterOpen, scopeErr := bridge.TopmostModalNodeID(tCtx, targetFrameID)
+			if scopeErr != nil {
+				httpx.Error(w, selectorResolutionHTTPStatus(scopeErr), fmt.Errorf("recheck topmost dialog: %w", scopeErr))
+				return
+			}
+			stable = modalNodeID == afterNodeID && modalOpen == afterOpen
+		}
+		if !stable {
+			continue
+		}
+		if err != nil {
+			status := http.StatusInternalServerError
+			if selectorParam != "" || refParam != "" {
+				status = selectorResolutionHTTPStatus(err)
+				err = fmt.Errorf("element text extract: %w", err)
+			}
+			httpx.Error(w, status, err)
+			return
+		}
+		if selectorParam != "" || refParam != "" {
+			h.writeElementTextResponse(w, r, tCtx, text)
+		} else {
+			h.writeTextResponse(w, r, tCtx, text, maxChars, format, textRoute)
+		}
 		return
 	}
-	h.writeTextResponse(w, r, tCtx, text, maxChars, format, textRoute)
+	httpx.Error(w, http.StatusConflict, fmt.Errorf("topmost dialog changed twice during text extraction; retry after the page settles"))
 }
 
-// writeElementText extracts text for a single selector/ref-targeted element and
-// writes the {url,title,text} JSON response.
-func (h *Handlers) writeElementText(w http.ResponseWriter, r *http.Request, tCtx context.Context, resolvedTabID, selectorParam, refParam string) {
-	text, err := h.extractElementText(tCtx, resolvedTabID, selectorParam, refParam)
-	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("element text extract: %w", err))
-		return
-	}
+// writeElementTextResponse writes an already scope-validated element read.
+func (h *Handlers) writeElementTextResponse(w http.ResponseWriter, r *http.Request, tCtx context.Context, text string) {
 	url, _ := h.Bridge.CurrentURL(tCtx)
 	title, _ := h.Bridge.CurrentTitle(tCtx)
 	h.recordResolvedURL(r, url)
@@ -195,17 +231,34 @@ func (h *Handlers) evalTextInFrame(ctx context.Context, script, frameID string) 
 	return text, nil
 }
 
-func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref string) (string, error) {
+func (h *Handlers) extractElementText(ctx context.Context, tabID, selectorValue, ref string, scopeBackendNodeID int64) (string, error) {
 	var text string
+	if scopeBackendNodeID != 0 {
+		var sel selector.Selector
+		if ref != "" {
+			sel = selector.Parse("ref:" + ref)
+		} else {
+			sel = selector.Parse(selectorValue)
+		}
+		nodeID, err := bridge.ResolveUnifiedSelectorWithinNode(ctx, sel, h.Bridge.GetRefCache(tabID), scopeBackendNodeID)
+		if err != nil {
+			return "", err
+		}
+		if err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
+			`function() { return this.innerText || this.textContent || ''; }`, nil, &text); err != nil {
+			return "", err
+		}
+		return text, nil
+	}
 
 	if ref != "" {
 		cache := h.Bridge.GetRefCache(tabID)
 		if cache == nil {
-			return "", fmt.Errorf("ref not found: %s (no snapshot cache)", ref)
+			return "", fmt.Errorf("ref not found: %s (no snapshot cache): %w", ref, bridge.ErrSelectorNoMatch)
 		}
 		target, ok := cache.Lookup(ref)
 		if !ok {
-			return "", fmt.Errorf("ref not found: %s", ref)
+			return "", fmt.Errorf("ref not found: %s: %w", ref, bridge.ErrSelectorNoMatch)
 		}
 		nodeID := target.BackendNodeID
 
@@ -220,26 +273,26 @@ func (h *Handlers) extractElementText(ctx context.Context, tabID, selector, ref 
 
 	var script string
 	switch {
-	case strings.HasPrefix(selector, "xpath:"):
-		xpath := selector[len("xpath:"):]
+	case strings.HasPrefix(selectorValue, "xpath:"):
+		xpath := selectorValue[len("xpath:"):]
 		script = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);var n=r.singleNodeValue;return n?(n.innerText||n.textContent||''):null})()`, xpath)
-	case strings.HasPrefix(selector, "//") || strings.HasPrefix(selector, "(//"):
-		script = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);var n=r.singleNodeValue;return n?(n.innerText||n.textContent||''):null})()`, selector)
-	case strings.HasPrefix(selector, "text:"):
-		textVal := selector[len("text:"):]
+	case strings.HasPrefix(selectorValue, "//") || strings.HasPrefix(selectorValue, "(//"):
+		script = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);var n=r.singleNodeValue;return n?(n.innerText||n.textContent||''):null})()`, selectorValue)
+	case strings.HasPrefix(selectorValue, "text:"):
+		textVal := selectorValue[len("text:"):]
 		script = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%q))return w.currentNode.parentElement.innerText||w.currentNode.parentElement.textContent||''}return null})()`, textVal)
-	case strings.HasPrefix(selector, "css:"):
-		css := selector[len("css:"):]
+	case strings.HasPrefix(selectorValue, "css:"):
+		css := selectorValue[len("css:"):]
 		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, css)
 	default:
-		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, selector)
+		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, selectorValue)
 	}
 
 	if err := h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{}); err != nil {
 		return "", err
 	}
 	if text == "" {
-		return "", fmt.Errorf("no element matches selector: %s", selector)
+		return "", fmt.Errorf("no element matches selector %q: %w", selectorValue, bridge.ErrSelectorNoMatch)
 	}
 	return text, nil
 }

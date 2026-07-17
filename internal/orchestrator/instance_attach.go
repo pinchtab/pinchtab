@@ -167,7 +167,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 	args := []string{
 		"bridge",
 		"--cdp-attach", cdpURL,
-		"--browser-provider", resolved.Browser,
+		"--browser", resolved.Browser,
 		"--remote-browser-name", name,
 	}
 	slog.Info("starting CDP attach bridge child",

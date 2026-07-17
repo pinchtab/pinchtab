@@ -80,6 +80,14 @@ func (h *Handlers) recordResolvedTab(r *http.Request, tabID string) {
 	h.recordActivity(r, activity.Update{TabID: tabID})
 }
 
+func markCreatedTab(w http.ResponseWriter, tabID string) {
+	if w == nil || strings.TrimSpace(tabID) == "" {
+		return
+	}
+	w.Header().Set(activity.HeaderPTTabID, tabID)
+	w.Header().Set(activity.HeaderPTTabCreated, "true")
+}
+
 func (h *Handlers) setCurrentTabForRequest(r *http.Request, tabID string) {
 	if h == nil || h.CurrentTabs == nil {
 		return

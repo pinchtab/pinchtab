@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
@@ -167,6 +170,26 @@ func captureFromSurface(beyondViewport bool, clip *page.Viewport) bool {
 	return clip != nil && clip.Scale != 0 && clip.Scale != 1
 }
 
+// captureScreenshotWithoutActivation wakes a background renderer without
+// activating its tab in the operator's browser. Chromium supports focus
+// emulation on attached targets; providers that reject it retain the historical
+// BringToFront fallback so capture availability does not regress.
+func captureScreenshotWithoutActivation(ctx context.Context, shot *page.CaptureScreenshotParams) ([]byte, error) {
+	executor := cdp.ExecutorFromContext(ctx)
+	focusEmulated := emulation.SetFocusEmulationEnabled(true).Do(ctx) == nil
+	if focusEmulated {
+		defer func() {
+			restoreCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			restoreCtx = cdp.WithExecutor(restoreCtx, executor)
+			_ = emulation.SetFocusEmulationEnabled(false).Do(restoreCtx)
+		}()
+	} else {
+		_ = page.BringToFront().Do(ctx)
+	}
+	return shot.Do(ctx)
+}
+
 // CaptureScreenshot runs Page.captureScreenshot with the supplied options.
 // Quality is applied only for JPEG; clip and beyondViewport are mutually
 // exclusive (clip wins) — the same rule the handler enforces on input.
@@ -198,15 +221,6 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 
 	var buf []byte
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		// Wake the target's renderer before capturing. Background / non-foreground
-		// tabs (common once target-aware orchestration spreads tabs across
-		// providers) throttle their compositor and stop painting, so
-		// captureScreenshot blocks until the action deadline (~30s). A best-effort
-		// BringToFront resumes painting for the target we are about to capture; the
-		// error is ignored so providers whose CDP proxy does not implement it
-		// (e.g. Cloak) still capture normally.
-		_ = page.BringToFront().Do(ctx)
-
 		shot := page.CaptureScreenshot().WithFormat(opts.Format).WithFromSurface(fromSurface)
 		if clip != nil {
 			shot = shot.WithClip(clip)
@@ -218,7 +232,7 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 			shot = shot.WithQuality(int64(opts.Quality))
 		}
 		var inner error
-		buf, inner = shot.Do(ctx)
+		buf, inner = captureScreenshotWithoutActivation(ctx, shot)
 		return inner
 	}))
 	return buf, err
@@ -323,8 +337,8 @@ func ScreenshotClipForNode(ctx context.Context, nodeID int64) (*ScreenshotClip, 
 // CaptureScreenshot is the provider-aware entry point used across the BridgeAPI
 // (screencast polling, recorder, annotated capture). It delegates to the shared
 // package-level CaptureScreenshot engine so every provider gets the same
-// rendering path, including the BringToFront + WithFromSurface(false) fixes that
-// keep headed browsers (e.g. Cloak) from blocking on an idle compositor surface.
+// rendering path, including non-activating focus emulation and
+// WithFromSurface(false), so headed browsers can paint without stealing focus.
 func (b *Bridge) CaptureScreenshot(ctx context.Context, format string, quality int, clip *cdptk.ScreenshotClip) ([]byte, error) {
 	cdpFormat := page.CaptureScreenshotFormatJpeg
 	if format == "png" {

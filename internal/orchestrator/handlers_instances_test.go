@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -420,8 +421,9 @@ func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
 	if instances[0].Browser != config.BrowserCloak {
 		t.Fatalf("internal Browser = %q, want cloak", instances[0].Browser)
 	}
-	if !strings.Contains(strings.Join(runner.args, " "), "--browser-provider cloak") {
-		t.Fatalf("runner args = %v, want cloak provider", runner.args)
+	wantArgs := []string{"bridge", "--cdp-attach", "ws://127.0.0.1:9222/devtools/browser/abc", "--browser", "cloak", "--remote-browser-name", "attached-cloak"}
+	if !slices.Equal(runner.args, wantArgs) {
+		t.Fatalf("runner args = %v, want supported bridge command surface %v", runner.args, wantArgs)
 	}
 
 	var inst bridge.Instance

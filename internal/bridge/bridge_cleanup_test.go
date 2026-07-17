@@ -228,6 +228,46 @@ func TestCleanup_RemoteCDP_SkipsKillLogic(t *testing.T) {
 	}
 }
 
+func TestCleanup_CDPAttachURLOnly_SkipsKillLogic(t *testing.T) {
+	withShortenedGrace(t, 20*time.Millisecond, 20*time.Millisecond)
+	termCount, killCount := withMockedProcessLookup(t, func() []int { return []int{1} })
+
+	ctx := context.TODO()
+	b := New(ctx, ctx, &config.RuntimeConfig{
+		ProfileDir:   "/tmp/pinchtab-test-profile",
+		CDPAttachURL: "http://127.0.0.1:9222",
+	})
+	b.Cleanup()
+
+	if got := termCount.Load(); got != 0 {
+		t.Errorf("CDP attach cleanup must not SIGTERM, got %d", got)
+	}
+	if got := killCount.Load(); got != 0 {
+		t.Errorf("CDP attach cleanup must not SIGKILL, got %d", got)
+	}
+}
+
+func TestRestartBrowser_CDPAttachURLOnly_SkipsKillLogic(t *testing.T) {
+	origDrain := browserRestartDrainWindow
+	browserRestartDrainWindow = time.Millisecond
+	t.Cleanup(func() { browserRestartDrainWindow = origDrain })
+	_, killCount := withMockedProcessLookup(t, func() []int { return []int{1} })
+
+	cfg := &config.RuntimeConfig{
+		ProfileDir:         t.TempDir(),
+		CDPAttachURL:       "http://127.0.0.1:1",
+		AttachAllowHosts:   []string{"127.0.0.1"},
+		AttachAllowSchemes: []string{"http"},
+	}
+	b := New(context.Background(), nil, cfg)
+	if err := b.RestartBrowser(cfg); err == nil {
+		t.Fatal("restart against an unreachable external CDP endpoint unexpectedly succeeded")
+	}
+	if got := killCount.Load(); got != 0 {
+		t.Errorf("external restart must not SIGKILL, got %d", got)
+	}
+}
+
 func TestFetchPauseSuppressionLifecycle(t *testing.T) {
 	b := &Bridge{}
 	flag := b.fetchPauseSuppression("t1")

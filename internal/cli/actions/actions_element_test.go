@@ -12,6 +12,7 @@ func newActionCmd() *cobra.Command {
 	cmd.Flags().String("css", "", "")
 	cmd.Flags().Bool("wait-nav", false, "")
 	cmd.Flags().Bool("dismiss-banners", false, "")
+	cmd.Flags().Bool("dismiss-known-interstitials", false, "")
 	cmd.Flags().String("tab", "", "")
 	cmd.Flags().Float64("x", 0, "")
 	cmd.Flags().Float64("y", 0, "")
@@ -21,6 +22,7 @@ func newActionCmd() *cobra.Command {
 	cmd.Flags().String("dialog-action", "", "")
 	cmd.Flags().String("dialog-text", "", "")
 	cmd.Flags().String("mode", "", "")
+	cmd.Flags().Bool("submit", false, "")
 	return cmd
 }
 
@@ -30,6 +32,7 @@ func newSimpleCmd() *cobra.Command {
 	cmd.Flags().Bool("snap", false, "")
 	cmd.Flags().Bool("snap-diff", false, "")
 	cmd.Flags().Bool("text", false, "")
+	cmd.Flags().Bool("submit", false, "")
 	return cmd
 }
 
@@ -50,6 +53,52 @@ func TestClick(t *testing.T) {
 	}
 	if body["ref"] != "e5" {
 		t.Errorf("expected ref=e5, got %v", body["ref"])
+	}
+}
+
+func TestClickSubmit(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	cmd := newActionCmd()
+	if err := cmd.Flags().Set("submit", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	Action(m.server.Client(), m.base(), "", "click", "e5", cmd)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(m.lastBody), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["submit"] != true {
+		t.Fatalf("submit = %v, want true", body["submit"])
+	}
+}
+
+func TestPrintActionResultSubmitPendingIsNotOK(t *testing.T) {
+	got := captureStdout(t, func() {
+		printActionResult("click", map[string]any{
+			"success": true,
+			"result": map[string]any{
+				"postState": map[string]any{"status": "pending"},
+			},
+		})
+	})
+	if got != "PENDING\n" {
+		t.Fatalf("pending output = %q, want PENDING", got)
+	}
+}
+
+func TestPrintActionResultSubmitSuccessNamesObservedSignal(t *testing.T) {
+	got := captureStdout(t, func() {
+		printActionResult("click", map[string]any{
+			"success": true,
+			"result": map[string]any{
+				"postState": map[string]any{"status": "succeeded", "signal": "dialog_closed"},
+			},
+		})
+	})
+	if got != "SUCCEEDED dialog_closed\n" {
+		t.Fatalf("success output = %q, want observed submit signal", got)
 	}
 }
 
@@ -99,6 +148,22 @@ func TestClickDismissBannersWithoutWaitNavIsNoop(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if _, ok := body["dismissBanners"]; ok {
 		t.Errorf("expected dismissBanners not sent without --wait-nav, got %v", body["dismissBanners"])
+	}
+}
+
+func TestClickDismissKnownInterstitialsIsIndependentOfWaitNav(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	cmd := newActionCmd()
+	_ = cmd.Flags().Set("dismiss-known-interstitials", "true")
+
+	Action(m.server.Client(), m.base(), "", "click", "e5", cmd)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(m.lastBody), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["dismissKnownInterstitials"] != true {
+		t.Fatalf("dismissKnownInterstitials = %v, want true", body["dismissKnownInterstitials"])
 	}
 }
 
@@ -463,6 +528,24 @@ func TestFill(t *testing.T) {
 	}
 	if _, hasRef := body["ref"]; hasRef {
 		t.Errorf("expected no ref for selector embed, got %v", body["ref"])
+	}
+}
+
+func TestFillSubmit(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	cmd := newSimpleCmd()
+	if err := cmd.Flags().Set("submit", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	ActionSimple(m.server.Client(), m.base(), "", "fill", []string{"#search", "needle"}, cmd)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(m.lastBody), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["submit"] != true {
+		t.Fatalf("submit = %v, want true", body["submit"])
 	}
 }
 

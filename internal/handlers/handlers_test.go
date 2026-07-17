@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -42,9 +43,10 @@ type mockBridge struct {
 	staticEscalate      *bridge.StaticEscalateError
 	navigateParams      []bridge.NavigateParams
 
-	evaluateCalls int
-	evaluateExprs []string
-	evaluateFn    func(expression string, result any) error
+	evaluateCalls     int
+	evaluateExprs     []string
+	evaluateFn        func(expression string, result any) error
+	createTabContexts []string
 }
 
 func (m *mockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
@@ -57,7 +59,7 @@ func (m *mockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error)
 }
 
 func (m *mockBridge) ListTargets() ([]bridge.TabTarget, error) {
-	return []bridge.TabTarget{{TargetID: "tab1", Type: "page"}}, nil
+	return []bridge.TabTarget{{TargetID: "tab1", Type: "page", BrowserContextID: "context-profile"}}, nil
 }
 
 func (m *mockBridge) AvailableActions() []string {
@@ -78,6 +80,14 @@ func (m *mockBridge) CreateTab(url string) (string, context.Context, context.Can
 	m.createTabURLs = append(m.createTabURLs, url)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately - no browser spawned
+	return "tab_abc12345", ctx, cancel, nil
+}
+
+func (m *mockBridge) CreateTabInBrowserContext(url, browserContextID string) (string, context.Context, context.CancelFunc, error) {
+	m.createTabURLs = append(m.createTabURLs, url)
+	m.createTabContexts = append(m.createTabContexts, browserContextID)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	return "tab_abc12345", ctx, cancel, nil
 }
 
@@ -515,6 +525,32 @@ func TestHandleTab(t *testing.T) {
 	}
 	if m.createTabURLs[0] != "" {
 		t.Fatalf("expected HandleTab to create a blank tab first, got %q", m.createTabURLs[0])
+	}
+	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab_abc12345" {
+		t.Fatalf("created tab header = %q, want tab_abc12345", got)
+	}
+	if got := w.Header().Get(activity.HeaderPTTabCreated); got != "true" {
+		t.Fatalf("created marker header = %q, want true", got)
+	}
+}
+
+func TestHandleTabCreatesBlankTabInAttestedBrowserContext(t *testing.T) {
+	m := &mockBridge{}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/tab", bytes.NewReader([]byte(
+		`{"action":"new","browserContextId":"context-profile"}`,
+	)))
+	w := httptest.NewRecorder()
+	h.HandleTab(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	if !reflect.DeepEqual(m.createTabContexts, []string{"context-profile"}) {
+		t.Fatalf("created contexts = %v, want context-profile", m.createTabContexts)
+	}
+	if !strings.Contains(w.Body.String(), `"browserContextId":"context-profile"`) {
+		t.Fatalf("browser context receipt missing: %s", w.Body.String())
 	}
 }
 
