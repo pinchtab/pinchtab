@@ -15,9 +15,9 @@ import (
 
 const downloadDataPreviewLimit = 256
 
-func Download(client *http.Client, base, token string, args []string, output string) {
+func Download(client *http.Client, base, token string, args []string, output, tabID string) {
 	if len(args) < 1 {
-		cli.Fatal("Usage: pinchtab download <url> [-o <file>]")
+		cli.Fatal("Usage: pinchtab download <url> [-o <file>] [--tab <id>]")
 	}
 
 	targetURL := args[0]
@@ -25,7 +25,12 @@ func Download(client *http.Client, base, token string, args []string, output str
 	params := url.Values{}
 	params.Set("url", targetURL)
 
-	body := apiclient.DoGetRaw(client, base, token, "/download", params)
+	path := "/download"
+	if tabID != "" {
+		path = "/tabs/" + url.PathEscape(tabID) + "/download"
+	}
+
+	body := apiclient.DoGetRaw(client, base, token, path, params)
 	if body == nil {
 		return
 	}

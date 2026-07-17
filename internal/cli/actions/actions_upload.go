@@ -3,15 +3,16 @@ package actions
 import (
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
-func Upload(client *http.Client, base, token string, args []string, selector string) {
+func Upload(client *http.Client, base, token string, args []string, selector, tabID string) {
 	if len(args) < 1 {
-		cli.Fatal("Usage: pinchtab upload <file-path> [--selector <css>]")
+		cli.Fatal("Usage: pinchtab upload <file-path> [--selector <css>] [--tab <id>]")
 	}
 
 	var files []string
@@ -30,5 +31,10 @@ func Upload(client *http.Client, base, token string, args []string, selector str
 		body["selector"] = selector
 	}
 
-	apiclient.DoPost(client, base, token, "/upload", body)
+	path := "/upload"
+	if tabID != "" {
+		path = "/tabs/" + url.PathEscape(tabID) + "/upload"
+	}
+
+	apiclient.DoPost(client, base, token, path, body)
 }

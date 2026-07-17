@@ -242,6 +242,8 @@ func configureBrowserFlags() {
 		scrollCmd,
 		selectCmd,
 		evalCmd,
+		uploadCmd,
+		downloadCmd,
 		checkCmd,
 		uncheckCmd,
 		keyboardTypeCmd,
