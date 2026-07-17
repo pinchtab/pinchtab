@@ -306,10 +306,10 @@ Wraps `Page.printToPDF`. Prints background graphics by default.
 
 ## Download files
 
-Prefer raw bytes or base64 responses unless the user explicitly asks for a saved file.
+Downloads can contain private content from the active browser session. Require the user to name the source and destination, and save only to an approved workspace or temporary path.
 
 ```bash
-# Returns base64 JSON by default (uses browser session/cookies/stealth)
+# Returns base64 JSON by default (uses the active browser session)
 curl "/download?url=https://site.com/report.pdf"
 
 # Raw bytes (pipe to file)
@@ -321,7 +321,7 @@ curl "/download?url=https://site.com/export.csv&output=file&path=/tmp/pinchtab-e
 
 ## Upload files
 
-Only upload local files the user explicitly provided or approved for the task.
+Only upload a local file the user explicitly provided or approved for the named destination.
 
 ```bash
 # Upload a local file to a file input
@@ -447,7 +447,7 @@ curl -X POST /tabs/TARGET_ID/wait \
 # Pause automation for manual intervention
 curl -X POST /tabs/TARGET_ID/handoff \
   -H 'Content-Type: application/json' \
-  -d '{"reason":"captcha","timeoutMs":120000}'
+  -d '{"reason":"human_verification","timeoutMs":120000}'
 
 # Inspect or resume handoff state
 curl /tabs/TARGET_ID/handoff
@@ -490,60 +490,9 @@ curl -X POST /cookies -H 'Content-Type: application/json' \
 curl -X DELETE /cookies
 ```
 
-## Solve challenges
-
-PinchTab includes a pluggable solver framework for browser challenges (Cloudflare Turnstile, CAPTCHAs, interstitials). Solvers auto-detect the challenge type and resolve it using human-like interaction.
-
-```bash
-# List available solvers
-curl /solvers
-
-# Auto-detect and solve (tries each solver in order)
-curl -X POST /solve -H 'Content-Type: application/json' \
-  -d '{"maxAttempts": 3, "timeout": 30000}'
-
-# Use a specific solver by name
-curl -X POST /solve/cloudflare -H 'Content-Type: application/json' \
-  -d '{"maxAttempts": 3}'
-
-# Solve on a specific tab
-curl -X POST /tabs/TAB_ID/solve -H 'Content-Type: application/json' \
-  -d '{"solver": "cloudflare"}'
-
-# Solve on a specific tab with path-based solver
-curl -X POST /tabs/TAB_ID/solve/cloudflare -H 'Content-Type: application/json' \
-  -d '{}'
-```
-
-**Request fields:**
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `solver` | string | — | Solver name (omit for auto-detect) |
-| `tabId` | string | — | Target tab (omit for default tab) |
-| `maxAttempts` | int | 3 | Maximum solve attempts |
-| `timeout` | float | 30000 | Overall timeout in ms |
-
-**Response:**
-
-```json
-{
-  "tabId": "DEADBEEF",
-  "solver": "cloudflare",
-  "solved": true,
-  "challengeType": "managed",
-  "attempts": 1,
-  "title": "Example Site"
-}
-```
-
-Returns `solved: true, attempts: 0` when no challenge is detected — safe to call speculatively.
-
-**Built-in solvers:** `cloudflare` (Turnstile/interstitial — detects via page title, clicks checkbox with human-like input).
-
-**Stealth requirement:** Solvers work best with `stealthLevel: "full"`. Cloudflare checks browser fingerprints before and after the checkbox click. Verify stealth is active with `GET /stealth/status`.
-
 ## Network Export
+
+Network captures and exports can contain private URLs, response bodies, cookies, and authorization headers. Obtain explicit user approval before collecting or exporting them, preserve the default redaction, store artifacts only in an approved path, and delete them when the task ends.
 
 ```bash
 # Export as HAR 1.2 (stream to response)
@@ -558,9 +507,6 @@ curl "/network/export?format=har&output=file&path=session.har"
 # Include response bodies (10 MB cap per entry)
 curl "/network/export?format=har&body=true"
 
-# Include raw sensitive headers (Cookie, Authorization)
-curl "/network/export?format=har&redact=false"
-
 # Live streaming export (entries written to file as they arrive)
 curl -N "/network/export/stream?format=ndjson&path=live.ndjson"
 
@@ -571,18 +517,6 @@ curl /tabs/TAB_ID/network/export?format=har
 All standard network filters apply: `filter`, `method`, `status`, `type`, `limit`.
 
 Formats are pluggable. `GET /network/export?format=unknown` returns `{"available": ["har", "ndjson"]}`.
-
-## Stealth
-
-```bash
-# Check stealth status and score
-curl /stealth/status
-
-# Rotate browser fingerprint
-curl -X POST /fingerprint/rotate -H 'Content-Type: application/json' \
-  -d '{"os":"windows"}'
-# os: "windows", "mac", or omit for random
-```
 
 ## Health check
 

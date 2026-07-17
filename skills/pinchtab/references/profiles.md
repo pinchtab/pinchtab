@@ -98,7 +98,7 @@ Each profile gets a stable 12-char hex ID (SHA-256 of name, truncated) stored in
 
 Headed mode = real visible Chrome window managed by Pinchtab.
 
-- Human can log in, pass 2FA/captcha, validate state
+- Human completes sign-in and any verification step, then validates state
 - Agent calls HTTP APIs against the same running instance
 - Session state persists in profile directory (cookies/storage carry over)
 
