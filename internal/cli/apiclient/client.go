@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -60,6 +61,35 @@ func DoPostRaw(client *http.Client, base, token, path string, body map[string]an
 	statusCode, respBody, _ := doPostQuietWithStatus(client, base, token, path, body, nil)
 	exitOnAPIError(request{method: "POST", url: base + path, body: body}, statusCode, respBody)
 	return respBody
+}
+
+// DoPostRawE sends a POST and returns an error instead of terminating the
+// process. Long-running commands use it when they need to release resources
+// before reporting a request failure.
+func DoPostRawE(client *http.Client, base, token, path string, body map[string]any) ([]byte, error) {
+	r := request{method: "POST", url: base + path, body: body}
+	statusCode, respBody, err := doRequest(client, token, r)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	if statusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("%s", strings.TrimSpace(renderAPIError(r, statusCode, respBody)))
+	}
+	return respBody, nil
+}
+
+// DoGetRawE sends a GET and returns an error instead of terminating the
+// process. See DoPostRawE.
+func DoGetRawE(client *http.Client, base, token, path string, params url.Values) ([]byte, error) {
+	r := request{method: "GET", url: buildURL(base, path, params)}
+	statusCode, respBody, err := doRequest(client, token, r)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	if statusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("%s", strings.TrimSpace(renderAPIError(r, statusCode, respBody)))
+	}
+	return respBody, nil
 }
 
 func DoPostQuietWithStatus(client *http.Client, base, token, path string, body map[string]any) (int, []byte, map[string]any) {

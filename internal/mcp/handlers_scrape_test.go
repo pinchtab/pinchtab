@@ -39,6 +39,20 @@ func TestHandleScrapeSplitsCommaLists(t *testing.T) {
 	}
 }
 
+func TestHandleScrapeForwardsBrowser(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_scrape", map[string]any{
+		"url":     "https://example.com",
+		"browser": "cloak",
+	}, srv)
+
+	if text := resultText(t, r); !strings.Contains(text, `"browser":"cloak"`) {
+		t.Errorf("browser option not forwarded: %s", text)
+	}
+}
+
 func TestHandleScrapeMissingURL(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()

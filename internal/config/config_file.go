@@ -174,7 +174,7 @@ func DefaultFileConfig() FileConfig {
 			ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
 		},
 		Browsers: BrowsersConfig{
-			Default: BrowserChrome,
+			Default: DefaultBrowserForSystem(),
 		},
 		InstanceDefaults: InstanceDefaultsConfig{
 			Mode:              "headless",

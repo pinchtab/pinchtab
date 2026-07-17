@@ -1,10 +1,9 @@
 package actions
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -60,15 +59,7 @@ func TestValidateAuditFlags(t *testing.T) {
 	}
 }
 
-// The rejection must happen before any request: this re-execs the test
-// binary to absorb Audit's os.Exit and fails if the fake instance receives
-// a single hit — i.e. if the validation ever moves back below the POST.
-func TestAuditPDFWithoutOutputDirExitsBeforePOST(t *testing.T) {
-	if os.Getenv("AUDIT_PREFLIGHT_HELPER") == "1" {
-		Audit(http.DefaultClient, os.Getenv("AUDIT_PREFLIGHT_BASE"), "", newAuditTestCmd("--format", "pdf"), "https://example.com")
-		return
-	}
-
+func TestAuditPDFWithoutOutputDirReturnsBeforePOST(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
@@ -77,17 +68,59 @@ func TestAuditPDFWithoutOutputDirExitsBeforePOST(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := exec.Command(os.Args[0], "-test.run", "TestAuditPDFWithoutOutputDirExitsBeforePOST")
-	cmd.Env = append(os.Environ(), "AUDIT_PREFLIGHT_HELPER=1", "AUDIT_PREFLIGHT_BASE="+srv.URL)
-	out, err := cmd.CombinedOutput()
-
-	if err == nil {
-		t.Fatalf("expected non-zero exit, got success with output:\n%s", out)
-	}
-	if !strings.Contains(string(out), "--format pdf requires --output-dir") {
-		t.Errorf("output should name both flags:\n%s", out)
+	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--format", "pdf"), "https://example.com")
+	if err == nil || !strings.Contains(err.Error(), "--format pdf requires --output-dir") {
+		t.Fatalf("Audit() error = %v, want missing output-dir error", err)
 	}
 	if got := hits.Load(); got != 0 {
 		t.Errorf("server received %d request(s); validation ran after server work", got)
+	}
+}
+
+func TestAuditCookieRunStopsIsolatedInstanceOnFailure(t *testing.T) {
+	var stopped atomic.Bool
+	var deletedCookies atomic.Bool
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/instances/start":
+			_, _ = fmt.Fprintf(w, `{"id":"isolated","url":%q}`, srv.URL)
+		case "/tab":
+			_, _ = w.Write([]byte(`{"tabId":"temporary-tab"}`))
+		case "/cookies":
+			if r.Method == http.MethodDelete {
+				deletedCookies.Store(true)
+			}
+			_, _ = w.Write([]byte(`{"set":1}`))
+		case "/close":
+			_, _ = w.Write([]byte(`{}`))
+		case "/audit":
+			http.Error(w, `{"error":"upstream failed"}`, http.StatusBadGateway)
+		case "/instances/isolated/stop":
+			stopped.Store(true)
+			_, _ = w.Write([]byte(`{"status":"stopped"}`))
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--cookie", "session=temporary"), "https://example.com")
+	if err == nil || !strings.Contains(err.Error(), "upstream failed") {
+		t.Fatalf("Audit() error = %v, want upstream failure", err)
+	}
+	if !stopped.Load() {
+		t.Fatal("isolated instance was not stopped after audit failure")
+	}
+	if deletedCookies.Load() {
+		t.Fatal("cookie-authenticated audit cleared cookies instead of discarding its isolated instance")
+	}
+}
+
+func TestApplyRunAuthRejectsProfileWithCookies(t *testing.T) {
+	_, _, err := applyRunAuth(http.DefaultClient, "http://example.invalid", "", newAuditTestCmd("--profile", "work", "--cookie", "session=temporary"), "https://example.com")
+	if err == nil || !strings.Contains(err.Error(), "--profile cannot be combined") {
+		t.Fatalf("applyRunAuth() error = %v, want profile/cookie conflict", err)
 	}
 }

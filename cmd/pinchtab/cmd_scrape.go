@@ -30,9 +30,9 @@ exactly those URLs instead of crawling.
 Pages that fail in both engines do not fail the run: the command still
 exits 0 and the failing page's report entry carries an "error" field.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
-			browseractions.Scrape(rt.client, rt.base, rt.token, cmd, args[0])
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCLIWithError(func(rt cliRuntime) error {
+			return browseractions.Scrape(rt.client, rt.base, rt.token, cmd, args[0])
 		})
 	},
 }

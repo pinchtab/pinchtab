@@ -90,9 +90,9 @@ link-crawls from the root page.
 | `--output-dir <dir>` | | Write `report.json` (and `report.md` with `--format md`) to this directory |
 | `--format <f>` | json | Report format: `json` or `md` |
 | `--json` | false | Print the full report JSON to stdout |
-| `--cookie name=value` | | Inject a cookie before the run (repeatable; the cookie jar is cleared afterwards) |
-| `--cookies-file <file>` | | Inject cookies from a JSON array of `{name, value, domain, ...}` objects |
-| `--profile <name>` | | Run against the instance of this browser profile |
+| `--cookie name=value` | | Inject a cookie into an isolated temporary browser instance before the run (repeatable) |
+| `--cookies-file <file>` | | Inject cookies into an isolated temporary browser instance from a JSON array of `{name, value, domain, ...}` objects |
+| `--profile <name>` | | Run against the instance of this browser profile (cannot be combined with `--cookie` or `--cookies-file`) |
 
 Failure contract: a page that fails in **both** engines does not fail the run —
 the command exits 0 and that page's report entry carries an `error` field. A
@@ -142,8 +142,8 @@ by URL pattern, and each page's content (or its snippet in preview mode).
 The CLI is a thin client over one endpoint:
 
 - `POST /scrape {"url", "preview", "only", "maxPages", "maxPerPattern",
-  "includePatterns", "excludePatterns", "concurrency", "enrichAll",
-  "noBrowser", "timeoutSeconds"}` → the scrape report
+	"includePatterns", "excludePatterns", "concurrency", "enrichAll",
+	"noBrowser", "timeoutSeconds", "browser"}` → the scrape report
 
 Every crawl fetch and every expand fetch goes through the same SSRF/redirect
 navigation guard as browser navigation.

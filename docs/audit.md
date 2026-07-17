@@ -54,9 +54,9 @@ no URL argument is needed.
 | `--output-dir <dir>` | | Write `report.json` and `screenshots/` to this directory |
 | `--format <f>` | json | Report format: `json`, `md`, `html`, or `pdf` |
 | `--json` | false | Print the full report JSON to stdout |
-| `--cookie name=value` | | Inject a cookie before the run (repeatable; the cookie jar is cleared afterwards) |
-| `--cookies-file <file>` | | Inject cookies from a JSON array of `{name, value, domain, ...}` objects |
-| `--profile <name>` | | Run against the instance of this browser profile |
+| `--cookie name=value` | | Inject a cookie into an isolated temporary browser instance before the run (repeatable) |
+| `--cookies-file <file>` | | Inject cookies into an isolated temporary browser instance from a JSON array of `{name, value, domain, ...}` objects |
+| `--profile <name>` | | Run against the instance of this browser profile (cannot be combined with `--cookie` or `--cookies-file`) |
 
 Failure contract: a page that fails to load does **not** fail the run — the
 command exits 0 and that page's report entry carries an `error` field. The run
@@ -141,10 +141,12 @@ pinchtab audit https://example.com/account --cookies-file cookies.json
 pinchtab audit https://example.com --profile work
 ```
 
-Cookies are injected before the first navigation and scoped to the run: the
-browser cookie jar is cleared when the run finishes, so a later audit does
-not inherit them. `--profile` routes the run at the instance owning that
-browser profile (`pinchtab instance start --profile <name>` to launch one).
+Cookies are injected before the first navigation into an isolated temporary
+browser instance. The instance and its cookie jar are discarded when the run
+finishes, including if the audit request fails, so no persistent profile is
+altered. `--cookie` and `--cookies-file` cannot be combined with `--profile`.
+Without injected cookies, `--profile` routes the run at the instance owning
+that browser profile (`pinchtab instance start --profile <name>` to launch one).
 
 ## Library mode (Go)
 

@@ -20,9 +20,9 @@ Differences are data, not failure: the command exits 0 even when pages
 differ. Pass --fail-on-diff to exit non-zero when any visual or data diff
 exists (CI gate).`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
-			browseractions.Compare(rt.client, rt.base, rt.token, cmd, args[0], args[1])
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCLIWithError(func(rt cliRuntime) error {
+			return browseractions.Compare(rt.client, rt.base, rt.token, cmd, args[0], args[1])
 		})
 	},
 }

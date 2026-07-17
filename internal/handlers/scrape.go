@@ -26,6 +26,7 @@ const (
 
 type scrapeRequest struct {
 	URL             string   `json:"url"`
+	Browser         string   `json:"browser"`
 	MaxPages        int      `json:"maxPages"`
 	MaxPerPattern   int      `json:"maxPerPattern"`
 	IncludePatterns []string `json:"includePatterns"`
@@ -55,7 +56,7 @@ func (h *Handlers) HandleScrape(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routing, ok := h.resolveNavigateBrowser(w, r, "", "")
+	routing, ok := h.resolveNavigateBrowser(w, r, "", strings.TrimSpace(req.Browser))
 	if !ok {
 		return
 	}

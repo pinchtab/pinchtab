@@ -21,14 +21,25 @@ const scrapeTimeout = 15 * time.Minute
 const scrapeFormatMarkdown = "md"
 
 // Scrape runs a site scrape via POST /scrape and prints or writes the report.
-func Scrape(client *http.Client, base, token string, cmd *cobra.Command, target string) {
+func Scrape(client *http.Client, base, token string, cmd *cobra.Command, target string) (err error) {
 	format := renderFormat(cmd)
 	if format != "json" && format != scrapeFormatMarkdown {
-		fmt.Fprintf(os.Stderr, "unsupported --format %q (json or md)\n", format)
-		os.Exit(1)
+		return fmt.Errorf("unsupported --format %q (json or md)", format)
 	}
 
-	base, cleanupCookies := applyRunAuth(client, base, token, cmd, target)
+	base, cleanup, err := applyRunAuth(client, base, token, cmd, target)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			if err == nil {
+				err = cleanupErr
+			} else {
+				err = fmt.Errorf("%w (also %v)", err, cleanupErr)
+			}
+		}
+	}()
 
 	body := map[string]any{"url": target}
 	if v, _ := cmd.Flags().GetInt("max-pages"); v > 0 {
@@ -64,36 +75,37 @@ func Scrape(client *http.Client, base, token string, cmd *cobra.Command, target 
 	}
 
 	longClient := &http.Client{Transport: client.Transport, Timeout: scrapeTimeout}
-	raw := apiclient.DoPostRaw(longClient, base, token, "/scrape", body)
-	cleanupCookies()
+	raw, err := apiclient.DoPostRawE(longClient, base, token, "/scrape", body)
+	if err != nil {
+		return err
+	}
 
 	var report scrape.Report
 	if err := json.Unmarshal(raw, &report); err != nil {
-		fmt.Fprintf(os.Stderr, "parse scrape report: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("parse scrape report: %w", err)
 	}
 
 	if dir := mustString(cmd, "output-dir"); dir != "" {
 		if err := writeScrapeArtifacts(dir, raw, report, format); err != nil {
-			fmt.Fprintf(os.Stderr, "write artifacts: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("write artifacts: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
 	} else if format == scrapeFormatMarkdown {
 		fmt.Println(string(scrape.RenderMarkdown(report)))
-		return
+		return nil
 	}
 
 	if mustBool(cmd, "json") {
 		out, _ := json.MarshalIndent(report, "", "  ")
 		fmt.Println(string(out))
-		return
+		return nil
 	}
 	if preview {
 		printPreviewSummary(report)
-		return
+		return nil
 	}
 	printScrapeSummary(report)
+	return nil
 }
 
 // writeScrapeArtifacts writes report.json (the server response, indented)

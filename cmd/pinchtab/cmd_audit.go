@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/spf13/cobra"
 )
@@ -23,18 +25,17 @@ prints the full report to stdout.
 Pages that fail to load do not fail the run: the command still exits 0 and
 the failing page's report entry carries an "error" field.`,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		seaportalReport, _ := cmd.Flags().GetString("seaportal-report")
 		if len(args) == 0 && seaportalReport == "" {
-			cmd.PrintErrln("audit needs a URL argument or --seaportal-report")
-			return
+			return fmt.Errorf("audit needs a URL argument or --seaportal-report")
 		}
 		target := ""
 		if len(args) > 0 {
 			target = args[0]
 		}
-		runCLI(func(rt cliRuntime) {
-			browseractions.Audit(rt.client, rt.base, rt.token, cmd, target)
+		return runCLIWithError(func(rt cliRuntime) error {
+			return browseractions.Audit(rt.client, rt.base, rt.token, cmd, target)
 		})
 	},
 }

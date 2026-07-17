@@ -69,7 +69,10 @@ PinchTab's distribution policy for CloakBrowser is:
   are clear with the upstream CloakBrowser maintainers.
 
 The safe default is: install or download CloakBrowser yourself, then point
-PinchTab at that local binary path.
+PinchTab at that local binary path if it is not discoverable. PinchTab
+automatically prefers a discoverable local CloakBrowser installation when
+`browsers.default` is omitted, including in a newly generated config. Existing
+configs that explicitly choose Chrome continue to use Chrome.
 
 Review:
 

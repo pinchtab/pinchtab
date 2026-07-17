@@ -8,6 +8,7 @@ import (
 )
 
 func TestDefaultFileConfig(t *testing.T) {
+	setCloakBrowserDiscovery(t, "")
 	fc := DefaultFileConfig()
 	if fc.Schema != CurrentConfigSchemaURL() {
 		t.Errorf("DefaultFileConfig.Schema = %q, want %q", fc.Schema, CurrentConfigSchemaURL())
@@ -139,6 +140,13 @@ func TestDefaultFileConfig(t *testing.T) {
 	}
 	if fc.Observability.Activity.Events.Bridge == nil || *fc.Observability.Activity.Events.Bridge {
 		t.Errorf("DefaultFileConfig.Observability.Activity.Events.Bridge = %v, want explicit false", formatBoolPtr(fc.Observability.Activity.Events.Bridge))
+	}
+}
+
+func TestDefaultFileConfigPrefersInstalledCloakBrowser(t *testing.T) {
+	setCloakBrowserDiscovery(t, "/opt/cloakbrowser/chrome")
+	if got := DefaultFileConfig().Browsers.Default; got != BrowserCloak {
+		t.Errorf("DefaultFileConfig().Browsers.Default = %q, want %q when CloakBrowser is installed", got, BrowserCloak)
 	}
 }
 

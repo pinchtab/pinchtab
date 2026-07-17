@@ -16,15 +16,27 @@ import (
 
 // Compare audits the same pages on two base URLs and reports visual and
 // data differences per page.
-func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBase, stagingBase string) {
+func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBase, stagingBase string) (err error) {
 	paths := comparePaths(cmd)
 	visual := mustBool(cmd, "visual-diff")
 	concurrency, _ := cmd.Flags().GetInt("concurrency")
 
-	base, cleanupCookies := applyRunAuth(client, base, token, cmd, liveBase)
+	base, cleanup, err := applyRunAuth(client, base, token, cmd, liveBase)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			if err == nil {
+				err = cleanupErr
+			} else {
+				err = fmt.Errorf("%w (also %v)", err, cleanupErr)
+			}
+		}
+	}()
 
 	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
-	runSide := func(siteBase string) audit.AuditReport {
+	runSide := func(siteBase string) (audit.AuditReport, error) {
 		body := map[string]any{
 			"urls":    joinPaths(siteBase, paths),
 			"options": map[string]any{"screenshot": visual},
@@ -32,29 +44,34 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 		if concurrency > 0 {
 			body["concurrency"] = concurrency
 		}
-		raw := apiclient.DoPostRaw(longClient, base, token, "/audit", body)
+		raw, err := apiclient.DoPostRawE(longClient, base, token, "/audit", body)
+		if err != nil {
+			return audit.AuditReport{}, err
+		}
 		var report audit.AuditReport
 		if err := json.Unmarshal(raw, &report); err != nil {
-			fmt.Fprintf(os.Stderr, "parse audit report for %s: %v\n", siteBase, err)
-			os.Exit(1)
+			return audit.AuditReport{}, fmt.Errorf("parse audit report for %s: %w", siteBase, err)
 		}
-		return report
+		return report, nil
 	}
 
-	liveReport := runSide(liveBase)
-	stagingReport := runSide(stagingBase)
-	cleanupCookies()
+	liveReport, err := runSide(liveBase)
+	if err != nil {
+		return err
+	}
+	stagingReport, err := runSide(stagingBase)
+	if err != nil {
+		return err
+	}
 
 	outcome, err := audit.ComparePages(liveBase, stagingBase, liveReport, stagingReport)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "compare: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("compare: %w", err)
 	}
 
 	if dir, _ := cmd.Flags().GetString("output-dir"); dir != "" {
 		if err := writeCompareArtifacts(dir, &outcome); err != nil {
-			fmt.Fprintf(os.Stderr, "write artifacts: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("write artifacts: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "report written to %s\n", filepath.Join(dir, "report.json"))
 	}
@@ -63,13 +80,11 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 	if format != auditreport.FormatJSON {
 		rendered, err := auditreport.RenderComparison(outcome.Report, format)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "render report: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("render report: %w", err)
 		}
 		if dir, _ := cmd.Flags().GetString("output-dir"); dir != "" {
 			if err := os.WriteFile(filepath.Join(dir, "report."+format), rendered, 0o644); err != nil {
-				fmt.Fprintf(os.Stderr, "write rendered report: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("write rendered report: %w", err)
 			}
 		} else {
 			fmt.Println(string(rendered))
@@ -84,9 +99,9 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 	}
 
 	if mustBool(cmd, "fail-on-diff") && outcome.Report.HasDiffs {
-		fmt.Fprintln(os.Stderr, "differences found (--fail-on-diff)")
-		os.Exit(1)
+		return fmt.Errorf("differences found (--fail-on-diff)")
 	}
+	return nil
 }
 
 func comparePaths(cmd *cobra.Command) []string {
