@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -80,21 +79,27 @@ func TestAuditPDFWithoutOutputDirReturnsBeforePOST(t *testing.T) {
 func TestAuditCookieRunStopsIsolatedInstanceOnFailure(t *testing.T) {
 	var stopped atomic.Bool
 	var deletedCookies atomic.Bool
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var instancePaths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/instances/start":
-			_, _ = fmt.Fprintf(w, `{"id":"isolated","url":%q}`, srv.URL)
-		case "/tab":
+			_, _ = w.Write([]byte(`{"id":"isolated","url":"http://localhost:9870"}`))
+		case "/instances/isolated":
+			_, _ = w.Write([]byte(`{"id":"isolated","status":"running"}`))
+		case "/instances/isolated/tab":
+			instancePaths = append(instancePaths, r.URL.Path)
 			_, _ = w.Write([]byte(`{"tabId":"temporary-tab"}`))
-		case "/cookies":
+		case "/instances/isolated/cookies":
+			instancePaths = append(instancePaths, r.URL.Path)
 			if r.Method == http.MethodDelete {
 				deletedCookies.Store(true)
 			}
 			_, _ = w.Write([]byte(`{"set":1}`))
-		case "/close":
+		case "/instances/isolated/close":
+			instancePaths = append(instancePaths, r.URL.Path)
 			_, _ = w.Write([]byte(`{}`))
-		case "/audit":
+		case "/instances/isolated/audit":
+			instancePaths = append(instancePaths, r.URL.Path)
 			http.Error(w, `{"error":"upstream failed"}`, http.StatusBadGateway)
 		case "/instances/isolated/stop":
 			stopped.Store(true)
@@ -115,6 +120,15 @@ func TestAuditCookieRunStopsIsolatedInstanceOnFailure(t *testing.T) {
 	}
 	if deletedCookies.Load() {
 		t.Fatal("cookie-authenticated audit cleared cookies instead of discarding its isolated instance")
+	}
+	wantPaths := []string{
+		"/instances/isolated/tab",
+		"/instances/isolated/cookies",
+		"/instances/isolated/close",
+		"/instances/isolated/audit",
+	}
+	if strings.Join(instancePaths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("isolated instance paths = %v, want %v", instancePaths, wantPaths)
 	}
 }
 

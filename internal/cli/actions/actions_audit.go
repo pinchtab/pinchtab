@@ -136,7 +136,47 @@ func startIsolatedInstance(client *http.Client, base, token string) (string, fun
 		}
 		return nil
 	}
-	return strings.TrimSuffix(instance.URL, "/"), cleanup, nil
+	if err := waitForIsolatedInstance(client, base, token, instance.ID); err != nil {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			return "", nil, fmt.Errorf("wait for isolated instance: %w (also failed to stop isolated instance: %v)", err, cleanupErr)
+		}
+		return "", nil, fmt.Errorf("wait for isolated instance: %w", err)
+	}
+	// Child instance URLs bind to the orchestrator's local interface. They are
+	// therefore not generally reachable by a remote CLI client (including the
+	// E2E runner container). Use the orchestrator's per-instance proxy instead.
+	return strings.TrimSuffix(base, "/") + "/instances/" + url.PathEscape(instance.ID), cleanup, nil
+}
+
+func waitForIsolatedInstance(client *http.Client, base, token, instanceID string) error {
+	const timeout = 30 * time.Second
+	deadline := time.Now().Add(timeout)
+	path := "/instances/" + url.PathEscape(instanceID)
+
+	for {
+		raw, err := apiclient.DoGetRawE(client, base, token, path, nil)
+		if err == nil {
+			var instance struct {
+				Status string `json:"status"`
+			}
+			if err := json.Unmarshal(raw, &instance); err != nil {
+				return fmt.Errorf("parse instance status: %w", err)
+			}
+			switch instance.Status {
+			case "running":
+				return nil
+			case "error", "stopped":
+				return fmt.Errorf("instance %q entered %s state", instanceID, instance.Status)
+			}
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				return fmt.Errorf("instance %q did not become ready within %s: %w", instanceID, timeout, err)
+			}
+			return fmt.Errorf("instance %q did not become ready within %s", instanceID, timeout)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // resolveProfileBase routes the run at the instance owning the named

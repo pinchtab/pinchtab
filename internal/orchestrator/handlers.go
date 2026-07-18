@@ -78,6 +78,14 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	mux.HandleFunc("GET /instances/{id}/tabs", o.handleInstanceTabs)
 	mux.HandleFunc("POST /instances/{id}/tabs/open", o.handleInstanceTabOpen)
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
+	// Disposable, cookie-authenticated CLI runs access their isolated child
+	// through these routes because a child's loopback URL is not reachable by
+	// remote clients.
+	mux.HandleFunc("POST /instances/{id}/close", o.proxyToInstance)
+	cookiesMeta, _ := routes.Meta(routes.CapCookies)
+	registerCapabilityRoute(mux, "POST /instances/{id}/cookies", o.Allows(routes.CapCookies), cookiesMeta.Label, cookiesMeta.Setting, cookiesMeta.DisabledCode, o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/audit", o.proxyToInstance)
+	mux.HandleFunc("POST /instances/{id}/scrape", o.proxyToInstance)
 	screencastMeta, _ := routes.Meta(routes.CapScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.Allows(routes.CapScreencast), screencastMeta.Label, screencastMeta.Setting, screencastMeta.DisabledCode, o.handleProxyScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.Allows(routes.CapScreencast), screencastMeta.Label, screencastMeta.Setting, screencastMeta.DisabledCode, o.proxyToInstance)
