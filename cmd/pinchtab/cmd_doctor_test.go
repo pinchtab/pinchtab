@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/doctor"
 	"github.com/spf13/cobra"
 )
 
@@ -56,6 +57,45 @@ func TestRunDoctorBrowserNoArgsShowsOverview(t *testing.T) {
 	}
 	if !strings.Contains(output, "chrome") {
 		t.Fatalf("expected chrome in output, got %q", output)
+	}
+}
+
+func TestBrowserOverviewCloakHintsMatchPresenceState(t *testing.T) {
+	base := doctor.BrowserInfo{
+		Name:       "cloak",
+		Registered: true,
+		Status:     "needs-config",
+	}
+
+	missingConfig := base
+	missingConfig.Checks = []doctor.CheckResult{{
+		Name:   "cloakbrowser_present",
+		Status: doctor.StatusWarn,
+		Detail: "CloakBrowser found at /opt/cloak/chrome -> 130.0.0, but browser.binary is unset",
+	}}
+	if hint := browserOverviewHint(missingConfig); !strings.Contains(hint, "Set browser.binary") {
+		t.Fatalf("unset binary hint = %q, want config guidance", hint)
+	}
+
+	brokenPath := base
+	brokenPath.Checks = []doctor.CheckResult{
+		{Name: "cloakbrowser_present", Status: doctor.StatusWarn, Detail: `configured browser.binary "/missing/cloak" could not be executed: no such file or directory`},
+		{Name: "cdp_reachable", Status: doctor.StatusFail},
+	}
+	if hint := browserOverviewHint(brokenPath); !strings.Contains(hint, "Fix browser.binary") {
+		t.Fatalf("broken binary hint = %q, want config repair guidance", hint)
+	}
+	if strings.Contains(browserOverviewHint(brokenPath), "was found") {
+		t.Fatalf("broken binary hint = %q, must not claim browser was found", browserOverviewHint(brokenPath))
+	}
+
+	cdpFailure := base
+	cdpFailure.Checks = []doctor.CheckResult{
+		{Name: "cloakbrowser_present", Status: doctor.StatusPass, Detail: "/opt/cloak/chrome -> 130.0.0 (>= 120.0.0)"},
+		{Name: "cdp_reachable", Status: doctor.StatusFail},
+	}
+	if hint := browserOverviewHint(cdpFailure); !strings.Contains(hint, "was found at /opt/cloak/chrome") {
+		t.Fatalf("CDP failure hint = %q, want verified-binary repair guidance", hint)
 	}
 }
 
