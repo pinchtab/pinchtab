@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Site Audit Report</title>
+<style>
+body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; color: #1a1a2e; }
+h1 { border-bottom: 2px solid #0a6cff; padding-bottom: .3rem; }
+h2 { margin-top: 2rem; border-bottom: 1px solid #d0d4dd; padding-bottom: .2rem; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; }
+th, td { border: 1px solid #d0d4dd; padding: .35rem .6rem; text-align: left; font-size: .92rem; }
+th { background: #f2f4f8; }
+.score { font-size: 1.3rem; font-weight: 700; }
+.error { color: #c0182b; }
+img.screenshot { max-width: 100%; border: 1px solid #d0d4dd; margin: .3rem 0 1rem; }
+code { background: #f2f4f8; padding: .1rem .3rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Site Audit Report</h1>
+<p>Schema version 1.0 · generated 2026-07-04 12:00:00 UTC · 2 page(s)</p>
+
+<h2>Summary</h2>
+<p class="score">Summary score: 85/100</p>
+<table>
+<tr><th>Page</th><th>Score</th><th>Load</th><th>Broken assets</th><th>Console errors</th><th>Status</th></tr>
+<tr><td>Audit Fixture Site</td><td>70</td><td>200 ms</td><td>2</td><td>1</td><td>ok</td></tr>
+<tr><td>http://fixtures/audit-site/down.html</td><td>0</td><td>-</td><td>0</td><td>0</td><td><span class="error">navigation failed: net::ERR_CONNECTION_REFUSED</span></td></tr>
+</table>
+
+<h2>SEO &amp; Metadata</h2>
+<h3>Audit Fixture Site</h3><table>
+<tr><th>confidence</th><td>90</td></tr>
+<tr><th>description</th><td>Deterministic audit fixture site.</td></tr>
+<tr><th>title</th><td>Audit Fixture Site</td></tr>
+</table>
+
+<h2>Content &amp; Functionality</h2>
+<table><tr><th>Page</th><th>Title</th><th>Interactive elements</th></tr>
+<tr><td>http://fixtures/audit-site/index.html</td><td>Audit Fixture Site</td><td>1</td></tr>
+<tr><td>http://fixtures/audit-site/down.html</td><td></td><td>0</td></tr>
+</table>
+
+<h2>Visual Differences</h2>
+<table><tr><th>Page</th><th>Changed</th><th>Diff pixels</th><th>Diff ratio</th><th>Diff image</th></tr>
+<tr><td>Audit Fixture Site</td><td>true</td><td>120</td><td>0.0200</td><td>diffs/index.diff.png</td></tr>
+
+</table>
+
+<h2>Performance</h2>
+<table><tr><th>Page</th><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>Load</th></tr>
+<tr><td>Audit Fixture Site</td><td>5 ms</td><td>120 ms</td><td>300 ms</td><td>0.05</td><td>200 ms</td></tr>
+<tr><td>http://fixtures/audit-site/down.html</td><td>-</td><td>-</td><td>-</td><td>0</td><td>-</td></tr>
+</table>
+
+<h2>Console &amp; JS Errors</h2>
+<h3>Audit Fixture Site</h3><ul>
+<li><code>error</code> boom</li>
+<li><code>warning</code> careful</li>
+</ul>
+
+<h2>Broken Assets</h2>
+<table><tr><th>Page</th><th>Asset</th><th>Type</th><th>Status</th></tr>
+<tr><td>Audit Fixture Site</td><td>http://fixtures/audit-site/assets/missing.png</td><td>image</td><td>404</td></tr>
+<tr><td>Audit Fixture Site</td><td>http://fixtures/api</td><td>xhr</td><td>net::ERR_FAILED</td></tr>
+</table>
+
+<h2>Usability Issues</h2><ul>
+<li>Audit Fixture Site: accessibility score 70/100</li>
+</ul>
+
+<h2>Security Findings</h2><ul>
+<li><strong>insecure-form-action</strong> [medium]: password posts over http (http://fixtures/audit-site/forms.html)</li>
+</ul>
+
+<h2>Recommendations</h2><ol>
+<li>Serve the site over https.</li>
+<li>Fix 2 broken asset reference(s) — see Broken Assets.</li>
+<li>Investigate 1 console error(s) — see Console &amp; JS Errors.</li>
+<li>Improve accessibility on 1 page(s) scoring below 100 — see Usability Issues.</li>
+<li>Address 1 security finding(s) — see Security Findings.</li>
+<li>Re-check 1 page(s) that failed to audit.</li>
+</ol>
+
+<h2>Screenshots</h2>
+<h3>Audit Fixture Site</h3><img class="screenshot" src="screenshots/page-001.png" alt="Screenshot of Audit Fixture Site">
+</body>
+</html>

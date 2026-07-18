@@ -144,7 +144,7 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 		baselineOps = countBaselineOps()
 	}
 
-	ptRe := regexp.MustCompile(`\./scripts/pt\s+(\w+)`)
+	ptRe := regexp.MustCompile(`\./scripts/pt\s+((?:--?\S+(?:\s+"?[^"\s-]\S*"?)?\s+)*)(\w+)`)
 	var totalOps int
 	cmdTypes := make(map[string]int)
 	var hasTranscripts bool
@@ -189,8 +189,15 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 			for _, b := range blocks {
 				if b.Type == "tool_use" && b.Name == "Bash" {
 					for _, m := range ptRe.FindAllStringSubmatch(b.Input.Command, -1) {
+						verb := m[2]
+						// Skip the recorder itself; `./scripts/runner step-end`
+						// is not a browser op. (pt and runner are distinct
+						// wrappers, but guard against any pt-routed runner call.)
+						if verb == "runner" {
+							continue
+						}
 						totalOps++
-						cmdTypes[m[1]]++
+						cmdTypes[verb]++
 					}
 				}
 			}

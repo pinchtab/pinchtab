@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -468,4 +469,38 @@ func normalizeNetworkHeaders(headers map[string]string) map[string]string {
 		return nil
 	}
 	return normalized
+}
+
+// BrokenAsset is a subresource that failed to load: an HTTP error response
+// (status >= 400) or a request that failed outright (network error, abort).
+type BrokenAsset struct {
+	URL          string `json:"url"`
+	ResourceType string `json:"resourceType"`
+	StatusCode   int    `json:"statusCode"`
+	Error        string `json:"error,omitempty"`
+}
+
+// IsBrokenAsset reports whether entry represents a failed load: a response
+// with status >= 400, or a failed request. In-flight requests are not broken.
+func IsBrokenAsset(entry NetworkEntry) bool {
+	return entry.Status >= 400 || entry.Failed
+}
+
+// BrokenAssets classifies the broken loads in entries. Resource types are
+// the CDP categories lowercased (image, script, stylesheet, font, xhr,
+// fetch, document, ...).
+func BrokenAssets(entries []NetworkEntry) []BrokenAsset {
+	broken := []BrokenAsset{}
+	for _, entry := range entries {
+		if !IsBrokenAsset(entry) {
+			continue
+		}
+		broken = append(broken, BrokenAsset{
+			URL:          entry.URL,
+			ResourceType: strings.ToLower(entry.ResourceType),
+			StatusCode:   entry.Status,
+			Error:        entry.Error,
+		})
+	}
+	return broken
 }

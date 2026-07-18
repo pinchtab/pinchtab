@@ -28,6 +28,18 @@ headless/headed mode, remote debugging, tab limits, and action humanization.
 PinchTab does not bundle CloakBrowser in release binaries, npm packages,
 Homebrew formulae, or the default published Docker image.
 
+### Console log capture
+
+CloakBrowser's native patches suppress CDP `Runtime` domain events after the
+first navigation (enabling that domain is a well-known bot-detection vector),
+so the standard `Runtime.consoleAPICalled` stream PinchTab uses on Chrome
+never delivers page console output. PinchTab detects this via the browser
+capability registry and instead attaches a second, read-only CDP session per
+tab that listens on the deprecated-but-functional `Console` domain. Console
+logs (`/console`, audit `consoleLogs`) and uncaught page errors (`/errors`)
+work on Cloak through that fallback. Nothing is injected into the page, so
+the fallback adds no fingerprint surface.
+
 ## Licensing
 
 CloakBrowser has two relevant pieces:
@@ -57,7 +69,10 @@ PinchTab's distribution policy for CloakBrowser is:
   are clear with the upstream CloakBrowser maintainers.
 
 The safe default is: install or download CloakBrowser yourself, then point
-PinchTab at that local binary path.
+PinchTab at that local binary path if it is not discoverable. PinchTab
+automatically prefers a discoverable local CloakBrowser installation when
+`browsers.default` is omitted, including in a newly generated config. Existing
+configs that explicitly choose Chrome continue to use Chrome.
 
 Review:
 

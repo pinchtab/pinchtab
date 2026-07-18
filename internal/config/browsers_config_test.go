@@ -175,6 +175,7 @@ func TestValidateBrowsersBlock_EmptyConfigMap(t *testing.T) {
 
 func TestBrowsersBlock_DefaultsWhenAbsent(t *testing.T) {
 	clearConfigEnvVars(t)
+	setCloakBrowserDiscovery(t, "")
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
 
@@ -196,6 +197,56 @@ func TestBrowsersBlock_DefaultsWhenAbsent(t *testing.T) {
 	}
 	if len(cfg.BrowsersAvailable) != 1 || cfg.BrowsersAvailable[0] != "chrome" {
 		t.Errorf("BrowsersAvailable = %v, want [chrome]", cfg.BrowsersAvailable)
+	}
+}
+
+func TestBrowsersBlock_DefaultsWhenAbsentPrefersInstalledCloakBrowser(t *testing.T) {
+	clearConfigEnvVars(t)
+	setCloakBrowserDiscovery(t, "/opt/cloakbrowser/chrome")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	fc := FileConfig{Server: ServerConfig{Port: "9867"}}
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PINCHTAB_CONFIG", cfgPath)
+
+	cfg := Load()
+	if cfg.DefaultBrowser != BrowserCloak {
+		t.Errorf("DefaultBrowser = %q, want %q when CloakBrowser is installed", cfg.DefaultBrowser, BrowserCloak)
+	}
+	if len(cfg.BrowsersAvailable) != 1 || cfg.BrowsersAvailable[0] != BrowserCloak {
+		t.Errorf("BrowsersAvailable = %v, want [cloak]", cfg.BrowsersAvailable)
+	}
+}
+
+func TestBrowsersBlock_ExplicitChromeWinsOverInstalledCloakBrowser(t *testing.T) {
+	clearConfigEnvVars(t)
+	setCloakBrowserDiscovery(t, "/opt/cloakbrowser/chrome")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	fc := FileConfig{
+		Server:   ServerConfig{Port: "9867"},
+		Browsers: BrowsersConfig{Default: BrowserChrome},
+	}
+	data, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PINCHTAB_CONFIG", cfgPath)
+
+	cfg := Load()
+	if cfg.DefaultBrowser != BrowserChrome {
+		t.Errorf("DefaultBrowser = %q, want explicit %q", cfg.DefaultBrowser, BrowserChrome)
 	}
 }
 

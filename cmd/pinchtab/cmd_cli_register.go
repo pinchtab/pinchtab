@@ -25,7 +25,7 @@ func browserRootCommands() []*cobra.Command {
 		downloadCmd, uploadCmd, findCmd, selectCmd, checkCmd, uncheckCmd, networkCmd, waitCmd,
 		keyboardCmd, keydownCmd, keyupCmd, scrollintoviewCmd, dialogCmd, consoleCmd, errorsCmd,
 		clipboardCmd, cacheCmd, cookiesCmd, setCmd, storageCmd, stateCmd, closeCmd, handoffCmd,
-		resumeCmd, handoffStatusCmd, recordCmd,
+		resumeCmd, handoffStatusCmd, recordCmd, auditCmd, compareCmd, scrapeCmd,
 	}
 }
 
@@ -242,6 +242,8 @@ func configureBrowserFlags() {
 		scrollCmd,
 		selectCmd,
 		evalCmd,
+		uploadCmd,
+		downloadCmd,
 		checkCmd,
 		uncheckCmd,
 		keyboardTypeCmd,
@@ -354,6 +356,48 @@ func configureBrowserFlags() {
 	consoleCmd.Flags().String("limit", "", "Maximum entries to return")
 	errorsCmd.Flags().Bool("clear", false, "Clear error logs")
 	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
+
+	auditCmd.Flags().Bool("sitemap", false, "Treat the URL as a sitemap.xml and audit the discovered pages")
+	auditCmd.Flags().Int("sample-size", 0, "Pages audited per template group, e.g. /products/p1..pN (0 = all pages; deterministic picks)")
+	auditCmd.Flags().Bool("screenshot", true, "Capture page screenshots")
+	auditCmd.Flags().Bool("network-monitor", true, "Collect network requests and broken assets")
+	auditCmd.Flags().String("output-dir", "", "Write report.json and screenshots/ to this directory")
+	auditCmd.Flags().Int("concurrency", 0, "Pages audited in parallel (default 2, max 8)")
+	auditCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
+	auditCmd.Flags().String("seaportal-report", "", "Audit pages from a SeaPortal results JSON file (array of Result objects)")
+	auditCmd.Flags().Bool("enrich-all", false, "Browser-enrich every seaportal page, ignoring browserRecommended routing")
+	auditCmd.Flags().String("format", "json", "Report format: json, md, html, or pdf (pdf needs --output-dir and the evaluate capability; on print failure report.json is still written and the exit code is non-zero)")
+	auditCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	auditCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	auditCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
+
+	scrapeCmd.Flags().Int("max-pages", 0, "Maximum pages sampled across the site (default 50)")
+	scrapeCmd.Flags().Int("max-per-pattern", 0, "Maximum pages sampled per URL pattern group (default 8)")
+	scrapeCmd.Flags().StringArray("include", nil, "Only crawl URLs matching this regex (repeatable)")
+	scrapeCmd.Flags().StringArray("exclude", nil, "Skip URLs matching this regex (repeatable)")
+	scrapeCmd.Flags().Int("concurrency", 0, "Pages browser-rendered in parallel (default 2, max 8)")
+	scrapeCmd.Flags().Bool("enrich-all", false, "Browser-render every reachable page, ignoring routing")
+	scrapeCmd.Flags().Bool("no-browser", false, "HTTP crawl only; record routing verdicts without browser rendering")
+	scrapeCmd.Flags().Bool("preview", false, "Outline only: page tree, sizes, and snippets, no browser rendering or full bodies — survey a large site before expanding")
+	scrapeCmd.Flags().StringArray("only", nil, "Expand exactly these URLs at full fidelity instead of crawling (repeatable; drill down after --preview)")
+	scrapeCmd.Flags().Int("timeout", 0, "Overall HTTP crawl timeout in seconds (default 60)")
+	scrapeCmd.Flags().Bool("json", false, "Print the full report JSON to stdout")
+	scrapeCmd.Flags().String("format", "json", "Report format: json or md")
+	scrapeCmd.Flags().String("output-dir", "", "Write report.json (and report.md with --format md) to this directory")
+	scrapeCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	scrapeCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	scrapeCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
+
+	compareCmd.Flags().String("pages", "", "Comma-separated relative paths to compare (default: the base URLs)")
+	compareCmd.Flags().Bool("visual-diff", true, "Capture screenshots and compute visual diffs")
+	compareCmd.Flags().String("output-dir", "", "Write report.json and diffs/ to this directory")
+	compareCmd.Flags().Int("concurrency", 0, "Pages audited in parallel per side (default 2, max 8)")
+	compareCmd.Flags().Bool("json", false, "Print the comparison report JSON to stdout")
+	compareCmd.Flags().Bool("fail-on-diff", false, "Exit non-zero when any visual or data diff exists")
+	compareCmd.Flags().String("format", "json", "Report format: json, md, or html")
+	compareCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	compareCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	compareCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
 
 	addTabFlag(consoleCmd, errorsCmd)
 }

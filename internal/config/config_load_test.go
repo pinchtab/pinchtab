@@ -30,6 +30,7 @@ func TestEnvOr(t *testing.T) {
 
 func TestLoadConfigDefaults(t *testing.T) {
 	clearConfigEnvVars(t)
+	setCloakBrowserDiscovery(t, "")
 	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
 	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
 
@@ -173,6 +174,20 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.AutoSolver.RetryMaxDelayMs != 10000 {
 		t.Errorf("default AutoSolver.RetryMaxDelayMs = %d, want 10000", cfg.AutoSolver.RetryMaxDelayMs)
+	}
+}
+
+func TestLoadConfigDefaultsPreferInstalledCloakBrowser(t *testing.T) {
+	clearConfigEnvVars(t)
+	setCloakBrowserDiscovery(t, "/opt/cloakbrowser/chrome")
+	t.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	cfg, _, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DefaultBrowser != BrowserCloak {
+		t.Errorf("default DefaultBrowser = %q, want %q when CloakBrowser is installed", cfg.DefaultBrowser, BrowserCloak)
 	}
 }
 
@@ -965,6 +980,13 @@ func clearConfigEnvVars(t *testing.T) {
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
 	}
+}
+
+func setCloakBrowserDiscovery(t *testing.T, binary string) {
+	t.Helper()
+	original := discoverCloakBrowserBinary
+	discoverCloakBrowserBinary = func() string { return binary }
+	t.Cleanup(func() { discoverCloakBrowserBinary = original })
 }
 
 func writeTestConfig(t *testing.T, body string) {

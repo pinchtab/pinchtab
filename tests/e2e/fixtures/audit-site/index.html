@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- audit-site homepage: no intentional defects. Nav links to every page on
+     the site. The staging copy differs on purpose: banner color, banner
+     position, and the welcome text (for visual-diff scenarios). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Deterministic audit fixture site for PinchTab e2e tests.">
+  <link rel="icon" href="data:,">
+  <title>Audit Fixture Site</title>
+</head>
+<body>
+  <header id="banner" style="background:#0a6cff;color:#ffffff;padding:12px">Welcome to the audit fixture site</header>
+  <nav aria-label="Site pages">
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="broken-assets.html">Broken assets</a></li>
+      <li><a href="console-errors.html">Console errors</a></li>
+      <li><a href="a11y-issues.html">Accessibility issues</a></li>
+      <li><a href="clean.html">Clean page</a></li>
+      <li><a href="forms.html">Forms</a></li>
+      <li><a href="cookie-echo.html">Cookie echo</a></li>
+      <li><a href="products/p1.html">Product 1</a></li>
+      <li><a href="products/p2.html">Product 2</a></li>
+      <li><a href="products/p3.html">Product 3</a></li>
+      <li><a href="products/p4.html">Product 4</a></li>
+      <li><a href="products/p5.html">Product 5</a></li>
+    </ul>
+  </nav>
+  <main>
+    <h1>Audit fixture site</h1>
+    <p id="tagline">Every page on this site documents its own intentional defects in an HTML comment.</p>
+  </main>
+</body>
+</html>

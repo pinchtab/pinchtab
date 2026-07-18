@@ -198,3 +198,97 @@ func TestVerifyServerPIDInfoChecksProcessCommand(t *testing.T) {
 		t.Fatalf("verifyServerPIDInfo() error = %v", err)
 	}
 }
+
+func TestIsPinchTabAuthError(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{"pinchtab 401", 401, `{"code":"missing_token","error":"unauthorized"}`, true},
+		{"pinchtab 403", 403, `{"code":"invalid_token","error":"unauthorized"}`, true},
+		{"foreign 401 html", 401, `<html>401 Authorization Required</html>`, false},
+		{"json missing code", 401, `{"error":"unauthorized"}`, false},
+		{"ok response", 200, `{"code":"x","error":"y"}`, false},
+		{"foreign 404", 404, `404 page not found`, false},
+	}
+	for _, tc := range cases {
+		if got := isPinchTabAuthError(tc.status, []byte(tc.body)); got != tc.want {
+			t.Errorf("%s: isPinchTabAuthError = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestPortBusyErrorAuthenticatedPinchTab(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"code":"missing_token","error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	err := portBusyError(srv.URL, "/home/user/.config/pinchtab/config.json")
+	if err == nil {
+		t.Fatal("expected an error for a busy port")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"PinchTab server (different config/token)",
+		srv.URL,
+		"pinchtab server stop",
+		`"port"`,
+		"/home/user/.config/pinchtab/config.json",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message missing %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "not a PinchTab server") {
+		t.Errorf("authenticated PinchTab server mislabeled as foreign:\n%s", msg)
+	}
+}
+
+func TestPortBusyErrorForeignListener(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<html>welcome to nginx</html>"))
+	}))
+	defer srv.Close()
+
+	err := portBusyError(srv.URL, "/tmp/config.json")
+	if err == nil {
+		t.Fatal("expected an error for a busy port")
+	}
+	msg := err.Error()
+	for _, want := range []string{"not a PinchTab server", srv.URL, `"port"`, "/tmp/config.json"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message missing %q:\n%s", want, msg)
+		}
+	}
+}
+
+func TestPortBusyErrorReadyPinchTab(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","mode":"dashboard","version":"dev"}`))
+	}))
+	defer srv.Close()
+
+	err := portBusyError(srv.URL, "/tmp/config.json")
+	if err == nil {
+		t.Fatal("expected an error for a busy port")
+	}
+	if !strings.Contains(err.Error(), "server already running") || !strings.Contains(err.Error(), "pinchtab server stop") {
+		t.Errorf("ready-server message lacks the stop command:\n%s", err)
+	}
+}
+
+func TestPortBusyErrorFreePort(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close()
+
+	if err := portBusyError(url, "/tmp/config.json"); err != nil {
+		t.Errorf("free port should yield nil, got %v", err)
+	}
+}

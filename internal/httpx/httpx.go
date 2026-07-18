@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
@@ -114,6 +115,14 @@ func SanitizeErrorMessage(message string) string {
 func CancelOnClientDone(reqCtx context.Context, cancel context.CancelFunc) {
 	<-reqCtx.Done()
 	cancel()
+}
+
+// ExtendWriteDeadline pushes the connection's write deadline d into the
+// future so a long-running handler (multi-page audit/scrape) is not killed
+// by the server's default WriteTimeout before it can write its response.
+// Best-effort: an unsupported ResponseWriter keeps the server default.
+func ExtendWriteDeadline(w http.ResponseWriter, d time.Duration) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d))
 }
 
 type StatusWriter struct {

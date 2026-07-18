@@ -1,0 +1,503 @@
+{
+  "generatedAt": "0000-00-00T00:00:00Z",
+  "input": {},
+  "options": {
+    "concurrency": 1,
+    "networkMonitor": true
+  },
+  "pages": [
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Broken assets",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Console errors",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Accessibility issues",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Clean page",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Forms",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Cookie echo",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Product 1",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Product 2",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Product 3",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Product 4",
+            "role": "link",
+            "visible": true
+          },
+          {
+            "name": "Product 5",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/index.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Audit Fixture Site",
+      "url": "http://fixtures/audit-site/index.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [
+          {
+            "error": "net::ERR_ABORTED",
+            "resourceType": "stylesheet",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.css"
+          },
+          {
+            "error": "net::ERR_ABORTED",
+            "resourceType": "script",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.js"
+          },
+          {
+            "resourceType": "fetch",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.json"
+          },
+          {
+            "resourceType": "image",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.png"
+          }
+        ],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Stylesheet",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.css"
+          },
+          {
+            "method": "GET",
+            "resourceType": "Script",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.js"
+          },
+          {
+            "method": "GET",
+            "resourceType": "Fetch",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.json"
+          },
+          {
+            "method": "GET",
+            "resourceType": "Image",
+            "status": 404,
+            "url": "http://fixtures/audit-site/assets/missing.png"
+          },
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/broken-assets.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Broken Assets — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/broken-assets.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [
+          {
+            "level": "log",
+            "message": "audit-fixture log message"
+          },
+          {
+            "level": "warning",
+            "message": "audit-fixture warn message"
+          },
+          {
+            "level": "error",
+            "message": "audit-fixture error message"
+          }
+        ],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/console-errors.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Console Errors — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/console-errors.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 70,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "role": "textbox",
+            "visible": true
+          },
+          {
+            "role": "link",
+            "visible": true
+          },
+          {
+            "role": "button",
+            "visible": true
+          },
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Image",
+            "status": 200,
+            "url": "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+          },
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/a11y-issues.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Accessibility Issues — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/a11y-issues.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Search",
+            "role": "textbox",
+            "visible": true
+          },
+          {
+            "name": "Search",
+            "role": "button",
+            "visible": true
+          },
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/clean.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Clean Page — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/clean.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Username",
+            "role": "textbox",
+            "visible": true
+          },
+          {
+            "name": "Password",
+            "role": "textbox",
+            "visible": true
+          },
+          {
+            "name": "Sign in",
+            "role": "button",
+            "visible": true
+          },
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/forms.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "securityFindings": [
+        {
+          "detail": "password form submits over plain http to http://fixtures/audit-site/login",
+          "ruleId": "insecure-password-form",
+          "severity": "high",
+          "url": "http://fixtures/audit-site/forms.html"
+        }
+      ],
+      "title": "Forms — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/forms.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [
+          {
+            "level": "log",
+            "message": "cookies:"
+          }
+        ],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/cookie-echo.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Cookie Echo — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/cookie-echo.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/products/p1.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Product 1 — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/products/p1.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/products/p2.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Product 2 — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/products/p2.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/products/p3.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Product 3 — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/products/p3.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/products/p4.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Product 4 — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/products/p4.html"
+    },
+    {
+      "browser": {
+        "accessibilityScore": 100,
+        "brokenAssets": [],
+        "consoleLogs": [],
+        "interactiveElements": [
+          {
+            "name": "Home",
+            "role": "link",
+            "visible": true
+          }
+        ],
+        "networkRequests": [
+          {
+            "method": "GET",
+            "resourceType": "Document",
+            "status": 200,
+            "url": "http://fixtures/audit-site/products/p5.html"
+          }
+        ],
+        "screenshotPath": "",
+        "timingMetrics": {}
+      },
+      "title": "Product 5 — Audit Fixture Site",
+      "url": "http://fixtures/audit-site/products/p5.html"
+    }
+  ],
+  "schemaVersion": "1.0",
+  "securityFindings": [
+    {
+      "detail": "password form submits over plain http to http://fixtures/audit-site/login",
+      "ruleId": "insecure-password-form",
+      "severity": "high",
+      "url": "http://fixtures/audit-site/forms.html"
+    }
+  ],
+  "summaryScore": 97
+}

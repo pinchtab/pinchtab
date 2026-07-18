@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Intentional defects: on load this page deterministically emits
+     1 console.log, 1 console.warn, 1 console.error, and 1 uncaught thrown
+     error (in its own script block so nothing else is interrupted). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Page that deterministically emits console messages and an uncaught error.">
+  <link rel="icon" href="data:,">
+  <title>Console Errors — Audit Fixture Site</title>
+</head>
+<body>
+  <h1>Console errors</h1>
+  <p>This page logs one message per console level and throws one uncaught error on load.</p>
+  <a href="index.html">Home</a>
+  <script>
+    console.log('audit-fixture log message');
+    console.warn('audit-fixture warn message');
+    console.error('audit-fixture error message');
+  </script>
+  <script>
+    throw new Error('audit-fixture uncaught error');
+  </script>
+</body>
+</html>

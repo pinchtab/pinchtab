@@ -61,6 +61,10 @@ func TestCapabilities(t *testing.T) {
 			t.Errorf("Capabilities().Has(%q) = false; want true", c)
 		}
 	}
+
+	if caps.Has(browsers.CapRuntimeConsoleEvents) {
+		t.Error("cloak should NOT have CapRuntimeConsoleEvents: its native patches suppress Runtime domain events")
+	}
 }
 
 func TestSupportsRemoteCDP(t *testing.T) {

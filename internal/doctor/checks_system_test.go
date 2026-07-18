@@ -215,12 +215,33 @@ func TestCloakBrowserPresent_FailWhenAbsentAndConfigured(t *testing.T) {
 	}
 }
 
-func TestCloakBrowserPresent_PassWithStub(t *testing.T) {
+func TestCloakBrowserPresent_WarnsWhenDiscoveredButUnconfigured(t *testing.T) {
 	withStubBinary(t, "cloakbrowser", "CloakBrowser 130.0.6723.91")
 	t.Setenv("HOME", t.TempDir())
 	r := runCloakPresent(t)
-	if r.Status != StatusPass {
-		t.Fatalf("status = %v want pass; detail=%q err=%v", r.Status, r.Detail, r.Err)
+	if r.Status != StatusWarn {
+		t.Fatalf("status = %v want warn; detail=%q err=%v", r.Status, r.Detail, r.Err)
+	}
+	if !strings.Contains(r.Detail, "browser.binary is unset") {
+		t.Fatalf("detail = %q, want browser.binary setup guidance", r.Detail)
+	}
+}
+
+func TestCloakBrowserPresent_WarnsForInvalidConfiguredPath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-cloakbrowser")
+	results := Run(context.Background(), &config.RuntimeConfig{
+		DefaultBrowser: config.BrowserCloak,
+		BrowserBinary:  missing,
+	}, "cloakbrowser_present")
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	result := results[0]
+	if result.Status != StatusWarn {
+		t.Fatalf("status = %v, want warn; detail=%q", result.Status, result.Detail)
+	}
+	if !strings.Contains(result.Detail, "configured browser.binary") {
+		t.Fatalf("detail = %q, want configured browser.binary guidance", result.Detail)
 	}
 }
 

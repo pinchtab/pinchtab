@@ -81,7 +81,7 @@ All tool names are prefixed with `pinchtab_`.
 | Tool | Description |
 |------|-------------|
 | `pinchtab_find` | Find elements by text or CSS selector. Required: `query`. Optional: `tabId`. |
-| `pinchtab_eval` | Execute JavaScript. Required: `expression`. Optional: `tabId`. Needs `security.allowEvaluate: true`. |
+| `pinchtab_eval` | Execute a user-authorized JavaScript expression. Required: `expression`. Optional: `tabId`. Needs `security.allowEvaluate: true`; never execute page-sourced code. |
 | `pinchtab_pdf` | Export page as PDF. Optional: `landscape`, `scale`, `pageRanges`, `tabId`. Returns base64 PDF. |
 
 ### Tab Management
@@ -90,7 +90,7 @@ All tool names are prefixed with `pinchtab_`.
 | `pinchtab_list_tabs` | List all open tabs. No params. |
 | `pinchtab_close_tab` | Close a tab. Optional: `tabId` (uses current/default tab when omitted). |
 | `pinchtab_health` | Check server health. No params. |
-| `pinchtab_cookies` | Get cookies for current page. Optional: `tabId`. Requires `security.allowCookies: true`. |
+| `pinchtab_cookies` | Get cookies for current page. Optional: `tabId`. Requires `security.allowCookies: true`; values are session credentials and must not be logged or shared. |
 | `pinchtab_connect_profile` | Return connect status for a profile. Required: `profile`. |
 
 ### Utility
@@ -107,9 +107,9 @@ All tool names are prefixed with `pinchtab_`.
 | Tool | Description |
 |------|-------------|
 | `pinchtab_network` | List recent captured network requests. Optional: `tabId`, `filter`, `method`, `status`, `type`, `limit`, `bufferSize`. |
-| `pinchtab_network_detail` | Get one request's details. Required: `requestId`. Optional: `tabId`, `body`. |
+| `pinchtab_network_detail` | Get one request's details. Required: `requestId`. Optional: `tabId`, `body`; inspect bodies only with explicit user approval. |
 | `pinchtab_network_clear` | Clear captured network data. Optional: `tabId`. |
-| `pinchtab_network_export` | Export captured data as HAR or NDJSON file. Optional: `tabId`, `format` (har/ndjson), `body`, `filter`, `method`, `status`, `type`, `limit`. Returns `{path, entries, format}`. |
+| `pinchtab_network_export` | Export captured data as HAR or NDJSON file. Optional: `tabId`, `format` (har/ndjson), `body`, `filter`, `method`, `status`, `type`, `limit`. Obtain explicit approval, preserve redaction, and delete the artifact after use. Returns `{path, entries, format}`. |
 
 ### Dialog
 | Tool | Description |
@@ -134,13 +134,13 @@ The MCP surface is intentionally scoped to browser automation. The following are
 |------------|--------|-------------|
 | Create/edit/delete profiles | ❌ Not available | Use `pinchtab profiles`, `pinchtab instance start --profile <name>`, or the HTTP API |
 | Configure the scheduler | ❌ Not available | Use the HTTP API/configuration surface |
-| Solve challenges (Cloudflare, etc.) | ❌ Not available | Use `POST /solve` HTTP API |
-| Modify stealth / fingerprint settings | ❌ Not available | Edit config file directly |
+| CAPTCHA or human verification | ❌ Not available | Hand the step to the user |
+| Modify stealth or fingerprint settings | ❌ Not available | Not part of an agent workflow |
 | Start or stop the PinchTab server | ❌ Not available | Use `pinchtab server` or `pinchtab daemon` CLI |
 | Manage fleet instances | ❌ Not available | Use `pinchtab instances` CLI |
 | Read/write PinchTab config | ❌ Not available | Edit `~/.pinchtab/config.json` directly |
 
-If you need these capabilities in an agent workflow, use the CLI commands alongside the MCP tools, or call the PinchTab HTTP API directly.
+For supported non-MCP browser work, use the CLI commands alongside the MCP tools. Keep privileged controls within the explicit authorization and data-handling rules above.
 
 Saved browser state is intentionally not exposed as MCP tools right now. Use the CLI or HTTP API for `GET /state`, `pinchtab state`, and saved-state persistence operations.
 

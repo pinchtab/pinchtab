@@ -24,8 +24,9 @@ tests/
 .vscode/
 *.swp
 
-# Docs (not needed in image)
+# Docs (not needed in image), except the library example built into runner-cli
 docs/
+!docs/examples/
 
 # Development
 node_modules/

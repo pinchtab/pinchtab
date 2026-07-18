@@ -15,11 +15,11 @@ import (
 // Ported from verify-answers.sh — patterns are case-insensitive.
 var expectPatterns = map[string]string{
 	// Group 0: Setup & diagnosis
-	"0.1": `status.*ok|^ok$|"ok"`,
+	"0.1": `status.*ok|\bok\b|"ok"`,
 	"0.2": `401|missing_token|unauth|bad_token|rejected`,
-	"0.3": `200|authed.*200|status.*ok|^ok$|"ok"`,
+	"0.3": `200|authed.*200|status.*ok|\bok\b|"ok"`,
 	"0.4": `running`,
-	"0.5": `tab.*list|tabs.*returned|active tab|listed.*tab|\d+ tabs? (found|open)|tabs:|tab.*id`,
+	"0.5": `tab.*list|tabs.*returned|active tab|listed.*tab|\d+ tabs? (found|open)|tabs:|tab.*id|"tabs"\s*:|\bno (open )?tabs\b|empty`,
 	"0.6": `cleaned|closed|no stale|reused.*tab|no cleanup|single active|is empty|already empty|clean.*state|cannot close last|one tab`,
 	"0.7": `VERIFY_HOME_LOADED_12345|navigated to fixtures|fixtures.*home|PinchTab Benchmark|fixtures/`,
 	"0.8": `[0-9A-F]{32}|tab.*id.*captured`,

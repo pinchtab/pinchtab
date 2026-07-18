@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -206,6 +207,7 @@ func populateLiveBodyResult(result map[string]any, body string, base64Encoded bo
 // @Param status string query Status code range filter e.g. "4xx", "5xx", "200" (optional)
 // @Param type string query Resource type filter e.g. "xhr", "fetch", "document" (optional)
 // @Param limit int query Maximum entries to return (optional)
+// @Param broken bool query Return only broken assets (status >= 400 or failed) as {url,resourceType,statusCode} (optional)
 // @Param bufferSize int query Buffer size for new capture (optional, default from config)
 //
 // @Response 200 application/json List of network entries
@@ -247,6 +249,16 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 
 	if filter.Limit > 0 && len(entries) > filter.Limit {
 		entries = entries[len(entries)-filter.Limit:]
+	}
+
+	if parseBoolQuery(r.URL.Query().Get("broken")) {
+		broken := observe.BrokenAssets(entries)
+		httpx.JSON(w, 200, map[string]any{
+			"broken": broken,
+			"count":  len(broken),
+			"tabId":  resolvedTabID,
+		})
+		return
 	}
 
 	httpx.JSON(w, 200, map[string]any{

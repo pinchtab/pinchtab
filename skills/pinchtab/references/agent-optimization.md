@@ -27,7 +27,7 @@ Need to check page state?
 5. `snap --full` — full JSON tree
 6. `screenshot` — image payload, highest token cost
 
-**Rule of thumb:** Reach for `snap -i -c` as your default snapshot. Only escalate to `screenshot` when visual layout matters (CAPTCHA, canvas, complex CSS).
+**Rule of thumb:** Reach for `snap -i -c` as your default snapshot. Only escalate to `screenshot` when visual layout matters (canvas or complex CSS).
 
 ---
 
@@ -127,7 +127,7 @@ pinchtab find "target text"   # avoids eval entirely
 
 **Recovery:**
 1. `pinchtab screenshot` — confirm login page is showing
-2. Re-authenticate: `pinchtab nav <login-url>`, then fill credentials
+2. Navigate to the login page and ask the user to complete sign-in. Do not request or enter credentials, one-time codes, or session tokens.
 3. If using a profile, start or target that profile explicitly: `pinchtab instance start --profile <name>`
 
 ---
@@ -161,24 +161,6 @@ pinchtab snap -i -c      # fresh snapshot → new refs
 
 ---
 
-### Bot Detection / CAPTCHA / Cloudflare
-**Cause:** Target site detected automated behavior or uses a challenge gateway.
-
-**Recovery options:**
-1. Try `POST /solve` first — it auto-detects Cloudflare Turnstile and solves it:
-   ```bash
-   curl -X POST http://localhost:9867/solve \
-     -H 'Content-Type: application/json' -d '{"maxAttempts": 3}'
-   ```
-2. If solve returns `solved: false`, try with more attempts or check `challengeType`
-3. Slow down: add `pinchtab wait 1500` between interactions
-4. Switch to a profile with existing session cookies (CF cookies persist)
-5. If unsupported CAPTCHA (not Cloudflare): report to user for manual intervention
-6. Check `GET /solvers` to see which solver types are available
-7. Verify `stealthLevel: "full"` is active — solvers depend on it. Check with `GET /stealth/status`
-
----
-
 ### Timeout on Navigation
 **Cause:** Page load exceeded default timeout (usually 30s).
 
@@ -199,4 +181,4 @@ pinchtab nav <url> --block-images --snap
 - **Scope snapshots.** Use `snap -s <selector>` to target a specific section of the page when you know where the element is.
 - **Prefer `fill` over `type` for framework forms.** Saves retries caused by React/Vue not detecting raw keystroke events.
 - **Check health before long workflows.** Run `pinchtab health` at the start of a multi-step task to fail fast if the server is down.
-- **Inspect network activity when needed.** `pinchtab network --limit 20` lists recent requests; use `pinchtab network <requestId> --body` for details.
+- **Inspect network activity only with approval.** Captures can contain tokens and personal data; do not inspect bodies or export data unless the user explicitly requests it, and preserve redaction.

@@ -49,6 +49,7 @@
       "127.0.0.1",
       "::1",
       "fixtures",
+      "scrapesite",
       "httpbin.org"
     ],
     "downloadAllowedDomains": ["fixtures", "httpbin.org"],

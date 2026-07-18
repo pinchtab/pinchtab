@@ -87,6 +87,7 @@ func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorChe
 		override = strings.TrimSpace(env.Binary)
 	}
 	found := override
+	discovered := false
 	if found == "" {
 		d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
 		found = d.Found
@@ -96,9 +97,17 @@ func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorChe
 				Detail: "cloakbrowser not found; set browser.binary or install CloakBrowser. probed: " + strings.Join(d.Probed, ", "),
 			}
 		}
+		discovered = true
 	}
 	line, err := browserprobe.RunVersion(ctx, found)
 	if err != nil {
+		if override != "" {
+			return browsers.DoctorCheckResult{
+				Status: browsers.DoctorWarn,
+				Detail: fmt.Sprintf("configured browser.binary %q could not be executed: %v", found, err),
+				Err:    err,
+			}
+		}
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorWarn,
 			Detail: fmt.Sprintf("%s: --version failed: %v", found, err),
@@ -116,6 +125,12 @@ func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorChe
 		return browsers.DoctorCheckResult{
 			Status: browsers.DoctorWarn,
 			Detail: fmt.Sprintf("%s -> %s (< required %s)", found, token, cloakMinVersion),
+		}
+	}
+	if discovered {
+		return browsers.DoctorCheckResult{
+			Status: browsers.DoctorWarn,
+			Detail: fmt.Sprintf("CloakBrowser found at %s -> %s, but browser.binary is unset", found, token),
 		}
 	}
 	return browsers.DoctorCheckResult{

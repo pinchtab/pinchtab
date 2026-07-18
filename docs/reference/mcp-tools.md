@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-PinchTab currently exposes 41 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
+PinchTab currently exposes 43 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
 
 For selector-based interaction tools, prefer `selector`. `ref` and `query` are still accepted as deprecated/alias fallbacks on the element-action tools (`query` is shorthand for `find:<text>`).
 
@@ -62,6 +62,12 @@ All element-action tools accept the unified `selector` and the legacy aliases `r
 | `pinchtab_eval` | `expression` required, `tabId` | Requires `security.allowEvaluate` (documented non-default JS-execution opt-in). Not frame-scoped — current `pinchtab_frame` state does not change evaluation context |
 | `pinchtab_pdf` | `tabId`, `landscape`, `scale`, `pageRanges` | Returns base64-encoded PDF content |
 | `pinchtab_find` | `query` required, `tabId` | Semantic element search; returns `best_ref` and selector hints to reuse in action tools |
+
+## Site
+
+| Tool | Key Parameters | Notes |
+| --- | --- | --- |
+| `pinchtab_scrape` | `url` required, `preview`, `only`, `maxPages`, `maxPerPattern`, `include`, `exclude`, `concurrency`, `enrichAll`, `noBrowser`, `timeoutSeconds`, `browser` | Crawl a whole site to a page tree of markdown via `/scrape`. HTTP-first extraction; only thin/blocked/failed pages are browser-rendered. `preview=true` returns a cheap outline (sizes + snippets, no bodies, no browser); `only` (comma-separated URLs) expands chosen pages at full fidelity. `include`/`exclude` are comma-separated regexes. Full reports can be large — prefer preview then expand. Runs with an extended timeout (multi-page crawls take minutes) |
 
 ## Tab Management
 

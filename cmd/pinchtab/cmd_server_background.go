@@ -138,11 +138,8 @@ func runServerBackground(cfg *config.RuntimeConfig, opts serverBackgroundOptions
 	}
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%s", cfg.Port)
-	if isUnauthenticatedPinchTabServerReady(baseURL) {
-		return fmt.Errorf("server already running at %s; stop it before starting a background server", baseURL)
-	}
-	if portIsListening(baseURL) {
-		return fmt.Errorf("port already in use at %s, but it is not a healthy PinchTab server for this config", baseURL)
+	if err := portBusyError(baseURL, config.ConfigFilePath()); err != nil {
+		return err
 	}
 
 	binary, marker, err := prepareServerSpawn()
@@ -219,6 +216,48 @@ func isBackgroundServerReady(baseURL, marker string) bool {
 
 func isUnauthenticatedPinchTabServerReady(baseURL string) bool {
 	return isPinchTabHealthReady(baseURL+"/health", "")
+}
+
+// portBusyError classifies whatever holds the port and returns an
+// actionable error, or nil when the port is free: a ready PinchTab server,
+// a PinchTab server running with a different config/token (its /health
+// answers with the PinchTab auth-error shape), or a foreign process.
+func portBusyError(baseURL, configPath string) error {
+	if isUnauthenticatedPinchTabServerReady(baseURL) {
+		return fmt.Errorf("server already running at %s; stop it with: pinchtab server stop", baseURL)
+	}
+	if isAuthenticatedPinchTabServer(baseURL) {
+		return fmt.Errorf("a PinchTab server (different config/token) is already running at %s; stop it with `pinchtab server stop` (or from its own checkout), or change \"port\" in %s", baseURL, configPath)
+	}
+	if portIsListening(baseURL) {
+		return fmt.Errorf("port already in use at %s by a process that is not a PinchTab server; stop that process or change \"port\" in %s", baseURL, configPath)
+	}
+	return nil
+}
+
+// isAuthenticatedPinchTabServer reports whether /health answered with a
+// PinchTab-shaped auth error, i.e. the occupant is a PinchTab server whose
+// token this config does not hold.
+func isAuthenticatedPinchTabServer(baseURL string) bool {
+	status, body, reachable := server.ProbeHealth(baseURL+"/health", 3*time.Second, nil)
+	if !reachable {
+		return false
+	}
+	return isPinchTabAuthError(status, body)
+}
+
+func isPinchTabAuthError(status int, body []byte) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
+	}
+	var resp struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return false
+	}
+	return resp.Error != "" && resp.Code != ""
 }
 
 func isPinchTabHealthReady(url, marker string) bool {

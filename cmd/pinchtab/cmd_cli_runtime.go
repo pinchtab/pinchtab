@@ -25,6 +25,10 @@ func runCLI(fn func(cliRuntime)) {
 	runCLIWith(loadConfig(), fn)
 }
 
+func runCLIWithError(fn func(cliRuntime) error) error {
+	return fn(newCLIRuntime(loadConfig()))
+}
+
 func runCLIWith(cfg *config.RuntimeConfig, fn func(cliRuntime)) {
 	fn(newCLIRuntime(cfg))
 }

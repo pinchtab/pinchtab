@@ -13,10 +13,21 @@ const (
 	BrowserGhostChrome = "ghost-chrome"
 )
 
-// NormalizeBrowser maps user-facing config values (browser.provider,
-// CLI flags) to canonical browser registry IDs. It is the intentional gateway
-// between the config/API layer and browsers.Get during the browser architecture
-// migration.
+var discoverCloakBrowserBinary = func() string {
+	browser, ok := browsers.Get(BrowserCloak)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(browser.DiscoverBinary().Found)
+}
+
+func DefaultBrowserForSystem() string {
+	if discoverCloakBrowserBinary() != "" {
+		return BrowserCloak
+	}
+	return BrowserChrome
+}
+
 func NormalizeBrowser(provider string) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case BrowserCloak:

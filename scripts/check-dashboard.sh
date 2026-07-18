@@ -79,11 +79,11 @@ if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
   BEFORE_FIX="$(mktemp)"
   cp "$GENERATED_TYPES" "$BEFORE_FIX"
   $TYGO_CMD generate 2>/dev/null
-  npx prettier --write "$GENERATED_TYPES" 2>/dev/null || true
+  $RUN run types:format
   if cmp -s "$BEFORE_FIX" "$GENERATED_TYPES"; then
     ok "Types in sync"
   else
-    fail "Types out of sync" "Run: cd dashboard && tygo generate && npx prettier --write src/generated/types.ts"
+    fail "Types out of sync" "Run: cd dashboard && tygo generate && $RUN run types:format"
     if confirm "Fix generated types now?"; then
       ok "Types fixed"
     else

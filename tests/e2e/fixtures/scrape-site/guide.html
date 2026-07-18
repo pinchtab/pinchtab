@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Static content page: like about.html, its full text is server-rendered so
+     the report should mark it source=http. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="A short guide on the scrape fixture site.">
+  <link rel="icon" href="data:,">
+  <title>Guide — Scrape Fixture Site</title>
+</head>
+<body>
+  <nav aria-label="Site pages"><a href="index.html">Home</a></nav>
+  <main>
+    <article>
+      <h1>A short guide</h1>
+      <p>This guide page adds a third server-rendered document to the fixture so
+         the crawl discovers more than a couple of URLs and the report's page
+         tree has something to group. Its text, like the other static pages, is
+         present in the initial HTML response and needs no JavaScript to read.</p>
+      <p>When the scrape command runs against this site, the guide should be
+         fetched over HTTP, extracted successfully, and reported as HTTP-sourced.
+         It exists mainly to give the preview mode several pages to summarise and
+         to give the expand mode more than one candidate URL to choose from.</p>
+      <p>The deliberately wordy paragraphs ensure the extracted content comfortably
+         exceeds the thin-content threshold, so the routing logic leaves this page
+         on the HTTP path instead of escalating it to the browser.</p>
+    </article>
+  </main>
+</body>
+</html>

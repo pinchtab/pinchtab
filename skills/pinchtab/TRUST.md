@@ -32,8 +32,6 @@ High-impact capabilities are **disabled by default** and require explicit config
 | File uploads | **Disabled** | `security.allowUploads` |
 | Network interception | **Disabled** | `security.allowNetworkIntercept` |
 | `file://` navigation | **Disabled** | `security.allowFileScheme`; grants read access to local files the server can read, and `file://` has no host so it is **not** constrained by `allowedDomains` or the SSRF guard — enable only on trusted, single-tenant hosts |
-| Challenge solving (autoSolver) | **Disabled** | `autoSolver.enabled`; requires explicit opt-in per deployment |
-| Stealth level | **Light** (minimal) | `instanceDefaults.stealthLevel`; `light` applies only basic fingerprint normalization — anti-bot bypass requires `medium` or `full`, which must be set explicitly |
 | Navigation domains | **Local-only allowlist** | `security.allowedDomains` (restrict or expand deliberately) |
 | Cookie access | **Disabled** | `security.allowCookies`; use only when task requires it; do not log or expose session tokens |
 

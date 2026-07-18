@@ -15,7 +15,7 @@ func TestDownloadTruncatesPrintedBase64(t *testing.T) {
 	defer m.close()
 
 	output := captureStdout(t, func() {
-		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, "")
+		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, "", "")
 	})
 
 	if !strings.Contains(output, `"dataTruncated": true`) {
@@ -42,7 +42,7 @@ func TestDownloadWithOutputSavesDecodedFileAndTruncatesPrintedBase64(t *testing.
 
 	outFile := filepath.Join(t.TempDir(), "image.bin")
 	output := captureStdout(t, func() {
-		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, outFile)
+		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, outFile, "")
 	})
 
 	written, err := os.ReadFile(outFile)
@@ -60,5 +60,19 @@ func TestDownloadWithOutputSavesDecodedFileAndTruncatesPrintedBase64(t *testing.
 	}
 	if strings.Contains(output, `"`+encoded+`"`) {
 		t.Fatalf("expected output to avoid printing the full base64 payload")
+	}
+}
+
+func TestDownloadTabScopedPath(t *testing.T) {
+	m := newMockServer()
+	m.response = `{"data":"","contentType":"text/plain","size":0}`
+	defer m.close()
+
+	captureStdout(t, func() {
+		Download(m.server.Client(), m.base(), "", []string{"https://example.com/f.txt"}, "", "tab1")
+	})
+
+	if m.lastPath != "/tabs/tab1/download" {
+		t.Fatalf("expected /tabs/tab1/download, got %s", m.lastPath)
 	}
 }

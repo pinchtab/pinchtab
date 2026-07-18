@@ -6,6 +6,8 @@
     "core-concepts.md",
     "headless-vs-headed.md",
     "dashboard.md",
+    "audit.md",
+    "scrape.md",
     "mcp.md",
     "benchmark.md"
   ],

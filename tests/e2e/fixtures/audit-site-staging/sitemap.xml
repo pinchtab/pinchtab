@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lists all 12 audit-site pages. URLs use the compose-internal `fixtures`
+     host; scenarios rewrite the host part to FIXTURES_URL before fetching.
+     The xmlns is the standard sitemap namespace identifier, never fetched. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://fixtures/audit-site/index.html</loc></url>
+  <url><loc>http://fixtures/audit-site/broken-assets.html</loc></url>
+  <url><loc>http://fixtures/audit-site/console-errors.html</loc></url>
+  <url><loc>http://fixtures/audit-site/a11y-issues.html</loc></url>
+  <url><loc>http://fixtures/audit-site/clean.html</loc></url>
+  <url><loc>http://fixtures/audit-site/forms.html</loc></url>
+  <url><loc>http://fixtures/audit-site/cookie-echo.html</loc></url>
+  <url><loc>http://fixtures/audit-site/products/p1.html</loc></url>
+  <url><loc>http://fixtures/audit-site/products/p2.html</loc></url>
+  <url><loc>http://fixtures/audit-site/products/p3.html</loc></url>
+  <url><loc>http://fixtures/audit-site/products/p4.html</loc></url>
+  <url><loc>http://fixtures/audit-site/products/p5.html</loc></url>
+</urlset>

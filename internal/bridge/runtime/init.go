@@ -88,6 +88,11 @@ func InitBrowser(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks)
 		slog.Error("browser initialization failed", "headless", cfg.Headless, "error", err.Error())
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start browser: %w", err)
 	}
+	// Publish the resolved DevTools port (auto-picked when the config left it
+	// unset) so bridge features that open side CDP sessions — e.g. the Console
+	// domain fallback for browsers without CapRuntimeConsoleEvents — can reach
+	// the launched browser.
+	cfg.BrowserDebugPort = debugPort
 
 	if ProxyAuthEnabled(cfg.Proxy) {
 		if err := EnableProxyAuth(browserCtx, cfg.Proxy, nil); err != nil {

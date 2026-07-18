@@ -184,7 +184,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		BlockAds:           false,
 		MaxTabs:            20,
 		MaxParallelTabs:    0,
-		DefaultBrowser:     BrowserChrome,
+		DefaultBrowser:     DefaultBrowserForSystem(),
 		BrowserBinary:      "", // Set via config.json only
 		BrowserExtraFlags:  "",
 		Cloak:              CloakBrowserRuntimeConfig{DisableDefaultStealthArgs: true},
@@ -535,7 +535,7 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	} else if name := ResolveDefaultTarget(cfg); name != "" && !cfg.TargetsSynthesized && cfg.Targets[name].Provider != "" {
 		cfg.DefaultBrowser = NormalizeBrowser(cfg.Targets[name].Provider)
 	} else {
-		cfg.DefaultBrowser = "chrome"
+		cfg.DefaultBrowser = DefaultBrowserForSystem()
 	}
 
 	// Apply native-stealth default when the winning provider supports it.

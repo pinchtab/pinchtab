@@ -369,12 +369,17 @@ equivalent field is `browsers.default`:
 }
 ```
 
-`browsers.default` selects the local browser backend:
+`browsers.default` explicitly selects the local browser backend:
 
-- `chrome` is the default and uses the normal Chrome/Chromium launch path.
+- `chrome` uses the normal Chrome/Chromium launch path.
 - `ghost-chrome` serves static-friendly reads from a lightweight fetcher and
   escalates to Chrome when a page needs rendering.
-- `cloak` uses a user-installed CloakBrowser Chromium binary from `browser.binary`.
+- `cloak` uses a discovered or configured local CloakBrowser Chromium binary.
+
+When `browsers.default` is omitted, PinchTab prefers a discovered local
+CloakBrowser installation and otherwise falls back to Chrome. Newly generated
+config files make the same choice, while existing configs that explicitly set
+`browsers.default` to `chrome` continue to use Chrome.
 
 `browsers.available` optionally restricts which browsers requests may select.
 For multiple named configurations of the same provider (different binaries,
@@ -383,9 +388,10 @@ and `browser.fallbackOrder` — see [Terminology](../architecture/terminology.md
 The legacy `browser.provider` field is no longer supported and is rejected at
 validation time.
 
-When the selected browser is `cloak`, `browser.binary` (or the target's
-`binary`) must point at the local CloakBrowser Chromium executable. PinchTab
-does not download, bundle, or redistribute the CloakBrowser binary.
+When the selected browser is `cloak`, PinchTab uses `browser.binary` when set
+or searches its normal local CloakBrowser paths. A named CloakBrowser target
+must set that target's `binary` explicitly. PinchTab does not download, bundle,
+or redistribute the CloakBrowser binary.
 
 On **macOS**, prefer a dedicated automation browser over your daily Google
 Chrome. Launching `/Applications/Google Chrome.app` headless makes macOS treat

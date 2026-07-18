@@ -82,10 +82,8 @@ func writeBrowserOverview(w io.Writer, report doctor.BrowsersReport, focus strin
 
 		_, _ = fmt.Fprintf(w, "  %s %-14s %s\n", doctor.BrowserStatusMarker(bi.Status), bi.Name, bi.StatusDetail)
 
-		if bi.Status != "ready" {
-			if hint, ok := doctor.BrowserInstallHints[bi.Name]; ok {
-				_, _ = fmt.Fprintf(w, "    %s\n", hint)
-			}
+		if hint := browserOverviewHint(bi); hint != "" {
+			_, _ = fmt.Fprintf(w, "    %s\n", hint)
 		}
 
 		for _, c := range bi.Checks {
@@ -112,6 +110,55 @@ func writeBrowserOverview(w io.Writer, report doctor.BrowsersReport, focus strin
 			_, _ = fmt.Fprintf(w, "  Known browsers: %s\n", strings.Join(report.KnownBrowsers, ", "))
 		}
 	}
+}
+
+func browserOverviewHint(bi doctor.BrowserInfo) string {
+	if bi.Name == "cloak" {
+		presence := cloakPresenceResult(bi)
+		if presence != nil && presence.Status != doctor.StatusPass {
+			if strings.Contains(presence.Detail, "browser.binary is unset") {
+				return "Set browser.binary (or browser.targets.<name>.binary) to the discovered CloakBrowser executable."
+			}
+			if strings.Contains(presence.Detail, "configured browser.binary") {
+				return "Fix browser.binary (or browser.targets.<name>.binary) so it points to an executable CloakBrowser binary."
+			}
+		}
+		if presence != nil && presence.Status == doctor.StatusPass && hasFailedCheck(bi, "cdp_reachable") {
+			if binary := cloakPresentBinary(presence.Detail); binary != "" {
+				return fmt.Sprintf("CloakBrowser was found at %s but did not accept CDP. Try updating or reinstalling it.", binary)
+			}
+		}
+	}
+	if bi.Status != "ready" {
+		return doctor.BrowserInstallHints[bi.Name]
+	}
+	return ""
+}
+
+func cloakPresenceResult(bi doctor.BrowserInfo) *doctor.CheckResult {
+	for i := range bi.Checks {
+		if bi.Checks[i].Name == "cloakbrowser_present" {
+			return &bi.Checks[i]
+		}
+	}
+	return nil
+}
+
+func hasFailedCheck(bi doctor.BrowserInfo, name string) bool {
+	for _, check := range bi.Checks {
+		if check.Name == name && check.Status == doctor.StatusFail {
+			return true
+		}
+	}
+	return false
+}
+
+func cloakPresentBinary(detail string) string {
+	binary, _, ok := strings.Cut(detail, " -> ")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(binary)
 }
 
 func init() {

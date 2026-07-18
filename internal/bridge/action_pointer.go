@@ -24,7 +24,13 @@ var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
 var doubleClickByNodeIDAction = DoubleClickByNodeID
 var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
 
-const trustedNodeClickTimeout = 100 * time.Millisecond
+// trustedNodeClickTimeout bounds each of the trusted CDP click and its JS
+// fallback. It is kept short so a dialog-blocked JS fallback cannot hang for
+// the whole action timeout, but 100ms proved too tight under heavy CPU
+// contention (e.g. many concurrent browser instances): a legitimate CDP click
+// could exceed it, fall back to JS, and time out there too, failing the
+// action. 250ms keeps the dialog-hang bound small while surviving contention.
+const trustedNodeClickTimeout = 250 * time.Millisecond
 
 func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
 	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)

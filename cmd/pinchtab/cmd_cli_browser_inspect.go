@@ -221,7 +221,7 @@ var downloadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urls.Normalize(args[0])
 		runCLI(func(rt cliRuntime) {
-			browseractions.Download(rt.client, rt.base, rt.token, args, stringFlag(cmd, "output"))
+			browseractions.Download(rt.client, rt.base, rt.token, args, stringFlag(cmd, "output"), stringFlag(cmd, "tab"))
 		})
 	},
 }
@@ -232,7 +232,7 @@ var uploadCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Upload(rt.client, rt.base, rt.token, args, stringFlag(cmd, "selector"))
+			browseractions.Upload(rt.client, rt.base, rt.token, args, stringFlag(cmd, "selector"), stringFlag(cmd, "tab"))
 		})
 	},
 }

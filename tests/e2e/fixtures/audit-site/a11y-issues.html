@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- Intentional defects: img without alt, input without label, empty link,
+     empty button. The img uses a data: URI so it renders without any
+     network request (defect is the missing alt, not a 404). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="Page with deterministic accessibility defects.">
+  <link rel="icon" href="data:,">
+  <title>Accessibility Issues — Audit Fixture Site</title>
+</head>
+<body>
+  <h1>Accessibility issues</h1>
+  <p>This page contains four deterministic accessibility defects.</p>
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+  <input type="text" name="q">
+  <a href="clean.html"></a>
+  <button></button>
+  <p><a href="index.html">Home</a></p>
+</body>
+</html>

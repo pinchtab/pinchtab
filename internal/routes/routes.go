@@ -122,6 +122,11 @@ var coreEndpoints = []Endpoint{
 	{"DELETE", "/cookies", "Clear all cookies", CapCookies, true},
 
 	{"GET", "/metrics", "Runtime metrics", CapNone, true},
+	{"GET", "/timing", "Page timing and Core Web Vitals", CapNone, true},
+	{"GET", "/a11y/audit", "Accessibility findings and score", CapNone, true},
+	{"POST", "/audit/page", "Audit a single page with browser enrichment", CapNone, false},
+	{"POST", "/audit", "Run a multi-page site audit", CapNone, false},
+	{"POST", "/scrape", "Scrape a site: HTTP crawl plus browser enrichment", CapNone, false},
 
 	{"GET", "/network", "Network log", CapNone, true},
 	{"GET", "/network/stream", "Network SSE stream", CapNone, true},

@@ -34,6 +34,7 @@ Choose the cheapest tool that satisfies your goal:
 | Check a specific value | `pinchtab_eval(expression="document.title")` | Lowest |
 | Find a specific element | `pinchtab_find(query="login button")` | Low |
 | Read page text only | `pinchtab_get_text()` | Low |
+| Read a whole site to markdown | `pinchtab_scrape(url=..., preview=true)` then expand | Varies |
 | Find interactive elements | `pinchtab_snapshot(interactive=true, compact=true)` | Medium |
 | Full page structure | `pinchtab_snapshot()` | Medium-High |
 | Visual verification | `pinchtab_screenshot()` | Highest |
@@ -54,6 +55,20 @@ pinchtab_navigate(url="https://example.com")
 - For read-heavy tasks, consider blocking images (set via config on the server).
 
 **After navigation**: Always call `pinchtab_snapshot()` before interacting. The page may have redirects, modals, or cookie banners.
+
+---
+
+## Site scrape
+
+To read a **whole site** (not one page) into markdown, use `pinchtab_scrape` — it crawls over HTTP first and browser-renders only the pages that need it (thin, blocked, or JS-only).
+
+```
+pinchtab_scrape(url="https://example.com", preview=true)
+```
+
+- **Large sites**: call with `preview=true` first for a token-cheap outline (per-page titles, sizes, snippets, and which pages need the browser — no full bodies). Full reports can be large; don't scrape everything blind.
+- **Drill down**: expand the pages you picked from the preview with `only` (comma-separated URLs): `pinchtab_scrape(url="https://example.com", only="https://example.com/a, https://example.com/b")`.
+- `noBrowser=true` for an HTTP-only crawl; `enrichAll=true` to browser-render every page. Multi-page crawls run for minutes.
 
 ---
 

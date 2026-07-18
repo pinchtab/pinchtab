@@ -9,8 +9,8 @@ We currently support the following versions of Pinchtab with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| v0.10.0+ | :white_check_mark: |
-| < v0.10.0 | :x: |
+| v0.14.0+ | :white_check_mark: |
+| < v0.14.0 | :x: |
 
 ## Current Posture
 
