@@ -1,12 +1,14 @@
 package actions
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/audit"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +23,24 @@ func newAuditTestCmd(args ...string) *cobra.Command {
 	cmd.Flags().Bool("json", false, "")
 	cmd.Flags().String("seaportal-report", "", "")
 	cmd.Flags().Bool("enrich-all", false, "")
+	cmd.Flags().String("format", "json", "")
+	cmd.Flags().StringArray("cookie", nil, "")
+	cmd.Flags().String("cookies-file", "", "")
+	cmd.Flags().String("profile", "", "")
+	if err := cmd.Flags().Parse(args); err != nil {
+		panic(err)
+	}
+	return cmd
+}
+
+func newCompareTestCmd(args ...string) *cobra.Command {
+	cmd := &cobra.Command{Use: "compare"}
+	cmd.Flags().String("pages", "", "")
+	cmd.Flags().Bool("visual-diff", true, "")
+	cmd.Flags().String("output-dir", "", "")
+	cmd.Flags().Int("concurrency", 0, "")
+	cmd.Flags().Bool("json", false, "")
+	cmd.Flags().Bool("fail-on-diff", false, "")
 	cmd.Flags().String("format", "json", "")
 	cmd.Flags().StringArray("cookie", nil, "")
 	cmd.Flags().String("cookies-file", "", "")
@@ -136,5 +156,82 @@ func TestApplyRunAuthRejectsProfileWithCookies(t *testing.T) {
 	_, _, err := applyRunAuth(http.DefaultClient, "http://example.invalid", "", newAuditTestCmd("--profile", "work", "--cookie", "session=temporary"), "https://example.com")
 	if err == nil || !strings.Contains(err.Error(), "--profile cannot be combined") {
 		t.Fatalf("applyRunAuth() error = %v, want profile/cookie conflict", err)
+	}
+}
+
+func TestResolveProfileBaseUsesOrchestratorProxy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/instances" {
+			t.Fatalf("path = %s, want /instances", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`[{"id":"work-instance","profileName":"work","status":"running","url":"http://localhost:9870"}]`))
+	}))
+	defer srv.Close()
+
+	base, err := resolveProfileBase(http.DefaultClient, srv.URL, "", "work")
+	if err != nil {
+		t.Fatalf("resolveProfileBase() error = %v", err)
+	}
+	if want := srv.URL + "/instances/work-instance"; base != want {
+		t.Fatalf("resolveProfileBase() = %q, want %q", base, want)
+	}
+}
+
+func TestSetRunCookiesRejectsPartialWrite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tab":
+			_, _ = w.Write([]byte(`{"tabId":"temporary-tab"}`))
+		case "/cookies":
+			_, _ = w.Write([]byte(`{"set":0,"failed":1,"total":1}`))
+		case "/close":
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	err := setRunCookies(http.DefaultClient, srv.URL, "", "https://example.com", []audit.Cookie{{Name: "session", Value: "temporary"}})
+	if err == nil || !strings.Contains(err.Error(), "cookie injection incomplete") {
+		t.Fatalf("setRunCookies() error = %v, want incomplete cookie injection", err)
+	}
+}
+
+func TestCompareInjectsShorthandCookiesForBothSites(t *testing.T) {
+	var cookieURLs []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/instances/start":
+			_, _ = w.Write([]byte(`{"id":"isolated","url":"http://localhost:9870"}`))
+		case "/instances/isolated":
+			_, _ = w.Write([]byte(`{"id":"isolated","status":"running"}`))
+		case "/instances/isolated/tab":
+			_, _ = w.Write([]byte(`{"tabId":"temporary-tab"}`))
+		case "/instances/isolated/cookies":
+			var body struct {
+				URL string `json:"url"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode cookie body: %v", err)
+			}
+			cookieURLs = append(cookieURLs, body.URL)
+			_, _ = w.Write([]byte(`{"set":1,"failed":0,"total":1}`))
+		case "/instances/isolated/close", "/instances/isolated/stop":
+			_, _ = w.Write([]byte(`{}`))
+		case "/instances/isolated/audit":
+			_, _ = w.Write([]byte(`{"pages":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	err := Compare(http.DefaultClient, srv.URL, "", newCompareTestCmd("--cookie", "session=temporary"), "https://live.example", "https://staging.example")
+	if err != nil {
+		t.Fatalf("Compare() error = %v", err)
+	}
+	if want := []string{"https://live.example", "https://staging.example"}; strings.Join(cookieURLs, ",") != strings.Join(want, ",") {
+		t.Fatalf("cookie URLs = %v, want %v", cookieURLs, want)
 	}
 }

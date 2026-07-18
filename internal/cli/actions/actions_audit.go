@@ -106,8 +106,20 @@ func setRunCookies(client *http.Client, base, token, url string, cookies []audit
 	if tab.TabID != "" {
 		body["tabId"] = tab.TabID
 	}
-	if _, err := apiclient.DoPostRawE(client, base, token, "/cookies", body); err != nil {
+	raw, err = apiclient.DoPostRawE(client, base, token, "/cookies", body)
+	if err != nil {
 		return err
+	}
+	var result struct {
+		Set    int `json:"set"`
+		Failed int `json:"failed"`
+		Total  int `json:"total"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return fmt.Errorf("parse cookie injection result: %w", err)
+	}
+	if result.Failed != 0 || result.Set != len(cookies) {
+		return fmt.Errorf("cookie injection incomplete: set %d of %d cookies (%d failed)", result.Set, len(cookies), result.Failed)
 	}
 	return nil
 }
@@ -179,9 +191,9 @@ func waitForIsolatedInstance(client *http.Client, base, token, instanceID string
 	}
 }
 
-// resolveProfileBase routes the run at the instance owning the named
-// profile: the orchestrator base for the default-routed instance, or the
-// instance's own URL otherwise.
+// resolveProfileBase routes the run at the instance owning the named profile
+// through the orchestrator proxy. Child URLs normally bind to localhost and
+// are therefore not reachable by remote CLI clients.
 func resolveProfileBase(client *http.Client, base, token, profile string) (string, error) {
 	raw, err := apiclient.DoGetRawE(client, base, token, "/instances", nil)
 	if err != nil {
@@ -191,7 +203,6 @@ func resolveProfileBase(client *http.Client, base, token, profile string) (strin
 		ID          string `json:"id"`
 		ProfileName string `json:"profileName"`
 		Status      string `json:"status"`
-		URL         string `json:"url"`
 	}
 	if err := json.Unmarshal(raw, &instances); err != nil {
 		return "", fmt.Errorf("parse instances: %w", err)
@@ -200,23 +211,9 @@ func resolveProfileBase(client *http.Client, base, token, profile string) (strin
 		if inst.ProfileName != profile || inst.Status != "running" {
 			continue
 		}
-		if inst.ID == defaultInstanceID(client, base, token) {
-			return base, nil
-		}
-		return strings.TrimSuffix(inst.URL, "/"), nil
+		return strings.TrimSuffix(base, "/") + "/instances/" + url.PathEscape(inst.ID), nil
 	}
 	return "", fmt.Errorf("no running instance for profile %q (start one: pinchtab instance start --profile %s)", profile, profile)
-}
-
-func defaultInstanceID(client *http.Client, base, token string) string {
-	raw := apiclient.DoGetRaw(client, base, token, "/health", nil)
-	var health struct {
-		DefaultInstance struct {
-			ID string `json:"id"`
-		} `json:"defaultInstance"`
-	}
-	_ = json.Unmarshal(raw, &health)
-	return health.DefaultInstance.ID
 }
 
 // validateAuditFlags rejects invalid flag combinations pre-flight, before

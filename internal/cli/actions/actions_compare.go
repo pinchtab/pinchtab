@@ -34,6 +34,21 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 			}
 		}
 	}()
+	if cookies, err := loadRunCookies(cmd); err != nil {
+		return err
+	} else if len(cookies) > 0 {
+		stagingCookies := make([]audit.Cookie, 0, len(cookies))
+		for _, cookie := range cookies {
+			if strings.TrimSpace(cookie.Domain) == "" {
+				stagingCookies = append(stagingCookies, cookie)
+			}
+		}
+		if len(stagingCookies) > 0 {
+			if err := setRunCookies(client, base, token, stagingBase, stagingCookies); err != nil {
+				return fmt.Errorf("set staging run cookies: %w", err)
+			}
+		}
+	}
 
 	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
 	runSide := func(siteBase string) (audit.AuditReport, error) {
