@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css}'",
+    "types:format": "prettier --write src/generated/types.ts",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest",

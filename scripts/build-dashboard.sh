@@ -99,7 +99,7 @@ fi
 
 # Normalize tygo output with prettier so generation doesn't dirty git
 if [ -f "src/generated/types.ts" ]; then
-  npx prettier --write src/generated/types.ts 2>/dev/null || true
+  bun run types:format
 fi
 
 bun run build

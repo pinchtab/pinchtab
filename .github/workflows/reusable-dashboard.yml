@@ -43,7 +43,7 @@ jobs:
       - name: Generate dashboard types
         run: |
           $HOME/go/bin/tygo generate
-          npx prettier --write src/generated/types.ts
+          bun run types:format
           git diff --exit-code -- src/generated/types.ts
 
       - name: TypeScript check
@@ -86,7 +86,7 @@ jobs:
       - name: Generate dashboard types
         run: |
           $HOME/go/bin/tygo generate
-          npx prettier --write src/generated/types.ts
+          bun run types:format
 
       - name: Build
         run: bun run build
