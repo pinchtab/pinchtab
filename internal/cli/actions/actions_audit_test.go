@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -231,7 +233,49 @@ func TestCompareInjectsShorthandCookiesForBothSites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compare() error = %v", err)
 	}
-	if want := []string{"https://live.example", "https://staging.example"}; strings.Join(cookieURLs, ",") != strings.Join(want, ",") {
+	if want := []string{"https://live.example/", "https://staging.example"}; strings.Join(cookieURLs, ",") != strings.Join(want, ",") {
+		t.Fatalf("cookie URLs = %v, want %v", cookieURLs, want)
+	}
+}
+
+func TestAuditSeaportalReportInjectsCookiesWithoutPositionalURL(t *testing.T) {
+	reportPath := filepath.Join(t.TempDir(), "seaportal.json")
+	if err := os.WriteFile(reportPath, []byte(`[{"url":"https://example.com/a","profile":{"browserRecommended":false}}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var cookieURLs []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/instances/start":
+			_, _ = w.Write([]byte(`{"id":"isolated","url":"http://localhost:9870"}`))
+		case "/instances/isolated":
+			_, _ = w.Write([]byte(`{"id":"isolated","status":"running"}`))
+		case "/instances/isolated/tab":
+			_, _ = w.Write([]byte(`{"tabId":"temporary-tab"}`))
+		case "/instances/isolated/cookies":
+			var body struct {
+				URL string `json:"url"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode cookie body: %v", err)
+			}
+			cookieURLs = append(cookieURLs, body.URL)
+			_, _ = w.Write([]byte(`{"set":1,"failed":0,"total":1}`))
+		case "/instances/isolated/close", "/instances/isolated/stop":
+			_, _ = w.Write([]byte(`{}`))
+		case "/instances/isolated/audit":
+			_, _ = w.Write([]byte(`{"pages":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--seaportal-report", reportPath, "--cookie", "session=temporary"), "")
+	if err != nil {
+		t.Fatalf("Audit() error = %v", err)
+	}
+	if want := []string{"https://example.com/"}; strings.Join(cookieURLs, ",") != strings.Join(want, ",") {
 		t.Fatalf("cookie URLs = %v, want %v", cookieURLs, want)
 	}
 }

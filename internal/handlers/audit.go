@@ -43,23 +43,27 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	routing, ok := h.resolveNavigateBrowser(w, r, "", "")
-	if !ok {
-		return
-	}
-	if !h.ensureBrowserOrRespond(w, routing.EffectiveCfg) {
-		return
+	effectiveCfg := h.Config
+	if auditNeedsBrowser(req, seaportalPages) {
+		routing, ok := h.resolveNavigateBrowser(w, r, "", "")
+		if !ok {
+			return
+		}
+		effectiveCfg = routing.EffectiveCfg
+		if !h.ensureBrowserOrRespond(w, effectiveCfg) {
+			return
+		}
 	}
 
 	// A multi-page audit legitimately outlives the server's WriteTimeout.
 	httpx.ExtendWriteDeadline(w, auditRunTimeout)
 
 	auditor := func(url string, opts audit.PageOptions) audit.PageAudit {
-		targets, err := h.validateAuditTarget(url, routing.EffectiveCfg)
+		targets, err := h.validateAuditTarget(url, effectiveCfg)
 		if err != nil {
 			return audit.NewPageAuditError(url, err)
 		}
-		return h.auditPage(r.Context(), url, opts, routing.EffectiveCfg, targets)
+		return h.auditPage(r.Context(), url, opts, effectiveCfg, targets)
 	}
 
 	report, err := audit.RunAudit(
@@ -71,7 +75,7 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 			EnrichAll:   req.EnrichAll,
 			Page:        req.Options.pageOptions(),
 		},
-		h.fetchSitemap(routing.EffectiveCfg),
+		h.fetchSitemap(effectiveCfg),
 		auditor,
 	)
 	if err != nil {
@@ -79,6 +83,18 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, report)
+}
+
+func auditNeedsBrowser(req auditRequest, seaportalPages []audit.SeaportalPage) bool {
+	if len(seaportalPages) == 0 || req.EnrichAll {
+		return true
+	}
+	for _, page := range seaportalPages {
+		if page.BrowserRecommended {
+			return true
+		}
+	}
+	return false
 }
 
 // fetchSitemap returns a SitemapFetcher that applies the same URL/IDPI/SSRF

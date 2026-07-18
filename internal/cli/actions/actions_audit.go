@@ -35,7 +35,7 @@ func mustBool(cmd *cobra.Command, name string) bool {
 // applyRunAuth resolves --profile routing and injects --cookie /
 // --cookies-file cookies before the run. Cookie-authenticated runs receive a
 // disposable instance so they never alter a persistent browser profile.
-func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, scopeURL string) (string, func() error, error) {
+func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, scopeURLs ...string) (string, func() error, error) {
 	cookies, err := loadRunCookies(cmd)
 	if err != nil {
 		return "", nil, err
@@ -52,7 +52,8 @@ func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, s
 	if mustString(cmd, "profile") != "" {
 		return "", nil, fmt.Errorf("--profile cannot be combined with --cookie or --cookies-file; cookie-authenticated runs use an isolated temporary instance")
 	}
-	if scopeURL == "" {
+	scopes := cookieScopeURLs(scopeURLs)
+	if len(scopes) == 0 {
 		return "", nil, fmt.Errorf("cookie injection requires a URL target")
 	}
 
@@ -60,13 +61,32 @@ func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, s
 	if err != nil {
 		return "", nil, err
 	}
-	if err := setRunCookies(client, instanceBase, token, scopeURL, cookies); err != nil {
-		if cleanupErr := cleanup(); cleanupErr != nil {
-			return "", nil, fmt.Errorf("set run cookies: %w (also failed to stop isolated instance: %v)", err, cleanupErr)
+	for _, scope := range scopes {
+		if err := setRunCookies(client, instanceBase, token, scope, cookies); err != nil {
+			if cleanupErr := cleanup(); cleanupErr != nil {
+				return "", nil, fmt.Errorf("set run cookies: %w (also failed to stop isolated instance: %v)", err, cleanupErr)
+			}
+			return "", nil, fmt.Errorf("set run cookies: %w", err)
 		}
-		return "", nil, fmt.Errorf("set run cookies: %w", err)
 	}
 	return instanceBase, cleanup, nil
+}
+
+func cookieScopeURLs(urls []string) []string {
+	seen := make(map[string]bool, len(urls))
+	scopes := make([]string, 0, len(urls))
+	for _, raw := range urls {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			continue
+		}
+		scope := (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/"}).String()
+		if !seen[scope] {
+			seen[scope] = true
+			scopes = append(scopes, scope)
+		}
+	}
+	return scopes
 }
 
 func loadRunCookies(cmd *cobra.Command) ([]audit.Cookie, error) {
@@ -238,7 +258,35 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		return err
 	}
 
-	base, cleanup, err := applyRunAuth(client, base, token, cmd, target)
+	body := map[string]any{}
+	authScopes := []string{target}
+	switch {
+	case mustString(cmd, "seaportal-report") != "":
+		path := mustString(cmd, "seaportal-report")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read seaportal report: %w", err)
+		}
+		pages, err := audit.ParseSeaportalReport(data)
+		if err != nil {
+			return err
+		}
+		authScopes = make([]string, 0, len(pages))
+		for _, page := range pages {
+			authScopes = append(authScopes, page.URL)
+		}
+		body["seaportalResults"] = json.RawMessage(data)
+		body["seaportalFile"] = path
+		if v, _ := cmd.Flags().GetBool("enrich-all"); v {
+			body["enrichAll"] = true
+		}
+	case mustBool(cmd, "sitemap"):
+		body["sitemapUrl"] = target
+	default:
+		body["urls"] = []string{target}
+	}
+
+	base, cleanup, err := applyRunAuth(client, base, token, cmd, authScopes...)
 	if err != nil {
 		return err
 	}
@@ -251,25 +299,6 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 			}
 		}
 	}()
-
-	body := map[string]any{}
-	switch {
-	case mustString(cmd, "seaportal-report") != "":
-		path := mustString(cmd, "seaportal-report")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read seaportal report: %w", err)
-		}
-		body["seaportalResults"] = json.RawMessage(data)
-		body["seaportalFile"] = path
-		if v, _ := cmd.Flags().GetBool("enrich-all"); v {
-			body["enrichAll"] = true
-		}
-	case mustBool(cmd, "sitemap"):
-		body["sitemapUrl"] = target
-	default:
-		body["urls"] = []string{target}
-	}
 
 	screenshot, _ := cmd.Flags().GetBool("screenshot")
 	network, _ := cmd.Flags().GetBool("network-monitor")

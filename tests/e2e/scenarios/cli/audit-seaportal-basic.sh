@@ -60,6 +60,20 @@ fi
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "seaportal-only audit accepts cookie authentication"
+
+pt_ok audit --seaportal-report "$SEAPORTAL_REPORT" --cookie session=e2evalue --screenshot=false --json
+
+PAGE_COUNT=$(echo "$PT_OUT" | jq '.pages | length' 2>/dev/null)
+if [ "${PAGE_COUNT:-0}" -eq 3 ] 2>/dev/null; then
+  pass_assert "cookie-authenticated seaportal report ran without a positional URL"
+else
+  fail_assert "cookie-authenticated seaportal report ran without a positional URL (pages: $PAGE_COUNT)"
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "--enrich-all overrides browserRecommended routing"
 
 pt_ok audit --seaportal-report "$SEAPORTAL_REPORT" --enrich-all --json
