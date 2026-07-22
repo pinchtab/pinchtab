@@ -100,6 +100,7 @@ func (b *Bridge) tabSetup(ctx context.Context, tabID string) {
 		b.installWorkerStealthParity(ctx)
 	}
 	b.injectStealth(ctx)
+	b.injectArkoseCapture(ctx)
 	if b.Config != nil && b.Config.NoAnimations {
 		if err := b.InjectNoAnimations(ctx); err != nil {
 			slog.Warn("no-animations injection failed", "err", err)
