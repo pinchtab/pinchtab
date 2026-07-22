@@ -125,6 +125,30 @@ func TestHandleTabNetworkRoute_CapabilityDisabled(t *testing.T) {
 	}
 }
 
+func TestNetworkInterceptSecurityStateIncludesEveryGatedDirectRoute(t *testing.T) {
+	h := New(newRouteMockBridge(), &config.RuntimeConfig{}, nil, nil, nil)
+	state := h.endpointSecurityStates()["networkIntercept"]
+	want := []string{
+		"GET /network/{requestId}",
+		"GET /tabs/{id}/network/{requestId}",
+		"POST /network/clear",
+		"GET /network/route",
+		"POST /network/route",
+		"DELETE /network/route",
+		"GET /tabs/{id}/network/route",
+		"POST /tabs/{id}/network/route",
+		"DELETE /tabs/{id}/network/route",
+	}
+	if len(state.Paths) != len(want) {
+		t.Fatalf("security paths = %v, want %v", state.Paths, want)
+	}
+	for i := range want {
+		if state.Paths[i] != want[i] {
+			t.Fatalf("security path[%d] = %q, want %q", i, state.Paths[i], want[i])
+		}
+	}
+}
+
 func TestHandleTabNetworkUnroute_CapabilityDisabled(t *testing.T) {
 	b := newRouteMockBridge()
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)

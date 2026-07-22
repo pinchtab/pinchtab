@@ -78,6 +78,10 @@ type ActionRequest struct {
 	WaitNav bool   `json:"waitNav"`
 	Fast    bool   `json:"fast"`
 	Owner   string `json:"owner"`
+	// Submit is an explicit opt-in to a terminal action. Fill dispatches Enter
+	// after filling; click uses one DOM click and lets the handler observe a
+	// bounded post-submit state. Ordinary clicks retain their normal delivery.
+	Submit bool `json:"submit,omitempty"`
 
 	// DismissBanners, when true and combined with WaitNav, runs a best-effort
 	// cookie/consent-banner dismissal pass after a click that triggered a
@@ -85,6 +89,9 @@ type ActionRequest struct {
 	// invokes the dismissal helper post-action. No effect on actions that
 	// don't trigger navigation.
 	DismissBanners bool `json:"dismissBanners,omitempty"`
+	// DismissKnownInterstitials requests the conservative, catalog-backed
+	// pre-action pass. Unlike DismissBanners it never removes generic overlays.
+	DismissKnownInterstitials bool `json:"dismissKnownInterstitials,omitempty"`
 
 	// Humanize, when set, overrides the per-instance `humanize` default for
 	// this action only. nil = use the configured default. true forces the
@@ -158,6 +165,41 @@ func CanonicalActionKind(kind string) string {
 	return kind
 }
 
+// IsSubmitClick reports whether an action requested the explicit once-only
+// click-submit contract.
+func IsSubmitClick(kind string, req ActionRequest) bool {
+	return req.Submit && CanonicalActionKind(kind) == ActionClick
+}
+
+// ValidateSubmitAction rejects combinations that cannot preserve exactly-once
+// submit dispatch. Fill's existing submit-via-Enter contract is unchanged.
+func ValidateSubmitAction(kind string, req ActionRequest) error {
+	if !req.Submit {
+		return nil
+	}
+	kind = CanonicalActionKind(kind)
+	switch kind {
+	case ActionFill:
+		return nil
+	case ActionClick:
+		if req.HasXY {
+			return fmt.Errorf("click submit requires an element target; coordinates are not supported")
+		}
+		if req.WaitNav {
+			return fmt.Errorf("click submit cannot be combined with waitNav")
+		}
+		if strings.TrimSpace(req.Mode) != "" {
+			return fmt.Errorf("click submit cannot be combined with mode")
+		}
+		if req.Humanize != nil && *req.Humanize {
+			return fmt.Errorf("click submit cannot be combined with humanize=true")
+		}
+		return nil
+	default:
+		return fmt.Errorf("submit is only supported for fill and click actions")
+	}
+}
+
 func hasJSONKey(raw map[string]json.RawMessage, key string) bool {
 	_, ok := raw[key]
 	return ok
@@ -166,6 +208,12 @@ func hasJSONKey(raw map[string]json.RawMessage, key string) bool {
 func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionRequest) (map[string]any, error) {
 	kind = CanonicalActionKind(kind)
 	req.Kind = CanonicalActionKind(req.Kind)
+	if req.Kind == "" {
+		req.Kind = kind
+	}
+	if err := ValidateSubmitAction(kind, req); err != nil {
+		return nil, err
+	}
 	if kind == ActionClick && b.effectiveHumanize(req) && strings.TrimSpace(req.Mode) != "" {
 		return nil, fmt.Errorf("mode and humanize are mutually exclusive")
 	}

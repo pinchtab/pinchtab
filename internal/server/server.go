@@ -81,6 +81,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	var sessionAPI *dashboard.SessionAPI
 	if sessionStore.Enabled() {
 		sessionAPI = dashboard.NewSessionAPI(sessionStore, cfg.BrowsersAvailable)
+		sessionAPI.SetSessionTabSource(orch.SessionTabIDs)
 	}
 
 	orch.OnEvent(func(evt orchestrator.InstanceEvent) {

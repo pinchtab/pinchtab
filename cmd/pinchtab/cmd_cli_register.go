@@ -68,10 +68,12 @@ func configureBrowserFlags() {
 	addPointerActionFlags(clickCmd, "click")
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
 	clickCmd.Flags().Bool("dismiss-banners", false, "Dismiss cookie/consent banners after a wait-nav click (no-op without --wait-nav)")
+	clickCmd.Flags().Bool("dismiss-known-interstitials", false, "Dismiss a recognized portal interstitial before resolving the click target")
 	addPostActionFlags(clickCmd, "action", true)
 	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
 	clickCmd.Flags().String("mode", "", "Click delivery mode override: dom | dispatch")
+	clickCmd.Flags().Bool("submit", false, "Dispatch one DOM click and report bounded post-submit state")
 
 	addPointerActionFlags(dblclickCmd, "dblclick")
 
@@ -201,6 +203,7 @@ func configureBrowserFlags() {
 	addPostActionFlags(reloadCmd, "reload", true)
 	reloadCmd.Flags().Bool("dismiss-banners", false, "After reload, dismiss cookie/consent banners")
 	addPostActionFlags(fillCmd, "fill", true)
+	fillCmd.Flags().Bool("submit", false, "Press Enter after filling the field")
 	addPostActionFlags(selectCmd, "select", true)
 	addPostActionFlags(scrollCmd, "scroll", false)
 
@@ -212,6 +215,7 @@ func configureBrowserFlags() {
 		snapCmd,
 		frameCmd,
 		screenshotCmd,
+		captureCmd,
 		annotateCmd,
 		pdfCmd,
 		findCmd,

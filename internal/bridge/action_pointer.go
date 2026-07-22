@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -21,6 +22,7 @@ var clickElementAction = ClickElement
 var clickByNodeIDAction = ClickByNodeID
 var jsClickByBackendNodeAction = JSClickByBackendNode
 var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
+var clickFloatingFlyoutItemAction = clickFloatingFlyoutItem
 var doubleClickByNodeIDAction = DoubleClickByNodeID
 var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
 
@@ -61,6 +63,10 @@ func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
 func clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", "default":
+		handled, err := clickFloatingFlyoutItemAction(ctx, nodeID)
+		if err != nil || handled {
+			return err
+		}
 		return clickByNodeIDWithJSFallback(ctx, nodeID)
 	case "dom":
 		return jsClickByBackendNodeAction(ctx, nodeID)
@@ -69,6 +75,49 @@ func clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error
 	default:
 		return fmt.Errorf("invalid click mode: %s", mode)
 	}
+}
+
+// clickFloatingFlyoutItem avoids DOM.scrollIntoViewIfNeeded for portal-backed
+// menu options: scrolling their floating owner can rerender and detach the node
+// before the pointer dispatch. A DOM click is intentional for this narrow role
+// and positioning combination; all other nodes retain the trusted pointer path.
+func clickFloatingFlyoutItem(ctx context.Context, nodeID int64) (handled bool, err error) {
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		node, err := dom.DescribeNode().WithBackendNodeID(cdp.BackendNodeID(nodeID)).Do(ctx)
+		if err != nil {
+			return err
+		}
+		role := strings.ToLower(strings.TrimSpace(node.AttributeValue("role")))
+		if role != "menuitem" && role != "option" {
+			return nil
+		}
+
+		object, err := dom.ResolveNode().WithBackendNodeID(cdp.BackendNodeID(nodeID)).Do(ctx)
+		if err != nil {
+			return err
+		}
+		result, exception, err := runtime.CallFunctionOn(`function() {
+			if (!this.isConnected) return false;
+			for (var el = this; el && el.nodeType === 1; el = el.parentElement) {
+				var position = getComputedStyle(el).position;
+				if (position === 'fixed' || position === 'absolute') {
+					try { this.focus({preventScroll: true}); } catch (e) {}
+					this.click();
+					return true;
+				}
+			}
+			return false;
+		}`).WithObjectID(object.ObjectID).WithReturnByValue(true).Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exception != nil {
+			return exception
+		}
+		handled = string(result.Value) == "true"
+		return nil
+	}))
+	return handled, err
 }
 
 func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
@@ -135,48 +184,6 @@ var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
 		return 0, 0, err
 	}
 	return viewport.X, viewport.Y, nil
-}
-
-// submitFormIfButton checks whether the target element is a submit button and,
-// if so, uses requestSubmit() for a single-shot submission: constraint
-// validation + submit event (so JS handlers run) + actual submission.
-// Falls back to CDP click if the element is not a submit button or on error.
-func submitFormIfButton(ctx context.Context, selector string) (bool, error) {
-	var isSubmit bool
-	err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`
-		(function() {
-			var el = document.querySelector(%q);
-			if (!el) return false;
-			var tag = el.tagName.toLowerCase();
-			var type = (el.type || '').toLowerCase();
-			return (tag === 'button' && (type === 'submit' || type === '')) ||
-			       (tag === 'input' && type === 'submit');
-		})()
-	`, selector), &isSubmit))
-	if err != nil || !isSubmit {
-		return false, err
-	}
-	// Fire full event chain via requestSubmit(el):
-	// - runs constraint validation
-	// - dispatches the submit event (so JS handlers like Odoo's fire)
-	// - submits the form if nothing cancels it
-	// One call, no double-fire (replaces manual dispatchEvent + form.submit).
-	var submitted bool
-	err = chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`
-		(function() {
-			var el = document.querySelector(%q);
-			if (!el) return false;
-			el.focus();
-			var opts = {bubbles: true, cancelable: true};
-			el.dispatchEvent(new MouseEvent('mousedown', opts));
-			el.dispatchEvent(new MouseEvent('mouseup', opts));
-			el.dispatchEvent(new MouseEvent('click', opts));
-			var form = el.closest('form');
-			if (form) { form.requestSubmit(el); }
-			return true;
-		})()
-	`, selector), &submitted))
-	return submitted, err
 }
 
 // settle finalizes the popup auto-switch from a deferred call in the click
@@ -247,7 +254,7 @@ func scaleScreencastCoords(ctx context.Context, req *ActionRequest) {
 
 func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	scaleScreencastCoords(ctx, &req)
-	if b.effectiveHumanize(req) {
+	if !req.Submit && b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
 	}
 
@@ -282,17 +289,27 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		if auto != nil {
 			auto.prepareWindowOpenCapture(clickCtx)
 		}
-		if req.Selector != "" {
-			// For submit buttons, use requestSubmit() to fire constraint validation,
-			// JS submit handlers, and actual submission in one shot (issue #411).
-			submitted, subErr := submitFormIfButton(clickCtx, req.Selector)
-			if subErr != nil {
-				slog.Debug("submitFormIfButton failed, falling back to JS click",
-					"selector", req.Selector, "error", subErr)
-			} else if submitted {
-				resultCh <- clickResult{err: nil}
+		if req.Submit {
+			nodeID := req.NodeID
+			if nodeID == 0 && req.Selector != "" {
+				node, nodeErr := firstNodeBySelector(clickCtx, req.Selector)
+				if nodeErr != nil {
+					resultCh <- clickResult{err: nodeErr}
+					return
+				}
+				nodeID = int64(node.BackendNodeID)
+			}
+			if nodeID <= 0 {
+				resultCh <- clickResult{err: fmt.Errorf("click submit requires a selector, ref, or nodeId")}
 				return
 			}
+			if auto != nil {
+				auto.prepareNode(clickCtx, nodeID)
+			}
+			// One DOM click only. In particular, do not use the trusted-click
+			// timeout fallback: its second dispatch can double-submit a slow SPA.
+			err = jsClickByBackendNodeAction(clickCtx, nodeID)
+		} else if req.Selector != "" {
 			node, nodeErr := firstNodeBySelector(clickCtx, req.Selector)
 			if nodeErr != nil {
 				resultCh <- clickResult{err: nodeErr}

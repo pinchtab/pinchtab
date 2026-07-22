@@ -13,7 +13,54 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
+
+func TestProxyResponseTracksOnlySuccessfullyCreatedSessionTabs(t *testing.T) {
+	o := NewOrchestrator(t.TempDir())
+
+	created := func(sessionID, instanceID, tabID string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/tab", nil)
+		req = session.WithSession(req, &session.Session{ID: sessionID})
+		resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
+		resp.Header.Set(activity.HeaderPTTabID, tabID)
+		resp.Header.Set(activity.HeaderPTTabCreated, "true")
+		o.handleProxyResponseHeaders(req, resp, instanceID)
+	}
+
+	created("ses_1", "inst_a", "tab_2")
+	created("ses_1", "inst_a", "tab_1")
+	created("ses_2", "inst_b", "tab_3")
+
+	// Merely using another tab must not silently claim it for this session.
+	used := httptest.NewRequest(http.MethodGet, "/tabs/tab_foreign/title", nil)
+	used = session.WithSession(used, &session.Session{ID: "ses_1"})
+	usedResp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
+	usedResp.Header.Set(activity.HeaderPTTabID, "tab_foreign")
+	o.handleProxyResponseHeaders(used, usedResp, "inst_b")
+
+	if got := o.SessionTabIDs("ses_1"); len(got) != 2 || got[0] != "tab_1" || got[1] != "tab_2" {
+		t.Fatalf("ses_1 tabs = %v, want [tab_1 tab_2]", got)
+	}
+	if got := o.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab_3" {
+		t.Fatalf("ses_2 tabs = %v, want [tab_3]", got)
+	}
+
+	closed := httptest.NewRequest(http.MethodPost, "/tabs/tab_1/close", nil)
+	closed.SetPathValue("id", "tab_1")
+	closed = session.WithSession(closed, &session.Session{ID: "ses_2"})
+	closedResp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
+	closedResp.Header.Set(activity.HeaderPTTabID, "tab_1")
+	o.handleProxyResponseHeaders(closed, closedResp, "inst_a")
+
+	if got := o.SessionTabIDs("ses_1"); len(got) != 1 || got[0] != "tab_2" {
+		t.Fatalf("ses_1 tabs after close = %v, want [tab_2]", got)
+	}
+	if got := o.SessionTabIDs("ses_2"); len(got) != 1 || got[0] != "tab_3" {
+		t.Fatalf("close crossed session boundary: ses_2 tabs = %v", got)
+	}
+}
 
 func startLocalHTTPServer(t *testing.T, h http.Handler) (*httptest.Server, string) {
 	t.Helper()

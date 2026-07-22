@@ -56,12 +56,25 @@ func CurrentManager() (Manager, error) {
 }
 
 func IsInstalled() bool {
+	installed, err := InstallationStatus()
+	return err == nil && installed
+}
+
+// InstallationStatus distinguishes an absent service from an unreadable service
+// location so lifecycle callers can fail closed instead of starting a second owner.
+func InstallationStatus() (bool, error) {
 	manager, err := CurrentManager()
 	if err != nil {
-		return false
+		return false, err
 	}
 	_, err = os.Stat(manager.ServicePath())
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 func IsRunning() bool {

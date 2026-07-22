@@ -27,6 +27,10 @@ func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects
 	return bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, maxRedirects)
 }
 
+func DispatchNavigation(ctx context.Context, url string) error {
+	return bridgecdpops.DispatchNavigation(ctx, url)
+}
+
 func shouldReplaceBlankHistoryEntry(curURL string, cur int64, entryCount int) bool {
 	return bridgecdpops.ShouldReplaceBlankHistoryEntry(curURL, cur, entryCount)
 }

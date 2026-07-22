@@ -16,6 +16,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/daemon"
 	"github.com/pinchtab/pinchtab/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +43,7 @@ type serverBackgroundOptions struct {
 }
 
 var readProcessCommand = defaultReadProcessCommand
+var daemonInstallationStatus = daemon.InstallationStatus
 
 var serverStopCmd = &cobra.Command{
 	Use:   "stop",
@@ -58,21 +60,29 @@ var serverRestartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart the running server (stop + start in background)",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := loadConfig()
-
-		if server.CheckPinchTabRunning(cfg.Port, cfg.Token) {
-			fmt.Println("Stopping server...")
-			if err := runServerStop(); err != nil {
-				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.WarningStyle, fmt.Sprintf("stop: %v", err)))
-			}
-		}
-
-		fmt.Println("Starting server...")
-		if err := runServerBackground(cfg, serverBackgroundOptions{}); err != nil {
+		if err := runServerRestart(loadConfig()); err != nil {
 			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 			os.Exit(1)
 		}
 	},
+}
+
+func runServerRestart(cfg *config.RuntimeConfig) error {
+	installed, err := daemonInstallationStatus()
+	if err != nil {
+		return fmt.Errorf("cannot determine background-service ownership; refusing restart: %w", err)
+	}
+	if installed {
+		return fmt.Errorf("background service is installed; use `pinchtab daemon restart` so one service manager owns the server")
+	}
+	if server.CheckPinchTabRunning(cfg.Port, cfg.Token) {
+		fmt.Println("Stopping server...")
+		if err := runServerStop(); err != nil {
+			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.WarningStyle, fmt.Sprintf("stop: %v", err)))
+		}
+	}
+	fmt.Println("Starting server...")
+	return runServerBackground(cfg, serverBackgroundOptions{})
 }
 
 func stateDirForConfig(cfg *config.RuntimeConfig) string {

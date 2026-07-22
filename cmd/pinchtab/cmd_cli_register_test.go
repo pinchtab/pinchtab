@@ -55,7 +55,7 @@ func TestBrowserCommandRegistration(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"css", "x", "y", "humanize", "wait-nav", "mode"} {
+	for _, name := range []string{"css", "x", "y", "humanize", "wait-nav", "mode", "submit", "dismiss-known-interstitials"} {
 		if clickCmd.Flags().Lookup(name) == nil {
 			t.Errorf("clickCmd missing flag %q", name)
 		}
@@ -68,6 +68,12 @@ func TestBrowserCommandRegistration(t *testing.T) {
 		if hoverCmd.Flags().Lookup(name) == nil {
 			t.Errorf("hoverCmd missing flag %q", name)
 		}
+	}
+}
+
+func TestCaptureCommandRegistersTabFlag(t *testing.T) {
+	if captureCmd.Flags().Lookup("tab") == nil {
+		t.Fatal("captureCmd missing --tab flag")
 	}
 }
 
@@ -89,6 +95,7 @@ func TestPostActionFlagsBundle(t *testing.T) {
 	wantUsage(clickCmd, "snap", "Output interactive snapshot after action")
 	wantUsage(clickCmd, "snap-diff", "Output snapshot diff after action (changes only)")
 	wantUsage(clickCmd, "text", "Output page text after action (for verification)")
+	wantUsage(clickCmd, "submit", "Dispatch one DOM click and report bounded post-submit state")
 
 	wantUsage(reloadCmd, "snap", "Output interactive snapshot after reload")
 	wantUsage(reloadCmd, "snap-diff", "Output snapshot diff after reload (changes only)")

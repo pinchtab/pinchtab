@@ -20,6 +20,11 @@ import (
 // error — which must surface as 5xx, not 404. Callers classify with errors.Is.
 var ErrSelectorNoMatch = errors.New("selector matched no element")
 
+// ErrSelectorOutsideScope marks a cached ref that still exists but belongs to
+// the background document rather than the active modal subtree. Callers must
+// not treat this as a stale ref or invoke global semantic recovery.
+var ErrSelectorOutsideScope = errors.New("selector target is outside scope")
+
 type FrameElementMeta struct {
 	TagName string `json:"tagName"`
 	ID      string `json:"id,omitempty"`
@@ -43,20 +48,34 @@ func frameExecutionContextID(ctx context.Context, frameID string) (int64, error)
 }
 
 func frameDocumentObjectID(ctx context.Context, frameID string) (string, error) {
+	// Selector and modal discovery run in an isolated world so page script cannot
+	// hide or redirect targets by replacing DOM methods in the main world.
+	if frameID == "" {
+		frameTree, err := FetchFrameTree(ctx)
+		if err != nil {
+			return "", fmt.Errorf("resolve top frame: %w", err)
+		}
+		frameID = frameTree.Frame.ID
+		if frameID == "" {
+			return "", fmt.Errorf("resolve top frame: frame id is empty")
+		}
+	}
+	execID, err := frameExecutionContextID(ctx, frameID)
+	if err != nil {
+		return "", err
+	}
+	if execID == 0 {
+		return "", fmt.Errorf("frame %q has no isolated execution context", frameID)
+	}
+
 	params := map[string]any{
 		"expression":    "document",
 		"returnByValue": false,
-	}
-	if frameID != "" {
-		execID, err := frameExecutionContextID(ctx, frameID)
-		if err != nil {
-			return "", err
-		}
-		params["contextId"] = execID
+		"contextId":     execID,
 	}
 
 	var docResult json.RawMessage
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", params, &docResult)
 	}))
 	if err != nil {
@@ -67,11 +86,17 @@ func frameDocumentObjectID(ctx context.Context, frameID string) (string, error) 
 		Result struct {
 			ObjectID string `json:"objectId"`
 		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails,omitempty"`
 	}
 	if err := json.Unmarshal(docResult, &doc); err != nil {
 		return "", err
 	}
 	if doc.Result.ObjectID == "" {
+		if doc.ExceptionDetails != nil {
+			return "", fmt.Errorf("resolve document: %s", doc.ExceptionDetails.Text)
+		}
 		return "", fmt.Errorf("document object not found")
 	}
 	return doc.Result.ObjectID, nil
@@ -156,6 +181,250 @@ func resolveNodeInFrame(ctx context.Context, frameID, functionDeclaration string
 	}
 
 	return backendNodeIDFromObjectID(ctx, call.Result.ObjectID)
+}
+
+// TopmostModalNodeIDInFrame returns the backend node ID of the visually
+// topmost visible modal owner in a frame. A missing dialog is a normal result,
+// not an error. Discovery runs in an isolated world and uses browser hit
+// testing rather than comparing local z-index values, which are not comparable
+// across stacking contexts or the native top layer.
+func TopmostModalNodeIDInFrame(ctx context.Context, frameID string) (int64, bool, error) {
+	const topmostModalFn = `function() {
+		const candidates = [];
+		const seen = new Set();
+		const composedParent = (node) => node && (node.parentNode || node.host || null);
+		const composedContains = (ancestor, node) => {
+			for (let cur = node; cur; cur = composedParent(cur)) if (cur === ancestor) return true;
+			return false;
+		};
+		const visit = (root) => {
+			if (!root || !root.querySelectorAll) return;
+			for (const el of root.querySelectorAll('dialog, [aria-modal="true"]')) {
+				if (!seen.has(el)) { seen.add(el); candidates.push(el); }
+			}
+			for (const el of root.querySelectorAll("*")) if (el.shadowRoot) visit(el.shadowRoot);
+		};
+		visit(this);
+		const visible = candidates.filter((el) => {
+			if (!el || !el.isConnected) return false;
+			let nativeModal = false;
+			try { nativeModal = el.matches(":modal"); } catch (_) {}
+			if (!nativeModal && el.getAttribute("aria-modal") !== "true") return false;
+			for (let cur = el; cur; cur = composedParent(cur)) {
+				if (cur.nodeType !== 1) continue;
+				if (cur.getAttribute("aria-hidden") === "true") return false;
+				const style = cur.ownerDocument.defaultView.getComputedStyle(cur);
+				if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+				if (Number.parseFloat(style.opacity || "1") <= 0) return false;
+			}
+			const rect = el.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
+				rect.left < el.ownerDocument.defaultView.innerWidth && rect.top < el.ownerDocument.defaultView.innerHeight;
+		});
+		if (!visible.length) return null;
+
+		// An inner modal owns interaction before any containing modal, regardless
+		// of the outer element's local z-index.
+		const leaves = visible.filter((candidate) => !visible.some((other) =>
+			other !== candidate && composedContains(candidate, other)));
+		const points = [];
+		const pointKeys = new Set();
+		const addPoint = (x, y) => {
+			x = Math.max(0, Math.min(this.defaultView.innerWidth - 1, x));
+			y = Math.max(0, Math.min(this.defaultView.innerHeight - 1, y));
+			const key = Math.round(x) + ":" + Math.round(y);
+			if (!pointKeys.has(key)) { pointKeys.add(key); points.push([x, y]); }
+		};
+		for (const el of leaves) {
+			const r = el.getBoundingClientRect();
+			const left = Math.max(0, r.left), right = Math.min(this.defaultView.innerWidth, r.right);
+			const top = Math.max(0, r.top), bottom = Math.min(this.defaultView.innerHeight, r.bottom);
+			addPoint((left + right) / 2, (top + bottom) / 2);
+			addPoint(left + (right - left) * .2, top + (bottom - top) * .2);
+			addPoint(right - (right - left) * .2, top + (bottom - top) * .2);
+			addPoint(left + (right - left) * .2, bottom - (bottom - top) * .2);
+			addPoint(right - (right - left) * .2, bottom - (bottom - top) * .2);
+		}
+		const deepHit = (x, y) => {
+			let root = this, hit = null;
+			while (root && root.elementFromPoint) {
+				const next = root.elementFromPoint(x, y);
+				if (!next || next === hit) break;
+				hit = next;
+				root = next.shadowRoot;
+			}
+			return hit;
+		};
+		let best = null, bestHits = 0;
+		for (const candidate of leaves) {
+			let hits = 0;
+			for (const [x, y] of points) if (composedContains(candidate, deepHit(x, y))) hits++;
+			if (hits > bestHits || (hits === bestHits && hits > 0)) {
+				best = candidate;
+				bestHits = hits;
+			}
+		}
+		return bestHits > 0 ? best : null;
+	}`
+
+	nodeID, err := resolveNodeInFrame(ctx, frameID, topmostModalFn, nil)
+	if errors.Is(err, ErrSelectorNoMatch) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("resolve topmost dialog: %w", err)
+	}
+	return nodeID, true, nil
+}
+
+// TopmostModalNodeID gives a top-document modal precedence over a caller's
+// current iframe scope. This prevents a stale frame scope from interacting
+// with background content underneath a page-level modal. When the top
+// document has no modal, it falls back to the requested frame.
+func TopmostModalNodeID(ctx context.Context, frameID string) (int64, bool, error) {
+	nodeID, open, err := TopmostModalNodeIDInFrame(ctx, "")
+	if err != nil || open || frameID == "" {
+		return nodeID, open, err
+	}
+	return TopmostModalNodeIDInFrame(ctx, frameID)
+}
+
+// resolveNodeWithinBackendNode invokes functionDeclaration with the scope
+// element as `this` and converts the returned DOM object to a backend node ID.
+func resolveNodeWithinBackendNode(ctx context.Context, scopeBackendNodeID int64, functionDeclaration string, args []map[string]any) (int64, error) {
+	var scopeResult json.RawMessage
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+			"backendNodeId": scopeBackendNodeID,
+		}, &scopeResult)
+	}))
+	if err != nil {
+		return 0, fmt.Errorf("resolve scope node: %w", err)
+	}
+
+	var scope struct {
+		Object struct {
+			ObjectID string `json:"objectId"`
+		} `json:"object"`
+	}
+	if err := json.Unmarshal(scopeResult, &scope); err != nil {
+		return 0, err
+	}
+	if scope.Object.ObjectID == "" {
+		return 0, fmt.Errorf("dialog scope is no longer attached")
+	}
+
+	params := map[string]any{
+		"functionDeclaration": functionDeclaration,
+		"objectId":            scope.Object.ObjectID,
+		"returnByValue":       false,
+	}
+	if len(args) > 0 {
+		params["arguments"] = args
+	}
+
+	var callResult json.RawMessage
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &callResult)
+	}))
+	if err != nil {
+		return 0, err
+	}
+
+	var call struct {
+		Result struct {
+			Type     string `json:"type"`
+			Subtype  string `json:"subtype"`
+			ObjectID string `json:"objectId"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails,omitempty"`
+	}
+	if err := json.Unmarshal(callResult, &call); err != nil {
+		return 0, err
+	}
+	if call.ExceptionDetails != nil {
+		return 0, fmt.Errorf("scoped selector evaluation: %s", call.ExceptionDetails.Text)
+	}
+	if call.Result.ObjectID == "" || call.Result.Subtype == "null" || call.Result.Type == "undefined" {
+		return 0, fmt.Errorf("%w", ErrSelectorNoMatch)
+	}
+	return backendNodeIDFromObjectID(ctx, call.Result.ObjectID)
+}
+
+// BackendNodeWithinScope reports whether target is the scope node or one of
+// its DOM descendants. It is used to reject stale/background snapshot refs
+// while a modal dialog owns the interaction surface.
+func BackendNodeWithinScope(ctx context.Context, scopeBackendNodeID, targetBackendNodeID int64) (bool, error) {
+	if scopeBackendNodeID == 0 || targetBackendNodeID == 0 {
+		return false, nil
+	}
+
+	resolve := func(ctx context.Context, backendNodeID int64) (string, error) {
+		var raw json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+			"backendNodeId": backendNodeID,
+		}, &raw); err != nil {
+			return "", err
+		}
+		var parsed struct {
+			Object struct {
+				ObjectID string `json:"objectId"`
+			} `json:"object"`
+		}
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			return "", err
+		}
+		if parsed.Object.ObjectID == "" {
+			return "", fmt.Errorf("backend node %d is no longer attached", backendNodeID)
+		}
+		return parsed.Object.ObjectID, nil
+	}
+
+	var contains bool
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		scopeObjectID, err := resolve(ctx, scopeBackendNodeID)
+		if err != nil {
+			return fmt.Errorf("resolve scope node: %w", err)
+		}
+		targetObjectID, err := resolve(ctx, targetBackendNodeID)
+		if err != nil {
+			return fmt.Errorf("resolve target node: %w", err)
+		}
+
+		var raw json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": `function(target) {
+				for (let cur = target; cur; cur = cur.parentNode || cur.host || null) {
+					if (cur === this) return true;
+				}
+				return false;
+			}`,
+			"objectId":      scopeObjectID,
+			"arguments":     []map[string]any{{"objectId": targetObjectID}},
+			"returnByValue": true,
+		}, &raw); err != nil {
+			return err
+		}
+		var parsed struct {
+			Result struct {
+				Value bool `json:"value"`
+			} `json:"result"`
+			ExceptionDetails *struct {
+				Text string `json:"text"`
+			} `json:"exceptionDetails,omitempty"`
+		}
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			return err
+		}
+		if parsed.ExceptionDetails != nil {
+			return fmt.Errorf("scope containment check: %s", parsed.ExceptionDetails.Text)
+		}
+		contains = parsed.Result.Value
+		return nil
+	}))
+	return contains, err
 }
 
 func resolveElementMetaInFrame(ctx context.Context, frameID, functionDeclaration string, args []map[string]any) (FrameElementMeta, error) {
@@ -407,6 +676,7 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 		const out = [];
 		const visit = (scope) => {
 			if (!scope || !scope.querySelectorAll) return;
+			if (scope.nodeType === 1 && scope.matches && scope.matches(selector)) out.push(scope);
 			const elements = Array.from(scope.querySelectorAll("*"));
 			out.push(...Array.from(scope.querySelectorAll(selector)));
 			for (const el of elements) if (el.shadowRoot) visit(el.shadowRoot);
@@ -448,9 +718,13 @@ const resolveSelectorAtFn = `function(kind, value, index, fromEnd) {
 		case "css":
 			return pick(deepQueryAll(value));
 		case "xpath": {
-			const result = root.evaluate(value, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+			const document = root.ownerDocument || root;
+			const result = document.evaluate(value, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 			const items = [];
-			for (let i = 0; i < result.snapshotLength; i++) items.push(result.snapshotItem(i));
+			for (let i = 0; i < result.snapshotLength; i++) {
+				const item = result.snapshotItem(i);
+				if (root.nodeType === 9 || item === root || (root.contains && root.contains(item))) items.push(item);
+			}
 			return pick(items);
 		}
 		case "text":
@@ -486,6 +760,26 @@ func resolveSelectorAtInFrame(ctx context.Context, frameID string, sel selector.
 		return nil
 	}))
 	return backendNodeID, err
+}
+
+func resolveSelectorAtWithinNode(ctx context.Context, scopeBackendNodeID int64, sel selector.Selector, index int, fromEnd bool) (int64, error) {
+	kind := string(sel.Kind)
+	switch sel.Kind {
+	case selector.KindCSS, selector.KindXPath, selector.KindText:
+	default:
+		return 0, fmt.Errorf("%s selector cannot be used with first/last/nth", sel.Kind)
+	}
+
+	nid, err := resolveNodeWithinBackendNode(ctx, scopeBackendNodeID, resolveSelectorAtFn, []map[string]any{
+		{"value": kind},
+		{"value": sel.Value},
+		{"value": index},
+		{"value": fromEnd},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("%s %q inside topmost dialog: %w", sel.Kind, sel.Value, err)
+	}
+	return nid, nil
 }
 
 func parseNthSelectorValue(value string) (int, string, error) {
@@ -527,6 +821,31 @@ func resolveNestedSelectorAtInFrame(ctx context.Context, frameID string, raw str
 		return 0, fmt.Errorf("semantic selectors must be resolved at the handler layer via /find")
 	default:
 		return resolveSelectorAtInFrame(ctx, frameID, inner, index, fromEnd)
+	}
+}
+
+func resolveNestedSelectorWithinNode(ctx context.Context, scopeBackendNodeID int64, raw string, refCache *RefCache, index int, fromEnd bool) (int64, error) {
+	inner := selector.Parse(raw)
+	switch inner.Kind {
+	case selector.KindFirst:
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, inner.Value, refCache, 0, false)
+	case selector.KindLast:
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, inner.Value, refCache, 0, true)
+	case selector.KindNth:
+		nth, nestedRaw, err := parseNthSelectorValue(inner.Value)
+		if err != nil {
+			return 0, err
+		}
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, nestedRaw, refCache, nth, false)
+	case selector.KindRef:
+		if fromEnd || index != 0 {
+			return 0, fmt.Errorf("ref selector cannot be used with last/nth")
+		}
+		return ResolveUnifiedSelectorWithinNode(ctx, inner, refCache, scopeBackendNodeID)
+	case selector.KindSemantic:
+		return 0, fmt.Errorf("semantic selectors must be resolved at the handler layer via /find")
+	default:
+		return resolveSelectorAtWithinNode(ctx, scopeBackendNodeID, inner, index, fromEnd)
 	}
 }
 
@@ -638,6 +957,61 @@ func ResolveUnifiedSelectorInFrame(ctx context.Context, sel selector.Selector, r
 			return 0, err
 		}
 		return resolveNestedSelectorAtInFrame(ctx, frameID, rawSelector, refCache, index, false)
+
+	default:
+		return 0, fmt.Errorf("unknown selector kind: %q", sel.Kind)
+	}
+}
+
+// ResolveUnifiedSelectorWithinNode resolves a selector strictly inside a DOM
+// subtree. Ref selectors are accepted only when their cached backend node is
+// still contained by that subtree; all other supported selectors are
+// evaluated with the scope element as their root.
+func ResolveUnifiedSelectorWithinNode(ctx context.Context, sel selector.Selector, refCache *RefCache, scopeBackendNodeID int64) (int64, error) {
+	if scopeBackendNodeID == 0 {
+		return 0, fmt.Errorf("dialog scope is missing")
+	}
+
+	switch sel.Kind {
+	case selector.KindRef:
+		if refCache == nil {
+			return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
+		}
+		target, ok := refCache.Lookup(sel.Value)
+		if !ok || target.BackendNodeID == 0 {
+			return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
+		}
+		inside, err := BackendNodeWithinScope(ctx, scopeBackendNodeID, target.BackendNodeID)
+		if err != nil {
+			return 0, fmt.Errorf("validate ref %s against topmost dialog: %w", sel.Value, err)
+		}
+		if !inside {
+			return 0, fmt.Errorf("ref %s is outside the topmost dialog: %w", sel.Value, ErrSelectorOutsideScope)
+		}
+		return target.BackendNodeID, nil
+
+	case selector.KindCSS, selector.KindXPath, selector.KindText:
+		return resolveSelectorAtWithinNode(ctx, scopeBackendNodeID, sel, 0, false)
+
+	case selector.KindSemantic:
+		return 0, fmt.Errorf("semantic selectors must be resolved at the handler layer via /find")
+
+	case selector.KindRole, selector.KindLabel, selector.KindPlaceholder,
+		selector.KindAlt, selector.KindTitle, selector.KindTestID:
+		return 0, fmt.Errorf("%s selectors must be resolved at the handler layer via semantic", sel.Kind)
+
+	case selector.KindFirst:
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, sel.Value, refCache, 0, false)
+
+	case selector.KindLast:
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, sel.Value, refCache, 0, true)
+
+	case selector.KindNth:
+		index, rawSelector, err := parseNthSelectorValue(sel.Value)
+		if err != nil {
+			return 0, err
+		}
+		return resolveNestedSelectorWithinNode(ctx, scopeBackendNodeID, rawSelector, refCache, index, false)
 
 	default:
 		return 0, fmt.Errorf("unknown selector kind: %q", sel.Kind)

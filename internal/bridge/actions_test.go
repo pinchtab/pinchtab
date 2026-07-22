@@ -677,6 +677,75 @@ func TestClickByNodeIDWithJSFallback_SkipsFallbackOnCancelledCtx(t *testing.T) {
 	}
 }
 
+func TestClickSubmitUsesOneJSTransactionWithoutFallback(t *testing.T) {
+	origJS := jsClickByBackendNodeAction
+	origTrusted := clickByNodeIDAction
+	origFlyout := clickFloatingFlyoutItemAction
+	t.Cleanup(func() {
+		jsClickByBackendNodeAction = origJS
+		clickByNodeIDAction = origTrusted
+		clickFloatingFlyoutItemAction = origFlyout
+	})
+
+	jsCalls := 0
+	trustedCalls := 0
+	flyoutCalls := 0
+	jsClickByBackendNodeAction = func(_ context.Context, nodeID int64) error {
+		jsCalls++
+		if nodeID != 42 {
+			t.Fatalf("nodeID = %d, want 42", nodeID)
+		}
+		return context.DeadlineExceeded
+	}
+	clickByNodeIDAction = func(context.Context, int64) error {
+		trustedCalls++
+		return nil
+	}
+	clickFloatingFlyoutItemAction = func(context.Context, int64) (bool, error) {
+		flyoutCalls++
+		return false, nil
+	}
+
+	b := New(context.Background(), nil, &config.RuntimeConfig{Humanize: true})
+	_, err := b.actionClick(context.Background(), ActionRequest{
+		Kind:   ActionClick,
+		NodeID: 42,
+		Submit: true,
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("submit click error = %v, want deadline", err)
+	}
+	if jsCalls != 1 || trustedCalls != 0 || flyoutCalls != 0 {
+		t.Fatalf("dispatch counts = js:%d trusted:%d flyout:%d, want 1/0/0", jsCalls, trustedCalls, flyoutCalls)
+	}
+}
+
+func TestValidateSubmitAction(t *testing.T) {
+	trueValue := true
+	tests := []struct {
+		name    string
+		kind    string
+		req     ActionRequest
+		wantErr bool
+	}{
+		{name: "fill unchanged", kind: ActionFill, req: ActionRequest{Submit: true}},
+		{name: "click element", kind: ActionClick, req: ActionRequest{Submit: true, NodeID: 1}},
+		{name: "coordinates", kind: ActionClick, req: ActionRequest{Submit: true, HasXY: true}, wantErr: true},
+		{name: "wait nav", kind: ActionClick, req: ActionRequest{Submit: true, WaitNav: true}, wantErr: true},
+		{name: "mode", kind: ActionClick, req: ActionRequest{Submit: true, Mode: "dom"}, wantErr: true},
+		{name: "humanize", kind: ActionClick, req: ActionRequest{Submit: true, Humanize: &trueValue}, wantErr: true},
+		{name: "other action", kind: ActionType, req: ActionRequest{Submit: true}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateSubmitAction(tt.kind, tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateSubmitAction() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTypeAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	raw := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -887,6 +956,20 @@ func TestUncheckAction_WithSelector_UsesCSSPath(t *testing.T) {
 	}
 }
 
+func TestFinishFillSubmitIsOptInAndDispatchesEnter(t *testing.T) {
+	result := map[string]any{"filled": true}
+	got, err := finishFill(context.Background(), result, false)
+	if err != nil || got["submitted"] != nil {
+		t.Fatalf("non-submit fill = (%v, %v), want unchanged result", got, err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := finishFill(ctx, map[string]any{"filled": true}, true); err == nil || !strings.Contains(err.Error(), "submit filled field") {
+		t.Fatalf("submit fill error = %v, want Enter dispatch attempt", err)
+	}
+}
+
 func TestKeyboardTypeAction_Registered(t *testing.T) {
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 	if _, ok := b.Actions[ActionKeyboardType]; !ok {
@@ -945,6 +1028,50 @@ func TestKeyDownAction_RequiresKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "key required") {
 		t.Fatalf("expected 'key required' error, got: %v", err)
+	}
+}
+
+func TestParsePressChord(t *testing.T) {
+	tests := []struct {
+		input         string
+		wantKey       string
+		wantModifiers int
+		wantChord     bool
+		wantError     string
+	}{
+		{input: "Enter", wantKey: "Enter"},
+		{input: "+", wantKey: "+"},
+		{input: "Control+A", wantKey: "A", wantModifiers: 2, wantChord: true},
+		{input: "Ctrl+Shift+ArrowLeft", wantKey: "ArrowLeft", wantModifiers: 10, wantChord: true},
+		{input: "Cmd+C", wantKey: "C", wantModifiers: 4, wantChord: true},
+		{input: "Banana+A", wantChord: true, wantError: "invalid press chord modifier"},
+		{input: "Ctrl+", wantChord: true, wantError: "invalid press chord"},
+		{input: "Ctrl+Control+A", wantChord: true, wantError: "duplicate press chord modifier"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			key, modifiers, chord, err := parsePressChord(tt.input)
+			if key != tt.wantKey || modifiers != tt.wantModifiers || chord != tt.wantChord {
+				t.Fatalf("parsePressChord(%q) = (%q, %d, %v), want (%q, %d, %v)",
+					tt.input, key, modifiers, chord, tt.wantKey, tt.wantModifiers, tt.wantChord)
+			}
+			if tt.wantError == "" && err != nil {
+				t.Fatalf("parsePressChord(%q) unexpected error: %v", tt.input, err)
+			}
+			if tt.wantError != "" && (err == nil || !strings.Contains(err.Error(), tt.wantError)) {
+				t.Fatalf("parsePressChord(%q) error = %v, want %q", tt.input, err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestPressChordRejectsAmbiguousModifierInputsBeforeDispatch(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	_, err := b.Actions[ActionPress](context.Background(), ActionRequest{
+		Key: "Control+A", Modifiers: 2,
+	})
+	if err == nil || !strings.Contains(err.Error(), "also supplied modifiers") {
+		t.Fatalf("press ambiguous chord error = %v", err)
 	}
 }
 

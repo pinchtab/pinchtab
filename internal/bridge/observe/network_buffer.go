@@ -303,6 +303,7 @@ func (nb *NetworkBuffer) Clear() {
 	nb.index = make(map[string]int)
 	nb.head = 0
 	nb.size = 0
+	nb.retainedBytes = 0
 }
 
 func (nb *NetworkBuffer) Len() int {

@@ -97,8 +97,9 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	// Route through the shared bridge.CaptureScreenshot engine: it carries the
 	// scale/beyondViewport clip synthesis and the provider-runtime fixes
-	// (BringToFront + WithFromSurface(false)) so capture works on chrome and
-	// cloak alike; tCtx already targets the active provider's CDP session.
+	// (non-activating focus emulation + WithFromSurface(false)) so capture works
+	// without switching the operator's active tab; tCtx already targets the
+	// active provider's CDP session.
 	cdpFormat := bridge.ScreenshotFormatJpeg
 	if req.format == "png" {
 		cdpFormat = bridge.ScreenshotFormatPng

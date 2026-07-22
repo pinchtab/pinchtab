@@ -105,7 +105,7 @@ func NetworkClear(client *http.Client, base, token string, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
 	}
-	result := apiclient.DoPost(client, base, token, "/network/clear", map[string]any{})
+	result := apiclient.DoPost(client, base, token, "/network/clear?"+params.Encode(), map[string]any{})
 	if result == nil {
 		fmt.Fprintln(os.Stderr, "Failed to clear network data")
 	}

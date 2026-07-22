@@ -31,6 +31,27 @@ func TestCaptureEndpointIsShorthandAndTabScoped(t *testing.T) {
 	}
 }
 
+func TestSensitiveNetworkEndpointsRequireInterceptCapability(t *testing.T) {
+	want := map[string]bool{
+		"GET /network/{requestId}": false,
+		"POST /network/clear":      false,
+	}
+	for _, ep := range Core() {
+		if _, ok := want[ep.Route()]; !ok {
+			continue
+		}
+		if ep.Capability != CapNetworkIntercept {
+			t.Errorf("%s capability = %q, want %q", ep.Route(), ep.Capability, CapNetworkIntercept)
+		}
+		want[ep.Route()] = true
+	}
+	for route, found := range want {
+		if !found {
+			t.Errorf("Core() missing %s", route)
+		}
+	}
+}
+
 func TestFrameEndpointsAreShorthandAndTabScoped(t *testing.T) {
 	found := map[string]bool{
 		"GET /frame":  false,

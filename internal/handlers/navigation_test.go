@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/pinchtab/internal/netguard"
@@ -302,6 +303,28 @@ func TestHandleNavigate_RejectsUnsupportedSchemeForExistingTab(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "invalid URL scheme") {
 		t.Fatalf("expected invalid URL scheme error, got %s", w.Body.String())
+	}
+}
+
+func TestHandleNavigateDispatchOnlyReturnsAfterAcceptedBackgroundNavigation(t *testing.T) {
+	m := &mockBridge{navigateResult: &bridge.NavigateResult{
+		URL: "http://localhost:8765/slow-spa",
+	}}
+	h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(
+		`{"tabId":"tab1","url":"http://localhost:8765/slow-spa","dispatchOnly":true}`,
+	)))
+	w := httptest.NewRecorder()
+	h.HandleNavigate(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("dispatch-only status = %d: %s", w.Code, w.Body.String())
+	}
+	if len(m.navigateParams) != 1 || !m.navigateParams[0].DispatchOnly {
+		t.Fatalf("navigate params = %+v, want DispatchOnly", m.navigateParams)
+	}
+	if !strings.Contains(w.Body.String(), `"dispatched":true`) {
+		t.Fatalf("dispatch-only receipt missing: %s", w.Body.String())
 	}
 }
 

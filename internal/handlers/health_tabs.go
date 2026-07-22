@@ -35,7 +35,6 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": fmt.Sprintf("browser initialization failed: %v", err)})
 		return
 	}
-
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
 		httpx.JSON(w, 503, map[string]any{"status": "error", "reason": err.Error()})
@@ -148,6 +147,9 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "browser_draining", bridge.ErrBrowserDraining.Error(), true, map[string]any{"retryAfterSeconds": seconds})
 		return
 	}
+	if !h.ensureBrowserOrRespond(w, h.Config) {
+		return
+	}
 
 	targets, err := h.Bridge.ListTargets()
 	if err != nil {
@@ -172,6 +174,9 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 			"url":   t.URL,
 			"title": t.Title,
 			"type":  t.Type,
+		}
+		if t.BrowserContextID != "" {
+			entry["browserContextId"] = t.BrowserContextID
 		}
 		if hr, ok := h.Bridge.(tabHandoffReader); ok {
 			if hs, ok := hr.TabHandoffState(tabID); ok {

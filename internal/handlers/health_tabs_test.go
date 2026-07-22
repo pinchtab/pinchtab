@@ -164,6 +164,31 @@ func TestHandleTabs_Success(t *testing.T) {
 	if len(tabs) != 2 {
 		t.Errorf("expected 2 tabs, got %d", len(tabs))
 	}
+	if !mockBridge.ensureBrowserCalled {
+		t.Fatal("expected tab listing to initialize the browser before enumerating existing pages")
+	}
+	if mockBridge.createTabCalled {
+		t.Fatal("tab listing must not create a new page")
+	}
+}
+
+func TestHandleTabs_EnsureBrowserFailureStopsBeforeEnumeration(t *testing.T) {
+	mockBridge := &MockBridge{ensureBrowserErr: "attach failed"}
+	h := &Handlers{Bridge: mockBridge, Config: &config.RuntimeConfig{}}
+	req := httptest.NewRequest("GET", "/tabs", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleTabs(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected initialization failure, got %d: %s", w.Code, w.Body.String())
+	}
+	if !mockBridge.ensureBrowserCalled {
+		t.Fatal("expected EnsureBrowser to be called")
+	}
+	if mockBridge.listTargetsCalled {
+		t.Fatal("ListTargets must not run after initialization fails")
+	}
 }
 
 func TestHandleTabs_CurrentTrackedTabIsReturnedFirst(t *testing.T) {
@@ -302,9 +327,12 @@ type MockBridge struct {
 	currentTabID        string
 	draining            bool
 	retryAfter          time.Duration
+	listTargetsCalled   bool
+	createTabCalled     bool
 }
 
 func (m *MockBridge) ListTargets() ([]bridge.TabTarget, error) {
+	m.listTargetsCalled = true
 	if m.listTargetsErr != "" {
 		return nil, fmt.Errorf("%s", m.listTargetsErr)
 	}
@@ -323,6 +351,7 @@ func (m *MockBridge) TabContext(tabID string) (*bridge.TabHandle, string, error)
 }
 
 func (m *MockBridge) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	m.createTabCalled = true
 	return "", context.Background(), func() {}, nil
 }
 

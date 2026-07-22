@@ -2,13 +2,20 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/gobwas/ws"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 // initBrowserFromExistingCDP attaches the bridge to a browser that is already
@@ -34,8 +41,33 @@ func initBrowserFromExistingCDP(cfg *config.RuntimeConfig, bundle *stealth.Bundl
 	if err != nil {
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("normalize cdpAttachUrl: %w", err)
 	}
-	slog.Info("attaching to existing browser via CDP", "cdpUrl", wsURL)
+	slog.Info("attaching to existing browser via CDP", "cdpUrl", internalurls.RedactForLog(wsURL))
 
+	remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, err := attachExistingCDP(wsURL)
+	if err == nil {
+		slog.Info("attached to existing browser via CDP", "cdpUrl", internalurls.RedactForLog(wsURL))
+		return remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, stealth.LaunchModeAttached, nil
+	}
+
+	refreshedURL, refreshErr := refreshStaleCDPURL(cfg.CDPAttachURL, wsURL, err, cfg)
+	if refreshErr != nil {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized,
+			fmt.Errorf("%w; stale CDP endpoint refresh failed: %v", err, refreshErr)
+	}
+	if refreshedURL == "" {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err
+	}
+
+	slog.Info("retrying CDP attach after browser endpoint refresh", "cdpUrl", internalurls.RedactForLog(refreshedURL))
+	remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, err = attachExistingCDP(refreshedURL)
+	if err != nil {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err
+	}
+	slog.Info("attached to existing browser via refreshed CDP endpoint", "cdpUrl", internalurls.RedactForLog(refreshedURL))
+	return remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, stealth.LaunchModeAttached, nil
+}
+
+func attachExistingCDP(wsURL string) (context.Context, context.CancelFunc, context.Context, context.CancelFunc, error) {
 	remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel := newRemoteCDPContexts(context.Background(), wsURL)
 
 	// Touch the browser so we fail fast if the CDP URL is unreachable. We
@@ -48,9 +80,43 @@ func initBrowserFromExistingCDP(cfg *config.RuntimeConfig, bundle *stealth.Bundl
 	})); err != nil {
 		browserCancel()
 		remoteAllocCancel()
-		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to attach to CDP at %s: %w", wsURL, err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to attach to CDP at %s: %w", internalurls.RedactForLog(wsURL), err)
+	}
+	return remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, nil
+}
+
+// refreshStaleCDPURL returns a fresh browser endpoint only when the dial got a
+// typed 404 and /json/version proves the browser GUID changed.
+func refreshStaleCDPURL(rawURL, staleURL string, attachErr error, cfg *config.RuntimeConfig) (string, error) {
+	var status ws.StatusError
+	if !errors.As(attachErr, &status) || status != ws.StatusError(http.StatusNotFound) {
+		return "", nil
 	}
 
-	slog.Info("attached to existing browser via CDP", "cdpUrl", wsURL)
-	return remoteAllocCtx, remoteAllocCancel, browserCtx, browserCancel, stealth.LaunchModeAttached, nil
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	probe, pinned, err := probeCDPVersionParsed(ctx, parsed, cfg.AttachAllowHosts, cfg.AttachAllowSchemes)
+	if err != nil {
+		return "", err
+	}
+	refreshedURL, err := normalizeResolvedDevToolsURL(probe.WebSocketDebuggerURL, parsed, pinned, cfg.AttachAllowHosts)
+	if err != nil {
+		return "", err
+	}
+	stale, err := url.Parse(staleURL)
+	if err != nil {
+		return "", err
+	}
+	refreshed, err := url.Parse(refreshedURL)
+	if err != nil {
+		return "", err
+	}
+	if stale.EscapedPath() == refreshed.EscapedPath() {
+		return "", nil
+	}
+	return refreshedURL, nil
 }

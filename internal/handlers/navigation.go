@@ -71,6 +71,7 @@ type navigateRequest struct {
 	WaitFor        string  `json:"waitFor"`
 	WaitSelector   string  `json:"waitSelector"`
 	DismissBanners bool    `json:"dismissBanners"`
+	DispatchOnly   bool    `json:"dispatchOnly"`
 	Browser        string  `json:"browser,omitempty"`
 }
 
@@ -87,6 +88,7 @@ func decodeNavigateRequest(w http.ResponseWriter, r *http.Request) (navigateRequ
 		req.WaitFor = q.Get("waitFor")
 		req.WaitSelector = q.Get("waitSelector")
 		d.Bool("dismissBanners", &req.DismissBanners)
+		d.Bool("dispatchOnly", &req.DispatchOnly)
 		req.Browser = q.Get("browser")
 		d.Float("waitTitle", &req.WaitTitle)
 		d.Float("timeout", &req.Timeout)
@@ -337,6 +339,7 @@ func (h *Handlers) tryStaticFirstNavigate(w http.ResponseWriter, r *http.Request
 		}
 		h.setCurrentTabForRequest(r, navResult.TabID)
 		h.recordResolvedURL(r, navResult.URL)
+		markCreatedTab(w, navResult.TabID)
 		httpx.JSON(w, 200, map[string]any{"tabId": navResult.TabID, "url": navResult.URL, "title": navResult.Title, "route": navRoute})
 		return staticFirstOutcome{handled: true}
 	}
@@ -456,6 +459,7 @@ func (h *Handlers) executeNavigate(w http.ResponseWriter, r *http.Request, req n
 		waitSelector:   req.WaitSelector,
 		titleWait:      titleWait,
 		dismissBanners: req.DismissBanners,
+		dispatchOnly:   req.DispatchOnly,
 		target:         targets.target,
 		trustedCIDRs:   targets.trustedCIDRs,
 		blockPatterns:  blockPatterns,
@@ -478,6 +482,7 @@ type navExec struct {
 	waitSelector   string
 	titleWait      time.Duration
 	dismissBanners bool
+	dispatchOnly   bool
 	target         *validatedNavigateTarget
 	trustedCIDRs   []*net.IPNet
 	blockPatterns  []string
@@ -504,6 +509,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	navResult, navErr := h.Bridge.Navigate(ex.ctx, ex.url, bridge.NavigateParams{
 		MaxRedirects: ex.maxRedirects,
 		SkipStatic:   ex.skipStatic,
+		DispatchOnly: ex.dispatchOnly,
 	})
 	if navErr != nil {
 		if ex.isNewTab {
@@ -538,6 +544,17 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 		h.Bridge.DeleteRefCache(ex.tabID)
 		h.clearTabFrameScope(ex.tabID)
 	}
+	if ex.dispatchOnly {
+		h.setCurrentTabForRequest(r, ex.tabID)
+		h.recordResolvedURL(r, ex.url)
+		h.recordActivity(r, activity.Update{
+			Action: "navigate.dispatch", TabID: ex.tabID, URL: ex.url,
+		})
+		httpx.JSON(w, 200, map[string]any{
+			"tabId": ex.tabID, "url": ex.url, "dispatched": true,
+		})
+		return
+	}
 
 	// The ghost-chrome adapter may serve a navigate from a static tab instead of
 	// the tab this handler drove; its result is authoritative. The static
@@ -551,6 +568,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 		h.setCurrentTabForRequest(r, navResult.TabID)
 		if ex.isNewTab {
 			h.recordResolvedTab(r, navResult.TabID)
+			markCreatedTab(w, navResult.TabID)
 		}
 		h.recordResolvedURL(r, navResult.URL)
 		httpx.JSON(w, 200, navResponse(navResult.TabID, navResult.URL, navResult.Title, route, !ex.isNewTab))
@@ -570,6 +588,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	h.setCurrentTabForRequest(r, ex.tabID)
 	if ex.isNewTab {
 		h.recordResolvedTab(r, ex.tabID)
+		markCreatedTab(w, ex.tabID)
 	}
 	h.recordResolvedURL(r, navURL)
 

@@ -52,6 +52,8 @@ type Bridge struct {
 	fingerprintMu        sync.RWMutex
 	fingerprintOverlays  map[string]bool
 	workerStealthTargets sync.Map
+	attachIndicatorMu    sync.Mutex
+	attachIndicators     map[string]attachIndicatorState
 	handoffMu            sync.RWMutex
 	handoffs             map[string]TabHandoffState
 	pointerMu            sync.RWMutex
@@ -251,6 +253,18 @@ func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelF
 	return tabID, ctx, cancel, err
 }
 
+func (b *Bridge) CreateTabInBrowserContext(url, browserContextID string) (string, context.Context, context.CancelFunc, error) {
+	tm, err := b.tabManager()
+	if err != nil {
+		return "", nil, nil, err
+	}
+	tabID, ctx, cancel, err := tm.CreateTabInBrowserContext(url, browserContextID)
+	if err == nil {
+		go b.SaveState()
+	}
+	return tabID, ctx, cancel, err
+}
+
 func (b *Bridge) TabContext(tabID string) (*TabHandle, string, error) {
 	tm, err := b.tabManager()
 	if err != nil {
@@ -275,10 +289,11 @@ func (b *Bridge) ListTargets() ([]TabTarget, error) {
 	targets := make([]TabTarget, len(infos))
 	for i, t := range infos {
 		targets[i] = TabTarget{
-			TargetID: string(t.TargetID),
-			URL:      t.URL,
-			Title:    t.Title,
-			Type:     string(t.Type),
+			TargetID:         string(t.TargetID),
+			URL:              t.URL,
+			Title:            t.Title,
+			Type:             string(t.Type),
+			BrowserContextID: string(t.BrowserContextID),
 		}
 	}
 	return targets, nil
@@ -384,6 +399,12 @@ func (b *Bridge) BrowserContext() context.Context {
 }
 
 func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams) (*NavigateResult, error) {
+	if params.DispatchOnly {
+		if err := DispatchNavigation(ctx, url); err != nil {
+			return nil, fmt.Errorf("dispatch navigation: %w", err)
+		}
+		return &NavigateResult{URL: url}, nil
+	}
 	if err := NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects); err != nil {
 		return nil, err
 	}

@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	HeaderAgentID     = "X-Agent-Id"
-	HeaderPTSessionID = "X-PinchTab-Session-Id"
-	HeaderPTSource    = "X-PinchTab-Source"
-	HeaderPTInstance  = "X-PinchTab-Instance-Id"
-	HeaderPTProfileID = "X-PinchTab-Profile-Id"
-	HeaderPTProfile   = "X-PinchTab-Profile-Name"
-	HeaderPTTabID     = "X-PinchTab-Tab-Id"
+	HeaderAgentID      = "X-Agent-Id"
+	HeaderPTSessionID  = "X-PinchTab-Session-Id"
+	HeaderPTSource     = "X-PinchTab-Source"
+	HeaderPTInstance   = "X-PinchTab-Instance-Id"
+	HeaderPTProfileID  = "X-PinchTab-Profile-Id"
+	HeaderPTProfile    = "X-PinchTab-Profile-Name"
+	HeaderPTTabID      = "X-PinchTab-Tab-Id"
+	HeaderPTTabCreated = "X-PinchTab-Tab-Created"
 )
 
 type requestStateKey struct{}

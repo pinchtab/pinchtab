@@ -12,6 +12,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 const (
@@ -281,6 +282,10 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 // @Response 200 application/json Network entry details
 // @Response 404 application/json Request not found
 func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
+	if !h.networkInterceptEnabled() {
+		h.writeCapabilityDisabled(w, routes.CapNetworkIntercept)
+		return
+	}
 	if !h.ensureBrowserReady(w) {
 		return
 	}
@@ -366,6 +371,10 @@ func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
 //
 // @Response 200 application/json Success
 func (h *Handlers) HandleNetworkClear(w http.ResponseWriter, r *http.Request) {
+	if !h.networkInterceptEnabled() {
+		h.writeCapabilityDisabled(w, routes.CapNetworkIntercept)
+		return
+	}
 	nm := h.Bridge.NetworkMonitor()
 	if nm == nil {
 		httpx.JSON(w, 200, map[string]any{"cleared": true})

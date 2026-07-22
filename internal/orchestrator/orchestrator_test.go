@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -507,18 +508,9 @@ func TestOrchestrator_Attach_SpawnsChildBridgeWithCDPFlags(t *testing.T) {
 	if !runner.runCalled {
 		t.Fatal("expected runner.Run to be called for child bridge")
 	}
-	args := strings.Join(runner.args, " ")
-	if !strings.Contains(args, "bridge") {
-		t.Fatalf("expected child args to contain 'bridge': %v", runner.args)
-	}
-	if !strings.Contains(args, "--cdp-attach "+cdpURL) {
-		t.Fatalf("expected --cdp-attach flag with cdp url: %v", runner.args)
-	}
-	if !strings.Contains(args, "--browser-provider cloak") {
-		t.Fatalf("expected --browser-provider cloak: %v", runner.args)
-	}
-	if !strings.Contains(args, "--remote-browser-name ext-cloak") {
-		t.Fatalf("expected --remote-browser-name flag: %v", runner.args)
+	wantArgs := []string{"bridge", "--cdp-attach", cdpURL, "--browser", "cloak", "--remote-browser-name", "ext-cloak"}
+	if !slices.Equal(runner.args, wantArgs) {
+		t.Fatalf("child args = %v, want supported bridge command surface %v", runner.args, wantArgs)
 	}
 }
 

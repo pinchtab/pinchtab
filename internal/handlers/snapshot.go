@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	selectorpkg "github.com/pinchtab/pinchtab/internal/selector"
 	"gopkg.in/yaml.v3"
 )
 
@@ -110,23 +113,46 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	var scopeNodeID int64
 
 	frameScope := h.selectorFrameID(resolvedTabID)
-	if frameScope != "" || selector != "" {
+	ghostRoute := snapChromeRoute != nil && snapChromeRoute.UsedBrowser == config.BrowserGhostChrome
+	var modalOpen bool
+	if frameScope != "" || selector != "" || !ghostRoute {
 		// Frame-scoped or selector-scoped: inline AX tree fetch with scoping.
-		rawNodes, err := bridge.FetchAXTree(tCtx)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("a11y tree: %w", err))
-			return
-		}
-		rawNodes = bridge.FilterAXNodesByFrame(rawNodes, frameScope)
+		var rawNodes []bridge.RawAXNode
+		stable := false
+		for attempt := 0; attempt < 2; attempt++ {
+			var modalNodeID int64
+			var modalErr error
+			if !ghostRoute {
+				modalNodeID, modalOpen, modalErr = bridge.TopmostModalNodeID(tCtx, frameScope)
+				if modalErr != nil {
+					httpx.Error(w, selectorResolutionHTTPStatus(modalErr), fmt.Errorf("resolve topmost dialog: %w", modalErr))
+					return
+				}
+			}
 
-		if selector != "" {
-			var scopeErr error
-			scopeNodeID, scopeErr = h.resolveSelectorNodeID(tCtx, resolvedTabID, selector)
+			candidateNodes, candidateScope, scopeErr := h.scopedSnapshotNodes(
+				tCtx, resolvedTabID, frameScope, selector, modalNodeID, modalOpen,
+			)
+			if !ghostRoute {
+				afterNodeID, afterOpen, recheckErr := bridge.TopmostModalNodeID(tCtx, frameScope)
+				if recheckErr != nil {
+					httpx.Error(w, selectorResolutionHTTPStatus(recheckErr), fmt.Errorf("recheck topmost dialog: %w", recheckErr))
+					return
+				}
+				if modalNodeID != afterNodeID || modalOpen != afterOpen {
+					continue
+				}
+			}
 			if scopeErr != nil {
-				httpx.Error(w, 400, frameScopedSelectorError("selector", scopeErr))
+				httpx.Error(w, selectorResolutionHTTPStatus(scopeErr), scopeErr)
 				return
 			}
-			rawNodes = bridge.FilterSubtree(rawNodes, scopeNodeID)
+			rawNodes, scopeNodeID, stable = candidateNodes, candidateScope, true
+			break
+		}
+		if !stable {
+			httpx.Error(w, http.StatusConflict, fmt.Errorf("topmost dialog changed twice during snapshot; retry after the page settles"))
+			return
 		}
 
 		flat, refs = bridge.BuildSnapshot(rawNodes, filter, maxDepth)
@@ -430,6 +456,57 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 		httpx.JSON(w, 200, resp)
 	}
+}
+
+func (h *Handlers) scopedSnapshotNodes(
+	ctx context.Context,
+	tabID, frameScope, rawSelector string,
+	modalNodeID int64,
+	modalOpen bool,
+) ([]bridge.RawAXNode, int64, error) {
+	rawNodes, err := bridge.FetchAXTree(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("a11y tree: %w", err)
+	}
+	if !modalOpen {
+		rawNodes = bridge.FilterAXNodesByFrame(rawNodes, frameScope)
+	}
+	scopeNodeID := int64(0)
+	if modalOpen {
+		if !axTreeContainsBackendNode(rawNodes, modalNodeID) {
+			return nil, 0, fmt.Errorf("topmost dialog is absent from the accessibility tree")
+		}
+		rawNodes = bridge.FilterSubtree(rawNodes, modalNodeID)
+		scopeNodeID = modalNodeID
+	}
+
+	if rawSelector == "" {
+		return rawNodes, scopeNodeID, nil
+	}
+	if modalOpen {
+		scopeNodeID, err = bridge.ResolveUnifiedSelectorWithinNode(ctx, selectorpkg.Parse(rawSelector), h.Bridge.GetRefCache(tabID), modalNodeID)
+	} else {
+		scopeNodeID, err = h.resolveSelectorNodeID(ctx, tabID, rawSelector)
+	}
+	if err != nil {
+		return nil, 0, frameScopedSelectorError("selector", err)
+	}
+	if !axTreeContainsBackendNode(rawNodes, scopeNodeID) {
+		// A valid DOM element can be absent from the accessibility tree. Return
+		// an empty scoped result so FilterSubtree's legacy not-found fallback
+		// cannot expose the surrounding modal or page.
+		return nil, scopeNodeID, nil
+	}
+	return bridge.FilterSubtree(rawNodes, scopeNodeID), scopeNodeID, nil
+}
+
+func axTreeContainsBackendNode(nodes []bridge.RawAXNode, backendNodeID int64) bool {
+	for _, node := range nodes {
+		if node.BackendDOMNodeID == backendNodeID {
+			return true
+		}
+	}
+	return false
 }
 
 // @Endpoint GET /tabs/{id}/snapshot

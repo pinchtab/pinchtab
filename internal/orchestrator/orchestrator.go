@@ -260,6 +260,15 @@ func (o *Orchestrator) Bindings() *Bindings {
 	return o.bindings
 }
 
+// SessionTabIDs reports tabs created for a session and still present in the
+// orchestrator's ownership ledger.
+func (o *Orchestrator) SessionTabIDs(sessionID string) []string {
+	if o == nil || o.bindings == nil {
+		return []string{}
+	}
+	return o.bindings.SessionTabIDs(sessionID)
+}
+
 func (o *Orchestrator) SetStrictCrossInstanceTab(strict bool) {
 	if o == nil {
 		return

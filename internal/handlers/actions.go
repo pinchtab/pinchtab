@@ -99,6 +99,23 @@ func rejectMixedBrowsers(w http.ResponseWriter, actions []bridge.ActionRequest, 
 	return requestBrowser, true
 }
 
+func rejectMultiStepSubmitClicks(w http.ResponseWriter, actions []bridge.ActionRequest, noun, field string) bool {
+	for i, action := range actions {
+		if bridge.IsSubmitClick(action.Kind, action) {
+			httpx.ErrorCode(
+				w,
+				http.StatusBadRequest,
+				"click_submit_requires_single_action",
+				fmt.Sprintf("%s %s[%d] uses click submit; use a single /action request so its bounded post-state can be reported", noun, field, i),
+				false,
+				nil,
+			)
+			return false
+		}
+	}
+	return true
+}
+
 // dialogAwareActionError shapes a per-action error message: it surfaces a blocking
 // dialog's own message, or a hint when a click timed out with a pending dialog,
 // otherwise the caller-supplied fallback.
@@ -144,7 +161,7 @@ func (h *Handlers) runResolvedActionStep(
 			} else {
 				nextCtx = switchedCtx
 				nextTabID = switchedTabID
-				w.Header().Set(activity.HeaderPTTabID, nextTabID)
+				markCreatedTab(w, nextTabID)
 				h.recordResolvedTab(r, nextTabID)
 			}
 		}
@@ -188,6 +205,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		req.HasXY = req.HasXY || hasXYParam
 		req.Button = q.Get("button")
 		d.Bool("dismissBanners", &req.DismissBanners)
+		d.Bool("dismissKnownInterstitials", &req.DismissKnownInterstitials)
+		d.Bool("submit", &req.Submit)
 		if d.present("autoSwitch") {
 			var autoSwitch bool
 			d.Bool("autoSwitch", &autoSwitch)
@@ -230,6 +249,10 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.DialogAction != "" && req.DialogAction != "accept" && req.DialogAction != "dismiss" {
 		httpx.Error(w, 400, fmt.Errorf("dialogAction must be 'accept' or 'dismiss'"))
+		return
+	}
+	if err := bridge.ValidateSubmitAction(req.Kind, req); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_action", err.Error(), false, nil)
 		return
 	}
 	h.recordActionRequest(r, req)
@@ -291,12 +314,32 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
+	if req.DismissKnownInterstitials {
+		if _, err := h.dismissKnownInterstitials(tCtx, resolvedTabID); err != nil {
+			httpx.ErrorCode(w, http.StatusConflict, "known_interstitial_not_dismissed", err.Error(), true, nil)
+			return
+		}
+	}
+
 	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, &req)
 	if err != nil {
 		httpx.Error(w, selectorResolution.httpStatus(), err)
 		return
 	}
 	refMissing := selectorResolution.refMissing
+	submitClick := bridge.IsSubmitClick(req.Kind, req)
+	if submitClick && refMissing {
+		httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found", fmt.Sprintf("ref %s not found - take a /snapshot first", req.Ref), false, map[string]any{
+			"dispatched": false,
+		})
+		return
+	}
+	if submitClick && req.NodeID <= 0 {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_target", "click submit requires a selector, ref, or nodeId", false, map[string]any{
+			"dispatched": false,
+		})
+		return
+	}
 
 	// Cache intent before execution so recovery can reconstruct the query.
 	// Only cache when the ref IS in the snapshot — otherwise we'd overwrite
@@ -312,7 +355,47 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 404, fmt.Errorf("ref %s not found - take a /snapshot first", req.Ref))
 		return
 	}
+
+	var submitBefore submitStateSnapshot
+	if submitClick {
+		submitBefore, err = h.captureSubmitState(tCtx, resolvedTabID)
+		if err != nil {
+			httpx.ErrorCode(w, http.StatusInternalServerError, "submit_pre_state_failed", fmt.Sprintf("capture pre-submit state: %v", err), true, map[string]any{
+				"dispatched": false,
+			})
+			return
+		}
+	}
+
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
+	submitTimeoutWithDialog := submitClick && isClickTimeoutWithPendingDialog(actionErr, req.Kind, resolvedTabID, h.Bridge)
+	if submitClick && !submitTimeoutWithDialog && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
+		actionTimedOut := errors.Is(actionErr, context.DeadlineExceeded)
+		dispatch := "acknowledged"
+		if actionTimedOut {
+			dispatch = "unconfirmed"
+		}
+
+		// tCtx may be expired here. Keep the live tab context as the parent and
+		// give post-state observation its own bounded, client-cancelable child.
+		postCtx, postCancel := context.WithTimeout(ctx, postSubmitPollTimeout)
+		go httpx.CancelOnClientDone(r.Context(), postCancel)
+		postState, postErr := h.pollSubmitPostState(postCtx, resolvedTabID, submitBefore, dispatch, actionTimedOut)
+		postCancel()
+		if postErr != nil {
+			httpx.ErrorCode(w, http.StatusInternalServerError, "submit_post_state_failed", postErr.Error(), false, map[string]any{
+				"dispatch":       dispatch,
+				"actionTimedOut": actionTimedOut,
+				"doNotRetry":     true,
+			})
+			return
+		}
+		if result == nil {
+			result = make(map[string]any)
+		}
+		result["postState"] = postState
+		actionErr = nil
+	}
 	if actionErr != nil {
 		if strings.HasPrefix(actionErr.Error(), "unknown action") {
 			kinds := h.Bridge.AvailableActions()
@@ -350,7 +433,15 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		httpx.ErrorCode(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, actionErr), true, nil)
+		retryable := !submitClick
+		var details map[string]any
+		if submitClick {
+			details = map[string]any{
+				"dispatch":   "unconfirmed",
+				"doNotRetry": true,
+			}
+		}
+		httpx.ErrorCode(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, actionErr), retryable, details)
 		return
 	}
 
@@ -371,7 +462,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// request-scoped current tab at it so the next action lands there.
 	if switched := switchedTabFromActionResult(result); switched != "" {
 		h.setCurrentTabForRequest(r, switched)
-		w.Header().Set(activity.HeaderPTTabID, switched)
+		markCreatedTab(w, switched)
 		h.recordResolvedTab(r, switched)
 	}
 	actionRoute := buildActionRoute(resolvedBrowser, requestBrowser, handleDecision)
@@ -397,6 +488,9 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 
 	if len(req.Actions) == 0 {
 		httpx.Error(w, 400, fmt.Errorf("actions array is empty"))
+		return
+	}
+	if !rejectMultiStepSubmitClicks(w, req.Actions, "batch", "actions") {
 		return
 	}
 
@@ -605,6 +699,9 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Steps) == 0 {
 		httpx.ErrorCode(w, 400, "bad_request", "steps array is empty", false, nil)
+		return
+	}
+	if !rejectMultiStepSubmitClicks(w, req.Steps, "macro", "steps") {
 		return
 	}
 	owner := resolveOwner(r, req.Owner)

@@ -1,10 +1,70 @@
 package bridge
 
 import (
+	"context"
+	"errors"
+	"reflect"
 	"testing"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 )
+
+type screenshotExecutor struct {
+	methods    []string
+	focusFlags []bool
+	captureErr error
+}
+
+func (e *screenshotExecutor) Execute(_ context.Context, method string, params, result any) error {
+	e.methods = append(e.methods, method)
+	if method == emulation.CommandSetFocusEmulationEnabled {
+		e.focusFlags = append(e.focusFlags, params.(*emulation.SetFocusEmulationEnabledParams).Enabled)
+		return nil
+	}
+	if method == page.CommandCaptureScreenshot {
+		if e.captureErr != nil {
+			return e.captureErr
+		}
+		result.(*page.CaptureScreenshotReturns).Data = "cG5n"
+	}
+	return nil
+}
+
+func TestCaptureScreenshotWithoutActivationRestoresFocusEmulation(t *testing.T) {
+	exec := &screenshotExecutor{}
+	ctx := cdp.WithExecutor(context.Background(), exec)
+	got, err := captureScreenshotWithoutActivation(ctx, page.CaptureScreenshot())
+	if err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	if string(got) != "png" {
+		t.Fatalf("capture bytes = %q, want png", got)
+	}
+	wantMethods := []string{
+		emulation.CommandSetFocusEmulationEnabled,
+		page.CommandCaptureScreenshot,
+		emulation.CommandSetFocusEmulationEnabled,
+	}
+	if !reflect.DeepEqual(exec.methods, wantMethods) {
+		t.Fatalf("CDP methods = %v, want %v", exec.methods, wantMethods)
+	}
+	if !reflect.DeepEqual(exec.focusFlags, []bool{true, false}) {
+		t.Fatalf("focus flags = %v, want [true false]", exec.focusFlags)
+	}
+}
+
+func TestCaptureScreenshotWithoutActivationRestoresAfterCaptureError(t *testing.T) {
+	exec := &screenshotExecutor{captureErr: errors.New("capture failed")}
+	ctx := cdp.WithExecutor(context.Background(), exec)
+	if _, err := captureScreenshotWithoutActivation(ctx, page.CaptureScreenshot()); err == nil {
+		t.Fatal("expected capture error")
+	}
+	if !reflect.DeepEqual(exec.focusFlags, []bool{true, false}) {
+		t.Fatalf("focus flags = %v, want [true false]", exec.focusFlags)
+	}
+}
 
 func TestClampScale(t *testing.T) {
 	cases := []struct {

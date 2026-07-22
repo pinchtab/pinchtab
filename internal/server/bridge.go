@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridgeregistry"
 	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -88,16 +91,43 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		slog.Error("server error", "err", err)
+		os.Exit(1)
+	}
+	applyBoundBridgePort(cfg, listener.Addr())
+	registration, err := registerBridge(cfg, listener.Addr())
+	if err != nil {
+		_ = listener.Close()
+		slog.Error("bridge registry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := registration.Close(); err != nil {
+			slog.Warn("remove bridge registry record", "err", err)
 		}
+	}()
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.Serve(listener)
 	}()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	defer signal.Stop(sigChan)
+	select {
+	case <-sigChan:
+	case err := <-serveErr:
+		doShutdown()
+		if err != nil && err != http.ErrServerClosed {
+			_ = registration.Close()
+			slog.Error("server error", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	doShutdown()
 
@@ -106,6 +136,44 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	if err := server.Shutdown(ctx); err != nil {
 		slog.Error("shutdown error", "err", err)
 	}
+}
+
+func applyBoundBridgePort(cfg *config.RuntimeConfig, listenerAddr net.Addr) {
+	if cfg == nil || listenerAddr == nil {
+		return
+	}
+	_, port, err := net.SplitHostPort(listenerAddr.String())
+	if err == nil && strings.TrimSpace(port) != "" {
+		cfg.Port = port
+	}
+}
+
+func registerBridge(cfg *config.RuntimeConfig, listenerAddr net.Addr) (*bridgeregistry.Registration, error) {
+	cdpIdentity := strings.TrimSpace(cfg.CDPAttachURL)
+	if cdpIdentity == "" {
+		cdpIdentity = strings.TrimSpace(cfg.RemoteCDPURL)
+	}
+	browserType := strings.TrimSpace(cfg.DefaultBrowser)
+	if browserType == "" {
+		browserType = config.BrowserChrome
+	}
+	address := strings.TrimSpace(cfg.Bind)
+	port := strings.TrimSpace(cfg.Port)
+	if listenerAddr != nil {
+		if listenerHost, listenerPort, err := net.SplitHostPort(listenerAddr.String()); err == nil {
+			port = listenerPort
+			if address == "" {
+				address = listenerHost
+			}
+		}
+	}
+	return bridgeregistry.Register(cfg.StateDir, bridgeregistry.Record{
+		Address:      address,
+		Port:         port,
+		CDPIdentity:  cdpIdentity,
+		BrowserType:  browserType,
+		BrowserLabel: cfg.RemoteBrowserName,
+	})
 }
 
 func configureBridgeRouter(h *handlers.Handlers, cfg *config.RuntimeConfig) {

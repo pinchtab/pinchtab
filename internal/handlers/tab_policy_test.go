@@ -5,12 +5,31 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
+
+type busyPolicyBridge struct {
+	policyMockBridge
+	currentURLErr error
+	tabContextIDs []string
+}
+
+func (b *busyPolicyBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
+	b.tabContextIDs = append(b.tabContextIDs, tabID)
+	return bridge.NewTabHandle(context.Background()), tabID, nil
+}
+
+func (b *busyPolicyBridge) CurrentURL(context.Context) (string, error) {
+	if b.currentURLErr != nil {
+		return "", b.currentURLErr
+	}
+	return "https://example.com/report", nil
+}
 
 type policyMockBridge struct {
 	mockBridge
@@ -134,5 +153,51 @@ func TestHandleBackIgnoresCachedTabPolicyBlock(t *testing.T) {
 
 	if w.Code == 403 {
 		t.Fatalf("expected back to bypass current-tab policy enforcement, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestExplicitTabWaitReturnsRetryableBusyWithoutLosingTab(t *testing.T) {
+	b := &busyPolicyBridge{currentURLErr: context.DeadlineExceeded}
+	b.mockBridge.evaluateFn = func(_ string, result any) error {
+		*(result.(*bool)) = true
+		return nil
+	}
+	h := New(b, &config.RuntimeConfig{
+		AllowedDomains: []string{"example.com"},
+		IDPI:           config.IDPIConfig{Enabled: true, StrictMode: true},
+	}, nil, nil, nil)
+
+	req := httptest.NewRequest("POST", "/tabs/exact-tab/wait", nil)
+	w := httptest.NewRecorder()
+	h.handleWaitCore(w, req, waitRequest{TabID: "exact-tab", Text: "ready"})
+
+	if w.Code != 503 {
+		t.Fatalf("expected 503 tab_busy, got %d: %s", w.Code, w.Body.String())
+	}
+	var failure struct {
+		Code      string `json:"code"`
+		Retryable bool   `json:"retryable"`
+		Details   struct {
+			TabID string `json:"tabId"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &failure); err != nil {
+		t.Fatalf("decode busy response: %v", err)
+	}
+	if failure.Code != "tab_unresponsive" || !failure.Retryable || failure.Details.TabID != "exact-tab" ||
+		!strings.Contains(w.Body.String(), "activate it or open a fresh tab") {
+		t.Fatalf("unexpected busy response: %+v", failure)
+	}
+
+	b.currentURLErr = nil
+	retry := httptest.NewRecorder()
+	h.handleWaitCore(retry, req, waitRequest{TabID: "exact-tab", Text: "ready"})
+	if retry.Code != 200 {
+		t.Fatalf("same explicit tab did not recover: %d %s", retry.Code, retry.Body.String())
+	}
+	for _, got := range b.tabContextIDs {
+		if got != "exact-tab" {
+			t.Fatalf("explicit tab changed across retry: %v", b.tabContextIDs)
+		}
 	}
 }

@@ -139,3 +139,21 @@ func TestNetworkBuffer_ClearPreservesInflight(t *testing.T) {
 		t.Errorf("Clear must not reset inflight: got count=%d, want 1", count)
 	}
 }
+
+func TestNetworkBuffer_ClearResetsRetainedBytes(t *testing.T) {
+	buf := NewNetworkBuffer(10)
+	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://example.com"})
+	buf.Update("r1", func(entry *NetworkEntry) {
+		entry.ResponseBody = "retained"
+		entry.BodyRetained = true
+	})
+	if got := buf.RetainedBytes(); got != int64(len("retained")) {
+		t.Fatalf("setup retained bytes = %d, want %d", got, len("retained"))
+	}
+
+	buf.Clear()
+
+	if got := buf.RetainedBytes(); got != 0 {
+		t.Fatalf("retained bytes after clear = %d, want 0", got)
+	}
+}

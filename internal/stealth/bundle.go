@@ -65,9 +65,10 @@ type Status struct {
 	Flags                    map[string]bool `json:"flags"`
 	Capabilities             map[string]bool `json:"capabilities"`
 	// ProviderCapabilities is advisory; omitted for empty/unknown providers to preserve legacy JSON shape.
-	ProviderCapabilities []string        `json:"providerCapabilities,omitempty"`
-	Tradeoffs            []string        `json:"tradeoffs,omitempty"`
-	TabOverrides         map[string]bool `json:"tabOverrides"`
+	ProviderCapabilities   []string        `json:"providerCapabilities,omitempty"`
+	Tradeoffs              []string        `json:"tradeoffs,omitempty"`
+	TabOverrides           map[string]bool `json:"tabOverrides"`
+	AttachMutationsSkipped bool            `json:"attachMutationsSkipped,omitempty"`
 }
 
 func NewBundle(cfg *config.RuntimeConfig, seed int64) *Bundle {
@@ -173,6 +174,11 @@ func StatusFromBundle(bundle *Bundle, cfg *config.RuntimeConfig, launchMode Laun
 	}
 	if status.LaunchMode == "" {
 		status.LaunchMode = LaunchModeUninitialized
+	}
+	if status.LaunchMode == LaunchModeAttached || status.LaunchMode == LaunchModeRemoteCDP {
+		status.AttachMutationsSkipped = true
+		status.Tradeoffs = append(status.Tradeoffs,
+			"external attach: PinchTab skips launch-only stealth, locale, animation, and Runtime-domain mutations")
 	}
 	return status
 }

@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/debugger"
 	"github.com/chromedp/cdproto/page"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
@@ -27,9 +30,22 @@ import (
 var BridgeShutdownGracePeriod = 5 * time.Second
 var bridgeShutdownTermGrace = 2 * time.Second
 var bridgeFastShutdownGrace = 200 * time.Millisecond
+var browserRestartDrainWindow = 2 * time.Second
 
 func (b *Bridge) quietStealthObservers() bool {
 	return b != nil && b.Config != nil && stealth.NormalizeLevel(b.Config.StealthLevel) == stealth.LevelFull
+}
+
+func (b *Bridge) externalAttachMode() bool {
+	if b == nil {
+		return false
+	}
+	if b.stealthLaunchMode == stealth.LaunchModeAttached ||
+		b.stealthLaunchMode == stealth.LaunchModeRemoteCDP {
+		return true
+	}
+	return b.Config != nil && (strings.TrimSpace(b.Config.CDPAttachURL) != "" ||
+		strings.TrimSpace(b.Config.RemoteCDPURL) != "")
 }
 
 func (b *Bridge) RestartStatus() (bool, time.Duration) {
@@ -82,7 +98,37 @@ func (b *Bridge) applyTargetStealth(ctx context.Context) {
 	}
 }
 
-func (b *Bridge) tabSetup(ctx context.Context, tabID string) {
+func preventDebuggerPauses(ctx context.Context) error {
+	if _, err := debugger.Enable().Do(ctx); err != nil {
+		return fmt.Errorf("enable debugger domain: %w", err)
+	}
+	if err := debugger.SetSkipAllPauses(true).Do(ctx); err != nil {
+		// Enabling Debugger without the skip guard would make `debugger`
+		// statements pause this CDP session. Restore the safer default before
+		// rejecting the target.
+		_ = debugger.Disable().Do(ctx)
+		return fmt.Errorf("skip debugger pauses: %w", err)
+	}
+	// setSkipAllPauses prevents the next pause but does not release a target
+	// that was already stopped when PinchTab attached. Resume it; Chrome's
+	// normal "not paused" response means there was nothing to release.
+	if err := debugger.Resume().Do(ctx); err != nil {
+		var protocolErr *cdproto.Error
+		alreadyRunning := errors.As(err, &protocolErr) && protocolErr.Code == -32000 &&
+			protocolErr.Message == "Can only perform operation while paused."
+		if !alreadyRunning {
+			_ = debugger.Disable().Do(ctx)
+			return fmt.Errorf("resume paused debugger: %w", err)
+		}
+	}
+	return nil
+}
+
+func (b *Bridge) tabSetup(ctx context.Context, tabID string) error {
+	if err := preventDebuggerPauses(ctx); err != nil {
+		return err
+	}
+
 	// Fetch auth events are session-scoped, so each new tab needs its own
 	// proxy-auth listener + Fetch enablement; the initial tab is covered by
 	// the launch/attach init paths. The suppression flag quiets this
@@ -94,6 +140,17 @@ func (b *Bridge) tabSetup(ctx context.Context, tabID string) {
 		} else if bridgeruntime.ProxyAuthEnabled(b.Config.Proxy) {
 			slog.Debug("per-tab proxy auth enabled", "tab", tabID)
 		}
+	}
+	// An externally managed browser already owns its launch fingerprint,
+	// locale, animation policy, and Runtime-domain behavior. Mutating those
+	// targets during attach caused locale-override failures and could alter a
+	// human's live profile. The debugger guard and optional proxy-auth wiring
+	// above are connection safety, not launch emulation, so they remain active.
+	if b.externalAttachMode() {
+		if err := b.installAttachIndicator(ctx, tabID); err != nil {
+			slog.Warn("attach indicator setup failed", "tab", tabID, "err", err)
+		}
+		return nil
 	}
 	if !config.PinchTabStealthDefaultsDisabled(b.Config) {
 		b.applyTargetStealth(ctx)
@@ -121,6 +178,7 @@ func (b *Bridge) tabSetup(ctx context.Context, tabID string) {
 			slog.Warn("runtime.Disable failed", "err", err)
 		}
 	}
+	return nil
 }
 
 func (b *Bridge) ensureStealthBundle() {
@@ -277,17 +335,22 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 		return fmt.Errorf("runtime config is required")
 	}
 
-	const drainWindow = 2 * time.Second
-
 	b.initMu.Lock()
 	b.draining = true
-	b.drainUntil = time.Now().Add(drainWindow)
+	b.drainUntil = time.Now().Add(browserRestartDrainWindow)
 	b.initMu.Unlock()
 
-	slog.Info("browser soft restart: draining requests before restart", "drain_window", drainWindow)
-	time.Sleep(drainWindow)
+	slog.Info("browser soft restart: draining requests before restart", "drain_window", browserRestartDrainWindow)
+	time.Sleep(browserRestartDrainWindow)
 
 	b.initMu.Lock()
+	externalAttach := b.externalAttachMode()
+	if externalAttach {
+		// The title indicator and its new-document script live in the external
+		// page. Remove them while the target contexts are still usable; context
+		// cancellation below only releases PinchTab's side of the connection.
+		b.clearAttachIndicators()
+	}
 
 	if b.BrowserCancel != nil {
 		b.BrowserCancel()
@@ -298,29 +361,31 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 		slog.Info("browser soft restart: cancelled allocator context")
 	}
 
-	profileDir := ""
-	if b.tempProfileDir != "" {
-		profileDir = b.tempProfileDir
-	} else {
-		profileDir = cfg.ProfileDir
-	}
-	if profileDir != "" {
-		time.Sleep(200 * time.Millisecond)
-		killed := killChromeByProfileDir(profileDir)
-		if killed > 0 {
-			slog.Info("browser soft restart: killed surviving chrome processes", "count", killed, "profileDir", profileDir)
-		}
-		ClearChromeSessions(profileDir)
-	}
-	b.ClearSavedState()
-
-	if b.tempProfileDir != "" {
-		if err := os.RemoveAll(b.tempProfileDir); err != nil {
-			slog.Warn("failed to remove temp profile dir during restart", "path", b.tempProfileDir, "err", err)
+	if !externalAttach {
+		profileDir := ""
+		if b.tempProfileDir != "" {
+			profileDir = b.tempProfileDir
 		} else {
-			slog.Info("removed temp profile dir during restart", "path", b.tempProfileDir)
+			profileDir = cfg.ProfileDir
 		}
-		b.tempProfileDir = ""
+		if profileDir != "" {
+			time.Sleep(200 * time.Millisecond)
+			killed := killChromeByProfileDirFunc(profileDir)
+			if killed > 0 {
+				slog.Info("browser soft restart: killed surviving chrome processes", "count", killed, "profileDir", profileDir)
+			}
+			ClearChromeSessions(profileDir)
+		}
+		b.ClearSavedState()
+
+		if b.tempProfileDir != "" {
+			if err := os.RemoveAll(b.tempProfileDir); err != nil {
+				slog.Warn("failed to remove temp profile dir during restart", "path", b.tempProfileDir, "err", err)
+			} else {
+				slog.Info("removed temp profile dir during restart", "path", b.tempProfileDir)
+			}
+			b.tempProfileDir = ""
+		}
 	}
 
 	b.initialized = false
@@ -364,8 +429,14 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 // Cleanup releases browser resources and removes temporary profile directories.
 // Must be called on shutdown to prevent Chrome process and disk leaks.
 func (b *Bridge) Cleanup() {
-	// Remote-CDP: external browser is not owned by PinchTab.
-	if b != nil && b.Config != nil && strings.TrimSpace(b.Config.RemoteCDPURL) != "" {
+	if b != nil && b.externalAttachMode() {
+		b.clearAttachIndicators()
+	}
+	// External attach: the browser is not owned by PinchTab. CDPAttachURL is
+	// the current bridge flag; RemoteCDPURL is the legacy/server alias. Use the
+	// resolved launch mode as the source of truth so either configuration form
+	// can never fall through to profile-scoped process termination.
+	if b != nil && b.externalAttachMode() {
 		if b.BrowserCancel != nil {
 			b.BrowserCancel()
 			slog.Debug("remote-CDP: browser context cancelled (external browser left running)")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,8 +9,28 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/server"
 )
+
+func TestServerRestartRefusesInstalledOrUnknownServiceOwnership(t *testing.T) {
+	original := daemonInstallationStatus
+	defer func() { daemonInstallationStatus = original }()
+
+	daemonInstallationStatus = func() (bool, error) { return true, nil }
+	err := runServerRestart(&config.RuntimeConfig{})
+	if err == nil || !strings.Contains(err.Error(), "pinchtab daemon restart") {
+		t.Fatalf("installed-service error = %v", err)
+	}
+
+	daemonInstallationStatus = func() (bool, error) {
+		return false, errors.New("service path unreadable")
+	}
+	err = runServerRestart(&config.RuntimeConfig{})
+	if err == nil || !strings.Contains(err.Error(), "refusing restart") {
+		t.Fatalf("unknown-ownership error = %v", err)
+	}
+}
 
 func TestIsBackgroundServerReadyRequiresValidPinchTabHealth(t *testing.T) {
 	tests := []struct {

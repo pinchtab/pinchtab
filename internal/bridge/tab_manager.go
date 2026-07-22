@@ -28,7 +28,7 @@ const (
 	tabCreateNavTimeout = 20 * time.Second
 )
 
-type TabSetupFunc func(ctx context.Context, tabID string)
+type TabSetupFunc func(ctx context.Context, tabID string) error
 
 type TabManager struct {
 	browserCtx        context.Context
@@ -130,6 +130,17 @@ func browserExecutorContext(ctx context.Context) (context.Context, error) {
 }
 
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
+	return tm.createTab(url, "")
+}
+
+func (tm *TabManager) CreateTabInBrowserContext(url, browserContextID string) (string, context.Context, context.CancelFunc, error) {
+	if browserContextID == "" {
+		return "", nil, nil, fmt.Errorf("browser context id required")
+	}
+	return tm.createTab(url, browserContextID)
+}
+
+func (tm *TabManager) createTab(url, browserContextID string) (string, context.Context, context.CancelFunc, error) {
 	if tm == nil {
 		return "", nil, nil, fmt.Errorf("tab manager not initialized")
 	}
@@ -162,12 +173,20 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	}
 
 	// target.CreateTarget works for both local and remote (CDP_URL) allocators.
+	// Chromium's explicit focus=false contract opens a normal rendered tab while
+	// leaving the browser window's OS focus unchanged. Do not set background=true:
+	// heavy headed SPAs can suspend that target before DOM/AX reads. newWindow
+	// remains false, so no additional OS window is created.
 	var targetID target.ID
 	createCtx, createCancel := context.WithTimeout(tm.browserCtx, tabCreateTimeout)
 	if err := chromedp.Run(createCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			params := target.CreateTarget("about:blank").WithFocus(false)
+			if browserContextID != "" {
+				params = params.WithBrowserContextID(cdp.BrowserContextID(browserContextID))
+			}
 			var err error
-			targetID, err = target.CreateTarget("about:blank").Do(ctx)
+			targetID, err = params.Do(ctx)
 			return err
 		}),
 	); err != nil {
@@ -187,7 +206,15 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
 
 	if tm.onTabSetup != nil {
-		tm.onTabSetup(ctx, tabID)
+		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(execCtx context.Context) error {
+			return tm.onTabSetup(execCtx, tabID)
+		})); err != nil {
+			cancel()
+			if execCtx, execErr := browserExecutorContext(tm.browserCtx); execErr == nil {
+				_ = target.CloseTarget(targetID).Do(execCtx)
+			}
+			return "", nil, nil, fmt.Errorf("setup new tab: %w", err)
+		}
 	}
 
 	if blockPatterns := tm.tabBlockPatterns(); len(blockPatterns) > 0 {

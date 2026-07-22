@@ -90,6 +90,7 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 			}),
 		"networkIntercept": capState(routes.CapNetworkIntercept, h.networkInterceptEnabled(),
 			[]string{
+				"GET /network/{requestId}", "GET /tabs/{id}/network/{requestId}", "POST /network/clear",
 				"GET /network/route", "POST /network/route", "DELETE /network/route",
 				"GET /tabs/{id}/network/route", "POST /tabs/{id}/network/route", "DELETE /tabs/{id}/network/route",
 			}),

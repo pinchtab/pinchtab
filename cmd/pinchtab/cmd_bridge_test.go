@@ -68,3 +68,14 @@ func TestResolveBridgeBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestBridgeAttachChildFlagContract(t *testing.T) {
+	for _, name := range []string{"cdp-attach", "browser", "remote-browser-name"} {
+		if bridgeCmd.Flags().Lookup(name) == nil {
+			t.Errorf("bridge command missing child flag %q", name)
+		}
+	}
+	if bridgeCmd.Flags().Lookup("browser-provider") != nil {
+		t.Error("bridge command must not register obsolete browser-provider flag")
+	}
+}

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -270,6 +273,17 @@ func TestConfigGetMasksServerToken(t *testing.T) {
 }
 
 func TestConfigTokenSubcommandCopiesToClipboard(t *testing.T) {
+	originalLookPath := clipboardLookPath
+	originalExecCommand := clipboardExecCommand
+	clipboardLookPath = func(name string) (string, error) { return name, nil }
+	clipboardExecCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	}
+	t.Cleanup(func() {
+		clipboardLookPath = originalLookPath
+		clipboardExecCommand = originalExecCommand
+	})
+
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv("PINCHTAB_CONFIG", configPath)
 	t.Setenv("PINCHTAB_TOKEN", "")
@@ -294,6 +308,43 @@ func TestConfigTokenSubcommandCopiesToClipboard(t *testing.T) {
 	if strings.Contains(output, "test-token-for-clipboard") {
 		t.Fatalf("expected token to stay hidden, got %q", output)
 	}
+	if !strings.Contains(output, "Token copied to clipboard") {
+		t.Fatalf("expected clipboard success message, got %q", output)
+	}
+}
+
+func TestCopyToClipboardTimesOut(t *testing.T) {
+	originalLookPath := clipboardLookPath
+	originalExecCommand := clipboardExecCommand
+	originalTimeout := clipboardTimeout
+	clipboardLookPath = func(name string) (string, error) { return name, nil }
+	clipboardTimeout = 20 * time.Millisecond
+	clipboardExecCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestClipboardBlockingHelper")
+		cmd.Env = append(os.Environ(), "PINCHTAB_CLIPBOARD_BLOCKING_HELPER=1")
+		return cmd
+	}
+	t.Cleanup(func() {
+		clipboardLookPath = originalLookPath
+		clipboardExecCommand = originalExecCommand
+		clipboardTimeout = originalTimeout
+	})
+
+	started := time.Now()
+	err := copyToClipboard("test-token")
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("copyToClipboard() error = %v, want timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("copyToClipboard() took %s, want bounded completion", elapsed)
+	}
+}
+
+func TestClipboardBlockingHelper(t *testing.T) {
+	if os.Getenv("PINCHTAB_CLIPBOARD_BLOCKING_HELPER") != "1" {
+		return
+	}
+	select {}
 }
 
 func TestConfigSchemaSubcommandPrintsURL(t *testing.T) {
