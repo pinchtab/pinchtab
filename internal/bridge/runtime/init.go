@@ -14,11 +14,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
@@ -48,10 +50,17 @@ func InitChrome(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) 
 		return initChromeFromExistingCDP(cfg, bundle)
 	}
 
+	if err := validateTransactionPolicyLaunch(cfg); err != nil {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err
+	}
+
 	slog.Info("starting chrome initialization", "headless", cfg.Headless, "profile", cfg.ProfileDir, "binary", cfg.ChromeBinary)
 
 	bundle = ensureStealthBundle(cfg, bundle)
-	allocCtx, allocCancel, opts, debugPort := setupAllocator(cfg, bundle, hooks)
+	allocCtx, allocCancel, opts, debugPort, err := setupAllocator(cfg, bundle, hooks)
+	if err != nil {
+		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err
+	}
 	browserCtx, browserCancel, launchMode, err := startChrome(allocCtx, cfg, bundle, opts, debugPort, hooks)
 	if err != nil {
 		allocCancel()
@@ -145,7 +154,13 @@ func appendExecAllocatorFlags(opts []chromedp.ExecAllocatorOption, flags []strin
 	return opts
 }
 
-func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int) {
+func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hooks) (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption, int, error) {
+	// Recheck immediately before building allocator arguments. If the generated
+	// directory vanished after InitChrome's first check, do not silently launch
+	// with profile extensions or an unprotected browser.
+	if err := validateTransactionPolicyLaunch(cfg); err != nil {
+		return nil, nil, nil, 0, err
+	}
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
@@ -232,7 +247,7 @@ func setupAllocator(cfg *config.RuntimeConfig, bundle *stealth.Bundle, hooks Hoo
 	}))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	return ctx, cancel, opts, debugPort
+	return ctx, cancel, opts, debugPort, nil
 }
 
 func startChrome(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, opts []chromedp.ExecAllocatorOption, debugPort int, hooks Hooks) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
@@ -288,6 +303,14 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to connect to chrome: %w", err)
 	}
 
+	if cfg.TransactionPolicy.Enabled {
+		if err := verifyTransactionPolicyExtension(browserCtx); err != nil {
+			browserCancel()
+			allocCancel()
+			return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("transaction policy extension did not activate: %w", err)
+		}
+	}
+
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := stealth.ApplyTargetEmulation(ctx, cfg, bundle.LaunchUserAgent()); err != nil {
 			return err
@@ -327,6 +350,12 @@ func shouldRetryChromeStartupWithDirectLaunch(parentCtx context.Context, err err
 }
 
 func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.RuntimeConfig, bundle *stealth.Bundle, debugPort int, injectedStealthScript string) (context.Context, context.CancelFunc, stealth.LaunchMode, error) {
+	// This path can be reached after allocator startup has timed out. Keep its
+	// guard independent so a future direct caller cannot bypass policy launch
+	// validation before starting a process.
+	if err := validateTransactionPolicyLaunch(cfg); err != nil {
+		return nil, nil, stealth.LaunchModeUninitialized, err
+	}
 	chromeBinary := cfg.ChromeBinary
 	if chromeBinary == "" {
 		chromeBinary = findChromeBinary()
@@ -365,6 +394,18 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 	remoteAllocCtx, remoteAllocCancel := chromedp.NewRemoteAllocator(parentCtx, wsURL)
 	browserCtx, browserCancel := chromedp.NewContext(remoteAllocCtx)
 
+	// The direct-launch recovery path must prove the extension activated too;
+	// otherwise a startup workaround could turn an enabled policy into an
+	// unprotected managed browser.
+	if cfg.TransactionPolicy.Enabled {
+		if err := verifyTransactionPolicyExtension(browserCtx); err != nil {
+			browserCancel()
+			remoteAllocCancel()
+			_ = cmd.Process.Kill()
+			return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("transaction policy extension did not activate: %w", err)
+		}
+	}
+
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := stealth.ApplyTargetEmulation(ctx, cfg, bundle.LaunchUserAgent()); err != nil {
 			return err
@@ -382,6 +423,101 @@ func startChromeWithRemoteAllocator(parentCtx context.Context, cfg *config.Runti
 		remoteAllocCancel()
 		killAndReap()
 	}, stealth.LaunchModeDirectFallback, nil
+}
+
+func validateTransactionPolicyLaunch(cfg *config.RuntimeConfig) error {
+	if cfg == nil || !cfg.TransactionPolicy.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.ChromeBinary) == "" {
+		return fmt.Errorf("transaction policy requires browser.binary to name an unpacked-extension-capable Chromium or Chrome for Testing executable")
+	}
+	binary := strings.ToLower(strings.TrimSpace(cfg.ChromeBinary))
+	base := filepath.Base(binary)
+	// Chrome for Testing on macOS is named "Google Chrome for Testing" and is
+	// supported. Reject Stable by its app/path identity rather than matching the
+	// generic words "google chrome".
+	if (strings.Contains(binary, "google chrome") && !strings.Contains(binary, "for testing")) || base == "google-chrome" || base == "google-chrome-stable" || strings.Contains(binary, "program files/google/chrome/application") {
+		return fmt.Errorf("transaction policy does not support Google Chrome Stable; configure a compatible Chromium or Chrome for Testing executable")
+	}
+	// Policy activation is meaningful only when this generated extension is the
+	// sole extension Chrome can load. Do not accept a path merely because it has
+	// a familiar prefix: it must be a validated content-addressed generation.
+	if len(cfg.ExtensionPaths) != 1 {
+		return fmt.Errorf("transaction policy requires exactly one generated extension and rejects browser.extensionPaths")
+	}
+	if !isTransactionPolicyExtensionPath(cfg.StateDir, cfg.ExtensionPaths[0]) {
+		return fmt.Errorf("transaction policy extension is not a managed generated extension")
+	}
+	manifest, rules, err := compileTransactionPolicy(cfg.TransactionPolicy)
+	if err != nil {
+		return fmt.Errorf("recompile transaction policy for launch validation: %w", err)
+	}
+	if err := checkTransactionPolicyGenerationContent(cfg.ExtensionPaths[0], manifest, rules); err != nil {
+		return fmt.Errorf("transaction policy extension is unavailable, unsafe, or does not match policy: %w", err)
+	}
+	return nil
+}
+
+func isTransactionPolicyExtensionPath(stateDir, extensionPath string) bool {
+	stateRoot, err := filepath.Abs(stateDir)
+	if err != nil {
+		return false
+	}
+	path, err := filepath.Abs(extensionPath)
+	if err != nil || filepath.Dir(path) != filepath.Join(stateRoot, transactionPolicyStateRoot) {
+		return false
+	}
+	return transactionPolicyGenerationName.MatchString(filepath.Base(path))
+}
+
+func hasExactTransactionPolicyRulesets(enabled []string) bool {
+	return len(enabled) == 1 && enabled[0] == transactionPolicyRulesetID
+}
+
+func verifyTransactionPolicyExtension(browserCtx context.Context) error {
+	// The fixed manifest key makes this exact extension URL an identity-bound
+	// probe. Evaluate DNR directly in that extension page; MV3 workers need not
+	// be separately visible or attachable through Target.getTargets.
+	if err := chromedp.Run(browserCtx, chromedp.Navigate("chrome-extension://"+transactionPolicyExtensionID+"/probe.html")); err != nil {
+		return fmt.Errorf("open generated extension activation probe: %w", err)
+	}
+	var state struct {
+		Enabled     []string `json:"enabled"`
+		Unsupported []int    `json:"unsupported"`
+		Disabled    []int    `json:"disabled"`
+		RuleCount   int      `json:"ruleCount"`
+	}
+	const probe = `(async () => {
+		const rules = await (await fetch(chrome.runtime.getURL('rules.json'), {cache: 'no-store'})).json();
+		const regexRules = rules.filter(rule => typeof rule.condition.regexFilter === 'string');
+		const unsupported = [];
+		for (const rule of regexRules) {
+			const result = await chrome.declarativeNetRequest.isRegexSupported({
+				regex: rule.condition.regexFilter,
+				isCaseSensitive: rule.condition.isUrlFilterCaseSensitive
+			});
+			if (!result.isSupported) unsupported.push(rule.id);
+		}
+		return {
+			enabled: Array.from(await chrome.declarativeNetRequest.getEnabledRulesets()),
+			unsupported,
+			disabled: Array.from(await chrome.declarativeNetRequest.getDisabledRuleIds({rulesetId: 'pinchtab_transaction_policy'})),
+			ruleCount: rules.length
+		};
+	})()`
+	if err := chromedp.Run(browserCtx, chromedp.Evaluate(probe, &state, func(p *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams {
+		return p.WithAwaitPromise(true)
+	})); err != nil {
+		return fmt.Errorf("inspect generated extension rules: %w", err)
+	}
+	if !hasExactTransactionPolicyRulesets(state.Enabled) {
+		return fmt.Errorf("generated ruleset %q was not exclusively enabled (enabled rulesets=%v)", transactionPolicyRulesetID, state.Enabled)
+	}
+	if state.RuleCount == 0 || len(state.Unsupported) != 0 || len(state.Disabled) != 0 {
+		return fmt.Errorf("generated ruleset is incomplete (rules=%d unsupported=%v disabled=%v)", state.RuleCount, state.Unsupported, state.Disabled)
+	}
+	return nil
 }
 
 func findFreePort(start, end int) (int, error) {

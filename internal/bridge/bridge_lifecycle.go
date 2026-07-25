@@ -12,6 +12,7 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/stealth"
@@ -72,7 +73,7 @@ func (b *Bridge) tabSetup(ctx context.Context) {
 	b.applyTargetStealth(ctx)
 	b.installWorkerStealthParity(ctx)
 	b.injectStealth(ctx)
-	if b.Config.NoAnimations {
+	if b.Config != nil && b.Config.NoAnimations {
 		if err := b.InjectNoAnimations(ctx); err != nil {
 			slog.Warn("no-animations injection failed", "err", err)
 		}
@@ -144,9 +145,14 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		}
 	}
 
-	slog.Info("starting chrome with confirmed profile", "headless", cfg.Headless, "profile", cfg.ProfileDir)
+	launchCfg, err := bridgeruntime.PrepareTransactionPolicyExtension(cfg)
+	if err != nil {
+		return fmt.Errorf("prepare transaction policy: %w", err)
+	}
+
+	slog.Info("starting chrome with confirmed profile", "headless", launchCfg.Headless, "profile", launchCfg.ProfileDir)
 	b.ensureStealthBundle()
-	allocCtx, allocCancel, browserCtx, browserCancel, launchMode, err := InitChrome(cfg, b.StealthBundle)
+	allocCtx, allocCancel, browserCtx, browserCancel, launchMode, err := InitChrome(launchCfg, b.StealthBundle)
 	if err != nil {
 		return fmt.Errorf("failed to initialize chrome: %w", err)
 	}
@@ -333,7 +339,10 @@ func (b *Bridge) Cleanup() {
 	}
 }
 
-func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) {
+func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel context.CancelFunc, browserCtx context.Context, browserCancel context.CancelFunc) error {
+	if b.Config != nil && b.Config.TransactionPolicy.Enabled {
+		return fmt.Errorf("transaction policy requires a PinchTab-managed browser launch; attached browsers cannot load the required extension")
+	}
 	b.initMu.Lock()
 	defer b.initMu.Unlock()
 
@@ -356,6 +365,7 @@ func (b *Bridge) SetBrowserContexts(allocCtx context.Context, allocCancel contex
 		b.SetDialogManager(b.Dialogs)
 		b.SetNetworkMonitor(b.netMonitor)
 	}
+	return nil
 }
 
 func cryptoRandSeed() int64 {

@@ -210,6 +210,7 @@ func DefaultFileConfig() FileConfig {
 				WrapContent:    true,
 				ScanTimeoutSec: 5,
 			},
+			TransactionPolicy: TransactionPolicyConfig{Enabled: false, Hosts: []string{}, DenyRules: []TransactionPolicyRule{}, AllowRules: []TransactionPolicyRule{}},
 		},
 		Profiles: ProfilesConfig{
 			BaseDir:        filepath.Join(userConfigDir(), "profiles"),

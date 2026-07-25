@@ -122,6 +122,9 @@ func Load() *RuntimeConfig {
 			ScanTimeoutSec: 5,
 		},
 
+		// TransactionPolicy defaults (disabled by default)
+		TransactionPolicy: TransactionPolicyConfig{},
+
 		// Engine default (set via config.json only)
 		Engine: "chrome",
 
@@ -340,6 +343,8 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	// IDPI – copy the whole struct; individual fields have safe zero-value defaults.
 	cfg.IDPI = fc.Security.IDPI
+	// TransactionPolicy – copy the whole struct; disabled by default.
+	cfg.TransactionPolicy = fc.Security.TransactionPolicy
 	cfg.AllowedDomains = effectiveSecurityAllowedDomains(fc.Security)
 	if fc.Observability.Activity.Enabled != nil {
 		cfg.Observability.Activity.Enabled = *fc.Observability.Activity.Enabled

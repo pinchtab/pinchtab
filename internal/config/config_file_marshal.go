@@ -126,6 +126,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 				ScanTimeoutSec:  fc.Security.IDPI.ScanTimeoutSec,
 				ShieldThreshold: fc.Security.IDPI.ShieldThreshold,
 			},
+			TransactionPolicy: fc.Security.TransactionPolicy,
 		},
 		Profiles: profilesConfigJSON{
 			BaseDir:        fc.Profiles.BaseDir,
@@ -372,7 +373,8 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),
 				AllowSchemes: append([]string(nil), cfg.AttachAllowSchemes...),
 			},
-			IDPI: cfg.IDPI,
+			IDPI:              cfg.IDPI,
+			TransactionPolicy: cfg.TransactionPolicy,
 		},
 		Profiles: ProfilesConfig{
 			BaseDir:        cfg.ProfilesBaseDir,

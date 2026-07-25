@@ -79,9 +79,10 @@ type securityConfigJSON struct {
 	MaxRedirects           *int           `json:"maxRedirects"`
 	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
 	TrustedResolveCIDRs    []string       `json:"trustedResolveCIDRs"`
-	TrustLoopbackProxy     *bool          `json:"trustLoopbackProxy"`
-	Attach                 attachJSON     `json:"attach"`
-	IDPI                   idpiConfigJSON `json:"idpi"`
+	TrustLoopbackProxy     *bool                   `json:"trustLoopbackProxy"`
+	Attach                 attachJSON              `json:"attach"`
+	IDPI                   idpiConfigJSON          `json:"idpi"`
+	TransactionPolicy      TransactionPolicyConfig `json:"transactionPolicy"`
 }
 
 type attachJSON struct {

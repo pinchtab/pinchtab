@@ -355,6 +355,12 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 }
 
 func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts LaunchOptions) (*bridge.Instance, error) {
+	o.mu.RLock()
+	policyEnabled := o.runtimeCfg != nil && o.runtimeCfg.TransactionPolicy.Enabled
+	o.mu.RUnlock()
+	if policyEnabled && len(opts.ExtensionPaths) > 0 {
+		return nil, fmt.Errorf("request-supplied extensionPaths are not allowed while transaction policy is enabled")
+	}
 	// Validate profile name to prevent path traversal attacks
 	if err := profiles.ValidateProfileName(name); err != nil {
 		return nil, err
@@ -458,6 +464,16 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	}
 	if o.internalToken != "" {
 		envOverrides["PINCHTAB_INTERNAL_TOKEN"] = o.internalToken
+	}
+	// filterEnvWithPrefixes strips ALL PINCHTAB_-prefixed vars from the parent
+	// environment before spawning the per-instance child process, so runtime
+	// container-compatibility overrides (e.g. the no-sandbox flag needed under
+	// containerd/CRI-O, which lack a Docker-only /.dockerenv marker) must be
+	// explicitly re-forwarded here or every profile-managed instance silently
+	// loses them, even though the top-level always-on bridge process (which
+	// inherits the full container env directly) keeps working fine.
+	if v := os.Getenv(config.ChromeNoSandboxEnvVar()); v != "" {
+		envOverrides[config.ChromeNoSandboxEnvVar()] = v
 	}
 	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
 
@@ -629,6 +645,10 @@ func intPtr(v int) *int {
 // bridge in place (upsert). Non-bridge duplicates still return an error.
 func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance, authToken string) (*bridge.Instance, bool, error) {
 	o.mu.Lock()
+	if o.runtimeCfg != nil && o.runtimeCfg.TransactionPolicy.Enabled {
+		o.mu.Unlock()
+		return nil, false, fmt.Errorf("transaction policy requires a PinchTab-managed browser launch; attached browsers are not protected")
+	}
 	for _, existing := range o.instances {
 		if existing.ProfileName == name && instanceIsActive(existing) {
 			if existing.Attached && inst.AttachType == "bridge" && existing.AttachType == "bridge" {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -385,6 +386,9 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	}
 	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
 		reasons = append(reasons, "Stealth level")
+	}
+	if !reflect.DeepEqual(c.boot.Security.TransactionPolicy, next.Security.TransactionPolicy) {
+		reasons = append(reasons, "Transaction policy")
 	}
 	if !sameIntPtr(c.boot.MultiInstance.Restart.MaxRestarts, next.MultiInstance.Restart.MaxRestarts) ||
 		!sameIntPtr(c.boot.MultiInstance.Restart.InitBackoffSec, next.MultiInstance.Restart.InitBackoffSec) ||
