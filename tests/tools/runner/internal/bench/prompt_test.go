@@ -98,7 +98,7 @@ func TestLaneUserPromptStructure(t *testing.T) {
 
 func TestBenchmarkRunGroupFile(t *testing.T) {
 	got := BenchmarkRunGroupFile("/dir", 5)
-	want := "/dir/group-05.md"
+	want := filepath.Join("/dir", "group-05.md")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -237,6 +238,7 @@ func TestNavigateCreatesTabWhenIdentifiedCallerHasNoCurrentTab(t *testing.T) {
 
 func TestCurrentTabStore_LRUCapEvictsOldest(t *testing.T) {
 	store := NewCurrentTabStore()
+	store.now = deterministicClock()
 	store.SetCap(2)
 
 	scopes := []currentTabScope{
@@ -262,6 +264,7 @@ func TestCurrentTabStore_LRUCapEvictsOldest(t *testing.T) {
 
 func TestCurrentTabStore_GetBumpsRecency(t *testing.T) {
 	store := NewCurrentTabStore()
+	store.now = deterministicClock()
 	store.SetCap(2)
 
 	a := scopedCurrentTab(currentTabScopeAgent, "a")
@@ -284,6 +287,14 @@ func TestCurrentTabStore_GetBumpsRecency(t *testing.T) {
 	}
 	if _, ok := store.Get(c); !ok {
 		t.Fatal("c should be present")
+	}
+}
+
+func deterministicClock() func() time.Time {
+	now := time.Unix(0, 0)
+	return func() time.Time {
+		now = now.Add(time.Nanosecond)
+		return now
 	}
 }
 
