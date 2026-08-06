@@ -355,27 +355,27 @@ type ProfilesConfig struct {
 }
 
 type SecurityConfig struct {
-	AllowEvaluate          *bool        `json:"allowEvaluate,omitempty"`
-	AllowMacro             *bool        `json:"allowMacro,omitempty"`
-	AllowScreencast        *bool        `json:"allowScreencast,omitempty"`
-	AllowDownload          *bool        `json:"allowDownload,omitempty"`
-	AllowCookies           *bool        `json:"allowCookies,omitempty"`
-	AllowNetworkIntercept  *bool        `json:"allowNetworkIntercept,omitempty"`
-	AllowedDomains         []string     `json:"allowedDomains,omitempty"`
-	DownloadAllowedDomains []string     `json:"downloadAllowedDomains,omitempty"`
-	DownloadMaxBytes       *int         `json:"downloadMaxBytes,omitempty"`
-	AllowUpload            *bool        `json:"allowUpload,omitempty"`
-	AllowClipboard         *bool        `json:"allowClipboard,omitempty"`
-	AllowStateExport       *bool        `json:"allowStateExport,omitempty"`
-	StateEncryptionKey     *string      `json:"stateEncryptionKey,omitempty"`
-	EnableActionGuards     *bool        `json:"enableActionGuards,omitempty"`
-	UploadMaxRequestBytes  *int         `json:"uploadMaxRequestBytes,omitempty"`
-	UploadMaxFiles         *int         `json:"uploadMaxFiles,omitempty"`
-	UploadMaxFileBytes     *int         `json:"uploadMaxFileBytes,omitempty"`
-	UploadMaxTotalBytes    *int         `json:"uploadMaxTotalBytes,omitempty"`
-	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
-	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
-	TrustedResolveCIDRs    []string     `json:"trustedResolveCIDRs,omitempty"`
+	AllowEvaluate          *bool                   `json:"allowEvaluate,omitempty"`
+	AllowMacro             *bool                   `json:"allowMacro,omitempty"`
+	AllowScreencast        *bool                   `json:"allowScreencast,omitempty"`
+	AllowDownload          *bool                   `json:"allowDownload,omitempty"`
+	AllowCookies           *bool                   `json:"allowCookies,omitempty"`
+	AllowNetworkIntercept  *bool                   `json:"allowNetworkIntercept,omitempty"`
+	AllowedDomains         []string                `json:"allowedDomains,omitempty"`
+	DownloadAllowedDomains []string                `json:"downloadAllowedDomains,omitempty"`
+	DownloadMaxBytes       *int                    `json:"downloadMaxBytes,omitempty"`
+	AllowUpload            *bool                   `json:"allowUpload,omitempty"`
+	AllowClipboard         *bool                   `json:"allowClipboard,omitempty"`
+	AllowStateExport       *bool                   `json:"allowStateExport,omitempty"`
+	StateEncryptionKey     *string                 `json:"stateEncryptionKey,omitempty"`
+	EnableActionGuards     *bool                   `json:"enableActionGuards,omitempty"`
+	UploadMaxRequestBytes  *int                    `json:"uploadMaxRequestBytes,omitempty"`
+	UploadMaxFiles         *int                    `json:"uploadMaxFiles,omitempty"`
+	UploadMaxFileBytes     *int                    `json:"uploadMaxFileBytes,omitempty"`
+	UploadMaxTotalBytes    *int                    `json:"uploadMaxTotalBytes,omitempty"`
+	MaxRedirects           *int                    `json:"maxRedirects,omitempty"`
+	TrustedProxyCIDRs      []string                `json:"trustedProxyCIDRs,omitempty"`
+	TrustedResolveCIDRs    []string                `json:"trustedResolveCIDRs,omitempty"`
 	TrustLoopbackProxy     *bool                   `json:"trustLoopbackProxy,omitempty"`
 	Attach                 AttachConfig            `json:"attach,omitempty"`
 	IDPI                   IDPIConfig              `json:"idpi,omitempty"`

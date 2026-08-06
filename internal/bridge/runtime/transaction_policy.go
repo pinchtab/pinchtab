@@ -219,7 +219,7 @@ func transactionRuleConditions(hostPattern string, hosts []string, rule config.T
 	guardedUnsafeMethod := method == "CONNECT" || method == "DELETE" || method == "OTHER" || method == "PATCH" || method == "POST" || method == "PUT"
 	rootSegment := strings.TrimSpace(rule.PathPrefix) == "/" && strings.TrimSpace(rule.PathSegment) != "" && strings.TrimSpace(rule.QueryParam) == ""
 
-	regexEncodePath := encodePath && !guardedUnsafeMethod && !(method == "*" && rootSegment)
+	regexEncodePath := encodePath && !guardedUnsafeMethod && (method != "*" || !rootSegment)
 	regexes, err := transactionRuleRegexes(hostPattern, rule, regexEncodePath)
 	if err != nil {
 		return nil, err

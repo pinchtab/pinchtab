@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -214,6 +215,16 @@ func Load() *RuntimeConfig {
 	if errs := ValidateFileConfig(fc); len(errs) > 0 {
 		for _, e := range errs {
 			slog.Warn("config validation error", "path", configPath, "error", e)
+		}
+		// An enabled-but-invalid transaction policy must never load: a
+		// half-configured deny policy silently permits the traffic it was
+		// meant to block. Fail startup instead.
+		if fc.Security.TransactionPolicy.Enabled {
+			for _, e := range errs {
+				if strings.HasPrefix(e.Error(), "security.transactionPolicy") {
+					panic(fmt.Sprintf("invalid enabled security.transactionPolicy in %s: %v", configPath, errs))
+				}
+			}
 		}
 	}
 
@@ -644,6 +655,10 @@ func ApplyFileConfigToRuntime(cfg *RuntimeConfig, fc *FileConfig) {
 		return
 	}
 
+	// The transaction policy is startup-only: a live reload must not be able
+	// to enable or disable supplier transaction guards under a running bridge.
+	policy := cfg.TransactionPolicy
 	applyFileConfig(cfg, fc)
+	cfg.TransactionPolicy = policy
 	finalizeProfileConfig(cfg)
 }

@@ -58,27 +58,27 @@ type profilesConfigJSON struct {
 }
 
 type securityConfigJSON struct {
-	AllowEvaluate          *bool          `json:"allowEvaluate"`
-	AllowMacro             *bool          `json:"allowMacro"`
-	AllowScreencast        *bool          `json:"allowScreencast"`
-	AllowDownload          *bool          `json:"allowDownload"`
-	AllowCookies           *bool          `json:"allowCookies"`
-	AllowNetworkIntercept  *bool          `json:"allowNetworkIntercept"`
-	AllowedDomains         []string       `json:"allowedDomains"`
-	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
-	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
-	AllowUpload            *bool          `json:"allowUpload"`
-	AllowClipboard         *bool          `json:"allowClipboard"`
-	AllowStateExport       *bool          `json:"allowStateExport"`
-	StateEncryptionKey     *string        `json:"stateEncryptionKey"`
-	EnableActionGuards     *bool          `json:"enableActionGuards"`
-	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
-	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
-	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
-	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
-	MaxRedirects           *int           `json:"maxRedirects"`
-	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
-	TrustedResolveCIDRs    []string       `json:"trustedResolveCIDRs"`
+	AllowEvaluate          *bool                   `json:"allowEvaluate"`
+	AllowMacro             *bool                   `json:"allowMacro"`
+	AllowScreencast        *bool                   `json:"allowScreencast"`
+	AllowDownload          *bool                   `json:"allowDownload"`
+	AllowCookies           *bool                   `json:"allowCookies"`
+	AllowNetworkIntercept  *bool                   `json:"allowNetworkIntercept"`
+	AllowedDomains         []string                `json:"allowedDomains"`
+	DownloadAllowedDomains []string                `json:"downloadAllowedDomains"`
+	DownloadMaxBytes       *int                    `json:"downloadMaxBytes"`
+	AllowUpload            *bool                   `json:"allowUpload"`
+	AllowClipboard         *bool                   `json:"allowClipboard"`
+	AllowStateExport       *bool                   `json:"allowStateExport"`
+	StateEncryptionKey     *string                 `json:"stateEncryptionKey"`
+	EnableActionGuards     *bool                   `json:"enableActionGuards"`
+	UploadMaxRequestBytes  *int                    `json:"uploadMaxRequestBytes"`
+	UploadMaxFiles         *int                    `json:"uploadMaxFiles"`
+	UploadMaxFileBytes     *int                    `json:"uploadMaxFileBytes"`
+	UploadMaxTotalBytes    *int                    `json:"uploadMaxTotalBytes"`
+	MaxRedirects           *int                    `json:"maxRedirects"`
+	TrustedProxyCIDRs      []string                `json:"trustedProxyCIDRs"`
+	TrustedResolveCIDRs    []string                `json:"trustedResolveCIDRs"`
 	TrustLoopbackProxy     *bool                   `json:"trustLoopbackProxy"`
 	Attach                 attachJSON              `json:"attach"`
 	IDPI                   idpiConfigJSON          `json:"idpi"`

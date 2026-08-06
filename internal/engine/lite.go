@@ -519,3 +519,26 @@ func normalizeWhitespace(s string) string {
 	}
 	return strings.TrimSpace(b.String())
 }
+
+// FieldSensitive reports whether the element behind ref is a credential-bearing
+// field (password type, sensitive autocomplete, or a secret-looking name/id).
+// Used to decide whether an action response may echo the typed text back.
+// Fails closed: an unresolvable ref is treated as sensitive.
+func (l *LiteEngine) FieldSensitive(tabID, ref string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	tab, err := l.resolveTab(tabID)
+	if err != nil {
+		return true
+	}
+	el, ok := tab.refMap[ref]
+	if !ok {
+		return true
+	}
+	attr := func(name string) string {
+		v, _ := el.GetAttribute(name)
+		return v
+	}
+	return IsSensitiveFieldAttrs(attr("type"), attr("autocomplete"), attr("name"), attr("id"), attr("aria-label"))
+}

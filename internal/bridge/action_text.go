@@ -15,26 +15,41 @@ func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]
 		return b.actionHumanizedType(ctx, req)
 	}
 	if req.Selector != "" {
-		return map[string]any{"typed": req.Text}, chromedp.Run(ctx,
+		// Probe the field before typing: after SendKeys the selector still
+		// resolves, but probing first also covers pages that swap the node.
+		echo := textEcho(ctx, req.Selector, 0, echoKeyTyped, req.Text, nil)
+		if err := chromedp.Run(ctx,
 			chromedp.Click(req.Selector, chromedp.ByQuery),
 			chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery),
-		)
+		); err != nil {
+			return nil, err
+		}
+		return echo, nil
 	}
 	if req.NodeID > 0 {
-		return map[string]any{"typed": req.Text}, TypeByNodeID(ctx, req.NodeID, req.Text)
+		echo := textEcho(ctx, "", req.NodeID, echoKeyTyped, req.Text, nil)
+		if err := TypeByNodeID(ctx, req.NodeID, req.Text); err != nil {
+			return nil, err
+		}
+		return echo, nil
 	}
 	return nil, fmt.Errorf("need selector or ref")
 }
 
 func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Selector != "" {
-		return map[string]any{"filled": req.Text}, chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
+		echo := textEcho(ctx, req.Selector, 0, echoKeyFilled, req.Text, nil)
+		if err := chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery)); err != nil {
+			return nil, err
+		}
+		return echo, nil
 	}
 	if req.NodeID > 0 {
+		echo := textEcho(ctx, "", req.NodeID, echoKeyFilled, req.Text, nil)
 		if err := FillByNodeID(ctx, req.NodeID, req.Text); err != nil {
 			return nil, err
 		}
-		result := map[string]any{"filled": req.Text}
+		result := echo
 		if actual, err := ReadInputValue(ctx, req.NodeID); err == nil && req.Text != "" && actual != req.Text {
 			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
 		}
@@ -71,12 +86,15 @@ func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (ma
 		return nil, fmt.Errorf("need selector, ref, or nodeId")
 	}
 
+	// Focused above, so the focused element is the target.
+	echo := textEcho(ctx, req.Selector, req.NodeID, echoKeyTyped, req.Text, map[string]any{"human": true})
+
 	actions := Type(req.Text, req.Fast)
 	if err := chromedp.Run(ctx, actions...); err != nil {
 		return nil, err
 	}
 
-	return map[string]any{"typed": req.Text, "human": true}, nil
+	return echo, nil
 }
 
 // keyboardTypeThreshold is the character count above which we switch from
@@ -98,11 +116,20 @@ func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map
 	// We still fire a keydown at the start and keyup at the end to trigger
 	// any key-event listeners that apps might depend on.
 	// Use rune count (not byte length) since we're counting keystrokes.
+	// These paths dispatch to whatever is focused, so probe the focused element.
 	if len([]rune(req.Text)) > keyboardTypeThreshold {
-		return b.keyboardTypeBatched(ctx, req.Text)
+		echo := textEcho(ctx, "", 0, echoKeyTyped, req.Text, map[string]any{"batched": true})
+		if _, err := b.keyboardTypeBatched(ctx, req.Text); err != nil {
+			return nil, err
+		}
+		return echo, nil
 	}
 
-	return b.keyboardTypePerChar(ctx, req.Text)
+	echo := textEcho(ctx, "", 0, echoKeyTyped, req.Text, nil)
+	if _, err := b.keyboardTypePerChar(ctx, req.Text); err != nil {
+		return nil, err
+	}
+	return echo, nil
 }
 
 // keyboardTypePerChar dispatches individual keyDown/keyUp events for each character.
@@ -145,7 +172,8 @@ func (b *Bridge) keyboardTypePerChar(ctx context.Context, text string) (map[stri
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"typed": text}, nil
+	// Internal result; callers replace this with a redaction-aware echo.
+	return map[string]any{"typed_len": len([]rune(text))}, nil
 }
 
 // keyboardTypeBatchedEdgeChars is how many characters to type with real
@@ -189,13 +217,15 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 		return nil, err
 	}
 
-	return map[string]any{"typed": text, "batched": true}, nil
+	// Internal result; callers replace this with a redaction-aware echo.
+	return map[string]any{"typed_len": len([]rune(text)), "batched": true}, nil
 }
 
 func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for keyboard-inserttext")
 	}
+	echo := textEcho(ctx, "", 0, "inserted", req.Text, nil)
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
 			"text": req.Text,
@@ -204,7 +234,7 @@ func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (m
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"inserted": req.Text}, nil
+	return echo, nil
 }
 
 func (b *Bridge) actionKeyDown(ctx context.Context, req ActionRequest) (map[string]any, error) {
