@@ -105,6 +105,98 @@ func browserExecutorContext(ctx context.Context) (context.Context, error) {
 	return cdp.WithExecutor(ctx, c.Browser), nil
 }
 
+// trackedCDPIDs returns the raw CDP target IDs this manager currently tracks.
+func (tm *TabManager) trackedCDPIDs() map[string]bool {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	out := make(map[string]bool, len(tm.tabs))
+	for _, entry := range tm.tabs {
+		if entry != nil && entry.CDPID != "" {
+			out[entry.CDPID] = true
+		}
+	}
+	return out
+}
+
+// selectOrphanTargets returns page targets that exist in Chrome but are not
+// tracked by this TabManager, oldest-first (GetTargets returns newest first),
+// capped at `limit` entries. A negative or zero limit means "all orphans".
+//
+// Orphans accumulate whenever the bridge process is restarted, a tab context
+// dies, or Chromium restores a previous session: the Chrome target survives
+// but the managed entry does not. They are invisible to a managed-count-only
+// tab cap, which is how a `maxTabs: 8` instance ended up holding 158 live
+// page targets in production (SBSA lane, 2026-08-17) and starved every other
+// caller of that instance.
+func selectOrphanTargets(tracked map[string]bool, pages []*target.Info, limit int) []target.ID {
+	orphans := make([]target.ID, 0)
+	// GetTargets is newest-first; walk backwards so we reap the oldest first.
+	for i := len(pages) - 1; i >= 0; i-- {
+		t := pages[i]
+		if t == nil || t.Type != TargetTypePage {
+			continue
+		}
+		if tracked[string(t.TargetID)] {
+			continue
+		}
+		orphans = append(orphans, t.TargetID)
+		if limit > 0 && len(orphans) >= limit {
+			break
+		}
+	}
+	return orphans
+}
+
+// reapOrphanTargets closes untracked page targets so the configured tab cap
+// reflects Chrome reality rather than in-process bookkeeping. Returns the
+// number of targets actually closed.
+func (tm *TabManager) reapOrphanTargets(limit int) int {
+	pages, err := tm.ListTargets()
+	if err != nil {
+		slog.Warn("tab budget: cannot list chrome targets", "err", err)
+		return 0
+	}
+	orphans := selectOrphanTargets(tm.trackedCDPIDs(), pages, limit)
+	closed := 0
+	for _, id := range orphans {
+		closeCtx, cancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
+		c := chromedp.FromContext(closeCtx)
+		if c == nil || c.Browser == nil {
+			cancel()
+			break
+		}
+		if err := target.CloseTarget(id).Do(cdp.WithExecutor(closeCtx, c.Browser)); err != nil {
+			slog.Debug("tab budget: orphan close failed", "targetId", id, "err", err)
+			cancel()
+			continue
+		}
+		cancel()
+		closed++
+	}
+	if closed > 0 {
+		slog.Info("tab budget: closed untracked chrome targets", "count", closed, "maxTabs", tm.config.MaxTabs)
+	}
+	return closed
+}
+
+// liveTabCount is the number of tabs the cap must be enforced against: every
+// open page target in Chrome, not just the ones this process happens to track.
+// Falls back to the managed count if Chrome cannot be queried.
+func (tm *TabManager) liveTabCount() int {
+	tm.mu.RLock()
+	managed := len(tm.tabs)
+	tm.mu.RUnlock()
+
+	pages, err := tm.ListTargets()
+	if err != nil {
+		return managed
+	}
+	if len(pages) > managed {
+		return len(pages)
+	}
+	return managed
+}
+
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
 	if tm == nil {
 		return "", nil, nil, fmt.Errorf("tab manager not initialized")
@@ -113,13 +205,27 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		return "", nil, nil, fmt.Errorf("no browser context available")
 	}
 
+	// Upstream deliberately counted only the managed map here, to avoid
+	// premature eviction from unmanaged targets such as the initial
+	// about:blank tab. That is still the right concern, but the fix is to reap
+	// the untracked targets rather than to ignore them: counting only the
+	// managed map let untracked targets (bridge restart, dead tab contexts,
+	// Chromium session restore) grow without bound, which is how a
+	// `maxTabs: 8` instance ended up holding 158 live page targets in
+	// production and starved every other caller of that instance
+	// (SBSA lane, 2026-08-17).
+	//
+	// Orphans are reaped oldest-first BEFORE any managed tab is considered for
+	// eviction, so the about:blank case now resolves by closing that stray
+	// target instead of evicting a tab a caller may still be driving.
 	if tm.config != nil && tm.config.MaxTabs > 0 {
-		// Count managed tabs for eviction decisions. Using Chrome's target list
-		// would include unmanaged targets (e.g. the initial about:blank tab),
-		// causing premature eviction of managed tabs.
-		tm.mu.RLock()
-		managedCount := len(tm.tabs)
-		tm.mu.RUnlock()
+		managedCount := tm.liveTabCount()
+
+		if managedCount >= tm.config.MaxTabs {
+			if closed := tm.reapOrphanTargets(managedCount - tm.config.MaxTabs + 1); closed > 0 {
+				managedCount = tm.liveTabCount()
+			}
+		}
 
 		if managedCount >= tm.config.MaxTabs {
 			switch tm.config.TabEvictionPolicy {
