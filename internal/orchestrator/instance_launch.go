@@ -96,13 +96,33 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	reservedPorts = append(reservedPorts, cdpPort)
 
 	profilePath := filepath.Join(o.baseDir, name)
+	resolved := false
 	if o.profiles != nil {
 		if resolvedPath, err := o.profiles.ProfilePath(name); err == nil {
 			profilePath = resolvedPath
+			resolved = true
 		}
+	}
+	if !resolved {
+		// The named profile is not in the profile store. We still start — that
+		// is the documented "profile dirs are created on demand" behaviour —
+		// but it means the caller gets a BLANK browser: no cookies, no
+		// remembered-device token, no logged-in session. For a bank profile
+		// that silently turns "reuse my session" into "full re-auth", so say
+		// so loudly instead of leaving it to be inferred from a failed login.
+		slog.Warn("profile not found in store; starting instance on a fresh empty profile dir",
+			"profile", name, "path", profilePath)
 	}
 	if err := os.MkdirAll(filepath.Join(profilePath, "Default"), 0755); err != nil {
 		return nil, fmt.Errorf("create profile dir: %w", err)
+	}
+	// Mark the directory as a real Chromium user-data-dir immediately; see
+	// profiles.seedChromiumPreferences for why an unmarked dir is dangerous.
+	prefsPath := filepath.Join(profilePath, "Default", "Preferences")
+	if _, err := os.Stat(prefsPath); os.IsNotExist(err) {
+		if werr := os.WriteFile(prefsPath, []byte("{}"), 0600); werr != nil {
+			slog.Warn("failed to seed Chromium Preferences", "path", prefsPath, "err", werr)
+		}
 	}
 	instanceStateDir := filepath.Join(profilePath, ".pinchtab-state")
 	if err := os.MkdirAll(instanceStateDir, 0700); err != nil {
