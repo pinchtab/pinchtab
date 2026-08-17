@@ -355,10 +355,36 @@ func (pm *ProfileManager) Create(name string) error {
 	if err := os.MkdirAll(filepath.Join(dest, "Default"), 0755); err != nil {
 		return err
 	}
+	if err := seedChromiumPreferences(dest); err != nil {
+		return err
+	}
 	return writeProfileMeta(dest, ProfileMeta{
 		ID:   profileID(name),
 		Name: name,
 	})
+}
+
+// seedChromiumPreferences writes a minimal Default/Preferences file if none
+// exists yet.
+//
+// A freshly created profile is structurally indistinguishable from a corrupt
+// one until Chromium first launches into it and writes Preferences itself —
+// and Chromium writes that file atomically (temp + rename), so a hard kill
+// (pod eviction, OOM, SIGKILL on scale-to-zero) can also leave the directory
+// without one. External profile-volume janitors reasonably treat "no
+// Preferences" as "broken, safe to delete"; on 2026-08-17 that heuristic
+// destroyed the `stdbank-luke` and `bobgo-luke` bank profiles on the
+// production PinchTab volume, along with their remembered-device tokens.
+//
+// Seeding an empty-but-valid Preferences file at create time makes a managed
+// profile self-identifying from the filesystem alone. Chromium overwrites it
+// on first run.
+func seedChromiumPreferences(dest string) error {
+	prefs := filepath.Join(dest, "Default", "Preferences")
+	if _, err := os.Stat(prefs); err == nil {
+		return nil
+	}
+	return os.WriteFile(prefs, []byte("{}"), 0600)
 }
 
 func resolveImportSourcePath(sourcePath string) (string, error) {
