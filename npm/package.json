@@ -43,8 +43,8 @@
   "author": "Mario <mario@giagolab.com>",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.3.0",
-    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2",
+    "@types/node": "^26.4.0",
     "eslint": "^10.8.1",
     "@eslint/js": "^10.0.1",
     "typescript-eslint": "^8.67.0",
