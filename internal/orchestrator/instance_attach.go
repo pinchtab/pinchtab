@@ -209,7 +209,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 	reserved = false
 	released = true
 
-	go o.monitor(internal)
+	o.startMonitor(internal)
 
 	healthTimeout := o.attachHealthCheckTimeout
 	if healthTimeout <= 0 {

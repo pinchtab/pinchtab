@@ -151,11 +151,10 @@ func TestStrategy_EnsureRunning_BrowserTargetAutoLaunchesRequestedTarget(t *test
 			"cloak":  {Provider: config.BrowserCloak},
 		},
 	})
-	t.Cleanup(func() {
-		for _, inst := range orch.List() {
-			_ = orch.Stop(inst.ID)
-		}
-	})
+	// Shutdown, not a Stop loop: it also waits for the startup monitors, which
+	// otherwise outlive the test and keep reading http.DefaultTransport while
+	// the cleanup registered above restores it.
+	t.Cleanup(orch.Shutdown)
 
 	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=cloak", nil)
 

@@ -288,6 +288,49 @@ func (o *Orchestrator) Shutdown() {
 		}(id)
 	}
 	wg.Wait()
+
+	// Signal after the instances are stopped, so a monitor still probing a
+	// healthy instance gets to record its outcome, then wait for every monitor
+	// to return. Bounded by one poll interval rather than
+	// instanceStartupTimeout, because the probe loop watches shutdownCh.
+	o.signalShutdown()
+	if !waitGroupWithin(&o.monitors, monitorShutdownGrace) {
+		// Belt and braces. finalizeInstanceExit is interruptible, so this should
+		// not fire; if a monitor ever blocks somewhere else, shutdown must still
+		// return rather than hang the process.
+		slog.Warn("startup monitors did not finish within the shutdown grace period",
+			"grace", monitorShutdownGrace)
+	}
+}
+
+// monitorShutdownGrace bounds how long Shutdown waits for startup monitors.
+// Generous next to the poll interval they watch shutdownCh on, and far below
+// instanceStartupTimeout.
+const monitorShutdownGrace = 5 * time.Second
+
+// waitGroupWithin reports whether wg finished inside d.
+func waitGroupWithin(wg *sync.WaitGroup, d time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(d):
+		return false
+	}
+}
+
+// signalShutdown closes shutdownCh exactly once. Safe to call on an
+// Orchestrator built without the constructor, where the channel is nil.
+func (o *Orchestrator) signalShutdown() {
+	o.shutdownOnce.Do(func() {
+		if o.shutdownCh != nil {
+			close(o.shutdownCh)
+		}
+	})
 }
 
 func (o *Orchestrator) ForceShutdown() {

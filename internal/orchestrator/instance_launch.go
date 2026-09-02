@@ -223,12 +223,22 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		effectiveBinary:         effectiveBinaryFromCfg(effectiveCfg),
 	}
 
+	// Snapshot under the same lock that guards the monitor's writes, and before
+	// the monitor exists. monitor -> applyStartupOutcome writes Status, URL and
+	// Error on this very struct; returning &inst.Instance handed the caller a
+	// live pointer into it, and POST /instances/start serializes that pointer to
+	// the response with no lock held. The race detector reports it as
+	// applyStartupOutcome (health.go) against bridge.Instance.MarshalJSON.
+	//
+	// snapshotWithFallbackMetadata already returns a detached copy for the
+	// fallback path; this makes the plain path agree.
 	o.mu.Lock()
 	o.instances[instanceID] = inst
+	snapshot := inst.Instance
 	o.mu.Unlock()
 	reservedPorts = nil
 
-	go o.monitor(inst)
+	o.startMonitor(inst)
 
-	return &inst.Instance, nil
+	return &snapshot, nil
 }

@@ -27,6 +27,40 @@ type startupProbe struct {
 	waitCh      chan error
 }
 
+// startMonitor runs monitor for inst and registers it with o.monitors, so
+// Shutdown can wait for it. Every monitor must start this way; a bare
+// `go o.monitor(inst)` is a goroutine that outlives its orchestrator.
+func (o *Orchestrator) startMonitor(inst *InstanceInternal) {
+	o.monitors.Add(1)
+	go func() {
+		defer o.monitors.Done()
+		o.monitor(inst)
+	}()
+}
+
+// shuttingDown reports whether Shutdown has been called. Safe on an
+// Orchestrator built without the constructor: a nil channel is never ready.
+func (o *Orchestrator) shuttingDown() bool {
+	select {
+	case <-o.shutdownCh:
+		return true
+	default:
+		return false
+	}
+}
+
+// sleepOrShutdown waits for d, or returns early once Shutdown is called. It
+// replaces a bare time.Sleep in the probe loop so a shutdown does not have to
+// wait out a poll interval per instance.
+func (o *Orchestrator) sleepOrShutdown(d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-o.shutdownCh:
+	}
+}
+
 func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	p := o.probeStartupHealth(inst)
 	o.applyStartupOutcome(inst, p)
@@ -56,7 +90,18 @@ func (o *Orchestrator) probeStartupHealth(inst *InstanceInternal) startupProbe {
 		if portErr != nil {
 			break
 		}
-		time.Sleep(instanceHealthPollInterval)
+		// Stop probing a starting instance once the orchestrator is going down;
+		// applyStartupOutcome below leaves a stopping/stopped instance alone, so
+		// bailing here loses nothing.
+		if o.shuttingDown() {
+			p.lastProbe = "orchestrator shutting down"
+			break
+		}
+		o.sleepOrShutdown(instanceHealthPollInterval)
+		if o.shuttingDown() {
+			p.lastProbe = "orchestrator shutting down"
+			break
+		}
 
 		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.runtimeCfg), probePort) {
 			targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", healthProbePolicyLoopback)
@@ -129,7 +174,15 @@ func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProb
 
 func (o *Orchestrator) finalizeInstanceExit(inst *InstanceInternal, p startupProbe) {
 	if !p.exitedEarly {
-		<-p.waitCh
+		// Interruptible: this waits for the child process to report exit, which
+		// for a process that never exits is forever. Shutdown waits on the
+		// monitors, so a bare receive here makes shutdown unbounded. Stop has
+		// already signalled the process by the time shutdownCh closes; the state
+		// transition below still runs.
+		select {
+		case <-p.waitCh:
+		case <-o.shutdownCh:
+		}
 	}
 	o.mu.Lock()
 	wasStopped := false

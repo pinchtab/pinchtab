@@ -41,6 +41,23 @@ type Orchestrator struct {
 	// race with stubbed package vars.
 	detachedStops sync.WaitGroup
 
+	// monitors tracks the per-instance startup monitors for the same reason.
+	// A monitor writes instance state for up to instanceStartupTimeout after
+	// launch, so one that outlives its orchestrator keeps touching memory the
+	// owner has finished with — and, in tests, package vars the test has already
+	// restored. Shutdown waits on this.
+	monitors sync.WaitGroup
+
+	// shutdownCh is closed once, by Shutdown, to cut short in-flight startup
+	// probes. Without it, waiting on monitors would mean waiting out the full
+	// instanceStartupTimeout for any instance still starting.
+	//
+	// Nil when an Orchestrator is built as a bare struct literal rather than
+	// through the constructor, which some tests do. A nil channel is never
+	// ready, so every select below simply falls through to its other case.
+	shutdownCh   chan struct{}
+	shutdownOnce sync.Once
+
 	// strictCrossInstanceTab toggles the cross-instance explicit-tab rule.
 	// When false (default), a request that targets a tab on a different
 	// instance than the caller's existing identity binding rebinds the
@@ -155,6 +172,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		tabsCache:      NewTabsCache(0, nil),
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          ids.NewManager(),
+		shutdownCh:     make(chan struct{}),
 	}
 
 	orch.registerInstanceCleanupHook()

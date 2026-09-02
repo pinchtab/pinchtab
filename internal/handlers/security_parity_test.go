@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
@@ -19,10 +20,11 @@ type providerSetup struct {
 	Setup func(t *testing.T, cfg *config.RuntimeConfig) *Handlers
 }
 
-// navigateProviders returns the provider paths for /navigate security tests
-// (chrome and cloak — ghost-chrome has no parity coverage here yet, a known
-// gap). Both share the same navguard+IDPI code paths before any Browser or
-// Chrome call is made, so the security checks are exercised uniformly.
+// navigateProviders returns the provider paths for /navigate security tests:
+// every browser this build can route to. They share the same navguard+IDPI code
+// paths before any Browser or Chrome call is made, so the security checks are
+// exercised uniformly — and a provider added without those checks fails here
+// rather than shipping a route around the domain policy.
 func navigateProviders() []providerSetup {
 	return []providerSetup{
 		{
@@ -42,6 +44,43 @@ func navigateProviders() []providerSetup {
 				return New(&mockBridge{}, cfg, nil, nil, nil)
 			},
 		},
+		{
+			Name: "ghost-chrome",
+			Setup: func(t *testing.T, cfg *config.RuntimeConfig) *Handlers {
+				t.Helper()
+				cfg.DefaultBrowser = config.BrowserGhostChrome
+				cfg.BrowsersAvailable = []string{config.BrowserGhostChrome}
+				return New(&mockBridge{}, cfg, nil, nil, nil)
+			},
+		},
+	}
+}
+
+// The parity matrix above is hand-listed, which is the shape that silently
+// narrows: a provider added to the registry without a line here would ship a
+// route around the domain policy with every parity test still green. Derive the
+// expected set from the registry instead, so adding a browser is what fails.
+func TestSecurityParityCoversEveryRegisteredBrowser(t *testing.T) {
+	covered := map[string]bool{}
+	for _, p := range navigateProviders() {
+		covered[p.Name] = true
+	}
+
+	registered := browsers.IDs()
+	if len(registered) == 0 {
+		t.Fatal("no browsers registered; this rule and every parity subtest below it would pass vacuously")
+	}
+
+	var missing []string
+	for _, id := range registered {
+		if !covered[id] {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("registered but absent from the /navigate parity matrix: %s\n"+
+			"every provider must be pinned against the domain, private-IP and DNS checks, "+
+			"or it is an untested way around them", strings.Join(missing, ", "))
 	}
 }
 

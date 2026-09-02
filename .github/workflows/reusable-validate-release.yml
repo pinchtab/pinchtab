@@ -39,7 +39,7 @@ jobs:
       sha: ${{ steps.meta.outputs.sha }}
       ref: ${{ steps.meta.outputs.ref }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}

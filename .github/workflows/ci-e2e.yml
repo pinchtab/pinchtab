@@ -45,7 +45,7 @@ jobs:
       run_infra_extended: ${{ steps.changes.outputs.run_infra_extended }}
       run_smoke: ${{ steps.changes.outputs.run_smoke }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Decide which suites this diff needs
