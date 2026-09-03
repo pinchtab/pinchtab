@@ -220,7 +220,7 @@ func StripInternalHeadersMiddleware(next http.Handler) http.Handler {
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rid := r.Header.Get("X-Request-Id")
-		if rid == "" {
+		if !usableRequestID(rid) {
 			b := make([]byte, 8)
 			_, _ = rand.Read(b)
 			rid = hex.EncodeToString(b)
@@ -229,4 +229,34 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		r.Header.Set("X-Request-Id", rid)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// maxRequestIDLen bounds an inbound correlation id. A UUID is 36 characters and
+// a W3C traceparent 55, so this leaves room for every id a real client sends
+// while keeping the header out of the "arbitrary payload" class — the server
+// accepts 256 KiB of headers, and this value is copied into every audit and
+// access log line for the request, into the dashboard activity stream, and onto
+// the proxied hop.
+const maxRequestIDLen = 128
+
+// usableRequestID reports whether an inbound X-Request-Id may be adopted as this
+// request's correlation id. Honouring a client's id is deliberate — it is what
+// makes one request findable in the outer log and the instance log alike — but
+// the id is adopted only when it is shaped like one. Anything else is replaced
+// by a generated id rather than refused, because the correlation id is not
+// something a request should fail on.
+func usableRequestID(rid string) bool {
+	if rid == "" || len(rid) > maxRequestIDLen {
+		return false
+	}
+	for i := 0; i < len(rid); i++ {
+		c := rid[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '-', c == '_', c == '.', c == ':':
+		default:
+			return false
+		}
+	}
+	return true
 }
