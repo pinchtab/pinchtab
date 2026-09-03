@@ -303,7 +303,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 	}
 
 	var rr *recovery.RecoveryResult
-	if err != nil && !submitClick && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
+	if err != nil && !actionAlreadyDispatched(err) && !submitClick && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
 		r2, recRes, recErr := h.Recovery.AttemptWithClassification(
 			ctx, resolvedTabID, req.Ref, req.Kind,
 			recovery.ClassifyFailure(err),
@@ -322,6 +322,14 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		}
 	}
 	return result, backend, rr, err
+}
+
+// actionAlreadyDispatched names the one error the bridge raises only AFTER the action ran
+// and succeeded, so healing it would re-match against the page the caller's own action
+// navigated to and dispatch a second, unrequested action. The rest of recovery's navigation
+// class — a detached frame, a crashed page — means the dispatch never landed and still heals.
+func actionAlreadyDispatched(err error) bool {
+	return errors.Is(err, bridge.ErrUnexpectedNavigation)
 }
 
 func switchedTabFromActionResult(result map[string]any) string {

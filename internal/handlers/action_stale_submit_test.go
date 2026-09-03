@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -366,5 +367,92 @@ func TestTheStepPathTurnsTheRefusalIntoAFailedStepNamingTheSnapshot(t *testing.T
 	}
 	if placed := f.settleForOrder(); placed != 0 {
 		t.Errorf("%d order(s) placed by a refused step", placed)
+	}
+}
+
+// navigatingBridge dispatches the action and answers the guard sentinel — the bridge's own
+// spelling of "the action ran, and then the page moved". Every dispatch is counted, because
+// the defect is invisible in the returned error: both the fixed and the broken path answer
+// the navigation, and only the count says whether a second, unrequested click went out.
+type navigatingBridge struct {
+	mockBridge
+	refCache   *bridge.RefCache
+	actionErr  error
+	dispatches int64
+}
+
+func (m *navigatingBridge) GetRefCache(string) *bridge.RefCache  { return m.refCache }
+func (m *navigatingBridge) SetRefCache(string, *bridge.RefCache) {}
+
+func (m *navigatingBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
+	atomic.AddInt64(&m.dispatches, 1)
+	return nil, m.actionErr
+}
+
+func navigatingHandlers(t *testing.T, actionErr error) (*navigatingBridge, *Handlers, string) {
+	t.Helper()
+	const tabID = "tab-nav-guard"
+	mb := &navigatingBridge{
+		mockBridge: mockBridge{availableActions: []string{bridge.ActionClick, bridge.ActionHover}},
+		actionErr:  actionErr,
+		refCache: &bridge.RefCache{
+			Refs:  map[string]int64{"e6": 18},
+			Nodes: []bridge.A11yNode{{Ref: "e6", Role: "link", Name: "Learn more", NodeID: 18}},
+		},
+	}
+	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	h.Recovery.RecordIntent(tabID, "e6", recovery.IntentEntry{
+		Descriptor: semantic.ElementDescriptor{Ref: "e6", Role: "link", Name: "Learn more"},
+		CachedAt:   time.Now(),
+	})
+	return mb, h, tabID
+}
+
+// The card's defect: the ref resolved, the click landed, and the page moved — and recovery
+// then re-matched that ref against the page the click had already navigated to and clicked
+// whatever it found, driving the browser to a third page the caller never named.
+func TestAnActionThatOnlyTrippedTheNavigationGuardIsNotDispatchedTwice(t *testing.T) {
+	for _, kind := range []string{bridge.ActionClick, bridge.ActionHover} {
+		t.Run(kind, func(t *testing.T) {
+			navErr := fmt.Errorf("%w: %s -> %s", bridge.ErrUnexpectedNavigation, "https://a.example/", "https://b.example/")
+			mb, h, tabID := navigatingHandlers(t, navErr)
+
+			req := &bridge.ActionRequest{Kind: kind, Ref: "e6", NodeID: 18}
+			_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+
+			if !errors.Is(err, bridge.ErrUnexpectedNavigation) {
+				t.Fatalf("error = %v, want the navigation guard's sentinel", err)
+			}
+			if got := atomic.LoadInt64(&mb.dispatches); got != 1 {
+				t.Errorf("%d dispatches for one request; the guard fires only after the action succeeded, so a second one is an unrequested action on the user's browser", got)
+			}
+			if rr != nil {
+				t.Errorf("a recovery block was published for a request that clicked nothing else: %+v", rr)
+			}
+		})
+	}
+}
+
+// The converse, and the reason the guard keys on the sentinel rather than on recovery's
+// "navigation" failure class: that class also carries a detached frame and a crashed page,
+// where the dispatch never landed and re-dispatching is the whole point of recovery.
+func TestANavigationClassifiedFailureThatNeverDispatchedStillHeals(t *testing.T) {
+	for name, actionErr := range map[string]error{
+		"a detached frame": errors.New("frame was detached"),
+		"a crashed page":   errors.New("page crashed"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			mb, h, tabID := navigatingHandlers(t, actionErr)
+
+			req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e6", NodeID: 18}
+			_, _, _, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+
+			if err == nil {
+				t.Fatalf("%s reported success", name)
+			}
+			if got := atomic.LoadInt64(&mb.dispatches); got < 2 {
+				t.Errorf("%d dispatch(es) for %s; recovery must still heal a failure whose action never took effect", got, name)
+			}
+		})
 	}
 }
