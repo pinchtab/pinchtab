@@ -444,9 +444,10 @@ func TestAnActionThatNavigatedIsNotDispatchedTwice(t *testing.T) {
 	}
 }
 
-// The converse, and the reason the guard keys on the sentinel rather than on recovery's
-// "navigation" failure class: that class also carries a detached frame and a crashed page,
-// where the dispatch never landed and re-dispatching is the whole point of recovery.
+// The converse of the test above, and what stops that one from being read as "never
+// heal anything a navigation touched": recovery's "navigation" failure class also
+// carries a detached frame and a crashed page, where the dispatch never landed and
+// re-dispatching is the whole point. Those still heal.
 func TestANavigationClassifiedFailureThatNeverDispatchedStillHeals(t *testing.T) {
 	for name, actionErr := range map[string]error{
 		"a detached frame": errors.New("frame was detached"),

@@ -1014,3 +1014,33 @@ func TestPrintActionResultAClickThatDidNotNavigateStaysPlain(t *testing.T) {
 		t.Errorf("output = %q; a click that moved nothing reported a navigation", got)
 	}
 }
+
+// A submit that redirects keeps its own post-state headline — that says more than
+// "it moved" — and reports the landing underneath it. The landing used to be absent
+// from this form entirely.
+func TestPrintActionResultASubmitThatNavigatedKeepsItsPostStateAndSaysWhereItLanded(t *testing.T) {
+	navigatedSubmit := map[string]any{
+		"success": true,
+		"result": map[string]any{
+			"clicked":     true,
+			"postState":   map[string]any{"status": "succeeded", "signal": "url_changed"},
+			"navigated":   true,
+			"url":         "https://shop.example.com/order/confirmed",
+			"previousUrl": "https://shop.example.com/checkout",
+			"refsStale":   true,
+		},
+	}
+
+	out := captureStdout(t, func() { printActionResult("click", navigatedSubmit) })
+	if !strings.Contains(out, "SUCCEEDED url_changed") {
+		t.Errorf("stdout = %q; the submit lost its observed post-state signal", out)
+	}
+	if !strings.Contains(out, "https://shop.example.com/order/confirmed") {
+		t.Errorf("stdout = %q; the submit does not say where it landed", out)
+	}
+
+	hint := captureStderr(t, func() { printActionResult("click", navigatedSubmit) })
+	if !strings.Contains(hint, "snap") {
+		t.Errorf("stderr = %q; nothing tells the caller its refs are dead", hint)
+	}
+}

@@ -323,15 +323,21 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", kind)
 	}
-	guardEnabled := b.Config == nil || b.Config.EnableActionGuards
-	checkNav := guardEnabled && shouldCheckUnexpectedNavigation(req)
+	// Measured for every action, not for a selected few. This used to skip a
+	// waitNav click and a submit click, from when the check RAISED an error and
+	// refusing to error on a declared navigation was right. It only annotates the
+	// result now, so both exclusions had stopped meaning anything except that the
+	// two forms most likely to navigate were the two that never said where they
+	// landed — a waiting caller got strictly less than a plain one, and refsStale
+	// was missing from exactly the form whose next action depends on the new page.
+	reportNavigation := b.Config == nil || b.Config.EnableActionGuards
 	urlReader := b.URLReader
 	if urlReader == nil {
 		urlReader = defaultActionURLReader
 		slog.Debug("URLReader is nil, using default fallback (guard checks may be no-ops without chromedp context)")
 	}
 	var beforeURL string
-	if checkNav {
+	if reportNavigation {
 		if u, err := urlReader(ctx); err == nil {
 			beforeURL = u
 		}
@@ -342,7 +348,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 		return nil, classifyActionError(err)
 	}
 
-	if checkNav && beforeURL != "" {
+	if reportNavigation && beforeURL != "" {
 		if afterURL, uErr := urlReader(ctx); uErr == nil && navigationChanged(beforeURL, afterURL) {
 			res = withNavigationOutcome(res, beforeURL, afterURL)
 		}

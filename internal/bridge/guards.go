@@ -51,14 +51,6 @@ func classifyActionError(err error) error {
 	return err
 }
 
-// shouldCheckUnexpectedNavigation selects the actions whose landing URL is worth
-// measuring. waitNav is not an assertion the caller made about navigation — it
-// asks the action to WAIT for one — so a caller that waits already learns the
-// landed URL from the wait itself and needs no second report here.
-func shouldCheckUnexpectedNavigation(req ActionRequest) bool {
-	return !req.WaitNav && !IsSubmitClick(req.Kind, req)
-}
-
 // navigationChanged reports whether an action moved the page. It used to return
 // an error, and ExecuteAction returned that error INSTEAD of the successful
 // result the action had already produced — so clicking an ordinary link failed

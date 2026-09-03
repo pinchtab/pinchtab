@@ -54,6 +54,11 @@ minted per snapshot, so take a new one before the next ref-targeted action:
 pinchtab click e1 --snap    # click, then print the new snapshot in one call
 ```
 
+These fields are present whichever form you use: a plain click, a click with
+`--wait-nav`, and a `--submit` click that redirects all report where they landed and
+that your refs are dead. A `--submit` click keeps its own `postState` as the headline
+and carries the landing alongside it.
+
 `--wait-nav` is not permission to navigate — it makes the click *wait* for the
 navigation to settle before returning, which is what you want when the next action
 depends on the new page having loaded.

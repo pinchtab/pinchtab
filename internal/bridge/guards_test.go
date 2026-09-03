@@ -53,18 +53,47 @@ func TestNormalizeGuardURL(t *testing.T) {
 	}
 }
 
-func TestShouldCheckUnexpectedNavigation(t *testing.T) {
-	if !shouldCheckUnexpectedNavigation(ActionRequest{}) {
-		t.Fatal("click should be guarded when WaitNav is false")
-	}
-	if !shouldCheckUnexpectedNavigation(ActionRequest{}) {
-		t.Fatal("press should be guarded when WaitNav is false")
-	}
-	if shouldCheckUnexpectedNavigation(ActionRequest{WaitNav: true}) {
-		t.Fatal("WaitNav=true should disable navigation guard")
-	}
-	if shouldCheckUnexpectedNavigation(ActionRequest{Kind: ActionClick, Submit: true}) {
-		t.Fatal("click submit should treat navigation as an expected post-state")
+// The forms that used to be excluded, and the reason the exclusion was wrong: a
+// caller that DECLARES a navigation is the one most certain to need where it landed
+// and that its refs are dead, and it was the one form that never got told. The
+// exclusion made sense only while the check raised an error.
+func TestEveryFormOfANavigatingActionReportsWhereItLanded(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		req  ActionRequest
+	}{
+		{"plain click", ActionRequest{Kind: ActionClick}},
+		{"click that declares the navigation", ActionRequest{Kind: ActionClick, WaitNav: true}},
+		{"submit click", ActionRequest{Kind: ActionClick, Submit: true, Ref: "e1"}},
+		{"non-click action", ActionRequest{Kind: ActionType}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call := 0
+			b := &Bridge{
+				Config: &config.RuntimeConfig{EnableActionGuards: true},
+				URLReader: func(context.Context) (string, error) {
+					call++
+					if call == 1 {
+						return "https://a.example", nil
+					}
+					return "https://b.example", nil
+				},
+				Actions: map[string]ActionFunc{
+					ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
+						return map[string]any{"ok": true}, nil
+					},
+					ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
+						return map[string]any{"ok": true}, nil
+					},
+				},
+			}
+
+			res, err := b.ExecuteAction(context.Background(), tc.req.Kind, tc.req)
+			if err != nil {
+				t.Fatalf("an action that ran and moved the page reported failure: %v", err)
+			}
+			assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
+		})
 	}
 }
 

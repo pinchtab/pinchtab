@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -134,4 +135,46 @@ func emptyMetric(value any) bool {
 		return true
 	}
 	return false
+}
+
+// What this proves and what it does NOT. The bridge is mocked here, so it returns the
+// navigated result whatever the request said — this pins that the outcome survives the
+// endpoint and reaches the wire for both request shapes, and it would stay GREEN if the
+// waitNav exclusion came back. The property that every form is MEASURED is owned by
+// bridge.TestEveryFormOfANavigatingActionReportsWhereItLanded, which is the test that
+// reds when either clause is restored.
+func TestEveryFormOfANavigatingClickCarriesTheOutcomeOverTheWire(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"plain click", `{"kind":"click","ref":"e1","nodeId":42,"tabId":"tab1"}`},
+		{"click that declares the navigation", `{"kind":"click","ref":"e1","nodeId":42,"tabId":"tab1","waitNav":true}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mb := &mockBridge{availableActions: []string{bridge.ActionClick}, actionResult: navigatedActionResult()}
+			h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(tc.body)))
+			req.Header.Set("Content-Type", "application/json")
+
+			h.HandleAction(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Result map[string]any `json:"result"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if got, _ := resp.Result[bridge.ResultLandedURL].(string); got == "" {
+				t.Errorf("result carries no landed URL: %v", resp.Result)
+			}
+			if resp.Result[bridge.ResultRefsStale] != true {
+				t.Errorf("result does not say the caller's refs are dead: %v — this is the form whose next action depends on the new page", resp.Result)
+			}
+		})
+	}
 }
