@@ -250,7 +250,10 @@ func (pm *ProfileManager) UpdateMeta(name string, meta map[string]string) error 
 		return err
 	}
 
-	existing := readProfileMeta(dir)
+	existing, err := readProfileMetaForUpdate(dir)
+	if err != nil {
+		return err
+	}
 	if existing.Name == "" {
 		existing.Name = name
 	}
@@ -291,7 +294,8 @@ func (pm *ProfileManager) Rename(oldName, newName string) error {
 		return err
 	}
 
-	meta := readProfileMeta(oldDir)
+	original := readProfileMeta(oldDir)
+	meta := original
 	meta.ID = newID
 	meta.Name = newName
 	if err := writeProfileMeta(oldDir, meta); err != nil {
@@ -299,9 +303,10 @@ func (pm *ProfileManager) Rename(oldName, newName string) error {
 	}
 
 	if err := os.Rename(oldDir, newDir); err != nil {
-		meta.ID = profileID(oldName)
-		meta.Name = oldName
-		_ = writeProfileMeta(oldDir, meta)
+		// Restore what was read, not a recomputed equivalent: an imported profile
+		// can carry an id that is not profileID(oldName), and the listing asserts
+		// identity on that id.
+		_ = writeProfileMeta(oldDir, original)
 		return fmt.Errorf("failed to rename profile directory: %w", err)
 	}
 
