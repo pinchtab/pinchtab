@@ -23,13 +23,6 @@ func Error(cmd, reason string, code int) {
 	os.Exit(code)
 }
 
-// ErrorWithHint prints an error with a hint to stderr and exits.
-func ErrorWithHint(cmd, reason, hint string, code int) {
-	fmt.Fprintf(os.Stderr, "ERROR: %s: %s\n", cmd, reason)
-	fmt.Fprintf(os.Stderr, "HINT: %s\n", hint)
-	os.Exit(code)
-}
-
 // Hint prints a hint line to stderr (does not exit).
 func Hint(text string) {
 	fmt.Fprintf(os.Stderr, "HINT: %s\n", text)
