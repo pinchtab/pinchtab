@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"image"
 	_ "image/png"
 	"testing"
@@ -110,57 +111,80 @@ func TestCaptureImageMatchesTheSpaceItReports(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-
-			t.Run("viewport", func(t *testing.T) {
-				res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{Format: ScreenshotFormatPng}})
-				if err != nil {
-					t.Fatal(err)
+			// Scale 0 is what a caller who passes no ?scale reaches the bridge with, and
+			// it must mean native — the identity has to hold for the parameter's absent
+			// form as well as for the halving and doubling the docs advertise.
+			for _, scale := range []float64{0, 1, 0.5, 2} {
+				effective := scale
+				if effective == 0 {
+					effective = 1
 				}
-				if res.CoordinateSpace != "viewport" {
-					t.Fatalf("CoordinateSpace = %q, want viewport", res.CoordinateSpace)
-				}
-				assertImageIs(t, res, res.Viewport.Width, res.Viewport.Height)
-			})
-
-			t.Run("beyondViewport", func(t *testing.T) {
-				res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{
-					Format: ScreenshotFormatPng, BeyondViewport: true,
-				}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if res.CoordinateSpace != "document" {
-					t.Fatalf("CoordinateSpace = %q, want document", res.CoordinateSpace)
-				}
-				docWidth, docHeight := documentSize(t, ctx)
-				assertImageIs(t, res, docWidth, docHeight)
-			})
-
-			t.Run("selector", func(t *testing.T) {
-				clip, err := ScreenshotClipForNode(ctx, nodeID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{
-					Format: ScreenshotFormatPng,
-					Clip:   clip,
-				}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if res.CoordinateSpace != "clip" {
-					t.Fatalf("CoordinateSpace = %q, want clip", res.CoordinateSpace)
-				}
-				assertImageIs(t, res, clip.Width, clip.Height)
-			})
+				t.Run(fmt.Sprintf("scale %v", scale), func(t *testing.T) {
+					runImageSpaceModes(t, ctx, nodeID, scale, effective)
+				})
+			}
 		})
 	}
 }
 
+func runImageSpaceModes(t *testing.T, ctx context.Context, nodeID int64, scale, effective float64) {
+	t.Helper()
+
+	t.Run("viewport", func(t *testing.T) {
+		res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{Format: ScreenshotFormatPng, Scale: scale}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.CoordinateSpace != "viewport" {
+			t.Fatalf("CoordinateSpace = %q, want viewport", res.CoordinateSpace)
+		}
+		assertImageIs(t, res, res.Viewport.Width, res.Viewport.Height, effective)
+	})
+
+	t.Run("beyondViewport", func(t *testing.T) {
+		res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{
+			Format: ScreenshotFormatPng, BeyondViewport: true, Scale: scale,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.CoordinateSpace != "document" {
+			t.Fatalf("CoordinateSpace = %q, want document", res.CoordinateSpace)
+		}
+		docWidth, docHeight := documentSize(t, ctx)
+		assertImageIs(t, res, docWidth, docHeight, effective)
+	})
+
+	t.Run("selector", func(t *testing.T) {
+		clip, err := ScreenshotClipForNode(ctx, nodeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := PairedCapture(ctx, CaptureOpts{MaxDepth: -1, Image: ScreenshotOpts{
+			Format: ScreenshotFormatPng,
+			Clip:   clip,
+			Scale:  scale,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.CoordinateSpace != "clip" {
+			t.Fatalf("CoordinateSpace = %q, want clip", res.CoordinateSpace)
+		}
+		assertImageIs(t, res, clip.Width, clip.Height, effective)
+	})
+}
+
 // assertImageIs is the contract as one identity: the image is the reported space at the
-// reported ratio. Rounding is a single pixel per axis — CDP rounds the composited size —
-// and anything larger is a client's overlay landing somewhere else.
-func assertImageIs(t *testing.T, res *PairedResult, spaceWidth, spaceHeight float64) {
+// reported ratio, times the scale the CALLER asked for. Rounding is a single pixel per
+// axis — CDP rounds the composited size — and anything larger is a client's overlay
+// landing somewhere else.
+//
+// requestedScale is a factor the caller passed, not one they have to discover: it is in
+// the identity because ?scale is a documented parameter and the response reports the page
+// ratio, never the product. Leaving it out is how the docs came to promise a mapping that
+// `capture --scale 0.5` does not keep.
+func assertImageIs(t *testing.T, res *PairedResult, spaceWidth, spaceHeight, requestedScale float64) {
 	t.Helper()
 
 	dpr := res.Viewport.DevicePixelRatio
@@ -168,14 +192,14 @@ func assertImageIs(t *testing.T, res *PairedResult, spaceWidth, spaceHeight floa
 		t.Fatalf("capture reported devicePixelRatio %v; a client scaling by it would map every box onto nothing", dpr)
 	}
 	gotWidth, gotHeight := imageDimensions(t, res.ImageBytes)
-	wantWidth, wantHeight := spaceWidth*dpr, spaceHeight*dpr
+	wantWidth, wantHeight := spaceWidth*dpr*requestedScale, spaceHeight*dpr*requestedScale
 
 	if diff := gotWidth - wantWidth; diff > 1 || diff < -1 {
-		t.Errorf("image is %.0f px wide; the response reports %s %.0f at devicePixelRatio %v, so a boundingBox scaled by it lands %.2fx off",
-			gotWidth, res.CoordinateSpace, spaceWidth, dpr, gotWidth/wantWidth)
+		t.Errorf("image is %.0f px wide; the response reports %s %.0f at devicePixelRatio %v and the caller asked for scale %v, so a boundingBox mapped through those lands %.2fx off",
+			gotWidth, res.CoordinateSpace, spaceWidth, dpr, requestedScale, gotWidth/wantWidth)
 	}
 	if diff := gotHeight - wantHeight; diff > 1 || diff < -1 {
-		t.Errorf("image is %.0f px tall; the response reports %s %.0f at devicePixelRatio %v, so a boundingBox scaled by it lands %.2fx off",
-			gotHeight, res.CoordinateSpace, spaceHeight, dpr, gotHeight/wantHeight)
+		t.Errorf("image is %.0f px tall; the response reports %s %.0f at devicePixelRatio %v and the caller asked for scale %v, so a boundingBox mapped through those lands %.2fx off",
+			gotHeight, res.CoordinateSpace, spaceHeight, dpr, requestedScale, gotHeight/wantHeight)
 	}
 }
