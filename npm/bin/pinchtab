@@ -25,58 +25,33 @@ function getBinaryPath() {
   return platform.resolveManagedBinaryPath(__dirname);
 }
 
-// Handle `pinchtab skill update` at the Node.js level (no Go binary needed)
+// `pinchtab skill ...` is answered at the Node.js level: the skill ships in the
+// npm package, not in the Go binary.
 const args = process.argv.slice(2);
-if (args[0] === 'skill' && (args[1] === 'update' || args[1] === 'sync')) {
+if (args[0] === 'skill' && ['update', 'sync', 'status', 'list'].includes(args[1])) {
+  const check = args[1] === 'status' || args[1] === 'list';
   try {
-    const { syncSkills } = require('../scripts/sync-skills');
-    console.log('Syncing Pinchtab skill files...\n');
-    const { updated, skipped } = syncSkills({ verbose: true });
-
-    if (updated.length > 0) {
-      console.log(`\n✓ Updated ${updated.length} skill director${updated.length === 1 ? 'y' : 'ies'}`);
-    } else {
-      console.log('\nNo agent skill directories found to update.');
-      console.log('Skill directories are synced only where agents are already installed.');
-    }
-
-    if (skipped.length > 0) {
-      console.log(`⚠ Skipped ${skipped.length} (permission errors)`);
-    }
+    const { syncSkills, formatReport, isOutOfDate } = require('../scripts/sync-skills');
+    const outcome = syncSkills({ check, force: args.includes('--force') });
+    console.log(formatReport(outcome).join('\n'));
+    const failed = outcome.results.some((r) => r.action === 'failed');
+    const outOfDate = check && outcome.results.some(isOutOfDate);
+    process.exit(failed || outOfDate ? 1 : 0);
   } catch (err) {
-    console.error(`Failed to sync skills: ${err.message}`);
+    console.error(`Failed to ${check ? 'check' : 'sync'} skills: ${err.message}`);
     process.exit(1);
   }
-  process.exit(0);
-}
-
-if (args[0] === 'skill' && args[1] === 'list') {
-  try {
-    const { getTargetSkillDirs, getBundledSkillsDir } = require('../scripts/sync-skills');
-    const bundled = getBundledSkillsDir();
-    console.log(`Bundled skills: ${fs.existsSync(bundled) ? bundled : '(not found)'}`);
-    console.log('\nDetected agent skill directories:');
-    const targets = getTargetSkillDirs();
-    if (targets.length === 0) {
-      console.log('  (none found)');
-    } else {
-      targets.forEach((t) => {
-        const exists = fs.existsSync(t);
-        console.log(`  ${exists ? '●' : '○'} ${t}${exists ? '' : ' (will be created on sync)'}`);
-      });
-    }
-  } catch (err) {
-    console.error(`Failed to list skills: ${err.message}`);
-    process.exit(1);
-  }
-  process.exit(0);
 }
 
 if (args[0] === 'skill') {
   console.log('Usage: pinchtab skill <command>\n');
   console.log('Commands:');
-  console.log('  update    Sync bundled skill files to agent directories');
-  console.log('  list      Show detected agent skill directories');
+  console.log(
+    '  status            Report each detected agent copy against the bundled skill (exit 1 if any is stale)'
+  );
+  console.log(
+    '  update [--force]  Install or refresh the bundled skill in detected agent homes; --force replaces an edited copy'
+  );
   process.exit(0);
 }
 

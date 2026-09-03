@@ -3,11 +3,13 @@ import * as path from 'path';
 import { ensureBinary } from './download';
 import { getCheckoutBinaryPath } from './platform';
 
-interface SkillSyncResult {
-  updated: string[];
+interface SkillSync {
+  syncSkills: (opts: { force?: boolean; check?: boolean }) => unknown;
+  formatReport: (outcome: unknown) => string[];
 }
 
-// syncBundledSkills mirrors bundled skill files into detected agent directories.
+// syncBundledSkills is the npm user path for the agent skill: it writes into the
+// user's agent homes as an install side effect, so it always prints what it did.
 // Non-fatal: a sync failure must never block the install. sync-skills is a
 // CommonJS script shipped alongside the package, loaded relative to the compiled
 // location (dist/src -> ../../scripts).
@@ -15,17 +17,11 @@ function syncBundledSkills(): void {
   try {
     const syncSkillsPath = path.join(__dirname, '..', '..', 'scripts', 'sync-skills');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { syncSkills } = require(syncSkillsPath) as {
-      syncSkills: (opts: { verbose: boolean }) => SkillSyncResult;
-    };
-    const { updated } = syncSkills({ verbose: false });
-    if (updated.length > 0) {
-      console.log(
-        `✓ Synced skill files to ${updated.length} agent director${updated.length === 1 ? 'y' : 'ies'}`
-      );
-    }
-  } catch (_err) {
-    // Non-fatal: skill sync failure shouldn't block install
+    const { syncSkills, formatReport } = require(syncSkillsPath) as SkillSync;
+    console.log(formatReport(syncSkills({})).join('\n'));
+  } catch (err) {
+    console.warn(`⚠ Skill sync skipped: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn('  Retry with: pinchtab skill update');
   }
 }
 

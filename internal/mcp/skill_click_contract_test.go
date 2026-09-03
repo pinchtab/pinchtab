@@ -16,6 +16,9 @@ const clickDocPath = "docs/reference/click.md"
 // release because only the docs were ever listed in a contract-changing card's
 // footprint. This guard is the answer to that: the skills are checked AGAINST the
 // docs, so the next contract change reds here instead of shipping stale guidance.
+// It reads the working tree, so it proves the shipped source and nothing about a
+// copy installed in an agent home; that half is covered by the version stamp the
+// npm package writes at staging and by `pinchtab skill status` (npm/scripts/sync-skills.js).
 var clickContractSkills = []string{"skills/pinchtab/SKILL.md", "skills/pinchtab-mcp/SKILL.md"}
 
 // clickContractBanned are statements the contract no longer produces. An agent

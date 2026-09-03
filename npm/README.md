@@ -155,6 +155,10 @@ pinchtab --version
 pinchtab --help
 ```
 
+### Agent skill
+
+The package bundles the `pinchtab` agent skill, stamped with the release version and a content hash, and syncs it into detected agent homes on install and upgrade, printing what it wrote. `pinchtab skill status` reports each copy against the bundled one (exit 1 if any is stale) and `pinchtab skill update` refreshes them; a copy you edited is kept unless you pass `--force`.
+
 ### Shell Completion
 
 After installing the CLI globally, you can generate shell completions:

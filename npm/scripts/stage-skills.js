@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { stampSkill } = require('./sync-skills');
 
 const SKILL_NAME = 'pinchtab';
 const sourceDir = path.join(__dirname, '..', '..', 'skills', SKILL_NAME);
@@ -31,11 +32,14 @@ function stageSkills() {
 
   fs.rmSync(targetDir, { recursive: true, force: true });
   copyDirSync(sourceDir, targetDir);
+  return stampSkill(targetDir, require('../package.json').version);
 }
 
 if (require.main === module) {
-  stageSkills();
-  console.log(`Staged ${SKILL_NAME} skill into npm package`);
+  const stamp = stageSkills();
+  console.log(
+    `Staged ${SKILL_NAME} skill ${stamp.version} (${stamp.contentHash}) into npm package`
+  );
 }
 
 module.exports = { stageSkills };

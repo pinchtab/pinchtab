@@ -211,6 +211,18 @@ brew install pinchtab/tap/pinchtab
 npm install -g pinchtab
 ```
 
+### Agent skill
+
+The npm package ships the `pinchtab` agent skill and copies it into every agent home it detects (`~/.claude/skills`, `~/.cursor/skills`, `~/.windsurf/skills`, `~/.codex/skills`, OpenClaw) on install and upgrade, printing what it wrote. The shipped copy carries the release version and a content hash in its frontmatter, so a stale or hand-edited copy is detectable without a source checkout:
+
+```bash
+pinchtab skill status           # each detected copy vs the bundled skill; exit 1 if any is stale
+pinchtab skill update           # install or refresh; an edited copy is kept and reported
+pinchtab skill update --force   # replace an edited copy
+```
+
+Inside a checkout, `scripts/install-skills.sh` symlinks the repo skills instead so edits are live; the sync never writes through a symlink.
+
 ### Platform Support
 
 PinchTab's primary tested operator workflow is local macOS and Linux.

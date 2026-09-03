@@ -39,7 +39,7 @@ Development and CI scripts for PinchTab.
 |--------|---------|
 | `doctor.sh` | Verify & setup dev environment (interactive — prompts before installing) |
 | `install-hooks.sh` | Install git pre-commit hook |
-| `install-skills.sh` | Symlink repo skills into `./.claude/skills` by default; set `CLAUDE_SKILLS_DIR=~/.claude/skills` for a global install |
+| `install-skills.sh` | Developer path for the agent skills: symlink repo skills into `./.claude/skills` by default; set `CLAUDE_SKILLS_DIR=~/.claude/skills` for a global install. Users of an installed binary use `pinchtab skill update` (npm package) instead |
 
 ## Testing
 
