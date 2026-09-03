@@ -57,7 +57,7 @@ func withOptionalSnapshot(ctx context.Context, c *Client, r mcp.CallToolRequest,
 	} else if returnedTabID := responseStringField(body, "tabId"); returnedTabID != "" {
 		q.Set("tabId", returnedTabID)
 	}
-	snapBody, _, snapErr := c.Get(ctx, "/snapshot", routedQuery(r, q))
+	snapBody, _, snapErr := c.GetCapturingVocab(ctx, "/snapshot", routedQuery(r, q), tabID)
 	if snapErr != nil {
 		return resultFromBytes(body, code)
 	}

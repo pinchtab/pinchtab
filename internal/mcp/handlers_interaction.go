@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -290,22 +289,9 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 			return resultFromBytes(body, code)
 		}
 
-		snapSupportedKinds := map[string]bool{"click": true, "fill": true, "select": true}
 		if snapSupportedKinds[kind] {
-			if snap, ok := optBool(r, "snap"); ok && snap {
-				q := url.Values{}
-				q.Set("filter", "interactive")
-				q.Set("format", "compact")
-				if tabID := optString(r, "tabId"); tabID != "" {
-					q.Set("tabId", tabID)
-				}
-				snapBody, _, snapErr := c.GetCapturingVocab(ctx, "/snapshot", q, optString(r, "tabId"))
-				if snapErr == nil {
-					return mcp.NewToolResultText(string(body) + "\n" + string(snapBody)), nil
-				}
-			}
+			return withOptionalSnapshot(ctx, c, r, optString(r, "tabId"), body, code)
 		}
-
 		return resultFromBytes(body, code)
 	}
 }
@@ -347,3 +333,9 @@ func handleKeyboard(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		return resultFromBytes(body, code)
 	}
 }
+
+// snapSupportedKinds are the interaction kinds whose tools declare snap. Only
+// these follow the action with a snapshot; mcp-go does not reject an undeclared
+// argument, so a snap sent to hover or scroll must not silently change what the
+// tool returns.
+var snapSupportedKinds = map[string]bool{"click": true, "fill": true, "select": true}
