@@ -216,7 +216,8 @@ Rules:
 - Click behavior: omit `--mode` for the normal click path, use `click --mode dom` for `element.click()`, or `click --mode dispatch` for synthetic click events.
 - Treat `click --mode dom` and `click --mode dispatch` as broad low-level escape hatches; bypassing occlusion is the common case.
 - `click --mode ...` and `click --humanize` are mutually exclusive.
-- `click --wait-nav` when a click navigates. May return `{"success":true}` or `Error 409: unexpected page navigation` — treat 409 as success and verify with fresh `snap`/`text`.
+- A click that navigates **succeeds** (no error to handle): prints `OK navigated <url>`; JSON adds `navigated`, `url` (landed), `previousUrl`, `refsStale`. `refsStale` means every ref from your last snapshot is dead — re-snapshot first (`click <ref> --snap` does both). A `#fragment` jump is not a navigation; refs survive.
+- `--wait-nav` is not permission to navigate — it *waits* for the navigation to settle, for when the next step needs the new page loaded. Fields above are reported whichever form you use.
 - `--dismiss-banners` on `nav`/`back`/`forward`/`reload` (and on `click --wait-nav`) runs a best-effort pass that clicks a visible Accept all / Got it / OK / Close / Dismiss button, or removes obvious cookie/consent/dialog/overlay containers. Use when a fresh page-load shows a modal that blocks interaction (typical symptom: `Error 500: action click: element is occluded`). Heuristic — can misfire on pages that label legitimate UI as `overlay` or `modal`; not a substitute for an explicit selector when one is known.
 - Use low-level `mouse` only for drag handles, canvas widgets, or exact pointer sequences.
 - JS dialogs: `--dialog-action accept|dismiss`, `--dialog-text` for `prompt()` responses.

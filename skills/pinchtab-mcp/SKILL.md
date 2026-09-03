@@ -146,7 +146,8 @@ pinchtab_click(selector="e5")
 ```
 
 - Use refs from snapshot (e.g., `e5`).
-- For links/buttons that navigate: add `waitNav=true`.
+- A click that navigates **succeeds** (no error to handle): the result adds `navigated`, `url` (landed), `previousUrl`, `refsStale` — never guess whether your refs survived. A `#fragment` jump is not a navigation; refs survive.
+- `waitNav=true` is not permission to navigate — it *waits* for the navigation to settle, for when the next step needs the new page loaded. Fields above are reported whichever form you use.
 - To save a round-trip: add `snap=true` to get a snapshot after the click.
 
 ### Fill input
@@ -345,7 +346,7 @@ For these, use the pinchtab CLI or HTTP API directly.
 
 ## Element Ref Best Practices
 
-1. **Re-snapshot after navigation; a ref survives a change of filter, selector or depth.** Always re-snapshot after `pinchtab_navigate` or `pinchtab_click(waitNav=true)` — a new document expires every ref. But within one page a ref denotes a node, so carrying `e5` from a full snapshot into an `interactive`/`selector`/`depth` read is safe and returns the same node (filtered views are sparse — `e0, e1, e6`). The tools track each snapshot's vocabulary token, so a truly stale ref surfaces as a `vocab_superseded` refusal instead of a wrong-element click.
+1. **Re-snapshot when the result says your refs are dead; a ref survives a change of filter, selector or depth.** Re-snapshot after `pinchtab_navigate` and after any result carrying `refsStale` — a new document expires every ref. Key on `refsStale`, never on whether you passed `waitNav`: the page decides whether a click navigates, and the result says which happened. But within one page a ref denotes a node, so carrying `e5` from a full snapshot into an `interactive`/`selector`/`depth` read is safe and returns the same node (filtered views are sparse — `e0, e1, e6`). The tools track each snapshot's vocabulary token, so a truly stale ref surfaces as a `vocab_superseded` refusal instead of a wrong-element click.
 2. **Use `diff=true` after interactions.** Shows only changed elements, saving tokens.
 3. **Prefer refs over CSS selectors.** Refs resolve by backend node IDs, more reliable than CSS.
 4. **Refs work across iframes.** Same-origin iframe content is flattened into the main tree — refs are clickable without frame hops.
