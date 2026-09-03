@@ -205,7 +205,7 @@ func securityDefaultsSnapshot(fc *config.FileConfig) securityDefaultsState {
 		Bind:  fc.Server.Bind,
 		Token: fc.Server.Token,
 		Security: securityConfigValues{
-			IDPI: fc.Security.IDPI,
+			IDPI: fc.Security.EffectiveIDPI(),
 		},
 	}
 	if fc.Security.AllowEvaluate != nil {

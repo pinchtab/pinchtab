@@ -187,7 +187,6 @@ func DefaultFileConfig() FileConfig {
 			AllowDownload:          &allowDownload,
 			AllowCookies:           &allowCookies,
 			AllowNetworkIntercept:  &allowNetworkIntercept,
-			AllowedDomains:         append([]string(nil), defaultLocalAllowedDomains...),
 			DownloadAllowedDomains: []string{},
 			DownloadMaxBytes:       &downloadMaxBytes,
 			AllowUpload:            &allowUpload,
@@ -206,7 +205,7 @@ func DefaultFileConfig() FileConfig {
 				AllowSchemes:     []string{"ws", "wss", "http", "https"},
 				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
-			IDPI: IDPIConfig{
+			IDPI: &IDPIConfig{
 				Enabled:        true,
 				StrictMode:     true,
 				ScanContent:    true,

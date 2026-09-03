@@ -253,7 +253,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		errs = append(errs, validateBrowserExtraFlags(fc.Browser.BrowserExtraFlags)...)
 	}
 
-	errs = append(errs, validateIDPIConfig(fc.Security.IDPI, effectiveSecurityAllowedDomains(fc.Security))...)
+	errs = append(errs, validateIDPIConfig(fc.Security.EffectiveIDPI(), effectiveSecurityAllowedDomains(fc.Security))...)
 	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
 	errs = append(errs, validateTrustedCIDRList("security.trustedProxyCIDRs", fc.Security.TrustedProxyCIDRs)...)
 	errs = append(errs, validateTrustedCIDRList("security.trustedResolveCIDRs", fc.Security.TrustedResolveCIDRs)...)

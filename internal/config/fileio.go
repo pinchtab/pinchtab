@@ -72,6 +72,7 @@ func tightenConfigPermsOnRead(path string) error {
 func savedConfigBaseline() *FileConfig {
 	defaults := DefaultFileConfig()
 	defaults.ConfigVersion = ""
+	defaults.Security.IDPI = nil
 	return &defaults
 }
 

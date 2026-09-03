@@ -745,7 +745,7 @@ func setAttachField(a *AttachConfig, field, value string) error {
 }
 
 func setIDPIField(s *SecurityConfig, field, value string) error {
-	i := &s.IDPI
+	i := s.ensureIDPI()
 	switch field {
 	case "enabled":
 		b, err := parseBool(value)

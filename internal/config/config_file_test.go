@@ -84,8 +84,8 @@ func TestDefaultFileConfig(t *testing.T) {
 	if !fc.Security.IDPI.Enabled {
 		t.Errorf("DefaultFileConfig.Security.IDPI.Enabled = %v, want true", fc.Security.IDPI.Enabled)
 	}
-	if len(fc.Security.AllowedDomains) != 3 || fc.Security.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("DefaultFileConfig.Security.AllowedDomains = %v, want local-only allowlist", fc.Security.AllowedDomains)
+	if len(fc.Security.AllowedDomains) != 0 {
+		t.Errorf("DefaultFileConfig.Security.AllowedDomains = %v, want none", fc.Security.AllowedDomains)
 	}
 	if !fc.Security.IDPI.StrictMode {
 		t.Errorf("DefaultFileConfig.Security.IDPI.StrictMode = %v, want true", fc.Security.IDPI.StrictMode)
@@ -462,8 +462,8 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 	if !parsed.Security.IDPI.Enabled {
 		t.Errorf("round-trip Security.IDPI.Enabled = %v, want true", parsed.Security.IDPI.Enabled)
 	}
-	if len(parsed.Security.AllowedDomains) != 3 || parsed.Security.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("round-trip Security.AllowedDomains = %v, want local-only allowlist", parsed.Security.AllowedDomains)
+	if len(parsed.Security.AllowedDomains) != 0 {
+		t.Errorf("round-trip Security.AllowedDomains = %v, want none", parsed.Security.AllowedDomains)
 	}
 	if !parsed.Security.IDPI.StrictMode {
 		t.Errorf("round-trip Security.IDPI.StrictMode = %v, want true", parsed.Security.IDPI.StrictMode)

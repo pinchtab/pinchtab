@@ -205,7 +205,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		AllowFileScheme:           false,
 		RetainNetworkBodies:       false,
 		RetainNetworkBodyMaxBytes: 256 * 1024,
-		AllowedDomains:            append([]string(nil), defaultLocalAllowedDomains...),
+		AllowedDomains:            nil,
 		DownloadAllowedDomains:    nil,
 		DownloadMaxBytes:          DefaultDownloadMaxBytes,
 		AllowUpload:               false,
@@ -261,14 +261,6 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 		AttachAllowSchemes: []string{"ws", "wss", "http", "https"},
-
-		IDPI: IDPIConfig{
-			Enabled:        true,
-			StrictMode:     true,
-			ScanContent:    true,
-			WrapContent:    true,
-			ScanTimeoutSec: 5,
-		},
 
 		Observability: ObservabilityConfig{
 			Activity: ActivityConfig{
@@ -517,7 +509,9 @@ func applySecurityConfig(cfg *RuntimeConfig, s SecurityConfig) {
 	if s.TrustLoopbackProxy != nil {
 		cfg.TrustLoopbackProxy = *s.TrustLoopbackProxy
 	}
-	cfg.IDPI = s.IDPI
+	if s.IDPI != nil {
+		cfg.IDPI = *s.IDPI
+	}
 	cfg.AllowedDomains = effectiveSecurityAllowedDomains(s)
 	if s.Attach.Enabled != nil {
 		cfg.AttachEnabled = *s.Attach.Enabled

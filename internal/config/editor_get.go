@@ -335,7 +335,7 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return getAttachField(&s.Attach, strings.TrimPrefix(field, "attach."))
 	}
 	if strings.HasPrefix(field, "idpi.") {
-		return getIDPIField(&s.IDPI, strings.TrimPrefix(field, "idpi."))
+		return getIDPIField(s.IDPI, strings.TrimPrefix(field, "idpi."))
 	}
 
 	switch field {
@@ -456,6 +456,9 @@ func getAttachField(a *AttachConfig, field string) (string, error) {
 }
 
 func getIDPIField(i *IDPIConfig, field string) (string, error) {
+	if i == nil {
+		i = &IDPIConfig{}
+	}
 	switch field {
 	case "enabled":
 		return strconv.FormatBool(i.Enabled), nil

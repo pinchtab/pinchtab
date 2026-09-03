@@ -312,7 +312,7 @@ func validateStartInstanceSecurityPolicy(policy *bridge.SecurityPolicy) error {
 	errs := config.ValidateFileConfig(&config.FileConfig{
 		Security: config.SecurityConfig{
 			AllowedDomains: append([]string(nil), policy.AllowedDomains...),
-			IDPI: config.IDPIConfig{
+			IDPI: &config.IDPIConfig{
 				Enabled: true,
 			},
 		},

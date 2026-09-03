@@ -101,6 +101,7 @@ var blankIsTheAnswer = map[string]string{
 	"browser.fallbackOrder":                   "no fallback configured; an implicit launch then tries the primary target only",
 	"instanceDefaults.timezone":               "unset means the host timezone",
 	"instanceDefaults.userAgent":              "unset means the browser's own user agent",
+	"security.allowedDomains":                 "empty list; an absent allowlist is not a restriction, so every host is permitted. A localhost-only default used to be printed here, and honouring it would have refused every external navigation",
 	"security.downloadAllowedDomains":         "empty list, downloads follow the main allowlist",
 	"security.trustedProxyCIDRs":              "empty list",
 	"security.trustedResolveCIDRs":            "empty list",

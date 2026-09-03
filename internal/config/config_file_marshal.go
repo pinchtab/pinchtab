@@ -209,46 +209,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			TabPolicy:              fc.InstanceDefaults.TabPolicy,
 			DialogAutoAccept:       fc.InstanceDefaults.DialogAutoAccept,
 		},
-		Security: securityConfigJSON{
-			AllowEvaluate:          fc.Security.AllowEvaluate,
-			AllowMacro:             fc.Security.AllowMacro,
-			AllowScreencast:        fc.Security.AllowScreencast,
-			AllowDownload:          fc.Security.AllowDownload,
-			AllowCookies:           fc.Security.AllowCookies,
-			AllowNetworkIntercept:  fc.Security.AllowNetworkIntercept,
-			AllowFileScheme:        fc.Security.AllowFileScheme,
-			AllowedDomains:         effectiveSecurityAllowedDomains(fc.Security),
-			DownloadAllowedDomains: copyStringSlice(fc.Security.DownloadAllowedDomains),
-			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
-			AllowUpload:            fc.Security.AllowUpload,
-			AllowClipboard:         fc.Security.AllowClipboard,
-			AllowStateExport:       fc.Security.AllowStateExport,
-			StateEncryptionKey:     fc.Security.StateEncryptionKey,
-			EnableActionGuards:     fc.Security.EnableActionGuards,
-			UploadMaxRequestBytes:  fc.Security.UploadMaxRequestBytes,
-			UploadMaxFiles:         fc.Security.UploadMaxFiles,
-			UploadMaxFileBytes:     fc.Security.UploadMaxFileBytes,
-			UploadMaxTotalBytes:    fc.Security.UploadMaxTotalBytes,
-			MaxRedirects:           fc.Security.MaxRedirects,
-			TrustedProxyCIDRs:      copyStringSlice(fc.Security.TrustedProxyCIDRs),
-			TrustedResolveCIDRs:    copyStringSlice(fc.Security.TrustedResolveCIDRs),
-			TrustLoopbackProxy:     fc.Security.TrustLoopbackProxy,
-			Attach: attachJSON{
-				Enabled:          fc.Security.Attach.Enabled,
-				AllowHosts:       copyStringSlice(fc.Security.Attach.AllowHosts),
-				AllowSchemes:     copyStringSlice(fc.Security.Attach.AllowSchemes),
-				ForwardProxyAuth: fc.Security.Attach.ForwardProxyAuth,
-			},
-			IDPI: idpiConfigJSON{
-				Enabled:         fc.Security.IDPI.Enabled,
-				StrictMode:      fc.Security.IDPI.StrictMode,
-				ScanContent:     fc.Security.IDPI.ScanContent,
-				WrapContent:     fc.Security.IDPI.WrapContent,
-				CustomPatterns:  copyStringSlice(fc.Security.IDPI.CustomPatterns),
-				ScanTimeoutSec:  fc.Security.IDPI.ScanTimeoutSec,
-				ShieldThreshold: fc.Security.IDPI.ShieldThreshold,
-			},
-		},
+		Security: fc.Security.wire(),
 		Profiles: profilesConfigJSON{
 			BaseDir:        fc.Profiles.BaseDir,
 			DefaultProfile: fc.Profiles.DefaultProfile,
@@ -352,6 +313,56 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (s SecurityConfig) wire() securityConfigJSON {
+	return securityConfigJSON{
+		AllowEvaluate:          s.AllowEvaluate,
+		AllowMacro:             s.AllowMacro,
+		AllowScreencast:        s.AllowScreencast,
+		AllowDownload:          s.AllowDownload,
+		AllowCookies:           s.AllowCookies,
+		AllowNetworkIntercept:  s.AllowNetworkIntercept,
+		AllowFileScheme:        s.AllowFileScheme,
+		AllowedDomains:         effectiveSecurityAllowedDomains(s),
+		DownloadAllowedDomains: copyStringSlice(s.DownloadAllowedDomains),
+		DownloadMaxBytes:       s.DownloadMaxBytes,
+		AllowUpload:            s.AllowUpload,
+		AllowClipboard:         s.AllowClipboard,
+		AllowStateExport:       s.AllowStateExport,
+		StateEncryptionKey:     s.StateEncryptionKey,
+		EnableActionGuards:     s.EnableActionGuards,
+		UploadMaxRequestBytes:  s.UploadMaxRequestBytes,
+		UploadMaxFiles:         s.UploadMaxFiles,
+		UploadMaxFileBytes:     s.UploadMaxFileBytes,
+		UploadMaxTotalBytes:    s.UploadMaxTotalBytes,
+		MaxRedirects:           s.MaxRedirects,
+		TrustedProxyCIDRs:      copyStringSlice(s.TrustedProxyCIDRs),
+		TrustedResolveCIDRs:    copyStringSlice(s.TrustedResolveCIDRs),
+		TrustLoopbackProxy:     s.TrustLoopbackProxy,
+		Attach: attachJSON{
+			Enabled:          s.Attach.Enabled,
+			AllowHosts:       copyStringSlice(s.Attach.AllowHosts),
+			AllowSchemes:     copyStringSlice(s.Attach.AllowSchemes),
+			ForwardProxyAuth: s.Attach.ForwardProxyAuth,
+		},
+		IDPI: s.IDPI.wire(),
+	}
+}
+
+func (i *IDPIConfig) wire() idpiConfigJSON {
+	if i == nil {
+		i = &IDPIConfig{}
+	}
+	return idpiConfigJSON{
+		Enabled:         i.Enabled,
+		StrictMode:      i.StrictMode,
+		ScanContent:     i.ScanContent,
+		WrapContent:     i.WrapContent,
+		CustomPatterns:  copyStringSlice(i.CustomPatterns),
+		ScanTimeoutSec:  i.ScanTimeoutSec,
+		ShieldThreshold: i.ShieldThreshold,
+	}
+}
+
 func (fc *FileConfig) UnmarshalJSON(data []byte) error {
 	type rawFileConfig FileConfig
 	tmp := rawFileConfig(*fc)
@@ -398,6 +409,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	trustLoopbackProxy := cfg.TrustLoopbackProxy
 	attachEnabled := cfg.AttachEnabled
 	attachForwardProxyAuth := cfg.AttachForwardProxyAuth
+	idpi := cfg.IDPI
 	start := cfg.InstancePortStart
 	end := cfg.InstancePortEnd
 	restartMaxRestarts := cfg.RestartMaxRestarts
@@ -536,7 +548,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				AllowSchemes:     append([]string(nil), cfg.AttachAllowSchemes...),
 				ForwardProxyAuth: &attachForwardProxyAuth,
 			},
-			IDPI: cfg.IDPI,
+			IDPI: &idpi,
 		},
 		Profiles: ProfilesConfig{
 			BaseDir:        cfg.ProfilesBaseDir,

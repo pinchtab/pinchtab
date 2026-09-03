@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -106,20 +107,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if strings.Join(cfg.AttachAllowSchemes, ",") != strings.Join(wantAttachSchemes, ",") {
 		t.Errorf("default AttachAllowSchemes = %v, want %v", cfg.AttachAllowSchemes, wantAttachSchemes)
 	}
-	if !cfg.IDPI.Enabled {
-		t.Errorf("default IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
+	if !reflect.DeepEqual(cfg.IDPI, IDPIConfig{}) {
+		t.Errorf("default IDPI = %+v, want the zero value: a file that says nothing about IDPI boots with it off, and the starter file states it explicitly", cfg.IDPI)
 	}
-	if len(cfg.AllowedDomains) != 3 || cfg.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("default AllowedDomains = %v, want local-only allowlist", cfg.AllowedDomains)
-	}
-	if !cfg.IDPI.StrictMode {
-		t.Errorf("default IDPI.StrictMode = %v, want true", cfg.IDPI.StrictMode)
-	}
-	if !cfg.IDPI.ScanContent {
-		t.Errorf("default IDPI.ScanContent = %v, want true", cfg.IDPI.ScanContent)
-	}
-	if !cfg.IDPI.WrapContent {
-		t.Errorf("default IDPI.WrapContent = %v, want true", cfg.IDPI.WrapContent)
+	if len(cfg.AllowedDomains) != 0 {
+		t.Errorf("default AllowedDomains = %v, want none: a localhost-only default refuses every external navigation, so it is not a live policy", cfg.AllowedDomains)
 	}
 	if !cfg.Observability.Activity.Enabled {
 		t.Errorf("default Observability.Activity.Enabled = %v, want true", cfg.Observability.Activity.Enabled)
@@ -490,8 +482,8 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	if !cfg.IDPI.Enabled {
 		t.Errorf("ApplyFileConfigToRuntime IDPI.Enabled = %v, want true", cfg.IDPI.Enabled)
 	}
-	if len(cfg.AllowedDomains) != 3 || cfg.AllowedDomains[0] != "127.0.0.1" {
-		t.Errorf("ApplyFileConfigToRuntime AllowedDomains = %v, want local-only allowlist", cfg.AllowedDomains)
+	if len(cfg.AllowedDomains) != 0 {
+		t.Errorf("ApplyFileConfigToRuntime AllowedDomains = %v, want none; a file that names no allowlist must not receive one", cfg.AllowedDomains)
 	}
 	if !cfg.IDPI.StrictMode || !cfg.IDPI.ScanContent || !cfg.IDPI.WrapContent {
 		t.Errorf("ApplyFileConfigToRuntime IDPI = %+v, want strict+scan+wrap enabled", cfg.IDPI)

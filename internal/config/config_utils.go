@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-var defaultLocalAllowedDomains = []string{"127.0.0.1", "localhost", "::1"}
-
 func homeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home

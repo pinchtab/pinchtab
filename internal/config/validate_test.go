@@ -961,7 +961,7 @@ func TestValidateFileConfig_IDPIPassthrough(t *testing.T) {
 	fc := &FileConfig{
 		Security: SecurityConfig{
 			AllowedDomains: []string{""}, // invalid
-			IDPI: IDPIConfig{
+			IDPI: &IDPIConfig{
 				Enabled:        true,
 				CustomPatterns: []string{"  "}, // invalid
 			},

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -167,8 +168,6 @@ type DashboardSessionRuntimeConfig struct {
 	RequireElevation              bool          `json:"requireElevation,omitempty"`
 }
 
-// IDPIConfig holds the configuration for the Indirect Prompt Injection (IDPI)
-// defense layer.
 type IDPIConfig struct {
 	Enabled        bool     `json:"enabled,omitempty"`
 	StrictMode     bool     `json:"strictMode,omitempty"`
@@ -478,7 +477,29 @@ type SecurityConfig struct {
 	TrustedResolveCIDRs    []string     `json:"trustedResolveCIDRs,omitempty"`
 	TrustLoopbackProxy     *bool        `json:"trustLoopbackProxy,omitempty"`
 	Attach                 AttachConfig `json:"attach,omitempty"`
-	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
+	IDPI                   *IDPIConfig  `json:"idpi,omitempty"`
+}
+
+func (s *SecurityConfig) ensureIDPI() *IDPIConfig {
+	if s.IDPI == nil {
+		s.IDPI = &IDPIConfig{}
+	}
+	return s.IDPI
+}
+
+func (s SecurityConfig) EffectiveIDPI() IDPIConfig {
+	if s.IDPI == nil {
+		return IDPIConfig{}
+	}
+	return *s.IDPI
+}
+
+func (s SecurityConfig) MarshalJSON() ([]byte, error) {
+	type tagged SecurityConfig
+	return json.Marshal(struct {
+		tagged
+		IDPI IDPIConfig `json:"idpi"`
+	}{tagged(s), s.EffectiveIDPI()})
 }
 
 type MultiInstanceConfig struct {

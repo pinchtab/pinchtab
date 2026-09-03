@@ -188,10 +188,12 @@ func applyPosture(cfg *config.FileConfig, p securityPosture) {
 	cfg.Security.AllowUpload = boolPtr(p.allowUpload)
 	cfg.Security.AllowMacro = boolPtr(p.allowMacro)
 	cfg.Security.AllowScreencast = boolPtr(p.allowScreencast)
-	cfg.Security.IDPI.Enabled = p.idpiOn
-	cfg.Security.IDPI.StrictMode = p.idpiOn
-	cfg.Security.IDPI.ScanContent = p.idpiOn
-	cfg.Security.IDPI.WrapContent = p.idpiOn
+	idpi := cfg.Security.EffectiveIDPI()
+	idpi.Enabled = p.idpiOn
+	idpi.StrictMode = p.idpiOn
+	idpi.ScanContent = p.idpiOn
+	idpi.WrapContent = p.idpiOn
+	cfg.Security.IDPI = &idpi
 	cfg.Security.AllowedDomains = append([]string(nil), p.allowedDomains...)
 	if p.bind != "" {
 		cfg.Server.Bind = p.bind
