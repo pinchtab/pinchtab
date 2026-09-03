@@ -119,8 +119,10 @@ func assertRemedyRuns(t *testing.T, line string) {
 		}
 		// A flag the resolved command does not define is the same dead end as a missing
 		// verb, and it is the likelier one: a remedy naming --wait-nav outlives a rename.
+		// The name is cut at "=" the way remedyFlagTakesAValue cuts it, or the day a
+		// remedy is written --flag=value this reports the flag as undefined.
 		for _, flag := range flags {
-			name := strings.TrimLeft(flag, "-")
+			name, _, _ := strings.Cut(strings.TrimLeft(flag, "-"), "=")
 			if found.Flags().Lookup(name) == nil && found.InheritedFlags().Lookup(name) == nil {
 				t.Errorf("remedy command %v names flag %q, which %q does not define", words, flag, found.CommandPath())
 			}
@@ -169,6 +171,19 @@ func TestTheRemedyGuardRedsOnACommandThatCannotRun(t *testing.T) {
 		if !fake.Failed() {
 			t.Errorf("the guard accepts %q, so it would accept a remedy nobody can run", line)
 		}
+	}
+}
+
+// The joined flag form, which no remedy uses today and which the undefined-flag check
+// would have reported as undefined: the name has to be cut at "=" or every --flag=value
+// reads as a flag the command never defined. This is a POSITIVE shape on purpose — the
+// broken version reds a line that runs, and a reds-list row cannot see that, since an
+// undefined flag is reported either way.
+func TestTheRemedyGuardAcceptsADefinedFlagWrittenWithAnEquals(t *testing.T) {
+	fake := &testing.T{}
+	assertRemedyRuns(fake, "pinchtab session create --agent-id=a")
+	if fake.Failed() {
+		t.Error("the guard rejects `pinchtab session create --agent-id=a`, a line that runs; a remedy written in the joined form would be unpublishable")
 	}
 }
 

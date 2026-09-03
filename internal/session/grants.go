@@ -57,18 +57,21 @@ func NormalizeGrant(grant string) string {
 	return strings.ToLower(strings.TrimSpace(grant))
 }
 
-// ValidateGrants normalizes a requested grant list and refuses an unknown name.
-// Refusing is the point: a mistyped grant that is dropped silently produces a
-// session the caller believes is scoped and which is not, which is a worse
-// outcome than the request failing.
+// ValidateGrants normalizes a requested grant list and refuses any entry that is
+// not a grant. Refusing is the point: a mistyped grant that is dropped silently
+// produces a session the caller believes is scoped and which is not, which is a
+// worse outcome than the request failing.
+//
+// An entry naming NOTHING is refused for that same reason and not skipped. An
+// absent field and an empty list both mean "do not narrow", which is a caller
+// saying nothing about grants; "" inside the list is a caller who asked to be
+// scoped and named no scope, and dropping it silently hands back the unscoped
+// session they were trying not to create.
 func ValidateGrants(grants []string) ([]string, error) {
 	out := make([]string, 0, len(grants))
 	for _, raw := range grants {
 		grant := NormalizeGrant(raw)
-		if grant == "" {
-			continue
-		}
-		if grant != GrantAll && !slices.Contains(grantNames, grant) {
+		if grant == "" || (grant != GrantAll && !slices.Contains(grantNames, grant)) {
 			return nil, fmt.Errorf("unknown grant %q (valid grants: %s, or %q for all)",
 				raw, strings.Join(grantNames, ", "), GrantAll)
 		}
