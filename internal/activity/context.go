@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
@@ -52,6 +54,13 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 		return next
 	}
 
+	// Recording must never fail a request, so the error is swallowed — but
+	// swallowing it silently is how the activity feed goes empty with nothing
+	// anywhere saying why. Reported on the TRANSITION in each direction: a fault
+	// that lasts warns once rather than once per request, which is the volume at
+	// which an operator stops reading it, and the recovery says so too.
+	var recordingBroken atomic.Bool
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &httpx.StatusWriter{ResponseWriter: w, Code: 200}
@@ -94,7 +103,13 @@ func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
 		if evt.Method == "" {
 			evt.Method = r.Method
 		}
-		_ = rec.Record(evt)
+		if err := rec.Record(evt); err != nil {
+			if recordingBroken.CompareAndSwap(false, true) {
+				slog.Warn("activity: recording failed; events are being lost until this recovers", "err", err)
+			}
+		} else if recordingBroken.CompareAndSwap(true, false) {
+			slog.Info("activity: recording recovered")
+		}
 	})
 }
 

@@ -21,16 +21,20 @@ func (r dashboardActivityRecorder) Enabled() bool {
 	return r.dash != nil
 }
 
+// Record fans one event out to two INDEPENDENT sinks: the on-disk store and the
+// dashboard's live feed. Returning on the store's error skipped the broadcast, so
+// a disk fault took the live feed — which touches no disk — dark with it. Each
+// sink is now attempted regardless of the other, and the caller is told what
+// failed rather than only that something did.
 func (r dashboardActivityRecorder) Record(evt activity.Event) error {
+	var err error
 	if r.base != nil && r.base.Enabled() {
-		if err := r.base.Record(evt); err != nil {
-			return err
-		}
+		err = r.base.Record(evt)
 	}
 	if r.dash != nil && shouldBroadcastDashboardActivity(evt) {
 		r.dash.RecordActivityEvent(evt)
 	}
-	return nil
+	return err
 }
 
 func (r dashboardActivityRecorder) Query(filter activity.Filter) ([]activity.Event, error) {

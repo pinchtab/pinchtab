@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -317,8 +318,14 @@ func (s *Store) Record(evt Event) error {
 	}
 	evt.URL = sanitizeActivityURL(evt.URL)
 
+	// Retention is housekeeping, and housekeeping must not cost the event. A
+	// failing prune — an unreadable directory, a file another process holds —
+	// used to abort Record before the append, so a sweep that could not run threw
+	// away an observation the append would have stored perfectly well. It is also
+	// throttled: lastPruneTime advances whether or not the sweep succeeded, so
+	// exactly one event per hour was lost to a fault that had nothing to do with it.
 	if err := s.maybePrune(evt.Timestamp); err != nil {
-		return err
+		slog.Warn("activity: retention sweep failed; the event is still recorded", "err", err)
 	}
 
 	// Marshal and append outside the lock: the only shared mutable state is the
