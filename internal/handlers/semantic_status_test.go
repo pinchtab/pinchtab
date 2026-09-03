@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -195,30 +196,65 @@ func TestTheStatusSurvivesRewordingTheMessage(t *testing.T) {
 		{"not-configured wording alone buys nothing", errors.New("semantic selectors require a matcher (not configured)"), http.StatusInternalServerError},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := statusForElementErr(tc.err); got != tc.want {
-				t.Errorf("statusForElementErr(%v) = %d, want %d", tc.err, got, tc.want)
+			if got := selectorFailureStatus(tc.err); got != tc.want {
+				t.Errorf("selectorFailureStatus(%v) = %d, want %d", tc.err, got, tc.want)
 			}
 		})
 	}
 }
 
-// Criterion three, structurally: both paths must REACH the one mapper. The inspect path
-// and the action path each mapped selector failures themselves, and the two switches
-// drifted — semantic misses answered 404 on /action and 500 on all six read endpoints.
+// Criterion three, structurally: every path must REACH the one mapper. The inspect
+// path and the action path each mapped selector failures themselves, and the two
+// switches drifted — semantic misses answered 404 on /action and 500 on all six read
+// endpoints, while the capture endpoints hardcoded 400 and the inspect ones 500.
 //
 // This pins the call sites; TestBothPathsAgreeOnTheStatusForTheSameFailure pins the
 // outcome. Both are needed: a census cannot see a second mapper under a new name, and an
 // agreement test cannot see a caller that stops mapping at all.
-func TestOneMapperServesBothTheInspectAndActionPaths(t *testing.T) {
+//
+// The census reads BOTH spellings, because a site either asks the mapper for a status
+// it must carry itself (the screenshot clip path returns a statusError) or hands the
+// whole refusal to respondSelectorFailure, which asks the same owner.
+// A status literal sitting in the same call as the selector-failure wrapper:
+// `httpx.Error(w, 400, frameScopedSelectorError(...))` and
+// `&statusError{500, frameScopedSelectorError(...)}` were both live before this card.
+var statusLiteralBesideSelectorFailure = regexp.MustCompile(`[,{]\s*[45]\d\d\s*,`)
+
+func TestOneMapperServesEverySelectorResolvingPath(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 20)
 
 	callers := map[string]bool{}
-	for _, site := range pkg.Calls(t, "statusForElementErr") {
-		callers[site.Func] = true
+	for _, name := range []string{"selectorFailureStatus", "respondSelectorFailure"} {
+		for _, site := range pkg.Calls(t, name) {
+			callers[site.Func] = true
+		}
 	}
-	for _, required := range []string{"inspectElement", "resolveActionRequestSelectorInScope"} {
+	for _, required := range []string{"inspectElement", "resolveActionRequestSelectorInScope", "handleInspect", "resolveScreenshotClip"} {
 		if !callers[required] {
-			t.Errorf("%s no longer maps its selector failures through statusForElementErr; a second copy of the status switch is how the inspect and action paths drifted apart", required)
+			t.Errorf("%s no longer maps its selector failures through the one owner; a second copy of the status switch is how the read paths came to give five different answers", required)
+		}
+	}
+
+	// The deleted twin must not come back: it read the raw no-match sentinel while
+	// this one reads the wrapped one, and they agreed on 404 by coincidence.
+	if _, found := pkg.Func("selectorResolutionHTTPStatus"); found {
+		t.Error("selectorResolutionHTTPStatus is back; one question needs one mapper, and a second one reading a different sentinel is how these statuses drifted")
+	}
+
+	// The shape this card removed, banned so a verb added later cannot bring it
+	// back: a selector failure written out beside a status LITERAL. Building the
+	// wrapper and returning it is fine — that is what a producer does, and its
+	// caller answers through the owner — so the ban is on the answering line, which
+	// is where /screenshot said 400 and /html said 500 for the same condition.
+	for _, file := range srccensus.Tree(t, ".", 20) {
+		for i, line := range strings.Split(file.Text, "\n") {
+			if !strings.Contains(line, "frameScopedSelectorError(") {
+				continue
+			}
+			if statusLiteralBesideSelectorFailure.MatchString(line) {
+				t.Errorf("%s:%d answers a selector failure with a hardcoded status: %s\nask selectorFailureStatus, or hand the whole refusal to respondSelectorFailure",
+					file.Name, i+1, strings.TrimSpace(line))
+			}
 		}
 	}
 

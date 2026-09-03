@@ -55,7 +55,7 @@ func inspectSelectorParam(r *http.Request) string {
 // serveElementInspection runs the shared read-only single-element inspection
 // preamble: record the read, require a unified selector, then resolve + inspect
 // via inspectElement. build returns the JSON response for the resolved element;
-// its error is mapped by inspectElement (statusForElementErr).
+// its error is mapped by inspectElement (selectorFailureStatus).
 //
 // attr and count do not use this: attr validates an extra required `name` param
 // before tab resolution, and count targets multiple elements via a different
@@ -78,8 +78,8 @@ func (h *Handlers) serveElementInspection(w http.ResponseWriter, r *http.Request
 
 // inspectElement runs the shared read-only inspect lifecycle (browser init, tab
 // resolution, domain-policy enforcement, auto-close arming, and timeout/cancel
-// wiring) and writes the JSON value fn returns, mapping fn's error via
-// statusForElementErr. Handlers keep their own param parsing + recordReadRequest
+// wiring) and writes the JSON value fn returns, mapping fn's error through
+// respondSelectorFailure. Handlers keep their own param parsing + recordReadRequest
 // and pass the per-endpoint getter/response as fn.
 func (h *Handlers) inspectElement(w http.ResponseWriter, r *http.Request, tabID string,
 	fn func(ctx context.Context, resolvedTabID string) (any, error)) {
@@ -103,7 +103,7 @@ func (h *Handlers) inspectElement(w http.ResponseWriter, r *http.Request, tabID 
 
 	result, err := fn(tCtx, resolvedTabID)
 	if err != nil {
-		httpx.Error(w, statusForElementErr(err), err)
+		respondSelectorFailure(w, err)
 		return
 	}
 	httpx.JSON(w, 200, result)

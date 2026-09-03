@@ -149,7 +149,7 @@ func TestSelectorResolutionHTTPStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := selectorResolutionHTTPStatus(tt.err); got != tt.want {
+			if got := selectorFailureStatus(tt.err); got != tt.want {
 				t.Fatalf("status = %d, want %d", got, tt.want)
 			}
 		})

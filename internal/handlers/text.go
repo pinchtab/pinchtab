@@ -68,7 +68,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		if !ghostRoute {
 			modalNodeID, modalOpen, err = bridge.TopmostModalNodeID(tCtx, targetFrameID)
 			if err != nil {
-				httpx.Error(w, selectorResolutionHTTPStatus(err), err)
+				httpx.Error(w, selectorFailureStatus(err), err)
 				return
 			}
 		}
@@ -89,7 +89,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		if !ghostRoute {
 			afterNodeID, afterOpen, scopeErr := bridge.TopmostModalNodeID(tCtx, targetFrameID)
 			if scopeErr != nil {
-				httpx.Error(w, selectorResolutionHTTPStatus(scopeErr), fmt.Errorf("recheck topmost dialog: %w", scopeErr))
+				httpx.Error(w, selectorFailureStatus(scopeErr), fmt.Errorf("recheck topmost dialog: %w", scopeErr))
 				return
 			}
 			stable = modalNodeID == afterNodeID && modalOpen == afterOpen
@@ -100,7 +100,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			status := http.StatusInternalServerError
 			if selectorParam != "" || refParam != "" {
-				status = selectorResolutionHTTPStatus(err)
+				status = selectorFailureStatus(err)
 				err = fmt.Errorf("element text extract: %w", err)
 			}
 			httpx.Error(w, status, err)

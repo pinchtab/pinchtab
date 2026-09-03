@@ -140,7 +140,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		opts.Image.BeyondViewport = false
 		nodeID, sErr := h.resolveSelectorNodeID(tCtx, resolvedTabID, selector)
 		if sErr != nil {
-			httpx.Error(w, 400, frameScopedSelectorError("selector", sErr))
+			respondSelectorFailure(w, frameScopedSelectorError("selector", sErr))
 			return
 		}
 		opts.ScopeBackendNodeID = nodeID

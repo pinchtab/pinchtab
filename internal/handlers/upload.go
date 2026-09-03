@@ -207,7 +207,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		// A selector that doesn't resolve is a client error, not a server fault —
 		// match the element-targeting handlers' 4xx convention.
 		err = fmt.Errorf("%w: upload selector %q: %v", ErrElementNotFound, req.Selector, err)
-		httpx.Error(w, statusForElementErr(err), err)
+		httpx.Error(w, selectorFailureStatus(err), err)
 		return
 	}
 

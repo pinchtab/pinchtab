@@ -26,21 +26,6 @@ func frameScopedSelectorError(kind string, err error) error {
 	return fmt.Errorf("%s in current frame: %w", kind, err)
 }
 
-func selectorResolutionHTTPStatus(err error) int {
-	switch {
-	case err == nil:
-		return http.StatusOK
-	case errors.Is(err, bridge.ErrSelectorNoMatch):
-		return http.StatusNotFound
-	case errors.Is(err, bridge.ErrSelectorOutsideScope):
-		return http.StatusBadRequest
-	case errors.Is(err, context.DeadlineExceeded):
-		return http.StatusGatewayTimeout
-	default:
-		return http.StatusInternalServerError
-	}
-}
-
 func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID string, req *bridge.ActionRequest) (actionSelectorResolution, error) {
 	original := *req
 	original.NormalizeSelector()
@@ -60,7 +45,7 @@ func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID strin
 	for attempt := 0; attempt < 2; attempt++ {
 		modalNodeID, modalOpen, err := bridge.TopmostModalNodeID(ctx, frameID)
 		if err != nil {
-			return actionSelectorResolution{status: selectorResolutionHTTPStatus(err)}, frameScopedSelectorError("topmost dialog", err)
+			return actionSelectorResolution{status: selectorFailureStatus(err)}, frameScopedSelectorError("topmost dialog", err)
 		}
 
 		attemptReq := original
@@ -68,7 +53,7 @@ func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID strin
 
 		afterNodeID, afterOpen, scopeErr := bridge.TopmostModalNodeID(ctx, frameID)
 		if scopeErr != nil {
-			return actionSelectorResolution{status: selectorResolutionHTTPStatus(scopeErr)}, frameScopedSelectorError("recheck topmost dialog", scopeErr)
+			return actionSelectorResolution{status: selectorFailureStatus(scopeErr)}, frameScopedSelectorError("recheck topmost dialog", scopeErr)
 		}
 		if modalNodeID == afterNodeID && modalOpen == afterOpen {
 			*req = attemptReq
@@ -106,7 +91,7 @@ func (h *Handlers) resolveActionRequestSelectorInScope(
 
 	if handled, err := h.applySemanticActionSelectorInScope(ctx, tabID, frameID, modalNodeID, sel, req); handled {
 		if err != nil {
-			return actionSelectorResolution{status: statusForElementErr(err)}, err
+			return actionSelectorResolution{status: selectorFailureStatus(err)}, err
 		}
 		return actionSelectorResolution{}, nil
 	}
@@ -129,7 +114,7 @@ func (h *Handlers) resolveActionRequestSelectorInScope(
 				}
 				return actionSelectorResolution{refMissing: true}, nil
 			}
-			return actionSelectorResolution{status: selectorResolutionHTTPStatus(err)}, frameScopedSelectorError("ref selector", err)
+			return actionSelectorResolution{status: selectorFailureStatus(err)}, frameScopedSelectorError("ref selector", err)
 		}
 		req.NodeID = nid
 		if nid == 0 {
@@ -145,7 +130,7 @@ func (h *Handlers) resolveActionRequestSelectorInScope(
 	case selector.KindCSS, selector.KindXPath, selector.KindText:
 		nid, err := resolve(sel)
 		if err != nil {
-			return actionSelectorResolution{status: selectorResolutionHTTPStatus(err)}, frameScopedSelectorError(string(sel.Kind)+" selector", err)
+			return actionSelectorResolution{status: selectorFailureStatus(err)}, frameScopedSelectorError(string(sel.Kind)+" selector", err)
 		}
 		req.NodeID, req.Selector, req.Ref = nid, "", ""
 	case selector.KindRole, selector.KindLabel, selector.KindPlaceholder,
@@ -153,7 +138,7 @@ func (h *Handlers) resolveActionRequestSelectorInScope(
 		selector.KindFirst, selector.KindLast, selector.KindNth:
 		nid, err := resolve(sel)
 		if err != nil {
-			return actionSelectorResolution{status: selectorResolutionHTTPStatus(err)}, frameScopedSelectorError("selector", err)
+			return actionSelectorResolution{status: selectorFailureStatus(err)}, frameScopedSelectorError("selector", err)
 		}
 		req.NodeID = nid
 		req.Selector = ""

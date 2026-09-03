@@ -41,12 +41,11 @@ func (h *Handlers) HandleAnnotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate the selector up front so a bad selector surfaces as a 400 (user
-	// error), matching the /screenshot and /capture convention, rather than the
-	// generic 500 the collector would otherwise produce.
+	// Validate the selector up front, through the one owner of the selector-failure
+	// status, rather than leaving the collector to produce a generic 500.
 	if selector != "" {
 		if _, sErr := h.resolveSelectorNodeID(tCtx, resolvedTabID, selector); sErr != nil {
-			httpx.Error(w, 400, frameScopedSelectorError("selector", sErr))
+			respondSelectorFailure(w, frameScopedSelectorError("selector", sErr))
 			return
 		}
 	}

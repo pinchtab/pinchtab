@@ -92,7 +92,7 @@ func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind in
 
 	payload, err := h.inspectPayload(tCtx, resolvedTabID, targetFrameID, r.URL.Query().Get("selector"), r.URL.Query().Get("ref"), kind)
 	if err != nil {
-		httpx.Error(w, 500, err)
+		respondSelectorFailure(w, err)
 		return
 	}
 
