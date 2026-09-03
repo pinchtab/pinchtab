@@ -38,7 +38,7 @@ func (tm *TabManager) idpiDomainPolicyActive() bool {
 }
 
 func (tm *TabManager) startTabPolicyWatcher(tabID string, ctx context.Context) {
-	if !tm.idpiDomainPolicyActive() || ctx == nil {
+	if ctx == nil {
 		return
 	}
 
@@ -51,19 +51,31 @@ func (tm *TabManager) startTabPolicyWatcher(tabID string, ctx context.Context) {
 	entry.Watching = true
 	tm.mu.Unlock()
 
-	tm.refreshTabPolicyFromContext(tabID, ctx)
+	if tm.idpiDomainPolicyActive() {
+		tm.refreshTabPolicyFromContext(tabID, ctx)
+	}
 
 	chromedp.ListenTarget(ctx, func(ev any) {
-		switch e := ev.(type) {
-		case *page.EventFrameNavigated:
-			if e.Frame == nil || e.Frame.ParentID != "" {
-				return
-			}
+		tm.onTabNavigation(tabID, ctx, ev)
+	})
+}
+
+func (tm *TabManager) onTabNavigation(tabID string, ctx context.Context, ev any) {
+	switch e := ev.(type) {
+	case *page.EventFrameNavigated:
+		if e.Frame == nil || e.Frame.ParentID != "" {
+			return
+		}
+		tm.DeleteRefCache(tabID)
+		tm.ClearFrameScope(tabID)
+		if tm.idpiDomainPolicyActive() {
 			tm.updateTabPolicy(tabID, e.Frame.URL)
-		case *page.EventNavigatedWithinDocument:
+		}
+	case *page.EventNavigatedWithinDocument:
+		if tm.idpiDomainPolicyActive() {
 			go tm.refreshTabPolicyFromContext(tabID, ctx)
 		}
-	})
+	}
 }
 
 func (tm *TabManager) refreshTabPolicyFromContext(tabID string, ctx context.Context) {
