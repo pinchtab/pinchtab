@@ -23,22 +23,23 @@ func TestClassifyActionError_PreservesTyped(t *testing.T) {
 	}
 }
 
-func TestCheckUnexpectedNavigation(t *testing.T) {
-	err := checkUnexpectedNavigation("https://a.example", "https://b.example")
-	if !errors.Is(err, ErrUnexpectedNavigation) {
-		t.Fatalf("expected ErrUnexpectedNavigation, got %v", err)
-	}
-}
-
-func TestCheckUnexpectedNavigation_NoChange(t *testing.T) {
-	if err := checkUnexpectedNavigation("https://a.example", "https://a.example"); err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-}
-
-func TestCheckUnexpectedNavigation_EquivalentURLs(t *testing.T) {
-	if err := checkUnexpectedNavigation("https://A.EXAMPLE/path?x=1#section", "https://a.example/path?x=1"); err != nil {
-		t.Fatalf("expected nil error for equivalent URLs, got %v", err)
+func TestNavigationChanged(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		before, after string
+		want          bool
+	}{
+		{"a different page", "https://a.example", "https://b.example", true},
+		{"the same page", "https://a.example", "https://a.example", false},
+		{"fragment and host case only", "https://A.EXAMPLE/path?x=1#section", "https://a.example/path?x=1", false},
+		{"unreadable before", "", "https://b.example", false},
+		{"unreadable after", "https://a.example", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := navigationChanged(tc.before, tc.after); got != tc.want {
+				t.Errorf("navigationChanged(%q, %q) = %v, want %v", tc.before, tc.after, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -100,9 +101,34 @@ func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
 		},
 	}
 
-	_, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{})
-	if !errors.Is(err, ErrUnexpectedNavigation) {
-		t.Fatalf("expected ErrUnexpectedNavigation, got %v", err)
+	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{})
+	if err != nil {
+		t.Fatalf("a click that ran and moved the page reported failure: %v", err)
+	}
+	assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
+}
+
+// The whole defect in one assertion: the action's own result is what the API used
+// to throw away when it returned the navigation as an error instead.
+func assertNavigationOutcome(t *testing.T, res map[string]any, before, after string) {
+	t.Helper()
+	if res == nil {
+		t.Fatal("no result delivered for an action that succeeded")
+	}
+	if res["ok"] != true {
+		t.Errorf("the action's own result was discarded: %v", res)
+	}
+	if res[ResultNavigated] != true {
+		t.Errorf("result does not report the navigation: %v", res)
+	}
+	if res[ResultLandedURL] != after {
+		t.Errorf("landed url = %v, want %q", res[ResultLandedURL], after)
+	}
+	if res[ResultPreviousURL] != before {
+		t.Errorf("previous url = %v, want %q", res[ResultPreviousURL], before)
+	}
+	if res[ResultRefsStale] != true {
+		t.Errorf("result does not say the caller's refs are dead: %v", res)
 	}
 }
 
@@ -150,10 +176,11 @@ func TestExecuteAction_UnexpectedNavigation_WithNilConfigDefaultsEnabled(t *test
 		},
 	}
 
-	_, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{})
-	if !errors.Is(err, ErrUnexpectedNavigation) {
-		t.Fatalf("expected ErrUnexpectedNavigation, got %v", err)
+	res, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{})
+	if err != nil {
+		t.Fatalf("an action that ran and moved the page reported failure: %v", err)
 	}
+	assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
 }
 
 func TestExecuteAction_ClassifiesStaleError_WhenGuardsDisabled(t *testing.T) {

@@ -88,22 +88,24 @@ func TestRenderAPIErrorKeepsApplicationErrors(t *testing.T) {
 	}
 }
 
-// The /action navigation guard reports a 409 whose details carry the way
-// forward; the renderer is what puts it in front of the user.
-func TestRenderAPIErrorBodyShowsNavigationChangedHintAndRemedy(t *testing.T) {
-	body := `{"code":"navigation_changed",` +
-		`"error":"unexpected page navigation: https://pinchtab.com/ -> https://pinchtab.com/docs/",` +
-		`"details":{"hint":"The action navigated the page; set waitNav true or submit true.",` +
-		`"remedy":"pinchtab click <ref> --wait-nav (use --submit instead when the click submits a form)",` +
-		`"url":"https://pinchtab.com/docs/"}}`
+// A refusal whose details carry the way forward; the renderer is what puts it in
+// front of the user. The sample used to be navigation_changed, which the server no
+// longer emits — a click that navigates succeeds — so it is an allowlist refusal,
+// which is a code the server does still produce with the same details shape.
+func TestRenderAPIErrorBodyShowsHintAndRemedy(t *testing.T) {
+	body := `{"code":"idpi_domain_blocked",` +
+		`"error":"navigation blocked by IDPI: domain \"evil.test\" is not in the allowed list",` +
+		`"details":{"hint":"the requested URL is outside security.allowedDomains, so the request was refused.",` +
+		`"remedy":"pinchtab config set security.allowedDomains \"...\" && pinchtab server restart",` +
+		`"url":"https://evil.test/"}}`
 
-	out := renderAPIErrorBody(409, []byte(body))
+	out := renderAPIErrorBody(403, []byte(body))
 
 	for _, want := range []string{
-		"Error 409: unexpected page navigation",
-		"💡 The action navigated the page",
-		"Remedy: pinchtab click <ref> --wait-nav",
-		"--submit",
+		"Error 403: navigation blocked by IDPI",
+		"💡 the requested URL is outside security.allowedDomains",
+		"Remedy: pinchtab config set security.allowedDomains",
+		"server restart",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered error missing %q:\n%s", want, out)

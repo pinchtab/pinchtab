@@ -12,6 +12,52 @@ pinchtab click e5
 OK
 ```
 
+## When the click navigates
+
+A click that moves the page **succeeds**. There is nothing to declare in advance and
+nothing to opt into: the result reports where the tab landed and that your refs are
+gone.
+
+```bash
+pinchtab nav https://example.com --snap
+# e1:link "Learn more"
+pinchtab click e1
+# OK navigated https://www.iana.org/help/example-domains
+# HINT: every ref from your last snapshot is dead — run `pinchtab snap -i` before the next action
+echo $?   # 0
+```
+
+With `--json`, the same click carries the outcome in `result`:
+
+```json
+{
+  "success": true,
+  "result": {
+    "clicked": true,
+    "navigated": true,
+    "url": "https://www.iana.org/help/example-domains",
+    "previousUrl": "https://example.com/",
+    "refsStale": true
+  }
+}
+```
+
+`navigated` is keyed on what actually happened — the URL before the action compared
+against the URL after — not on the element's role or tag, so it is the same answer for
+a link, a router `<button>`, and a form control that redirects. A fragment-only change
+(`#section`) is not a navigation: the document is the same and your refs still resolve.
+
+**`refsStale: true` means every ref from your previous `/snapshot` is dead.** Refs are
+minted per snapshot, so take a new one before the next ref-targeted action:
+
+```bash
+pinchtab click e1 --snap    # click, then print the new snapshot in one call
+```
+
+`--wait-nav` is not permission to navigate — it makes the click *wait* for the
+navigation to settle before returning, which is what you want when the next action
+depends on the new page having loaded.
+
 ## CLI Flags
 
 | Flag | Description |
@@ -47,7 +93,7 @@ pinchtab click --x 100 --y 200           # Click at coordinates
 
 ## Notes
 
-- Element refs come from `/snapshot`
+- Element refs come from `/snapshot`, and a navigation invalidates all of them — see [When the click navigates](#when-the-click-navigates)
 - Refs for iframe descendants can be clicked directly without frame switch
 - Selector lookup is limited to current frame scope (default: `main`)
 - Use [`/frame`](./frame.md) before selector-based iframe actions

@@ -343,15 +343,37 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	}
 
 	if checkNav && beforeURL != "" {
-		afterURL, uErr := urlReader(ctx)
-		if uErr == nil {
-			if navErr := checkUnexpectedNavigation(beforeURL, afterURL); navErr != nil {
-				return nil, navErr
-			}
+		if afterURL, uErr := urlReader(ctx); uErr == nil && navigationChanged(beforeURL, afterURL) {
+			res = withNavigationOutcome(res, beforeURL, afterURL)
 		}
 	}
 
 	return res, nil
+}
+
+// Navigated, LandedURL, PreviousURL and RefsStale are the keys a result grows
+// when the action moved the page. They ride on the SUCCESSFUL result — the
+// action ran, so the caller gets what it earned plus what it now needs to know:
+// where it landed, and that every ref from its last snapshot is dead, because
+// refs are minted per snapshot.
+const (
+	ResultNavigated   = "navigated"
+	ResultLandedURL   = "url"
+	ResultPreviousURL = "previousUrl"
+	ResultRefsStale   = "refsStale"
+)
+
+// withNavigationOutcome never drops the action's own result: it is the value the
+// API used to discard, and delivering it is the whole point.
+func withNavigationOutcome(res map[string]any, before, after string) map[string]any {
+	if res == nil {
+		res = map[string]any{}
+	}
+	res[ResultNavigated] = true
+	res[ResultLandedURL] = after
+	res[ResultPreviousURL] = before
+	res[ResultRefsStale] = true
+	return res
 }
 
 func (b *Bridge) AvailableActions() []string {

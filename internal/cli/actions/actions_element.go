@@ -193,6 +193,15 @@ func printActionResult(kind string, result map[string]any) {
 		return
 	}
 	if actionResult, ok := result["result"].(map[string]any); ok {
+		// A click that moved the page succeeded. It used to exit 1 with a 409, which
+		// is the signal every agent loop and CI harness branches on, so the natural
+		// reaction — retry — re-clicked on the page the first click had reached.
+		if actionResult["navigated"] == true {
+			landed, _ := actionResult["url"].(string)
+			output.Value("OK navigated " + landed)
+			output.Hint("every ref from your last snapshot is dead — run `pinchtab snap -i` before the next action")
+			return
+		}
 		if postState, ok := actionResult["postState"].(map[string]any); ok {
 			status, _ := postState["status"].(string)
 			signal, _ := postState["signal"].(string)

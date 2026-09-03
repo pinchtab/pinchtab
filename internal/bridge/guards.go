@@ -11,9 +11,6 @@ import (
 )
 
 var (
-	// ErrUnexpectedNavigation indicates an action was expected to keep context stable
-	// but the page URL changed.
-	ErrUnexpectedNavigation = errors.New("unexpected page navigation")
 	// ErrElementStale indicates the targeted DOM/backend node is no longer valid.
 	ErrElementStale         = errors.New("element reference is stale")
 	ErrInvalidActionRequest = errors.New("invalid action request")
@@ -54,22 +51,35 @@ func classifyActionError(err error) error {
 	return err
 }
 
+// shouldCheckUnexpectedNavigation selects the actions whose landing URL is worth
+// measuring. waitNav is not an assertion the caller made about navigation — it
+// asks the action to WAIT for one — so a caller that waits already learns the
+// landed URL from the wait itself and needs no second report here.
 func shouldCheckUnexpectedNavigation(req ActionRequest) bool {
 	return !req.WaitNav && !IsSubmitClick(req.Kind, req)
 }
 
-func checkUnexpectedNavigation(before, after string) error {
+// navigationChanged reports whether an action moved the page. It used to return
+// an error, and ExecuteAction returned that error INSTEAD of the successful
+// result the action had already produced — so clicking an ordinary link failed
+// after the click had worked. A navigation is an outcome to report, not a
+// failure: the caller is told where it landed and that its refs are dead, and
+// the result it earned is delivered.
+//
+// A fragment-only or case-of-host change is not a navigation: the document is
+// the same and the refs still resolve.
+func navigationChanged(before, after string) bool {
 	before = strings.TrimSpace(before)
 	after = strings.TrimSpace(after)
 	if before == "" || after == "" || before == after {
-		return nil
+		return false
 	}
 	if normalizedBefore, ok := normalizeGuardURL(before); ok {
 		if normalizedAfter, ok := normalizeGuardURL(after); ok && normalizedBefore == normalizedAfter {
-			return nil
+			return false
 		}
 	}
-	return fmt.Errorf("%w: %s -> %s", ErrUnexpectedNavigation, before, after)
+	return true
 }
 
 func normalizeGuardURL(raw string) (string, bool) {

@@ -31,6 +31,7 @@ type mockBridge struct {
 	ensureBrowserCfg  *config.RuntimeConfig
 	dialogManager     *bridge.DialogManager
 	executeActionErr  error
+	actionResult      map[string]any
 	autoCloseArmed    []string
 	autoCloseCanceled []string
 	availableActions  []string
@@ -78,6 +79,9 @@ func (m *mockBridge) AvailableActions() []string {
 func (m *mockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
 	if m.executeActionErr != nil {
 		return nil, m.executeActionErr
+	}
+	if m.actionResult != nil {
+		return m.actionResult, nil
 	}
 	return map[string]any{"success": true}, nil
 }

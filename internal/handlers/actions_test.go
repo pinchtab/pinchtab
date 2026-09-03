@@ -647,9 +647,18 @@ func TestEnsureChromeAliasServes(t *testing.T) {
 	}
 }
 
-func TestHandleAction_NavigationChangedCarriesHintAndRemedy(t *testing.T) {
-	navErr := fmt.Errorf("%w: %s -> %s", bridge.ErrUnexpectedNavigation, "https://pinchtab.com/", "https://pinchtab.com/docs/")
-	mb := &mockBridge{executeActionErr: navErr}
+// The endpoint's whole contract for a click that navigates: a success carrying where
+// the caller landed and the fact that its refs are dead. It used to be a 409 whose
+// hint and remedy told the caller to re-issue the click with --wait-nav — advice that
+// re-clicked on the page the first click had already reached.
+func TestHandleAction_ANavigatingClickIsASuccessCarryingTheLandedURL(t *testing.T) {
+	mb := &mockBridge{actionResult: map[string]any{
+		"clicked":                true,
+		bridge.ResultNavigated:   true,
+		bridge.ResultLandedURL:   "https://pinchtab.com/docs/",
+		bridge.ResultPreviousURL: "https://pinchtab.com/",
+		bridge.ResultRefsStale:   true,
+	}}
 	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
 	req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click"}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -657,45 +666,32 @@ func TestHandleAction_NavigationChangedCarriesHintAndRemedy(t *testing.T) {
 
 	h.HandleAction(w, req)
 
-	if w.Code != 409 {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Code    string         `json:"code"`
-		Details map[string]any `json:"details"`
+		Success bool           `json:"success"`
+		Result  map[string]any `json:"result"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp.Code != "navigation_changed" {
-		t.Fatalf("code = %q, want navigation_changed", resp.Code)
+	if !resp.Success {
+		t.Fatalf("success = false: %s", w.Body.String())
 	}
-	for _, key := range []string{"hint", "remedy", "url"} {
-		value, _ := resp.Details[key].(string)
-		if value == "" {
-			t.Fatalf("details[%q] missing or empty: %#v", key, resp.Details)
-		}
+	// The action's own result is what the API used to discard when it answered with
+	// the navigation as an error instead.
+	if resp.Result["clicked"] != true {
+		t.Errorf("the action's own result was dropped: %v", resp.Result)
 	}
-	hint, _ := resp.Details["hint"].(string)
-	for _, want := range []string{"waitNav", "submit"} {
-		if !strings.Contains(hint, want) {
-			t.Fatalf("hint %q does not name request field %q", hint, want)
-		}
+	if resp.Result[bridge.ResultNavigated] != true {
+		t.Errorf("result does not report the navigation: %v", resp.Result)
 	}
-	// One command, one flag: the remedy is a line a caller can run, so the alternative
-	// flag belongs in the hint. Naming both here is what made the field unrunnable.
-	line, _ := resp.Details["remedy"].(string)
-	if want := "pinchtab click <ref> --wait-nav"; line != want {
-		t.Fatalf("remedy = %q, want %q", line, want)
+	if got, _ := resp.Result[bridge.ResultLandedURL].(string); got != "https://pinchtab.com/docs/" {
+		t.Errorf("result[%s] = %q, want the landed URL", bridge.ResultLandedURL, got)
 	}
-	if strings.Contains(line, "--submit") {
-		t.Fatalf("remedy %q offers two flags, so it is not one command to run", line)
-	}
-	if !strings.Contains(hint, "--submit") {
-		t.Fatalf("hint %q does not name the --submit alternative the remedy dropped", hint)
-	}
-	if got, _ := resp.Details["url"].(string); got != "https://pinchtab.com/docs/" {
-		t.Fatalf("details[url] = %q, want the resulting URL", got)
+	if resp.Result[bridge.ResultRefsStale] != true {
+		t.Errorf("result does not say the caller's refs are dead: %v", resp.Result)
 	}
 }
 

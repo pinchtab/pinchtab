@@ -263,20 +263,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			if errors.Is(recErr, ErrStaleSubmitTarget) {
 				return nil, "", nil, recErr
 			}
-			// The action RAN: the click landed and moved the page, and the guard reports
-			// that navigation from inside the callback. Wrapping it as "ref not found and
-			// recovery failed" asserted two false things about a dispatch that happened,
-			// and the natural retry then repeats it. The navigation is passed through
-			// unwrapped so this answers what the same click answers with a fresh ref.
-			//
-			// The recovery record IS published here, unlike on the refusal above: it was
-			// built on the original page before the click, and it is the only disclosure
-			// of WHICH element received a click the caller aimed at a different ref.
-			// Suppressing it would leave the navigation reported with no way to learn the
-			// dispatch went somewhere else.
-			if errors.Is(recErr, bridge.ErrUnexpectedNavigation) {
-				return nil, "", &rr, recErr
-			}
 			return nil, "", &rr, refNotFound(req.Ref)
 		}
 		return recRes, "", &rr, nil
@@ -303,7 +289,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 	}
 
 	var rr *recovery.RecoveryResult
-	if err != nil && !actionAlreadyDispatched(err) && !submitClick && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
+	if err != nil && !submitClick && req.Ref != "" && h.Recovery != nil && h.Recovery.ShouldAttempt(err, req.Ref) {
 		r2, recRes, recErr := h.Recovery.AttemptWithClassification(
 			ctx, resolvedTabID, req.Ref, req.Kind,
 			recovery.ClassifyFailure(err),
@@ -322,14 +308,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		}
 	}
 	return result, backend, rr, err
-}
-
-// actionAlreadyDispatched names the one error the bridge raises only AFTER the action ran
-// and succeeded, so healing it would re-match against the page the caller's own action
-// navigated to and dispatch a second, unrequested action. The rest of recovery's navigation
-// class — a detached frame, a crashed page — means the dispatch never landed and still heals.
-func actionAlreadyDispatched(err error) bool {
-	return errors.Is(err, bridge.ErrUnexpectedNavigation)
 }
 
 func switchedTabFromActionResult(result map[string]any) string {

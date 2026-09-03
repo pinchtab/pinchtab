@@ -129,34 +129,6 @@ func actionFailureIsRetryable(err error, dispatchMayHaveLanded bool) bool {
 	return !errors.Is(err, ErrTargetNotFound) && !errors.Is(err, bridge.ErrInvalidActionRequest)
 }
 
-const navigationChangedHint = "The action navigated the page, which the guard reports unless the request declares it: set waitNav true to wait for the navigation, or submit true when the click submits a form. From the CLI those are --wait-nav and --submit."
-
-// The ref stays a placeholder: this guard reports on an action it did not receive the ref
-// for — it is reached from the post-action navigation check, which sees only the error —
-// so there is no value here to interpolate. The alternative flag stays in the hint,
-// because a remedy names one command to run.
-var navigationChangedRemedy = remedy.Declare("pinchtab click <ref> --wait-nav")
-
-func navigationChangedDetails(err error) map[string]any {
-	details := remedy.Details(navigationChangedHint, navigationChangedRemedy.Remedy())
-	if url := navigatedToURL(err); url != "" {
-		details["url"] = url
-	}
-	return details
-}
-
-func navigatedToURL(err error) string {
-	if err == nil {
-		return ""
-	}
-	message := err.Error()
-	idx := strings.LastIndex(message, " -> ")
-	if idx < 0 {
-		return ""
-	}
-	return strings.TrimSpace(message[idx+len(" -> "):])
-}
-
 func (h *Handlers) mapDialogBlockingError(err error, kind, tabID string) (string, *bridge.DialogState, bool) {
 	var dialogErr *bridge.ErrDialogBlocking
 	if errors.As(err, &dialogErr) {
@@ -683,18 +655,6 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(actionErr, ErrStaleSubmitTarget) {
 			httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found",
 				refNotFound(req.Ref).Error(), false, staleSubmitTargetDetails())
-			return
-		}
-		if errors.Is(actionErr, bridge.ErrUnexpectedNavigation) {
-			details := navigationChangedDetails(actionErr)
-			// A navigation reported after a recovered click has to say WHICH element was
-			// clicked: the caller named a ref that no longer resolved, so the dispatch went
-			// to whatever recovery matched. Without this the 409 discloses the navigation
-			// and hides the substitution.
-			if recoveryResult != nil {
-				details["recovery"] = recoveryResult
-			}
-			httpx.ErrorCode(w, 409, "navigation_changed", actionErr.Error(), false, details)
 			return
 		}
 		if browserops.IsIDPIBlocked(actionErr) {

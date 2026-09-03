@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -198,27 +197,28 @@ func TestTheSubmitCheckIsWhatStopsTheOrder(t *testing.T) {
 	}
 }
 
-// The honesty half, and the half a reviewer found pinned by nothing: a stale ref whose
-// recovered click NAVIGATES ran the action. Reporting it as "ref not found and recovery
-// failed" asserts two false things about a dispatch that happened, and the only sane
-// reaction to "not found" — retry — repeats it. This must answer the navigation itself.
-func TestAStaleRefWhoseRecoveredClickNavigatesAnswersTheNavigationNotNotFound(t *testing.T) {
+// A stale ref whose recovered click NAVIGATES ran the action, so it reports success:
+// the click landed, the page moved, and the caller is told where it landed. The
+// substitution is the one thing this must not hide — the dispatch went to whatever
+// recovery matched, not to the ref the caller named.
+func TestAStaleRefWhoseRecoveredClickNavigatesSucceedsAndDisclosesTheSubstitution(t *testing.T) {
 	f := newOrderFixture(t)
 	h, ctx, tabID := staleSubmitHandlers(t, f)
 
-	_, _, rr, err := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, h.Config, tabID, true)
+	result, _, rr, err := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, h.Config, tabID, true)
 
-	if err == nil {
-		t.Fatalf("a recovered click that navigated reported success; the guard should surface the navigation")
+	if err != nil {
+		t.Fatalf("a recovered click that navigated reported failure: %v", err)
 	}
-	if !errors.Is(err, bridge.ErrUnexpectedNavigation) {
-		t.Fatalf("error = %v, want the navigation guard's error", err)
+	if result[bridge.ResultNavigated] != true {
+		t.Errorf("result does not report the navigation: %v", result)
 	}
-	if strings.Contains(err.Error(), "not found and recovery failed") {
-		t.Errorf("the navigation is reported as a lookup failure: %q — the ref WAS matched and the click DID land", err)
+	if landed, _ := result[bridge.ResultLandedURL].(string); !strings.Contains(landed, "/terms") {
+		t.Errorf("landed url = %v, want the link's own target", result[bridge.ResultLandedURL])
 	}
-	// The click went to whatever recovery matched, not to the ref the caller named, so the
-	// record of that substitution is the one thing this response must not hide.
+	if result[bridge.ResultRefsStale] != true {
+		t.Errorf("result does not say the caller's refs are dead: %v", result)
+	}
 	if rr == nil {
 		t.Fatal("no recovery record published for a dispatched click, so nothing says which element was clicked")
 	}
@@ -242,8 +242,8 @@ func TestTheRefusalPublishesNoRecoveryRecordWhileTheNavigationDoes(t *testing.T)
 	}
 
 	_, _, navigated, navErr := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, h.Config, tabID, true)
-	if !errors.Is(navErr, bridge.ErrUnexpectedNavigation) {
-		t.Fatalf("navigation error = %v", navErr)
+	if navErr != nil {
+		t.Fatalf("the navigating click reported failure: %v", navErr)
 	}
 	if navigated == nil {
 		t.Error("the navigation published no recovery record, so a dispatched click discloses nothing about its target")
@@ -302,9 +302,9 @@ func TestTheEndpointRefusesAStaleSubmitRefWithASnapshotRemedyAndNoOrder(t *testi
 }
 
 // The helper returns the record; this pins that it survives the endpoint and reaches the
-// caller. Without it the 409 discloses the navigation and hides the substitution — and the
+// caller. Without it the 200 reports the navigation and hides the substitution — and the
 // helper-level pair cannot see that, because the field is attached one layer out.
-func TestTheNavigation409DisclosesWhichElementWasActuallyClicked(t *testing.T) {
+func TestTheNavigationResponseDisclosesWhichElementWasActuallyClicked(t *testing.T) {
 	f := newOrderFixture(t)
 	h, _, tabID := staleSubmitHandlers(t, f)
 
@@ -312,30 +312,28 @@ func TestTheNavigation409DisclosesWhichElementWasActuallyClicked(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body)))
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 for a click that ran and moved the page: %s", rec.Code, rec.Body.String())
 	}
 	var resp struct {
-		Code    string         `json:"code"`
-		Error   string         `json:"error"`
-		Details map[string]any `json:"details"`
+		Success  bool           `json:"success"`
+		Result   map[string]any `json:"result"`
+		Recovery map[string]any `json:"recovery"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode navigation response: %v (%s)", err, rec.Body.String())
 	}
-	if resp.Code != "navigation_changed" {
-		t.Errorf("code = %q, want navigation_changed", resp.Code)
+	if !resp.Success {
+		t.Errorf("success = false for a click that landed: %s", rec.Body.String())
 	}
-	if strings.Contains(resp.Error, "not found and recovery failed") {
-		t.Errorf("the wire still reports the dispatch as a lookup failure: %q", resp.Error)
+	if resp.Result[bridge.ResultNavigated] != true {
+		t.Errorf("result does not report the navigation: %v", resp.Result)
 	}
-
-	published, ok := resp.Details["recovery"].(map[string]any)
-	if !ok {
-		t.Fatalf("details.recovery absent, so the 409 says the page moved without saying the click went to a different element than the caller named: %v", resp.Details)
+	if resp.Recovery == nil {
+		t.Fatalf("recovery absent, so the response says the page moved without saying the click went to a different element than the caller named: %s", rec.Body.String())
 	}
-	if newRef, _ := published["new_ref"].(string); newRef == "" {
-		t.Errorf("details.recovery names no matched ref, so the substitution is still undisclosed: %v", published)
+	if newRef, _ := resp.Recovery["new_ref"].(string); newRef == "" {
+		t.Errorf("recovery names no matched ref, so the substitution is still undisclosed: %v", resp.Recovery)
 	}
 }
 
@@ -376,9 +374,10 @@ func TestTheStepPathTurnsTheRefusalIntoAFailedStepNamingTheSnapshot(t *testing.T
 // the navigation, and only the count says whether a second, unrequested click went out.
 type navigatingBridge struct {
 	mockBridge
-	refCache   *bridge.RefCache
-	actionErr  error
-	dispatches int64
+	refCache     *bridge.RefCache
+	actionErr    error
+	actionResult map[string]any
+	dispatches   int64
 }
 
 func (m *navigatingBridge) GetRefCache(string) *bridge.RefCache  { return m.refCache }
@@ -386,7 +385,7 @@ func (m *navigatingBridge) SetRefCache(string, *bridge.RefCache) {}
 
 func (m *navigatingBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
 	atomic.AddInt64(&m.dispatches, 1)
-	return nil, m.actionErr
+	return m.actionResult, m.actionErr
 }
 
 func navigatingHandlers(t *testing.T, actionErr error) (*navigatingBridge, *Handlers, string) {
@@ -408,23 +407,35 @@ func navigatingHandlers(t *testing.T, actionErr error) (*navigatingBridge, *Hand
 	return mb, h, tabID
 }
 
-// The card's defect: the ref resolved, the click landed, and the page moved — and recovery
-// then re-matched that ref against the page the click had already navigated to and clicked
-// whatever it found, driving the browser to a third page the caller never named.
-func TestAnActionThatOnlyTrippedTheNavigationGuardIsNotDispatchedTwice(t *testing.T) {
+// PIN-264 added a guard here that suppressed the post-execution heal when the error
+// was the navigation sentinel. That sentinel no longer exists: a navigation is a
+// SUCCESS now, so err is nil and the heal branch cannot run at all. The guard and its
+// sentinel-shaped test were deleted together rather than left as a branch nothing can
+// reach — but the property they protected is the reason this replacement exists: an
+// action that ran and moved the page must dispatch exactly once.
+func TestAnActionThatNavigatedIsNotDispatchedTwice(t *testing.T) {
 	for _, kind := range []string{bridge.ActionClick, bridge.ActionHover} {
 		t.Run(kind, func(t *testing.T) {
-			navErr := fmt.Errorf("%w: %s -> %s", bridge.ErrUnexpectedNavigation, "https://a.example/", "https://b.example/")
-			mb, h, tabID := navigatingHandlers(t, navErr)
+			mb, h, tabID := navigatingHandlers(t, nil)
+			mb.actionResult = map[string]any{
+				"ok":                     true,
+				bridge.ResultNavigated:   true,
+				bridge.ResultLandedURL:   "https://b.example/",
+				bridge.ResultPreviousURL: "https://a.example/",
+				bridge.ResultRefsStale:   true,
+			}
 
 			req := &bridge.ActionRequest{Kind: kind, Ref: "e6", NodeID: 18}
-			_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+			result, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
 
-			if !errors.Is(err, bridge.ErrUnexpectedNavigation) {
-				t.Fatalf("error = %v, want the navigation guard's sentinel", err)
+			if err != nil {
+				t.Fatalf("an action that ran and moved the page reported failure: %v", err)
+			}
+			if result[bridge.ResultLandedURL] != "https://b.example/" {
+				t.Errorf("the landed url did not reach the caller: %v", result)
 			}
 			if got := atomic.LoadInt64(&mb.dispatches); got != 1 {
-				t.Errorf("%d dispatches for one request; the guard fires only after the action succeeded, so a second one is an unrequested action on the user's browser", got)
+				t.Errorf("%d dispatches for one request; re-matching a ref against the page the caller's own action navigated to is a second, unrequested action on the user's browser", got)
 			}
 			if rr != nil {
 				t.Errorf("a recovery block was published for a request that clicked nothing else: %+v", rr)
