@@ -257,6 +257,7 @@ func CloneRuntimeConfig(in *RuntimeConfig) *RuntimeConfig {
 	out.TrustedProxyCIDRs = cloneStringSlice(in.TrustedProxyCIDRs)
 	out.TrustedResolveCIDRs = cloneStringSlice(in.TrustedResolveCIDRs)
 	out.ExtensionPaths = cloneStringSlice(in.ExtensionPaths)
+	out.BrowsersAvailable = cloneStringSlice(in.BrowsersAvailable)
 	out.FallbackOrder = cloneStringSlice(in.FallbackOrder)
 	out.AttachAllowHosts = cloneStringSlice(in.AttachAllowHosts)
 	out.AttachAllowSchemes = cloneStringSlice(in.AttachAllowSchemes)
