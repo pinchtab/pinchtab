@@ -128,7 +128,7 @@ func (h *Handlers) HandleTabMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mem, err := h.Bridge.GetMemoryMetrics(tabID)
+	mem, err := h.Bridge.GetAggregatedMemoryMetrics()
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("failed to get metrics: %w", err))
 		return

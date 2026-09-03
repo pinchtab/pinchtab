@@ -43,7 +43,12 @@ failing. Read each layer at its own endpoint instead:
 | `GET /metrics` | front door (server mode) / the bridge itself (bridge mode) | that process's own counters |
 | `GET /instances/{id}/metrics` | proxied to that instance | that instance's counters |
 | `GET /instances/metrics` | front door | per-instance **browser memory**, not request counters |
-| `GET /tabs/{id}/metrics` | proxied to the owning instance | one tab's browser measurements |
+| `GET /tabs/{id}/metrics` | proxied to the owning instance | that instance's **browser memory** — the whole process tree, not the tab |
+
+The tab id in the last row selects the instance to ask, never the measurement. There
+is no per-tab reading behind it: two tabs of one instance answer identically, and the
+figure is the same one that instance reports for itself. See
+[Memory monitoring](../guides/memory-monitoring.md).
 
 `failures.recent` repeats `layer` on each event as well as on the block, so an
 event pasted into a bug report still says where it came from.

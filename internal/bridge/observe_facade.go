@@ -128,14 +128,6 @@ func GetResponseBody(ctx context.Context, requestID string) (string, bool, error
 	return bridgeobserve.GetResponseBody(ctx, requestID)
 }
 
-func (b *Bridge) GetMemoryMetrics(tabID string) (*MemoryMetrics, error) {
-	return b.GetAggregatedMemoryMetrics()
-}
-
-func (b *Bridge) GetBrowserMemoryMetrics() (*MemoryMetrics, error) {
-	return b.GetAggregatedMemoryMetrics()
-}
-
 func (b *Bridge) GetAggregatedMemoryMetrics() (*MemoryMetrics, error) {
 	return bridgeobserve.GetAggregatedMemoryMetrics(b.BrowserCtx)
 }

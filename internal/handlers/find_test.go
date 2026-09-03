@@ -52,12 +52,6 @@ func (m *findMockBridge) NetworkMonitor() *bridge.NetworkMonitor           { ret
 func (m *findMockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
 	return nil, nil
 }
-func (m *findMockBridge) GetMemoryMetrics(tabID string) (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{}, nil
-}
-func (m *findMockBridge) GetBrowserMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{}, nil
-}
 func (m *findMockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
 	return &bridge.MemoryMetrics{}, nil
 }

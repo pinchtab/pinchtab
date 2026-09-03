@@ -61,8 +61,9 @@ type BridgeAPI interface {
 	RunningBrowser() (string, bool)
 	StealthStatus() *stealth.Status
 
-	GetMemoryMetrics(tabID string) (*MemoryMetrics, error)
-	GetBrowserMemoryMetrics() (*MemoryMetrics, error)
+	// GetAggregatedMemoryMetrics measures the whole browser process tree. There is
+	// no per-tab reading behind it, so it takes no tab identifier: /tabs/{id}/metrics
+	// uses the id to select the owning instance, never the measurement.
 	GetAggregatedMemoryMetrics() (*MemoryMetrics, error)
 
 	GetCrashLogs() []string

@@ -429,14 +429,6 @@ func (m *MockBridge) StealthStatus() *stealth.Status {
 	}
 }
 
-func (m *MockBridge) GetMemoryMetrics(tabID string) (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{MemoryMB: 10, Renderers: 1}, nil
-}
-
-func (m *MockBridge) GetBrowserMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 2}, nil
-}
-
 func (m *MockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
 	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
 }
@@ -709,5 +701,52 @@ func TestHandleHealth_IncludesFailureAndCrashDiagnostics(t *testing.T) {
 	}
 	if _, ok := resp["crashes"]; !ok {
 		t.Fatal("expected crashes diagnostics in /health response")
+	}
+}
+
+// GET /tabs/{id}/metrics reports the owning INSTANCE's process-tree memory. The tab
+// id selects the instance and the 404 for an unknown tab, never the measurement, so
+// two live tabs of one instance must answer identically — that is the documented
+// behaviour (docs/reference/metrics.md, docs/guides/memory-monitoring.md), not a bug.
+//
+// The day a genuinely per-target reading exists, this is the test that has to change,
+// and changing it is the decision to publish a narrower scope under this path.
+func TestTabMetricsReportTheInstanceAggregateForEveryTabOfOneInstance(t *testing.T) {
+	h := New(&MockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	read := func(path string) map[string]any {
+		t.Helper()
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d: %s", path, w.Code, w.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode %s: %v (body %s)", path, err, w.Body.String())
+		}
+		return body
+	}
+
+	first := read("/tabs/tab-one/metrics")
+	second := read("/tabs/tab-two/metrics")
+	if fmt.Sprint(first) != fmt.Sprint(second) {
+		t.Errorf("two tabs of one instance reported different memory (%v vs %v); this endpoint measures the browser process tree, so a per-tab difference would mean the scope changed",
+			first, second)
+	}
+
+	// The scope is checkable rather than merely asserted: the same reading is what
+	// this instance publishes for itself at /metrics, which is the layer the
+	// reference table names.
+	instance, ok := read("/metrics")["memory"].(map[string]any)
+	if !ok {
+		t.Fatalf("the instance /metrics carried no memory block; the comparison below would be vacuous")
+	}
+	if fmt.Sprint(first) != fmt.Sprint(instance) {
+		t.Errorf("the tab endpoint reported %v while the instance reports %v; the tab path must serve the instance aggregate, not a second source",
+			first, instance)
 	}
 }

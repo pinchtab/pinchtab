@@ -68,6 +68,10 @@ curl "http://localhost:9867/tabs/<tabId>/text"
 curl "http://localhost:9867/tabs/<tabId>/metrics"
 ```
 
+`/tabs/<tabId>/metrics` answers with the owning instance's aggregate memory, not the
+tab's own — the tab id selects which instance to ask. See
+[Memory monitoring](memory-monitoring.md).
+
 ## Reuse A Persistent Profile
 
 List existing profiles first:

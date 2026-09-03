@@ -274,7 +274,9 @@ Reading, writing, and clearing cookies requires `security.allowCookies=true`.
 curl http://localhost:9867/tabs/<tabId>/metrics
 ```
 
-This reports memory metrics for the tab through the bridge, not a full per-tab performance profile.
+This reports the owning browser instance's aggregate memory — the whole process tree —
+not an isolated per-tab reading: the tab id picks the instance to ask. Two tabs of one
+instance return the same figures. See [Memory monitoring](../guides/memory-monitoring.md).
 
 ## Lock And Unlock
 
