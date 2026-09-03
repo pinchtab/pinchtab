@@ -399,9 +399,44 @@ func TestEnabledFoldsModeAndEnabled(t *testing.T) {
 		{"enabled, off", Config{Enabled: true, Mode: ModeOff}, false},
 		{"disabled, preferred", Config{Enabled: false, Mode: ModePreferred}, false},
 		{"disabled, off", Config{Enabled: false, Mode: ModeOff}, false},
+		// Every value the validator refuses, and the case variants it accepts as
+		// off. The table used to cover only the two canonical spellings, so a
+		// predicate that served everything but exact "off" looked correct here.
+		{"enabled, required", Config{Enabled: true, Mode: ModeRequired}, false},
+		{"enabled, a typo", Config{Enabled: true, Mode: "prefered"}, false},
+		{"enabled, off capitalised", Config{Enabled: true, Mode: "Off"}, false},
+		{"enabled, off shouted", Config{Enabled: true, Mode: "OFF"}, false},
+		{"enabled, off with space", Config{Enabled: true, Mode: " off "}, false},
+		{"enabled, preferred capitalised", Config{Enabled: true, Mode: " Preferred "}, true},
 	} {
 		if got := NewStore(tt.cfg).Enabled(); got != tt.want {
 			t.Errorf("%s: Enabled() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// ModeServes is an allowlist over the normalized value, not "anything but off".
+// A denylist reads every unvalidated value — a typo, a posture the server does not
+// implement — as the default and leaves an auth mechanism serving, which is the
+// state refusing those values exists to end.
+func TestModeServesOnlyTheValuesTheValidatorAccepts(t *testing.T) {
+	for _, tt := range []struct {
+		mode string
+		want bool
+	}{
+		{"", true},
+		{ModePreferred, true},
+		{" Preferred ", true},
+		{ModeOff, false},
+		{"Off", false},
+		{"OFF", false},
+		{" off ", false},
+		{ModeRequired, false},
+		{"prefered", false},
+	} {
+		if got := ModeServes(tt.mode); got != tt.want {
+			t.Errorf("ModeServes(%q) = %v, want %v — a value the validator does not accept must never serve, and a case variant of off must mean off",
+				tt.mode, got, tt.want)
 		}
 	}
 }

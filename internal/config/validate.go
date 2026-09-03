@@ -25,18 +25,20 @@ import (
 // operator-visible and small-radius (the default is preferred, so only an explicit
 // setter is hit) and it replaces a silent security misapprehension with a loud one.
 func validateAgentSessionMode(mode string) []error {
-	switch mode {
+	switch session.NormalizeMode(mode) {
 	case "", session.ModeOff, session.ModePreferred:
 		return nil
 	case session.ModeRequired:
 		return []error{ValidationError{
-			Field:   "sessions.agent.mode",
-			Message: fmt.Sprintf("%q is not implemented: the server bearer token and the dashboard cookie still authenticate, so this value cannot deliver the session-only auth it names (must be off or preferred)", session.ModeRequired),
+			Field:       "sessions.agent.mode",
+			Message:     fmt.Sprintf("%q is not implemented: the server bearer token and the dashboard cookie still authenticate, so this value cannot deliver the session-only auth it names (must be off or preferred)", session.ModeRequired),
+			FatalAtLoad: true,
 		}}
 	default:
 		return []error{ValidationError{
-			Field:   "sessions.agent.mode",
-			Message: fmt.Sprintf("invalid value %q (must be off or preferred)", mode),
+			Field:       "sessions.agent.mode",
+			Message:     fmt.Sprintf("invalid value %q (must be off or preferred)", mode),
+			FatalAtLoad: true,
 		}}
 	}
 }
@@ -44,6 +46,19 @@ func validateAgentSessionMode(mode string) []error {
 type ValidationError struct {
 	Field   string
 	Message string
+
+	// FatalAtLoad stops the process at load instead of warning past the problem.
+	// Membership is an explicit opt-in with a reason per field, so the class stays
+	// readable in the type rather than being re-decided from a message:
+	//
+	//   sessions.agent.mode — an auth posture. A value the server cannot interpret
+	//     would otherwise be read as the default and leave agent sessions serving,
+	//     which is the misapprehension refusing it exists to end. Choosing a posture
+	//     on the operator's behalf is what a load must not do.
+	//
+	// It is the only member. Every other validation error warns at load and gates
+	// only the write paths, which is what keeps an inert key from aborting a server.
+	FatalAtLoad bool
 }
 
 func (e ValidationError) Error() string {

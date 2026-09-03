@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // refusedKey records a key the product deliberately does not carry: patch writes the
@@ -58,6 +59,7 @@ var censusValueFor = map[string]string{
 	"security.trustedProxyCIDRs":           "10.0.0.0/8",
 	"security.trustedResolveCIDRs":         "10.0.0.0/8",
 	"autoSolver.solvers":                   "semantic",
+	"sessions.agent.mode":                  session.ModeOff,
 }
 
 // censusCandidates are tried in order for every other key: the first one the setter takes

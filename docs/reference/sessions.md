@@ -34,6 +34,18 @@ In `config.json`:
 | `preferred` | Both bearer and session auth accepted (default) |
 | `required` | **Not implemented — refused at config load.** It would mean only session auth is accepted for agents, but the bearer token and the dashboard cookie still authenticate, so the value is refused rather than accepted and ignored |
 
+Mode values are case-insensitive and surrounding space is ignored: `"Off"`, `"OFF"`
+and `" off "` all mean off. A capitalisation slip in this switch turns agent sessions
+off, as written, rather than being read as anything else.
+
+**A mode the server cannot interpret stops it.** `"required"`, a typo, or any other
+value outside the table is refused at load: the process reports the field and exits
+instead of starting with a posture chosen on your behalf — the failure a warning-only
+load would hide is agent sessions left serving. The daemon unit and auto-start run a
+bare `pinchtab server`, so the config file is the whole input and the exit is where you
+see it. `pinchtab config set sessions.agent.mode off` still works on a config the
+server refuses to load, so the repair does not need a hand edit.
+
 ## Lifecycle
 
 1. **Create** — `pinchtab session create --agent-id <id>` (or `POST /sessions` directly)

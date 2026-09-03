@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -335,6 +336,9 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 	for _, e := range res.ValidationErrs {
 		diags = append(diags, LoadDiagnostic{slog.LevelWarn, "config validation error", []any{"path", res.Path, "error", e}})
 	}
+	if err := fatalValidationError(res.ValidationErrs); err != nil {
+		return cfg, diags, err
+	}
 	// Reported at load like the rest, but from the non-gating list: the file says
 	// something inert, which is worth knowing and is nobody's blocker.
 	for _, advisory := range res.Advisories {
@@ -348,6 +352,20 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 	}
 
 	return cfg, diags, nil
+}
+
+// fatalValidationError returns the first validation error that must stop the load.
+// The class is declared by the error itself (ValidationError.FatalAtLoad), never
+// inferred here from a field name or a message, so adding a member is a decision
+// taken where the rule is written.
+func fatalValidationError(errs []error) error {
+	for _, e := range errs {
+		var ve ValidationError
+		if errors.As(e, &ve) && ve.FatalAtLoad {
+			return fmt.Errorf("config cannot be loaded: %w", e)
+		}
+	}
+	return nil
 }
 
 // ConfigFileStatus reports on-disk config state without invoking Load (used by `pinchtab doctor`).

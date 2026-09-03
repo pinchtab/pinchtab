@@ -148,6 +148,11 @@ func TestModeOffDisablesAgentSessionsExactlyAsEnabledFalseDoes(t *testing.T) {
 			[]string{"sessions.agent.mode"}, "sessions.agent.enabled"},
 		{"both off", func(fc *config.FileConfig) { agentSessionsEnabled(fc, false); fc.Sessions.Agent.Mode = "off" },
 			[]string{"sessions.agent.enabled", "sessions.agent.mode"}, ""},
+		// A capitalisation slip in an auth switch means what the operator wrote: the
+		// save is accepted rather than refused, and the family goes off. Refusing it
+		// as a typo would leave agent sessions serving on a warning.
+		{"mode Off", func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "Off" },
+			[]string{"sessions.agent.mode"}, "sessions.agent.enabled"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFrontDoor(t, nil)
