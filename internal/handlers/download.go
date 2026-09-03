@@ -45,7 +45,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	validator := newDownloadURLGuard(allowed)
 	if err := validator.Validate(dlURL); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("unsafe URL: %w", err))
+		writeDownloadGuardError(w, fmt.Errorf("unsafe URL: %w", err), maxDownloadBytes)
 		return
 	}
 

@@ -16,10 +16,23 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 	"github.com/pinchtab/pinchtab/internal/netguard"
+	"github.com/pinchtab/pinchtab/internal/remedy"
 )
 
 // Aliased to the bridge sentinel so errors from either layer classify identically.
 var errDownloadTooLarge = bridge.ErrDownloadTooLarge
+
+const codeDownloadHostBlocked = "download_host_blocked"
+
+var errDownloadHostBlocked = errors.New("internal or blocked host")
+
+var downloadHostGrant = remedy.Declare(
+	`pinchtab config set security.downloadAllowedDomains "$(pinchtab config get security.downloadAllowedDomains),<host>" && pinchtab server restart`)
+
+type downloadHostBlockedError struct{ host string }
+
+func (e downloadHostBlockedError) Error() string { return errDownloadHostBlocked.Error() }
+func (e downloadHostBlockedError) Unwrap() error { return errDownloadHostBlocked }
 
 type downloadURLGuard struct {
 	allowedDomains []string
@@ -29,11 +42,6 @@ func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
 }
 
-// explicitlyAllowsHost reports whether the operator named this host in
-// security.downloadAllowedDomains, which is what lets the dialler reach a private
-// address. It asks the one owner of that question rather than reading the
-// restriction predicate: "nothing blocked it" is not "the operator permitted it",
-// and under a bare "*" the two answers differ.
 func (g *downloadURLGuard) explicitlyAllowsHost(host string) bool {
 	host = netguard.NormalizeHost(host)
 	if host == "" {
@@ -42,9 +50,6 @@ func (g *downloadURLGuard) explicitlyAllowsHost(host string) bool {
 	return idpi.DomainAllowed("https://"+host, config.IDPIConfig{Enabled: true}, g.allowedDomains)
 }
 
-// isDomainAllowed reports whether rawURL passes the domain restriction. A bare "*"
-// passes every host here, unchanged: this answers what the download may fetch, not
-// what it may reach a private address for.
 func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
 	if len(g.allowedDomains) == 0 {
 		return false
@@ -67,8 +72,14 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 	}
 
 	host := netguard.NormalizeHost(parsed.Hostname())
-	if host == "" || netguard.IsLocalHost(host) {
-		return fmt.Errorf("internal or blocked host")
+	if host == "" {
+		return downloadHostBlockedError{}
+	}
+	if g.explicitlyAllowsHost(host) {
+		return nil
+	}
+	if netguard.IsLocalHost(host) {
+		return downloadHostBlockedError{host: host}
 	}
 
 	if len(g.allowedDomains) > 0 {
@@ -204,11 +215,27 @@ func parseContentLengthHeaderGeneric(headers map[string]interface{}) (int64, boo
 	return parseContentLengthHeader(headers)
 }
 
+func downloadHostBlockedDetails(host string) map[string]any {
+	if host == "" {
+		return nil
+	}
+	details := remedy.Details(
+		"Name the host in security.downloadAllowedDomains to let the download endpoint reach it; a loopback entry exposes services on the server's own machine.",
+		downloadHostGrant.Fill(host))
+	details["host"] = host
+	details["setting"] = "security.downloadAllowedDomains"
+	return details
+}
+
 func writeDownloadGuardError(w http.ResponseWriter, err error, maxBytes int) bool {
 	if err == nil {
 		return false
 	}
+	var blocked downloadHostBlockedError
 	switch {
+	case errors.As(err, &blocked):
+		httpx.ErrorCode(w, http.StatusBadRequest, codeDownloadHostBlocked, err.Error(), false,
+			downloadHostBlockedDetails(blocked.host))
 	case errors.Is(err, bridge.ErrTooManyRedirects):
 		httpx.Error(w, 422, fmt.Errorf("download: %w", err))
 	case errors.Is(err, errDownloadTooLarge):

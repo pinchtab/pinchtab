@@ -2,8 +2,15 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // The download dialler asks the guard whether the operator named this host, and a
@@ -60,5 +67,82 @@ func TestABareWildcardStillLiftsTheDownloadDomainRestriction(t *testing.T) {
 	err := newDownloadURLGuard([]string{"listed.example"}).Validate(unlisted)
 	if err == nil || !strings.Contains(err.Error(), "downloadAllowedDomains") {
 		t.Errorf("a named allowlist admitted an unlisted host (%v); the row above would then prove nothing", err)
+	}
+}
+
+func TestAnAllowlistedLoopbackHostGetsTheSameVerdictFromValidateAndTheDialler(t *testing.T) {
+	stubDownloadHostResolution(t, func(ctx context.Context, network, host string) ([]net.IP, error) {
+		if host == "localhost" {
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		}
+		return nil, errors.New("not found")
+	})
+
+	for _, tc := range []struct {
+		name        string
+		allowed     []string
+		host        string
+		wantAllowed bool
+		wantBlocked bool
+	}{
+		{"loopback literal named", []string{"127.0.0.1"}, "127.0.0.1", true, false},
+		{"localhost named", []string{"localhost"}, "localhost", true, false},
+		{"loopback beside a wildcard", []string{"*", "127.0.0.1"}, "127.0.0.1", true, false},
+		{"loopback under a bare wildcard", []string{"*"}, "127.0.0.1", false, true},
+		{"loopback absent from a named list", []string{"example.com"}, "127.0.0.1", false, true},
+		{"loopback with no list", nil, "127.0.0.1", false, true},
+		{"private host named", []string{"10.0.0.5"}, "10.0.0.5", true, false},
+		{"private host absent from a named list", []string{"example.com"}, "10.0.0.5", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			guard := newDownloadURLGuard(tc.allowed)
+			err := guard.Validate("http://" + tc.host + ":18791/dl.html")
+			if (err == nil) != tc.wantAllowed {
+				t.Fatalf("Validate answered %v, want allowed=%v", err, tc.wantAllowed)
+			}
+			if errors.Is(err, errDownloadHostBlocked) != tc.wantBlocked {
+				t.Fatalf("Validate answered %v, want the blocked-host refusal=%v", err, tc.wantBlocked)
+			}
+			_, dialErr := resolveDownloadDialIPs(context.Background(), tc.host, guard.explicitlyAllowsHost(tc.host))
+			if (dialErr == nil) != tc.wantAllowed {
+				t.Fatalf("the dialler answered %v while Validate answered %v; the two layers must agree", dialErr, err)
+			}
+		})
+	}
+}
+
+func TestABlockedDownloadHostRefusalNamesTheSettingAndTheRemedy(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AllowDownload: true}, nil, nil, nil)
+	req := httptest.NewRequest("GET", "/download?url=http://127.0.0.1:18791/dl.html", nil)
+	w := httptest.NewRecorder()
+	h.HandleDownload(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code    string `json:"code"`
+		Error   string `json:"error"`
+		Details struct {
+			Host    string `json:"host"`
+			Setting string `json:"setting"`
+			Remedy  string `json:"remedy"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v: %s", err, w.Body.String())
+	}
+	if body.Code != codeDownloadHostBlocked {
+		t.Errorf("code %q, want %q", body.Code, codeDownloadHostBlocked)
+	}
+	if !strings.Contains(body.Error, "internal or blocked host") {
+		t.Errorf("error %q lost the refusal", body.Error)
+	}
+	if body.Details.Host != "127.0.0.1" || body.Details.Setting != "security.downloadAllowedDomains" {
+		t.Errorf("details name host %q setting %q", body.Details.Host, body.Details.Setting)
+	}
+	for _, want := range []string{"config set security.downloadAllowedDomains", "127.0.0.1", "server restart"} {
+		if !strings.Contains(body.Details.Remedy, want) {
+			t.Errorf("remedy %q lacks %q", body.Details.Remedy, want)
+		}
 	}
 }
