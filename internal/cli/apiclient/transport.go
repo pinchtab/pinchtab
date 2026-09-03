@@ -3,6 +3,7 @@ package apiclient
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -56,7 +57,13 @@ func doRequest(client *http.Client, token string, r request) (int, []byte, error
 	if r.respHeaders != nil {
 		*r.respHeaders = resp.Header
 	}
-	body, _ := io.ReadAll(resp.Body)
+	// A short read is a failed request, never a body: a connection dropping
+	// mid-response would otherwise reach the caller as a fragment carrying its
+	// status, and the CLI would parse or print the fragment as the answer.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("read response from %s: %w", r.url, err)
+	}
 	return resp.StatusCode, body, nil
 }
 

@@ -2,9 +2,12 @@ package activity
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
@@ -197,5 +200,47 @@ func TestPropagateHeadersUsesAgentIDHeader(t *testing.T) {
 	}
 	if got := proxyReq.Header.Get("X-PinchTab-Agent-Id"); got != "" {
 		t.Fatalf("X-PinchTab-Agent-Id = %q, want empty", got)
+	}
+}
+
+// The enrichment peek is a budget for this package's own parse, never a limit on
+// the request. Substituting the peeked bytes for r.Body truncated any action or
+// navigate payload over the budget — the routes agents spend their traffic on —
+// and the handler then reported the client's own JSON as invalid.
+func TestAnOversizeRouteBodyReachesTheHandlerIntact(t *testing.T) {
+	filler := strings.Repeat("x", activityPeekBytes*2)
+	payload := `{"kind":"fill","ref":"e5","text":"` + filler + `"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(payload))
+	EnrichRouteActivity(req)
+
+	seen, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("the restored body could not be read: %v", err)
+	}
+	if string(seen) != payload {
+		t.Fatalf("the handler saw %d of %d bytes; the middleware must peek without consuming", len(seen), len(payload))
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(seen, &decoded); err != nil {
+		t.Errorf("the body the handler received no longer parses (%v); PinchTab would report the client's payload as invalid", err)
+	}
+}
+
+// A body within the budget still enriches, so the fix above did not turn the
+// peek off.
+func TestASmallRouteBodyStillEnrichesTheActivityRow(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(`{"kind":"click","ref":"e5"}`))
+	state := &requestState{}
+	req = req.WithContext(context.WithValue(req.Context(), requestStateKey{}, state))
+
+	EnrichRouteActivity(req)
+
+	if state.event.Action != "click" || state.event.Ref != "e5" {
+		t.Errorf("action=%q ref=%q, want the peeked values", state.event.Action, state.event.Ref)
+	}
+	seen, _ := io.ReadAll(req.Body)
+	if string(seen) != `{"kind":"click","ref":"e5"}` {
+		t.Errorf("the enriched request lost its body: %q", string(seen))
 	}
 }

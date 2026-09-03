@@ -42,6 +42,10 @@ func CheckServerAndGuide(client *http.Client, base, token string) bool {
 	}
 
 	if resp.StatusCode >= 400 {
+		// The read error is discarded on purpose here, unlike in the transport: this
+		// body is only interpolated into an error message the caller is already
+		// failing on, so a partial read costs a few characters of context and
+		// nothing else.
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Fprintf(os.Stderr, "Server error %d: %s\n", resp.StatusCode, string(body))
 		return false

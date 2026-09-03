@@ -225,12 +225,22 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 	}
 }
 
+// maxEchoedScreenshotBytes bounds the raw-bytes fallback below. An error envelope
+// or an unrecognised field is small; anything of image scale that failed to parse
+// is a damaged payload, and echoing it verbatim spends the model's context on
+// megabytes of base64 that mean nothing.
+const maxEchoedScreenshotBytes = 8 << 10
+
 // screenshotResult turns the /screenshot JSON envelope into an MCP image
 // result so clients can render the picture natively. The text portion is
 // always a JSON object `{"format", "annotations": [...]}` so downstream
-// callers can parse one stable schema regardless of `annotate`. On any parse
-// hiccup we fall back to the raw bytes so error envelopes and future fields
-// still surface.
+// callers can parse one stable schema regardless of `annotate`.
+//
+// On a parse hiccup it falls back to the raw bytes, which serves the case it was
+// written for — a small error envelope, or a future field this struct does not
+// model. It refuses the other case that reaches the same branch: a body too large
+// to be either, which is a damaged image payload and is reported as one instead of
+// being handed to the model as text.
 func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
 	var env struct {
 		Format      string          `json:"format"`
@@ -238,6 +248,11 @@ func screenshotResult(body []byte, annotate bool) (*mcp.CallToolResult, error) {
 		Annotations json.RawMessage `json:"annotations,omitempty"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil || env.Base64 == "" {
+		if len(body) > maxEchoedScreenshotBytes {
+			return mcp.NewToolResultError(fmt.Sprintf(
+				"the screenshot response was %d bytes and carried no readable image; it is not echoed because a damaged image payload is not readable text — retry with beyondViewport=false, a lower quality, or a selector",
+				len(body))), nil
+		}
 		return resultFromBytes(body, 200)
 	}
 

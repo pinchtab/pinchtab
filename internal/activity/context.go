@@ -268,6 +268,15 @@ func initialAction(r *http.Request) string {
 	return ""
 }
 
+// replayedBody hands the downstream handler the bytes already read followed by the
+// rest of the stream, and closes the original. It is a ReadCloser rather than a
+// NopCloser over a buffer because the request body is not fully in memory: only the
+// peek is.
+type replayedBody struct {
+	io.Reader
+	io.Closer
+}
+
 func initialURL(r *http.Request) string {
 	if u := strings.TrimSpace(r.URL.Query().Get("url")); u != "" {
 		return sanitizeActivityURL(u)
@@ -275,9 +284,19 @@ func initialURL(r *http.Request) string {
 	return ""
 }
 
+// activityPeekBytes bounds what the enrichment reads from a request body. It is a
+// budget for THIS function's parse, never a limit on the request: the peeked bytes
+// are put back in front of the rest, so the handler always sees every byte the
+// client sent. Substituting the peek for the body truncated an oversize action or
+// navigate payload and then reported the client's own JSON as invalid.
+const activityPeekBytes = 8 << 10
+
 // EnrichRouteActivity peeks at the request body for action and navigate
-// requests to extract kind, ref, and url for the activity stream. The body
-// is restored for the downstream proxy handler.
+// requests to extract kind, ref, and url for the activity stream. The body is
+// restored in full for the downstream handler: what was read is replayed ahead of
+// whatever is still unread, so enrichment costs the request nothing. A payload
+// whose first activityPeekBytes are not a complete JSON object simply enriches
+// nothing — the activity row loses a field, the request keeps its bytes.
 func EnrichRouteActivity(r *http.Request) {
 	if r == nil || r.Body == nil || r.Method != http.MethodPost {
 		return
@@ -289,11 +308,16 @@ func EnrichRouteActivity(r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<10))
-	if err != nil || len(body) == 0 {
+	original := r.Body
+	peeked, err := io.ReadAll(io.LimitReader(original, activityPeekBytes))
+	r.Body = replayedBody{
+		Reader: io.MultiReader(bytes.NewReader(peeked), original),
+		Closer: original,
+	}
+	if err != nil || len(peeked) == 0 {
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
+	body := peeked
 
 	var peek struct {
 		Kind string `json:"kind"`

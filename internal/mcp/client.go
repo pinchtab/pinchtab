@@ -104,11 +104,48 @@ func (c *Client) doWithHeaders(req *http.Request) ([]byte, int, http.Header, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MB limit
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
 	if err != nil {
 		return nil, resp.StatusCode, resp.Header, fmt.Errorf("read response: %w", err)
 	}
+	if len(body) > MaxResponseBytes {
+		return nil, resp.StatusCode, resp.Header, oversizeResponseError(req.URL.Path, resp.ContentLength)
+	}
 	return body, resp.StatusCode, resp.Header, nil
+}
+
+// MaxResponseBytes caps what the MCP server will read from one PinchTab response.
+// The read takes MaxResponseBytes+1 and refuses above the cap — the module's idiom
+// wherever a limit exists — because a body cut at exactly the cap is indistinguishable
+// from a whole one, and the consumer here is a language model that cannot tell a
+// truncated base64 image from a complete one.
+const MaxResponseBytes = 10 << 20
+
+// oversizeResponseError refuses the read and tells the agent how to ask for less.
+// A refusal an agent cannot act on is retried verbatim, so the remedy is keyed to the
+// endpoint that produced the body rather than being a generic "too large".
+func oversizeResponseError(path string, contentLength int64) error {
+	seen := "more than"
+	if contentLength >= 0 {
+		seen = fmt.Sprintf("%d bytes, over", contentLength)
+	}
+	return fmt.Errorf("%s returned %s the %d-byte response limit and was refused rather than truncated; %s",
+		path, seen, MaxResponseBytes, oversizeRemedy(path))
+}
+
+// oversizeRemedy names the narrowing argument of the tool that reaches each path.
+func oversizeRemedy(path string) string {
+	switch {
+	case strings.HasSuffix(path, "/screenshot"):
+		return "retry with beyondViewport=false, a lower quality, or a selector so only one element is captured"
+	case strings.HasSuffix(path, "/capture"):
+		return "retry with beyondViewport=false, a lower quality, or interactiveOnly so the snapshot half is smaller"
+	case strings.HasSuffix(path, "/snapshot"), strings.HasSuffix(path, "/text"),
+		strings.HasSuffix(path, "/html"), strings.HasSuffix(path, "/scrape"):
+		return "retry with a selector, a smaller depth, or interactiveOnly to read one region instead of the page"
+	default:
+		return "retry asking for less of the page"
+	}
 }
 
 // GetCapturingVocab performs a GET and records the response's vocabulary token
