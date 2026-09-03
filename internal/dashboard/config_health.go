@@ -32,6 +32,7 @@ type healthEnvelope struct {
 	Uptime              int64                `json:"uptime"`
 	AuthRequired        bool                 `json:"authRequired"`
 	Profiles            int                  `json:"profiles"`
+	TemporaryProfiles   int                  `json:"temporaryProfiles"`
 	QuarantinedProfiles int                  `json:"quarantinedProfiles"`
 	Instances           int                  `json:"instances"`
 	DefaultInstance     *healthInstanceInfo  `json:"defaultInstance,omitempty"`
@@ -52,16 +53,19 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		return healthEnvelope{}, err
 	}
 
-	profileCount, quarantinedCount := 0, 0
+	profileCount, temporaryCount, quarantinedCount := 0, 0, 0
 	if c.profiles != nil {
 		profiles, err := c.profiles.List()
 		if err == nil {
 			for _, p := range profiles {
-				if p.Quarantined {
+				switch {
+				case p.Quarantined:
 					quarantinedCount++
-					continue
+				case p.Temporary:
+					temporaryCount++
+				default:
+					profileCount++
 				}
-				profileCount++
 			}
 		}
 	}
@@ -90,6 +94,7 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		Uptime:              int64(time.Since(c.startedAt).Milliseconds()),
 		AuthRequired:        cfg != nil && strings.TrimSpace(cfg.Token) != "",
 		Profiles:            profileCount,
+		TemporaryProfiles:   temporaryCount,
 		QuarantinedProfiles: quarantinedCount,
 		Instances:           instanceCount,
 		DefaultInstance:     defaultInst,
