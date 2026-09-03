@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/remedy"
 )
 
 func (f frontDoor) sessionRequest(t *testing.T, token string) *httptest.ResponseRecorder {
@@ -105,19 +106,48 @@ func TestEnablingAgentSessionsReportsARestartReason(t *testing.T) {
 	}
 }
 
+// applyRemedy runs the refusal's own remedy against a file config, so the test
+// follows the prescription instead of restoring by hand. A remedy that names the
+// wrong setting therefore does not merely read wrong — the service stays refused.
+func applyRemedy(t *testing.T, fc *config.FileConfig, line string) {
+	t.Helper()
+
+	segments := remedy.Segments(line)
+	if len(segments) == 0 {
+		t.Fatalf("the refusal carried no runnable remedy (%q)", line)
+	}
+	for _, words := range segments {
+		if len(words) != 5 || words[1] != "config" || words[2] != "set" {
+			t.Fatalf("remedy segment %v is not a `pinchtab config set <field> <value>` this test can apply", words)
+		}
+		if err := config.SetConfigValue(fc, words[3], words[4]); err != nil {
+			t.Fatalf("the refusal prescribes `%s` and the config editor answers %v", strings.Join(words, " "), err)
+		}
+	}
+}
+
 // mode "off" is the other half of one question, and the docs promise it reduces
 // the auth surface. It must reach exactly the state enabled false reaches — the
 // same refusals, through the same assertions — or the two fields drift again.
-// mode and the two timeouts have no boot-time consumer, so they apply live in
-// both directions and never produce a restart reason.
+//
+// Both fields reach one refusal, so the refusal has to say WHICH is off: an
+// operator handed a command for the setting they did not touch runs it and lands
+// on the identical refusal with nothing new. The restore here is the refusal's own
+// remedy rather than a hand-written inverse, so a wrong prescription reds twice —
+// once on the setting it names, once on the service that stays refused.
 func TestModeOffDisablesAgentSessionsExactlyAsEnabledFalseDoes(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		disable func(*config.FileConfig)
-		restore func(*config.FileConfig)
+		names   []string
+		banned  string
 	}{
-		{"enabled false", func(fc *config.FileConfig) { agentSessionsEnabled(fc, false) }, func(fc *config.FileConfig) { agentSessionsEnabled(fc, true) }},
-		{"mode off", func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "off" }, func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "preferred" }},
+		{"enabled false", func(fc *config.FileConfig) { agentSessionsEnabled(fc, false) },
+			[]string{"sessions.agent.enabled"}, "sessions.agent.mode"},
+		{"mode off", func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "off" },
+			[]string{"sessions.agent.mode"}, "sessions.agent.enabled"},
+		{"both off", func(fc *config.FileConfig) { agentSessionsEnabled(fc, false); fc.Sessions.Agent.Mode = "off" },
+			[]string{"sessions.agent.enabled", "sessions.agent.mode"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFrontDoor(t, nil)
@@ -140,19 +170,57 @@ func TestModeOffDisablesAgentSessionsExactlyAsEnabledFalseDoes(t *testing.T) {
 				t.Fatalf("the existing session token still authenticated (%d: %s)", after.Code, after.Body.String())
 			}
 			create := f.createSessionOverHTTP(t)
-			if create.Code != http.StatusNotFound || errorCode(t, create) != CodeSessionsDisabled {
+			if create.Code != http.StatusNotFound {
 				t.Fatalf("POST /sessions answered %d (%s), want the disabled refusal", create.Code, create.Body.String())
 			}
+			code, _, hint, prescribed := decodeSessionRefusal(t, create)
+			if code != CodeSessionsDisabled {
+				t.Fatalf("refusal code = %q, want %q", code, CodeSessionsDisabled)
+			}
+			for _, setting := range tc.names {
+				if !strings.Contains(hint, setting) {
+					t.Errorf("hint = %q, want it to name %q — the setting that is actually off", hint, setting)
+				}
+				if !strings.Contains(prescribed, setting) {
+					t.Errorf("remedy = %q, want it to set %q", prescribed, setting)
+				}
+			}
+			if tc.banned != "" {
+				if strings.Contains(hint, tc.banned) || strings.Contains(prescribed, tc.banned) {
+					t.Errorf("the refusal prescribes %q, which is not the setting that was switched off: hint %q, remedy %q",
+						tc.banned, hint, prescribed)
+				}
+			}
 
-			// Back again, live: the family was mounted at boot, so nothing here is frozen.
-			f.save(t, tc.restore)
+			// Follow the prescription exactly. The family was mounted at boot, so it
+			// must restore the service live, with no restart owed.
+			f.save(t, func(fc *config.FileConfig) { applyRemedy(t, fc, prescribed) })
 			if !f.agentSessions.Enabled() {
-				t.Fatal("the store did not come back; the restoring save reported applied and moved nothing")
+				t.Fatal("the refusal's own remedy did not re-enable the store")
 			}
 			if back := f.createSessionOverHTTP(t); back.Code != http.StatusCreated {
-				t.Fatalf("POST /sessions answered %d (%s) after restoring", back.Code, back.Body.String())
+				t.Fatalf("POST /sessions answered %d (%s) after running the prescribed remedy", back.Code, back.Body.String())
 			}
 		})
+	}
+}
+
+// The boot-frozen direction, through mode rather than through enabled: a process
+// that booted with mode off never mounted the family, so a save turning it back on
+// must report a restart reason instead of claiming it applied. Without the mode
+// fold in SessionsFileConfig.AgentEnabled this save reports applied and moves
+// nothing — the defect one field over, which no unit table can see.
+func TestEnablingThroughModeOnABootDisabledServerReportsARestartReason(t *testing.T) {
+	f := newFrontDoor(t, func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "off" })
+
+	reasons := f.saveReportingReasons(t, func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "preferred" })
+	if !slices.Contains(reasons, "Agent sessions") {
+		t.Fatalf("restartReasons = %v, want one naming the agent sessions block", reasons)
+	}
+	create := f.createSessionOverHTTP(t)
+	if create.Code != http.StatusNotFound || errorCode(t, create) != CodeSessionsDisabled {
+		t.Fatalf("POST /sessions answered %d (%s) after the save; if the family were live the restart reason would be manufactured",
+			create.Code, create.Body.String())
 	}
 }
 

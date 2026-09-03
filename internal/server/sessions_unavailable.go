@@ -26,8 +26,7 @@ const (
 	msgSessionsUnavailableInBridgeMode = "agent sessions are unavailable in bridge mode"
 	hintSessionsUnavailableInBridge    = "no config value mounts the session family on a bridge; the full server is what serves it."
 
-	msgSessionsDisabled  = session.MsgDisabled
-	hintSessionsDisabled = session.HintDisabledAtBoot
+	msgSessionsDisabled = session.MsgDisabled
 )
 
 // Running the full server is the bridge's whole remedy. The verb it used to lead with —
@@ -58,8 +57,12 @@ func RegisterSessionsUnavailableInBridgeMode(mux *http.ServeMux) {
 		msgSessionsUnavailableInBridgeMode, hintSessionsUnavailableInBridge, runFullServer.Remedy())
 }
 
-// RegisterSessionsDisabled is the full server's answer when sessions.agent.enabled is off.
-func RegisterSessionsDisabled(mux *http.ServeMux) {
-	registerSessionsUnavailable(mux, CodeSessionsDisabled,
-		msgSessionsDisabled, hintSessionsDisabled, remedy.None)
+// RegisterSessionsDisabled is the full server's answer when this process booted
+// with agent sessions off. off names the settings that switched them off, so the
+// refusal prescribes the one the operator actually set; the guidance carries no
+// remedy, because reaching a family this process never mounted needs a restart as
+// well as an edit and that is not one command.
+func RegisterSessionsDisabled(mux *http.ServeMux, off []string) {
+	hint, r := session.DisabledGuidance(off, false)
+	registerSessionsUnavailable(mux, CodeSessionsDisabled, msgSessionsDisabled, hint, r)
 }

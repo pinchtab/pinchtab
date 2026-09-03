@@ -44,9 +44,27 @@ const (
 	ModeRequired  = "required"
 )
 
-// ModeServes reports whether a mode value leaves agent sessions serving. An
-// empty value is the default, ModePreferred.
-func ModeServes(mode string) bool { return mode != ModeOff }
+// NormalizeMode is the canonical reading of a sessions.agent.mode value: case
+// folded and trimmed, the way this codebase reads every other config enum. The
+// validator and the predicate both go through it so the accepted set is spelled
+// once, and so "Off" means off rather than being a typo that leaves an auth
+// mechanism on.
+func NormalizeMode(mode string) string {
+	return strings.ToLower(strings.TrimSpace(mode))
+}
+
+// ModeServes reports whether a mode value leaves agent sessions serving. It is an
+// allowlist, not a denylist: an empty value is the default (ModePreferred) and
+// nothing else serves, so a value the validator refuses can never be read as
+// "preferred" by a process that started anyway.
+func ModeServes(mode string) bool {
+	switch NormalizeMode(mode) {
+	case "", ModePreferred:
+		return true
+	default:
+		return false
+	}
+}
 
 // Config controls store behavior.
 type Config struct {
@@ -496,6 +514,27 @@ func (s *Store) Enabled() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cfg.Enabled && ModeServes(s.cfg.Mode)
+}
+
+// DisabledBy names the settings switching agent sessions off, so a refusal can
+// prescribe a command that works. Two fields reach the one predicate, and an
+// operator who disabled through one of them is not helped by being told to set
+// the other. Empty when the store serves.
+func (s *Store) DisabledBy() []string {
+	if s == nil {
+		return []string{SettingEnabled}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var off []string
+	if !s.cfg.Enabled {
+		off = append(off, SettingEnabled)
+	}
+	if !ModeServes(s.cfg.Mode) {
+		off = append(off, SettingMode)
+	}
+	return off
 }
 
 // PersistPath returns the file the store persists to, so a caller rebuilding

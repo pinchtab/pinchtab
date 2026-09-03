@@ -61,8 +61,9 @@ func (a *SessionAPI) registerPatterns(mux *http.ServeMux, patterns []string) {
 func (a *SessionAPI) whileEnabled(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a.store == nil || !a.store.Enabled() {
+			hint, r := session.DisabledGuidance(a.store.DisabledBy(), true)
 			httpx.ErrorCode(w, http.StatusNotFound, session.CodeDisabled, session.MsgDisabled, false,
-				remedy.Details(session.HintDisabledBySave, session.RemedyEnable()))
+				remedy.Details(hint, r))
 			return
 		}
 		next(w, r)

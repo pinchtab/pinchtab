@@ -32,6 +32,13 @@ func decodeSessionRefusal(t *testing.T, w *httptest.ResponseRecorder) (code, mes
 	return resp.Code, resp.Error, resp.Details.Hint, resp.Details.Remedy
 }
 
+// registerDisabledByEnabled is the boot-disabled registrar in its commonest state,
+// bound so the tables below keep their func(*http.ServeMux) shape. Which setting is
+// off is the subject of the front-door guidance test, not of these.
+func registerDisabledByEnabled(mux *http.ServeMux) {
+	RegisterSessionsDisabled(mux, []string{session.SettingEnabled})
+}
+
 func requestFor(pattern string) *http.Request {
 	method, path, _ := strings.Cut(pattern, " ")
 	// {id} is a mux wildcard, not a literal; a real caller sends a value.
@@ -52,7 +59,7 @@ func TestBothUnavailableModesAnswerEveryRouteInTheFamilyWithACode(t *testing.T) 
 		{"bridge", RegisterSessionsUnavailableInBridgeMode, CodeSessionsUnavailableInBridgeMode, "pinchtab server", "bridge"},
 		// No remedy: enabling the family is a file edit plus a restart, which is not one
 		// command a caller can run, so the guidance is a hint and the field is absent.
-		{"sessions disabled", RegisterSessionsDisabled, CodeSessionsDisabled, "", "sessions.agent.enabled"},
+		{"sessions disabled", registerDisabledByEnabled, CodeSessionsDisabled, "", "sessions.agent.enabled"},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			mux := http.NewServeMux()
@@ -105,7 +112,7 @@ func TestTheTwoUnavailableModesDoNotShareARemedy(t *testing.T) {
 	}
 
 	bridgeCode, bridgeGuidance := answer(RegisterSessionsUnavailableInBridgeMode)
-	disabledCode, disabledGuidance := answer(RegisterSessionsDisabled)
+	disabledCode, disabledGuidance := answer(registerDisabledByEnabled)
 
 	if bridgeCode == disabledCode {
 		t.Errorf("both modes answer with %q, so the caller cannot tell them apart", bridgeCode)
@@ -153,7 +160,7 @@ func TestAnUnknownPathIsUntouchedAndSaysNothingAboutSessions(t *testing.T) {
 		register func(*http.ServeMux)
 	}{
 		{"bridge", RegisterSessionsUnavailableInBridgeMode},
-		{"sessions disabled", RegisterSessionsDisabled},
+		{"sessions disabled", registerDisabledByEnabled},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			mux := http.NewServeMux()

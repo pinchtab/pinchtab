@@ -25,6 +25,7 @@ func TestEveryConfigReadHoldsTheStoreLock(t *testing.T) {
 		"applyConfig",     // called under the lock by UpdateConfig, and from NewStore before sharing
 		"registerSession", // takes the lock, stamps the lifetime, installs the session
 		"Enabled",         // takes the lock for the read of both fields the predicate folds
+		"DisabledBy",      // takes the lock for the read of the same two fields
 		"PersistPath",     // takes the lock for the read
 		"isExpired",       // only ever called with the lock held
 		"loadPersisted",   // runs in NewStore, before the store is reachable

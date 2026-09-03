@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/server"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 // The three states are produced by the REAL registrars rather than hand-written JSON, so
@@ -54,7 +55,7 @@ func TestSessionCreateAdviceDiffersPerUnavailableState(t *testing.T) {
 		},
 		{
 			name:         "server with sessions disabled",
-			register:     server.RegisterSessionsDisabled,
+			register:     func(mux *http.ServeMux) { server.RegisterSessionsDisabled(mux, []string{session.SettingEnabled}) },
 			path:         "/sessions",
 			wantAdvice:   true,
 			wantGuidance: "sessions.agent.enabled",

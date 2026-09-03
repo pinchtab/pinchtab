@@ -73,7 +73,7 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 	if agentSessions.Enabled() {
 		dashboard.NewSessionAPI(agentSessions, cfg.BrowsersAvailable).RegisterHandlers(mux)
 	} else {
-		RegisterSessionsDisabled(mux)
+		RegisterSessionsDisabled(mux, agentSessions.DisabledBy())
 	}
 
 	return frontDoor{

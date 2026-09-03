@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/pinchtab/pinchtab/internal/remedy"
@@ -32,22 +33,45 @@ func RoutePatterns() []string {
 // it off in a process that did mount it.
 //
 // The code and the message are shared because both states genuinely are disabled.
-// The HINT is not, and must not be: whether a restart is owed is exactly what
-// separates them. A boot-disabled process never mounted the family, so enabling it
-// cannot reach the running process; a process disabled by a save already mounted
-// the family, so switching it back on applies immediately. One hint serving both
-// tells an operator to restart a server that does not need it.
+// The GUIDANCE is not, and must not be, because it varies in two independent ways.
+// Whether a RESTART is owed separates the two registrars: a boot-disabled process
+// never mounted the family, so enabling it cannot reach the running process, while
+// a save-disabled one already mounted it and re-enabling applies immediately. WHICH
+// SETTING is off separates two ways of being disabled: enabled false and mode off
+// both reach this refusal, and a refusal naming the wrong one hands the operator a
+// command that leaves them on the identical refusal with nothing new.
 const (
 	CodeDisabled = "sessions_disabled"
 	MsgDisabled  = "agent sessions are not enabled on this server"
 
-	HintDisabledAtBoot = "set sessions.agent.enabled = true and restart the server; the route family is mounted at startup, so enabling it cannot take effect in the running process."
-	HintDisabledBySave = "agent sessions were switched off by a config save; set sessions.agent.enabled = true to switch them back on — this server already mounted the route family, so it applies without a restart."
+	SettingEnabled = "sessions.agent.enabled"
+	SettingMode    = "sessions.agent.mode"
 )
 
-// enableAgentSessions is the remedy the save-disabled state has and the boot-disabled
-// state does not: one command, applying live, with no restart to pair it with.
-var enableAgentSessions = remedy.Declare("pinchtab config set sessions.agent.enabled true")
+const (
+	hintAtBoot = "set %s and restart the server; the route family is mounted at startup, so enabling it cannot take effect in the running process."
+	hintBySave = "agent sessions were switched off by a config save; set %s to switch them back on — this server already mounted the route family, so it applies without a restart."
+)
 
-// RemedyEnable is the save-disabled state's remedy line.
-func RemedyEnable() remedy.Remedy { return enableAgentSessions.Remedy() }
+var (
+	enableAgentSessions  = remedy.Declare("pinchtab config set " + SettingEnabled + " true")
+	preferAgentSessions  = remedy.Declare("pinchtab config set " + SettingMode + " preferred")
+	restoreAgentSessions = remedy.Declare("pinchtab config set " + SettingEnabled + " true && pinchtab config set " + SettingMode + " preferred")
+)
+
+// DisabledGuidance is the hint and remedy for a disabled refusal. off is what
+// Store.DisabledBy answered; mounted says whether this process mounted the family,
+// which is what decides whether any single command can reach it.
+func DisabledGuidance(off []string, mounted bool) (string, remedy.Remedy) {
+	setting, r := SettingEnabled+" = true", enableAgentSessions.Remedy()
+	switch {
+	case slices.Contains(off, SettingEnabled) && slices.Contains(off, SettingMode):
+		setting, r = SettingEnabled+" = true and "+SettingMode+" = preferred", restoreAgentSessions.Remedy()
+	case slices.Contains(off, SettingMode):
+		setting, r = SettingMode+" = preferred", preferAgentSessions.Remedy()
+	}
+	if !mounted {
+		return fmt.Sprintf(hintAtBoot, setting), remedy.None
+	}
+	return fmt.Sprintf(hintBySave, setting), r
+}
