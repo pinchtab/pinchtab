@@ -156,6 +156,21 @@ func TestHostAllowedAcrossTheFormsAHostIsWrittenIn(t *testing.T) {
 		{"wildcard subdomain", "https://api.corp.example.com/v1", true},
 		{"wildcard subdomain bare with port", "api.corp.example.com:8443", true},
 
+		// The protocol-relative form and the slash runs a browser skips after a
+		// special scheme. These read as hostless to net/url, so this primitive
+		// answered "" for them and refused a listed host — and, read INVERTED by
+		// the response-forgery rule, a listed host that stops matching starts
+		// PERMITTING forgery on exactly the sensitive origin the list marks.
+		{"protocol-relative", "//example.com/x", true},
+		{"protocol-relative with port", "//example.com:8443/x", true},
+		{"protocol-relative unlisted", "//evil.com/x", false},
+		{"single leading slash", "/example.com/x", true},
+		{"special scheme, no slashes", "https:example.com/x", true},
+		{"special scheme, one slash", "https:/example.com/x", true},
+		{"special scheme, four slashes", "https:////example.com/x", true},
+		{"special scheme, backslashes", `https:\\example.com\x`, true},
+		{"special scheme, backslashes unlisted", `https:\\evil.com\x`, false},
+
 		{"unlisted host", "https://evil.com", false},
 		{"unlisted host with port", "evil.com:8080", false},
 		{"unlisted subdomain of a listed host", "https://evil.example.com.attacker.test", false},
@@ -212,5 +227,32 @@ func TestOnePackageOwnsTheSecurityHostExtractor(t *testing.T) {
 	}
 	if filepath.Base(filepath.Dir(declarations[0])) != "security" {
 		t.Errorf("the one extractor lives in %s; internal/security owns this primitive because every consumer already imports it and it imports none of them", declarations[0])
+	}
+}
+
+// The direction this primitive is read in by internal/bridge's response-forgery
+// rule, which inverts it: forgery is BLOCKED on listed hosts. A spelling that stops
+// matching the allowlist therefore does not merely refuse a navigation — it PERMITS
+// response forgery on the origin the operator marked as sensitive. That is the half
+// of the widening the navigation tests cannot see, so it is asserted here.
+func TestASpellingThatStopsMatchingWouldPermitForgeryOnAListedHost(t *testing.T) {
+	allowed := []string{"bank.example.com"}
+
+	for _, rawURL := range []string{
+		"https://bank.example.com/transfer",
+		"//bank.example.com/transfer",
+		"//bank.example.com:8443/transfer",
+		"/bank.example.com/transfer",
+		"https:bank.example.com/transfer",
+		"https:/bank.example.com/transfer",
+		"https:////bank.example.com/transfer",
+		`https:\\bank.example.com\transfer`,
+	} {
+		t.Run(rawURL, func(t *testing.T) {
+			if !HostAllowed(rawURL, allowed) {
+				t.Errorf("HostAllowed(%q) = false (host extracted: %q) — the forgery rule reads this inverted, so a listed host that stops matching starts permitting forged responses on the sensitive origin the list marks",
+					rawURL, ExtractHost(rawURL))
+			}
+		})
 	}
 }
