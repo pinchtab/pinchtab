@@ -15,7 +15,9 @@ vi.mock("../services/api", () => ({
   fetchInstances: vi.fn(),
   launchInstance: vi.fn(),
   stopInstance: vi.fn(),
-  fetchInstanceTabs: vi.fn(),
+  // The detail panel loads the tab count on mount, so this needs a real
+  // resolution rather than the undefined a bare vi.fn() answers with.
+  fetchInstanceTabs: vi.fn().mockResolvedValue([]),
   fetchInstanceLogs: vi.fn(),
   fetchActivity: vi.fn(),
   fetchAllTabs: vi.fn(),

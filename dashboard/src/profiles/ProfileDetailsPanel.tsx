@@ -34,7 +34,11 @@ export default function ProfileDetailsPanel({
   deleteNotice,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
-  const [tabs, setTabs] = useState<InstanceTab[]>([]);
+  // null is "the count is not known", which the badge must not render as 0: a
+  // hard 0 beside a running instance reads as "idle, safe to stop" and Stop is
+  // two buttons away. It is the initial state as well as the failed-fetch one,
+  // so the first paint never claims a count it has not read.
+  const [tabs, setTabs] = useState<InstanceTab[] | null>(null);
   const [formValues, setFormValues] = useState({ name: "", useWhen: "" });
   const { handoffNotifications } = useAppStore();
 
@@ -58,26 +62,26 @@ export default function ProfileDetailsPanel({
     setFormValues({ name, useWhen });
   }, []);
 
+  const instanceId = instance?.id;
+
   const loadTabs = useCallback(async () => {
-    if (!instance?.id) {
+    if (!instanceId) {
       setTabs([]);
       return;
     }
 
     try {
-      const instanceTabs = await api
-        .fetchInstanceTabs(instance.id)
-        .catch(() => []);
-      setTabs(instanceTabs);
+      setTabs(await api.fetchInstanceTabs(instanceId));
     } catch (e) {
       console.error("Failed to load tabs", e);
+      setTabs(null);
     }
-  }, [instance]);
+  }, [instanceId]);
 
+  // Unguarded by activeTab: the badge is what tells an operator whether opening
+  // the Tabs sub-panel is worth it, so it cannot be populated by opening it.
   useEffect(() => {
-    if (activeTab === "live" || activeTab === "tabs" || activeTab === "logs") {
-      loadTabs();
-    }
+    loadTabs();
   }, [activeTab, loadTabs]);
 
   const handleSave = () => {
@@ -99,7 +103,7 @@ export default function ProfileDetailsPanel({
   const profileTabs: { id: TabId; label: string; badge?: string | number }[] = [
     { id: "profile", label: `Profile: ${profile.name}` },
     { id: "live", label: "Live" },
-    { id: "tabs", label: "Tabs", badge: tabs.length },
+    { id: "tabs", label: "Tabs", badge: tabs === null ? "—" : tabs.length },
     { id: "logs", label: "Logs" },
   ];
 
@@ -140,7 +144,7 @@ export default function ProfileDetailsPanel({
           {activeTab === "live" && (
             <ProfileLiveViewPanel
               instance={instance}
-              tabs={tabs}
+              tabs={tabs ?? []}
               isRunning={isRunning}
             />
           )}
@@ -148,7 +152,7 @@ export default function ProfileDetailsPanel({
           {activeTab === "tabs" && (
             <div className="flex h-full min-h-0 flex-col">
               <InstanceTabsPanel
-                tabs={tabs}
+                tabs={tabs ?? []}
                 instanceId={instance?.id}
                 handoffTabs={handoffTabs}
                 emptyMessage={
