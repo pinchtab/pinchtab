@@ -162,3 +162,47 @@ func TestASaveKeepsTheAgentSessionStoreWritingToItsOriginalPath(t *testing.T) {
 		t.Errorf("the store started writing under the edited stateDir %s, splitting live sessions across two files", moved)
 	}
 }
+
+// Both states answer sessions_disabled and both are genuinely disabled, so the code
+// and the message are shared. The GUIDANCE cannot be: only the boot-disabled state
+// owes a restart. A shared hint is this card's own defect one direction over — the
+// machine-readable restartReasons says nothing is owed while the human-readable
+// remedy in the same response family says to restart.
+func TestTheTwoDisabledStatesDoNotShareGuidance(t *testing.T) {
+	booted := newFrontDoor(t, func(fc *config.FileConfig) { agentSessionsEnabled(fc, false) })
+	bootCode, _, bootHint, bootRemedy := decodeSessionRefusal(t, booted.createSessionOverHTTP(t))
+
+	saved := newFrontDoor(t, nil)
+	saved.save(t, func(fc *config.FileConfig) { agentSessionsEnabled(fc, false) })
+	saveCode, _, saveHint, saveRemedy := decodeSessionRefusal(t, saved.createSessionOverHTTP(t))
+
+	if bootCode != CodeSessionsDisabled || saveCode != CodeSessionsDisabled {
+		t.Fatalf("codes = %q and %q, want both %q; the code is the state and both states are disabled",
+			bootCode, saveCode, CodeSessionsDisabled)
+	}
+	if bootHint == saveHint {
+		t.Fatalf("both disabled states answer the same hint %q; one of them is told to restart a server that re-enables live", bootHint)
+	}
+	if !strings.Contains(bootHint, "restart the server") {
+		t.Errorf("the boot-disabled hint = %q, want it to say a restart is owed — the family was never mounted", bootHint)
+	}
+	if !strings.Contains(saveHint, "without a restart") {
+		t.Errorf("the save-disabled hint = %q, want it to say no restart is owed", saveHint)
+	}
+	if bootRemedy != "" {
+		t.Errorf("the boot-disabled remedy = %q, want none: a config edit plus a restart is not one command", bootRemedy)
+	}
+	if saveRemedy == "" {
+		t.Error("the save-disabled state carries no remedy, though one command reverses it")
+	}
+
+	// The save-disabled hint's claim, checked rather than merely worded.
+	reasons := saved.saveReportingReasons(t, func(fc *config.FileConfig) { agentSessionsEnabled(fc, true) })
+	if len(reasons) != 0 {
+		t.Fatalf("re-enabling after a save reported %v; the hint promises no restart is owed", reasons)
+	}
+	if create := saved.createSessionOverHTTP(t); create.Code != http.StatusCreated {
+		t.Fatalf("POST /sessions answered %d (%s) after re-enabling; the hint promises it applies immediately",
+			create.Code, create.Body.String())
+	}
+}

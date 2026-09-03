@@ -27,7 +27,7 @@ const (
 	hintSessionsUnavailableInBridge    = "no config value mounts the session family on a bridge; the full server is what serves it."
 
 	msgSessionsDisabled  = session.MsgDisabled
-	hintSessionsDisabled = session.HintDisabled
+	hintSessionsDisabled = session.HintDisabledAtBoot
 )
 
 // Running the full server is the bridge's whole remedy. The verb it used to lead with —

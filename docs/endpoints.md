@@ -894,7 +894,9 @@ Scheduler routes are only present when `scheduler.enabled` is true.
 
 Create returns `sessionToken` — the plaintext token shown only once.
 
-Agent session routes are only present in full server mode with `sessions.agent.enabled` true. The family always answers, so the state is readable from the error code rather than from a bare 404: a bridge returns `sessions_unavailable_bridge_mode`, whose remedy is to run `pinchtab server`, and a full server with the setting off returns `sessions_disabled`, whose remedy is the config change. No config value mounts the family in bridge mode.
+Agent session routes are only present in full server mode with `sessions.agent.enabled` true. The family always answers, so the state is readable from the error code rather than from a bare 404: a bridge returns `sessions_unavailable_bridge_mode`, whose remedy is to run `pinchtab server`, and a full server with the setting off returns `sessions_disabled`. No config value mounts the family in bridge mode.
+
+`sessions_disabled` covers two states, and its `details.hint` says which one. A server that BOOTED with the setting off never mounted the family, so enabling it needs `pinchtab config set sessions.agent.enabled true` and a restart, and the refusal carries no `details.remedy` because that is not one command. A server that booted with it on and was switched off by a config save already mounted the family: `pinchtab config set sessions.agent.enabled true` applies live, needs no restart, and is carried as the refusal's `details.remedy`.
 
 Session-authenticated callers cannot reach dashboard/admin endpoint families such as config, dashboard agent listings, dashboard event streams, session management, profile management, instance management, or cache controls. They are intended for trusted automation in controlled environments, not for untrusted multi-tenant isolation.
 

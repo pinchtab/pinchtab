@@ -1,6 +1,10 @@
 package session
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/pinchtab/pinchtab/internal/remedy"
+)
 
 // routePatterns is the ONE definition of the agent-session family's mux patterns. Three
 // call sites range over it: the live registration in the dashboard package, and the two
@@ -26,8 +30,24 @@ func RoutePatterns() []string {
 // registrars answer for it: the server package when the store booted disabled and
 // never mounted the family, and the dashboard's SessionAPI when a save switched
 // it off in a process that did mount it.
+//
+// The code and the message are shared because both states genuinely are disabled.
+// The HINT is not, and must not be: whether a restart is owed is exactly what
+// separates them. A boot-disabled process never mounted the family, so enabling it
+// cannot reach the running process; a process disabled by a save already mounted
+// the family, so switching it back on applies immediately. One hint serving both
+// tells an operator to restart a server that does not need it.
 const (
 	CodeDisabled = "sessions_disabled"
 	MsgDisabled  = "agent sessions are not enabled on this server"
-	HintDisabled = "set sessions.agent.enabled = true and restart the server; the route family is mounted at startup, so enabling it cannot take effect in the running process."
+
+	HintDisabledAtBoot = "set sessions.agent.enabled = true and restart the server; the route family is mounted at startup, so enabling it cannot take effect in the running process."
+	HintDisabledBySave = "agent sessions were switched off by a config save; set sessions.agent.enabled = true to switch them back on — this server already mounted the route family, so it applies without a restart."
 )
+
+// enableAgentSessions is the remedy the save-disabled state has and the boot-disabled
+// state does not: one command, applying live, with no restart to pair it with.
+var enableAgentSessions = remedy.Declare("pinchtab config set sessions.agent.enabled true")
+
+// RemedyEnable is the save-disabled state's remedy line.
+func RemedyEnable() remedy.Remedy { return enableAgentSessions.Remedy() }

@@ -55,13 +55,14 @@ func (a *SessionAPI) registerPatterns(mux *http.ServeMux, patterns []string) {
 }
 
 // whileEnabled re-reads the store on every request, so a save that switches agent
-// sessions off is refused by routes a boot with them on already mounted. The
-// answer is the one the never-mounted state gives, from the same vocabulary.
+// sessions off is refused by routes a boot with them on already mounted. The code
+// and message are the never-mounted state's; the guidance is not, because this
+// state is the one a config set alone reverses.
 func (a *SessionAPI) whileEnabled(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a.store == nil || !a.store.Enabled() {
 			httpx.ErrorCode(w, http.StatusNotFound, session.CodeDisabled, session.MsgDisabled, false,
-				remedy.Details(session.HintDisabled, remedy.None))
+				remedy.Details(session.HintDisabledBySave, session.RemedyEnable()))
 			return
 		}
 		next(w, r)
