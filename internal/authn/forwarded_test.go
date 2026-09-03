@@ -58,6 +58,11 @@ func TestRequestScheme(t *testing.T) {
 			true, "https",
 		},
 		{
+			"rfc7239 Forwarded proto reads the client-most element, not the proxy-most",
+			requestWith("example.com", false, map[string]string{"Forwarded": `for=203.0.113.7;host=app.example;proto=https, for=10.0.0.1;proto=http;host=proxy.internal`}),
+			true, "https",
+		},
+		{
 			"X-Forwarded-Proto preferred over Forwarded",
 			requestWith("example.com", false, map[string]string{"X-Forwarded-Proto": "https", "Forwarded": "proto=http"}),
 			true, "https",
@@ -110,6 +115,11 @@ func TestRequestHost(t *testing.T) {
 			"rfc7239 Forwarded host",
 			requestWith("origin.internal", false, map[string]string{"Forwarded": `host=public.example.com;proto=https`}),
 			true, "public.example.com",
+		},
+		{
+			"rfc7239 Forwarded host reads the client-most element, not the proxy-most",
+			requestWith("origin.internal", false, map[string]string{"Forwarded": `for=203.0.113.7;proto=https;host=app.example, for=10.0.0.1;proto=http;host=proxy.internal`}),
+			true, "app.example",
 		},
 		{
 			"falls back to direct host when no forwarded header",
