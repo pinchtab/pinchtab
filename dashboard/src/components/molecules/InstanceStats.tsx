@@ -127,6 +127,37 @@ export default function InstanceStats({ instance, metrics, tabs }: Props) {
           <StatItem label="Renderers" value={fmt(metrics.renderers)} />
         </StatGroup>
       )}
+
+      {metrics && (metrics.page || metrics.unreadableTargets > 0) && (
+        <StatGroup title="Pages">
+          {metrics.page && (
+            <>
+              <StatItem
+                label="JS heap"
+                value={`${fmt(metrics.page.jsHeapUsedMB, 1)} / ${fmt(metrics.page.jsHeapTotalMB, 1)} MB`}
+                sub={`used / total, summed over ${fmt(metrics.page.targets)} tab${metrics.page.targets === 1 ? "" : "s"}`}
+              />
+              <StatItem label="DOM nodes" value={fmt(metrics.page.nodes)} />
+              <StatItem
+                label="Listeners"
+                value={fmt(metrics.page.jsEventListeners)}
+              />
+              <StatItem
+                label="Frames"
+                value={fmt(metrics.page.frames)}
+                sub={`${fmt(metrics.page.documents)} documents`}
+              />
+            </>
+          )}
+          {metrics.unreadableTargets > 0 && (
+            <StatItem
+              label="Unreadable"
+              value={fmt(metrics.unreadableTargets)}
+              sub="tabs that did not answer; not counted"
+            />
+          )}
+        </StatGroup>
+      )}
     </div>
   );
 }

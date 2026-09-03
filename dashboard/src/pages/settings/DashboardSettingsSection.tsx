@@ -94,7 +94,7 @@ export function DashboardSettingsSection({
       </SettingRow>
       <SettingRow
         label="Memory metrics"
-        description="Collect per-instance browser memory (RSS across the Chrome process tree) in the dashboard. Useful for debugging, but heavier."
+        description="Poll every running instance for browser memory on each monitoring tick: RSS across the Chrome process tree plus JS heap and DOM counters read from each open tab over CDP. Measured cost: about a millisecond per open tab plus a few tens of milliseconds for the process-tree walk, per instance per tick."
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input

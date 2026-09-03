@@ -1,17 +1,17 @@
 # Memory Monitoring
 
-PinchTab exposes memory information for the Chrome processes it launches. The current implementation measures browser memory at the process level and reports browser-wide aggregates for each instance.
+PinchTab exposes memory information for the Chrome processes it launches. Each instance reports two measurements side by side: the OS view of its process tree, and the page counters Chrome itself reports for the tabs that instance tracks.
 
 ## What PinchTab Measures
 
-PinchTab walks the Chrome process tree for a running instance:
+For the process tree, PinchTab walks the running instance's Chrome processes:
 
 1. find the main browser PID
 2. enumerate child processes
 3. sum RSS memory across the browser and its children
 4. count renderer processes
 
-This gives you real OS-level memory usage for that instance's Chrome process tree.
+For the pages, PinchTab asks every tab the instance tracks for its own `Performance.getMetrics` reading over CDP and sums the answers.
 
 ## Memory Fields
 
@@ -19,12 +19,23 @@ This gives you real OS-level memory usage for that instance's Chrome process tre
 | --- | --- |
 | `memoryMB` | Real RSS memory across the browser process tree |
 | `renderers` | Number of renderer processes in the browser process tree |
+| `page.targets` | Tabs whose reading is included in the `page` sums |
+| `page.jsHeapUsedMB` / `page.jsHeapTotalMB` | JavaScript heap used and reserved, summed over those tabs |
+| `page.documents` / `page.frames` / `page.nodes` / `page.jsEventListeners` | DOM counters summed over those tabs |
+| `unreadableTargets` | Tabs that did not answer within the read timeout; they contribute nothing |
 
-Both fields are measured. Neither is derived from the other, and PinchTab reports no JavaScript-heap or DOM-count figures: there is no CDP collection behind these endpoints.
+Every field is measured; none is derived from another field in the payload.
+
+## Aggregation Rule
+
+- **Which targets contribute:** every tab the instance tracks with a live context. Each is read separately with `Performance.getMetrics`, and the `page` block is the sum of the readings that arrived.
+- **Scope:** the instance. `memoryMB` is the whole process tree, which also holds the GPU and utility processes and the shared browser process; `page` covers only the tabs. The two describe different populations and are never combined or compared arithmetically.
+- **Absent versus unreadable:** `page` is omitted when no tab contributed. `unreadableTargets` says how many tabs were asked and did not answer (closed or crashed mid-collection, or a read timeout). No tab is ever reported as `0` heap or `0` nodes because it could not be read: `{"unreadableTargets":0}` with no `page` means no tabs, `{"unreadableTargets":2}` with no `page` means two tabs that would not answer.
+- **Cost (measured, five tabs open):** about 1 ms per tab read and about 30 ms for the process-tree walk, so a poll is a few tens of milliseconds per instance and grows by roughly a millisecond per open tab. The dashboard's **Memory metrics** toggle does not gate the CDP reads specifically: it gates whether the dashboard polls every running instance's `/metrics` on each monitoring tick at all. `GET /metrics` on an instance always collects both.
 
 Important limitation:
 
-- `GET /tabs/{id}/metrics` returns the owning browser instance's aggregate memory, not isolated per-tab memory
+- `GET /tabs/{id}/metrics` returns the owning browser instance's aggregate, including the `page` sum over all its tabs, not isolated per-tab figures
 
 ## Instance Metrics
 
@@ -45,7 +56,17 @@ Example shape:
   },
   "memory": {
     "memoryMB": 850.5,
-    "renderers": 11
+    "renderers": 11,
+    "page": {
+      "targets": 3,
+      "jsHeapUsedMB": 41.2,
+      "jsHeapTotalMB": 64.0,
+      "documents": 4,
+      "frames": 5,
+      "nodes": 9120,
+      "jsEventListeners": 212
+    },
+    "unreadableTargets": 0
   }
 }
 ```
@@ -61,11 +82,13 @@ Example shape:
 ```json
 {
   "memoryMB": 850.5,
-  "renderers": 11
+  "renderers": 11,
+  "page": { "targets": 3, "jsHeapUsedMB": 41.2, "jsHeapTotalMB": 64.0, "documents": 4, "frames": 5, "nodes": 9120, "jsEventListeners": 212 },
+  "unreadableTargets": 0
 }
 ```
 
-Treat this as “memory for the browser instance that owns this tab”, not “memory for this tab alone”.
+Treat this as “memory for the browser instance that owns this tab”, not “memory for this tab alone”: the `page` block is summed over every tab of that instance.
 
 ## All Running Instances
 
@@ -75,7 +98,7 @@ In orchestrator mode:
 curl http://localhost:9867/instances/metrics
 ```
 
-This returns one metrics object per running instance — `instanceId`, `profileName`, `memoryMB` and `renderers` — which is the best API for comparing memory across a fleet.
+This returns one metrics object per running instance — `instanceId`, `profileName`, `memoryMB`, `renderers`, `page` and `unreadableTargets` — which is the best API for comparing memory across a fleet.
 
 ## Dashboard Monitoring
 

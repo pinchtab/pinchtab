@@ -28,8 +28,10 @@ type remoteHealth struct {
 }
 
 type memoryMetrics struct {
-	MemoryMB  float64 `json:"memoryMB"`
-	Renderers int     `json:"renderers"`
+	MemoryMB          float64             `json:"memoryMB"`
+	Renderers         int                 `json:"renderers"`
+	Page              *bridge.PageMetrics `json:"page,omitempty"`
+	UnreadableTargets int                 `json:"unreadableTargets"`
 }
 
 func (o *Orchestrator) fetchTabs(inst *InstanceInternal) ([]remoteTab, error) {

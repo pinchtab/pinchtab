@@ -206,6 +206,19 @@ type InstanceMetrics struct {
 	ProfileName string  `json:"profileName"`
 	MemoryMB    float64 `json:"memoryMB"`
 	Renderers   int     `json:"renderers"`
+
+	Page              *PageMetrics `json:"page,omitempty"`
+	UnreadableTargets int          `json:"unreadableTargets"`
+}
+
+type PageMetrics struct {
+	Targets          int     `json:"targets"`
+	JSHeapUsedMB     float64 `json:"jsHeapUsedMB"`
+	JSHeapTotalMB    float64 `json:"jsHeapTotalMB"`
+	Documents        int     `json:"documents"`
+	Frames           int     `json:"frames"`
+	Nodes            int     `json:"nodes"`
+	JSEventListeners int     `json:"jsEventListeners"`
 }
 
 type LaunchInstanceRequest struct {

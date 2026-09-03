@@ -189,6 +189,17 @@ export interface InstanceMetrics {
   profileName: string;
   memoryMB: number /* float64 */;
   renderers: number /* int */;
+  page?: PageMetrics;
+  unreadableTargets: number /* int */;
+}
+export interface PageMetrics {
+  targets: number /* int */;
+  jsHeapUsedMB: number /* float64 */;
+  jsHeapTotalMB: number /* float64 */;
+  documents: number /* int */;
+  frames: number /* int */;
+  nodes: number /* int */;
+  jsEventListeners: number /* int */;
 }
 export interface LaunchInstanceRequest {
   profileId?: string; // profile ID (prof_XXXXXXXX) or existing profile name

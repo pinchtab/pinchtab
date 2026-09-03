@@ -129,6 +129,18 @@ func browserExecutorContext(ctx context.Context) (context.Context, error) {
 	return cdp.WithExecutor(ctx, c.Browser), nil
 }
 
+func (tm *TabManager) LiveTabContexts() map[string]context.Context {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	out := make(map[string]context.Context, len(tm.tabs))
+	for id, entry := range tm.tabs {
+		if entry.Ctx != nil && entry.Ctx.Err() == nil {
+			out[id] = entry.Ctx
+		}
+	}
+	return out
+}
+
 func (tm *TabManager) trackedTabIDs() []string {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()

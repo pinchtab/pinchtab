@@ -45,6 +45,56 @@ describe("InstanceStats", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the summed page counters and the tabs that did not answer", () => {
+    render(
+      <InstanceStats
+        instance={instance}
+        metrics={{
+          instanceId: "inst_1",
+          profileName: "default",
+          memoryMB: 512,
+          renderers: 3,
+          unreadableTargets: 1,
+          page: {
+            targets: 2,
+            jsHeapUsedMB: 12.5,
+            jsHeapTotalMB: 20,
+            documents: 2,
+            frames: 3,
+            nodes: 6400,
+            jsEventListeners: 51,
+          },
+        }}
+        tabs={[]}
+      />,
+    );
+    expect(screen.getByText("12.5 / 20 MB")).toBeInTheDocument();
+    expect(
+      screen.getByText("used / total, summed over 2 tabs"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("6,400")).toBeInTheDocument();
+    expect(screen.getByText("51")).toBeInTheDocument();
+    expect(screen.getByText("Unreadable")).toBeInTheDocument();
+  });
+
+  it("shows no page group when no tab could be read and none failed", () => {
+    render(
+      <InstanceStats
+        instance={instance}
+        metrics={{
+          instanceId: "inst_1",
+          profileName: "default",
+          memoryMB: 512,
+          renderers: 3,
+          unreadableTargets: 0,
+        }}
+        tabs={[]}
+      />,
+    );
+    expect(screen.queryByText("Pages")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unreadable")).not.toBeInTheDocument();
+  });
+
   it("stays silent about crashes for an instance that never crashed", () => {
     render(<InstanceStats instance={instance} tabs={[]} />);
     expect(screen.getByText("running")).toBeInTheDocument();

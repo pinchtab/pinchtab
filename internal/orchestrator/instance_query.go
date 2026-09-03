@@ -328,13 +328,30 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 			continue
 		}
 		all = append(all, types.InstanceMetrics{
-			InstanceID:  inst.ID,
-			ProfileName: inst.ProfileName,
-			MemoryMB:    mem.MemoryMB,
-			Renderers:   mem.Renderers,
+			InstanceID:        inst.ID,
+			ProfileName:       inst.ProfileName,
+			MemoryMB:          mem.MemoryMB,
+			Renderers:         mem.Renderers,
+			Page:              pageMetricsDTO(mem.Page),
+			UnreadableTargets: mem.UnreadableTargets,
 		})
 	}
 	return all
+}
+
+func pageMetricsDTO(page *bridge.PageMetrics) *types.PageMetrics {
+	if page == nil {
+		return nil
+	}
+	return &types.PageMetrics{
+		Targets:          page.Targets,
+		JSHeapUsedMB:     page.JSHeapUsedMB,
+		JSHeapTotalMB:    page.JSHeapTotalMB,
+		Documents:        page.Documents,
+		Frames:           page.Frames,
+		Nodes:            page.Nodes,
+		JSEventListeners: page.JSEventListeners,
+	}
 }
 
 func (o *Orchestrator) ScreencastURL(instanceID, tabID string) string {

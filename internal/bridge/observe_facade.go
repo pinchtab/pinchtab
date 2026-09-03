@@ -31,6 +31,8 @@ type NetworkFilter = bridgeobserve.NetworkFilter
 type NetworkMonitor = bridgeobserve.NetworkMonitor
 type MemoryMetrics = bridgeobserve.MemoryMetrics
 
+type PageMetrics = bridgeobserve.PageMetrics
+
 func frameIDs(tree RawFrameTree) []string {
 	return bridgeobserve.FrameIDs(tree)
 }
@@ -129,5 +131,9 @@ func GetResponseBody(ctx context.Context, requestID string) (string, bool, error
 }
 
 func (b *Bridge) GetAggregatedMemoryMetrics() (*MemoryMetrics, error) {
-	return bridgeobserve.GetAggregatedMemoryMetrics(b.BrowserCtx)
+	var targets map[string]context.Context
+	if tm, err := b.tabManager(); err == nil {
+		targets = tm.LiveTabContexts()
+	}
+	return bridgeobserve.GetAggregatedMemoryMetrics(b.BrowserCtx, targets)
 }
