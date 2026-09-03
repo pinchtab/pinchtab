@@ -78,7 +78,7 @@ pinchtab nav <url> --block-images       # Block images for this navigation
 pinchtab nav <url> --block-ads          # Block ads for this navigation
 pinchtab nav <url> --snap               # Navigate and output interactive snapshot
 pinchtab nav <url> --text               # Navigate and output page text
-pinchtab nav <url> --print-tab-id       # Print only the tab ID, whatever stdout is
+pinchtab nav <url> --print-tab-id       # Print only the tab ID, whatever stdout is (with --snap/--text the tab ID goes to stderr)
 pinchtab back                           # Go back in the active tab
 pinchtab back --tab <id>                # Go back in a specific tab
 pinchtab forward                        # Go forward in the active tab

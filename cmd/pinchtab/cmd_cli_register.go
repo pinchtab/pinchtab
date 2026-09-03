@@ -275,7 +275,7 @@ func configureBrowserFlags() {
 	)
 
 	evalCmd.Flags().Bool("await-promise", false, "Resolve a returned Promise before responding")
-	navCmd.Flags().Bool("print-tab-id", false, "Print only the tab ID on stdout (also triggered automatically when stdout is a pipe)")
+	navCmd.Flags().Bool("print-tab-id", false, "Print only the tab ID on stdout; with --snap or --text the payload owns stdout and the tab ID goes to stderr (also triggered automatically when stdout is a pipe)")
 	for _, cmd := range []*cobra.Command{handoffCmd, tabHandoffCmd} {
 		cmd.Flags().String("reason", "", "Reason for human handoff (default: manual_handoff)")
 		cmd.Flags().Int("timeout-ms", 0, "Optional auto-resume timeout in milliseconds")

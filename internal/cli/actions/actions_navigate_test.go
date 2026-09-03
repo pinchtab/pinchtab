@@ -22,6 +22,9 @@ func newNavigateCmd() *cobra.Command {
 	cmd.Flags().Float64("timeout", 0, "")
 	cmd.Flags().String("tab", "", "")
 	cmd.Flags().Bool("print-tab-id", false, "")
+	cmd.Flags().Bool("snap", false, "")
+	cmd.Flags().Bool("snap-diff", false, "")
+	cmd.Flags().Bool("text", false, "")
 	return cmd
 }
 
@@ -390,34 +393,54 @@ func TestNavigateReportsTheLandedURLAtATerminal(t *testing.T) {
 	}
 }
 
-// TAB=$(pinchtab nav URL) captures every line, so a second line would break it.
-// Both the explicit flag and a non-terminal stdout must stay single-line.
-func TestNavigatePrintsOnlyTheTabIDWhenCaptured(t *testing.T) {
+const navigateSnapshotPayload = "# Example Domain | https://example.com/ | 1 nodes\ne1:link \"More information\""
+
+func TestNavigateStdoutHasOneOwner(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		terminal bool
-		flag     bool
+		name          string
+		terminal      bool
+		flag          bool
+		payload       string
+		wantStdout    string
+		tabIDOnStderr bool
 	}{
-		{name: "stdout is not a character device", terminal: false},
-		{name: "print-tab-id at a terminal", terminal: true, flag: true},
+		{name: "terminal", terminal: true, wantStdout: "ABC123\nhttps://example.com/\n"},
+		{name: "terminal with snap", terminal: true, payload: "snap", wantStdout: "ABC123\nhttps://example.com/\n" + navigateSnapshotPayload + "\n"},
+		{name: "pipe", wantStdout: "ABC123\n"},
+		{name: "print-tab-id at a terminal", terminal: true, flag: true, wantStdout: "ABC123\n"},
+		{name: "pipe with snap", payload: "snap", wantStdout: navigateSnapshotPayload + "\n", tabIDOnStderr: true},
+		{name: "pipe with snap-diff", payload: "snap-diff", wantStdout: navigateSnapshotPayload + "\n", tabIDOnStderr: true},
+		{name: "pipe with text", payload: "text", wantStdout: "Page text\n", tabIDOnStderr: true},
+		{name: "print-tab-id at a terminal with snap", terminal: true, flag: true, payload: "snap", wantStdout: navigateSnapshotPayload + "\n", tabIDOnStderr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stdoutTerminal(t, tc.terminal)
 
 			m := newMockServer()
 			m.response = `{"tabId":"ABC123","url":"https://example.com/"}`
+			m.responses["GET /snapshot"] = mockResponse{statusCode: 200, body: navigateSnapshotPayload}
+			m.responses["GET /tabs/ABC123/text"] = mockResponse{statusCode: 200, body: `{"text":"Page text"}`}
 			defer m.close()
 
 			cmd := newNavigateCmd()
 			if tc.flag {
 				_ = cmd.Flags().Set("print-tab-id", "true")
 			}
-			out := captureStdout(t, func() {
-				Navigate(m.server.Client(), m.base(), "", "https://example.com", cmd)
+			if tc.payload != "" {
+				_ = cmd.Flags().Set(tc.payload, "true")
+			}
+			var stdout string
+			stderr := captureStderr(t, func() {
+				stdout = captureStdout(t, func() {
+					Navigate(m.server.Client(), m.base(), "", "https://example.com", cmd)
+				})
 			})
 
-			if got := strings.TrimSpace(out); got != "ABC123" {
-				t.Errorf("stdout = %q, want exactly the tab ID so $(pinchtab nav URL) stays usable", got)
+			if stdout != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tc.wantStdout)
+			}
+			if got := strings.Contains(stderr, "ABC123\n"); got != tc.tabIDOnStderr {
+				t.Errorf("tab id on stderr = %v, want %v (stderr %q)", got, tc.tabIDOnStderr, stderr)
 			}
 		})
 	}
@@ -563,9 +586,6 @@ func TestNavigateTextFetchesPageText(t *testing.T) {
 	defer m.close()
 
 	cmd := newNavigateCmd()
-	cmd.Flags().Bool("snap", false, "")
-	cmd.Flags().Bool("snap-diff", false, "")
-	cmd.Flags().Bool("text", false, "")
 	_ = cmd.Flags().Set("text", "true")
 
 	out := captureStdout(t, func() {
