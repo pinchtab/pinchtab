@@ -48,6 +48,11 @@ func TestHealthCountsEachProfileInExactlyOneBucketThatReconcilesWithTheListing(t
 	profileDir(t, baseDir, "instance-9869")
 	profileDir(t, baseDir, "instance-9870")
 	profileDir(t, baseDir, "default.quarantine-1700000001")
+	// A quarantined TEMPORARY: the real quarantine flow renames instance-9871 to
+	// instance-9871.quarantine-<ts>, so List() reports it Temporary AND Quarantined.
+	// GET /profiles hides it as temporary, so /health must count it as temporary too
+	// or profiles + quarantinedProfiles no longer equals the default list length.
+	profileDir(t, baseDir, "instance-9871.quarantine-1700000002")
 	pm := profiles.NewProfileManager(baseDir)
 
 	api := newConfigAPIForTest(config.Load(), nil, pm, nil, nil, "test", time.Now())
@@ -61,8 +66,8 @@ func TestHealthCountsEachProfileInExactlyOneBucketThatReconcilesWithTheListing(t
 		t.Fatalf("decode: %v", err)
 	}
 
-	if health.Profiles != 2 || health.TemporaryProfiles != 3 || health.QuarantinedProfiles != 1 {
-		t.Errorf("profiles/temporary/quarantined = %d/%d/%d, want 2/3/1", health.Profiles, health.TemporaryProfiles, health.QuarantinedProfiles)
+	if health.Profiles != 2 || health.TemporaryProfiles != 4 || health.QuarantinedProfiles != 1 {
+		t.Errorf("profiles/temporary/quarantined = %d/%d/%d, want 2/4/1 — the quarantined temporary belongs in temporaryProfiles, the bucket GET /profiles treats it as", health.Profiles, health.TemporaryProfiles, health.QuarantinedProfiles)
 	}
 	all, err := pm.List()
 	if err != nil {

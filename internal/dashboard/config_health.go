@@ -58,11 +58,16 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		profiles, err := c.profiles.List()
 		if err == nil {
 			for _, p := range profiles {
+				// Temporary is checked before Quarantined to match GET /profiles'
+				// own precedence, which hides Temporary first: a quarantined
+				// temporary (an instance-*.quarantine-* dir) is a temporary the
+				// listing hides, so counting it as quarantined would break the
+				// reconciliation profiles + quarantinedProfiles == default list length.
 				switch {
-				case p.Quarantined:
-					quarantinedCount++
 				case p.Temporary:
 					temporaryCount++
+				case p.Quarantined:
+					quarantinedCount++
 				default:
 					profileCount++
 				}
