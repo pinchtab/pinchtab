@@ -320,6 +320,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	maintenanceCtx, maintenanceCancel := context.WithCancel(context.Background())
 	go orch.RunMaintenance(maintenanceCtx)
 	go sessionStore.RunMaintenance(maintenanceCtx)
+	go sessions.RunMaintenance(maintenanceCtx)
 
 	shutdownOnce := &sync.Once{}
 	doShutdown := func() {

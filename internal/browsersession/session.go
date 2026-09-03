@@ -1,8 +1,10 @@
 package browsersession
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -296,12 +298,53 @@ func (m *Manager) applyConfigLocked(cfg Config) {
 }
 
 func (m *Manager) sessionValid(state sessionState, now time.Time, expected [32]byte) bool {
-	return m.sessionTimeValid(state, now) && state.TokenHash == expected
+	return m.sessionTimeValid(state, now) &&
+		subtle.ConstantTimeCompare(state.TokenHash[:], expected[:]) == 1
 }
 
 func (m *Manager) sessionTimeValid(state sessionState, now time.Time) bool {
 	return now.Sub(state.LastSeen) <= m.idleTimeout &&
 		now.Sub(state.CreatedAt) <= m.maxLifetime
+}
+
+// MaintenanceInterval is how often RunMaintenance sweeps expired sessions.
+const MaintenanceInterval = 5 * time.Minute
+
+// PruneExpired drops expired sessions and persists the result. Expiry is
+// otherwise only noticed when a session's own cookie is presented again, so a
+// dashboard login that is simply abandoned — a closed browser, a second device —
+// is never detected, and its record plus its token hash survive in memory and in
+// the persisted file for the life of the process.
+func (m *Manager) PruneExpired() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	before := len(m.sessions)
+	m.pruneExpiredLocked(m.now())
+	var job saveJob
+	if len(m.sessions) != before {
+		job = m.snapshotLocked()
+	}
+	m.mu.Unlock()
+	m.writeSnapshot(job)
+}
+
+// RunMaintenance sweeps expired sessions until ctx is done.
+func (m *Manager) RunMaintenance(ctx context.Context) {
+	if m == nil {
+		return
+	}
+	t := time.NewTicker(MaintenanceInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			m.PruneExpired()
+		}
+	}
 }
 
 func (m *Manager) pruneExpiredLocked(now time.Time) {

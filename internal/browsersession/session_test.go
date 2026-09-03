@@ -424,3 +424,64 @@ func TestSessionManagerClearsElevationAcrossRestartByDefault(t *testing.T) {
 		t.Fatal("IsElevated() after restart = true, want false when persistence across restart is disabled")
 	}
 }
+
+// A dashboard login that is never presented again — a closed browser, a second
+// device — expires but is noticed by nothing: every other deletion path runs off
+// the cookie the abandoned session no longer sends. Without a sweep its record and
+// its token hash sit in memory and in the persisted file for the life of the
+// process, and the file is rewritten whole on every later mutation.
+func TestPruneExpiredForgetsAnAbandonedSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	mgr := NewManager(Config{
+		IdleTimeout: time.Hour,
+		MaxLifetime: 24 * time.Hour,
+		Persist:     true,
+		PersistPath: path,
+	})
+	mgr.now = func() time.Time { return now }
+
+	abandoned, err := mgr.Create("secret")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now = now.Add(90 * time.Minute)
+	live, err := mgr.Create("secret")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	mgr.PruneExpired()
+
+	persisted := func() map[string]bool {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read persist file: %v", readErr)
+		}
+		var ps persistedSessions
+		if unmarshalErr := json.Unmarshal(data, &ps); unmarshalErr != nil {
+			t.Fatalf("unmarshal: %v", unmarshalErr)
+		}
+		ids := map[string]bool{}
+		for _, r := range ps.Sessions {
+			ids[r.ID] = true
+		}
+		return ids
+	}()
+
+	mgr.mu.RLock()
+	_, stillInMemory := mgr.sessions[abandoned]
+	_, liveInMemory := mgr.sessions[live]
+	mgr.mu.RUnlock()
+
+	if stillInMemory {
+		t.Error("the expired session is still in memory after the sweep")
+	}
+	if persisted[abandoned] {
+		t.Error("the expired session's record and token hash are still on disk after the sweep")
+	}
+	if !liveInMemory || !persisted[live] {
+		t.Error("the sweep dropped a session that is still within its idle timeout")
+	}
+}
