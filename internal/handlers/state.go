@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
@@ -46,7 +47,7 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryptionKey := os.Getenv("PINCHTAB_STATE_KEY")
+	encryptionKey := h.stateEncryptionKey()
 	path := state.ResolvePath(h.Config.StateDir, name)
 	sf, err := state.Load(path, encryptionKey)
 	if err != nil {
@@ -54,6 +55,22 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, sf)
+}
+
+// stateEncryptionKey resolves the key the state files are encrypted with. The
+// environment variable wins so an operator can override per process, and
+// security.stateEncryptionKey answers otherwise — it is the documented knob,
+// it is redacted by the dashboard config API, and it was reachable by
+// `config set` while nothing read it, so setting it stored a secret that did
+// nothing and the request still refused for want of a key.
+func (h *Handlers) stateEncryptionKey() string {
+	if key := strings.TrimSpace(os.Getenv("PINCHTAB_STATE_KEY")); key != "" {
+		return key
+	}
+	if h == nil || h.Config == nil {
+		return ""
+	}
+	return strings.TrimSpace(h.Config.StateEncryptionKey)
 }
 
 type stateSaveRequest struct {
@@ -77,9 +94,9 @@ func (h *Handlers) HandleStateSave(w http.ResponseWriter, r *http.Request) {
 
 	encryptionKey := ""
 	if req.Encrypt {
-		encryptionKey = os.Getenv("PINCHTAB_STATE_KEY")
+		encryptionKey = h.stateEncryptionKey()
 		if err := state.ValidateEncryptionKey(encryptionKey); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("encryption key required: set PINCHTAB_STATE_KEY environment variable"))
+			httpx.Error(w, 400, fmt.Errorf("encryption key required: set security.stateEncryptionKey or the PINCHTAB_STATE_KEY environment variable"))
 			return
 		}
 	}

@@ -138,7 +138,47 @@ func Save(stateDir string, sf *StateFile, encryptionKey string) (string, error) 
 		return "", fmt.Errorf("write state file: %w", err)
 	}
 
+	// One name is one file. Save picks its extension from whether a key was
+	// supplied, so saving a name again with the encryption flag flipped used to
+	// leave the earlier file beside the new one — and the earlier one is the
+	// plaintext copy of the same cookies whenever the flip was towards
+	// encryption. Removing the sibling is the difference between "this state is
+	// encrypted now" and "there is also an unencrypted copy of it on disk".
+	if err := removeSibling(dir, sanitizeFilename(sf.Name), ext); err != nil {
+		return path, err
+	}
+
 	return path, nil
+}
+
+// removeSibling deletes the same state name under the extension Save did not
+// write. A failure is returned rather than logged: the caller has just been told
+// the state is encrypted, and the whole point is that the other copy is gone.
+func removeSibling(dir, base, writtenExt string) error {
+	for _, ext := range stateExtensions {
+		if ext == writtenExt {
+			continue
+		}
+		path, ok := statePathWithin(dir, base, ext)
+		if !ok {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove previous %s copy of state %q: %w", ext, base, err)
+		}
+	}
+	return nil
+}
+
+// stateExtensions are the two spellings one state name can have on disk,
+// encrypted first because that is the one ResolvePath prefers.
+var stateExtensions = []string{".json.enc", ".json"}
+
+// statePathWithin joins a state file path and reports whether it stayed inside
+// dir, so every caller applies the same containment rule.
+func statePathWithin(dir, base, ext string) (string, bool) {
+	path := filepath.Clean(filepath.Join(dir, base+ext))
+	return path, strings.HasPrefix(path, filepath.Clean(dir)+string(os.PathSeparator))
 }
 
 // Load reads a StateFile from disk. If encryptionKey is non-empty, the file
@@ -262,23 +302,31 @@ func FindByPrefix(stateDir, prefix string) ([]StateEntry, error) {
 	return matched, nil
 }
 
-// Delete removes a named state file. Tries .json.enc first, falls back to .json.
+// Delete removes a named state file under BOTH spellings. Stopping at the first
+// success reported the state deleted while leaving the other copy on disk, and
+// the copy left behind was the plaintext one whenever both existed.
 func Delete(stateDir, name string) error {
 	dir := SessionsDir(stateDir)
 	base := sanitizeFilename(name)
-	cleanDir := filepath.Clean(dir) + string(os.PathSeparator)
-	for _, ext := range []string{".json.enc", ".json"} {
-		path := filepath.Clean(filepath.Join(dir, base+ext))
-		if !strings.HasPrefix(path, cleanDir) {
+	removed := false
+	for _, ext := range stateExtensions {
+		path, ok := statePathWithin(dir, base, ext)
+		if !ok {
 			return fmt.Errorf("resolved path escapes sessions dir")
 		}
-		if err := os.Remove(path); err == nil {
-			return nil
-		} else if !os.IsNotExist(err) {
+		err := os.Remove(path)
+		switch {
+		case err == nil:
+			removed = true
+		case os.IsNotExist(err):
+		default:
 			return fmt.Errorf("delete state file: %w", err)
 		}
 	}
-	return fmt.Errorf("state file %q not found", name)
+	if !removed {
+		return fmt.Errorf("state file %q not found", name)
+	}
+	return nil
 }
 
 // Clean removes state files older than the given duration.
@@ -449,10 +497,9 @@ func sanitizeFilename(name string) string {
 func ResolvePath(stateDir, name string) string {
 	dir := SessionsDir(stateDir)
 	base := sanitizeFilename(name)
-	for _, ext := range []string{".json.enc", ".json"} {
-		resolved := filepath.Clean(filepath.Join(dir, base+ext))
-		cleanDir := filepath.Clean(dir) + string(os.PathSeparator)
-		if !strings.HasPrefix(resolved, cleanDir) {
+	for _, ext := range stateExtensions {
+		resolved, ok := statePathWithin(dir, base, ext)
+		if !ok {
 			return ""
 		}
 		if _, err := os.Stat(resolved); err == nil {
@@ -460,9 +507,8 @@ func ResolvePath(stateDir, name string) string {
 		}
 	}
 	// File doesn't exist yet — return the .json path (for new saves).
-	resolved := filepath.Clean(filepath.Join(dir, base+".json"))
-	cleanDir := filepath.Clean(dir) + string(os.PathSeparator)
-	if !strings.HasPrefix(resolved, cleanDir) {
+	resolved, ok := statePathWithin(dir, base, ".json")
+	if !ok {
 		return ""
 	}
 	return resolved

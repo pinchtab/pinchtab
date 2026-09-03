@@ -79,7 +79,7 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryptionKey := os.Getenv("PINCHTAB_STATE_KEY")
+	encryptionKey := h.stateEncryptionKey()
 	path := state.ResolvePath(h.Config.StateDir, req.Name)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		matches, matchErr := state.FindByPrefix(h.Config.StateDir, req.Name)

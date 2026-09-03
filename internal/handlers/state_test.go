@@ -98,3 +98,39 @@ func TestHandleStateLoadBatchesStorage(t *testing.T) {
 		t.Fatalf("expected %d origins, got %v", len(sf.Origins), got["origins"])
 	}
 }
+
+// security.stateEncryptionKey is the documented knob: it loads from the config
+// file, `config set` writes it, and the dashboard config API redacts it as a
+// secret. Nothing read it — every state path took the key from the environment
+// only — so setting it stored a secret that did nothing while an encrypted save
+// still refused for want of a key.
+func TestStateEncryptionKeyFallsBackToTheConfiguredKey(t *testing.T) {
+	t.Setenv("PINCHTAB_STATE_KEY", "")
+
+	h := &Handlers{Config: &config.RuntimeConfig{StateEncryptionKey: "  from-config  "}}
+	if got := h.stateEncryptionKey(); got != "from-config" {
+		t.Errorf("stateEncryptionKey() = %q, want the configured key; setting it must have an effect", got)
+	}
+}
+
+// The environment variable stays the override, so a deployment that exports it
+// today keeps behaving exactly as before.
+func TestStateEncryptionKeyPrefersTheEnvironment(t *testing.T) {
+	t.Setenv("PINCHTAB_STATE_KEY", "from-env")
+
+	h := &Handlers{Config: &config.RuntimeConfig{StateEncryptionKey: "from-config"}}
+	if got := h.stateEncryptionKey(); got != "from-env" {
+		t.Errorf("stateEncryptionKey() = %q, want the environment override", got)
+	}
+}
+
+// Neither source set is still "no key", which is what makes an encrypted save
+// refuse rather than write something unreadable.
+func TestStateEncryptionKeyIsEmptyWhenNeitherSourceIsSet(t *testing.T) {
+	t.Setenv("PINCHTAB_STATE_KEY", "")
+
+	h := &Handlers{Config: &config.RuntimeConfig{}}
+	if got := h.stateEncryptionKey(); got != "" {
+		t.Errorf("stateEncryptionKey() = %q, want empty", got)
+	}
+}
