@@ -269,28 +269,30 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 		}
 	})
 
-	// Monitor browser context cancellation. A canceled context during
-	// draining is expected (deliberate shutdown); otherwise it indicates
-	// an unexpected failure such as an in-process GPU crash.
-	go func() {
-		<-b.BrowserCtx.Done()
-		err := b.BrowserCtx.Err()
-		if b.draining {
-			slog.Info("browser context ended during drain", "reason", err)
-			return
-		}
-		reason := "unexpected context cancellation"
-		if err != nil && err != context.Canceled {
-			reason = err.Error()
-		}
-		event := b.recordBrowserDeath(reason)
-		slog.Warn("🔥 BROWSER CONTEXT ENDED UNEXPECTEDLY", "error", err)
-		if handler != nil {
-			handler(event)
-		}
-	}()
+	go b.watchBrowserDeath(b.BrowserCtx, handler)
 
 	slog.Info("crash monitoring enabled")
+}
+
+// watchBrowserDeath is the production trigger for a whole-browser death: the
+// browser context ending outside a drain. It is what a kill -9 of Chrome reaches,
+// and it needs no CDP, so it is pinned without a browser.
+func (b *Bridge) watchBrowserDeath(browserCtx context.Context, handler CrashHandler) {
+	<-browserCtx.Done()
+	err := browserCtx.Err()
+	if b.draining {
+		slog.Info("browser context ended during drain", "reason", err)
+		return
+	}
+	reason := "unexpected context cancellation"
+	if err != nil && err != context.Canceled {
+		reason = err.Error()
+	}
+	event := b.recordBrowserDeath(reason)
+	slog.Warn("🔥 BROWSER CONTEXT ENDED UNEXPECTEDLY", "error", err)
+	if handler != nil {
+		handler(event)
+	}
 }
 
 // GetCrashLogs returns recent crash information from Chrome's preferences

@@ -89,3 +89,66 @@ func TestTheLostTabRecordIsBounded(t *testing.T) {
 		t.Errorf("kept %d lost tabs, want the bound %d", kept, maxTabsLostToCrashes)
 	}
 }
+
+func watchedBridgeHoldingTabs(t *testing.T, ids ...string) (*Bridge, context.CancelFunc, chan CrashEvent) {
+	t.Helper()
+	ResetCrashMonitoringForTests()
+	t.Cleanup(ResetCrashMonitoringForTests)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	b := newTestBridge()
+	b.BrowserCtx = ctx
+	for _, id := range ids {
+		b.tabs[id] = &TabEntry{CreatedAt: time.Now()}
+	}
+	deaths := make(chan CrashEvent, 1)
+	go b.watchBrowserDeath(ctx, func(ev CrashEvent) { deaths <- ev })
+	return b, cancel, deaths
+}
+
+// The production trigger, not the helper: the browser context ending outside a
+// drain is what a kill -9 of Chrome reaches, and it must record the tabs the
+// browser held so the next lookup of one names the death.
+func TestTheBrowserContextEndingRecordsTheDeathAndTheTabsItTook(t *testing.T) {
+	_, kill, deaths := watchedBridgeHoldingTabs(t, "tabA", "tabB")
+	kill()
+
+	var death CrashEvent
+	select {
+	case death = <-deaths:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the browser context ended and no death was recorded")
+	}
+	if death.Reason != "unexpected context cancellation" {
+		t.Errorf("reason = %q, want the cancellation named", death.Reason)
+	}
+	if summary := CrashSnapshot(); summary.Total != 1 {
+		t.Errorf("crash total = %d, want the one death", summary.Total)
+	}
+
+	_, _, err := NewTabManager(context.Background(), nil, nil, nil, nil).TabContext("tabB")
+	var lost *TabNotFoundError
+	if !errors.As(err, &lost) || lost.Crash == nil || lost.Crash.Reason != death.Reason {
+		t.Fatalf("TabContext after the death = %v, want the tab reported as lost to it", err)
+	}
+}
+
+// A drain ends the context on purpose; it must record neither a crash nor lost tabs,
+// or every clean shutdown would annotate the next session's misses.
+func TestADrainEndingTheBrowserContextRecordsNothing(t *testing.T) {
+	b, stop, deaths := watchedBridgeHoldingTabs(t, "tabA")
+	b.draining = true
+	stop()
+
+	select {
+	case ev := <-deaths:
+		t.Fatalf("a drain was recorded as a death: %+v", ev)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if summary := CrashSnapshot(); summary.Total != 0 {
+		t.Errorf("crash total = %d after a drain, want 0", summary.Total)
+	}
+	if _, lost := CrashThatDestroyedTab("tabA"); lost {
+		t.Error("a drained tab was recorded as lost to a crash")
+	}
+}
