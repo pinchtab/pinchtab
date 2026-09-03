@@ -40,7 +40,7 @@ func TestTheOwnedResponseHeaderSetIsExactlyWhatTheOuterChainSets(t *testing.T) {
 	}
 	for _, r := range []*http.Request{plain, secure} {
 		for _, name := range headersSetByMiddleware(t, func(next http.Handler) http.Handler {
-			return SecurityHeadersMiddleware(cfg, next)
+			return SecurityHeadersMiddleware(config.NewLive(cfg), next)
 		}, r) {
 			set[name] = true
 		}
@@ -68,7 +68,7 @@ func TestTheOuterChainSetsItsHeadersSingleValued(t *testing.T) {
 	req := httptest.NewRequest("GET", "/tabs", nil)
 	req.TLS = &tls.ConnectionState{}
 
-	handler := RequestIDMiddleware(SecurityHeadersMiddleware(&config.RuntimeConfig{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})))
+	handler := RequestIDMiddleware(SecurityHeadersMiddleware(config.NewLive(&config.RuntimeConfig{}), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})))
 	handler.ServeHTTP(rec, req)
 
 	for _, name := range httpx.OuterChainResponseHeaders() {

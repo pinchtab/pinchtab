@@ -8,8 +8,9 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-func CorsMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
+func CorsMiddleware(live *config.Live, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := live.Get()
 		allowedOrigin := corsAllowedOrigin(cfg, r)
 		if allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
@@ -21,7 +22,7 @@ func CorsMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		if r.Method == "OPTIONS" {
-			if strings.TrimSpace(r.Header.Get("Origin")) != "" && allowedOrigin == "" && strings.TrimSpace(cfg.Token) != "" {
+			if strings.TrimSpace(r.Header.Get("Origin")) != "" && allowedOrigin == "" && cfg != nil && strings.TrimSpace(cfg.Token) != "" {
 				httpx.ErrorCode(w, 403, "cors_forbidden", "cross-origin requests are disabled when auth is enabled", false, nil)
 				return
 			}
@@ -34,7 +35,7 @@ func CorsMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 
 func corsAllowedOrigin(cfg *config.RuntimeConfig, r *http.Request) string {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
+	if origin == "" || cfg == nil {
 		return ""
 	}
 	if strings.TrimSpace(cfg.Token) == "" {

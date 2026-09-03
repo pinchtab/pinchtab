@@ -83,6 +83,12 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	RegisterSessionsUnavailableInBridgeMode(mux)
 	cli.LogSecurityWarnings(cfg)
 
+	// A bridge process registers no ConfigAPI and no orchestrator, so nothing
+	// here ever publishes a second value: this Live holds the boot config for the
+	// life of the process by construction, not by accident. The middlewares still
+	// resolve per request, which is what keeps one contract for both processes.
+	live := config.NewLive(cfg)
+
 	server = &http.Server{
 		Addr: listenAddr,
 		Handler: handlers.TrustedInternalProxyStripMiddleware(os.Getenv("PINCHTAB_INTERNAL_TOKEN"))(
@@ -90,8 +96,8 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 				activity.Middleware(
 					actStore,
 					"bridge",
-					handlers.SecurityHeadersMiddleware(cfg,
-						handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+					handlers.SecurityHeadersMiddleware(live,
+						handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(live, mux))),
 					),
 				),
 			),

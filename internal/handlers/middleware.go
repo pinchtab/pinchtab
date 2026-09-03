@@ -82,8 +82,16 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func SecurityHeadersMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
+// SecurityHeadersMiddleware and every other middleware here take the publication
+// point rather than a config, and resolve it PER REQUEST. A middleware is built
+// once at startup and serves for the life of the process, so one that closed over
+// the boot *RuntimeConfig would enforce boot values forever: a save publishes a
+// new value and never writes the old object. That froze trustProxyHeaders,
+// cookieSecure and sessions.dashboard.requireElevation while the dashboard
+// reported the save applied.
+func SecurityHeadersMiddleware(live *config.Live, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := live.Get()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", defaultCSP)
@@ -95,18 +103,23 @@ func SecurityHeadersMiddleware(cfg *config.RuntimeConfig, next http.Handler) htt
 	})
 }
 
-func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
-	return AuthMiddlewareWithSessions(cfg, nil, nil, next)
+func AuthMiddleware(live *config.Live, next http.Handler) http.Handler {
+	return AuthMiddlewareWithSessions(live, nil, nil, next)
 }
 
-func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *browsersession.Manager, agentSessions *session.Store, next http.Handler) http.Handler {
+func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Manager, agentSessions *session.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := live.Get()
 		if isPublicDashboardPath(r.URL.Path) || isPublicAuthPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 		if backgroundHealthProbeAllowed(cfg, r) {
 			next.ServeHTTP(w, r)
+			return
+		}
+		if cfg == nil {
+			httpx.ErrorCode(w, http.StatusServiceUnavailable, "token_required", "server token is not configured", false, nil)
 			return
 		}
 		token := strings.TrimSpace(cfg.Token)

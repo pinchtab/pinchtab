@@ -29,7 +29,7 @@ func frontDoorFixture(t *testing.T) http.Handler {
 	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"tabs":[]}`))
 	})
-	return FrontDoorHandler(cfg, nil, nil, nil, mux)
+	return FrontDoorHandler(config.NewLive(cfg), nil, nil, nil, mux)
 }
 
 func readFrontDoorMetrics(t *testing.T, handler http.Handler) map[string]any {

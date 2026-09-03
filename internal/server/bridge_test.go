@@ -118,7 +118,7 @@ func TestBridgeHandlerChainAppliesRateLimit(t *testing.T) {
 		activity.Middleware(
 			nil,
 			"bridge",
-			handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+			handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(config.NewLive(cfg), mux))),
 		),
 	)
 

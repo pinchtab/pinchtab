@@ -16,7 +16,7 @@ func TestHandleScreencast_AuthRejectsNoToken(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/screencast", nil)
 	w := httptest.NewRecorder()
-	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
+	handler := AuthMiddleware(config.NewLive(cfg), http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
@@ -32,7 +32,7 @@ func TestHandleScreencast_AuthRejectsWrongToken(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: "wrong-token"})
 	req.Header.Set("Referer", "http://example.com/dashboard")
 	w := httptest.NewRecorder()
-	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
+	handler := AuthMiddleware(config.NewLive(cfg), http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
@@ -47,7 +47,7 @@ func TestHandleScreencast_AuthRejectsWrongHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/screencast", nil)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	w := httptest.NewRecorder()
-	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
+	handler := AuthMiddleware(config.NewLive(cfg), http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
@@ -61,7 +61,7 @@ func TestHandleScreencast_NoTokenConfigRejectsRequest(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/screencast", nil)
 	w := httptest.NewRecorder()
-	handler := AuthMiddleware(cfg, http.HandlerFunc(h.HandleScreencast))
+	handler := AuthMiddleware(config.NewLive(cfg), http.HandlerFunc(h.HandleScreencast))
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {

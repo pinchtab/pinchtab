@@ -299,7 +299,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		})
 	})
 
-	handler := FrontDoorHandler(cfg, liveActivity, sessions, sessionStore, mux)
+	handler := FrontDoorHandler(live, liveActivity, sessions, sessionStore, mux)
 	if cfg.VerboseBanner {
 		cli.LogSecurityWarnings(cfg)
 	}
