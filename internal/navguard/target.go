@@ -36,15 +36,24 @@ func ValidateTarget(ctx context.Context, raw string, allowExplicitInternal bool,
 	// exactly the single-label intranet names it exists for.
 	host := security.ExtractHost(raw)
 	if host == "" {
-		// No resolvable host means the IP/SSRF checks below can't run, so a
-		// caller that relies on ValidateTarget alone would otherwise allow any
-		// scheme. Enforce scheme safety here too (defense in depth) so opaque
-		// targets like file:/data: are rejected regardless of caller ordering;
-		// scheme-less/relative inputs and about:blank still pass ValidateURL.
+		// "Cannot check" must not share an outcome with "checked and safe". This
+		// branch used to return success: no resolution, no private-IP check. Go and
+		// the browser disagree about where an authority begins, so a target the
+		// browser resolves and this cannot read was permitted unchecked — which is
+		// how every slash-and-backslash spelling of a private address got past the
+		// SSRF guard the correctly-spelled one is refused by.
+		//
+		// urls.EnsureScheme now collapses those spellings, so the browser's host and
+		// this one agree and nothing reaches here that the browser would navigate.
+		// The refusal is what keeps that a closed class rather than a claim about
+		// how exactly this mirrors the WHATWG state machine: anything left with no
+		// readable host is refused whether or not the normaliser anticipated it.
+		//
+		// The scheme check runs first so an unsafe scheme is still named as one.
 		if err := ValidateURL(raw); err != nil {
 			return nil, err
 		}
-		return &ValidatedTarget{}, nil
+		return nil, fmt.Errorf("navigation target has no readable host")
 	}
 	if netguard.IsLocalHost(host) {
 		return &ValidatedTarget{AllowInternal: true}, nil

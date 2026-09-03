@@ -93,3 +93,41 @@ func TestAnUnlistedSingleLabelHostIsRefusedNamingTheAllowlist(t *testing.T) {
 		t.Errorf("remedy = %q; it does not name the host the caller must list", got)
 	}
 }
+
+// Both navigate paths apply urls.EnsureScheme before the same validation, so a fix
+// landing on one and not the other leaves the bypass reachable. They are driven
+// against the same table here rather than trusted to share it.
+//
+// IDPI is OFF in this fixture, and deliberately: with IDPI enabled and NO allowlist
+// configured, ShieldGuard.DomainAllowed answers true for every URL (nothing scored,
+// so nothing blocked), that becomes allowExplicitInternal, and the private-IP block
+// is overridden before the spelling ever matters. That is a separate defect, recorded
+// on the card; turning IDPI off here is what lets this test measure the spelling
+// property it is about rather than that one.
+func TestBothNavigatePathsRefuseEverySpellingOfAPrivateHost(t *testing.T) {
+	cfg := hostFormConfig(nil)
+	cfg.IDPI = config.IDPIConfig{}
+	h := New(&policyMockBridge{}, cfg, nil, nil, nil)
+
+	for _, raw := range []string{
+		`https://10.0.0.5/x`,
+		`https:\\10.0.0.5\x`,
+		`https:/10.0.0.5/x`,
+		`https:\/10.0.0.5\x`,
+		`https:////10.0.0.5/x`,
+		`//10.0.0.5/x`,
+		`https:10.0.0.5/x`,
+		`/10.0.0.5/x`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			if _, ok := h.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", raw, h.Config); ok {
+				t.Errorf("navigate path ALLOWED a private address written as %q", raw)
+			}
+
+			if _, err := h.validateAuditTarget(raw, h.Config); err == nil {
+				t.Errorf("audit-page path ALLOWED a private address written as %q; the two share the normalization and must share the verdict", raw)
+			}
+		})
+	}
+}

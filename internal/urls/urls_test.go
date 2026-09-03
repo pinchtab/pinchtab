@@ -2,6 +2,7 @@ package urls
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -240,4 +241,55 @@ func TestRedactForLogTruncationBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The card asks for the CLI and MCP normalizers to be PROBED against the same
+// table rather than assumed safe, and for the verdicts to be recorded. They are
+// recorded here as assertions:
+//
+//   - Sanitize (MCP) delegates to EnsureScheme, so it collapses the authority and
+//     hands the server a string whose host is readable.
+//   - Normalize (CLI) did NOT, and that was worse than a bypass: recognising only
+//     the literal "http://" and "https://" prefixes, it prepended a second scheme
+//     in front of these spellings and produced "https://https:/10.0.0.5/x", whose
+//     host reads as "https" — so the CLI sent the server a destination the user
+//     never typed. It now delegates to EnsureScheme, and this pins that.
+func TestTheCLIAndMCPNormalizersAgainstTheAuthorityTable(t *testing.T) {
+	for _, raw := range []string{
+		`https://10.0.0.5/x`,
+		`https:\\10.0.0.5\x`,
+		`https:/10.0.0.5/x`,
+		`https:\/10.0.0.5\x`,
+		`https:////10.0.0.5/x`,
+		`//10.0.0.5/x`,
+		`https:10.0.0.5/x`,
+		`/10.0.0.5/x`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if got := EnsureScheme(raw); got != "https://10.0.0.5/x" {
+				t.Errorf("EnsureScheme(%q) = %q, want the collapsed authority", raw, got)
+			}
+
+			sanitized, err := Sanitize(raw)
+			if err != nil {
+				t.Fatalf("Sanitize(%q) error = %v", raw, err)
+			}
+			if host := hostOf(t, sanitized); host != "10.0.0.5" {
+				t.Errorf("Sanitize(%q) = %q, whose host reads as %q — MCP would hand the server a target the guard cannot check", raw, sanitized, host)
+			}
+
+			if host := hostOf(t, Normalize(raw)); host != "10.0.0.5" {
+				t.Errorf("Normalize(%q) = %q, whose host reads as %q — the CLI would send the server a destination the user never typed", raw, Normalize(raw), host)
+			}
+		})
+	}
+}
+
+func hostOf(t *testing.T, rawURL string) string {
+	t.Helper()
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
