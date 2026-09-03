@@ -509,3 +509,25 @@ func TestTheClipToViewportCensusFailsOnSourceItCannotParse(t *testing.T) {
 		t.Error("unparseable source reported no conversion instead of an error; a file the census cannot read must fail it, not pass silently")
 	}
 }
+
+func TestViewportClipIsPageRelativeAtNativeScale(t *testing.T) {
+	clip := cdptk.ViewportClip(30, 40, 800, 600)
+	if clip == nil {
+		t.Fatal("ViewportClip returned nil for a real viewport")
+	}
+	want := page.Viewport{X: 30, Y: 40, Width: 800, Height: 600, Scale: 1}
+	if *clip != want {
+		t.Fatalf("ViewportClip = %+v, want %+v", *clip, want)
+	}
+	if !cdptk.CaptureFromSurface(false, clip) {
+		t.Error("the viewport clip does not take the surface path; CDP discards a clip on the read-the-view path, so the capture would silently come back unclipped")
+	}
+}
+
+func TestViewportClipRefusesAnEmptyViewport(t *testing.T) {
+	for _, tc := range []struct{ w, h float64 }{{0, 600}, {800, 0}, {-1, -1}} {
+		if clip := cdptk.ViewportClip(0, 0, tc.w, tc.h); clip != nil {
+			t.Errorf("ViewportClip(%v, %v) = %+v, want nil; an empty clip asks CDP for no pixels at all", tc.w, tc.h, clip)
+		}
+	}
+}

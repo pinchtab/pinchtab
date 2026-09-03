@@ -107,6 +107,15 @@ The coordinate space depends on `selector` and `beyondViewport`:
   (`box.x` and `box.y` include scroll offset). The image is the full
   document.
 
+In all three, the image measures exactly the reported space times
+`image.devicePixelRatio`: scaling a `boundingBox` by that ratio, from the
+origin the space names, lands on the image's pixels. This holds under
+`pinchtab set viewport` as well, so an overlay never needs a mode-specific
+factor. Keeping it costs the default capture the faster read-the-view path —
+that path returns the real window surface, whose scale factor is the screen's
+rather than the page's and which viewport emulation does not touch — so an
+idle headed browser can make a `/capture` slower than a `/screenshot`.
+
 `visible` is true when the box has positive area and intersects the
 viewport — a cheap heuristic, not a strict occlusion check. A node
 scrolled past, in either direction, is measured and reports

@@ -8,6 +8,8 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 type CaptureOpts struct {
@@ -112,7 +114,7 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 
 	// Image first. Order matters only when BeyondViewport is true (P3 concern);
 	// at viewport scale either order is equivalent.
-	imgBytes, err := CaptureScreenshot(ctx, opts.Image)
+	imgBytes, err := CaptureScreenshot(ctx, captureImageOpts(opts.Image, res.Viewport))
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +171,23 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	res.DomEpoch = mintDomEpoch()
 	res.DurationMs = time.Since(start).Milliseconds()
 	return res, nil
+}
+
+// captureImageOpts settles which region the capture renders. A caller's own clip and a
+// beyond-viewport capture already composite, so they are left exactly as asked; only the
+// default — no clip, viewport space — is redirected onto cdptk.ViewportClip, which is
+// what makes the returned image match the viewport and devicePixelRatio this response
+// reports. The clip is added to the SCREENSHOT options alone: the response metadata is
+// derived from what the caller asked for, so a synthesized clip must not turn the
+// reported coordinateSpace into "clip".
+func captureImageOpts(image ScreenshotOpts, vp ViewportInfo) ScreenshotOpts {
+	if image.Clip != nil || image.BeyondViewport {
+		return image
+	}
+	if clip := cdptk.ViewportClip(vp.ScrollX, vp.ScrollY, vp.Width, vp.Height); clip != nil {
+		image.Clip = clip
+	}
+	return image
 }
 
 func imageFormatString(f page.CaptureScreenshotFormat) string {

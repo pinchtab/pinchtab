@@ -455,6 +455,16 @@ to hold: the coordinate ORIGIN, which `image.coordinateSpace` names
 (`viewport` or `document`), and the box-model EDGE, which is always the
 border box.
 
+Stated as the guarantee: **scaling a `boundingBox` by `image.devicePixelRatio`,
+from the origin `image.coordinateSpace` names, lands on that image's own
+pixels — in every mode, with or without an emulated viewport.** The image
+measures exactly the reported space times the reported ratio, so a client
+never branches on configuration and never has to detect whether a linear
+mapping happens to exist. The default (viewport) capture composites the page
+to keep that promise, which costs it the faster read-the-view path
+`/screenshot` still takes: on an idle headed browser a `/capture` can
+therefore block until its deadline where a `/screenshot` returns at once.
+
 The response carries an `epoch.domEpoch` token cached on the tab's ref-cache.
 Future client work can pass `expectedEpoch` to action endpoints to detect
 stale refs at the use site; in P1 it is informational. `pairing.navigated`

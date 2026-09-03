@@ -149,6 +149,37 @@ func captureFromSurface(goos string, beyondViewport bool, clip *page.Viewport) b
 	return goos == "windows" || beyondViewport || clip != nil
 }
 
+// ViewportClip is the clip that makes a DEFAULT capture come back in the space its
+// own metadata reports. It is the answer to a contract, not an optimisation: /capture
+// publishes coordinateSpace, viewport and devicePixelRatio so a client can scale a
+// node's boundingBox onto image pixels without guessing, and the read-the-view fast
+// path cannot keep that promise. That path returns the real window surface, which
+// Emulation.setDeviceMetricsOverride does not touch and whose scale factor is the
+// screen's, not the page's — measured in headless Chrome on a HiDPI screen, a page
+// reporting 756x413 at devicePixelRatio 1 came back 1512x826, and the same page
+// emulated to 400x300 came back 800x600. Both are a caller's overlay landing on the
+// wrong pixels, and no reported dpr rescues the emulated case, where the surface can
+// carry a different aspect ratio entirely.
+//
+// A clip covering the viewport composites the page and lets CDP apply the page's own
+// device pixel ratio, which is what the beyond-viewport and selector paths already do
+// and why those two were correct while the default one was not. Scale stays 1: CDP
+// multiplies a clipped capture by the page dpr itself, so a scale of dpr would square
+// it. Coordinates are page-relative, hence the scroll offsets.
+//
+// The cost is stated rather than hidden: a clipped capture takes fromSurface=true, so
+// the default /capture gives up the read-the-view fast path this file documents and an
+// idle headed browser can stall it until the action deadline. /screenshot and the
+// screencast keep the fast path — they publish no coordinate contract to break — so the
+// latency trade is paid only by the endpoint whose whole purpose is mapping refs onto
+// pixels.
+func ViewportClip(scrollX, scrollY, width, height float64) *page.Viewport {
+	if width <= 0 || height <= 0 {
+		return nil
+	}
+	return &page.Viewport{X: scrollX, Y: scrollY, Width: width, Height: height, Scale: 1}
+}
+
 // captureRefusal is the CDP error a renderer returns when it will not serve the
 // read-the-view fast path. It carries no code the client can match on, so the message is
 // the only discriminator available.
