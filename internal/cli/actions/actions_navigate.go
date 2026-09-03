@@ -114,7 +114,7 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 	}
 
 	if !isIdentifiedCaller(cmd) {
-		output.Hint(cli.NoSessionHint)
+		output.Advisory(cli.NoSessionHint)
 	}
 
 	printPostActionOutput(client, base, token, resultTabID, cmd)

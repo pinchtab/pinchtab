@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/safelog"
 	"github.com/spf13/cobra"
@@ -17,7 +18,11 @@ var rootCmd = &cobra.Command{
 	Use:   "pinchtab",
 	Short: "PinchTab - Browser control for AI agents",
 	Long: `PinchTab provides a lightweight, API-driven way for AI agents to control
-browsers, manage tabs, and perform interactive tasks.`,
+browsers, manage tabs, and perform interactive tasks.
+
+Advisory hints — the ones about a steady state you may have chosen, such as
+running without an agent session — print once per run. Silence them with
+` + output.HintsEnv + `=` + output.HintsOff + `.`,
 	Example: `  pinchtab server
   pinchtab nav https://pinchtab.com`,
 	Run: func(cmd *cobra.Command, args []string) {

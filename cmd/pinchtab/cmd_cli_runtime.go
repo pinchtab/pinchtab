@@ -129,9 +129,9 @@ func resolveCLIBase(cfg *config.RuntimeConfig) string {
 	resolved := resolveBaseURL(defaultBase)
 	if resolved == defaultBase {
 		if serverURL != "" {
-			output.Hint("--server " + resolved + " is the default and can be omitted")
+			output.Advisory("--server " + resolved + " is the default and can be omitted")
 		} else if os.Getenv("PINCHTAB_SERVER") != "" {
-			output.Hint("PINCHTAB_SERVER=" + resolved + " is the default and can be omitted")
+			output.Advisory("PINCHTAB_SERVER=" + resolved + " is the default and can be omitted")
 		}
 	}
 	return resolved

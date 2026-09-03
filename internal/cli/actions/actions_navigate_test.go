@@ -310,8 +310,7 @@ func TestNavigatePrintTabID(t *testing.T) {
 }
 
 func TestNavigateNoSessionHintNamesPrerequisiteAndCommand(t *testing.T) {
-	t.Setenv("PINCHTAB_SESSION", "")
-	t.Setenv("PINCHTAB_AGENT_ID", "")
+	anonymousCaller(t)
 
 	m := newMockServer()
 	m.response = `{"tabId":"ABC123","status":"ok"}`
@@ -701,8 +700,7 @@ func TestNavigateWithoutFallbackAnnouncesNothingExtra(t *testing.T) {
 // carries: an anonymous fallback prints both lines, and the same remedy twice on
 // one command is the shape that trains readers to skip hints.
 func TestFallbackNoticeDoesNotRepeatTheSessionRemedy(t *testing.T) {
-	t.Setenv("PINCHTAB_SESSION", "")
-	t.Setenv("PINCHTAB_AGENT_ID", "")
+	anonymousCaller(t)
 
 	m := newMockServer()
 	m.setResponse(http.MethodPost, "/tabs/STALE123/navigate", http.StatusNotFound, `{"error":"tab not found"}`)
