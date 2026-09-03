@@ -61,17 +61,33 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 		return
 	}
 
+	// The hook gets its OWN url. Handing it targetURL made the two the same
+	// object, so a hook that touched req.URL edited the value AllowedURL had
+	// already approved — and the caller's, which it does not own. Re-gating an
+	// aliased url is also unable to see the change: the orchestrator's gate asks
+	// whether the url is same-origin with targetURL, and an alias always is.
+	routedURL := *targetURL
+
 	proxyReq := r.Clone(r.Context())
-	proxyReq.URL = targetURL
-	proxyReq.Host = targetURL.Host
+	proxyReq.URL = &routedURL
+	proxyReq.Host = routedURL.Host
 	proxyReq.Header = r.Header.Clone()
 	activity.PropagateHeaders(r.Context(), proxyReq)
+	hostBeforeRewrite := proxyReq.Host
 	if opts.RewriteRequest != nil {
 		opts.RewriteRequest(proxyReq)
 	}
 
+	// A rewrite that moved the target has to pass the same gate the original did,
+	// or the hook is a way around it. Only re-asked when the target actually
+	// changed, so the common path costs nothing.
+	if opts.AllowedURL != nil && proxyReq.URL.String() != targetURL.String() && !opts.AllowedURL(proxyReq.URL) {
+		httpx.Error(w, 400, fmt.Errorf("invalid proxy target"))
+		return
+	}
+
 	if isWebSocketUpgrade(proxyReq) {
-		ProxyWebSocket(w, proxyReq, targetURL.String())
+		ProxyWebSocket(w, proxyReq, proxyReq.URL.String())
 		return
 	}
 
@@ -80,10 +96,26 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 		client = DefaultClient
 	}
 
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
+	// Built from proxyReq, not from r: RewriteRequest is handed a whole
+	// *http.Request and the WebSocket path below honours the whole of it, so
+	// re-deriving the method, target and body from the original request made a
+	// hook that rewrote any of them work over WebSocket and be silently ignored
+	// over HTTP. Nothing in the module rewrites more than headers today, so this
+	// changes no traffic — it makes the hook's own signature true before someone
+	// takes it at its word.
+	//
+	// proxyReq cannot be sent as-is: it is a server request and carries
+	// RequestURI, which a client request may not set.
+	outReq, err := http.NewRequestWithContext(r.Context(), proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if err != nil {
 		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
+	}
+	// Only a rewrite propagates a Host. Left alone, the transport derives the
+	// Host header from the URL as before, which spells a default port the way
+	// the wire expects rather than the way targetURL.Host holds it.
+	if proxyReq.Host != hostBeforeRewrite {
+		outReq.Host = proxyReq.Host
 	}
 	copyRequestHeaders(outReq.Header, proxyReq.Header)
 	httpx.ForwardRequestID(outReq.Header, proxyReq.Header)
