@@ -38,8 +38,8 @@ func TestAuthenticateReturnsDefensiveCopy(t *testing.T) {
 	wg.Wait()
 }
 
-// Enabled/Mode are read on every authenticated request; UpdateConfig replaces
-// the whole config struct, so unsynchronized reads race.
+// Enabled is read on every authenticated request and reads two config fields;
+// UpdateConfig replaces the whole config struct, so unsynchronized reads race.
 func TestConfigAccessorsAreSynchronized(t *testing.T) {
 	s := NewStore(Config{Enabled: true, Mode: "preferred"})
 
@@ -48,14 +48,13 @@ func TestConfigAccessorsAreSynchronized(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			s.UpdateConfig(Config{Enabled: i%2 == 0, Mode: "required"})
+			s.UpdateConfig(Config{Enabled: i%2 == 0, Mode: ModeOff})
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
 			_ = s.Enabled()
-			_ = s.Mode()
 		}
 	}()
 	wg.Wait()

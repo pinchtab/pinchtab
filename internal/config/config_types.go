@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/pinchtab/pinchtab/internal/session"
+)
 
 const defaultPort = "9867"
 
@@ -300,9 +304,16 @@ type SessionsFileConfig struct {
 // when the file leaves the key out.
 const DefaultAgentSessionsEnabled = true
 
-// AgentEnabled resolves sessions.agent.enabled against that default, so a
-// comparison of two file configs never reads an absent key as disabled.
+// AgentEnabled is the file-config twin of session.Store.Enabled: whether this
+// config leaves agent sessions serving. It resolves an absent enabled key against
+// the default, so a comparison of two file configs never reads absence as
+// disabled, and it honours mode — mode "off" disables the family exactly as
+// enabled false does, so a restart-reason comparison built on this cannot miss
+// the transition through the other field.
 func (s SessionsFileConfig) AgentEnabled() bool {
+	if !session.ModeServes(s.Agent.Mode) {
+		return false
+	}
 	if s.Agent.Enabled == nil {
 		return DefaultAgentSessionsEnabled
 	}

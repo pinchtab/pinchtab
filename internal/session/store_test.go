@@ -384,3 +384,24 @@ func TestNilStore(t *testing.T) {
 		t.Fatal("nil store should return nil list")
 	}
 }
+
+// enabled and mode were a two-field encoding of one question and the halves
+// drifted: mode was documented as reducing the auth surface and read by nothing.
+// Enabled() is now the one predicate, so every consumer follows both fields.
+func TestEnabledFoldsModeAndEnabled(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		cfg  Config
+		want bool
+	}{
+		{"enabled, mode unset", Config{Enabled: true}, true},
+		{"enabled, preferred", Config{Enabled: true, Mode: ModePreferred}, true},
+		{"enabled, off", Config{Enabled: true, Mode: ModeOff}, false},
+		{"disabled, preferred", Config{Enabled: false, Mode: ModePreferred}, false},
+		{"disabled, off", Config{Enabled: false, Mode: ModeOff}, false},
+	} {
+		if got := NewStore(tt.cfg).Enabled(); got != tt.want {
+			t.Errorf("%s: Enabled() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

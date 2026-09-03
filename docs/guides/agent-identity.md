@@ -141,7 +141,7 @@ curl -X POST http://localhost:9867/sessions/ses_e6ac8132fe7e7016/revoke \
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `sessions.agent.enabled` | `true` | Enable agent sessions |
-| `sessions.agent.mode` | `preferred` | Auth mode: `off`, `preferred`, `required` |
+| `sessions.agent.mode` | `preferred` | Auth mode. `preferred` serves agent sessions alongside the server token; `off` disables them exactly as `enabled: false` does. `required` is **not implemented** and is refused at config load — the bearer token and the dashboard cookie still authenticate, so the value cannot deliver the session-only auth it names |
 | `sessions.agent.idleTimeoutSec` | `1800` (30m) | Session expires after this many seconds of inactivity |
 | `sessions.agent.maxLifetimeSec` | `86400` (24h) | Hard session expiry |
 

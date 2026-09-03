@@ -33,10 +33,25 @@ type Session struct {
 	Grants     []string  `json:"grants,omitempty"`
 }
 
+// The auth modes sessions.agent.mode may name. ModeRequired is vocabulary, not
+// behaviour: it is refused by config validation, because accepting it would
+// promise session-only auth that the bearer token and the dashboard cookie still
+// bypass. This package owns the set so the validator and the predicate cannot
+// hold two copies of it.
+const (
+	ModeOff       = "off"
+	ModePreferred = "preferred"
+	ModeRequired  = "required"
+)
+
+// ModeServes reports whether a mode value leaves agent sessions serving. An
+// empty value is the default, ModePreferred.
+func ModeServes(mode string) bool { return mode != ModeOff }
+
 // Config controls store behavior.
 type Config struct {
 	Enabled     bool
-	Mode        string // "off", "preferred", "required"
+	Mode        string
 	IdleTimeout time.Duration
 	MaxLifetime time.Duration
 	PersistPath string
@@ -160,7 +175,7 @@ func (s *Store) applyConfig(cfg Config) {
 		cfg.MaxLifetime = DefaultMaxLifetime
 	}
 	if cfg.Mode == "" {
-		cfg.Mode = "preferred"
+		cfg.Mode = ModePreferred
 	}
 	s.cfg = cfg
 }
@@ -470,14 +485,17 @@ func (s *Store) RunMaintenance(ctx context.Context) {
 	}
 }
 
-// Enabled reports whether session auth is enabled.
+// Enabled is the ONE predicate every consumer of agent sessions asks — the front
+// door's session branch, the session API's handlers and their registration. enabled
+// and mode were a two-field encoding of one question, and the halves drifted: mode
+// was documented as reducing the auth surface while nothing read it.
 func (s *Store) Enabled() bool {
 	if s == nil {
 		return false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.cfg.Enabled
+	return s.cfg.Enabled && ModeServes(s.cfg.Mode)
 }
 
 // PersistPath returns the file the store persists to, so a caller rebuilding
@@ -489,16 +507,6 @@ func (s *Store) PersistPath() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cfg.PersistPath
-}
-
-// Mode returns the current auth mode.
-func (s *Store) Mode() string {
-	if s == nil {
-		return "off"
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cfg.Mode
 }
 
 func (s *Store) isExpired(sess *Session, now time.Time) bool {

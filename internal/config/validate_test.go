@@ -1303,3 +1303,64 @@ func TestTheIgnoredKeyTextsInstructOnlyWhatTheProductCanDo(t *testing.T) {
 		t.Errorf("the refusal names server.stateDir but config set rejects it: %v", err)
 	}
 }
+
+// mode used to be accepted whatever it said and read by nothing, so
+// `config set sessions.agent.mode nonsense` succeeded and changed nothing.
+// "required" is refused separately from a typo because it is not a typo: it names
+// a posture this server does not enforce, and accepting it leaves an operator
+// believing they have session-only auth.
+func TestValidateFileConfig_AgentSessionMode(t *testing.T) {
+	for _, tt := range []struct {
+		mode     string
+		wantErr  bool
+		wantSays string
+	}{
+		{"", false, ""},
+		{"off", false, ""},
+		{"preferred", false, ""},
+		{"required", true, "not implemented"},
+		{"nonsense", true, "invalid value"},
+		{"Off", true, "invalid value"},
+	} {
+		fc := &FileConfig{Sessions: SessionsFileConfig{Agent: AgentSessionFileConfig{Mode: tt.mode}}}
+		errs := ValidateFileConfig(fc)
+
+		if hasErr := len(errs) > 0; hasErr != tt.wantErr {
+			t.Errorf("mode=%q: got error=%v (%v), want error=%v", tt.mode, hasErr, errs, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr {
+			continue
+		}
+		message := errs[0].Error()
+		if !strings.Contains(message, "sessions.agent.mode") {
+			t.Errorf("mode=%q: refusal %q does not name the field", tt.mode, message)
+		}
+		if !strings.Contains(message, tt.wantSays) {
+			t.Errorf("mode=%q: refusal %q does not say %q", tt.mode, message, tt.wantSays)
+		}
+	}
+}
+
+// The predicate the whole card turns on, at the file-config layer: mode off and
+// enabled false must answer the same, or the restart-reason comparison built on
+// this misses the transition through the other field.
+func TestAgentEnabledFoldsBothFields(t *testing.T) {
+	enabled, disabled := true, false
+	for _, tt := range []struct {
+		name string
+		fc   SessionsFileConfig
+		want bool
+	}{
+		{"absent keys", SessionsFileConfig{}, true},
+		{"enabled true", SessionsFileConfig{Agent: AgentSessionFileConfig{Enabled: &enabled}}, true},
+		{"enabled false", SessionsFileConfig{Agent: AgentSessionFileConfig{Enabled: &disabled}}, false},
+		{"mode off", SessionsFileConfig{Agent: AgentSessionFileConfig{Mode: "off"}}, false},
+		{"enabled true, mode off", SessionsFileConfig{Agent: AgentSessionFileConfig{Enabled: &enabled, Mode: "off"}}, false},
+		{"mode preferred", SessionsFileConfig{Agent: AgentSessionFileConfig{Mode: "preferred"}}, true},
+	} {
+		if got := tt.fc.AgentEnabled(); got != tt.want {
+			t.Errorf("%s: AgentEnabled() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

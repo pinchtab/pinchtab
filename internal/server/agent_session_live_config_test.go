@@ -105,27 +105,69 @@ func TestEnablingAgentSessionsReportsARestartReason(t *testing.T) {
 	}
 }
 
+// mode "off" is the other half of one question, and the docs promise it reduces
+// the auth surface. It must reach exactly the state enabled false reaches — the
+// same refusals, through the same assertions — or the two fields drift again.
 // mode and the two timeouts have no boot-time consumer, so they apply live in
-// both directions and must never produce a restart reason.
-func TestAgentSessionModeAppliesLiveInBothDirections(t *testing.T) {
+// both directions and never produce a restart reason.
+func TestModeOffDisablesAgentSessionsExactlyAsEnabledFalseDoes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		disable func(*config.FileConfig)
+		restore func(*config.FileConfig)
+	}{
+		{"enabled false", func(fc *config.FileConfig) { agentSessionsEnabled(fc, false) }, func(fc *config.FileConfig) { agentSessionsEnabled(fc, true) }},
+		{"mode off", func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "off" }, func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "preferred" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFrontDoor(t, nil)
+
+			_, token, err := f.agentSessions.Create("agent-under-test", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if before := f.sessionRequest(t, token); before.Code != http.StatusOK {
+				t.Fatalf("the session token was refused before any save (%d: %s)", before.Code, before.Body.String())
+			}
+
+			f.save(t, tc.disable)
+
+			if f.agentSessions.Enabled() {
+				t.Fatal("the store still reports agent sessions enabled; Enabled() is not the one predicate both fields feed")
+			}
+			after := f.sessionRequest(t, token)
+			if after.Code != http.StatusUnauthorized || errorCode(t, after) != "session_auth_unavailable" {
+				t.Fatalf("the existing session token still authenticated (%d: %s)", after.Code, after.Body.String())
+			}
+			create := f.createSessionOverHTTP(t)
+			if create.Code != http.StatusNotFound || errorCode(t, create) != CodeSessionsDisabled {
+				t.Fatalf("POST /sessions answered %d (%s), want the disabled refusal", create.Code, create.Body.String())
+			}
+
+			// Back again, live: the family was mounted at boot, so nothing here is frozen.
+			f.save(t, tc.restore)
+			if !f.agentSessions.Enabled() {
+				t.Fatal("the store did not come back; the restoring save reported applied and moved nothing")
+			}
+			if back := f.createSessionOverHTTP(t); back.Code != http.StatusCreated {
+				t.Fatalf("POST /sessions answered %d (%s) after restoring", back.Code, back.Body.String())
+			}
+		})
+	}
+}
+
+// The timeouts have no boot-time consumer either: they reach the store and never
+// produce a restart reason. f.save asserts the second half.
+func TestAgentSessionTimeoutsApplyLive(t *testing.T) {
 	f := newFrontDoor(t, nil)
 
-	if got := f.agentSessions.Mode(); got != "preferred" {
-		t.Fatalf("boot mode = %q, want preferred", got)
-	}
 	f.save(t, func(fc *config.FileConfig) {
-		fc.Sessions.Agent.Mode = "required"
 		idle, life := 60, 600
 		fc.Sessions.Agent.IdleTimeoutSec = &idle
 		fc.Sessions.Agent.MaxLifetimeSec = &life
 	})
-	if got := f.agentSessions.Mode(); got != "required" {
-		t.Fatalf("mode after the save = %q, want required", got)
-	}
-
-	f.save(t, func(fc *config.FileConfig) { fc.Sessions.Agent.Mode = "preferred" })
-	if got := f.agentSessions.Mode(); got != "preferred" {
-		t.Fatalf("mode after the second save = %q, want preferred", got)
+	if !f.agentSessions.Enabled() {
+		t.Fatal("a timeout save disabled the store")
 	}
 }
 

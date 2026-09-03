@@ -30,9 +30,9 @@ In `config.json`:
 
 | Mode | Behavior |
 |------|----------|
-| `off` | Agent sessions disabled |
+| `off` | Agent sessions disabled, exactly as `enabled: false` |
 | `preferred` | Both bearer and session auth accepted (default) |
-| `required` | Only session auth accepted for agents |
+| `required` | **Not implemented — refused at config load.** It would mean only session auth is accepted for agents, but the bearer token and the dashboard cookie still authenticate, so the value is refused rather than accepted and ignored |
 
 ## Lifecycle
 
@@ -52,7 +52,9 @@ In `config.json`:
 >
 > The session management API (`/sessions`) still has admin-style authority for create, list, and inspect operations. Any caller authenticated with the server bearer token or a valid dashboard cookie can manage sessions for any agent. Session-authenticated callers are blocked from dashboard/admin endpoint families, but a session without explicit grants can still access the normal non-admin automation surface by default.
 >
-> In untrusted or shared environments where agent sessions are not needed, disable them entirely by setting `"enabled": false` or `"mode": "off"` in your config to reduce the auth surface.
+> In untrusted or shared environments where agent sessions are not needed, disable them entirely by setting `"enabled": false` or `"mode": "off"` in your config to reduce the auth surface. The two are one switch: either refuses an existing session token at the front door and answers the whole `/sessions` family with `sessions_disabled`.
+>
+> `"mode": "required"` is not implemented and is refused at config load rather than accepted and ignored: the server bearer token and the dashboard cookie still authenticate, so setting it would leave you believing session auth is the only way in.
 
 ### Session Grants
 

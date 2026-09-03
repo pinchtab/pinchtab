@@ -14,7 +14,32 @@ import (
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config/geo"
 	"github.com/pinchtab/pinchtab/internal/safelog"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
+
+// validateAgentSessionMode gates sessions.agent.mode. "required" is refused
+// rather than accepted-and-ignored: it names a real posture — the session
+// credential as the only accepted agent credential — that this server does not
+// enforce, and an operator who sets it believes they have session-only auth while
+// the bearer token and the dashboard cookie still authenticate. Refusing is
+// operator-visible and small-radius (the default is preferred, so only an explicit
+// setter is hit) and it replaces a silent security misapprehension with a loud one.
+func validateAgentSessionMode(mode string) []error {
+	switch mode {
+	case "", session.ModeOff, session.ModePreferred:
+		return nil
+	case session.ModeRequired:
+		return []error{ValidationError{
+			Field:   "sessions.agent.mode",
+			Message: fmt.Sprintf("%q is not implemented: the server bearer token and the dashboard cookie still authenticate, so this value cannot deliver the session-only auth it names (must be off or preferred)", session.ModeRequired),
+		}}
+	default:
+		return []error{ValidationError{
+			Field:   "sessions.agent.mode",
+			Message: fmt.Sprintf("invalid value %q (must be off or preferred)", mode),
+		}}
+	}
+}
 
 type ValidationError struct {
 	Field   string
@@ -321,6 +346,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Observability.Activity.RetentionDays),
 		})
 	}
+	errs = append(errs, validateAgentSessionMode(fc.Sessions.Agent.Mode)...)
 	if fc.Sessions.Dashboard.IdleTimeoutSec != nil && *fc.Sessions.Dashboard.IdleTimeoutSec <= 0 {
 		errs = append(errs, ValidationError{
 			Field:   "sessions.dashboard.idleTimeoutSec",
