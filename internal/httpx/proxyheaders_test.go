@@ -43,15 +43,15 @@ func TestCopyProxiedResponseHeadersLeavesTheOuterChainsHeadersSingleValued(t *te
 
 func TestCopyProxiedResponseHeadersMatchesOwnedHeadersCaseInsensitively(t *testing.T) {
 	dst := http.Header{}
-	dst.Set(HeaderRequestID, "outer")
+	dst.Set(RequestIDHeader, "outer")
 
 	src := http.Header{}
 	src["x-request-id"] = []string{"upstream"}
 
 	CopyProxiedResponseHeaders(dst, src)
 
-	if got := dst.Values(HeaderRequestID); len(got) != 1 || got[0] != "outer" {
-		t.Errorf("%s = %v, want the outer value alone — an upstream spelling the canonicaliser did not touch must still be filtered", HeaderRequestID, got)
+	if got := dst.Values(RequestIDHeader); len(got) != 1 || got[0] != "outer" {
+		t.Errorf("%s = %v, want the outer value alone — an upstream spelling the canonicaliser did not touch must still be filtered", RequestIDHeader, got)
 	}
 }
 
@@ -93,8 +93,8 @@ func TestOuterChainResponseHeadersCannotBeMutatedByCallers(t *testing.T) {
 	got := OuterChainResponseHeaders()
 	got[0] = "X-Not-Owned"
 
-	if !OuterChainOwnsResponseHeader(HeaderRequestID) {
-		t.Fatalf("a caller editing the returned slice changed the owned set, so one proxy hop could stop filtering %s", HeaderRequestID)
+	if !OuterChainOwnsResponseHeader(RequestIDHeader) {
+		t.Fatalf("a caller editing the returned slice changed the owned set, so one proxy hop could stop filtering %s", RequestIDHeader)
 	}
 }
 

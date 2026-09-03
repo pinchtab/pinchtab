@@ -84,10 +84,10 @@ func TestRequestIDMiddlewareStampsTheSameIDOnRequestAndResponse(t *testing.T) {
 
 	var seen string
 	RequestIDMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		seen = r.Header.Get(httpx.HeaderRequestID)
+		seen = r.Header.Get(httpx.RequestIDHeader)
 	})).ServeHTTP(rec, req)
 
-	response := rec.Header().Get(httpx.HeaderRequestID)
+	response := rec.Header().Get(httpx.RequestIDHeader)
 	if response == "" {
 		t.Fatal("no request id on the response, so a caller has nothing to quote")
 	}

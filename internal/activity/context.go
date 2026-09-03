@@ -170,7 +170,7 @@ func PropagateHeaders(ctx context.Context, req *http.Request) {
 
 	evt := state.snapshot()
 	if evt.RequestID != "" {
-		req.Header.Set("X-Request-Id", evt.RequestID)
+		req.Header.Set(httpx.RequestIDHeader, evt.RequestID)
 	}
 	if evt.AgentID != "" {
 		req.Header.Set(HeaderAgentID, evt.AgentID)
@@ -197,11 +197,11 @@ func PropagateHeaders(ctx context.Context, req *http.Request) {
 
 func requestIDFor(r *http.Request, w http.ResponseWriter) string {
 	if w != nil {
-		if rid := strings.TrimSpace(w.Header().Get("X-Request-Id")); rid != "" {
+		if rid := strings.TrimSpace(w.Header().Get(httpx.RequestIDHeader)); rid != "" {
 			return rid
 		}
 	}
-	return strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	return strings.TrimSpace(r.Header.Get(httpx.RequestIDHeader))
 }
 
 func agentIDFor(r *http.Request) string {

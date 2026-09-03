@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // AuditLog records security-sensitive actions without logging raw credentials
@@ -23,7 +25,7 @@ func auditAttrs(r *http.Request, event string) []any {
 		return attrs
 	}
 	attrs = append(attrs,
-		"requestId", strings.TrimSpace(r.Header.Get("X-Request-Id")),
+		"requestId", strings.TrimSpace(r.Header.Get(httpx.RequestIDHeader)),
 		"method", r.Method,
 		"path", r.URL.Path,
 		"clientIP", ClientIP(r),

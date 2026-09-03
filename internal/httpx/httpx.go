@@ -217,6 +217,13 @@ const (
 // RequestIDHeader is the id the request-id middleware stamps on every response and
 // the activity recorder copies into its event, so it is the join key between an
 // access-log line and the cause logged for it.
+//
+// It is the ONLY spelling of this header in the module, and the census beside it
+// keeps it that way. The name was written out twice here and as a bare literal in
+// four more packages, so renaming it — to lower-case it, or to move to a
+// standard trace header — would have changed some readers and not others, and the
+// halves fail quietly: a stamp nobody reads logs an empty id, and a reader whose
+// writer moved on lets the outer chain's id through twice.
 const RequestIDHeader = "X-Request-Id"
 
 // logFailureCause writes the UNREDACTED reason a failure was returned. The message

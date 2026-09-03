@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	HeaderRequestID               = "X-Request-Id"
 	HeaderContentSecurityPolicy   = "Content-Security-Policy"
 	HeaderFrameOptions            = "X-Frame-Options"
 	HeaderContentTypeOptions      = "X-Content-Type-Options"
@@ -14,7 +13,7 @@ const (
 )
 
 var outerChainResponseHeaders = []string{
-	HeaderRequestID,
+	RequestIDHeader,
 	HeaderContentSecurityPolicy,
 	HeaderFrameOptions,
 	HeaderContentTypeOptions,
@@ -76,8 +75,8 @@ func containsFold(names []string, key string) bool {
 // the two are different permissions, since a copy forwards whatever arrived under that
 // name while this forwards the one value the outer chain resolved for this request.
 func ForwardRequestID(dst, src http.Header) {
-	if rid := strings.TrimSpace(src.Get(HeaderRequestID)); rid != "" {
-		dst.Set(HeaderRequestID, rid)
+	if rid := strings.TrimSpace(src.Get(RequestIDHeader)); rid != "" {
+		dst.Set(RequestIDHeader, rid)
 	}
 }
 

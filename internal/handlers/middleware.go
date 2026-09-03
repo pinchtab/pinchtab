@@ -59,7 +59,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			atomic.AddUint64(&metricRequestsFailed, 1)
 			recordFailureEvent(FailureEvent{
 				Time:      time.Now(),
-				RequestID: w.Header().Get("X-Request-Id"),
+				RequestID: w.Header().Get(httpx.RequestIDHeader),
 				Method:    r.Method,
 				Path:      r.URL.Path,
 				Status:    sw.Code,
@@ -69,7 +69,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			})
 		}
 		attrs := []any{
-			"requestId", w.Header().Get("X-Request-Id"),
+			"requestId", w.Header().Get(httpx.RequestIDHeader),
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.Code,
@@ -232,14 +232,14 @@ func StripInternalHeadersMiddleware(next http.Handler) http.Handler {
 
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rid := r.Header.Get("X-Request-Id")
+		rid := r.Header.Get(httpx.RequestIDHeader)
 		if !usableRequestID(rid) {
 			b := make([]byte, 8)
 			_, _ = rand.Read(b)
 			rid = hex.EncodeToString(b)
 		}
-		w.Header().Set("X-Request-Id", rid)
-		r.Header.Set("X-Request-Id", rid)
+		w.Header().Set(httpx.RequestIDHeader, rid)
+		r.Header.Set(httpx.RequestIDHeader, rid)
 		next.ServeHTTP(w, r)
 	})
 }

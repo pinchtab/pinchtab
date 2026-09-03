@@ -149,14 +149,14 @@ func TestBothBridgeHopsTellTheInstanceTheOuterChainsRequestID(t *testing.T) {
 			}
 
 			req := httptest.NewRequest("POST", "/find", strings.NewReader(`{"text":"Buy"}`))
-			req.Header.Set(httpx.HeaderRequestID, "outer-trace-key")
+			req.Header.Set(httpx.RequestIDHeader, "outer-trace-key")
 
 			tc.call(NewBridgeClient(), httptest.NewRecorder(), req, parsed.Port())
 
 			if seen == nil {
 				t.Fatal("the instance received no request; this test is measuring nothing")
 			}
-			if got := seen.Get(httpx.HeaderRequestID); got != "outer-trace-key" {
+			if got := seen.Get(httpx.RequestIDHeader); got != "outer-trace-key" {
 				t.Errorf("instance was told %q, want the outer chain's id — without it the instance mints its own and one request needs two ids to trace", got)
 			}
 		})
@@ -179,14 +179,14 @@ func TestProxyWithTabIDForwardsOnlyTheRequestID(t *testing.T) {
 	}
 
 	req := httptest.NewRequest("POST", "/find", strings.NewReader(`{"text":"Buy"}`))
-	req.Header.Set(httpx.HeaderRequestID, "outer-trace-key")
+	req.Header.Set(httpx.RequestIDHeader, "outer-trace-key")
 	req.Header.Set("Cookie", "pinchtab_auth_token=session-secret")
 	req.Header.Set("X-Forwarded-For", "203.0.113.10")
 	req.Header.Set("Authorization", "Bearer user-token")
 
 	NewBridgeClient().ProxyWithTabID(httptest.NewRecorder(), req, parsed.Port(), "tab-1", "/find")
 
-	if got := seen.Get(httpx.HeaderRequestID); got != "outer-trace-key" {
+	if got := seen.Get(httpx.RequestIDHeader); got != "outer-trace-key" {
 		t.Fatalf("request id = %q, want it forwarded — the rest of this test cannot tell a narrow forward from no forward without it", got)
 	}
 	for _, name := range []string{"Cookie", "X-Forwarded-For", "Authorization"} {

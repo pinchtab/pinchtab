@@ -99,7 +99,7 @@ func instanceEchoingItsOwnRequestID(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	srv := httptest.NewServer(handlers.RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(r.Header.Get(httpx.HeaderRequestID)))
+		_, _ = w.Write([]byte(r.Header.Get(httpx.RequestIDHeader)))
 	})))
 	t.Cleanup(srv.Close)
 	return srv
@@ -117,13 +117,13 @@ func proxyThroughOuterChain(t *testing.T, upstream *httptest.Server, inbound str
 	front := handlers.RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// What the outer chain resolved for this request: RequestIDMiddleware stamps it
 		// onto the request, and it is the value msg=request logs.
-		outerID = r.Header.Get(httpx.HeaderRequestID)
+		outerID = r.Header.Get(httpx.RequestIDHeader)
 		Forward(w, r, targetURL, Options{})
 	}))
 
 	req := httptest.NewRequest("GET", "/tabs", nil)
 	if inbound != "" {
-		req.Header.Set(httpx.HeaderRequestID, inbound)
+		req.Header.Set(httpx.RequestIDHeader, inbound)
 	}
 	front.ServeHTTP(rec, req)
 	return outerID, rec.Body.String(), rec
@@ -162,9 +162,9 @@ func TestOneProxiedRequestIsTraceableByOneIDInBothLogs(t *testing.T) {
 			}
 
 			// The doubling half, on the same response.
-			values := rec.Header().Values(httpx.HeaderRequestID)
+			values := rec.Header().Values(httpx.RequestIDHeader)
 			if len(values) != 1 {
-				t.Fatalf("%s = %v, want exactly one value; a caller cannot tell which of two ids their HTTP library will show them", httpx.HeaderRequestID, values)
+				t.Fatalf("%s = %v, want exactly one value; a caller cannot tell which of two ids their HTTP library will show them", httpx.RequestIDHeader, values)
 			}
 			if values[0] != outerID {
 				t.Errorf("response carries %q but the outer chain logged %q, so the value a caller reads is not the one on disk", values[0], outerID)
@@ -199,7 +199,7 @@ func TestForwardingTheRequestIDDoesNotWidenIntoAWholesaleCopy(t *testing.T) {
 	} {
 		req.Header.Set(name, value)
 	}
-	req.Header.Set(httpx.HeaderRequestID, "traced")
+	req.Header.Set(httpx.RequestIDHeader, "traced")
 
 	front := handlers.RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		Forward(w, r, targetURL, Options{})
@@ -209,7 +209,7 @@ func TestForwardingTheRequestIDDoesNotWidenIntoAWholesaleCopy(t *testing.T) {
 	if received == nil {
 		t.Fatal("upstream received no request; this test is measuring nothing")
 	}
-	if got := received.Get(httpx.HeaderRequestID); got != "traced" {
+	if got := received.Get(httpx.RequestIDHeader); got != "traced" {
 		t.Fatalf("request id = %q, want it forwarded — without that the rest of this test cannot distinguish a narrow forward from no forward at all", got)
 	}
 	for _, name := range []string{"Cookie", "Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip"} {
@@ -225,13 +225,13 @@ func TestForwardingTheRequestIDDoesNotWidenIntoAWholesaleCopy(t *testing.T) {
 // Deleting it from the list would also forward it, and every behavioural test above would
 // stay green — this is the only check that tells the two implementations apart.
 func TestTheRequestIDIsForwardedByReAddingItRatherThanByLeavingTheStripList(t *testing.T) {
-	if _, stripped := strippedProxyRequestHeaders[strings.ToLower(httpx.HeaderRequestID)]; !stripped {
+	if _, stripped := strippedProxyRequestHeaders[strings.ToLower(httpx.RequestIDHeader)]; !stripped {
 		t.Error("x-request-id left strippedProxyRequestHeaders; it must stay stripped from the blind copy and be re-added by httpx.ForwardRequestID, or an arbitrary inbound value passes through on any path that skipped the outer middleware")
 	}
 
 	copied := http.Header{}
-	copyRequestHeaders(copied, http.Header{httpx.HeaderRequestID: {"from-the-blind-copy"}})
-	if got := copied.Get(httpx.HeaderRequestID); got != "" {
+	copyRequestHeaders(copied, http.Header{httpx.RequestIDHeader: {"from-the-blind-copy"}})
+	if got := copied.Get(httpx.RequestIDHeader); got != "" {
 		t.Errorf("the blind copy carried the request id as %q; the re-add is meant to be the only way it travels", got)
 	}
 }
