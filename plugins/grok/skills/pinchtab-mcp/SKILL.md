@@ -363,3 +363,6 @@ For these, use the pinchtab CLI or HTTP API directly.
 | `invalid URL` | Missing scheme | Include `http://` or `https://` |
 | Element not found | Page not loaded | Use `pinchtab_wait(for="selector", value=…)` |
 | Action seems ignored | Page changed mid-action | Re-snapshot, use fresh refs |
+| Snapshot looks right but clicks do nothing | A script threw on load, leaving the DOM present and handlers unwired | Call `pinchtab_errors()` (and `pinchtab_console()`) — they report why the page died |
+
+`pinchtab_console(clear=…)` and `pinchtab_errors(clear=…)` read the tab's console logs and uncaught JS exceptions. A result full of errors is a **successful** call — that payload is the diagnosis, not a tool failure — so read it rather than retrying blind.

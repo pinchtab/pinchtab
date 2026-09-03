@@ -248,7 +248,11 @@ pinchtab pdf [-o path.pdf] [--landscape]
 pinchtab record start out.gif [--fps 5] [--scale 1.0]  # .gif/.webm/.mp4; requires security.allowScreencast; .gif works without ffmpeg, .webm/.mp4 need ffmpeg
 pinchtab record stop                                    # stop, encode, and save to path given at start
 pinchtab record status                                  # check active recording
+pinchtab console [--clear]                               # browser console logs for the tab
+pinchtab errors [--clear]                                # uncaught JS exceptions the page threw
 ```
+
+**When a snapshot looks right but the page does not respond to actions, check `pinchtab errors` (and `pinchtab console`) before retrying.** A script that threw on load leaves the DOM present and the handlers unwired, so clicks land on nothing; the error log is the only channel that says so. A buffer full of errors is the useful answer, not a failed command.
 
 ### Site review
 

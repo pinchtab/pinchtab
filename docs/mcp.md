@@ -114,7 +114,7 @@ PINCHTAB_TOKEN=<that-host-token> pinchtab --server http://remote:9867 mcp
 
 ## Available Tools
 
-PinchTab currently exposes 36 tools:
+PinchTab currently exposes 38 tools:
 
 - Navigation: 9
 - Interaction: 8
@@ -125,6 +125,7 @@ PinchTab currently exposes 36 tools:
 - Tab management: 5
 - Wait utilities: 1
 - Network: 5
+- Diagnostics: 2
 - Dialog: 1
 
 ### Navigation
@@ -188,6 +189,11 @@ PinchTab currently exposes 36 tools:
 - `pinchtab_network_clear`
 - `pinchtab_network_route`
 - `pinchtab_network_unroute`
+
+### Diagnostics
+
+- `pinchtab_console` — read (or `clear`) the tab's browser console logs
+- `pinchtab_errors` — read (or `clear`) the tab's uncaught JavaScript exceptions; check this when a snapshot looks healthy but actions do nothing
 
 ### Dialog
 

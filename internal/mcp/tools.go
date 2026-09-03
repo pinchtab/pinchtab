@@ -306,6 +306,17 @@ func allTools() []mcp.Tool {
 			mcp.WithString("pattern", mcp.Description("Pattern to remove (omit to clear all rules)")),
 		),
 
+		mcp.NewTool("pinchtab_console",
+			mcp.WithDescription("Read the tab's captured browser console logs (console.log/warn/error and friends). Check this when a page looks healthy in the snapshot but does not respond to actions — the log often says why. A payload full of error-level logs is still a successful call."),
+			tabIDParam(),
+			mcp.WithBoolean("clear", mcp.Description("Clear the tab's console log buffer instead of reading it")),
+		),
+		mcp.NewTool("pinchtab_errors",
+			mcp.WithDescription("Read the tab's uncaught JavaScript errors (exceptions the page threw). Check this when a snapshot looks right but clicks do nothing: a script that died on load leaves the DOM present and the handlers unwired. A payload full of errors is still a successful call."),
+			tabIDParam(),
+			mcp.WithBoolean("clear", mcp.Description("Clear the tab's error buffer instead of reading it")),
+		),
+
 		mcp.NewTool("pinchtab_record",
 			mcp.WithDescription("Record browser activity; 'action' picks which. action='start': start recording — requires security.allowScreencast, and GIF works without ffmpeg while WebM/MP4 need ffmpeg. action='stop': stop recording and save the encoded file; encoding may take a while for long recordings. action='status': check active recording status (format, fps, duration, frame count)."),
 			mcp.WithString("action", mcp.Required(), mcp.Enum("start", "stop", "status"), mcp.Description("Recording action to take")),

@@ -253,6 +253,25 @@ pinchtab network <requestId> --body
 
 > **Sensitive data:** Request bodies and exports may contain cookies, tokens, or personal data. Obtain explicit approval before inspecting bodies or exporting data, keep redaction enabled, and delete artifacts after use.
 
+### `pinchtab console`
+Read the tab's captured browser console logs (`console.log`/`warn`/`error`). Check this when a page looks healthy in the snapshot but does not respond to actions — the log often says why.
+
+```bash
+pinchtab console
+pinchtab console --limit 20
+pinchtab console --clear     # empty the buffer instead of reading it
+```
+
+### `pinchtab errors`
+Read the tab's **uncaught JavaScript errors** — exceptions the page threw. A script that dies on load leaves the DOM present and the click handlers unwired, so the snapshot looks right while nothing works.
+
+```bash
+pinchtab errors
+pinchtab errors --clear      # empty the buffer instead of reading it
+```
+
+A buffer full of errors is the normal, useful case — it is what tells you the page failed, not an error in the command itself.
+
 ---
 
 ## State Commands
