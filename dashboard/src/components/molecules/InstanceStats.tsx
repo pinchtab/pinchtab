@@ -68,6 +68,12 @@ function formatUptime(startTime: string): string {
   return `${days}d ${hrs % 24}h`;
 }
 
+function formatCrashTime(time: string): string {
+  const at = new Date(time);
+  if (Number.isNaN(at.getTime())) return time;
+  return at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function countUniqueDomains(tabs: InstanceTab[]): number {
   const domains = new Set<string>();
   for (const tab of tabs) {
@@ -91,6 +97,17 @@ export default function InstanceStats({ instance, metrics, tabs }: Props) {
             <StatItem label="Status" value={instance.status} />
             <StatItem label="Uptime" value={formatUptime(instance.startTime)} />
             <StatItem label="Port" value={instance.port} />
+            {instance.crashes && instance.crashes.total > 0 && (
+              <StatItem
+                label="Crashes"
+                value={fmt(instance.crashes.total)}
+                sub={
+                  instance.crashes.recent.length > 0
+                    ? `last: ${instance.crashes.recent[instance.crashes.recent.length - 1].reason} at ${formatCrashTime(instance.crashes.recent[instance.crashes.recent.length - 1].time)} · tabs open before it were lost`
+                    : "tabs open before it were lost"
+                }
+              />
+            )}
           </>
         )}
       </StatGroup>

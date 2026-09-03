@@ -327,6 +327,8 @@ type Instance struct {
 	// Instance JSON byte-identical to pre-P2.4a output.
 	FallbackFrom   string `json:"fallbackFrom,omitempty"`
 	FallbackReason string `json:"fallbackReason,omitempty"`
+
+	Crashes *CrashSummary `json:"crashes,omitempty"`
 }
 
 func (i Instance) MarshalJSON() ([]byte, error) {

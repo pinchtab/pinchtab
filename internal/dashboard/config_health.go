@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli/report"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -25,19 +26,24 @@ type healthSecurityInfo struct {
 }
 
 type healthEnvelope struct {
-	Status              string              `json:"status"`
-	Mode                string              `json:"mode"`
-	Version             string              `json:"version"`
-	Uptime              int64               `json:"uptime"`
-	AuthRequired        bool                `json:"authRequired"`
-	Profiles            int                 `json:"profiles"`
-	QuarantinedProfiles int                 `json:"quarantinedProfiles"`
-	Instances           int                 `json:"instances"`
-	DefaultInstance     *healthInstanceInfo `json:"defaultInstance,omitempty"`
-	Agents              int                 `json:"agents"`
-	RestartRequired     bool                `json:"restartRequired"`
-	RestartReasons      []string            `json:"restartReasons,omitempty"`
-	Security            *healthSecurityInfo `json:"security,omitempty"`
+	Status              string               `json:"status"`
+	Mode                string               `json:"mode"`
+	Version             string               `json:"version"`
+	Uptime              int64                `json:"uptime"`
+	AuthRequired        bool                 `json:"authRequired"`
+	Profiles            int                  `json:"profiles"`
+	QuarantinedProfiles int                  `json:"quarantinedProfiles"`
+	Instances           int                  `json:"instances"`
+	DefaultInstance     *healthInstanceInfo  `json:"defaultInstance,omitempty"`
+	Agents              int                  `json:"agents"`
+	RestartRequired     bool                 `json:"restartRequired"`
+	RestartReasons      []string             `json:"restartReasons,omitempty"`
+	Security            *healthSecurityInfo  `json:"security,omitempty"`
+	Crashes             *bridge.CrashSummary `json:"crashes,omitempty"`
+}
+
+type crashReporter interface {
+	CrashSummary() bridge.CrashSummary
 }
 
 func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
@@ -94,6 +100,11 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 	if includeSecurity {
 		security := runtimeSecurityInfo(cfg)
 		out.Security = &security
+	}
+	if reporter, ok := c.instances.(crashReporter); ok {
+		if crashes := reporter.CrashSummary(); crashes.Total > 0 {
+			out.Crashes = &crashes
+		}
 	}
 	return out, nil
 }

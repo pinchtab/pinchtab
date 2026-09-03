@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -57,6 +58,13 @@ func WriteTabContextError(w http.ResponseWriter, err error, notFoundStatus int) 
 	}
 	if notFoundStatus == 0 {
 		notFoundStatus = http.StatusNotFound
+	}
+	var lost *bridge.TabNotFoundError
+	if errors.As(err, &lost) && lost.Crash != nil {
+		message, details := crashAnnotation(err.Error(), nil, *lost.Crash,
+			"this tab died with it, along with its logins, form state and refs; open a new tab and navigate again")
+		httpx.ErrorCode(w, notFoundStatus, "browser_crashed", message, false, details)
+		return
 	}
 	httpx.Error(w, notFoundStatus, err)
 }

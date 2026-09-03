@@ -35,10 +35,71 @@ func (o *Orchestrator) List() []bridge.Instance {
 	for _, inst := range o.instances {
 		copyInst := inst.Instance
 		copyInst.Status = effectiveInstanceStatus(copyInst.Status, instanceIsActive(inst))
+		if crashes, ok := o.crashes[inst.ID]; ok && crashes.Total > 0 {
+			summary := crashes
+			copyInst.Crashes = &summary
+		}
 		result = append(result, copyInst)
 	}
 	return result
 }
+
+// RefreshCrashes asks every live instance for its crash record and keeps the
+// answers, so List can carry them and CrashSummary can merge them. Browser
+// crashes are recorded by the process that owns the browser, which in server
+// mode is never this one.
+func (o *Orchestrator) RefreshCrashes() map[string]bridge.CrashSummary {
+	o.mu.RLock()
+	instances := make([]*InstanceInternal, 0, len(o.instances))
+	for _, inst := range o.instances {
+		if inst.Status == "running" && instanceIsActive(inst) {
+			instances = append(instances, inst)
+		}
+	}
+	o.mu.RUnlock()
+
+	fresh := make(map[string]bridge.CrashSummary, len(instances))
+	for _, inst := range instances {
+		crashes, err := o.fetchCrashes(inst)
+		if err != nil || crashes == nil {
+			continue
+		}
+		for i := range crashes.Recent {
+			crashes.Recent[i].InstanceID = inst.ID
+		}
+		fresh[inst.ID] = *crashes
+	}
+
+	o.mu.Lock()
+	if o.crashes == nil {
+		o.crashes = map[string]bridge.CrashSummary{}
+	}
+	for id, crashes := range fresh {
+		o.crashes[id] = crashes
+	}
+	o.mu.Unlock()
+	return fresh
+}
+
+// CrashSummary merges the instances' crash records into the shape bridge /health
+// carries, each event naming its instance.
+func (o *Orchestrator) CrashSummary() bridge.CrashSummary {
+	o.RefreshCrashes()
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	var merged bridge.CrashSummary
+	for _, crashes := range o.crashes {
+		merged.Total += crashes.Total
+		merged.Recent = append(merged.Recent, crashes.Recent...)
+	}
+	sort.SliceStable(merged.Recent, func(i, j int) bool { return merged.Recent[i].Time.Before(merged.Recent[j].Time) })
+	if len(merged.Recent) > maxMergedCrashEvents {
+		merged.Recent = merged.Recent[len(merged.Recent)-maxMergedCrashEvents:]
+	}
+	return merged
+}
+
+const maxMergedCrashEvents = 20
 
 func (o *Orchestrator) Logs(id string) (string, error) {
 	o.mu.RLock()

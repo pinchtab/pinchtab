@@ -185,15 +185,21 @@ func (h *Handlers) annotateBrowserCrash(message string, details map[string]any) 
 		return message, details
 	}
 
+	return crashAnnotation(message, details, crash,
+		"this error is a symptom of the dead browser, not of your selector or timeout; restart it with: pinchtab server restart")
+}
+
+// crashAnnotation is the one shape a crash takes in an error body: the reason in
+// the message, browserCrashed/browserCrashReason as discrete fields, and a hint
+// that says what the caller should do about it.
+func crashAnnotation(message string, details map[string]any, crash bridge.CrashEvent, remedy string) (string, map[string]any) {
 	annotated := make(map[string]any, len(details)+3)
 	for k, v := range details {
 		annotated[k] = v
 	}
 	annotated["browserCrashed"] = true
 	annotated["browserCrashReason"] = crash.Reason
-	annotated["hint"] = fmt.Sprintf(
-		"the browser crashed (%s at %s) — this error is a symptom of the dead browser, not of your selector or timeout; restart it with: pinchtab server restart",
-		crash.Reason, crash.Time.Format(time.RFC3339))
+	annotated["hint"] = fmt.Sprintf("the browser crashed (%s at %s) — %s", crash.Reason, crash.Time.Format(time.RFC3339), remedy)
 	return fmt.Sprintf("%s (browser crashed: %s)", message, crash.Reason), annotated
 }
 

@@ -49,6 +49,11 @@ export default function InstanceListItem({
           <div className="dashboard-mono text-xs text-text-muted">
             :{instance.port} · {instance.browser || "chrome"} · {tabCount} tabs
             {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
+            {instance.crashes && instance.crashes.total > 0 && (
+              <span className="text-destructive">
+                {` · crashed ×${instance.crashes.total}`}
+              </span>
+            )}
           </div>
         </div>
       </div>

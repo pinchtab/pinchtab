@@ -58,6 +58,20 @@ export interface Instance {
    */
   fallbackFrom?: string;
   fallbackReason?: string;
+  crashes?: CrashSummary;
+}
+export interface CrashEvent {
+  time: string;
+  targetId?: string;
+  tabId?: string;
+  url?: string;
+  reason: string;
+  lastError?: string;
+  instanceId?: string;
+}
+export interface CrashSummary {
+  total: number /* uint64 */;
+  recent: CrashEvent[];
 }
 export interface Agent {
   id: string;

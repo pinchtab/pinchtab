@@ -67,12 +67,14 @@ curl http://localhost:9867/health
 | `agents` | Connected agent count |
 | `restartRequired` | `true` when file-based config changes need restart |
 | `restartReasons` | Restart reason list when required |
+| `crashes` | Present once any instance's browser has crashed: `total` and `recent`, the same block bridge `/health` carries, each event naming its `instanceId` |
 
 Notes:
 
 - `defaultInstance` is present when at least one instance exists
 - use `defaultInstance.status == "running"` when you want to confirm Chrome is ready
 - strategies such as `always-on` can create an instance automatically at startup
+- `status` does not degrade on a browser crash: the instance is relaunched and is serving again. The crash is history, so it rides beside `status` as `crashes`; a crashed-then-relaunched instance differs from one that never crashed by that key alone. Every tab the dead browser held is gone, and a call to one answers `404` with code `browser_crashed` and a `hint` saying so
 
 ## Related Pages
 

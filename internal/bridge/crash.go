@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,8 @@ import (
 
 const maxRecentCrashes = 20
 
+const maxTabsLostToCrashes = 256
+
 // CrashEvent contains information about a crash. Generation identifies the
 // browser context that was live when the crash was recorded; it is internal to
 // the liveness lookup and never appears in /health or /metrics output.
@@ -24,7 +27,31 @@ type CrashEvent struct {
 	URL        string    `json:"url,omitempty"`
 	Reason     string    `json:"reason"`
 	LastError  string    `json:"lastError,omitempty"`
+	InstanceID string    `json:"instanceId,omitempty"`
 	Generation uint64    `json:"-"`
+}
+
+// CrashSummary is the crash block of /health and /metrics in both modes.
+type CrashSummary struct {
+	Total  uint64       `json:"total"`
+	Recent []CrashEvent `json:"recent"`
+}
+
+// TabNotFoundError names the tab a lookup missed and, when the browser's death
+// is what removed it, the crash that did so.
+type TabNotFoundError struct {
+	TabID string
+	Crash *CrashEvent
+}
+
+func (e *TabNotFoundError) Error() string { return fmt.Sprintf("tab %s not found", e.TabID) }
+
+func tabNotFound(tabID string) error {
+	err := &TabNotFoundError{TabID: tabID}
+	if crash, ok := CrashThatDestroyedTab(tabID); ok {
+		err.Crash = &crash
+	}
+	return err
 }
 
 // CrashHandler is called when a crash is detected
@@ -34,6 +61,8 @@ var (
 	crashMu           sync.Mutex
 	recentCrashEvents []CrashEvent
 	crashEventsTotal  uint64
+	tabsLostToCrashes = map[string]CrashEvent{}
+	tabsLostOrder     []string
 
 	genMu            sync.Mutex
 	generations      = map[context.Context]uint64{}
@@ -112,15 +141,53 @@ func CrashForBrowserContext(ctx context.Context) (CrashEvent, bool) {
 }
 
 // CrashSnapshot returns recent crash diagnostics for /health and /metrics.
-func CrashSnapshot() map[string]any {
+func CrashSnapshot() CrashSummary {
 	crashMu.Lock()
 	recent := make([]CrashEvent, 0, len(recentCrashEvents))
 	recent = append(recent, recentCrashEvents...)
 	crashMu.Unlock()
-	return map[string]any{
-		"total":  atomic.LoadUint64(&crashEventsTotal),
-		"recent": recent,
+	return CrashSummary{
+		Total:  atomic.LoadUint64(&crashEventsTotal),
+		Recent: recent,
 	}
+}
+
+// recordTabsLostToCrash remembers which tabs a browser death destroyed, so a later
+// lookup of one of them can say the crash removed it rather than blaming the id.
+// This outlives the browser generation on purpose: the tab belonged to the dead
+// browser, so its loss is attributable however many relaunches follow.
+func recordTabsLostToCrash(tabIDs []string, ev CrashEvent) {
+	crashMu.Lock()
+	defer crashMu.Unlock()
+	for _, id := range tabIDs {
+		if _, seen := tabsLostToCrashes[id]; !seen {
+			tabsLostOrder = append(tabsLostOrder, id)
+		}
+		tabsLostToCrashes[id] = ev
+	}
+	for len(tabsLostOrder) > maxTabsLostToCrashes {
+		delete(tabsLostToCrashes, tabsLostOrder[0])
+		tabsLostOrder = tabsLostOrder[1:]
+	}
+}
+
+// CrashThatDestroyedTab reports the browser death that removed tabID, if any.
+func CrashThatDestroyedTab(tabID string) (CrashEvent, bool) {
+	crashMu.Lock()
+	defer crashMu.Unlock()
+	ev, ok := tabsLostToCrashes[tabID]
+	return ev, ok
+}
+
+// recordBrowserDeath records a whole-browser crash together with every tab it
+// held, which is the fact a caller of one of those tabs needs next.
+func (b *Bridge) recordBrowserDeath(reason string) CrashEvent {
+	event := CrashEvent{Time: time.Now(), Reason: reason}
+	recordCrashEventForContext(b.BrowserCtx, event)
+	if b.TabManager != nil {
+		recordTabsLostToCrash(b.trackedTabIDs(), event)
+	}
+	return event
 }
 
 // HasCrashDiagnostics reports whether any crash events have been recorded.
@@ -136,6 +203,8 @@ func ResetCrashMonitoringForTests() {
 	atomic.StoreUint64(&crashEventsTotal, 0)
 	crashMu.Lock()
 	recentCrashEvents = nil
+	tabsLostToCrashes = map[string]CrashEvent{}
+	tabsLostOrder = nil
 	crashMu.Unlock()
 	genMu.Lock()
 	generations = map[context.Context]uint64{}
@@ -214,11 +283,7 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 		if err != nil && err != context.Canceled {
 			reason = err.Error()
 		}
-		event := CrashEvent{
-			Time:   time.Now(),
-			Reason: reason,
-		}
-		recordCrashEventForContext(b.BrowserCtx, event)
+		event := b.recordBrowserDeath(reason)
 		slog.Warn("🔥 BROWSER CONTEXT ENDED UNEXPECTEDLY", "error", err)
 		if handler != nil {
 			handler(event)

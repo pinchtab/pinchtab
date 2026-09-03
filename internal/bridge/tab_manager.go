@@ -129,6 +129,16 @@ func browserExecutorContext(ctx context.Context) (context.Context, error) {
 	return cdp.WithExecutor(ctx, c.Browser), nil
 }
 
+func (tm *TabManager) trackedTabIDs() []string {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	ids := make([]string, 0, len(tm.tabs))
+	for id := range tm.tabs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (tm *TabManager) CreateTab(url string) (string, context.Context, context.CancelFunc, error) {
 	return tm.createTab(url, "")
 }
@@ -310,7 +320,7 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	execCtx, execErr := browserExecutorContext(closeCtx)
 	if execErr != nil {
 		if !tracked {
-			return fmt.Errorf("tab %s not found", tabID)
+			return tabNotFound(tabID)
 		}
 		slog.Debug("close target skipped", "tabId", tabID, "cdpId", cdpTargetID, "err", execErr)
 		tm.purgeTrackedTabState(tabID, cdpTargetID)
@@ -319,7 +329,7 @@ func (tm *TabManager) CloseTab(tabID string) error {
 
 	if err := target.CloseTarget(target.ID(cdpTargetID)).Do(execCtx); err != nil {
 		if !tracked {
-			return fmt.Errorf("tab %s not found", tabID)
+			return tabNotFound(tabID)
 		}
 		slog.Debug("close target CDP", "tabId", tabID, "cdpId", cdpTargetID, "err", err)
 	}

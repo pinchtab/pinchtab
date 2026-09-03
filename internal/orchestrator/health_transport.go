@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
@@ -20,6 +21,10 @@ type remoteTab struct {
 
 type remoteMetrics struct {
 	Memory *memoryMetrics `json:"memory,omitempty"`
+}
+
+type remoteHealth struct {
+	Crashes *bridge.CrashSummary `json:"crashes,omitempty"`
 }
 
 type memoryMetrics struct {
@@ -85,6 +90,34 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 		return nil, err
 	}
 	return result.Memory, nil
+}
+
+func (o *Orchestrator) fetchCrashes(inst *InstanceInternal) (*bridge.CrashSummary, error) {
+	target, err := o.instancePathURL(inst, "/health", "")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	tagOrchestratorMonitoringRequest(req)
+	o.applyInstanceAuth(req, inst)
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+	var result remoteHealth
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Crashes, nil
 }
 
 func tagOrchestratorMonitoringRequest(req *http.Request) {

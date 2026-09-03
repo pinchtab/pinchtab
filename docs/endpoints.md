@@ -20,6 +20,15 @@ Notes:
 
 - in bridge mode, `/health` reports bridge health and tab count
 - in full server mode, `/health` reports dashboard health, auth state, and instance count
+- a browser crash is reported the same way in both modes: `/health` carries a `crashes`
+  block (`total`, `recent`) whenever the browser behind it has crashed. In bridge mode the
+  bridge records its own; in full server mode the front door merges every instance's
+  record and each event names its `instanceId`. `status` stays `ok` — a crashed instance is
+  relaunched and is serving again — so watch `crashes`, not `status`, for lost client
+  state. The same block appears on each entry of `GET /instances`. After a crash every
+  tab the browser held is gone, and a call to one answers `404` with code
+  `browser_crashed`, `browserCrashed: true`, `browserCrashReason` and a `hint`, rather
+  than a bare `tab <id> not found`
 - `/metrics` reports the counters of the process answering it: in full server mode the front
   door's own request counters (auth rejections and unrouted paths included), in bridge mode
   the bridge's. Every response names its `layer`, and the layers are never summed — read one

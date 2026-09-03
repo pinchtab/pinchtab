@@ -105,7 +105,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 	}
 
 	if !ok {
-		return nil, "", fmt.Errorf("tab %s not found", tabID)
+		return nil, "", tabNotFound(tabID)
 	}
 
 	if entry.Ctx == nil {

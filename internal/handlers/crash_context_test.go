@@ -250,3 +250,60 @@ func TestActionExecutionFailureNamesTheBrowserCrash(t *testing.T) {
 		t.Fatalf("details = %v, want the crash reason", body["details"])
 	}
 }
+
+type lostTabBridge struct {
+	mockBridge
+	err error
+}
+
+func (m *lostTabBridge) TabContext(string) (*bridge.TabHandle, string, error) { return nil, "", m.err }
+
+func consoleLogsResponse(t *testing.T, b bridge.BridgeAPI) *httptest.ResponseRecorder {
+	t.Helper()
+	bridge.ResetCrashMonitoringForTests()
+	t.Cleanup(bridge.ResetCrashMonitoringForTests)
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	w := httptest.NewRecorder()
+	h.HandleGetConsoleLogs(w, httptest.NewRequest("GET", "/console?tabId=tab_dead", nil))
+	return w
+}
+
+// The dominant post-crash error: a crash deletes every tab, so what a caller sees
+// next is "tab not found", and that used to read as a bad id with no crash in it.
+func TestATabDestroyedByACrashSaysSoInsteadOfBlamingTheID(t *testing.T) {
+	crash := bridge.CrashEvent{Time: time.Now(), Reason: "unexpected context cancellation"}
+	w := consoleLogsResponse(t, &lostTabBridge{err: &bridge.TabNotFoundError{TabID: "tab_dead", Crash: &crash}})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", w.Code, w.Body.String())
+	}
+	body := decodeErrorBody(t, w)
+	if body["code"] != "browser_crashed" {
+		t.Errorf("code = %v, want browser_crashed", body["code"])
+	}
+	message, _ := body["error"].(string)
+	if !strings.Contains(message, "tab tab_dead not found") || !strings.Contains(message, "unexpected context cancellation") {
+		t.Errorf("error = %q, want the miss and the crash reason", message)
+	}
+	details, _ := body["details"].(map[string]any)
+	if details["browserCrashed"] != true || details["browserCrashReason"] != "unexpected context cancellation" {
+		t.Errorf("details = %v, want the crash fields", details)
+	}
+	hint, _ := details["hint"].(string)
+	if !strings.Contains(hint, "browser crashed") || !strings.Contains(hint, "open a new tab") {
+		t.Errorf("hint = %q, want it to name the crash and the remedy", hint)
+	}
+}
+
+func TestATabMissWithoutACrashIsTheBareNotFound(t *testing.T) {
+	w := consoleLogsResponse(t, &lostTabBridge{err: &bridge.TabNotFoundError{TabID: "tab_dead"}})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+	body := decodeErrorBody(t, w)
+	if body["code"] != "error" || body["error"] != "tab tab_dead not found" {
+		t.Errorf("body = %v, want the plain not-found", body)
+	}
+	if _, ok := body["details"]; ok {
+		t.Errorf("details appeared without a crash: %v", body)
+	}
+}

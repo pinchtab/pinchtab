@@ -55,6 +55,23 @@ type Instance struct {
 	// empty in P2.4a).
 	FallbackFrom   string `json:"fallbackFrom,omitempty"`
 	FallbackReason string `json:"fallbackReason,omitempty"`
+
+	Crashes *CrashSummary `json:"crashes,omitempty"`
+}
+
+type CrashEvent struct {
+	Time       time.Time `json:"time"`
+	TargetID   string    `json:"targetId,omitempty"`
+	TabID      string    `json:"tabId,omitempty"`
+	URL        string    `json:"url,omitempty"`
+	Reason     string    `json:"reason"`
+	LastError  string    `json:"lastError,omitempty"`
+	InstanceID string    `json:"instanceId,omitempty"`
+}
+
+type CrashSummary struct {
+	Total  uint64       `json:"total"`
+	Recent []CrashEvent `json:"recent"`
 }
 
 type Agent struct {
