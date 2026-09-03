@@ -331,6 +331,15 @@ func (s *Scheduler) worker(id int) {
 }
 
 func (s *Scheduler) dispatch(t *Task) {
+	// The in-flight slot belongs to the dequeue that produced this task, so it is
+	// released here and nowhere else: finishTask also runs for tasks that expired
+	// or were cancelled while QUEUED, which never took a slot, and for a running
+	// task that was cancelled, whose slot this dispatch is still holding. Releasing
+	// there decremented another task's count, and the count is what bounds both
+	// MaxPerAgentFlight and MaxInflight. Deferred so every exit path — including a
+	// panic in an executor — gives the slot back.
+	defer s.queue.Complete(t.AgentID)
+
 	dispatchStart := timeNow()
 
 	if err := t.SetState(StateAssigned); err != nil {
@@ -386,9 +395,11 @@ func (s *Scheduler) dispatch(t *Task) {
 	s.finishTask(t)
 }
 
+// finishTask publishes a task's terminal state. It does NOT release an in-flight
+// slot: it is reached from the deadline reaper and from Cancel for tasks that were
+// still queued, and dispatch owns the slot for the ones that were not.
 func (s *Scheduler) finishTask(t *Task) {
 	s.results.Store(t)
-	s.queue.Complete(t.AgentID)
 
 	s.liveMu.Lock()
 	delete(s.live, t.ID)
