@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
@@ -381,47 +380,13 @@ func (o *Orchestrator) stopDetachedFailedAttempt(instanceID string, inst *Instan
 
 	if inst.cmd == nil {
 		if inst.AttachType == "bridge" {
-			o.requestDetachedShutdown(inst)
+			o.requestChildShutdown(inst)
 		}
 		return
 	}
 
-	o.requestDetachedShutdown(inst)
-	pid := inst.cmd.PID()
-	if pid > 0 {
-		if waitForProcessExit(pid, 5*time.Second) {
-			return
-		}
-
-		if err := killProcessGroup(pid, sigTERM); err != nil {
-			slog.Warn("failed to send SIGTERM to failed fallback attempt", "id", instanceID, "pid", pid, "err", err)
-		}
-		if waitForProcessExit(pid, 3*time.Second) {
-			return
-		}
-
-		if err := killProcessGroup(pid, sigKILL); err != nil {
-			slog.Warn("failed to send SIGKILL to failed fallback attempt", "id", instanceID, "pid", pid, "err", err)
-		}
-	}
-
-	inst.cmd.Cancel()
-	if pid > 0 && !waitForProcessExit(pid, 2*time.Second) {
-		slog.Warn("failed fallback attempt still running after teardown", "id", instanceID, "pid", pid)
-	}
-}
-
-func (o *Orchestrator) requestDetachedShutdown(inst *InstanceInternal) {
-	reqCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	targetURL, targetErr := o.instancePathURL(inst, "/shutdown", "")
-	if targetErr != nil {
-		return
-	}
-	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
-	o.applyInstanceAuth(req, inst)
-	if resp, err := o.client.Do(req); err == nil {
-		_ = resp.Body.Close()
+	if !o.stopChildProcess(instanceID, inst) {
+		slog.Warn("failed fallback attempt still running after teardown", "id", instanceID, "pid", inst.cmd.PID())
 	}
 }
 

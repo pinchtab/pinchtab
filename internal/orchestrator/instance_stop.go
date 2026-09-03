@@ -51,30 +51,33 @@ func (o *Orchestrator) Stop(id string) error {
 	}
 
 	pid := inst.cmd.PID()
-
-	reqCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
-	defer cancel()
-	if targetURL, targetErr := o.instancePathURL(inst, "/shutdown", ""); targetErr == nil {
-		req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
-		o.applyInstanceAuth(req, inst)
-		resp, err := o.client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-		}
+	if !o.stopChildProcess(id, inst) {
+		o.setStopError(id, fmt.Sprintf("failed to stop process %d; still running", pid))
+		return fmt.Errorf("failed to stop instance %q gracefully", id)
 	}
 
+	o.markStopped(id)
+	return nil
+}
+
+// stopChildProcess runs the child shutdown escalation: ask the bridge to shut
+// down, then SIGTERM, SIGKILL, and finally cancel the command context. It
+// reports whether the process is gone. Stop and the detached failed-attempt
+// teardown share it; they differ only in the bookkeeping around it.
+func (o *Orchestrator) stopChildProcess(id string, inst *InstanceInternal) bool {
+	o.requestChildShutdown(inst)
+
+	pid := inst.cmd.PID()
 	if pid > 0 {
 		if waitForProcessExit(pid, gracefulProcessStopTimeout) {
-			o.markStopped(id)
-			return nil
+			return true
 		}
 
 		if err := killProcessGroup(pid, sigTERM); err != nil {
 			slog.Warn("failed to send SIGTERM to instance", "id", id, "pid", pid, "err", err)
 		}
 		if waitForProcessExit(pid, termProcessStopTimeout) {
-			o.markStopped(id)
-			return nil
+			return true
 		}
 
 		if err := killProcessGroup(pid, sigKILL); err != nil {
@@ -83,18 +86,23 @@ func (o *Orchestrator) Stop(id string) error {
 	}
 
 	inst.cmd.Cancel()
+	return pid <= 0 || waitForProcessExit(pid, killProcessStopTimeout)
+}
 
-	if pid > 0 {
-		if waitForProcessExit(pid, killProcessStopTimeout) {
-			o.markStopped(id)
-			return nil
-		}
-		o.setStopError(id, fmt.Sprintf("failed to stop process %d; still running", pid))
-		return fmt.Errorf("failed to stop instance %q gracefully", id)
+// requestChildShutdown asks a child bridge to shut itself down. Failures are
+// the caller's cue to escalate, not an error to report.
+func (o *Orchestrator) requestChildShutdown(inst *InstanceInternal) {
+	reqCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
+	defer cancel()
+	targetURL, targetErr := o.instancePathURL(inst, "/shutdown", "")
+	if targetErr != nil {
+		return
 	}
-
-	o.markStopped(id)
-	return nil
+	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
+	o.applyInstanceAuth(req, inst)
+	if resp, err := o.client.Do(req); err == nil {
+		_ = resp.Body.Close()
+	}
 }
 
 func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
@@ -242,7 +250,6 @@ func (o *Orchestrator) cleanupStoppedProfile(profileName, browser string) {
 	providerhooks.CleanupProfile(browser, profilePath)
 
 	if strings.HasPrefix(profileName, "instance-") {
-		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
 			slog.Warn("failed to delete temporary profile directory", "name", profileName, "err", err)
 		} else {
@@ -290,23 +297,38 @@ func (o *Orchestrator) Shutdown() {
 	wg.Wait()
 
 	// Signal after the instances are stopped, so a monitor still probing a
-	// healthy instance gets to record its outcome, then wait for every monitor
-	// to return. Bounded by one poll interval rather than
-	// instanceStartupTimeout, because the probe loop watches shutdownCh.
+	// healthy instance gets to record its outcome, then join every goroutine
+	// the orchestrator detached. The monitors are bounded by one poll interval
+	// rather than instanceStartupTimeout because the probe loop watches
+	// shutdownCh; the teardowns run a failed attempt's own process escalation,
+	// which nothing else stops for them.
 	o.signalShutdown()
-	if !waitGroupWithin(&o.monitors, monitorShutdownGrace) {
-		// Belt and braces. finalizeInstanceExit is interruptible, so this should
-		// not fire; if a monitor ever blocks somewhere else, shutdown must still
-		// return rather than hang the process.
-		slog.Warn("startup monitors did not finish within the shutdown grace period",
-			"grace", monitorShutdownGrace)
+	joinDetached("startup monitors", &o.monitors, monitorShutdownGrace)
+	joinDetached("failed-attempt teardowns", &o.detachedStops, detachedStopShutdownGrace)
+}
+
+// joinDetached waits for wg, then reports rather than hangs. Every wait here is
+// bounded so a goroutine blocked somewhere unexpected can never hold the
+// process open.
+func joinDetached(work string, wg *sync.WaitGroup, grace time.Duration) {
+	if waitGroupWithin(wg, grace) {
+		return
 	}
+	slog.Warn("detached goroutines did not finish within the shutdown grace period",
+		"work", work, "grace", grace)
 }
 
 // monitorShutdownGrace bounds how long Shutdown waits for startup monitors.
 // Generous next to the poll interval they watch shutdownCh on, and far below
 // instanceStartupTimeout.
 const monitorShutdownGrace = 5 * time.Second
+
+// detachedStopShutdownGrace bounds how long Shutdown waits for failed-attempt
+// teardowns. One runs stopChildProcess, whose own escalation is bounded by the
+// shutdown request plus the three process waits, so a teardown that is making
+// progress finishes inside this.
+var detachedStopShutdownGrace = shutdownRequestTimeout + gracefulProcessStopTimeout +
+	termProcessStopTimeout + killProcessStopTimeout + time.Second
 
 // waitGroupWithin reports whether wg finished inside d.
 func waitGroupWithin(wg *sync.WaitGroup, d time.Duration) bool {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -120,5 +121,30 @@ func TestEveryMonitorGoesThroughStartMonitor(t *testing.T) {
 	if len(offenders) > 0 {
 		t.Fatalf("monitor started outside startMonitor in %s; use o.startMonitor(inst) so Shutdown can wait for it",
 			strings.Join(offenders, ", "))
+	}
+}
+
+// Shutdown must also join the detached failed-attempt teardowns. A teardown
+// kills a browser process and deletes its profile for up to its own escalation
+// bound after Shutdown is called, so one that outlives the orchestrator is the
+// same leak the monitors had — and its field comment already promised that
+// shutdown paths wait for it. That tearDownFailedAttempt registers with the
+// group is pinned by TestTearDownFailedAttempt_DetachesBeforeAsyncStop; this pins
+// the other half.
+func TestShutdownJoinsDetachedFailedAttemptTeardowns(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+
+	var finished atomic.Bool
+	o.detachedStops.Add(1)
+	go func() {
+		defer o.detachedStops.Done()
+		time.Sleep(300 * time.Millisecond)
+		finished.Store(true)
+	}()
+
+	o.Shutdown()
+
+	if !finished.Load() {
+		t.Fatal("Shutdown returned while a detached failed-attempt teardown was still running")
 	}
 }
