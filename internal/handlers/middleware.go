@@ -37,15 +37,27 @@ const (
 // requestLogLevel maps the answered status onto a severity an operator can route on. Every
 // request used to log at Info, so a server returning 500s looked exactly like a healthy one
 // to any level-based alert, dashboard or log shipper — `grep level=ERROR` found nothing.
-func requestLogLevel(status int) slog.Level {
+//
+// A recorded reason raises the level on its own. Some endpoints answer 200 while
+// reporting a failure inside the envelope — a batch or macro run whose steps all
+// failed — and keying only on the status made those runs log as healthy traffic.
+func requestLogLevel(status int, reasonRecorded bool) slog.Level {
 	switch {
 	case status >= 500:
 		return slog.LevelError
-	case status >= 400:
+	case status >= 400, reasonRecorded:
 		return slog.LevelWarn
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// requestFailed is the one definition of "this request failed" for the recording
+// channels: the status, or a reason the handler published beside a success status.
+// The producer that wrote the response is the only thing that knows the second
+// case, which is why it is a recorded fact rather than something re-derived here.
+func requestFailed(sw *httpx.StatusWriter) bool {
+	return sw.Code >= 400 || sw.FailureMessage != ""
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -56,7 +68,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		ms := uint64(time.Since(start).Milliseconds())
 		atomic.AddUint64(&metricRequestsTotal, 1)
 		atomic.AddUint64(&metricRequestLatencyN, ms)
-		if sw.Code >= 400 {
+		if requestFailed(sw) {
 			atomic.AddUint64(&metricRequestsFailed, 1)
 			recordFailureEvent(FailureEvent{
 				Time:      time.Now(),
@@ -79,7 +91,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		if sw.FailureMessage != "" {
 			attrs = append(attrs, "code", sw.FailureCode, "error", sw.FailureMessage)
 		}
-		slog.Log(r.Context(), requestLogLevel(sw.Code), "request", attrs...)
+		slog.Log(r.Context(), requestLogLevel(sw.Code, sw.FailureMessage != ""), "request", attrs...)
 	})
 }
 

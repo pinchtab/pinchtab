@@ -161,6 +161,19 @@ POST /evaluate
 POST /tabs/{id}/evaluate
 ```
 
+`POST /actions` and `POST /macro` answer **200 whatever their steps did**: the envelope
+reports the run, and each step's outcome is its own entry — `{"index", "success", "code",
+"error"}` — beside the top-level `total`, `successful` and `failed` counts. Read `failed`
+and the per-item entries; a 2xx does not mean the steps worked. A 4xx from these endpoints
+is about the request itself (an empty array, a bad body, a refused capability), never about
+a step.
+
+That is a deliberate contract and it does not make a failed run invisible: a run with any
+failed step publishes a failure reason on the server side, so it moves `requestsFailed`,
+appears in `failures.recent` with the failed count and the first step's code and message,
+logs at `WARN`, and carries `steps: {total, successful, failed}` plus the code and message
+on its activity record — see [reference/metrics.md](reference/metrics.md).
+
 `/evaluate` is intentionally separate from selector frame scope. `GET/POST /frame` only affects selector-based `/snapshot` and `/action` calls, not arbitrary JavaScript evaluation.
 
 `GET /action` decodes a subset of the action fields and refuses, with `400` naming the field, any parameter it cannot express rather than silently dropping it — so a modifier chord, a drag, `waitNav` or `humanize` must be sent as `POST /action` with a JSON body. A parameter the action request does not declare at all is refused the same way, with a `did you mean` hint for a near miss, so `?modifers=8` or `?Modifiers=8` no longer dispatches a plain click and answers `200`. The accepted set is the action request's own fields plus the parameters only the GET form carries, which today is `timeout` — a per-request action timeout in seconds, clamped to 0–60, that the POST form sends in its body instead. Cache-busters and stray parameters must be dropped from the URL.

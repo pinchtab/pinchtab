@@ -47,6 +47,7 @@ type Update struct {
 	Action      string
 	Route       *browserops.RouteMetadata
 	Ref         string
+	Steps       *StepCounts
 }
 
 func Middleware(rec Recorder, source string, next http.Handler) http.Handler {
@@ -165,6 +166,9 @@ func EnrichRequest(r *http.Request, update Update) {
 	}
 	if update.Action != "" {
 		state.event.Action = update.Action
+	}
+	if update.Steps != nil {
+		state.event.Steps = update.Steps
 	}
 	if update.Route != nil {
 		state.event.Route = update.Route

@@ -33,6 +33,13 @@ Every response says which layer its numbers describe:
 }
 ```
 
+A failure is not always a 4xx. `POST /actions` and `POST /macro` answer 200 with per-item
+results by design, so a run whose steps failed publishes a failure reason instead of a
+status: it counts in `requestsFailed`, appears in `failures.recent` with the run's path,
+`status: 200`, and a message of the form `N of M steps failed: <first step's error>`, and
+logs at `WARN`. Watching `requestsFailed` therefore sees an agent whose batches are all
+failing, which is the shape of traffic these endpoints exist to serve.
+
 **The two layers are never added together.** A single `requestsTotal` covering both
 would mean two things at once, and an operator cannot act on that number: a spike
 would not say whether clients are being turned away at the door or the browser is

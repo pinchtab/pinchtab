@@ -892,21 +892,66 @@ func (h *Handlers) writeMultiStepActionResult(
 	route *browserops.RouteMetadata, extra map[string]any,
 ) {
 	successful := countSuccessful(results)
+	failed := total - successful
 	if successful > 0 {
 		h.maybeAutoSolve(ctx, resolvedTabID, autoSolverTriggerAction)
 	}
-	h.recordActivity(r, activity.Update{Route: route})
+	h.recordActivity(r, activity.Update{
+		Route: route,
+		Steps: &activity.StepCounts{Total: total, Successful: successful, Failed: failed},
+	})
+	// The envelope answers 200 whatever happened inside it — that contract is
+	// deliberate and the per-item results are correct — so the failure signal
+	// travels on the channel built for it instead. Metrics, slog and the activity
+	// record all read the recorded reason, and without this a run in which every
+	// step failed is indistinguishable from one in which every step succeeded.
+	if reason := multiStepFailureReason(results, total, successful); reason.message != "" {
+		httpx.RecordFailureReason(w, reason.code, reason.message)
+	}
 	resp := map[string]any{
 		"results":    results,
 		"total":      total,
 		"successful": successful,
-		"failed":     total - successful,
+		"failed":     failed,
 		"route":      route,
 	}
 	for k, v := range extra {
 		resp[k] = v
 	}
 	httpx.JSON(w, 200, resp)
+}
+
+type multiStepFailure struct {
+	code    string
+	message string
+}
+
+// multiStepFailureReason summarises a run for the recording channels: how many of
+// how many steps failed, and the first failure's own code and message, which is
+// the one a reader needs to act — the later ones are usually its consequence.
+// A run with no failures records nothing, so a healthy batch stays at INFO and
+// moves no counter.
+func multiStepFailureReason(results []actionResult, total, successful int) multiStepFailure {
+	failed := total - successful
+	if failed <= 0 {
+		return multiStepFailure{}
+	}
+	first := multiStepFailure{code: "multi_step_failed"}
+	for _, result := range results {
+		if result.Success {
+			continue
+		}
+		if result.Code != "" {
+			first.code = result.Code
+		}
+		first.message = result.Error
+		break
+	}
+	summary := fmt.Sprintf("%d of %d steps failed", failed, total)
+	if first.message != "" {
+		summary += ": " + first.message
+	}
+	return multiStepFailure{code: first.code, message: summary}
 }
 
 func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {

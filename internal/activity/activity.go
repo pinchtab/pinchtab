@@ -59,6 +59,20 @@ type Event struct {
 	Ref         string                    `json:"ref,omitempty"`
 	Code        string                    `json:"code,omitempty"`
 	Error       string                    `json:"error,omitempty"`
+	// Steps is present only for a multi-step run (/actions, /macro), where the
+	// request's own status says nothing about how the steps went: the envelope
+	// answers 200 whatever happened inside it. The zeros inside are meaningful,
+	// so the whole block is a pointer rather than three omitempty ints.
+	Steps *StepCounts `json:"steps,omitempty"`
+}
+
+// StepCounts is how a multi-step run reports itself to the activity feed: the
+// counts the response body already carries, recorded so a reader of the feed can
+// see a run that failed entirely without re-fetching anything.
+type StepCounts struct {
+	Total      int `json:"total"`
+	Successful int `json:"successful"`
+	Failed     int `json:"failed"`
 }
 
 type Filter struct {
