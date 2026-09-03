@@ -65,13 +65,17 @@ func (p *PinchtabPage) HTMLWithin(timeout time.Duration) (string, error) {
 	return html, nil
 }
 
+// Screenshot goes through the bridge this adapter already holds rather than
+// chromedp's helper. The helper leaves fromSurface at CDP's default of true,
+// which waits for a fresh compositor frame — and an idle headed page (a captcha
+// challenge sitting still is the autosolver's whole subject) stops swapping
+// frames, so the capture blocks until the action deadline. The bridge engine
+// owns that rule for every caller.
 func (p *PinchtabPage) Screenshot() ([]byte, error) {
-	var buf []byte
-	err := chromedp.Run(p.ctx, chromedp.CaptureScreenshot(&buf))
-	if err != nil {
-		return nil, fmt.Errorf("screenshot: %w", err)
+	if p.b == nil {
+		return nil, fmt.Errorf("screenshot: no bridge")
 	}
-	return buf, nil
+	return p.b.CaptureScreenshot(p.ctx, "png", 0, nil)
 }
 
 // PinchtabExecutor implements autosolver.ActionExecutor by delegating

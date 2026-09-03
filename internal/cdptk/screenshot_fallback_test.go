@@ -102,12 +102,10 @@ func TestTheRefusalIsRecognisedInTheErrorTheBrowserSends(t *testing.T) {
 // already failing. A source census is the only guard available, and without it this fix is
 // unwired the first time someone rewrites a capture site.
 func TestEveryCaptureSiteRoutesThroughTheSurfaceFallback(t *testing.T) {
-	// Screencast polls frames continuously rather than answering one request, so a retry
-	// there belongs to that loop's own cadence rather than to a per-call fallback. Exempt
-	// with the reason, not silently skipped.
-	exempt := map[string]string{
-		"internal/cdptk/screencast.go": "a polling frame loop, not a one-shot capture",
-	}
+	// No site is exempt today. An exemption records a capture that legitimately
+	// answers to a different cadence — a polling frame loop rather than one
+	// request — and must carry its reason rather than be silently skipped.
+	exempt := map[string]string{}
 
 	sites := 0
 	for _, file := range srccensus.Tree(t, "../..", moduleFileFloor) {
@@ -146,6 +144,16 @@ const moduleFileFloor = 200
 
 const cdprotoPage = "github.com/chromedp/cdproto/page"
 
+// captureSpellings are the two ways this module reaches Page.captureScreenshot:
+// cdproto's builder and chromedp's helper. Both land on the same CDP command and
+// both need the fallback, but a census that knew only the builder could not see a
+// helper call at all — which is how a raw capture lived on in an adapter that
+// already held a bridge whose engine owns the rule.
+var captureSpellings = map[string]string{
+	cdprotoPage:                    ".CaptureScreenshot()",
+	"github.com/chromedp/chromedp": ".CaptureScreenshot(",
+}
+
 // capturesAScreenshot resolves the file's OWN local name for cdproto/page before matching
 // the call, rather than matching the literal "page.CaptureScreenshot()".
 //
@@ -155,7 +163,7 @@ const cdprotoPage = "github.com/chromedp/cdproto/page"
 // count still passes. Reading the import makes every spelling of the call one case.
 func capturesAScreenshot(t *testing.T, name, text string) bool {
 	t.Helper()
-	if !strings.Contains(text, ".CaptureScreenshot()") {
+	if !strings.Contains(text, ".CaptureScreenshot(") {
 		return false
 	}
 	parsed, err := parser.ParseFile(token.NewFileSet(), name, text, parser.ImportsOnly)
@@ -164,14 +172,18 @@ func capturesAScreenshot(t *testing.T, name, text string) bool {
 	}
 	for _, spec := range parsed.Imports {
 		path, err := strconv.Unquote(spec.Path.Value)
-		if err != nil || path != cdprotoPage {
+		if err != nil {
 			continue
 		}
-		local := "page"
+		call, spelled := captureSpellings[path]
+		if !spelled {
+			continue
+		}
+		local := path[strings.LastIndex(path, "/")+1:]
 		if spec.Name != nil {
 			local = spec.Name.Name
 		}
-		if strings.Contains(text, local+".CaptureScreenshot()") {
+		if strings.Contains(text, local+call) {
 			return true
 		}
 	}

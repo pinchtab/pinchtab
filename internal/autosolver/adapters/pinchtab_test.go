@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 // stalledEndpoint listens on a TCP port, accepts connections, and then never
@@ -110,5 +112,56 @@ func TestHTMLWithin_StalledFetchDoesNotLeakGoroutine(t *testing.T) {
 	if grew := after - before; grew >= iterations {
 		t.Fatalf("goroutine count grew by %d across %d stalled fetches (before=%d after=%d); "+
 			"a stalled HTML fetch appears to leak a worker", grew, iterations, before, after)
+	}
+}
+
+// stubBridge answers CaptureScreenshot and embeds the interface for everything
+// else, so the test states only the method under test.
+type stubBridge struct {
+	bridge.BridgeAPI
+	format string
+	clip   *cdptk.ScreenshotClip
+	called bool
+}
+
+func (s *stubBridge) CaptureScreenshot(_ context.Context, format string, _ int, clip *cdptk.ScreenshotClip) ([]byte, error) {
+	s.called = true
+	s.format = format
+	s.clip = clip
+	return []byte("png-bytes"), nil
+}
+
+// The adapter holds a bridge whose capture engine owns the fromSurface rule.
+// Capturing through chromedp's helper instead left fromSurface at CDP's default
+// of true, which waits for a compositor frame an idle headed page never produces
+// — and an idle challenge page is exactly what the autosolver looks at.
+func TestPageScreenshotGoesThroughTheBridgeEngine(t *testing.T) {
+	b := &stubBridge{}
+	page := NewPinchtabPage(context.Background(), "tab1", b)
+
+	got, err := page.Screenshot()
+	if err != nil {
+		t.Fatalf("Screenshot: %v", err)
+	}
+	if !b.called {
+		t.Fatal("Screenshot did not go through the bridge; it captured on its own and skipped the fromSurface rule")
+	}
+	if string(got) != "png-bytes" {
+		t.Errorf("Screenshot returned %q, want the bridge's bytes", got)
+	}
+	if b.format != "png" {
+		t.Errorf("captured format %q, want png — the interface documents a PNG", b.format)
+	}
+	if b.clip != nil {
+		t.Errorf("captured with clip %+v, want the whole page", b.clip)
+	}
+}
+
+// The adapter is constructed with a nil bridge in this package's own stalled-page
+// test, so the absence must answer rather than panic.
+func TestPageScreenshotWithoutABridgeReportsIt(t *testing.T) {
+	page := NewPinchtabPage(context.Background(), "tab1", nil)
+	if _, err := page.Screenshot(); err == nil {
+		t.Fatal("Screenshot with no bridge returned no error")
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/assets"
 )
 
@@ -25,24 +24,6 @@ var CreateIsolatedWorld = func(ctx context.Context, params *page.CreateIsolatedW
 
 var EvaluateInWorld = func(ctx context.Context, params *runtime.EvaluateParams) (*runtime.RemoteObject, *runtime.ExceptionDetails, error) {
 	return params.Do(ctx)
-}
-
-func CaptureScreenshotJPEG(ctx context.Context, quality int) ([]byte, error) {
-	var buf []byte
-	err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(c context.Context) error {
-			var err error
-			buf, err = page.CaptureScreenshot().
-				WithFormat(page.CaptureScreenshotFormatJpeg).
-				WithQuality(int64(quality)).
-				Do(c)
-			return err
-		}),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
 }
 
 func StartRepaintLoop(ctx context.Context) func() {
