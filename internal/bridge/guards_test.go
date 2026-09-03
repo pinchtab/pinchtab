@@ -107,34 +107,64 @@ func TestReadActionURL_NoChromeDPContext(t *testing.T) {
 	}
 }
 
-func TestExecuteAction_UnexpectedNavigation_WhenEnabled(t *testing.T) {
-	call := 0
-	readActionURL := func(context.Context) (string, error) {
-		call++
-		if call == 1 {
-			return "https://a.example", nil
-		}
-		return "https://b.example", nil
+func TestExecuteAction_ReportsTheNavigationOutcomeWhateverEnableActionGuardsSays(t *testing.T) {
+	settings := map[string]*config.RuntimeConfig{
+		"guards on":  {EnableActionGuards: true},
+		"guards off": {EnableActionGuards: false},
+		"nil config": nil,
 	}
+	for name, cfg := range settings {
+		t.Run(name, func(t *testing.T) {
+			t.Run("a navigating click reports where it landed", func(t *testing.T) {
+				res := executeClickAcross(t, cfg, "https://a.example", "https://b.example")
+				assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
+			})
+			t.Run("a click that stays put reports none of it", func(t *testing.T) {
+				res := executeClickAcross(t, cfg, "https://a.example", "https://a.example")
+				assertNoNavigationOutcome(t, res)
+			})
+		})
+	}
+}
 
+func executeClickAcross(t *testing.T, cfg *config.RuntimeConfig, before, after string) map[string]any {
+	t.Helper()
+	call := 0
 	b := &Bridge{
-		Config:    &config.RuntimeConfig{EnableActionGuards: true},
-		URLReader: readActionURL,
+		Config: cfg,
+		URLReader: func(context.Context) (string, error) {
+			call++
+			if call == 1 {
+				return before, nil
+			}
+			return after, nil
+		},
 		Actions: map[string]ActionFunc{
 			ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
 				return map[string]any{"ok": true}, nil
 			},
-			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
-				return map[string]any{"ok": true}, nil
-			},
 		},
 	}
-
 	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{})
 	if err != nil {
-		t.Fatalf("a click that ran and moved the page reported failure: %v", err)
+		t.Fatalf("a click that ran reported failure: %v", err)
 	}
-	assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
+	if call != 2 {
+		t.Fatalf("the page url was read %d times, want before and after the click", call)
+	}
+	return res
+}
+
+func assertNoNavigationOutcome(t *testing.T, res map[string]any) {
+	t.Helper()
+	if res["ok"] != true {
+		t.Errorf("the action's own result was discarded: %v", res)
+	}
+	for _, key := range []string{ResultNavigated, ResultLandedURL, ResultPreviousURL, ResultRefsStale} {
+		if _, present := res[key]; present {
+			t.Errorf("a click that did not move the page reports %s: %v", key, res)
+		}
+	}
 }
 
 // The whole defect in one assertion: the action's own result is what the API used
@@ -159,57 +189,6 @@ func assertNavigationOutcome(t *testing.T, res map[string]any, before, after str
 	if res[ResultRefsStale] != true {
 		t.Errorf("result does not say the caller's refs are dead: %v", res)
 	}
-}
-
-func TestExecuteAction_UnexpectedNavigationGuardDisabled(t *testing.T) {
-	called := 0
-	readActionURL := func(context.Context) (string, error) {
-		called++
-		return "https://a.example", nil
-	}
-
-	b := &Bridge{
-		Config:    &config.RuntimeConfig{EnableActionGuards: false},
-		URLReader: readActionURL,
-		Actions: map[string]ActionFunc{
-			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
-				return map[string]any{"ok": true}, nil
-			},
-		},
-	}
-
-	if _, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{}); err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-	if called != 0 {
-		t.Fatalf("expected readActionURL to not be called when guards are disabled, got %d calls", called)
-	}
-}
-
-func TestExecuteAction_UnexpectedNavigation_WithNilConfigDefaultsEnabled(t *testing.T) {
-	call := 0
-	readActionURL := func(context.Context) (string, error) {
-		call++
-		if call == 1 {
-			return "https://a.example", nil
-		}
-		return "https://b.example", nil
-	}
-
-	b := &Bridge{
-		URLReader: readActionURL,
-		Actions: map[string]ActionFunc{
-			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
-				return map[string]any{"ok": true}, nil
-			},
-		},
-	}
-
-	res, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{})
-	if err != nil {
-		t.Fatalf("an action that ran and moved the page reported failure: %v", err)
-	}
-	assertNavigationOutcome(t, res, "https://a.example", "https://b.example")
 }
 
 func TestExecuteAction_ClassifiesStaleError_WhenGuardsDisabled(t *testing.T) {
