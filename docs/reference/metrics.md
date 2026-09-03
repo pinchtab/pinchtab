@@ -40,6 +40,12 @@ status: it counts in `requestsFailed`, appears in `failures.recent` with the run
 logs at `WARN`. Watching `requestsFailed` therefore sees an agent whose batches are all
 failing, which is the shape of traffic these endpoints exist to serve.
 
+This holds at **both** layers. The reason travels the proxy hop on its own response
+headers, so a batch served by an instance and proxied by the front door moves the front
+door's `requestsFailed` too — which is the number an operator running `pinchtab server`
+curls, since `GET /metrics` there reports the front door's own counters. A proxied
+response carrying no reason records nothing, whatever its status.
+
 **The two layers are never added together.** A single `requestsTotal` covering both
 would mean two things at once, and an operator cannot act on that number: a spike
 would not say whether clients are being turned away at the door or the browser is

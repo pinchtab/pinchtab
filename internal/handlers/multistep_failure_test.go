@@ -7,12 +7,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/proxy"
 )
 
 // recordedRun is what the three durable channels held after one multi-step run.
@@ -211,5 +214,97 @@ func assertStepCounts(t *testing.T, event map[string]any, total, successful, fai
 		if got, _ := steps[field].(float64); int(got) != want {
 			t.Errorf("activity steps.%s = %v, want %d", field, steps[field], want)
 		}
+	}
+}
+
+// proxiedRun drives the FRONT DOOR's shape: an upstream instance answering exactly
+// what the shared writer now produces, through the real proxy, under the real
+// logging middleware. The differential above is the bridge shape — one process, no
+// hop — which is why it could not see that the reason stopped at the boundary.
+func proxiedRun(t *testing.T, status int, code, message string) recordedRun {
+	t.Helper()
+
+	logs := &bytes.Buffer{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	resetObservabilityForTests()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if code != "" {
+			// The producer's own publisher, so the headers under test are the ones a
+			// real instance stamps rather than a literal this test invented.
+			httpx.RecordFailureReason(w, code, message)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	target, err := url.Parse(upstream.URL + "/tabs/tab1/actions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxy.Forward(w, r, target, proxy.Options{})
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/tabs/tab1/actions", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	chain.ServeHTTP(w, req)
+
+	failed, _ := SnapshotMetrics()["requestsFailed"].(uint64)
+	failures := allRecentFailureEvents(t)
+	encoded, err := json.Marshal(failures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recordedRun{
+		channels:    map[string]string{"the server log": logs.String(), "failures.recent": string(encoded)},
+		failures:    failures,
+		failedDelta: failed,
+	}
+}
+
+// The hop the card's fix stopped at. GET /metrics on the front door serves the
+// front door's OWN counters by design, so an operator running `pinchtab server`
+// watches these numbers — and for a batch in which every step failed they did not
+// move, because the reason travelled beside a 200 and the proxy dropped it on the
+// status.
+//
+// The healthy row is the load-bearing half: removing the status gate is exactly the
+// change that could start counting ordinary proxied traffic as failures, and the
+// header's presence is what must be doing the work instead.
+func TestTheFrontDoorRecordsAProxiedFailureReasonBesideA200(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		status     int
+		code       string
+		message    string
+		wantFailed uint64
+		wantLevel  string
+	}{
+		{"a batch: 200 carrying a reason", http.StatusOK, "ref_not_found", "3 of 3 steps failed: " + firstBatchFailure, 1, "level=WARN"},
+		{"a single action: 4xx carrying a reason", http.StatusNotFound, "ref_not_found", firstBatchFailure, 1, "level=WARN"},
+		{"ordinary traffic: 200 with no reason", http.StatusOK, "", "", 0, "level=INFO"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			run := proxiedRun(t, tc.status, tc.code, tc.message)
+
+			if run.failedDelta != tc.wantFailed {
+				t.Errorf("the front door's requestsFailed moved by %d, want %d — this is the counter an operator curls at /metrics",
+					run.failedDelta, tc.wantFailed)
+			}
+			if len(run.failures) != int(tc.wantFailed) {
+				t.Errorf("failures.recent holds %d entries, want %d:\n%s", len(run.failures), tc.wantFailed, run.channels["failures.recent"])
+			}
+			if !strings.Contains(run.channels["the server log"], tc.wantLevel) {
+				t.Errorf("the front door logged at the wrong level, want %s:\n%s", tc.wantLevel, run.channels["the server log"])
+			}
+			if tc.wantFailed > 0 && !strings.Contains(run.channels["failures.recent"], tc.message) {
+				t.Errorf("failures.recent does not carry the reason the instance published:\n%s", run.channels["failures.recent"])
+			}
+		})
 	}
 }

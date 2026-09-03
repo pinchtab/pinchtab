@@ -187,16 +187,17 @@ func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
 	Forward(w, r, parsed, Options{})
 }
 
-// enrichActivityFromHeaders extracts tab ID from upstream response headers
-// and enriches the activity event. This works for all response sizes,
-// unlike body-based enrichment which is limited to small JSON responses.
 // recordProxiedFailureReason carries the reason across the hop: the instance's error
 // producer stamped these headers on the response it serialised, so reading them here
 // keeps the reason coming from the producer — never from re-parsing the body.
+// The status is deliberately NOT consulted. A multi-step run answers 200 with its
+// failures in the body and publishes the reason beside it, so a status gate here
+// dropped exactly that case and left the front door's counter, failures.recent, log
+// level and activity record unmoved for a batch in which every step failed. The
+// header being present is the whole condition, and it is a stronger one: only a
+// producer that called RecordFailureReason stamps it, so ordinary 200 traffic
+// records nothing and cannot be counted as a failure.
 func recordProxiedFailureReason(w http.ResponseWriter, resp *http.Response) {
-	if resp.StatusCode < 400 {
-		return
-	}
 	code := strings.TrimSpace(resp.Header.Get(httpx.FailureCodeHeader))
 	if code == "" {
 		return
@@ -204,6 +205,9 @@ func recordProxiedFailureReason(w http.ResponseWriter, resp *http.Response) {
 	httpx.RecordFailureReason(w, code, resp.Header.Get(httpx.FailureMessageHeader))
 }
 
+// enrichActivityFromHeaders extracts the tab id from upstream response headers and
+// enriches the activity event. It works for all response sizes, unlike body-based
+// enrichment, which is limited to small JSON responses.
 func enrichActivityFromHeaders(origReq *http.Request, respHeaders http.Header) {
 	tabID := strings.TrimSpace(respHeaders.Get(activity.HeaderPTTabID))
 	if tabID != "" {

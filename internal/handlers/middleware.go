@@ -56,8 +56,13 @@ func requestLogLevel(status int, reasonRecorded bool) slog.Level {
 // channels: the status, or a reason the handler published beside a success status.
 // The producer that wrote the response is the only thing that knows the second
 // case, which is why it is a recorded fact rather than something re-derived here.
+//
+// "A reason was recorded" means EITHER field, matching what RecordFailureReason
+// accepts: it publishes when a code or a message is present, so keying this on the
+// message alone left a producer that carried only a code recorded on the wire and
+// uncounted here.
 func requestFailed(sw *httpx.StatusWriter) bool {
-	return sw.Code >= 400 || sw.FailureMessage != ""
+	return sw.Code >= 400 || sw.FailureCode != "" || sw.FailureMessage != ""
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -91,7 +96,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		if sw.FailureMessage != "" {
 			attrs = append(attrs, "code", sw.FailureCode, "error", sw.FailureMessage)
 		}
-		slog.Log(r.Context(), requestLogLevel(sw.Code, sw.FailureMessage != ""), "request", attrs...)
+		slog.Log(r.Context(), requestLogLevel(sw.Code, requestFailed(sw)), "request", attrs...)
 	})
 }
 
