@@ -178,3 +178,60 @@ func TestAnEmptyAllowlistNeverGrantsThePrivateIPOverride(t *testing.T) {
 		})
 	}
 }
+
+// The spelling table above runs with IDPI off and no allowlist, deliberately, so it
+// measures the spelling property rather than the allowlist override that used to sit
+// in front of it. That leaves the configurations an operator actually runs
+// unmeasured, and the two fixes involved landed on separate cards: one makes every
+// spelling name the same host, the other stops an empty allowlist reading as "every
+// host explicitly allowed". Neither card's tests cover the combination, so a
+// regression in either could restore the bypass under a real config while both
+// suites stay green.
+func TestEverySpellingIsRefusedUnderTheConfigurationsOperatorsRun(t *testing.T) {
+	spellings := []string{
+		`https://10.0.0.5/x`,
+		`https:\\10.0.0.5\x`,
+		`https:/10.0.0.5/x`,
+		`https:\/10.0.0.5\x`,
+		`https:////10.0.0.5/x`,
+		`//10.0.0.5/x`,
+		`https:10.0.0.5/x`,
+		`/10.0.0.5/x`,
+	}
+
+	shipped := config.DefaultFileConfig()
+	defaults := hostFormConfig(shipped.Security.AllowedDomains)
+	defaults.IDPI = config.IDPIConfig{Enabled: shipped.Security.IDPI.Enabled, StrictMode: shipped.Security.IDPI.StrictMode}
+
+	for _, tc := range []struct {
+		name string
+		cfg  *config.RuntimeConfig
+	}{
+		{"the shipped defaults", defaults},
+		{"idpi on with an empty allowlist", hostFormConfig(nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := New(&policyMockBridge{}, tc.cfg, nil, nil, nil)
+			for _, raw := range spellings {
+				w := httptest.NewRecorder()
+				if _, ok := h.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", raw, h.Config); ok {
+					t.Errorf("navigate path ALLOWED a private address written as %q", raw)
+				}
+				if _, err := h.validateAuditTarget(raw, h.Config); err == nil {
+					t.Errorf("audit-page path ALLOWED a private address written as %q", raw)
+				}
+			}
+		})
+	}
+
+	// Without this a blanket refusal under either config would satisfy every row
+	// above, which is the failure mode the normalising half of the fix exists to
+	// avoid.
+	t.Run("a public host in an unusual spelling is still permitted", func(t *testing.T) {
+		h := New(&policyMockBridge{}, hostFormConfig(nil), nil, nil, nil)
+		w := httptest.NewRecorder()
+		if _, ok := h.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", `https:\\example.com\x`, h.Config); !ok {
+			t.Errorf("a public host written unusually was refused: %d %s", w.Code, w.Body.String())
+		}
+	})
+}
