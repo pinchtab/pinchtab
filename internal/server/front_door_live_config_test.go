@@ -27,6 +27,7 @@ type frontDoor struct {
 	handler  http.Handler
 	api      *dashboard.ConfigAPI
 	sessions *browsersession.Manager
+	live     *config.Live
 }
 
 func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
@@ -66,6 +67,7 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 		handler:  FrontDoorHandler(live, nil, sessions, nil, mux),
 		api:      api,
 		sessions: sessions,
+		live:     live,
 	}
 }
 
@@ -192,5 +194,56 @@ func TestSavingRequireElevationTakesEffectWithoutARestart(t *testing.T) {
 	}
 	if resp.Code != "elevation_required" {
 		t.Errorf("code = %q, want elevation_required — the refusal must name the control that produced it", resp.Code)
+	}
+}
+
+// BackgroundMarker is the one field the chain reads per request that no save can
+// carry: cmd_server sets it on the runtime config at boot and no config file has a
+// place for it. Reading it through the Live therefore depends on every published
+// value carrying it forward, which is a property of the clone rather than of this
+// chain — so if it ever stops holding, `pinchtab server` loses its own health probe
+// and nothing else says so.
+//
+// The assertion is on what the auth chain DECIDES, not on the response: this
+// fixture registers no /health/background route, so a probe the chain admits ends
+// at the mux as a 404. Admitted-or-refused is the property; the route existing is
+// a different one.
+func TestABackgroundProbeIsStillAdmittedAfterASave(t *testing.T) {
+	const marker = "background-marker-under-test"
+
+	f := newFrontDoor(t, nil)
+	published := config.CloneRuntimeConfig(f.live.Get())
+	published.BackgroundMarker = marker
+	f.live.Publish(published)
+
+	admitted := func(header string) bool {
+		req := httptest.NewRequest(http.MethodGet, "/health/background", nil)
+		if header != "" {
+			req.Header.Set("PinchTab-Background-Marker", header)
+		}
+		w := httptest.NewRecorder()
+		f.handler.ServeHTTP(w, req)
+		return w.Code != http.StatusUnauthorized
+	}
+
+	// Without the marker the chain refuses, so being admitted after the save
+	// cannot come from the endpoint being reachable by anyone.
+	if admitted("") {
+		t.Fatal("an unmarked background probe was admitted; this endpoint must not be open")
+	}
+	if !admitted(marker) {
+		t.Fatal("the marked probe was refused before any save, so this test never reached the state it is about")
+	}
+
+	f.save(t, func(fc *config.FileConfig) {
+		trust := true
+		fc.Server.TrustProxyHeaders = &trust
+	})
+
+	if !admitted(marker) {
+		t.Error("the marked probe was refused after a save; the published value dropped BackgroundMarker")
+	}
+	if got := f.live.Get().BackgroundMarker; got != marker {
+		t.Errorf("BackgroundMarker after a save = %q, want %q", got, marker)
 	}
 }
