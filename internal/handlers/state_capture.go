@@ -19,7 +19,7 @@ type currentBrowserStateResponse struct {
 	URL      string                         `json:"url,omitempty"`
 	Title    string                         `json:"title,omitempty"`
 	Origins  []string                       `json:"origins"`
-	Cookies  []state.Cookie                 `json:"cookies"`
+	Cookies  any                            `json:"cookies"`
 	Storage  map[string]state.OriginStorage `json:"storage"`
 	Metadata map[string]interface{}         `json:"metadata,omitempty"`
 }
@@ -54,10 +54,36 @@ func (h *Handlers) HandleStateCurrent(w http.ResponseWriter, r *http.Request) {
 		URL:      captured.url,
 		Title:    captured.title,
 		Origins:  captured.file.Origins,
-		Cookies:  captured.file.Cookies,
+		Cookies:  h.cookiesInScope(captured.file.Cookies),
 		Storage:  captured.file.Storage,
 		Metadata: captured.file.Metadata,
 	})
+}
+
+// cookiesInScope is the one place cookie VALUES leave a state response: they need
+// the cookies capability whatever route asked, and without it the count stands in,
+// the same vocabulary /state/save answers with.
+func (h *Handlers) cookiesInScope(cookies []state.Cookie) any {
+	if h.Config != nil && h.Config.AllowCookies {
+		return cookies
+	}
+	return len(cookies)
+}
+
+func (h *Handlers) stateFileInScope(sf *state.StateFile) any {
+	if h.Config != nil && h.Config.AllowCookies {
+		return sf
+	}
+	raw, err := json.Marshal(sf)
+	if err != nil {
+		return sf
+	}
+	var withheld map[string]any
+	if err := json.Unmarshal(raw, &withheld); err != nil {
+		return sf
+	}
+	withheld["cookies"] = len(sf.Cookies)
+	return withheld
 }
 
 // HandleStateLoad reads a state file and restores cookies and storage.

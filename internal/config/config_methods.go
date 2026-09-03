@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/routes"
 	"path/filepath"
+	"reflect"
+	"strings"
 )
 
 // EnabledSensitiveEndpoints returns the names of sensitive endpoint families
@@ -11,30 +14,31 @@ func (cfg *RuntimeConfig) EnabledSensitiveEndpoints() []string {
 	if cfg == nil {
 		return nil
 	}
-
-	enabled := make([]string, 0, 7)
-	if cfg.AllowEvaluate {
-		enabled = append(enabled, "evaluate")
-	}
-	if cfg.AllowMacro {
-		enabled = append(enabled, "macro")
-	}
-	if cfg.AllowScreencast {
-		enabled = append(enabled, "screencast")
-	}
-	if cfg.AllowDownload {
-		enabled = append(enabled, "download")
-	}
-	if cfg.AllowCookies {
-		enabled = append(enabled, "cookies")
-	}
-	if cfg.AllowUpload {
-		enabled = append(enabled, "upload")
-	}
-	if cfg.AllowNetworkIntercept {
-		enabled = append(enabled, "networkIntercept")
+	caps := routes.Capabilities()
+	enabled := make([]string, 0, len(caps))
+	for _, cap := range caps {
+		if cfg.CapabilityEnabled(cap) {
+			meta, _ := routes.Meta(cap)
+			enabled = append(enabled, meta.Label)
+		}
 	}
 	return enabled
+}
+
+// CapabilityEnabled reads the flag a capability's declared setting names, so the
+// routes table is the only place a capability is listed.
+func (cfg *RuntimeConfig) CapabilityEnabled(cap routes.Capability) bool {
+	meta, ok := routes.Meta(cap)
+	if !ok || cfg == nil {
+		return false
+	}
+	field := reflect.ValueOf(cfg).Elem().FieldByName(capabilityFlagField(meta.Setting))
+	return field.IsValid() && field.Kind() == reflect.Bool && field.Bool()
+}
+
+func capabilityFlagField(setting string) string {
+	name := strings.TrimPrefix(setting, "security.")
+	return strings.ToUpper(name[:1]) + name[1:]
 }
 
 // ActivityStateDir returns the directory root used for activity log storage.

@@ -54,7 +54,7 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("load state: %w", err))
 		return
 	}
-	httpx.JSON(w, 200, sf)
+	httpx.JSON(w, 200, h.stateFileInScope(sf))
 }
 
 // stateEncryptionKey resolves the key the state files are encrypted with. The

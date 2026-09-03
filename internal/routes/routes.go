@@ -4,6 +4,8 @@
 // the generated /openapi.json response.
 package routes
 
+import "sort"
+
 import "fmt"
 
 // Capability gates an endpoint behind a security config flag.
@@ -43,6 +45,17 @@ var capabilityMeta = map[Capability]CapabilityMeta{
 	CapUpload:           {CapUpload, "upload", "security.allowUpload", "upload_disabled"},
 	CapStateExport:      {CapStateExport, "stateExport", "security.allowStateExport", "state_export_disabled"},
 	CapNetworkIntercept: {CapNetworkIntercept, "networkIntercept", "security.allowNetworkIntercept", "network_intercept_disabled"},
+}
+
+// Capabilities lists every gated capability, ordered by label so a reporter
+// derived from the table answers deterministically.
+func Capabilities() []Capability {
+	caps := make([]Capability, 0, len(capabilityMeta))
+	for cap := range capabilityMeta {
+		caps = append(caps, cap)
+	}
+	sort.Slice(caps, func(i, j int) bool { return capabilityMeta[caps[i]].Label < capabilityMeta[caps[j]].Label })
+	return caps
 }
 
 // Meta returns the gate metadata for a capability. The second result is false
