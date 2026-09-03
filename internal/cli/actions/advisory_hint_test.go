@@ -1,13 +1,39 @@
 package actions
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 )
+
+// TestMain moves the CLI state directory for the WHOLE package, because an advisory
+// marker is written by the production code under test rather than by a helper: any
+// test in this package that reaches Navigate writes one, and a per-test Setenv only
+// protects the tests that remember it. Unprotected, the suite silences the very
+// advisory this package asserts on for the operator who ran it, and every later
+// assertion here depends on whether the suite has run on that machine before.
+//
+// It is os.Setenv rather than t.Setenv because TestMain has no *testing.T, and the
+// exit path restores nothing on purpose: the process is about to end.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "pinchtab-cli-state")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cannot isolate the CLI state directory: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("XDG_STATE_HOME", dir); err != nil {
+		fmt.Fprintf(os.Stderr, "cannot isolate the CLI state directory: %v\n", err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 // staleTabCmd drives the fallback that reports a dead tab — an occurrence hint,
 // which must print on every occurrence — alongside the no-session advisory.

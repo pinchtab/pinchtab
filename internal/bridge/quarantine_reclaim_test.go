@@ -336,6 +336,13 @@ var directoryRemovers = []directoryRemover{
 		why:               "removes a t.TempDir-rooted browser profile built for one test",
 	},
 	{
+		path:              "internal/cli/output/advisory.go",
+		funcs:             []string{"ResetAdvisories"},
+		underProfilesBase: false,
+		route:             "ResetAdvisories only — no ordinary command reaches it; it is the deliberate 'let me hear the advice again' path and the tests' fresh-install helper",
+		why:               "removes the advisories marker directory under the CLI state dir, never a browser profile, so the quarantine predicate does not apply. The join cannot widen: clistate.Dir() answers a non-empty path in every branch (XDG_STATE_HOME, the home fallback, os.TempDir), so the removal is always .../pinchtab/advisories and never the state dir itself or the filesystem root",
+	},
+	{
 		path:              "tests/tools/runner/internal/e2e/provider.go",
 		funcs:             []string{"cleanup", "prepareCloakOverrides", "prepareGhostChromeOverrides"},
 		underProfilesBase: false,

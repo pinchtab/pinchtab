@@ -144,6 +144,36 @@ func TestASecondAdvisoryIsNotSuppressedByTheFirst(t *testing.T) {
 	}
 }
 
+// The run where the two suppression states MEET, which is the ordinary path once a
+// caller has run any command that emits its own advisory: an already-shown one is
+// suppressed and a brand-new one prints in the same process. The new advisory is
+// the caller's first sight of this class, so it must carry the switch — an
+// advisory that prints nothing must not consume the run's silencer on its way out.
+func TestASuppressedAdvisoryDoesNotConsumeTheSilencerOfANewOne(t *testing.T) {
+	isolatedInstall(t)
+
+	const other = "a different steady state: export PINCHTAB_SOMETHING=1"
+	if first := captureStderr(t, func() { Advisory(testAdvisory) }); !strings.Contains(first, SilenceAdvisoryHint) {
+		t.Fatalf("the first run printed no silencer (%q), so this test never reached the state it is about", first)
+	}
+
+	nextInvocation()
+	out := captureStderr(t, func() {
+		Advisory(testAdvisory)
+		Advisory(other)
+	})
+
+	if strings.Contains(out, testAdvisory) {
+		t.Errorf("the already-shown advisory printed again: %q", out)
+	}
+	if !strings.Contains(out, other) {
+		t.Errorf("the new advisory was suppressed by an unrelated one: %q", out)
+	}
+	if !strings.Contains(out, SilenceAdvisoryHint) {
+		t.Errorf("the new advisory arrived with no way to learn about the switch: %q", out)
+	}
+}
+
 // ResetAdvisories has to reach the marker too, or a test asking for a fresh run
 // gets a machine that has already heard everything.
 func TestResetAdvisoriesClearsThePersistedMarker(t *testing.T) {

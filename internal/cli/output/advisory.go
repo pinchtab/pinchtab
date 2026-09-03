@@ -44,7 +44,14 @@ var (
 // A hint that reports what just happened is not advisory: it belongs on Hint,
 // which prints every time it fires, because the second occurrence is news too.
 func Advisory(text string) {
-	if AdvisoriesSilenced() {
+	// Both suppression checks come FIRST, because a suppressed advisory must change
+	// no state. Taking the silencer decision before consulting the marker spent the
+	// run's one silencer line on an advisory that then printed nothing, so the next
+	// advisory — the one the caller is seeing for the first time — arrived with no
+	// opt-out beside it. Two different advisories reach one process on the ordinary
+	// path (the redundant --server notice and the no-session hint), so that is a
+	// real caller's first sight of the switch, not a test-only shape.
+	if AdvisoriesSilenced() || advisoryAlreadyShown(text) {
 		return
 	}
 
@@ -55,7 +62,7 @@ func Advisory(text string) {
 	silencerShown = silencerShown || first
 	advisoryMu.Unlock()
 
-	if !first || advisoryAlreadyShown(text) {
+	if !first {
 		return
 	}
 	if withSilencer {
