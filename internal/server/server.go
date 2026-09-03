@@ -284,6 +284,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
 	registerFrontDoorMetrics(mux)
+	registerFrontDoorOpenAPI(mux, live)
 	mux.HandleFunc("GET /health/background", func(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]string{
 			"status":  "ok",
@@ -293,7 +294,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		})
 	})
 
-	handler := FrontDoorHandler(live, liveActivity, sessions, sessionStore, mux)
+	handler := FrontDoorHandler(live, liveActivity, sessions, sessionStore, notFoundEnvelope(mux))
 	if cfg.VerboseBanner {
 		cli.LogSecurityWarnings(cfg)
 	}

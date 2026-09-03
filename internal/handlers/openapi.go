@@ -9,6 +9,17 @@ import (
 )
 
 func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	httpx.JSON(w, 200, h.openAPIDocument(""))
+}
+
+// ServeOpenAPI writes the spec with an optional info.description. A proxy front
+// door serves the catalogue-derived instance surface it forwards to, so it states
+// the scope of what the document does and does not enumerate.
+func (h *Handlers) ServeOpenAPI(w http.ResponseWriter, description string) {
+	httpx.JSON(w, 200, h.openAPIDocument(description))
+}
+
+func (h *Handlers) openAPIDocument(description string) map[string]any {
 	security := h.endpointSecurityStates()
 
 	paths := map[string]map[string]any{}
@@ -92,13 +103,17 @@ func (h *Handlers) HandleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
-	httpx.JSON(w, 200, map[string]any{
-		"openapi": "3.0.0",
-		"info": map[string]any{
-			"title":   "Pinchtab API",
-			"version": "0.7.x-local",
-		},
+	info := map[string]any{
+		"title":   "Pinchtab API",
+		"version": "0.7.x-local",
+	}
+	if description != "" {
+		info["description"] = description
+	}
+	return map[string]any{
+		"openapi":             "3.0.0",
+		"info":                info,
 		"x-pinchtab-security": security,
 		"paths":               paths,
-	})
+	}
 }
