@@ -64,21 +64,23 @@ func TestHostAllowed_CaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestExtractHost_BareHostname(t *testing.T) {
-	if got := ExtractHost("example.com/path"); got != "example.com" {
-		t.Errorf("ExtractHost('example.com/path') = %q, want 'example.com'", got)
-	}
-}
-
-func TestExtractHost_FullURL(t *testing.T) {
-	if got := ExtractHost("https://example.com:8080/path?q=1"); got != "example.com" {
-		t.Errorf("ExtractHost full URL = %q, want 'example.com'", got)
-	}
-}
-
-func TestExtractHost_NoHost(t *testing.T) {
-	if got := ExtractHost("about:blank"); got != "" {
-		t.Errorf("ExtractHost('about:blank') = %q, want ''", got)
+func TestExtractHostResolvesEveryFormTheNormaliserWidened(t *testing.T) {
+	for raw, want := range map[string]string{
+		"example.com/path":                  "example.com",
+		"https://example.com:8080/path?q=1": "example.com",
+		"intranet":                          "intranet",
+		"localhost:9222":                    "localhost",
+		"//evil.com/x":                      "evil.com",
+		"/evil.com/x":                       "evil.com",
+		"https:evil.com/x":                  "evil.com",
+		"https:/evil.com/x":                 "evil.com",
+		"https:////evil.com/x":              "evil.com",
+		`https:\\evil.com\x`:                "evil.com",
+		"about:blank":                       "",
+	} {
+		if got := ExtractHost(raw); got != want {
+			t.Errorf("ExtractHost(%q) = %q, want %q. This primitive is read in BOTH directions: the IDPI domain check and download policy read a match as permission, the response-forgery rule inverts it, so a form that stops yielding a host re-opens surface rather than tightening it. urls.EnsureScheme owns the normalisation that decides which forms carry a host", raw, got, want)
+		}
 	}
 }
 

@@ -51,28 +51,7 @@ func HostMatchesPatterns(host string, patterns []string) bool {
 	return false
 }
 
-// ExtractHost is the ONE extractor that answers "which host is this security
-// decision about". navguard and internal/urls each kept a private copy with its
-// own hand-rolled bare-URL branch, and the three disagreed: a single-label name
-// like "intranet" was a host to one and nothing to another, and every scheme-less
-// "host:port" — "localhost:9222" included — was nothing to all of them, because
-// url.Parse reads the leading label as a scheme. Normalizing the scheme first
-// (urls.EnsureScheme) leaves this with nothing to guess at, so it is a parse and
-// a lowercase and there is no branch left to diverge.
-//
-// This widens what the allowlist matches, deliberately. Every consumer of this
-// primitive — the IDPI domain check, the response-forgery rule, download policy,
-// route interception — now sees a host for two forms that used to yield "":
-//
-//   - a single-label name ("intranet"), which the operator can only have put in
-//     security.allowedDomains on purpose, and which the docs say the list matches;
-//   - any "host:port" without a scheme, which was refused BY the allowlist for
-//     every host, listed or not.
-//
-// The forgery rule reads the same answer inverted, so a host that starts matching
-// there starts being protected rather than starting to be permitted. A bare host
-// defaults to https:// — the assumption the CLI and MCP already make — so the
-// scheme-less form is upgraded, never downgraded.
+// urls.EnsureScheme owns the normalisation that decides which forms carry a host.
 func ExtractHost(rawURL string) string {
 	parsed, err := url.Parse(urls.EnsureScheme(rawURL))
 	if err != nil {
