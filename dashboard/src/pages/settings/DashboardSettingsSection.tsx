@@ -94,7 +94,7 @@ export function DashboardSettingsSection({
       </SettingRow>
       <SettingRow
         label="Memory metrics"
-        description="Enable per-tab heap collection in the dashboard. Useful for debugging, but heavier."
+        description="Collect per-instance browser memory (RSS across the Chrome process tree) in the dashboard. Useful for debugging, but heavier."
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input

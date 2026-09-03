@@ -173,12 +173,8 @@ export interface InstanceTab {
 export interface InstanceMetrics {
   instanceId: string;
   profileName: string;
-  jsHeapUsedMB: number /* float64 */;
-  jsHeapTotalMB: number /* float64 */;
-  documents: number /* int64 */;
-  frames: number /* int64 */;
-  nodes: number /* int64 */;
-  listeners: number /* int64 */;
+  memoryMB: number /* float64 */;
+  renderers: number /* int */;
 }
 export interface LaunchInstanceRequest {
   profileId?: string; // profile ID (prof_XXXXXXXX) or existing profile name

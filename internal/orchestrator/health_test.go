@@ -360,7 +360,7 @@ func TestFetchMetrics_TagsBridgeRequestAsOrchestrator(t *testing.T) {
 			source = req.Header.Get("X-PinchTab-Source")
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"memory":{"jsHeapUsedMB":1}}`)),
+				Body:       io.NopCloser(strings.NewReader(`{"memory":{"memoryMB":1}}`)),
 				Header:     make(http.Header),
 			}, nil
 		}),

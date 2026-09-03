@@ -430,15 +430,15 @@ func (m *MockBridge) StealthStatus() *stealth.Status {
 }
 
 func (m *MockBridge) GetMemoryMetrics(tabID string) (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 10, JSHeapTotalMB: 20}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 10, Renderers: 1}, nil
 }
 
 func (m *MockBridge) GetBrowserMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 50, JSHeapTotalMB: 100}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 2}, nil
 }
 
 func (m *MockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 50, JSHeapTotalMB: 100, Nodes: 500}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
 }
 
 func (m *MockBridge) GetCrashLogs() []string {

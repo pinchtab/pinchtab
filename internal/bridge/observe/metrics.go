@@ -8,19 +8,16 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-// MemoryMetrics holds Chrome memory statistics.
+// MemoryMetrics holds what PinchTab measures: RSS across the browser process
+// tree and the renderer count. Every field is measured, never derived from
+// another field in the same payload.
 type MemoryMetrics struct {
-	MemoryMB float64 `json:"memoryMB"`
+	MemoryMB  float64 `json:"memoryMB"`
+	Renderers int     `json:"renderers"`
+}
 
-	JSHeapUsedMB  float64 `json:"jsHeapUsedMB"`
-	JSHeapTotalMB float64 `json:"jsHeapTotalMB"`
-
-	Renderers int `json:"renderers"`
-
-	Documents int64 `json:"documents"`
-	Frames    int64 `json:"frames"`
-	Nodes     int64 `json:"nodes"`
-	Listeners int64 `json:"listeners"`
+func newMemoryMetrics(totalBytes uint64, renderers int) *MemoryMetrics {
+	return &MemoryMetrics{MemoryMB: float64(totalBytes) / (1024 * 1024), Renderers: renderers}
 }
 
 // GetAggregatedMemoryMetrics returns OS-level memory usage across the browser process tree.
@@ -49,8 +46,7 @@ func GetAggregatedMemoryMetrics(browserCtx context.Context) (*MemoryMetrics, err
 	children, err := p.Children()
 	if err != nil {
 		mem, _ := getProcessMemory(mainPID)
-		result.MemoryMB = float64(mem) / (1024 * 1024)
-		return result, nil
+		return newMemoryMetrics(mem, 0), nil
 	}
 
 	var totalMem uint64
@@ -68,12 +64,7 @@ func GetAggregatedMemoryMetrics(browserCtx context.Context) (*MemoryMetrics, err
 		totalMem += childMem
 	}
 
-	result.MemoryMB = float64(totalMem) / (1024 * 1024)
-	result.Renderers = rendererCount
-	result.JSHeapUsedMB = result.MemoryMB * 0.4
-	result.JSHeapTotalMB = result.MemoryMB * 0.5
-
-	return result, nil
+	return newMemoryMetrics(totalMem, rendererCount), nil
 }
 
 func getProcessMemory(pid int32) (uint64, error) {

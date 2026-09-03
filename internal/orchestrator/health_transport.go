@@ -23,12 +23,8 @@ type remoteMetrics struct {
 }
 
 type memoryMetrics struct {
-	JSHeapUsedMB  float64 `json:"jsHeapUsedMB"`
-	JSHeapTotalMB float64 `json:"jsHeapTotalMB"`
-	Documents     int64   `json:"documents"`
-	Frames        int64   `json:"frames"`
-	Nodes         int64   `json:"nodes"`
-	Listeners     int64   `json:"listeners"`
+	MemoryMB  float64 `json:"memoryMB"`
+	Renderers int     `json:"renderers"`
 }
 
 func (o *Orchestrator) fetchTabs(inst *InstanceInternal) ([]remoteTab, error) {

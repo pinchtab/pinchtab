@@ -18,14 +18,12 @@ This gives you real OS-level memory usage for that instance's Chrome process tre
 | Field | Meaning |
 | --- | --- |
 | `memoryMB` | Real RSS memory across the browser process tree |
-| `jsHeapUsedMB` | Estimated value derived from `memoryMB` |
-| `jsHeapTotalMB` | Estimated value derived from `memoryMB` |
 | `renderers` | Number of renderer processes in the browser process tree |
-| `documents`, `frames`, `nodes`, `listeners` | Legacy compatibility fields; currently not populated with live DOM counts |
+
+Both fields are measured. Neither is derived from the other, and PinchTab reports no JavaScript-heap or DOM-count figures: there is no CDP collection behind these endpoints.
 
 Important limitation:
 
-- `jsHeapUsedMB` and `jsHeapTotalMB` are estimates, not true per-tab DevTools heap measurements
 - `GET /tabs/{id}/metrics` returns the owning browser instance's aggregate memory, not isolated per-tab memory
 
 ## Instance Metrics
@@ -47,8 +45,6 @@ Example shape:
   },
   "memory": {
     "memoryMB": 850.5,
-    "jsHeapUsedMB": 340.2,
-    "jsHeapTotalMB": 425.25,
     "renderers": 11
   }
 }
@@ -65,13 +61,7 @@ Example shape:
 ```json
 {
   "memoryMB": 850.5,
-  "jsHeapUsedMB": 340.2,
-  "jsHeapTotalMB": 425.25,
-  "renderers": 11,
-  "documents": 0,
-  "frames": 0,
-  "nodes": 0,
-  "listeners": 0
+  "renderers": 11
 }
 ```
 
@@ -85,7 +75,7 @@ In orchestrator mode:
 curl http://localhost:9867/instances/metrics
 ```
 
-This returns one metrics object per running instance, which is the best API for comparing memory across a fleet.
+This returns one metrics object per running instance — `instanceId`, `profileName`, `memoryMB` and `renderers` — which is the best API for comparing memory across a fleet.
 
 ## Dashboard Monitoring
 

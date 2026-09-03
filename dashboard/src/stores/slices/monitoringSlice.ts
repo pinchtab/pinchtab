@@ -10,7 +10,7 @@ export interface TabDataPoint {
 
 export interface MemoryDataPoint {
   timestamp: number;
-  [instanceId: string]: number; // jsHeapUsedMB
+  [instanceId: string]: number; // memoryMB
 }
 
 export interface ServerDataPoint {
@@ -26,7 +26,7 @@ export interface MonitoringSlice {
   memoryChartData: MemoryDataPoint[];
   serverChartData: ServerDataPoint[];
   currentTabs: Record<string, InstanceTab[]>;
-  currentMemory: Record<string, number>; // instanceId -> jsHeapUsedMB
+  currentMemory: Record<string, number>; // instanceId -> memoryMB
   currentMetrics: Record<string, InstanceMetrics>; // instanceId -> full metrics
   addChartDataPoint: (point: TabDataPoint) => void;
   addMemoryDataPoint: (point: MemoryDataPoint) => void;
@@ -104,8 +104,8 @@ export const createMonitoringSlice: StateCreator<
         if (includeMemory) {
           const metrics = metricsByInstance[instance.id];
           if (metrics) {
-            memDataPoint[instance.id] = metrics.jsHeapUsedMB;
-            currentMemory[instance.id] = metrics.jsHeapUsedMB;
+            memDataPoint[instance.id] = metrics.memoryMB;
+            currentMemory[instance.id] = metrics.memoryMB;
             currentMetrics[instance.id] = metrics;
           }
         }

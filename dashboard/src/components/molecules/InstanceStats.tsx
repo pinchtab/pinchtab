@@ -81,11 +81,6 @@ function countUniqueDomains(tabs: InstanceTab[]): number {
 }
 
 export default function InstanceStats({ instance, metrics, tabs }: Props) {
-  const heapPct =
-    metrics && metrics.jsHeapTotalMB > 0
-      ? (metrics.jsHeapUsedMB / metrics.jsHeapTotalMB) * 100
-      : null;
-
   const uniqueDomains = countUniqueDomains(tabs);
 
   return (
@@ -103,27 +98,16 @@ export default function InstanceStats({ instance, metrics, tabs }: Props) {
       <StatGroup title="Browsing">
         <StatItem label="Tabs" value={fmt(tabs.length)} />
         <StatItem label="Domains" value={fmt(uniqueDomains)} />
-        {metrics && (
-          <>
-            <StatItem label="Documents" value={fmt(metrics.documents)} />
-            <StatItem label="Frames" value={fmt(metrics.frames)} />
-          </>
-        )}
       </StatGroup>
 
       {metrics && (
         <StatGroup title="Resources">
           <StatItem
-            label="Heap"
-            value={`${fmt(metrics.jsHeapUsedMB, 1)} MB`}
-            sub={
-              heapPct !== null
-                ? `${fmt(heapPct, 0)}% of ${fmt(metrics.jsHeapTotalMB, 1)} MB`
-                : undefined
-            }
+            label="Memory"
+            value={`${fmt(metrics.memoryMB, 1)} MB`}
+            sub="RSS across the browser process tree"
           />
-          <StatItem label="DOM Nodes" value={fmt(metrics.nodes)} />
-          <StatItem label="Listeners" value={fmt(metrics.listeners)} />
+          <StatItem label="Renderers" value={fmt(metrics.renderers)} />
         </StatGroup>
       )}
     </div>

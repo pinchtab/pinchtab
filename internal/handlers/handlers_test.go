@@ -174,15 +174,15 @@ func (m *mockBridge) Text(_ context.Context, _ string, _ bridge.ContentParams) (
 func (m *mockBridge) TabLockInfo(tabID string) *bridge.LockInfo { return nil }
 
 func (m *mockBridge) GetMemoryMetrics(tabID string) (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 10}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 10, Renderers: 1}, nil
 }
 
 func (m *mockBridge) GetBrowserMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 50}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 2}, nil
 }
 
 func (m *mockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{JSHeapUsedMB: 50, Nodes: 500}, nil
+	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
 }
 
 func (m *mockBridge) GetCrashLogs() []string {

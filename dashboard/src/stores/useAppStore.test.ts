@@ -376,9 +376,9 @@ describe("useAppStore", () => {
         { id: "t4", instanceId: "C" },
       ],
       metrics: [
-        { instanceId: "A", jsHeapUsedMB: 10 },
-        { instanceId: "A", jsHeapUsedMB: 99 }, // duplicate: first wins
-        { instanceId: "B", jsHeapUsedMB: 20 },
+        { instanceId: "A", memoryMB: 10 },
+        { instanceId: "A", memoryMB: 99 }, // duplicate: first wins
+        { instanceId: "B", memoryMB: 20 },
       ],
       serverMetrics: {
         goHeapAllocMB: 42,
@@ -402,8 +402,8 @@ describe("useAppStore", () => {
       // First metrics entry wins for the duplicate (10, not 99).
       expect(s.currentMemory).toEqual({ A: 10, B: 20 });
       expect(s.currentMetrics).toEqual({
-        A: { instanceId: "A", jsHeapUsedMB: 10 },
-        B: { instanceId: "B", jsHeapUsedMB: 20 },
+        A: { instanceId: "A", memoryMB: 10 },
+        B: { instanceId: "B", memoryMB: 20 },
       });
 
       const tabData = s.tabsChartData;

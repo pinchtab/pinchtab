@@ -267,14 +267,10 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 			continue
 		}
 		all = append(all, types.InstanceMetrics{
-			InstanceID:    inst.ID,
-			ProfileName:   inst.ProfileName,
-			JSHeapUsedMB:  mem.JSHeapUsedMB,
-			JSHeapTotalMB: mem.JSHeapTotalMB,
-			Documents:     mem.Documents,
-			Frames:        mem.Frames,
-			Nodes:         mem.Nodes,
-			Listeners:     mem.Listeners,
+			InstanceID:  inst.ID,
+			ProfileName: inst.ProfileName,
+			MemoryMB:    mem.MemoryMB,
+			Renderers:   mem.Renderers,
 		})
 	}
 	return all
