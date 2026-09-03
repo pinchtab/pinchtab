@@ -81,24 +81,35 @@ func TestIsValid(t *testing.T) {
 	}
 }
 
-func TestExtractHost(t *testing.T) {
+func TestEnsureScheme(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
 		expected string
 	}{
-		{"https://example.com", "example.com"},
-		{"https://Example.COM/path", "example.com"},
-		{"http://sub.example.com:8080/path", "sub.example.com"},
-		{"example.com/path", "example.com"},
-		{"EXAMPLE.COM", "example.com"},
-		{"", ""},
+		{"bare host", "example.com", "https://example.com"},
+		{"single-label host", "intranet", "https://intranet"},
+		{"bare host with path", "example.com/path", "https://example.com/path"},
+		// The case url.Parse gets wrong on its own: it reads "intranet" as a
+		// scheme, so the host disappears entirely unless the port is recognised.
+		{"bare host with port", "intranet:8080", "https://intranet:8080"},
+		{"bare host with port and path", "example.com:8080/x", "https://example.com:8080/x"},
+		{"loopback with cdp port", "localhost:9222", "https://localhost:9222"},
+		{"scheme-ful url is untouched", "http://example.com", "http://example.com"},
+		{"file url is untouched", "file:///tmp/x", "file:///tmp/x"},
+		// Opaque schemes keep their meaning: prefixing these would invent a host
+		// where the form has none.
+		{"about is untouched", "about:blank", "about:blank"},
+		{"data is untouched", "data:text/plain,hi", "data:text/plain,hi"},
+		{"javascript is untouched", "javascript:alert(1)", "javascript:alert(1)"},
+		{"mailto is untouched", "mailto:someone@example.com", "mailto:someone@example.com"},
+		{"empty stays empty", "", ""},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := ExtractHost(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExtractHost(%q) = %q, want %q", tt.input, result, tt.expected)
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EnsureScheme(tt.input); got != tt.expected {
+				t.Errorf("EnsureScheme(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}

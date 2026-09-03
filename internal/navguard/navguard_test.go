@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/netguard"
+	"github.com/pinchtab/pinchtab/internal/security"
 )
 
 func stubHostResolution(t *testing.T, fn func(context.Context, string, string) ([]net.IP, error)) {
@@ -148,12 +149,45 @@ func TestValidateTarget_AllowsNoHostSafeInputs(t *testing.T) {
 	v := &Validator{}
 	for _, rawURL := range []string{
 		"about:blank",
-		"some/relative/path",
 		"",
 	} {
 		if _, err := v.ValidateTarget(context.Background(), rawURL, false); err != nil {
 			t.Fatalf("ValidateTarget(%q) should allow safe hostless input, got %v", rawURL, err)
 		}
+	}
+}
+
+// "some/relative/path" used to sit in the list above, treated as hostless because
+// the private bare-URL branch here demanded a dot, a colon, an IP or localhost
+// before it would call a single label a host. That is the same rule that made
+// "intranet/path" hostless, so an operator's allowlisted intranet name was never
+// resolved and never got the internal-IP override the allowlist had already
+// granted it. One extractor now answers for both, and a leading single label is a
+// host — so this input is resolved and refused when it does not exist, rather than
+// waved through as a relative path the HTTP API never actually accepts.
+func TestValidateTarget_TreatsALeadingSingleLabelAsAHost(t *testing.T) {
+	var asked []string
+	stubHostResolution(t, func(_ context.Context, _, host string) ([]net.IP, error) {
+		asked = append(asked, host)
+		return []net.IP{net.ParseIP("192.168.1.10")}, nil
+	})
+
+	v := &Validator{}
+	if _, err := v.ValidateTarget(context.Background(), "intranet/path", false); err == nil {
+		t.Fatal("a single-label host resolving to a private IP was allowed without the allowlist override")
+	}
+	if len(asked) != 1 || asked[0] != "intranet" {
+		t.Fatalf("resolved hosts = %v, want exactly [intranet]; the host was not extracted from the bare form", asked)
+	}
+
+	// With the allowlist override the same target is permitted — the override the
+	// old bare-host rule silently discarded.
+	target, err := v.ValidateTarget(context.Background(), "intranet/path", true)
+	if err != nil {
+		t.Fatalf("allowlisted single-label host refused: %v", err)
+	}
+	if len(target.TrustedResolvedIP) == 0 {
+		t.Error("the override returned no resolved IP, so the target was never resolved")
 	}
 }
 
@@ -423,4 +457,67 @@ func cidrStrings(cidrs []*net.IPNet) []string {
 		out[i] = c.String()
 	}
 	return out
+}
+
+// The defect this card started from, stated as the property that prevents it:
+// the allowlist decision and the host this guard resolves must come from the same
+// extractor. They did not, so security.HostAllowed answered "yes, intranet is
+// listed" while this guard saw no host at all, dropped the override on the floor,
+// and the operator got an SSRF refusal on a target they had explicitly allowed.
+func TestTheAllowlistAnswerAndTheResolvedHostComeFromOneExtractor(t *testing.T) {
+	allowed := []string{"intranet", "wiki", "example.com"}
+
+	var resolved []string
+	stubHostResolution(t, func(_ context.Context, _, host string) ([]net.IP, error) {
+		resolved = append(resolved, host)
+		return []net.IP{net.ParseIP("10.0.0.7")}, nil
+	})
+
+	for _, rawURL := range []string{
+		"intranet",
+		"intranet/wiki",
+		"intranet:8080",
+		"https://intranet/wiki",
+		"wiki",
+		"example.com",
+	} {
+		t.Run(rawURL, func(t *testing.T) {
+			resolved = nil
+			listed := security.HostAllowed(rawURL, allowed)
+			if !listed {
+				t.Fatalf("HostAllowed(%q) = false; this table only carries listed hosts", rawURL)
+			}
+
+			target, err := ValidateTarget(context.Background(), rawURL, listed, nil)
+			if err != nil {
+				t.Fatalf("a listed host resolving to a private IP was refused: %v — the allowlist override did not reach this guard", err)
+			}
+			if len(resolved) != 1 {
+				t.Fatalf("resolved %v; the guard did not resolve exactly the host the allowlist matched", resolved)
+			}
+			if got, want := resolved[0], security.ExtractHost(rawURL); got != want {
+				t.Errorf("guard resolved %q, allowlist matched %q — two answers to one question", got, want)
+			}
+			if len(target.TrustedResolvedIP) == 0 {
+				t.Error("the override produced no resolved IP, so nothing was actually checked")
+			}
+		})
+	}
+}
+
+// The converse: the override is the allowlist's to grant, not a side effect of
+// the host form. An unlisted single-label host resolving to a private IP is still
+// refused.
+func TestAnUnlistedSingleLabelHostIsStillRefused(t *testing.T) {
+	stubHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("10.0.0.7")}, nil
+	})
+
+	listed := security.HostAllowed("intranet", []string{"example.com"})
+	if listed {
+		t.Fatal("the fixture allowlist matched a host it does not carry")
+	}
+	if _, err := ValidateTarget(context.Background(), "intranet", listed, nil); err == nil {
+		t.Fatal("an unlisted single-label host resolving to a private IP was allowed")
+	}
 }

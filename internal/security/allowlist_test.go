@@ -1,6 +1,12 @@
 package security
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
+)
 
 func TestHostAllowed_EmptyAllowlistMeansNoEnforcement(t *testing.T) {
 	if !HostAllowed("https://anything.test/", nil) {
@@ -110,5 +116,101 @@ func TestHostAllowed_TrailingRootLabelDoesNotWidenTheList(t *testing.T) {
 	}
 	if got := ExtractHost("https://example.com../path"); got != "example.com." {
 		t.Errorf("ExtractHost trimmed more than the single root label: %q", got)
+	}
+}
+
+// The forms a host is written in, driven through the ALLOWLIST DECISION rather
+// than the parse, because the decision is what the operator gets. Three
+// extractors used to answer this question and they disagreed on the first two
+// groups below: a single-label intranet name was a host to one and nothing to
+// another, and every scheme-less "host:port" was nothing to all of them, so a
+// listed host written with a port was refused by the allowlist itself.
+func TestHostAllowedAcrossTheFormsAHostIsWrittenIn(t *testing.T) {
+	allowed := []string{"intranet", "example.com", "localhost", "192.168.1.5", "*.corp.example.com"}
+
+	cases := []struct {
+		name   string
+		rawURL string
+		want   bool
+	}{
+		{"single-label bare host", "intranet", true},
+		{"single-label with path", "intranet/wiki", true},
+		{"single-label with query", "intranet?q=1", true},
+		{"single-label with port", "intranet:8080", true},
+		{"single-label unlisted", "wiki", false},
+
+		{"bare host with port", "example.com:8080", true},
+		{"bare host with port and path", "example.com:8080/x", true},
+		{"loopback with the cdp port", "localhost:9222", true},
+		{"literal ip with port", "192.168.1.5:9000", true},
+
+		{"scheme-ful", "https://example.com/path", true},
+		{"scheme-ful with port", "https://example.com:8443/path?q=1", true},
+		{"scheme-ful uppercase", "HTTPS://EXAMPLE.COM", true},
+		{"bare host", "example.com", true},
+		{"literal ip", "192.168.1.5", true},
+		{"localhost", "localhost", true},
+
+		{"trailing root label", "example.com./path", true},
+		{"trailing root label with port", "example.com.:8443", true},
+		{"wildcard subdomain", "https://api.corp.example.com/v1", true},
+		{"wildcard subdomain bare with port", "api.corp.example.com:8443", true},
+
+		{"unlisted host", "https://evil.com", false},
+		{"unlisted host with port", "evil.com:8080", false},
+		{"unlisted subdomain of a listed host", "https://evil.example.com.attacker.test", false},
+		{"about:blank has no host to verify", "about:blank", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HostAllowed(tc.rawURL, allowed); got != tc.want {
+				t.Errorf("HostAllowed(%q, %v) = %v, want %v (host extracted: %q)",
+					tc.rawURL, allowed, got, tc.want, ExtractHost(tc.rawURL))
+			}
+		})
+	}
+}
+
+// The case both surviving extractors used to get wrong, kept as its own test
+// because it fails for EVERY host rather than for an unlucky one: url.Parse reads
+// "localhost" in "localhost:9222" as a scheme, so the host came back empty and
+// HostAllowed refused on the empty host — the canonical CDP spelling refused by
+// the allowlist that lists it.
+func TestAListedHostWrittenWithAPortIsAllowed(t *testing.T) {
+	for _, rawURL := range []string{"localhost:9222", "example.com:8080", "192.168.1.5:9000", "intranet:8080"} {
+		host := ExtractHost(rawURL)
+		if host == "" {
+			t.Errorf("ExtractHost(%q) = %q; an empty host is refused by the allowlist whatever it lists", rawURL, host)
+			continue
+		}
+		if !HostAllowed(rawURL, []string{host}) {
+			t.Errorf("HostAllowed(%q, [%q]) = false; the host it names is the one listed", rawURL, host)
+		}
+	}
+}
+
+// The rule the card is named for, kept enforceable: one extractor answers "which
+// host is this security decision about". Three used to, they disagreed on exactly
+// the forms an intranet host is written in, and the direction of the disagreement
+// was luck rather than design. A fourth copy — or a resurrection of one of the
+// two deleted — reds here by file and line rather than by whichever consumer
+// happens to read the losing answer.
+func TestOnePackageOwnsTheSecurityHostExtractor(t *testing.T) {
+	files := srccensus.Tree(t, "../..", 200)
+
+	var declarations []string
+	for _, file := range files {
+		if strings.Contains(file.Text, "func ExtractHost(") {
+			declarations = append(declarations, file.Name)
+		}
+	}
+
+	if len(declarations) != 1 {
+		t.Fatalf("ExtractHost is declared in %d files, want exactly 1:\n  %s",
+			len(declarations), strings.Join(declarations, "\n  "))
+	}
+	if filepath.Base(filepath.Dir(declarations[0])) != "security" {
+		t.Errorf("the one extractor lives in %s; internal/security owns this primitive because every consumer already imports it and it imports none of them", declarations[0])
 	}
 }

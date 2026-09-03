@@ -63,7 +63,7 @@ func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return audit.NewPageAuditError(url, err)
 		}
-		return h.auditPage(r.Context(), url, opts, effectiveCfg, targets)
+		return h.auditPage(r.Context(), targets.url, opts, effectiveCfg, targets)
 	}
 
 	report, err := audit.RunAudit(

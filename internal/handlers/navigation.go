@@ -18,6 +18,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/pinchtab/internal/remedy"
+	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
 // HandleNavigate navigates a tab to a URL or creates a new tab.
@@ -111,6 +112,11 @@ func decodeNavigateRequest(w http.ResponseWriter, r *http.Request) (navigateRequ
 type navTargets struct {
 	target       *validatedNavigateTarget
 	trustedCIDRs []*net.IPNet
+	// url is the normalized target every decision above was made about. The
+	// caller navigates to THIS, not to what it decoded: a decision taken on
+	// "https://intranet" and a navigation issued for "intranet" are a decision
+	// about a different string than the one that ran.
+	url string
 }
 
 // navigateToURL runs the full navigate pipeline on an already-decoded request:
@@ -129,6 +135,7 @@ func (h *Handlers) navigateToURL(w http.ResponseWriter, r *http.Request, req nav
 	if !ok {
 		return
 	}
+	req.URL = targets.url
 
 	navRoute := h.recordNavigateRoute(r, routing)
 
@@ -204,6 +211,10 @@ func idpiScannerHint() string {
 // target resolution, recording the navigate request on both the blocked and
 // accepted paths. On success it returns the resolved target and trusted-proxy CIDRs.
 func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Request, tabID, url string, effectiveCfg *config.RuntimeConfig) (navTargets, bool) {
+	// The raw HTTP path is the only one that reaches here scheme-less: the CLI
+	// normalizes through urls.Normalize and MCP through urls.Sanitize. Doing it
+	// here as well is what lets the host extractor below be a plain parse.
+	url = urls.EnsureScheme(url)
 	allowFile := effectiveCfg != nil && effectiveCfg.AllowFileScheme
 	if err := validateNavigateURL(url, allowFile); err != nil {
 		httpx.Error(w, 400, err)
@@ -227,7 +238,7 @@ func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Reques
 	// guard above (strict-mode allowlists block it via the empty-host path).
 	if allowFile && navguard.IsFileURL(url) {
 		h.recordNavigateRequest(r, tabID, url)
-		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(effectiveCfg)}, true
+		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(effectiveCfg), url: url}, true
 	}
 
 	trustedResolveCIDRs := parseCIDRs(effectiveCfg.TrustedResolveCIDRs)
@@ -238,7 +249,7 @@ func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Reques
 	}
 	trustedCIDRs := buildNavigateTrustedProxyCIDRs(effectiveCfg)
 	h.recordNavigateRequest(r, tabID, url)
-	return navTargets{target: target, trustedCIDRs: trustedCIDRs}, true
+	return navTargets{target: target, trustedCIDRs: trustedCIDRs, url: url}, true
 }
 
 // recordNavigateRoute builds the single-browser route metadata for this navigate,

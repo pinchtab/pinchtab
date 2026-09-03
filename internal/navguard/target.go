@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/netguard"
+	"github.com/pinchtab/pinchtab/internal/security"
 )
 
 // ValidateTarget resolves a navigation URL's target host and enforces SSRF
@@ -29,8 +30,12 @@ func ValidateTarget(ctx context.Context, raw string, allowExplicitInternal bool,
 		return &ValidatedTarget{AllowInternal: true}, nil
 	}
 
-	host, hasHost := ExtractHost(raw)
-	if !hasHost {
+	// One extractor answers this for the whole process: the host the allowlist
+	// matched upstream (allowExplicitInternal) and the host resolved and
+	// SSRF-checked here must be the same string, or the override silently misses
+	// exactly the single-label intranet names it exists for.
+	host := security.ExtractHost(raw)
+	if host == "" {
 		// No resolvable host means the IP/SSRF checks below can't run, so a
 		// caller that relies on ValidateTarget alone would otherwise allow any
 		// scheme. Enforce scheme safety here too (defense in depth) so opaque

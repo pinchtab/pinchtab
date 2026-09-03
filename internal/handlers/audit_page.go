@@ -14,6 +14,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/navguard"
+	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
 const (
@@ -86,6 +87,7 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	req.URL = targets.url
 	if !h.ensureBrowserOrRespond(w, routing.EffectiveCfg) {
 		return
 	}
@@ -98,6 +100,7 @@ func (h *Handlers) HandleAuditPage(w http.ResponseWriter, r *http.Request) {
 // for batch audits: the same URL/IDPI/SSRF validation, but failures come back
 // as errors so the caller can turn them into per-page report entries.
 func (h *Handlers) validateAuditTarget(url string, cfg *config.RuntimeConfig) (navTargets, error) {
+	url = urls.EnsureScheme(url)
 	allowFile := cfg != nil && cfg.AllowFileScheme
 	if err := validateNavigateURL(url, allowFile); err != nil {
 		return navTargets{}, err
@@ -107,13 +110,13 @@ func (h *Handlers) validateAuditTarget(url string, cfg *config.RuntimeConfig) (n
 		return navTargets{}, fmt.Errorf("navigation blocked by IDPI: %s", domainResult.Reason)
 	}
 	if allowFile && navguard.IsFileURL(url) {
-		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg)}, nil
+		return navTargets{target: &validatedNavigateTarget{AllowInternal: true}, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg), url: url}, nil
 	}
 	target, err := validateNavigateTarget(url, h.IDPIGuard.DomainAllowed(url), parseCIDRs(cfg.TrustedResolveCIDRs))
 	if err != nil {
 		return navTargets{}, err
 	}
-	return navTargets{target: target, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg)}, nil
+	return navTargets{target: target, trustedCIDRs: buildNavigateTrustedProxyCIDRs(cfg), url: url}, nil
 }
 
 // auditPage navigates a fresh tab to url and assembles the single-page

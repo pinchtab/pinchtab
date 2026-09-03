@@ -97,7 +97,7 @@ func (h *Handlers) HandleScrape(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", err
 		}
-		return h.renderPageHTML(runCtx, url, routing.EffectiveCfg, targets)
+		return h.renderPageHTML(runCtx, targets.url, routing.EffectiveCfg, targets)
 	}
 
 	// Expand a chosen URL set instead of discovering the site when --only is
