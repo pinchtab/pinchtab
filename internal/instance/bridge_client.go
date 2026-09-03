@@ -16,18 +16,47 @@ import (
 // Each method targets a specific bridge endpoint.
 type BridgeClient struct {
 	client *http.Client
+
+	// authorize stamps the credential a bridge instance requires. A spawned
+	// instance runs the same auth middleware as its parent, so an unauthenticated
+	// call to it is answered 401 — and the one caller of FetchTabs swallows that
+	// at debug level, so the tab→instance discovery it feeds simply found nothing
+	// and said so nowhere. Nil means "no credential", which is what a test stub
+	// and an unauthenticated bridge want.
+	authorize func(*http.Request)
 }
 
-// NewBridgeClient creates a BridgeClient.
+// NewBridgeClient creates a BridgeClient that sends no credential.
 func NewBridgeClient() *BridgeClient {
+	return NewBridgeClientWithAuth(nil)
+}
+
+// NewBridgeClientWithAuth creates a BridgeClient that runs authorize over every
+// request it builds. The orchestrator supplies one that resolves the target
+// instance and applies that instance's own token, since an attached external
+// bridge does not share the server's.
+func NewBridgeClientWithAuth(authorize func(*http.Request)) *BridgeClient {
 	return &BridgeClient{
-		client: &http.Client{Timeout: httpx.MaxNavigationHTTPDuration},
+		client:    &http.Client{Timeout: httpx.MaxNavigationHTTPDuration},
+		authorize: authorize,
 	}
+}
+
+// authorized applies the configured credential to a request the client built.
+func (bc *BridgeClient) authorized(req *http.Request) *http.Request {
+	if bc.authorize != nil {
+		bc.authorize(req)
+	}
+	return req
 }
 
 // FetchTabs implements TabFetcher by querying a bridge's /tabs endpoint.
 func (bc *BridgeClient) FetchTabs(instanceURL string) ([]bridge.InstanceTab, error) {
-	resp, err := bc.client.Get(instanceURL + "/tabs")
+	req, err := http.NewRequest(http.MethodGet, instanceURL+"/tabs", nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch tabs request: %w", err)
+	}
+	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
 		return nil, fmt.Errorf("fetch tabs: %w", err)
 	}
@@ -57,7 +86,7 @@ func (bc *BridgeClient) CreateTab(ctx context.Context, port, url string) (string
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := bc.client.Do(req)
+	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
 		return "", fmt.Errorf("create tab: %w", err)
 	}
@@ -92,7 +121,7 @@ func (bc *BridgeClient) NavigateTab(ctx context.Context, port, tabID, url string
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := bc.client.Do(req)
+	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
 		return fmt.Errorf("navigate: %w", err)
 	}
@@ -114,7 +143,7 @@ func (bc *BridgeClient) CloseTab(ctx context.Context, port, tabID string) error 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := bc.client.Do(req)
+	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
 		return fmt.Errorf("close tab: %w", err)
 	}
@@ -134,7 +163,7 @@ func (bc *BridgeClient) SnapshotTab(ctx context.Context, port, tabID string) {
 	if err != nil {
 		return
 	}
-	resp, err := bc.client.Do(req)
+	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
 		return
 	}

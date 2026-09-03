@@ -193,11 +193,27 @@ func (o *Orchestrator) registerInstanceCleanupHook() {
 }
 
 func (o *Orchestrator) initInstanceManager() {
-	bridgeClient := instance.NewBridgeClient()
+	bridgeClient := instance.NewBridgeClientWithAuth(o.authorizeInstanceRequest)
 	o.instanceMgr = instance.NewManager(
 		&orchestratorLauncher{orch: o},
 		bridgeClient,
 	)
+}
+
+// authorizeInstanceRequest stamps the target instance's own credential on a
+// request the instance manager built for it. A spawned instance runs the same
+// auth middleware as this process, so a bare call to its /tabs is answered 401 —
+// which the locator's discovery swallowed at debug level, leaving the tab→instance
+// cache to be filled only by lookups that had already succeeded some other way.
+//
+// Resolved per request rather than closed over one token because an attached
+// external bridge authenticates with its own, which applyInstanceAuth knows and a
+// captured server token would not.
+func (o *Orchestrator) authorizeInstanceRequest(req *http.Request) {
+	if o == nil || req == nil {
+		return
+	}
+	o.applyInstanceAuth(req, o.proxyTargetInstance(req.URL))
 }
 
 func (o *Orchestrator) RunMaintenance(ctx context.Context) {
