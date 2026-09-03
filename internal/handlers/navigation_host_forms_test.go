@@ -151,6 +151,9 @@ func TestAnEmptyAllowlistNeverGrantsThePrivateIPOverride(t *testing.T) {
 		{"idpi off, empty allowlist", false, nil, false},
 		{"idpi off, unrelated host listed", false, []string{"example.com"}, false},
 		{"idpi on, the internal host explicitly listed", true, []string{"10.0.0.5"}, true},
+		{"idpi on, a bare wildcard", true, []string{"*"}, false},
+		{"idpi on, a wildcard beside an unrelated host", true, []string{"*", "example.com"}, false},
+		{"idpi on, a wildcard beside the internal host", true, []string{"*", "10.0.0.5"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := hostFormConfig(tc.allowed)
@@ -176,6 +179,31 @@ func TestAnEmptyAllowlistNeverGrantsThePrivateIPOverride(t *testing.T) {
 				t.Errorf("audit-page path allowed=%v, want %v (err=%v)", auditOK, tc.allow, auditErr)
 			}
 		})
+	}
+}
+
+// Withdrawing the override from a bare "*" must not turn it into a restriction: its
+// documented meaning is that every host passes the domain check, and both paths that
+// consume the predicate still have to navigate anywhere. Without this, refusing "*"
+// outright would satisfy every row of the table above.
+func TestABareWildcardStillLiftsTheDomainRestriction(t *testing.T) {
+	h := New(&policyMockBridge{}, hostFormConfig([]string{"*"}), nil, nil, nil)
+
+	const publicTarget = "https://example.com/x"
+	w := httptest.NewRecorder()
+	if _, ok := h.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", publicTarget, h.Config); !ok {
+		t.Errorf("navigate refused a public host under a wildcard allowlist: %d %s", w.Code, w.Body.String())
+	}
+	if _, err := h.validateAuditTarget(publicTarget, h.Config); err != nil {
+		t.Errorf("audit-page refused a public host under a wildcard allowlist: %v", err)
+	}
+
+	// The control: a named list does restrict, so the rows above are the wildcard's
+	// doing rather than the domain check having stopped restricting anything.
+	restricted := New(&policyMockBridge{}, hostFormConfig([]string{"listed.example"}), nil, nil, nil)
+	w = httptest.NewRecorder()
+	if _, ok := restricted.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", publicTarget, restricted.Config); ok {
+		t.Error("navigate allowed an unlisted host under a named allowlist")
 	}
 }
 

@@ -112,3 +112,55 @@ func TestTheShieldScanIsCalledOnlyWhereItAnswersItsOwnQuestion(t *testing.T) {
 		}
 	}
 }
+
+// A bare "*" is a positive match against a non-empty list, so the empty-list rule
+// alone admits it — but it names no host. Written by an operator it means "do not
+// restrict me by domain", which is the intent an empty list expresses, and that
+// intent grants nothing. Two spellings of one intent must not get opposite answers
+// on private-IP protection.
+//
+// Two lists are deliberately NOT covered by this rule, and both exclusions are
+// properties of the key rather than of the code, so a later sweep should leave them
+// alone: security.attach.allowHosts (internal/bridge/runtime/cdp_url.go), whose only
+// purpose is to permit remote CDP attach — it has no restricting role, so "*" there
+// is unambiguous and documented as a full override — and RouteManager's
+// fulfillForgeryPermittedFor, which reads the allowlist to RESTRICT forgery and
+// grants no internal-address access at all.
+func TestABareWildcardGrantsNoExplicitAllowance(t *testing.T) {
+	const privateTarget = "https://10.0.0.5/x"
+	enabled := config.IDPIConfig{Enabled: true, StrictMode: true}
+
+	for _, tc := range []struct {
+		name    string
+		allowed []string
+		want    bool
+	}{
+		{"a bare wildcard", []string{"*"}, false},
+		{"a bare wildcard with whitespace", []string{" * "}, false},
+		{"a wildcard beside an unrelated host", []string{"*", "example.com"}, false},
+		{"a wildcard beside the target host", []string{"*", "10.0.0.5"}, true},
+		{"the target host alone", []string{"10.0.0.5"}, true},
+		{"a wildcard subdomain", []string{"*.corp.example.com"}, false},
+		{"no list at all", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DomainAllowed(privateTarget, enabled, tc.allowed); got != tc.want {
+				t.Errorf("DomainAllowed(%v) = %v, want %v — this boolean is allowExplicitInternal, and only an entry that denotes a host may grant it", tc.allowed, got, tc.want)
+			}
+			if got := NewShieldGuard(enabled, tc.allowed).DomainAllowed(privateTarget); got != tc.want {
+				t.Errorf("the guard answers %v for %v; it must not keep a second answer to this question", got, tc.allowed)
+			}
+		})
+	}
+
+	// The withdrawal is scoped to the override. "*" still lifts the domain
+	// RESTRICTION for every host, which is the whole documented purpose of writing it.
+	for _, target := range []string{privateTarget, "https://anything.example/x"} {
+		if CheckDomain(target, enabled, []string{"*"}).Blocked {
+			t.Errorf("a bare wildcard blocked %s; the domain restriction it lifts is not this card's subject", target)
+		}
+	}
+	if !CheckDomain("https://unlisted.example/x", enabled, []string{"example.com"}).Blocked {
+		t.Error("the restriction admitted an unlisted host, so the row above proves nothing about the wildcard")
+	}
+}

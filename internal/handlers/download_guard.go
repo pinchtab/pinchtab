@@ -29,20 +29,22 @@ func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
 }
 
-func (g *downloadURLGuard) isHostAllowed(host string) bool {
-	if len(g.allowedDomains) == 0 {
-		return false
-	}
+// explicitlyAllowsHost reports whether the operator named this host in
+// security.downloadAllowedDomains, which is what lets the dialler reach a private
+// address. It asks the one owner of that question rather than reading the
+// restriction predicate: "nothing blocked it" is not "the operator permitted it",
+// and under a bare "*" the two answers differ.
+func (g *downloadURLGuard) explicitlyAllowsHost(host string) bool {
 	host = netguard.NormalizeHost(host)
 	if host == "" {
 		return false
 	}
-	return g.isDomainAllowed("https://" + host)
+	return idpi.DomainAllowed("https://"+host, config.IDPIConfig{Enabled: true}, g.allowedDomains)
 }
 
-// isDomainAllowed reports whether rawURL's domain is on the configured
-// allowlist. Allowlisted domains bypass private-IP checks because they
-// are explicitly trusted by the operator (e.g. internal docker hosts).
+// isDomainAllowed reports whether rawURL passes the domain restriction. A bare "*"
+// passes every host here, unchanged: this answers what the download may fetch, not
+// what it may reach a private address for.
 func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
 	if len(g.allowedDomains) == 0 {
 		return false

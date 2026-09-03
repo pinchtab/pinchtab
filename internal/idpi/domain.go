@@ -2,6 +2,7 @@ package idpi
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/security"
@@ -41,17 +42,40 @@ func CheckDomain(rawURL string, cfg config.IDPIConfig, allowedDomains []string) 
 }
 
 // DomainAllowed reports whether rawURL's host matches an explicit allowedDomains
-// entry under an active IDPI domain allowlist. For an IDPI-independent check
-// callers should use security.HostAllowed directly.
+// entry under an active IDPI domain allowlist. Consumers feed it into navguard's
+// allowExplicitInternal, so it answers "did the operator name THIS host", never
+// "is this host permitted" — for the latter use security.HostAllowed.
+//
+// A bare "*" is dropped before matching: it denotes "anything", which is the same
+// intent as an empty list, and an empty list grants nothing. It stays a full match
+// for the domain RESTRICTION in CheckDomain — only the private-IP override is
+// withheld from it. "*.corp.example.com" still denotes a set of hosts and is kept.
 func DomainAllowed(rawURL string, cfg config.IDPIConfig, allowedDomains []string) bool {
-	if !cfg.Enabled || len(allowedDomains) == 0 || security.IsAllowedSpecialURL(rawURL) {
+	if !cfg.Enabled || security.IsAllowedSpecialURL(rawURL) {
+		return false
+	}
+	named := hostDenotingPatterns(allowedDomains)
+	if len(named) == 0 {
 		return false
 	}
 	host := security.ExtractHost(rawURL)
 	if host == "" {
 		return false
 	}
-	return security.HostMatchesPatterns(host, allowedDomains)
+	return security.HostMatchesPatterns(host, named)
+}
+
+// hostDenotingPatterns drops the entries that name no host, so ["*", "example.com"]
+// still grants for example.com and grants nothing for anything else.
+func hostDenotingPatterns(allowedDomains []string) []string {
+	named := make([]string, 0, len(allowedDomains))
+	for _, pattern := range allowedDomains {
+		if strings.TrimSpace(pattern) == "*" {
+			continue
+		}
+		named = append(named, pattern)
+	}
+	return named
 }
 
 func makeResult(strictMode bool, reason string) CheckResult {

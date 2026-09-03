@@ -201,7 +201,7 @@ Why they are considered dangerous:
 - `evaluate` can execute JavaScript in page context
 - `macro` can trigger higher-level automation flows
 - `screencast` can stream live page contents
-- `download` can fetch and persist remote content. When `security.downloadAllowedDomains` is set, listed domains bypass private-IP SSRF checks (intended for internal hosts such as Docker services). `["*"]` matches every host and disables all private-IP protection on the download endpoint.
+- `download` can fetch and persist remote content. When `security.downloadAllowedDomains` is set, explicitly listed domains bypass private-IP SSRF checks (intended for internal hosts such as Docker services). A bare `"*"` matches every host for the domain restriction but grants no such bypass: private-IP protection stays on. Name the internal host to reach it — `["docker-registry.internal"]`, `["10.0.0.5"]`, or `["*", "10.0.0.5"]` to keep every other host reachable too.
 - `cookies` can read, write, or clear browser session tokens for the current page
 - `upload` can push local files into browser flows
 - `allowFileScheme` permits navigation to `file://` URLs. Because a `file://` URL has no host, it is **not** subject to `allowedDomains` or the SSRF/private-IP guard, so enabling it grants read access (via snapshot/screenshot/scrape) to any local file the server process can read. It stays blocked when a strict-mode `allowedDomains` allowlist is active. Enable only on trusted, single-tenant hosts. `javascript:`, `chrome://`, and `data:` remain rejected regardless.
@@ -304,9 +304,13 @@ Important notes:
   scanner found nothing suspicious" was read as "the operator allowed this host".)
 - listing a private or internal host explicitly — `["10.0.0.5"]`, or the default
   `["127.0.0.1", "localhost", "::1"]` — is what permits navigation to it. That is the
-  only way the private-IP guard is relaxed, and it is a positive match against a
-  non-empty list, never the absence of one.
-- if `allowedDomains` contains `"*"`, the whitelist effectively allows everything
+  only way the private-IP guard is relaxed, and it is a positive match by an entry
+  that **denotes a host**, never the absence of a list and never a bare `"*"`.
+- if `allowedDomains` contains `"*"`, the whitelist effectively allows everything: the
+  domain restriction is lifted for every host. It grants **no** private-IP override —
+  `"*"` names no host, which is the same intent as an empty list — so with `["*"]` the
+  SSRF guard still refuses private and internal addresses. To reach one, name it:
+  `["*", "10.0.0.5"]` keeps unrestricted navigation and permits that host.
 - `security.allowedDomains` is the canonical config path. `security.idpi.allowedDomains` is still accepted when loading older config files, but new saves are normalized to `security.allowedDomains`
 - `strictMode = true` blocks disallowed domains and suspicious content
 - `strictMode = false` allows the request but emits warnings instead
