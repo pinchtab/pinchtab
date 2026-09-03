@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/netip"
 	"sync"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -93,10 +92,6 @@ func validateNavigateURL(raw string, allowFile bool) error {
 func validateNavigateTarget(raw string, allowExplicitInternal bool, trustedResolveCIDRs []*net.IPNet) (*navguard.ValidatedTarget, error) {
 	v := &navguard.Validator{TrustedResolveCIDRs: trustedResolveCIDRs}
 	return v.ValidateTarget(context.Background(), raw, allowExplicitInternal)
-}
-
-func validateNavigateRemoteIPAddress(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.Addr) error {
-	return navguard.ValidateRemoteIP(raw, trustedCIDRs, trustedIPs)
 }
 
 func parseCIDRs(raw []string) []*net.IPNet {

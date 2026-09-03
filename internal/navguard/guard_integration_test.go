@@ -21,7 +21,7 @@ func TestIntegration_FullPipeline_PublicURLAllowed(t *testing.T) {
 	v := &Validator{}
 
 	rawURL := "https://example.com/page"
-	if err := v.ValidateURL(rawURL); err != nil {
+	if err := ValidateURL(rawURL); err != nil {
 		t.Fatalf("ValidateURL failed: %v", err)
 	}
 
@@ -51,7 +51,7 @@ func TestIntegration_FullPipeline_PrivateIPBlocked(t *testing.T) {
 	v := &Validator{}
 
 	rawURL := "https://internal-service.example.com/api"
-	if err := v.ValidateURL(rawURL); err != nil {
+	if err := ValidateURL(rawURL); err != nil {
 		t.Fatalf("ValidateURL failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestIntegration_FullPipeline_AllowedDomainPermitsPrivateIP(t *testing.T) {
 	v := &Validator{}
 
 	rawURL := "https://trusted-internal.corp.example.com/dashboard"
-	if err := v.ValidateURL(rawURL); err != nil {
+	if err := ValidateURL(rawURL); err != nil {
 		t.Fatalf("ValidateURL failed: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestIntegration_FullPipeline_TrustedCIDRBypass(t *testing.T) {
 	}
 
 	rawURL := "https://k8s-service.internal.example.com/health"
-	if err := v.ValidateURL(rawURL); err != nil {
+	if err := ValidateURL(rawURL); err != nil {
 		t.Fatalf("ValidateURL failed: %v", err)
 	}
 

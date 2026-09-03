@@ -380,13 +380,13 @@ func TestHandleNavigate_AllowsPrivateIPWithTrustedResolveCIDR(t *testing.T) {
 }
 
 func TestValidateNavigateRemoteIPAddress_AllowsExactTrustedResolvedIP(t *testing.T) {
-	if err := validateNavigateRemoteIPAddress("10.1.2.3", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")}); err != nil {
+	if err := navguard.ValidateRemoteIP("10.1.2.3", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")}); err != nil {
 		t.Fatalf("expected exact trusted resolved IP to be allowed, got %v", err)
 	}
 }
 
 func TestValidateNavigateRemoteIPAddress_RejectsDifferentIPInSameCIDR(t *testing.T) {
-	err := validateNavigateRemoteIPAddress("10.1.2.4", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")})
+	err := navguard.ValidateRemoteIP("10.1.2.4", nil, []netip.Addr{netip.MustParseAddr("10.1.2.3")})
 	if err == nil {
 		t.Fatal("expected different runtime IP in same CIDR to be blocked")
 	}

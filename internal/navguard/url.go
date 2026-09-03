@@ -12,12 +12,9 @@ const MaxURLLen = 8 << 10
 
 // ValidateURL checks that raw is a well-formed, scheme-safe navigation URL.
 // It allows http, https, about:blank, and bare hostnames (no scheme).
-func (v *Validator) ValidateURL(raw string) error {
-	return ValidateURL(raw)
-}
-
-// ValidateURL is the standalone (non-method) URL validator, usable without a
-// Validator instance.
+//
+// Not a Validator method: the answer depends on nothing a Validator carries, and
+// hanging it off one implied that TrustedResolveCIDRs applied to it.
 func ValidateURL(raw string) error {
 	return ValidateURLAllowingFile(raw, false)
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/navguard"
 )
 
 func TestBuildNavigateTrustedProxyCIDRs_NilConfig(t *testing.T) {
@@ -58,8 +59,8 @@ func TestValidateNavigateRemoteIPAddress_LoopbackProxyAllowed(t *testing.T) {
 	trusted := buildNavigateTrustedProxyCIDRs(cfg)
 
 	for _, ip := range []string{"127.0.0.1", "127.255.255.254", "::1"} {
-		if err := validateNavigateRemoteIPAddress(ip, trusted, nil); err != nil {
-			t.Errorf("validateNavigateRemoteIPAddress(%q) with TrustLoopbackProxy=true returned %v, want nil", ip, err)
+		if err := navguard.ValidateRemoteIP(ip, trusted, nil); err != nil {
+			t.Errorf("navguard.ValidateRemoteIP(%q) with TrustLoopbackProxy=true returned %v, want nil", ip, err)
 		}
 	}
 }
@@ -69,8 +70,8 @@ func TestValidateNavigateRemoteIPAddress_LoopbackProxyBlockedByDefault(t *testin
 	trusted := buildNavigateTrustedProxyCIDRs(cfg)
 
 	for _, ip := range []string{"127.0.0.1", "::1"} {
-		if err := validateNavigateRemoteIPAddress(ip, trusted, nil); err == nil {
-			t.Errorf("validateNavigateRemoteIPAddress(%q) with TrustLoopbackProxy=false returned nil, want SSRF block", ip)
+		if err := navguard.ValidateRemoteIP(ip, trusted, nil); err == nil {
+			t.Errorf("navguard.ValidateRemoteIP(%q) with TrustLoopbackProxy=false returned nil, want SSRF block", ip)
 		}
 	}
 }
