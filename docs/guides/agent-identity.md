@@ -145,7 +145,7 @@ curl -X POST http://localhost:9867/sessions/ses_e6ac8132fe7e7016/revoke \
 | `sessions.agent.idleTimeoutSec` | `1800` (30m) | Session expires after this many seconds of inactivity |
 | `sessions.agent.maxLifetimeSec` | `86400` (24h) | Hard session expiry |
 
-If a session record carries explicit grants, those grants narrow which endpoint groups the session may call. If a session has no explicit grants, it can use the normal non-admin automation API by default, while dashboard/admin routes remain blocked. That default is meant for trusted automation only.
+If a session record carries explicit grants, those grants narrow which endpoint groups the session may call. Grants are set when the session is created — `pinchtab session create --agent-id <id> --grant browse`, or the `grants` field on `POST /sessions` — and are reported by `session list` and `session info`. If a session has no explicit grants, it can use the normal non-admin automation API by default, while dashboard/admin routes remain blocked. That default is meant for trusted automation only. A grant never widens: server-level capability gates still apply on top of it.
 
 ## Choosing the Right Level
 

@@ -74,7 +74,32 @@ When a session record contains explicit `grants`, PinchTab enforces them in midd
 
 The built-in grant groups are: `browse`, `network`, `media`, `cookies`, `clipboard`, `evaluate`, `storage`, `console`, `solve`, `tasks`, and `activity`.
 
-The `cookies` grant only authorizes session access to cookie routes; cookie operations still require the server-level `security.allowCookies` gate.
+Set them when the session is created, on the API or on the CLI:
+
+```bash
+curl -X POST "$BASE/sessions" -H "Authorization: Bearer $PINCHTAB_TOKEN" \
+  -d '{"agentId":"reader","grants":["browse","network"]}'
+
+pinchtab session create --agent-id reader --grant browse --grant network
+```
+
+An unrecognised grant is refused with `invalid_grant` and no session is created, so
+a typo cannot leave you holding a credential you believe is scoped. `"*"` is the
+explicit spelling of "not scoped" and means the same as omitting the field. Grants
+are reported by `pinchtab session list` and `pinchtab session info`, and they
+survive a restart. There is no route that changes the grants of an existing
+session: create a new one with the scope you want and revoke the old.
+
+A request refused for scope answers `session_scope_forbidden` with a hint naming
+the grants the session holds and the grant that would have covered the route. The
+same code also answers an admin verb, where no grant applies at all — the hint says
+which of the two fired, because the remedies differ: a different session, or the
+server token.
+
+**Grants narrow; they never widen.** A grant authorizes session access to a group
+of routes, and every server-level gate still applies on top: `evaluate` does not
+re-enable `security.allowEvaluate`, `cookies` does not re-enable
+`security.allowCookies`, and no grant reaches an admin route.
 
 That default is a convenience for trusted automation, not a sandbox. If you need hard isolation between agents or tenants, use separate PinchTab instances.
 
@@ -83,6 +108,9 @@ That default is a convenience for trusted automation, not a sandbox. If you need
 ```bash
 # Create a new session (prints the session token to stdout; use --json for a full JSON object)
 pinchtab session create --agent-id agent-1
+
+# Create one limited to a capability group (repeatable; see Session Grants)
+pinchtab session create --agent-id reader --grant browse
 export PINCHTAB_SESSION=$(pinchtab session create --agent-id agent-1)
 
 # CLI automatically uses session auth when PINCHTAB_SESSION is set

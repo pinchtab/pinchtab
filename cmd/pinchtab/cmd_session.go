@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/server"
+	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -69,14 +71,25 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			agentID, _ := cmd.Flags().GetString("agent-id")
 			label, _ := cmd.Flags().GetString("label")
+			grants, _ := cmd.Flags().GetStringSlice("grant")
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			if agentID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --agent-id is required")
 				os.Exit(1)
 			}
+			// Validated here as well as by the server so a typo costs no round trip
+			// and the message can name the whole vocabulary.
+			grants, err := session.ValidateGrants(grants)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 			body := map[string]any{"agentId": agentID}
 			if label != "" {
 				body["label"] = label
+			}
+			if len(grants) > 0 {
+				body["grants"] = grants
 			}
 			// Auto-start the control plane first: the documented "create a session
 			// before any browser command" order otherwise fails cold on a fresh
@@ -107,6 +120,8 @@ func init() {
 	}
 	createCmd.Flags().String("agent-id", "", "Agent ID to associate with the session (required)")
 	createCmd.Flags().String("label", "", "Optional human-readable label")
+	createCmd.Flags().StringSlice("grant", nil,
+		"Limit the session to one capability group; repeatable. Without it the session reaches every non-admin route. Valid: "+strings.Join(session.GrantNames(), ", "))
 	addJSONFlag(createCmd)
 
 	revokeCmd := &cobra.Command{

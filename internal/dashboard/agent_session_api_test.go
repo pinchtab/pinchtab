@@ -529,3 +529,82 @@ func TestAgentSessionAPI_RegisterHandlers_NoOpsWhenDisabled(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
 	}
 }
+
+// The grants key used to be discarded silently, which is what made an unscoped
+// session look scoped: the caller asked for a narrowing, got a 201, and held a
+// credential that reached every non-admin route.
+func TestAgentSessionAPI_CreateAppliesAndEchoesGrants(t *testing.T) {
+	store := newTestSessionStore()
+	mux := newTestSessionMux(store)
+
+	req := httptest.NewRequest("POST", "/sessions", strings.NewReader(`{"agentId":"agent-1","grants":["browse"," Network "]}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	resp := decodeSessionResponse(t, w)
+	echoed, _ := resp["grants"].([]any)
+	if len(echoed) != 2 || echoed[0] != session.GrantBrowse || echoed[1] != session.GrantNetwork {
+		t.Fatalf("grants echoed as %v, want the normalized pair", resp["grants"])
+	}
+
+	// Echoed is not enough: the store is what the middleware reads.
+	id, _ := resp["id"].(string)
+	stored, ok := store.Get(id)
+	if !ok {
+		t.Fatalf("session %q is not in the store", id)
+	}
+	if len(stored.Grants) != 2 || stored.Grants[0] != session.GrantBrowse {
+		t.Errorf("stored grants = %v, want the pair the caller asked for", stored.Grants)
+	}
+}
+
+// An unknown grant is refused rather than dropped, and the refusal carries the
+// offender and the vocabulary — the whole point of not being silent.
+func TestAgentSessionAPI_CreateRefusesAnUnknownGrant(t *testing.T) {
+	store := newTestSessionStore()
+	mux := newTestSessionMux(store)
+
+	req := httptest.NewRequest("POST", "/sessions", strings.NewReader(`{"agentId":"agent-1","grants":["brows"]}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+	resp := decodeSessionResponse(t, w)
+	if resp["code"] != "invalid_grant" {
+		t.Errorf("code = %v, want invalid_grant", resp["code"])
+	}
+	if msg, _ := resp["error"].(string); !strings.Contains(msg, "brows") || !strings.Contains(msg, "browse") {
+		t.Errorf("error = %q, want the offender and the valid names", msg)
+	}
+	if len(store.List()) != 0 {
+		t.Error("a session was created despite the refused grant; a half-applied scope is worse than none")
+	}
+}
+
+// A session's scope must be readable, not only writable: list and get carry it, so
+// an operator can audit what a credential can reach.
+func TestAgentSessionAPI_ListAndGetReportGrants(t *testing.T) {
+	store := newTestSessionStore()
+	mux := newTestSessionMux(store)
+
+	create := httptest.NewRecorder()
+	mux.ServeHTTP(create, httptest.NewRequest("POST", "/sessions", strings.NewReader(`{"agentId":"agent-1","grants":["browse"]}`)))
+	id, _ := decodeSessionResponse(t, create)["id"].(string)
+
+	get := httptest.NewRecorder()
+	mux.ServeHTTP(get, httptest.NewRequest("GET", "/sessions/"+id, nil))
+	if !strings.Contains(get.Body.String(), `"grants":["browse"]`) {
+		t.Errorf("GET /sessions/{id} does not report the scope: %s", get.Body.String())
+	}
+
+	list := httptest.NewRecorder()
+	mux.ServeHTTP(list, httptest.NewRequest("GET", "/sessions", nil))
+	if !strings.Contains(list.Body.String(), `"grants":["browse"]`) {
+		t.Errorf("GET /sessions does not report the scope: %s", list.Body.String())
+	}
+}

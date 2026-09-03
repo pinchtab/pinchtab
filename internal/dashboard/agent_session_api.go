@@ -88,9 +88,10 @@ func (a *SessionAPI) handlerFor(pattern string) http.HandlerFunc {
 
 func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		AgentID string `json:"agentId"`
-		Label   string `json:"label,omitempty"`
-		Browser string `json:"browser,omitempty"`
+		AgentID string   `json:"agentId"`
+		Label   string   `json:"label,omitempty"`
+		Browser string   `json:"browser,omitempty"`
+		Grants  []string `json:"grants,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "invalid request body", false, nil)
@@ -107,10 +108,21 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	grants, err := session.ValidateGrants(req.Grants)
+	if err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_grant", err.Error(), false, nil)
+		return
+	}
+
 	sessionID, token, err := a.store.Create(req.AgentID, req.Label, req.Browser)
 	if err != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "create_failed", "failed to create session", false, nil)
 		return
+	}
+	// Scoped before the token is published: nothing else knows the token yet, so
+	// the session cannot authenticate anything between the two writes.
+	if len(grants) > 0 {
+		a.store.SetGrants(sessionID, grants)
 	}
 
 	sess, _ := a.store.Get(sessionID)
@@ -132,6 +144,11 @@ func (a *SessionAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if sess.Browser != "" {
 		resp["browser"] = sess.Browser
+	}
+	// Echoed so the caller can see the scope it asked for was applied. A silently
+	// dropped grants key is what let an unscoped session look scoped.
+	if len(sess.Grants) > 0 {
+		resp["grants"] = sess.Grants
 	}
 	httpx.JSON(w, http.StatusCreated, resp)
 }

@@ -73,20 +73,39 @@ func assertRemedyRuns(t *testing.T, line string) {
 			continue
 		}
 
-		var args, flags []string
-		for _, word := range words[1:] {
+		// The command path is the words before the first flag; everything after is
+		// split by the RESOLVED command's own flag table rather than by the shape of
+		// the token, because a flag's separate value does not start with a dash and
+		// would otherwise be counted as a positional argument — which rejects every
+		// remedy of the form `--flag <value>` however correct it is.
+		path := words[1:]
+		for i, word := range path {
 			if strings.HasPrefix(word, "-") {
-				flags = append(flags, word)
-				continue
+				path = path[:i]
+				break
 			}
-			args = append(args, word)
 		}
-
-		found, rest, err := rootCmd.Find(args)
+		found, rest, err := rootCmd.Find(path)
 		if err != nil {
 			t.Errorf("remedy command %v does not resolve: %v", words, err)
 			continue
 		}
+
+		args := append([]string(nil), rest...)
+		var flags []string
+		tail := words[1+len(path):]
+		for i := 0; i < len(tail); i++ {
+			word := tail[i]
+			if !strings.HasPrefix(word, "-") {
+				args = append(args, word)
+				continue
+			}
+			flags = append(flags, word)
+			if i+1 < len(tail) && !strings.HasPrefix(tail[i+1], "-") && remedyFlagTakesAValue(found, word) {
+				i++
+			}
+		}
+		rest = args
 		if !found.Runnable() || printsGroupHelp(found) {
 			t.Errorf("remedy command %v resolves to %q, which is a command group and only prints help when run",
 				words, found.CommandPath())
@@ -109,6 +128,18 @@ func assertRemedyRuns(t *testing.T, line string) {
 	}
 }
 
+// remedyFlagTakesAValue mirrors cobra's own binding rule rather than a hand list of
+// value-taking flags: a flag with no implicit value (everything but a bool) consumes
+// the next word. An unknown flag consumes nothing and is reported by the check below.
+func remedyFlagTakesAValue(cmd *cobra.Command, word string) bool {
+	name, _, _ := strings.Cut(strings.TrimLeft(word, "-"), "=")
+	flag := cmd.Flags().Lookup(name)
+	if flag == nil {
+		flag = cmd.InheritedFlags().Lookup(name)
+	}
+	return flag != nil && flag.NoOptDefVal == ""
+}
+
 // printsGroupHelp reports whether the command's only action is the help the unknown-subcommand
 // guard installs on groups. Runnable() alone stopped answering this question when that guard
 // landed: every group is now runnable, and a remedy naming one still does nothing.
@@ -128,6 +159,10 @@ func TestTheRemedyGuardRedsOnACommandThatCannotRun(t *testing.T) {
 		"pinchtab config get security.allowedDomains && pinchtab unclog",
 		"pinchtab session",
 		"pinchtab back --wait-nav",
+		// Splitting a flag's value off the positional list must not blind the
+		// argument check: revoke takes exactly one id, and this line hands it two
+		// past a flag that consumes neither.
+		"pinchtab session revoke --json ses_one ses_two",
 	} {
 		fake := &testing.T{}
 		assertRemedyRuns(fake, line)

@@ -15,6 +15,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/remedy"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
 
@@ -147,10 +148,10 @@ func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Mana
 				httpx.ErrorCode(w, 401, "bad_session", "invalid or expired agent session", false, nil)
 				return
 			}
-			if !sessionRequestAllowed(r, sess) {
-				httpx.ErrorCode(w, http.StatusForbidden, "session_scope_forbidden", "agent session is not allowed to access this endpoint", false, map[string]any{
-					"safeControlledEnvironmentOnly": true,
-				})
+			if refusal, refused := sessionRequestRefusal(r, sess); refused {
+				details := remedy.Details(refusal.hint, refusal.remedy)
+				details["safeControlledEnvironmentOnly"] = true
+				httpx.ErrorCode(w, http.StatusForbidden, "session_scope_forbidden", "agent session is not allowed to access this endpoint", false, details)
 				return
 			}
 			if !agentSessions.Touch(sess.ID) {

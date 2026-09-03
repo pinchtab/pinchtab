@@ -69,6 +69,11 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 	mux.HandleFunc("/tabs", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"tabs":[]}`))
 	})
+	// A second route in a different grant group, so a scoped session can be shown
+	// reaching one and refused the other through the real chain.
+	mux.HandleFunc("/clipboard/read", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"text":""}`))
+	})
 	api.RegisterHandlers(mux)
 	if agentSessions.Enabled() {
 		dashboard.NewSessionAPI(agentSessions, cfg.BrowsersAvailable).RegisterHandlers(mux)
