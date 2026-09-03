@@ -27,6 +27,10 @@ func anonymousCaller(t *testing.T) {
 	t.Helper()
 	t.Setenv("PINCHTAB_SESSION", "")
 	t.Setenv("PINCHTAB_AGENT_ID", "")
+	// Advisories are remembered under the CLI state directory, so a test that does
+	// not move it would silence itself on its second run and write to the machine
+	// it runs on.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	output.ResetAdvisories()
 	t.Cleanup(output.ResetAdvisories)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/cli/clistate"
 	"github.com/spf13/cobra"
 )
 
@@ -43,15 +44,7 @@ func (s tabStateStore) path() string {
 	return s.dir() + "/current-tab-" + s.serverSlug()
 }
 
-func (tabStateStore) dir() string {
-	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-		return dir + "/pinchtab"
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home + "/.local/state/pinchtab"
-	}
-	return "/tmp/pinchtab"
-}
+func (tabStateStore) dir() string { return clistate.Dir() }
 
 // serverSlug turns the resolved base URL into a filename-safe identity. It stays
 // readable (127.0.0.1-9930) so an operator can tell which server a state file
