@@ -13,8 +13,8 @@ import (
 
 func (o *Orchestrator) childInstanceBaseURL(port string) string {
 	host := configuredChildInstanceHost("")
-	if o != nil && o.runtimeCfg != nil {
-		host = configuredChildInstanceHost(o.runtimeCfg.Bind)
+	if cfg := o.cfg(); cfg != nil {
+		host = configuredChildInstanceHost(cfg.Bind)
 	}
 	return httpBaseURL(host, port)
 }
@@ -33,10 +33,10 @@ func portConflictError(port string, inspection PortInspection) error {
 	return fmt.Errorf("instance port %s is already in use on this machine", port)
 }
 
-// buildChildFileConfig builds the per-child FileConfig; nil effectiveCfg falls back to o.runtimeCfg.
+// buildChildFileConfig builds the per-child FileConfig; nil effectiveCfg falls back to o.cfg().
 func (o *Orchestrator) buildChildFileConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) config.FileConfig {
 	if effectiveCfg == nil {
-		effectiveCfg = o.runtimeCfg
+		effectiveCfg = o.cfg()
 	}
 	fc := config.FileConfigFromRuntime(effectiveCfg)
 	fc.Server.Port = port
@@ -94,7 +94,7 @@ func (o *Orchestrator) writeChildConfig(effectiveCfg *config.RuntimeConfig, port
 
 // writeAttachChildConfig writes a minimal child config for a CDP-attach bridge; RemoteCDPURL is passed via CLI flags.
 func (o *Orchestrator) writeAttachChildConfig(port, provider, stateDir string) (string, error) {
-	fc := config.FileConfigFromRuntime(o.runtimeCfg)
+	fc := config.FileConfigFromRuntime(o.cfg())
 	fc.Server.Port = port
 	fc.Server.StateDir = stateDir
 	activityEnabled := false

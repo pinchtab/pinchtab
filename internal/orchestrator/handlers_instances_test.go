@@ -359,7 +359,7 @@ func TestHandleAttachInstanceUsesDefaultBrowserTargetWhenOmitted(t *testing.T) {
 	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true}
 	o := setupAttachTargetsOrchestrator(t, runner)
-	o.runtimeCfg.DefaultTarget = "cloak-1"
+	republishCfg(o, func(c *config.RuntimeConfig) { c.DefaultTarget = "cloak-1" })
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
 		"name":"attached-cloak",
@@ -497,9 +497,11 @@ func TestHandleAttachBridgeUsesDefaultBrowserTarget(t *testing.T) {
 
 	o := setupAttachTargetsOrchestrator(t, &mockRunner{portAvail: true})
 	o.client = backend.Client()
-	o.runtimeCfg.DefaultTarget = "cloak-1"
-	o.runtimeCfg.AttachAllowHosts = []string{"*"}
-	o.runtimeCfg.AttachAllowSchemes = []string{"http"}
+	republishCfg(o, func(c *config.RuntimeConfig) {
+		c.DefaultTarget = "cloak-1"
+		c.AttachAllowHosts = []string{"*"}
+		c.AttachAllowSchemes = []string{"http"}
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach-bridge", strings.NewReader(fmt.Sprintf(`{
 		"name":"attached-bridge",

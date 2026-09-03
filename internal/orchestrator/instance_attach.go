@@ -96,14 +96,14 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 		return nil, err
 	}
 
-	bridgePort, err := o.portAllocator.AllocatePort()
+	bridgePort, err := o.ports().AllocatePort()
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate bridge port: %w", err)
 	}
 	released := false
 	defer func() {
 		if !released {
-			o.portAllocator.ReleasePort(bridgePort)
+			o.ports().ReleasePort(bridgePort)
 		}
 	}()
 	portStr := strconv.Itoa(bridgePort)
@@ -331,9 +331,10 @@ func (o *Orchestrator) hasActiveAttachedBridge(name string) bool {
 func (o *Orchestrator) resolveAttachOptions(opts AttachOptions, defaultProvider string) (AttachOptions, error) {
 	requestedProvider := strings.TrimSpace(opts.Browser)
 
+	cfg := o.cfg()
 	var configured []string
-	if o.runtimeCfg != nil {
-		configured = o.runtimeCfg.BrowsersAvailable
+	if cfg != nil {
+		configured = cfg.BrowsersAvailable
 	}
 
 	explicitProvider := requestedProvider != ""
@@ -346,7 +347,7 @@ func (o *Orchestrator) resolveAttachOptions(opts AttachOptions, defaultProvider 
 		parsedProvider = provider
 	}
 
-	if o.runtimeCfg == nil || len(o.runtimeCfg.Targets) == 0 {
+	if cfg == nil || len(cfg.Targets) == 0 {
 		if parsedProvider == "" && defaultProvider != "" {
 			provider, err := config.ParseBrowser(defaultProvider, configured)
 			if err != nil {
@@ -358,7 +359,7 @@ func (o *Orchestrator) resolveAttachOptions(opts AttachOptions, defaultProvider 
 	}
 
 	if parsedProvider == "" {
-		resolved, err := config.ResolveDefaultBrowserTarget(o.runtimeCfg)
+		resolved, err := config.ResolveDefaultBrowserTarget(cfg)
 		if err != nil {
 			return AttachOptions{}, err
 		}

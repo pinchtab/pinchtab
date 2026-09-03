@@ -286,6 +286,25 @@ func (p *Package) FieldAssignments(field string) []Site {
 	return sites
 }
 
+// FieldReferences returns every selector naming field — a read or a write, o.live and
+// l.orch.live alike — so a guard can say "this field is only touched inside its
+// accessor". FieldAssignments is the narrower sibling: it sees writes only, which is
+// not enough when an unsynchronised READ is the defect.
+func (p *Package) FieldReferences(field string) []Site {
+	var sites []Site
+	p.each(func(name string, file *ast.File) {
+		ast.Inspect(file, func(node ast.Node) bool {
+			sel, ok := node.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != field {
+				return true
+			}
+			sites = append(sites, p.site(name, file, sel, "."+field))
+			return true
+		})
+	})
+	return sites
+}
+
 // Func is a declaration found in the package, carrying the span a scope check needs.
 type Func struct {
 	Name string

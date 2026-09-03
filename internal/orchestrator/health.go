@@ -103,7 +103,7 @@ func (o *Orchestrator) probeStartupHealth(inst *InstanceInternal) startupProbe {
 			break
 		}
 
-		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.runtimeCfg), probePort) {
+		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.cfg()), probePort) {
 			targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", healthProbePolicyLoopback)
 			if err != nil {
 				p.lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())

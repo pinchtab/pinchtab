@@ -7,7 +7,7 @@ import (
 )
 
 func (c *ConfigAPI) tokenConfigured(cfg config.FileConfig) bool {
-	if c != nil && c.runtime != nil && strings.TrimSpace(c.runtime.Token) != "" {
+	if runtime := c.cfg(); runtime != nil && strings.TrimSpace(runtime.Token) != "" {
 		return true
 	}
 	return strings.TrimSpace(cfg.Server.Token) != ""

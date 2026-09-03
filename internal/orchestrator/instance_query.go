@@ -122,7 +122,7 @@ func (o *Orchestrator) firstRunningURL(match func(*InstanceInternal) bool) strin
 func (o *Orchestrator) FirstRunningURLForRequest(r *http.Request) (string, int, error) {
 	requested := ExtractRequestedBrowser(r)
 	if requested == "" {
-		resolved, err := config.ResolveDefaultBrowserTarget(o.runtimeCfg)
+		resolved, err := config.ResolveDefaultBrowserTarget(o.cfg())
 		if err != nil {
 			return "", http.StatusBadRequest, err
 		}
@@ -140,8 +140,8 @@ func (o *Orchestrator) FirstRunningURLForRequest(r *http.Request) (string, int, 
 	}
 
 	normalized := config.NormalizeBrowser(requested)
-	if o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-		matches := config.TargetsForBrowser(o.runtimeCfg, requested)
+	if cfg := o.cfg(); cfg != nil && len(cfg.Targets) > 0 {
+		matches := config.TargetsForBrowser(cfg, requested)
 		if len(matches) == 0 {
 			return "", http.StatusBadRequest, fmt.Errorf("no browser target configured for browser %q", requested)
 		}

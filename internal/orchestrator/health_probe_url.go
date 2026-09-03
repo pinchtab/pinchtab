@@ -28,17 +28,18 @@ func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy h
 	}
 
 	host := baseURL.Hostname()
+	cfg := o.cfg()
 	switch policy {
 	case healthProbePolicyAttachAllowlist:
-		if o.runtimeCfg == nil {
+		if cfg == nil {
 			return nil, fmt.Errorf("blocked: attach not configured")
 		}
-		if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
+		if !isAllowedAttachHost(host, cfg.AttachAllowHosts) {
 			slog.Warn("health probe blocked: host not allowed", "url", rawURL, "host", host)
 			return nil, fmt.Errorf("blocked: host not allowed")
 		}
 	default:
-		if !isAllowedChildProbeHost(host, configuredChildBind(o.runtimeCfg)) {
+		if !isAllowedChildProbeHost(host, configuredChildBind(cfg)) {
 			slog.Warn("health probe blocked: non-loopback host", "url", rawURL, "host", host)
 			return nil, fmt.Errorf("blocked: non-loopback host")
 		}

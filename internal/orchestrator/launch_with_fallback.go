@@ -234,7 +234,7 @@ type orchestratorFallbackLauncher struct {
 }
 
 func (l orchestratorFallbackLauncher) ResolveTarget(candidate string) (ResolvedLaunchTarget, error) {
-	resolved, err := config.ResolveExplicitBrowserTarget(l.orch.runtimeCfg, candidate)
+	resolved, err := config.ResolveExplicitBrowserTarget(l.orch.cfg(), candidate)
 	if err != nil {
 		return ResolvedLaunchTarget{}, err
 	}

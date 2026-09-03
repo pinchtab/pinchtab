@@ -25,17 +25,15 @@ type InstanceEvent struct {
 type EventHandler func(InstanceEvent)
 
 type Orchestrator struct {
-	instances      map[string]*InstanceInternal
-	baseDir        string
-	binary         string
-	profiles       *profiles.ProfileManager
-	runner         HostRunner
-	mu             sync.RWMutex
-	client         *http.Client
-	childAuthToken string
-	allowEvaluate  bool
-	internalToken  string
-	bindings       *Bindings
+	instances     map[string]*InstanceInternal
+	baseDir       string
+	binary        string
+	profiles      *profiles.ProfileManager
+	runner        HostRunner
+	mu            sync.RWMutex
+	client        *http.Client
+	internalToken string
+	bindings      *Bindings
 	// detachedStops tracks async failed-attempt teardowns so tests (and
 	// shutdown paths) can wait for them instead of leaking goroutines that
 	// race with stubbed package vars.
@@ -72,7 +70,7 @@ type Orchestrator struct {
 	idMgr            *ids.Manager
 	eventHandlers    []EventHandler
 	instanceMgr      *instance.Manager
-	runtimeCfg       *config.RuntimeConfig
+	live             config.Live
 	fallbackLauncher Launcher
 
 	// attachHealthCheckTimeout overrides the default health-check timeout in tests.
@@ -160,19 +158,17 @@ func NewOrchestrator(baseDir string) *Orchestrator {
 
 func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator {
 	orch := &Orchestrator{
-		instances:      make(map[string]*InstanceInternal),
-		baseDir:        baseDir,
-		binary:         resolveStableBinary(baseDir),
-		runner:         runner,
-		client:         &http.Client{Timeout: httpx.MaxNavigationHTTPDuration},
-		childAuthToken: "",
-		allowEvaluate:  false,
-		internalToken:  generateInternalToken(),
-		bindings:       NewBindings(nil),
-		tabsCache:      NewTabsCache(0, nil),
-		portAllocator:  NewPortAllocator(9868, 9968),
-		idMgr:          ids.NewManager(),
-		shutdownCh:     make(chan struct{}),
+		instances:     make(map[string]*InstanceInternal),
+		baseDir:       baseDir,
+		binary:        resolveStableBinary(baseDir),
+		runner:        runner,
+		client:        &http.Client{Timeout: httpx.MaxNavigationHTTPDuration},
+		internalToken: generateInternalToken(),
+		bindings:      NewBindings(nil),
+		tabsCache:     NewTabsCache(0, nil),
+		portAllocator: NewPortAllocator(9868, 9968),
+		idMgr:         ids.NewManager(),
+		shutdownCh:    make(chan struct{}),
 	}
 
 	orch.registerInstanceCleanupHook()
@@ -292,15 +288,14 @@ func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {
 	o.profiles = pm
 }
 
+// ApplyRuntimeConfig publishes the value every reader will see from here on. The
+// config is never written in place, so publication is a single pointer store and
+// only the derived state that lives outside it needs the lock.
 func (o *Orchestrator) ApplyRuntimeConfig(cfg *config.RuntimeConfig) {
-	o.runtimeCfg = cfg
+	o.live.Publish(cfg)
 	if cfg == nil {
-		o.childAuthToken = ""
-		o.allowEvaluate = false
 		return
 	}
-	o.childAuthToken = cfg.Token
-	o.allowEvaluate = cfg.AllowEvaluate
 	o.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
 	if cfg.AllocationPolicy != "" {
 		if err := o.SetAllocationPolicy(cfg.AllocationPolicy); err != nil {
@@ -309,38 +304,92 @@ func (o *Orchestrator) ApplyRuntimeConfig(cfg *config.RuntimeConfig) {
 	}
 }
 
+// LiveConfig hands out the publication point so every other holder of the runtime
+// config in this process reads and writes the same one. A save through the
+// dashboard is then visible to the orchestrator's goroutines by construction,
+// rather than by two holders agreeing to mutate one shared object.
+func (o *Orchestrator) LiveConfig() *config.Live {
+	if o == nil {
+		return nil
+	}
+	return &o.live
+}
+
+// cfg is the ONE accessor for the published runtime config. Nothing reads a bare
+// field: a nil Live (a bare struct literal in a test) answers nil, which every
+// caller already handles.
+func (o *Orchestrator) cfg() *config.RuntimeConfig {
+	if o == nil {
+		return nil
+	}
+	return o.live.Get()
+}
+
+// ports is the same discipline for the allocator, which is a swap rather than a
+// publication: SetPortRange replaces it while launches are reading it.
+func (o *Orchestrator) ports() *PortAllocator {
+	if o == nil {
+		return nil
+	}
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.portAllocator
+}
+
+// cfgToken is the child auth token: derived from the published config on every
+// read rather than copied into a field, so a reader cannot observe a token that
+// disagrees with the config in effect.
+func (o *Orchestrator) cfgToken() string {
+	cfg := o.cfg()
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Token
+}
+
 func (o *Orchestrator) AllowsEvaluate() bool {
-	return o != nil && o.allowEvaluate
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowEvaluate
 }
 
 func (o *Orchestrator) AllowsMacro() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowMacro
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowMacro
 }
 
 func (o *Orchestrator) AllowsScreencast() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowScreencast
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowScreencast
 }
 
 func (o *Orchestrator) AllowsDownload() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowDownload
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowDownload
 }
 
 func (o *Orchestrator) AllowsCookies() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowCookies
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowCookies
 }
 
 func (o *Orchestrator) AllowsUpload() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowUpload
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowUpload
 }
 
 func (o *Orchestrator) AllowsStateExport() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowStateExport
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowStateExport
 }
 
 func (o *Orchestrator) AllowsNetworkIntercept() bool {
-	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowNetworkIntercept
+	cfg := o.cfg()
+	return cfg != nil && cfg.AllowNetworkIntercept
 }
 
 func (o *Orchestrator) SetPortRange(start, end int) {
-	o.portAllocator = NewPortAllocator(start, end)
+	allocator := NewPortAllocator(start, end)
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.portAllocator = allocator
 }

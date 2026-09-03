@@ -16,20 +16,39 @@ import (
 )
 
 type AuthAPI struct {
-	runtime      *config.RuntimeConfig
+	live         *config.Live
 	sessions     *browsersession.Manager
 	loginLimiter *authn.AttemptLimiter
 }
 
-func NewAuthAPI(runtime *config.RuntimeConfig, sessions *browsersession.Manager) *AuthAPI {
+func NewAuthAPI(live *config.Live, sessions *browsersession.Manager) *AuthAPI {
 	return &AuthAPI{
-		runtime:  runtime,
+		live:     live,
 		sessions: sessions,
 		loginLimiter: authn.NewAttemptLimiter(authn.AttemptLimiterConfig{
 			Window:      authn.DefaultLoginRateLimitWindow,
 			MaxAttempts: authn.DefaultLoginRateLimitMaxAttempt,
 		}),
 	}
+}
+
+func (a *AuthAPI) cfg() *config.RuntimeConfig {
+	if a == nil {
+		return nil
+	}
+	return a.live.Get()
+}
+
+func (a *AuthAPI) token() string {
+	cfg := a.cfg()
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Token
+}
+
+func cookieTrustsProxy(cfg *config.RuntimeConfig) bool {
+	return cfg != nil && cfg.TrustProxyHeaders
 }
 
 func (a *AuthAPI) RegisterHandlers(mux *http.ServeMux) {
@@ -39,7 +58,7 @@ func (a *AuthAPI) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(a.runtime.Token)
+	token := strings.TrimSpace(a.token())
 	if token == "" {
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "token_required", "server token is not configured", false, nil)
 		return
@@ -94,7 +113,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		if a.loginLimiter != nil {
 			a.loginLimiter.RecordFailure(clientIP)
 		}
-		authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders, cookieSecureSetting(a.runtime))
+		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
 		authn.AuditWarn(r, "auth.login_failed", "reason", "bad_token")
 		httpx.Unauthorized(w, httpx.CodeBadToken, provided)
 		return
@@ -116,7 +135,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime(), a.runtime != nil && a.runtime.TrustProxyHeaders, cookieSecureSetting(a.runtime))
+	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime(), cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
 	authn.AuditLog(r, "auth.session_created",
 		"sessionIdleSec", int(a.sessions.IdleTimeout().Seconds()),
 		"sessionMaxLifetimeSec", int(a.sessions.MaxLifetime().Seconds()),
@@ -131,12 +150,12 @@ func (a *AuthAPI) HandleLogout(w http.ResponseWriter, r *http.Request) {
 			authn.AuditLog(r, "auth.session_revoked", "reason", "logout")
 		}
 	}
-	authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders, cookieSecureSetting(a.runtime))
+	authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(a.runtime.Token)
+	token := strings.TrimSpace(a.token())
 	if token == "" {
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "token_required", "server token is not configured", false, nil)
 		return
@@ -172,7 +191,7 @@ func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.sessions.Elevate(creds.Value, token) {
-		authn.ClearSessionCookie(w, r, a.runtime != nil && a.runtime.TrustProxyHeaders, cookieSecureSetting(a.runtime))
+		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
 		httpx.Unauthorized(w, httpx.CodeBadToken, "")
 		return
 	}
@@ -192,10 +211,11 @@ func cookieSecureSetting(cfg *config.RuntimeConfig) *bool {
 }
 
 func (a *AuthAPI) requiresHTTPSForDashboardSession(r *http.Request) bool {
-	if a == nil || a.runtime == nil || a.runtime.CookieSecure == nil || !*a.runtime.CookieSecure {
+	cfg := a.cfg()
+	if cfg == nil || cfg.CookieSecure == nil || !*cfg.CookieSecure {
 		return false
 	}
-	return !authn.RequestIsHTTPS(r, a.runtime.TrustProxyHeaders)
+	return !authn.RequestIsHTTPS(r, cfg.TrustProxyHeaders)
 }
 
 func secondsCeil(d time.Duration) int {

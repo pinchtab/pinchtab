@@ -51,7 +51,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	reservedPorts := make([]int, 0, 2)
 	defer func() {
 		for _, reserved := range reservedPorts {
-			o.portAllocator.ReleasePort(reserved)
+			o.ports().ReleasePort(reserved)
 		}
 	}()
 
@@ -59,7 +59,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 
 	if port == "" || port == "0" {
 		o.mu.Unlock()
-		allocatedPort, err := o.portAllocator.AllocatePort()
+		allocatedPort, err := o.ports().AllocatePort()
 		if err != nil {
 			return nil, fmt.Errorf("failed to allocate port: %w", err)
 		}
@@ -73,10 +73,10 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			return nil, err
 		}
 		port = strconv.Itoa(portInt)
-		if err := o.portAllocator.ReservePort(portInt); err != nil {
+		if err := o.ports().ReservePort(portInt); err != nil {
 			return nil, fmt.Errorf("failed to reserve port %s: %w", port, err)
 		}
-		if portInt >= o.portAllocator.start && portInt <= o.portAllocator.end {
+		if portInt >= o.ports().start && portInt <= o.ports().end {
 			reservedPorts = append(reservedPorts, portInt)
 		}
 		o.mu.Lock()
@@ -110,7 +110,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 
 	o.mu.Unlock()
 
-	cdpPort, err := o.portAllocator.AllocatePort()
+	cdpPort, err := o.ports().AllocatePort()
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate browser debug port: %w", err)
 	}
@@ -134,14 +134,19 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	}
 
 	requestedPolicy := cloneSecurityPolicy(opts.SecurityPolicy)
-	effectivePolicy := effectiveSecurityPolicy(o.runtimeCfg, requestedPolicy)
+	// One read of the published config for the whole launch: a save landing
+	// mid-launch must not have the policy come from one value and the target
+	// from the next.
+	cfg := o.cfg()
+	effectivePolicy := effectiveSecurityPolicy(cfg, requestedPolicy)
 
-	effectiveCfg := o.runtimeCfg
+	effectiveCfg := cfg
+	hasTargets := cfg != nil && len(cfg.Targets) > 0
 	targetPromoted := false
 	// A resolved target name is authoritative: re-deriving from the provider
 	// picks the wrong target when several targets share one provider.
-	if targetName := strings.TrimSpace(opts.TargetName); targetName != "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-		resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, targetName)
+	if targetName := strings.TrimSpace(opts.TargetName); targetName != "" && hasTargets {
+		resolved, err := config.ResolveExplicitBrowserTarget(cfg, targetName)
 		if err == nil {
 			effectiveCfg = resolved.Config
 			targetPromoted = true
@@ -149,12 +154,12 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			slog.Warn("launch: resolved target name no longer resolves; falling back to provider-derived config", "target", targetName, "err", err)
 		}
 	}
-	if browser := strings.TrimSpace(opts.Browser); !targetPromoted && browser != "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
+	if browser := strings.TrimSpace(opts.Browser); !targetPromoted && browser != "" && hasTargets {
 		// Lenient: only promote a target when the provider maps to an unambiguous
 		// winner (single match, or the configured default among several); an
 		// ambiguous/zero match leaves the provider-derived config in place.
-		if target, _ := config.MatchBrowserToTarget(o.runtimeCfg, browser); target != "" {
-			if resolved, err := config.ResolveExplicitBrowserTarget(o.runtimeCfg, target); err == nil {
+		if target, _ := config.MatchBrowserToTarget(cfg, browser); target != "" {
+			if resolved, err := config.ResolveExplicitBrowserTarget(cfg, target); err == nil {
 				effectiveCfg = resolved.Config
 			}
 		}
@@ -176,8 +181,8 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 
 	if opts.Browser != "" {
 		var configured []string
-		if o.runtimeCfg != nil {
-			configured = o.runtimeCfg.BrowsersAvailable
+		if cfg != nil {
+			configured = cfg.BrowsersAvailable
 		}
 		if _, err := config.ParseBrowser(opts.Browser, configured); err != nil {
 			return nil, fmt.Errorf("invalid browser %q: %w", opts.Browser, err)
@@ -194,8 +199,8 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	}
 
 	browser := opts.Browser
-	if browser == "" && o.runtimeCfg != nil {
-		browser = config.NormalizeBrowser(o.runtimeCfg.DefaultBrowser)
+	if browser == "" && cfg != nil {
+		browser = config.NormalizeBrowser(cfg.DefaultBrowser)
 	}
 
 	inst := &InstanceInternal{

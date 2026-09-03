@@ -76,12 +76,13 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 	if c.agents != nil {
 		agentCount = c.agents.AgentCount()
 	}
+	cfg := c.cfg()
 	out := healthEnvelope{
 		Status:              "ok",
 		Mode:                "dashboard",
 		Version:             c.version,
 		Uptime:              int64(time.Since(c.startedAt).Milliseconds()),
-		AuthRequired:        strings.TrimSpace(c.runtime.Token) != "",
+		AuthRequired:        cfg != nil && strings.TrimSpace(cfg.Token) != "",
 		Profiles:            profileCount,
 		QuarantinedProfiles: quarantinedCount,
 		Instances:           instanceCount,
@@ -91,7 +92,7 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		RestartReasons:      restartReasons,
 	}
 	if includeSecurity {
-		security := runtimeSecurityInfo(c.runtime)
+		security := runtimeSecurityInfo(cfg)
 		out.Security = &security
 	}
 	return out, nil

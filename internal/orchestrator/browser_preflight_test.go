@@ -20,10 +20,10 @@ func TestBrowserUnavailableReason(t *testing.T) {
 	}
 
 	t.Run("missing browser.binary override is reported", func(t *testing.T) {
-		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+		o := orchWithConfig(&config.RuntimeConfig{
 			DefaultBrowser: "chrome",
 			BrowserBinary:  filepath.Join(t.TempDir(), "missing"),
-		}}
+		})
 		reason, unavailable := o.BrowserUnavailableReason(req("/text?url=http://x/"))
 		if !unavailable {
 			t.Fatal("expected a missing override to be reported unavailable")
@@ -34,17 +34,17 @@ func TestBrowserUnavailableReason(t *testing.T) {
 	})
 
 	t.Run("existing override is available", func(t *testing.T) {
-		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+		o := orchWithConfig(&config.RuntimeConfig{
 			DefaultBrowser: "chrome",
 			BrowserBinary:  existing,
-		}}
+		})
 		if _, unavailable := o.BrowserUnavailableReason(req("/text?url=http://x/")); unavailable {
 			t.Error("an existing override binary should be available")
 		}
 	})
 
 	t.Run("default target binary is available", func(t *testing.T) {
-		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+		o := orchWithConfig(&config.RuntimeConfig{
 			DefaultBrowser: config.BrowserChrome,
 			Targets: config.BrowserTargetsConfig{
 				"only": {
@@ -52,17 +52,17 @@ func TestBrowserUnavailableReason(t *testing.T) {
 					Binary:   existing,
 				},
 			},
-		}}
+		})
 		if _, unavailable := o.BrowserUnavailableReason(req("/text?url=http://x/")); unavailable {
 			t.Error("an existing default-target binary should be available")
 		}
 	})
 
 	t.Run("explicit per-request browser falls through", func(t *testing.T) {
-		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+		o := orchWithConfig(&config.RuntimeConfig{
 			DefaultBrowser: "chrome",
 			BrowserBinary:  filepath.Join(t.TempDir(), "missing"),
-		}}
+		})
 		// An explicit ?browser= override must not be short-circuited here.
 		if _, unavailable := o.BrowserUnavailableReason(req("/text?browser=chrome&url=http://x/")); unavailable {
 			t.Error("explicit per-request browser should fall through, not fast-fail")
@@ -70,11 +70,11 @@ func TestBrowserUnavailableReason(t *testing.T) {
 	})
 
 	t.Run("external CDP attach falls through", func(t *testing.T) {
-		o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{
+		o := orchWithConfig(&config.RuntimeConfig{
 			DefaultBrowser: "chrome",
 			BrowserBinary:  filepath.Join(t.TempDir(), "missing"),
 			CDPAttachURL:   "http://127.0.0.1:9222",
-		}}
+		})
 		if _, unavailable := o.BrowserUnavailableReason(req("/text?url=http://x/")); unavailable {
 			t.Error("CDP attach needs no local binary; should fall through")
 		}

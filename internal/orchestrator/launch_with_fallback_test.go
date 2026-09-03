@@ -163,19 +163,20 @@ func fastPolling(t *testing.T) {
 
 func newFallbackTestOrch(t *testing.T) *Orchestrator {
 	t.Helper()
-	return &Orchestrator{
+	o := &Orchestrator{
 		instances:     make(map[string]*InstanceInternal),
 		portAllocator: NewPortAllocator(9000, 9100),
-		runtimeCfg: &config.RuntimeConfig{
-			DefaultBrowser: config.BrowserChrome,
-			Targets: config.BrowserTargetsConfig{
-				"chrome": config.BrowserTargetConfig{Provider: config.BrowserChrome},
-				"cloak":  config.BrowserTargetConfig{Provider: config.BrowserCloak},
-				"backup": config.BrowserTargetConfig{Provider: config.BrowserChrome},
-			},
-			DefaultTarget: "chrome",
-		},
 	}
+	o.LiveConfig().Publish(&config.RuntimeConfig{
+		DefaultBrowser: config.BrowserChrome,
+		Targets: config.BrowserTargetsConfig{
+			"chrome": config.BrowserTargetConfig{Provider: config.BrowserChrome},
+			"cloak":  config.BrowserTargetConfig{Provider: config.BrowserCloak},
+			"backup": config.BrowserTargetConfig{Provider: config.BrowserChrome},
+		},
+		DefaultTarget: "chrome",
+	})
+	return o
 }
 
 func TestLaunchWithFallback_FirstCandidateSucceeds(t *testing.T) {
@@ -260,7 +261,7 @@ func TestLaunchWithFallback_StoresFallbackMetadataOnCanonicalInstance(t *testing
 func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 	fastPolling(t)
 	o := newFallbackTestOrch(t)
-	o.runtimeCfg.FallbackOrder = []string{"cloak"}
+	republishCfg(o, func(c *config.RuntimeConfig) { c.FallbackOrder = []string{"cloak"} })
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome", failReason: ReasonBinaryMissing},
 		{target: "cloak", succeed: true},
@@ -410,11 +411,13 @@ func TestLaunchWithFallback_NonRecoverableWaitErrorAborts(t *testing.T) {
 func TestLaunchWithTargetSelection_ResolvesProviderNameFallback(t *testing.T) {
 	fastPolling(t)
 	o := newFallbackTestOrch(t)
-	o.runtimeCfg.Targets = config.BrowserTargetsConfig{
-		"chrome":        config.BrowserTargetConfig{Provider: config.BrowserChrome},
-		"cloak-primary": config.BrowserTargetConfig{Provider: config.BrowserCloak},
-	}
-	o.runtimeCfg.DefaultTarget = "chrome"
+	republishCfg(o, func(c *config.RuntimeConfig) {
+		c.Targets = config.BrowserTargetsConfig{
+			"chrome":        config.BrowserTargetConfig{Provider: config.BrowserChrome},
+			"cloak-primary": config.BrowserTargetConfig{Provider: config.BrowserCloak},
+		}
+		c.DefaultTarget = "chrome"
+	})
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome", failReason: ReasonBinaryMissing},
 		{target: "cloak-primary", succeed: true},

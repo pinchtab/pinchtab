@@ -11,7 +11,7 @@ import (
 
 // fakeOrch avoids the binary-install side effects of NewOrchestrator.
 func fakeOrch(cfg *config.RuntimeConfig) *Orchestrator {
-	return &Orchestrator{runtimeCfg: cfg}
+	return orchWithConfig(cfg)
 }
 
 func runtimeCfgWithTargets() *config.RuntimeConfig {
@@ -103,7 +103,7 @@ func TestBuildChildFileConfig_LegacyConfigByteStable(t *testing.T) {
 	}
 	o := fakeOrch(cfg)
 
-	prev := o.buildChildFileConfig(o.runtimeCfg, "9999", 12345, "/tmp/profile", "/tmp/state", true, nil, nil)
+	prev := o.buildChildFileConfig(o.cfg(), "9999", 12345, "/tmp/profile", "/tmp/state", true, nil, nil)
 	prevBytes, err := json.MarshalIndent(prev, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal prev: %v", err)

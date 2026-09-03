@@ -228,7 +228,7 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 	iproxy.SetProxyWSBackendAuthorization(req.Header, "")
 	if token := inst.authToken; token != "" {
 		iproxy.SetProxyWSBackendAuthorization(req.Header, "Bearer "+token)
-	} else if token := o.childAuthToken; token != "" {
+	} else if token := o.cfgToken(); token != "" {
 		iproxy.SetProxyWSBackendAuthorization(req.Header, "Bearer "+token)
 	}
 
@@ -324,7 +324,7 @@ func (o *Orchestrator) applyInstanceAuth(req *http.Request, inst *InstanceIntern
 	iproxy.SetProxyWSBackendAuthorization(req.Header, "")
 	token := inst.authToken
 	if token == "" {
-		token = o.childAuthToken
+		token = o.cfgToken()
 	}
 	if token != "" {
 		bearer := "Bearer " + token

@@ -30,7 +30,7 @@ type agentCounter interface {
 }
 
 type ConfigAPI struct {
-	runtime   *config.RuntimeConfig
+	live      *config.Live
 	instances InstanceLister
 	profiles  profileLister
 	applier   runtimeConfigApplier
@@ -60,7 +60,7 @@ type configEnvelope struct {
 }
 
 func NewConfigAPI(
-	runtime *config.RuntimeConfig,
+	live *config.Live,
 	instances InstanceLister,
 	profiles profileLister,
 	applier runtimeConfigApplier,
@@ -75,7 +75,7 @@ func NewConfigAPI(
 		boot = *fc
 	}
 	return &ConfigAPI{
-		runtime:   runtime,
+		live:      live,
 		instances: instances,
 		profiles:  profiles,
 		applier:   applier,
@@ -84,6 +84,15 @@ func NewConfigAPI(
 		startedAt: startedAt,
 		boot:      boot,
 	}
+}
+
+// cfg is the one read of the published runtime config, shared with the
+// orchestrator and the auth API so a save is seen by all three at once.
+func (c *ConfigAPI) cfg() *config.RuntimeConfig {
+	if c == nil {
+		return nil
+	}
+	return c.live.Get()
 }
 
 func (c *ConfigAPI) SetSessionManager(sessions *browsersession.Manager) {
@@ -207,12 +216,15 @@ func (c *ConfigAPI) persistAndApply(w http.ResponseWriter, normalized *config.Fi
 	// writes landing in the same filesystem mtime tick.
 	c.cfgCacheValid = false
 
-	config.ApplyFileConfigToRuntime(c.runtime, normalized)
+	// A save publishes a NEW value; the object the orchestrator's goroutines are
+	// already reading is never written to.
+	next := config.NextRuntimeConfig(c.cfg(), normalized)
+	c.live.Publish(next)
 	if c.sessions != nil {
-		c.sessions.UpdateConfig(BrowserSessionConfig(c.runtime))
+		c.sessions.UpdateConfig(BrowserSessionConfig(next))
 	}
 	if c.applier != nil {
-		c.applier.ApplyRuntimeConfig(c.runtime)
+		c.applier.ApplyRuntimeConfig(next)
 	}
 	return true
 }
@@ -234,14 +246,15 @@ func (c *ConfigAPI) respondConfigUpdated(w http.ResponseWriter, r *http.Request,
 }
 
 func (c *ConfigAPI) hasConfigWriteElevation(r *http.Request) bool {
-	if c == nil || c.runtime == nil || strings.TrimSpace(c.runtime.Token) == "" {
+	cfg := c.cfg()
+	if cfg == nil || strings.TrimSpace(cfg.Token) == "" {
 		return true
 	}
 	creds := authn.CredentialsFromRequest(r)
 	if creds.Method != authn.MethodCookie {
 		return true
 	}
-	return c.sessions != nil && c.sessions.IsElevated(creds.Value, c.runtime.Token)
+	return c.sessions != nil && c.sessions.IsElevated(creds.Value, cfg.Token)
 }
 
 func (c *ConfigAPI) currentConfig() (config.FileConfig, string, []string, error) {

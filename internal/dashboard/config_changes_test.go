@@ -50,7 +50,7 @@ func TestSameConfigSectionTreatsUnmarshalableValuesAsChanged(t *testing.T) {
 
 func TestRestartReasonsIgnoreAbsentVersusEmptyContainers(t *testing.T) {
 	boot := config.DefaultFileConfig()
-	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
 	api.boot = boot
 
 	next := boot

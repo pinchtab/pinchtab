@@ -24,16 +24,17 @@ import (
 // bridge/runtime.InitBrowser, including default-target promotion, so it can't
 // diverge from what the instance would actually try to launch.
 func (o *Orchestrator) BrowserUnavailableReason(r *http.Request) (string, bool) {
-	if o == nil || o.runtimeCfg == nil {
+	cfg := o.cfg()
+	if cfg == nil {
 		return "", false
 	}
 	if ExtractRequestedBrowser(r) != "" {
 		return "", false
 	}
-	if strings.TrimSpace(o.runtimeCfg.CDPAttachURL) != "" {
+	if strings.TrimSpace(cfg.CDPAttachURL) != "" {
 		return "", false // attaching to an external CDP endpoint; no local binary needed
 	}
-	effective := runtimekit.ResolveEffectiveBrowser(o.runtimeCfg)
+	effective := runtimekit.ResolveEffectiveBrowser(cfg)
 	provider := effective.ID
 	if _, ok := browsers.Get(provider); !ok {
 		return "", false

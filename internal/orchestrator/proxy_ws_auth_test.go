@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"net/http"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // The WebSocket header filter in internal/proxy promotes
@@ -27,7 +29,7 @@ func TestApplyInstanceAuthDropsClientSuppliedWSAuthorization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o := &Orchestrator{childAuthToken: tt.childToken}
+			o := orchWithConfig(&config.RuntimeConfig{Token: tt.childToken})
 			inst := &InstanceInternal{authToken: tt.instanceToken}
 
 			req, err := http.NewRequest(http.MethodGet, "http://instance/screencast", nil)

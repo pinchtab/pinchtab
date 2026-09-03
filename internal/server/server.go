@@ -87,10 +87,11 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			RateBucketHosts: MetricInt(snapshot["rateBucketHosts"]),
 		}
 	})
-	configAPI := dashboard.NewConfigAPI(cfg, orch, profMgr, orch, dash, version, startedAt)
+	live := orch.LiveConfig()
+	configAPI := dashboard.NewConfigAPI(live, orch, profMgr, orch, dash, version, startedAt)
 	sessions := browsersession.NewManager(dashboard.BrowserSessionConfig(cfg))
 	configAPI.SetSessionManager(sessions)
-	authAPI := dashboard.NewAuthAPI(cfg, sessions)
+	authAPI := dashboard.NewAuthAPI(live, sessions)
 
 	sessionStore := session.NewStore(session.Config{
 		Enabled:     cfg.Sessions.Agent.Enabled,

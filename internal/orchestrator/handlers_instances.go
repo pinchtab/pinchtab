@@ -392,8 +392,8 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		attachBrowser = req.Provider
 	}
 
-	if attachBrowser != "" && o.runtimeCfg != nil && len(o.runtimeCfg.Targets) > 0 {
-		matches := config.TargetsForBrowser(o.runtimeCfg, attachBrowser)
+	if cfg := o.cfg(); attachBrowser != "" && cfg != nil && len(cfg.Targets) > 0 {
+		matches := config.TargetsForBrowser(cfg, attachBrowser)
 		if len(matches) == 0 {
 			httpx.Error(w, 400, fmt.Errorf("no browser target configured for browser %q", attachBrowser))
 			return
@@ -512,11 +512,12 @@ func (o *Orchestrator) probeAttachBridge(baseURL, token string) error {
 }
 
 func (o *Orchestrator) validateAttachURL(rawURL string) error {
-	if o.runtimeCfg == nil {
+	cfg := o.cfg()
+	if cfg == nil {
 		return fmt.Errorf("attach not configured")
 	}
 
-	if !o.runtimeCfg.AttachEnabled {
+	if !cfg.AttachEnabled {
 		return fmt.Errorf("attach is disabled")
 	}
 
@@ -526,14 +527,14 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	}
 
 	schemeAllowed := false
-	for _, allowed := range o.runtimeCfg.AttachAllowSchemes {
+	for _, allowed := range cfg.AttachAllowSchemes {
 		if parsed.Scheme == allowed {
 			schemeAllowed = true
 			break
 		}
 	}
 	if !schemeAllowed {
-		return fmt.Errorf("scheme %q not allowed (allowed: %v)", parsed.Scheme, o.runtimeCfg.AttachAllowSchemes)
+		return fmt.Errorf("scheme %q not allowed (allowed: %v)", parsed.Scheme, cfg.AttachAllowSchemes)
 	}
 
 	if parsed.Scheme == "http" || parsed.Scheme == "https" {
@@ -550,8 +551,8 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	}
 
 	host := parsed.Hostname()
-	if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
-		return fmt.Errorf("host %q not allowed (allowed: %v)", host, o.runtimeCfg.AttachAllowHosts)
+	if !isAllowedAttachHost(host, cfg.AttachAllowHosts) {
+		return fmt.Errorf("host %q not allowed (allowed: %v)", host, cfg.AttachAllowHosts)
 	}
 
 	return nil

@@ -215,16 +215,16 @@ func (o *Orchestrator) markStopped(id string) {
 }
 
 func (o *Orchestrator) releaseInstancePorts(id string, inst *InstanceInternal) {
-	if o == nil || o.portAllocator == nil || inst == nil {
+	if o == nil || o.ports() == nil || inst == nil {
 		return
 	}
 	portStr := inst.Port
 	if portInt, err := strconv.Atoi(portStr); err == nil {
-		o.portAllocator.ReleasePort(portInt)
+		o.ports().ReleasePort(portInt)
 		slog.Debug("released port", "id", id, "port", portStr)
 	}
 	if inst.cdpPort > 0 {
-		o.portAllocator.ReleasePort(inst.cdpPort)
+		o.ports().ReleasePort(inst.cdpPort)
 		slog.Debug("released browser debug port", "id", id, "port", inst.cdpPort)
 	}
 }
@@ -238,8 +238,8 @@ func (o *Orchestrator) removeInstanceFromManager(id string) {
 
 func (o *Orchestrator) cleanupStoppedProfile(profileName, browser string) {
 	profilePath := filepath.Join(o.baseDir, profileName)
-	if browser == "" && o.runtimeCfg != nil {
-		browser = config.NormalizeBrowser(o.runtimeCfg.DefaultBrowser)
+	if cfg := o.cfg(); browser == "" && cfg != nil {
+		browser = config.NormalizeBrowser(cfg.DefaultBrowser)
 	}
 	if browser == "" {
 		// Every provider's cleanup hook is the same chrome-process sweep;

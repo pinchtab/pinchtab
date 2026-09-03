@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/config"
+
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -133,7 +135,7 @@ func TestRegisterHandlers_TabCloseUsesGenericProxyAndInvalidatesCache(t *testing
 
 	o := NewOrchestrator(t.TempDir())
 	o.client = backend.Client()
-	o.childAuthToken = "child-token"
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{Token: "child-token"})
 	inst := bridge.Instance{ID: "inst_1", Status: "running", URL: backend.URL}
 	o.instances["inst_1"] = &InstanceInternal{
 		Instance: inst,
@@ -290,7 +292,7 @@ func TestProxyToTarget_InjectsChildAuthAndStripsCookie(t *testing.T) {
 
 	o := NewOrchestrator(t.TempDir())
 	o.client = backend.Client()
-	o.childAuthToken = "child-token"
+	o.ApplyRuntimeConfig(&config.RuntimeConfig{Token: "child-token"})
 	o.instances["inst_1"] = &InstanceInternal{
 		Instance: bridge.Instance{ID: "inst_1", Status: "running"},
 		URL:      backend.URL,

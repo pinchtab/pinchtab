@@ -44,8 +44,8 @@ func (o *Orchestrator) RouteForRequest(r *http.Request) (string, int, error) {
 	requestedBrowser := ExtractRequestedBrowser(r)
 	if requestedBrowser != "" {
 		var available []string
-		if o.runtimeCfg != nil {
-			available = o.runtimeCfg.BrowsersAvailable
+		if cfg := o.cfg(); cfg != nil {
+			available = cfg.BrowsersAvailable
 		}
 		if _, err := config.ParseBrowser(requestedBrowser, available); err != nil {
 			return "", http.StatusBadRequest, fmt.Errorf("unknown browser %q: %w", requestedBrowser, err)

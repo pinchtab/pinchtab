@@ -64,7 +64,7 @@ func TestNewConfigAPISnapshotsBootConfigFromFile(t *testing.T) {
 	}
 
 	runtime := config.Load()
-	api := NewConfigAPI(runtime, nil, nil, nil, nil, "test", time.Now())
+	api := newConfigAPIForTest(runtime, nil, nil, nil, nil, "test", time.Now())
 
 	if api.boot.MultiInstance.Restart.MaxRestarts != nil {
 		t.Fatalf("boot restart maxRestarts = %v, want nil from file snapshot", *api.boot.MultiInstance.Restart.MaxRestarts)
@@ -97,7 +97,7 @@ func TestCurrentConfigCachesByMtime(t *testing.T) {
 	}
 	origMtime := info.ModTime()
 
-	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
 
 	cfg, _, _, err := api.currentConfig()
 	if err != nil {
@@ -139,7 +139,7 @@ func TestCurrentConfigCachesByMtime(t *testing.T) {
 
 func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
 	cfg := config.DefaultFileConfig()
-	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
 	api.boot = cfg
 
 	next := cfg
@@ -153,7 +153,7 @@ func TestRestartReasonsIncludeStealthLevel(t *testing.T) {
 
 func TestRestartReasonsIncludeSecurityPolicy(t *testing.T) {
 	cfg := config.DefaultFileConfig()
-	api := NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
 	api.boot = cfg
 
 	// Editing the allowlist changes the boot-snapshotted IDPI/security policy, so
@@ -596,7 +596,7 @@ func newConfigAPIOverFile(t *testing.T, data []byte) *ConfigAPI {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	return NewConfigAPI(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	return newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
 }
 
 func decodeConfigEnvelope(t *testing.T, w *httptest.ResponseRecorder) configEnvelope {
