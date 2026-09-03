@@ -140,7 +140,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 			if !ghostRoute {
 				modalNodeID, modalOpen, modalErr = bridge.TopmostModalNodeID(tCtx, frameScope)
 				if modalErr != nil {
-					httpx.Error(w, selectorFailureStatus(modalErr), modalErr)
+					respondSelectorFailure(w, modalErr)
 					return
 				}
 			}
@@ -151,7 +151,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 			if !ghostRoute {
 				afterNodeID, afterOpen, recheckErr := bridge.TopmostModalNodeID(tCtx, frameScope)
 				if recheckErr != nil {
-					httpx.Error(w, selectorFailureStatus(recheckErr), fmt.Errorf("recheck topmost dialog: %w", recheckErr))
+					respondSelectorFailure(w, fmt.Errorf("recheck topmost dialog: %w", recheckErr))
 					return
 				}
 				if modalNodeID != afterNodeID || modalOpen != afterOpen {
@@ -159,7 +159,7 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if scopeErr != nil {
-				httpx.Error(w, selectorFailureStatus(scopeErr), scopeErr)
+				respondSelectorFailure(w, scopeErr)
 				return
 			}
 			rawNodes, scopeNodeID, stable = candidateNodes, candidateScope, true

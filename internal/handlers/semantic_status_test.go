@@ -229,7 +229,19 @@ func TestOneMapperServesEverySelectorResolvingPath(t *testing.T) {
 			callers[site.Func] = true
 		}
 	}
-	for _, required := range []string{"inspectElement", "resolveActionRequestSelectorInScope", "handleInspect", "resolveScreenshotClip"} {
+	exits := map[string]bool{}
+	for _, site := range pkg.Calls(t, "respondSelectorFailure") {
+		exits[site.Func] = true
+	}
+	for _, required := range []string{"HandleText", "HandleSnapshot", "handleInspect"} {
+		if !exits[required] {
+			t.Errorf("%s does not answer a selector failure through respondSelectorFailure; asking the owner for a status and writing it with httpx.Error answers the right status with the generic code", required)
+		}
+	}
+	for _, required := range []string{
+		"inspectElement", "resolveActionRequestSelectorInScope", "handleInspect",
+		"resolveScreenshotClip", "HandleText", "HandleSnapshot",
+	} {
 		if !callers[required] {
 			t.Errorf("%s no longer maps its selector failures through the one owner; a second copy of the status switch is how the read paths came to give five different answers", required)
 		}
