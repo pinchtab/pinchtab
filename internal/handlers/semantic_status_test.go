@@ -220,6 +220,20 @@ func TestTheStatusSurvivesRewordingTheMessage(t *testing.T) {
 // `&statusError{500, frameScopedSelectorError(...)}` were both live before this card.
 var statusLiteralBesideSelectorFailure = regexp.MustCompile(`[,{]\s*[45]\d\d\s*,`)
 
+// The other way to answer with the right status and the wrong code: ask the owner for
+// the status and hand it to the generic writer, which hardcodes code "error". A handler
+// with several exits satisfies a presence check on respondSelectorFailure while one
+// branch still writes this way, so the ban is on the shape itself, across line breaks.
+var ownerStatusWrittenGenerically = regexp.MustCompile(`(?s)httpx\.Error(?:Code)?\(\s*\w+\s*,\s*selectorFailureStatus\(`)
+
+func ownerStatusWrittenGenericallyAt(text string) []int {
+	var lines []int
+	for _, match := range ownerStatusWrittenGenerically.FindAllStringIndex(text, -1) {
+		lines = append(lines, 1+strings.Count(text[:match[0]], "\n"))
+	}
+	return lines
+}
+
 func TestOneMapperServesEverySelectorResolvingPath(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 20)
 
@@ -270,9 +284,36 @@ func TestOneMapperServesEverySelectorResolvingPath(t *testing.T) {
 		}
 	}
 
+	for _, file := range srccensus.Tree(t, ".", 20) {
+		for _, line := range ownerStatusWrittenGenericallyAt(file.Text) {
+			t.Errorf("%s:%d asks selectorFailureStatus for the status and writes it with the generic writer, which answers the right status with code \"error\"; hand the whole refusal to respondSelectorFailure", file.Name, line)
+		}
+	}
+
 	// The string-matching mapper is gone on purpose: a status keyed on message text
 	// changes whenever a sentence is reworded, and these messages are reworded often.
 	if _, found := pkg.Func("semanticSelectorHTTPStatus"); found {
 		t.Error("semanticSelectorHTTPStatus is back; the semantic statuses come from sentinels now, so a message-matching mapper would silently re-key them on wording")
+	}
+}
+
+func TestTheGenericWriterBanRedsOnTheShapeItExistsFor(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want []int
+	}{
+		{"one line", "\thttpx.Error(w, selectorFailureStatus(err), err)\n", []int{1}},
+		{"with the code writer", "\n\thttpx.ErrorCode(w, selectorFailureStatus(err), \"x\", msg, false, nil)\n", []int{2}},
+		{"split across lines", "\thttpx.Error(\n\t\tw,\n\t\tselectorFailureStatus(err),\n\t\terr)\n", []int{1}},
+		{"the one exit", "\trespondSelectorFailure(w, err)\n", nil},
+		{"a producer carrying the status", "\treturn &statusError{selectorFailureStatus(err), err}\n", nil},
+		{"a literal status", "\thttpx.Error(w, 500, err)\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ownerStatusWrittenGenericallyAt(tc.src); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Errorf("flagged lines %v, want %v for %q", got, tc.want, tc.src)
+			}
+		})
 	}
 }
