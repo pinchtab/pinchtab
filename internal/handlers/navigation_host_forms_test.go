@@ -98,16 +98,14 @@ func TestAnUnlistedSingleLabelHostIsRefusedNamingTheAllowlist(t *testing.T) {
 // landing on one and not the other leaves the bypass reachable. They are driven
 // against the same table here rather than trusted to share it.
 //
-// IDPI is OFF in this fixture, and deliberately: with IDPI enabled and NO allowlist
-// configured, ShieldGuard.DomainAllowed answers true for every URL (nothing scored,
-// so nothing blocked), that becomes allowExplicitInternal, and the private-IP block
-// is overridden before the spelling ever matters. That is a separate defect, recorded
-// on the card; turning IDPI off here is what lets this test measure the spelling
-// property it is about rather than that one.
+// It runs with IDPI ENABLED and an empty allowlist — the configuration in which this
+// used to be unable to see anything, because an empty allowlist made
+// ShieldGuard.DomainAllowed answer true for every URL and the private-IP block was
+// overridden before the spelling could matter. Disabling IDPI here was a fixture
+// configured into the safe corner, which reads as coverage while proving nothing; it
+// is enabled now, and that is part of what proves the empty-allowlist fix landed.
 func TestBothNavigatePathsRefuseEverySpellingOfAPrivateHost(t *testing.T) {
-	cfg := hostFormConfig(nil)
-	cfg.IDPI = config.IDPIConfig{}
-	h := New(&policyMockBridge{}, cfg, nil, nil, nil)
+	h := New(&policyMockBridge{}, hostFormConfig(nil), nil, nil, nil)
 
 	for _, raw := range []string{
 		`https://10.0.0.5/x`,
@@ -127,6 +125,55 @@ func TestBothNavigatePathsRefuseEverySpellingOfAPrivateHost(t *testing.T) {
 
 			if _, err := h.validateAuditTarget(raw, h.Config); err == nil {
 				t.Errorf("audit-page path ALLOWED a private address written as %q; the two share the normalization and must share the verdict", raw)
+			}
+		})
+	}
+}
+
+// The five rows the card measured, on BOTH paths that feed this boolean into
+// navguard's allowExplicitInternal. The shape of the defect: enabling IDPI with an
+// empty allowlist REMOVED a protection that is present with IDPI off, because
+// "the shield found nothing suspicious" was read as "the operator allowed this host".
+//
+// The last row is the override working as intended and must keep working — a fix that
+// also refuses an explicitly listed internal host has over-corrected.
+func TestAnEmptyAllowlistNeverGrantsThePrivateIPOverride(t *testing.T) {
+	const privateTarget = "https://10.0.0.5/x"
+
+	for _, tc := range []struct {
+		name    string
+		idpi    bool
+		allowed []string
+		allow   bool
+	}{
+		{"idpi on, empty allowlist", true, nil, false},
+		{"idpi on, unrelated host listed", true, []string{"example.com"}, false},
+		{"idpi off, empty allowlist", false, nil, false},
+		{"idpi off, unrelated host listed", false, []string{"example.com"}, false},
+		{"idpi on, the internal host explicitly listed", true, []string{"10.0.0.5"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := hostFormConfig(tc.allowed)
+			if !tc.idpi {
+				cfg.IDPI = config.IDPIConfig{}
+			}
+			h := New(&policyMockBridge{}, cfg, nil, nil, nil)
+
+			if got := h.IDPIGuard.DomainAllowed(privateTarget); got != tc.allow {
+				t.Errorf("DomainAllowed = %v, want %v — this boolean is allowExplicitInternal, so it must mean 'the operator allowed this host', never 'nothing looked wrong'", got, tc.allow)
+			}
+
+			w := httptest.NewRecorder()
+			_, navigateOK := h.validateNavigateTargets(w, httptest.NewRequest("GET", "/navigate", nil), "", privateTarget, h.Config)
+			if navigateOK != tc.allow {
+				t.Errorf("navigate path allowed=%v, want %v: %d %s", navigateOK, tc.allow, w.Code, w.Body.String())
+			}
+
+			// The audit-page path consumes the same boolean, so a fix landing on one
+			// leaves the other exposed.
+			_, auditErr := h.validateAuditTarget(privateTarget, h.Config)
+			if auditOK := auditErr == nil; auditOK != tc.allow {
+				t.Errorf("audit-page path allowed=%v, want %v (err=%v)", auditOK, tc.allow, auditErr)
 			}
 		})
 	}

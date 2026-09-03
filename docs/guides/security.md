@@ -297,7 +297,15 @@ The default local-only IDPI config is:
 
 Important notes:
 
-- if `allowedDomains` is empty, the main domain restriction is not doing useful work
+- an empty `allowedDomains` **lifts the domain restriction and grants nothing**. It is
+  not an allowance: no host counts as explicitly allowed, so the SSRF/private-IP guard
+  keeps refusing private and internal addresses exactly as it does with IDPI off.
+  (Enabling IDPI with an empty list used to *remove* that protection, because "the
+  scanner found nothing suspicious" was read as "the operator allowed this host".)
+- listing a private or internal host explicitly — `["10.0.0.5"]`, or the default
+  `["127.0.0.1", "localhost", "::1"]` — is what permits navigation to it. That is the
+  only way the private-IP guard is relaxed, and it is a positive match against a
+  non-empty list, never the absence of one.
 - if `allowedDomains` contains `"*"`, the whitelist effectively allows everything
 - `security.allowedDomains` is the canonical config path. `security.idpi.allowedDomains` is still accepted when loading older config files, but new saves are normalized to `security.allowedDomains`
 - `strictMode = true` blocks disallowed domains and suspicious content

@@ -101,9 +101,20 @@ func (g *ShieldGuard) CheckDomain(rawURL string) CheckResult {
 	}
 }
 
+// DomainAllowed delegates to the free function so ONE implementation answers this
+// question. It used to answer `shield.CheckDomain(rawURL).Score == 0` — "the shield
+// found nothing suspicious" — where every caller asks "did the operator explicitly
+// allow this host". An empty allowlist makes the first true for every URL, so absence
+// of suspicion was read as presence of permission: both consumers feed this straight
+// into navguard's allowExplicitInternal, which overrides the private-IP block, and
+// enabling IDPI with an empty allowlist therefore REMOVED a protection that is present
+// with IDPI off.
+//
+// The interface this satisfies already documents the right answer ("returns false when
+// the allowlist is empty"), and noopGuard and the free function both give it. This was
+// the outlier.
 func (g *ShieldGuard) DomainAllowed(rawURL string) bool {
-	result := g.shield.CheckDomain(rawURL)
-	return result.Score == 0
+	return DomainAllowed(rawURL, g.cfg, g.allowedDomains)
 }
 
 func (g *ShieldGuard) WrapContent(text, pageURL string) string {
