@@ -720,7 +720,7 @@ on stderr when you run `config set`, `config patch` or `config validate` — and
 blocks anything. There is nothing to fix and nothing to remove; the value simply has no
 effect. Validation errors, such as an out-of-range `server.port`, still block a save.
 
-`server.trustProxyHeaders` should stay `false` unless PinchTab is behind a trusted reverse proxy that overwrites `Forwarded` and `X-Forwarded-*` headers. Do not enable it on direct-exposure deployments or behind proxies that pass client-supplied forwarding headers through unchanged.
+`server.trustProxyHeaders` should stay `false` unless PinchTab is behind a trusted reverse proxy that overwrites `Forwarded` and `X-Forwarded-*` headers. Do not enable it on direct-exposure deployments or behind proxies that pass client-supplied forwarding headers through unchanged. When it is enabled, the client-most forwarded address is also the client identity: rate-limit buckets, the concurrent-stream cap and every audit line are keyed on it rather than on the proxy's address.
 
 ## Legacy Flat Format
 

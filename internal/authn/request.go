@@ -1,7 +1,6 @@
 package authn
 
 import (
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,18 +60,17 @@ func TokenFromRequest(r *http.Request) string {
 	return CredentialsFromRequest(r).Value
 }
 
-// ClientIP returns the immediate peer IP address for audit and rate-limiting
-// decisions. Reverse proxy headers are ignored unless a trusted-proxy model is
-// added explicitly.
+// ClientIP returns the client IP for audit and rate-limiting decisions: the
+// value ResolveClientIP put on the request context, or the immediate peer
+// address when nothing resolved one.
 func ClientIP(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
+	if resolved, ok := r.Context().Value(clientIPKey{}).(resolvedClientIP); ok {
+		return resolved.value
 	}
-	return strings.TrimSpace(r.RemoteAddr)
+	return peerIP(r)
 }
 
 func parseAuthorizationHeader(auth string) (bearer, session string) {

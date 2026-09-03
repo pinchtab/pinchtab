@@ -352,6 +352,38 @@ func TestAuthAPIHandleLoginRateLimitsRepeatedFailures(t *testing.T) {
 	}
 }
 
+// The sibling of the spoofed-headers test, on the other side of the flag: behind a
+// trusted proxy every request carries the proxy's peer address, so bucketing by it
+// lets one client failing its attempts lock every dashboard user out.
+func TestAuthAPIHandleLoginRateLimitsEachForwardedClientSeparatelyWhenProxyIsTrusted(t *testing.T) {
+	api := newAuthAPIForTest(&config.RuntimeConfig{Token: "secret-token", TrustProxyHeaders: true}, browsersession.NewManager(browsersession.Config{}))
+	api.loginLimiter = authn.NewAttemptLimiter(authn.AttemptLimiterConfig{
+		Window:      time.Minute,
+		MaxAttempts: 1,
+	})
+
+	login := func(forwardedFor string) int {
+		req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"token":"wrong"}`))
+		req.RemoteAddr = "198.51.100.10:41000"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+		req = req.WithContext(authn.WithClientIP(req.Context(), authn.ResolveClientIP(req, true)))
+		w := httptest.NewRecorder()
+		api.HandleLogin(w, req)
+		return w.Code
+	}
+
+	if code := login("203.0.113.1"); code != http.StatusUnauthorized {
+		t.Fatalf("first client status = %d, want %d", code, http.StatusUnauthorized)
+	}
+	if code := login("203.0.113.1"); code != http.StatusTooManyRequests {
+		t.Fatalf("same client repeating status = %d, want %d", code, http.StatusTooManyRequests)
+	}
+	if code := login("203.0.113.2"); code != http.StatusUnauthorized {
+		t.Fatalf("second client status = %d, want %d; one client's failures must not lock out everyone behind the proxy", code, http.StatusUnauthorized)
+	}
+}
+
 func TestAuthAPIHandleLoginRateLimitIgnoresSpoofedForwardedHeaders(t *testing.T) {
 	api := newAuthAPIForTest(&config.RuntimeConfig{Token: "secret-token"}, browsersession.NewManager(browsersession.Config{}))
 	api.loginLimiter = authn.NewAttemptLimiter(authn.AttemptLimiterConfig{

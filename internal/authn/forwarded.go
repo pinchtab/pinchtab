@@ -54,9 +54,9 @@ func firstForwardedValue(header string) string {
 }
 
 // forwardedDirective extracts a single directive (e.g. "proto" or "host") from
-// the RFC 7239 Forwarded header, returning the first match unquoted.
+// the client-most element of the RFC 7239 Forwarded header, unquoted.
 func forwardedDirective(header, name string) string {
-	header = strings.TrimSpace(header)
+	header = firstForwardedValue(header)
 	if header == "" {
 		return ""
 	}

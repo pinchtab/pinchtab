@@ -93,13 +93,13 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 		Addr: listenAddr,
 		Handler: handlers.TrustedInternalProxyStripMiddleware(os.Getenv("PINCHTAB_INTERNAL_TOKEN"))(
 			handlers.RequestIDMiddleware(
-				activity.Middleware(
+				handlers.ClientIPMiddleware(live, activity.Middleware(
 					actStore,
 					"bridge",
 					handlers.SecurityHeadersMiddleware(live,
 						handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(live, mux))),
 					),
-				),
+				)),
 			),
 		),
 		MaxHeaderBytes:    maxHeaderBytes,

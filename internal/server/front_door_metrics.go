@@ -32,13 +32,13 @@ func FrontDoorHandler(
 ) http.Handler {
 	return handlers.StripInternalHeadersMiddleware(
 		handlers.RequestIDMiddleware(
-			activity.Middleware(
+			handlers.ClientIPMiddleware(live, activity.Middleware(
 				recorder,
 				"server",
 				handlers.SecurityHeadersMiddleware(live,
 					handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(live, handlers.AuthMiddlewareWithSessions(live, sessions, sessionStore, mux)))),
 				),
-			),
+			)),
 		),
 	)
 }
