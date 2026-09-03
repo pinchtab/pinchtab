@@ -40,6 +40,7 @@ PUT  /api/config
 Notes:
 
 - `server.token` is treated as write-only by `PUT /api/config`
+- `PUT /api/config` expects the inner config object, not the envelope `GET /api/config` returns; a body carrying an unrecognized top-level key (such as the envelope's own `config`) is refused with a `400 unrecognized_config_keys` rather than silently applying nothing
 - auth routes are for the dashboard session flow
 
 ## Dashboard Events And Agents

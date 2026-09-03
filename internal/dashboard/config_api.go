@@ -183,6 +183,13 @@ func (c *ConfigAPI) parseConfigUpdate(w http.ResponseWriter, r *http.Request, cu
 		return config.FileConfig{}, false
 	}
 
+	if unknown := config.UnknownFileConfigKeys(body); len(unknown) > 0 {
+		httpx.ErrorCode(w, 400, "unrecognized_config_keys", "PUT the inner config object, not the GET envelope", false, map[string]any{
+			"unrecognizedKeys": unknown,
+		})
+		return config.FileConfig{}, false
+	}
+
 	normalized := *current
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&normalized); err != nil {
 		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)

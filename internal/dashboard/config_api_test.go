@@ -366,6 +366,87 @@ func TestHandlePutConfigRejectsWriteOnlyTokenField(t *testing.T) {
 	}
 }
 
+func TestHandlePutConfigRefusesGetEnvelopeAndAppliesNothing(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	getRes := httptest.NewRecorder()
+	api.HandleGetConfig(getRes, getReq)
+
+	var envelope map[string]any
+	if err := json.Unmarshal(getRes.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("Unmarshal GET payload: %v", err)
+	}
+	inner := envelope["config"].(map[string]any)
+	inner["timeouts"].(map[string]any)["actionSec"] = 31
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("Marshal PUT body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unrecognized_config_keys") {
+		t.Fatalf("response = %q, want unrecognized_config_keys error", w.Body.String())
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Timeouts.ActionSec != 30 {
+		t.Fatalf("saved timeouts.actionSec = %d, want unchanged 30", saved.Timeouts.ActionSec)
+	}
+}
+
+func TestHandlePutConfigAppliesTheInnerObject(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+
+	body := []byte(`{"timeouts":{"actionSec":45}}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Timeouts.ActionSec != 45 {
+		t.Fatalf("saved timeouts.actionSec = %d, want 45", saved.Timeouts.ActionSec)
+	}
+}
+
+func TestHandlePutConfigRefusesAnyUnrecognizedTopLevelKey(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+
+	body := []byte(`{"timeoutz":{"actionSec":45}}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "timeoutz") {
+		t.Fatalf("response = %q, want the unrecognized key named", w.Body.String())
+	}
+}
+
 func TestHandlePutConfigRequiresElevationForProxyChangeWithDashboardCookie(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"
