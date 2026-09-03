@@ -54,7 +54,7 @@ func HostMatchesPatterns(host string, patterns []string) bool {
 // It handles both fully-qualified URLs ("https://example.com:8080/path") and
 // bare hostnames ("example.com" or "example.com/path").
 func ExtractHost(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
 		return ""
 	}
@@ -73,7 +73,14 @@ func ExtractHost(rawURL string) string {
 		}
 	}
 
-	return strings.ToLower(strings.TrimSpace(host))
+	// The DNS root label is silent: "example.com." and "example.com" name the
+	// same host and the browser fetches both. Leaving it on made the two answers
+	// differ, and this primitive is read in both directions — a listed host that
+	// stops matching is a refusal on a target the operator allowed, and the
+	// response-forgery rule reads the same answer inverted, where a listed host
+	// that stops matching PERMITS forgery on exactly the sensitive origin the
+	// list marks. navguard's host extractor already trimmed it.
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 }
 
 // IsAllowedSpecialURL reports whether rawURL is a non-routable URL that bypasses

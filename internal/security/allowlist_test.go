@@ -75,3 +75,40 @@ func TestExtractHost_NoHost(t *testing.T) {
 		t.Errorf("ExtractHost('about:blank') = %q, want ''", got)
 	}
 }
+
+// A fully-qualified name carrying the silent DNS root label is the same host:
+// the browser resolves and fetches "example.com." exactly as "example.com".
+// The allowlist is read in both directions, so a host that stops matching is
+// wrong twice over — a refusal on a target the operator listed, and, where the
+// answer is read inverted (bridge response forgery is BLOCKED on listed hosts),
+// permission to forge responses on the sensitive origin the list marks.
+func TestHostAllowed_TrailingRootLabelIsTheSameHost(t *testing.T) {
+	cases := []struct {
+		name    string
+		rawURL  string
+		allowed []string
+	}{
+		{"exact", "https://example.com./path", []string{"example.com"}},
+		{"exact with port", "https://example.com.:8443/path", []string{"example.com"}},
+		{"wildcard subdomain", "https://api.example.com./v1", []string{"*.example.com"}},
+		{"bare hostname", "example.com./path", []string{"example.com"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !HostAllowed(tc.rawURL, tc.allowed) {
+				t.Errorf("HostAllowed(%q, %v) = false; the root label names the same host", tc.rawURL, tc.allowed)
+			}
+		})
+	}
+}
+
+// The trim must not reach past the root label into the name itself, and it must
+// not turn a non-match into a match.
+func TestHostAllowed_TrailingRootLabelDoesNotWidenTheList(t *testing.T) {
+	if HostAllowed("https://evil.com./path", []string{"example.com"}) {
+		t.Error("an unlisted host matched the allowlist")
+	}
+	if got := ExtractHost("https://example.com../path"); got != "example.com." {
+		t.Errorf("ExtractHost trimmed more than the single root label: %q", got)
+	}
+}
