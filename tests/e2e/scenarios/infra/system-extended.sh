@@ -15,7 +15,11 @@ assert_ok "navigate"
 pt_get "/instances/metrics"
 assert_ok "get instance metrics"
 assert_json_exists "$RESULT" '.[0].instanceId'
-assert_json_exists "$RESULT" '.[0].jsHeapUsedMB'
+# The measured fields this endpoint used to drop, pinned on the wire: it once
+# published only values derived from memoryMB while omitting memoryMB itself.
+assert_json_exists "$RESULT" '.[0].memoryMB'
+assert_json_exists "$RESULT" '.[0].renderers'
+assert_json_not_exists "$RESULT" '.[0].jsHeapUsedMB' "no derived heap field on the wire"
 
 end_test
 
