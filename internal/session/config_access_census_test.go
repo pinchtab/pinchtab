@@ -26,6 +26,7 @@ func TestEveryConfigReadHoldsTheStoreLock(t *testing.T) {
 		"registerSession", // takes the lock, stamps the lifetime, installs the session
 		"Enabled",         // takes the lock for the read
 		"Mode",            // takes the lock for the read
+		"PersistPath",     // takes the lock for the read
 		"isExpired",       // only ever called with the lock held
 		"loadPersisted",   // runs in NewStore, before the store is reachable
 		"snapshotLocked",

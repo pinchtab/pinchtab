@@ -15,6 +15,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 const frontDoorLiveToken = "front-door-live-token"
@@ -24,10 +25,11 @@ const frontDoorLiveToken = "front-door-live-token"
 // the save writes to. The chain is the real one — an isolated middleware already
 // behaved correctly, which is why nothing caught the boot pointer.
 type frontDoor struct {
-	handler  http.Handler
-	api      *dashboard.ConfigAPI
-	sessions *browsersession.Manager
-	live     *config.Live
+	handler       http.Handler
+	api           *dashboard.ConfigAPI
+	sessions      *browsersession.Manager
+	agentSessions *session.Store
+	live          *config.Live
 }
 
 func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
@@ -35,6 +37,7 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = frontDoorLiveToken
+	fc.Server.StateDir = t.TempDir()
 	if boot != nil {
 		boot(&fc)
 	}
@@ -54,20 +57,31 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 	live := orch.LiveConfig()
 
 	sessions := browsersession.NewManager(dashboard.BrowserSessionConfig(cfg))
+	agentSessions := session.NewStore(dashboard.AgentSessionConfig(cfg, dashboard.AgentSessionStatePath(cfg)))
 	api := dashboard.NewConfigAPI(live, orch, nil, orch, nil, "test", time.Now())
 	api.SetSessionManager(sessions)
+	api.SetAgentSessionStore(agentSessions)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+	mux.HandleFunc("/tabs", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"tabs":[]}`))
+	})
 	api.RegisterHandlers(mux)
+	if agentSessions.Enabled() {
+		dashboard.NewSessionAPI(agentSessions, cfg.BrowsersAvailable).RegisterHandlers(mux)
+	} else {
+		RegisterSessionsDisabled(mux)
+	}
 
 	return frontDoor{
-		handler:  FrontDoorHandler(live, nil, sessions, nil, mux),
-		api:      api,
-		sessions: sessions,
-		live:     live,
+		handler:       FrontDoorHandler(live, nil, sessions, agentSessions, mux),
+		api:           api,
+		sessions:      sessions,
+		agentSessions: agentSessions,
+		live:          live,
 	}
 }
 
@@ -75,6 +89,16 @@ func newFrontDoor(t *testing.T, boot func(*config.FileConfig)) frontDoor {
 // dashboard does, and asserts the server reported it as applied rather than as
 // needing a restart — which is the claim this card says the front door broke.
 func (f frontDoor) save(t *testing.T, mutate func(*config.FileConfig)) {
+	t.Helper()
+
+	if reasons := f.saveReportingReasons(t, mutate); len(reasons) > 0 {
+		t.Fatalf("the save reported restartRequired=true (%v); this card must not enlarge that list", reasons)
+	}
+}
+
+// saveReportingReasons drives the same real PUT and hands back the restart
+// reasons the server reported, for the one transition that has any.
+func (f frontDoor) saveReportingReasons(t *testing.T, mutate func(*config.FileConfig)) []string {
 	t.Helper()
 
 	current, _, err := config.LoadFileConfig()
@@ -102,9 +126,10 @@ func (f frontDoor) save(t *testing.T, mutate func(*config.FileConfig)) {
 	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode save envelope: %v", err)
 	}
-	if env.RestartRequired {
-		t.Fatalf("the save reported restartRequired=true (%v); this card must not enlarge that list", env.RestartReasons)
+	if env.RestartRequired && len(env.RestartReasons) == 0 {
+		t.Fatal("the save reported restartRequired=true with no reason naming what is frozen")
 	}
+	return env.RestartReasons
 }
 
 func proxiedPreflight() *http.Request {

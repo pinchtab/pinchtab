@@ -480,6 +480,17 @@ func (s *Store) Enabled() bool {
 	return s.cfg.Enabled
 }
 
+// PersistPath returns the file the store persists to, so a caller rebuilding
+// the config from elsewhere can carry it over instead of recomputing it.
+func (s *Store) PersistPath() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfg.PersistPath
+}
+
 // Mode returns the current auth mode.
 func (s *Store) Mode() string {
 	if s == nil {

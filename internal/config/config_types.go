@@ -296,6 +296,19 @@ type SessionsFileConfig struct {
 	Agent     AgentSessionFileConfig     `json:"agent,omitempty"`
 }
 
+// DefaultAgentSessionsEnabled is the effective value of sessions.agent.enabled
+// when the file leaves the key out.
+const DefaultAgentSessionsEnabled = true
+
+// AgentEnabled resolves sessions.agent.enabled against that default, so a
+// comparison of two file configs never reads an absent key as disabled.
+func (s SessionsFileConfig) AgentEnabled() bool {
+	if s.Agent.Enabled == nil {
+		return DefaultAgentSessionsEnabled
+	}
+	return *s.Agent.Enabled
+}
+
 type AgentSessionFileConfig struct {
 	Enabled        *bool  `json:"enabled,omitempty"`
 	Mode           string `json:"mode,omitempty"`

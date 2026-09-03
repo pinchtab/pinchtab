@@ -280,7 +280,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 
 		Sessions: SessionsRuntimeConfig{
 			Agent: AgentSessionRuntimeConfig{
-				Enabled:     true,
+				Enabled:     DefaultAgentSessionsEnabled,
 				Mode:        "preferred",
 				IdleTimeout: 30 * time.Minute,
 				MaxLifetime: 24 * time.Hour,

@@ -19,20 +19,15 @@ const (
 	CodeSessionsUnavailableInBridgeMode = "sessions_unavailable_bridge_mode"
 	// CodeSessionsDisabled: mounted by config and switched off, where the config remedy
 	// this family always printed is the correct one.
-	CodeSessionsDisabled = "sessions_disabled"
+	CodeSessionsDisabled = session.CodeDisabled
 )
 
 const (
 	msgSessionsUnavailableInBridgeMode = "agent sessions are unavailable in bridge mode"
 	hintSessionsUnavailableInBridge    = "no config value mounts the session family on a bridge; the full server is what serves it."
 
-	msgSessionsDisabled = "agent sessions are not enabled on this server"
-	// The config editor knows sessions.dashboard.* and no sessions.agent.* field, so
-	// "pinchtab config set sessions.agent.enabled true" answers "unknown field" — the same
-	// dead end this family's remedy existed to remove, one state over. So this state has NO
-	// remedy: the fix is a file edit plus a restart, which is not one command, and the hint
-	// says so rather than a remedy naming a command that dead-ends.
-	hintSessionsDisabled = "set sessions.agent.enabled = true in config.json and restart the server; the config editor has no field for that path, so it cannot be changed from the command line."
+	msgSessionsDisabled  = session.MsgDisabled
+	hintSessionsDisabled = session.HintDisabled
 )
 
 // Running the full server is the bridge's whole remedy. The verb it used to lead with —

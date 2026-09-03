@@ -50,7 +50,21 @@ func (a *SessionAPI) registerPatterns(mux *http.ServeMux, patterns []string) {
 		if handler == nil {
 			panic("dashboard: no session handler bound for " + pattern)
 		}
-		mux.HandleFunc(pattern, handler)
+		mux.HandleFunc(pattern, a.whileEnabled(handler))
+	}
+}
+
+// whileEnabled re-reads the store on every request, so a save that switches agent
+// sessions off is refused by routes a boot with them on already mounted. The
+// answer is the one the never-mounted state gives, from the same vocabulary.
+func (a *SessionAPI) whileEnabled(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if a.store == nil || !a.store.Enabled() {
+			httpx.ErrorCode(w, http.StatusNotFound, session.CodeDisabled, session.MsgDisabled, false,
+				remedy.Details(session.HintDisabled, remedy.None))
+			return
+		}
+		next(w, r)
 	}
 }
 

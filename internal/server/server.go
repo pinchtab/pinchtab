@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -93,13 +92,8 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	configAPI.SetSessionManager(sessions)
 	authAPI := dashboard.NewAuthAPI(live, sessions)
 
-	sessionStore := session.NewStore(session.Config{
-		Enabled:     cfg.Sessions.Agent.Enabled,
-		Mode:        cfg.Sessions.Agent.Mode,
-		IdleTimeout: cfg.Sessions.Agent.IdleTimeout,
-		MaxLifetime: cfg.Sessions.Agent.MaxLifetime,
-		PersistPath: filepath.Join(cfg.StateDir, "sessions.json"),
-	})
+	sessionStore := session.NewStore(dashboard.AgentSessionConfig(cfg, dashboard.AgentSessionStatePath(cfg)))
+	configAPI.SetAgentSessionStore(sessionStore)
 	var sessionAPI *dashboard.SessionAPI
 	if sessionStore.Enabled() {
 		sessionAPI = dashboard.NewSessionAPI(sessionStore, cfg.BrowsersAvailable)

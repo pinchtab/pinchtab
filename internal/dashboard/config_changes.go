@@ -108,6 +108,15 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
 		reasons = append(reasons, "Stealth level")
 	}
+	// The sessions.agent block applies live in every direction but one: whether
+	// the session API and its route family exist at all is decided at boot, so a
+	// process that booted with agent sessions off cannot serve them until it
+	// restarts. Turning them off needs no restart — both request-time consumers
+	// read the store live — and claiming otherwise about an authentication
+	// control would be the same defect one direction over.
+	if !c.boot.Sessions.AgentEnabled() && next.Sessions.AgentEnabled() {
+		reasons = append(reasons, "Agent sessions")
+	}
 	if !sameIntPtr(c.boot.MultiInstance.Restart.MaxRestarts, next.MultiInstance.Restart.MaxRestarts) ||
 		!sameIntPtr(c.boot.MultiInstance.Restart.InitBackoffSec, next.MultiInstance.Restart.InitBackoffSec) ||
 		!sameIntPtr(c.boot.MultiInstance.Restart.MaxBackoffSec, next.MultiInstance.Restart.MaxBackoffSec) ||

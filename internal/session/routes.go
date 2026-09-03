@@ -21,3 +21,13 @@ var routePatterns = []string{
 func RoutePatterns() []string {
 	return slices.Clone(routePatterns)
 }
+
+// The disabled state's vocabulary lives here, beside the route list, because two
+// registrars answer for it: the server package when the store booted disabled and
+// never mounted the family, and the dashboard's SessionAPI when a save switched
+// it off in a process that did mount it.
+const (
+	CodeDisabled = "sessions_disabled"
+	MsgDisabled  = "agent sessions are not enabled on this server"
+	HintDisabled = "set sessions.agent.enabled = true and restart the server; the route family is mounted at startup, so enabling it cannot take effect in the running process."
+)

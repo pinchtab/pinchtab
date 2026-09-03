@@ -15,6 +15,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/browsersession"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 type profileLister interface {
@@ -30,16 +31,17 @@ type agentCounter interface {
 }
 
 type ConfigAPI struct {
-	live      *config.Live
-	instances InstanceLister
-	profiles  profileLister
-	applier   runtimeConfigApplier
-	agents    agentCounter
-	sessions  *browsersession.Manager
-	version   string
-	startedAt time.Time
-	boot      config.FileConfig
-	mu        sync.RWMutex
+	live          *config.Live
+	instances     InstanceLister
+	profiles      profileLister
+	applier       runtimeConfigApplier
+	agents        agentCounter
+	sessions      *browsersession.Manager
+	agentSessions *session.Store
+	version       string
+	startedAt     time.Time
+	boot          config.FileConfig
+	mu            sync.RWMutex
 
 	// Config-file snapshot cached by mtime so read-only health/config polls answer
 	// from memory instead of re-reading + parsing the file every request. Guarded
@@ -100,6 +102,15 @@ func (c *ConfigAPI) SetSessionManager(sessions *browsersession.Manager) {
 		return
 	}
 	c.sessions = sessions
+}
+
+// SetAgentSessionStore wires the agent session store so a save of the
+// sessions.agent block reaches the running store instead of only the file.
+func (c *ConfigAPI) SetAgentSessionStore(store *session.Store) {
+	if c == nil {
+		return
+	}
+	c.agentSessions = store
 }
 
 func (c *ConfigAPI) RegisterHandlers(mux *http.ServeMux) {
@@ -222,6 +233,9 @@ func (c *ConfigAPI) persistAndApply(w http.ResponseWriter, normalized *config.Fi
 	c.live.Publish(next)
 	if c.sessions != nil {
 		c.sessions.UpdateConfig(BrowserSessionConfig(next))
+	}
+	if c.agentSessions != nil {
+		c.agentSessions.UpdateConfig(AgentSessionConfig(next, c.agentSessions.PersistPath()))
 	}
 	if c.applier != nil {
 		c.applier.ApplyRuntimeConfig(next)
