@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,8 +52,8 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		Name string `json:"name,omitempty"`
 	}
 
-	if r.ContentLength > 0 {
-		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+	if r.Body != nil {
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil && !errors.Is(err, io.EOF) {
 			httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 			return
 		}
@@ -228,8 +229,8 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Request) {
 	var req startInstanceRequest
 
-	if r.ContentLength > 0 {
-		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
+	if r.Body != nil {
+		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil && !errors.Is(err, io.EOF) {
 			httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 			return
 		}

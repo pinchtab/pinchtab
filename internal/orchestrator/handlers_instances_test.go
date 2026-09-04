@@ -34,30 +34,36 @@ func TestHandleLaunchByNameRejectsNameField(t *testing.T) {
 func TestInstanceStartEndpointsRejectUnknownProfileKeysWithoutLaunching(t *testing.T) {
 	for _, path := range []string{"/instances/start", "/instances/launch"} {
 		for _, key := range []string{"profile", "profileName"} {
-			t.Run(path+"/"+key, func(t *testing.T) {
-				runner := &mockRunner{portAvail: true}
-				o := NewOrchestratorWithRunner(t.TempDir(), runner)
-				req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(fmt.Sprintf(`{"%s":"work"}`, key)))
-				w := httptest.NewRecorder()
-
-				if path == "/instances/start" {
-					o.handleStartInstance(w, req)
-				} else {
-					o.handleLaunchByName(w, req)
-				}
-
-				if w.Code != http.StatusBadRequest {
-					t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
-				}
-				for _, want := range []string{`unknown field \"` + key + `\"`, "profileId"} {
-					if !strings.Contains(w.Body.String(), want) {
-						t.Fatalf("body %q does not contain %q", w.Body.String(), want)
+			for _, chunked := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/chunked=%t", path, key, chunked), func(t *testing.T) {
+					runner := &mockRunner{portAvail: true}
+					o := NewOrchestratorWithRunner(t.TempDir(), runner)
+					req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(fmt.Sprintf(`{"%s":"work"}`, key)))
+					if chunked {
+						req.ContentLength = -1
+						req.TransferEncoding = []string{"chunked"}
 					}
-				}
-				if runner.runCalled || len(o.List()) != 0 {
-					t.Fatal("an invalid profile key started an instance")
-				}
-			})
+					w := httptest.NewRecorder()
+
+					if path == "/instances/start" {
+						o.handleStartInstance(w, req)
+					} else {
+						o.handleLaunchByName(w, req)
+					}
+
+					if w.Code != http.StatusBadRequest {
+						t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+					}
+					for _, want := range []string{`unknown field \"` + key + `\"`, "profileId"} {
+						if !strings.Contains(w.Body.String(), want) {
+							t.Fatalf("body %q does not contain %q", w.Body.String(), want)
+						}
+					}
+					if runner.runCalled || len(o.List()) != 0 {
+						t.Fatal("an invalid profile key started an instance")
+					}
+				})
+			}
 		}
 	}
 }
