@@ -190,6 +190,12 @@ func (c *ConfigAPI) parseConfigUpdate(w http.ResponseWriter, r *http.Request, cu
 		return config.FileConfig{}, false
 	}
 
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil || len(fields) == 0 {
+		httpx.ErrorCode(w, 400, "empty_config_update", "config update contains no recognized fields", false, nil)
+		return config.FileConfig{}, false
+	}
+
 	normalized := *current
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&normalized); err != nil {
 		httpx.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)

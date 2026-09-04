@@ -447,6 +447,31 @@ func TestHandlePutConfigRefusesAnyUnrecognizedTopLevelKey(t *testing.T) {
 	}
 }
 
+func TestHandlePutConfigRefusesBodyWithNoRecognizedFields(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "secret-token"
+	api := newConfigAPITestAPI(t, fc)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	api.HandlePutConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("HandlePutConfig() status = %d, want %d; body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "empty_config_update") {
+		t.Fatalf("response = %q, want empty_config_update error", w.Body.String())
+	}
+
+	saved, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig() error = %v", err)
+	}
+	if saved.Timeouts.ActionSec != fc.Timeouts.ActionSec {
+		t.Fatalf("saved timeouts.actionSec = %d, want unchanged %d", saved.Timeouts.ActionSec, fc.Timeouts.ActionSec)
+	}
+}
+
 func TestHandlePutConfigRequiresElevationForProxyChangeWithDashboardCookie(t *testing.T) {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "secret-token"
