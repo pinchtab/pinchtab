@@ -62,7 +62,11 @@ func TestEffectiveLaunchTargetPrefersTargetBinaryOverDiscovery(t *testing.T) {
 func TestEffectiveLaunchTargetFallsBackToDiscoveryWithoutTargets(t *testing.T) {
 	withoutBrowserDiscovery(t)
 	dir := t.TempDir()
-	discovered := filepath.Join(dir, "cloakbrowser")
+	// The stub has to be something the host agrees is executable, or discovery
+	// correctly refuses it and there is nothing left to fall back to. On Windows
+	// that means an extension PATHEXT names: exec.LookPath will not return a bare
+	// "cloakbrowser" there, and the mode bits below carry no meaning.
+	discovered := filepath.Join(dir, "cloakbrowser"+exeSuffix)
 	if err := os.WriteFile(discovered, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}

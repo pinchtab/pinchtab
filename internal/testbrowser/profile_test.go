@@ -13,10 +13,11 @@ import (
 
 // The property the fix delivers, proven deterministically rather than sampled by
 // re-running a suite: a browser profile whose removal FAILS must not fail the test.
-// The subtest's own recorder stands in for a real Chrome still flushing its cache —
-// on this platform a directory is unremovable while it is a mount point or read-only
-// parent, so the honest simulation is to fail the removal by making the PARENT
-// unwritable, which is exactly the class of error RemoveAll reports mid-flush.
+// The subtest's own recorder stands in for a real Chrome still flushing its cache.
+//
+// How a removal is made to fail is per-platform, so makeRemovalFail owns it: unix
+// clears the parent's write bit, Windows holds a handle open inside the profile.
+// Both produce the class of error RemoveAll reports mid-flush.
 func TestProfileDirCleanupToleratesAFailedRemoval(t *testing.T) {
 	parent := t.TempDir()
 	dir := filepath.Join(parent, "profile")
@@ -26,10 +27,7 @@ func TestProfileDirCleanupToleratesAFailedRemoval(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "Default", "Cache", "Cache_Data", "index"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(parent, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+	makeRemovalFail(t, parent, dir)
 
 	recorder := &cleanupRecorder{TB: t}
 	removeProfileDir(recorder, dir)

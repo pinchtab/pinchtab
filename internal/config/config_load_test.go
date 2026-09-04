@@ -793,15 +793,20 @@ func TestApplyFileConfigToRuntime_CloakBrowserSettings(t *testing.T) {
 	if cfg.BrowserBinary != "/opt/cloakbrowser/chrome" {
 		t.Fatalf("BrowserBinary = %q, want configured binary", cfg.BrowserBinary)
 	}
+	// The loader stores fontsDir cleaned, and filepath.Clean is separator-aware:
+	// "/opt/fonts" comes back as `\opt\fonts` on Windows. Comparing against the
+	// literal asserted the separator of whoever ran the test rather than the
+	// behaviour, so it failed there while the loader was doing exactly its job.
+	wantFontsDir := filepath.Clean("/opt/fonts")
 	if cfg.Cloak.FingerprintSeed != "42069" ||
 		cfg.Cloak.Platform != "windows" ||
 		cfg.Cloak.Locale != "en-GB" ||
 		cfg.Cloak.Timezone != "Europe/London" ||
 		cfg.Cloak.WebRTCIP != "auto" ||
-		cfg.Cloak.FontsDir != "/opt/fonts" ||
+		cfg.Cloak.FontsDir != wantFontsDir ||
 		cfg.Cloak.StorageQuotaMB != quota ||
 		cfg.Cloak.DisableDefaultStealthArgs {
-		t.Fatalf("Cloak settings not applied: %+v", cfg.Cloak)
+		t.Fatalf("Cloak settings not applied: %+v (wanted fontsDir %q)", cfg.Cloak, wantFontsDir)
 	}
 
 	defaultCfg := &RuntimeConfig{}
