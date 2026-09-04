@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -291,23 +292,34 @@ func TestAnnotationRectForNodeAppliesFrameOffset(t *testing.T) {
 }
 
 // The fromSurface rule had two implementations in packages that cannot import each other,
-// and they had already drifted once. This is the table that now stands for both.
+// and they had already drifted once. The rule itself is now tabled per-GOOS in the
+// in-package TestCaptureFromSurfaceRulePerGOOS, which is the only place it can be checked
+// whole: this exported wrapper reads runtime.GOOS, so from out here only the host's own
+// answers are knowable. This covers what is left — that the wrapper asks the rule about
+// the machine it is running on, rather than deciding anything itself.
+//
+// It used to assert want:false for a plain capture unconditionally, which is the
+// non-Windows answer. Windows always composites a surface (issue #619), so the row was
+// wrong on the one platform whose clause it was accidentally exercising.
 func TestCaptureFromSurface(t *testing.T) {
+	clip := &page.Viewport{Width: 120, Height: 60, Scale: 1}
+	hostAlwaysComposites := runtime.GOOS == "windows"
+
 	for _, tc := range []struct {
 		name           string
 		beyondViewport bool
 		clip           *page.Viewport
 		want           bool
 	}{
-		{name: "plain capture keeps the fast read", beyondViewport: false, clip: nil, want: false},
-		{name: "any clip needs the surface", beyondViewport: false, clip: &page.Viewport{Width: 120, Height: 60, Scale: 1}, want: true},
-		{name: "a native-scale clip still needs it", beyondViewport: false, clip: &page.Viewport{Width: 120, Height: 60, Scale: 1}, want: true},
-		{name: "beyond viewport needs it with no clip", beyondViewport: true, clip: nil, want: true},
-		{name: "both", beyondViewport: true, clip: &page.Viewport{Width: 10, Height: 10, Scale: 1}, want: true},
+		{name: "plain capture keeps the fast read where the host allows it", want: hostAlwaysComposites},
+		{name: "any clip needs the surface", clip: clip, want: true},
+		{name: "beyond viewport needs it with no clip", beyondViewport: true, want: true},
+		{name: "both", beyondViewport: true, clip: clip, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := cdptk.CaptureFromSurface(tc.beyondViewport, tc.clip); got != tc.want {
-				t.Errorf("cdptk.CaptureFromSurface(%v, %+v) = %v, want %v", tc.beyondViewport, tc.clip, got, tc.want)
+				t.Errorf("cdptk.CaptureFromSurface(%v, %+v) = %v, want %v (GOOS=%s)",
+					tc.beyondViewport, tc.clip, got, tc.want, runtime.GOOS)
 			}
 		})
 	}

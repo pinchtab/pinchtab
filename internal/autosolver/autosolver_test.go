@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,16 @@ type mockSolver struct {
 	solved     bool
 	err        error
 	solveCalls int
+
+	// waitForClockTick makes Solve occupy at least one tick of the clock the
+	// autosolver times attempts with, for the tests that assert a recorded
+	// duration is non-zero. A solver that returns immediately can be timed as
+	// exactly 0 — time.Since only reports what the clock resolves, and the
+	// Windows clock advances about every 15.6ms, so an instant return is
+	// genuinely 0ms there. Waiting for the tick asserts what the tests mean
+	// (the duration was measured, not left unset) without assuming any
+	// particular clock resolution.
+	waitForClockTick bool
 }
 
 func (m *mockSolver) Name() string  { return m.name }
@@ -73,10 +84,23 @@ func (m *mockSolver) CanHandle(_ context.Context, _ Page) (bool, error) {
 }
 func (m *mockSolver) Solve(_ context.Context, _ Page, _ ActionExecutor) (*Result, error) {
 	m.solveCalls++
+	if m.waitForClockTick {
+		waitForClockTick()
+	}
 	if m.err != nil {
 		return &Result{Error: m.err.Error()}, m.err
 	}
 	return &Result{Solved: m.solved, SolverUsed: m.name}, nil
+}
+
+// waitForClockTick blocks until the monotonic clock has advanced at least once,
+// which is the smallest non-zero duration this machine can report. It returns
+// as soon as that happens, so it costs nothing on a fine-grained clock.
+func waitForClockTick() {
+	start := time.Now()
+	for time.Since(start) <= 0 {
+		runtime.Gosched()
+	}
 }
 
 type mockSemantic struct {
@@ -531,15 +555,17 @@ func solverHistory(history []AttemptEntry) []AttemptEntry {
 
 func twoFailingSolvers() (*mockSolver, *mockSolver) {
 	return &mockSolver{
-			name:      "alpha",
-			priority:  10,
-			canHandle: true,
-			err:       fmt.Errorf("alpha exploded"),
+			name:             "alpha",
+			priority:         10,
+			canHandle:        true,
+			err:              fmt.Errorf("alpha exploded"),
+			waitForClockTick: true,
 		}, &mockSolver{
-			name:      "beta",
-			priority:  20,
-			canHandle: true,
-			err:       fmt.Errorf("beta exploded"),
+			name:             "beta",
+			priority:         20,
+			canHandle:        true,
+			err:              fmt.Errorf("beta exploded"),
+			waitForClockTick: true,
 		}
 }
 
