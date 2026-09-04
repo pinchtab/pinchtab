@@ -22,9 +22,11 @@ Notes:
 - in full server mode, `/health` reports dashboard health, auth state, and instance count
 - server-mode `/health` counts profiles in three disjoint buckets: `profiles` is the
   persistent, non-quarantined profiles an operator manages; `temporaryProfiles` the
-  `instance-*` profiles minted by instance starts that named none; `quarantinedProfiles`
-  the corrupted ones renamed aside. The default `GET /profiles` list is
-  `profiles + quarantinedProfiles` (it hides temporaries; `?all=true` shows every bucket)
+  `instance-*` profiles minted by instance starts that named none, including temporary
+  profiles later quarantined; `quarantinedProfiles` the quarantined non-temporary
+  profiles. Temporary classification takes precedence when both flags apply. The default
+  `GET /profiles` list is `profiles + quarantinedProfiles` (it hides temporaries;
+  `?all=true` shows every bucket)
 - a browser crash is reported the same way in both modes: `/health` carries a `crashes`
   block (`total`, `recent`) whenever the browser behind it has crashed. In bridge mode the
   bridge records its own; in full server mode the front door merges every instance's
