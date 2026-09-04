@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/browserprobe"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -77,21 +75,33 @@ func checkBinaryStarts(ctx context.Context, cfg *config.RuntimeConfig) CheckResu
 	if bin == "" {
 		return CheckResult{Status: StatusSkip, Detail: "browser.binary not set; relying on provider discovery"}
 	}
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(cctx, bin, "--version") // #nosec G204 -- bin is a browser path from config/discovery, not user input
-	out, err := cmd.CombinedOutput()
+	// This used to run `bin --version` itself, a second copy of a probe
+	// browserprobe already owns — and the copy still had the Windows defect the
+	// original was fixed for. There `--version` prints no version: the process
+	// forwards its arguments to the running browser and prints "Opening in
+	// existing browser session.", so `pinchtab doctor` opened a window on the
+	// user's desktop and then reported that sentence as the browser's version
+	// (issue #649). browserprobe.RunVersion reads the install layout on Windows
+	// and starts nothing.
+	version, err := browserprobe.RunVersion(ctx, bin)
 	if err != nil {
 		return CheckResult{
 			Status: StatusFail,
-			Detail: fmt.Sprintf("--version failed: %v", err),
+			Detail: fmt.Sprintf("version probe failed: %v", err),
 			Err:    err,
 		}
 	}
-	version := parseVersionLine(string(out))
-	if version == "" {
-		version = strings.TrimSpace(string(out))
+	if parsed := parseVersionLine(version); parsed != "" {
+		version = parsed
+	}
+	// A probe that answers something with no version in it has not identified the
+	// browser, whatever its exit code was. Reporting Pass on that is how the
+	// "Opening in existing browser session." sentence reached users as a version.
+	if extractVersionToken(version) == "" {
+		return CheckResult{
+			Status: StatusWarn,
+			Detail: fmt.Sprintf("%s: probe returned no version (%q)", bin, version),
+		}
 	}
 	return CheckResult{
 		Status: StatusPass,

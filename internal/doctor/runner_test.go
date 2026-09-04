@@ -284,3 +284,58 @@ func TestCheckResultMarshalsDurationInMilliseconds(t *testing.T) {
 		t.Fatalf("expected durationMs in milliseconds, got %s", data)
 	}
 }
+
+// TestBinaryStarts_DoesNotRunTheBrowserOnWindows is the regression for the
+// binary_starts half of issue #649. The check ran `bin --version` itself, a
+// second copy of a probe browserprobe owns. On Windows that switch prints no
+// version — the process forwards its arguments to the running browser — so
+// `pinchtab doctor` opened a window and reported "Opening in existing browser
+// session." as the version.
+//
+// The stub here is not a runnable image. If the check execs it the probe fails,
+// which is the point: the version has to come from the install layout beside it.
+func TestBinaryStarts_DoesNotRunTheBrowserOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("install-layout version reading is windows-only")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-chrome.exe")
+	if err := os.WriteFile(path, []byte("not a PE image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "151.0.7922.175"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.RuntimeConfig{BrowserBinary: path}
+	r := checkBinaryStarts(context.Background(), cfg)
+	if r.Status != StatusPass {
+		t.Fatalf("status = %v, want pass; detail=%q err=%v", r.Status, r.Detail, r.Err)
+	}
+	if !strings.Contains(r.Detail, "151.0.7922.175") {
+		t.Errorf("detail = %q, want the version from the install layout", r.Detail)
+	}
+}
+
+// A probe that comes back without a version in it has not identified the
+// browser, whatever the exit code was. Passing on that is how the sentence
+// "Opening in existing browser session." reached users as a version string.
+func TestBinaryStarts_DoesNotPassWithoutAVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fake binary requires unix")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-chrome-chatty")
+	script := "#!/bin/sh\necho 'Opening in existing browser session.'\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{BrowserBinary: path}
+	r := checkBinaryStarts(context.Background(), cfg)
+	if r.Status == StatusPass {
+		t.Fatalf("status = pass for a probe with no version in it; detail=%q", r.Detail)
+	}
+	if !strings.Contains(r.Detail, "no version") {
+		t.Errorf("detail = %q, want it to say no version was returned", r.Detail)
+	}
+}
