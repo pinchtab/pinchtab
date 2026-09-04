@@ -1,0 +1,43 @@
+# Git's Windows default is core.autocrlf=true, which rewrites every text file to
+# CRLF on checkout. Nothing in this repository wants CRLF, and several things
+# break on it, so pin the working-tree ending rather than leaving it to whatever
+# each contributor's Git is configured to do.
+#
+# What breaks without this, all of it only on Windows and none of it visible to
+# Linux CI:
+#
+#   - Shell scripts. bash reads the trailing CR as part of the last token, so a
+#     CRLF script misparses. scripts/ci/detect-e2e-suites.sh reads
+#     e2e-escalation.map line by line and rejected every blank line in it,
+#     failing four tests in internal/devtools.
+#   - Golden files. internal/audit/report compares rendered output to a fixture
+#     byte for byte; CRLF adds one byte per line and every comparison fails.
+#   - The extensionless entry points below — ./dev is what DEFINITION_OF_DONE.md
+#     tells contributors to run.
+#
+# The repository's own content is already LF throughout, so this changes no
+# committed bytes; it stops checkout from changing them.
+
+# Detect text vs binary automatically, and give every text file LF in the
+# working tree on every platform.
+* text=auto eol=lf
+
+# Spelled out for the cases that break loudest, so a future `* -text` or a
+# contributor's local override cannot quietly take them with it.
+*.sh        text eol=lf
+dev         text eol=lf
+scripts/pre-commit text eol=lf
+npm/bin/pinchtab   text eol=lf
+*.map       text eol=lf
+
+# Binary formats: never convert, never diff as text.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.woff      binary
+*.woff2     binary
