@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -42,12 +41,21 @@ func (s currentTabScope) Description() string {
 // keeps that bounded.
 const defaultCurrentTabCap = 5000
 
-// currentTabEntry holds a tab id plus a per-entry timestamp used as the
-// LRU recency signal. lastTouched is updated on Get, Set, and any access
-// that proves the entry is still in active use.
+// currentTabEntry holds a tab id plus a per-entry tick used as the LRU
+// recency signal. touchedAt is updated on Get, Set, and any access that
+// proves the entry is still in active use.
+//
+// It counts touches rather than reading a clock. Wall time cannot order two
+// touches that land inside the same clock tick, and the tick is coarse on
+// Windows — ~15.6ms, long enough to cover a burst of current-tab traffic.
+// Entries touched within one tick all compared equal, no entry was Before any
+// other, and eviction fell through to Go's randomized map iteration order:
+// the store stopped being an LRU and dropped an arbitrary agent's pointer
+// while a genuinely older one survived. A counter is exactly ordered by
+// construction and needs no clock at all.
 type currentTabEntry struct {
-	tabID       string
-	lastTouched time.Time
+	tabID     string
+	touchedAt uint64
 }
 
 // CurrentTabStore tracks server-side current-tab pointers for identified
@@ -57,14 +65,13 @@ type CurrentTabStore struct {
 	mu      sync.RWMutex
 	entries map[string]currentTabEntry
 	cap     int
-	now     func() time.Time
+	touches uint64
 }
 
 func NewCurrentTabStore() *CurrentTabStore {
 	return &CurrentTabStore{
 		entries: make(map[string]currentTabEntry),
 		cap:     defaultCurrentTabCap,
-		now:     time.Now,
 	}
 }
 
@@ -90,7 +97,7 @@ func (s *CurrentTabStore) Get(scope currentTabScope) (string, bool) {
 		s.mu.Unlock()
 		return "", false
 	}
-	entry.lastTouched = s.now()
+	entry.touchedAt = s.nextTouchLocked()
 	s.entries[scope.key] = entry
 	s.mu.Unlock()
 	return entry.tabID, true
@@ -105,7 +112,7 @@ func (s *CurrentTabStore) Set(scope currentTabScope, tabID string) {
 		return
 	}
 	s.mu.Lock()
-	s.entries[scope.key] = currentTabEntry{tabID: tabID, lastTouched: s.now()}
+	s.entries[scope.key] = currentTabEntry{tabID: tabID, touchedAt: s.nextTouchLocked()}
 	s.evictExcessLocked()
 	s.mu.Unlock()
 }
@@ -121,18 +128,25 @@ func (s *CurrentTabStore) evictExcessLocked() {
 	for len(s.entries) > s.cap {
 		var (
 			oldestKey string
-			oldestAt  time.Time
+			oldestAt  uint64
 			first     = true
 		)
 		for k, e := range s.entries {
-			if first || e.lastTouched.Before(oldestAt) {
+			if first || e.touchedAt < oldestAt {
 				oldestKey = k
-				oldestAt = e.lastTouched
+				oldestAt = e.touchedAt
 				first = false
 			}
 		}
 		delete(s.entries, oldestKey)
 	}
+}
+
+// nextTouchLocked returns a strictly increasing recency tick. Caller must hold
+// s.mu (write).
+func (s *CurrentTabStore) nextTouchLocked() uint64 {
+	s.touches++
+	return s.touches
 }
 
 func (s *CurrentTabStore) Clear(scope currentTabScope) {

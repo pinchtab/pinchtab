@@ -304,3 +304,70 @@ func TestUntrustedSessionHeaderIgnored(t *testing.T) {
 		t.Fatalf("untrusted header must not resolve to %q", got)
 	}
 }
+
+// TestCurrentTabStore_EvictsInTouchOrderWithoutSleeping pins the invariant the
+// wall-clock recency signal could not hold: eviction order must follow the
+// order entries were touched, not how fast they were touched.
+//
+// The old signal was time.Now(). Every touch here lands inside a single clock
+// tick — ~15.6ms on Windows, wide enough for far more traffic than this — so
+// every entry compared equal, no entry was Before any other, and eviction fell
+// through to Go's randomized map iteration. Entries survived or died at random
+// while the store still claimed to be an LRU.
+//
+// No sleeps: a test that has to pause to let a clock advance is measuring the
+// clock, and the store must not need one.
+func TestCurrentTabStore_EvictsInTouchOrderWithoutSleeping(t *testing.T) {
+	const (
+		capacity = 10
+		total    = 50
+	)
+	store := NewCurrentTabStore()
+	store.SetCap(capacity)
+
+	scopes := make([]currentTabScope, total)
+	for i := range scopes {
+		scopes[i] = scopedCurrentTab(currentTabScopeAgent, fmt.Sprintf("agent-%02d", i))
+		store.Set(scopes[i], fmt.Sprintf("tab-%02d", i))
+	}
+
+	// Exactly the last `capacity` writes survive; everything older is gone.
+	for i := 0; i < total-capacity; i++ {
+		if _, ok := store.Get(scopes[i]); ok {
+			t.Fatalf("scope %d should have been evicted; only the newest %d survive", i, capacity)
+		}
+	}
+	for i := total - capacity; i < total; i++ {
+		if _, ok := store.Get(scopes[i]); !ok {
+			t.Fatalf("scope %d should have survived; only the oldest %d are evicted", i, total-capacity)
+		}
+	}
+}
+
+// Get is a touch, so reading an entry has to move it out of eviction's way even
+// when every read happens within one clock tick.
+func TestCurrentTabStore_GetBumpsRecencyWithoutSleeping(t *testing.T) {
+	const capacity = 4
+	store := NewCurrentTabStore()
+	store.SetCap(capacity)
+
+	scopes := make([]currentTabScope, capacity)
+	for i := range scopes {
+		scopes[i] = scopedCurrentTab(currentTabScopeAgent, fmt.Sprintf("agent-%d", i))
+		store.Set(scopes[i], fmt.Sprintf("tab-%d", i))
+	}
+
+	// Touch the oldest entry, then push the cap. The entry just read must
+	// outlive the one that has not been touched since it was written.
+	if _, ok := store.Get(scopes[0]); !ok {
+		t.Fatal("scope 0 should still be present before the bump")
+	}
+	store.Set(scopedCurrentTab(currentTabScopeAgent, "agent-new"), "tab-new")
+
+	if _, ok := store.Get(scopes[0]); !ok {
+		t.Error("the entry Get touched was evicted; Get did not bump recency")
+	}
+	if _, ok := store.Get(scopes[1]); ok {
+		t.Error("scope 1 was the least recently used and should have been evicted")
+	}
+}
