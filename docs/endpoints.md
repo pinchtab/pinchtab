@@ -650,6 +650,10 @@ This is different from `GET /tabs/{id}/state`, which returns live tab/page runti
 Notes:
 
 - All state and storage endpoints are gated by `security.allowStateExport`: `/storage`, `/tabs/{id}/storage`, `GET /state`, `GET /state/list`, `GET /state/show`, `POST /state/save`, `POST /state/load`, `DELETE /state`, and `POST /state/clean`
+- Cookie values in `GET /state` and `GET /state/show` additionally require
+  `security.allowCookies`; with only `allowStateExport`, those responses return the cookie
+  count while withholding values. Save/load remain available because they move cookie
+  values server-side and return counts only.
 - state files are stored in `{stateDir}/sessions/` with `0600` permissions
 - optional AES-256-GCM encryption via `security.stateEncryptionKey` config setting
 - storage is captured only for the current origin (active tab)
