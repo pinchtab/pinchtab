@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -49,7 +48,7 @@ func fatalStartup(stage string, err error) {
 }
 
 func startupFatalHints(err error) []string {
-	if !errors.Is(err, syscall.EADDRINUSE) {
+	if !isAddrInUse(err) {
 		return nil
 	}
 	return []string{
