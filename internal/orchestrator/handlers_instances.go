@@ -53,7 +53,7 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
-			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 			return
 		}
 	}
@@ -230,7 +230,7 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
-			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 			return
 		}
 	}
@@ -369,7 +369,7 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
-		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 
@@ -425,7 +425,7 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
-		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 		return
 	}
 	if req.BaseURL == "" {

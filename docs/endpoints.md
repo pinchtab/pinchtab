@@ -883,7 +883,9 @@ POST /instances/{id}/tab
 
 Notes:
 
-- `/instances/start` and `/instances/launch` use `mode`, not `headless`
+- `/instances/start` and `/instances/launch` use `profileId` for either an existing
+  profile ID or name, and `mode`, not `headless`. Request bodies reject unrecognised
+  fields with a 400 that names the offending key and the accepted shape.
 - `/instances/launch` is a sibling endpoint of `/instances/start` (separate handler `handleLaunchByName`), kept for the launch-by-profile workflow; `name` on the body is no longer supported, profiles must already exist
 - instance responses include both `mode` and `headless`
 - instance start surfaces accept `securityPolicy.allowedDomains` for additive instance-scoped IDPI/domain allowlist overrides

@@ -35,7 +35,7 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 	}
 	if r.ContentLength > 0 {
 		if err := httpx.DecodeJSONBody(w, r, 0, &req); err != nil {
-			httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON"))
+			httpx.Error(w, httpx.StatusForJSONDecodeError(err), err)
 			return
 		}
 	}

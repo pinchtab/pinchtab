@@ -91,6 +91,23 @@ func TestStatusForJSONDecodeError(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONBodyRejectsUnknownFieldsAndNamesTheExpectedShape(t *testing.T) {
+	var dst struct {
+		ProfileID string `json:"profileId"`
+		Mode      string `json:"mode"`
+	}
+	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"profile":"work"}`))
+	err := DecodeJSONBody(httptest.NewRecorder(), req, 0, &dst)
+	if err == nil {
+		t.Fatal("DecodeJSONBody accepted an unknown request field")
+	}
+	for _, want := range []string{`unknown field "profile"`, "expected one of: mode, profileId"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
 func TestProblem(t *testing.T) {
 	w := httptest.NewRecorder()
 	Problem(w, http.StatusBadGateway, "backend_unavailable", "backend \x1b[31m unavailable", true, map[string]any{"service": "bridge"})

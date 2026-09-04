@@ -9,6 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"reflect"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/sanitize"
@@ -163,7 +166,60 @@ func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst 
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxJSONBodyBytes
 	}
-	return json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes)).Decode(dst)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return clarifyUnknownJSONField(err, dst)
+	}
+	return nil
+}
+
+func clarifyUnknownJSONField(err error, dst any) error {
+	if !strings.HasPrefix(err.Error(), "json: unknown field ") {
+		return err
+	}
+	fields := jsonFieldNames(reflect.TypeOf(dst))
+	if len(fields) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w; expected one of: %s", err, strings.Join(fields, ", "))
+}
+
+func jsonFieldNames(typ reflect.Type) []string {
+	for typ != nil && typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ == nil || typ.Kind() != reflect.Struct {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.Anonymous && field.Tag.Get("json") == "" {
+			for _, name := range jsonFieldNames(field.Type) {
+				seen[name] = struct{}{}
+			}
+			continue
+		}
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = field.Name
+		}
+		if field.IsExported() {
+			seen[name] = struct{}{}
+		}
+	}
+
+	fields := make([]string, 0, len(seen))
+	for name := range seen {
+		fields = append(fields, name)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 func StatusForJSONDecodeError(err error) int {
