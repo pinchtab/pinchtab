@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -270,6 +271,37 @@ func screenshotCmd() *cobra.Command {
 	return cmd
 }
 
+// recordStopBody renders a /record/stop response carrying a path.
+//
+// Built with the JSON encoder rather than string concatenation. A Windows path
+// is full of backslashes, and pasted raw between quotes they read as JSON
+// escapes: "C:\Users\Temp\..." offers \U and \T, neither of which is one. The
+// body was then unparseable, RecordStop took its "cannot decode" branch and
+// returned before reaching the rename these tests exist to exercise, and the
+// failure surfaced as a missing output file rather than as bad test data.
+func recordStopBody(t *testing.T, path string) string {
+	t.Helper()
+	body, err := json.Marshal(recordStopResponse(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
+// recordStopBodyOrPanic is recordStopBody for the child process, which has no
+// *testing.T to fail through.
+func recordStopBodyOrPanic(path string) string {
+	body, err := json.Marshal(recordStopResponse(path))
+	if err != nil {
+		panic(err)
+	}
+	return string(body)
+}
+
+func recordStopResponse(path string) map[string]any {
+	return map[string]any{"status": "ok", "path": path, "frames": 3}
+}
+
 // The record site cannot use the writer form: the bytes are already on disk under the
 // server's name, so it reserves and renames. Two stops in one second must therefore
 // still keep both recordings and print the name each one took.
@@ -284,7 +316,7 @@ func TestTwoRecordStopsInOneSecondKeepBothRecordings(t *testing.T) {
 		}
 		m := newMockServer()
 		defer m.close()
-		m.setResponse("POST", "/record/stop", 200, `{"status":"ok","path":"`+serverPath+`","frames":3}`)
+		m.setResponse("POST", "/record/stop", 200, recordStopBody(t, serverPath))
 		m.setResponse("GET", "/record/status", 200, `{"state":"finished"}`)
 		return captureStdout(t, func() { RecordStop(m.server.Client(), m.base(), "") })
 	}
@@ -348,7 +380,7 @@ func runFailedRenameChild(dir string) {
 	missing := filepath.Join(dir, "never-encoded.gif")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/record/stop" {
-			_, _ = w.Write([]byte(`{"status":"ok","path":"` + missing + `","frames":3}`))
+			_, _ = w.Write([]byte(recordStopBodyOrPanic(missing)))
 			return
 		}
 		_, _ = w.Write([]byte(`{"state":"finished"}`))
