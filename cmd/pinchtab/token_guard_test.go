@@ -87,7 +87,19 @@ func TestAnEnvTokenStartsBothModesWithoutTouchingTheOperatorConfig(t *testing.T)
 
 func TestTheDefaultPathStillSelfProvisionsAndSaysSo(t *testing.T) {
 	tmpHome := t.TempDir()
+	// HOME alone does not redirect the default config path on Windows.
+	// config.userConfigDir returns $HOME/.pinchtab only on darwin and linux; on
+	// Windows it falls through to os.UserConfigDir, which reads %AppData% and
+	// never consults HOME. So this test used to run against the developer's real
+	// config: it read a token that was already there, self-provisioned nothing,
+	// printed nothing, and failed — and on a machine with no config yet it would
+	// have created one, writing a generated credential outside the test's
+	// TempDir. internal/config/config_utils_test.go already isolates this way,
+	// setting both spellings because os.Getenv is case-sensitive.
+	configHome := filepath.Join(tmpHome, "AppData", "Roaming")
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("AppData", configHome)
+	t.Setenv("APPDATA", configHome)
 	t.Setenv("PINCHTAB_CONFIG", "")
 	t.Setenv("PINCHTAB_TOKEN", "")
 
