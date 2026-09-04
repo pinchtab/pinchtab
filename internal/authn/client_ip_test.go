@@ -3,6 +3,7 @@ package authn
 import (
 	"context"
 	"net/http/httptest"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -83,26 +84,68 @@ func TestClientIPFallsBackToThePeerWhenNothingResolvedOne(t *testing.T) {
 // clientIdentityHeaders are the headers a caller can set to claim an identity.
 // Exactly one file may read one: a second reader is a second trust decision, and
 // the two drift the moment trustProxyHeaders means different things to each.
-var clientIdentityHeaders = []string{`"X-Forwarded-For"`, `"X-Real-Ip"`, `"X-Real-IP"`, `"X-Client-Ip"`}
+var clientIdentityHeaders = []string{
+	"X-Forwarded-For",
+	"X-Real-Ip",
+	"X-Client-Ip",
+	"Forwarded",
+	"CF-Connecting-IP",
+	"True-Client-IP",
+	"X-Cluster-Client-IP",
+	"Fastly-Client-IP",
+}
 
-func TestOneFileReadsAForwardingHeaderForClientIdentity(t *testing.T) {
-	files := srccensus.Tree(t, "../..", 200)
-
+func clientIdentityHeaderReaders(files []srccensus.SourceFile) []string {
 	var readers []string
 	for _, file := range files {
 		for _, header := range clientIdentityHeaders {
-			if strings.Contains(file.Text, header) {
-				readers = append(readers, file.Name+" ("+header+")")
-				break
+			getHeader := regexp.MustCompile(`(?i)\.Header\.Get\(\s*"` + regexp.QuoteMeta(header) + `"\s*\)`)
+			if getHeader.MatchString(file.Text) {
+				readers = append(readers, file.Name+` ("`+header+`")`)
 			}
 		}
 	}
-
-	want := []string{`internal/authn/client_ip.go ("X-Forwarded-For")`}
 	sort.Strings(readers)
+	return readers
+}
+
+func TestOneFileReadsAForwardingHeaderForClientIdentity(t *testing.T) {
+	files := srccensus.Tree(t, "../..", 200)
+	readers := clientIdentityHeaderReaders(files)
+
+	want := []string{
+		`internal/authn/client_ip.go ("Forwarded")`,
+		`internal/authn/client_ip.go ("X-Forwarded-For")`,
+		`internal/authn/forwarded.go ("Forwarded")`,
+	}
 	if strings.Join(readers, "\n  ") != strings.Join(want, "\n  ") {
-		t.Fatalf("client-identity header readers are:\n  %s\nwant exactly:\n  %s\nresolve the identity in ResolveClientIP and read it back with ClientIP rather than adding a second reader",
+		t.Fatalf("client-identity header readers are:\n  %s\nwant exactly:\n  %s\na client-identity header is any header in clientIdentityHeaders; add new spellings to that list, never work around it, and resolve identity in ResolveClientIP rather than adding a second reader",
 			strings.Join(readers, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+func TestClientIdentityHeaderCensusCatchesEverySpellingAndExcludesSchemeHeaders(t *testing.T) {
+	for _, header := range clientIdentityHeaders {
+		t.Run(header, func(t *testing.T) {
+			files := []srccensus.SourceFile{{
+				Name: "internal/handlers/planted_reader.go",
+				Text: `package handlers; func planted(r *http.Request) { _ = r.Header.Get("` + strings.ToLower(header) + `") }`,
+			}}
+			readers := clientIdentityHeaderReaders(files)
+			if len(readers) != 1 || !strings.Contains(readers[0], header) {
+				t.Fatalf("a planted case-insensitive reader for %q escaped the census: %v", header, readers)
+			}
+		})
+	}
+
+	for _, header := range []string{"X-Forwarded-Proto", "X-Forwarded-Host"} {
+		files := []srccensus.SourceFile{{
+			Name: "internal/handlers/non_identity_reader.go",
+			Text: `package handlers; func planted(r *http.Request) { _ = r.Header.Get("` + header + `") }`,
+		}}
+		if readers := clientIdentityHeaderReaders(files); len(readers) != 0 {
+			t.Fatalf("%q carries connection metadata, not client identity, but the census matched it: %v", header, readers)
+		}
 	}
 }
 
