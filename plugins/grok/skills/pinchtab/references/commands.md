@@ -365,6 +365,7 @@ List available profiles.
 
 ```bash
 pinchtab profiles
+pinchtab profiles create work
 pinchtab instance start --profile work
 ```
 

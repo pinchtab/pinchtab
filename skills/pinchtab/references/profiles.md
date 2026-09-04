@@ -58,12 +58,16 @@ CLI subcommands are available — use these instead of `curl` when possible:
 
 ```bash
 pinchtab profiles                                   # list profiles
+pinchtab profiles create <name>                     # human setup: create before authentication
 pinchtab instance start --profile <name>            # start (auto-allocates port)
 pinchtab instance navigate <id> <url>
 pinchtab instance stop <id>
 pinchtab instance restart <id>
 pinchtab instance logs <id>
 ```
+
+Creating a profile only creates an empty browser state. A human must start it headed and
+authenticate before an agent can reuse that session.
 
 Once a profile instance is running, the CLI auto-routes to it; you can also target it explicitly:
 

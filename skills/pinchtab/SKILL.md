@@ -87,7 +87,7 @@ If a site requires a CAPTCHA, anti-bot challenge, or other human verification, s
 
 ## Authentication and State
 
-Patterns: (1) one-off `pinchtab instance start`; (2) reuse profile `instance start --profile work --mode headed`, switch to headless after login; (3) HTTP `POST /profiles` then `POST /profiles/<name>/start`; (4) human-assisted headed login, agent reuses headless. Agent sessions: `pinchtab session create --agent-id <id>` or `POST /sessions` → set `PINCHTAB_SESSION=ses_...`.
+Patterns: (1) one-off `pinchtab instance start`; (2) reuse a profile with `instance start --profile work`; (3) HTTP `POST /profiles` then `POST /profiles/<name>/start`. Human setup: `pinchtab profiles create work`, authenticate headed; agents reuse headless. Agent sessions: `pinchtab session create --agent-id <id>` or `POST /sessions` → set `PINCHTAB_SESSION=ses_...`.
 
 **Session reuse safety:** When reusing authenticated browser sessions established by a human, use a dedicated low-privilege profile — not the user's personal browsing profile. Confirm with the user before performing account-changing actions (password changes, payment, deletion, permissions) in a reused session. Restrict navigation to the sites needed for the task.
 

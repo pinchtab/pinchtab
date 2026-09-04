@@ -162,6 +162,7 @@ func handleConnectProfile(c *Client) func(context.Context, mcp.CallToolRequest) 
 
 		resp := map[string]any{
 			"profile": status.Name,
+			"exists":  status.Exists,
 			"running": status.Running,
 			"status":  status.Status,
 			"id":      status.ID,
@@ -169,6 +170,14 @@ func handleConnectProfile(c *Client) func(context.Context, mcp.CallToolRequest) 
 		}
 		if status.Error != "" {
 			resp["error"] = status.Error
+		}
+		if !status.Exists || status.Status == "missing" {
+			resp["status"] = "missing"
+			resp["message"] = status.Message
+			if status.Message == "" {
+				resp["message"] = fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", status.Name)
+			}
+			return jsonResult(resp)
 		}
 		if status.Running && status.Port != "" {
 			resp["url"] = c.dashboardProfilesURL()

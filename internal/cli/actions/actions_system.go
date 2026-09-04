@@ -111,6 +111,19 @@ func Profiles(client *http.Client, base, token string, cmd *cobra.Command) {
 	fmt.Print(formatProfileList(profiles))
 }
 
+func ProfilesCreate(client *http.Client, base, token, name string) {
+	raw := apiclient.DoPostRaw(client, base, token, "/profiles", map[string]any{"name": name})
+	var created struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &created); err != nil || created.ID == "" || created.Name == "" {
+		fmt.Fprintf(os.Stderr, "Failed to parse created profile: %s\n", strings.TrimSpace(string(raw)))
+		return
+	}
+	fmt.Printf("%s\t%s\n", created.ID, created.Name)
+}
+
 // ProfilesPrune reclaims quarantine backlog. Without --confirm it reports what would go
 // and frees nothing, so the bare invocation is safe for an agent to run.
 func ProfilesPrune(client *http.Client, base, token string, cmd *cobra.Command) {

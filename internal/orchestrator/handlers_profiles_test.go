@@ -88,3 +88,44 @@ func TestHandleStartByID_TargetsConfigBadBrowser_Rejects400(t *testing.T) {
 		t.Fatalf("status = %d, want 400 body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestHandleProfileInstanceDistinguishesMissingFromStopped(t *testing.T) {
+	baseDir := t.TempDir()
+	o := NewOrchestratorWithRunner(baseDir, &mockRunner{portAvail: true})
+	pm := profiles.NewProfileManager(baseDir)
+	if err := pm.CreateWithMeta("work", profiles.ProfileMeta{}); err != nil {
+		t.Fatalf("CreateWithMeta: %v", err)
+	}
+	o.profiles = pm
+
+	for _, tc := range []struct {
+		name       string
+		wantExists bool
+		wantStatus string
+	}{
+		{"work", true, "stopped"},
+		{"missing", false, "missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/profiles/"+tc.name+"/instance", nil)
+			req.SetPathValue("id", tc.name)
+			w := httptest.NewRecorder()
+			o.handleProfileInstance(w, req)
+
+			var body struct {
+				Exists  bool   `json:"exists"`
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}
+			if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if body.Exists != tc.wantExists || body.Status != tc.wantStatus {
+				t.Fatalf("exists/status = %v/%q, want %v/%q", body.Exists, body.Status, tc.wantExists, tc.wantStatus)
+			}
+			if !tc.wantExists && (!strings.Contains(body.Message, "does not exist") || !strings.Contains(body.Message, "human setup step")) {
+				t.Fatalf("missing-profile message does not stop an agent retry loop: %q", body.Message)
+			}
+		})
+	}
+}

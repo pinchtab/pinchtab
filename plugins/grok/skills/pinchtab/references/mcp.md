@@ -137,7 +137,7 @@ The MCP surface is intentionally scoped to browser automation. The following are
 
 | Capability | Status | Alternative |
 |------------|--------|-------------|
-| Create/edit/delete profiles | ❌ Not available | Use `pinchtab profiles`, `pinchtab instance start --profile <name>`, or the HTTP API |
+| Create/edit/delete profiles | ❌ Not available | Human setup uses `pinchtab profiles create <name>`, authenticates it headed, then starts/reuses it with `pinchtab instance start --profile <name>` |
 | Configure the scheduler | ❌ Not available | Use the HTTP API/configuration surface |
 | CAPTCHA or human verification | ❌ Not available | Hand the step to the user |
 | Modify stealth or fingerprint settings | ❌ Not available | Not part of an agent workflow |

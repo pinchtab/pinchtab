@@ -254,7 +254,10 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 	if req.ProfileID != "" {
 		profileName, err = o.resolveProfileName(req.ProfileID)
 		if err != nil {
-			httpx.Error(w, 404, fmt.Errorf("profile %q not found", req.ProfileID))
+			httpx.ErrorCode(w, http.StatusNotFound, "profile_not_found", fmt.Sprintf("profile %q not found", req.ProfileID), false, map[string]any{
+				"profile": req.ProfileID,
+				"remedy":  "pinchtab profiles create <name>",
+			})
 			return
 		}
 	} else {

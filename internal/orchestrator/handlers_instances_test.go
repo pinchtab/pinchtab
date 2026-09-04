@@ -62,6 +62,28 @@ func TestInstanceStartEndpointsRejectUnknownProfileKeysWithoutLaunching(t *testi
 	}
 }
 
+func TestHandleStartInstanceMissingProfileNamesTheCreateRemedy(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.profiles = profiles.NewProfileManager(t.TempDir())
+	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"profileId":"missing"}`))
+	w := httptest.NewRecorder()
+
+	o.handleStartInstance(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", w.Code, w.Body.String())
+	}
+	for _, want := range []string{"profile_not_found", "pinchtab profiles create"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("body %q does not contain %q", w.Body.String(), want)
+		}
+	}
+	if runner.runCalled || len(o.List()) != 0 {
+		t.Fatal("a missing profile started an instance")
+	}
+}
+
 func TestHandleLaunchByNameAliasesStartSemantics(t *testing.T) {
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }

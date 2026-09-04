@@ -81,9 +81,11 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		httpx.JSON(w, 200, map[string]any{
 			"name":    id,
+			"exists":  false,
 			"running": false,
-			"status":  "stopped",
+			"status":  "missing",
 			"port":    "",
+			"message": fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", id),
 		})
 		return
 	}
@@ -93,6 +95,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 		if inst.ProfileName == name && (inst.Status == "running" || inst.Status == "starting") {
 			httpx.JSON(w, 200, map[string]any{
 				"name":    name,
+				"exists":  true,
 				"running": inst.Status == "running",
 				"status":  inst.Status,
 				"port":    inst.Port,
@@ -103,6 +106,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 	}
 	httpx.JSON(w, 200, map[string]any{
 		"name":    name,
+		"exists":  true,
 		"running": false,
 		"status":  "stopped",
 		"port":    "",

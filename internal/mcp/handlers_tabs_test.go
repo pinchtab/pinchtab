@@ -102,6 +102,7 @@ func TestHandleConnectProfileRunning(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"name":    "work",
+			"exists":  true,
 			"running": true,
 			"status":  "running",
 			"port":    "9868",
@@ -128,6 +129,7 @@ func TestHandleConnectProfileNotRunning(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"name":    "work",
+			"exists":  true,
 			"running": false,
 			"status":  "stopped",
 			"port":    "",
@@ -152,13 +154,38 @@ func TestHandleConnectProfileNotRunning(t *testing.T) {
 	}
 }
 
-func TestHandleConnectProfileMissingProfile(t *testing.T) {
+func TestHandleConnectProfileRequiresAProfileArgument(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()
 
 	r := callTool(t, "pinchtab_connect_profile", map[string]any{}, srv)
 	if !r.IsError {
 		t.Fatal("expected error for missing profile")
+	}
+}
+
+func TestHandleConnectProfileReportsMissingAsAHumanSetupStep(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":    "missing",
+			"exists":  false,
+			"running": false,
+			"status":  "missing",
+			"message": `Profile "missing" does not exist. Creating and authenticating a reusable profile is a human setup step.`,
+		})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_connect_profile", map[string]any{"profile": "missing"}, srv)
+	text := resultText(t, r)
+	for _, want := range []string{`"exists": false`, `"status": "missing"`, "does not exist", "human setup step"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing-profile result %q does not contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, "start the profile") {
+		t.Fatalf("missing-profile result suggests an agent retry: %q", text)
 	}
 }
 

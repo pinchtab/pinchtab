@@ -56,7 +56,7 @@ func registerManagementCommands() {
 
 	instanceCmd.AddCommand(instanceListCmd, startInstanceCmd, instanceNavigateCmd, instanceStopCmd, instanceRestartCmd, instanceLogsCmd)
 	activityCmd.AddCommand(activityTabCmd)
-	profilesCmd.AddCommand(profilesPruneCmd)
+	profilesCmd.AddCommand(profilesCreateCmd, profilesPruneCmd)
 
 	configureManagementFlags()
 

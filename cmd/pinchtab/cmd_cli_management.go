@@ -68,6 +68,17 @@ var profilesPruneCmd = &cobra.Command{
 	},
 }
 
+var profilesCreateCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create a browser profile for human setup and authentication",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.ProfilesCreate(rt.client, rt.base, rt.token, args[0])
+		})
+	},
+}
+
 var activityCmd = &cobra.Command{
 	Use:   "activity",
 	Short: "List recorded activity events",
