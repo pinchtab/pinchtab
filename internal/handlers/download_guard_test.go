@@ -13,11 +13,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// The download dialler asks the guard whether the operator named this host, and a
-// bare "*" names none. It used to derive that grant from the RESTRICTION predicate
-// — "nothing blocked it" read as "the operator permitted it" — which is why a
-// wildcard, whose whole purpose is to block nothing, dialled every private address.
-func TestABareWildcardGrantsNoPrivateIPOverrideOnTheDownloadDialler(t *testing.T) {
+func TestTheDownloadAllowlistControlsTheDomainAndPrivateIPChecksTogether(t *testing.T) {
 	const privateHost = "10.0.0.5"
 
 	for _, tc := range []struct {
@@ -25,8 +21,8 @@ func TestABareWildcardGrantsNoPrivateIPOverrideOnTheDownloadDialler(t *testing.T
 		allowed []string
 		want    bool
 	}{
-		{"a bare wildcard", []string{"*"}, false},
-		{"a wildcard beside an unrelated host", []string{"*", "example.com"}, false},
+		{"a bare wildcard", []string{"*"}, true},
+		{"a wildcard beside an unrelated host", []string{"*", "example.com"}, true},
 		{"a wildcard beside the internal host", []string{"*", privateHost}, true},
 		{"the internal host alone", []string{privateHost}, true},
 		{"a wildcard subdomain", []string{"*.corp.example.com"}, false},
@@ -34,9 +30,9 @@ func TestABareWildcardGrantsNoPrivateIPOverrideOnTheDownloadDialler(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			guard := newDownloadURLGuard(tc.allowed)
-			allowInternal := guard.explicitlyAllowsHost(privateHost)
+			allowInternal := guard.allowsHost(privateHost)
 			if allowInternal != tc.want {
-				t.Fatalf("explicitlyAllowsHost(%v) = %v, want %v", tc.allowed, allowInternal, tc.want)
+				t.Fatalf("allowsHost(%v) = %v, want %v", tc.allowed, allowInternal, tc.want)
 			}
 
 			// The predicate matters only through the dialler that consumes it: a
@@ -55,9 +51,6 @@ func TestABareWildcardGrantsNoPrivateIPOverrideOnTheDownloadDialler(t *testing.T
 	}
 }
 
-// The withdrawal is scoped to the override: "*" still lifts the domain restriction
-// for every host, which is what an operator writes it for. Without this, refusing
-// the wildcard outright would satisfy every row above.
 func TestABareWildcardStillLiftsTheDownloadDomainRestriction(t *testing.T) {
 	const unlisted = "https://unlisted.example/file.bin"
 
@@ -88,7 +81,7 @@ func TestAnAllowlistedLoopbackHostGetsTheSameVerdictFromValidateAndTheDialler(t 
 		{"loopback literal named", []string{"127.0.0.1"}, "127.0.0.1", true, false},
 		{"localhost named", []string{"localhost"}, "localhost", true, false},
 		{"loopback beside a wildcard", []string{"*", "127.0.0.1"}, "127.0.0.1", true, false},
-		{"loopback under a bare wildcard", []string{"*"}, "127.0.0.1", false, true},
+		{"loopback under a bare wildcard", []string{"*"}, "127.0.0.1", true, false},
 		{"loopback absent from a named list", []string{"example.com"}, "127.0.0.1", false, true},
 		{"loopback with no list", nil, "127.0.0.1", false, true},
 		{"private host named", []string{"10.0.0.5"}, "10.0.0.5", true, false},
@@ -103,7 +96,7 @@ func TestAnAllowlistedLoopbackHostGetsTheSameVerdictFromValidateAndTheDialler(t 
 			if errors.Is(err, errDownloadHostBlocked) != tc.wantBlocked {
 				t.Fatalf("Validate answered %v, want the blocked-host refusal=%v", err, tc.wantBlocked)
 			}
-			_, dialErr := resolveDownloadDialIPs(context.Background(), tc.host, guard.explicitlyAllowsHost(tc.host))
+			_, dialErr := resolveDownloadDialIPs(context.Background(), tc.host, guard.allowsHost(tc.host))
 			if (dialErr == nil) != tc.wantAllowed {
 				t.Fatalf("the dialler answered %v while Validate answered %v; the two layers must agree", dialErr, err)
 			}

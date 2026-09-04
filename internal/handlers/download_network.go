@@ -55,7 +55,7 @@ func dialGuardedDownloadAddress(ctx context.Context, network, addr string, valid
 		return nil, err
 	}
 
-	allowInternal := validator != nil && validator.explicitlyAllowsHost(host)
+	allowInternal := validator != nil && validator.allowsHost(host)
 	ips, err := resolveDownloadDialIPs(ctx, host, allowInternal)
 	if err != nil {
 		return nil, err

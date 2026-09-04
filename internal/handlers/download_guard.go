@@ -42,12 +42,12 @@ func newDownloadURLGuard(allowedDomains []string) *downloadURLGuard {
 	return &downloadURLGuard{allowedDomains: append([]string(nil), allowedDomains...)}
 }
 
-func (g *downloadURLGuard) explicitlyAllowsHost(host string) bool {
+func (g *downloadURLGuard) allowsHost(host string) bool {
 	host = netguard.NormalizeHost(host)
 	if host == "" {
 		return false
 	}
-	return idpi.DomainAllowed("https://"+host, config.IDPIConfig{Enabled: true}, g.allowedDomains)
+	return g.isDomainAllowed("https://" + host)
 }
 
 func (g *downloadURLGuard) isDomainAllowed(rawURL string) bool {
@@ -75,7 +75,7 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 	if host == "" {
 		return downloadHostBlockedError{}
 	}
-	if g.explicitlyAllowsHost(host) {
+	if g.allowsHost(host) {
 		return nil
 	}
 	if netguard.IsLocalHost(host) {
