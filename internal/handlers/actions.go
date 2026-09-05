@@ -238,92 +238,24 @@ var getOnlyActionQueryKeys = map[string]string{
 	"timeout": "per-request action timeout in seconds; the GET form has no body to carry it, so HandleAction reads it from the query",
 }
 
-// actionQueryKeys is the complete set of meaningful /action query parameters, derived from its
-// TWO owners rather than listed by hand: every field bridge.ActionRequest declares, plus what
-// the handler reads from the query itself. A field added to either is accepted with no edit
-// here, and anything else is a typo or a stray parameter the GET form would drop without a word.
 var actionQueryKeys = actionRequestJSONKeys()
 
+var actionQuery = queryContract{endpoint: "/action", keys: actionQueryKeys}
+
 func actionRequestJSONKeys() map[string]struct{} {
-	keys := make(map[string]struct{})
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(bridge.ActionRequest{})) {
-		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if name != "" && name != "-" {
-			keys[name] = struct{}{}
-		}
-	}
+	keys := jsonKeysOf(reflect.TypeOf(bridge.ActionRequest{}))
 	for key := range getOnlyActionQueryKeys {
 		keys[key] = struct{}{}
 	}
 	return keys
 }
 
-// unknownQueryFields names every supplied parameter the request type does not declare, sorted
-// so the refusal reads the same on every run. Presence follows the decoder's own rule — a
-// non-empty value — so ?_= is absent rather than an unknown request.
 func unknownQueryFields(q url.Values) []string {
-	var unknown []string
-	for key := range q {
-		if _, known := actionQueryKeys[key]; known {
-			continue
-		}
-		if strings.TrimSpace(q.Get(key)) == "" {
-			continue
-		}
-		unknown = append(unknown, key)
-	}
-	sort.Strings(unknown)
-	return unknown
+	return actionQuery.unknown(q)
 }
 
 func unknownQueryFieldsError(unknown []string) error {
-	named := make([]string, 0, len(unknown))
-	for _, key := range unknown {
-		if near := nearestActionQueryKey(key); near != "" {
-			named = append(named, fmt.Sprintf("%s (did you mean %s?)", key, near))
-			continue
-		}
-		named = append(named, key)
-	}
-	return fmt.Errorf("%s: not a parameter of /action and would be silently dropped; check the spelling or send the request as POST /action with a JSON body", strings.Join(named, ", "))
-}
-
-func nearestActionQueryKey(key string) string {
-	if len(key) < 4 {
-		return ""
-	}
-	best := ""
-	bestDistance := 0
-	for candidate := range actionQueryKeys {
-		distance := editDistance(strings.ToLower(key), strings.ToLower(candidate))
-		if best == "" || distance < bestDistance || (distance == bestDistance && candidate < best) {
-			best, bestDistance = candidate, distance
-		}
-	}
-	if bestDistance > 2 {
-		return ""
-	}
-	return best
-}
-
-func editDistance(a, b string) int {
-	previous := make([]int, len(b)+1)
-	current := make([]int, len(b)+1)
-	for j := range previous {
-		previous[j] = j
-	}
-	for i := 1; i <= len(a); i++ {
-		current[0] = i
-		for j := 1; j <= len(b); j++ {
-			cost := 1
-			if a[i-1] == b[j-1] {
-				cost = 0
-			}
-			current[j] = min(previous[j]+1, min(current[j-1]+1, previous[j-1]+cost))
-		}
-		previous, current = current, previous
-	}
-	return previous[len(b)]
+	return actionQuery.unknownError(unknown)
 }
 
 func decodeActionRequest(w http.ResponseWriter, r *http.Request) (bridge.ActionRequest, bool) {
@@ -409,6 +341,9 @@ func decodeActionRequest(w http.ResponseWriter, r *http.Request) (bridge.ActionR
 			return bridge.ActionRequest{}, false
 		}
 		return req, true
+	}
+	if !refusePostQuery(w, r, "/action", reflect.TypeOf(bridge.ActionRequest{})) {
+		return bridge.ActionRequest{}, false
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
@@ -710,6 +645,9 @@ func (h *Handlers) HandleTabAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
+	if !refusePostQuery(w, r, "/actions", reflect.TypeOf(actionsRequest{})) {
+		return
+	}
 	var req actionsRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))

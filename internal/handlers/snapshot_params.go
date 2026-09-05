@@ -67,6 +67,9 @@ type SnapshotCostControls struct {
 // control was not told, just charged more.
 func ParseSnapshotCostControls(q url.Values) (SnapshotCostControls, error) {
 	controls := SnapshotCostControls{Format: "json", MaxTokens: -1, MaxDepth: -1}
+	if err := mistypedTabTarget(q); err != nil {
+		return controls, err
+	}
 
 	format := normalizeParam(q.Get("format"))
 	if format != "" {

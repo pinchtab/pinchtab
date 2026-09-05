@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -395,17 +396,23 @@ func writeFrameScope(w http.ResponseWriter, tabID string, scope bridge.FrameScop
 }
 
 func (h *Handlers) HandleFrame(w http.ResponseWriter, r *http.Request) {
-	tabID := r.URL.Query().Get("tabId")
 	var req frameRequest
-	if r.Method != http.MethodGet {
+	if r.Method == http.MethodGet {
+		if err := mistypedTabTarget(r.URL.Query()); err != nil {
+			httpx.Error(w, 400, err)
+			return
+		}
+		req.TabID = r.URL.Query().Get("tabId")
+	} else {
+		if !refusePostQuery(w, r, "/frame", reflect.TypeOf(frameRequest{})) {
+			return
+		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
 			return
 		}
-		if req.TabID != "" {
-			tabID = req.TabID
-		}
 	}
+	tabID := req.TabID
 
 	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
 	if err != nil {

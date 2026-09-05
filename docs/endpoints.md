@@ -117,6 +117,14 @@ Important behavior:
 - `POST /navigate` creates a new tab when `tabId` is omitted for anonymous callers
 - session-authenticated callers keep a current tab per session; omitted `tabId` reuses that session's current tab when one exists, otherwise creates one
 - bearer-token callers with `X-Agent-Id` keep a current tab per agent ID when no session is present
+- a tab is named by `tabId` and by nothing else, one spelling per verb: a `GET` names it in the
+  query, and `POST /navigate`, `POST /action`, `POST /actions` and `POST /frame` name it in the
+  JSON body only. A query parameter on one of those POSTs is refused with `400` naming it rather
+  than dropped, because a dropped `tabId` would drive a tab the caller never named and answer `200`.
+  `tab`, `tabID` and `tab_id` are refused on `GET /snapshot` and `GET /frame` instead of being
+  listed in `ignoredParams`: a wrong cost parameter gives a differently shaped answer to the right
+  question, a wrong target gives a right-shaped answer about the wrong page. Body-less POSTs such
+  as `/back?tabId=` keep their query form
 - a navigation that never produced a document — the tab is offline, an `abort` route
   rule matched, DNS failed, the connection was refused — leaves Chrome on its own
   `chrome-error://` page without failing the navigation, so `POST /navigate` checks the

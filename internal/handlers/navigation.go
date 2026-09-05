@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -99,6 +100,9 @@ func decodeNavigateRequest(w http.ResponseWriter, r *http.Request) (navigateRequ
 			return navigateRequest{}, false
 		}
 		return req, true
+	}
+	if !refusePostQuery(w, r, "/navigate", reflect.TypeOf(navigateRequest{})) {
+		return navigateRequest{}, false
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))

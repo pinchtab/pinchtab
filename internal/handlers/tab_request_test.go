@@ -1,12 +1,18 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -140,5 +146,143 @@ func TestEmptyPathSegmentNeverReachesATabHandler(t *testing.T) {
 	}
 	if w.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status = %d, want 307; ServeMux is expected to redirect the empty segment rather than match it", w.Code)
+	}
+}
+
+type echoingTabBridge struct {
+	*mockBridge
+}
+
+func (b *echoingTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
+	if tabID == "" {
+		tabID = "tabA"
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return bridge.NewTabHandle(ctx), tabID, nil
+}
+
+func newTwoTabHandlers(t *testing.T) *Handlers {
+	t.Helper()
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	})
+	const target = "http://localhost/page.html"
+	return New(&echoingTabBridge{mockBridge: &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{URL: target}}}, &config.RuntimeConfig{}, nil, nil, nil)
+}
+
+var postBodyVerbs = []struct {
+	endpoint string
+	handler  func(*Handlers) http.HandlerFunc
+	body     string
+}{
+	{"/navigate", func(h *Handlers) http.HandlerFunc { return h.HandleNavigate }, `{"url":"http://localhost/page.html","tabId":"tabB"}`},
+	{"/action", func(h *Handlers) http.HandlerFunc { return h.HandleAction }, `{"kind":"click","selector":"#btn","tabId":"tabB"}`},
+	{"/actions", func(h *Handlers) http.HandlerFunc { return h.HandleActions }, `{"actions":[{"kind":"click","selector":"#btn","tabId":"tabB"}]}`},
+	{"/frame", func(h *Handlers) http.HandlerFunc { return h.HandleFrame }, `{"target":"main","tabId":"tabB"}`},
+}
+
+func drive(h *Handlers, handler http.HandlerFunc, method, target, body string) *httptest.ResponseRecorder {
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req := httptest.NewRequest(method, target, reader)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler(w, req)
+	return w
+}
+
+func actedOnTab(w *httptest.ResponseRecorder) string {
+	if header := w.Header().Get(activity.HeaderPTTabID); header != "" {
+		return header
+	}
+	var resp struct {
+		TabID string `json:"tabId"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	return resp.TabID
+}
+
+func TestPostQueryParametersAreRefusedNotDropped(t *testing.T) {
+	for _, verb := range postBodyVerbs {
+		t.Run(verb.endpoint, func(t *testing.T) {
+			h := newTwoTabHandlers(t)
+			w := drive(h, verb.handler(h), http.MethodPost, verb.endpoint+"?tabId=tabB", verb.body)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("POST %s?tabId= answered %d, acting on %q; a query the POST branch never reads must be refused: %s", verb.endpoint, w.Code, actedOnTab(w), w.Body.String())
+			}
+			for _, want := range []string{"tabId (send it in the JSON body)", "POST " + verb.endpoint} {
+				if !strings.Contains(w.Body.String(), want) {
+					t.Fatalf("refusal %s does not say %q", w.Body.String(), want)
+				}
+			}
+			w = drive(h, verb.handler(h), http.MethodPost, verb.endpoint+"?stray=1", verb.body)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "stray:") || strings.Contains(w.Body.String(), "JSON body)") {
+				t.Fatalf("a stray query key must be refused by name without the body hint: %d %s", w.Code, w.Body.String())
+			}
+			w = drive(h, verb.handler(h), http.MethodPost, verb.endpoint+"?browser=chrome", verb.body)
+			if w.Code == http.StatusBadRequest && strings.Contains(w.Body.String(), "would silently drop this query parameter") {
+				t.Fatalf("?browser= is the router's parameter and the MCP client's POST shape; refusing it breaks a shipped caller: %s", w.Body.String())
+			}
+			w = drive(h, verb.handler(h), http.MethodPost, verb.endpoint+"?tabId=", verb.body)
+			if w.Code == http.StatusBadRequest && strings.Contains(w.Body.String(), "would silently drop this query parameter") {
+				t.Fatalf("an empty query value is absent, not a dropped parameter: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestTargetingActsOnTheTabNamedNotTheCurrentOne(t *testing.T) {
+	h := newTwoTabHandlers(t)
+	cases := []struct {
+		name    string
+		method  string
+		target  string
+		body    string
+		handler http.HandlerFunc
+	}{
+		{"GET /navigate?tabId", http.MethodGet, "/navigate?url=http://localhost/page.html&tabId=tabB", "", h.HandleNavigate},
+		{"POST /navigate body tabId", http.MethodPost, "/navigate", `{"url":"http://localhost/page.html","tabId":"tabB"}`, h.HandleNavigate},
+		{"GET /action?tabId", http.MethodGet, "/action?kind=click&selector=%23btn&tabId=tabB", "", h.HandleAction},
+		{"POST /action body tabId", http.MethodPost, "/action", `{"kind":"click","selector":"#btn","tabId":"tabB"}`, h.HandleAction},
+		{"GET /frame?tabId", http.MethodGet, "/frame?tabId=tabB", "", h.HandleFrame},
+		{"POST /frame body tabId", http.MethodPost, "/frame", `{"target":"main","tabId":"tabB"}`, h.HandleFrame},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := drive(h, tc.handler, tc.method, tc.target, tc.body)
+			if got := actedOnTab(w); got != "tabB" {
+				t.Fatalf("acted on %q, want the named tabB (status %d: %s)", got, w.Code, w.Body.String())
+			}
+		})
+	}
+	t.Run("the fixture's current tab is a different tab", func(t *testing.T) {
+		w := drive(h, h.HandleAction, http.MethodPost, "/action", `{"kind":"click","selector":"#btn"}`)
+		if got := actedOnTab(w); got != "tabA" {
+			t.Fatalf("an unnamed target resolved to %q, want the current tabA; without this the named-tab rows prove nothing", got)
+		}
+	})
+}
+
+func TestMistypedTargetingIsRefusedOnReadVerbs(t *testing.T) {
+	h := newTwoTabHandlers(t)
+	for _, spelling := range mistypedTabTargets {
+		for _, verb := range []struct {
+			path    string
+			handler http.HandlerFunc
+		}{{"/snapshot", h.HandleSnapshot}, {"/frame", h.HandleFrame}} {
+			t.Run(verb.path+"?"+spelling, func(t *testing.T) {
+				w := drive(h, verb.handler, http.MethodGet, verb.path+"?"+spelling+"=tabB", "")
+				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), spelling+": not a targeting parameter") {
+					t.Fatalf("GET %s?%s= answered %d about %q instead of refusing: %s", verb.path, spelling, w.Code, actedOnTab(w), w.Body.String())
+				}
+			})
+		}
+	}
+	controls, err := ParseSnapshotCostControls(url.Values{"bogus": []string{"1"}})
+	if err != nil || len(controls.Ignored) != 1 || controls.Ignored[0] != "bogus" {
+		t.Fatalf("a non-targeting unknown parameter must stay diagnostic in ignoredParams, got %v %v", controls.Ignored, err)
 	}
 }

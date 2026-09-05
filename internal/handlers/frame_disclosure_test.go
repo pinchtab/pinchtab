@@ -279,7 +279,7 @@ func TestAScopedReadIsDistinguishableFromAWholeDocumentRead(t *testing.T) {
 		t.Errorf("an unscoped read claims a frame scope: %s", header)
 	}
 
-	frameReq := httptest.NewRequest("POST", "/frame?tabId="+tabID, strings.NewReader(`{"target":"inner.html"}`))
+	frameReq := httptest.NewRequest("POST", "/frame", strings.NewReader(`{"tabId":"`+tabID+`","target":"inner.html"}`))
 	frameRes := httptest.NewRecorder()
 	h.HandleFrame(frameRes, frameReq)
 	if frameRes.Code != http.StatusOK {
@@ -410,7 +410,7 @@ func scopeToInnerFrame(t *testing.T, h *Handlers, tabID string) string {
 
 func scopeToFrame(t *testing.T, h *Handlers, tabID, target string) string {
 	t.Helper()
-	req := httptest.NewRequest("POST", "/frame?tabId="+tabID, strings.NewReader(`{"target":"`+target+`"}`))
+	req := httptest.NewRequest("POST", "/frame", strings.NewReader(`{"tabId":"`+tabID+`","target":"`+target+`"}`))
 	res := httptest.NewRecorder()
 	h.HandleFrame(res, req)
 	if res.Code != http.StatusOK {
@@ -425,7 +425,7 @@ func scopeToFrame(t *testing.T, h *Handlers, tabID, target string) string {
 
 func resetFrameScope(t *testing.T, h *Handlers, tabID string) {
 	t.Helper()
-	req := httptest.NewRequest("POST", "/frame?tabId="+tabID, strings.NewReader(`{"target":"main"}`))
+	req := httptest.NewRequest("POST", "/frame", strings.NewReader(`{"tabId":"`+tabID+`","target":"main"}`))
 	res := httptest.NewRecorder()
 	h.HandleFrame(res, req)
 	if res.Code != http.StatusOK {
@@ -527,7 +527,7 @@ func TestAScopedCaptureDisclosesTheFrameWhileItsEpochIdStaysTheMainFrame(t *test
 	unscopedNodes := captureSnapshotNodeCount(t, unscoped)
 
 	frameRes := httptest.NewRecorder()
-	h.HandleFrame(frameRes, httptest.NewRequest("POST", "/frame?tabId="+tabID, strings.NewReader(`{"target":"inner.html"}`)))
+	h.HandleFrame(frameRes, httptest.NewRequest("POST", "/frame", strings.NewReader(`{"tabId":"`+tabID+`","target":"inner.html"}`)))
 	if frameRes.Code != http.StatusOK {
 		t.Fatalf("frame scope: status %d body=%s", frameRes.Code, frameRes.Body.String())
 	}
