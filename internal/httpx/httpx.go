@@ -26,6 +26,62 @@ const (
 	MaxNavigationHTTPDuration = MaxNavigationTimeout + NavigationTransportGrace
 )
 
+// The budget an operation gets when one process calls another is decided here,
+// once, from the operation: a read-sized deadline for the cheap reads, the
+// navigation ceiling for everything that may drive a browser. Clients keep
+// their own Timeout as the outer ceiling only. Package-level so a test can
+// shrink both without waiting out the real values.
+var (
+	ReadHTTPDuration        = 30 * time.Second
+	LongOperationHTTPBudget = MaxNavigationHTTPDuration
+)
+
+// heavyReadSegments are the GET families that render, capture or stream and so
+// earn the long budget even though they read: a wrong guess here keeps today's
+// behaviour, while a cheap read wrongly listed only waits longer than it needs.
+var heavyReadSegments = map[string]bool{
+	"screenshot": true, "annotate": true, "capture": true, "pdf": true, "snapshot": true,
+	"text": true, "html": true, "styles": true, "a11y": true, "download": true,
+	"screencast": true, "scrape": true, "audit": true, "compare": true,
+}
+
+// RequestBudget is the deadline the operation at method+path gets from a
+// calling process. Every mutation is long: it may navigate, act or wait. A GET
+// is read-sized unless it is one of the heavy read families.
+func RequestBudget(method, path string) time.Duration {
+	if method != http.MethodGet && method != http.MethodHead {
+		return LongOperationHTTPBudget
+	}
+	for _, segment := range strings.Split(strings.Trim(path, "/"), "/") {
+		if heavyReadSegments[segment] || (segment == "network" && strings.Contains(path, "/network/stream") || strings.Contains(path, "/network/export")) {
+			return LongOperationHTTPBudget
+		}
+	}
+	return ReadHTTPDuration
+}
+
+// WithRequestBudget bounds ctx by RequestBudget for the operation and hands the
+// budget back so a failure can name it; the caller cancels once the response is
+// fully consumed.
+func WithRequestBudget(ctx context.Context, method, path string) (context.Context, context.CancelFunc, time.Duration) {
+	budget := RequestBudget(method, path)
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	return ctx, cancel, budget
+}
+
+// UnreachableError names who did not answer and, when the budget ran out, how
+// long the caller waited — the blank-terminal case this exists for.
+func UnreachableError(instanceID, host string, budget time.Duration, err error) error {
+	who := host
+	if instanceID != "" {
+		who = "instance " + instanceID + " at " + host
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("%s did not answer within its %s budget: %w", who, budget, err)
+	}
+	return fmt.Errorf("%s unreachable: %w", who, err)
+}
+
 type ProblemDetails struct {
 	Type      string         `json:"type"`
 	Title     string         `json:"title"`

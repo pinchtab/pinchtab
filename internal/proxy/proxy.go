@@ -106,7 +106,9 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 	//
 	// proxyReq cannot be sent as-is: it is a server request and carries
 	// RequestURI, which a client request may not set.
-	outReq, err := http.NewRequestWithContext(r.Context(), proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
+	ctx, cancel, budget := httpx.WithRequestBudget(r.Context(), proxyReq.Method, proxyReq.URL.Path)
+	defer cancel()
+	outReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if err != nil {
 		httpx.Error(w, 502, fmt.Errorf("proxy error: %w", err))
 		return
@@ -122,7 +124,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 
 	resp, err := client.Do(outReq)
 	if err != nil {
-		httpx.Error(w, 502, fmt.Errorf("instance unreachable: %w", err))
+		httpx.Error(w, 502, httpx.UnreachableError(outReq.Header.Get(activity.HeaderPTInstance), outReq.URL.Host, budget, err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()

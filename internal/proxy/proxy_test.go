@@ -6,7 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"net/url"
+	"strings"
+	"time"
 )
 
 func fakeBridge(t *testing.T) *httptest.Server {
@@ -206,5 +210,71 @@ func TestHTTP_DoesNotDoubleTheOuterChainsResponseHeaders(t *testing.T) {
 		if got[0] != "outer-"+name {
 			t.Errorf("%s = %q, want the outer chain's value, which is the one it logged", name, got[0])
 		}
+	}
+}
+
+// wedgedInstance answers /health instantly and holds /tabs and /navigate for
+// `hold`: a stub that blocked everything would exercise connection failure,
+// which already worked, not the read budget this pins.
+func wedgedInstance(t *testing.T, hold time.Duration) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tabs", "/navigate":
+			select {
+			case <-time.After(hold):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"path":"` + r.URL.Path + `"}`))
+	}))
+}
+
+func shrinkBudgets(t *testing.T, read, long time.Duration) {
+	t.Helper()
+	prevRead, prevLong := httpx.ReadHTTPDuration, httpx.LongOperationHTTPBudget
+	httpx.ReadHTTPDuration, httpx.LongOperationHTTPBudget = read, long
+	t.Cleanup(func() { httpx.ReadHTTPDuration, httpx.LongOperationHTTPBudget = prevRead, prevLong })
+}
+
+// A wedged instance costs a read its own short budget, names the instance and
+// the budget, and a navigate through the same client still gets the long ceiling.
+func TestForwardBoundsAReadByItsOwnBudgetAndLeavesNavigationItsCeiling(t *testing.T) {
+	shrinkBudgets(t, 100*time.Millisecond, 2*time.Second)
+	srv := wedgedInstance(t, 400*time.Millisecond)
+	defer srv.Close()
+	target := func(path string) *url.URL {
+		u, _ := url.Parse(srv.URL + path)
+		return u
+	}
+	rewrite := func(req *http.Request) { req.Header.Set(activity.HeaderPTInstance, "inst_wedged") }
+
+	started := time.Now()
+	rec := httptest.NewRecorder()
+	Forward(rec, httptest.NewRequest("GET", "/tabs", nil), target("/tabs"), Options{RewriteRequest: rewrite})
+	if rec.Code != 502 {
+		t.Fatalf("GET /tabs on a wedged instance = %d, want 502: %s", rec.Code, rec.Body.String())
+	}
+	if waited := time.Since(started); waited > time.Second {
+		t.Fatalf("the read waited %v; the read budget did not bound it", waited)
+	}
+	for _, want := range []string{"instance inst_wedged", "did not answer within its 100ms budget"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("failure does not say %q: %s", want, rec.Body.String())
+		}
+	}
+
+	rec = httptest.NewRecorder()
+	Forward(rec, httptest.NewRequest("GET", "/health", nil), target("/health"), Options{})
+	if rec.Code != 200 {
+		t.Fatalf("GET /health = %d; the budget must not touch an instance that answers", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	Forward(rec, httptest.NewRequest("POST", "/navigate", strings.NewReader(`{"url":"https://example.com"}`)), target("/navigate"), Options{})
+	if rec.Code != 200 {
+		t.Fatalf("POST /navigate = %d: %s; navigation lost its long ceiling", rec.Code, rec.Body.String())
 	}
 }

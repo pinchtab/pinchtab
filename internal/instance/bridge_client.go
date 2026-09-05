@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -52,13 +53,15 @@ func (bc *BridgeClient) authorized(req *http.Request) *http.Request {
 
 // FetchTabs implements TabFetcher by querying a bridge's /tabs endpoint.
 func (bc *BridgeClient) FetchTabs(instanceURL string) ([]bridge.InstanceTab, error) {
-	req, err := http.NewRequest(http.MethodGet, instanceURL+"/tabs", nil)
+	ctx, cancel, budget := httpx.WithRequestBudget(context.Background(), http.MethodGet, "/tabs")
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, instanceURL+"/tabs", nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetch tabs request: %w", err)
 	}
 	resp, err := bc.client.Do(bc.authorized(req))
 	if err != nil {
-		return nil, fmt.Errorf("fetch tabs: %w", err)
+		return nil, fmt.Errorf("fetch tabs: %w", httpx.UnreachableError("", req.URL.Host, budget, err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -80,6 +83,8 @@ func (bc *BridgeClient) FetchTabs(instanceURL string) ([]bridge.InstanceTab, err
 func (bc *BridgeClient) CreateTab(ctx context.Context, port, url string) (string, error) {
 	// Create blank tab first to avoid waitFor issues
 	body := `{"action":"new","url":"about:blank"}`
+	ctx, cancel, _ := httpx.WithRequestBudget(ctx, http.MethodPost, "/tab")
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/tab"), strings.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create tab request: %w", err)
@@ -115,6 +120,8 @@ func (bc *BridgeClient) CreateTab(ctx context.Context, port, url string) (string
 // NavigateTab navigates an existing tab to a URL
 func (bc *BridgeClient) NavigateTab(ctx context.Context, port, tabID, url string) error {
 	body := fmt.Sprintf(`{"url":%q,"waitFor":"dom"}`, url)
+	ctx, cancel, _ := httpx.WithRequestBudget(ctx, http.MethodPost, "/navigate")
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/tabs/"+tabID+"/navigate"), strings.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("navigate request: %w", err)
@@ -137,6 +144,8 @@ func (bc *BridgeClient) NavigateTab(ctx context.Context, port, tabID, url string
 // CloseTab closes a tab on a bridge instance.
 func (bc *BridgeClient) CloseTab(ctx context.Context, port, tabID string) error {
 	body := fmt.Sprintf(`{"tabId":%q}`, tabID)
+	ctx, cancel, _ := httpx.WithRequestBudget(ctx, http.MethodPost, "/close")
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bridgeURL(port, "/close"), strings.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("close tab request: %w", err)
@@ -159,6 +168,8 @@ func (bc *BridgeClient) CloseTab(ctx context.Context, port, tabID string) error 
 // the snapshot cache. The response body is discarded.
 func (bc *BridgeClient) SnapshotTab(ctx context.Context, port, tabID string) {
 	url := bridgeURL(port, "/tabs/"+tabID+"/snapshot")
+	ctx, cancel, _ := httpx.WithRequestBudget(ctx, http.MethodGet, "/snapshot")
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return
@@ -191,7 +202,9 @@ func (bc *BridgeClient) ProxyWithTabID(w http.ResponseWriter, r *http.Request, p
 	}
 
 	targetURL := bridgeURL(port, path)
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, strings.NewReader(string(encoded)))
+	ctx, cancel, budget := httpx.WithRequestBudget(r.Context(), r.Method, path)
+	defer cancel()
+	proxyReq, err := http.NewRequestWithContext(ctx, r.Method, targetURL, strings.NewReader(string(encoded)))
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("proxy request: %w", err))
 		return
@@ -205,7 +218,7 @@ func (bc *BridgeClient) ProxyWithTabID(w http.ResponseWriter, r *http.Request, p
 
 	resp, err := bc.client.Do(proxyReq)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", err))
+		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", httpx.UnreachableError(r.Header.Get(activity.HeaderPTInstance), proxyReq.URL.Host, budget, err)))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -224,7 +237,9 @@ func (bc *BridgeClient) ProxyToTab(w http.ResponseWriter, r *http.Request, port,
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	ctx, cancel, budget := httpx.WithRequestBudget(r.Context(), r.Method, suffix)
+	defer cancel()
+	proxyReq, err := http.NewRequestWithContext(ctx, r.Method, targetURL, r.Body)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("proxy request: %w", err))
 		return
@@ -241,7 +256,7 @@ func (bc *BridgeClient) ProxyToTab(w http.ResponseWriter, r *http.Request, port,
 
 	resp, err := bc.client.Do(proxyReq)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", err))
+		httpx.Error(w, http.StatusBadGateway, fmt.Errorf("proxy failed: %w", httpx.UnreachableError(r.Header.Get(activity.HeaderPTInstance), proxyReq.URL.Host, budget, err)))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
