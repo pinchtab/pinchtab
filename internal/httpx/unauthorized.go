@@ -11,7 +11,13 @@ import (
 const (
 	CodeMissingToken = "missing_token"
 	CodeBadToken     = "bad_token"
+	CodeBadSession   = "bad_session"
 )
+
+func UnauthorizedSession(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", fmt.Sprintf("Session realm=%q, error=%q", "pinchtab", CodeBadSession))
+	ErrorCode(w, http.StatusUnauthorized, CodeBadSession, "invalid or expired agent session", false, nil)
+}
 
 // Unauthorized is the one producer of the bearer 401 pair — the WWW-Authenticate
 // header and the coded body — for every missing_token/bad_token site. presented
