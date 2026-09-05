@@ -16,19 +16,19 @@ var securityCmd = &cobra.Command{
 	Short: "Review runtime security posture",
 	Long:  "Shows runtime security posture and recommended defaults.",
 	Run: func(cmd *cobra.Command, args []string) {
-		printSecurityOverview(loadLocalConfig())
+		changes, err := recommendedChanges()
+		printSecurityOverview(loadLocalConfig(), changes, err)
 	},
 }
 
-var securityDryRun bool
-
 func init() {
 	securityCmd.GroupID = "config"
+	var upDryRun, downDryRun bool
 	up := &cobra.Command{
 		Use:   "up",
 		Short: "Apply recommended security defaults",
 		Run: func(cmd *cobra.Command, args []string) {
-			handleSecurityUpCommand()
+			handleSecurityUpCommand(upDryRun)
 		},
 	}
 	down := &cobra.Command{
@@ -39,14 +39,21 @@ func init() {
 			"sensitive endpoint families and attach are enabled, while IDPI protections are disabled. " +
 			"Loopback bind and API authentication remain enabled, and attach host allowlisting stays local-only until you widen it explicitly.",
 		Run: func(cmd *cobra.Command, args []string) {
-			handleSecurityDownCommand()
+			handleSecurityDownCommand(downDryRun)
 		},
 	}
-	for _, preset := range []*cobra.Command{up, down} {
-		preset.Flags().BoolVar(&securityDryRun, "dry-run", false, "Report the settings the preset would write without writing them")
-		securityCmd.AddCommand(preset)
-	}
+	const dryRunHelp = "Report the settings the preset would write without writing them"
+	up.Flags().BoolVar(&upDryRun, "dry-run", false, dryRunHelp)
+	down.Flags().BoolVar(&downDryRun, "dry-run", false, dryRunHelp)
+	securityCmd.AddCommand(up, down)
 	rootCmd.AddCommand(securityCmd)
+}
+
+// recommendedChanges is what security up would write right now: the overview
+// advertises the preset's own dry run, so the two counts are one number.
+func recommendedChanges() ([]workflow.SettingChange, error) {
+	result, err := workflow.RestoreSecurityDefaults(true)
+	return result.Changes, err
 }
 
 // printEnforcedDriftWarning flags when a server is running but was started with
@@ -76,10 +83,9 @@ func printEnforcedDriftWarning(cfg *config.RuntimeConfig) {
 	fmt.Println()
 }
 
-func printSecurityOverview(cfg *config.RuntimeConfig) {
+func printSecurityOverview(cfg *config.RuntimeConfig, recommended []workflow.SettingChange, recommendedErr error) {
 	printEnforcedDriftWarning(cfg)
 	posture := cli.AssessSecurityPosture(cfg)
-	recommended := cli.RecommendedSecurityDefaultLines(cfg)
 	warnings := cli.AssessSecurityWarnings(cfg)
 
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Security"))
@@ -94,15 +100,15 @@ func printSecurityOverview(cfg *config.RuntimeConfig) {
 	fmt.Println()
 
 	switch {
+	case recommendedErr != nil:
+		fmt.Println("  " + cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("could not compute what security up would write: %v", recommendedErr)))
 	case len(recommended) == 0 && len(warnings) == 0:
 		fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
 	case len(recommended) > 0:
 		fmt.Printf("  %s %s\n",
-			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d config setting(s) differ from recommended defaults (the rows above summarise them) —", len(recommended))),
+			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d config setting(s) differ from recommended defaults (the rows above summarise them; security up would write exactly these) —", len(recommended))),
 			cli.StyleStdout(cli.CommandStyle, "pinchtab security up"))
-		for _, line := range recommended {
-			fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, line))
-		}
+		printSettingChanges(recommended)
 	default:
 		fmt.Println("  " + cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d security warning(s) detected:", len(warnings))))
 		for _, warning := range warnings {
@@ -191,15 +197,15 @@ func postureRowNote(path string) string {
 	return "posture row: " + strings.Join(rows, ", ")
 }
 
-func handleSecurityUpCommand() {
-	if _, err := applySecurityUp(securityDryRun); err != nil {
+func handleSecurityUpCommand(dryRun bool) {
+	if _, err := applySecurityUp(dryRun); err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 		os.Exit(1)
 	}
 }
 
-func handleSecurityDownCommand() {
-	if _, err := applySecurityDown(securityDryRun); err != nil {
+func handleSecurityDownCommand(dryRun bool) {
+	if _, err := applySecurityDown(dryRun); err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 		os.Exit(1)
 	}

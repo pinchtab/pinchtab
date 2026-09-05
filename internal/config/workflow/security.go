@@ -94,6 +94,20 @@ func recommendedSecuritySettings() ([]setting, error) {
 	), nil
 }
 
+// RecommendedSecuritySettingPaths is every key security up writes, for the
+// surfaces that must agree with it.
+func RecommendedSecuritySettingPaths() ([]string, error) {
+	settings, err := recommendedSecuritySettings()
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(settings))
+	for _, s := range settings {
+		paths = append(paths, s.path)
+	}
+	return paths, nil
+}
+
 func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) error {
 	if fc == nil {
 		return fmt.Errorf("nil file config")
@@ -240,8 +254,6 @@ func commitPreset(fc *config.FileConfig, configPath string, dryRun bool) (Preset
 	return result, nil
 }
 
-const tokenSetting = "server.token"
-
 func settingChanges(before, after []byte) ([]SettingChange, error) {
 	old, err := flattenConfigJSON(before)
 	if err != nil {
@@ -266,13 +278,21 @@ func settingChanges(before, after []byte) ([]SettingChange, error) {
 		if old[path] == next[path] {
 			continue
 		}
-		changes = append(changes, redactToken(SettingChange{Path: path, Old: old[path], New: next[path]}))
+		changes = append(changes, redactSecret(SettingChange{Path: path, Old: old[path], New: next[path]}))
 	}
 	return changes, nil
 }
 
-func redactToken(c SettingChange) SettingChange {
-	if c.Path != tokenSetting {
+// isSecretSetting keys on the config's secret vocabulary by name — a token or a
+// password anywhere in the document — so a preset that starts touching one
+// cannot print it.
+func isSecretSetting(path string) bool {
+	last := path[strings.LastIndex(path, ".")+1:]
+	return last == "token" || last == "password"
+}
+
+func redactSecret(c SettingChange) SettingChange {
+	if !isSecretSetting(c.Path) {
 		return c
 	}
 	if c.Old == `""` {

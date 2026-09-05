@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,13 +10,14 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
 
 func TestHandleSecurityCommandDefaultConfigSkipsEmptySections(t *testing.T) {
 	cfg := testRuntimeConfig()
 
 	output := captureStdout(t, func() {
-		printSecurityOverview(cfg)
+		printSecurityOverview(cfg, nil, nil)
 	})
 
 	required := []string{
@@ -48,7 +50,7 @@ func TestPrintSecurityOverviewDoesNotCallAuthDisabledSafe(t *testing.T) {
 	cfg.Token = ""
 
 	output := captureStdout(t, func() {
-		printSecurityOverview(cfg)
+		printSecurityOverview(cfg, nil, nil)
 	})
 
 	if strings.Contains(output, "All recommended security defaults are active.") {
@@ -165,7 +167,7 @@ func TestPrintSecurityOverviewNamesWarningsSecurityUpCannotFix(t *testing.T) {
 	cfg.AllowedDomains = nil
 
 	output := captureStdout(t, func() {
-		printSecurityOverview(cfg)
+		printSecurityOverview(cfg, nil, nil)
 	})
 
 	if !strings.Contains(output, "website whitelist is not set for IDPI") || !strings.Contains(output, "configure allowedDomains") {
@@ -173,5 +175,42 @@ func TestPrintSecurityOverviewNamesWarningsSecurityUpCannotFix(t *testing.T) {
 	}
 	if strings.Contains(output, "differ from recommended defaults") || strings.Contains(output, "warning(s) detected — pinchtab security up") {
 		t.Fatalf("security up cannot set a whitelist, so the overview must not send the operator there\n%s", output)
+	}
+}
+
+// The overview advertises the preset's own dry run, so its count and the count
+// security up then reports are one number; a config missing the recommended
+// defaults is where two hand-kept lists used to disagree by one.
+func TestOverviewCountIsThePresetChangeCount(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if err := os.WriteFile(configPath, []byte(`{"server":{"bind":"0.0.0.0","token":"secret"},"security":{"allowEvaluate":true}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := recommendedChanges()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) < 4 {
+		t.Fatalf("the relaxed fixture yields only %d changes; too few to tell the lists apart", len(changes))
+	}
+	output := captureStdout(t, func() {
+		printSecurityOverview(config.Load(), changes, nil)
+	})
+	want := fmt.Sprintf("%d config setting(s) differ from recommended defaults", len(changes))
+	if !strings.Contains(output, want) {
+		t.Fatalf("overview does not advertise %q\n%s", want, output)
+	}
+	for _, change := range changes {
+		if !strings.Contains(output, change.Path+":") {
+			t.Errorf("overview omits %s, which security up would write", change.Path)
+		}
+	}
+	preview, err := workflow.RestoreSecurityDefaults(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Changes) != len(changes) {
+		t.Fatalf("overview counts %d, the preset would write %d", len(changes), len(preview.Changes))
 	}
 }

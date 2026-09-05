@@ -311,13 +311,20 @@ func TestDryRunReportsATokenItDoesNotProvision(t *testing.T) {
 	}
 }
 
-func TestTheTokenValueNeverAppearsInAChange(t *testing.T) {
-	changes, err := settingChanges([]byte(`{"server":{"token":"old-secret"}}`), []byte(`{"server":{"token":"new-secret"}}`))
+func TestNoSecretValueEverAppearsInAChange(t *testing.T) {
+	changes, err := settingChanges(
+		[]byte(`{"server":{"token":"old-secret"},"browser":{"proxy":{"password":"old-pass"}}}`),
+		[]byte(`{"server":{"token":"new-secret"},"browser":{"proxy":{"password":"new-pass"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Old != "<set>" || changes[0].New != "<generated>" {
-		t.Fatalf("token change = %+v", changes)
+	if len(changes) != 2 {
+		t.Fatalf("changes = %+v", changes)
+	}
+	for _, c := range changes {
+		if c.Old != "<set>" || c.New != "<generated>" {
+			t.Errorf("%s rendered %q -> %q; a secret must never appear", c.Path, c.Old, c.New)
+		}
 	}
 }
 

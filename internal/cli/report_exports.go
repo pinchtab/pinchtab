@@ -31,10 +31,6 @@ func PostureRowsForSetting(path string) []string {
 	return report.PostureRowsForSetting(path)
 }
 
-func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
-	return report.RecommendedSecurityDefaultLines(cfg)
-}
-
 func LogSecurityWarnings(cfg *config.RuntimeConfig) {
 	report.LogSecurityWarnings(cfg)
 }

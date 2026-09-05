@@ -423,8 +423,9 @@ report for what the command would write and touch nothing, tokens included. `--d
 is the spelling every previewing PinchTab command uses.
 
 The overview counts three different populations and says which is which: posture rows
-(the table), config settings that differ from the recommended defaults (listed under the
-count, and what `security up` writes), and security warnings `security up` cannot fix.
+(the table), the config settings `security up` would write right now (the overview runs
+the preset's own dry run, so that count and `security up --dry-run` are one number), and
+security warnings `security up` cannot fix.
 
 If you intentionally expose PinchTab beyond localhost, treat the token as mandatory and keep the sensitive endpoint families disabled unless you have a specific reason to enable them. For anything more exposed than a single-machine local setup, assume you are operating an advanced deployment and review each security control explicitly.
 
