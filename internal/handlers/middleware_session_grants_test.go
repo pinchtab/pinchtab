@@ -588,3 +588,55 @@ func TestBrowseGrantAdmitsOnlyTheApprovedRedundantReads(t *testing.T) {
 		t.Fatal("browse still contains the dead GET /action matcher entry")
 	}
 }
+
+func TestBrowseSessionReachesApprovedReadsThroughTheRegisteredFrontDoor(t *testing.T) {
+	h := newTwoTabHandlers(t)
+	h.Config.Token = "server-token"
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+
+	store := session.NewStore(session.Config{Enabled: true, IdleTimeout: 30 * time.Minute, MaxLifetime: 24 * time.Hour})
+	sessionID, token, err := store.Create("browse-agent", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !store.SetGrants(sessionID, []string{session.GrantBrowse}) {
+		t.Fatal("browse session vanished before its grant was set")
+	}
+	frontDoor := AuthMiddlewareWithSessions(config.NewLive(h.Config), nil, store, mux)
+
+	allowed := []string{
+		"/title", "/tabs/tabB/title",
+		"/capture", "/tabs/tabB/capture",
+		"/box?ref=e1", "/tabs/tabB/box?ref=e1",
+		"/count?selector=div", "/tabs/tabB/count?selector=div",
+	}
+	for _, path := range allowed {
+		t.Run("allowed "+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Authorization", "Session "+token)
+			w := httptest.NewRecorder()
+			frontDoor.ServeHTTP(w, req)
+			if strings.Contains(w.Body.String(), "session_scope_forbidden") {
+				t.Fatalf("browse session was scope-refused from registered GET %s: %s", path, w.Body.String())
+			}
+		})
+	}
+
+	refused := []string{
+		"/html", "/tabs/tabB/html",
+		"/styles", "/tabs/tabB/styles",
+		"/state", "/tabs/tabB/state",
+	}
+	for _, path := range refused {
+		t.Run("refused "+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Authorization", "Session "+token)
+			w := httptest.NewRecorder()
+			frontDoor.ServeHTTP(w, req)
+			if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "session_scope_forbidden") {
+				t.Fatalf("browse session reached deliberately excluded GET %s: status=%d body=%s", path, w.Code, w.Body.String())
+			}
+		})
+	}
+}
