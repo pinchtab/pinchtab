@@ -408,6 +408,16 @@ Security defaults restored in ~/.pinchtab/config.json (5 config setting(s) writt
       not shown in the posture table
 ```
 
+`security up` writes exactly these keys and nothing else: `server.bind`, every gated
+capability's `security.allow*` flag, `security.attach.enabled`,
+`security.attach.allowHosts`, and the four `security.idpi` flags (`enabled`,
+`strictMode`, `scanContent`, `wrapContent`). Operator-set data in the security block is
+preserved: `allowedDomains`, `downloadAllowedDomains`, `trustedProxyCIDRs`,
+`trustedResolveCIDRs`, `stateEncryptionKey`, `allowFileScheme`, `attach.allowSchemes`,
+`idpi.customPatterns` and `idpi.shieldThreshold` all survive. The one operator list it
+does reset is `attach.allowHosts`, back to loopback, and that removal is itemised in the
+report before it happens under `--dry-run`.
+
 `pinchtab security up --dry-run` and `pinchtab security down --dry-run` print the same
 report for what the command would write and touch nothing, tokens included. `--dry-run`
 is the spelling every previewing PinchTab command uses.

@@ -85,7 +85,9 @@ func TestNoHandListedCapabilityDisableLineRemains(t *testing.T) {
 
 func TestRecommendedDefaultsAreSatisfiedBySecurityUp(t *testing.T) {
 	fc := config.DefaultFileConfig()
-	workflow.ApplyRecommendedSecurityDefaults(&fc)
+	if err := workflow.ApplyRecommendedSecurityDefaults(&fc); err != nil {
+		t.Fatal(err)
+	}
 	if lines := RecommendedSecurityDefaultLines(config.NextRuntimeConfig(config.Load(), &fc)); len(lines) > 0 {
 		t.Fatalf("RecommendedSecurityDefaultLines() = %v after security up; the report sends the operator back to a command that changes nothing", lines)
 	}
@@ -109,7 +111,9 @@ func TestEveryRecommendedLineStatesTheValueSecurityUpWrites(t *testing.T) {
 		t.Fatalf("RecommendedSecurityDefaultLines() = %v on a fully relaxed config; too few lines for this check to prove anything", lines)
 	}
 	hardened := config.DefaultFileConfig()
-	workflow.ApplyRecommendedSecurityDefaults(&hardened)
+	if err := workflow.ApplyRecommendedSecurityDefaults(&hardened); err != nil {
+		t.Fatal(err)
+	}
 	for _, line := range lines {
 		path, value, ok := strings.Cut(line, " = ")
 		if !ok {
@@ -135,7 +139,9 @@ func TestEveryKeySecurityUpWritesResolvesToAPostureRowOrToNone(t *testing.T) {
 	relaxed.Server.Bind = "0.0.0.0"
 	relaxed.Security.IDPI = &config.IDPIConfig{}
 	hardened := config.DefaultFileConfig()
-	workflow.ApplyRecommendedSecurityDefaults(&hardened)
+	if err := workflow.ApplyRecommendedSecurityDefaults(&hardened); err != nil {
+		t.Fatal(err)
+	}
 	claimed, unclaimed := 0, 0
 	for _, line := range RecommendedSecurityDefaultLines(config.NextRuntimeConfig(config.Load(), &relaxed)) {
 		path, _, _ := strings.Cut(line, " = ")

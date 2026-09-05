@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -33,13 +35,74 @@ type PresetResult struct {
 
 func (r PresetResult) Changed() bool { return len(r.Changes) > 0 }
 
-func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	defaults := config.DefaultFileConfig()
-	if fc == nil {
-		return
+// setting is one config key a preset writes by name; everything a preset does
+// not name survives untouched, by construction.
+type setting struct {
+	path  string
+	value string
+}
+
+func applySettings(fc *config.FileConfig, settings []setting) error {
+	for _, item := range settings {
+		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
+			return fmt.Errorf("set %s: %w", item.path, err)
+		}
 	}
-	fc.Server.Bind = defaults.Server.Bind
-	fc.Security = defaults.Security
+	return nil
+}
+
+// capabilitySettings names every gated capability's setting except the ones in
+// skip, so both presets derive the capability half from routes rather than
+// transcribing it.
+func capabilitySettings(value string, skip ...routes.Capability) ([]setting, error) {
+	settings := make([]setting, 0)
+	for cap := range routes.CapabilityEndpoints() {
+		if slices.Contains(skip, cap) {
+			continue
+		}
+		meta, ok := routes.Meta(cap)
+		if !ok {
+			return nil, fmt.Errorf("capability %q gates routes but routes.Meta does not describe it", cap)
+		}
+		settings = append(settings, setting{path: meta.Setting, value: value})
+	}
+	sort.Slice(settings, func(i, j int) bool { return settings[i].path < settings[j].path })
+	return settings, nil
+}
+
+// recommendedSecuritySettings is the whole of what security up writes: the
+// loopback bind, every capability off, attach off and local-only, and the IDPI
+// flags on, each valued from DefaultFileConfig. Allowlists, CIDR lists, custom
+// patterns, tuned thresholds and the state encryption key are not named here
+// and so are preserved.
+func recommendedSecuritySettings() ([]setting, error) {
+	defaults := config.DefaultFileConfig()
+	idpi := defaults.Security.EffectiveIDPI()
+	settings := []setting{{path: "server.bind", value: defaults.Server.Bind}}
+	capabilities, err := capabilitySettings("false")
+	if err != nil {
+		return nil, err
+	}
+	settings = append(settings, capabilities...)
+	return append(settings,
+		setting{path: "security.attach.enabled", value: strconv.FormatBool(*defaults.Security.Attach.Enabled)},
+		setting{path: "security.attach.allowHosts", value: strings.Join(defaults.Security.Attach.AllowHosts, ",")},
+		setting{path: "security.idpi.enabled", value: strconv.FormatBool(idpi.Enabled)},
+		setting{path: "security.idpi.strictMode", value: strconv.FormatBool(idpi.StrictMode)},
+		setting{path: "security.idpi.scanContent", value: strconv.FormatBool(idpi.ScanContent)},
+		setting{path: "security.idpi.wrapContent", value: strconv.FormatBool(idpi.WrapContent)},
+	), nil
+}
+
+func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) error {
+	if fc == nil {
+		return fmt.Errorf("nil file config")
+	}
+	settings, err := recommendedSecuritySettings()
+	if err != nil {
+		return err
+	}
+	return applySettings(fc, settings)
 }
 
 func RestoreSecurityDefaults(dryRun bool) (PresetResult, error) {
@@ -47,7 +110,9 @@ func RestoreSecurityDefaults(dryRun bool) (PresetResult, error) {
 	if err != nil {
 		return PresetResult{}, err
 	}
-	ApplyRecommendedSecurityDefaults(fc)
+	if err := ApplyRecommendedSecurityDefaults(fc); err != nil {
+		return PresetResult{}, err
+	}
 	if _, err := config.ProvisionFileToken(fc, configPath); err != nil {
 		return PresetResult{}, err
 	}
@@ -100,35 +165,21 @@ func BuildGuardsDownConfig(fc *config.FileConfig) error {
 		return fmt.Errorf("generate token: %w", err)
 	}
 
-	for cap := range routes.CapabilityEndpoints() {
-		if cap == guardsDownExcludedCapability {
-			continue
-		}
-		meta, ok := routes.Meta(cap)
-		if !ok {
-			return fmt.Errorf("capability %q gates routes but routes.Meta does not describe it", cap)
-		}
-		if err := config.SetConfigValue(fc, meta.Setting, "true"); err != nil {
-			return fmt.Errorf("set %s: %w", meta.Setting, err)
-		}
+	capabilities, err := capabilitySettings("true", guardsDownExcludedCapability)
+	if err != nil {
+		return err
 	}
-
-	for _, item := range []struct {
-		path  string
-		value string
-	}{
-		{path: "server.bind", value: "127.0.0.1"},
-		{path: "security.attach.enabled", value: "true"},
-		{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
-		{path: "security.attach.allowSchemes", value: "ws,wss"},
-		{path: "security.idpi.enabled", value: "false"},
-		{path: "security.idpi.strictMode", value: "false"},
-		{path: "security.idpi.scanContent", value: "false"},
-		{path: "security.idpi.wrapContent", value: "false"},
-	} {
-		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
-			return fmt.Errorf("set %s: %w", item.path, err)
-		}
+	if err := applySettings(fc, append(capabilities,
+		setting{path: "server.bind", value: "127.0.0.1"},
+		setting{path: "security.attach.enabled", value: "true"},
+		setting{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
+		setting{path: "security.attach.allowSchemes", value: "ws,wss"},
+		setting{path: "security.idpi.enabled", value: "false"},
+		setting{path: "security.idpi.strictMode", value: "false"},
+		setting{path: "security.idpi.scanContent", value: "false"},
+		setting{path: "security.idpi.wrapContent", value: "false"},
+	)); err != nil {
+		return err
 	}
 
 	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {

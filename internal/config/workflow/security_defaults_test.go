@@ -34,7 +34,9 @@ func TestApplyRecommendedSecurityDefaults(t *testing.T) {
 		},
 	}
 
-	ApplyRecommendedSecurityDefaults(fc)
+	if err := ApplyRecommendedSecurityDefaults(fc); err != nil {
+		t.Fatal(err)
+	}
 
 	if fc.Server.Port != "9999" {
 		t.Fatalf("expected port to be preserved, got %q", fc.Server.Port)
@@ -59,7 +61,9 @@ func TestApplyRecommendedSecurityDefaults(t *testing.T) {
 func TestApplyRecommendedSecurityDefaults_LeavesAMissingTokenAlone(t *testing.T) {
 	fc := &config.FileConfig{}
 
-	ApplyRecommendedSecurityDefaults(fc)
+	if err := ApplyRecommendedSecurityDefaults(fc); err != nil {
+		t.Fatal(err)
+	}
 
 	if fc.Server.Token != "" {
 		t.Fatalf("applying security defaults generated a token %q; whether one may be added to an existing config is ProvisionFileToken's decision, and generating here bypasses the operator-config refusal", fc.Server.Token)
@@ -232,7 +236,7 @@ func TestRestoreSecurityDefaultsReportsExactlyTheKeysTheFileGained(t *testing.T)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("report names %v\nfile diff is %v", got, want)
 	}
-	for _, path := range []string{"security.idpi.enabled", "security.idpi.wrapContent", "security.idpi.scanTimeoutSec"} {
+	for _, path := range []string{"security.idpi.enabled", "security.idpi.wrapContent", "security.idpi.strictMode"} {
 		if _, ok := got[path]; !ok {
 			t.Errorf("%s was written silently: not in the report", path)
 		}

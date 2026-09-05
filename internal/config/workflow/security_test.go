@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -133,3 +134,194 @@ func TestGuardsDownPostureActiveMirrorsThePreset(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// securityConfigPaths walks SecurityConfig by its json tags so a field added later
+// is classified by this census before it can be wiped: every path is either one
+// the preset names, or one the preset must leave untouched.
+func securityConfigPaths(t *testing.T) []string {
+	t.Helper()
+	var paths []string
+	var walk func(prefix string, typ reflect.Type)
+	walk = func(prefix string, typ reflect.Type) {
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if name == "" || name == "-" {
+				continue
+			}
+			path := prefix + "." + name
+			ft := field.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+			}
+			if ft.Kind() == reflect.Struct {
+				walk(path, ft)
+				continue
+			}
+			paths = append(paths, path)
+		}
+	}
+	walk("security", reflect.TypeOf(config.SecurityConfig{}))
+	if len(paths) < 20 {
+		t.Fatalf("walked only %d security paths; the census would prove little", len(paths))
+	}
+	return paths
+}
+
+// sentinelSecurityConfig sets every leaf of SecurityConfig to a value no default
+// carries, so "preserved" and "reset" are both observable for every field.
+func sentinelSecurityConfig() config.SecurityConfig {
+	var fill func(v reflect.Value)
+	fill = func(v reflect.Value) {
+		for i := 0; i < v.NumField(); i++ {
+			f := v.Field(i)
+			switch f.Kind() {
+			case reflect.Ptr:
+				elem := reflect.New(f.Type().Elem())
+				if elem.Elem().Kind() == reflect.Struct {
+					fill(elem.Elem())
+				} else {
+					setSentinel(elem.Elem())
+				}
+				f.Set(elem)
+			case reflect.Struct:
+				fill(f)
+			default:
+				setSentinel(f)
+			}
+		}
+	}
+	var sec config.SecurityConfig
+	fill(reflect.ValueOf(&sec).Elem())
+	return sec
+}
+
+func setSentinel(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Int:
+		v.SetInt(7777)
+	case reflect.String:
+		v.SetString("sentinel-value")
+	case reflect.Slice:
+		v.Set(reflect.ValueOf([]string{"sentinel.example", "10.9.8.0/24"}))
+	default:
+		panic("unhandled security field kind " + v.Kind().String())
+	}
+}
+
+func TestSecurityUpNamesEveryFieldItResetsAndPreservesTheRest(t *testing.T) {
+	named := map[string]string{}
+	settings, err := recommendedSecuritySettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range settings {
+		named[s.path] = s.value
+	}
+	if _, ok := named["security.allowEvaluate"]; !ok {
+		t.Fatal("the capability half is not derived: allowEvaluate is missing from the named resets")
+	}
+
+	fc := config.DefaultFileConfig()
+	fc.Security = sentinelSecurityConfig()
+	before := map[string]string{}
+	for _, path := range securityConfigPaths(t) {
+		v, err := config.GetConfigValue(&fc, path)
+		if err != nil {
+			t.Fatalf("read %s before: %v", path, err)
+		}
+		before[path] = v
+	}
+	if err := ApplyRecommendedSecurityDefaults(&fc); err != nil {
+		t.Fatal(err)
+	}
+	for path, was := range before {
+		got, err := config.GetConfigValue(&fc, path)
+		if err != nil {
+			t.Fatalf("read %s after: %v", path, err)
+		}
+		if want, reset := named[path]; reset {
+			if got != want {
+				t.Errorf("%s is a named reset but reads %q, want %q", path, got, want)
+			}
+			continue
+		}
+		if got != was {
+			t.Errorf("%s is not named by security up yet changed %q -> %q; it must be named or preserved", path, was, got)
+		}
+	}
+}
+
+// The nine keys the wholesale assignment used to destroy, proven on the file the
+// operator keeps: the change report names only recommended settings, and each key
+// reads back unchanged afterwards.
+func TestSecurityUpPreservesOperatorSecurityData(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if err := os.WriteFile(configPath, []byte(`{
+  "server": {"bind": "0.0.0.0", "token": "secret"},
+  "security": {
+    "allowEvaluate": true,
+    "allowFileScheme": true,
+    "allowedDomains": ["intranet.example"],
+    "downloadAllowedDomains": ["files.example"],
+    "trustedProxyCIDRs": ["10.0.0.0/8"],
+    "trustedResolveCIDRs": ["192.168.0.0/16"],
+    "stateEncryptionKey": "operator-secret-key",
+    "attach": {"enabled": true, "allowHosts": ["chrome.internal"], "allowSchemes": ["ws"]},
+    "idpi": {"enabled": false, "customPatterns": ["ignore previous"], "shieldThreshold": 42}
+  }
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	preserved := map[string]string{
+		"security.allowFileScheme":        "true",
+		"security.allowedDomains":         "intranet.example",
+		"security.downloadAllowedDomains": "files.example",
+		"security.trustedProxyCIDRs":      "10.0.0.0/8",
+		"security.trustedResolveCIDRs":    "192.168.0.0/16",
+		"security.stateEncryptionKey":     "operator-secret-key",
+		"security.attach.allowSchemes":    "ws",
+		"security.idpi.customPatterns":    "ignore previous",
+		"security.idpi.shieldThreshold":   "42",
+	}
+
+	result, err := RestoreSecurityDefaults(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := map[string]bool{}
+	settings, _ := recommendedSecuritySettings()
+	for _, s := range settings {
+		named[s.path] = true
+	}
+	moved := 0
+	for _, change := range result.Changes {
+		if !named[change.Path] {
+			t.Errorf("security up wrote %s (%s -> %s), which it never named", change.Path, change.Old, change.New)
+		}
+		moved++
+	}
+	if moved < 4 {
+		t.Fatalf("only %d recommended settings moved; the relaxed fixture should move more", moved)
+	}
+	loaded, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range preserved {
+		got, err := config.GetConfigValue(loaded, path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if got != want {
+			t.Errorf("%s = %q after security up, want the operator's %q", path, got, want)
+		}
+	}
+	if hosts, _ := config.GetConfigValue(loaded, "security.attach.allowHosts"); strings.Contains(hosts, "chrome.internal") {
+		t.Errorf("attach.allowHosts kept a non-local host: %q; that reset is deliberate and named", hosts)
+	}
+}
