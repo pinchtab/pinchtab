@@ -5,9 +5,14 @@ Check server status and availability.
 `/health` is deliberately **not** the endpoint to compare across modes: in server
 mode it is the orchestrator's own envelope, and an orchestrator has facts
 (`instances`, `profiles`, `defaultInstance`) a bridge does not. Failure and crash
-telemetry is served in the same shape by both modes on
-[`/metrics`](./metrics.md) — use that when comparing a bridge repro against a
-server-mode problem.
+telemetry is served in the same shape by both modes, but not by the same endpoint:
+`/metrics` reports the counters of the process answering it, so in server mode it is
+the front door's own layer and a browser crash never appears there, while in bridge
+mode it is the instance layer. To compare a bridge repro against a server-mode
+problem, read the server-mode instance at `/instances/{id}/metrics`, which answers
+from the same layer a bridge's `/metrics` does. Every metrics response names its
+`layer` (`frontDoor` or `instance`); two readings are comparable only when that field
+agrees. [`/metrics`](./metrics.md) has the layer table.
 
 ## Bridge Mode
 

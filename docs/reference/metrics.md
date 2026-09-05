@@ -85,7 +85,12 @@ Deliberately different:
   `/health` is the orchestrator's own envelope (`instances`, `profiles`,
   `defaultInstance`, `restartRequired`), because those facts exist only at the front
   door. A bridge has no instances to report. The two `/health` bodies therefore
-  differ on purpose, and `/metrics` is the endpoint to compare across modes.
+  differ on purpose. `/metrics` is answered locally, which is exactly why it is
+  **not** the endpoint to compare across modes either: it reports the layer of the
+  process answering it, the front door in server mode and the instance in bridge
+  mode. The server-mode counterpart to a bridge's `/metrics` is
+  `/instances/{id}/metrics`; compare two readings only when their `layer` fields
+  agree.
 - **`memory` appears only on an instance's `/metrics`**, since only a process
   holding a browser can measure one.
 - **Browser crash events are recorded by whichever process owns the browser**, so in
