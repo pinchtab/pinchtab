@@ -64,37 +64,16 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clientIP := authn.ClientIP(r)
-	if a.loginLimiter != nil {
-		if allowed, retryAfter := a.loginLimiter.Allow(clientIP); !allowed {
-			retryAfterSec := secondsCeil(retryAfter)
-			w.Header().Set("Retry-After", strconv.Itoa(retryAfterSec))
-			authn.AuditWarn(r, "auth.login_rate_limited",
-				"retryAfterSec", retryAfterSec,
-				"windowSec", int(a.loginLimiter.Window().Seconds()),
-				"maxAttempts", a.loginLimiter.MaxAttempts(),
-			)
-			httpx.ErrorCode(w, http.StatusTooManyRequests, "login_rate_limited", "too many login attempts", true, map[string]any{
-				"retryAfterSec": retryAfterSec,
-				"windowSec":     int(a.loginLimiter.Window().Seconds()),
-				"maxAttempts":   a.loginLimiter.MaxAttempts(),
-			})
-			return
-		}
-	}
-
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "bad_auth_json", "invalid auth payload", false, nil)
+	if a.rejectIfRateLimited(w, r, clientIP, "auth.login_rate_limited") {
 		return
 	}
 
-	provided := strings.TrimSpace(req.Token)
+	provided, ok := decodeTokenPayload(w, r)
+	if !ok {
+		return
+	}
 	if provided == "" {
-		if a.loginLimiter != nil {
-			a.loginLimiter.RecordFailure(clientIP)
-		}
+		a.recordAuthFailure(clientIP)
 		authn.AuditWarn(r, "auth.login_failed", "reason", "missing_token")
 		httpx.Unauthorized(w, httpx.CodeMissingToken, "")
 		return
@@ -110,9 +89,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-		if a.loginLimiter != nil {
-			a.loginLimiter.RecordFailure(clientIP)
-		}
+		a.recordAuthFailure(clientIP)
 		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
 		authn.AuditWarn(r, "auth.login_failed", "reason", "bad_token")
 		httpx.Unauthorized(w, httpx.CodeBadToken, provided)
@@ -143,6 +120,46 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (a *AuthAPI) rejectIfRateLimited(w http.ResponseWriter, r *http.Request, clientIP, auditEvent string) bool {
+	if a.loginLimiter == nil {
+		return false
+	}
+	allowed, retryAfter := a.loginLimiter.Allow(clientIP)
+	if allowed {
+		return false
+	}
+	retryAfterSec := secondsCeil(retryAfter)
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSec))
+	authn.AuditWarn(r, auditEvent,
+		"retryAfterSec", retryAfterSec,
+		"windowSec", int(a.loginLimiter.Window().Seconds()),
+		"maxAttempts", a.loginLimiter.MaxAttempts(),
+	)
+	httpx.ErrorCode(w, http.StatusTooManyRequests, "login_rate_limited", "too many login attempts", true, map[string]any{
+		"retryAfterSec": retryAfterSec,
+		"windowSec":     int(a.loginLimiter.Window().Seconds()),
+		"maxAttempts":   a.loginLimiter.MaxAttempts(),
+	})
+	return true
+}
+
+func (a *AuthAPI) recordAuthFailure(clientIP string) {
+	if a.loginLimiter != nil {
+		a.loginLimiter.RecordFailure(clientIP)
+	}
+}
+
+func decodeTokenPayload(w http.ResponseWriter, r *http.Request) (string, bool) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_auth_json", "invalid auth payload", false, nil)
+		return "", false
+	}
+	return strings.TrimSpace(req.Token), true
+}
+
 func (a *AuthAPI) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if a.sessions != nil {
 		if creds := authn.CredentialsFromRequest(r); creds.Method == authn.MethodCookie {
@@ -170,25 +187,29 @@ func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusForbidden, "session_auth_required", "dashboard session required", false, nil)
 		return
 	}
-
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "bad_auth_json", "invalid auth payload", false, nil)
+	clientIP := authn.ClientIP(r)
+	if a.rejectIfRateLimited(w, r, clientIP, "auth.elevation_rate_limited") {
 		return
 	}
 
-	provided := strings.TrimSpace(req.Token)
+	provided, ok := decodeTokenPayload(w, r)
+	if !ok {
+		return
+	}
 	if provided == "" {
+		a.recordAuthFailure(clientIP)
 		authn.AuditWarn(r, "auth.elevation_failed", "reason", "missing_token")
 		httpx.Unauthorized(w, httpx.CodeMissingToken, "")
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+		a.recordAuthFailure(clientIP)
 		authn.AuditWarn(r, "auth.elevation_failed", "reason", "bad_token")
 		httpx.Unauthorized(w, httpx.CodeBadToken, provided)
 		return
+	}
+	if a.loginLimiter != nil {
+		a.loginLimiter.Reset(clientIP)
 	}
 	if !a.sessions.Elevate(creds.Value, token) {
 		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))

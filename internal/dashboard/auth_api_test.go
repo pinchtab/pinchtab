@@ -414,3 +414,30 @@ func TestAuthAPIHandleLoginRateLimitIgnoresSpoofedForwardedHeaders(t *testing.T)
 		t.Fatalf("second status = %d, want %d", w.Code, http.StatusTooManyRequests)
 	}
 }
+
+func TestAuthAPIHandleElevateRateLimitsRepeatedFailures(t *testing.T) {
+	sessions := browsersession.NewManager(browsersession.Config{})
+	sessionID, err := sessions.Create("secret-token")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	api := newAuthAPIForTest(&config.RuntimeConfig{Token: "secret-token"}, sessions)
+	api.loginLimiter = authn.NewAttemptLimiter(authn.AttemptLimiterConfig{Window: time.Minute, MaxAttempts: 1})
+
+	elevate := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/api/auth/elevate", strings.NewReader(`{"token":"wrong"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "203.0.113.7:4444"
+		req.AddCookie(&http.Cookie{Name: authn.CookieName, Value: sessionID})
+		w := httptest.NewRecorder()
+		api.HandleElevate(w, req)
+		return w
+	}
+	if w := elevate(); w.Code != http.StatusUnauthorized {
+		t.Fatalf("first bad elevation status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	w := elevate()
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("second bad elevation status = %d (Retry-After %q), want %d: a stolen cookie must not get unlimited guesses at the token", w.Code, w.Header().Get("Retry-After"), http.StatusTooManyRequests)
+	}
+}
