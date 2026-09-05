@@ -189,7 +189,9 @@ func typeKeyNames(typ reflect.Type, into map[string]bool) {
 // scope disclosure is published by frameDisclosure.attach, the shared owner the
 // other scoped readers use, so it appears on the wire without a literal here.
 var attachedByTheSharedOwner = map[string]string{
-	"frame": "written by frameDisclosure.attach in internal/handlers/frame.go, not by HandleCapture",
+	"frame":            "written by frameDisclosure.attach in internal/handlers/frame.go, not by HandleCapture",
+	"untrustedContent": "written by trustBoundary.attach in internal/handlers/snapshot_idpi.go, the one owner of the trust boundary every scoped reader uses",
+	"idpiNotice":       "written by trustBoundary.attach in internal/handlers/snapshot_idpi.go beside untrustedContent",
 }
 
 func TestCaptureEnvelopeAndTheProducerNameTheSameKeys(t *testing.T) {
