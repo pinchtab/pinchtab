@@ -128,7 +128,6 @@ func DefaultFileConfig() FileConfig {
 	allowUpload := false
 	allowClipboard := false
 	allowStateExport := false
-	enableActionGuards := true
 	uploadMaxRequestBytes := DefaultUploadMaxRequestBytes
 	uploadMaxFiles := DefaultUploadMaxFiles
 	uploadMaxFileBytes := DefaultUploadMaxFileBytes
@@ -192,7 +191,6 @@ func DefaultFileConfig() FileConfig {
 			AllowUpload:            &allowUpload,
 			AllowClipboard:         &allowClipboard,
 			AllowStateExport:       &allowStateExport,
-			EnableActionGuards:     &enableActionGuards,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,

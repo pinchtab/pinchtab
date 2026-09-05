@@ -37,7 +37,7 @@ func UnknownFileConfigKeys(data []byte) []string {
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil
 	}
-	keys := collectUnknownKeys("", root, reflect.TypeOf(FileConfig{}), aliasFileConfigPaths())
+	keys := collectUnknownKeys("", root, reflect.TypeOf(FileConfig{}), acceptedUndeclaredFileConfigPaths())
 	sort.Strings(keys)
 	return keys
 }
@@ -154,6 +154,14 @@ func aliasFileConfigPaths() map[string]bool {
 	for _, path := range declaredPaths("", reflect.TypeOf(aliasRawConfig{})) {
 		exempt[path] = true
 	}
+	return exempt
+}
+
+func acceptedUndeclaredFileConfigPaths() map[string]bool {
+	exempt := aliasFileConfigPaths()
+	// Retired in PIN-315. Existing config files must continue to load, but the
+	// key is deliberately absent from FileConfig, the editor, and the schema.
+	exempt["security.enableActionGuards"] = true
 	return exempt
 }
 

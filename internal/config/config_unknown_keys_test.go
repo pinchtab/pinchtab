@@ -65,6 +65,13 @@ func TestUnknownFileConfigKeysAcceptsADocumentOfDeclaredKeys(t *testing.T) {
 	}
 }
 
+func TestUnknownFileConfigKeysAcceptsRetiredEnableActionGuards(t *testing.T) {
+	keys := UnknownFileConfigKeys([]byte(`{"security":{"enableActionGuards":false}}`))
+	if len(keys) != 0 {
+		t.Fatalf("retired compatibility key reported as unknown: %v", keys)
+	}
+}
+
 // browser.targets keys are operator-chosen, so a target name can never be an
 // unknown key — but a misspelled field INSIDE one still must be.
 func TestUnknownFileConfigKeysTreatsMapKeysAsOpenAndStillChecksTheirValues(t *testing.T) {

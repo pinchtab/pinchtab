@@ -70,7 +70,7 @@ func TestEveryFormOfANavigatingActionReportsWhereItLanded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			call := 0
 			b := &Bridge{
-				Config: &config.RuntimeConfig{EnableActionGuards: true},
+				Config: &config.RuntimeConfig{},
 				URLReader: func(context.Context) (string, error) {
 					call++
 					if call == 1 {
@@ -107,12 +107,8 @@ func TestReadActionURL_NoChromeDPContext(t *testing.T) {
 	}
 }
 
-func TestExecuteAction_ReportsTheNavigationOutcomeWhateverEnableActionGuardsSays(t *testing.T) {
-	settings := map[string]*config.RuntimeConfig{
-		"guards on":  {EnableActionGuards: true},
-		"guards off": {EnableActionGuards: false},
-		"nil config": nil,
-	}
+func TestExecuteActionAlwaysReportsTheNavigationOutcome(t *testing.T) {
+	settings := map[string]*config.RuntimeConfig{"config": {}, "nil config": nil}
 	for name, cfg := range settings {
 		t.Run(name, func(t *testing.T) {
 			t.Run("a navigating click reports where it landed", func(t *testing.T) {
@@ -191,9 +187,9 @@ func assertNavigationOutcome(t *testing.T, res map[string]any, before, after str
 	}
 }
 
-func TestExecuteAction_ClassifiesStaleError_WhenGuardsDisabled(t *testing.T) {
+func TestExecuteActionClassifiesStaleError(t *testing.T) {
 	b := &Bridge{
-		Config: &config.RuntimeConfig{EnableActionGuards: false},
+		Config: &config.RuntimeConfig{},
 		Actions: map[string]ActionFunc{
 			ActionType: func(context.Context, ActionRequest) (map[string]any, error) {
 				return nil, errors.New("Node with given identifier does not exist")

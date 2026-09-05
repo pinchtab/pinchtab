@@ -503,9 +503,6 @@
         "stateEncryptionKey": {
           "$ref": "#/definitions/nullableString"
         },
-        "enableActionGuards": {
-          "$ref": "#/definitions/nullableBoolean"
-        },
         "uploadMaxRequestBytes": {
           "anyOf": [
             {

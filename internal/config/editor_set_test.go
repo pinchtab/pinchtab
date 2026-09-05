@@ -171,9 +171,6 @@ func TestSetConfigValue_SecurityFields(t *testing.T) {
 			return fc.Security.DownloadMaxBytes != nil && *fc.Security.DownloadMaxBytes == 33554432
 		}, false},
 		{"security.allowUpload", "off", func(fc *FileConfig) bool { return *fc.Security.AllowUpload == false }, false},
-		{"security.enableActionGuards", "true", func(fc *FileConfig) bool {
-			return fc.Security.EnableActionGuards != nil && *fc.Security.EnableActionGuards
-		}, false},
 		{"security.uploadMaxRequestBytes", "12582912", func(fc *FileConfig) bool {
 			return fc.Security.UploadMaxRequestBytes != nil && *fc.Security.UploadMaxRequestBytes == 12582912
 		}, false},
@@ -188,7 +185,6 @@ func TestSetConfigValue_SecurityFields(t *testing.T) {
 		}, false},
 		{"security.allowEvaluate", "maybe", nil, true},
 		{"security.allowClipboard", "maybe", nil, true},
-		{"security.enableActionGuards", "maybe", nil, true},
 		{"security.unknown", "true", nil, true},
 	}
 
@@ -354,11 +350,12 @@ func TestSetConfigValue_TimeoutsFields(t *testing.T) {
 
 func TestSetConfigValue_InvalidPaths(t *testing.T) {
 	tests := []string{
-		"port",          // missing section
-		"",              // empty
-		"unknown.field", // unknown section
-		"server",        // missing field
-		"a.b.c",         // too many parts (we only split on first .)
+		"port",                        // missing section
+		"",                            // empty
+		"unknown.field",               // unknown section
+		"server",                      // missing field
+		"security.enableActionGuards", // retired field
+		"a.b.c",                       // too many parts (we only split on first .)
 	}
 
 	for _, path := range tests {

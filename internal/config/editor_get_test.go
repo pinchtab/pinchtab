@@ -53,7 +53,6 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"security.downloadAllowedDomains", "pinchtab.com,*.pinchtab.com", "pinchtab.com,*.pinchtab.com"},
 		{"security.downloadMaxBytes", "33554432", "33554432"},
 		{"security.allowUpload", "yes", "true"},
-		{"security.enableActionGuards", "0", "false"},
 		{"security.uploadMaxRequestBytes", "12582912", "12582912"},
 		{"security.uploadMaxFiles", "12", "12"},
 		{"security.uploadMaxFileBytes", "6291456", "6291456"},
@@ -118,7 +117,6 @@ func TestGetConfigValue_NilPointerReturnsEmpty(t *testing.T) {
 		"security.allowStateExport",
 		"security.downloadMaxBytes",
 		"security.allowUpload",
-		"security.enableActionGuards",
 		"security.uploadMaxRequestBytes",
 		"security.uploadMaxFiles",
 		"security.uploadMaxFileBytes",
@@ -182,12 +180,13 @@ func TestGetConfigValue_AttachSlices(t *testing.T) {
 func TestGetConfigValue_UnknownPaths(t *testing.T) {
 	fc := &FileConfig{}
 	errorCases := []string{
-		"port",                     // missing section
-		"",                         // empty
-		"unknown.field",            // unknown section
-		"server.ghost",             // unknown field in known section
-		"security.attach.badfield", // unknown attach field
-		"security.idpi.badfield",   // unknown idpi field
+		"port",                        // missing section
+		"",                            // empty
+		"unknown.field",               // unknown section
+		"server.ghost",                // unknown field in known section
+		"security.attach.badfield",    // unknown attach field
+		"security.idpi.badfield",      // unknown idpi field
+		"security.enableActionGuards", // retired field
 	}
 	for _, path := range errorCases {
 		t.Run(path, func(t *testing.T) {

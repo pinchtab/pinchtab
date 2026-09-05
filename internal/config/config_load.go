@@ -212,7 +212,6 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		AllowClipboard:            false,
 		AllowStateExport:          false,
 		StateEncryptionKey:        "",
-		EnableActionGuards:        true,
 		UploadMaxRequestBytes:     DefaultUploadMaxRequestBytes,
 		UploadMaxFiles:            DefaultUploadMaxFiles,
 		UploadMaxFileBytes:        DefaultUploadMaxFileBytes,
@@ -485,9 +484,6 @@ func applySecurityConfig(cfg *RuntimeConfig, s SecurityConfig) {
 	}
 	if s.StateEncryptionKey != nil {
 		cfg.StateEncryptionKey = *s.StateEncryptionKey
-	}
-	if s.EnableActionGuards != nil {
-		cfg.EnableActionGuards = *s.EnableActionGuards
 	}
 	if s.UploadMaxRequestBytes != nil {
 		cfg.UploadMaxRequestBytes = clampPositiveLimit(*s.UploadMaxRequestBytes, DefaultUploadMaxRequestBytes, MaxUploadMaxRequestBytes)

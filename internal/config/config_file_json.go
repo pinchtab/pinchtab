@@ -96,7 +96,6 @@ type securityConfigJSON struct {
 	AllowClipboard         *bool          `json:"allowClipboard"`
 	AllowStateExport       *bool          `json:"allowStateExport"`
 	StateEncryptionKey     *string        `json:"stateEncryptionKey"`
-	EnableActionGuards     *bool          `json:"enableActionGuards"`
 	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
 	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
 	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`

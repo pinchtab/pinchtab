@@ -329,7 +329,6 @@ func (s SecurityConfig) wire() securityConfigJSON {
 		AllowClipboard:         s.AllowClipboard,
 		AllowStateExport:       s.AllowStateExport,
 		StateEncryptionKey:     s.StateEncryptionKey,
-		EnableActionGuards:     s.EnableActionGuards,
 		UploadMaxRequestBytes:  s.UploadMaxRequestBytes,
 		UploadMaxFiles:         s.UploadMaxFiles,
 		UploadMaxFileBytes:     s.UploadMaxFileBytes,
@@ -400,7 +399,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	allowUpload := cfg.AllowUpload
 	allowClipboard := cfg.AllowClipboard
 	allowStateExport := cfg.AllowStateExport
-	enableActionGuards := cfg.EnableActionGuards
 	uploadMaxRequestBytes := cfg.EffectiveUploadMaxRequestBytes()
 	uploadMaxFiles := cfg.EffectiveUploadMaxFiles()
 	uploadMaxFileBytes := cfg.EffectiveUploadMaxFileBytes()
@@ -533,7 +531,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			AllowUpload:            &allowUpload,
 			AllowClipboard:         &allowClipboard,
 			AllowStateExport:       &allowStateExport,
-			EnableActionGuards:     &enableActionGuards,
 			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
 			UploadMaxFiles:         &uploadMaxFiles,
 			UploadMaxFileBytes:     &uploadMaxFileBytes,

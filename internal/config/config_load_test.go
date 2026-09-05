@@ -51,9 +51,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowCookies {
 		t.Errorf("default AllowCookies = %v, want false", cfg.AllowCookies)
 	}
-	if !cfg.EnableActionGuards {
-		t.Errorf("default EnableActionGuards = %v, want true", cfg.EnableActionGuards)
-	}
 	if cfg.TrustProxyHeaders {
 		t.Errorf("default TrustProxyHeaders = %v, want false", cfg.TrustProxyHeaders)
 	}
@@ -451,9 +448,6 @@ func TestApplyFileConfigToRuntimeResetsSecurityFlagsToSafeDefaults(t *testing.T)
 	}
 	if cfg.AllowUpload {
 		t.Errorf("ApplyFileConfigToRuntime AllowUpload = %v, want false", cfg.AllowUpload)
-	}
-	if !cfg.EnableActionGuards {
-		t.Errorf("ApplyFileConfigToRuntime EnableActionGuards = %v, want true", cfg.EnableActionGuards)
 	}
 	if len(cfg.DownloadAllowedDomains) != 0 {
 		t.Errorf("ApplyFileConfigToRuntime DownloadAllowedDomains = %v, want empty list", cfg.DownloadAllowedDomains)

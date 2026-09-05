@@ -506,7 +506,6 @@ var securityBoolFields = map[string]bool{
 	"allowUpload":           true,
 	"allowNetworkIntercept": true,
 	"allowFileScheme":       true,
-	"enableActionGuards":    true,
 	"trustLoopbackProxy":    true,
 }
 
@@ -619,8 +618,6 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowNetworkIntercept = &b
 	case "allowFileScheme":
 		s.AllowFileScheme = &b
-	case "enableActionGuards":
-		s.EnableActionGuards = &b
 	case "trustLoopbackProxy":
 		s.TrustLoopbackProxy = &b
 	default:

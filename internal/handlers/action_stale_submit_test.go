@@ -102,13 +102,10 @@ func staleSubmitHandlers(t *testing.T, f orderFixture) (*Handlers, context.Conte
 		t.Fatal(err)
 	}
 
-	// EnableActionGuards is what turns the unexpected-navigation check on; without it the
-	// bridge never compares the URL and the navigation half of this card is unobservable.
 	cfg := &config.RuntimeConfig{
-		ActionTimeout:      10 * time.Second,
-		DefaultBrowser:     config.BrowserChrome,
-		StateDir:           t.TempDir(),
-		EnableActionGuards: true,
+		ActionTimeout:  10 * time.Second,
+		DefaultBrowser: config.BrowserChrome,
+		StateDir:       t.TempDir(),
 	}
 	b := bridge.New(context.Background(), ctx, cfg)
 	const tabID = "tab-stale-submit"
