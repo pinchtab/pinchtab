@@ -2,6 +2,8 @@ package authn
 
 import (
 	"net/http"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 	"net/url"
 	"strings"
 	"time"
@@ -9,44 +11,47 @@ import (
 
 const defaultSessionCookieLifetime = 7 * 24 * time.Hour
 
-// SetSessionCookie stores the opaque dashboard session id in an HttpOnly
-// same-site cookie so browser APIs can authenticate without exposing the
-// underlying bearer token to JavaScript.
-func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, maxLifetime time.Duration, trustProxy bool, cookieSecure *bool) {
+type CookiePolicy struct {
+	TrustProxy bool
+	Secure     *bool
+}
+
+func CookiePolicyFor(cfg *config.RuntimeConfig) CookiePolicy {
+	if cfg == nil {
+		return CookiePolicy{}
+	}
+	return CookiePolicy{TrustProxy: cfg.TrustProxyHeaders, Secure: cfg.CookieSecure}
+}
+
+func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, maxLifetime time.Duration, policy CookiePolicy) {
 	if maxLifetime <= 0 {
 		maxLifetime = defaultSessionCookieLifetime
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Value:    url.QueryEscape(strings.TrimSpace(sessionID)),
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   sessionCookieSecure(r, trustProxy, cookieSecure),
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   int(maxLifetime.Seconds()),
-		Expires:  time.Now().Add(maxLifetime),
-	})
+	http.SetCookie(w, sessionCookie(r, policy, url.QueryEscape(strings.TrimSpace(sessionID)), int(maxLifetime.Seconds()), time.Now().Add(maxLifetime)))
 }
 
-// ClearSessionCookie expires the dashboard auth cookie.
-func ClearSessionCookie(w http.ResponseWriter, r *http.Request, trustProxy bool, cookieSecure *bool) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   sessionCookieSecure(r, trustProxy, cookieSecure),
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
+func ClearSessionCookie(w http.ResponseWriter, r *http.Request, policy CookiePolicy) {
+	http.SetCookie(w, sessionCookie(r, policy, "", -1, time.Unix(0, 0)))
 }
 
-func sessionCookieSecure(r *http.Request, trustProxy bool, cookieSecure *bool) bool {
-	if cookieSecure != nil {
-		return *cookieSecure
+func sessionCookie(r *http.Request, policy CookiePolicy, value string, maxAge int, expires time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     CookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   policy.secure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   maxAge,
+		Expires:  expires,
 	}
-	return RequestIsHTTPS(r, trustProxy)
+}
+
+func (p CookiePolicy) secure(r *http.Request) bool {
+	if p.Secure != nil {
+		return *p.Secure
+	}
+	return RequestIsHTTPS(r, p.TrustProxy)
 }
 
 func RequestIsHTTPS(r *http.Request, trustProxy bool) bool {

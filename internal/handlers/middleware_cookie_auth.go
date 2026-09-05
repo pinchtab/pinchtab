@@ -113,13 +113,6 @@ func cookieOriginAllowed(r *http.Request, trustProxy bool) bool {
 	return false
 }
 
-func cookieSecureSetting(cfg *config.RuntimeConfig) *bool {
-	if cfg == nil {
-		return nil
-	}
-	return cfg.CookieSecure
-}
-
 func sameOriginRequest(origin string, r *http.Request, trustProxy ...bool) bool {
 	parsed, err := url.Parse(origin)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {

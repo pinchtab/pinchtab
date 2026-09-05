@@ -44,10 +44,6 @@ func (a *AuthAPI) token() string {
 	return cfg.Token
 }
 
-func cookieTrustsProxy(cfg *config.RuntimeConfig) bool {
-	return cfg != nil && cfg.TrustProxyHeaders
-}
-
 func (a *AuthAPI) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/login", a.HandleLogin)
 	mux.HandleFunc("POST /api/auth/elevate", a.HandleElevate)
@@ -87,7 +83,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
 		a.recordAuthFailure(clientIP)
-		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
+		authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(a.cfg()))
 		authn.AuditWarn(r, "auth.login_failed", "reason", "bad_token")
 		httpx.Unauthorized(w, httpx.CodeBadToken, provided)
 		return
@@ -109,7 +105,7 @@ func (a *AuthAPI) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime(), cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
+	authn.SetSessionCookie(w, r, sessionID, a.sessions.MaxLifetime(), authn.CookiePolicyFor(a.cfg()))
 	authn.AuditLog(r, "auth.session_created",
 		"sessionIdleSec", int(a.sessions.IdleTimeout().Seconds()),
 		"sessionMaxLifetimeSec", int(a.sessions.MaxLifetime().Seconds()),
@@ -164,7 +160,7 @@ func (a *AuthAPI) HandleLogout(w http.ResponseWriter, r *http.Request) {
 			authn.AuditLog(r, "auth.session_revoked", "reason", "logout")
 		}
 	}
-	authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
+	authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(a.cfg()))
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -209,7 +205,7 @@ func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
 		a.loginLimiter.Reset(clientIP)
 	}
 	if !a.sessions.Elevate(creds.Value, token) {
-		authn.ClearSessionCookie(w, r, cookieTrustsProxy(a.cfg()), cookieSecureSetting(a.cfg()))
+		authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(a.cfg()))
 		httpx.Unauthorized(w, httpx.CodeBadToken, "")
 		return
 	}
@@ -219,13 +215,6 @@ func (a *AuthAPI) HandleElevate(w http.ResponseWriter, r *http.Request) {
 		"status":             "ok",
 		"elevationWindowSec": int(a.sessions.ElevationWindow().Seconds()),
 	})
-}
-
-func cookieSecureSetting(cfg *config.RuntimeConfig) *bool {
-	if cfg == nil {
-		return nil
-	}
-	return cfg.CookieSecure
 }
 
 func (a *AuthAPI) requiresHTTPSForDashboardSession(r *http.Request) bool {
