@@ -401,11 +401,15 @@ does. A generated `server.token` is listed as `<absent> -> <generated>` and neve
 printed.
 
 ```text
-Security defaults restored in ~/.pinchtab/config.json (5 config setting(s) written):
+Security defaults restored in ~/.pinchtab/config.json (4 config setting(s) written):
     security.idpi.enabled: <absent> -> true
       posture row: website whitelist, IDPI strict mode, IDPI content guard
-    security.idpi.scanTimeoutSec: <absent> -> 5
-      not shown in the posture table
+    security.idpi.scanContent: <absent> -> true
+      posture row: IDPI content guard
+    security.idpi.strictMode: <absent> -> true
+      posture row: IDPI strict mode
+    security.idpi.wrapContent: <absent> -> true
+      posture row: IDPI content guard
 ```
 
 `security up` writes exactly these keys and nothing else: `server.bind`, every gated
