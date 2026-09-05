@@ -36,6 +36,9 @@ Notes:
   tab the browser held is gone, and a call to one answers `404` with code
   `browser_crashed`, `browserCrashed: true`, `browserCrashReason` and a `hint`, rather
   than a bare `tab <id> not found`
+- server-mode `/health` answers an authenticated caller with the security contract: `security`
+  (the front door's own configuration) and `enforcedSecurity` (what each running instance
+  enforces, with a three-state `comparison`). See [reference/health.md](reference/health.md)
 - `/metrics` reports the counters of the process answering it: in full server mode the front
   door's own request counters (auth rejections and unrouted paths included), in bridge mode
   the bridge's. Every response names its `layer`, and the layers are never summed — read one

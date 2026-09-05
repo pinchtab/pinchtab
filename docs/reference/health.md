@@ -73,6 +73,10 @@ curl http://localhost:9867/health
 | `restartRequired` | `true` when file-based config changes need restart |
 | `restartReasons` | Restart reason list when required |
 | `crashes` | Present once any instance's browser has crashed: `total` and `recent`, the same block bridge `/health` carries, each event naming its `instanceId` |
+| `security` | Present only for a bearer-token or cookie-authenticated caller. The front-door process's own configured policy, nothing more: `scope` carries the literal `frontDoorConfiguration` so a client can key on it, then `level`, `bind`, `allowedDomains`, `idpiEnabled`, `enabledSensitiveEndpoints` and `guardsDown`. What the instance processes enforce is `enforcedSecurity` |
+| `enforcedSecurity` | Present beside `security`. What the instance processes are enforcing, which is the policy each snapshotted at its own boot. `instances[]` lists RUNNING instances only, so an absent id is an instance that was not running, never one that matched. Each entry carries `id`, `queried`, `comparison` and `policy`. `divergent` is `true` whenever any listed instance is not `match`, so it is raised by `unknown` as well as by a real difference and does not on its own prove the policies differ |
+| `enforcedSecurity.instances[].comparison` | Three states. `match`: the instance's enforced policy equals the front door's current configuration. `diverges`: it differs from the front door's CURRENT configuration, which is not by itself a misconfiguration: a security change saved while the instance kept running reports `diverges` until the instance is replaced, and an instance launched with a per-instance `securityPolicy.allowedDomains` reports `diverges` for its whole life because the extra domains are merged into the child's policy. `unknown`: the instance did not answer, so `queried` is `false`; it is not an instance enforcing nothing |
+| `enforcedSecurity.instances[].policy` | The enforced `idpiEnabled`, `allowedDomains`, `enabledSensitiveEndpoints` and `guardsDown`. Absent, not empty, when `queried` is `false` |
 
 Notes:
 
