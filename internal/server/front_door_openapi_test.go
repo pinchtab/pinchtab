@@ -18,10 +18,14 @@ func TestFrontDoorServesOpenAPIAndHelp(t *testing.T) {
 	registerFrontDoorOpenAPI(mux, config.NewLive(&config.RuntimeConfig{}))
 	handler := notFoundEnvelope(mux)
 
-	if len(frontDoorOpenAPIRoutes) != 2 {
-		t.Fatalf("front-door API-discovery route count = %d, want canonical endpoint and alias", len(frontDoorOpenAPIRoutes))
+	wantRoutes := map[string]bool{"GET /openapi.json": true, "GET /help": true}
+	if len(frontDoorOpenAPIRoutes) != len(wantRoutes) {
+		t.Fatalf("front-door API-discovery routes = %v, want exactly /openapi.json and /help", frontDoorOpenAPIRoutes)
 	}
 	for _, pattern := range frontDoorOpenAPIRoutes {
+		if !wantRoutes[pattern] {
+			t.Fatalf("unexpected front-door API-discovery route %q; want exactly /openapi.json and /help", pattern)
+		}
 		_, path, ok := strings.Cut(pattern, " ")
 		if !ok {
 			t.Fatalf("invalid front-door API-discovery route pattern %q", pattern)
