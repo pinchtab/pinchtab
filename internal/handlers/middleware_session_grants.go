@@ -201,42 +201,6 @@ func sessionGrantAllows(grant, method, path string) bool {
 	return ok && matcher(method, path)
 }
 
-// browseRefusedReadReasons is the deliberate remainder of the catalogue's
-// ungated GET surface. The browse grant defaults closed: adding a read route to
-// routes.Core requires either admitting it explicitly below or recording why it
-// remains outside this narrow automation grant. These reasons are consumed by
-// the catalogue census, so an omission cannot masquerade as a decision.
-var browseRefusedReadReasons = map[string]string{
-	"/frame":                 "frame scope is automation control state, not page content",
-	"/annotate":              "this GET mutates the page by injecting or clearing an overlay",
-	"/url":                   "not approved in the four-route redundancy widening",
-	"/html":                  "outerHTML can expose hidden values, data attributes, scripts, and metadata absent from snapshot and text",
-	"/styles":                "computed styles can expose page data absent from snapshot and text",
-	"/value":                 "form values can contain secrets not present in the accessibility tree",
-	"/attr":                  "attributes can contain hidden values and metadata",
-	"/visible":               "not approved in the four-route redundancy widening",
-	"/enabled":               "not approved in the four-route redundancy widening",
-	"/checked":               "not approved in the four-route redundancy widening",
-	"/pdf":                   "a full document export is broader than the permitted screenshot and snapshot reads",
-	"/handoff":               "human-handoff control state is outside browsing",
-	"/metrics":               "runtime metrics disclose process and browser state rather than page content",
-	"/timing":                "page timing and performance data were not part of the approved redundancy widening",
-	"/a11y/audit":            "the enriched audit surface was not part of the approved redundancy widening",
-	"/network":               "network traffic belongs to the network grant",
-	"/network/stream":        "network traffic belongs to the network grant",
-	"/network/export":        "network traffic belongs to the network grant",
-	"/network/export/stream": "network traffic belongs to the network grant",
-	"/console":               "console output belongs to the console grant",
-	"/errors":                "page errors belong to the console grant",
-	"/clipboard/read":        "clipboard contents belong to the clipboard grant",
-	"/clipboard/paste":       "clipboard contents belong to the clipboard grant",
-	"/stealth/status":        "browser fingerprint configuration is not page content",
-	"/solvers":               "solver configuration belongs to the solve grant",
-	"/config/autosolver":     "solver configuration belongs to the solve grant",
-	"/cache/status":          "browser cache state is an administrative surface",
-	"/state":                 "cookies and storage require the storage/state capability rather than browse",
-}
-
 func sessionBrowseGrantAllows(method, path string) bool {
 	switch method {
 	case http.MethodGet:
