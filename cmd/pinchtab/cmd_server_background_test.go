@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/spf13/pflag"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -447,5 +448,44 @@ func TestBackgroundServerArgsLogLevelForwarding(t *testing.T) {
 	want := []string{"server", "--background-child", "marker-123", "--log-level", "warn"}
 	if !reflect.DeepEqual(explicit, want) {
 		t.Errorf("backgroundServerArgs() = %#v, want %#v", explicit, want)
+	}
+}
+
+func TestEveryServerFlagTravelsToTheDetachedChild(t *testing.T) {
+	notForwarded := map[string]string{
+		"background":            "the flag that spawns the child; forwarding it would fork forever",
+		backgroundChildFlagName: "the child marker, passed positionally by backgroundServerArgs itself",
+	}
+	args := backgroundServerArgs("marker", serverBackgroundOptions{
+		Yolo:       true,
+		Headed:     true,
+		Verbose:    true,
+		LogLevel:   "debug",
+		Extensions: []string{"/ext"},
+		Browser:    "chrome",
+		Bind:       "127.0.0.1",
+		Port:       "9999",
+	})
+	joined := " " + strings.Join(args, " ") + " "
+	checked := 0
+	serverCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if reason, ok := notForwarded[f.Name]; ok {
+			if reason == "" {
+				t.Errorf("--%s is exempt with no reason recorded", f.Name)
+			}
+			return
+		}
+		checked++
+		long := " --" + f.Name + " "
+		short := ""
+		if f.Shorthand != "" {
+			short = " -" + f.Shorthand + " "
+		}
+		if !strings.Contains(joined, long) && (short == "" || !strings.Contains(joined, short)) {
+			t.Errorf("--%s is a server flag the parent applies to its own config but backgroundServerArgs never forwards; the detached child would start without it", f.Name)
+		}
+	})
+	if checked < 6 {
+		t.Fatalf("checked only %d forwarded flags; this census would prove little", checked)
 	}
 }
