@@ -73,7 +73,8 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		ms := uint64(time.Since(start).Milliseconds())
 		atomic.AddUint64(&metricRequestsTotal, 1)
 		atomic.AddUint64(&metricRequestLatencyN, ms)
-		if requestFailed(sw) {
+		failed := requestFailed(sw)
+		if failed {
 			atomic.AddUint64(&metricRequestsFailed, 1)
 			recordFailureEvent(FailureEvent{
 				Time:      time.Now(),
@@ -96,7 +97,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		if sw.FailureMessage != "" {
 			attrs = append(attrs, "code", sw.FailureCode, "error", sw.FailureMessage)
 		}
-		slog.Log(r.Context(), requestLogLevel(sw.Code, requestFailed(sw)), "request", attrs...)
+		slog.Log(r.Context(), requestLogLevel(sw.Code, failed), "request", attrs...)
 	})
 }
 
@@ -136,20 +137,15 @@ func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Mana
 			next.ServeHTTP(w, r)
 			return
 		}
-		if cfg == nil {
+		if cfg == nil || strings.TrimSpace(cfg.Token) == "" {
 			httpx.ErrorCode(w, http.StatusServiceUnavailable, "token_required", "server token is not configured", false, nil)
 			return
 		}
 		token := strings.TrimSpace(cfg.Token)
-		if token == "" {
-			httpx.ErrorCode(w, http.StatusServiceUnavailable, "token_required", "server token is not configured", false, nil)
-			return
-		}
 
 		creds := authn.CredentialsFromRequest(r)
 		if creds.Value == "" {
-			authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(cfg))
-			httpx.Unauthorized(w, httpx.CodeMissingToken, "")
+			rejectCredential(w, r, cfg, httpx.CodeMissingToken, "")
 			return
 		}
 
@@ -183,8 +179,7 @@ func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Mana
 			r = session.WithSession(r, sess)
 		case authn.MethodHeader:
 			if subtle.ConstantTimeCompare([]byte(creds.Value), []byte(token)) != 1 {
-				authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(cfg))
-				httpx.Unauthorized(w, httpx.CodeBadToken, creds.Value)
+				rejectCredential(w, r, cfg, httpx.CodeBadToken, creds.Value)
 				return
 			}
 		case authn.MethodCookie:
@@ -195,8 +190,7 @@ func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Mana
 				return
 			}
 			if sessions == nil || !sessions.Validate(creds.Value, token) {
-				authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(cfg))
-				httpx.Unauthorized(w, httpx.CodeBadToken, "")
+				rejectCredential(w, r, cfg, httpx.CodeBadToken, "")
 				return
 			}
 			if !cookieAuthAllowed(r) {
@@ -211,12 +205,16 @@ func AuthMiddlewareWithSessions(live *config.Live, sessions *browsersession.Mana
 				return
 			}
 		default:
-			authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(cfg))
-			httpx.Unauthorized(w, httpx.CodeBadToken, creds.Value)
+			rejectCredential(w, r, cfg, httpx.CodeBadToken, creds.Value)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func rejectCredential(w http.ResponseWriter, r *http.Request, cfg *config.RuntimeConfig, code, presented string) {
+	authn.ClearSessionCookie(w, r, authn.CookiePolicyFor(cfg))
+	httpx.Unauthorized(w, code, presented)
 }
 
 func backgroundHealthProbeAllowed(cfg *config.RuntimeConfig, r *http.Request) bool {
