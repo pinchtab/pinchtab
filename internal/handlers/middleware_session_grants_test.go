@@ -497,3 +497,58 @@ func TestNetworkGrantAdmitsTheWholeGetPrefixAndOnlyClearUnderPost(t *testing.T) 
 		}
 	}
 }
+
+func TestBrowseGrantCataloguesEveryUngatedReadDecision(t *testing.T) {
+	seenReasons := map[string]bool{}
+	for _, ep := range routes.Core() {
+		if ep.Method != http.MethodGet {
+			continue
+		}
+		if reason := browseRefusedReadReasons[ep.Path]; reason != "" {
+			seenReasons[ep.Path] = true
+		}
+		if ep.Capability != routes.CapNone {
+			continue
+		}
+
+		forms := []string{ep.Path}
+		if ep.TabScoped {
+			forms = append(forms, "/tabs/probe1"+ep.Path)
+		}
+		for _, path := range forms {
+			if sessionBrowseGrantAllows(http.MethodGet, path) {
+				continue
+			}
+			if browseRefusedReadReasons[ep.Path] == "" {
+				t.Errorf("browse silently refuses catalogued read GET %s; admit it deliberately or add a written refusal reason", path)
+			}
+		}
+	}
+
+	for path, reason := range browseRefusedReadReasons {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("browse refusal %s has no reason", path)
+		}
+		if !seenReasons[path] {
+			t.Errorf("browse refusal reason for %s no longer corresponds to a catalogued GET route", path)
+		}
+	}
+}
+
+func TestBrowseGrantAdmitsOnlyTheApprovedRedundantReads(t *testing.T) {
+	for _, path := range []string{"/title", "/capture", "/box", "/count"} {
+		for _, form := range []string{path, "/tabs/tab1" + path} {
+			if !sessionBrowseGrantAllows(http.MethodGet, form) {
+				t.Errorf("browse refuses approved read GET %s", form)
+			}
+		}
+	}
+	for _, path := range []string{"/html", "/styles", "/state", "/tabs/tab1/html", "/tabs/tab1/styles"} {
+		if sessionBrowseGrantAllows(http.MethodGet, path) {
+			t.Errorf("browse admits deliberately refused read GET %s", path)
+		}
+	}
+	if sessionBrowseGrantAllows(http.MethodGet, "/action") {
+		t.Fatal("browse still contains the dead GET /action matcher entry")
+	}
+}

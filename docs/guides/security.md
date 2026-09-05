@@ -180,6 +180,7 @@ Agent sessions are reduced-distribution credentials for trusted automation, not 
 
 - session-authenticated callers are blocked from dashboard/admin endpoint families such as config, session management, profile management, instance management, dashboard agent listings, and cache controls
 - session records can optionally carry explicit grants that narrow access further — set them at creation with `pinchtab session create --agent-id <id> --grant browse` or the `grants` field on `POST /sessions` (see [sessions](../reference/sessions.md#session-grants))
+- the `browse` grant includes page driving plus the redundant read surfaces `/title`, `/capture`, `/box`, and `/count` in both root and `/tabs/{id}/…` form; it deliberately excludes `/html` and `/styles` because they reveal page data absent from text/snapshot, and `/state` because it includes cookies and storage
 - sessions without explicit grants can still use the normal non-admin automation API by default
 - a grant only narrows: every server-level capability gate still applies on top, so `--grant evaluate` does not re-enable `security.allowEvaluate` and no grant reaches an admin route
 
