@@ -105,6 +105,14 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 		!sameConfigSection(c.boot.Observability.Activity.Events, next.Observability.Activity.Events) {
 		reasons = append(reasons, "Activity recording")
 	}
+	if c.boot.Server.LogLevel != next.Server.LogLevel {
+		reasons = append(reasons, "Log level")
+	}
+	if !sameConfigSection(c.boot.Server.NetworkBufferSize, next.Server.NetworkBufferSize) ||
+		!sameConfigSection(c.boot.Server.RetainNetworkBodies, next.Server.RetainNetworkBodies) ||
+		!sameConfigSection(c.boot.Server.RetainNetworkBodyMaxBytes, next.Server.RetainNetworkBodyMaxBytes) {
+		reasons = append(reasons, "Network recording")
+	}
 	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
 	}
@@ -114,11 +122,29 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	if effectiveProfilesDir(c.boot) != effectiveProfilesDir(next) {
 		reasons = append(reasons, "Profiles directory")
 	}
+	if c.boot.Profiles.DefaultProfile != next.Profiles.DefaultProfile ||
+		!sameConfigSection(c.boot.Profiles.QuarantineKeep, next.Profiles.QuarantineKeep) {
+		reasons = append(reasons, "Profiles configuration")
+	}
 	if c.boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
 		reasons = append(reasons, "Routing strategy")
 	}
 	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
 		reasons = append(reasons, "Stealth level")
+	}
+	if !sameConfigSection(c.boot.InstanceDefaults, next.InstanceDefaults) {
+		reasons = append(reasons, "Instance defaults")
+	}
+	if !sameConfigSection(c.boot.Browser, next.Browser) ||
+		c.boot.Browsers.Default != next.Browsers.Default ||
+		!sameConfigSection(c.boot.Browsers.Available, next.Browsers.Available) {
+		reasons = append(reasons, "Browser configuration")
+	}
+	if !sameConfigSection(c.boot.Scheduler, next.Scheduler) {
+		reasons = append(reasons, "Scheduler configuration")
+	}
+	if !sameConfigSection(c.boot.AutoSolver, next.AutoSolver) {
+		reasons = append(reasons, "Auto-solver configuration")
 	}
 	// The sessions.agent block applies live in every direction but one: whether
 	// the session API and its route family exist at all is decided at boot, so a

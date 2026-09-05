@@ -101,17 +101,59 @@ func TestActivityRecorderSnapshotChangesRequireRestart(t *testing.T) {
 	}
 }
 
+func TestOtherBootSnapshotChangesRequireRestart(t *testing.T) {
+	tests := map[string]struct {
+		want   string
+		mutate func(*config.FileConfig)
+	}{
+		"log level": {"Log level", func(fc *config.FileConfig) { fc.Server.LogLevel = "debug" }},
+		"network recording": {"Network recording", func(fc *config.FileConfig) {
+			value := 101
+			fc.Server.NetworkBufferSize = &value
+		}},
+		"default profile": {"Profiles configuration", func(fc *config.FileConfig) { fc.Profiles.DefaultProfile += "-next" }},
+		"quarantine policy": {"Profiles configuration", func(fc *config.FileConfig) {
+			value := *fc.Profiles.QuarantineKeep + 1
+			fc.Profiles.QuarantineKeep = &value
+		}},
+		"browser":           {"Browser configuration", func(fc *config.FileConfig) { fc.Browser.BrowserBinary += "-next" }},
+		"instance defaults": {"Instance defaults", func(fc *config.FileConfig) { fc.InstanceDefaults.Timezone += "-next" }},
+		"scheduler": {"Scheduler configuration", func(fc *config.FileConfig) {
+			value := 2
+			fc.Scheduler.WorkerCount = &value
+		}},
+		"auto solver": {"Auto-solver configuration", func(fc *config.FileConfig) {
+			value := !*fc.AutoSolver.Enabled
+			fc.AutoSolver.Enabled = &value
+		}},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			boot := config.DefaultFileConfig()
+			next := cloneFileConfig(t, boot)
+			tc.mutate(&next)
+			api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+			api.boot = boot
+			if reasons := api.restartReasonsFor(next); !containsString(reasons, tc.want) {
+				t.Fatalf("restartReasonsFor() = %v, want %q", reasons, tc.want)
+			}
+		})
+	}
+}
+
 // configInertFields is deliberately small. Every other reachable FileConfig leaf
 // must prove its classification by mutation: either NextRuntimeConfig changes the
 // published value (live), or restartReasonsFor names a frozen consumer (restart).
 // Keeping inertness explicit prevents a new field inside an existing section from
 // hiding behind a section-level label.
 var configInertFields = map[string]string{
-	"$schema":                         "JSON Schema editor metadata",
-	"configVersion":                   "load-time compatibility metadata",
-	"server.engine":                   "retained only so validation can reject the removed setting",
-	"observability.activity.stateDir": config.ActivityStateDirAdvisory,
-	"browsers.config":                 "retired overrides retained only so validation can reject them with migration guidance",
+	"$schema":                               "JSON Schema editor metadata",
+	"configVersion":                         "load-time compatibility metadata",
+	"server.token":                          "PUT /api/config preserves the write-only boot credential and rejects token edits",
+	"server.engine":                         "retained only so validation can reject the removed setting",
+	"observability.activity.stateDir":       config.ActivityStateDirAdvisory,
+	"observability.activity.sessionIdleSec": "reserved session-grouping setting; no running consumer currently reads it",
+	"browsers.config":                       "retired overrides retained only so validation can reject them with migration guidance",
 }
 
 func TestEveryFileConfigSettingHasAnEffectiveDisposition(t *testing.T) {
@@ -141,17 +183,22 @@ func TestEveryFileConfigSettingHasAnEffectiveDisposition(t *testing.T) {
 		live := !reflect.DeepEqual(runtimeFor(path, current), runtimeFor(path, next))
 		inertReason, inert := configInertFields[path]
 		wantRestart := configRestartReason(path)
+		liveEvidence, wantLive := configLiveEvidence(path)
 		switch {
 		case wantRestart != "":
 			if !containsString(restartReasons, wantRestart) {
 				t.Errorf("%s is frozen but restartReasonsFor returned %v, want %q; removing a restart clause must red this census", path, restartReasons, wantRestart)
 			}
 		case inert:
-			if live || len(restartReasons) > 0 {
-				t.Errorf("%s is marked inert but also has executable evidence: live=%v restart=%v", path, live, restartReasons)
+			if len(restartReasons) > 0 {
+				t.Errorf("%s is marked inert but also produces restart reasons %v", path, restartReasons)
 			}
-		case !live:
-			t.Errorf("%s is unclassified: its mutation neither changes the live RuntimeConfig nor has a declared restart/inert classification; add application behavior, configRestartReason coverage, or documented inertness", path)
+		case wantLive:
+			if liveEvidence == "" || !live {
+				t.Errorf("%s is declared live (%s) but its mutation did not change the published RuntimeConfig", path, liveEvidence)
+			}
+		default:
+			t.Errorf("%s is absent from the explicit consumer-semantics registry; classify it in configRestartReason, configLiveEvidence, or configInertFields", path)
 		}
 		if inert && inertReason == "" {
 			t.Errorf("%s is marked inert without recording why", path)
@@ -164,6 +211,23 @@ func TestEveryFileConfigSettingHasAnEffectiveDisposition(t *testing.T) {
 	}
 }
 
+func configLiveEvidence(path string) (string, bool) {
+	switch {
+	case path == "server.trustProxyHeaders" || path == "server.cookieSecure":
+		return "front-door middleware resolves config.Live per request", true
+	case path == "multiInstance.allocationPolicy" || path == "multiInstance.instancePortStart" || path == "multiInstance.instancePortEnd":
+		return "Orchestrator.ApplyRuntimeConfig swaps allocator state", true
+	case strings.HasPrefix(path, "timeouts."):
+		return "request handlers resolve effective runtime timeouts", true
+	case strings.HasPrefix(path, "sessions.dashboard."):
+		return "browsersession.Manager.UpdateConfig applies dashboard session settings", true
+	case strings.HasPrefix(path, "sessions.agent.") && path != "sessions.agent.enabled":
+		return "session.Store.UpdateConfig applies agent session settings", true
+	default:
+		return "", false
+	}
+}
+
 func configRestartReason(path string) string {
 	switch {
 	case strings.HasPrefix(path, "security."):
@@ -172,14 +236,28 @@ func configRestartReason(path string) string {
 		return "Server address"
 	case path == "server.stateDir":
 		return "Server state directory (server.stateDir)"
+	case path == "server.logLevel":
+		return "Log level"
+	case path == "server.networkBufferSize" || path == "server.retainNetworkBodies" || path == "server.retainNetworkBodyMaxBytes":
+		return "Network recording"
 	case path == "profiles.baseDir":
 		return "Profiles directory"
+	case path == "profiles.defaultProfile" || path == "profiles.quarantineKeep":
+		return "Profiles configuration"
 	case path == "multiInstance.strategy":
 		return "Routing strategy"
 	case strings.HasPrefix(path, "multiInstance.restart."):
 		return "Restart policy"
 	case path == "instanceDefaults.stealthLevel":
 		return "Stealth level"
+	case strings.HasPrefix(path, "instanceDefaults."):
+		return "Instance defaults"
+	case strings.HasPrefix(path, "browser.") || path == "browsers.default" || path == "browsers.available":
+		return "Browser configuration"
+	case strings.HasPrefix(path, "scheduler."):
+		return "Scheduler configuration"
+	case strings.HasPrefix(path, "autoSolver."):
+		return "Auto-solver configuration"
 	case path == "sessions.agent.enabled":
 		return "Agent sessions"
 	case path == "observability.activity.enabled" ||
