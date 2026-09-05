@@ -3,7 +3,6 @@ package dashboard
 import (
 	"encoding/json"
 	"path/filepath"
-	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -133,10 +132,10 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 }
 
 func effectiveProfilesDir(fc config.FileConfig) string {
-	if baseDir := strings.TrimSpace(fc.Profiles.BaseDir); baseDir != "" {
-		return filepath.Clean(baseDir)
+	if fc.Profiles.BaseDir != "" {
+		return fc.Profiles.BaseDir
 	}
-	return filepath.Join(strings.TrimSpace(fc.Server.StateDir), "profiles")
+	return filepath.Join(fc.Server.StateDir, "profiles")
 }
 
 func sameIntPtr(a, b *int) bool {

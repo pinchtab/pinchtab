@@ -57,6 +57,20 @@ func TestRestartReasonsOmitStateDirWhenUnchanged(t *testing.T) {
 	}
 }
 
+func TestWhitespaceProfilesBaseDirUsesRuntimeExplicitValueSemantics(t *testing.T) {
+	boot := config.DefaultFileConfig()
+	boot.Server.StateDir = filepath.Join(t.TempDir(), "state")
+	boot.Profiles.BaseDir = "   "
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api.boot = boot
+
+	next := boot
+	next.Profiles.BaseDir = ""
+	if reasons := api.restartReasonsFor(next); !containsString(reasons, "Profiles directory") {
+		t.Fatalf("restartReasonsFor() = %v, want Profiles directory: runtime treats whitespace as an explicit BaseDir while empty derives from stateDir", reasons)
+	}
+}
+
 type configSectionDisposition string
 
 const (
