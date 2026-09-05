@@ -33,83 +33,54 @@ func portConflictError(port string, inspection PortInspection) error {
 	return fmt.Errorf("instance port %s is already in use on this machine", port)
 }
 
-// buildChildFileConfig builds the per-child FileConfig; nil effectiveCfg falls back to o.cfg().
-func (o *Orchestrator) buildChildFileConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) config.FileConfig {
+func (o *Orchestrator) baseChildFileConfig(effectiveCfg *config.RuntimeConfig, port, stateDir string) config.FileConfig {
 	if effectiveCfg == nil {
 		effectiveCfg = o.cfg()
 	}
 	fc := config.FileConfigFromRuntime(effectiveCfg)
 	fc.Server.Port = port
-	fc.Server.StateDir = instanceStateDir
+	fc.Server.StateDir = stateDir
 	activityEnabled := false
 	fc.Observability.Activity.Enabled = &activityEnabled
+	return fc
+}
+
+func (o *Orchestrator) buildChildFileConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) config.FileConfig {
+	fc := o.baseChildFileConfig(effectiveCfg, port, instanceStateDir)
 	fc.SetBrowserDebugPort(cdpPort)
 	fc.Profiles.BaseDir = filepath.Dir(profilePath)
 	fc.Profiles.DefaultProfile = filepath.Base(profilePath)
+	fc.InstanceDefaults.Mode = "headed"
 	if headless {
 		fc.InstanceDefaults.Mode = "headless"
-	} else {
-		fc.InstanceDefaults.Mode = "headed"
 	}
 	if securityPolicy != nil {
 		fc.Security.AllowedDomains = append([]string(nil), securityPolicy.AllowedDomains...)
 	}
-
 	if len(extensionPaths) > 0 {
-		seen := make(map[string]bool)
-		unique := make([]string, 0, len(fc.Browser.ExtensionPaths)+len(extensionPaths))
-		for _, p := range fc.Browser.ExtensionPaths {
-			if !seen[p] {
-				seen[p] = true
-				unique = append(unique, p)
-			}
-		}
-		for _, p := range extensionPaths {
-			if !seen[p] {
-				seen[p] = true
-				unique = append(unique, p)
-			}
-		}
-		fc.Browser.ExtensionPaths = unique
+		fc.Browser.ExtensionPaths = uniqueStrings(fc.Browser.ExtensionPaths, extensionPaths)
 	}
 	return fc
 }
 
 func (o *Orchestrator) writeChildConfig(effectiveCfg *config.RuntimeConfig, port string, cdpPort int, profilePath, instanceStateDir string, headless bool, extensionPaths []string, securityPolicy *bridge.SecurityPolicy) (string, error) {
-	fc := o.buildChildFileConfig(effectiveCfg, port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths, securityPolicy)
-
-	configPath := filepath.Join(instanceStateDir, "config.json")
-	data, err := json.MarshalIndent(fc, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		return "", err
-	}
-	if err := os.Chmod(configPath, 0600); err != nil {
-		return "", err
-	}
-	return configPath, nil
+	return writeChildConfigFile(instanceStateDir, o.buildChildFileConfig(effectiveCfg, port, cdpPort, profilePath, instanceStateDir, headless, extensionPaths, securityPolicy))
 }
 
-// writeAttachChildConfig writes a minimal child config for a CDP-attach bridge; RemoteCDPURL is passed via CLI flags.
 func (o *Orchestrator) writeAttachChildConfig(port, provider, stateDir string) (string, error) {
-	fc := config.FileConfigFromRuntime(o.cfg())
-	fc.Server.Port = port
-	fc.Server.StateDir = stateDir
-	activityEnabled := false
-	fc.Observability.Activity.Enabled = &activityEnabled
+	fc := o.baseChildFileConfig(nil, port, stateDir)
 	fc.Browsers.Default = provider
 	attachDisabled := false
-	allowHosts := append([]string(nil), fc.Security.Attach.AllowHosts...)
-	allowSchemes := append([]string(nil), fc.Security.Attach.AllowSchemes...)
 	fc.Security.Attach = config.AttachConfig{
 		Enabled:          &attachDisabled,
-		AllowHosts:       allowHosts,
-		AllowSchemes:     allowSchemes,
+		AllowHosts:       append([]string(nil), fc.Security.Attach.AllowHosts...),
+		AllowSchemes:     append([]string(nil), fc.Security.Attach.AllowSchemes...),
 		ForwardProxyAuth: &attachDisabled,
 	}
+	return writeChildConfigFile(stateDir, fc)
+}
 
+func writeChildConfigFile(stateDir string, fc config.FileConfig) (string, error) {
 	configPath := filepath.Join(stateDir, "config.json")
 	data, err := json.MarshalIndent(fc, "", "  ")
 	if err != nil {
@@ -148,23 +119,28 @@ func cloneSecurityPolicy(policy *bridge.SecurityPolicy) *bridge.SecurityPolicy {
 }
 
 func mergeAllowedDomains(base []string, extras []string) []string {
-	seen := make(map[string]bool, len(base)+len(extras))
-	out := make([]string, 0, len(base)+len(extras))
-	for _, domain := range base {
-		trimmed := strings.TrimSpace(domain)
-		if trimmed == "" || seen[trimmed] {
-			continue
-		}
-		seen[trimmed] = true
-		out = append(out, trimmed)
+	return uniqueStrings(trimAll(base), trimAll(extras))
+}
+
+func trimAll(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, strings.TrimSpace(value))
 	}
-	for _, domain := range extras {
-		trimmed := strings.TrimSpace(domain)
-		if trimmed == "" || seen[trimmed] {
-			continue
+	return out
+}
+
+func uniqueStrings(lists ...[]string) []string {
+	seen := make(map[string]bool)
+	out := make([]string, 0)
+	for _, list := range lists {
+		for _, value := range list {
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			out = append(out, value)
 		}
-		seen[trimmed] = true
-		out = append(out, trimmed)
 	}
 	return out
 }
