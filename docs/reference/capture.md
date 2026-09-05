@@ -98,8 +98,9 @@ directly with one from any of those surfaces.
 The coordinate space depends on `selector` and `beyondViewport`:
 
 - **`viewport`** (default): boxes are viewport-relative CSS pixels. The
-  image is the visible viewport. `image.devicePixelRatio` tells you the
-  ratio of image pixels to CSS pixels.
+  image is the visible viewport. At the default `scale`,
+  `image.devicePixelRatio` is the ratio of image pixels to CSS pixels;
+  with a `scale` the ratio is `devicePixelRatio × scale`.
 - **`clip`** (when `selector` is set): boxes are relative to the cropped
   image origin. The response also includes `image.clip` with the original
   document-relative clip rectangle.
