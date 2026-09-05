@@ -310,3 +310,26 @@ func TestLogsSince_DeltaAfterAppends(t *testing.T) {
 		t.Fatalf("delta chunk = %q reset = %v, want %q false", chunk, reset, "line2\n")
 	}
 }
+
+func TestRingBufferSince_OffsetBeyondEndResets(t *testing.T) {
+	rb := newRingBuffer(64)
+	_, _ = rb.Write([]byte("fresh process\n"))
+	chunk, newOffset, reset := rb.since(1_000_000)
+	if !reset || chunk != "fresh process\n" || newOffset != uint64(len("fresh process\n")) {
+		t.Fatalf("since(stale larger offset) = (%q, %d, %v); a client resuming against a restarted instance must be told to replace, not wait", chunk, newOffset, reset)
+	}
+}
+
+func TestRingBufferKeepsOnlyTheTailAcrossManyWrites(t *testing.T) {
+	rb := newRingBuffer(10)
+	for i := 0; i < 100; i++ {
+		_, _ = rb.Write([]byte("abc"))
+	}
+	_, _ = rb.Write([]byte("0123456789XYZ"))
+	if got := rb.String(); got != "3456789XYZ" {
+		t.Fatalf("String() = %q, want the last 10 bytes", got)
+	}
+	if _, end, _ := rb.since(0); end != 300+13 {
+		t.Fatalf("totalWritten = %d, want %d", end, 313)
+	}
+}

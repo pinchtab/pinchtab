@@ -138,8 +138,9 @@ func (rb *ringBuffer) Write(p []byte) (int, error) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 	rb.data = append(rb.data, p...)
-	if len(rb.data) > rb.max {
-		rb.data = rb.data[len(rb.data)-rb.max:]
+	if excess := len(rb.data) - rb.max; excess > 0 {
+		copy(rb.data, rb.data[excess:])
+		rb.data = rb.data[:rb.max]
 	}
 	rb.totalWritten += uint64(len(p))
 	return len(p), nil
@@ -159,10 +160,10 @@ func (rb *ringBuffer) since(offset uint64) (chunk string, newOffset uint64, rese
 	defer rb.mu.Unlock()
 	end := rb.totalWritten
 	start := end - uint64(len(rb.data))
-	if offset < start {
+	if offset < start || offset > end {
 		return string(rb.data), end, true
 	}
-	if offset >= end {
+	if offset == end {
 		return "", end, false
 	}
 	return string(rb.data[offset-start:]), end, false
