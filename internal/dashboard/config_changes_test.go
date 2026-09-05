@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,102 +72,200 @@ func TestWhitespaceProfilesBaseDirUsesRuntimeExplicitValueSemantics(t *testing.T
 	}
 }
 
-type configSectionDisposition string
-
-const (
-	configAppliesLive  configSectionDisposition = "applies live"
-	configNeedsRestart configSectionDisposition = "needs restart"
-	configIsInert      configSectionDisposition = "deliberately inert"
-)
-
-type configSectionCensusRow struct {
-	disposition configSectionDisposition
-	evidence    string
-	mutate      func(*config.FileConfig)
-	wantReason  string
+// configInertFields is deliberately small. Every other reachable FileConfig leaf
+// must prove its classification by mutation: either NextRuntimeConfig changes the
+// published value (live), or restartReasonsFor names a frozen consumer (restart).
+// Keeping inertness explicit prevents a new field inside an existing section from
+// hiding behind a section-level label.
+var configInertFields = map[string]string{
+	"$schema":                         "JSON Schema editor metadata",
+	"configVersion":                   "load-time compatibility metadata",
+	"server.engine":                   "retained only so validation can reject the removed setting",
+	"observability.activity.stateDir": config.ActivityStateDirAdvisory,
+	"browsers.config":                 "retired overrides retained only so validation can reject them with migration guidance",
 }
 
-// fileConfigSectionCensus is the review point for PUT /api/config semantics.
-// Live rows are published by persistAndApply through NextRuntimeConfig; restart
-// rows name a representative frozen setting whose clause is exercised below;
-// the two metadata fields are persisted but intentionally have no runtime effect.
-// Profiles.BaseDir is the only effective section value derived from another
-// section: when empty it follows Server.StateDir. effectiveProfilesDir is therefore
-// deliberately part of the restart check instead of comparing the literal fields.
-var fileConfigSectionCensus = map[string]configSectionCensusRow{
-	"Schema":           {configIsInert, "$schema is editor metadata only", nil, ""},
-	"ConfigVersion":    {configIsInert, "configVersion selects file compatibility while loading", nil, ""},
-	"Server":           {configNeedsRestart, "listener and state stores are constructed at boot", func(c *config.FileConfig) { c.Server.StateDir += "-moved" }, "Server state directory (server.stateDir)"},
-	"Browser":          {configAppliesLive, "ApplyFileConfigToRuntime publishes browser settings for subsequent browser work", nil, ""},
-	"InstanceDefaults": {configNeedsRestart, "the running default instance keeps its boot stealth level", func(c *config.FileConfig) { c.InstanceDefaults.StealthLevel = "full" }, "Stealth level"},
-	"Security": {configNeedsRestart, "the front-door security policy is assembled at boot", func(c *config.FileConfig) {
-		c.Security.AllowedDomains = append(c.Security.AllowedDomains, "census.invalid")
-	}, "Security policy"},
-	"Profiles":      {configNeedsRestart, "profile storage is opened at boot", func(c *config.FileConfig) { c.Profiles.BaseDir += "-moved" }, "Profiles directory"},
-	"MultiInstance": {configNeedsRestart, "routing strategy and restart supervisor are constructed at boot", func(c *config.FileConfig) { c.MultiInstance.Strategy = "explicit" }, "Routing strategy"},
-	"Timeouts":      {configAppliesLive, "ApplyFileConfigToRuntime publishes request timeouts", nil, ""},
-	"Scheduler":     {configAppliesLive, "ApplyRuntimeConfig updates the orchestrator scheduler", nil, ""},
-	"Observability": {configAppliesLive, "activity consumers resolve the published runtime config", nil, ""},
-	"Sessions":      {configNeedsRestart, "enabling the agent route family requires boot-time route registration", func(c *config.FileConfig) { enabled := true; c.Sessions.Agent.Enabled = &enabled }, "Agent sessions"},
-	"AutoSolver":    {configAppliesLive, "ApplyFileConfigToRuntime publishes solver settings", nil, ""},
-	"Browsers":      {configAppliesLive, "ApplyFileConfigToRuntime publishes provider selection", nil, ""},
-}
-
-func TestEveryFileConfigSectionHasAnEffectiveDisposition(t *testing.T) {
-	typ := reflect.TypeOf(config.FileConfig{})
-	seen := make(map[string]bool, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		seen[field.Name] = true
-		row, ok := fileConfigSectionCensus[field.Name]
-		if !ok {
-			t.Errorf("FileConfig.%s is unclassified: add it to fileConfigSectionCensus as live, restart-required, or deliberately inert; an unclassified section can make PUT /api/config report an unapplied save as applied", field.Name)
-			continue
+func TestEveryFileConfigSettingHasAnEffectiveDisposition(t *testing.T) {
+	boot := config.DefaultFileConfig()
+	seed := config.Load()
+	runtimeFor := func(path string, fc config.FileConfig) *config.RuntimeConfig {
+		isolated := cloneFileConfig(t, fc)
+		prepareConfigCensusFixture(path, &isolated)
+		if path == "instanceDefaults.headless" {
+			isolated.InstanceDefaults.Headless = fc.InstanceDefaults.Headless
 		}
-		if row.evidence == "" {
-			t.Errorf("FileConfig.%s has no evidence for its %q classification", field.Name, row.disposition)
-		}
-		switch row.disposition {
-		case configAppliesLive, configIsInert:
-			if row.mutate != nil || row.wantReason != "" {
-				t.Errorf("FileConfig.%s is %q but declares a restart mutation/reason", field.Name, row.disposition)
-			}
-		case configNeedsRestart:
-			if row.mutate == nil || row.wantReason == "" {
-				t.Errorf("FileConfig.%s is restart-required but does not exercise a reason clause", field.Name)
-			}
-		default:
-			t.Errorf("FileConfig.%s has unknown disposition %q", field.Name, row.disposition)
-		}
+		return config.NextRuntimeConfig(seed, &isolated)
 	}
-	for name := range fileConfigSectionCensus {
-		if !seen[name] {
-			t.Errorf("fileConfigSectionCensus contains %q, which is no longer a FileConfig field; update the census with the type", name)
+	seen := make(map[string]bool)
+	forEachConfigLeaf(t, reflect.ValueOf(&boot).Elem(), "", func(path string, indexes []int) {
+		seen[path] = true
+		current := cloneFileConfig(t, boot)
+		prepareConfigCensusFixture(path, &current)
+		next := cloneFileConfig(t, current)
+		mutateConfigLeaf(t, reflect.ValueOf(&next).Elem(), indexes)
+		applyConfigCensusMutation(path, &next)
+
+		base := runtimeFor(path, current)
+		api := newConfigAPIForTest(base, nil, nil, nil, nil, "test", time.Now())
+		api.boot = current
+		restartReasons := api.restartReasonsFor(next)
+		live := !reflect.DeepEqual(runtimeFor(path, current), runtimeFor(path, next))
+		inertReason, inert := configInertFields[path]
+		wantRestart := configRestartReason(path)
+		switch {
+		case wantRestart != "":
+			if !containsString(restartReasons, wantRestart) {
+				t.Errorf("%s is frozen but restartReasonsFor returned %v, want %q; removing a restart clause must red this census", path, restartReasons, wantRestart)
+			}
+		case inert:
+			if live || len(restartReasons) > 0 {
+				t.Errorf("%s is marked inert but also has executable evidence: live=%v restart=%v", path, live, restartReasons)
+			}
+		case !live:
+			t.Errorf("%s is unclassified: its mutation neither changes the live RuntimeConfig nor has a declared restart/inert classification; add application behavior, configRestartReason coverage, or documented inertness", path)
+		}
+		if inert && inertReason == "" {
+			t.Errorf("%s is marked inert without recording why", path)
+		}
+	})
+	for path := range configInertFields {
+		if !seen[path] {
+			t.Errorf("configInertFields contains %q, which is no longer a FileConfig leaf; update the census with the type", path)
 		}
 	}
 }
 
-func TestEveryRestartRequiredConfigSectionHasAWorkingClause(t *testing.T) {
-	for name, row := range fileConfigSectionCensus {
-		if row.disposition != configNeedsRestart {
-			continue
-		}
-		t.Run(name, func(t *testing.T) {
-			boot := config.DefaultFileConfig()
-			// The sessions clause is directional, so establish its disabled boot state.
-			if name == "Sessions" {
-				disabled := false
-				boot.Sessions.Agent.Enabled = &disabled
-			}
-			next := boot
-			row.mutate(&next)
+func configRestartReason(path string) string {
+	switch {
+	case strings.HasPrefix(path, "security."):
+		return "Security policy"
+	case path == "server.port" || path == "server.bind":
+		return "Server address"
+	case path == "server.stateDir":
+		return "Server state directory (server.stateDir)"
+	case path == "profiles.baseDir":
+		return "Profiles directory"
+	case path == "multiInstance.strategy":
+		return "Routing strategy"
+	case strings.HasPrefix(path, "multiInstance.restart."):
+		return "Restart policy"
+	case path == "instanceDefaults.stealthLevel":
+		return "Stealth level"
+	case path == "sessions.agent.enabled":
+		return "Agent sessions"
+	default:
+		return ""
+	}
+}
 
-			api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
-			api.boot = boot
-			if reasons := api.restartReasonsFor(next); !containsString(reasons, row.wantReason) {
-				t.Fatalf("restartReasonsFor() = %v, want %q for FileConfig.%s; its frozen setting would otherwise be saved and reported applied", reasons, row.wantReason, name)
+func prepareConfigCensusFixture(path string, fc *config.FileConfig) {
+	switch path {
+	case "instanceDefaults.headless":
+		fc.InstanceDefaults.Mode = ""
+		value := false
+		fc.InstanceDefaults.Headless = &value
+	case "sessions.agent.enabled":
+		value := false
+		fc.Sessions.Agent.Enabled = &value
+	}
+}
+
+func applyConfigCensusMutation(path string, fc *config.FileConfig) {
+	switch path {
+	case "instanceDefaults.mode":
+		fc.InstanceDefaults.Mode = "headed"
+	case "instanceDefaults.headless":
+		fc.InstanceDefaults.Mode = ""
+	}
+}
+
+func forEachConfigLeaf(t *testing.T, value reflect.Value, prefix string, visit func(string, []int)) {
+	t.Helper()
+	var walk func(reflect.Type, string, []int)
+	walk = func(typ reflect.Type, path string, indexes []int) {
+		if typ.Kind() == reflect.Ptr {
+			typ = typ.Elem()
+		}
+		if typ.Kind() != reflect.Struct || typ == reflect.TypeOf(time.Duration(0)) {
+			visit(path, indexes)
+			return
+		}
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if !field.IsExported() {
+				continue
 			}
-		})
+			name := jsonFieldName(field)
+			if name == "-" {
+				continue
+			}
+			nextPath := name
+			if path != "" {
+				nextPath = path + "." + name
+			}
+			walk(field.Type, nextPath, append(append([]int(nil), indexes...), i))
+		}
+	}
+	walk(value.Type(), prefix, nil)
+}
+
+func cloneFileConfig(t *testing.T, source config.FileConfig) config.FileConfig {
+	t.Helper()
+	data, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clone config.FileConfig
+	if err := json.Unmarshal(data, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
+}
+
+func mutateConfigLeaf(t *testing.T, root reflect.Value, indexes []int) {
+	t.Helper()
+	value := root
+	for _, index := range indexes {
+		if value.Kind() == reflect.Ptr {
+			if value.IsNil() {
+				value.Set(reflect.New(value.Type().Elem()))
+			}
+			value = value.Elem()
+		}
+		value = value.Field(index)
+	}
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			value.Set(reflect.New(value.Type().Elem()))
+		}
+		value = value.Elem()
+	}
+	switch value.Kind() {
+	case reflect.Bool:
+		value.SetBool(!value.Bool())
+	case reflect.String:
+		value.SetString(value.String() + "census")
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		value.SetInt(value.Int() + 1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		value.SetUint(value.Uint() + 1)
+	case reflect.Slice:
+		elem := reflect.New(value.Type().Elem()).Elem()
+		if elem.Kind() == reflect.String {
+			elem.SetString("census")
+		}
+		value.Set(reflect.Append(value, elem))
+	case reflect.Map:
+		if value.IsNil() {
+			value.Set(reflect.MakeMap(value.Type()))
+		}
+		key := reflect.New(value.Type().Key()).Elem()
+		if key.Kind() == reflect.String {
+			key.SetString("census")
+		}
+		value.SetMapIndex(key, reflect.New(value.Type().Elem()).Elem())
+	default:
+		t.Fatalf("no census mutation for %s", value.Type())
 	}
 }
 
