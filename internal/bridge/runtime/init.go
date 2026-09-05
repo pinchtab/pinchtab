@@ -247,9 +247,9 @@ func setupAllocator(cfg *config.RuntimeConfig, binary string, bundle *stealth.Bu
 				cmd.Env = os.Environ()
 			}
 			if len(plan.env) > 0 {
-				cmd.Env = mergeGeoEnv(cmd.Env, plan.env)
+				cmd.Env = MergeEnv(cmd.Env, plan.env)
 			}
-			cmd.Env = mergeGeoEnv(cmd.Env, geoAlignment.env)
+			cmd.Env = MergeEnv(cmd.Env, geoAlignment.env)
 		}
 		if hooks.ConfigureBrowserProcess != nil {
 			hooks.ConfigureBrowserProcess(cmd)
@@ -333,7 +333,7 @@ func resolveLaunchGeoAlignment(parent context.Context, cfg *config.RuntimeConfig
 }
 
 // mergeGeoEnv overlays additions over base by key; base is not mutated.
-func mergeGeoEnv(base, additions []string) []string {
+func MergeEnv(base, additions []string) []string {
 	if len(additions) == 0 {
 		return base
 	}

@@ -158,13 +158,13 @@ func startBrowserWithRemoteAllocator(parentCtx context.Context, cfg *config.Runt
 	cmd.Stdout = newPrefixedLogWriter(os.Stdout, "browser stdout")
 	cmd.Stderr = newPrefixedLogWriter(os.Stderr, "browser stderr")
 	if len(providerEnv) > 0 {
-		cmd.Env = mergeGeoEnv(os.Environ(), providerEnv)
+		cmd.Env = MergeEnv(os.Environ(), providerEnv)
 	}
 	if len(geoAlignment.env) > 0 {
 		if cmd.Env == nil {
 			cmd.Env = os.Environ()
 		}
-		cmd.Env = mergeGeoEnv(cmd.Env, geoAlignment.env)
+		cmd.Env = MergeEnv(cmd.Env, geoAlignment.env)
 	}
 	if err := cmd.Start(); err != nil {
 		return nil, nil, stealth.LaunchModeUninitialized, fmt.Errorf("failed to start browser directly: %w", err)

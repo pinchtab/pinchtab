@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"fmt"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/runtime"
 	"net"
 	"sort"
 	"strings"
@@ -93,27 +94,16 @@ func tailLogLine(logs string) string {
 }
 
 func mergeEnvWithOverrides(base []string, overrides map[string]string) []string {
-	out := make([]string, 0, len(base)+len(overrides))
-	for _, kv := range base {
-		key, _, ok := strings.Cut(kv, "=")
-		if !ok {
-			continue
-		}
-		if _, exists := overrides[key]; exists {
-			continue
-		}
-		out = append(out, kv)
-	}
-
 	keys := make([]string, 0, len(overrides))
 	for k := range overrides {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	additions := make([]string, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, k+"="+overrides[k])
+		additions = append(additions, k+"="+overrides[k])
 	}
-	return out
+	return runtime.MergeEnv(base, additions)
 }
 
 func filterEnvWithPrefixes(env []string, prefixes ...string) []string {

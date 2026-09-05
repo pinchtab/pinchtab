@@ -269,7 +269,7 @@ func TestBuildBrowserArgs_CloakAppliesGeoFlagsAndRespectsExplicit(t *testing.T) 
 func TestMergeGeoEnv_OverridesByKey(t *testing.T) {
 	base := []string{"PATH=/bin", "TZ=UTC", "FOO=bar"}
 	add := []string{"TZ=Europe/London"}
-	got := mergeGeoEnv(base, add)
+	got := MergeEnv(base, add)
 	want := []string{"PATH=/bin", "FOO=bar", "TZ=Europe/London"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("mergeGeoEnv = %v, want %v", got, want)
@@ -278,8 +278,8 @@ func TestMergeGeoEnv_OverridesByKey(t *testing.T) {
 
 func TestMergeGeoEnv_NoAdditionsReturnsBase(t *testing.T) {
 	base := []string{"PATH=/bin"}
-	got := mergeGeoEnv(base, nil)
+	got := MergeEnv(base, nil)
 	if !reflect.DeepEqual(got, base) {
-		t.Errorf("mergeGeoEnv(_, nil) = %v, want %v", got, base)
+		t.Errorf("MergeEnv(_, nil) = %v, want %v", got, base)
 	}
 }
