@@ -247,6 +247,7 @@ Current nested file-config shape:
     "downloadMaxBytes": 20971520,
     "allowUpload": false,
     "allowClipboard": false,
+    "allowNetworkIntercept": false,
     "uploadMaxRequestBytes": 10485760,
     "uploadMaxFiles": 8,
     "uploadMaxFileBytes": 5242880,
@@ -673,6 +674,8 @@ headers correctly.
 `security.attach.allowHosts` is an allowlist. If you set it to `["*"]`, PinchTab accepts any reachable attach host with an allowed scheme. That is a documented, non-default, security-reducing override: it removes host allowlisting entirely and should only be used on isolated, operator-controlled networks.
 
 `security.attach.forwardProxyAuth` controls whether PinchTab may send configured proxy authentication credentials over remote CDP attach. It defaults to `false`; enable it only when the attached browser process and CDP transport are trusted.
+
+`security.allowNetworkIntercept` gates the power to rewrite the tab's traffic: `/network/route` rules that abort a matching request or fulfill it with an arbitrary body, plus the network log reads `GET /network/{requestId}` and `POST /network/clear`. It defaults to `false`, and a call to a gated endpoint answers `403` with code `network_intercept_disabled`. It is not a switch over Chrome's request interception as a mechanism: `/emulation/offline`, `security.maxRedirects` and downloads use that mechanism too and stay available with the key off, because none of them can rewrite what the page receives.
 
 ### Quarantined Profile Retention
 
