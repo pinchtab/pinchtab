@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net"
 	"net/http"
@@ -221,21 +222,20 @@ func findFreePort(start, end int) (int, error) {
 func waitForBrowserDevTools(port int, timeout time.Duration) (string, error) {
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d/json/version", port)
 	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
+	wsURL, err := readiness.WaitUntil(context.Background(), timeout, 250*time.Millisecond, func() (string, bool, error) {
 		resp, err := client.Get(endpoint)
-		if err == nil {
-			var info struct {
-				WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
-			}
-			decodeErr := json.NewDecoder(resp.Body).Decode(&info)
-			_ = resp.Body.Close()
-			if decodeErr == nil && info.WebSocketDebuggerURL != "" {
-				return info.WebSocketDebuggerURL, nil
-			}
+		if err != nil {
+			return "", false, nil
 		}
-		time.Sleep(250 * time.Millisecond)
+		var info struct {
+			WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&info)
+		_ = resp.Body.Close()
+		return info.WebSocketDebuggerURL, decodeErr == nil && info.WebSocketDebuggerURL != "", nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("browser devtools not ready on port %d after %v", port, timeout)
 	}
-	return "", fmt.Errorf("browser devtools not ready on port %d after %v", port, timeout)
+	return wsURL, nil
 }

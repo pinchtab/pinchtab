@@ -2,7 +2,9 @@ package solvers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
@@ -49,25 +51,21 @@ func (s *JSChallenge) Solve(ctx context.Context, page autosolver.Page, executor 
 		_ = clickIfExists(ctx, executor, selector)
 	}
 
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) {
+	if _, err := readiness.WaitUntil(ctx, 8*time.Second, 400*time.Millisecond, func() (struct{}, bool, error) {
 		html, err := page.HTML()
-		if err == nil {
-			intent := autosolver.DetectChallengeIntent(page.Title(), page.URL(), html)
-			if intent == nil || intent.Type == autosolver.IntentNormal {
-				result.Solved = true
-				result.FinalTitle = page.Title()
-				result.FinalURL = page.URL()
-				return result, nil
-			}
+		if err != nil {
+			return struct{}{}, false, nil
 		}
-
-		select {
-		case <-ctx.Done():
-			result.Error = ctx.Err().Error()
-			return result, ctx.Err()
-		case <-time.After(400 * time.Millisecond):
-		}
+		intent := autosolver.DetectChallengeIntent(page.Title(), page.URL(), html)
+		return struct{}{}, intent == nil || intent.Type == autosolver.IntentNormal, nil
+	}); err == nil {
+		result.Solved = true
+		result.FinalTitle = page.Title()
+		result.FinalURL = page.URL()
+		return result, nil
+	} else if !errors.Is(err, readiness.ErrNotReady) {
+		result.Error = err.Error()
+		return result, err
 	}
 
 	result.FinalTitle = page.Title()

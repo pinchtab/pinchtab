@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net/http"
 	"os"
@@ -475,12 +477,10 @@ func gracefulStopTimeout(cfg *config.RuntimeConfig) time.Duration {
 }
 
 func waitForExit(pid int, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return true
-		}
-		time.Sleep(200 * time.Millisecond)
+	if _, err := readiness.WaitUntil(context.Background(), timeout, 200*time.Millisecond, func() (struct{}, bool, error) {
+		return struct{}{}, !processAlive(pid), nil
+	}); err == nil {
+		return true
 	}
 	return !processAlive(pid)
 }

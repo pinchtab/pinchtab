@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"strings"
 	"time"
 
@@ -380,18 +381,12 @@ func waitForArmedDialogSettle(dm *DialogManager, tabID string, timeout time.Dura
 		timeout = dialogAutoHandleTimeout
 	}
 
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !dm.HasAutoHandler(tabID) {
-			// Allow the handler goroutine to finish UI side-effects before
-			// immediate follow-up reads (for example get_text assertions).
-			time.Sleep(dialogAutoHandleSettleDelay)
-			return
-		}
-		time.Sleep(dialogAutoHandlePollInterval)
+	if _, err := readiness.WaitUntil(context.Background(), timeout, dialogAutoHandlePollInterval, func() (struct{}, bool, error) {
+		return struct{}{}, !dm.HasAutoHandler(tabID), nil
+	}); err == nil {
+		time.Sleep(dialogAutoHandleSettleDelay)
+		return
 	}
-
-	// Prevent stale one-shot handlers from leaking into later clicks.
 	_ = dm.TakeAutoHandler(tabID)
 }
 

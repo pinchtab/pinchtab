@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"io"
 	"net/http"
 	"strings"
@@ -145,14 +147,12 @@ func ShutdownServer(port, token string) error {
 		return fmt.Errorf("shutdown returned HTTP %d", resp.StatusCode)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		time.Sleep(300 * time.Millisecond)
-		if !CheckPinchTabRunning(port, token) {
-			return nil
-		}
+	if _, err := readiness.WaitUntil(context.Background(), 10*time.Second, 300*time.Millisecond, func() (struct{}, bool, error) {
+		return struct{}{}, !CheckPinchTabRunning(port, token), nil
+	}); err != nil {
+		return fmt.Errorf("server did not exit within 10s")
 	}
-	return fmt.Errorf("server did not exit within 10s")
+	return nil
 }
 
 func MetricFloat(value any) float64 {
