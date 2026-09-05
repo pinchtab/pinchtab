@@ -985,21 +985,32 @@ func TestABodyWithNoIDPIKeysGainsNoNoticeBlock(t *testing.T) {
 	}
 }
 
-// Both halves are required. A body that flags untrusted content but says nothing
-// adds no empty block, and the key still travels in the payload.
-func TestUntrustedContentWithoutANoticeAddsNoBlock(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"ok","untrustedContent":true}`))
-	}))
-	defer srv.Close()
-
-	result := callTool(t, "pinchtab_get_text", map[string]any{}, srv)
-	blocks := textBlocks(t, result)
-	if len(blocks) != 1 {
-		t.Fatalf("got %d blocks, want one: an empty notice is not a notice", len(blocks))
+// Both halves of the predicate are load-bearing, and each needs its own row: a
+// body that flags untrusted content but says nothing adds no empty block, and a
+// body carrying the producer's notice text WITHOUT the flag is not a trusted page
+// being declared untrusted. Either key alone leaves the result as it was, and the
+// keys still travel in the payload.
+func TestOnlyBothIDPIHalvesTogetherAddANoticeBlock(t *testing.T) {
+	cases := map[string]string{
+		"flag without a notice": `{"status":"ok","untrustedContent":true}`,
+		"notice without a flag": `{"status":"ok","idpiNotice":"` + testIDPINotice + `"}`,
 	}
-	if !strings.Contains(blocks[0], "untrustedContent") {
-		t.Errorf("the key stopped travelling in the payload: %s", blocks[0])
+
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer srv.Close()
+
+			blocks := textBlocks(t, callTool(t, "pinchtab_get_text", map[string]any{}, srv))
+			if len(blocks) != 1 {
+				t.Fatalf("got %d blocks, want one: %v", len(blocks), blocks)
+			}
+			if blocks[0] != body {
+				t.Errorf("the payload changed:\n got %s\nwant %s", blocks[0], body)
+			}
+		})
 	}
 }
 
