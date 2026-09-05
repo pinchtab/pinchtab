@@ -27,7 +27,9 @@ func TestTheRequestIDHeaderIsSpelledInOnePlace(t *testing.T) {
 	// A site that legitimately writes the name out, with the reason at the entry.
 	// Checked in both directions: an entry naming a file the walk no longer finds,
 	// or one that no longer contains the literal, fails as a stale exemption.
-	exempt := map[string]string{}
+	exempt := map[string]string{
+		"internal/cli/apiclient/transport.go": "the CLI is a client of the wire and does not import server packages; apiclient/request_id_test.go pins its literal against httpx.RequestIDHeader",
+	}
 
 	files := srccensus.Tree(t, filepath.Join("..", ".."), 200)
 

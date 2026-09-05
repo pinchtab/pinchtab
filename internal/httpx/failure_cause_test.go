@@ -149,6 +149,7 @@ const (
 	minFailureProducers  = 3
 	moduleRoot           = "../.."
 	recorderChainFunc    = "RecordFailureReason"
+	failurePreludeFunc   = "recordFailure"
 )
 
 var directFailureWrite = regexp.MustCompile(`http\.Error\(|WriteHeader\(http\.Status(BadRequest|Unauthorized|Forbidden|NotFound|MethodNotAllowed|Conflict|Gone|RequestEntityTooLarge|TooManyRequests|InternalServerError|NotImplemented|BadGateway|ServiceUnavailable|GatewayTimeout)\)|WriteHeader\([45][0-9][0-9]\)`)
@@ -160,11 +161,14 @@ func TestEveryFailureRecorderAlsoLogsItsCause(t *testing.T) {
 	for _, site := range pkg.Calls(t, "logFailureCause") {
 		logsItsCause[site.Func] = true
 	}
+	for _, site := range pkg.Calls(t, failurePreludeFunc) {
+		logsItsCause[site.Func] = true
+	}
 
 	var offenders []string
 	producers := 0
-	for _, site := range pkg.Calls(t, recorderChainFunc) {
-		if site.Func == recorderChainFunc {
+	for _, site := range append(pkg.Calls(t, recorderChainFunc), pkg.Calls(t, failurePreludeFunc)...) {
+		if site.Func == recorderChainFunc || site.Func == failurePreludeFunc {
 			continue
 		}
 		producers++
