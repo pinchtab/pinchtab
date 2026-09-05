@@ -312,18 +312,37 @@ func TestDryRunReportsATokenItDoesNotProvision(t *testing.T) {
 }
 
 func TestNoSecretValueEverAppearsInAChange(t *testing.T) {
-	changes, err := settingChanges(
-		[]byte(`{"server":{"token":"old-secret"},"browser":{"proxy":{"password":"old-pass"}}}`),
-		[]byte(`{"server":{"token":"new-secret"},"browser":{"proxy":{"password":"new-pass"}}}`))
+	before := `{"server":{"token":"old-secret","bind":"0.0.0.0"},"browser":{"proxy":{"password":"old-pass"}},` +
+		`"security":{"stateEncryptionKey":"old-key"},"autoSolver":{"external":{"capsolverKey":"old-cap"},"credentials":{"login":{"username":"old-user"}}}}`
+	after := `{"server":{"token":"new-secret","bind":"127.0.0.1"},"browser":{"proxy":{"password":"new-pass"}},` +
+		`"security":{"stateEncryptionKey":"new-key"},"autoSolver":{"external":{"capsolverKey":"new-cap"},"credentials":{"login":{"username":"new-user"}}}}`
+	changes, err := settingChanges([]byte(before), []byte(after))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 2 {
-		t.Fatalf("changes = %+v", changes)
+	secret := map[string]bool{
+		"server.token":                          true,
+		"browser.proxy.password":                true,
+		"security.stateEncryptionKey":           true,
+		"autoSolver.external.capsolverKey":      true,
+		"autoSolver.credentials.login.username": true,
 	}
+	seen := map[string]bool{}
 	for _, c := range changes {
-		if c.Old != "<set>" || c.New != "<generated>" {
-			t.Errorf("%s rendered %q -> %q; a secret must never appear", c.Path, c.Old, c.New)
+		seen[c.Path] = true
+		if secret[c.Path] {
+			if c.Old != "<set>" || c.New != "<generated>" {
+				t.Errorf("%s rendered %q -> %q; a secret must never appear", c.Path, c.Old, c.New)
+			}
+			continue
+		}
+		if c.Path != "server.bind" || c.Old != `"0.0.0.0"` || c.New != `"127.0.0.1"` {
+			t.Errorf("non-secret %s rendered %q -> %q; redaction must not hide ordinary settings", c.Path, c.Old, c.New)
+		}
+	}
+	for path := range secret {
+		if !seen[path] {
+			t.Errorf("fixture never produced a change for %s", path)
 		}
 	}
 }

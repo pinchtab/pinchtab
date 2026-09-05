@@ -470,8 +470,8 @@ func TestIsSensitiveConfigPath(t *testing.T) {
 		"":                                        false,
 	}
 	for path, want := range cases {
-		if got := isSensitiveConfigPath(path); got != want {
-			t.Errorf("isSensitiveConfigPath(%q) = %v, want %v", path, got, want)
+		if got := config.IsSensitiveConfigPath(path); got != want {
+			t.Errorf("config.IsSensitiveConfigPath(%q) = %v, want %v", path, got, want)
 		}
 	}
 }

@@ -283,16 +283,11 @@ func settingChanges(before, after []byte) ([]SettingChange, error) {
 	return changes, nil
 }
 
-// isSecretSetting keys on the config's secret vocabulary by name — a token or a
-// password anywhere in the document — so a preset that starts touching one
-// cannot print it.
-func isSecretSetting(path string) bool {
-	last := path[strings.LastIndex(path, ".")+1:]
-	return last == "token" || last == "password"
-}
-
+// redactSecret hides a changed value whose path the config package's one
+// secret vocabulary marks: the diff runs over the whole document, so this is
+// what keeps a preset that starts touching a key from printing it.
 func redactSecret(c SettingChange) SettingChange {
-	if !isSecretSetting(c.Path) {
+	if !config.IsSensitiveConfigPath(c.Path) {
 		return c
 	}
 	if c.Old == `""` {

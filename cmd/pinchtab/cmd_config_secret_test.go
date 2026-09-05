@@ -1,18 +1,23 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
+)
 
 // `pinchtab config get <path>` prints the value, and `config set` echoes it
 // back, so every config path holding secret material must be masked. The
 // schema's secret-bearing fields are capsolverKey, twoCaptchaKey,
 // stateEncryptionKey, password, token and the credentials subtree.
 //
-// This is where the masking rule lives, and it is a DISPLAY property of these
-// two commands rather than of the field: a surface that publishes config values
-// some other way inherits none of it. security.stateEncryptionKey is only
-// readable through the editor at all because the section-leaf walk in
-// internal/config required every declared leaf to resolve, so this list is what
-// keeps that reachability from printing a secret.
+// The rule is config.IsSensitiveConfigPath, the one path-name vocabulary, which
+// the preset change report shares; this test pins that these two commands still
+// consult it for every secret field, because a surface that publishes config
+// values by path and skips it prints the value. security.stateEncryptionKey is
+// only readable through the editor at all because the section-leaf walk in
+// internal/config required every declared leaf to resolve, so the vocabulary is
+// what keeps that reachability from printing a secret.
 func TestIsSensitiveConfigPathCoversEverySecretField(t *testing.T) {
 	sensitive := []string{
 		"server.token",
@@ -25,8 +30,8 @@ func TestIsSensitiveConfigPathCoversEverySecretField(t *testing.T) {
 		"browser.targets.default.proxy.password",
 	}
 	for _, path := range sensitive {
-		if !isSensitiveConfigPath(path) {
-			t.Errorf("isSensitiveConfigPath(%q) = false, want true — value would print in clear", path)
+		if !config.IsSensitiveConfigPath(path) {
+			t.Errorf("config.IsSensitiveConfigPath(%q) = false, want true — value would print in clear", path)
 		}
 	}
 }
@@ -43,8 +48,8 @@ func TestIsSensitiveConfigPathLeavesOrdinarySettingsVisible(t *testing.T) {
 		"observability.activity.retentionDays",
 	}
 	for _, path := range ordinary {
-		if isSensitiveConfigPath(path) {
-			t.Errorf("isSensitiveConfigPath(%q) = true, want false — ordinary setting would be masked", path)
+		if config.IsSensitiveConfigPath(path) {
+			t.Errorf("config.IsSensitiveConfigPath(%q) = true, want false — ordinary setting would be masked", path)
 		}
 	}
 }
