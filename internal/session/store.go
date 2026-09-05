@@ -292,15 +292,9 @@ func (s *Store) authenticate(token string, touch bool) (*Session, bool) {
 		if subtle.ConstantTimeCompare(hash[:], sess.TokenHash[:]) != 1 {
 			return
 		}
-		if s.isExpired(sess, now) {
-			sess.Status = StatusExpired
-			job, persist = s.snapshotLocked()
-			expiredEvt = &LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonExpired}
+		job, persist, expiredEvt = s.refreshLocked(sess, now, touch)
+		if expiredEvt != nil {
 			return
-		}
-		if touch {
-			sess.LastSeenAt = now
-			job, persist = s.maybeSnapshotTouchLocked(now)
 		}
 		match = cloneSessionLocked(sess)
 		ok = true
@@ -315,37 +309,43 @@ func (s *Store) authenticate(token string, touch bool) (*Session, bool) {
 	return match, ok
 }
 
-// Touch updates LastSeenAt for an active, unexpired session.
 func (s *Store) Touch(sessionID string) bool {
 	if s == nil {
 		return false
 	}
-
 	now := s.now()
 
 	s.mu.Lock()
-
 	sess, ok := s.sessions[strings.TrimSpace(sessionID)]
 	if !ok || sess.Status != StatusActive {
 		s.mu.Unlock()
 		return false
 	}
-	if s.isExpired(sess, now) {
-		sess.Status = StatusExpired
-		job, persist := s.snapshotLocked()
-		s.mu.Unlock()
-		if persist {
-			s.writeSnapshot(job)
-		}
-		return false
-	}
-	sess.LastSeenAt = now
-	job, persist := s.maybeSnapshotTouchLocked(now)
+	job, persist, expiredEvt := s.refreshLocked(sess, now, true)
 	s.mu.Unlock()
+
 	if persist {
 		s.writeSnapshot(job)
 	}
+	if expiredEvt != nil {
+		s.dispatchLifecycle([]LifecycleEvent{*expiredEvt})
+		return false
+	}
 	return true
+}
+
+func (s *Store) refreshLocked(sess *Session, now time.Time, touch bool) (snapshotJob, bool, *LifecycleEvent) {
+	if s.isExpired(sess, now) {
+		sess.Status = StatusExpired
+		job, persist := s.snapshotLocked()
+		return job, persist, &LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonExpired}
+	}
+	if !touch {
+		return snapshotJob{}, false, nil
+	}
+	sess.LastSeenAt = now
+	job, persist := s.maybeSnapshotTouchLocked(now)
+	return job, persist, nil
 }
 
 // cloneSessionLocked returns a copy no caller can use to mutate store-owned

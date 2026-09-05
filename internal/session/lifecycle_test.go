@@ -150,3 +150,28 @@ func TestLifecycle_NoSubscribersIsSafe(t *testing.T) {
 	}
 	// No assertion — just must not panic / deadlock.
 }
+
+func TestLifecycle_TouchExpiryFiresEvent(t *testing.T) {
+	t0 := time.Unix(1_700_000_000, 0)
+	clock := t0
+	s := NewStore(Config{Enabled: true, Mode: "preferred", IdleTimeout: time.Hour})
+	s.now = func() time.Time { return clock }
+
+	id, _, err := s.Create("agent-expire", "", "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	hook, wait := collectingHook(t)
+	s.OnLifecycle(hook)
+
+	clock = t0.Add(2 * time.Hour)
+	if s.Touch(id) {
+		t.Fatal("expired session should not be touchable")
+	}
+
+	got := wait(1, time.Second)
+	if len(got) != 1 || got[0].Reason != LifecycleReasonExpired {
+		t.Fatalf("expected one expired event from Touch, as Authenticate emits for the same transition, got %#v", got)
+	}
+}
