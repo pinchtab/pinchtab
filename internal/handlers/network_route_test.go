@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -139,13 +140,11 @@ func TestNetworkInterceptSecurityStateIncludesEveryGatedDirectRoute(t *testing.T
 		"POST /tabs/{id}/network/route",
 		"DELETE /tabs/{id}/network/route",
 	}
-	if len(state.Paths) != len(want) {
-		t.Fatalf("security paths = %v, want %v", state.Paths, want)
-	}
-	for i := range want {
-		if state.Paths[i] != want[i] {
-			t.Fatalf("security path[%d] = %q, want %q", i, state.Paths[i], want[i])
-		}
+	got := append([]string(nil), state.Paths...)
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("security paths = %v, want %v", got, want)
 	}
 }
 

@@ -40,39 +40,31 @@ func (h *Handlers) allows(cap routes.Capability) bool {
 	return h != nil && h.Config.CapabilityEnabled(cap)
 }
 
-func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
-	return map[string]endpointSecurityState{
-		"evaluate": capState(routes.CapEvaluate, h.allows(routes.CapEvaluate),
-			[]string{"POST /evaluate", "POST /tabs/{id}/evaluate"}),
-		"macro": capState(routes.CapMacro, h.allows(routes.CapMacro),
-			[]string{"POST /macro"}),
-		"screencast": capState(routes.CapScreencast, h.allows(routes.CapScreencast),
-			[]string{"GET /screencast", "GET /screencast/tabs", "POST /record/start", "POST /record/stop", "GET /record/status", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"}),
-		"download": capState(routes.CapDownload, h.allows(routes.CapDownload),
-			[]string{"GET /download", "GET /tabs/{id}/download"}),
-		"cookies": capState(routes.CapCookies, h.allows(routes.CapCookies),
-			[]string{"GET /cookies", "POST /cookies", "DELETE /cookies", "GET /tabs/{id}/cookies", "POST /tabs/{id}/cookies", "DELETE /tabs/{id}/cookies"}),
-		"upload": capState(routes.CapUpload, h.allows(routes.CapUpload),
-			[]string{"POST /upload", "POST /tabs/{id}/upload"}),
-		// clipboard has no capability gate in the route catalog, so its metadata stays local.
-		"clipboard": {
-			Enabled: h.clipboardEnabled(),
-			Setting: clipboardSetting,
-			Message: httpx.DisabledEndpointMessage("clipboard", clipboardSetting),
-			Paths:   []string{"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste"},
-		},
-		"stateExport": capState(routes.CapStateExport, h.allows(routes.CapStateExport),
-			[]string{
-				"GET /storage", "POST /storage", "DELETE /storage",
-				"GET /tabs/{id}/storage", "POST /tabs/{id}/storage", "DELETE /tabs/{id}/storage",
-				"GET /state", "GET /state/list", "GET /state/show", "POST /state/save",
-				"POST /state/load", "DELETE /state", "POST /state/clean",
-			}),
-		"networkIntercept": capState(routes.CapNetworkIntercept, h.allows(routes.CapNetworkIntercept),
-			[]string{
-				"GET /network/{requestId}", "GET /tabs/{id}/network/{requestId}", "POST /network/clear",
-				"GET /network/route", "POST /network/route", "DELETE /network/route",
-				"GET /tabs/{id}/network/route", "POST /tabs/{id}/network/route", "DELETE /tabs/{id}/network/route",
-			}),
+var instanceScopedCapabilityPaths = map[routes.Capability][]string{
+	routes.CapScreencast: {"GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"},
+}
+
+func capabilityPaths(cap routes.Capability) []string {
+	var paths []string
+	for _, ep := range routes.CapabilityEndpoints()[cap] {
+		paths = append(paths, ep.Route())
+		if ep.TabScoped {
+			paths = append(paths, ep.TabRoute())
+		}
 	}
+	return append(paths, instanceScopedCapabilityPaths[cap]...)
+}
+
+func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
+	states := make(map[string]endpointSecurityState)
+	for _, cap := range routes.Capabilities() {
+		states[string(cap)] = capState(cap, h.allows(cap), capabilityPaths(cap))
+	}
+	states["clipboard"] = endpointSecurityState{
+		Enabled: h.clipboardEnabled(),
+		Setting: clipboardSetting,
+		Message: httpx.DisabledEndpointMessage("clipboard", clipboardSetting),
+		Paths:   []string{"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste"},
+	}
+	return states
 }
