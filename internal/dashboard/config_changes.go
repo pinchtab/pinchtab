@@ -97,6 +97,14 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	if !sameConfigSection(c.boot.Security, next.Security) {
 		reasons = append(reasons, "Security policy")
 	}
+	// The activity recorder and its retention/event-source filters are built once
+	// by server startup. Publishing their RuntimeConfig fields does not rebuild the
+	// recorder, so these edits are honest only when reported as restart-required.
+	if !sameConfigSection(c.boot.Observability.Activity.Enabled, next.Observability.Activity.Enabled) ||
+		!sameConfigSection(c.boot.Observability.Activity.RetentionDays, next.Observability.Activity.RetentionDays) ||
+		!sameConfigSection(c.boot.Observability.Activity.Events, next.Observability.Activity.Events) {
+		reasons = append(reasons, "Activity recording")
+	}
 	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
 	}

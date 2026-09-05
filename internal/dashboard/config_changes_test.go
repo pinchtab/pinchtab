@@ -72,6 +72,35 @@ func TestWhitespaceProfilesBaseDirUsesRuntimeExplicitValueSemantics(t *testing.T
 	}
 }
 
+func TestActivityRecorderSnapshotChangesRequireRestart(t *testing.T) {
+	mutations := map[string]func(*config.FileConfig){
+		"enabled": func(fc *config.FileConfig) {
+			value := !*fc.Observability.Activity.Enabled
+			fc.Observability.Activity.Enabled = &value
+		},
+		"retention": func(fc *config.FileConfig) {
+			value := *fc.Observability.Activity.RetentionDays + 1
+			fc.Observability.Activity.RetentionDays = &value
+		},
+		"events": func(fc *config.FileConfig) {
+			value := !*fc.Observability.Activity.Events.Server
+			fc.Observability.Activity.Events.Server = &value
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			boot := config.DefaultFileConfig()
+			next := cloneFileConfig(t, boot)
+			mutate(&next)
+			api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+			api.boot = boot
+			if reasons := api.restartReasonsFor(next); !containsString(reasons, "Activity recording") {
+				t.Fatalf("restartReasonsFor() = %v, want Activity recording for boot-snapshotted %s", reasons, name)
+			}
+		})
+	}
+}
+
 // configInertFields is deliberately small. Every other reachable FileConfig leaf
 // must prove its classification by mutation: either NextRuntimeConfig changes the
 // published value (live), or restartReasonsFor names a frozen consumer (restart).
@@ -153,6 +182,10 @@ func configRestartReason(path string) string {
 		return "Stealth level"
 	case path == "sessions.agent.enabled":
 		return "Agent sessions"
+	case path == "observability.activity.enabled" ||
+		path == "observability.activity.retentionDays" ||
+		strings.HasPrefix(path, "observability.activity.events."):
+		return "Activity recording"
 	default:
 		return ""
 	}
