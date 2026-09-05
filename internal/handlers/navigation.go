@@ -496,6 +496,17 @@ type navExec struct {
 // + banner dismiss, and response assembly. Branch-specific behavior is gated on
 // ex.isNewTab so the two callers cannot drift.
 func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExec) {
+	// One owner for the tab this handler created: it is closed on every exit
+	// unless the response hands it to the caller. The rule is the response tab,
+	// not failure — the ghost-chrome adapter answers 200 from another tab and
+	// the created one is then redundant — so a new exit path inherits it.
+	handedTab := ""
+	defer func() {
+		if ex.isNewTab && handedTab != ex.tabID {
+			_ = h.Bridge.CloseTab(ex.tabID)
+		}
+	}()
+
 	navGuard, err := installNavigateRuntimeGuardWithBridge(h.Bridge, ex.ctx, ex.cancel, ex.target, ex.trustedCIDRs)
 	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
@@ -513,11 +524,6 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 		DispatchOnly: ex.dispatchOnly,
 	})
 	if navErr != nil {
-		if ex.isNewTab {
-			// The blank tab never carried the requested URL; keeping it around on
-			// failure only burns a MaxTabs slot until eviction.
-			_ = h.Bridge.CloseTab(ex.tabID)
-		}
 		if navGuard != nil {
 			if blockedErr := navGuard.blocked(); blockedErr != nil {
 				httpx.Error(w, http.StatusForbidden, blockedErr)
@@ -546,6 +552,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 		h.clearTabFrameScope(ex.tabID)
 	}
 	if ex.dispatchOnly {
+		handedTab = ex.tabID
 		h.setCurrentTabForRequest(r, ex.tabID)
 		h.recordResolvedURL(r, ex.url)
 		h.recordActivity(r, activity.Update{
@@ -563,9 +570,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	// the remaining post-steps are Chrome-tab CDP ops against a tab that never
 	// navigated.
 	if navResult != nil && navResult.TabID != "" && navResult.TabID != ex.tabID {
-		if ex.isNewTab {
-			_ = h.Bridge.CloseTab(ex.tabID)
-		}
+		handedTab = navResult.TabID
 		h.setCurrentTabForRequest(r, navResult.TabID)
 		if ex.isNewTab {
 			h.recordResolvedTab(r, navResult.TabID)
@@ -587,13 +592,11 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	navURL, _ := h.Bridge.CurrentURL(ex.ctx)
 	if strings.HasPrefix(navURL, errorPagePrefix) {
 		landing := h.errorPageLanding(ex.tabID, ex.url)
-		if ex.isNewTab {
-			_ = h.Bridge.CloseTab(ex.tabID)
-		}
 		navigateErrorWithHint(w, classifyNavigateError(landing), landing, ex.url)
 		return
 	}
 	title, _ := bridge.WaitForTitle(ex.ctx, ex.titleWait)
+	handedTab = ex.tabID
 	h.setCurrentTabForRequest(r, ex.tabID)
 	if ex.isNewTab {
 		h.recordResolvedTab(r, ex.tabID)

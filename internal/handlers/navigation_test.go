@@ -735,3 +735,60 @@ func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
 		}
 	})
 }
+
+// The tab a newTab navigate creates has one owner deciding its fate: it is closed
+// on every exit unless the response names it as the caller's. The rule is the
+// response tab, not failure — the ghost-chrome path answers 200 from another tab
+// and closes the created one — so all three shapes sit in one table and a
+// close-on-failure or close-everything regression is visible.
+func TestANewTabIsClosedUnlessTheResponseNamesIt(t *testing.T) {
+	const target = "http://localhost/page.html"
+	cases := []struct {
+		name       string
+		mock       *mockBridge
+		wantStatus int
+		wantTabID  string
+		wantClosed bool
+	}{
+		{
+			name:       "a chrome-error landing closes the created tab and names none",
+			mock:       &mockBridge{currentURL: "chrome-error://chromewebdata/", navigateResult: &bridge.NavigateResult{URL: target}},
+			wantStatus: http.StatusBadGateway, wantTabID: "", wantClosed: true,
+		},
+		{
+			name:       "a loaded page keeps the created tab and names it",
+			mock:       &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{URL: target}},
+			wantStatus: 200, wantTabID: "tab_abc12345", wantClosed: false,
+		},
+		{
+			name:       "a navigate served from another tab answers 200 with that tab and closes the created one",
+			mock:       &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{TabID: "static-1", URL: target, Title: "served"}},
+			wantStatus: 200, wantTabID: "static-1", wantClosed: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := New(tc.mock, &config.RuntimeConfig{}, nil, nil, nil)
+			w := httptest.NewRecorder()
+			h.HandleNavigate(w, httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"`+target+`","newTab":true}`))))
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if len(tc.mock.createTabURLs) != 1 {
+				t.Fatalf("created %v, want exactly one tab", tc.mock.createTabURLs)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			gotTabID, _ := body["tabId"].(string)
+			if gotTabID != tc.wantTabID {
+				t.Fatalf("response names tab %q, want %q: %s", gotTabID, tc.wantTabID, w.Body.String())
+			}
+			closed := len(tc.mock.closedTabs) == 1 && tc.mock.closedTabs[0] == "tab_abc12345"
+			if closed != tc.wantClosed {
+				t.Fatalf("closed = %v (%v), want %v; a created tab must be closed exactly when the response does not hand it over", closed, tc.mock.closedTabs, tc.wantClosed)
+			}
+		})
+	}
+}
