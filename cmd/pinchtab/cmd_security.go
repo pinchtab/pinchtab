@@ -99,17 +99,7 @@ func printSecurityOverview(cfg *config.RuntimeConfig, recommended []workflow.Set
 	}
 	fmt.Println()
 
-	switch {
-	case recommendedErr != nil:
-		fmt.Println("  " + cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("could not compute what security up would write: %v", recommendedErr)))
-	case len(recommended) == 0 && len(warnings) == 0:
-		fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
-	case len(recommended) > 0:
-		fmt.Printf("  %s %s\n",
-			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d config setting(s) differ from recommended defaults (the rows above summarise them; security up would write exactly these) —", len(recommended))),
-			cli.StyleStdout(cli.CommandStyle, "pinchtab security up"))
-		printSettingChanges(recommended)
-	default:
+	if len(warnings) > 0 {
 		fmt.Println("  " + cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d security warning(s) detected:", len(warnings))))
 		for _, warning := range warnings {
 			fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, warning.Message))
@@ -117,6 +107,17 @@ func printSecurityOverview(cfg *config.RuntimeConfig, recommended []workflow.Set
 				fmt.Printf("      %s\n", cli.StyleStdout(cli.MutedStyle, hint))
 			}
 		}
+	}
+	switch {
+	case recommendedErr != nil:
+		fmt.Println("  " + cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("could not compute what security up would write: %v", recommendedErr)))
+	case len(recommended) > 0:
+		fmt.Printf("  %s %s\n",
+			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d config setting(s) differ from recommended defaults (the rows above summarise them; security up would write exactly these) —", len(recommended))),
+			cli.StyleStdout(cli.CommandStyle, "pinchtab security up"))
+		printSettingChanges(recommended)
+	case len(warnings) == 0:
+		fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
 	}
 	fmt.Println()
 

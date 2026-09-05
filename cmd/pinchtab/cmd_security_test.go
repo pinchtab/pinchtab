@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -217,7 +218,10 @@ func TestOverviewCountIsThePresetChangeCount(t *testing.T) {
 }
 
 // The overview is the second surface for security warnings, driven off the same
-// assessor as the boot banner, so every warning the assessor returns must print.
+// assessor as the boot banner, so every warning the assessor returns must print —
+// whatever the recommended list holds, and even when computing it failed. A live
+// statement about the running server outranks an offer to reconcile settings, so
+// the warnings print first and the all-clear line never stands above one.
 func TestOverviewPrintsEveryAssessedWarning(t *testing.T) {
 	cfg := testRuntimeConfig()
 	cfg.Token = ""
@@ -227,15 +231,42 @@ func TestOverviewPrintsEveryAssessedWarning(t *testing.T) {
 	if len(assessed) < 2 {
 		t.Fatalf("only %d warnings assessed; too few to prove the overview prints them all", len(assessed))
 	}
-	output := captureStdout(t, func() {
-		printSecurityOverview(cfg, nil, nil)
-	})
-	for _, warning := range assessed {
-		if !strings.Contains(output, warning.Message) {
-			t.Errorf("overview omits %q\n%s", warning.Message, output)
-		}
-		if hint := warning.Hint(); hint != "" && !strings.Contains(output, hint) {
-			t.Errorf("overview omits the hint for %s\n%s", warning.ID, output)
-		}
+	oneChange := []workflow.SettingChange{{Path: "server.token", Old: "", New: "<generated>"}}
+	cases := []struct {
+		name    string
+		changes []workflow.SettingChange
+		err     error
+	}{
+		{"nothing differs", nil, nil},
+		{"a recommended default differs", oneChange, nil},
+		{"the recommended computation failed", nil, errors.New("config unreadable")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			output := captureStdout(t, func() {
+				printSecurityOverview(cfg, tc.changes, tc.err)
+			})
+			for _, warning := range assessed {
+				if !strings.Contains(output, warning.Message) {
+					t.Errorf("overview omits %q\n%s", warning.Message, output)
+				}
+				if hint := warning.Hint(); hint != "" && !strings.Contains(output, hint) {
+					t.Errorf("overview omits the hint for %s\n%s", warning.ID, output)
+				}
+			}
+			if strings.Contains(output, "All recommended security defaults are active.") {
+				t.Errorf("the all-clear line printed while warnings stand\n%s", output)
+			}
+			if len(tc.changes) > 0 {
+				warned := strings.Index(output, "security warning(s) detected")
+				differs := strings.Index(output, "differ from recommended defaults")
+				if differs < 0 || warned < 0 || warned > differs {
+					t.Errorf("warnings must print before the recommended list (warnings at %d, list at %d)\n%s", warned, differs, output)
+				}
+			}
+			if tc.err != nil && !strings.Contains(output, "could not compute") {
+				t.Errorf("a failed recommended computation was not reported\n%s", output)
+			}
+		})
 	}
 }
