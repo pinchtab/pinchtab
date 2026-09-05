@@ -3,8 +3,9 @@
 //////////
 // source: types.go
 /*
-Package types contains shared API types for the dashboard.
-These types are exported to TypeScript via tygo.
+Package types contains the module's shared API wire types — read by the
+dashboard, the CLI and the MCP server. They are exported to TypeScript via
+tygo, so every exported declaration here must appear in the generated file.
 */
 
 /**
@@ -216,4 +217,112 @@ export interface ProfileInstanceStatus {
   port: string;
   id?: string;
   message?: string;
+}
+/**
+ * CaptureEnvelope is the /capture JSON envelope. The producer
+ * (internal/handlers.HandleCapture) still builds it as a map, so the parity test
+ * beside this type is what keeps the two descriptions equal; the CLI and the MCP
+ * server decode into this rather than each keeping a private mirror.
+ */
+export interface CaptureEnvelope {
+  status: string;
+  tabId: string;
+  url: string;
+  title: string;
+  capturedAt: string;
+  epoch: CaptureEpoch;
+  pairing: CapturePairing;
+  image: CaptureImage;
+  snapshot: CaptureSnapshot;
+  frame?: CaptureFrame;
+  idpiWarning?: string;
+  untrustedContent?: boolean;
+  idpiNotice?: string;
+}
+export interface CaptureEpoch {
+  frameId: string;
+  loaderId: string;
+  domEpoch: string;
+}
+export interface CapturePairing {
+  navigated: boolean;
+  captureDurationMs: number /* int64 */;
+}
+/**
+ * CaptureImage carries path OR base64, never both: output=file writes the image
+ * and names the path, output=inline returns the bytes.
+ */
+export interface CaptureImage {
+  format: string;
+  bytes: number /* int */;
+  coordinateSpace: string;
+  devicePixelRatio: number /* float64 */;
+  viewport: CaptureViewport;
+  clip?: CaptureRect;
+  path?: string;
+  base64?: string;
+}
+export interface CaptureViewport {
+  w: number /* float64 */;
+  h: number /* float64 */;
+  scrollX: number /* float64 */;
+  scrollY: number /* float64 */;
+}
+export interface CaptureRect {
+  x: number /* float64 */;
+  y: number /* float64 */;
+  w: number /* float64 */;
+  h: number /* float64 */;
+}
+export interface CaptureSnapshot {
+  filter: string;
+  nodeCount: number /* int */;
+  nodes: CaptureNode[];
+}
+/**
+ * CaptureFrame is the scope disclosure the shared frame owner attaches to a
+ * scoped read. Absent on a whole-document capture.
+ */
+export interface CaptureFrame {
+  frameId?: string;
+  frameUrl?: string;
+  frameName?: string;
+  ownerRef?: string;
+  frameTitle?: string;
+}
+/**
+ * CaptureNode is the hand-maintained wire twin of observe.A11yNode.
+ */
+export interface CaptureNode {
+  ref: string;
+  role: string;
+  name: string;
+  depth: number /* int */;
+  value?: string;
+  label?: string;
+  placeholder?: string;
+  alt?: string;
+  title?: string;
+  testid?: string;
+  text?: string;
+  tag?: string;
+  disabled?: boolean;
+  focused?: boolean;
+  checked?: string;
+  hidden?: boolean;
+  nodeId?: number /* int64 */;
+  frameId?: string;
+  frameUrl?: string;
+  frameName?: string;
+  childFrameId?: string;
+  childFrameUrl?: string;
+  childFrameName?: string;
+  boundingBox?: CaptureBoundingBox;
+  visible?: boolean;
+}
+export interface CaptureBoundingBox {
+  x: number /* float64 */;
+  y: number /* float64 */;
+  w: number /* float64 */;
+  h: number /* float64 */;
 }

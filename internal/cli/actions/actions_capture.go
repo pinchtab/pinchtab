@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/spf13/cobra"
@@ -71,7 +72,7 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 		return
 	}
 
-	var resp captureResponse
+	var resp types.CaptureEnvelope
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		output.Error("capture", fmt.Sprintf("decode response: %v", err), output.ExitRuntime)
 		return
@@ -122,7 +123,7 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	output.Value(fmt.Sprintf("epoch: %s navigated=%v duration=%dms",
 		resp.Epoch.DomEpoch, resp.Pairing.Navigated, resp.Pairing.CaptureDurationMs))
 	output.Value(fmt.Sprintf("viewport: %.0fx%.0f dpr=%g space=%s",
-		resp.Image.Viewport.W, resp.Image.Viewport.H, resp.Image.DPR, resp.Image.CoordinateSpace))
+		resp.Image.Viewport.W, resp.Image.Viewport.H, resp.Image.DevicePixelRatio, resp.Image.CoordinateSpace))
 
 	if len(resp.Snapshot.Nodes) > 0 {
 		fmt.Println()
@@ -141,53 +142,9 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	}
 }
 
-type captureResponse struct {
-	Status     string `json:"status"`
-	TabID      string `json:"tabId"`
-	URL        string `json:"url"`
-	Title      string `json:"title"`
-	CapturedAt string `json:"capturedAt"`
-	Epoch      struct {
-		FrameID  string `json:"frameId"`
-		LoaderID string `json:"loaderId"`
-		DomEpoch string `json:"domEpoch"`
-	} `json:"epoch"`
-	Pairing struct {
-		Navigated         bool  `json:"navigated"`
-		CaptureDurationMs int64 `json:"captureDurationMs"`
-	} `json:"pairing"`
-	Image struct {
-		Format          string  `json:"format"`
-		Base64          string  `json:"base64"`
-		Bytes           int     `json:"bytes"`
-		CoordinateSpace string  `json:"coordinateSpace"`
-		DPR             float64 `json:"devicePixelRatio"`
-		Viewport        struct {
-			W, H, ScrollX, ScrollY float64
-		} `json:"viewport"`
-	} `json:"image"`
-	Snapshot struct {
-		Filter    string            `json:"filter"`
-		NodeCount int               `json:"nodeCount"`
-		Nodes     []captureNodeWire `json:"nodes"`
-	} `json:"snapshot"`
-	IDPIWarning string `json:"idpiWarning,omitempty"`
-}
-
-type captureNodeWire struct {
-	Ref         string `json:"ref"`
-	Role        string `json:"role"`
-	Name        string `json:"name"`
-	Value       string `json:"value,omitempty"`
-	BoundingBox *struct {
-		X, Y, W, H float64
-	} `json:"boundingBox,omitempty"`
-	Visible bool `json:"visible,omitempty"`
-}
-
 // formatCaptureNode renders one node like snap's compact line, with bounds
 // appended when present: [eN] role "name" (x,y wxh).
-func formatCaptureNode(n captureNodeWire) string {
+func formatCaptureNode(n types.CaptureNode) string {
 	var b strings.Builder
 	b.WriteString("[")
 	b.WriteString(n.Ref)

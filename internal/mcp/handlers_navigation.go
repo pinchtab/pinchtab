@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
@@ -341,25 +342,7 @@ func handleCapture(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 // result: image block + JSON text block. On parse failure we fall back to the
 // raw bytes so downstream callers still see the wire response.
 func captureResult(body []byte) (*mcp.CallToolResult, error) {
-	var env struct {
-		Status     string          `json:"status"`
-		TabID      string          `json:"tabId"`
-		URL        string          `json:"url"`
-		Title      string          `json:"title"`
-		CapturedAt string          `json:"capturedAt"`
-		Epoch      json.RawMessage `json:"epoch"`
-		Pairing    json.RawMessage `json:"pairing"`
-		Image      struct {
-			Format          string          `json:"format"`
-			Base64          string          `json:"base64"`
-			Bytes           int             `json:"bytes"`
-			CoordinateSpace string          `json:"coordinateSpace"`
-			DPR             float64         `json:"devicePixelRatio"`
-			Viewport        json.RawMessage `json:"viewport"`
-			Clip            json.RawMessage `json:"clip,omitempty"`
-		} `json:"image"`
-		Snapshot json.RawMessage `json:"snapshot"`
-	}
+	var env types.CaptureEnvelope
 	if err := json.Unmarshal(body, &env); err != nil || env.Image.Base64 == "" {
 		return resultFromBytes(body, 200)
 	}
@@ -373,28 +356,23 @@ func captureResult(body []byte) (*mcp.CallToolResult, error) {
 		mimeType = "image/png"
 	}
 
-	imagePayload := map[string]any{
-		"format":           format,
-		"bytes":            env.Image.Bytes,
-		"coordinateSpace":  env.Image.CoordinateSpace,
-		"devicePixelRatio": env.Image.DPR,
-		"viewport":         env.Image.Viewport,
-	}
-	if len(env.Image.Clip) > 0 {
-		imagePayload["clip"] = env.Image.Clip
-	}
-	textPayload := map[string]any{
-		"status":     env.Status,
-		"tabId":      env.TabID,
-		"url":        env.URL,
-		"title":      env.Title,
-		"capturedAt": env.CapturedAt,
-		"epoch":      env.Epoch,
-		"pairing":    env.Pairing,
-		"image":      imagePayload,
-		"snapshot":   env.Snapshot,
-	}
-	encoded, err := json.Marshal(textPayload)
+	// The image rides the result's own image block, so the text half describes it
+	// and carries no bytes: base64 and path are cleared and omitempty drops them.
+	image := env.Image
+	image.Format = format
+	image.Base64 = ""
+	image.Path = ""
+	// The text half keeps exactly the keys this tool has always emitted: the
+	// disclosure and IDPI blocks stay out of it, so widening what an agent sees is
+	// a decision rather than a side effect of typing the envelope.
+	text := env
+	text.Image = image
+	text.Frame = nil
+	text.IDPIWarning = ""
+	text.UntrustedContent = false
+	text.IDPINotice = ""
+
+	encoded, err := json.Marshal(text)
 	if err != nil {
 		return resultFromBytes(body, 200)
 	}

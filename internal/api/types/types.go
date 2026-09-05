@@ -1,5 +1,6 @@
-// Package types contains shared API types for the dashboard.
-// These types are exported to TypeScript via tygo.
+// Package types contains the module's shared API wire types — read by the
+// dashboard, the CLI and the MCP server. They are exported to TypeScript via
+// tygo, so every exported declaration here must appear in the generated file.
 package types
 
 import (
@@ -238,4 +239,114 @@ type ProfileInstanceStatus struct {
 	Port    string `json:"port"`
 	ID      string `json:"id,omitempty"`
 	Message string `json:"message,omitempty"`
+}
+
+// CaptureEnvelope is the /capture JSON envelope. The producer
+// (internal/handlers.HandleCapture) still builds it as a map, so the parity test
+// beside this type is what keeps the two descriptions equal; the CLI and the MCP
+// server decode into this rather than each keeping a private mirror.
+type CaptureEnvelope struct {
+	Status           string          `json:"status"`
+	TabID            string          `json:"tabId"`
+	URL              string          `json:"url"`
+	Title            string          `json:"title"`
+	CapturedAt       string          `json:"capturedAt"`
+	Epoch            CaptureEpoch    `json:"epoch"`
+	Pairing          CapturePairing  `json:"pairing"`
+	Image            CaptureImage    `json:"image"`
+	Snapshot         CaptureSnapshot `json:"snapshot"`
+	Frame            *CaptureFrame   `json:"frame,omitempty"`
+	IDPIWarning      string          `json:"idpiWarning,omitempty"`
+	UntrustedContent bool            `json:"untrustedContent,omitempty"`
+	IDPINotice       string          `json:"idpiNotice,omitempty"`
+}
+
+type CaptureEpoch struct {
+	FrameID  string `json:"frameId"`
+	LoaderID string `json:"loaderId"`
+	DomEpoch string `json:"domEpoch"`
+}
+
+type CapturePairing struct {
+	Navigated         bool  `json:"navigated"`
+	CaptureDurationMs int64 `json:"captureDurationMs"`
+}
+
+// CaptureImage carries path OR base64, never both: output=file writes the image
+// and names the path, output=inline returns the bytes.
+type CaptureImage struct {
+	Format           string          `json:"format"`
+	Bytes            int             `json:"bytes"`
+	CoordinateSpace  string          `json:"coordinateSpace"`
+	DevicePixelRatio float64         `json:"devicePixelRatio"`
+	Viewport         CaptureViewport `json:"viewport"`
+	Clip             *CaptureRect    `json:"clip,omitempty"`
+	Path             string          `json:"path,omitempty"`
+	Base64           string          `json:"base64,omitempty"`
+}
+
+type CaptureViewport struct {
+	W       float64 `json:"w"`
+	H       float64 `json:"h"`
+	ScrollX float64 `json:"scrollX"`
+	ScrollY float64 `json:"scrollY"`
+}
+
+type CaptureRect struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
+type CaptureSnapshot struct {
+	Filter    string        `json:"filter"`
+	NodeCount int           `json:"nodeCount"`
+	Nodes     []CaptureNode `json:"nodes"`
+}
+
+// CaptureFrame is the scope disclosure the shared frame owner attaches to a
+// scoped read. Absent on a whole-document capture.
+type CaptureFrame struct {
+	FrameID    string `json:"frameId,omitempty"`
+	FrameURL   string `json:"frameUrl,omitempty"`
+	FrameName  string `json:"frameName,omitempty"`
+	OwnerRef   string `json:"ownerRef,omitempty"`
+	FrameTitle string `json:"frameTitle,omitempty"`
+}
+
+// CaptureNode is the hand-maintained wire twin of observe.A11yNode.
+type CaptureNode struct {
+	Ref            string              `json:"ref"`
+	Role           string              `json:"role"`
+	Name           string              `json:"name"`
+	Depth          int                 `json:"depth"`
+	Value          string              `json:"value,omitempty"`
+	Label          string              `json:"label,omitempty"`
+	Placeholder    string              `json:"placeholder,omitempty"`
+	Alt            string              `json:"alt,omitempty"`
+	Title          string              `json:"title,omitempty"`
+	TestID         string              `json:"testid,omitempty"`
+	Text           string              `json:"text,omitempty"`
+	Tag            string              `json:"tag,omitempty"`
+	Disabled       bool                `json:"disabled,omitempty"`
+	Focused        bool                `json:"focused,omitempty"`
+	Checked        string              `json:"checked,omitempty"`
+	Hidden         bool                `json:"hidden,omitempty"`
+	NodeID         int64               `json:"nodeId,omitempty"`
+	FrameID        string              `json:"frameId,omitempty"`
+	FrameURL       string              `json:"frameUrl,omitempty"`
+	FrameName      string              `json:"frameName,omitempty"`
+	ChildFrameID   string              `json:"childFrameId,omitempty"`
+	ChildFrameURL  string              `json:"childFrameUrl,omitempty"`
+	ChildFrameName string              `json:"childFrameName,omitempty"`
+	BoundingBox    *CaptureBoundingBox `json:"boundingBox,omitempty"`
+	Visible        *bool               `json:"visible,omitempty"`
+}
+
+type CaptureBoundingBox struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
 }
