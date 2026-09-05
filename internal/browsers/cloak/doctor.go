@@ -23,10 +23,9 @@ var launchAndProbe = chrome.LaunchAndProbe
 func (Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	return []browsers.DoctorCheck{
 		{
-			ID:              "cloakbrowser_present",
-			Description:     "CloakBrowser binary found and version adequate",
-			Fn:              cloakPresenceCheck,
-			LaunchesBrowser: true,
+			ID:          "cloakbrowser_present",
+			Description: "CloakBrowser binary found and version adequate",
+			Fn:          cloakPresenceCheck,
 		},
 		{
 			ID:              "cdp_reachable",

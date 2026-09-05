@@ -30,6 +30,21 @@ func TestSummarize_Counts(t *testing.T) {
 	}
 }
 
+func TestSummarizeDoesNotCountPresenceAsABrowserLaunch(t *testing.T) {
+	results := []CheckResult{
+		{Name: "cloakbrowser_present", Status: StatusPass},
+		{Name: "cdp_reachable", Status: StatusSkip, LaunchesBrowser: true},
+		{Name: "fingerprint_flags_accepted", Status: StatusSkip, LaunchesBrowser: true},
+	}
+	got := Summarize(results)
+	if got.BrowserLaunched != 0 {
+		t.Fatalf("BrowserLaunched = %d, want 0 when only the presence check ran", got.BrowserLaunched)
+	}
+	if strings.HasPrefix(Verdict(got), "Clean:") {
+		t.Fatalf("Verdict() = %q, must not call a presence-only run clean", Verdict(got))
+	}
+}
+
 func TestExitCode(t *testing.T) {
 	cases := []struct {
 		name string
