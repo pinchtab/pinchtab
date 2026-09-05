@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net/http"
 	"os"
@@ -145,17 +146,13 @@ func (o *Orchestrator) waitForBridgeEndpointExit(inst *InstanceInternal, timeout
 	if err != nil {
 		return false
 	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	_, err = readiness.WaitUntil(context.Background(), timeout, 50*time.Millisecond, func() (struct{}, bool, error) {
 		probeCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
 		_, probeErr := o.probeHealthURL(probeCtx, inst, healthURL.String())
-		cancel()
-		if probeErr != nil {
-			return true
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return false
+		return struct{}{}, probeErr != nil, nil
+	})
+	return err == nil
 }
 
 func (o *Orchestrator) StopProfile(name string) error {

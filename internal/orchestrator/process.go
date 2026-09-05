@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/runtime"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"net"
 	"sort"
 	"strings"
@@ -45,12 +47,10 @@ func waitForProcessExit(pid int, timeout time.Duration) bool {
 	if pid <= 0 {
 		return true
 	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !isProcessAlive(pid) {
-			return true
-		}
-		time.Sleep(150 * time.Millisecond)
+	if _, err := readiness.WaitUntil(context.Background(), timeout, 150*time.Millisecond, func() (struct{}, bool, error) {
+		return struct{}{}, !isProcessAlive(pid), nil
+	}); err == nil {
+		return true
 	}
 	return !isProcessAlive(pid)
 }
