@@ -368,3 +368,24 @@ func TestAThrottleSurvivesNavigation(t *testing.T) {
 		t.Fatal("clearing every condition left a stored entry behind")
 	}
 }
+
+// The honesty guard: with no interception behind it there is nothing to block
+// traffic, so offline must fail rather than flip navigator.onLine and answer
+// "offline". The browser is real here on purpose — the emulation call succeeds,
+// so only the guard can make the request fail.
+func TestSetOfflineFailsWhenTheInterceptionCannotBeInstalled(t *testing.T) {
+	f := newOfflineFixture(t)
+	if err := f.navigate("/start"); err != nil {
+		t.Fatal(err)
+	}
+	f.b.routeMgr = nil
+	if err := f.setOffline(true); err == nil {
+		t.Fatal("offline was reported applied with no interception behind it")
+	}
+	if _, ok := f.b.NetworkConditions(f.tabID); ok {
+		t.Error("a failed offline request stored conditions to re-apply after navigation")
+	}
+	if got := f.fetch("/honesty"); got != "ok-200" {
+		t.Errorf("fetch after the refused offline = %q, want ok-200", got)
+	}
+}
