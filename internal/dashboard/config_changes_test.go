@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -26,6 +27,43 @@ func TestSensitiveConfigChangesIgnoresAbsentVersusEmptyContainers(t *testing.T) 
 	if changes.requiresElevation {
 		t.Errorf("sensitiveConfigChanges() demands elevation for %v, but only absent-versus-empty containers differ: %v", changes.names, emptied)
 	}
+}
+
+func TestRestartReasonsIncludeStateDirAndDerivedProfilesDir(t *testing.T) {
+	boot := config.DefaultFileConfig()
+	boot.Server.StateDir = filepath.Join(t.TempDir(), "old")
+	boot.Profiles.BaseDir = ""
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api.boot = boot
+
+	next := boot
+	next.Server.StateDir = filepath.Join(t.TempDir(), "new")
+	reasons := api.restartReasonsFor(next)
+	for _, want := range []string{"Server state directory (server.stateDir)", "Profiles directory"} {
+		if !containsString(reasons, want) {
+			t.Errorf("restartReasonsFor() = %v, want %q", reasons, want)
+		}
+	}
+}
+
+func TestRestartReasonsOmitStateDirWhenUnchanged(t *testing.T) {
+	boot := config.DefaultFileConfig()
+	boot.Server.StateDir = filepath.Join(t.TempDir(), "state")
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api.boot = boot
+
+	if reasons := api.restartReasonsFor(boot); containsString(reasons, "Server state directory (server.stateDir)") {
+		t.Fatalf("restartReasonsFor() = %v, unexpectedly reports unchanged state dir", reasons)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSensitiveConfigChangesStillReportsARealSecurityEdit(t *testing.T) {

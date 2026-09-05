@@ -16,12 +16,16 @@ func BrowserSessionConfig(runtime *config.RuntimeConfig) browsersession.Config {
 	if runtime == nil {
 		return browsersession.Config{}
 	}
+	return browserSessionConfig(runtime, filepath.Join(runtime.StateDir, dashboardSessionStateFile))
+}
+
+func browserSessionConfig(runtime *config.RuntimeConfig, persistPath string) browsersession.Config {
 	return browsersession.Config{
 		IdleTimeout:                   runtime.Sessions.Dashboard.IdleTimeout,
 		MaxLifetime:                   runtime.Sessions.Dashboard.MaxLifetime,
 		ElevationWindow:               runtime.Sessions.Dashboard.ElevationWindow,
 		Persist:                       runtime.Sessions.Dashboard.Persist,
-		PersistPath:                   filepath.Join(runtime.StateDir, dashboardSessionStateFile),
+		PersistPath:                   persistPath,
 		PersistElevationAcrossRestart: runtime.Sessions.Dashboard.PersistElevationAcrossRestart,
 	}
 }

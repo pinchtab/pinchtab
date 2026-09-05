@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"encoding/json"
+	"path/filepath"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -86,7 +88,7 @@ func changedTargetProxyNames(current, next config.BrowserTargetsConfig) []string
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
-	reasons := make([]string, 0, 6)
+	reasons := make([]string, 0, 8)
 
 	// The IDPI guard, allowlist, and sensitive-endpoint policy are snapshotted
 	// from the boot config when the server starts and are not rebuilt on a config
@@ -99,7 +101,10 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
 	}
-	if c.boot.Profiles.BaseDir != next.Profiles.BaseDir {
+	if c.boot.Server.StateDir != next.Server.StateDir {
+		reasons = append(reasons, "Server state directory (server.stateDir)")
+	}
+	if effectiveProfilesDir(c.boot) != effectiveProfilesDir(next) {
 		reasons = append(reasons, "Profiles directory")
 	}
 	if c.boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
@@ -125,6 +130,13 @@ func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	}
 
 	return reasons
+}
+
+func effectiveProfilesDir(fc config.FileConfig) string {
+	if baseDir := strings.TrimSpace(fc.Profiles.BaseDir); baseDir != "" {
+		return filepath.Clean(baseDir)
+	}
+	return filepath.Join(strings.TrimSpace(fc.Server.StateDir), "profiles")
 }
 
 func sameIntPtr(a, b *int) bool {

@@ -253,6 +253,17 @@ func (m *Manager) ElevationWindow() time.Duration {
 	return m.elevationWindow
 }
 
+// PersistPath returns the file selected when the manager was constructed. Config
+// saves use it to avoid moving live dashboard sessions between state directories.
+func (m *Manager) PersistPath() string {
+	if m == nil {
+		return ""
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.persistPath
+}
+
 func (m *Manager) UpdateConfig(cfg Config) {
 	if m == nil {
 		return

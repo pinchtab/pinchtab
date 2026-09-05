@@ -257,7 +257,10 @@ func TestASaveKeepsTheAgentSessionStoreWritingToItsOriginalPath(t *testing.T) {
 	}
 	moved := t.TempDir()
 
-	f.save(t, func(fc *config.FileConfig) { fc.Server.StateDir = moved })
+	reasons := f.saveReportingReasons(t, func(fc *config.FileConfig) { fc.Server.StateDir = moved })
+	if !slices.Contains(reasons, "Server state directory (server.stateDir)") {
+		t.Fatalf("restartReasons = %v, want server.stateDir named", reasons)
+	}
 
 	if got := f.agentSessions.PersistPath(); got != original {
 		t.Fatalf("persist path after the save = %q, want %q", got, original)
@@ -275,6 +278,25 @@ func TestASaveKeepsTheAgentSessionStoreWritingToItsOriginalPath(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(moved, "sessions.json")); err == nil {
 		t.Errorf("the store started writing under the edited stateDir %s, splitting live sessions across two files", moved)
+	}
+}
+
+func TestStateDirSaveReportsRestartAndDoesNotCreateTheDestination(t *testing.T) {
+	f := newFrontDoor(t, nil)
+	originalDashboardSessions := f.sessions.PersistPath()
+	moved := filepath.Join(t.TempDir(), "state-moved")
+
+	reasons := f.saveReportingReasons(t, func(fc *config.FileConfig) { fc.Server.StateDir = moved })
+	for _, want := range []string{"Server state directory (server.stateDir)", "Profiles directory"} {
+		if !slices.Contains(reasons, want) {
+			t.Errorf("restartReasons = %v, want %q", reasons, want)
+		}
+	}
+	if got := f.sessions.PersistPath(); got != originalDashboardSessions {
+		t.Fatalf("dashboard session persist path after save = %q, want original %q", got, originalDashboardSessions)
+	}
+	if _, err := os.Stat(moved); !os.IsNotExist(err) {
+		t.Fatalf("stateDir save created unapplied destination %q: err=%v", moved, err)
 	}
 }
 

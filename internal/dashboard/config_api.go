@@ -245,7 +245,7 @@ func (c *ConfigAPI) persistAndApply(w http.ResponseWriter, normalized *config.Fi
 	next := config.NextRuntimeConfig(c.cfg(), normalized)
 	c.live.Publish(next)
 	if c.sessions != nil {
-		c.sessions.UpdateConfig(BrowserSessionConfig(next))
+		c.sessions.UpdateConfig(browserSessionConfig(next, c.sessions.PersistPath()))
 	}
 	if c.agentSessions != nil {
 		c.agentSessions.UpdateConfig(AgentSessionConfig(next, c.agentSessions.PersistPath()))

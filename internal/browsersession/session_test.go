@@ -131,6 +131,14 @@ func TestIsElevatedPersistsExpiryDeletion(t *testing.T) {
 	}
 }
 
+func TestPersistPathReportsConfiguredPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	mgr := NewManager(Config{Persist: true, PersistPath: path})
+	if got := mgr.PersistPath(); got != path {
+		t.Fatalf("PersistPath() = %q, want %q", got, path)
+	}
+}
+
 func TestValidateDebouncesLastSeenPersistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sessions.json")
 	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
