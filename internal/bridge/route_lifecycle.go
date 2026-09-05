@@ -37,16 +37,11 @@ type tabRouteState struct {
 	listenCancel context.CancelFunc
 	fetchEnabled bool
 	offline      bool
+	redirect     *RedirectLimit
 }
 
 func (s *tabRouteState) idle() bool {
-	return len(s.rules) == 0 && !s.offline
-}
-
-func (s *tabRouteState) snapshot() tabRouteState {
-	prior := *s
-	prior.rules = append([]RouteRule(nil), s.rules...)
-	return prior
+	return len(s.rules) == 0 && !s.offline && s.redirect == nil
 }
 
 // NewRouteManager constructs a RouteManager. allowedDomainsFn, when non-nil, is
@@ -161,17 +156,16 @@ func (rm *RouteManager) AddRule(ctx context.Context, tabID string, rule RouteRul
 		state = &tabRouteState{}
 		rm.perTab[tabID] = state
 	}
-	prior := state.snapshot()
 
-	replaced := false
+	replaced, wasReplaced := RouteRule{}, false
 	for i, r := range state.rules {
 		if r.Pattern == rule.Pattern {
+			replaced, wasReplaced = r, true
 			state.rules[i] = rule
-			replaced = true
 			break
 		}
 	}
-	if !replaced {
+	if !wasReplaced {
 		if len(state.rules) >= MaxRulesPerTab {
 			if state.idle() {
 				delete(rm.perTab, tabID)
@@ -185,13 +179,28 @@ func (rm *RouteManager) AddRule(ctx context.Context, tabID string, rule RouteRul
 	rm.mu.Unlock()
 
 	if err := rm.enableFetch(ctx, tabID, claim); err != nil {
-		rm.rollbackClaim(tabID, prior, claim)
+		rm.rollbackClaim(tabID, claim, func(s *tabRouteState) {
+			s.rules = withoutRule(s.rules, rule.Pattern)
+			if wasReplaced {
+				s.rules = append(s.rules, replaced)
+			}
+		})
 		return err
 	}
 	return nil
 }
 
-// fetchClaim is what one AddRule/SetOffline call took under the lock: whether
+func withoutRule(rules []RouteRule, pattern string) []RouteRule {
+	kept := rules[:0]
+	for _, r := range rules {
+		if r.Pattern != pattern {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
+// fetchClaim is what one AddRule/SetOffline/ArmRedirectLimit call took under the lock: whether
 // it registered the tab's listener and whether it claimed the Fetch enable, so
 // the CDP work after unlock and any rollback undo exactly that much.
 type fetchClaim struct {
@@ -240,21 +249,26 @@ func (rm *RouteManager) enableFetch(ctx context.Context, tabID string, claim fet
 	return nil
 }
 
-// rollbackClaim restores the per-tab state captured before a failed claim. If
-// the claim registered a fresh listener, its context is cancelled so the no-op
-// listener handle is released.
-func (rm *RouteManager) rollbackClaim(tabID string, prior tabRouteState, claim fetchClaim) {
+// rollbackClaim undoes exactly what one failed claim did: the caller's own
+// mutation through undo, the Fetch enable it claimed, and the listener it
+// registered. Anything a concurrent caller added meanwhile is left standing,
+// because that caller was told nil.
+func (rm *RouteManager) rollbackClaim(tabID string, claim fetchClaim, undo func(*tabRouteState)) {
 	rm.mu.Lock()
 	s := rm.perTab[tabID]
 	if s == nil {
 		rm.mu.Unlock()
 		return
 	}
+	undo(s)
+	if claim.enable {
+		s.fetchEnabled = false
+	}
 	var newCancel context.CancelFunc
 	if claim.register {
 		newCancel = s.listenCancel
+		s.listenCtx, s.listenCancel = nil, nil
 	}
-	*s = prior
 	if s.idle() {
 		delete(rm.perTab, tabID)
 	}

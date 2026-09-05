@@ -56,11 +56,18 @@ func (tm *TabManager) NetworkConditions(tabID string) (NetworkConditions, bool) 
 func (tm *TabManager) SetNetworkConditions(tabID string, c NetworkConditions) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if !c.Offline {
+	if !networkConditionsActive(c) {
 		delete(tm.netConditions, tabID)
 		return
 	}
 	tm.netConditions[tabID] = c
+}
+
+// networkConditionsActive reports whether the conditions change anything: a
+// throttle is active at any positive latency or any non-negative throughput,
+// because -1 is Chrome's "unthrottled".
+func networkConditionsActive(c NetworkConditions) bool {
+	return c.Offline || c.Latency > 0 || c.DownloadThroughput >= 0 || c.UploadThroughput >= 0
 }
 
 func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {

@@ -401,7 +401,7 @@ func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams
 		}
 		return &NavigateResult{URL: url}, nil
 	}
-	if err := NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects); err != nil {
+	if err := b.navigateWithRedirectLimit(ctx, url, params.MaxRedirects); err != nil {
 		return nil, err
 	}
 
@@ -416,6 +416,33 @@ func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams
 		URL:   finalURL,
 		Title: title,
 	}, nil
+}
+
+// navigateWithRedirectLimit arms the redirect budget on the tab's route
+// dispatch for the duration of the navigation, so the limit is one more verdict
+// on the Fetch domain the RouteManager already owns rather than a second owner.
+func (b *Bridge) navigateWithRedirectLimit(ctx context.Context, url string, maxRedirects int) error {
+	if maxRedirects < 0 {
+		return NavigatePage(ctx, url)
+	}
+	target := chromedp.FromContext(ctx)
+	if target == nil || target.Target == nil {
+		return fmt.Errorf("redirect limit: navigation context has no target")
+	}
+	tabHandle, tabID, err := b.TabContext(string(target.Target.TargetID))
+	if err != nil {
+		return err
+	}
+	limit, err := b.routeMgr.ArmRedirectLimit(tabHandle, tabID, maxRedirects)
+	if err != nil {
+		return fmt.Errorf("redirect limit: %w", err)
+	}
+	navErr := NavigatePage(ctx, url)
+	b.routeMgr.DisarmRedirectLimit(tabHandle, tabID, limit)
+	if err := limit.Err(); err != nil {
+		return err
+	}
+	return navErr
 }
 
 // ctx must already be a tab-scoped chromedp context; tabID is for bookkeeping

@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/cdproto/fetch"
-	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -46,66 +43,6 @@ func dispatchBackgroundNavigation(ctx context.Context, url string, replaceInitia
 		return fmt.Errorf("activate background web lifecycle: %w", err)
 	}
 	return startNavigation(ctx, url, replaceInitialBlank)
-}
-
-var ErrTooManyRedirects = fmt.Errorf("too many redirects")
-
-func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int) error {
-	replaceInitialBlank, _ := shouldReplaceInitialBlankNavigation(ctx)
-
-	if maxRedirects < 0 {
-		return navigateAndWait(ctx, url, replaceInitialBlank)
-	}
-
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return fetch.Enable().Do(ctx)
-	})); err != nil {
-		return fmt.Errorf("fetch enable: %w", err)
-	}
-	waiter, err := newNavigationLifecycleWaiter(ctx)
-	if err != nil {
-		return err
-	}
-	defer waiter.close()
-
-	var redirectCount atomic.Int32
-	var blocked atomic.Bool
-
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		e, ok := ev.(*fetch.EventRequestPaused)
-		if !ok {
-			return
-		}
-		go func() {
-			reqID := e.RequestID
-			if e.RedirectedRequestID != "" {
-				count := int(redirectCount.Add(1))
-				if count > maxRedirects {
-					blocked.Store(true)
-					_ = fetch.FailRequest(reqID, network.ErrorReasonBlockedByClient).Do(cdp.WithExecutor(ctx, chromedp.FromContext(ctx).Target))
-					return
-				}
-			}
-			_ = fetch.ContinueRequest(reqID).Do(cdp.WithExecutor(ctx, chromedp.FromContext(ctx).Target))
-		}()
-	})
-
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return startNavigation(ctx, url, replaceInitialBlank)
-	}))
-
-	_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return fetch.Disable().Do(ctx)
-	}))
-
-	if blocked.Load() {
-		return fmt.Errorf("%w: got %d, max %d", ErrTooManyRedirects, redirectCount.Load(), maxRedirects)
-	}
-	if err != nil {
-		return err
-	}
-
-	return waiter.wait(ctx)
 }
 
 // ShouldReplaceBlankHistoryEntry reports whether the first navigation should replace an untouched about:blank entry.

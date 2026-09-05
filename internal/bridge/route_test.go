@@ -7,6 +7,10 @@ import (
 	"testing"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
+	"path/filepath"
+	"reflect"
+	"strings"
 )
 
 func TestGlobMatch(t *testing.T) {
@@ -769,5 +773,104 @@ func TestRouteManager_FailedEnableRollsBackSuppression(t *testing.T) {
 	}
 	if len(calls) != 2 || calls[0] != "tab1=true" || calls[1] != "tab1=false" {
 		t.Fatalf("expected suppress-then-rollback, got %v", calls)
+	}
+}
+
+// The module has one Fetch enabler for per-tab request routing and three unrelated
+// ones; the redirect limiter's own enable/disable pair is gone. A new independent
+// enabler must be argued onto this list, not added quietly.
+func TestFetchEnablersAreExactlyTheRecordedSet(t *testing.T) {
+	want := map[string]int{
+		"internal/bridge/route_lifecycle.go":    2,
+		"internal/bridge/handler_support.go":    1,
+		"internal/bridge/download.go":           1,
+		"internal/bridge/runtime/proxy_auth.go": 1,
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, file := range srccensus.Tree(t, "../..", moduleGoFileFloor) {
+		if n := strings.Count(file.Text, "fetch.Enable("); n > 0 {
+			rel, err := filepath.Rel(root, file.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got[filepath.ToSlash(rel)] = n
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("fetch.Enable call sites = %v, want %v; per-tab request routing has one owner, RouteManager", got, want)
+	}
+}
+
+func TestAFailedAddRuleLeavesAConcurrentOfflineFlagStanding(t *testing.T) {
+	rm := NewRouteManager(nil)
+	rm.mu.Lock()
+	rm.perTab["tab1"] = &tabRouteState{offline: true}
+	rm.mu.Unlock()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if err := rm.AddRule(ctx, "tab1", RouteRule{Pattern: "*", Action: RouteActionAbort}); err == nil {
+		t.Fatal("expected fetch.enable to fail on a cancelled context")
+	}
+	if !rm.Offline("tab1") {
+		t.Fatal("a failed rule add reverted an offline flag it never set")
+	}
+	if rules := rm.List("tab1"); len(rules) != 0 {
+		t.Fatalf("the failed rule stayed installed: %+v", rules)
+	}
+}
+
+func TestAFailedSetOfflineLeavesConcurrentRulesStanding(t *testing.T) {
+	rm := NewRouteManager(nil)
+	rm.mu.Lock()
+	rm.perTab["tab1"] = &tabRouteState{rules: []RouteRule{{Pattern: "a", Action: RouteActionAbort}}}
+	rm.mu.Unlock()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if err := rm.SetOffline(ctx, "tab1", true); err == nil {
+		t.Fatal("expected fetch.enable to fail on a cancelled context")
+	}
+	if rm.Offline("tab1") {
+		t.Fatal("offline stayed set after its enable failed")
+	}
+	if rules := rm.List("tab1"); len(rules) != 1 {
+		t.Fatalf("a failed offline reverted rules it never added: %+v", rules)
+	}
+}
+
+func TestARedirectBudgetCountsHopsAndReleasesTheTab(t *testing.T) {
+	rm := NewRouteManager(nil)
+	if rm.countRedirect("tab1") {
+		t.Fatal("an unarmed tab blocked a redirect")
+	}
+	limit := &RedirectLimit{max: 1}
+	rm.mu.Lock()
+	rm.perTab["tab1"] = &tabRouteState{redirect: limit}
+	rm.mu.Unlock()
+
+	if _, active := rm.match("tab1", "https://x/", "document", "GET"); !active {
+		t.Fatal("a tab with only a redirect budget is not dispatched, so its hops are never counted")
+	}
+	if rm.countRedirect("tab1") {
+		t.Fatal("the first hop exceeded a budget of one")
+	}
+	if !rm.countRedirect("tab1") {
+		t.Fatal("the second hop did not exceed a budget of one")
+	}
+	if !errors.Is(limit.Err(), ErrTooManyRedirects) {
+		t.Fatalf("Err() = %v", limit.Err())
+	}
+
+	rm.DisarmRedirectLimit(t.Context(), "tab1", limit)
+	rm.mu.Lock()
+	_, lingering := rm.perTab["tab1"]
+	rm.mu.Unlock()
+	if lingering {
+		t.Fatal("disarming the only owner left the tab's state behind")
 	}
 }

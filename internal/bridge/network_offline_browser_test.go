@@ -2,8 +2,12 @@ package bridge
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +35,11 @@ func newOfflineFixture(t *testing.T) *offlineFixture {
 		f.mu.Lock()
 		f.served[r.URL.Path] = r.Header.Get("X-Pinchtab-Probe")
 		f.mu.Unlock()
+		if hops, ok := strings.CutPrefix(r.URL.Path, "/hop/"); ok && hops != "0" {
+			n, _ := strconv.Atoi(hops)
+			http.Redirect(w, r, fmt.Sprintf("/hop/%d", n-1), http.StatusFound)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte("<title>page " + r.URL.Path + "</title><body>ok</body>"))
 	}))
@@ -63,9 +72,13 @@ func newOfflineFixture(t *testing.T) *offlineFixture {
 }
 
 func (f *offlineFixture) navigate(path string) error {
+	return f.navigateLimited(path, -1)
+}
+
+func (f *offlineFixture) navigateLimited(path string, maxRedirects int) error {
 	ctx, cancel := context.WithTimeout(f.ctx, 8*time.Second)
 	defer cancel()
-	_, err := f.b.Navigate(ctx, f.srv.URL+path, NavigateParams{MaxRedirects: -1})
+	_, err := f.b.Navigate(ctx, f.srv.URL+path, NavigateParams{MaxRedirects: maxRedirects})
 	return err
 }
 
@@ -265,5 +278,92 @@ func TestRemovingEveryRuleKeepsAnOfflineTab(t *testing.T) {
 	verdict, active := rm.match("tab1", "https://x/", "fetch", "GET")
 	if !active || !verdict.offline {
 		t.Fatalf("offline tab with no rules dispatches as %+v active=%v", verdict, active)
+	}
+}
+
+// The redirect limiter used to enable and disable the Fetch domain itself, letting
+// the navigation through an offline tab and dropping offline afterwards while the
+// state still reported it.
+func TestOfflineSurvivesANavigateUnderARedirectLimit(t *testing.T) {
+	f := newOfflineFixture(t)
+	if err := f.navigate("/start"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.setOffline(true); err != nil {
+		t.Fatal(err)
+	}
+	navErr := f.navigateLimited("/limited", 3)
+	if _, hit := f.servedHeader("/limited"); hit {
+		t.Fatalf("a navigate under a redirect limit reached the server on an offline tab (nav err %v)", navErr)
+	}
+	if !f.b.routeMgr.Offline(f.tabID) {
+		t.Fatal("offline state was dropped by the navigate")
+	}
+	if got := f.fetch("/after"); got != "fail" {
+		t.Fatalf("fetch after the navigate = %q; offline reports on but traffic flows", got)
+	}
+	if _, hit := f.servedHeader("/after"); hit {
+		t.Fatal("the fetch after the navigate reached the server while offline")
+	}
+}
+
+func TestARouteRuleIsAppliedDuringANavigateUnderARedirectLimit(t *testing.T) {
+	f := newOfflineFixture(t)
+	if err := f.navigate("/start"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.b.AddRouteRule(f.tabID, RouteRule{Pattern: "*/blocked-nav*", Action: RouteActionAbort}); err != nil {
+		t.Fatal(err)
+	}
+	navErr := f.navigateLimited("/blocked-nav", 3)
+	if _, hit := f.servedHeader("/blocked-nav"); hit {
+		t.Fatalf("an abort rule was continued during the navigate (nav err %v)", navErr)
+	}
+	if err := f.navigateLimited("/open-nav", 3); err != nil {
+		t.Fatalf("an unrouted navigate under a redirect limit failed: %v", err)
+	}
+	if got := f.fetch("/blocked-nav.txt"); got != "fail" {
+		t.Fatalf("the rule stopped firing after the navigate: %q", got)
+	}
+	if rules := f.b.routeMgr.List(f.tabID); len(rules) != 1 {
+		t.Fatalf("rules after the navigate = %+v", rules)
+	}
+}
+
+func TestTheRedirectLimitStillRefusesLongChains(t *testing.T) {
+	f := newOfflineFixture(t)
+	if err := f.navigate("/start"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.navigateLimited("/hop/2", 5); err != nil {
+		t.Fatalf("a two-hop chain under a limit of five failed: %v", err)
+	}
+	if _, hit := f.servedHeader("/hop/0"); !hit {
+		t.Fatal("the chain never reached its end")
+	}
+	err := f.navigateLimited("/hop/2", 1)
+	if !errors.Is(err, ErrTooManyRedirects) {
+		t.Fatalf("a two-hop chain under a limit of one returned %v, want ErrTooManyRedirects", err)
+	}
+	if err := f.navigateLimited("/hop/1", 0); !errors.Is(err, ErrTooManyRedirects) {
+		t.Fatalf("maxRedirects 0 allowed a redirect: %v", err)
+	}
+	if err := f.navigateLimited("/hop/0", 0); err != nil {
+		t.Fatalf("maxRedirects 0 refused a navigation with no redirects: %v", err)
+	}
+	if f.b.routeMgr.Offline(f.tabID) || len(f.b.routeMgr.List(f.tabID)) != 0 {
+		t.Fatal("a redirect-limited navigate left routing state behind")
+	}
+}
+
+func TestAThrottleSurvivesNavigation(t *testing.T) {
+	tm := NewTabManager(context.Background(), nil, nil, nil, nil)
+	tm.SetNetworkConditions("t", NetworkConditions{Latency: 200, DownloadThroughput: -1, UploadThroughput: -1})
+	if _, ok := tm.NetworkConditions("t"); !ok {
+		t.Fatal("a pure throttle was discarded, so the next navigation silently drops it")
+	}
+	tm.SetNetworkConditions("t", NetworkConditions{DownloadThroughput: -1, UploadThroughput: -1})
+	if _, ok := tm.NetworkConditions("t"); ok {
+		t.Fatal("clearing every condition left a stored entry behind")
 	}
 }

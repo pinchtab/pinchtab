@@ -709,7 +709,7 @@ Offline body fields:
 - `offline` — `true` makes every request the tab issues fail as disconnected (page `fetch()` rejects, a navigation does not load) and sets `navigator.onLine` to `false`; `false` restores normal traffic
 - optional `tabId`, `latency`, `downloadThroughput`, `uploadThroughput`
 
-Offline is per tab and lasts until it is turned off or the tab closes; it survives navigation. It is enforced through the same request interception as `/network/route`: while offline is on it wins over every route rule, and turning it off puts the tab's rules back in effect. The response reports `status: offline` only once the interception is in place; if it cannot be installed the request fails instead.
+Offline is per tab and lasts until it is turned off or the tab closes; it survives navigation. It is enforced through the same request interception as `/network/route`: while offline is on it wins over every route rule, and turning it off puts the tab's rules back in effect. The response reports `status: offline` only once the interception is in place; if it cannot be installed the request fails instead. A throttle (`latency`, `downloadThroughput`, `uploadThroughput`) has the same lifetime: it is re-applied after every navigation until a request clears it, so `offline: false` with no throttle fields ends both. `security.maxRedirects` shares that interception too, so a navigate on an offline or routed tab leaves both in force.
 
 Headers body fields:
 

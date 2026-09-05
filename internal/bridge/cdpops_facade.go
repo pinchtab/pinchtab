@@ -14,7 +14,6 @@ const TargetTypePage = bridgecdpops.TargetTypePage
 var (
 	ImageBlockPatterns  = bridgecdpops.ImageBlockPatterns
 	MediaBlockPatterns  = bridgecdpops.MediaBlockPatterns
-	ErrTooManyRedirects = bridgecdpops.ErrTooManyRedirects
 	ErrElementOccluded  = bridgecdpops.ErrElementOccluded
 	ErrElementHidden    = bridgecdpops.ErrElementHidden
 	ErrElementBlocked   = bridgecdpops.ErrElementBlocked
@@ -23,10 +22,6 @@ var (
 
 func NavigatePage(ctx context.Context, url string) error {
 	return bridgecdpops.NavigatePage(ctx, url)
-}
-
-func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int) error {
-	return bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, maxRedirects)
 }
 
 func DispatchNavigation(ctx context.Context, url string) error {

@@ -29,9 +29,10 @@ type routeDispatchJob struct {
 // routeVerdict is what the tab's state says about one paused request: offline
 // outranks every rule, then the first matching rule, else pass-through.
 type routeVerdict struct {
-	rule    RouteRule
-	matched bool
-	offline bool
+	rule            RouteRule
+	matched         bool
+	offline         bool
+	redirectBlocked bool
 }
 
 type routeDispatchPool struct {
@@ -99,6 +100,7 @@ func (rm *RouteManager) registerListener(listenCtx context.Context, tabID string
 		if !active {
 			return
 		}
+		verdict.redirectBlocked = e.RedirectedRequestID != "" && rm.countRedirect(tabID)
 		job := routeDispatchJob{e: e, routeVerdict: verdict}
 		if !pool.submit(job) {
 			// Queue saturated: fall back to a one-off goroutine (the prior
@@ -121,6 +123,12 @@ func (rm *RouteManager) dispatch(listenCtx context.Context, tabID string, e *fet
 	if verdict.offline {
 		if err := fetch.FailRequest(e.RequestID, network.ErrorReasonInternetDisconnected).Do(executor); err != nil {
 			slog.Debug("fetch.failRequest (offline) failed", "tabId", tabID, "url", e.Request.URL, "err", err)
+		}
+		return
+	}
+	if verdict.redirectBlocked {
+		if err := fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executor); err != nil {
+			slog.Debug("fetch.failRequest (redirect limit) failed", "tabId", tabID, "url", e.Request.URL, "err", err)
 		}
 		return
 	}
@@ -164,8 +172,9 @@ func (rm *RouteManager) dispatch(listenCtx context.Context, tabID string, e *fet
 }
 
 // match looks for the first rule matching url + resourceType + method. The
-// second return value (active) is true iff the tab has any rules or is offline
-// — callers use it to skip dispatch entirely during teardown windows.
+// second return value (active) is true iff the tab has any rules, is offline or
+// has a redirect budget armed — callers use it to skip dispatch entirely during
+// teardown windows.
 //
 // Method semantics:
 //

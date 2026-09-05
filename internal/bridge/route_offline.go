@@ -30,13 +30,13 @@ func (rm *RouteManager) SetOffline(ctx context.Context, tabID string, offline bo
 		state = &tabRouteState{}
 		rm.perTab[tabID] = state
 	}
-	prior := state.snapshot()
+	wasOffline := state.offline
 	state.offline = true
 	claim := rm.claimFetchLocked(ctx, state)
 	rm.mu.Unlock()
 
 	if err := rm.enableFetch(ctx, tabID, claim); err != nil {
-		rm.rollbackClaim(tabID, prior, claim)
+		rm.rollbackClaim(tabID, claim, func(s *tabRouteState) { s.offline = wasOffline })
 		return err
 	}
 	return nil
