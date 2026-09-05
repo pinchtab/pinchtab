@@ -103,24 +103,70 @@ func TestTheStampIgnoresDotfilesAndDependsOnEveryDeclaredInput(t *testing.T) {
 	}
 }
 
-// An absent or empty declaration is an error, never an empty hash: an empty list
-// would make every stamp equal and the staleness guard green for every tree.
-func TestAMissingOrEmptyInputListIsAnErrorNotAnEmptyHash(t *testing.T) {
+// Two floors defend the empty-stamp hazard and each owns one shape. An empty or
+// comment-only declaration is refused by the LOADER, on a message naming the
+// declaration file; a declaration naming only absent paths passes the loader
+// with a non-empty list and an empty file set and is refused by the WALK, on a
+// message naming the directory and the paths that were missing. Deleting either
+// floor reds its own case and only its own.
+func TestTheLoaderRefusesAnEmptyDeclarationByName(t *testing.T) {
 	dir := writeFixtureDashboard(t, "v1")
 	if err := os.WriteFile(filepath.Join(dir, bundleInputsFile), []byte("# nothing declared\n\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The hashing floor below the loader also refuses an empty file set, so the
-	// loader's guard is pinned by its wording: the reader must be told the
-	// declaration is empty, not that the tree has no inputs.
-	if _, err := SourceStamp(dir); err == nil || !strings.Contains(err.Error(), "declares no inputs") {
-		t.Fatalf("an empty input list must be refused by name, got %v", err)
+	_, err := SourceStamp(dir)
+	if err == nil || !strings.Contains(err.Error(), bundleInputsFile) || !strings.Contains(err.Error(), "declares no inputs") {
+		t.Fatalf("an empty declaration must be refused by the loader, naming %s; got %v", bundleInputsFile, err)
 	}
 	if err := os.Remove(filepath.Join(dir, bundleInputsFile)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SourceStamp(dir); err == nil || !strings.Contains(err.Error(), "bundle inputs") {
-		t.Fatalf("a missing input list must be refused by name, got %v", err)
+	if _, err := SourceStamp(dir); err == nil || !strings.Contains(err.Error(), bundleInputsFile) {
+		t.Fatalf("a missing declaration must be refused naming %s; got %v", bundleInputsFile, err)
+	}
+}
+
+func TestTheWalkRefusesADeclarationOfOnlyAbsentPathsByName(t *testing.T) {
+	dir := writeFixtureDashboard(t, "v1")
+	if err := os.WriteFile(filepath.Join(dir, bundleInputsFile), []byte("srx\npackage.jsn\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := SourceStamp(dir)
+	if err == nil {
+		t.Fatal("a declaration naming only absent paths produced a stamp of nothing")
+	}
+	for _, want := range []string{"no bundle inputs under " + dir, "srx", "package.jsn"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("walk floor error %q does not name %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "declares no inputs") {
+		t.Fatalf("the loader answered a case only the walk can see: %v", err)
+	}
+}
+
+// The recorded decision on a typo beside real inputs: it is skipped, because the
+// build script skips it too and the two stamps must agree. The stamp is the
+// stamp of the inputs that exist.
+func TestAMissingDeclaredPathBesideRealOnesIsSkippedToMatchTheBuildScript(t *testing.T) {
+	dir := writeFixtureDashboard(t, "v1")
+	honest, err := SourceStamp(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared, err := os.ReadFile(filepath.Join(dir, bundleInputsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, bundleInputsFile), append(declared, []byte("typo.config.ts\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withTypo, err := SourceStamp(dir)
+	if err != nil {
+		t.Fatalf("a typo beside real inputs must be skipped as the build script skips it: %v", err)
+	}
+	if withTypo != honest {
+		t.Fatalf("the skipped path changed the stamp: %s vs %s", withTypo, honest)
 	}
 }
 

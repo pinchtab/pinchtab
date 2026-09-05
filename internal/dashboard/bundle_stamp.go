@@ -65,12 +65,17 @@ func SourceStamp(dashboardDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var files []string
+	// A declared path that does not exist is skipped, not refused: the build
+	// script skips it too, and the two stamps must agree or a typo in the
+	// declaration reads as staleness with a remedy that cannot clear it. The
+	// walk floor below names the skipped paths when nothing was left to hash.
+	var files, missing []string
 	for _, input := range bundleInputs {
 		root := filepath.Join(dashboardDir, input)
 		info, err := os.Stat(root)
 		if err != nil {
 			if os.IsNotExist(err) {
+				missing = append(missing, input)
 				continue
 			}
 			return "", err
@@ -104,7 +109,7 @@ func SourceStamp(dashboardDir string) (string, error) {
 		}
 	}
 	if len(files) == 0 {
-		return "", fmt.Errorf("no bundle inputs under %s", dashboardDir)
+		return "", fmt.Errorf("no bundle inputs under %s: every declared input is missing (%s)", dashboardDir, strings.Join(missing, ", "))
 	}
 	sort.Strings(files)
 	lines := sha256.New()
