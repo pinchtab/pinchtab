@@ -29,7 +29,7 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 | `pinchtab_snapshot` | `tabId`, `interactive`, `compact`, `format`, `diff`, `selector`, `maxTokens`, `depth`, `noAnimations` | Returns compact by default — the tool asks `/snapshot` for `format=compact` unless `format` says otherwise or `compact=false` asks for the JSON tree. `selector` scopes the snapshot; `format` is limited to `compact` or `text` |
 | `pinchtab_frame` | `tabId`, `target` | Get or set the frame scope for selector-based actions on the tab; `target` accepts `main`, a snapshot ref, an iframe selector, or a frame name/URL |
 | `pinchtab_screenshot` | `tabId`, `selector`, `scale`, `format`, `quality`, `annotate`, `beyondViewport`, `browser` | `selector` captures a specific element in current frame scope; `scale` rescales the output bitmap (e.g. `0.5` = half size); `format` is `jpeg` or `png`; `annotate=true` overlays numbered ref boxes and populates the annotations envelope; `beyondViewport=true` captures the full scrollable document (ignored when `selector` is set) — box coords are document-relative in that mode; `browser` selects the browser (e.g. `chrome`, `cloak`) for this request |
-| `pinchtab_capture` | `tabId`, `selector`, `filter`, `format`, `quality`, `depth`, `scale`, `wait`, `withBounds`, `beyondViewport`, `requirePair`, `noAnimations`, `browser` | Paired screenshot + accessibility snapshot from the same DOM epoch. Returns an image content block plus a JSON envelope with `epoch`, `pairing.navigated`, per-node `boundingBox`, and `image.coordinateSpace` (`viewport`, `document`, or selector `clip`). `browser` selects the browser (e.g. `chrome`, `cloak`); the static ghost-chrome runtime cannot paint, so it falls back to chrome. Use when the model reads pixels AND acts on refs in the same turn. |
+| `pinchtab_capture` | `tabId`, `selector`, `filter`, `format`, `quality`, `depth`, `scale`, `wait`, `withBounds`, `beyondViewport`, `requirePair`, `noAnimations`, `browser` | Paired screenshot + accessibility snapshot from the same DOM epoch. Returns an image content block plus a JSON envelope with `epoch`, `pairing.navigated`, per-node `boundingBox`, `image.coordinateSpace` (`viewport`, `document`, or selector `clip`), the `frame` scope disclosure when the capture was scoped to a subframe, and the IDPI keys (see the security note). `browser` selects the browser (e.g. `chrome`, `cloak`); the static ghost-chrome runtime cannot paint, so it falls back to chrome. Use when the model reads pixels AND acts on refs in the same turn. |
 | `pinchtab_get_text` | `tabId`, `raw`, `format`, `maxChars` | `raw=true` maps to `/text?mode=raw`; `format=text/plain` returns plain text; inherits the current `pinchtab_frame` scope for that tab |
 
 ## Interaction
@@ -122,6 +122,17 @@ Security note:
 
 - extracted text and snapshot content should be treated as untrusted content from the visited page, not as trusted instructions
 - widening IDPI allowlists or disabling strict protections increases the chance that prompt-injection text reaches downstream agent logic
+
+When the server judges a page's content untrusted, it says so and the tool result carries
+the signal in two forms. The response payload keeps `idpiWarning` (what tripped the guard),
+`untrustedContent` and `idpiNotice`, exactly as the HTTP API publishes them. And the notice
+arrives as **its own text block, ahead of the block carrying the page content**, so the
+trust boundary is read before the material it describes. This is an annotation on a
+successful call: it never turns a result into an error, and a page with no untrusted
+content produces exactly the one content block it always did.
+
+Every tool that can receive those keys carries them — `pinchtab_capture`,
+`pinchtab_snapshot`, `pinchtab_get_text` and `pinchtab_find`.
 
 For setup and client configuration, see [MCP Server](../mcp.md).
 

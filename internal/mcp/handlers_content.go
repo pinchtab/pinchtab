@@ -84,6 +84,10 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 			resp["nextActionHint"] = "No high-confidence ref found. Consider pinchtab_snapshot compact mode once, then retry pinchtab_find with a more specific query."
 		}
 
-		return jsonResult(resp)
+		// find builds its own JSON half, so like capture it bypasses the funnel on
+		// success and applies the funnel's notice helper itself. /find scans the same
+		// corpus the snapshot does and publishes the same warning.
+		result, err := jsonResult(resp)
+		return withUntrustedContentNotice(result, body), err
 	}
 }

@@ -276,7 +276,44 @@ func resultFromBytes(body []byte, code int) (*mcp.CallToolResult, error) {
 	if reason := reportsNoSuccess(body); reason != "" {
 		return mcp.NewToolResultError(reason), nil
 	}
-	return mcp.NewToolResultText(string(body)), nil
+	return withUntrustedContentNotice(mcp.NewToolResultText(string(body)), body), nil
+}
+
+// withUntrustedContentNotice puts the producer's trust notice in a text block of
+// its own, AHEAD of the blocks carrying the page content, so a model reads the
+// trust boundary before the material it describes. A notice sitting as one key of
+// a JSON envelope is read as data; this one is addressed to the reader.
+//
+// It annotates a SUCCESS and never creates a failure — resultFromBytes's two error
+// rules, the HTTP status and the counting shape, are the only ways a call reaches
+// the agent as an error, and an already-failed result is returned untouched.
+// A body carrying no untrusted content is returned byte-identical.
+func withUntrustedContentNotice(result *mcp.CallToolResult, body []byte) *mcp.CallToolResult {
+	if result == nil || result.IsError {
+		return result
+	}
+	notice := untrustedContentNotice(body)
+	if notice == "" {
+		return result
+	}
+	result.Content = append([]mcp.Content{mcp.NewTextContent(notice)}, result.Content...)
+	return result
+}
+
+// untrustedContentNotice reads the producer's own prose rather than restating it
+// here: the wording belongs to the endpoint that made the trust decision, and a
+// second copy in the MCP layer would drift from it. Both halves are required, so a
+// body that flags untrusted content without saying anything adds no empty block —
+// the untrustedContent key still travels in the payload.
+func untrustedContentNotice(body []byte) string {
+	var envelope struct {
+		UntrustedContent bool   `json:"untrustedContent"`
+		IDPINotice       string `json:"idpiNotice"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil || !envelope.UntrustedContent {
+		return ""
+	}
+	return strings.TrimSpace(envelope.IDPINotice)
 }
 
 // reportsNoSuccess is the funnel's body-level failure rule: an endpoint that answers 200

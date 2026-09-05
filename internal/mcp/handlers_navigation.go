@@ -362,21 +362,21 @@ func captureResult(body []byte) (*mcp.CallToolResult, error) {
 	image.Format = format
 	image.Base64 = ""
 	image.Path = ""
-	// The text half keeps exactly the keys this tool has always emitted: the
-	// disclosure and IDPI blocks stay out of it, so widening what an agent sees is
-	// a decision rather than a side effect of typing the envelope.
+	// Everything else the server computed reaches the agent: the IDPI keys because
+	// /capture is where prompt-injected page content meets a model, and the frame
+	// disclosure because it says whether the refs describe a subframe or the whole
+	// page. Only the image bytes are removed, and only because they ride the
+	// result's own image block.
 	text := env
 	text.Image = image
-	text.Frame = nil
-	text.IDPIWarning = ""
-	text.UntrustedContent = false
-	text.IDPINotice = ""
 
 	encoded, err := json.Marshal(text)
 	if err != nil {
 		return resultFromBytes(body, 200)
 	}
-	return mcp.NewToolResultImage(string(encoded), env.Image.Base64, mimeType), nil
+	// Capture bypasses the funnel on its success path, so it applies the funnel's
+	// own notice helper rather than a second copy of the rule.
+	return withUntrustedContentNotice(mcp.NewToolResultImage(string(encoded), env.Image.Base64, mimeType), body), nil
 }
 
 func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
