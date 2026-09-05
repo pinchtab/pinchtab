@@ -24,6 +24,17 @@ Use 'pinchtab network unroute' to remove a rule.`,
 	},
 }
 
+var networkRulesCmd = &cobra.Command{
+	Use:   "rules",
+	Short: "List interception rules on the active tab",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.NetworkRules(rt.client, rt.base, rt.token, cmd)
+		})
+	},
+}
+
 var networkUnrouteCmd = &cobra.Command{
 	Use:   "unroute [url]",
 	Short: "Remove an interception rule (or all rules if no pattern given)",

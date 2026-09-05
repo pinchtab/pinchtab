@@ -1,9 +1,63 @@
 package mcp
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestHandleNetworkRulesListsDifferentActions(t *testing.T) {
+	var rules []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/tabs/t1/network/route" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		switch r.Method {
+		case http.MethodPost:
+			var rule map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+				t.Fatal(err)
+			}
+			rules = append(rules, rule)
+			_ = json.NewEncoder(w).Encode(rule)
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"rules": rules})
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	}))
+	defer srv.Close()
+
+	for _, rule := range []map[string]any{
+		{"tabId": "t1", "pattern": "api/users", "action": "fulfill", "body": `{}`},
+		{"tabId": "t1", "pattern": "*.png", "action": "abort"},
+	} {
+		if result := callTool(t, "pinchtab_network_route", rule, srv); result.IsError {
+			t.Fatalf("install result = %+v", result)
+		}
+	}
+	r := callTool(t, "pinchtab_network_rules", map[string]any{"tabId": "t1"}, srv)
+	text := resultText(t, r)
+	for _, want := range []string{"api/users", "fulfill", "*.png", "abort"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("listing %q does not contain %q", text, want)
+		}
+	}
+}
+
+func TestHandleNetworkRulesEmptyListingIsSuccessful(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"rules":[]}`))
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_rules", map[string]any{"tabId": "t1"}, srv)
+	if r.IsError || !strings.Contains(resultText(t, r), `"rules":[]`) {
+		t.Fatalf("empty listing result = %+v", r)
+	}
+}
 
 func TestHandleNetwork(t *testing.T) {
 	srv := mockPinchTab()

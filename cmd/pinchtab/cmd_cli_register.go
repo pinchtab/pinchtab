@@ -41,6 +41,7 @@ var gatedCommands = map[*cobra.Command]routes.Capability{
 	stateCmd:          routes.CapStateExport,
 	recordCmd:         routes.CapScreencast,
 	networkRouteCmd:   routes.CapNetworkIntercept,
+	networkRulesCmd:   routes.CapNetworkIntercept,
 	networkUnrouteCmd: routes.CapNetworkIntercept,
 }
 
@@ -82,7 +83,7 @@ func registerBrowserCommands() {
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
 	mouseCmd.AddCommand(mouseMoveCmd, mouseDownCmd, mouseUpCmd, mouseWheelCmd)
-	networkCmd.AddCommand(networkRouteCmd, networkUnrouteCmd)
+	networkCmd.AddCommand(networkRouteCmd, networkRulesCmd, networkUnrouteCmd)
 	recordCmd.AddCommand(recordStartCmd, recordStopCmd, recordStatusCmd)
 	cookiesCmd.AddCommand(cookiesGetCmd, cookiesSetCmd, cookiesClearCmd)
 	storageCmd.AddCommand(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
@@ -386,8 +387,8 @@ func configureBrowserFlags() {
 	networkRouteCmd.Flags().String("content-type", "", "(With --body) Response Content-Type (default application/json)")
 	networkRouteCmd.Flags().Int("status", 0, "(With --body) Response status code (default 200)")
 	networkRouteCmd.Flags().String("method", "", "Limit to an HTTP method (GET, POST, ...). Fulfill rules without --method skip OPTIONS preflights to avoid breaking CORS.")
-	addTabFlag(networkRouteCmd, networkUnrouteCmd)
-	addJSONFlag(networkRouteCmd, networkUnrouteCmd)
+	addTabFlag(networkRouteCmd, networkRulesCmd, networkUnrouteCmd)
+	addJSONFlag(networkRouteCmd, networkRulesCmd, networkUnrouteCmd)
 
 	networkCmd.Flags().String("filter", "", "URL pattern filter")
 	networkCmd.Flags().String("method", "", "HTTP method filter (GET, POST, etc)")

@@ -61,6 +61,7 @@ func rawHandlerMap(c *Client) map[string]func(context.Context, mcp.CallToolReque
 		"pinchtab_network_detail":  handleNetworkDetail(c),
 		"pinchtab_network_clear":   handleNetworkClear(c),
 		"pinchtab_network_route":   handleNetworkRoute(c),
+		"pinchtab_network_rules":   handleNetworkRules(c),
 		"pinchtab_network_unroute": handleNetworkUnroute(c),
 
 		"pinchtab_console": handleConsole(c),

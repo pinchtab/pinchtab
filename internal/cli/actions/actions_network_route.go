@@ -74,6 +74,15 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	fmt.Printf("route installed: %s (%s)\n", pattern, req["action"])
 }
 
+// NetworkRules lists the interception rules installed on the selected tab.
+func NetworkRules(client *http.Client, base, token string, cmd *cobra.Command) {
+	path := "/network/route"
+	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
+		path = fmt.Sprintf("/tabs/%s/network/route", url.PathEscape(tab))
+	}
+	apiclient.DoGet(client, base, token, path, nil)
+}
+
 // NetworkUnroute removes one or all rules from the active tab. Empty pattern
 // removes all rules.
 func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command, pattern string) {

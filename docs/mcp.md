@@ -114,7 +114,7 @@ PINCHTAB_TOKEN=<that-host-token> pinchtab --server http://remote:9867 mcp
 
 ## Available Tools
 
-PinchTab currently exposes 38 tools:
+PinchTab currently exposes 39 tools:
 
 - Navigation: 9
 - Interaction: 8
@@ -124,7 +124,7 @@ PinchTab currently exposes 38 tools:
 - Site: 1
 - Tab management: 5
 - Wait utilities: 1
-- Network: 5
+- Network: 6
 - Diagnostics: 2
 - Dialog: 1
 
@@ -188,6 +188,7 @@ PinchTab currently exposes 38 tools:
 - `pinchtab_network_detail`
 - `pinchtab_network_clear`
 - `pinchtab_network_route`
+- `pinchtab_network_rules` — list the current tab's interception patterns and actions
 - `pinchtab_network_unroute`
 
 ### Diagnostics

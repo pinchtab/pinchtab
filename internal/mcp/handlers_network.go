@@ -118,6 +118,21 @@ func handleNetworkRoute(c *Client) func(context.Context, mcp.CallToolRequest) (*
 	}
 }
 
+func handleNetworkRules(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		tabID, err := r.RequireString("tabId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		path := "/tabs/" + url.PathEscape(tabID) + "/network/route"
+		respBody, code, err := c.Get(ctx, path, nil)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(respBody, code)
+	}
+}
+
 func handleNetworkUnroute(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tabID, err := r.RequireString("tabId")
