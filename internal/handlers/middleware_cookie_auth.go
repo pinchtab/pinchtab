@@ -46,8 +46,7 @@ func cookieAuthAllowed(r *http.Request) bool {
 			path == "/instances/metrics":
 			return true
 		case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/tabs"),
-			strings.HasPrefix(path, "/api/agents/") && !strings.HasSuffix(path, "/events"),
-			strings.HasPrefix(path, "/api/agents/") && strings.HasSuffix(path, "/events"),
+			strings.HasPrefix(path, "/api/agents/"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/logs"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/logs/stream"),
 			strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/proxy/screencast"),
@@ -99,13 +98,11 @@ func cookieElevationRequired(r *http.Request, cfg *config.RuntimeConfig) bool {
 }
 
 func cookieOriginAllowed(r *http.Request, trustProxy bool) bool {
-	if isWebSocketUpgrade(r) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		return origin != "" && sameOriginRequest(origin, r, trustProxy)
-	}
-
 	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
 		return sameOriginRequest(origin, r, trustProxy)
+	}
+	if isWebSocketUpgrade(r) {
+		return false
 	}
 	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
 		return sameOriginRequest(referer, r, trustProxy)
@@ -113,13 +110,12 @@ func cookieOriginAllowed(r *http.Request, trustProxy bool) bool {
 	return false
 }
 
-func sameOriginRequest(origin string, r *http.Request, trustProxy ...bool) bool {
+func sameOriginRequest(origin string, r *http.Request, trustProxy bool) bool {
 	parsed, err := url.Parse(origin)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return false
 	}
-	trust := len(trustProxy) > 0 && trustProxy[0]
-	return strings.EqualFold(parsed.Scheme, authn.RequestScheme(r, trust)) && strings.EqualFold(parsed.Host, authn.RequestHost(r, trust))
+	return strings.EqualFold(parsed.Scheme, authn.RequestScheme(r, trustProxy)) && strings.EqualFold(parsed.Host, authn.RequestHost(r, trustProxy))
 }
 
 func isWebSocketUpgrade(r *http.Request) bool {

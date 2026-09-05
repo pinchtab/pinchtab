@@ -43,8 +43,7 @@ func TestSameOriginRequest_DefaultIgnoresForwarded(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "browser.example.com")
 
-	// No trustProxy argument — defaults to false
-	if sameOriginRequest("https://browser.example.com/dashboard", req) {
-		t.Fatal("expected NOT same-origin when trustProxy not specified")
+	if sameOriginRequest("https://browser.example.com/dashboard", req, false) {
+		t.Fatal("expected NOT same-origin when the proxy is not trusted")
 	}
 }
