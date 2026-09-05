@@ -3,6 +3,7 @@ package dashboard
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,14 +110,17 @@ func TestAMissingOrEmptyInputListIsAnErrorNotAnEmptyHash(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, bundleInputsFile), []byte("# nothing declared\n\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SourceStamp(dir); err == nil {
-		t.Fatal("an empty input list produced a stamp")
+	// The hashing floor below the loader also refuses an empty file set, so the
+	// loader's guard is pinned by its wording: the reader must be told the
+	// declaration is empty, not that the tree has no inputs.
+	if _, err := SourceStamp(dir); err == nil || !strings.Contains(err.Error(), "declares no inputs") {
+		t.Fatalf("an empty input list must be refused by name, got %v", err)
 	}
 	if err := os.Remove(filepath.Join(dir, bundleInputsFile)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SourceStamp(dir); err == nil {
-		t.Fatal("a missing input list produced a stamp")
+	if _, err := SourceStamp(dir); err == nil || !strings.Contains(err.Error(), "bundle inputs") {
+		t.Fatalf("a missing input list must be refused by name, got %v", err)
 	}
 }
 
