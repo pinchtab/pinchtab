@@ -153,6 +153,19 @@ func Problem(w http.ResponseWriter, status int, code, detail string, retryable b
 	})
 }
 
+func BeginStream(w http.ResponseWriter) (http.Flusher, bool) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
+		return nil, false
+	}
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		Problem(w, http.StatusInternalServerError, "streaming_deadline_unsupported", "streaming deadline unsupported", false, nil)
+		return nil, false
+	}
+	return flusher, true
+}
+
 func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxJSONBodyBytes
