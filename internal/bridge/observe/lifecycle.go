@@ -2,6 +2,8 @@ package observe
 
 import (
 	"context"
+	"errors"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,26 +17,17 @@ func WaitForReadyState(ctx context.Context, ceiling time.Duration) (string, erro
 	if ceiling <= 0 {
 		ceiling = 2 * time.Second
 	}
-	deadline := time.Now().Add(ceiling)
-	const poll = 50 * time.Millisecond
-
-	var state string
-	for {
-		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &state)); err != nil {
-			return state, err
+	var last string
+	_, err := readiness.WaitUntil(ctx, ceiling, 50*time.Millisecond, func() (struct{}, bool, error) {
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.readyState`, &last)); err != nil {
+			return struct{}{}, false, err
 		}
-		if state == "complete" {
-			return state, nil
-		}
-		if !time.Now().Before(deadline) {
-			return state, nil
-		}
-		select {
-		case <-ctx.Done():
-			return state, ctx.Err()
-		case <-time.After(poll):
-		}
+		return struct{}{}, last == "complete", nil
+	})
+	if err != nil && !errors.Is(err, readiness.ErrNotReady) {
+		return last, err
 	}
+	return last, nil
 }
 
 // WaitForQuietWindow blocks until either no Page.lifecycleEvent has been
@@ -90,33 +83,20 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 		}
 	})
 
+	defer done.Store(true)
 	start := time.Now()
-	deadline := start.Add(ceiling)
-	// Poll ~4x per quiet window so the "no event for `quiet`" check stays
-	// responsive, with a 10ms floor to avoid busy-spinning when quiet is small.
 	pollInterval := quiet / 4
 	if pollInterval < 10*time.Millisecond {
 		pollInterval = 10 * time.Millisecond
 	}
-
-	for {
-		now := time.Now()
-		if !now.Before(deadline) {
-			done.Store(true)
-			return now.Sub(start), nil
-		}
+	_, err := readiness.WaitUntil(ctx, ceiling, pollInterval, func() (struct{}, bool, error) {
 		mu.Lock()
-		sinceLast := now.Sub(lastEvent)
+		sinceLast := time.Since(lastEvent)
 		mu.Unlock()
-		if sinceLast >= quiet {
-			done.Store(true)
-			return now.Sub(start), nil
-		}
-		select {
-		case <-ctx.Done():
-			done.Store(true)
-			return time.Since(start), ctx.Err()
-		case <-time.After(pollInterval):
-		}
+		return struct{}{}, sinceLast >= quiet, nil
+	})
+	if err != nil && !errors.Is(err, readiness.ErrNotReady) {
+		return time.Since(start), err
 	}
+	return time.Since(start), nil
 }
