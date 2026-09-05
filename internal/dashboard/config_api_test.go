@@ -3,6 +3,7 @@ package dashboard
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -719,13 +720,70 @@ func decodeConfigEnvelope(t *testing.T, w *httptest.ResponseRecorder) configEnve
 // like secrets (containing "key", "token", "secret", "password", "credential" in their
 // name) and verifies they are all redacted. This test will fail if a new sensitive
 // field is added to FileConfig without updating redactToken().
-func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
+// sensitiveLeaf is one config value the single path-name vocabulary calls
+// secret, addressed by the dotted JSON path the vocabulary is defined over.
+type sensitiveLeaf struct {
+	path  string
+	value reflect.Value
+}
+
+// sensitiveLeaves walks v by JSON tags and returns every leaf whose dotted path
+// config.IsSensitiveConfigPath marks. A Go field name is not a config path, so
+// the walk builds the path the way the file spells it; map keys are user-chosen
+// segments and enter the path as themselves.
+func sensitiveLeaves(v reflect.Value, path string, out *[]sensitiveLeaf) {
+	for v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Struct:
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := t.Field(i)
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if name == "-" {
+				continue
+			}
+			if name == "" {
+				name = field.Name
+			}
+			child := name
+			if path != "" {
+				child = path + "." + name
+			}
+			sensitiveLeaves(v.Field(i), child, out)
+		}
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			sensitiveLeaves(v.MapIndex(key), path+"."+key.String(), out)
+		}
+	default:
+		if path != "" && config.IsSensitiveConfigPath(path) {
+			*out = append(*out, sensitiveLeaf{path: path, value: v})
+		}
+	}
+}
+
+// fullySensitiveFixture is a FileConfig with every secret the schema declares
+// populated, so a blank left behind by redactToken is observable.
+func fullySensitiveFixture() config.FileConfig {
 	fc := config.DefaultFileConfig()
 	fc.Server.Token = "test-token"
 	encKey := "test-encryption-key"
 	fc.Security.StateEncryptionKey = &encKey
 	fc.AutoSolver.External.CapsolverKey = "test-capsolver-key"
 	fc.AutoSolver.External.TwoCaptchaKey = "test-twocaptcha-key"
+	fc.AutoSolver.Credentials.Login.User = "login-user"
+	fc.AutoSolver.Credentials.Login.Password = "login-pass"
+	fc.AutoSolver.Credentials.Signup.Name = "signup-name"
+	fc.AutoSolver.Credentials.Signup.Email = "signup@example.com"
+	fc.AutoSolver.Credentials.Signup.Password = "signup-pass"
+	fc.AutoSolver.Credentials.Form.Field1 = "form-1"
+	fc.AutoSolver.Credentials.Form.Field2 = "form-2"
+	fc.AutoSolver.Credentials.Form.Email = "form@example.com"
 	fc.Browser.Proxy = config.BrowserProxyConfig{
 		Server:   "http://proxy.example.com:8080",
 		Username: "alice",
@@ -741,7 +799,11 @@ func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
 			},
 		},
 	}
+	return fc
+}
 
+func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
+	fc := fullySensitiveFixture()
 	redacted := redactToken(fc)
 
 	// Masked to "***" (not empty) so the dashboard knows credentials are configured.
@@ -761,57 +823,75 @@ func TestRedactTokenCoversAllSensitiveFields(t *testing.T) {
 		t.Errorf("redactToken mutated source target proxy password")
 	}
 
+	var declared []sensitiveLeaf
+	sensitiveLeaves(reflect.ValueOf(fc), "", &declared)
+	if len(declared) < 8 {
+		t.Fatalf("the vocabulary marks only %d paths on a fully populated config; the walk matched almost nothing: %v", len(declared), declared)
+	}
 	var unredacted []string
-	findSensitiveFields(reflect.ValueOf(redacted), "", &unredacted)
-
+	var after []sensitiveLeaf
+	sensitiveLeaves(reflect.ValueOf(redacted), "", &after)
+	for _, leaf := range after {
+		if !isZeroValue(leaf.value) && !isMaskedString(leaf.value) {
+			unredacted = append(unredacted, leaf.path)
+		}
+	}
 	if len(unredacted) > 0 {
-		t.Fatalf("redactToken() did not redact sensitive fields: %v\n"+
-			"Add these to redactToken() in config_api.go", unredacted)
+		t.Fatalf("redactToken() left secret paths readable on GET: %v\nAdd them to redactToken() in config_redaction.go", unredacted)
 	}
 }
 
-// findSensitiveFields recursively scans a struct for fields with names suggesting
-// they contain secrets, and reports any that have non-zero values.
-func findSensitiveFields(v reflect.Value, path string, unredacted *[]string) {
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return
-		}
-		v = v.Elem()
+// The other half of the same contract: everything redactToken blanks must come
+// back when the dashboard echoes the redacted config on PUT, or a save wipes
+// the secret. Each path is asserted on its own so one dropped restore line
+// names itself.
+func TestPreserveWriteOnlyFieldsRestoresEverySecretTheRedactionBlanks(t *testing.T) {
+	original := fullySensitiveFixture()
+	echoed := redactToken(original)
+	preserveWriteOnlyConfigFields(&echoed, &original)
+
+	var want []sensitiveLeaf
+	sensitiveLeaves(reflect.ValueOf(original), "", &want)
+	if len(want) < 8 {
+		t.Fatalf("only %d secret paths to mirror; the walk matched almost nothing", len(want))
 	}
-
-	if v.Kind() != reflect.Struct {
-		return
+	var got []sensitiveLeaf
+	sensitiveLeaves(reflect.ValueOf(echoed), "", &got)
+	restored := map[string]string{}
+	for _, leaf := range got {
+		restored[leaf.path] = fmt.Sprint(reflect.Indirect(leaf.value).Interface())
 	}
-
-	sensitivePatterns := []string{"key", "token", "secret", "password", "credential"}
-
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		fieldPath := field.Name
-		if path != "" {
-			fieldPath = path + "." + field.Name
+	for _, leaf := range want {
+		wantValue := fmt.Sprint(reflect.Indirect(leaf.value).Interface())
+		if restored[leaf.path] != wantValue {
+			t.Errorf("%s = %q after a PUT that echoed the redaction, want the on-disk %q; a dashboard save would wipe it", leaf.path, restored[leaf.path], wantValue)
 		}
+	}
+}
 
-		fieldVal := v.Field(i)
-
-		nameLower := strings.ToLower(field.Name)
-		isSensitive := false
-		for _, pattern := range sensitivePatterns {
-			if strings.Contains(nameLower, pattern) {
-				isSensitive = true
-				break
-			}
-		}
-
-		if isSensitive && !isZeroValue(fieldVal) && !isMaskedString(fieldVal) {
-			*unredacted = append(*unredacted, fieldPath)
-		}
-
-		if fieldVal.Kind() == reflect.Struct || (fieldVal.Kind() == reflect.Ptr && fieldVal.Elem().Kind() == reflect.Struct) {
-			findSensitiveFields(fieldVal, fieldPath, unredacted)
-		}
+// The walk consults the single vocabulary rather than a word list of its own:
+// a *Passphrase leaf is secret to the owner and was invisible to the old
+// contains-match on field names, so a fixture carrying one must be reported.
+func TestTheRedactionGuardReadsTheSharedSecretVocabulary(t *testing.T) {
+	type vault struct {
+		Passphrase string `json:"passphrase"`
+		Label      string `json:"label"`
+	}
+	type fixture struct {
+		Vault          vault  `json:"vault"`
+		KeyboardLayout string `json:"keyboardLayout"`
+	}
+	var leaves []sensitiveLeaf
+	sensitiveLeaves(reflect.ValueOf(fixture{Vault: vault{Passphrase: "x", Label: "y"}, KeyboardLayout: "us"}), "", &leaves)
+	paths := map[string]bool{}
+	for _, leaf := range leaves {
+		paths[leaf.path] = true
+	}
+	if !paths["vault.passphrase"] {
+		t.Fatalf("a passphrase leaf was not reported as secret: %v", paths)
+	}
+	if paths["vault.label"] || paths["keyboardLayout"] {
+		t.Fatalf("a non-secret leaf was reported as secret: %v", paths)
 	}
 }
 
