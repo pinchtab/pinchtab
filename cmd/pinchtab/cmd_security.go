@@ -128,8 +128,9 @@ func printSecurityOverview(cfg *config.RuntimeConfig, recommended []workflow.Set
 	fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config set <path> <value>"), cli.StyleStdout(cli.MutedStyle, "# tune individual security flags"))
 }
 
-func applySecurityUp(dryRun bool) (workflow.PresetResult, error) {
-	result, err := workflow.RestoreSecurityDefaults(dryRun)
+func applySecurityUp(dryRun bool) (result workflow.PresetResult, err error) {
+	defer func() { printPreExistingErrors(result, err) }()
+	result, err = workflow.RestoreSecurityDefaults(dryRun)
 	if err != nil {
 		return result, fmt.Errorf("restore defaults: %w", err)
 	}
@@ -149,8 +150,9 @@ func applySecurityUp(dryRun bool) (workflow.PresetResult, error) {
 	return result, nil
 }
 
-func applySecurityDown(dryRun bool) (workflow.PresetResult, error) {
-	result, err := workflow.ApplyGuardsDownPreset(dryRun)
+func applySecurityDown(dryRun bool) (result workflow.PresetResult, err error) {
+	defer func() { printPreExistingErrors(result, err) }()
+	result, err = workflow.ApplyGuardsDownPreset(dryRun)
 	if err != nil {
 		return result, fmt.Errorf("guards down: %w", err)
 	}
@@ -171,6 +173,17 @@ func applySecurityDown(dryRun bool) (workflow.PresetResult, error) {
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Attach host allowlisting remains local-only. Widening allowHosts or enabling bridge schemes later is an additional explicit weakening."))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Changing server.bind away from 127.0.0.1 later is also an additional explicit weakening unless another network boundary still constrains access."))
 	return result, nil
+}
+
+func printPreExistingErrors(result workflow.PresetResult, err error) {
+	if err != nil || len(result.PreExisting) == 0 {
+		return
+	}
+	fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("%s already had %d validation error(s) before this command; the preset did not write those keys and left them untouched:", result.ConfigPath, len(result.PreExisting))))
+	for _, preExisting := range result.PreExisting {
+		fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, preExisting.Error()))
+	}
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Fix them with pinchtab config set, then confirm with pinchtab config validate."))
 }
 
 // printSettingChanges lists each key in the shape the residual warnings use, and

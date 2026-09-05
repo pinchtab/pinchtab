@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -324,4 +325,84 @@ func TestSecurityUpPreservesOperatorSecurityData(t *testing.T) {
 	if hosts, _ := config.GetConfigValue(loaded, "security.attach.allowHosts"); strings.Contains(hosts, "chrome.internal") {
 		t.Errorf("attach.allowHosts kept a non-local host: %q; that reset is deliberate and named", hosts)
 	}
+}
+
+func writePresetFixture(t *testing.T, body string) string {
+	t.Helper()
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
+const invalidPreservedValue = "not-a-cidr/99"
+
+func TestPresetsRefuseWhatTheyBreakAndReportWhatTheyFind(t *testing.T) {
+	valid := `{"server": {"token": "secret"}}`
+	invalidPreserved := `{"server": {"token": "secret"}, "security": {"trustedProxyCIDRs": ["` + invalidPreservedValue + `"]}}`
+	presets := map[string]func(bool) (PresetResult, error){
+		"security up":   RestoreSecurityDefaults,
+		"security down": ApplyGuardsDownPreset,
+	}
+	for name, preset := range presets {
+		t.Run(name+" over a valid config", func(t *testing.T) {
+			writePresetFixture(t, valid)
+			result, err := preset(false)
+			if err != nil || !result.Written || len(result.PreExisting) != 0 {
+				t.Fatalf("result %+v err %v; a valid config must be written with nothing reported", result, err)
+			}
+		})
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s over an invalid preserved value dryRun=%t", name, dryRun), func(t *testing.T) {
+				configPath := writePresetFixture(t, invalidPreserved)
+				before, _ := os.ReadFile(configPath)
+				result, err := preset(dryRun)
+				if err != nil {
+					t.Fatalf("a pre-existing error in a preserved key must not block the preset: %v", err)
+				}
+				if result.Written == dryRun || !result.Changed() {
+					t.Fatalf("written=%t changed=%t under dryRun=%t", result.Written, result.Changed(), dryRun)
+				}
+				if len(result.PreExisting) != 1 || !strings.Contains(result.PreExisting[0].Error(), "security.trustedProxyCIDRs") {
+					t.Fatalf("pre-existing errors %v; the operator must learn the file was already invalid", result.PreExisting)
+				}
+				after, _ := os.ReadFile(configPath)
+				if !strings.Contains(string(after), invalidPreservedValue) {
+					t.Fatalf("the invalid preserved value was destroyed: %s", after)
+				}
+				if dryRun && string(after) != string(before) {
+					t.Fatalf("dry run wrote the file")
+				}
+			})
+		}
+	}
+
+	for _, dryRun := range []bool{false, true} {
+		t.Run(fmt.Sprintf("a preset writing an invalid value refuses dryRun=%t", dryRun), func(t *testing.T) {
+			configPath := writePresetFixture(t, valid)
+			before, _ := os.ReadFile(configPath)
+			_, err := runPreset(dryRun, func(fc *config.FileConfig, _ string) error {
+				return config.SetConfigValue(fc, "server.port", "not-a-port")
+			})
+			if err == nil || !strings.Contains(err.Error(), "server.port") || !strings.Contains(err.Error(), "nothing was written") {
+				t.Fatalf("err = %v; a value the preset writes that fails validation must refuse by name", err)
+			}
+			after, _ := os.ReadFile(configPath)
+			if string(after) != string(before) {
+				t.Fatalf("the refused preset changed the file")
+			}
+		})
+	}
+
+	t.Run("an introduced error is refused even beside a pre-existing one", func(t *testing.T) {
+		writePresetFixture(t, invalidPreserved)
+		_, err := runPreset(false, func(fc *config.FileConfig, _ string) error {
+			return config.SetConfigValue(fc, "server.port", "not-a-port")
+		})
+		if err == nil || !strings.Contains(err.Error(), "server.port") || strings.Contains(err.Error(), "trustedProxyCIDRs") {
+			t.Fatalf("err = %v; only the error the preset introduced refuses, the pre-existing one is reported", err)
+		}
+	})
 }

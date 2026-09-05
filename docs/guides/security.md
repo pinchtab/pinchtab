@@ -426,6 +426,12 @@ report before it happens under `--dry-run`.
 report for what the command would write and touch nothing, tokens included. `--dry-run`
 is the spelling every previewing PinchTab command uses.
 
+Both presets follow one rule: they refuse what they would break and report what they
+find. A value the preset writes that fails validation refuses the whole write, and nothing
+is committed; a value that already fails `pinchtab config validate` in a key the preset
+preserves does not block it — the preset applies, leaves that value untouched, and names
+the pre-existing error beside its report, under `--dry-run` too.
+
 The overview counts three different populations and says which is which: posture rows
 (the table), the config settings `security up` would write right now (the overview runs
 the preset's own dry run, so that count and `security up --dry-run` are one number), and

@@ -28,9 +28,10 @@ type SettingChange struct {
 // exactly the keys the file gains, loses or changes; Written is false when the
 // diff was empty or the run was a preview.
 type PresetResult struct {
-	ConfigPath string
-	Changes    []SettingChange
-	Written    bool
+	ConfigPath  string
+	Changes     []SettingChange
+	Written     bool
+	PreExisting []error
 }
 
 func (r PresetResult) Changed() bool { return len(r.Changes) > 0 }
@@ -120,17 +121,57 @@ func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) error {
 }
 
 func RestoreSecurityDefaults(dryRun bool) (PresetResult, error) {
+	return runPreset(dryRun, func(fc *config.FileConfig, configPath string) error {
+		if err := ApplyRecommendedSecurityDefaults(fc); err != nil {
+			return err
+		}
+		_, err := config.ProvisionFileToken(fc, configPath)
+		return err
+	})
+}
+
+func runPreset(dryRun bool, build func(fc *config.FileConfig, configPath string) error) (PresetResult, error) {
 	fc, configPath, err := config.LoadFileConfig()
+	if err != nil {
+		return PresetResult{}, fmt.Errorf("load config: %w", err)
+	}
+	baseline := config.ValidateFileConfig(fc)
+	if err := build(fc, configPath); err != nil {
+		return PresetResult{}, err
+	}
+	preExisting, introduced := splitValidationErrors(baseline, config.ValidateFileConfig(fc))
+	if len(introduced) > 0 {
+		return PresetResult{}, fmt.Errorf("the preset would write a config that does not validate, so nothing was written: %s", joinErrors(introduced))
+	}
+	result, err := commitPreset(fc, configPath, dryRun)
 	if err != nil {
 		return PresetResult{}, err
 	}
-	if err := ApplyRecommendedSecurityDefaults(fc); err != nil {
-		return PresetResult{}, err
+	result.PreExisting = preExisting
+	return result, nil
+}
+
+func splitValidationErrors(baseline, after []error) (preExisting, introduced []error) {
+	known := make(map[string]bool, len(baseline))
+	for _, err := range baseline {
+		known[err.Error()] = true
 	}
-	if _, err := config.ProvisionFileToken(fc, configPath); err != nil {
-		return PresetResult{}, err
+	for _, err := range after {
+		if known[err.Error()] {
+			preExisting = append(preExisting, err)
+			continue
+		}
+		introduced = append(introduced, err)
 	}
-	return commitPreset(fc, configPath, dryRun)
+	return preExisting, introduced
+}
+
+func joinErrors(errs []error) string {
+	messages := make([]string, 0, len(errs))
+	for _, err := range errs {
+		messages = append(messages, err.Error())
+	}
+	return strings.Join(messages, "; ")
 }
 
 func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
@@ -169,21 +210,31 @@ func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
 // so a ninth capability is enabled by default while this one stays a deliberate opt-out.
 const guardsDownExcludedCapability = routes.CapStateExport
 
-// BuildGuardsDownConfig mutates fc in memory to apply the guards-down preset.
-// It does not persist anything.
+// BuildGuardsDownConfig mutates fc in memory to apply the guards-down preset and
+// refuses any config that does not validate, for the in-memory --yolo run that
+// has no report to carry a pre-existing error on.
 func BuildGuardsDownConfig(fc *config.FileConfig) error {
+	if err := applyGuardsDownSettings(fc); err != nil {
+		return err
+	}
+	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
+}
+
+func applyGuardsDownSettings(fc *config.FileConfig) error {
 	if fc == nil {
 		return fmt.Errorf("nil file config")
 	}
 	if _, err := config.EnsureFileToken(fc); err != nil {
 		return fmt.Errorf("generate token: %w", err)
 	}
-
 	capabilities, err := capabilitySettings("true", guardsDownExcludedCapability)
 	if err != nil {
 		return err
 	}
-	if err := applySettings(fc, append(capabilities,
+	return applySettings(fc, append(capabilities,
 		setting{path: "server.bind", value: "127.0.0.1"},
 		setting{path: "security.attach.enabled", value: "true"},
 		setting{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
@@ -192,14 +243,7 @@ func BuildGuardsDownConfig(fc *config.FileConfig) error {
 		setting{path: "security.idpi.strictMode", value: "false"},
 		setting{path: "security.idpi.scanContent", value: "false"},
 		setting{path: "security.idpi.wrapContent", value: "false"},
-	)); err != nil {
-		return err
-	}
-
-	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	))
 }
 
 func GuardsDownPostureActive(cfg *config.RuntimeConfig) bool {
@@ -218,14 +262,9 @@ func GuardsDownPostureActive(cfg *config.RuntimeConfig) bool {
 }
 
 func ApplyGuardsDownPreset(dryRun bool) (PresetResult, error) {
-	fc, configPath, err := config.LoadFileConfig()
-	if err != nil {
-		return PresetResult{}, fmt.Errorf("load config: %w", err)
-	}
-	if err := BuildGuardsDownConfig(fc); err != nil {
-		return PresetResult{}, err
-	}
-	return commitPreset(fc, configPath, dryRun)
+	return runPreset(dryRun, func(fc *config.FileConfig, _ string) error {
+		return applyGuardsDownSettings(fc)
+	})
 }
 
 // commitPreset is the one diff both presets share: the file on disk against the
