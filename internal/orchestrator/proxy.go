@@ -175,14 +175,7 @@ func (o *Orchestrator) ProxyToTarget(w http.ResponseWriter, r *http.Request, tar
 }
 
 func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceInternal, error) {
-	o.mu.RLock()
-	instances := make([]*InstanceInternal, 0, len(o.instances))
-	for _, inst := range o.instances {
-		if instanceIsRunning(inst) {
-			instances = append(instances, inst)
-		}
-	}
-	o.mu.RUnlock()
+	instances := o.runningInstances()
 
 	for _, inst := range instances {
 		tabs, err := o.fetchTabs(inst)

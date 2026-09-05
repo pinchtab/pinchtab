@@ -10,6 +10,22 @@ import (
 	"time"
 )
 
+func (o *Orchestrator) runningInstances() []*InstanceInternal {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.runningInstancesLocked()
+}
+
+func (o *Orchestrator) runningInstancesLocked() []*InstanceInternal {
+	instances := make([]*InstanceInternal, 0, len(o.instances))
+	for _, inst := range o.instances {
+		if instanceIsRunning(inst) {
+			instances = append(instances, inst)
+		}
+	}
+	return instances
+}
+
 func instanceIsRunning(inst *InstanceInternal) bool {
 	return inst != nil && inst.Status == bridge.InstanceStatusRunning && instanceIsActive(inst)
 }
