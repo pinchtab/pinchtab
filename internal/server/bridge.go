@@ -91,7 +91,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 
 	server = &http.Server{
 		Addr: listenAddr,
-		Handler: handlers.TrustedInternalProxyStripMiddleware(os.Getenv("PINCHTAB_INTERNAL_TOKEN"))(
+		Handler: handlers.TrustedInternalProxyStripMiddleware(os.Getenv(handlers.InternalTokenEnv))(
 			handlers.RequestIDMiddleware(
 				handlers.ClientIPMiddleware(live, activity.Middleware(
 					actStore,

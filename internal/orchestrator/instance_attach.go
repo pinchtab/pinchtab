@@ -154,14 +154,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 		return nil, fmt.Errorf("write attach child config: %w", err)
 	}
 
-	envOverrides := map[string]string{
-		"PINCHTAB_PORT":   portStr,
-		"PINCHTAB_CONFIG": childConfigPath,
-	}
-	if o.internalToken != "" {
-		envOverrides["PINCHTAB_INTERNAL_TOKEN"] = o.internalToken
-	}
-	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
+	env := o.childEnv(portStr, childConfigPath)
 
 	logBuf := newRingBuffer(256 * 1024)
 	args := []string{

@@ -10,7 +10,10 @@ import (
 // InternalTokenHeader carries the shared secret on orchestrator → instance
 // proxy hops. The instance verifies it against PINCHTAB_INTERNAL_TOKEN and
 // marks the request context as trusted-internal-proxy when it matches.
-const InternalTokenHeader = "X-PinchTab-Internal-Token"
+const (
+	InternalTokenHeader = "X-PinchTab-Internal-Token"
+	InternalTokenEnv    = "PINCHTAB_INTERNAL_TOKEN"
+)
 
 type trustCtxKey struct{}
 

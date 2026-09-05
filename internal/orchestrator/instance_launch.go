@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/handlers"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -170,14 +171,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("write child config: %w", err)
 	}
 
-	envOverrides := map[string]string{
-		"PINCHTAB_PORT":   port,
-		"PINCHTAB_CONFIG": childConfigPath,
-	}
-	if o.internalToken != "" {
-		envOverrides["PINCHTAB_INTERNAL_TOKEN"] = o.internalToken
-	}
-	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
+	env := o.childEnv(port, childConfigPath)
 
 	if opts.Browser != "" {
 		var configured []string
@@ -246,4 +240,15 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	o.startMonitor(inst)
 
 	return &snapshot, nil
+}
+
+func (o *Orchestrator) childEnv(port, childConfigPath string) []string {
+	overrides := map[string]string{
+		"PINCHTAB_PORT":   port,
+		"PINCHTAB_CONFIG": childConfigPath,
+	}
+	if o.internalToken != "" {
+		overrides[handlers.InternalTokenEnv] = o.internalToken
+	}
+	return mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), overrides)
 }
