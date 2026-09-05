@@ -193,6 +193,7 @@ Current nested file-config shape:
     "retainNetworkBodies": false,
     "retainNetworkBodyMaxBytes": 262144,
     "trustProxyHeaders": false,
+    "trustedProxyHops": 1,
     "cookieSecure": null
   },
   "browser": {
@@ -720,7 +721,35 @@ on stderr when you run `config set`, `config patch` or `config validate` — and
 blocks anything. There is nothing to fix and nothing to remove; the value simply has no
 effect. Validation errors, such as an out-of-range `server.port`, still block a save.
 
-`server.trustProxyHeaders` should stay `false` unless PinchTab is behind a trusted reverse proxy that overwrites `Forwarded` and `X-Forwarded-*` headers. Do not enable it on direct-exposure deployments or behind proxies that pass client-supplied forwarding headers through unchanged. When it is enabled, the client-most forwarded address is also the client identity: rate-limit buckets, the concurrent-stream cap and every audit line are keyed on it rather than on the proxy's address.
+`server.trustProxyHeaders` should stay `false` unless PinchTab is behind a trusted reverse
+proxy. Do not enable it on direct-exposure deployments: with no proxy in front, every
+element of `X-Forwarded-For` is written by the client.
+
+When it is enabled, the forwarded chain decides the client identity — rate-limit buckets
+(including the dashboard login and elevation limiters), the concurrent-stream cap and every
+audit line are keyed on it rather than on the proxy's address. `server.trustedProxyHops`
+says how many trusted proxies sit in front, and PinchTab takes that many elements from the
+**right** of the chain:
+
+| Deployment | `trustedProxyHops` | Why |
+| --- | --- | --- |
+| One reverse proxy (nginx, Caddy, Traefik) | `1` (default) | The proxy appends the address it saw; that last element is the client. |
+| CDN in front of an ingress | `2` | The ingress appended the CDN's address, the CDN appended the client's. |
+| N trusted proxies chained | `N` | Count every hop that appends, not just the one PinchTab connects to. |
+
+Counting from the right is what makes the value unforgeable. The common proxies —
+nginx's `proxy_add_x_forwarded_for`, and the Caddy and Traefik defaults — **append** rather
+than overwrite, so whatever `X-Forwarded-For` the client sent survives as the leftmost
+element. Reading the client-most element would let a caller pick its own rate-limit bucket
+and its own audit identity by rotating that value; reading the Nth from the right reads only
+what a trusted proxy wrote.
+
+Set the count to the number of proxies you actually run. Configuring **more** hops than
+exist fails closed: a chain shorter than the count is the shape a forging client produces,
+so PinchTab falls back to the transport peer address instead of accepting it. Configuring
+**fewer** hops than exist attributes requests to your own proxy rather than to the client,
+which flattens every caller into one bucket. A proxy that strips and rebuilds the header
+leaves a single element, where a hop count of `1` reads exactly what it wrote.
 
 ## Legacy Flat Format
 

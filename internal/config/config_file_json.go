@@ -27,6 +27,7 @@ type serverConfigJSON struct {
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`
 	RetainNetworkBodyMaxBytes *int   `json:"retainNetworkBodyMaxBytes,omitempty"`
 	TrustProxyHeaders         *bool  `json:"trustProxyHeaders,omitempty"`
+	TrustedProxyHops          *int   `json:"trustedProxyHops,omitempty"`
 	CookieSecure              *bool  `json:"cookieSecure,omitempty"`
 }
 

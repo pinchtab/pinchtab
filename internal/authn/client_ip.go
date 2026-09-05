@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 const forwardedForDirective = "for"
@@ -19,12 +21,17 @@ type resolvedClientIP struct{ value string }
 // ResolveClientIP adjudicates the client identity for a request. It is the one
 // place a forwarding header is read for that decision; every consumer reads the
 // answer back through ClientIP.
-func ResolveClientIP(r *http.Request, trustProxy bool) string {
+//
+// trustedHops is how many trusted proxies sit in front, and the identity is that
+// many elements from the RIGHT of the forwarding chain. Leftmost is what a client
+// controls: every appending proxy keeps the header the client sent and adds the
+// address it saw after it, so the client-most element is the client's own claim.
+func ResolveClientIP(r *http.Request, trustProxy bool, trustedHops int) string {
 	if r == nil {
 		return ""
 	}
 	if trustProxy {
-		if forwarded := forwardedClientIP(r); forwarded != "" {
+		if forwarded := forwardedClientIP(r, trustedHops); forwarded != "" {
 			return forwarded
 		}
 	}
@@ -35,13 +42,36 @@ func WithClientIP(ctx context.Context, ip string) context.Context {
 	return context.WithValue(ctx, clientIPKey{}, resolvedClientIP{value: ip})
 }
 
-func forwardedClientIP(r *http.Request) string {
+func forwardedClientIP(r *http.Request, trustedHops int) string {
 	if header := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); header != "" {
-		if ip := forwardedIP(firstForwardedValue(header)); ip != "" {
+		if ip := forwardedIP(trustedChainElement(header, trustedHops)); ip != "" {
 			return ip
 		}
 	}
-	return forwardedIP(forwardedDirective(r.Header.Get("Forwarded"), forwardedForDirective))
+	return forwardedIP(forwardedDirective(trustedChainElement(r.Header.Get("Forwarded"), trustedHops), forwardedForDirective))
+}
+
+// trustedChainElement returns the element the trusted hop count points at, or the
+// empty string when the chain is SHORTER than that count. Short is the shape a
+// forging client produces — an under-configured hop count must fall back to the
+// transport peer, never to whichever element happens to be left.
+func trustedChainElement(header string, trustedHops int) string {
+	hops := config.TrustedProxyHopsOrDefault(trustedHops)
+	elements := forwardedElements(header)
+	if len(elements) < hops {
+		return ""
+	}
+	return elements[len(elements)-hops]
+}
+
+func forwardedElements(header string) []string {
+	var elements []string
+	for _, part := range strings.Split(header, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			elements = append(elements, trimmed)
+		}
+	}
+	return elements
 }
 
 func forwardedIP(value string) string {

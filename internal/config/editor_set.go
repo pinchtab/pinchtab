@@ -59,6 +59,15 @@ func setServerField(s *ServerConfig, field, value string) error {
 			return fmt.Errorf("server.trustProxyHeaders must be true or false: %w", err)
 		}
 		s.TrustProxyHeaders = &b
+	case "trustedProxyHops":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("server.trustedProxyHops must be a number: %w", err)
+		}
+		if n < 1 {
+			return fmt.Errorf("server.trustedProxyHops must be at least 1: a deployment with no trusted proxy in front leaves server.trustProxyHeaders off")
+		}
+		s.TrustedProxyHops = &n
 	case "cookieSecure":
 		v := strings.ToLower(strings.TrimSpace(value))
 		if v == "" || v == "auto" || v == "null" {

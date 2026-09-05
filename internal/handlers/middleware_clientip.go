@@ -13,7 +13,12 @@ import (
 func ClientIPMiddleware(live *config.Live, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := live.Get()
-		ip := authn.ResolveClientIP(r, cfg != nil && cfg.TrustProxyHeaders)
+		trustProxy := cfg != nil && cfg.TrustProxyHeaders
+		hops := 0
+		if cfg != nil {
+			hops = cfg.TrustedProxyHops
+		}
+		ip := authn.ResolveClientIP(r, trustProxy, hops)
 		next.ServeHTTP(w, r.WithContext(authn.WithClientIP(r.Context(), ip)))
 	})
 }

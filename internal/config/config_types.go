@@ -19,6 +19,7 @@ type RuntimeConfig struct {
 	Token             string
 	StateDir          string
 	TrustProxyHeaders bool   // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy
+	TrustedProxyHops  int    // How many trusted proxies sit in front; the client identity is that many elements from the right of the forwarding chain
 	CookieSecure      *bool  // Nil = auto-detect based on request scheme/host for backward compatibility
 	VerboseBanner     bool   // Show the full startup banner and security warnings
 	LogLevel          string // Minimum log level: debug, info (default), warn or error
@@ -290,6 +291,7 @@ type ServerConfig struct {
 	RetainNetworkBodies       *bool  `json:"retainNetworkBodies,omitempty"`
 	RetainNetworkBodyMaxBytes *int   `json:"retainNetworkBodyMaxBytes,omitempty"`
 	TrustProxyHeaders         *bool  `json:"trustProxyHeaders,omitempty"`
+	TrustedProxyHops          *int   `json:"trustedProxyHops,omitempty"`
 	CookieSecure              *bool  `json:"cookieSecure,omitempty"`
 }
 
@@ -611,4 +613,21 @@ type AutoSolverFormConf struct {
 	Field1 string `json:"field1,omitempty"`
 	Field2 string `json:"field2,omitempty"`
 	Email  string `json:"email,omitempty"`
+}
+
+// DefaultTrustedProxyHops is one appending reverse proxy — the deployment shape
+// nginx's proxy_add_x_forwarded_for and the Caddy and Traefik defaults produce.
+// The client identity is then the address that proxy appended, which is the
+// transport peer it saw, rather than anything the client wrote for itself.
+const DefaultTrustedProxyHops = 1
+
+// TrustedProxyHopsOrDefault is the one reading of the hop count: a value below
+// one describes no trusted proxy at all, which is the trustProxyHeaders=false
+// deployment, so it folds to the default rather than to a chain position that
+// would take whatever element the client supplied.
+func TrustedProxyHopsOrDefault(hops int) int {
+	if hops < DefaultTrustedProxyHops {
+		return DefaultTrustedProxyHops
+	}
+	return hops
 }

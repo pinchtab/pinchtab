@@ -176,6 +176,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			RetainNetworkBodies:       fc.Server.RetainNetworkBodies,
 			RetainNetworkBodyMaxBytes: fc.Server.RetainNetworkBodyMaxBytes,
 			TrustProxyHeaders:         fc.Server.TrustProxyHeaders,
+			TrustedProxyHops:          fc.Server.TrustedProxyHops,
 			CookieSecure:              fc.Server.CookieSecure,
 		},
 		Browser: browserConfigJSON{
@@ -458,6 +459,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	}
 	retainBodies := cfg.RetainNetworkBodies
 	retainBodyMaxBytes := cfg.RetainNetworkBodyMaxBytes
+	trustedHops := TrustedProxyHopsOrDefault(cfg.TrustedProxyHops)
 
 	// Always emit browsers.default; stop writing the deprecated browser.provider
 	// field. Write the value verbatim (unknown values are kept raw by config load
@@ -484,6 +486,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			RetainNetworkBodies:       &retainBodies,
 			RetainNetworkBodyMaxBytes: &retainBodyMaxBytes,
 			TrustProxyHeaders:         &cfg.TrustProxyHeaders,
+			TrustedProxyHops:          &trustedHops,
 			CookieSecure:              cfg.CookieSecure,
 		},
 		Browser: BrowserConfig{

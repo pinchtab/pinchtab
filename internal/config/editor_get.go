@@ -40,6 +40,8 @@ func getServerField(s *ServerConfig, field string) (string, error) {
 		return formatIntPtr(s.RetainNetworkBodyMaxBytes), nil
 	case "trustProxyHeaders":
 		return formatBoolPtr(s.TrustProxyHeaders), nil
+	case "trustedProxyHops":
+		return formatIntPtr(s.TrustedProxyHops), nil
 	case "cookieSecure":
 		return formatBoolPtr(s.CookieSecure), nil
 	default:

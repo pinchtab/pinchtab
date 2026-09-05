@@ -186,6 +186,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		InstancePortEnd:   9968,
 		Token:             os.Getenv("PINCHTAB_TOKEN"),
 		StateDir:          userConfigDir(),
+		TrustedProxyHops:  DefaultTrustedProxyHops,
 		CookieSecure:      nil,
 
 		AllowEvaluate:             false,
@@ -435,6 +436,9 @@ func applyServerConfig(cfg *RuntimeConfig, s ServerConfig) {
 	}
 	if s.TrustProxyHeaders != nil {
 		cfg.TrustProxyHeaders = *s.TrustProxyHeaders
+	}
+	if s.TrustedProxyHops != nil && *s.TrustedProxyHops > 0 {
+		cfg.TrustedProxyHops = *s.TrustedProxyHops
 	}
 	cfg.CookieSecure = s.CookieSecure
 }

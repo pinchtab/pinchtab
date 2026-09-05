@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -367,7 +368,7 @@ func TestAuthAPIHandleLoginRateLimitsEachForwardedClientSeparatelyWhenProxyIsTru
 		req.RemoteAddr = "198.51.100.10:41000"
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Forwarded-For", forwardedFor)
-		req = req.WithContext(authn.WithClientIP(req.Context(), authn.ResolveClientIP(req, true)))
+		req = req.WithContext(authn.WithClientIP(req.Context(), authn.ResolveClientIP(req, true, 1)))
 		w := httptest.NewRecorder()
 		api.HandleLogin(w, req)
 		return w.Code
@@ -381,6 +382,41 @@ func TestAuthAPIHandleLoginRateLimitsEachForwardedClientSeparatelyWhenProxyIsTru
 	}
 	if code := login("203.0.113.2"); code != http.StatusUnauthorized {
 		t.Fatalf("second client status = %d, want %d; one client's failures must not lock out everyone behind the proxy", code, http.StatusUnauthorized)
+	}
+}
+
+// The brute-force bypass, at the limiter that guards the server token. Under an
+// appending proxy the client-most element is the caller's own claim, so rotating
+// it once per attempt used to mint a fresh login bucket every time and the limiter
+// never fired. The address the proxy appended is the identity, so all of these
+// attempts are one client.
+func TestAuthAPIHandleLoginCountsARotatedForwardedPrefixAsOneClient(t *testing.T) {
+	api := newAuthAPIForTest(&config.RuntimeConfig{Token: "secret-token", TrustProxyHeaders: true}, browsersession.NewManager(browsersession.Config{}))
+	api.loginLimiter = authn.NewAttemptLimiter(authn.AttemptLimiterConfig{
+		Window:      time.Minute,
+		MaxAttempts: 3,
+	})
+
+	attempt := func(forgedPrefix string) int {
+		req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"token":"wrong"}`))
+		req.RemoteAddr = "198.51.100.10:41000"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", forgedPrefix+", 10.0.0.1")
+		req = req.WithContext(authn.WithClientIP(req.Context(), authn.ResolveClientIP(req, true, 1)))
+		w := httptest.NewRecorder()
+		api.HandleLogin(w, req)
+		return w.Code
+	}
+
+	for i := 1; i <= 3; i++ {
+		if code := attempt(fmt.Sprintf("203.0.113.%d", i)); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d, want %d", i, code, http.StatusUnauthorized)
+		}
+	}
+	for i := 4; i <= 8; i++ {
+		if code := attempt(fmt.Sprintf("203.0.113.%d", i)); code != http.StatusTooManyRequests {
+			t.Fatalf("attempt %d with a rotated X-Forwarded-For prefix status = %d, want %d; the caller escaped the login bucket by naming itself", i, code, http.StatusTooManyRequests)
+		}
 	}
 }
 

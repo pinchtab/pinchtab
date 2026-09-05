@@ -215,6 +215,18 @@
         "trustProxyHeaders": {
           "$ref": "#/definitions/nullableBoolean"
         },
+        "trustedProxyHops": {
+          "description": "How many trusted proxies sit in front of PinchTab. The client identity is that many elements from the right of the forwarding chain. Only consulted when trustProxyHeaders is true. Default 1.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cookieSecure": {
           "$ref": "#/definitions/nullableBoolean"
         }
