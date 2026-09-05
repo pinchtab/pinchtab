@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) (code, message string) {
@@ -64,6 +66,34 @@ func TestCodedRefusalsWinOverTheGenericFallback(t *testing.T) {
 	code, _ := decodeEnvelope(t, w)
 	if code != CodeSessionsUnavailableInBridgeMode {
 		t.Fatalf("code = %q, want %q — the coded refusal was flattened into the generic fallback", code, CodeSessionsUnavailableInBridgeMode)
+	}
+}
+
+// notFoundEnvelope is unit-tested against a bare mux, but that cannot show either
+// MODE wraps its mux in it — and a mode that stops wrapping is silently back to the
+// plain-text "404 page not found" this card exists to remove. Neither entry point is
+// drivable from a unit test: RunDashboard and RunBridgeServer bind a listener, launch
+// a browser and block on signals. So the wiring is pinned at the source, inside the
+// enclosing function, following the same guard the session family already carries.
+func TestBothModesWrapTheMuxInTheNotFoundEnvelope(t *testing.T) {
+	pkg := srccensus.Load(t, ".", 4)
+
+	for _, mode := range []string{"RunDashboard", "RunBridgeServer"} {
+		t.Run(mode, func(t *testing.T) {
+			fn, ok := pkg.Func(mode)
+			if !ok {
+				t.Fatalf("%s not found in %s; if it was renamed, re-point this guard at the new entry point rather than deleting it", mode, pkg.Dir())
+			}
+			inside := 0
+			for _, site := range pkg.Calls(t, "notFoundEnvelope") {
+				if pkg.Contains(fn, site) {
+					inside++
+				}
+			}
+			if inside == 0 {
+				t.Errorf("%s never wraps its mux in notFoundEnvelope, so an unrouted path on that front answers net/http's bare plain-text 404 instead of the JSON envelope", mode)
+			}
+		})
 	}
 }
 
