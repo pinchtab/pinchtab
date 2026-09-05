@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -119,7 +120,12 @@ func TestTheTwoOutputModesStayMutuallyExclusive(t *testing.T) {
 // read from the source: a golden ages, the producer does not.
 func producerKeys(t *testing.T) map[string]bool {
 	t.Helper()
-	path := filepath.Join("..", "..", "handlers", "capture.go")
+	handlers := srccensus.Load(t, filepath.Join("..", "..", "handlers"), 50)
+	producer, ok := handlers.Func("HandleCapture")
+	if !ok {
+		t.Fatalf("HandleCapture is not declared in %s; the capture producer moved or was renamed, and this census must follow it", handlers.Dir())
+	}
+	path := filepath.Join(handlers.Dir(), producer.File)
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 	if err != nil {
 		t.Fatalf("parse producer: %v", err)
