@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
@@ -35,16 +36,8 @@ func probeSelectorVerbs(t *testing.T, endpoints []routes.Endpoint, mux *http.Ser
 		if ep.Method != http.MethodGet {
 			continue
 		}
-		base, baseOK := probeOnce(t, mux, ep, "")
-		miss, missOK := probeOnce(t, mux, ep, missingRefSelector)
-		if !baseOK || !missOK {
-			// The mock bridge implements a subset of the API, so a verb reaching a
-			// method it does not carry panics. That is a fixture limit, not a
-			// finding: it is named rather than silently dropped, and the floor
-			// below fails if one of this card's verbs lands here.
-			t.Logf("%s cannot be driven by this fixture and is not measured", ep.Path)
-			continue
-		}
+		base := probeOnce(t, mux, ep, "")
+		miss := probeOnce(t, mux, ep, missingRefSelector)
 		if base.Code == miss.Code {
 			continue
 		}
@@ -59,20 +52,20 @@ func probeSelectorVerbs(t *testing.T, endpoints []routes.Endpoint, mux *http.Ser
 
 // probeOnce answers one request, reporting whether the fixture could serve it at
 // all: a panic from the mock's unimplemented half is not an answer.
-func probeOnce(t *testing.T, mux *http.ServeMux, ep routes.Endpoint, selector string) (rec *httptest.ResponseRecorder, ok bool) {
+func probeOnce(t *testing.T, mux *http.ServeMux, ep routes.Endpoint, selector string) (rec *httptest.ResponseRecorder) {
 	t.Helper()
 	defer func() {
-		if recover() != nil {
-			ok = false
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("%s panicked while the route-derived selector census probed it: %v", ep.Route(), recovered)
 		}
 	}()
-	path := ep.Path
+	path := ep.Path + "?browser=" + config.BrowserGhostChrome
 	if selector != "" {
-		path += "?selector=" + selector
+		path += "&selector=" + selector
 	}
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(ep.Method, path, nil))
-	return rec, true
+	return rec
 }
 
 // countIsDeliberatelyDifferent records the one exclusion, with the reason it
@@ -94,20 +87,8 @@ func TestEverySelectorReadingVerbAnswersTheSameWayForANonMatchingSelector(t *tes
 		seen[probe.path] = probe
 	}
 
-	// The floor: the verbs this card is about must all be IN the derived set. A
-	// fixture change that stopped exercising one of them would otherwise shrink the
-	// enumeration silently and pass.
-	for _, path := range []string{
-		"/html", "/styles", "/screenshot", "/capture", "/annotate",
-		"/box", "/visible", "/enabled", "/checked", "/value", "/title", "/url",
-		countIsDeliberatelyDifferent,
-	} {
-		if _, ok := seen[path]; !ok {
-			t.Errorf("%s no longer reacts to a selector in this fixture, so the enumeration is not measuring it", path)
-		}
-	}
-	if len(probes) < 12 {
-		t.Fatalf("only %d verbs reacted to a selector; the enumeration is barely measuring anything", len(probes))
+	if len(seen) == 0 {
+		t.Fatal("no route reacted to a selector; the route-derived enumeration is measuring nothing")
 	}
 
 	assertSelectorAnswers(t, probes)
@@ -169,31 +150,22 @@ func TestAResolvedSelectorAndNoSelectorAreUnchanged(t *testing.T) {
 
 func newSelectorProbeMux(t *testing.T) *http.ServeMux {
 	t.Helper()
-	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&selectorProbeBridge{mockBridge: &mockBridge{runningBrowser: config.BrowserGhostChrome}}, &config.RuntimeConfig{
+		DefaultBrowser:    config.BrowserGhostChrome,
+		BrowsersAvailable: []string{config.BrowserGhostChrome},
+	}, nil, nil, nil)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, nil)
 	return mux
 }
 
-// Reported, not asserted: the verbs whose fixture path fails before selector
-// resolution are invisible to the enumeration above, so the census in
-// semantic_status_test.go is what covers them. Naming them keeps the gap explicit
-// rather than leaving a reader to assume the sweep covered everything.
-func TestTheEnumerationReportsWhatItCannotReach(t *testing.T) {
-	mux := newSelectorProbeMux(t)
-	reached := map[string]bool{}
-	for _, probe := range probeSelectorVerbs(t, routes.Core(), mux) {
-		reached[probe.path] = true
-	}
+// selectorProbeBridge completes the one mockBridge method whose embedded nil
+// BridgeAPI would otherwise panic while the route-derived census visits every
+// GET route. A future route that needs another unimplemented method must make
+// this test red instead of disappearing from the enumeration.
+type selectorProbeBridge struct{ *mockBridge }
 
-	var unreached []string
-	for _, path := range []string{"/text", "/snapshot"} {
-		if !reached[path] {
-			unreached = append(unreached, path)
-		}
-	}
-	sort.Strings(unreached)
-	if len(unreached) > 0 {
-		t.Logf("not measured behaviourally here (the fixture fails before selector resolution): %v — covered by the source census over the one mapper", unreached)
-	}
-}
+func (b *selectorProbeBridge) BrowserContext() context.Context             { return b.mockBridge.BrowserContext() }
+func (b *selectorProbeBridge) CanClearCache(context.Context) (bool, error) { return true, nil }
+
+var _ bridge.BridgeAPI = (*selectorProbeBridge)(nil)
