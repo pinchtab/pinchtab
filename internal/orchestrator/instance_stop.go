@@ -148,16 +148,7 @@ func (o *Orchestrator) waitForBridgeEndpointExit(inst *InstanceInternal, timeout
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		probeCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-		request, reqErr := http.NewRequestWithContext(probeCtx, http.MethodGet, healthURL.String(), nil)
-		if reqErr != nil {
-			cancel()
-			return false
-		}
-		o.applyInstanceAuth(request, inst)
-		response, probeErr := o.client.Do(request)
-		if response != nil {
-			_ = response.Body.Close()
-		}
+		_, probeErr := o.probeHealthURL(probeCtx, o.client, inst, healthURL.String())
 		cancel()
 		if probeErr != nil {
 			return true
@@ -384,4 +375,18 @@ func (o *Orchestrator) ForceShutdown() {
 		}
 		o.markStopped(inst.ID)
 	}
+}
+
+func (o *Orchestrator) probeHealthURL(ctx context.Context, client *http.Client, inst *InstanceInternal, healthURL string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		return false, err
+	}
+	o.applyInstanceAuth(req, inst)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, nil
 }

@@ -101,20 +101,8 @@ func (o *Orchestrator) waitForRequestRouteReady(inst *InstanceInternal, timeout 
 
 	result, err := readiness.WaitUntil(context.Background(), timeout, routeInstanceReadyPollInterval,
 		func() (string, bool, error) {
-			req, err := http.NewRequest(http.MethodGet, healthURL, nil)
-			if err != nil {
-				return "", false, err
-			}
-			// Children inherit Server.Token and /health is auth-gated; an
-			// unauthenticated poll loops on 401 until the timeout and
-			// auto-launch can never succeed.
-			o.applyInstanceAuth(req, inst)
-			resp, err := client.Do(req)
-			if err == nil {
-				_ = resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					return url, true, nil
-				}
+			if healthy, _ := o.probeHealthURL(context.Background(), client, inst, healthURL); healthy {
+				return url, true, nil
 			}
 			return "", false, nil
 		})

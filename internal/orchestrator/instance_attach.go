@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -234,15 +233,8 @@ func (o *Orchestrator) waitForChildBridgeHealthy(inst *InstanceInternal, timeout
 	deadline := time.Now().Add(timeout)
 	healthURL := strings.TrimRight(inst.URL, "/") + "/health"
 	for time.Now().Before(deadline) {
-		req, reqErr := http.NewRequest(http.MethodGet, healthURL, nil)
-		if reqErr != nil {
-			return reqErr
-		}
-		o.applyInstanceAuth(req, inst)
-		resp, err := o.client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+		if healthy, _ := o.probeHealthURL(context.Background(), o.client, inst, healthURL); healthy {
+			{
 				o.mu.Lock()
 				// Only promote starting -> running. The concurrent monitor()
 				// goroutine may have already moved the instance to a terminal
