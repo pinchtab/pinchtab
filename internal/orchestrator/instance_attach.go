@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net/url"
 	"os"
@@ -230,27 +231,22 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 }
 
 func (o *Orchestrator) waitForChildBridgeHealthy(inst *InstanceInternal, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
 	healthURL := strings.TrimRight(inst.URL, "/") + "/health"
-	for time.Now().Before(deadline) {
-		if healthy, _ := o.probeHealthURL(context.Background(), o.client, inst, healthURL); healthy {
-			{
-				o.mu.Lock()
-				// Only promote starting -> running. The concurrent monitor()
-				// goroutine may have already moved the instance to a terminal
-				// state (error on process exit, or stopping/stopped); a transient
-				// health 200 must not resurrect it.
-				if inst.Status == bridge.InstanceStatusStarting {
-					inst.Status = bridge.InstanceStatusRunning
-				}
-				o.mu.Unlock()
-				return nil
-			}
-		}
-		time.Sleep(250 * time.Millisecond)
+	if _, err := readiness.WaitUntil(context.Background(), timeout, childBridgeHealthPollInterval, func() (struct{}, bool, error) {
+		healthy, _ := o.probeHealthURL(context.Background(), inst, healthURL)
+		return struct{}{}, healthy, nil
+	}); err != nil {
+		return fmt.Errorf("child bridge health check timed out after %v", timeout)
 	}
-	return fmt.Errorf("child bridge health check timed out after %v", timeout)
+	o.mu.Lock()
+	if inst.Status == bridge.InstanceStatusStarting {
+		inst.Status = bridge.InstanceStatusRunning
+	}
+	o.mu.Unlock()
+	return nil
 }
+
+const childBridgeHealthPollInterval = 250 * time.Millisecond
 
 // AttachBridge registers an already-running bridge server as an attached instance.
 // If a bridge with the same name is already attached, it is updated in place (upsert)

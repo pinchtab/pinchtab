@@ -94,14 +94,9 @@ func (o *Orchestrator) launchAndWaitForRequestRoute(profileName, requestedTarget
 func (o *Orchestrator) waitForRequestRouteReady(inst *InstanceInternal, timeout time.Duration) (string, error) {
 	url := inst.URL
 	healthURL := strings.TrimRight(url, "/") + "/health"
-	client := o.client
-	if client == nil {
-		client = http.DefaultClient
-	}
-
 	result, err := readiness.WaitUntil(context.Background(), timeout, routeInstanceReadyPollInterval,
 		func() (string, bool, error) {
-			if healthy, _ := o.probeHealthURL(context.Background(), client, inst, healthURL); healthy {
+			if healthy, _ := o.probeHealthURL(context.Background(), inst, healthURL); healthy {
 				return url, true, nil
 			}
 			return "", false, nil
