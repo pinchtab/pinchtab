@@ -154,7 +154,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 		return nil, fmt.Errorf("write attach child config: %w", err)
 	}
 
-	env := o.childEnv(portStr, childConfigPath)
+	env := o.childEnv(childConfigPath)
 
 	logBuf := newRingBuffer(256 * 1024)
 	args := []string{

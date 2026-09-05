@@ -171,7 +171,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("write child config: %w", err)
 	}
 
-	env := o.childEnv(port, childConfigPath)
+	env := o.childEnv(childConfigPath)
 
 	if opts.Browser != "" {
 		var configured []string
@@ -242,11 +242,8 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	return &snapshot, nil
 }
 
-func (o *Orchestrator) childEnv(port, childConfigPath string) []string {
-	overrides := map[string]string{
-		"PINCHTAB_PORT":   port,
-		"PINCHTAB_CONFIG": childConfigPath,
-	}
+func (o *Orchestrator) childEnv(childConfigPath string) []string {
+	overrides := map[string]string{"PINCHTAB_CONFIG": childConfigPath}
 	if o.internalToken != "" {
 		overrides[handlers.InternalTokenEnv] = o.internalToken
 	}
