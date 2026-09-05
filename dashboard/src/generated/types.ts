@@ -207,3 +207,13 @@ export interface LaunchInstanceRequest {
   port?: string; // port number as string
   browser?: string; // browser override (chrome, cloak, ghost-chrome)
 }
+export const ProfileStatusMissing = "missing";
+export interface ProfileInstanceStatus {
+  name: string;
+  exists: boolean;
+  running: boolean;
+  status: string;
+  port: string;
+  id?: string;
+  message?: string;
+}
