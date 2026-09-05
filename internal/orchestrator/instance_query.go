@@ -11,6 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
 
 // effectiveInstanceStatus reconciles a stored instance Status with whether the
@@ -44,12 +45,44 @@ func (o *Orchestrator) List() []bridge.Instance {
 	return result
 }
 
-// RefreshCrashes asks every live instance for its crash record and keeps the
-// answers, so List can carry them and CrashSummary can merge them. Browser
-// crashes are recorded by the process that owns the browser, which in server
-// mode is never this one.
+// RefreshCrashes asks every live instance for its crash record and its enforced
+// security posture and keeps the answers, so List can carry the crashes and the
+// dashboard can report what each instance is actually enforcing. Both are known
+// only to the process that owns the browser, which in server mode is never this
+// one.
 func (o *Orchestrator) RefreshCrashes() map[string]bridge.CrashSummary {
+	o.refreshInstanceHealth()
 	o.mu.RLock()
+	defer o.mu.RUnlock()
+	fresh := make(map[string]bridge.CrashSummary, len(o.crashes))
+	for id, crashes := range o.crashes {
+		fresh[id] = crashes
+	}
+	return fresh
+}
+
+// EnforcedSecurity reports each running instance's enforced posture. An instance
+// that could not be queried maps to nil: unknown, which is not the same answer as
+// an instance enforcing nothing.
+func (o *Orchestrator) EnforcedSecurity() map[string]*workflow.EnforcedSecurity {
+	o.refreshInstanceHealth()
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	out := make(map[string]*workflow.EnforcedSecurity, len(o.enforced))
+	for id, posture := range o.enforced {
+		out[id] = posture
+	}
+	return out
+}
+
+// instanceHealthTTL bounds how often one /health poll of the front door fans out
+// to every instance: crashes and enforced posture ride the same instance /health,
+// so the two readers share one round of fetches.
+const instanceHealthTTL = 2 * time.Second
+
+func (o *Orchestrator) refreshInstanceHealth() {
+	o.mu.RLock()
+	stale := time.Since(o.enforcedAt) >= instanceHealthTTL
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
@@ -57,34 +90,44 @@ func (o *Orchestrator) RefreshCrashes() map[string]bridge.CrashSummary {
 		}
 	}
 	o.mu.RUnlock()
+	if !stale {
+		return
+	}
 
-	fresh := make(map[string]bridge.CrashSummary, len(instances))
+	crashes := make(map[string]bridge.CrashSummary, len(instances))
+	enforced := make(map[string]*workflow.EnforcedSecurity, len(instances))
 	for _, inst := range instances {
-		crashes, err := o.fetchCrashes(inst)
-		if err != nil || crashes == nil {
+		health, err := o.fetchHealth(inst)
+		if err != nil || health == nil {
+			enforced[inst.ID] = nil
 			continue
 		}
-		for i := range crashes.Recent {
-			crashes.Recent[i].InstanceID = inst.ID
+		enforced[inst.ID] = health.Security
+		if health.Crashes == nil {
+			continue
 		}
-		fresh[inst.ID] = *crashes
+		for i := range health.Crashes.Recent {
+			health.Crashes.Recent[i].InstanceID = inst.ID
+		}
+		crashes[inst.ID] = *health.Crashes
 	}
 
 	o.mu.Lock()
 	if o.crashes == nil {
 		o.crashes = map[string]bridge.CrashSummary{}
 	}
-	for id, crashes := range fresh {
-		o.crashes[id] = crashes
+	for id, summary := range crashes {
+		o.crashes[id] = summary
 	}
+	o.enforced = enforced
+	o.enforcedAt = time.Now()
 	o.mu.Unlock()
-	return fresh
 }
 
 // CrashSummary merges the instances' crash records into the shape bridge /health
 // carries, each event naming its instance.
 func (o *Orchestrator) CrashSummary() bridge.CrashSummary {
-	o.RefreshCrashes()
+	o.refreshInstanceHealth()
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	var merged bridge.CrashSummary

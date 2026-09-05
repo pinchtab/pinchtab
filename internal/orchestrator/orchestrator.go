@@ -11,6 +11,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/instance"
@@ -27,6 +28,8 @@ type EventHandler func(InstanceEvent)
 type Orchestrator struct {
 	instances     map[string]*InstanceInternal
 	crashes       map[string]bridge.CrashSummary
+	enforced      map[string]*workflow.EnforcedSecurity
+	enforcedAt    time.Time
 	baseDir       string
 	binary        string
 	profiles      *profiles.ProfileManager

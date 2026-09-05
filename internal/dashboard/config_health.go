@@ -1,7 +1,10 @@
 package dashboard
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,12 +15,18 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
 
+// frontDoorConfigurationScope labels health.security as this process's own
+// configuration: enforcement lives in the instance processes and is reported
+// under enforcedSecurity.
+const frontDoorConfigurationScope = "frontDoorConfiguration"
+
 type healthInstanceInfo struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
 }
 
 type healthSecurityInfo struct {
+	Scope                     string   `json:"scope"`
 	Level                     string   `json:"level"`
 	Bind                      string   `json:"bind"`
 	AllowedDomains            []string `json:"allowedDomains"`
@@ -27,21 +36,42 @@ type healthSecurityInfo struct {
 }
 
 type healthEnvelope struct {
-	Status              string               `json:"status"`
-	Mode                string               `json:"mode"`
-	Version             string               `json:"version"`
-	Uptime              int64                `json:"uptime"`
-	AuthRequired        bool                 `json:"authRequired"`
-	Profiles            int                  `json:"profiles"`
-	TemporaryProfiles   int                  `json:"temporaryProfiles"`
-	QuarantinedProfiles int                  `json:"quarantinedProfiles"`
-	Instances           int                  `json:"instances"`
-	DefaultInstance     *healthInstanceInfo  `json:"defaultInstance,omitempty"`
-	Agents              int                  `json:"agents"`
-	RestartRequired     bool                 `json:"restartRequired"`
-	RestartReasons      []string             `json:"restartReasons,omitempty"`
-	Security            *healthSecurityInfo  `json:"security,omitempty"`
-	Crashes             *bridge.CrashSummary `json:"crashes,omitempty"`
+	Status              string                  `json:"status"`
+	Mode                string                  `json:"mode"`
+	Version             string                  `json:"version"`
+	Uptime              int64                   `json:"uptime"`
+	AuthRequired        bool                    `json:"authRequired"`
+	Profiles            int                     `json:"profiles"`
+	TemporaryProfiles   int                     `json:"temporaryProfiles"`
+	QuarantinedProfiles int                     `json:"quarantinedProfiles"`
+	Instances           int                     `json:"instances"`
+	DefaultInstance     *healthInstanceInfo     `json:"defaultInstance,omitempty"`
+	Agents              int                     `json:"agents"`
+	RestartRequired     bool                    `json:"restartRequired"`
+	RestartReasons      []string                `json:"restartReasons,omitempty"`
+	Security            *healthSecurityInfo     `json:"security,omitempty"`
+	EnforcedSecurity    *healthEnforcedSecurity `json:"enforcedSecurity,omitempty"`
+	Crashes             *bridge.CrashSummary    `json:"crashes,omitempty"`
+}
+
+// healthEnforcedInstance is one instance process's posture. Comparison is the
+// three-state answer the front door can honestly give: "match", "diverges", or
+// "unknown" when the instance did not answer — an instance nobody could query
+// must not read as one enforcing nothing.
+type healthEnforcedInstance struct {
+	ID         string                     `json:"id"`
+	Queried    bool                       `json:"queried"`
+	Comparison string                     `json:"comparison"`
+	Policy     *workflow.EnforcedSecurity `json:"policy,omitempty"`
+}
+
+type healthEnforcedSecurity struct {
+	Instances []healthEnforcedInstance `json:"instances"`
+	Divergent bool                     `json:"divergent"`
+}
+
+type enforcedSecurityReporter interface {
+	EnforcedSecurity() map[string]*workflow.EnforcedSecurity
 }
 
 type crashReporter interface {
@@ -96,6 +126,7 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 	if includeSecurity {
 		security := runtimeSecurityInfo(cfg)
 		out.Security = &security
+		out.EnforcedSecurity = c.enforcedSecurityInfo(cfg)
 	}
 	if reporter, ok := c.instances.(crashReporter); ok {
 		if crashes := reporter.CrashSummary(); crashes.Total > 0 {
@@ -128,14 +159,69 @@ func healthSecurityVisibleTo(r *http.Request) bool {
 	}
 }
 
+// enforcedSecurityInfo reports what the instance processes are enforcing, which
+// is the posture they snapshotted at their own boot — the front door's configured
+// policy speaks only for the front door.
+func (c *ConfigAPI) enforcedSecurityInfo(cfg *config.RuntimeConfig) *healthEnforcedSecurity {
+	reporter, ok := c.instances.(enforcedSecurityReporter)
+	if !ok {
+		return nil
+	}
+	postures := reporter.EnforcedSecurity()
+	configured := workflow.EnforcedSecurityFor(cfg)
+
+	out := healthEnforcedSecurity{Instances: []healthEnforcedInstance{}}
+	for _, inst := range c.instances.List() {
+		if inst.Status != "running" {
+			continue
+		}
+		entry := healthEnforcedInstance{ID: inst.ID, Comparison: "unknown"}
+		if posture, present := postures[inst.ID]; present && posture != nil {
+			entry.Queried = true
+			entry.Policy = posture
+			entry.Comparison = "diverges"
+			if sameEnforcement(*posture, configured) {
+				entry.Comparison = "match"
+			}
+		}
+		if entry.Comparison != "match" {
+			out.Divergent = true
+		}
+		out.Instances = append(out.Instances, entry)
+	}
+	sort.Slice(out.Instances, func(i, j int) bool { return out.Instances[i].ID < out.Instances[j].ID })
+	return &out
+}
+
+func sameEnforcement(a, b workflow.EnforcedSecurity) bool {
+	left, err := json.Marshal(normalizeEnforcement(a))
+	if err != nil {
+		return false
+	}
+	right, err := json.Marshal(normalizeEnforcement(b))
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(left, right)
+}
+
+func normalizeEnforcement(p workflow.EnforcedSecurity) workflow.EnforcedSecurity {
+	p.AllowedDomains = append([]string{}, p.AllowedDomains...)
+	p.EnabledSensitiveEndpoints = append([]string{}, p.EnabledSensitiveEndpoints...)
+	sort.Strings(p.AllowedDomains)
+	sort.Strings(p.EnabledSensitiveEndpoints)
+	return p
+}
+
 func runtimeSecurityInfo(cfg *config.RuntimeConfig) healthSecurityInfo {
 	if cfg == nil {
-		return healthSecurityInfo{Level: "UNKNOWN"}
+		return healthSecurityInfo{Scope: frontDoorConfigurationScope, Level: "UNKNOWN"}
 	}
 	posture := report.AssessSecurityPosture(cfg)
 	enabled := append([]string(nil), cfg.EnabledSensitiveEndpoints()...)
 	domains := append([]string(nil), cfg.AllowedDomains...)
 	return healthSecurityInfo{
+		Scope:                     frontDoorConfigurationScope,
 		Level:                     posture.Level,
 		Bind:                      cfg.Bind,
 		AllowedDomains:            domains,

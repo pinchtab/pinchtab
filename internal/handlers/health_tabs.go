@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -58,6 +59,9 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	if bridge.HasCrashDiagnostics() {
 		resp["crashes"] = bridge.CrashSnapshot()
+	}
+	if h.Config != nil {
+		resp["security"] = workflow.EnforcedSecurityFor(h.Config)
 	}
 
 	httpx.JSON(w, 200, resp)

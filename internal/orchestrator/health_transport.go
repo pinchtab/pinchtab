@@ -8,6 +8,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
@@ -24,7 +25,8 @@ type remoteMetrics struct {
 }
 
 type remoteHealth struct {
-	Crashes *bridge.CrashSummary `json:"crashes,omitempty"`
+	Crashes  *bridge.CrashSummary       `json:"crashes,omitempty"`
+	Security *workflow.EnforcedSecurity `json:"security,omitempty"`
 }
 
 type memoryMetrics struct {
@@ -94,7 +96,7 @@ func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, err
 	return result.Memory, nil
 }
 
-func (o *Orchestrator) fetchCrashes(inst *InstanceInternal) (*bridge.CrashSummary, error) {
+func (o *Orchestrator) fetchHealth(inst *InstanceInternal) (*remoteHealth, error) {
 	target, err := o.instancePathURL(inst, "/health", "")
 	if err != nil {
 		return nil, err
@@ -113,13 +115,13 @@ func (o *Orchestrator) fetchCrashes(inst *InstanceInternal) (*bridge.CrashSummar
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil
+		return nil, fmt.Errorf("fetch health: status %d", resp.StatusCode)
 	}
 	var result remoteHealth
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	return result.Crashes, nil
+	return &result, nil
 }
 
 func tagOrchestratorMonitoringRequest(req *http.Request) {
