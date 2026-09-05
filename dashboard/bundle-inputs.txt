@@ -1,0 +1,13 @@
+# Inputs whose content decides the embedded dashboard bundle. One path per
+# line, relative to dashboard/; directories are walked, dotfiles skipped.
+# scripts/build-dashboard.sh hashes this list into bundle.stamp and
+# internal/dashboard.SourceStamp recomputes it, so declare an input here once.
+src
+public
+index.html
+package.json
+bun.lock
+vite.config.ts
+tsconfig.json
+tsconfig.app.json
+tsconfig.node.json

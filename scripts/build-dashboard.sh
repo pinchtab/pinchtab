@@ -117,9 +117,10 @@ rm -f internal/dashboard/dashboard/dashboard.html
 cp -r dashboard/dist/* internal/dashboard/dashboard/
 mv internal/dashboard/dashboard/index.html internal/dashboard/dashboard/dashboard.html
 
-# Stamp the bundle with the hash of the source it was built from. The Go side
-# (internal/dashboard.SourceStamp) hashes the same inputs the same way and the
-# unit suite fails when the embedded stamp no longer matches the tree.
+# Stamp the bundle with the hash of the source it was built from. The inputs are
+# declared once in dashboard/bundle-inputs.txt; the Go side
+# (internal/dashboard.SourceStamp) reads the same file and hashes the same way,
+# and the unit suite fails when the embedded stamp no longer matches the tree.
 sha256_stdin() {
   if command -v sha256sum &> /dev/null; then
     sha256sum | cut -d' ' -f1
@@ -129,7 +130,7 @@ sha256_stdin() {
 }
 bundle_inputs() {
   local input
-  for input in src public index.html package.json bun.lock vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json; do
+  grep -v '^[[:space:]]*#' dashboard/bundle-inputs.txt | grep -v '^[[:space:]]*$' | while IFS= read -r input; do
     [ -e "dashboard/$input" ] || continue
     if [ -d "dashboard/$input" ]; then
       find "dashboard/$input" -type f -not -path '*/.*'

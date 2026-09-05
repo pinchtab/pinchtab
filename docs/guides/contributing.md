@@ -192,8 +192,8 @@ ls -la pinchtab
 says nothing. That directory is gitignored build output, so `git status` cannot show
 its age either. `./dev build dashboard` (or `./scripts/build-dashboard.sh`) rebuilds
 the bundle, copies it there, and writes `bundle.stamp` beside it: the SHA-256 of the
-bundle's inputs (`dashboard/src`, `public`, `index.html`, `package.json`, `bun.lock`,
-`vite.config.ts` and the `tsconfig` files).
+bundle's inputs, declared once in `dashboard/bundle-inputs.txt` and read by both the
+build script and the Go check, so adding a build input is one line in that file.
 
 - `GET /health` reports the stamp as `dashboardBuild` next to `version`, or
   `not-built` when no bundle is embedded, so a running binary says which source its

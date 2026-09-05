@@ -21,11 +21,30 @@ const bundleStampFile = "dashboard/bundle.stamp"
 // route serves its explicit "not built" page in that case.
 const BundleNotBuilt = "not-built"
 
-// bundleInputs are the paths under dashboard/ that determine the bundle's
-// contents; scripts/build-dashboard.sh hashes the same list in the same order.
-var bundleInputs = []string{
-	"src", "public", "index.html", "package.json", "bun.lock", "vite.config.ts",
-	"tsconfig.json", "tsconfig.app.json", "tsconfig.node.json",
+// bundleInputsFile declares, once, the paths under dashboard/ that decide the
+// bundle's contents; scripts/build-dashboard.sh hashes the same file's lines.
+const bundleInputsFile = "bundle-inputs.txt"
+
+// loadBundleInputs reads the declaration. A missing or empty list is an error
+// rather than an empty hash: an empty list makes every stamp equal and turns
+// the staleness guard green for every tree.
+func loadBundleInputs(dashboardDir string) ([]string, error) {
+	data, err := os.ReadFile(filepath.Join(dashboardDir, bundleInputsFile))
+	if err != nil {
+		return nil, fmt.Errorf("bundle inputs: %w", err)
+	}
+	var inputs []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		inputs = append(inputs, line)
+	}
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("bundle inputs: %s declares no inputs", filepath.Join(dashboardDir, bundleInputsFile))
+	}
+	return inputs, nil
 }
 
 // BundleStamp is the source hash the embedded bundle was built from, or
@@ -42,6 +61,10 @@ func BundleStamp() string {
 // sorted by slash path, "path NUL sha256(content) LF", then sha256 over the lines.
 // Dotfiles are skipped so an editor's droppings do not differ between machines.
 func SourceStamp(dashboardDir string) (string, error) {
+	bundleInputs, err := loadBundleInputs(dashboardDir)
+	if err != nil {
+		return "", err
+	}
 	var files []string
 	for _, input := range bundleInputs {
 		root := filepath.Join(dashboardDir, input)
