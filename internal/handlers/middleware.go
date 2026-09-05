@@ -31,7 +31,7 @@ const (
 	defaultCSP              = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
 	strictTransportSecurity = "max-age=31536000"
 	backgroundHealthPath    = "/health/background"
-	backgroundHealthHeader  = "PinchTab-Background-Marker"
+	BackgroundHealthHeader  = "PinchTab-Background-Marker"
 )
 
 // requestLogLevel maps the answered status onto a severity an operator can route on. Every
@@ -222,7 +222,7 @@ func backgroundHealthProbeAllowed(cfg *config.RuntimeConfig, r *http.Request) bo
 		return false
 	}
 	marker := strings.TrimSpace(cfg.BackgroundMarker)
-	got := strings.TrimSpace(r.Header.Get(backgroundHealthHeader))
+	got := strings.TrimSpace(r.Header.Get(BackgroundHealthHeader))
 	if marker == "" || got == "" {
 		return false
 	}

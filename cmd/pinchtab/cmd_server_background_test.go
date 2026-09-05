@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/spf13/pflag"
 	"net/http"
 	"net/http/httptest"
@@ -210,7 +211,7 @@ func TestIsBackgroundServerReadyDoesNotSendBearerToken(t *testing.T) {
 	var gotMarker string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		gotMarker = r.Header.Get(backgroundHealthProbeHeader)
+		gotMarker = r.Header.Get(handlers.BackgroundHealthHeader)
 		_, _ = w.Write([]byte(`{"status":"ok","mode":"dashboard","version":"dev","marker":"marker-123"}`))
 	}))
 	defer srv.Close()
@@ -222,7 +223,7 @@ func TestIsBackgroundServerReadyDoesNotSendBearerToken(t *testing.T) {
 		t.Fatalf("Authorization = %q, want empty", gotAuth)
 	}
 	if gotMarker != "marker-123" {
-		t.Fatalf("%s = %q, want marker", backgroundHealthProbeHeader, gotMarker)
+		t.Fatalf("%s = %q, want marker", handlers.BackgroundHealthHeader, gotMarker)
 	}
 }
 

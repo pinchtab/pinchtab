@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net/http"
@@ -27,7 +28,6 @@ import (
 
 const backgroundStartTimeout = 30 * time.Second
 const backgroundMarkerBytes = 16
-const backgroundHealthProbeHeader = "PinchTab-Background-Marker"
 
 type serverPIDInfo struct {
 	PID        int      `json:"pid"`
@@ -399,7 +399,7 @@ func isPinchTabAuthError(status int, body []byte) bool {
 func isPinchTabHealthReady(url, marker string) bool {
 	var headers map[string]string
 	if marker != "" {
-		headers = map[string]string{backgroundHealthProbeHeader: marker}
+		headers = map[string]string{handlers.BackgroundHealthHeader: marker}
 	}
 	status, body, reachable := server.ProbeHealth(url, 3*time.Second, headers)
 	if !reachable || status != http.StatusOK {

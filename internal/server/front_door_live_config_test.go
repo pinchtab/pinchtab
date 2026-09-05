@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/pinchtab/pinchtab/internal/handlers"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -249,7 +250,7 @@ func TestABackgroundProbeIsStillAdmittedAfterASave(t *testing.T) {
 	admitted := func(header string) bool {
 		req := httptest.NewRequest(http.MethodGet, "/health/background", nil)
 		if header != "" {
-			req.Header.Set("PinchTab-Background-Marker", header)
+			req.Header.Set(handlers.BackgroundHealthHeader, header)
 		}
 		w := httptest.NewRecorder()
 		f.handler.ServeHTTP(w, req)

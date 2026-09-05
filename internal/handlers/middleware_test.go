@@ -141,7 +141,7 @@ func TestAuthMiddleware_AllowsBackgroundHealthProbeMarker(t *testing.T) {
 	})))
 
 	req := httptest.NewRequest(http.MethodGet, backgroundHealthPath, nil)
-	req.Header.Set(backgroundHealthHeader, "marker-123")
+	req.Header.Set(BackgroundHealthHeader, "marker-123")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -163,7 +163,7 @@ func TestAuthMiddleware_RejectsWrongBackgroundHealthProbeMarker(t *testing.T) {
 	})))
 
 	req := httptest.NewRequest(http.MethodGet, backgroundHealthPath, nil)
-	req.Header.Set(backgroundHealthHeader, "other")
+	req.Header.Set(BackgroundHealthHeader, "other")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
