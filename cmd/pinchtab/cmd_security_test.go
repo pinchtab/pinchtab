@@ -161,3 +161,20 @@ func testRuntimeConfig() *config.RuntimeConfig {
 		},
 	}
 }
+
+func TestPrintSecurityOverviewNamesWarningsSecurityUpCannotFix(t *testing.T) {
+	cfg := testRuntimeConfig()
+	cfg.AttachAllowSchemes = []string{"ws", "wss", "http", "https"}
+	cfg.AllowedDomains = nil
+
+	output := captureStdout(t, func() {
+		printSecurityOverview(cfg)
+	})
+
+	if !strings.Contains(output, "website whitelist is not set for IDPI") || !strings.Contains(output, "configure allowedDomains") {
+		t.Fatalf("expected the whitelist warning and its hint\n%s", output)
+	}
+	if strings.Contains(output, "differ from recommended defaults") || strings.Contains(output, "warning(s) detected — pinchtab security up") {
+		t.Fatalf("security up cannot set a whitelist, so the overview must not send the operator there\n%s", output)
+	}
+}

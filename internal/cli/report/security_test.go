@@ -22,7 +22,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		if len(warnings) != 0 {
 			t.Fatalf("expected no warnings, got %+v", warnings)
 		}
@@ -41,7 +41,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true
@@ -84,7 +84,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true
@@ -107,7 +107,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		var wildcardWarning SecurityWarning
 		for _, warning := range warnings {
@@ -136,7 +136,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			AttachAllowSchemes: []string{"ws", "wss"},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true

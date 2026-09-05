@@ -194,8 +194,14 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 	return warnings
 }
 
-func assessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
-	return AssessSecurityWarnings(cfg)
+func (w SecurityWarning) Hint() string {
+	for i := 0; i+1 < len(w.Attrs); i += 2 {
+		if w.Attrs[i] == "hint" {
+			hint, _ := w.Attrs[i+1].(string)
+			return hint
+		}
+	}
+	return ""
 }
 
 func LogSecurityWarnings(cfg *config.RuntimeConfig) {

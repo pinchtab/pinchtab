@@ -87,16 +87,21 @@ func printSecurityOverview(cfg *config.RuntimeConfig) {
 	}
 	fmt.Println()
 
-	if len(recommended) == 0 && len(warnings) == 0 {
+	switch {
+	case len(recommended) == 0 && len(warnings) == 0:
 		fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
-	} else {
-		label := fmt.Sprintf("%d setting(s) differ from recommended defaults —", len(recommended))
-		if len(recommended) == 0 {
-			label = fmt.Sprintf("%d security warning(s) detected —", len(warnings))
-		}
+	case len(recommended) > 0:
 		fmt.Printf("  %s %s\n",
-			cli.StyleStdout(cli.MutedStyle, label),
+			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d setting(s) differ from recommended defaults —", len(recommended))),
 			cli.StyleStdout(cli.CommandStyle, "pinchtab security up"))
+	default:
+		fmt.Println("  " + cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d security warning(s) detected:", len(warnings))))
+		for _, warning := range warnings {
+			fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, warning.Message))
+			if hint := warning.Hint(); hint != "" {
+				fmt.Printf("      %s\n", cli.StyleStdout(cli.MutedStyle, hint))
+			}
+		}
 	}
 	fmt.Println()
 
