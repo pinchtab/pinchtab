@@ -260,9 +260,7 @@ func sessionNetworkGrantAllows(method, path string) bool {
 			path == "/network/export",
 			path == "/network/export/stream":
 			return true
-		// /network/clear is a POST route; admitting the whole prefix under GET
-		// claimed a route the server does not serve.
-		case strings.HasPrefix(path, "/network/") && path != "/network/clear":
+		case strings.HasPrefix(path, "/network/"):
 			return true
 		case tabRouteHasSuffix(path, "/network"),
 			tabRouteHasSuffix(path, "/network/stream"),

@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -325,16 +329,103 @@ func grantProbePaths(universe map[string]bool) []string {
 	return paths
 }
 
+// grantMatcherLiteralPaths walks the matcher functions' own source and collects
+// every string literal compared with `path` by ==. Those are the concrete paths a
+// matcher admits by name, and they are the half of the admitted set the
+// catalogue-derived probes cannot see: a literal the catalogue never had is never
+// instantiated as a probe, so a typo or an entry outliving a deleted route stays
+// invisible to the probe half.
+func grantMatcherLiteralPaths(t *testing.T) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, "middleware_session_grants.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse the matcher source: %v", err)
+	}
+	seen := map[string]bool{}
+	var literals []string
+	for _, decl := range parsed.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || !strings.HasPrefix(fn.Name.Name, "session") || !strings.HasSuffix(fn.Name.Name, "GrantAllows") {
+			continue
+		}
+		ast.Inspect(fn, func(node ast.Node) bool {
+			cmp, ok := node.(*ast.BinaryExpr)
+			if !ok || cmp.Op != token.EQL {
+				return true
+			}
+			for _, side := range [][2]ast.Expr{{cmp.X, cmp.Y}, {cmp.Y, cmp.X}} {
+				ident, isIdent := side[0].(*ast.Ident)
+				lit, isLit := side[1].(*ast.BasicLit)
+				if !isIdent || ident.Name != "path" || !isLit || lit.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err == nil && !seen[value] {
+					seen[value] = true
+					literals = append(literals, value)
+				}
+			}
+			return true
+		})
+	}
+	if len(literals) == 0 {
+		t.Fatal("the source walk found no `path == \"...\"` literal in any session*GrantAllows matcher; the walk stopped matching and this half of the census would pass over nothing")
+	}
+	sort.Strings(literals)
+	return literals
+}
+
+func resolvesUnderAnyMethod(universe map[string]bool, path string) bool {
+	for route := range universe {
+		_, routePath, ok := strings.Cut(route, " ")
+		if ok && routePatternMatches(routePath, path) {
+			return true
+		}
+	}
+	return false
+}
+
 // A matcher must not outlive the routes it guards: every path a grant admits has
 // to resolve to a route the server actually serves for that method. A grant that
 // admits a path nothing serves promises a capability that does not exist, and a
 // matcher left behind by a deleted route is invisible until someone tries it.
+//
+// Two halves, because each is blind where the other sees. The probe half
+// instantiates every catalogued route and asks the matchers about it, so it
+// catches a catalogued path admitted under a method the catalogue does not
+// serve. The literal half walks the matchers' own `path == "..."` constants and
+// requires each to resolve under AT LEAST ONE method, so it catches a literal the
+// catalogue never had. It is deliberately not per-method: a literal's method is
+// the switch branch it sits in, and inferring that from the AST is brittle.
+//
+// Both halves are faithful to server routing: routePatternMatches treats a
+// {segment} as any non-empty segment because that is how the mux routes, so a
+// concrete path a matcher admits under a catalogued wildcard sibling (GET
+// /network/clear resolves to GET /network/{requestId}) is a real route, not a
+// finding. That limit is inherent; making routePatternMatches stricter would
+// describe routing the server does not do.
 func TestEveryPathAGrantAdmitsResolvesToARegisteredRoute(t *testing.T) {
 	universe := grantRouteUniverse()
 	if len(universe) < 100 {
 		t.Fatalf("route universe holds %d routes; the census stopped seeing the catalogue", len(universe))
 	}
 	paths := grantProbePaths(universe)
+
+	literals := grantMatcherLiteralPaths(t)
+	if !slices.Contains(literals, "/navigate") {
+		t.Fatalf("the source walk collected %v without /navigate; it is reading something other than the matchers' path literals", literals)
+	}
+	var unserved []string
+	for _, literal := range literals {
+		if !resolvesUnderAnyMethod(universe, literal) {
+			unserved = append(unserved, literal)
+		}
+	}
+	if len(unserved) > 0 {
+		t.Errorf("%d matcher literal(s) name a path no catalogued route serves under any method:\n  %s\nthe entry outlived its route or is misspelled; drop it or catalogue the route",
+			len(unserved), strings.Join(unserved, "\n  "))
+	}
 
 	admitted := 0
 	var dangling []string
@@ -387,5 +478,22 @@ func TestEverySessionCanDescribeItselfWhateverItsGrants(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// GET /network/clear is a network read of the entry whose id is "clear", served by
+// GET /network/{requestId}; the POST clear handler sits behind the matcher's
+// separate POST branch, so admitting the whole GET prefix reaches no write.
+func TestNetworkGrantAdmitsTheWholeGetPrefixAndOnlyClearUnderPost(t *testing.T) {
+	if !sessionGrantAllows(session.GrantNetwork, http.MethodGet, "/network/clear") {
+		t.Fatal("the network grant refuses GET /network/clear, which the server routes to GET /network/{requestId}")
+	}
+	if !sessionGrantAllows(session.GrantNetwork, http.MethodPost, "/network/clear") {
+		t.Fatal("the network grant refuses POST /network/clear")
+	}
+	for _, method := range []string{http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		if sessionGrantAllows(session.GrantNetwork, method, "/network/clear") {
+			t.Fatalf("the network grant admits %s /network/clear, a method neither branch names", method)
+		}
 	}
 }
