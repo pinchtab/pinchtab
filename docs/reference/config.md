@@ -758,8 +758,11 @@ useless, but not spoofable. A proxy that strips and rebuilds the header leaves a
 element, where a hop count of `1` reads exactly what it wrote.
 
 Because the server cannot count the proxies in front of it, a wrong value is silent at
-rest. Whenever `trustProxyHeaders` is on, the boot banner and `pinchtab security` print a
-warning naming the hop count in effect so you can confirm it against your front-end. Do
+rest. Whenever `trustProxyHeaders` is on, `pinchtab security` prints a warning naming the
+hop count in effect so you can confirm it against your front-end. The same warning is
+logged at boot by `pinchtab bridge`, and by `pinchtab server` only with the full startup
+banner (`pinchtab server --verbose`); a default `pinchtab server` boot is silent about it,
+so `pinchtab security` is the surface to check. Do
 not confuse this with `security.trustedProxyCIDRs`, which is unrelated to header trust:
 it lists CIDRs whose remote address is trusted when validating navigation responses.
 
