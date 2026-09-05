@@ -243,6 +243,13 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
 
+	// Capture must be enabled before navigation: a page can throw from its first
+	// synchronous script, before Navigate returns and before any later listener
+	// could observe the exception.
+	if tm.shouldEagerlyCaptureConsole() {
+		tm.setupConsoleCapture(ctx, rawCDPID)
+	}
+
 	// Start network capture before navigation so CDP events are captured.
 	if tm.netMonitor != nil {
 		if err := tm.netMonitor.StartCapture(ctx, tabID); err != nil {
@@ -276,10 +283,6 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 		if err := EnableDialogEvents(ctx); err != nil {
 			slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
 		}
-	}
-
-	if tm.shouldEagerlyCaptureConsole() {
-		tm.setupConsoleCapture(ctx, rawCDPID)
 	}
 
 	tm.mu.Lock()

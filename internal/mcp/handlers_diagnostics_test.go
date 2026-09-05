@@ -1,11 +1,19 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/handlers"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The two tools must be advertised in tools/list AND have a handler, or the MCP
@@ -33,28 +41,54 @@ func TestConsoleAndErrorToolsAreRegistered(t *testing.T) {
 // funnel misread this, the one channel that says why the page died would reach the agent
 // as an error, and the agent would learn nothing.
 func TestErrorsToolReturnsSuccessCarryingTheErrorText(t *testing.T) {
-	const thrown = "Uncaught TypeError: Cannot read properties of null (reading 'x')"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/errors" || r.Method != http.MethodGet {
-			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tabId": "tab1",
-			"errors": []map[string]any{
-				{"timestamp": "2026-09-03T08:46:59Z", "message": thrown, "url": "http://localhost:18777/", "line": 8, "column": 59},
-			},
-		})
+	const thrown = "pinchtab-mcp-real-page-boom"
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<script>setTimeout(() => { throw new Error("` + thrown + `") }, 0)</script>`))
 	}))
-	defer srv.Close()
+	defer page.Close()
 
-	result := callTool(t, "pinchtab_errors", map[string]any{"tabId": "tab1"}, srv)
-
-	if result.IsError {
-		t.Fatalf("a payload full of errors was reported as a failed call; /errors content IS failures and the call succeeded: %s", resultText(t, result))
+	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
+		chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(testbrowser.Path(t)),
+		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("no-sandbox", true),
+	)...)
+	browserCtx, cancelBrowser := chromedp.NewContext(alloc)
+	browserCtx, cancelTimeout := context.WithTimeout(browserCtx, 30*time.Second)
+	defer cancelTimeout()
+	defer cancelBrowser()
+	defer cancelAlloc()
+	if err := chromedp.Run(browserCtx); err != nil {
+		t.Fatalf("start test browser: %v", err)
 	}
-	if text := resultText(t, result); !strings.Contains(text, thrown) {
-		t.Fatalf("successful result does not carry the error text the agent needs: %q", text)
+	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := bridge.New(context.Background(), browserCtx, cfg)
+	tabID, _, _, err := b.CreateTab(page.URL)
+	if err != nil {
+		t.Fatalf("create tab with throwing page: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	handlers.New(b, cfg, nil, nil, nil).RegisterRoutes(mux, func() {})
+	api := httptest.NewServer(mux)
+	defer api.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		result := callTool(t, "pinchtab_errors", map[string]any{"tabId": tabID}, api)
+		text := resultText(t, result)
+		if result.IsError {
+			t.Fatalf("a payload full of errors was reported as a failed call; /errors content IS failures and the call succeeded: %s", text)
+		}
+		if strings.Contains(text, thrown) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("successful result does not carry the error thrown by the real page: %q", text)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
