@@ -113,7 +113,7 @@ type BridgeAPI interface {
 	SetGeolocation(ctx context.Context, lat, lng, accuracy float64) error
 	SetEmulatedMedia(ctx context.Context, feature, value string) error
 
-	SetNetworkConditions(ctx context.Context, params NetworkConditions) error
+	SetNetworkConditions(ctx context.Context, tabID string, params NetworkConditions) error
 	SetExtraHTTPHeaders(ctx context.Context, headers map[string]string) error
 	GetCookies(ctx context.Context, urls []string) ([]CookieData, error)
 	SetCookie(ctx context.Context, params SetCookieParams) error

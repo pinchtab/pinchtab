@@ -19,8 +19,6 @@ type offlineRequest struct {
 	UploadThroughput   float64 `json:"uploadThroughput"`
 }
 
-// HandleSetOffline enables or disables network offline emulation via CDP.
-// POST /emulation/offline
 func (h *Handlers) HandleSetOffline(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSONBody[offlineRequest](w, r)
 	if !ok {
@@ -30,8 +28,6 @@ func (h *Handlers) HandleSetOffline(w http.ResponseWriter, r *http.Request) {
 	h.setOffline(w, r, req)
 }
 
-// HandleTabSetOffline enables or disables network offline emulation for a specific tab.
-// POST /tabs/{id}/emulation/offline
 func (h *Handlers) HandleTabSetOffline(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSONBody[offlineRequest](w, r)
 	if !ok {
@@ -47,7 +43,6 @@ func (h *Handlers) HandleTabSetOffline(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) setOffline(w http.ResponseWriter, r *http.Request, req offlineRequest) {
-	// Apply defaults for throughput: -1 means no throttling.
 	if req.DownloadThroughput == 0 {
 		req.DownloadThroughput = -1
 	}
@@ -63,13 +58,13 @@ func (h *Handlers) setOffline(w http.ResponseWriter, r *http.Request, req offlin
 	tCtx, tCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer tCancel()
 
-	if err := h.Bridge.SetNetworkConditions(tCtx, bridge.NetworkConditions{
+	if err := h.Bridge.SetNetworkConditions(tCtx, resolvedTabID, bridge.NetworkConditions{
 		Offline:            req.Offline,
 		Latency:            req.Latency,
 		DownloadThroughput: req.DownloadThroughput,
 		UploadThroughput:   req.UploadThroughput,
 	}); err != nil {
-		httpx.Error(w, 500, fmt.Errorf("CDP network offline emulation: %w", err))
+		httpx.Error(w, 500, fmt.Errorf("network offline emulation: %w", err))
 		return
 	}
 

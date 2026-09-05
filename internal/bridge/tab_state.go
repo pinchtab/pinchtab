@@ -46,6 +46,23 @@ func (tm *TabManager) ClearFrameScope(tabID string) {
 	delete(tm.frameScope, tabID)
 }
 
+func (tm *TabManager) NetworkConditions(tabID string) (NetworkConditions, bool) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	c, ok := tm.netConditions[tabID]
+	return c, ok
+}
+
+func (tm *TabManager) SetNetworkConditions(tabID string, c NetworkConditions) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if !c.Offline {
+		delete(tm.netConditions, tabID)
+		return
+	}
+	tm.netConditions[tabID] = c
+}
+
 func (tm *TabManager) RegisterTab(tabID string, ctx context.Context) {
 	now := time.Now()
 	tm.mu.Lock()

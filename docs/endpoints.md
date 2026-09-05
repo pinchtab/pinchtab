@@ -692,6 +692,29 @@ Returns lightweight live tab/page runtime state for a tab, including load state,
 
 Use it as a cheap readiness probe before actions. Keep the detailed semantics in the API/skill references rather than here.
 
+## Emulation
+
+```text
+POST /emulation/offline
+POST /tabs/{id}/emulation/offline
+POST /emulation/headers
+POST /tabs/{id}/emulation/headers
+```
+
+Offline body fields:
+
+- `offline` — `true` makes every request the tab issues fail as disconnected (page `fetch()` rejects, a navigation does not load) and sets `navigator.onLine` to `false`; `false` restores normal traffic
+- optional `tabId`, `latency`, `downloadThroughput`, `uploadThroughput`
+
+Offline is per tab and lasts until it is turned off or the tab closes; it survives navigation. It is enforced through the same request interception as `/network/route`: while offline is on it wins over every route rule, and turning it off puts the tab's rules back in effect. The response reports `status: offline` only once the interception is in place; if it cannot be installed the request fails instead.
+
+Headers body fields:
+
+- `headers` — object of extra request headers sent on every request the tab issues; `{}` clears them
+- optional `tabId`
+
+Extra headers are per tab and last until replaced, cleared, or the tab closes; they survive navigation.
+
 ## Wait, Network, Dialog, Console, And Errors
 
 ```text

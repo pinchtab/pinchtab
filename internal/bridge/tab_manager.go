@@ -38,6 +38,7 @@ type TabManager struct {
 	accessed          map[string]bool
 	snapshots         map[string]*RefCache
 	frameScope        map[string]FrameScope
+	netConditions     map[string]NetworkConditions
 	onTabSetup        TabSetupFunc
 	onAfterClose      func() // optional: invoked after any successful CloseTab
 	dialogMgr         *DialogManager
@@ -66,16 +67,17 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		maxParallel = cfg.MaxParallelTabs
 	}
 	return &TabManager{
-		browserCtx: browserCtx,
-		config:     cfg,
-		idMgr:      idMgr,
-		tabs:       make(map[string]*TabEntry),
-		accessed:   make(map[string]bool),
-		snapshots:  make(map[string]*RefCache),
-		frameScope: make(map[string]FrameScope),
-		onTabSetup: onTabSetup,
-		logStore:   logStore,
-		executor:   NewTabExecutor(maxParallel),
+		browserCtx:    browserCtx,
+		config:        cfg,
+		idMgr:         idMgr,
+		tabs:          make(map[string]*TabEntry),
+		accessed:      make(map[string]bool),
+		snapshots:     make(map[string]*RefCache),
+		frameScope:    make(map[string]FrameScope),
+		netConditions: make(map[string]NetworkConditions),
+		onTabSetup:    onTabSetup,
+		logStore:      logStore,
+		executor:      NewTabExecutor(maxParallel),
 	}
 }
 

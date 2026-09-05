@@ -68,6 +68,9 @@ func (tm *TabManager) onTabNavigation(tabID string, ctx context.Context, ev any)
 		}
 		tm.DeleteRefCache(tabID)
 		tm.ClearFrameScope(tabID)
+		if conditions, ok := tm.NetworkConditions(tabID); ok {
+			go tm.reapplyNetworkConditions(tabID, ctx, conditions)
+		}
 		if tm.idpiDomainPolicyActive() {
 			tm.updateTabPolicy(tabID, e.Frame.URL)
 		}
@@ -75,6 +78,14 @@ func (tm *TabManager) onTabNavigation(tabID string, ctx context.Context, ev any)
 		if tm.idpiDomainPolicyActive() {
 			go tm.refreshTabPolicyFromContext(tabID, ctx)
 		}
+	}
+}
+
+func (tm *TabManager) reapplyNetworkConditions(tabID string, ctx context.Context, conditions NetworkConditions) {
+	applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := applyNetworkConditions(applyCtx, conditions); err != nil {
+		slog.Debug("network conditions re-apply failed", "tabId", tabID, "err", err)
 	}
 }
 

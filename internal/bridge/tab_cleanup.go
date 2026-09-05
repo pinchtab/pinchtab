@@ -114,6 +114,7 @@ func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
 	delete(tm.tabs, resolvedTabID)
 	delete(tm.snapshots, resolvedTabID)
 	delete(tm.frameScope, resolvedTabID)
+	delete(tm.netConditions, resolvedTabID)
 	delete(tm.accessed, resolvedTabID)
 	if tm.currentTab == resolvedTabID {
 		tm.currentTab = ""

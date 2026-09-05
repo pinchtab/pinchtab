@@ -527,7 +527,7 @@ func (m *MockBridge) SetEmulatedMedia(ctx context.Context, feature, value string
 	return nil
 }
 
-func (m *MockBridge) SetNetworkConditions(ctx context.Context, params bridge.NetworkConditions) error {
+func (m *MockBridge) SetNetworkConditions(ctx context.Context, tabID string, params bridge.NetworkConditions) error {
 	return nil
 }
 

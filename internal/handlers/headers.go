@@ -15,8 +15,6 @@ type headersRequest struct {
 	Headers map[string]string `json:"headers"`
 }
 
-// HandleSetHeaders sets extra HTTP headers via CDP.
-// POST /emulation/headers
 func (h *Handlers) HandleSetHeaders(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSONBody[headersRequest](w, r)
 	if !ok {
@@ -26,8 +24,6 @@ func (h *Handlers) HandleSetHeaders(w http.ResponseWriter, r *http.Request) {
 	h.setHeaders(w, r, req)
 }
 
-// HandleTabSetHeaders sets extra HTTP headers for a specific tab.
-// POST /tabs/{id}/emulation/headers
 func (h *Handlers) HandleTabSetHeaders(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSONBody[headersRequest](w, r)
 	if !ok {

@@ -154,12 +154,12 @@ func TestRouteManager_Match_FirstWins(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	rule, ok, _ := rm.match("tab1", "https://api.example.com/users", "", "GET")
-	if !ok {
+	verdict, _ := rm.match("tab1", "https://api.example.com/users", "", "GET")
+	if !verdict.matched {
 		t.Fatal("expected match")
 	}
-	if rule.Action != RouteActionFulfill {
-		t.Errorf("expected first rule (fulfill) to win, got %s", rule.Action)
+	if verdict.rule.Action != RouteActionFulfill {
+		t.Errorf("expected first rule (fulfill) to win, got %s", verdict.rule.Action)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestRouteManager_Match_NoneMatches(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/users", "", "GET"); ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/users", "", "GET"); v.matched {
 		t.Error("expected no match")
 	}
 }
@@ -184,13 +184,13 @@ func TestRouteManager_Match_ResourceTypeFilter(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://x/img.png", "image", "GET"); ok {
+	if v, _ := rm.match("tab1", "https://x/img.png", "image", "GET"); v.matched {
 		t.Error("rule with ResourceType=script should not match resourceType=image")
 	}
-	if _, ok, _ := rm.match("tab1", "https://x/app.js", "script", "GET"); !ok {
+	if v, _ := rm.match("tab1", "https://x/app.js", "script", "GET"); !v.matched {
 		t.Error("rule with ResourceType=script should match resourceType=script")
 	}
-	if _, ok, _ := rm.match("tab1", "https://x/app.js", "Script", "GET"); !ok {
+	if v, _ := rm.match("tab1", "https://x/app.js", "Script", "GET"); !v.matched {
 		t.Error("ResourceType match should be case-insensitive")
 	}
 }
@@ -431,10 +431,10 @@ func TestRouteManager_Match_FulfillSkipsOPTIONSByDefault(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); v.matched {
 		t.Error("fulfill rule with no Method must skip OPTIONS preflight")
 	}
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "GET"); !ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "GET"); !v.matched {
 		t.Error("fulfill rule should still match non-OPTIONS methods")
 	}
 }
@@ -450,7 +450,7 @@ func TestRouteManager_Match_AbortAllowsOPTIONSByDefault(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); !ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); !v.matched {
 		t.Error("abort rule with no Method should match OPTIONS too (no CORS bypass risk)")
 	}
 }
@@ -464,10 +464,10 @@ func TestRouteManager_Match_ExplicitOPTIONSOptIn(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); !ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "OPTIONS"); !v.matched {
 		t.Error("fulfill rule with Method=OPTIONS must match OPTIONS")
 	}
-	if _, ok, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "GET"); ok {
+	if v, _ := rm.match("tab1", "https://api.example.com/x", "fetch", "GET"); v.matched {
 		t.Error("fulfill rule with Method=OPTIONS must NOT match GET")
 	}
 }
@@ -480,10 +480,10 @@ func TestRouteManager_Match_MethodFilterCaseInsensitive(t *testing.T) {
 	}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://x/", "fetch", "POST"); !ok {
+	if v, _ := rm.match("tab1", "https://x/", "fetch", "POST"); !v.matched {
 		t.Error("Method filter should be case-insensitive")
 	}
-	if _, ok, _ := rm.match("tab1", "https://x/", "fetch", "GET"); ok {
+	if v, _ := rm.match("tab1", "https://x/", "fetch", "GET"); v.matched {
 		t.Error("Method=POST should not match GET")
 	}
 }
@@ -527,13 +527,13 @@ func TestRouteManager_Match_PerTabIsolation(t *testing.T) {
 	rm.perTab["tab2"] = &tabRouteState{rules: []RouteRule{{Pattern: "tab2-only", Action: RouteActionAbort}}}
 	rm.mu.Unlock()
 
-	if _, ok, _ := rm.match("tab1", "https://anywhere/", "", "GET"); !ok {
+	if v, _ := rm.match("tab1", "https://anywhere/", "", "GET"); !v.matched {
 		t.Error("tab1 should match its own '*' rule")
 	}
-	if _, ok, _ := rm.match("tab2", "https://anywhere/", "", "GET"); ok {
+	if v, _ := rm.match("tab2", "https://anywhere/", "", "GET"); v.matched {
 		t.Error("tab2 must NOT match tab1's rule (cross-tab leak)")
 	}
-	if _, ok, _ := rm.match("tab1", "https://x/tab2-only", "", "GET"); !ok {
+	if v, _ := rm.match("tab1", "https://x/tab2-only", "", "GET"); !v.matched {
 		// tab1's '*' covers everything, so still matches.
 		t.Error("tab1 '*' rule should still match URL containing tab2-only")
 	}

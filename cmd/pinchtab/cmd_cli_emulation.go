@@ -44,7 +44,7 @@ south of the equator are written the same way as anywhere else:
 var setOfflineCmd = &cobra.Command{
 	Use:   "offline <true|false>",
 	Short: "Enable or disable network offline emulation",
-	Long:  "Enable or disable network offline emulation using CDP network.EmulateNetworkConditions.",
+	Long:  "Enable or disable offline emulation for the tab: while offline every request on the tab fails as disconnected and navigator.onLine reports false. The state is per tab and survives navigation until turned off.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
