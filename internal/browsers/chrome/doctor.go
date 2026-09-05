@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/browserprobe"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
 const chromeMinVersion = "120.0.0"
+const chromeDoctorLaunchTimeout = 60 * time.Second
+
+var probeCDP = LaunchAndProbe
 
 func (b Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	return []browsers.DoctorCheck{
@@ -18,6 +22,12 @@ func (b Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 			ID:          "chrome_present",
 			Description: "Chrome/Chromium binary found and version adequate",
 			Fn:          chromePresenceCheck,
+		},
+		{
+			ID:              "cdp_reachable",
+			Description:     "Chrome launches headless and accepts CDP attach",
+			Fn:              cdpReachableCheck,
+			LaunchesBrowser: true,
 		},
 		{
 			ID:          "handle_decisions",
@@ -52,29 +62,44 @@ func (b Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	}
 }
 
-func chromePresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-	// A configured browser.binary override governs the runtime, so resolve against
-	// it first. Honoring it here keeps chrome_present consistent with the binary_*
-	// checks (which already validate the override) — otherwise a working configured
-	// browser sitting off the static discovery path produces a false FAIL.
-	override := ""
-	if env, ok := cfg.(*browsers.DoctorEnv); ok && env != nil {
-		override = strings.TrimSpace(env.Binary)
-	}
-	overridden := override != ""
+func resolveDoctorBinary(cfg interface{}) browsers.DoctorBinary {
+	return browsers.ResolveDoctorBinary(cfg, BinaryNames(), CommonPaths(runtime.GOOS))
+}
 
-	found := override
-	if found == "" {
-		d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
-		found = d.Found
-		if found == "" {
-			return browsers.DoctorCheckResult{
-				Status: browsers.DoctorFail,
-				Detail: "no chrome/chromium found. Install Chrome/Chromium (" +
-					browsers.InstallHint(runtime.GOOS) + ") or set " +
-					"browser.binary to an existing build. Probed: " + strings.Join(d.Probed, ", "),
-			}
+func chromeAbsent(probed []string) browsers.DoctorCheckResult {
+	return browsers.DoctorCheckResult{
+		Status: browsers.DoctorFail,
+		Detail: "no chrome/chromium found. Install Chrome/Chromium (" +
+			browsers.InstallHint(runtime.GOOS) + ") or set " +
+			"browser.binary to an existing build. Probed: " + strings.Join(probed, ", "),
+	}
+}
+
+func cdpReachableCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
+	binary := resolveDoctorBinary(cfg)
+	if binary.Path == "" {
+		return chromeAbsent(binary.Probed)
+	}
+	res, err := probeCDP(ctx, binary.Path, browsers.DoctorSandboxArgs(cfg), chromeDoctorLaunchTimeout)
+	if err != nil {
+		return browsers.DoctorCheckResult{
+			Status: browsers.DoctorFail,
+			Detail: fmt.Sprintf("%s: headless launch did not expose CDP: %v", binary.Path, err),
+			Err:    err,
 		}
+	}
+	return browsers.DoctorCheckResult{
+		Status: browsers.DoctorPass,
+		Detail: fmt.Sprintf("%s: /json/version OK on port %d", binary.Path, res.Port),
+	}
+}
+
+func chromePresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
+	binary := resolveDoctorBinary(cfg)
+	overridden := binary.Overridden
+	found := binary.Path
+	if found == "" {
+		return chromeAbsent(binary.Probed)
 	}
 	line, err := browserprobe.RunVersion(ctx, found)
 	if err != nil {

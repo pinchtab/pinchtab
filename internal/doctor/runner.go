@@ -3,6 +3,7 @@ package doctor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -32,25 +33,47 @@ type CheckResult struct {
 	// a raw time.Duration would marshal nanoseconds under a "Ms" key.
 	Duration   time.Duration `json:"-"`
 	DurationMS int64         `json:"durationMs"`
+	// LaunchesBrowser marks a check that starts a browsing session; the summary
+	// counts how many of those actually ran, which is what separates a clean run
+	// from one whose passes never left the binary.
+	LaunchesBrowser bool `json:"launchesBrowser"`
 }
 
 type CheckFunc func(ctx context.Context, cfg *config.RuntimeConfig) CheckResult
 
 type CheckEntry struct {
-	Name string
-	Fn   CheckFunc
+	Name            string
+	Fn              CheckFunc
+	LaunchesBrowser bool
 }
 
 type Summary struct {
-	Passed   int `json:"passed"`
-	Failed   int `json:"failed"`
-	Warnings int `json:"warnings"`
-	Skipped  int `json:"skipped"`
+	Passed          int `json:"passed"`
+	Failed          int `json:"failed"`
+	Warnings        int `json:"warnings"`
+	Skipped         int `json:"skipped"`
+	BrowserLaunched int `json:"browserLaunched"`
+}
+
+// Verdict is the sentence the counts alone could not say: passes that never
+// launched a browser are not a clean bill of health.
+func Verdict(s Summary) string {
+	switch {
+	case s.Failed > 0:
+		return fmt.Sprintf("%d check(s) failed.", s.Failed)
+	case s.BrowserLaunched == 0:
+		return "No check launched a browser: the passes above only inspected the installation, so this is not a clean bill of health."
+	default:
+		return fmt.Sprintf("Clean: %d check(s) launched a browser and passed.", s.BrowserLaunched)
+	}
 }
 
 func Summarize(results []CheckResult) Summary {
 	var s Summary
 	for _, r := range results {
+		if r.LaunchesBrowser && r.Status != StatusSkip {
+			s.BrowserLaunched++
+		}
 		switch r.Status {
 		case StatusPass:
 			s.Passed++
@@ -87,7 +110,8 @@ func Registry(cfg *config.RuntimeConfig) []CheckEntry {
 		for _, dc := range b.DoctorChecks(browsers.TargetConfig{Provider: browserID}) {
 			dc := dc
 			entries = append(entries, CheckEntry{
-				Name: dc.ID,
+				Name:            dc.ID,
+				LaunchesBrowser: dc.LaunchesBrowser,
 				Fn: func(ctx context.Context, _ *config.RuntimeConfig) CheckResult {
 					return browserCheckResult(ctx, dc, env)
 				},
@@ -169,6 +193,7 @@ func Run(ctx context.Context, cfg *config.RuntimeConfig, checkFilter string) []C
 		start := time.Now()
 		r := e.Fn(ctx, cfg)
 		r.Name = e.Name
+		r.LaunchesBrowser = e.LaunchesBrowser
 		if r.Duration == 0 {
 			r.Duration = time.Since(start)
 		}

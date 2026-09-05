@@ -138,6 +138,34 @@ func TestCDPReachableAllowsColdStart(t *testing.T) {
 	}
 }
 
+func TestCDPReachableUsesDiscoveryWithoutABinaryOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("discovery fixture uses a shell script")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, BinaryNames()[0])
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	original := launchAndProbe
+	var launched string
+	launchAndProbe = func(_ context.Context, path string, _ []string, _ time.Duration) (chrome.CDPProbeResult, error) {
+		launched = path
+		return chrome.CDPProbeResult{Port: 9222}, nil
+	}
+	t.Cleanup(func() { launchAndProbe = original })
+
+	result := cdpReachableCheck(context.Background(), &browsers.DoctorEnv{})
+	if result.Status != browsers.DoctorPass {
+		t.Fatalf("status = %v, want pass: %s", result.Status, result.Detail)
+	}
+	if launched != binary {
+		t.Fatalf("launched %q, want discovered binary %q", launched, binary)
+	}
+}
+
 func TestFingerprintFlagsAllowColdStart(t *testing.T) {
 	original := launchAndProbe
 	launchAndProbe = func(_ context.Context, _ string, _ []string, timeout time.Duration) (chrome.CDPProbeResult, error) {

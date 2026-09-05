@@ -107,9 +107,10 @@ type DoctorCheckResult struct {
 }
 
 type DoctorCheck struct {
-	ID          string
-	Description string
-	Fn          func(ctx context.Context, cfg interface{}) DoctorCheckResult
+	ID              string
+	Description     string
+	Fn              func(ctx context.Context, cfg interface{}) DoctorCheckResult
+	LaunchesBrowser bool
 }
 
 // DoctorEnv avoids browser sub-packages importing the config package.

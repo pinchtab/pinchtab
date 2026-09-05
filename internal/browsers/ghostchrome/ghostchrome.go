@@ -80,13 +80,13 @@ func (b Browser) DoctorChecks(cfg browsers.TargetConfig) []browsers.DoctorCheck 
 	// ghost-chrome escalates to Chrome for any rendered/visual/interactive work,
 	// so a missing Chrome binary must be diagnosed up front. Reuse Chrome's own
 	// chrome_present check rather than duplicating its discovery/version logic.
+	var borrowed []browsers.DoctorCheck
 	for _, c := range b.chrome.DoctorChecks(cfg) {
-		if c.ID == "chrome_present" {
-			checks = append([]browsers.DoctorCheck{c}, checks...)
-			break
+		if c.ID == "chrome_present" || c.ID == "cdp_reachable" {
+			borrowed = append(borrowed, c)
 		}
 	}
-	return checks
+	return append(borrowed, checks...)
 }
 
 func (b Browser) BuildLaunchArgs(cfg browsers.LaunchConfig) ([]string, []string, error) {

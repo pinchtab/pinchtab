@@ -447,7 +447,7 @@ cd pinchtab
 go build ./cmd/pinchtab     # Build pinchtab binary
 ```
 
-For runtime diagnostics against your installed PinchTab + browser config (binary exists, executes, fingerprint flags accepted, CDP reachable), use:
+For diagnostics of your installed PinchTab + browser config (config file loads, browser found and version adequate, a headless launch exposes CDP, request shapes handled; CloakBrowser adds fingerprint-flag and font checks), use:
 
 ```bash
 pinchtab doctor             # human-readable report

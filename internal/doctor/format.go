@@ -12,9 +12,12 @@ type jsonReport struct {
 	Target  string        `json:"target,omitempty"`
 	Results []CheckResult `json:"results"`
 	Summary Summary       `json:"summary"`
+	Verdict string        `json:"verdict"`
+	Scope   string        `json:"scope"`
+	Runtime string        `json:"runtime,omitempty"`
 }
 
-func WriteText(w io.Writer, browser, target string, results []CheckResult) {
+func WriteText(w io.Writer, browser, target string, results []CheckResult, runtime string) {
 	header := fmt.Sprintf("pinchtab doctor (browser=%s", browser)
 	if target != "" {
 		header += ", target=" + target
@@ -29,8 +32,12 @@ func WriteText(w io.Writer, browser, target string, results []CheckResult) {
 
 	s := Summarize(results)
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "%d passed, %d failed, %d skipped, %d warnings.\n",
-		s.Passed, s.Failed, s.Skipped, s.Warnings)
+	_, _ = fmt.Fprintf(w, "%d passed, %d failed, %d skipped, %d warnings. %s\n",
+		s.Passed, s.Failed, s.Skipped, s.Warnings, Verdict(s))
+	_, _ = fmt.Fprintln(w, ScopeStatement)
+	if runtime != "" {
+		_, _ = fmt.Fprintln(w, runtime)
+	}
 }
 
 func formatResultLine(r CheckResult) string {
@@ -70,18 +77,22 @@ func shortDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
-func WriteJSON(w io.Writer, browser, target string, results []CheckResult) error {
+func WriteJSON(w io.Writer, browser, target string, results []CheckResult, runtime string) error {
 	// Populate ErrMsg for JSON consumers in case a check forgot to copy from Err.
 	for i := range results {
 		if results[i].Err != nil && results[i].ErrMsg == "" {
 			results[i].ErrMsg = results[i].Err.Error()
 		}
 	}
+	summary := Summarize(results)
 	report := jsonReport{
 		Browser: browser,
 		Target:  target,
 		Results: results,
-		Summary: Summarize(results),
+		Summary: summary,
+		Verdict: Verdict(summary),
+		Scope:   ScopeStatement,
+		Runtime: runtime,
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

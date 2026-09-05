@@ -127,6 +127,16 @@ func TestGhostChromeChromePresentCheck(t *testing.T) {
 	}
 }
 
+func TestGhostChromeBorrowsChromeCDPCheck(t *testing.T) {
+	checks := (&Browser{}).DoctorChecks(browsers.TargetConfig{})
+	for _, check := range checks {
+		if check.ID == "cdp_reachable" && check.LaunchesBrowser {
+			return
+		}
+	}
+	t.Fatal("ghost-chrome did not borrow Chrome's browser-launching cdp_reachable check")
+}
+
 func TestGhostChromeHandleDecisionsCheck(t *testing.T) {
 	b := &Browser{}
 	checks := b.DoctorChecks(browsers.TargetConfig{})

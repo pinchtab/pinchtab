@@ -23,19 +23,22 @@ var launchAndProbe = chrome.LaunchAndProbe
 func (Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	return []browsers.DoctorCheck{
 		{
-			ID:          "cloakbrowser_present",
-			Description: "CloakBrowser binary found and version adequate",
-			Fn:          cloakPresenceCheck,
+			ID:              "cloakbrowser_present",
+			Description:     "CloakBrowser binary found and version adequate",
+			Fn:              cloakPresenceCheck,
+			LaunchesBrowser: true,
 		},
 		{
-			ID:          "cdp_reachable",
-			Description: "CloakBrowser accepts CDP attach headless",
-			Fn:          cdpReachableCheck,
+			ID:              "cdp_reachable",
+			Description:     "CloakBrowser accepts CDP attach headless",
+			Fn:              cdpReachableCheck,
+			LaunchesBrowser: true,
 		},
 		{
-			ID:          "fingerprint_flags_accepted",
-			Description: "CloakBrowser accepts configured fingerprint flags",
-			Fn:          fingerprintFlagsCheck,
+			ID:              "fingerprint_flags_accepted",
+			Description:     "CloakBrowser accepts configured fingerprint flags",
+			Fn:              fingerprintFlagsCheck,
+			LaunchesBrowser: true,
 		},
 		{
 			ID:          "linux_fonts_present",
@@ -75,28 +78,23 @@ func (Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 	}
 }
 
+func resolveDoctorBinary(cfg interface{}) browsers.DoctorBinary {
+	return browsers.ResolveDoctorBinary(cfg, BinaryNames(), CommonPaths(runtime.GOOS))
+}
+
 func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-	// An explicit browser.binary override is what the runtime launches, so resolve
-	// against it before falling back to discovery. The CloakBrowser installer drops
-	// its Chromium in a versioned dir that isn't on the static probe list, so without
-	// this a perfectly working configured binary reports a false FAIL while the
-	// binary_* checks below it pass.
+	binary := resolveDoctorBinary(cfg)
 	override := ""
-	if env, ok := cfg.(*browsers.DoctorEnv); ok && env != nil {
-		override = strings.TrimSpace(env.Binary)
+	if binary.Overridden {
+		override = binary.Path
 	}
-	found := override
-	discovered := false
+	found := binary.Path
+	discovered := !binary.Overridden
 	if found == "" {
-		d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
-		found = d.Found
-		if found == "" {
-			return browsers.DoctorCheckResult{
-				Status: browsers.DoctorFail,
-				Detail: "cloakbrowser not found; set browser.binary or install CloakBrowser. probed: " + strings.Join(d.Probed, ", "),
-			}
+		return browsers.DoctorCheckResult{
+			Status: browsers.DoctorFail,
+			Detail: "cloakbrowser not found; set browser.binary or install CloakBrowser. probed: " + strings.Join(binary.Probed, ", "),
 		}
-		discovered = true
 	}
 	line, err := browserprobe.RunVersion(ctx, found)
 	if err != nil {
@@ -159,20 +157,14 @@ func cloakPresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorChe
 	}
 }
 
+const noCloakFound = "skipped — no CloakBrowser found by browser.binary or discovery (see cloakbrowser_present)"
+
 func cdpReachableCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-	env, ok := cfg.(*browsers.DoctorEnv)
-	if !ok || env == nil {
-		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: "no runtime config"}
-	}
-	bin := strings.TrimSpace(env.Binary)
+	bin := resolveDoctorBinary(cfg).Path
 	if bin == "" {
-		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: "skipped — no browser.binary set (see cloakbrowser_present)"}
+		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: noCloakFound}
 	}
-	var args []string
-	if env.NoSandbox {
-		args = append(args, "--no-sandbox")
-	}
-	res, err := launchAndProbe(ctx, bin, args, cloakDoctorLaunchTimeout)
+	res, err := launchAndProbe(ctx, bin, browsers.DoctorSandboxArgs(cfg), cloakDoctorLaunchTimeout)
 	if err != nil {
 		return browsers.DoctorCheckResult{Status: browsers.DoctorFail, Detail: err.Error(), Err: err}
 	}
@@ -187,9 +179,9 @@ func fingerprintFlagsCheck(ctx context.Context, cfg interface{}) browsers.Doctor
 	if !ok || env == nil {
 		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: "no runtime config"}
 	}
-	bin := strings.TrimSpace(env.Binary)
+	bin := resolveDoctorBinary(cfg).Path
 	if bin == "" {
-		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: "skipped — no browser.binary set (see cloakbrowser_present)"}
+		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: noCloakFound}
 	}
 
 	launchCfg := browsers.LaunchConfig{
@@ -212,9 +204,7 @@ func fingerprintFlagsCheck(ctx context.Context, cfg interface{}) browsers.Doctor
 	if len(fpFlags) == 0 {
 		return browsers.DoctorCheckResult{Status: browsers.DoctorSkip, Detail: "no cloak fingerprint flags configured"}
 	}
-	if env.NoSandbox {
-		fpFlags = append(fpFlags, "--no-sandbox")
-	}
+	fpFlags = append(fpFlags, browsers.DoctorSandboxArgs(cfg)...)
 	res, err := launchAndProbe(ctx, bin, fpFlags, cloakDoctorLaunchTimeout)
 	if err != nil {
 		return browsers.DoctorCheckResult{
