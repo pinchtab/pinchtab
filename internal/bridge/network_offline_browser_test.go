@@ -299,11 +299,12 @@ func TestOfflineSurvivesANavigateUnderARedirectLimit(t *testing.T) {
 	if !f.b.routeMgr.Offline(f.tabID) {
 		t.Fatal("offline state was dropped by the navigate")
 	}
-	if got := f.fetch("/after"); got != "fail" {
-		t.Fatalf("fetch after the navigate = %q; offline reports on but traffic flows", got)
-	}
-	if _, hit := f.servedHeader("/after"); hit {
-		t.Fatal("the fetch after the navigate reached the server while offline")
+	// The tab now sits on Chrome's error page, whose opaque origin fails every
+	// fetch on its own, so the probe that proves the domain survived is a second
+	// navigation: it reaches the server only if the first navigate dropped Fetch.
+	navErr = f.navigateLimited("/second", 3)
+	if _, hit := f.servedHeader("/second"); hit {
+		t.Fatalf("the navigate after the first dropped offline: the server was reached (nav err %v)", navErr)
 	}
 }
 
