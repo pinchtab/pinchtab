@@ -55,35 +55,27 @@ func (b *Bridge) ContinueRequest(ctx context.Context, requestID string) error {
 }
 
 func (b *Bridge) GoBack(ctx context.Context) (bool, error) {
-	var didNavigate bool
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		cur, entries, err := page.GetNavigationHistory().Do(ctx)
-		if err != nil {
-			return fmt.Errorf("get history: %w", err)
-		}
-		if cur <= 0 || cur > int64(len(entries)-1) {
-			didNavigate = false
-			return nil
-		}
-		didNavigate = true
-		return page.NavigateToHistoryEntry(entries[cur-1].ID).Do(ctx)
-	}))
-	return didNavigate, err
+	return navigateHistory(ctx, -1)
 }
 
 func (b *Bridge) GoForward(ctx context.Context) (bool, error) {
+	return navigateHistory(ctx, 1)
+}
+
+func navigateHistory(ctx context.Context, delta int64) (bool, error) {
 	var didNavigate bool
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		cur, entries, err := page.GetNavigationHistory().Do(ctx)
 		if err != nil {
 			return fmt.Errorf("get history: %w", err)
 		}
-		if cur < 0 || cur >= int64(len(entries)-1) {
-			didNavigate = false
+		last := int64(len(entries) - 1)
+		target := cur + delta
+		if cur < 0 || cur > last || target < 0 || target > last {
 			return nil
 		}
 		didNavigate = true
-		return page.NavigateToHistoryEntry(entries[cur+1].ID).Do(ctx)
+		return page.NavigateToHistoryEntry(entries[target].ID).Do(ctx)
 	}))
 	return didNavigate, err
 }
