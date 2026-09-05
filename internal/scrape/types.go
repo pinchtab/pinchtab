@@ -81,6 +81,9 @@ type SiteInfo struct {
 }
 
 // Summary is the run roll-up.
+// Summary partitions the pages: FailedPages (see Failed) plus HTTPPages plus
+// BrowserPages equals the page count, and ContentTypes counts only the
+// successful pages.
 type Summary struct {
 	ContentTypes    map[string]int `json:"contentTypes,omitempty"`
 	HTTPPages       int            `json:"httpPages"`

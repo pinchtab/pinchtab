@@ -133,6 +133,26 @@ pages[]:
 summary:   contentTypes, httpPages, browserPages, failedPages, recommendations
 ```
 
+`summary` partitions the pages, so `failedPages + httpPages + browserPages` is the page
+count:
+
+- `failedPages` — pages that failed: a transport error (`error` set), or an HTTP
+  `statusCode` of 400 or above that the browser did not go on to render. A `3xx` is not
+  a failure: a recorded redirect status is an artefact of following it, not a page that
+  failed to serve. A page with no `statusCode` is unknown, never failed. A `4xx` the
+  browser then rendered (a `403` a stealth render got past) counts as a browser page,
+  since it produced content.
+- `httpPages` and `browserPages` — the successful pages, by the engine whose content
+  they carry.
+- `contentTypes` — counted over the successful pages only, so an error body is never
+  reported as an ordinary `page`. The failed page keeps its own `markdown` and
+  `statusCode`, because a caller may want the error body; only the taxonomy excludes it.
+- `recommendations` — the `"N of M pages returned errors or 4xx/5xx responses"` line
+  counts exactly `failedPages`.
+
+The CLI listing marks each failed page as `failed: http 404` (or `error: …` for a
+transport failure) so it agrees with the `failed` count on its first line.
+
 `--format md` writes `report.md` next to `report.json` (or prints to stdout
 without `--output-dir`): a single digest with the site overview, the page tree
 by URL pattern, and each page's content (or its snippet in preview mode).

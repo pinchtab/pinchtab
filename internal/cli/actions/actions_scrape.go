@@ -153,13 +153,25 @@ func printScrapeSummary(report scrape.Report) {
 	fmt.Printf("Scraped %d page(s) · %d http · %d browser-rendered · %d failed\n",
 		len(report.Pages), report.Summary.HTTPPages, report.Summary.BrowserPages, report.Summary.FailedPages)
 	for _, p := range report.Pages {
-		status := "source: " + p.Source
-		if p.BrowserError != "" {
-			status += " · browser failed: " + p.BrowserError
-		}
-		if p.Error != "" {
-			status = "error: " + p.Error
-		}
-		fmt.Printf("  %s · %s\n", p.URL, status)
+		fmt.Printf("  %s · %s\n", p.URL, scrapePageStatus(p))
 	}
+}
+
+// scrapePageStatus is the per-page line, marking every page the summary counts
+// as failed so the listing and the failed count agree without opening the JSON.
+func scrapePageStatus(p scrape.Page) string {
+	if p.Error != "" {
+		return "error: " + p.Error
+	}
+	if scrape.Failed(p) {
+		return fmt.Sprintf("failed: http %d", p.StatusCode)
+	}
+	status := "source: " + p.Source
+	if p.StatusCode >= 400 {
+		status += fmt.Sprintf(" · http %d recovered by the browser", p.StatusCode)
+	}
+	if p.BrowserError != "" {
+		status += " · browser failed: " + p.BrowserError
+	}
+	return status
 }

@@ -350,19 +350,32 @@ var regeneratedRecommendations = []string{"extractable text", "returned errors"}
 // numbers were post-render and the sentences pre-render inside one object — a run that
 // enriched every page still advised the reader to consider enrichment, and counted a page
 // as having little text while reporting its 2012 characters two lines above.
+// Failed is the one definition of a page that failed: a transport error, or a
+// 4xx/5xx the browser did not go on to render. A recorded 3xx is a redirect
+// artefact, not a page that failed to serve, and an absent status is unknown,
+// not a failure. A browser render clears the failure because the page produced
+// content, whatever the HTTP fetch answered.
+func Failed(p Page) bool {
+	return p.Error != "" || (p.StatusCode >= 400 && p.Source != SourceBrowser)
+}
+
+// summarize partitions the pages into failed, browser-rendered and http, summing
+// to the page count, and counts content types over the successful ones only, so
+// an error body is never reported as an ordinary page.
 func summarize(pages []Page, inherited []string) Summary {
 	s := Summary{ContentTypes: map[string]int{}}
 	for _, p := range pages {
-		if p.ContentType != "" {
-			s.ContentTypes[p.ContentType]++
-		}
 		switch {
-		case p.Error != "":
+		case Failed(p):
 			s.FailedPages++
+			continue
 		case p.Source == SourceBrowser:
 			s.BrowserPages++
 		default:
 			s.HTTPPages++
+		}
+		if p.ContentType != "" {
+			s.ContentTypes[p.ContentType]++
 		}
 	}
 	if len(s.ContentTypes) == 0 {
@@ -403,7 +416,7 @@ func recommend(pages []Page, s Summary, inherited []string) []string {
 // the errors line already reports.
 func thinPages(pages []Page) (thin, unenriched int) {
 	for _, p := range pages {
-		if p.Error != "" || p.StatusCode >= 400 {
+		if Failed(p) {
 			continue
 		}
 		if contentChars(p) >= ThinContentChars {

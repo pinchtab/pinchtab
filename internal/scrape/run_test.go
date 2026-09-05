@@ -735,3 +735,40 @@ func TestAnUnrecognisedInheritedRecommendationIsForwardedNotDropped(t *testing.T
 		t.Errorf("an inherited recommendation matching neither the regenerated phrases nor the sitemap lines was silently swallowed; the recorded rule says unrecognised advice FORWARDS, since dropping advice that is still true is the worse failure\n got %v", report.Summary.Recommendations)
 	}
 }
+
+// A reachable server answering 404 is a page that failed, and the one the
+// transport-error fixtures cannot see: it has a status code, an error body, and no
+// error. The summary must count it as failed, keep it out of the content taxonomy,
+// and make the errors line fire.
+func TestA404WithABodyIsAFailedPageNotASuccessfulHTTPPage(t *testing.T) {
+	crawl := fakeCrawl(
+		seaportal.PageObject{URL: "https://example.com/", Title: "Home", Status: 200, Markdown: longMarkdown, ContentType: "page"},
+		seaportal.PageObject{URL: "https://example.com/missing", Title: "Error response", Status: 404, Markdown: "Error code: 404\n\nMessage: File not found.", ContentType: "page"},
+		seaportal.PageObject{URL: "https://example.com/moved", Title: "Moved", Status: 301, Markdown: longMarkdown, ContentType: "page"},
+		seaportal.PageObject{URL: "https://example.com/unknown", Title: "No status", Markdown: longMarkdown, ContentType: "page"},
+	)
+	report, err := Run(context.Background(), Input{URL: "https://example.com"}, RunOptions{NoBrowser: true}, crawl, nil)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	s := report.Summary
+	if s.FailedPages != 1 || s.HTTPPages != 3 || s.BrowserPages != 0 {
+		t.Fatalf("summary = %+v, want the 404 alone failed and the 200, 3xx and status-less pages http", s)
+	}
+	if s.FailedPages+s.HTTPPages+s.BrowserPages != len(report.Pages) {
+		t.Fatalf("summary %+v does not partition %d pages", s, len(report.Pages))
+	}
+	if s.ContentTypes["page"] != 3 {
+		t.Fatalf("contentTypes = %v; the 404's error body is counted as an ordinary page", s.ContentTypes)
+	}
+	if missing := report.Pages[1]; missing.Markdown == "" || missing.StatusCode != 404 {
+		t.Fatalf("the failed page lost its own body or status: %+v", missing)
+	}
+	rec := recommendationNaming(t, report, "returned errors")
+	if !strings.HasPrefix(rec, "1 of 4 pages") {
+		t.Fatalf("the 4xx/5xx recommendation did not fire for a 404: %v", s.Recommendations)
+	}
+	if thin := recommendationNaming(t, report, "little extractable text"); thin != "" {
+		t.Fatalf("the failed page was also reported thin: %q", thin)
+	}
+}
