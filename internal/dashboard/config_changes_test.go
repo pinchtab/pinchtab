@@ -213,7 +213,7 @@ func TestEveryFileConfigSettingHasAnEffectiveDisposition(t *testing.T) {
 
 func configLiveEvidence(path string) (string, bool) {
 	switch {
-	case path == "server.trustProxyHeaders" || path == "server.cookieSecure":
+	case path == "server.trustProxyHeaders" || path == "server.trustedProxyHops" || path == "server.cookieSecure":
 		return "front-door middleware resolves config.Live per request", true
 	case path == "multiInstance.allocationPolicy" || path == "multiInstance.instancePortStart" || path == "multiInstance.instancePortEnd":
 		return "Orchestrator.ApplyRuntimeConfig swaps allocator state", true
@@ -271,6 +271,11 @@ func configRestartReason(path string) string {
 
 func prepareConfigCensusFixture(path string, fc *config.FileConfig) {
 	switch path {
+	case "server.trustedProxyHops":
+		if fc.Server.TrustedProxyHops == nil {
+			hops := config.DefaultTrustedProxyHops
+			fc.Server.TrustedProxyHops = &hops
+		}
 	case "instanceDefaults.headless":
 		fc.InstanceDefaults.Mode = ""
 		value := false
