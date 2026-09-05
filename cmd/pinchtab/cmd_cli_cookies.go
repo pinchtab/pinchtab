@@ -8,7 +8,7 @@ import (
 var cookiesCmd = &cobra.Command{
 	Use:   "cookies",
 	Short: "Manage browser cookies",
-	Long:  "Read, set and clear browser cookies for the tab you are driving. Requires security.allowCookies.",
+	Long:  "Read, set and clear browser cookies for the tab you are driving.",
 }
 
 var cookiesGetCmd = &cobra.Command{
@@ -52,8 +52,6 @@ state with state load.`,
 }
 
 func init() {
-	cookiesCmd.AddCommand(cookiesGetCmd, cookiesSetCmd, cookiesClearCmd)
-
 	addTabFlag(cookiesGetCmd, cookiesSetCmd)
 
 	cookiesGetCmd.Flags().String("name", "", "Only return the cookie with this name")

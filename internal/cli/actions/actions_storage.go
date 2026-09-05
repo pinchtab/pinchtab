@@ -8,13 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// StorageGet retrieves localStorage and/or sessionStorage items for the active tab.
-func StorageGet(client *http.Client, base, token string, cmd *cobra.Command) {
+func StorageGet(client *http.Client, base, token string, cmd *cobra.Command, key string) {
 	params := url.Values{}
 	if t, _ := cmd.Flags().GetString("type"); t != "" {
 		params.Set("type", t)
 	}
-	if k, _ := cmd.Flags().GetString("key"); k != "" {
+	if k := storageKey(cmd, key); k != "" {
 		params.Set("key", k)
 	}
 	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
@@ -26,7 +25,6 @@ func StorageGet(client *http.Client, base, token string, cmd *cobra.Command) {
 	printIndented(buf)
 }
 
-// StorageSet sets a single localStorage or sessionStorage item.
 func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key, value string) {
 	storageType, _ := cmd.Flags().GetString("type")
 	if storageType == "" {
@@ -46,11 +44,17 @@ func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key
 	requireMap(apiclient.DoPost(client, base, token, "/storage", body), 1, "Failed to set storage item")
 }
 
-// StorageDelete removes a storage item, clears a store, or clears both (--all).
-// It calls DELETE /storage so the server-side delete/clear handler is used.
-func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command) {
-	storageType, _ := cmd.Flags().GetString("type")
+func storageKey(cmd *cobra.Command, positional string) string {
+	if positional != "" {
+		return positional
+	}
 	key, _ := cmd.Flags().GetString("key")
+	return key
+}
+
+func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command, positional string) {
+	storageType, _ := cmd.Flags().GetString("type")
+	key := storageKey(cmd, positional)
 	all, _ := cmd.Flags().GetBool("all")
 	tabID, _ := cmd.Flags().GetString("tab")
 
@@ -74,7 +78,6 @@ func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command) 
 	requireMap(apiclient.DoDeleteJSON(client, base, token, "/storage", body), 1, "Failed to delete storage")
 }
 
-// StorageClear clears storage (alias: passes type=all or the given type).
 func StorageClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	StorageDelete(client, base, token, cmd)
+	StorageDelete(client, base, token, cmd, "")
 }

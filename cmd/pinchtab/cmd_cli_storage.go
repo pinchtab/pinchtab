@@ -12,12 +12,13 @@ var storageCmd = &cobra.Command{
 }
 
 var storageGetCmd = &cobra.Command{
-	Use:   "get",
+	Use:   "get [key]",
 	Short: "Get storage items",
-	Long:  "Read localStorage or sessionStorage items for the active tab. Use --type to select local|session (default: both). Use --key to fetch a single item.",
+	Long:  "Read localStorage or sessionStorage items for the active tab. Use --type to select local|session (default: both). Name a key positionally, or with --key, to fetch a single item.",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageGet(rt.client, rt.base, rt.token, cmd)
+			browseractions.StorageGet(rt.client, rt.base, rt.token, cmd, positionalKey(args))
 		})
 	},
 }
@@ -35,14 +36,22 @@ var storageSetCmd = &cobra.Command{
 }
 
 var storageDeleteCmd = &cobra.Command{
-	Use:   "delete",
+	Use:   "delete [key]",
 	Short: "Delete a specific storage key",
-	Long:  "Remove a single key from localStorage or sessionStorage. Use --key and --type local|session.",
+	Long:  "Remove a single key from localStorage or sessionStorage. Name the key positionally or with --key, and pick the store with --type local|session.",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageDelete(rt.client, rt.base, rt.token, cmd)
+			browseractions.StorageDelete(rt.client, rt.base, rt.token, cmd, positionalKey(args))
 		})
 	},
+}
+
+func positionalKey(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return args[0]
 }
 
 var storageClearCmd = &cobra.Command{
@@ -57,8 +66,6 @@ var storageClearCmd = &cobra.Command{
 }
 
 func init() {
-	storageCmd.AddCommand(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
-
 	addTabFlag(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
 
 	storageGetCmd.Flags().String("type", "", "Storage type: local, session (default: both)")

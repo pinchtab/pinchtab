@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +32,43 @@ func browserRootCommands() []*cobra.Command {
 	}
 }
 
+var gatedCommands = map[*cobra.Command]routes.Capability{
+	evalCmd:           routes.CapEvaluate,
+	downloadCmd:       routes.CapDownload,
+	uploadCmd:         routes.CapUpload,
+	cookiesCmd:        routes.CapCookies,
+	storageCmd:        routes.CapStateExport,
+	stateCmd:          routes.CapStateExport,
+	recordCmd:         routes.CapScreencast,
+	networkRouteCmd:   routes.CapNetworkIntercept,
+	networkUnrouteCmd: routes.CapNetworkIntercept,
+}
+
+var capabilitiesWithoutACommand = map[routes.Capability]string{
+	routes.CapMacro: "the macro pipeline is an HTTP-only batch verb; the CLI has no macro command",
+}
+
+func capabilityGateSentence(cap routes.Capability) string {
+	meta, ok := routes.Meta(cap)
+	if !ok {
+		panic(fmt.Sprintf("capability %q gates a command but routes.Meta does not describe it", cap))
+	}
+	return "Requires " + meta.Setting + "=true."
+}
+
+func applyCapabilityGateHelp() {
+	for cmd, cap := range gatedCommands {
+		sentence := capabilityGateSentence(cap)
+		for _, c := range append([]*cobra.Command{cmd}, cmd.Commands()...) {
+			c.Long = strings.TrimSpace(c.Long)
+			if c.Long == "" {
+				c.Long = c.Short + "."
+			}
+			c.Long += " " + sentence
+		}
+	}
+}
+
 func registerBrowserCommands() {
 	rootCmds := browserRootCommands()
 	setCommandGroup("browser", rootCmds...)
@@ -45,6 +84,10 @@ func registerBrowserCommands() {
 	mouseCmd.AddCommand(mouseMoveCmd, mouseDownCmd, mouseUpCmd, mouseWheelCmd)
 	networkCmd.AddCommand(networkRouteCmd, networkUnrouteCmd)
 	recordCmd.AddCommand(recordStartCmd, recordStopCmd, recordStatusCmd)
+	cookiesCmd.AddCommand(cookiesGetCmd, cookiesSetCmd, cookiesClearCmd)
+	storageCmd.AddCommand(storageGetCmd, storageSetCmd, storageDeleteCmd, storageClearCmd)
+	stateCmd.AddCommand(stateListCmd, stateSaveCmd, stateLoadCmd, stateShowCmd, stateDeleteCmd, stateCleanCmd)
+	applyCapabilityGateHelp()
 
 	configureBrowserFlags()
 

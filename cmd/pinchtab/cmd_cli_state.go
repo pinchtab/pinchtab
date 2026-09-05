@@ -30,7 +30,7 @@ var stateListCmd = &cobra.Command{
 var stateSaveCmd = &cobra.Command{
 	Use:   "save",
 	Short: "Save current browser state",
-	Long:  "Capture cookies, localStorage, and sessionStorage for the active tab and persist to disk. Requires security.allowStateExport=true.",
+	Long:  "Capture cookies, localStorage, and sessionStorage for the active tab and persist to disk.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.StateSave(rt.client, rt.base, rt.token, cmd)
@@ -41,7 +41,7 @@ var stateSaveCmd = &cobra.Command{
 var stateLoadCmd = &cobra.Command{
 	Use:   "load",
 	Short: "Load and restore a saved state",
-	Long:  "Restore cookies and storage from a previously saved state file. Supports exact name or prefix matching (most recent match is used). Requires security.allowStateExport=true.",
+	Long:  "Restore cookies and storage from a previously saved state file. Supports exact name or prefix matching (most recent match is used).",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.StateLoad(rt.client, rt.base, rt.token, cmd)
@@ -52,7 +52,7 @@ var stateLoadCmd = &cobra.Command{
 var stateShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show state file details",
-	Long:  "Display the full contents of a saved state file including cookies and storage. Requires security.allowStateExport=true.",
+	Long:  "Display the full contents of a saved state file including cookies and storage.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.StateShow(rt.client, rt.base, rt.token, cmd)
@@ -63,7 +63,7 @@ var stateShowCmd = &cobra.Command{
 var stateDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a saved state file",
-	Long:  "Remove a named state file from the state directory. Requires security.allowStateExport=true.",
+	Long:  "Remove a named state file from the state directory.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.StateDelete(rt.client, rt.base, rt.token, cmd)
@@ -74,7 +74,7 @@ var stateDeleteCmd = &cobra.Command{
 var stateCleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Remove old state files",
-	Long:  "Delete state files older than a given number of hours (default: 24). Requires security.allowStateExport=true.",
+	Long:  "Delete state files older than a given number of hours (default: 24).",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.StateClean(rt.client, rt.base, rt.token, cmd)
@@ -83,7 +83,6 @@ var stateCleanCmd = &cobra.Command{
 }
 
 func init() {
-	stateCmd.AddCommand(stateListCmd, stateSaveCmd, stateLoadCmd, stateShowCmd, stateDeleteCmd, stateCleanCmd)
 	addTabFlag(stateCmd)
 
 	stateSaveCmd.Flags().String("name", "", "Name for the saved state (auto-generated if omitted)")
