@@ -16,14 +16,7 @@ import (
 const (
 	maxConcurrentStreamRequestsPerHost = 8
 	rateLimitWindow                    = 10 * time.Second
-	// 3000/10s (~300 req/s per client IP): agent-driven workloads
-	// (snapshot/action loops, the optimization suites) legitimately burst far
-	// past the older 300 cap. Bearer-token auth and the loopback-only default
-	// bind are the primary gates; this limiter is per-client defense-in-depth.
-	// Operators exposing the port beyond localhost can lower it via
-	// PINCHTAB_RATE_LIMIT_MAX (documented in docs/reference/config.md).
-	defaultRateLimitMaxReq = 3000
-	evictionInterval       = 30 * time.Second
+	defaultRateLimitMaxReq             = 3000
 )
 
 var rateLimitMaxReq = func() int {
@@ -37,16 +30,17 @@ var (
 	streamMu          sync.Mutex
 	streamConnections = map[string]int{}
 
-	rateMu             sync.Mutex
-	rateBuckets        = map[string][]time.Time{}
-	rateLimiterStarted sync.Once
+	requestLimiter = newRequestLimiter()
 )
 
+func newRequestLimiter() *authn.AttemptLimiter {
+	return authn.NewAttemptLimiter(authn.AttemptLimiterConfig{Window: rateLimitWindow, MaxAttempts: rateLimitMaxReq})
+}
+
 func RateLimitMiddleware(next http.Handler) http.Handler {
-	startRateLimiterJanitor(rateLimitWindow, evictionInterval)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := authn.ClientIP(r)
 		if isLongLivedStreamRequest(r) {
-			host := authn.ClientIP(r)
 			if !acquireStreamConnection(host) {
 				atomic.AddUint64(&metricRateLimited, 1)
 				httpx.ErrorCode(w, 429, "stream_limit_reached", "too many concurrent streaming connections", true, map[string]any{
@@ -59,27 +53,12 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		host := authn.ClientIP(r)
-
-		now := time.Now()
-		rateMu.Lock()
-		hits := rateBuckets[host]
-		filtered := hits[:0]
-		for _, t := range hits {
-			if now.Sub(t) < rateLimitWindow {
-				filtered = append(filtered, t)
-			}
-		}
-		if len(filtered) >= rateLimitMaxReq {
-			rateBuckets[host] = filtered
-			rateMu.Unlock()
+		if allowed, retryAfter := requestLimiter.Take(host); !allowed {
 			atomic.AddUint64(&metricRateLimited, 1)
+			w.Header().Set("Retry-After", strconv.Itoa(int((retryAfter+time.Second-1)/time.Second)))
 			httpx.ErrorCode(w, 429, "rate_limited", "too many requests", true, map[string]any{"windowSec": int(rateLimitWindow.Seconds()), "max": rateLimitMaxReq})
 			return
 		}
-		rateBuckets[host] = append(filtered, now)
-		rateMu.Unlock()
-
 		next.ServeHTTP(w, r)
 	})
 }
@@ -122,34 +101,4 @@ func releaseStreamConnection(host string) {
 		return
 	}
 	streamConnections[host] = current - 1
-}
-
-func startRateLimiterJanitor(window, interval time.Duration) {
-	rateLimiterStarted.Do(func() {
-		go func() {
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-			for now := range ticker.C {
-				evictStaleRateBuckets(now, window)
-			}
-		}()
-	})
-}
-
-func evictStaleRateBuckets(now time.Time, window time.Duration) {
-	rateMu.Lock()
-	defer rateMu.Unlock()
-	for host, hits := range rateBuckets {
-		filtered := hits[:0]
-		for _, t := range hits {
-			if now.Sub(t) < window {
-				filtered = append(filtered, t)
-			}
-		}
-		if len(filtered) == 0 {
-			delete(rateBuckets, host)
-		} else {
-			rateBuckets[host] = filtered
-		}
-	}
 }

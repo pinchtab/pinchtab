@@ -50,18 +50,37 @@ func (l *AttemptLimiter) Allow(key string) (bool, time.Duration) {
 	if key == "" {
 		return true, 0
 	}
-
 	now := l.now()
-
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.allowedLocked(l.pruneLocked(key, now), now)
+}
 
-	filtered := l.pruneLocked(key, now)
-	if len(filtered) < l.maxAttempts {
+func (l *AttemptLimiter) Take(key string) (bool, time.Duration) {
+	if l == nil {
 		return true, 0
 	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return true, 0
+	}
+	now := l.now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	filtered := l.pruneLocked(key, now)
+	if allowed, retryAfter := l.allowedLocked(filtered, now); !allowed {
+		return false, retryAfter
+	}
+	l.sweepLocked(now)
+	l.attempts[key] = append(filtered, now)
+	return true, 0
+}
 
-	retryAfter := l.window - now.Sub(filtered[0])
+func (l *AttemptLimiter) allowedLocked(hits []time.Time, now time.Time) (bool, time.Duration) {
+	if len(hits) < l.maxAttempts {
+		return true, 0
+	}
+	retryAfter := l.window - now.Sub(hits[0])
 	if retryAfter < 0 {
 		retryAfter = 0
 	}
@@ -122,6 +141,15 @@ func (l *AttemptLimiter) Reset(key string) {
 	l.mu.Lock()
 	delete(l.attempts, key)
 	l.mu.Unlock()
+}
+
+func (l *AttemptLimiter) TrackedKeys() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.attempts)
 }
 
 func (l *AttemptLimiter) Window() time.Duration {

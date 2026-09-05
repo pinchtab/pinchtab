@@ -4,21 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func fillRateBucket(host string) {
-	now := time.Now()
-	hits := make([]time.Time, rateLimitMaxReq)
-	for i := range hits {
-		hits[i] = now
+	for i := 0; i < rateLimitMaxReq; i++ {
+		requestLimiter.RecordFailure(host)
 	}
-	rateMu.Lock()
-	rateBuckets[host] = hits
-	rateMu.Unlock()
 }
 
 func clientIPChain(trustProxy bool, seen *string) http.Handler {

@@ -31,9 +31,7 @@ func (c *activityCaptureRecorder) Query(activity.Filter) ([]activity.Event, erro
 }
 
 func resetRateLimitStateForTests() {
-	rateMu.Lock()
-	rateBuckets = map[string][]time.Time{}
-	rateMu.Unlock()
+	requestLimiter = newRequestLimiter()
 
 	streamMu.Lock()
 	streamConnections = map[string]int{}
@@ -1129,15 +1127,7 @@ func TestRateLimitMiddleware_IgnoresSpoofedForwardedHeaders(t *testing.T) {
 	resetRateLimitStateForTests()
 	t.Cleanup(resetRateLimitStateForTests)
 
-	now := time.Now()
-	hits := make([]time.Time, rateLimitMaxReq)
-	for i := range hits {
-		hits[i] = now
-	}
-
-	rateMu.Lock()
-	rateBuckets["198.51.100.10"] = hits
-	rateMu.Unlock()
+	fillRateBucket("198.51.100.10")
 
 	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1152,37 +1142,6 @@ func TestRateLimitMiddleware_IgnoresSpoofedForwardedHeaders(t *testing.T) {
 
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 when forwarded headers spoof a new IP, got %d", w.Code)
-	}
-}
-
-func TestEvictStaleRateBuckets_DeletesEmptyHosts(t *testing.T) {
-	resetRateLimitStateForTests()
-	t.Cleanup(resetRateLimitStateForTests)
-
-	now := time.Now()
-	window := 10 * time.Second
-
-	rateMu.Lock()
-	rateBuckets = map[string][]time.Time{
-		"stale-only": {now.Add(-2 * window)},
-		"mixed":      {now.Add(-2 * window), now.Add(-window / 2)},
-		"fresh":      {now.Add(-window / 3)},
-	}
-	rateMu.Unlock()
-
-	evictStaleRateBuckets(now, window)
-
-	rateMu.Lock()
-	defer rateMu.Unlock()
-
-	if _, ok := rateBuckets["stale-only"]; ok {
-		t.Fatal("expected stale-only bucket to be deleted")
-	}
-	if got := len(rateBuckets["mixed"]); got != 1 {
-		t.Fatalf("expected mixed bucket to keep 1 hit, got %d", got)
-	}
-	if got := len(rateBuckets["fresh"]); got != 1 {
-		t.Fatalf("expected fresh bucket to keep 1 hit, got %d", got)
 	}
 }
 

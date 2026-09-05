@@ -9,11 +9,8 @@ func recordStaleRefRetry() {
 	atomic.AddUint64(&metricStaleRefRetries, 1)
 }
 
-// RateBucketHostCount returns the number of unique hosts in rate limit tracking
 func RateBucketHostCount() int {
-	rateMu.Lock()
-	defer rateMu.Unlock()
-	return len(rateBuckets)
+	return requestLimiter.TrackedKeys()
 }
 
 func SnapshotMetrics() map[string]any {
@@ -24,9 +21,7 @@ func SnapshotMetrics() map[string]any {
 	if total > 0 {
 		avgMs = float64(latencySum) / float64(total)
 	}
-	rateMu.Lock()
-	bucketHosts := len(rateBuckets)
-	rateMu.Unlock()
+	bucketHosts := RateBucketHostCount()
 
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
