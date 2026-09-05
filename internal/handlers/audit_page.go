@@ -151,10 +151,7 @@ func (h *Handlers) auditPage(clientCtx context.Context, url string, opts audit.P
 		return audit.NewPageAuditError(url, navErr)
 	}
 
-	// Chrome renders net-level failures (connection refused, DNS) as an
-	// error page without failing the navigation; detect it and report the
-	// underlying net error from the network capture as page data.
-	if cur, urlErr := h.Bridge.CurrentURL(navCtx); urlErr == nil && strings.HasPrefix(cur, "chrome-error://") {
+	if cur, urlErr := h.Bridge.CurrentURL(navCtx); urlErr == nil && strings.HasPrefix(cur, errorPagePrefix) {
 		return audit.NewPageAuditError(url, h.documentNetError(tabID, url))
 	}
 
@@ -171,19 +168,8 @@ func (h *Handlers) auditPage(clientCtx context.Context, url string, opts audit.P
 	return audit.EnrichPage(url, opts, h.auditCollectors(cCtx, tabID))
 }
 
-// documentNetError recovers the document request's net error from the
-// network capture, falling back to a generic message.
 func (h *Handlers) documentNetError(tabID, url string) error {
-	if nm := h.Bridge.NetworkMonitor(); nm != nil {
-		if buf := nm.GetBuffer(tabID); buf != nil {
-			for _, e := range buf.List(bridge.NetworkFilter{}) {
-				if e.URL == url && e.Failed && e.Error != "" {
-					return fmt.Errorf("navigation failed: %s", e.Error)
-				}
-			}
-		}
-	}
-	return fmt.Errorf("navigation failed: %s could not be loaded", url)
+	return fmt.Errorf("navigation failed: %w", h.errorPageLanding(tabID, url))
 }
 
 // auditCollectors wires the audit collectors to this tab's bridge data.

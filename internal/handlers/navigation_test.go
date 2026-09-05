@@ -3,14 +3,17 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/navguard"
 	"github.com/pinchtab/pinchtab/internal/netguard"
@@ -645,4 +648,90 @@ func TestIsNavigateAbortedOnBinary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
+	const target = "http://localhost/page.html"
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	})
+	cases := []struct {
+		name      string
+		netError  string
+		retryable bool
+	}{
+		{"offline tab", "net::ERR_INTERNET_DISCONNECTED", false},
+		{"abort route rule", "net::ERR_BLOCKED_BY_CLIENT", false},
+		{"dns failure", "net::ERR_NAME_NOT_RESOLVED", false},
+		{"connection refused", "net::ERR_CONNECTION_REFUSED", true},
+		{"no recorded reason", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &mockBridge{currentURL: "chrome-error://chromewebdata/", navigateResult: &bridge.NavigateResult{URL: target}, networkMonitor: bridge.NewNetworkMonitor(10)}
+			if tc.netError != "" {
+				m.networkMonitor.GetOrCreateBufferForTest("tab1").Add(bridge.NetworkEntry{URL: target, Failed: true, Error: tc.netError})
+			}
+			h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+			srv := httptest.NewServer(http.HandlerFunc(h.HandleNavigate))
+			defer srv.Close()
+
+			body := map[string]any{"url": target, "tabId": "tab1"}
+			status, raw, _ := apiclient.DoPostQuietWithStatus(srv.Client(), srv.URL, "", "/navigate", body)
+			if status != http.StatusBadGateway {
+				t.Fatalf("status = %d, want 502: %s", status, raw)
+			}
+			var result map[string]any
+			if err := json.Unmarshal(raw, &result); err != nil {
+				t.Fatalf("decode %s: %v", raw, err)
+			}
+			if result["code"] != "navigation_not_loaded" {
+				t.Fatalf("code = %v, want navigation_not_loaded: %s", result["code"], raw)
+			}
+			if retryable, _ := result["retryable"].(bool); retryable != tc.retryable {
+				t.Fatalf("retryable = %v, want %v for %q", retryable, tc.retryable, tc.netError)
+			}
+			msg, _ := result["error"].(string)
+			if tc.netError != "" && !strings.Contains(msg, tc.netError) {
+				t.Fatalf("error %q does not name the recorded reason %q", msg, tc.netError)
+			}
+			if tc.netError == "" && !strings.Contains(msg, "recorded no reason") {
+				t.Fatalf("error %q does not state that no reason was recorded", msg)
+			}
+			if _, err := apiclient.DoPostRawE(srv.Client(), srv.URL, "", "/navigate", body); err == nil {
+				t.Fatal("the CLI's request path treats this navigate as a success, so pinchtab nav would exit 0")
+			}
+		})
+	}
+
+	t.Run("a new tab that lands on the error page is closed, not stranded", func(t *testing.T) {
+		m := &mockBridge{currentURL: "chrome-error://chromewebdata/", navigateResult: &bridge.NavigateResult{URL: target}}
+		h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+		w := httptest.NewRecorder()
+		h.HandleNavigate(w, httptest.NewRequest("POST", "/navigate", bytes.NewReader([]byte(`{"url":"`+target+`","newTab":true}`))))
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+		}
+		if len(m.createTabURLs) != 1 || len(m.closedTabs) != 1 {
+			t.Fatalf("created %v, closed %v; the tab the failed navigate created must be closed", m.createTabURLs, m.closedTabs)
+		}
+	})
+
+	t.Run("a loaded page keeps today's 200", func(t *testing.T) {
+		m := &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{URL: target}}
+		h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+		srv := httptest.NewServer(http.HandlerFunc(h.HandleNavigate))
+		defer srv.Close()
+		body := map[string]any{"url": target, "tabId": "tab1"}
+		status, raw, result := apiclient.DoPostQuietWithStatus(srv.Client(), srv.URL, "", "/navigate", body)
+		if status != 200 || result["url"] != target || result["tabId"] != "tab1" {
+			t.Fatalf("status %d body %s", status, raw)
+		}
+		if _, ok := result["title"]; !ok {
+			t.Fatalf("success body lost its title key: %s", raw)
+		}
+		if _, err := apiclient.DoPostRawE(srv.Client(), srv.URL, "", "/navigate", body); err != nil {
+			t.Fatalf("a loaded page reads as a failure on the CLI path: %v", err)
+		}
+	})
 }

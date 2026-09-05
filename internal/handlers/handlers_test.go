@@ -39,6 +39,8 @@ type mockBridge struct {
 	navigateErr       error
 	navigateFn        func(context.Context, string, bridge.NavigateParams) (*bridge.NavigateResult, error)
 	closedTabs        []string
+	currentURL        string
+	networkMonitor    *bridge.NetworkMonitor
 	runningBrowser    string
 	createTabFn       func(string) (string, context.Context, context.CancelFunc, error)
 
@@ -182,7 +184,7 @@ func (m *mockBridge) GetCrashLogs() []string {
 }
 
 func (m *mockBridge) NetworkMonitor() *bridge.NetworkMonitor {
-	return nil
+	return m.networkMonitor
 }
 
 func (m *mockBridge) GetDialogManager() *bridge.DialogManager {
@@ -290,7 +292,7 @@ func (m *mockBridge) SetCookie(ctx context.Context, params bridge.SetCookieParam
 }
 
 func (m *mockBridge) CurrentURL(ctx context.Context) (string, error) {
-	return "", nil
+	return m.currentURL, nil
 }
 
 func (m *mockBridge) CurrentTitle(ctx context.Context) (string, error) {

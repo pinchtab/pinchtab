@@ -581,6 +581,14 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	h.dismissBanners(ex.ctx, ex.tabID, ex.dismissBanners)
 
 	navURL, _ := h.Bridge.CurrentURL(ex.ctx)
+	if strings.HasPrefix(navURL, errorPagePrefix) {
+		landing := h.errorPageLanding(ex.tabID, ex.url)
+		if ex.isNewTab {
+			_ = h.Bridge.CloseTab(ex.tabID)
+		}
+		navigateErrorWithHint(w, classifyNavigateError(landing), landing, ex.url)
+		return
+	}
 	title, _ := bridge.WaitForTitle(ex.ctx, ex.titleWait)
 	h.setCurrentTabForRequest(r, ex.tabID)
 	if ex.isNewTab {
@@ -592,11 +600,64 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	httpx.JSON(w, 200, navResponse(ex.tabID, navURL, title, route, !ex.isNewTab))
 }
 
-// classifyNavigateError maps a Navigate error to an HTTP status: 422 for redirect
-// overflow, 400 for invalid-URL signals, else 500.
+const errorPagePrefix = "chrome-error://"
+
+const navigationNotLoadedCode = "navigation_not_loaded"
+
+type errorPageLanding struct {
+	url       string
+	reason    string
+	retryable bool
+}
+
+func (e *errorPageLanding) Error() string { return e.url + " could not be loaded: " + e.reason }
+
+func (h *Handlers) errorPageLanding(tabID, url string) *errorPageLanding {
+	return landingFailure(h.recordedNetworkEntries(tabID), url)
+}
+
+func (h *Handlers) recordedNetworkEntries(tabID string) []bridge.NetworkEntry {
+	nm := h.Bridge.NetworkMonitor()
+	if nm == nil {
+		return nil
+	}
+	buf := nm.GetBuffer(tabID)
+	if buf == nil {
+		return nil
+	}
+	return buf.List(bridge.NetworkFilter{})
+}
+
+func landingFailure(entries []bridge.NetworkEntry, url string) *errorPageLanding {
+	for _, e := range entries {
+		if e.URL == url && e.Failed && e.Error != "" {
+			return &errorPageLanding{url: url, reason: e.Error, retryable: transientNetError(e.Error)}
+		}
+	}
+	return &errorPageLanding{url: url, reason: "the browser landed on its error page and recorded no reason"}
+}
+
+var transientNetErrors = []string{
+	"ERR_CONNECTION_REFUSED", "ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED",
+	"ERR_CONNECTION_TIMED_OUT", "ERR_TIMED_OUT", "ERR_NETWORK_CHANGED",
+}
+
+func transientNetError(netErr string) bool {
+	for _, transient := range transientNetErrors {
+		if strings.Contains(netErr, transient) {
+			return true
+		}
+	}
+	return false
+}
+
 func classifyNavigateError(navErr error) int {
 	if errors.Is(navErr, bridge.ErrTooManyRedirects) {
 		return 422
+	}
+	var landing *errorPageLanding
+	if errors.As(navErr, &landing) {
+		return http.StatusBadGateway
 	}
 	errMsg := navErr.Error()
 	if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
@@ -710,6 +771,11 @@ func isNavigateAbortedOnBinary(err error, url string) bool {
 var downloadInstead = remedy.Declare(`pinchtab download "<url>"`)
 
 func navigateErrorWithHint(w http.ResponseWriter, code int, err error, url string) {
+	var landing *errorPageLanding
+	if errors.As(err, &landing) {
+		httpx.ErrorCode(w, code, navigationNotLoadedCode, fmt.Sprintf("navigate: %s", err.Error()), landing.retryable, map[string]any{"url": url})
+		return
+	}
 	if isNavigateAbortedOnBinary(err, url) {
 		httpx.ErrorCode(w, 502, "nav_binary_aborted", fmt.Sprintf("navigate: %s", err.Error()), false,
 			remedy.Details("Chrome cannot render binary/compressed files, so this URL has to be downloaded instead.",

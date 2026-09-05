@@ -114,6 +114,16 @@ Important behavior:
 - `POST /navigate` creates a new tab when `tabId` is omitted for anonymous callers
 - session-authenticated callers keep a current tab per session; omitted `tabId` reuses that session's current tab when one exists, otherwise creates one
 - bearer-token callers with `X-Agent-Id` keep a current tab per agent ID when no session is present
+- a navigation that never produced a document — the tab is offline, an `abort` route
+  rule matched, DNS failed, the connection was refused — leaves Chrome on its own
+  `chrome-error://` page without failing the navigation, so `POST /navigate` checks the
+  landing and answers `502` with code `navigation_not_loaded`, the recorded net error as
+  the reason (or a stated generic reason when the capture holds none), and `details.url`.
+  `retryable` is `true` only for a transient net error such as a refused or reset
+  connection; offline, an abort rule, DNS and an unknown reason are not retryable, since
+  they refuse identically on a retry. A `newTab` navigation that fails this way closes the
+  tab it created. The CLI therefore exits non-zero and an MCP tool reports an error with
+  no change on either surface, and a loaded page keeps exactly the `200` it always had
 - `POST /tab` supports `new` and `focus`
 - `POST /close` closes the `tabId` supplied in the JSON body, or the caller's current/default tab when `tabId` is omitted
 
