@@ -41,7 +41,7 @@ var serverCmd = &cobra.Command{
 				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("--yolo: load config: %v", err)))
 				os.Exit(1)
 			}
-			if _, err := workflow.BuildGuardsDownConfig(fc); err != nil {
+			if err := workflow.BuildGuardsDownConfig(fc); err != nil {
 				fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, fmt.Sprintf("--yolo: %v", err)))
 				os.Exit(1)
 			}

@@ -2,9 +2,11 @@ package report
 
 import (
 	"log/slog"
+	"sort"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 type SecurityWarning struct {
@@ -18,6 +20,9 @@ type SecurityPostureCheck struct {
 	Label  string
 	Passed bool
 	Detail string
+	// Settings are the config keys the row summarises, so a change report can say
+	// which row a written key shows up in, and which keys no row shows.
+	Settings []string
 }
 
 type SecurityPosture struct {
@@ -34,46 +39,53 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
 
 	checks := []SecurityPostureCheck{
 		{
-			ID:     "bind_loopback",
-			Label:  "loopback bind",
-			Passed: isLoopbackBind(cfg.Bind),
-			Detail: cfg.Bind,
+			ID:       "bind_loopback",
+			Settings: []string{"server.bind"},
+			Label:    "loopback bind",
+			Passed:   isLoopbackBind(cfg.Bind),
+			Detail:   cfg.Bind,
 		},
 		{
-			ID:     "api_auth_enabled",
-			Label:  "api auth",
-			Passed: strings.TrimSpace(cfg.Token) != "",
-			Detail: map[bool]string{true: "required", false: "disabled"}[strings.TrimSpace(cfg.Token) != ""],
+			ID:       "api_auth_enabled",
+			Settings: []string{"server.token"},
+			Label:    "api auth",
+			Passed:   strings.TrimSpace(cfg.Token) != "",
+			Detail:   map[bool]string{true: "required", false: "disabled"}[strings.TrimSpace(cfg.Token) != ""],
 		},
 		{
-			ID:     "sensitive_endpoints_disabled",
-			Label:  "sensitive endpoints",
-			Passed: len(cfg.EnabledSensitiveEndpoints()) == 0,
-			Detail: formatEndpointStatus(cfg.EnabledSensitiveEndpoints()),
+			ID:       "sensitive_endpoints_disabled",
+			Settings: capabilitySettings(),
+			Label:    "sensitive endpoints",
+			Passed:   len(cfg.EnabledSensitiveEndpoints()) == 0,
+			Detail:   formatEndpointStatus(cfg.EnabledSensitiveEndpoints()),
 		},
 		{
-			ID:     "attach_local_only",
-			Label:  "attach host scope",
-			Passed: !attachAllowsNonLocalHosts(cfg.AttachAllowHosts),
-			Detail: formatHostScope(cfg.AttachAllowHosts),
+			ID:       "attach_local_only",
+			Settings: []string{"security.attach.allowHosts"},
+			Label:    "attach host scope",
+			Passed:   !attachAllowsNonLocalHosts(cfg.AttachAllowHosts),
+			Detail:   formatHostScope(cfg.AttachAllowHosts),
 		},
 		{
-			ID:     "idpi_whitelist_scoped",
-			Label:  "website whitelist",
-			Passed: cfg.IDPI.Enabled && len(cfg.AllowedDomains) > 0 && !allowsAllDomains(cfg.AllowedDomains),
-			Detail: formatWhitelistStatus(cfg),
+			ID:       "idpi_whitelist_scoped",
+			Settings: []string{"security.idpi.enabled", "security.allowedDomains"},
+			Label:    "website whitelist",
+			Passed:   cfg.IDPI.Enabled && len(cfg.AllowedDomains) > 0 && !allowsAllDomains(cfg.AllowedDomains),
+			Detail:   formatWhitelistStatus(cfg),
 		},
 		{
-			ID:     "idpi_strict_mode",
-			Label:  "IDPI strict mode",
-			Passed: cfg.IDPI.Enabled && cfg.IDPI.StrictMode,
-			Detail: formatStrictModeStatus(cfg),
+			ID:       "idpi_strict_mode",
+			Settings: []string{"security.idpi.enabled", "security.idpi.strictMode"},
+			Label:    "IDPI strict mode",
+			Passed:   cfg.IDPI.Enabled && cfg.IDPI.StrictMode,
+			Detail:   formatStrictModeStatus(cfg),
 		},
 		{
-			ID:     "idpi_content_protection",
-			Label:  "IDPI content guard",
-			Passed: cfg.IDPI.Enabled && (cfg.IDPI.ScanContent || cfg.IDPI.WrapContent),
-			Detail: formatContentGuardStatus(cfg),
+			ID:       "idpi_content_protection",
+			Settings: []string{"security.idpi.enabled", "security.idpi.scanContent", "security.idpi.wrapContent"},
+			Label:    "IDPI content guard",
+			Passed:   cfg.IDPI.Enabled && (cfg.IDPI.ScanContent || cfg.IDPI.WrapContent),
+			Detail:   formatContentGuardStatus(cfg),
 		},
 	}
 
@@ -90,6 +102,31 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
 		Total:  len(checks),
 		Level:  securityPostureLevel(passed, len(checks)),
 	}
+}
+
+func capabilitySettings() []string {
+	settings := make([]string, 0)
+	for cap := range routes.CapabilityEndpoints() {
+		if meta, ok := routes.Meta(cap); ok {
+			settings = append(settings, meta.Setting)
+		}
+	}
+	sort.Strings(settings)
+	return settings
+}
+
+// PostureRowsForSetting names the posture rows a config key feeds; empty means the
+// key is invisible in the posture table and a change report must say so itself.
+func PostureRowsForSetting(path string) []string {
+	rows := make([]string, 0)
+	for _, check := range AssessSecurityPosture(&config.RuntimeConfig{}).Checks {
+		for _, setting := range check.Settings {
+			if setting == path {
+				rows = append(rows, check.Label)
+			}
+		}
+	}
+	return rows
 }
 
 func assessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {

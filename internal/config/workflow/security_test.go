@@ -26,7 +26,7 @@ func TestGuardsDownEnablesEveryCapabilityExceptTheRecordedExclusion(t *testing.T
 	}
 
 	fc := config.DefaultFileConfig()
-	if _, err := BuildGuardsDownConfig(&fc); err != nil {
+	if err := BuildGuardsDownConfig(&fc); err != nil {
 		t.Fatalf("BuildGuardsDownConfig() error = %v", err)
 	}
 
@@ -71,16 +71,17 @@ func TestApplyGuardsDownPreset(t *testing.T) {
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	cfg, gotPath, changed, err := ApplyGuardsDownPreset()
+	result, err := ApplyGuardsDownPreset(false)
 	if err != nil {
 		t.Fatalf("ApplyGuardsDownPreset() error = %v", err)
 	}
-	if !changed {
+	if !result.Written {
 		t.Fatal("expected guards down preset to change config")
 	}
-	if gotPath != configPath {
-		t.Fatalf("config path = %q, want %q", gotPath, configPath)
+	if result.ConfigPath != configPath {
+		t.Fatalf("config path = %q, want %q", result.ConfigPath, configPath)
 	}
+	cfg := config.Load()
 
 	if cfg.Bind != "127.0.0.1" {
 		t.Fatalf("Bind = %q, want 127.0.0.1", cfg.Bind)
@@ -107,7 +108,7 @@ func TestApplyGuardsDownPreset(t *testing.T) {
 
 func TestGuardsDownPostureActiveMirrorsThePreset(t *testing.T) {
 	fc := config.DefaultFileConfig()
-	if _, err := BuildGuardsDownConfig(&fc); err != nil {
+	if err := BuildGuardsDownConfig(&fc); err != nil {
 		t.Fatalf("BuildGuardsDownConfig() error = %v", err)
 	}
 	if !GuardsDownPostureActive(config.NextRuntimeConfig(config.Load(), &fc)) {

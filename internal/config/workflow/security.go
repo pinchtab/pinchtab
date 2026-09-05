@@ -1,15 +1,37 @@
 package workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
+
+// SettingChange is one config key a preset writes, as the file sees it: Old and
+// New are the key's compact JSON values, "" meaning the key is absent. The token
+// never travels in either; it is reported as generated or changed.
+type SettingChange struct {
+	Path string
+	Old  string
+	New  string
+}
+
+// PresetResult is what a preset did or, under dry run, would do. Changes is the
+// diff between the file on disk and the file the preset renders, so it names
+// exactly the keys the file gains, loses or changes; Written is false when the
+// diff was empty or the run was a preview.
+type PresetResult struct {
+	ConfigPath string
+	Changes    []SettingChange
+	Written    bool
+}
+
+func (r PresetResult) Changed() bool { return len(r.Changes) > 0 }
 
 func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) {
 	defaults := config.DefaultFileConfig()
@@ -20,28 +42,16 @@ func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) {
 	fc.Security = defaults.Security
 }
 
-func RestoreSecurityDefaults() (string, bool, error) {
+func RestoreSecurityDefaults(dryRun bool) (PresetResult, error) {
 	fc, configPath, err := config.LoadFileConfig()
 	if err != nil {
-		return "", false, err
+		return PresetResult{}, err
 	}
-	before := securityDefaultsSnapshot(fc)
 	ApplyRecommendedSecurityDefaults(fc)
-	tokenGenerated, err := config.ProvisionFileToken(fc, configPath)
-	if err != nil {
-		return "", false, err
+	if _, err := config.ProvisionFileToken(fc, configPath); err != nil {
+		return PresetResult{}, err
 	}
-	after := securityDefaultsSnapshot(fc)
-	if reflect.DeepEqual(before, after) {
-		return configPath, false, nil
-	}
-	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return "", false, err
-	}
-	if tokenGenerated {
-		fmt.Fprintf(os.Stderr, "pinchtab: generated server.token in %s\n", configPath)
-	}
-	return configPath, true, nil
+	return commitPreset(fc, configPath, dryRun)
 }
 
 func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
@@ -81,28 +91,13 @@ func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
 const guardsDownExcludedCapability = routes.CapStateExport
 
 // BuildGuardsDownConfig mutates fc in memory to apply the guards-down preset.
-// It does not persist anything. Returns whether fc was modified.
-func BuildGuardsDownConfig(fc *config.FileConfig) (bool, error) {
+// It does not persist anything.
+func BuildGuardsDownConfig(fc *config.FileConfig) error {
 	if fc == nil {
-		return false, fmt.Errorf("nil file config")
+		return fmt.Errorf("nil file config")
 	}
-	originalJSON, err := formatFileConfigJSON(fc)
-	if err != nil {
-		return false, err
-	}
-
-	original, err := config.GetConfigValue(fc, "server.token")
-	if err != nil {
-		return false, fmt.Errorf("read server.token: %w", err)
-	}
-	if strings.TrimSpace(original) == "" {
-		token, err := config.GenerateAuthToken()
-		if err != nil {
-			return false, fmt.Errorf("generate token: %w", err)
-		}
-		if err := config.SetConfigValue(fc, "server.token", token); err != nil {
-			return false, fmt.Errorf("set server.token: %w", err)
-		}
+	if _, err := config.EnsureFileToken(fc); err != nil {
+		return fmt.Errorf("generate token: %w", err)
 	}
 
 	for cap := range routes.CapabilityEndpoints() {
@@ -111,10 +106,10 @@ func BuildGuardsDownConfig(fc *config.FileConfig) (bool, error) {
 		}
 		meta, ok := routes.Meta(cap)
 		if !ok {
-			return false, fmt.Errorf("capability %q gates routes but routes.Meta does not describe it", cap)
+			return fmt.Errorf("capability %q gates routes but routes.Meta does not describe it", cap)
 		}
 		if err := config.SetConfigValue(fc, meta.Setting, "true"); err != nil {
-			return false, fmt.Errorf("set %s: %w", meta.Setting, err)
+			return fmt.Errorf("set %s: %w", meta.Setting, err)
 		}
 	}
 
@@ -132,19 +127,14 @@ func BuildGuardsDownConfig(fc *config.FileConfig) (bool, error) {
 		{path: "security.idpi.wrapContent", value: "false"},
 	} {
 		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
-			return false, fmt.Errorf("set %s: %w", item.path, err)
+			return fmt.Errorf("set %s: %w", item.path, err)
 		}
 	}
 
 	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
-		return false, errs[0]
+		return errs[0]
 	}
-
-	nextJSON, err := formatFileConfigJSON(fc)
-	if err != nil {
-		return false, err
-	}
-	return originalJSON != nextJSON, nil
+	return nil
 }
 
 func GuardsDownPostureActive(cfg *config.RuntimeConfig) bool {
@@ -162,108 +152,112 @@ func GuardsDownPostureActive(cfg *config.RuntimeConfig) bool {
 	return cfg.AttachEnabled && !cfg.IDPI.Enabled
 }
 
-func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
+func ApplyGuardsDownPreset(dryRun bool) (PresetResult, error) {
 	fc, configPath, err := config.LoadFileConfig()
 	if err != nil {
-		return nil, "", false, fmt.Errorf("load config: %w", err)
+		return PresetResult{}, fmt.Errorf("load config: %w", err)
 	}
-	changed, err := BuildGuardsDownConfig(fc)
+	if err := BuildGuardsDownConfig(fc); err != nil {
+		return PresetResult{}, err
+	}
+	return commitPreset(fc, configPath, dryRun)
+}
+
+// commitPreset is the one diff both presets share: the file on disk against the
+// bytes the save would write. Under dryRun the diff is the whole result.
+func commitPreset(fc *config.FileConfig, configPath string, dryRun bool) (PresetResult, error) {
+	existing, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return PresetResult{}, fmt.Errorf("read config: %w", err)
+	}
+	next, err := config.RenderFileConfig(fc, existing)
 	if err != nil {
-		return nil, "", false, err
+		return PresetResult{}, err
 	}
-	if !changed {
-		return config.Load(), configPath, false, nil
+	changes, err := settingChanges(existing, next)
+	if err != nil {
+		return PresetResult{}, err
+	}
+	result := PresetResult{ConfigPath: configPath, Changes: changes}
+	if dryRun || len(changes) == 0 {
+		return result, nil
 	}
 	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return nil, "", false, fmt.Errorf("save config: %w", err)
+		return PresetResult{}, fmt.Errorf("save config: %w", err)
 	}
-	return config.Load(), configPath, true, nil
+	result.Written = true
+	return result, nil
 }
 
-func formatFileConfigJSON(fc *config.FileConfig) (string, error) {
-	data, err := json.Marshal(fc)
+const tokenSetting = "server.token"
+
+func settingChanges(before, after []byte) ([]SettingChange, error) {
+	old, err := flattenConfigJSON(before)
 	if err != nil {
-		return "", fmt.Errorf("marshal config: %w", err)
+		return nil, fmt.Errorf("parse config on disk: %w", err)
 	}
-	return string(data), nil
+	next, err := flattenConfigJSON(after)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(next))
+	for path := range old {
+		paths = append(paths, path)
+	}
+	for path := range next {
+		if _, seen := old[path]; !seen {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	changes := make([]SettingChange, 0)
+	for _, path := range paths {
+		if old[path] == next[path] {
+			continue
+		}
+		changes = append(changes, redactToken(SettingChange{Path: path, Old: old[path], New: next[path]}))
+	}
+	return changes, nil
 }
 
-type securityDefaultsState struct {
-	Bind     string
-	Token    string
-	Security securityConfigValues
+func redactToken(c SettingChange) SettingChange {
+	if c.Path != tokenSetting {
+		return c
+	}
+	if c.Old == `""` {
+		c.Old = ""
+	}
+	if c.Old != "" {
+		c.Old = "<set>"
+	}
+	if c.New != "" {
+		c.New = "<generated>"
+	}
+	return c
 }
 
-type securityConfigValues struct {
-	AllowEvaluate         bool
-	AllowMacro            bool
-	AllowScreencast       bool
-	AllowDownload         bool
-	AllowCookies          bool
-	AllowNetworkIntercept bool
-	DownloadMaxBytes      int
-	AllowUpload           bool
-	UploadMaxRequestBytes int
-	UploadMaxFiles        int
-	UploadMaxFileBytes    int
-	UploadMaxTotalBytes   int
-	MaxRedirects          int
-	AttachEnabled         bool
-	IDPI                  config.IDPIConfig
-}
-
-func securityDefaultsSnapshot(fc *config.FileConfig) securityDefaultsState {
-	if fc == nil {
-		return securityDefaultsState{}
+// flattenConfigJSON maps every leaf of a config document to its dotted path,
+// with the leaf's compact JSON as the value; an empty document has no leaves.
+func flattenConfigJSON(data []byte) (map[string]string, error) {
+	out := map[string]string{}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return out, nil
 	}
-	s := securityDefaultsState{
-		Bind:  fc.Server.Bind,
-		Token: fc.Server.Token,
-		Security: securityConfigValues{
-			IDPI: fc.Security.EffectiveIDPI(),
-		},
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
 	}
-	if fc.Security.AllowEvaluate != nil {
-		s.Security.AllowEvaluate = *fc.Security.AllowEvaluate
+	var walk func(prefix string, value any)
+	walk = func(prefix string, value any) {
+		if object, ok := value.(map[string]any); ok && len(object) > 0 {
+			for key, child := range object {
+				walk(strings.TrimPrefix(prefix+"."+key, "."), child)
+			}
+			return
+		}
+		raw, _ := json.Marshal(value)
+		out[prefix] = string(raw)
 	}
-	if fc.Security.AllowMacro != nil {
-		s.Security.AllowMacro = *fc.Security.AllowMacro
-	}
-	if fc.Security.AllowScreencast != nil {
-		s.Security.AllowScreencast = *fc.Security.AllowScreencast
-	}
-	if fc.Security.AllowDownload != nil {
-		s.Security.AllowDownload = *fc.Security.AllowDownload
-	}
-	if fc.Security.AllowCookies != nil {
-		s.Security.AllowCookies = *fc.Security.AllowCookies
-	}
-	if fc.Security.AllowNetworkIntercept != nil {
-		s.Security.AllowNetworkIntercept = *fc.Security.AllowNetworkIntercept
-	}
-	if fc.Security.DownloadMaxBytes != nil {
-		s.Security.DownloadMaxBytes = *fc.Security.DownloadMaxBytes
-	}
-	if fc.Security.AllowUpload != nil {
-		s.Security.AllowUpload = *fc.Security.AllowUpload
-	}
-	if fc.Security.UploadMaxRequestBytes != nil {
-		s.Security.UploadMaxRequestBytes = *fc.Security.UploadMaxRequestBytes
-	}
-	if fc.Security.UploadMaxFiles != nil {
-		s.Security.UploadMaxFiles = *fc.Security.UploadMaxFiles
-	}
-	if fc.Security.UploadMaxFileBytes != nil {
-		s.Security.UploadMaxFileBytes = *fc.Security.UploadMaxFileBytes
-	}
-	if fc.Security.UploadMaxTotalBytes != nil {
-		s.Security.UploadMaxTotalBytes = *fc.Security.UploadMaxTotalBytes
-	}
-	if fc.Security.MaxRedirects != nil {
-		s.Security.MaxRedirects = *fc.Security.MaxRedirects
-	}
-	if fc.Security.Attach.Enabled != nil {
-		s.Security.AttachEnabled = *fc.Security.Attach.Enabled
-	}
-	return s
+	walk("", doc)
+	return out, nil
 }

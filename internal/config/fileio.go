@@ -140,21 +140,11 @@ func SaveFileConfig(fc *FileConfig, path string) error {
 	// whose whole job is to lay down a complete starter file — schema URL, bind, the
 	// works. Only an UPDATE has a file whose shape is authoritative, and that is where
 	// materialising defaults did the damage.
-	var data []byte
-	if len(existing) == 0 {
-		if data, err = json.MarshalIndent(fc, "", "  "); err != nil {
-			return fmt.Errorf("failed to serialize config: %w", err)
-		}
-		data = append(data, '\n')
-	} else if data, err = renderMinimalConfig(fc, existing); err != nil {
+	data, err := RenderFileConfig(fc, existing)
+	if err != nil {
 		return err
 	}
 
-	// A save that changes nothing does not touch the file. This is what makes a
-	// no-op write byte-identical by construction rather than by matching the user's
-	// formatting: an inline array or a hand-wrapped section is only ever re-rendered
-	// when something in it actually changed. It also means a read-only config raises
-	// no error for a write that had nothing to say.
 	if len(existing) > 0 && sameJSONDocument(existing, data) {
 		return nil
 	}
@@ -164,6 +154,19 @@ func SaveFileConfig(fc *FileConfig, path string) error {
 	}
 
 	return applyConfigPerms(path)
+}
+
+// RenderFileConfig is the bytes SaveFileConfig writes for fc over the file that
+// is already on disk, so a caller can diff or preview a save without performing it.
+func RenderFileConfig(fc *FileConfig, existing []byte) ([]byte, error) {
+	if len(existing) == 0 {
+		data, err := json.MarshalIndent(fc, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize config: %w", err)
+		}
+		return append(data, '\n'), nil
+	}
+	return renderMinimalConfig(fc, existing)
 }
 
 func configAsMap(fc *FileConfig) (map[string]any, error) {

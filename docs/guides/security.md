@@ -390,6 +390,32 @@ For a secure local setup:
 }
 ```
 
+### Applying And Previewing The Presets
+
+`pinchtab security up` writes the recommended defaults into the config file and
+`pinchtab security down` writes the documented guards-down preset. Both are persistent
+and take effect on the next restart, so both report exactly what they wrote: every
+config key that changed, with its old and new value, in the same shape the residual
+warnings use, and under each key the posture row that shows it or a note that no row
+does. A generated `server.token` is listed as `<absent> -> <generated>` and never
+printed.
+
+```text
+Security defaults restored in ~/.pinchtab/config.json (5 config setting(s) written):
+    security.idpi.enabled: <absent> -> true
+      posture row: website whitelist, IDPI strict mode, IDPI content guard
+    security.idpi.scanTimeoutSec: <absent> -> 5
+      not shown in the posture table
+```
+
+`pinchtab security up --dry-run` and `pinchtab security down --dry-run` print the same
+report for what the command would write and touch nothing, tokens included. `--dry-run`
+is the spelling every previewing PinchTab command uses.
+
+The overview counts three different populations and says which is which: posture rows
+(the table), config settings that differ from the recommended defaults (listed under the
+count, and what `security up` writes), and security warnings `security up` cannot fix.
+
 If you intentionally expose PinchTab beyond localhost, treat the token as mandatory and keep the sensitive endpoint families disabled unless you have a specific reason to enable them. For anything more exposed than a single-machine local setup, assume you are operating an advanced deployment and review each security control explicitly.
 
 ## Authenticated Browser Sessions

@@ -27,6 +27,10 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) report.SecurityPosture {
 	return report.AssessSecurityPosture(cfg)
 }
 
+func PostureRowsForSetting(path string) []string {
+	return report.PostureRowsForSetting(path)
+}
+
 func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 	return report.RecommendedSecurityDefaultLines(cfg)
 }

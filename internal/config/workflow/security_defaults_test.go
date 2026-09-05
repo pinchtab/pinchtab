@@ -2,9 +2,12 @@ package workflow
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -91,15 +94,15 @@ func TestRestoreSecurityDefaults(t *testing.T) {
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	gotPath, changed, err := RestoreSecurityDefaults()
+	result, err := RestoreSecurityDefaults(false)
 	if err != nil {
 		t.Fatalf("RestoreSecurityDefaults() error = %v", err)
 	}
-	if gotPath != configPath {
-		t.Fatalf("RestoreSecurityDefaults() path = %q, want %q", gotPath, configPath)
+	if result.ConfigPath != configPath {
+		t.Fatalf("RestoreSecurityDefaults() path = %q, want %q", result.ConfigPath, configPath)
 	}
-	if !changed {
-		t.Fatalf("RestoreSecurityDefaults() changed = false, want true")
+	if !result.Written {
+		t.Fatalf("RestoreSecurityDefaults() wrote nothing; changes = %+v", result.Changes)
 	}
 
 	saved, err := os.ReadFile(configPath)
@@ -142,7 +145,7 @@ func TestRestoreSecurityDefaults_RefusesToProvisionIntoAnOperatorConfig(t *testi
 		t.Fatal(err)
 	}
 
-	_, _, err = RestoreSecurityDefaults()
+	_, err = RestoreSecurityDefaults(false)
 	if !errors.Is(err, config.ErrOperatorConfigToken) {
 		t.Fatalf("RestoreSecurityDefaults() error = %v, want the operator-config refusal; this path used to generate a credential into the operator's file and discard the error", err)
 	}
@@ -171,12 +174,15 @@ func TestRestoreSecurityDefaults_TokenOnlyChangeOnTheDefaultPathIsSaved(t *testi
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	_, changed, err := RestoreSecurityDefaults()
+	result, err := RestoreSecurityDefaults(false)
 	if err != nil {
 		t.Fatalf("RestoreSecurityDefaults() error = %v", err)
 	}
-	if !changed {
-		t.Fatalf("RestoreSecurityDefaults() changed = false, want true")
+	if !result.Written {
+		t.Fatalf("RestoreSecurityDefaults() wrote nothing; changes = %+v", result.Changes)
+	}
+	if len(result.Changes) != 1 || result.Changes[0].Path != "server.token" || result.Changes[0].New != "<generated>" || result.Changes[0].Old != "" {
+		t.Fatalf("a token-only restore reports %+v, want one server.token change marked generated", result.Changes)
 	}
 
 	loaded, _, err := config.LoadFileConfig()
@@ -186,4 +192,153 @@ func TestRestoreSecurityDefaults_TokenOnlyChangeOnTheDefaultPathIsSaved(t *testi
 	if loaded.Server.Token == "" {
 		t.Fatalf("expected generated token to be persisted on the default path")
 	}
+}
+
+// Every key the file gains is named, and the expected set is the file's own diff
+// rather than a hand-kept list, so a recommended default added later cannot ship
+// without appearing in the report.
+func TestRestoreSecurityDefaultsReportsExactlyTheKeysTheFileGained(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if err := os.WriteFile(configPath, []byte(`{"server":{"port":"9999","bind":"0.0.0.0","token":"secret"},"security":{"allowEvaluate":true}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := flattenedFile(t, configPath)
+
+	result, err := RestoreSecurityDefaults(false)
+	if err != nil {
+		t.Fatalf("RestoreSecurityDefaults() error = %v", err)
+	}
+	after := flattenedFile(t, configPath)
+
+	want := map[string][2]string{}
+	for path, value := range after {
+		if before[path] != value {
+			want[path] = [2]string{before[path], value}
+		}
+	}
+	for path, value := range before {
+		if _, kept := after[path]; !kept {
+			want[path] = [2]string{value, ""}
+		}
+	}
+	if len(want) < 4 {
+		t.Fatalf("the file gained only %d keys; this check would prove little", len(want))
+	}
+	got := map[string][2]string{}
+	for _, change := range result.Changes {
+		got[change.Path] = [2]string{change.Old, change.New}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("report names %v\nfile diff is %v", got, want)
+	}
+	for _, path := range []string{"security.idpi.enabled", "security.idpi.wrapContent", "security.idpi.scanTimeoutSec"} {
+		if _, ok := got[path]; !ok {
+			t.Errorf("%s was written silently: not in the report", path)
+		}
+	}
+}
+
+func TestDryRunWritesNothingAndPreviewsTheRealRun(t *testing.T) {
+	for name, preset := range map[string]func(bool) (PresetResult, error){
+		"up":   RestoreSecurityDefaults,
+		"down": ApplyGuardsDownPreset,
+	} {
+		t.Run(name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.json")
+			t.Setenv("PINCHTAB_CONFIG", configPath)
+			if err := os.WriteFile(configPath, []byte(`{"server":{"port":"9999","bind":"0.0.0.0","token":"secret"},"security":{"allowEvaluate":true}}`+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			before, _ := os.ReadFile(configPath)
+
+			preview, err := preset(true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if preview.Written || len(preview.Changes) == 0 {
+				t.Fatalf("dry run = %+v, want unwritten changes", preview)
+			}
+			after, _ := os.ReadFile(configPath)
+			if !bytes.Equal(before, after) {
+				t.Fatalf("dry run changed the file:\n%s\n%s", before, after)
+			}
+
+			real, err := preset(false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !real.Written || !reflect.DeepEqual(real.Changes, preview.Changes) {
+				t.Fatalf("real run wrote %+v\npreview said %+v", real.Changes, preview.Changes)
+			}
+		})
+	}
+}
+
+// A dry run that mints a credential is worse than no dry run: the token is reported
+// as something that would be generated, and the file stays without one.
+func TestDryRunReportsATokenItDoesNotProvision(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("PINCHTAB_CONFIG", "")
+	configPath := filepath.Join(tmpHome, ".pinchtab", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = ""
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	preview, err := RestoreSecurityDefaults(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Changes) != 1 || preview.Changes[0].Path != "server.token" || preview.Changes[0].New != "<generated>" {
+		t.Fatalf("preview = %+v, want one server.token change marked generated", preview.Changes)
+	}
+	loaded, _, err := config.LoadFileConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Server.Token != "" {
+		t.Fatal("a dry run provisioned a token")
+	}
+}
+
+func TestTheTokenValueNeverAppearsInAChange(t *testing.T) {
+	changes, err := settingChanges([]byte(`{"server":{"token":"old-secret"}}`), []byte(`{"server":{"token":"new-secret"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Old != "<set>" || changes[0].New != "<generated>" {
+		t.Fatalf("token change = %+v", changes)
+	}
+}
+
+func flattenedFile(t *testing.T, path string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	var walk func(prefix string, v any)
+	walk = func(prefix string, v any) {
+		if obj, ok := v.(map[string]any); ok && len(obj) > 0 {
+			for k, child := range obj {
+				walk(strings.TrimPrefix(prefix+"."+k, "."), child)
+			}
+			return
+		}
+		raw, _ := json.Marshal(v)
+		out[prefix] = string(raw)
+	}
+	walk("", doc)
+	return out
 }

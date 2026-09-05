@@ -424,8 +424,10 @@ pinchtab config get <path>              # Read one file-config value
 pinchtab config set <path> <val>        # Set one file-config value
 pinchtab config patch <json>            # Merge JSON into the config file
 pinchtab security                       # Interactive security overview
-pinchtab security up                    # Apply stricter defaults
-pinchtab security down                  # Apply documented guards-down preset
+pinchtab security up                    # Apply stricter defaults, listing every key written
+pinchtab security down                  # Apply documented guards-down preset, listing every key written
+pinchtab security up --dry-run          # Preview what up would write without writing
+pinchtab security down --dry-run        # Preview what down would write without writing
 ```
 
 ## Global Flags

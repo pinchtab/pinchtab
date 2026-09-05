@@ -126,3 +126,40 @@ func TestEveryRecommendedLineStatesTheValueSecurityUpWrites(t *testing.T) {
 		}
 	}
 }
+
+// Every key security up writes on a relaxed config is either summarised by a posture
+// row or resolves to none, in which case the change report says so; the mapping is
+// read off the rows themselves so a new row cannot leave a key unclaimed silently.
+func TestEveryKeySecurityUpWritesResolvesToAPostureRowOrToNone(t *testing.T) {
+	relaxed := config.DefaultFileConfig()
+	relaxed.Server.Bind = "0.0.0.0"
+	relaxed.Security.IDPI = &config.IDPIConfig{}
+	hardened := config.DefaultFileConfig()
+	workflow.ApplyRecommendedSecurityDefaults(&hardened)
+	claimed, unclaimed := 0, 0
+	for _, line := range RecommendedSecurityDefaultLines(config.NextRuntimeConfig(config.Load(), &relaxed)) {
+		path, _, _ := strings.Cut(line, " = ")
+		if len(PostureRowsForSetting(path)) > 0 {
+			claimed++
+		} else {
+			unclaimed++
+		}
+	}
+	if claimed == 0 {
+		t.Fatal("no recommended setting resolves to a posture row; the mapping is empty")
+	}
+	for _, check := range AssessSecurityPosture(config.Load()).Checks {
+		if len(check.Settings) == 0 {
+			t.Errorf("posture row %q names no settings, so no change can be attributed to it", check.Label)
+		}
+	}
+	for _, path := range []string{"security.idpi.wrapContent", "security.idpi.scanContent", "security.idpi.enabled"} {
+		if len(PostureRowsForSetting(path)) == 0 {
+			t.Errorf("%s feeds the IDPI rows yet resolves to none", path)
+		}
+	}
+	if rows := PostureRowsForSetting("security.idpi.scanTimeoutSec"); len(rows) != 0 {
+		t.Errorf("scanTimeoutSec is not summarised by any row but resolves to %v", rows)
+	}
+	_ = unclaimed
+}

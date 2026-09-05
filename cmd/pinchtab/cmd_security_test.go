@@ -73,15 +73,12 @@ func TestApplySecurityDownPrintsExplicitRiskFraming(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		cfg, changed, err := applySecurityDown()
+		result, err := applySecurityDown(false)
 		if err != nil {
 			t.Fatalf("applySecurityDown() error = %v", err)
 		}
-		if !changed {
+		if !result.Written {
 			t.Fatal("expected applySecurityDown() to change config")
-		}
-		if cfg == nil {
-			t.Fatal("expected runtime config result")
 		}
 	})
 

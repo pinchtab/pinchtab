@@ -20,16 +20,18 @@ var securityCmd = &cobra.Command{
 	},
 }
 
+var securityDryRun bool
+
 func init() {
 	securityCmd.GroupID = "config"
-	securityCmd.AddCommand(&cobra.Command{
+	up := &cobra.Command{
 		Use:   "up",
 		Short: "Apply recommended security defaults",
 		Run: func(cmd *cobra.Command, args []string) {
 			handleSecurityUpCommand()
 		},
-	})
-	securityCmd.AddCommand(&cobra.Command{
+	}
+	down := &cobra.Command{
 		Use:   "down",
 		Short: "Apply a documented security-reducing preset while keeping loopback bind and API auth enabled",
 		Long: "Applies the guards-down preset for local operator workflows. " +
@@ -39,7 +41,11 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			handleSecurityDownCommand()
 		},
-	})
+	}
+	for _, preset := range []*cobra.Command{up, down} {
+		preset.Flags().BoolVar(&securityDryRun, "dry-run", false, "Report the settings the preset would write without writing them")
+		securityCmd.AddCommand(preset)
+	}
 	rootCmd.AddCommand(securityCmd)
 }
 
@@ -92,8 +98,11 @@ func printSecurityOverview(cfg *config.RuntimeConfig) {
 		fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
 	case len(recommended) > 0:
 		fmt.Printf("  %s %s\n",
-			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d setting(s) differ from recommended defaults —", len(recommended))),
+			cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d config setting(s) differ from recommended defaults (the rows above summarise them) —", len(recommended))),
 			cli.StyleStdout(cli.CommandStyle, "pinchtab security up"))
+		for _, line := range recommended {
+			fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, line))
+		}
 	default:
 		fmt.Println("  " + cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("%d security warning(s) detected:", len(warnings))))
 		for _, warning := range warnings {
@@ -112,46 +121,85 @@ func printSecurityOverview(cfg *config.RuntimeConfig) {
 	fmt.Printf("  %-44s %s\n", cli.StyleStdout(cli.CommandStyle, "pinchtab config set <path> <value>"), cli.StyleStdout(cli.MutedStyle, "# tune individual security flags"))
 }
 
-func applySecurityUp() (*config.RuntimeConfig, bool, error) {
-	configPath, changed, err := workflow.RestoreSecurityDefaults()
+func applySecurityUp(dryRun bool) (workflow.PresetResult, error) {
+	result, err := workflow.RestoreSecurityDefaults(dryRun)
 	if err != nil {
-		return nil, false, fmt.Errorf("restore defaults: %w", err)
+		return result, fmt.Errorf("restore defaults: %w", err)
 	}
-	if !changed {
-		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Security defaults already match %s", configPath)))
-		return config.Load(), false, nil
+	if !result.Changed() {
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Security defaults already match %s", result.ConfigPath)))
+		return result, nil
 	}
-	fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Security defaults restored in %s", configPath)))
+	if dryRun {
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Security defaults would write %d config setting(s) to %s:", len(result.Changes), result.ConfigPath)))
+		printSettingChanges(result.Changes)
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, "Nothing was written (--dry-run)."))
+		return result, nil
+	}
+	fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Security defaults restored in %s (%d config setting(s) written):", result.ConfigPath, len(result.Changes))))
+	printSettingChanges(result.Changes)
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Restart PinchTab to apply file-based changes."))
-	return config.Load(), true, nil
+	return result, nil
 }
 
-func applySecurityDown() (*config.RuntimeConfig, bool, error) {
-	nextCfg, configPath, changed, err := workflow.ApplyGuardsDownPreset()
+func applySecurityDown(dryRun bool) (workflow.PresetResult, error) {
+	result, err := workflow.ApplyGuardsDownPreset(dryRun)
 	if err != nil {
-		return nil, false, fmt.Errorf("guards down: %w", err)
+		return result, fmt.Errorf("guards down: %w", err)
 	}
-	if !changed {
-		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Guards down preset already matches %s", configPath)))
-		return nextCfg, false, nil
+	if !result.Changed() {
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Guards down preset already matches %s", result.ConfigPath)))
+		return result, nil
 	}
-	fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Guards down preset applied in %s", configPath)))
+	if dryRun {
+		fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Guards down preset would write %d config setting(s) to %s:", len(result.Changes), result.ConfigPath)))
+		printSettingChanges(result.Changes)
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, "Nothing was written (--dry-run)."))
+		return result, nil
+	}
+	fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Guards down preset applied in %s (%d config setting(s) written):", result.ConfigPath, len(result.Changes))))
+	printSettingChanges(result.Changes)
 	fmt.Println(cli.StyleStdout(cli.WarningStyle, "This is a documented, non-default, security-reducing preset."))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Loopback bind and API auth remain enabled; sensitive endpoints and attach are enabled, and IDPI protections are disabled."))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Attach host allowlisting remains local-only. Widening allowHosts or enabling bridge schemes later is an additional explicit weakening."))
 	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Changing server.bind away from 127.0.0.1 later is also an additional explicit weakening unless another network boundary still constrains access."))
-	return nextCfg, true, nil
+	return result, nil
+}
+
+// printSettingChanges lists each key in the shape the residual warnings use, and
+// says which posture row shows it, so nothing a preset writes is invisible on
+// both sides.
+func printSettingChanges(changes []workflow.SettingChange) {
+	for _, change := range changes {
+		fmt.Printf("    %s\n", cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("%s: %s -> %s", change.Path, settingValue(change.Old), settingValue(change.New))))
+		fmt.Printf("      %s\n", cli.StyleStdout(cli.MutedStyle, postureRowNote(change.Path)))
+	}
+}
+
+func settingValue(v string) string {
+	if v == "" {
+		return "<absent>"
+	}
+	return v
+}
+
+func postureRowNote(path string) string {
+	rows := cli.PostureRowsForSetting(path)
+	if len(rows) == 0 {
+		return "not shown in the posture table"
+	}
+	return "posture row: " + strings.Join(rows, ", ")
 }
 
 func handleSecurityUpCommand() {
-	if _, _, err := applySecurityUp(); err != nil {
+	if _, err := applySecurityUp(securityDryRun); err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 		os.Exit(1)
 	}
 }
 
 func handleSecurityDownCommand() {
-	if _, _, err := applySecurityDown(); err != nil {
+	if _, err := applySecurityDown(securityDryRun); err != nil {
 		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
 		os.Exit(1)
 	}
