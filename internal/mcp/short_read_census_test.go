@@ -35,7 +35,7 @@ const (
 	peeksWithoutTaking = "peeks a prefix and leaves the stream whole for its consumer"
 	unreachableCap     = "the cap cannot be reached by anything that passed the guard in front of it"
 	loudOnTruncation   = "a truncated value cannot parse, so the request is refused rather than accepted"
-	renderedForDisplay = "an error body rendered for the operator; a truncated message misleads no parser, and refusing above the cap would hide the server's reason entirely"
+	renderedForDisplay = "an error body rendered for the operator before the process exits on the HTTP status alone; PinchTab's own envelope is capped at 1 KiB per message, and a foreign oversize 404 body can only mis-render as route-not-found, never change the exit"
 )
 
 var cappedReads = map[string]string{
@@ -108,8 +108,21 @@ func TestASecondReadInAClassifiedFileIsNotInherited(t *testing.T) {
 		line: 999,
 		fn:   "leakedShortRead",
 	})
-	if got := unclassifiedSites(newFunc, cappedReads); len(got) != 1 || got[0].key != "internal/mcp/client.go::leakedShortRead" {
-		t.Errorf("a second capped read in a new function of an already-classified file was not reported as unclassified: %v", got)
+	const planted = "internal/mcp/client.go::leakedShortRead"
+	var plantedSeen bool
+	var real []string
+	for _, site := range unclassifiedSites(newFunc, cappedReads) {
+		if site.key == planted {
+			plantedSeen = true
+			continue
+		}
+		real = append(real, site.key)
+	}
+	if !plantedSeen {
+		t.Errorf("the planted capped read %s in a new function of an already-classified file was not reported as unclassified", planted)
+	}
+	if len(real) > 0 {
+		t.Errorf("the module has %d genuinely unclassified capped read(s) unrelated to the planted one: %v; TestEveryCappedReadIsClassified names them, classify them there", len(real), real)
 	}
 
 	sameFunc := append(append([]cappedSite{}, base...), cappedSite{
