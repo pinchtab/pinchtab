@@ -8,34 +8,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
-var configHintOnce sync.Once
-
-// EmitDefaultConfigHint prints a one-time hint to stderr when PINCHTAB_CONFIG
-// points somewhere other than the default config path AND a default config
-// already exists at that path. The hint is best-effort UX nudge for users
-// who may not realize they're running against a custom config.
-//
-// Scoped to specific commands (health, config) and once-per-process via
-// sync.Once so scripted callers and unrelated CLI commands stay quiet.
-func EmitDefaultConfigHint() {
-	configHintOnce.Do(func() {
-		defaultConfigPath := filepath.Join(userConfigDir(), "config.json")
-		configPath := envOr("PINCHTAB_CONFIG", defaultConfigPath)
-		if configPath == defaultConfigPath {
-			return
-		}
-		if _, err := os.Stat(defaultConfigPath); err != nil {
-			return
-		}
-		fmt.Fprintf(os.Stderr, "HINT: default config exists at %s — you can edit it directly instead of using PINCHTAB_CONFIG\n", defaultConfigPath)
-	})
+// DefaultConfigAdvisory is the text of the advisory for a caller running against
+// a custom PINCHTAB_CONFIG while a default config still exists, and the empty
+// string when it does not apply. It prints nothing itself: the hint stream is
+// output.Advisory's, so this line obeys the one hint switch and is deduped once
+// like every other advisory.
+func DefaultConfigAdvisory() string {
+	defaultConfigPath := filepath.Join(userConfigDir(), "config.json")
+	if envOr("PINCHTAB_CONFIG", defaultConfigPath) == defaultConfigPath {
+		return ""
+	}
+	if _, err := os.Stat(defaultConfigPath); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("default config exists at %s — you can edit it directly instead of using PINCHTAB_CONFIG", defaultConfigPath)
 }
 
 // parsedConfigFile is the side-effect-free result of resolving + reading +

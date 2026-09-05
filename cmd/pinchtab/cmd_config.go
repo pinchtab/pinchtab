@@ -2,15 +2,25 @@ package main
 
 import (
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/spf13/cobra"
 )
+
+// adviseDefaultConfig is the one printer of the custom-PINCHTAB_CONFIG advisory:
+// the text is decided in config, the empty string means it does not apply, and
+// output.Advisory owns the switch and the once-per-install dedupe.
+func adviseDefaultConfig() {
+	if text := config.DefaultConfigAdvisory(); text != "" {
+		output.Advisory(text)
+	}
+}
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		config.EmitDefaultConfigHint()
+		adviseDefaultConfig()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		printConfigOverview(loadLocalConfig())

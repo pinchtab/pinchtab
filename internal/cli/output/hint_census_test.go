@@ -3,10 +3,49 @@ package output
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
+
+// hintLiteral is the format Hint owns. Counting calls to Hint and Advisory can
+// never see a line that writes it by hand, which is how a second hint mechanism
+// with its own switch and its own dedupe lived in internal/config unnoticed, so
+// the guard also refuses the literal anywhere in module source outside this
+// package.
+const hintLiteral = "HINT:"
+
+// moduleRoot is where the literal census walks from, and moduleGoFileFloor its
+// vacuity floor.
+const (
+	moduleRoot        = "../../.."
+	moduleGoFileFloor = 400
+)
+
+// hintLiteralExclusions are the files allowed to spell the literal themselves,
+// each with the reason the next person to trip the guard needs, since the
+// failure message is where that reason is read.
+var hintLiteralExclusions = map[string]string{
+	"internal/server/server.go": "the server's READY boot banner: stdout, once per server start, addressed to whoever launched the server rather than to the CLI caller whose stderr the hint stream belongs to — it shares the spelling and not the role",
+}
+
+func TestNoHintIsWrittenOutsideTheHintStream(t *testing.T) {
+	for _, file := range srccensus.Tree(t, moduleRoot, moduleGoFileFloor) {
+		if strings.HasPrefix(file.Name, "internal/cli/output/") {
+			continue
+		}
+		if !strings.Contains(file.Text, hintLiteral) {
+			continue
+		}
+		if reason, excluded := hintLiteralExclusions[file.Name]; excluded {
+			t.Logf("%s is a recorded exclusion: %s", file.Name, reason)
+			continue
+		}
+		t.Errorf("%s writes %q itself, so it bypasses %s and %s — the switch, the once-per-install dedupe and the classification this census keeps. Print it through one of those instead. The one recorded exclusion is internal/server/server.go: %s",
+			file.Name, hintLiteral, advisory, occurrence, hintLiteralExclusions["internal/server/server.go"])
+	}
+}
 
 // Every hint is one of two things, and which one decides how often it may print.
 // An advisory describes a steady state the caller may have chosen: its wording is
@@ -43,6 +82,7 @@ var hintSites = map[string]struct {
 	"../actions/actions_tabs.go:TabHandoff":                            {occurrence, 1, "the reason this handoff carried"},
 	"../actions/actions_tabs.go:TabHandoffStatus":                      {occurrence, 1, "the reason this handoff carried"},
 	"../../../cmd/pinchtab/cmd_cli_runtime.go:resolveCLIBase":          {advisory, 2, "the caller's own --server/PINCHTAB_SERVER is redundant: their setting, not an event"},
+	"../../../cmd/pinchtab/cmd_config.go:adviseDefaultConfig":          {advisory, 1, "a custom PINCHTAB_CONFIG is a steady state the caller chose by setting it"},
 	"../../../cmd/pinchtab/cmd_config_actions.go:hintRestartIfRunning": {occurrence, 1, "this edit needs a restart to reach the running server"},
 	"../../../cmd/pinchtab/cmd_session.go:printSessionCreated":         {occurrence, 1, "the id of the session just created"},
 	"../../../cmd/pinchtab/cmd_session.go:init":                        {occurrence, 2, "attached to a failure that exits"},
