@@ -943,10 +943,10 @@ func textBlocks(t *testing.T, r *mcp.CallToolResult) []string {
 // each one is driven here rather than capture alone.
 //
 // This pins the FUNNEL, not deployed coverage: the fixture synthesises all three
-// keys for every tool, but today only /capture and /snapshot publish
-// untrustedContent and idpiNotice — /text and /find publish idpiWarning alone, so
-// the get_text and find rows exercise a body no producer emits yet. Do not read
-// a green here as "get_text warns with a notice block"; docs/reference/mcp-tools.md
+// keys for every tool. /capture, /snapshot and /find publish untrustedContent and
+// idpiNotice; /text wraps its boundary in-band and publishes idpiWarning alone, so
+// the get_text row exercises a body that producer does not emit. Do not read a
+// green here as "get_text leads with a notice block"; docs/reference/mcp-tools.md
 // states which tools do.
 func TestEveryIDPIPublishingToolCarriesTheWarningAndLeadsWithTheNotice(t *testing.T) {
 	srv := idpiServer(t)

@@ -131,13 +131,13 @@ trust boundary is read before the material it describes. This is an annotation o
 successful call: it never turns a result into an error, and a page with no untrusted
 content produces exactly the one content block it always did.
 
-Which tools deliver which half follows the server, not the MCP layer. Today only
-`/capture` and `/snapshot` publish `untrustedContent` and `idpiNotice`, so the prose
-notice block is emitted by `pinchtab_capture` and `pinchtab_snapshot`. `pinchtab_get_text`
-and `pinchtab_find` carry `idpiWarning` in their payload and nothing more, because `/text`
-and `/find` publish only that key. The notice funnel is already wired for every tool, so
-when those endpoints start publishing the other two keys their tools will lead with the
-notice block with no MCP change.
+Which tools deliver which half follows the server, not the MCP layer. `/capture`,
+`/snapshot` and `/find` publish `untrustedContent` and `idpiNotice` on every response
+while content wrapping is configured, so `pinchtab_capture`, `pinchtab_snapshot` and
+`pinchtab_find` lead with the prose notice block. `pinchtab_get_text` carries the boundary
+differently: `/text` wraps it in-band around the prose, so the tool's single block already
+contains the trust markers and no second notice block is added; its payload carries
+`idpiWarning` only when the scanner matched something.
 
 For setup and client configuration, see [MCP Server](../mcp.md).
 
