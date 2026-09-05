@@ -234,7 +234,10 @@ func (o *Orchestrator) waitForChildBridgeHealthy(inst *InstanceInternal, timeout
 	deadline := time.Now().Add(timeout)
 	healthURL := strings.TrimRight(inst.URL, "/") + "/health"
 	for time.Now().Before(deadline) {
-		req, _ := http.NewRequest(http.MethodGet, healthURL, nil)
+		req, reqErr := http.NewRequest(http.MethodGet, healthURL, nil)
+		if reqErr != nil {
+			return reqErr
+		}
 		o.applyInstanceAuth(req, inst)
 		resp, err := o.client.Do(req)
 		if err == nil {

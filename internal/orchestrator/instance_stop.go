@@ -99,7 +99,10 @@ func (o *Orchestrator) requestChildShutdown(inst *InstanceInternal) {
 	if targetErr != nil {
 		return
 	}
-	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, targetURL.String(), nil)
+	if err != nil {
+		return
+	}
 	o.applyInstanceAuth(req, inst)
 	if resp, err := o.client.Do(req); err == nil {
 		_ = resp.Body.Close()
@@ -145,7 +148,11 @@ func (o *Orchestrator) waitForBridgeEndpointExit(inst *InstanceInternal, timeout
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		probeCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-		request, _ := http.NewRequestWithContext(probeCtx, http.MethodGet, healthURL.String(), nil)
+		request, reqErr := http.NewRequestWithContext(probeCtx, http.MethodGet, healthURL.String(), nil)
+		if reqErr != nil {
+			cancel()
+			return false
+		}
 		o.applyInstanceAuth(request, inst)
 		response, probeErr := o.client.Do(request)
 		if response != nil {

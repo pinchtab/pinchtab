@@ -10,7 +10,11 @@ import (
 
 // CheckServerAndGuide checks if pinchtab server is running and provides guidance
 func CheckServerAndGuide(client *http.Client, base, token string) bool {
-	req, _ := http.NewRequest("GET", base+"/health", nil)
+	req, err := http.NewRequest("GET", base+"/health", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid server URL %q: %v\n", base, err)
+		return false
+	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
