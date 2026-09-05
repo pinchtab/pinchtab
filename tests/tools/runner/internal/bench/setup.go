@@ -1,7 +1,9 @@
 package bench
 
 import (
+	"context"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"io"
 	"net/http"
 	"os"
@@ -87,22 +89,24 @@ func setupAgentBrowserContainer(benchDir string, stdout, stderr io.Writer) error
 }
 
 func waitForPinchtabHealth(timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 2 * time.Second}
-
-	for time.Now().Before(deadline) {
-		req, _ := http.NewRequest("GET", "http://localhost:9867/health", nil)
+	_, err := readiness.WaitUntil(context.Background(), timeout, time.Second, func() (struct{}, bool, error) {
+		req, err := http.NewRequest("GET", "http://localhost:9867/health", nil)
+		if err != nil {
+			return struct{}{}, false, err
+		}
 		req.Header.Set("Authorization", "Bearer benchmark-token")
 		resp, err := client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return nil
-			}
+		if err != nil {
+			return struct{}{}, false, nil
 		}
-		time.Sleep(1 * time.Second)
+		_ = resp.Body.Close()
+		return struct{}{}, resp.StatusCode == 200, nil
+	})
+	if err != nil {
+		return fmt.Errorf("pinchtab health check timed out after %v", timeout)
 	}
-	return fmt.Errorf("pinchtab health check timed out after %v", timeout)
+	return nil
 }
 
 func verifyPinchtabConfig() error {
@@ -134,18 +138,16 @@ func verifyPinchtabConfig() error {
 }
 
 func waitForFixturesReachable(benchDir string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
+	_, err := readiness.WaitUntil(context.Background(), timeout, time.Second, func() (struct{}, bool, error) {
 		cmd := exec.Command("docker", "compose", "exec", "-T", "agent-browser",
 			"curl", "-sf", "http://fixtures/")
 		cmd.Dir = benchDir
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
-		time.Sleep(1 * time.Second)
+		return struct{}{}, cmd.Run() == nil, nil
+	})
+	if err != nil {
+		return fmt.Errorf("fixtures not reachable from agent-browser after %v", timeout)
 	}
-	return fmt.Errorf("fixtures not reachable from agent-browser after %v", timeout)
+	return nil
 }
 
 func initializeLaneGo(resultsDir string, lane Lane, provider, model string, stdout, stderr io.Writer) (string, error) {
