@@ -11,12 +11,16 @@ func (o *Orchestrator) Allows(cap routes.Capability) bool {
 	return o.cfg().CapabilityEnabled(cap)
 }
 
-func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
-	if enabled {
+func (o *Orchestrator) registerCapabilityRoute(mux *http.ServeMux, route string, cap routes.Capability, next http.HandlerFunc) {
+	meta, ok := routes.Meta(cap)
+	if !ok {
+		return
+	}
+	if o.Allows(cap) {
 		mux.HandleFunc(route, next)
 		return
 	}
-	mux.HandleFunc(route, httpx.DisabledEndpointHandler(feature, setting, code))
+	mux.HandleFunc(route, httpx.DisabledEndpointHandler(meta.Label, meta.Setting, meta.DisabledCode))
 }
 
 // RegisterHandlersNoLaunch registers all orchestrator handlers except
@@ -64,13 +68,11 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	// through these routes because a child's loopback URL is not reachable by
 	// remote clients.
 	mux.HandleFunc("POST /instances/{id}/close", o.proxyToInstance)
-	cookiesMeta, _ := routes.Meta(routes.CapCookies)
-	registerCapabilityRoute(mux, "POST /instances/{id}/cookies", o.Allows(routes.CapCookies), cookiesMeta.Label, cookiesMeta.Setting, cookiesMeta.DisabledCode, o.proxyToInstance)
+	o.registerCapabilityRoute(mux, "POST /instances/{id}/cookies", routes.CapCookies, o.proxyToInstance)
 	mux.HandleFunc("POST /instances/{id}/audit", o.proxyToInstance)
 	mux.HandleFunc("POST /instances/{id}/scrape", o.proxyToInstance)
-	screencastMeta, _ := routes.Meta(routes.CapScreencast)
-	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.Allows(routes.CapScreencast), screencastMeta.Label, screencastMeta.Setting, screencastMeta.DisabledCode, o.handleProxyScreencast)
-	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.Allows(routes.CapScreencast), screencastMeta.Label, screencastMeta.Setting, screencastMeta.DisabledCode, o.proxyToInstance)
+	o.registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", routes.CapScreencast, o.handleProxyScreencast)
+	o.registerCapabilityRoute(mux, "GET /instances/{id}/screencast", routes.CapScreencast, o.proxyToInstance)
 
 	// Tab operations - generic proxy (all route to the appropriate instance).
 	// Sourced from the shared route catalogue to stay in sync with bridge and strategy.
@@ -78,13 +80,8 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 		mux.HandleFunc(route, o.proxyTabRequest)
 	}
 	for cap, eps := range routes.TabScopedCapabilityRoutes() {
-		meta, ok := routes.Meta(cap)
-		if !ok {
-			continue
-		}
-		enabled := o.Allows(cap)
 		for _, ep := range eps {
-			registerCapabilityRoute(mux, ep.TabRoute(), enabled, meta.Label, meta.Setting, meta.DisabledCode, o.proxyTabRequest)
+			o.registerCapabilityRoute(mux, ep.TabRoute(), cap, o.proxyTabRequest)
 		}
 	}
 
