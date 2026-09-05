@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"github.com/pinchtab/pinchtab/internal/routes"
 	"sync"
 	"testing"
 
@@ -85,18 +86,18 @@ func TestTheTokenAndEvaluatePolicyFollowTheAppliedConfig(t *testing.T) {
 	o := orchWithConfig(nil)
 
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{Token: "first", AllowEvaluate: true})
-	if o.cfgToken() != "first" || !o.AllowsEvaluate() {
-		t.Fatalf("token=%q allowEvaluate=%v after the first apply", o.cfgToken(), o.AllowsEvaluate())
+	if o.cfgToken() != "first" || !o.Allows(routes.CapEvaluate) {
+		t.Fatalf("token=%q allowEvaluate=%v after the first apply", o.cfgToken(), o.Allows(routes.CapEvaluate))
 	}
 
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{Token: "second", AllowEvaluate: false})
-	if o.cfgToken() != "second" || o.AllowsEvaluate() {
-		t.Fatalf("token=%q allowEvaluate=%v after the second apply", o.cfgToken(), o.AllowsEvaluate())
+	if o.cfgToken() != "second" || o.Allows(routes.CapEvaluate) {
+		t.Fatalf("token=%q allowEvaluate=%v after the second apply", o.cfgToken(), o.Allows(routes.CapEvaluate))
 	}
 
 	o.ApplyRuntimeConfig(nil)
-	if o.cfgToken() != "" || o.AllowsEvaluate() {
-		t.Fatalf("token=%q allowEvaluate=%v after clearing the config", o.cfgToken(), o.AllowsEvaluate())
+	if o.cfgToken() != "" || o.Allows(routes.CapEvaluate) {
+		t.Fatalf("token=%q allowEvaluate=%v after clearing the config", o.cfgToken(), o.Allows(routes.CapEvaluate))
 	}
 }
 

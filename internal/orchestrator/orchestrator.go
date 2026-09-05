@@ -367,46 +367,6 @@ func (o *Orchestrator) cfgToken() string {
 	return cfg.Token
 }
 
-func (o *Orchestrator) AllowsEvaluate() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowEvaluate
-}
-
-func (o *Orchestrator) AllowsMacro() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowMacro
-}
-
-func (o *Orchestrator) AllowsScreencast() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowScreencast
-}
-
-func (o *Orchestrator) AllowsDownload() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowDownload
-}
-
-func (o *Orchestrator) AllowsCookies() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowCookies
-}
-
-func (o *Orchestrator) AllowsUpload() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowUpload
-}
-
-func (o *Orchestrator) AllowsStateExport() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowStateExport
-}
-
-func (o *Orchestrator) AllowsNetworkIntercept() bool {
-	cfg := o.cfg()
-	return cfg != nil && cfg.AllowNetworkIntercept
-}
-
 func (o *Orchestrator) SetPortRange(start, end int) {
 	allocator := NewPortAllocator(start, end)
 	o.mu.Lock()
