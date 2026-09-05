@@ -117,4 +117,31 @@ rm -f internal/dashboard/dashboard/dashboard.html
 cp -r dashboard/dist/* internal/dashboard/dashboard/
 mv internal/dashboard/dashboard/index.html internal/dashboard/dashboard/dashboard.html
 
+# Stamp the bundle with the hash of the source it was built from. The Go side
+# (internal/dashboard.SourceStamp) hashes the same inputs the same way and the
+# unit suite fails when the embedded stamp no longer matches the tree.
+sha256_stdin() {
+  if command -v sha256sum &> /dev/null; then
+    sha256sum | cut -d' ' -f1
+  else
+    shasum -a 256 | cut -d' ' -f1
+  fi
+}
+bundle_inputs() {
+  local input
+  for input in src public index.html package.json bun.lock vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json; do
+    [ -e "dashboard/$input" ] || continue
+    if [ -d "dashboard/$input" ]; then
+      find "dashboard/$input" -type f -not -path '*/.*'
+    else
+      echo "dashboard/$input"
+    fi
+  done | sed 's#^dashboard/##' | LC_ALL=C sort
+}
+STAMP="$(bundle_inputs | while IFS= read -r rel; do
+  printf '%s\0%s\n' "$rel" "$(sha256_stdin < "dashboard/$rel")"
+done | sha256_stdin)"
+echo "$STAMP" > internal/dashboard/dashboard/bundle.stamp
+echo "🔖 Bundle stamp: $STAMP"
+
 echo "✅ Dashboard built: internal/dashboard/dashboard/"

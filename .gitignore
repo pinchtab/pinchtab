@@ -44,6 +44,7 @@ debug.log
 dist/
 internal/dashboard/dashboard/assets/
 internal/dashboard/dashboard/dashboard.html
+internal/dashboard/dashboard/bundle.stamp
 memory/
 node_modules/
 npm/node_modules/

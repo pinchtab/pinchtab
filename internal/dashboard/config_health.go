@@ -39,6 +39,7 @@ type healthEnvelope struct {
 	Status              string                  `json:"status"`
 	Mode                string                  `json:"mode"`
 	Version             string                  `json:"version"`
+	DashboardBuild      string                  `json:"dashboardBuild"`
 	Uptime              int64                   `json:"uptime"`
 	AuthRequired        bool                    `json:"authRequired"`
 	Profiles            int                     `json:"profiles"`
@@ -112,6 +113,7 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		Status:              "ok",
 		Mode:                "dashboard",
 		Version:             c.version,
+		DashboardBuild:      BundleStamp(),
 		Uptime:              int64(time.Since(c.startedAt).Milliseconds()),
 		AuthRequired:        cfg != nil && strings.TrimSpace(cfg.Token) != "",
 		Profiles:            profileCount,

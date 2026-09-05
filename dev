@@ -18,6 +18,7 @@ NC=$'\033[0m'
 # name:emoji:description
 COMMANDS=(
   "build:🔨:Build the application"
+  "  dashboard:📦:Build the dashboard bundle into internal/dashboard/dashboard/ and stamp it"
   "dev:🚀:Build & run"
   "dashboard:🔥:Hot-reload dashboard development"
   "run:🏃:Run the application"
@@ -406,6 +407,7 @@ run_command() {
     "dev")          exec bash scripts/dev.sh ;;
     "dashboard")    exec bash scripts/dev-dashboard.sh ;;
     "build")        exec bash scripts/build.sh ;;
+    "build dashboard") exec bash scripts/build-dashboard.sh ;;
     "install")      exec bash scripts/install.sh ;;
     "install skills") exec bash scripts/install-skills.sh ;;
     "pack plugin") exec bash scripts/pack-plugin.sh ;;

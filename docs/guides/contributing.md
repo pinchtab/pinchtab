@@ -186,6 +186,24 @@ ls -la pinchtab
 ./pinchtab --version
 ```
 
+### Dashboard Bundle Stamp
+
+`go build` embeds whatever is in `internal/dashboard/dashboard/`, however old, and
+says nothing. That directory is gitignored build output, so `git status` cannot show
+its age either. `./dev build dashboard` (or `./scripts/build-dashboard.sh`) rebuilds
+the bundle, copies it there, and writes `bundle.stamp` beside it: the SHA-256 of the
+bundle's inputs (`dashboard/src`, `public`, `index.html`, `package.json`, `bun.lock`,
+`vite.config.ts` and the `tsconfig` files).
+
+- `GET /health` reports the stamp as `dashboardBuild` next to `version`, or
+  `not-built` when no bundle is embedded, so a running binary says which source its
+  dashboard came from.
+- The unit suite recomputes the hash from the tree and fails when the embedded stamp
+  differs, naming both hashes. A fresh clone with no bundle is skipped, not failed.
+- Rebuild whenever anything under `dashboard/` changes and then rebuild the Go binary.
+  A Go-only change never needs it: the stamp is a hash of dashboard sources, not of
+  Go code or timestamps, so branch switches and touches leave a current bundle current.
+
 ---
 
 ## Part 3: Run the Server
