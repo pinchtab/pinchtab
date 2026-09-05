@@ -339,6 +339,8 @@ func untrustedContentNotice(body []byte) string {
 // missing its counts, refuses) than a funnel serving every tool can impose without
 // breaking non-counting responses. Its check runs first, so its more specific message
 // wins; this rule is the class-wide net behind it.
+var successCountKeys = []string{"set", "successful", "succeeded"}
+
 func reportsNoSuccess(body []byte) string {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(body, &top); err != nil {
@@ -348,7 +350,7 @@ func reportsNoSuccess(body []byte) string {
 	if !ok || failed == 0 {
 		return ""
 	}
-	for _, key := range []string{"set", "successful", "succeeded"} {
+	for _, key := range successCountKeys {
 		succeeded, ok := topLevelCount(top, key)
 		if !ok {
 			continue

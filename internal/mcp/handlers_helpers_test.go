@@ -187,6 +187,11 @@ func TestEveryFailedKeyProducerHasARecordedFunnelDecision(t *testing.T) {
 		"internal/bridge/observe/network_buffer.go": "per-request failed is a nested BOOL describing the page's own subresources, excluded by the top-level-numeric requirement — an agent must not see a page's 404 as a failed call",
 	}
 
+	countingShape := map[string]bool{
+		"internal/handlers/cookies.go": true,
+		"internal/handlers/actions.go": true,
+	}
+
 	files := srccensus.Tree(t, filepath.Join("..", ".."), 200)
 	found := map[string]bool{}
 	for _, file := range files {
@@ -197,6 +202,9 @@ func TestEveryFailedKeyProducerHasARecordedFunnelDecision(t *testing.T) {
 			continue
 		}
 		found[file.Name] = true
+		if countingShape[file.Name] && !spellsAnySuccessKey(file.Text) {
+			t.Errorf("%s emits a counting shape but none of the funnel's success keys %v; the funnel would report its total failure as success", file.Name, successCountKeys)
+		}
 		if decisions[file.Name] == "" {
 			t.Errorf("%s spells a \"failed\" JSON key and has no recorded funnel decision; decide whether it is the counting shape (the funnel converts it) or a payload (say why it is excluded) and record it here", file.Name)
 		}
@@ -212,4 +220,13 @@ func TestEveryFailedKeyProducerHasARecordedFunnelDecision(t *testing.T) {
 	if len(found) == 0 {
 		t.Fatal("found no \"failed\" key producer at all; if the spelling moved, re-point this census rather than deleting it")
 	}
+}
+
+func spellsAnySuccessKey(text string) bool {
+	for _, key := range successCountKeys {
+		if strings.Contains(text, `"`+key+`"`) {
+			return true
+		}
+	}
+	return false
 }
