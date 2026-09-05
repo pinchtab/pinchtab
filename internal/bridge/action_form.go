@@ -3,7 +3,9 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -193,26 +195,24 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 	// Framework-backed ARIA controls often update state on the next task. Poll
 	// briefly and report the observed value instead of claiming the requested
 	// state without proof.
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for {
-		observed, observeErr := readCheckableState(ctx, objectID)
-		if observeErr == nil && observed.State == desired {
-			return map[string]any{
-				"checked":     wantChecked,
-				"controlType": observed.Kind,
-				"verified":    true,
-			}, nil
-		}
-		if time.Now().After(deadline) {
-			if observeErr != nil {
-				return nil, fmt.Errorf("verify checked state: %w", observeErr)
-			}
-			return nil, fmt.Errorf("checked state remained %q after requesting %q", observed.State, desired)
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(25 * time.Millisecond):
-		}
+	var observed checkableState
+	var observeErr error
+	_, waitErr := readiness.WaitUntil(ctx, 500*time.Millisecond, 25*time.Millisecond, func() (struct{}, bool, error) {
+		observed, observeErr = readCheckableState(ctx, objectID)
+		return struct{}{}, observeErr == nil && observed.State == desired, nil
+	})
+	switch {
+	case waitErr == nil:
+		return map[string]any{
+			"checked":     wantChecked,
+			"controlType": observed.Kind,
+			"verified":    true,
+		}, nil
+	case !errors.Is(waitErr, readiness.ErrNotReady):
+		return nil, waitErr
+	case observeErr != nil:
+		return nil, fmt.Errorf("verify checked state: %w", observeErr)
+	default:
+		return nil, fmt.Errorf("checked state remained %q after requesting %q", observed.State, desired)
 	}
 }
