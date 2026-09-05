@@ -286,3 +286,33 @@ func TestMistypedTargetingIsRefusedOnReadVerbs(t *testing.T) {
 		t.Fatalf("a non-targeting unknown parameter must stay diagnostic in ignoredParams, got %v %v", controls.Ignored, err)
 	}
 }
+
+func TestMistypedTargetingIsRefusedByTheSharedReadBoundary(t *testing.T) {
+	h := newTwoTabHandlers(t)
+	for _, spelling := range mistypedTabTargets {
+		for _, withHeader := range []bool{false, true} {
+			name := spelling + "/binary"
+			if withHeader {
+				name = spelling + "/response-header"
+			}
+			t.Run(name, func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodGet, "/read?"+spelling+"=tabB", nil)
+				w := httptest.NewRecorder()
+				if withHeader {
+					_, _, ok := h.guardedTabContextWithHeader(w, r, "", guardNone)
+					if ok {
+						t.Fatal("mistyped targeting reached the shared read context")
+					}
+				} else {
+					_, _, ok := h.guardedTabContext(w, r, "", guardNone)
+					if ok {
+						t.Fatal("mistyped targeting reached the shared binary-read context")
+					}
+				}
+				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), spelling+": not a targeting parameter") {
+					t.Fatalf("mistyped targeting answered %d instead of naming %s: %s", w.Code, spelling, w.Body.String())
+				}
+			})
+		}
+	}
+}
