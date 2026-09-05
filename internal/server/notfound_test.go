@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/handlers"
+	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
@@ -134,5 +137,81 @@ func TestWrongMethodStaysA405Envelope(t *testing.T) {
 	code, _ := decodeEnvelope(t, w)
 	if code != "method_not_allowed" {
 		t.Errorf("code = %q, want method_not_allowed", code)
+	}
+}
+
+// The wrapper used to dispatch the handler http.ServeMux.Handler returned, which
+// reports WHICH pattern matched but leaves the request's wildcard matches unset.
+// Every {id} route on both front doors therefore saw an empty id. A literal-path
+// fixture cannot see that, so the mux here registers a wildcard.
+func TestWildcardPathValuesSurviveTheEnvelope(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tabs/{id}/x", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(r.PathValue("id")))
+	})
+	handler := notFoundEnvelope(mux)
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/tabs/TAB123/x", nil))
+
+	if got := w.Body.String(); got != "TAB123" {
+		t.Fatalf("r.PathValue(\"id\") = %q, want TAB123: the wrapper must route the request the way mux.ServeHTTP would, wildcards included", got)
+	}
+}
+
+// Both front doors wrap their own mux, so the loss has to be pinned on each
+// registration rather than on a fixture mux. Every assertion here is POSITIVE —
+// the named id reached the handler — because a refusal cannot tell "correctly
+// refused" from "the id never arrived": with an empty id every tab and every
+// instance is unknown, which is why the e2e guards asserting refusals stayed
+// green through the whole outage.
+func TestBothFrontDoorsRouteATabScopedRequestWithItsID(t *testing.T) {
+	t.Run("full server", func(t *testing.T) {
+		mux := http.NewServeMux()
+		(&orchestrator.Orchestrator{}).RegisterHandlers(mux)
+
+		// The shape internal/mcp sends whenever an agent supplies tabId.
+		w := httptest.NewRecorder()
+		notFoundEnvelope(mux).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/tabs/TAB123/reload", strings.NewReader("{}")))
+
+		_, message := decodeEnvelope(t, w)
+		if !strings.Contains(message, "TAB123") {
+			t.Fatalf("the proxy answered %q; the tab id never reached it, so every tab-scoped route on this front door is dead", message)
+		}
+	})
+
+	t.Run("bridge", func(t *testing.T) {
+		mux := http.NewServeMux()
+		(&handlers.Handlers{Config: config.Load()}).RegisterRoutes(mux, func() {})
+
+		w := httptest.NewRecorder()
+		notFoundEnvelope(mux).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/tabs/TAB123/metrics", nil))
+
+		_, message := decodeEnvelope(t, w)
+		if w.Code == http.StatusBadRequest {
+			t.Fatalf("the bridge answered 400 %q; that is the empty-id gate, so the id never reached the handler", message)
+		}
+		if !strings.Contains(message, "bridge not initialized") {
+			t.Fatalf("message = %q, want the handler's own answer past the id gate", message)
+		}
+	})
+}
+
+// An instance-scoped id is lost the same way, and this is the pair the CLI's
+// instance verbs and the e2e readiness latch poll.
+func TestInstanceScopedRequestsCarryTheirID(t *testing.T) {
+	mux := http.NewServeMux()
+	(&orchestrator.Orchestrator{}).RegisterHandlers(mux)
+	handler := notFoundEnvelope(mux)
+
+	for _, probe := range []struct{ method, path string }{
+		{http.MethodGet, "/instances/inst_abc"},
+		{http.MethodPost, "/instances/inst_abc/stop"},
+	} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(probe.method, probe.path, strings.NewReader("{}")))
+		if _, message := decodeEnvelope(t, w); !strings.Contains(message, "inst_abc") {
+			t.Errorf("%s %s answered %q, naming no instance: the id was dropped", probe.method, probe.path, message)
+		}
 	}
 }
