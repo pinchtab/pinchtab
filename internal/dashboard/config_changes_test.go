@@ -490,3 +490,15 @@ func TestEmptyContainerFieldsKeepsTheJSONDocumentIdentical(t *testing.T) {
 		t.Fatalf("emptying nil containers changed the JSON document, so these fixtures differ in settings and not only in representation:\n%s\n%s", left, right)
 	}
 }
+
+func TestStealthLevelEditReportsOnlyStealthLevel(t *testing.T) {
+	boot := config.DefaultFileConfig()
+	next := cloneFileConfig(t, boot)
+	next.InstanceDefaults.StealthLevel = "full"
+	api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+	api.boot = boot
+	reasons := api.restartReasonsFor(next)
+	if !containsString(reasons, "Stealth level") || containsString(reasons, "Instance defaults") {
+		t.Fatalf("restartReasonsFor() = %v, want Stealth level alone", reasons)
+	}
+}

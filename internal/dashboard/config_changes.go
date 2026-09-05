@@ -64,105 +64,89 @@ func sensitiveConfigChanges(current, next *config.FileConfig) sensitiveConfigCha
 
 func changedTargetProxyNames(current, next config.BrowserTargetsConfig) []string {
 	seen := make(map[string]struct{}, len(current)+len(next))
-	names := make([]string, 0, len(current)+len(next))
-	for name := range current {
-		if _, ok := seen[name]; !ok {
-			seen[name] = struct{}{}
-			names = append(names, name)
-		}
-	}
-	for name := range next {
-		if _, ok := seen[name]; !ok {
-			seen[name] = struct{}{}
-			names = append(names, name)
-		}
-	}
 	var changed []string
-	for _, name := range names {
-		if !sameConfigSection(current[name].Proxy, next[name].Proxy) {
-			changed = append(changed, name)
+	for _, targets := range []config.BrowserTargetsConfig{current, next} {
+		for name := range targets {
+			if _, dup := seen[name]; dup {
+				continue
+			}
+			seen[name] = struct{}{}
+			if !sameConfigSection(current[name].Proxy, next[name].Proxy) {
+				changed = append(changed, name)
+			}
 		}
 	}
 	return changed
 }
 
+type bootSnapshottedSetting struct {
+	label   string
+	changed func(boot, next config.FileConfig) bool
+}
+
+var bootSnapshottedSettings = []bootSnapshottedSetting{
+	{"Security policy", func(b, n config.FileConfig) bool { return !sameConfigSection(b.Security, n.Security) }},
+	{"Activity recording", func(b, n config.FileConfig) bool {
+		return !sameConfigSection(b.Observability.Activity.Enabled, n.Observability.Activity.Enabled) ||
+			!sameConfigSection(b.Observability.Activity.RetentionDays, n.Observability.Activity.RetentionDays) ||
+			!sameConfigSection(b.Observability.Activity.Events, n.Observability.Activity.Events)
+	}},
+	{"Log level", func(b, n config.FileConfig) bool { return b.Server.LogLevel != n.Server.LogLevel }},
+	{"Network recording", func(b, n config.FileConfig) bool {
+		return !sameConfigSection(b.Server.NetworkBufferSize, n.Server.NetworkBufferSize) ||
+			!sameConfigSection(b.Server.RetainNetworkBodies, n.Server.RetainNetworkBodies) ||
+			!sameConfigSection(b.Server.RetainNetworkBodyMaxBytes, n.Server.RetainNetworkBodyMaxBytes)
+	}},
+	{"Server address", func(b, n config.FileConfig) bool {
+		return b.Server.Port != n.Server.Port || b.Server.Bind != n.Server.Bind
+	}},
+	{"Server state directory (server.stateDir)", func(b, n config.FileConfig) bool {
+		return b.Server.StateDir != n.Server.StateDir
+	}},
+	{"Profiles directory", func(b, n config.FileConfig) bool {
+		return effectiveProfilesDir(b) != effectiveProfilesDir(n)
+	}},
+	{"Profiles configuration", func(b, n config.FileConfig) bool {
+		return b.Profiles.DefaultProfile != n.Profiles.DefaultProfile ||
+			!sameConfigSection(b.Profiles.QuarantineKeep, n.Profiles.QuarantineKeep)
+	}},
+	{"Routing strategy", func(b, n config.FileConfig) bool {
+		return b.MultiInstance.Strategy != n.MultiInstance.Strategy
+	}},
+	{"Stealth level", func(b, n config.FileConfig) bool {
+		return b.InstanceDefaults.StealthLevel != n.InstanceDefaults.StealthLevel
+	}},
+	{"Instance defaults", func(b, n config.FileConfig) bool {
+		return !sameConfigSection(withoutStealthLevel(b.InstanceDefaults), withoutStealthLevel(n.InstanceDefaults))
+	}},
+	{"Browser configuration", func(b, n config.FileConfig) bool {
+		return !sameConfigSection(b.Browser, n.Browser) ||
+			b.Browsers.Default != n.Browsers.Default ||
+			!sameConfigSection(b.Browsers.Available, n.Browsers.Available)
+	}},
+	{"Scheduler configuration", func(b, n config.FileConfig) bool { return !sameConfigSection(b.Scheduler, n.Scheduler) }},
+	{"Auto-solver configuration", func(b, n config.FileConfig) bool { return !sameConfigSection(b.AutoSolver, n.AutoSolver) }},
+	{"Agent sessions", func(b, n config.FileConfig) bool {
+		return !b.Sessions.AgentEnabled() && n.Sessions.AgentEnabled()
+	}},
+	{"Restart policy", func(b, n config.FileConfig) bool {
+		return !sameConfigSection(b.MultiInstance.Restart, n.MultiInstance.Restart)
+	}},
+}
+
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
-	reasons := make([]string, 0, 8)
-
-	// The IDPI guard, allowlist, and sensitive-endpoint policy are snapshotted
-	// from the boot config when the server starts and are not rebuilt on a config
-	// edit, so any change to the security block only takes effect after a restart.
-	// Surfacing it here is what lets `pinchtab security`/`health` warn that the
-	// running server is enforcing stale policy instead of silently diverging.
-	if !sameConfigSection(c.boot.Security, next.Security) {
-		reasons = append(reasons, "Security policy")
+	reasons := make([]string, 0, len(bootSnapshottedSettings))
+	for _, setting := range bootSnapshottedSettings {
+		if setting.changed(c.boot, next) {
+			reasons = append(reasons, setting.label)
+		}
 	}
-	// The activity recorder and its retention/event-source filters are built once
-	// by server startup. Publishing their RuntimeConfig fields does not rebuild the
-	// recorder, so these edits are honest only when reported as restart-required.
-	if !sameConfigSection(c.boot.Observability.Activity.Enabled, next.Observability.Activity.Enabled) ||
-		!sameConfigSection(c.boot.Observability.Activity.RetentionDays, next.Observability.Activity.RetentionDays) ||
-		!sameConfigSection(c.boot.Observability.Activity.Events, next.Observability.Activity.Events) {
-		reasons = append(reasons, "Activity recording")
-	}
-	if c.boot.Server.LogLevel != next.Server.LogLevel {
-		reasons = append(reasons, "Log level")
-	}
-	if !sameConfigSection(c.boot.Server.NetworkBufferSize, next.Server.NetworkBufferSize) ||
-		!sameConfigSection(c.boot.Server.RetainNetworkBodies, next.Server.RetainNetworkBodies) ||
-		!sameConfigSection(c.boot.Server.RetainNetworkBodyMaxBytes, next.Server.RetainNetworkBodyMaxBytes) {
-		reasons = append(reasons, "Network recording")
-	}
-	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
-		reasons = append(reasons, "Server address")
-	}
-	if c.boot.Server.StateDir != next.Server.StateDir {
-		reasons = append(reasons, "Server state directory (server.stateDir)")
-	}
-	if effectiveProfilesDir(c.boot) != effectiveProfilesDir(next) {
-		reasons = append(reasons, "Profiles directory")
-	}
-	if c.boot.Profiles.DefaultProfile != next.Profiles.DefaultProfile ||
-		!sameConfigSection(c.boot.Profiles.QuarantineKeep, next.Profiles.QuarantineKeep) {
-		reasons = append(reasons, "Profiles configuration")
-	}
-	if c.boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
-		reasons = append(reasons, "Routing strategy")
-	}
-	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
-		reasons = append(reasons, "Stealth level")
-	}
-	if !sameConfigSection(c.boot.InstanceDefaults, next.InstanceDefaults) {
-		reasons = append(reasons, "Instance defaults")
-	}
-	if !sameConfigSection(c.boot.Browser, next.Browser) ||
-		c.boot.Browsers.Default != next.Browsers.Default ||
-		!sameConfigSection(c.boot.Browsers.Available, next.Browsers.Available) {
-		reasons = append(reasons, "Browser configuration")
-	}
-	if !sameConfigSection(c.boot.Scheduler, next.Scheduler) {
-		reasons = append(reasons, "Scheduler configuration")
-	}
-	if !sameConfigSection(c.boot.AutoSolver, next.AutoSolver) {
-		reasons = append(reasons, "Auto-solver configuration")
-	}
-	// The sessions.agent block applies live in every direction but one: whether
-	// the session API and its route family exist at all is decided at boot, so a
-	// process that booted with agent sessions off cannot serve them until it
-	// restarts. Turning them off needs no restart — both request-time consumers
-	// read the store live — and claiming otherwise about an authentication
-	// control would be the same defect one direction over.
-	if !c.boot.Sessions.AgentEnabled() && next.Sessions.AgentEnabled() {
-		reasons = append(reasons, "Agent sessions")
-	}
-	if !sameIntPtr(c.boot.MultiInstance.Restart.MaxRestarts, next.MultiInstance.Restart.MaxRestarts) ||
-		!sameIntPtr(c.boot.MultiInstance.Restart.InitBackoffSec, next.MultiInstance.Restart.InitBackoffSec) ||
-		!sameIntPtr(c.boot.MultiInstance.Restart.MaxBackoffSec, next.MultiInstance.Restart.MaxBackoffSec) ||
-		!sameIntPtr(c.boot.MultiInstance.Restart.StableAfterSec, next.MultiInstance.Restart.StableAfterSec) {
-		reasons = append(reasons, "Restart policy")
-	}
-
 	return reasons
+}
+
+func withoutStealthLevel(defaults config.InstanceDefaultsConfig) config.InstanceDefaultsConfig {
+	defaults.StealthLevel = ""
+	return defaults
 }
 
 func effectiveProfilesDir(fc config.FileConfig) string {
@@ -170,11 +154,4 @@ func effectiveProfilesDir(fc config.FileConfig) string {
 		return fc.Profiles.BaseDir
 	}
 	return filepath.Join(fc.Server.StateDir, "profiles")
-}
-
-func sameIntPtr(a, b *int) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }
