@@ -14,15 +14,11 @@ import (
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
-func (h *Handlers) evaluateEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowEvaluate
-}
-
 // HandleEvaluate runs JavaScript in the current tab.
 //
 // @Endpoint POST /evaluate
 func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
-	if !h.evaluateEnabled() {
+	if !h.allows(routes.CapEvaluate) {
 		h.writeCapabilityDisabled(w, routes.CapEvaluate)
 		return
 	}
@@ -81,7 +77,7 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 //
 // @Endpoint POST /tabs/{id}/evaluate
 func (h *Handlers) HandleTabEvaluate(w http.ResponseWriter, r *http.Request) {
-	if !h.evaluateEnabled() {
+	if !h.allows(routes.CapEvaluate) {
 		h.writeCapabilityDisabled(w, routes.CapEvaluate)
 		return
 	}

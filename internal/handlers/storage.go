@@ -34,7 +34,7 @@ func (h *Handlers) HandleStorage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ensureStateExportEnabled(w http.ResponseWriter) bool {
-	if h.stateExportEnabled() {
+	if h.allows(routes.CapStateExport) {
 		return true
 	}
 	h.writeCapabilityDisabled(w, routes.CapStateExport)

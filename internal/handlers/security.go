@@ -36,43 +36,23 @@ func capState(cap routes.Capability, enabled bool, paths []string) endpointSecur
 	}
 }
 
-func (h *Handlers) macroEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowMacro
-}
-
-func (h *Handlers) screencastEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowScreencast
-}
-
-func (h *Handlers) downloadEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowDownload
-}
-
-func (h *Handlers) cookiesEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowCookies
-}
-
-func (h *Handlers) uploadEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowUpload
-}
-
-func (h *Handlers) networkInterceptEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowNetworkIntercept
+func (h *Handlers) allows(cap routes.Capability) bool {
+	return h != nil && h.Config.CapabilityEnabled(cap)
 }
 
 func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 	return map[string]endpointSecurityState{
-		"evaluate": capState(routes.CapEvaluate, h.evaluateEnabled(),
+		"evaluate": capState(routes.CapEvaluate, h.allows(routes.CapEvaluate),
 			[]string{"POST /evaluate", "POST /tabs/{id}/evaluate"}),
-		"macro": capState(routes.CapMacro, h.macroEnabled(),
+		"macro": capState(routes.CapMacro, h.allows(routes.CapMacro),
 			[]string{"POST /macro"}),
-		"screencast": capState(routes.CapScreencast, h.screencastEnabled(),
+		"screencast": capState(routes.CapScreencast, h.allows(routes.CapScreencast),
 			[]string{"GET /screencast", "GET /screencast/tabs", "POST /record/start", "POST /record/stop", "GET /record/status", "GET /instances/{id}/screencast", "GET /instances/{id}/proxy/screencast"}),
-		"download": capState(routes.CapDownload, h.downloadEnabled(),
+		"download": capState(routes.CapDownload, h.allows(routes.CapDownload),
 			[]string{"GET /download", "GET /tabs/{id}/download"}),
-		"cookies": capState(routes.CapCookies, h.cookiesEnabled(),
+		"cookies": capState(routes.CapCookies, h.allows(routes.CapCookies),
 			[]string{"GET /cookies", "POST /cookies", "DELETE /cookies", "GET /tabs/{id}/cookies", "POST /tabs/{id}/cookies", "DELETE /tabs/{id}/cookies"}),
-		"upload": capState(routes.CapUpload, h.uploadEnabled(),
+		"upload": capState(routes.CapUpload, h.allows(routes.CapUpload),
 			[]string{"POST /upload", "POST /tabs/{id}/upload"}),
 		// clipboard has no capability gate in the route catalog, so its metadata stays local.
 		"clipboard": {
@@ -81,14 +61,14 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 			Message: httpx.DisabledEndpointMessage("clipboard", clipboardSetting),
 			Paths:   []string{"GET /clipboard/read", "POST /clipboard/write", "POST /clipboard/copy", "GET /clipboard/paste"},
 		},
-		"stateExport": capState(routes.CapStateExport, h.stateExportEnabled(),
+		"stateExport": capState(routes.CapStateExport, h.allows(routes.CapStateExport),
 			[]string{
 				"GET /storage", "POST /storage", "DELETE /storage",
 				"GET /tabs/{id}/storage", "POST /tabs/{id}/storage", "DELETE /tabs/{id}/storage",
 				"GET /state", "GET /state/list", "GET /state/show", "POST /state/save",
 				"POST /state/load", "DELETE /state", "POST /state/clean",
 			}),
-		"networkIntercept": capState(routes.CapNetworkIntercept, h.networkInterceptEnabled(),
+		"networkIntercept": capState(routes.CapNetworkIntercept, h.allows(routes.CapNetworkIntercept),
 			[]string{
 				"GET /network/{requestId}", "GET /tabs/{id}/network/{requestId}", "POST /network/clear",
 				"GET /network/route", "POST /network/route", "DELETE /network/route",

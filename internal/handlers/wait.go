@@ -142,7 +142,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	}
 
 	h.recordActivity(r, activity.Update{Action: "wait." + mode, TabID: req.TabID})
-	if mode == "fn" && !h.evaluateEnabled() {
+	if mode == "fn" && !h.allows(routes.CapEvaluate) {
 		h.writeCapabilityDisabled(w, routes.CapEvaluate)
 		return
 	}

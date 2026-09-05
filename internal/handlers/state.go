@@ -14,10 +14,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/state"
 )
 
-func (h *Handlers) stateExportEnabled() bool {
-	return h != nil && h.Config != nil && h.Config.AllowStateExport
-}
-
 // HandleStateList lists all saved state files.
 func (h *Handlers) HandleStateList(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureStateExportEnabled(w) {

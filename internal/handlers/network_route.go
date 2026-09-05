@@ -101,7 +101,7 @@ func (h *Handlers) HandleTabNetworkRouteList(w http.ResponseWriter, r *http.Requ
 // capability gate, browser bringup and tab resolution. It applies no tab guards
 // — each caller declares its own.
 func (h *Handlers) requireRouteContext(w http.ResponseWriter, r *http.Request, tabID string) (tabCtx context.Context, resolvedID string, ok bool) {
-	if !h.networkInterceptEnabled() {
+	if !h.allows(routes.CapNetworkIntercept) {
 		h.writeCapabilityDisabled(w, routes.CapNetworkIntercept)
 		return nil, "", false
 	}

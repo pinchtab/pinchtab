@@ -14,7 +14,7 @@ import (
 )
 
 func (h *Handlers) ensureCookiesEnabled(w http.ResponseWriter) bool {
-	if h.cookiesEnabled() {
+	if h.allows(routes.CapCookies) {
 		return true
 	}
 	h.writeCapabilityDisabled(w, routes.CapCookies)
