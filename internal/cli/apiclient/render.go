@@ -17,14 +17,11 @@ func PrintAndDecode(body []byte) map[string]any {
 func printAndDecode(body []byte) map[string]any {
 	var buf bytes.Buffer
 	isJSON := json.Indent(&buf, body, "", "  ") == nil
-	if isJSON {
-		fmt.Println(buf.String())
-	} else {
-		fmt.Println(string(body))
-	}
 	if !isJSON {
+		fmt.Println(string(body))
 		return nil
 	}
+	fmt.Println(buf.String())
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err == nil {
 		return result

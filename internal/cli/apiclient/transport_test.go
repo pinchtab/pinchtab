@@ -64,3 +64,10 @@ func TestACompleteResponseIsStillReturnedWhole(t *testing.T) {
 		t.Errorf("code %d body %q, want 200 and the whole body", code, string(body))
 	}
 }
+
+func TestAMalformedURLIsAnErrorNotAPanic(t *testing.T) {
+	_, _, err := doRequest(&http.Client{}, "", request{method: "GET", url: "http://[::1"})
+	if err == nil {
+		t.Fatal("doRequest() = nil error for a URL http.NewRequest rejects; the old code dereferenced a nil request")
+	}
+}

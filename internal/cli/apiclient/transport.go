@@ -51,7 +51,10 @@ func doRequest(client *http.Client, token string, r request) (int, []byte, error
 		data, _ := json.Marshal(r.body)
 		bodyReader = bytes.NewReader(data)
 	}
-	req, _ := http.NewRequest(r.method, r.url, bodyReader)
+	req, err := http.NewRequest(r.method, r.url, bodyReader)
+	if err != nil {
+		return 0, nil, err
+	}
 	if r.body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
