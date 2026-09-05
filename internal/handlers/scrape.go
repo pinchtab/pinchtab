@@ -172,7 +172,7 @@ func (h *Handlers) renderPageHTML(clientCtx context.Context, url string, cfg *co
 		return "", navErr
 	}
 
-	if cur, urlErr := h.Bridge.CurrentURL(navCtx); urlErr == nil && strings.HasPrefix(cur, "chrome-error://") {
+	if cur, urlErr := h.Bridge.CurrentURL(navCtx); urlErr == nil && strings.HasPrefix(cur, errorPagePrefix) {
 		return "", h.documentNetError(tabID, url)
 	}
 
