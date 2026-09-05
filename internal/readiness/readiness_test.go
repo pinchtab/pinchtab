@@ -65,3 +65,16 @@ func TestWaitUntil_ContextCancelReturnsCtxErr(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestWaitUntil_DoesNotOvershootTheTimeoutByAnInterval(t *testing.T) {
+	start := time.Now()
+	_, err := WaitUntil(context.Background(), 50*time.Millisecond, time.Second, func() (struct{}, bool, error) {
+		return struct{}{}, false, nil
+	})
+	if err != ErrNotReady {
+		t.Fatalf("err = %v, want ErrNotReady", err)
+	}
+	if elapsed := time.Since(start); elapsed > 300*time.Millisecond {
+		t.Fatalf("WaitUntil took %v with a 50ms timeout; the final sleep must be capped to the time remaining, not the full interval", elapsed)
+	}
+}

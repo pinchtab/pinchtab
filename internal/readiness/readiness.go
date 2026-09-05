@@ -67,10 +67,19 @@ func WaitUntil[T any](ctx context.Context, timeout, interval time.Duration, prob
 		if ready {
 			return result, nil
 		}
+		wait := interval
+		if remaining := time.Until(deadline); remaining < wait {
+			wait = remaining
+		}
+		if wait <= 0 {
+			break
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return zero, ctx.Err()
-		case <-time.After(interval):
+		case <-timer.C:
 		}
 	}
 	return zero, ErrNotReady
