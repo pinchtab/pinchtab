@@ -941,6 +941,13 @@ func textBlocks(t *testing.T, r *mcp.CallToolResult) []string {
 // when it needs pixels and refs together was the one not told the page content is
 // untrusted. The funnel is what keeps the other tools from diverging later, so
 // each one is driven here rather than capture alone.
+//
+// This pins the FUNNEL, not deployed coverage: the fixture synthesises all three
+// keys for every tool, but today only /capture and /snapshot publish
+// untrustedContent and idpiNotice — /text and /find publish idpiWarning alone, so
+// the get_text and find rows exercise a body no producer emits yet. Do not read
+// a green here as "get_text warns with a notice block"; docs/reference/mcp-tools.md
+// states which tools do.
 func TestEveryIDPIPublishingToolCarriesTheWarningAndLeadsWithTheNotice(t *testing.T) {
 	srv := idpiServer(t)
 	defer srv.Close()
