@@ -152,18 +152,25 @@ func RecordStatus(client *http.Client, base, token string) {
 	}
 
 	var status struct {
-		Active   bool    `json:"active"`
-		Format   string  `json:"format"`
-		Duration float64 `json:"durationSeconds"`
-		Frames   int     `json:"frames"`
-		TabID    string  `json:"tabId"`
-		FPS      int     `json:"fps"`
+		Active     bool    `json:"active"`
+		State      string  `json:"state"`
+		StopReason string  `json:"stopReason"`
+		Format     string  `json:"format"`
+		Duration   float64 `json:"durationSeconds"`
+		Frames     int     `json:"frames"`
+		TabID      string  `json:"tabId"`
+		FPS        int     `json:"fps"`
 	}
 	if err := json.Unmarshal(raw, &status); err != nil {
 		cli.Fatal("Decode failed: %v", err)
 	}
 
 	if !status.Active {
+		if status.StopReason != "" {
+			fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Recording ended early (%s): %d frame(s) kept for tab %s — run `pinchtab record stop` to save them",
+				status.StopReason, status.Frames, status.TabID)))
+			return
+		}
 		fmt.Println(cli.StyleStdout(cli.MutedStyle, "No active recording"))
 		return
 	}

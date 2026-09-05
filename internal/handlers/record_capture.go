@@ -25,23 +25,24 @@ func (rec *recorder) captureLoop() {
 		case <-rec.stopCh:
 			return
 		case <-rec.tabCtx.Done():
-			rec.mu.Lock()
-			rec.state = stateAborted
-			rec.stopReason = "tab_closed"
-			rec.cleanup()
-			rec.mu.Unlock()
-			slog.Info("recording aborted: tab context canceled", "tab", rec.tabID)
+			// The tab is gone — closed, or its browser died — but the frames are
+			// not: they stay on disk for the grace window exactly as a limit does,
+			// so stop() can still encode what was captured. Warn, not info: the
+			// run this was filming is usually the one that cannot be repeated.
+			frames := rec.transitionToEnded(stateAborted, "tab_closed")
+			slog.Warn("recording ended early: tab closed", "tab", rec.tabID, "reason", "tab_closed", "frames", frames)
+			rec.scheduleGraceCleanup()
 			return
 		case <-deadline.C:
-			rec.transitionToLimitReached("max_duration")
+			rec.transitionToEnded(stateLimitReached, "max_duration")
 			slog.Info("recording stopped: max duration reached", "tab", rec.tabID)
-			rec.scheduleLimitCleanup()
+			rec.scheduleGraceCleanup()
 			return
 		case <-ticker.C:
 			if reason := rec.checkLimits(&diskBytes); reason != "" {
-				rec.transitionToLimitReached(reason)
+				rec.transitionToEnded(stateLimitReached, reason)
 				slog.Info("recording stopped: "+reason, "tab", rec.tabID)
-				rec.scheduleLimitCleanup()
+				rec.scheduleGraceCleanup()
 				return
 			}
 			rec.writeFrame(&diskBytes)
@@ -82,16 +83,19 @@ func (rec *recorder) writeFrame(diskBytes *atomic.Int64) {
 	}
 }
 
-func (rec *recorder) transitionToLimitReached(reason string) {
+// transitionToEnded records that capture stopped without tearing anything
+// down: the frames stay for stop() to collect. It reports the frame count.
+func (rec *recorder) transitionToEnded(state recorderState, reason string) int {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
-	rec.state = stateLimitReached
+	rec.state = state
 	rec.stopReason = reason
+	return rec.frameNum
 }
 
-// scheduleLimitCleanup starts a goroutine that auto-cleans the recording
+// scheduleGraceCleanup starts a goroutine that auto-cleans an ended recording
 // after limitCleanupGrace if nobody calls stop().
-func (rec *recorder) scheduleLimitCleanup() {
+func (rec *recorder) scheduleGraceCleanup() {
 	go func() {
 		timer := time.NewTimer(limitCleanupGrace)
 		defer timer.Stop()
@@ -101,8 +105,8 @@ func (rec *recorder) scheduleLimitCleanup() {
 		case <-timer.C:
 			rec.mu.Lock()
 			defer rec.mu.Unlock()
-			if rec.state == stateLimitReached {
-				slog.Info("recording auto-cleanup after limit grace period", "tab", rec.tabID)
+			if rec.state == stateLimitReached || rec.state == stateAborted {
+				slog.Info("recording auto-cleanup after grace period", "tab", rec.tabID, "reason", rec.stopReason)
 				rec.cleanup()
 				rec.state = stateIdle
 				rec.stopReason = ""

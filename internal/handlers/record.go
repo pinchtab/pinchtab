@@ -73,7 +73,7 @@ const (
 	stateStopping                   // stop() called; waiting for capture loop to finish
 	stateEncoding                   // encoding frames to output format
 	stateFinished                   // encoding complete; cleanup pending
-	stateAborted                    // tab context was cancelled; resources cleaned up
+	stateAborted                    // tab context was cancelled; frames on disk awaiting stop() for the grace window
 )
 
 func (s recorderState) String() string {
@@ -176,7 +176,7 @@ func (rec *recorder) start(tabCtx context.Context, tabID, owner, format string, 
 
 func (rec *recorder) stop(callerOwner, outputPath string) (RecordStopResult, error) {
 	rec.mu.Lock()
-	if rec.state == stateIdle || rec.state == stateAborted {
+	if rec.state == stateIdle {
 		rec.mu.Unlock()
 		return RecordStopResult{}, fmt.Errorf("no active recording")
 	}

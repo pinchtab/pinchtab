@@ -15,6 +15,11 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/session"
+	"image"
+	"image/jpeg"
+	"log/slog"
+	"os"
+	"path/filepath"
 )
 
 func TestHandleRecordStart_Disabled(t *testing.T) {
@@ -546,5 +551,114 @@ func TestRecorderStatus_IdleAfterStop(t *testing.T) {
 	}
 	if status.State != "idle" {
 		t.Errorf("expected state=idle after stop+cleanup, got %q", status.State)
+	}
+}
+
+func jpegFrame(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return &buf
+}
+
+// The tab a recording films can vanish — closed, or its browser died — and the
+// frames must survive that: the state names the reason, the log carries it, and
+// stop() encodes what was captured to the path the caller names. The zero-frame
+// idle case is the one this must differ from, so it is asserted beside it.
+func TestATabClosingMidRecordingKeepsTheFramesRecoverable(t *testing.T) {
+	logs := captureLogs(t)
+	frame := jpegFrame(t)
+	captured := make(chan struct{}, 1)
+	rec := &recorder{captureFrame: func(context.Context, int) ([]byte, error) {
+		select {
+		case captured <- struct{}{}:
+		default:
+		}
+		return frame, nil
+	}}
+	tabCtx, closeTab := context.WithCancel(context.Background())
+	if err := rec.start(tabCtx, "tab-filmed", "", "gif", 30, 80, 1.0); err != nil {
+		t.Fatal(err)
+	}
+	<-captured
+	closeTab()
+	<-rec.doneCh
+
+	st := rec.status()
+	if st.Active || st.State != "aborted" || st.StopReason != "tab_closed" || st.Frames < 1 || st.TabID != "tab-filmed" {
+		t.Fatalf("status after the tab closed = %+v; it must say the recording ended early, why, and keep its frames", st)
+	}
+	if idle := (&recorder{}).status(); idle.State == st.State {
+		t.Fatalf("an ended recording (%q) reads like one never started (%q)", st.State, idle.State)
+	}
+	for _, want := range []string{"recording ended early", "tab=tab-filmed", "reason=tab_closed", "frames="} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("log lacks %q:\n%s", want, logs.String())
+		}
+	}
+
+	out := filepath.Join(t.TempDir(), "kept.gif")
+	res, err := rec.stop("", out)
+	if err != nil {
+		t.Fatalf("stop after the tab closed refused instead of encoding the kept frames: %v", err)
+	}
+	if res.Frames < 1 {
+		t.Fatalf("stop reported %d frames", res.Frames)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		s := rec.status()
+		if s.State == "finished" {
+			if s.Error != "" {
+				t.Fatalf("encode failed: %s", s.Error)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("encode never finished: %+v", s)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if info, err := os.Stat(out); err != nil || info.Size() == 0 {
+		t.Fatalf("the recording was not written to %s: %v", out, err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := rec.start(ctx, "tab-next", "", "gif", 5, 80, 1.0); err != nil {
+		t.Fatalf("a new recording after an early end was refused: %v", err)
+	}
+	_, _ = rec.stop("", "")
+}
+
+// Ended before its first frame, the recording still says so: stop names the
+// reason instead of answering as if nothing had been started.
+func TestATabClosingBeforeTheFirstFrameNamesTheReasonOnStop(t *testing.T) {
+	rec := &recorder{captureFrame: captureNothing}
+	tabCtx, closeTab := context.WithCancel(context.Background())
+	if err := rec.start(tabCtx, "tab-filmed", "", "gif", 1, 80, 1.0); err != nil {
+		t.Fatal(err)
+	}
+	closeTab()
+	<-rec.doneCh
+
+	_, err := rec.stop("", filepath.Join(t.TempDir(), "never.gif"))
+	if err == nil || !strings.Contains(err.Error(), "ended early (tab_closed)") {
+		t.Fatalf("stop on a recording ended before its first frame = %v; want the reason named", err)
+	}
+	if _, idleErr := (&recorder{}).stop("", ""); idleErr == nil || idleErr.Error() == err.Error() {
+		t.Fatalf("the ended-early answer %q is indistinguishable from never started %v", err, idleErr)
 	}
 }
