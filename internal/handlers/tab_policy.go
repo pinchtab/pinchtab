@@ -59,28 +59,12 @@ func (h *Handlers) guardTabContext(w http.ResponseWriter, r *http.Request, ctx c
 	return ctx, tabID, true
 }
 
-func refuseMistypedGETTabTarget(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method == http.MethodGet {
-		if err := mistypedTabTarget(r.URL.Query()); err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
-			return true
-		}
-	}
-	return false
-}
-
 func (h *Handlers) guardedTabContext(w http.ResponseWriter, r *http.Request, tabID string, guards tabGuards) (context.Context, string, bool) {
-	if refuseMistypedGETTabTarget(w, r) {
-		return nil, "", false
-	}
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	return h.guardTabContext(w, r, ctx, resolvedTabID, err, guards)
 }
 
 func (h *Handlers) guardedTabContextWithHeader(w http.ResponseWriter, r *http.Request, tabID string, guards tabGuards) (context.Context, string, bool) {
-	if refuseMistypedGETTabTarget(w, r) {
-		return nil, "", false
-	}
 	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
 	return h.guardTabContext(w, r, ctx, resolvedTabID, err, guards)
 }

@@ -300,8 +300,9 @@ func (h *Handlers) writeBridgeUnavailable(w http.ResponseWriter, err error) bool
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
-	h.registerBridgeRoutes(mux)
-	h.registerSpecialRoutes(mux, doShutdown)
+	targetSafeMux := mistypedTargetRegistrar{muxRegistrar: mux}
+	h.registerBridgeRoutes(targetSafeMux)
+	h.registerSpecialRoutes(targetSafeMux, doShutdown)
 
 	if h.Profiles != nil {
 		h.Profiles.RegisterHandlers(mux)
@@ -318,6 +319,14 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 // test recorder can capture the registered pattern set for catalog-parity checks.
 type muxRegistrar interface {
 	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
+type mistypedTargetRegistrar struct {
+	muxRegistrar
+}
+
+func (m mistypedTargetRegistrar) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	m.muxRegistrar.HandleFunc(pattern, refuseMistypedGETTabTarget(handler))
 }
 
 // routeBinding pairs one catalog Endpoint.Route() with the handlers that serve

@@ -121,6 +121,8 @@ Important behavior:
   query, and `POST /navigate`, `POST /action`, `POST /actions` and `POST /frame` name it in the
   JSON body only. A query parameter on one of those POSTs is refused with `400` naming it rather
   than dropped, because a dropped `tabId` would drive a tab the caller never named and answer `200`.
+  On every registered browser GET endpoint, the common targeting misspellings `tab`, `tabID`, and
+  `tab_id` are likewise refused with `400` instead of silently answering about the current tab.
   `tab`, `tabID` and `tab_id` are refused on `GET /snapshot` and `GET /frame` instead of being
   listed in `ignoredParams`: a wrong cost parameter gives a differently shaped answer to the right
   question, a wrong target gives a right-shaped answer about the wrong page. Body-less POSTs such

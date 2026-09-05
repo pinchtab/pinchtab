@@ -287,30 +287,23 @@ func TestMistypedTargetingIsRefusedOnReadVerbs(t *testing.T) {
 	}
 }
 
-func TestMistypedTargetingIsRefusedByTheSharedReadBoundary(t *testing.T) {
+func TestMistypedTargetingIsRefusedAcrossRegisteredGetEndpoints(t *testing.T) {
 	h := newTwoTabHandlers(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+	endpoints := []string{"/snapshot", "/text", "/title", "/console", "/screencast", "/download?url=http://localhost/file"}
 	for _, spelling := range mistypedTabTargets {
-		for _, withHeader := range []bool{false, true} {
-			name := spelling + "/binary"
-			if withHeader {
-				name = spelling + "/response-header"
-			}
-			t.Run(name, func(t *testing.T) {
-				r := httptest.NewRequest(http.MethodGet, "/read?"+spelling+"=tabB", nil)
-				w := httptest.NewRecorder()
-				if withHeader {
-					_, _, ok := h.guardedTabContextWithHeader(w, r, "", guardNone)
-					if ok {
-						t.Fatal("mistyped targeting reached the shared read context")
-					}
-				} else {
-					_, _, ok := h.guardedTabContext(w, r, "", guardNone)
-					if ok {
-						t.Fatal("mistyped targeting reached the shared binary-read context")
-					}
+		for _, endpoint := range endpoints {
+			t.Run(endpoint+"?"+spelling, func(t *testing.T) {
+				separator := "?"
+				if strings.Contains(endpoint, "?") {
+					separator = "&"
 				}
+				r := httptest.NewRequest(http.MethodGet, endpoint+separator+spelling+"=tabB", nil)
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, r)
 				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), spelling+": not a targeting parameter") {
-					t.Fatalf("mistyped targeting answered %d instead of naming %s: %s", w.Code, spelling, w.Body.String())
+					t.Fatalf("GET %s with %s answered %d instead of naming the mistyped target: %s", endpoint, spelling, w.Code, w.Body.String())
 				}
 			})
 		}

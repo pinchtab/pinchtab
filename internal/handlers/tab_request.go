@@ -133,3 +133,15 @@ func mistypedTabTarget(q url.Values) error {
 	}
 	return nil
 }
+
+func refuseMistypedGETTabTarget(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			if err := mistypedTabTarget(r.URL.Query()); err != nil {
+				httpx.Error(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
