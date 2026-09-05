@@ -15,7 +15,10 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/remedy"
 )
+
+var createMissingProfile = remedy.Declare("pinchtab profiles create <name>")
 
 type startInstanceRequest struct {
 	ProfileID       string                 `json:"profileId,omitempty"`
@@ -255,10 +258,9 @@ func (o *Orchestrator) startInstanceWithRequest(w http.ResponseWriter, r *http.R
 	if req.ProfileID != "" {
 		profileName, err = o.resolveProfileName(req.ProfileID)
 		if err != nil {
-			httpx.ErrorCode(w, http.StatusNotFound, "profile_not_found", fmt.Sprintf("profile %q not found", req.ProfileID), false, map[string]any{
-				"profile": req.ProfileID,
-				"remedy":  "pinchtab profiles create <name>",
-			})
+			details := remedy.Details("Creating and authenticating a reusable profile is a human setup step.", createMissingProfile.Fill(req.ProfileID))
+			details["profile"] = req.ProfileID
+			httpx.ErrorCode(w, http.StatusNotFound, "profile_not_found", fmt.Sprintf("profile %q not found", req.ProfileID), false, details)
 			return
 		}
 	} else {
