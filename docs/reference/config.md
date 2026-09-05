@@ -754,6 +754,12 @@ your own proxy rather than to the client, which flattens every caller into one b
 useless, but not spoofable. A proxy that strips and rebuilds the header leaves a single
 element, where a hop count of `1` reads exactly what it wrote.
 
+Because the server cannot count the proxies in front of it, a wrong value is silent at
+rest. Whenever `trustProxyHeaders` is on, the boot banner and `pinchtab security` print a
+warning naming the hop count in effect so you can confirm it against your front-end. Do
+not confuse this with `security.trustedProxyCIDRs`, which is unrelated to header trust:
+it lists CIDRs whose remote address is trusted when validating navigation responses.
+
 ## Legacy Flat Format
 
 Older flat config is still accepted for backward compatibility:

@@ -1,6 +1,9 @@
 package report
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -222,4 +225,81 @@ func TestAssessSecurityPosture(t *testing.T) {
 			t.Fatalf("expected EXPOSED posture, got %q", posture.Level)
 		}
 	})
+}
+
+func warningByID(warnings []SecurityWarning, id string) (SecurityWarning, bool) {
+	for _, w := range warnings {
+		if w.ID == id {
+			return w, true
+		}
+	}
+	return SecurityWarning{}, false
+}
+
+// The hop count is invisible at runtime and wrong in both directions silently, so
+// trusting forwarding headers earns a warning that names the count the server
+// actually uses and the rule it must satisfy. Off means the count is never read
+// and there is nothing to confirm.
+func TestTrustingForwardingHeadersNamesTheEffectiveHopCount(t *testing.T) {
+	cases := []struct {
+		name  string
+		trust bool
+		hops  int
+		want  string
+	}{
+		{"off says nothing", false, 3, ""},
+		{"on with the default reports one", true, 0, "1"},
+		{"on with two reports two", true, 2, "2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.RuntimeConfig{Bind: "127.0.0.1", Token: "secret", TrustProxyHeaders: tc.trust, TrustedProxyHops: tc.hops}
+			warning, found := warningByID(AssessSecurityWarnings(cfg), "trusted_proxy_hops")
+			if tc.want == "" {
+				if found {
+					t.Fatalf("headers are not trusted yet the hop count was warned about: %+v", warning)
+				}
+				return
+			}
+			if !found {
+				t.Fatal("headers are trusted but no warning names the hop count")
+			}
+			if !strings.Contains(warning.Message, "read "+tc.want+" hop(s)") {
+				t.Fatalf("message %q does not name the effective count %s", warning.Message, tc.want)
+			}
+			hint := warning.Hint()
+			if !strings.Contains(hint, "confirm "+tc.want+" equals the number of proxies in front that APPEND") || !strings.Contains(hint, "a higher number lets a client choose") {
+				t.Fatalf("hint %q does not state the rule an operator can act on", hint)
+			}
+			if strings.Contains(warning.Message+hint, "trustedProxyCIDRs") {
+				t.Fatalf("the warning points at security.trustedProxyCIDRs, which governs navigation responses, not header trust: %q", hint)
+			}
+		})
+	}
+}
+
+// The boot banner is LogSecurityWarnings and it must carry every warning the
+// assessor returns, so a warning added later cannot reach the CLI and not the banner.
+func TestTheBootBannerLogsEveryAssessedWarning(t *testing.T) {
+	cfg := &config.RuntimeConfig{Bind: "0.0.0.0", Token: "", TrustProxyHeaders: true, TrustedProxyHops: 2, AllowEvaluate: true}
+	assessed := AssessSecurityWarnings(cfg)
+	if len(assessed) < 3 {
+		t.Fatalf("only %d warnings assessed; too few to prove the banner carries them all", len(assessed))
+	}
+
+	var buf bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	LogSecurityWarnings(cfg)
+
+	logged := buf.String()
+	for _, warning := range assessed {
+		if !strings.Contains(logged, "warningId="+warning.ID) {
+			t.Errorf("banner omits %s", warning.ID)
+		}
+	}
+	if !strings.Contains(logged, "hops=2") {
+		t.Errorf("banner does not carry the hop count: %s", logged)
+	}
 }

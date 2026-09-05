@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
@@ -212,5 +213,29 @@ func TestOverviewCountIsThePresetChangeCount(t *testing.T) {
 	}
 	if len(preview.Changes) != len(changes) {
 		t.Fatalf("overview counts %d, the preset would write %d", len(changes), len(preview.Changes))
+	}
+}
+
+// The overview is the second surface for security warnings, driven off the same
+// assessor as the boot banner, so every warning the assessor returns must print.
+func TestOverviewPrintsEveryAssessedWarning(t *testing.T) {
+	cfg := testRuntimeConfig()
+	cfg.Token = ""
+	cfg.TrustProxyHeaders = true
+	cfg.TrustedProxyHops = 2
+	assessed := cli.AssessSecurityWarnings(cfg)
+	if len(assessed) < 2 {
+		t.Fatalf("only %d warnings assessed; too few to prove the overview prints them all", len(assessed))
+	}
+	output := captureStdout(t, func() {
+		printSecurityOverview(cfg, nil, nil)
+	})
+	for _, warning := range assessed {
+		if !strings.Contains(output, warning.Message) {
+			t.Errorf("overview omits %q\n%s", warning.Message, output)
+		}
+		if hint := warning.Hint(); hint != "" && !strings.Contains(output, hint) {
+			t.Errorf("overview omits the hint for %s\n%s", warning.ID, output)
+		}
 	}
 }

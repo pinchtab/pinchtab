@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -162,6 +163,19 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 			ID:      "sensitive_endpoints_without_auth",
 			Message: "high-risk configuration: sensitive endpoints enabled without API authentication",
 			Attrs:   []any{"endpoints", enabled, "hint", "set PINCHTAB_TOKEN or disable the sensitive endpoints"},
+		})
+	}
+
+	if cfg.TrustProxyHeaders {
+		hops := config.TrustedProxyHopsOrDefault(cfg.TrustedProxyHops)
+		warnings = append(warnings, SecurityWarning{
+			ID:      "trusted_proxy_hops",
+			Message: fmt.Sprintf("forwarding headers are trusted; client identity is read %d hop(s) from the right of X-Forwarded-For", hops),
+			Attrs: []any{
+				"setting", "server.trustedProxyHops",
+				"hops", hops,
+				"hint", fmt.Sprintf("confirm %d equals the number of proxies in front that APPEND to X-Forwarded-For (nginx proxy_add_x_forwarded_for, Caddy and Traefik defaults each count as one); a higher number lets a client choose its own rate-limit bucket and audit identity", hops),
+			},
 		})
 	}
 
