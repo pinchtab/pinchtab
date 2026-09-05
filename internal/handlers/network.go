@@ -438,10 +438,7 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 	subID, ch := buf.Subscribe()
 	defer buf.Unsubscribe(subID)
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
+	stream := httpx.NewEventStream(w, flusher)
 	flusher.Flush()
 
 	keepalive := time.NewTicker(15 * time.Second)
@@ -460,16 +457,14 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			if _, err := fmt.Fprintf(w, "event: network\ndata: %s\n\n", data); err != nil {
+			if stream.Raw("network", data) != nil {
 				return
 			}
-			flusher.Flush()
 
 		case <-keepalive.C:
-			if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
+			if stream.Keepalive() != nil {
 				return
 			}
-			flusher.Flush()
 
 		case <-r.Context().Done():
 			return

@@ -1,8 +1,6 @@
 package dashboard
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -40,10 +38,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
+	stream := httpx.NewEventStream(w, flusher)
 
 	activityCh := make(chan apiTypes.ActivityEvent, d.cfg.SSEBufferSize)
 	sysCh := make(chan SystemEvent, d.cfg.SSEBufferSize)
@@ -64,7 +59,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(r.URL.Query().Get("agentId")) == "" {
 		agentFilter = ""
 	}
-	emitSSE(w, flusher, "init", d.Agents())
+	_ = stream.Event("init", d.Agents())
 
 	for _, evt := range d.RecentEvents() {
 		if !matchesMode(mode, evt.Channel) {
@@ -73,10 +68,10 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 		if agentFilter != "" && evt.AgentID != agentFilter {
 			continue
 		}
-		d.emitActivityEvent(w, flusher, evt)
+		d.emitActivityEvent(stream, evt)
 	}
 
-	d.emitMonitoring(w, flusher, includeMemory)
+	d.emitMonitoring(stream, includeMemory)
 
 	keepalive := time.NewTicker(30 * time.Second)
 	monitoring := time.NewTicker(5 * time.Second)
@@ -87,46 +82,36 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 		select {
 		case evt := <-activityCh:
 			if matchesMode(mode, evt.Channel) && (agentFilter == "" || evt.AgentID == agentFilter) {
-				d.emitActivityEvent(w, flusher, evt)
+				d.emitActivityEvent(stream, evt)
 			}
 		case evt := <-sysCh:
-			emitSSE(w, flusher, "system", evt)
-			d.emitMonitoring(w, flusher, includeMemory)
+			_ = stream.Event("system", evt)
+			d.emitMonitoring(stream, includeMemory)
 		case <-monitoring.C:
-			d.emitMonitoring(w, flusher, includeMemory)
+			d.emitMonitoring(stream, includeMemory)
 		case <-keepalive.C:
-			_, _ = fmt.Fprintf(w, ": keepalive\n\n")
-			flusher.Flush()
+			_ = stream.Keepalive()
 		case <-r.Context().Done():
 			return
 		}
 	}
 }
 
-// emitSSE marshals payload and writes one SSE frame, then flushes.
-func emitSSE(w http.ResponseWriter, flusher http.Flusher, event string, payload any) {
-	data, _ := json.Marshal(payload)
-	_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
-	flusher.Flush()
-}
-
 // emitMonitoring sends a monitoring snapshot when a monitoring/instances source
 // exists, reusing a shared TTL-cached marshaled payload so concurrent connections
 // do not each recompute + marshal the full snapshot.
-func (d *Dashboard) emitMonitoring(w http.ResponseWriter, flusher http.Flusher, includeMemory bool) {
+func (d *Dashboard) emitMonitoring(stream *httpx.EventStream, includeMemory bool) {
 	if d.monitoring != nil || d.instances != nil {
-		data := d.monitoringPayloadBytes(includeMemory)
-		_, _ = fmt.Fprintf(w, "event: monitoring\ndata: %s\n\n", data)
-		flusher.Flush()
+		_ = stream.Raw("monitoring", d.monitoringPayloadBytes(includeMemory))
 	}
 }
 
-func (d *Dashboard) emitActivityEvent(w http.ResponseWriter, flusher http.Flusher, evt apiTypes.ActivityEvent) {
+func (d *Dashboard) emitActivityEvent(stream *httpx.EventStream, evt apiTypes.ActivityEvent) {
 	name := "action"
 	if evt.Channel == "progress" {
 		name = "progress"
 	}
-	emitSSE(w, flusher, name, evt)
+	_ = stream.Event(name, evt)
 }
 
 func matchesMode(mode, channel string) bool {

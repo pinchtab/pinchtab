@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -174,23 +173,10 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
+	stream := httpx.NewEventStream(w, flusher)
 	writeLog := func(chunk string, reset bool) bool {
-		data, err := json.Marshal(map[string]any{"logs": chunk, "reset": reset})
-		if err != nil {
-			return false
-		}
-		if _, err := fmt.Fprintf(w, "event: log\ndata: %s\n\n", data); err != nil {
-			return false
-		}
-		flusher.Flush()
-		return true
+		return stream.Event("log", map[string]any{"logs": chunk, "reset": reset}) == nil
 	}
-
 	if !writeLog(initial, true) {
 		return
 	}
@@ -206,17 +192,16 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 			if err != nil {
 				return
 			}
-			if chunk != "" {
+			if chunk != "" || reset {
 				last = newOffset
 				if !writeLog(chunk, reset) {
 					return
 				}
 				continue
 			}
-			if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
+			if stream.Keepalive() != nil {
 				return
 			}
-			flusher.Flush()
 		case <-r.Context().Done():
 			return
 		}
