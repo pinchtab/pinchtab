@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -214,4 +215,26 @@ func doctorTestCommand(out *bytes.Buffer) *cobra.Command {
 	cmd.SetOut(out)
 	cmd.SetContext(context.Background())
 	return cmd
+}
+
+func TestRunDoctorReportsFatalConfigInsteadOfAborting(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	if err := os.WriteFile(configPath, []byte(`{"sessions":{"agent":{"mode":"required"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restore := setDoctorGlobals("", false)
+	t.Cleanup(restore)
+
+	var out bytes.Buffer
+	err := runDoctor(doctorTestCommand(&out), nil)
+	if got := commandExitCode(err); got != 1 {
+		t.Fatalf("exit code = %d, want 1; err=%v", got, err)
+	}
+	report := out.String()
+	for _, want := range []string{"config_file", "FAIL", "sessions.agent.mode", "required", "SKIP", "valid loaded configuration"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("doctor report missing %q:\n%s", want, report)
+		}
+	}
 }

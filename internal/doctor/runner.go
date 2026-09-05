@@ -182,16 +182,35 @@ func browserCheckResult(ctx context.Context, dc browsers.DoctorCheck, env *brows
 // Run executes the diagnostic pipeline; when checkFilter is non-empty only
 // the named check runs.
 func Run(ctx context.Context, cfg *config.RuntimeConfig, checkFilter string) []CheckResult {
+	return run(ctx, cfg, checkFilter, nil)
+}
+
+// RunWithConfigError produces a useful diagnostic report when configuration
+// validation failed. The config check carries the fatal error; checks whose
+// inputs cannot be trusted are retained as explicit skips.
+func RunWithConfigError(ctx context.Context, cfg *config.RuntimeConfig, checkFilter string, configErr error) []CheckResult {
+	return run(ctx, cfg, checkFilter, configErr)
+}
+
+func run(ctx context.Context, cfg *config.RuntimeConfig, checkFilter string, configErr error) []CheckResult {
 	entries := Registry(cfg)
 	checkFilter = strings.TrimSpace(checkFilter)
 
 	out := make([]CheckResult, 0, len(entries))
 	for _, e := range entries {
-		if checkFilter != "" && e.Name != checkFilter {
+		if checkFilter != "" && e.Name != checkFilter && (configErr == nil || e.Name != "config_file") {
 			continue
 		}
 		start := time.Now()
-		r := e.Fn(ctx, cfg)
+		var r CheckResult
+		switch {
+		case configErr == nil:
+			r = e.Fn(ctx, cfg)
+		case e.Name == "config_file":
+			r = CheckResult{Status: StatusFail, Detail: "configuration could not be loaded: " + configErr.Error(), Err: configErr}
+		default:
+			r = CheckResult{Status: StatusSkip, Detail: "requires a valid loaded configuration"}
+		}
 		r.Name = e.Name
 		r.LaunchesBrowser = e.LaunchesBrowser
 		if r.Duration == 0 {

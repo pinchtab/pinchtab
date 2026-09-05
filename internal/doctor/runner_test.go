@@ -316,3 +316,23 @@ func TestCheckResultMarshalsDurationInMilliseconds(t *testing.T) {
 		t.Fatalf("expected durationMs in milliseconds, got %s", data)
 	}
 }
+
+func TestRunWithConfigErrorFailsConfigAndSkipsDependentChecks(t *testing.T) {
+	err := errors.New(`sessions.agent.mode: unsupported value "required"`)
+	results := RunWithConfigError(context.Background(), &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}, "", err)
+	if len(results) < 2 {
+		t.Fatalf("results = %v, want a report with dependent checks", results)
+	}
+	if results[0].Name != "config_file" || results[0].Status != StatusFail || !strings.Contains(results[0].Detail, "sessions.agent.mode") {
+		t.Fatalf("config result = %+v, want failing field-specific diagnosis", results[0])
+	}
+	for _, result := range results[1:] {
+		if result.Status != StatusSkip || !strings.Contains(result.Detail, "valid loaded configuration") {
+			t.Fatalf("dependent result = %+v, want explicit config-dependent skip", result)
+		}
+	}
+	filtered := RunWithConfigError(context.Background(), &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome}, "binary_exists", err)
+	if len(filtered) != 2 || filtered[0].Name != "config_file" || filtered[0].Status != StatusFail || filtered[1].Name != "binary_exists" || filtered[1].Status != StatusSkip {
+		t.Fatalf("filtered results = %+v, want config failure plus requested dependent skip", filtered)
+	}
+}

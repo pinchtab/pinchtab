@@ -35,7 +35,7 @@ clean bill of health.
 Exit codes:
   0  all checks passed or were skipped
   1  at least one check failed
-  2  usage or setup error (e.g. config could not be loaded)`,
+  2  usage error (e.g. an unknown check name)`,
 	Example: `  pinchtab doctor
   pinchtab doctor --json
   pinchtab doctor browser cloak-eu
@@ -46,9 +46,18 @@ Exit codes:
 }
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
-	cfg, err := loadDoctorConfig()
-	if err != nil {
-		return newCommandExitError(2, fmt.Errorf("pinchtab doctor: %w", err))
+	cfg, diagnostics, loadErr := config.LoadConfig()
+	config.EmitLoadDiagnostics(diagnostics)
+	if cfg == nil {
+		return newCommandExitError(2, fmt.Errorf("pinchtab doctor: no configuration found"))
+	}
+	if loadErr != nil {
+		check := strings.TrimSpace(doctorCheck)
+		if check != "" && !doctor.KnownCheck(cfg, check) {
+			return newCommandExitError(2, fmt.Errorf("pinchtab doctor: unknown check %q for browser=%s", check, cfg.DefaultBrowser))
+		}
+		results := doctor.RunWithConfigError(cmd.Context(), cfg, check, loadErr)
+		return runDoctorResults(cmd, cfg, results, "pinchtab doctor", "")
 	}
 	return runDoctorChecks(cmd, cfg, doctorCheck, "pinchtab doctor", "")
 }
@@ -66,6 +75,10 @@ func runDoctorChecks(cmd *cobra.Command, cfg *config.RuntimeConfig, check, errPr
 	}
 
 	results := doctor.Run(cmd.Context(), cfg, check)
+	return runDoctorResults(cmd, cfg, results, errPrefix, target)
+}
+
+func runDoctorResults(cmd *cobra.Command, cfg *config.RuntimeConfig, results []doctor.CheckResult, errPrefix, target string) error {
 	browser := config.NormalizeBrowser(cfg.DefaultBrowser)
 	out := cmd.OutOrStdout()
 	runtime := doctor.ProbeRuntime(cmd.Context(), cfg)
