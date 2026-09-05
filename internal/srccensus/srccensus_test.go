@@ -24,16 +24,48 @@ func writePackage(t *testing.T, files map[string]string) string {
 }
 
 // recorder stands in for *testing.T so a guard's own failures can be asserted. A census
-// helper whose Fatal cannot be observed is a promise nobody checked.
+// helper whose Fatal cannot be observed is a promise nobody checked. It also records
+// what the helper logs and defers, so the module-wide preamble is observable.
 type recorder struct {
 	testing.TB
-	fatals []string
+	fatals   []string
+	logs     []string
+	cleanups []func()
 }
 
 func (r *recorder) Helper() {}
 func (r *recorder) Fatalf(format string, args ...any) {
 	r.fatals = append(r.fatals, sprintf(format, args...))
 	panic(errStop{})
+}
+func (r *recorder) Failed() bool { return len(r.fatals) > 0 }
+func (r *recorder) Logf(format string, args ...any) {
+	r.logs = append(r.logs, sprintf(format, args...))
+}
+func (r *recorder) Cleanup(fn func()) { r.cleanups = append(r.cleanups, fn) }
+func (r *recorder) runCleanups() {
+	for i := len(r.cleanups) - 1; i >= 0; i-- {
+		r.cleanups[i]()
+	}
+}
+
+// runRecorded drives a census against the recorder, swallows its Fatal stop, and runs
+// the cleanups the way the test runner would after the test body.
+func runRecorded(t *testing.T, run func(tb testing.TB)) *recorder {
+	t.Helper()
+	rec := &recorder{TB: t}
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if _, ok := recovered.(errStop); !ok {
+					panic(recovered)
+				}
+			}
+		}()
+		run(rec)
+	}()
+	rec.runCleanups()
+	return rec
 }
 
 type errStop struct{}
@@ -621,5 +653,49 @@ func TestWalk(t *testing.T) {
 func TestAnUnparseableWalkerIsNotSilentlyExempt(t *testing.T) {
 	if _, err := callsSrccensus("broken_test.go", "package p\nfunc TestX( {\n"); err == nil {
 		t.Error("an unparseable file returned no error, so the guard would clear it without reading it")
+	}
+}
+
+// A census that walks a root outside its own package reds the package hosting it for a
+// change made anywhere under that root. When it fails it must say so, naming the root and
+// the host, so the reader does not bisect the wrong package; when it passes, or when the
+// root IS the package, nothing is added.
+func TestAFailingModuleWideCensusSaysItsSubjectIsTheWholeTree(t *testing.T) {
+	root := writeTree(t, map[string]string{"only.go": "package a\n"})
+	host, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := runRecorded(t, func(tb testing.TB) { Tree(tb, root, 5) })
+	if len(rec.fatals) == 0 {
+		t.Fatal("the floor did not fire, so this fixture proves nothing")
+	}
+	joined := strings.Join(rec.logs, "\n")
+	for _, want := range []string{"MODULE-WIDE CENSUS", root, host, "not necessarily where the change belongs", "file and function the failure names"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("a failing module-wide census did not explain itself with %q:\n%s", want, joined)
+		}
+	}
+}
+
+func TestAPassingModuleWideCensusAddsNothing(t *testing.T) {
+	root := writeTree(t, map[string]string{"only.go": "package a\n"})
+	rec := runRecorded(t, func(tb testing.TB) { Tree(tb, root, 1) })
+	if len(rec.fatals) != 0 || len(rec.logs) != 0 {
+		t.Fatalf("a green module-wide census logged %v (fatals %v); the preamble must be silent on success", rec.logs, rec.fatals)
+	}
+}
+
+// The package's own directory is the one root that must NOT earn the preamble: a
+// package-scoped census that fails is a break in this package, and saying otherwise
+// would send the reader away from it.
+func TestAFailingPackageScopedCensusGainsNoModuleWidePreamble(t *testing.T) {
+	rec := runRecorded(t, func(tb testing.TB) { Tree(tb, ".", 1000) })
+	if len(rec.fatals) == 0 {
+		t.Fatal("the floor did not fire on the package's own directory, so this fixture proves nothing")
+	}
+	if joined := strings.Join(rec.logs, "\n"); strings.Contains(joined, "MODULE-WIDE CENSUS") {
+		t.Fatalf("a package-scoped census claimed to be module-wide:\n%s", joined)
 	}
 }

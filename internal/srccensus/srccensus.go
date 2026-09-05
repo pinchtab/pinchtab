@@ -172,6 +172,7 @@ func tree(t testing.TB, root string, minFiles int, kind string, include func(pat
 	if err != nil {
 		t.Fatalf("cannot resolve %s, so this census would check nothing: %v", root, err)
 	}
+	explainModuleWideFailure(t, abs)
 
 	var files []SourceFile
 	walkErr := filepath.WalkDir(abs, func(path string, entry fs.DirEntry, err error) error {
@@ -212,6 +213,31 @@ func tree(t testing.TB, root string, minFiles int, kind string, include func(pat
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files
+}
+
+// explainModuleWideFailure makes a failing census whose root escapes the calling
+// package say so. Such a census reds the package that happens to host it for a
+// change made anywhere under its root, and at a glance that reads as a break in
+// the host package — every seat then bisects before trusting its own result. The
+// preamble is registered only when the root is not the test's own directory, so a
+// package-scoped census never gains a misleading one, and it is emitted only on
+// failure, so a green run stays silent.
+func explainModuleWideFailure(t testing.TB, root string) {
+	host, err := os.Getwd()
+	if err != nil || filepath.Clean(host) == root {
+		return
+	}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("%s", moduleWideFailurePreamble(root, host))
+		}
+	})
+}
+
+func moduleWideFailurePreamble(root, host string) string {
+	return "MODULE-WIDE CENSUS: this test walked every file under " + root +
+		", so its subject is the whole tree, not this package. The defect is in the file and function the failure names, which may live anywhere under that root; the package hosting this test (" +
+		host + ") is not necessarily where the change belongs."
 }
 
 // nestedCheckout reports whether dir is the root of its own checkout, by the presence of a
