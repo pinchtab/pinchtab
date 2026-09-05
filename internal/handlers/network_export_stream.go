@@ -102,9 +102,8 @@ type pendingExport struct {
 // ok=false. The browser-ready, path-required, prelude, and capture-bootstrap checks
 // run in the caller.
 func (h *Handlers) startExportStream(w http.ResponseWriter, r *http.Request, ec exportContext, nm *bridge.NetworkMonitor, buf *bridge.NetworkBuffer, userPath string) (*exportStreamSession, bool) {
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := httpx.StreamFlusher(w)
 	if !ok {
-		httpx.Error(w, 500, fmt.Errorf("streaming not supported"))
 		return nil, false
 	}
 

@@ -153,10 +153,17 @@ func Problem(w http.ResponseWriter, status int, code, detail string, retryable b
 	})
 }
 
-func BeginStream(w http.ResponseWriter) (http.Flusher, bool) {
+func StreamFlusher(w http.ResponseWriter) (http.Flusher, bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
+	}
+	return flusher, ok
+}
+
+func BeginStream(w http.ResponseWriter) (http.Flusher, bool) {
+	flusher, ok := StreamFlusher(w)
+	if !ok {
 		return nil, false
 	}
 	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {

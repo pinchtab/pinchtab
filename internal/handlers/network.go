@@ -398,9 +398,8 @@ func (h *Handlers) HandleNetworkClear(w http.ResponseWriter, r *http.Request) {
 //
 // @Response 200 text/event-stream SSE stream of network entries
 func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := httpx.StreamFlusher(w)
 	if !ok {
-		httpx.Problem(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported", false, nil)
 		return
 	}
 
