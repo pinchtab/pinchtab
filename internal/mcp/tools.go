@@ -19,9 +19,10 @@ var scrollStepDescription = strconv.Itoa(scroll.StepPixels) + "px"
 func allTools() []mcp.Tool {
 	return []mcp.Tool{
 		mcp.NewTool("pinchtab_navigate",
-			mcp.WithDescription("Navigate to a URL in the browser"),
+			mcp.WithDescription("Navigate to a URL in the browser. This is also how you open a tab: newTab=true navigates in a NEW tab and returns its tabId, leaving the current page open in the old one."),
 			mcp.WithString("url", mcp.Required(), mcp.Description("The URL to navigate to")),
 			tabIDParam(),
+			mcp.WithBoolean("newTab", mcp.Description("Open the URL in a new tab; the response carries its tabId, which any tool accepts")),
 			mcp.WithBoolean("snap", mcp.Description("Return interactive compact snapshot after navigation (saves a round-trip)")),
 			browserParam(),
 		),

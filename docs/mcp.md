@@ -218,12 +218,18 @@ The normal MCP browser loop is:
 1. Call `pinchtab_navigate` with a `url`
 2. Call `pinchtab_snapshot` to inspect page structure and collect refs
 3. Call `pinchtab_click`, `pinchtab_type`, or other action tools with structured arguments
-4. Call `pinchtab_wait_*` or `pinchtab_network` when needed
+4. Call `pinchtab_wait` or `pinchtab_network` when needed
 5. Call `pinchtab_back` to leave a dead end, or `pinchtab_reload` to retry the page
 
 `pinchtab_back`, `pinchtab_forward` and `pinchtab_reload` take an optional `tabId`
 and `snap`, so `snap: true` returns the page after the navigation in one
 round-trip.
+
+`pinchtab_navigate` opens tabs as well as following links: `newTab: true` navigates
+in a new tab and returns its `tabId`, leaving the current tab on the page it is
+showing. Pass that id to any tool to address the tab, `pinchtab_list_tabs` to see
+them and `pinchtab_close_tab` to close one. Without it, navigating replaces the
+current page — the same rule as `POST /navigate` and `pinchtab nav --new-tab`.
 
 `pinchtab_snapshot` supports MCP-safe output controls:
 

@@ -28,6 +28,12 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if tabID != "" {
 			payload["tabId"] = tabID
 		}
+		// Spelled as POST /navigate spells it, so the three surfaces agree; the
+		// server answers with the new tab's id, and withOptionalSnapshot reads it
+		// back rather than the empty tabId argument.
+		if newTab, ok := optBool(r, "newTab"); ok && newTab {
+			payload["newTab"] = true
+		}
 		body, code, err := c.Post(ctx, routedPathWithBody(r, "/navigate", payload), payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

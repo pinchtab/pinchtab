@@ -3,12 +3,20 @@ package mcp
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1072,5 +1080,185 @@ func TestEveryToolThatBuildsItsOwnResultAppliesTheTrustNotice(t *testing.T) {
 			continue
 		}
 		t.Errorf("%s builds its own success result and never calls withUntrustedContentNotice, so a page that declares its content untrusted reaches the agent through this tool with no notice; apply the helper or record the reason it cannot carry one", name)
+	}
+}
+
+// tabbedServer is a minimal stand-in for the bridge's tab model: enough of it to
+// answer whether a tab was OPENED or REPLACED, which a single-tab fixture cannot
+// show. /navigate honours newTab exactly as POST /navigate does, and /text
+// answers with whatever page the addressed tab is holding.
+type tabbedServer struct {
+	mu      sync.Mutex
+	order   []string
+	pages   map[string]string
+	minted  int
+	newTabs int
+}
+
+func newTabbedServer(t *testing.T) (*httptest.Server, *tabbedServer) {
+	t.Helper()
+	state := &tabbedServer{pages: map[string]string{}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		switch r.URL.Path {
+		case "/navigate":
+			var req struct {
+				URL    string `json:"url"`
+				TabID  string `json:"tabId"`
+				NewTab bool   `json:"newTab"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			tabID := req.TabID
+			if req.NewTab {
+				state.newTabs++
+			}
+			if req.NewTab || len(state.order) == 0 {
+				state.minted++
+				tabID = fmt.Sprintf("tab-%d", state.minted)
+				state.order = append(state.order, tabID)
+			}
+			if tabID == "" {
+				tabID = state.order[0]
+			}
+			state.pages[tabID] = req.URL
+			_ = json.NewEncoder(w).Encode(map[string]any{"tabId": tabID, "url": req.URL})
+		case "/text":
+			tabID := r.URL.Query().Get("tabId")
+			if tabID == "" && len(state.order) > 0 {
+				tabID = state.order[0]
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tabId": tabID, "text": state.pages[tabID]})
+		case "/tabs":
+			tabs := make([]map[string]any, 0, len(state.order))
+			for _, id := range state.order {
+				tabs = append(tabs, map[string]any{"id": id, "url": state.pages[id]})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tabs": tabs})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	return srv, state
+}
+
+func navigatedTabID(t *testing.T, r *mcp.CallToolResult) string {
+	t.Helper()
+	if r.IsError {
+		t.Fatalf("navigate returned an error: %s", resultText(t, r))
+	}
+	id, _ := resultJSON(t, r)["tabId"].(string)
+	if id == "" {
+		t.Fatalf("navigate answered no tabId, so the agent cannot address the tab: %s", resultText(t, r))
+	}
+	return id
+}
+
+// An MCP agent used to be confined to one tab for the life of the session: it
+// could list and close tabs and pass tabId everywhere, but nothing opened one.
+// Two tabs, a distinct page in each, both addressable, and navigating one leaves
+// the other where it was — a single-tab assertion cannot show any of that.
+func TestMCPAloneCanHoldTwoTabsWithADistinctPageInEach(t *testing.T) {
+	srv, state := newTabbedServer(t)
+	defer srv.Close()
+
+	first := navigatedTabID(t, callTool(t, "pinchtab_navigate", map[string]any{
+		"url": "https://example.com/one",
+	}, srv))
+	second := navigatedTabID(t, callTool(t, "pinchtab_navigate", map[string]any{
+		"url":    "https://example.com/two",
+		"newTab": true,
+	}, srv))
+
+	if first == second {
+		t.Fatalf("both navigates landed on %q; newTab did not open a tab", first)
+	}
+	if state.newTabs != 1 {
+		t.Errorf("the server saw newTab on %d request(s), want 1: the argument must reach POST /navigate", state.newTabs)
+	}
+	if len(state.order) != 2 {
+		t.Fatalf("tabs open = %v, want two", state.order)
+	}
+
+	// Navigating the first tab must not disturb the second.
+	callTool(t, "pinchtab_navigate", map[string]any{"url": "https://example.com/three", "tabId": first}, srv)
+
+	pageOf := func(tabID string) string {
+		text, _ := resultJSON(t, callTool(t, "pinchtab_get_text", map[string]any{"tabId": tabID}, srv))["text"].(string)
+		return text
+	}
+	if got := pageOf(first); got != "https://example.com/three" {
+		t.Errorf("first tab holds %q, want the page it was just navigated to", got)
+	}
+	if got := pageOf(second); got != "https://example.com/two" {
+		t.Errorf("second tab holds %q, want the page it was left on; navigating one tab moved another", got)
+	}
+}
+
+// The spelling is read from the owner — the navigate request struct POST
+// /navigate decodes — rather than from a list this test keeps, so a rename there
+// reds here instead of silently leaving a third surface behind.
+func navigateRequestTabFieldName(t *testing.T) string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "handlers", "navigation.go"), nil, 0)
+	if err != nil {
+		t.Fatalf("parse the navigate request owner: %v", err)
+	}
+	var name string
+	ast.Inspect(file, func(node ast.Node) bool {
+		spec, ok := node.(*ast.TypeSpec)
+		if !ok || spec.Name.Name != "navigateRequest" {
+			return true
+		}
+		structType, ok := spec.Type.(*ast.StructType)
+		if !ok {
+			return false
+		}
+		for _, field := range structType.Fields.List {
+			if len(field.Names) == 0 || field.Names[0].Name != "NewTab" || field.Tag == nil {
+				continue
+			}
+			tag, err := strconv.Unquote(field.Tag.Value)
+			if err != nil {
+				continue
+			}
+			name = strings.Split(reflect.StructTag(tag).Get("json"), ",")[0]
+		}
+		return false
+	})
+	if name == "" {
+		t.Fatal("navigateRequest no longer carries a NewTab field with a json tag; re-point this guard at the new owner rather than deleting it")
+	}
+	return name
+}
+
+func TestPinchtabNavigateSpellsNewTabTheWayPostNavigateDoes(t *testing.T) {
+	spelling := navigateRequestTabFieldName(t)
+
+	var navigate *mcp.Tool
+	for i, tool := range allTools() {
+		if tool.Name == "pinchtab_navigate" {
+			navigate = &allTools()[i]
+		}
+	}
+	if navigate == nil {
+		t.Fatal("pinchtab_navigate is not registered")
+	}
+	if _, declared := navigate.InputSchema.Properties[spelling]; !declared {
+		t.Fatalf("pinchtab_navigate's schema declares %v, and not %q — an argument absent from the schema is dropped before any handler sees it, which is how the capability went missing",
+			navigate.InputSchema.Properties, spelling)
+	}
+
+	// Declared is not the same as sent: the handler has to put it on the wire.
+	var sent map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&sent)
+		_ = json.NewEncoder(w).Encode(map[string]any{"tabId": "tab-1"})
+	}))
+	defer srv.Close()
+
+	callTool(t, "pinchtab_navigate", map[string]any{"url": "https://example.com", spelling: true}, srv)
+	if sent[spelling] != true {
+		t.Fatalf("POST /navigate body was %v, want %q on it", sent, spelling)
 	}
 }
