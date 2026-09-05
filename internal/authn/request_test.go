@@ -11,8 +11,8 @@ func TestTokenFromRequest_HeaderWins(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer header-token")
 	req.Header.Set("Cookie", CookieName+"="+url.QueryEscape("cookie-token"))
 
-	if got := TokenFromRequest(req); got != "header-token" {
-		t.Fatalf("TokenFromRequest() = %q, want %q", got, "header-token")
+	if got := CredentialsFromRequest(req).Value; got != "header-token" {
+		t.Fatalf("CredentialsFromRequest().Value = %q, want %q", got, "header-token")
 	}
 	if creds := CredentialsFromRequest(req); creds.Method != MethodHeader {
 		t.Fatalf("CredentialsFromRequest().Method = %q, want %q", creds.Method, MethodHeader)
@@ -24,8 +24,8 @@ func TestTokenFromRequest_CookieFallback(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Cookie", CookieName+"="+url.QueryEscape(want))
 
-	if got := TokenFromRequest(req); got != want {
-		t.Fatalf("TokenFromRequest() = %q, want %q", got, want)
+	if got := CredentialsFromRequest(req).Value; got != want {
+		t.Fatalf("CredentialsFromRequest().Value = %q, want %q", got, want)
 	}
 	if creds := CredentialsFromRequest(req); creds.Method != MethodCookie {
 		t.Fatalf("CredentialsFromRequest().Method = %q, want %q", creds.Method, MethodCookie)
@@ -46,8 +46,8 @@ func TestCookieValueFromHeaders(t *testing.T) {
 func TestTokenFromRequest_NoToken(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 
-	if got := TokenFromRequest(req); got != "" {
-		t.Fatalf("TokenFromRequest() = %q, want empty", got)
+	if got := CredentialsFromRequest(req).Value; got != "" {
+		t.Fatalf("CredentialsFromRequest().Value = %q, want empty", got)
 	}
 }
 

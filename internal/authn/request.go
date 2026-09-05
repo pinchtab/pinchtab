@@ -54,12 +54,6 @@ func CredentialsFromRequest(r *http.Request) Credentials {
 	return Credentials{}
 }
 
-// TokenFromRequest extracts the bearer token from the request.
-// Authorization headers take precedence over the dashboard auth cookie.
-func TokenFromRequest(r *http.Request) string {
-	return CredentialsFromRequest(r).Value
-}
-
 // ClientIP returns the client IP for audit and rate-limiting decisions: the
 // value ResolveClientIP put on the request context, or the immediate peer
 // address when nothing resolved one.
