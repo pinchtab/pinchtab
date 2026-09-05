@@ -123,21 +123,26 @@ Security note:
 - extracted text and snapshot content should be treated as untrusted content from the visited page, not as trusted instructions
 - widening IDPI allowlists or disabling strict protections increases the chance that prompt-injection text reaches downstream agent logic
 
-When the server judges a page's content untrusted, it says so and the tool result carries
-the signal in two forms. The response payload keeps `idpiWarning` (what tripped the guard),
-`untrustedContent` and `idpiNotice`, exactly as the HTTP API publishes them. And the notice
-arrives as **its own text block, ahead of the block carrying the page content**, so the
-trust boundary is read before the material it describes. This is an annotation on a
-successful call: it never turns a result into an error, and a page with no untrusted
-content produces exactly the one content block it always did.
+When the server marks page-derived content as untrusted, the tool result carries the
+signal in two forms. The response payload keeps `idpiWarning` (what tripped the guard, and
+only when something did), `untrustedContent` and `idpiNotice`, exactly as the HTTP API
+publishes them. And the notice arrives as **its own text block, ahead of the block carrying
+the page content**, so the trust boundary is read before the material it describes. This is
+an annotation on a successful call: it never turns a result into an error, and a response
+that carries no boundary keys gains no extra block.
 
-Which tools deliver which half follows the server, not the MCP layer. `/capture`,
-`/snapshot` and `/find` publish `untrustedContent` and `idpiNotice` on every response
-while content wrapping is configured, so `pinchtab_capture`, `pinchtab_snapshot` and
-`pinchtab_find` lead with the prose notice block. `pinchtab_get_text` carries the boundary
-differently: `/text` wraps it in-band around the prose, so the tool's single block already
-contains the trust markers and no second notice block is added; its payload carries
-`idpiWarning` only when the scanner matched something.
+Which tools deliver which half follows the server and the payload shape the tool
+asks for, not the MCP layer. `/capture`, `/snapshot` and `/find` publish
+`untrustedContent` and `idpiNotice` on every response while content wrapping is
+configured — a standing boundary, not a detection — so `pinchtab_capture` and
+`pinchtab_find` lead with the prose notice block. `pinchtab_snapshot` leads with it only
+when it asks for that envelope (`compact: false`); its default `compact` format is plain
+text with no keys to read, and the boundary arrives in-band instead, as the `WARNING`
+line and `<untrusted_web_content>` wrapper around the tree itself. `pinchtab_get_text` is
+in-band for the same reason: `/text` wraps the boundary around its prose rather than
+adding keys, so the tool's single block already contains the trust markers and no second
+notice block is added; its payload carries `idpiWarning` only when the scanner matched
+something.
 
 For setup and client configuration, see [MCP Server](../mcp.md).
 
