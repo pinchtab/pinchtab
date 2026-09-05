@@ -276,3 +276,21 @@ func TestAHealthyDocumentKeepsItsStatusAndReadsOK(t *testing.T) {
 		t.Fatalf("healthy page: status=%d failed=%v line=%q", pr.StatusCode, PageFailed(pr), PageStatus(pr))
 	}
 }
+
+func TestRedirectTo404UsesTerminalNavigationStatusNotLaterFrame(t *testing.T) {
+	const url = "http://fixtures/redirect"
+	c := Collectors{Network: func() ([]observe.NetworkEntry, error) {
+		return []observe.NetworkEntry{
+			{URL: url, ResourceType: "Document", Status: 301},
+			{URL: "http://fixtures/missing.html", ResourceType: "Document", Status: 404},
+			{URL: "http://fixtures/frame.html", ResourceType: "Document", Status: 200},
+		}, nil
+	}}
+	opts := DefaultPageOptions()
+	opts.Console, opts.Elements, opts.A11y, opts.Timing, opts.Screenshot, opts.Security = false, false, false, false, false, false
+	pr := EnrichPage(url, opts, c).ToPageResult()
+
+	if pr.StatusCode != 404 || !PageFailed(pr) || PageStatus(pr) != "http 404" {
+		t.Fatalf("redirected page: status=%d failed=%v line=%q", pr.StatusCode, PageFailed(pr), PageStatus(pr))
+	}
+}

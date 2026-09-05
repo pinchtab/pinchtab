@@ -160,20 +160,23 @@ func EnrichPage(url string, opts PageOptions, c Collectors) PageAudit {
 	return pa
 }
 
-// mainDocumentStatus is the status of the page's own navigation: the last
-// document response at the requested URL, else the first document response
-// (a redirect chain's first hop), else zero when the log holds no document.
-// Frames are document responses too, which is why the requested URL wins.
+// mainDocumentStatus is the status of the page's own navigation. Once the
+// requested document redirects, successive document responses belong to that
+// redirect chain until its first non-redirect response. Later document entries
+// may be frames and must not replace the terminal navigation status.
 func mainDocumentStatus(url string, entries []observe.NetworkEntry) int {
 	status := 0
+	followingRedirect := false
 	for _, e := range entries {
 		if !strings.EqualFold(e.ResourceType, "document") {
 			continue
 		}
-		if e.URL == url {
+		if e.URL == url || followingRedirect {
 			status = e.Status
-		} else if status == 0 {
-			status = e.Status
+			followingRedirect = e.Status >= 300 && e.Status < 400
+			if e.URL != url && !followingRedirect {
+				return status
+			}
 		}
 	}
 	return status
