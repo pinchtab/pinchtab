@@ -116,6 +116,7 @@ type PageAudit struct {
 	URL              string            `json:"url"`
 	Title            string            `json:"title,omitempty"`
 	Error            string            `json:"error,omitempty"`
+	StatusCode       int               `json:"statusCode,omitempty"`
 	Screenshot       string            `json:"screenshot,omitempty"`
 	A11yFindings     []A11yFinding     `json:"a11yFindings,omitempty"`
 	SecurityFindings []SecurityFinding `json:"securityFindings,omitempty"`

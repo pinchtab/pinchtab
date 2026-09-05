@@ -229,3 +229,50 @@ func TestMapTimingMetrics(t *testing.T) {
 		t.Errorf("MapTimingMetrics = %+v, want %+v", got, want)
 	}
 }
+
+// A reachable URL answering 404 has a status, an error body and no error. The
+// status must land on the page from the network log's document response, the
+// page must not read as ok, and its own failed document must not also count as
+// a broken asset — an unreachable-host fixture exercises none of this.
+func TestA404DocumentIsAFailedPageNotAnOKPageWithABrokenAsset(t *testing.T) {
+	const url = "http://fixtures/missing.html"
+	c := Collectors{Network: func() ([]observe.NetworkEntry, error) {
+		return []observe.NetworkEntry{
+			{URL: url, ResourceType: "Document", Status: 404},
+			{URL: "http://fixtures/favicon.ico", ResourceType: "Other", Status: 404},
+			{URL: "http://fixtures/frame.html", ResourceType: "Document", Status: 200},
+		}, nil
+	}}
+	opts := DefaultPageOptions()
+	opts.Console, opts.Elements, opts.A11y, opts.Timing, opts.Screenshot, opts.Security = false, false, false, false, false, false
+	pr := EnrichPage(url, opts, c).ToPageResult()
+
+	if pr.StatusCode != 404 {
+		t.Fatalf("StatusCode = %d, want the main document's 404 (a frame's 200 must not win)", pr.StatusCode)
+	}
+	if !PageFailed(pr) {
+		t.Fatal("a 404 page is not failed")
+	}
+	if got := PageStatus(pr); got != "http 404" {
+		t.Fatalf("PageStatus = %q, want http 404", got)
+	}
+	if len(pr.Browser.BrokenAssets) != 2 {
+		t.Fatalf("BrokenAssets = %+v, want both failures kept for consumers", pr.Browser.BrokenAssets)
+	}
+	if got := CountedBrokenAssets(pr); got != 1 {
+		t.Fatalf("CountedBrokenAssets = %d, want the favicon alone", got)
+	}
+}
+
+func TestAHealthyDocumentKeepsItsStatusAndReadsOK(t *testing.T) {
+	const url = "http://fixtures/page.html"
+	c := Collectors{Network: func() ([]observe.NetworkEntry, error) {
+		return []observe.NetworkEntry{{URL: url, ResourceType: "Document", Status: 200}}, nil
+	}}
+	opts := DefaultPageOptions()
+	opts.Console, opts.Elements, opts.A11y, opts.Timing, opts.Screenshot, opts.Security = false, false, false, false, false, false
+	pr := EnrichPage(url, opts, c).ToPageResult()
+	if pr.StatusCode != 200 || PageFailed(pr) || PageStatus(pr) != "ok" {
+		t.Fatalf("healthy page: status=%d failed=%v line=%q", pr.StatusCode, PageFailed(pr), PageStatus(pr))
+	}
+}

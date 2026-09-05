@@ -505,10 +505,10 @@ func printAuditSummary(report map[string]any) {
 func auditSummaryLines(report audit.AuditReport) []string {
 	failed, broken, jsErrors := 0, 0, 0
 	for _, p := range report.Pages {
-		if p.Error != "" {
+		if audit.PageFailed(p) {
 			failed++
 		}
-		broken += len(p.Browser.BrokenAssets)
+		broken += audit.CountedBrokenAssets(p)
 		jsErrors += len(p.Browser.JSErrors)
 	}
 	lines := []string{fmt.Sprintf(

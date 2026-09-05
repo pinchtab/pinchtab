@@ -49,6 +49,9 @@ type PageAudit struct {
 	Title string `json:"title,omitempty"`
 	// Error describes navigation or collector failures, empty on success.
 	Error string `json:"error,omitempty"`
+	// StatusCode is the HTTP status of the main document's response, read from
+	// the network log; zero when the log was not collected or has no document.
+	StatusCode int `json:"statusCode,omitempty"`
 	// Screenshot is the base64-encoded PNG when screenshot capture is on.
 	Screenshot string `json:"screenshot,omitempty"`
 	// A11yFindings are the accessibility rule violations behind AccessibilityScore.
@@ -100,6 +103,7 @@ func EnrichPage(url string, opts PageOptions, c Collectors) PageAudit {
 		} else {
 			pa.NetworkRequests = MapNetworkRequests(entries)
 			pa.BrokenAssets = MapBrokenAssets(observe.BrokenAssets(entries))
+			pa.StatusCode = mainDocumentStatus(url, entries)
 		}
 	}
 
@@ -154,6 +158,25 @@ func EnrichPage(url string, opts PageOptions, c Collectors) PageAudit {
 
 	pa.Error = strings.Join(errs, "; ")
 	return pa
+}
+
+// mainDocumentStatus is the status of the page's own navigation: the last
+// document response at the requested URL, else the first document response
+// (a redirect chain's first hop), else zero when the log holds no document.
+// Frames are document responses too, which is why the requested URL wins.
+func mainDocumentStatus(url string, entries []observe.NetworkEntry) int {
+	status := 0
+	for _, e := range entries {
+		if !strings.EqualFold(e.ResourceType, "document") {
+			continue
+		}
+		if e.URL == url {
+			status = e.Status
+		} else if status == 0 {
+			status = e.Status
+		}
+	}
+	return status
 }
 
 // MapConsoleLogs converts bridge console entries to the audit schema.

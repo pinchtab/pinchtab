@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -180,6 +181,7 @@ func (pa PageAudit) ToPageResult() PageResult {
 		URL:              pa.URL,
 		Title:            pa.Title,
 		Error:            pa.Error,
+		StatusCode:       pa.StatusCode,
 		Screenshot:       pa.Screenshot,
 		SecurityFindings: pa.SecurityFindings,
 		Browser:          pa.BrowserPageData,
@@ -213,14 +215,38 @@ func mergeSeaportal(pr PageResult, sp *SeaportalPage) PageResult {
 	return pr
 }
 
+// PageFailed is the one definition of a failed page: it could not be
+// collected, or its own document answered 4xx/5xx. The score deliberately
+// ignores it (see summaryScore); every count and status line consults it.
+func PageFailed(p PageResult) bool {
+	return p.Error != "" || p.StatusCode >= 400
+}
+
+// CountedBrokenAssets is the broken-asset count a headline prints: the page's
+// own failed document is a failed page, not an asset, so it is left in the
+// array for consumers but not counted twice.
+func CountedBrokenAssets(p PageResult) int {
+	n := 0
+	for _, a := range p.Browser.BrokenAssets {
+		if strings.EqualFold(a.ResourceType, "document") && a.URL == p.URL && a.Status == p.StatusCode {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 // PageStatus is the one-line health verdict every report surface prints for
 // a page: the audit failure when it could not be collected, otherwise the
-// uncaught-exception count, otherwise ok. An uncaught exception halts the
-// script that raised it, so a page carrying one is never ok.
+// document's own 4xx/5xx, otherwise the uncaught-exception count, otherwise
+// ok. An uncaught exception halts the script that raised it, so a page
+// carrying one is never ok.
 func PageStatus(p PageResult) string {
 	switch {
 	case p.Error != "":
 		return "error: " + p.Error
+	case PageFailed(p):
+		return fmt.Sprintf("http %d", p.StatusCode)
 	case len(p.Browser.JSErrors) > 0:
 		return fmt.Sprintf("%d uncaught JS error(s)", len(p.Browser.JSErrors))
 	default:

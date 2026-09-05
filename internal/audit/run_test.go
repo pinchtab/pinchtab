@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -228,5 +229,31 @@ func TestPageStatus(t *testing.T) {
 				t.Errorf("PageStatus = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// The score is documented to ignore failures, and this is the case that
+// reasoning depends on: the 404 page still contributes its accessibility score
+// while the report carries its status and the failure beside it.
+func TestA404PageIsReportedFailedWithoutMovingTheScore(t *testing.T) {
+	auditor := func(url string, opts PageOptions) PageAudit {
+		if strings.HasSuffix(url, "/missing") {
+			return PageAudit{URL: url, StatusCode: 404, BrowserPageData: BrowserPageData{AccessibilityScore: 95}}
+		}
+		return PageAudit{URL: url, StatusCode: 200, BrowserPageData: BrowserPageData{AccessibilityScore: 85}}
+	}
+	report, err := RunAudit(AuditInput{URLs: []string{"http://x/ok", "http://x/missing"}}, nil, RunOptions{}, nil, auditor)
+	if err != nil {
+		t.Fatalf("RunAudit: %v", err)
+	}
+	missing := report.Pages[1]
+	if missing.StatusCode != 404 || !PageFailed(missing) || PageStatus(missing) == "ok" {
+		t.Fatalf("404 page in report: status=%d failed=%v line=%q", missing.StatusCode, PageFailed(missing), PageStatus(missing))
+	}
+	if ok := report.Pages[0]; PageFailed(ok) || PageStatus(ok) != "ok" {
+		t.Fatalf("healthy page reads %q", PageStatus(ok))
+	}
+	if report.SummaryScore != 90 {
+		t.Fatalf("SummaryScore = %d, want 90: a failed page must not move the score", report.SummaryScore)
 	}
 }

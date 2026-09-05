@@ -89,6 +89,7 @@ type PageAudit struct: BrowserPageData
 type PageAudit struct: Error string `json:"error,omitempty"`
 type PageAudit struct: Screenshot string `json:"screenshot,omitempty"`
 type PageAudit struct: SecurityFindings []SecurityFinding `json:"securityFindings,omitempty"`
+type PageAudit struct: StatusCode int `json:"statusCode,omitempty"`
 type PageAudit struct: Title string `json:"title,omitempty"`
 type PageAudit struct: URL string `json:"url"`
 type PageOptions struct

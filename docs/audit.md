@@ -86,7 +86,9 @@ summaryScore                     # mean accessibility score of enriched pages;
                                  # broken assets, failed requests and uncaught
                                  # JS errors do not move it
 pages[]:
-  url, title, error?             # error set when the page failed to load
+  url, title, statusCode?, error?   # error set when the page could not be
+                                 # collected; statusCode is the page's own
+                                 # document response
   seaportal?                     # HTTP-extraction summary when ingested
   securityFindings[]?            # ruleId, severity, detail, url
   browser:
@@ -97,6 +99,15 @@ pages[]:
 securityFindings[]               # page findings aggregated site-level
 recommendations[]
 ```
+
+A page is **failed** when it could not be collected (`error`) or when its own
+document answered 4xx/5xx (`statusCode`). The headline's `failed page(s)` counts
+both and the page's status line reads `http 404` rather than `ok`. The page's own
+failed document also appears in its `brokenAssets` (resource type `document`), and
+stays there for consumers, but the headline's `broken asset(s)` count leaves it out so
+one failure is not reported twice. `summaryScore` is unchanged by any of this: it
+measures accessibility and deliberately ignores failures, which is exactly why they
+are printed beside it.
 
 `jsErrors[]` are uncaught JavaScript exceptions (message, stack, line,
 column) — the `GET /errors` channel, separate from `consoleLogs[]`, so a
