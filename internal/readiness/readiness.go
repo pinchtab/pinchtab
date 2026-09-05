@@ -58,29 +58,43 @@ var ErrNotReady = errors.New("not ready before deadline")
 // matching the existing `for now < deadline { probe; sleep }` loops.
 func WaitUntil[T any](ctx context.Context, timeout, interval time.Duration, probe func() (T, bool, error)) (T, error) {
 	var zero T
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		result, ready, err := probe()
-		if err != nil {
-			return zero, err
-		}
+	var result T
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	err := Poll(waitCtx, interval, func() (bool, error) {
+		value, ready, err := probe()
 		if ready {
-			return result, nil
+			result = value
 		}
-		wait := interval
-		if remaining := time.Until(deadline); remaining < wait {
-			wait = remaining
+		return ready, err
+	})
+	switch {
+	case err == nil:
+		return result, nil
+	case ctx.Err() != nil:
+		return zero, ctx.Err()
+	case errors.Is(err, context.DeadlineExceeded):
+		return zero, ErrNotReady
+	default:
+		return zero, err
+	}
+}
+
+func Poll(ctx context.Context, interval time.Duration, check func() (bool, error)) error {
+	for {
+		done, err := check()
+		if err != nil {
+			return err
 		}
-		if wait <= 0 {
-			break
+		if done {
+			return nil
 		}
-		timer := time.NewTimer(wait)
+		timer := time.NewTimer(interval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return zero, ctx.Err()
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}
-	return zero, ErrNotReady
 }
