@@ -216,6 +216,40 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/state/clean", "Clean old state files", CapStateExport, false},
 }
 
+// schedulerEndpoints is the task scheduler's route family. It sits beside the
+// core list rather than in it because these routes are served by
+// internal/scheduler on the orchestrator front door only — the bridge has no
+// binding for them, and Core() is what registerBridgeRoutes walks and panics on.
+// They are catalogued all the same: a subsystem the server serves has to be
+// discoverable in /openapi.json and /help by the agents it exists for.
+//
+// SchedulerSetting is the config key that turns the family on. When it is off the
+// routes still answer — with the coded refusal below rather than a bare 404, so a
+// caller can tell a disabled subsystem from an endpoint that does not exist.
+const (
+	SchedulerSetting  = "scheduler.enabled"
+	SchedulerLabel    = "scheduler"
+	SchedulerDisabled = "scheduler_disabled"
+)
+
+var schedulerEndpoints = []Endpoint{
+	{"POST", "/tasks", "Submit a task to the scheduler queue", CapNone, false},
+	{"GET", "/tasks", "List scheduled tasks", CapNone, false},
+	{"GET", "/tasks/{id}", "Read one scheduled task", CapNone, false},
+	{"POST", "/tasks/{id}/cancel", "Cancel a scheduled task", CapNone, false},
+	{"POST", "/tasks/batch", "Submit a batch of tasks", CapNone, false},
+	{"GET", "/scheduler/stats", "Scheduler queue statistics", CapNone, false},
+}
+
+// SchedulerEndpoints returns a copy of the scheduler's catalogued family. It is
+// the one list: internal/scheduler registers from it, the front door answers the
+// disabled refusal from it, and /openapi.json documents from it.
+func SchedulerEndpoints() []Endpoint {
+	out := make([]Endpoint, len(schedulerEndpoints))
+	copy(out, schedulerEndpoints)
+	return out
+}
+
 // Core returns a copy of the canonical endpoint list.
 func Core() []Endpoint {
 	out := make([]Endpoint, len(coreEndpoints))

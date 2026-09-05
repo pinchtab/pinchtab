@@ -14,6 +14,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
 // The wiring under test is RunDashboard's: one publication point reaches the
@@ -49,9 +50,9 @@ func TestADashboardSaveDoesNotRaceAnOrchestratorReader(t *testing.T) {
 			}
 			// The same reads the off-request goroutines make: the security
 			// policy and the child bind address the startup probe follows.
-			_ = orch.AllowsEvaluate()
-			_ = orch.AllowsMacro()
-			_ = orch.AllowsDownload()
+			_ = orch.Allows(routes.CapEvaluate)
+			_ = orch.Allows(routes.CapMacro)
+			_ = orch.Allows(routes.CapDownload)
 		}
 	}()
 

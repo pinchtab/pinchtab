@@ -56,6 +56,10 @@ func sessionRequestRefusal(r *http.Request, sess *session.Session) (sessionScope
 		return sessionScopeRefusal{hint: fmt.Sprintf(adminRouteFormat, method, path), remedy: remedy.None}, true
 	}
 
+	if sessionSelfDescriptionRoute(method, path) {
+		return sessionScopeRefusal{}, false
+	}
+
 	grants := normalizedSessionGrants(sess.Grants)
 	if len(grants) == 0 || grants[session.GrantAll] {
 		return sessionScopeRefusal{}, false
@@ -147,6 +151,25 @@ func sessionAdminRoute(method, path string) bool {
 	}
 }
 
+// sessionSelfDescriptionRoute names the routes that describe the API or the
+// caller. They belong to EVERY session, not to a grant: a session that cannot
+// reach /sessions/me cannot report its own scope when something fails, and has to
+// be told out of band what it already is. They lived inside the browse matcher
+// because the allowlist is per-grant and there was nowhere to say "every session",
+// which left ten of the eleven grants unable to introspect themselves. Said once
+// here rather than copied into each matcher, so a twelfth grant inherits it.
+func sessionSelfDescriptionRoute(method, path string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	switch path {
+	case "/sessions/me", "/health", "/openapi.json", "/help":
+		return true
+	default:
+		return false
+	}
+}
+
 func sessionRevokePath(path string) bool {
 	if !strings.HasPrefix(path, "/sessions/") || !strings.HasSuffix(path, "/revoke") {
 		return false
@@ -187,11 +210,7 @@ func sessionBrowseGrantAllows(method, path string) bool {
 			path == "/action",
 			path == "/snapshot",
 			path == "/screenshot",
-			path == "/text",
-			path == "/openapi.json",
-			path == "/help",
-			path == "/health",
-			path == "/sessions/me":
+			path == "/text":
 			return true
 		case tabRouteHasSuffix(path, "/snapshot"),
 			tabRouteHasSuffix(path, "/screenshot"),
@@ -241,7 +260,9 @@ func sessionNetworkGrantAllows(method, path string) bool {
 			path == "/network/export",
 			path == "/network/export/stream":
 			return true
-		case strings.HasPrefix(path, "/network/"):
+		// /network/clear is a POST route; admitting the whole prefix under GET
+		// claimed a route the server does not serve.
+		case strings.HasPrefix(path, "/network/") && path != "/network/clear":
 			return true
 		case tabRouteHasSuffix(path, "/network"),
 			tabRouteHasSuffix(path, "/network/stream"),
@@ -352,15 +373,28 @@ func sessionSolveGrantAllows(method, path string) bool {
 	return false
 }
 
+// The GET arm names the one read under /tasks/ rather than admitting the whole
+// prefix: /tasks/batch and /tasks/{id}/cancel are POST routes, and a matcher that
+// admits them under GET claims routes that do not exist.
 func sessionTasksGrantAllows(method, path string) bool {
 	switch method {
 	case http.MethodGet:
-		return path == "/tasks" || path == "/scheduler/stats" || strings.HasPrefix(path, "/tasks/")
+		return path == "/tasks" || path == "/scheduler/stats" || taskIDRoute(path, "")
 	case http.MethodPost:
-		return path == "/tasks" || path == "/tasks/batch" || (strings.HasPrefix(path, "/tasks/") && strings.HasSuffix(path, "/cancel"))
+		return path == "/tasks" || path == "/tasks/batch" || taskIDRoute(path, "/cancel")
 	default:
 		return false
 	}
+}
+
+// taskIDRoute matches /tasks/{id} plus an optional fixed suffix, and refuses an
+// empty id so /tasks/ and /tasks//cancel do not read as one.
+func taskIDRoute(path, suffix string) bool {
+	if !strings.HasPrefix(path, "/tasks/") || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/tasks/"), suffix)
+	return id != "" && !strings.Contains(id, "/")
 }
 
 func sessionActivityGrantAllows(method, path string) bool {

@@ -43,6 +43,14 @@ func TestOpenAPIPathsAreRegisteredRoutes(t *testing.T) {
 	}
 
 	registered := expectedRoutes()
+	// The scheduler family is catalogued and served by internal/scheduler on the
+	// orchestrator front door — and when the subsystem is off the front door
+	// answers the same patterns with the disabled refusal. It is documented and it
+	// resolves to a handler; it is simply not the BRIDGE that registers it, which
+	// is all expectedRoutes describes.
+	for _, ep := range routes.SchedulerEndpoints() {
+		registered[ep.Route()] = true
+	}
 
 	for path, item := range doc.Paths {
 		for verb := range item {

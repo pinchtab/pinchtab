@@ -5,16 +5,30 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
-// RegisterHandlers mounts the scheduler API routes on the given mux.
+// RegisterHandlers mounts the family from the route catalogue rather than from a
+// list of its own, so the routes served, the routes documented and the routes the
+// front door refuses when the scheduler is off are one list. A catalogued route
+// with no handler panics here, the same discipline the bridge's own registration
+// keeps.
 func (s *Scheduler) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("POST /tasks", s.handleSubmit)
-	mux.HandleFunc("GET /tasks", s.handleList)
-	mux.HandleFunc("GET /tasks/{id}", s.handleGet)
-	mux.HandleFunc("POST /tasks/{id}/cancel", s.handleCancel)
-	mux.HandleFunc("GET /scheduler/stats", s.handleStats)
-	mux.HandleFunc("POST /tasks/batch", s.handleBatch)
+	handlers := map[string]http.HandlerFunc{
+		"POST /tasks":             s.handleSubmit,
+		"GET /tasks":              s.handleList,
+		"GET /tasks/{id}":         s.handleGet,
+		"POST /tasks/{id}/cancel": s.handleCancel,
+		"POST /tasks/batch":       s.handleBatch,
+		"GET /scheduler/stats":    s.handleStats,
+	}
+	for _, ep := range routes.SchedulerEndpoints() {
+		handler, ok := handlers[ep.Route()]
+		if !ok {
+			panic("scheduler: no handler for catalogued route " + ep.Route())
+		}
+		mux.HandleFunc(ep.Route(), handler)
+	}
 }
 
 func (s *Scheduler) handleSubmit(w http.ResponseWriter, r *http.Request) {

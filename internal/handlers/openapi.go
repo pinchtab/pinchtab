@@ -54,6 +54,13 @@ func (h *Handlers) openAPIDocument(description string) map[string]any {
 		}
 	}
 
+	// The scheduler family is catalogued but served by internal/scheduler on the
+	// front door, so it is documented here and registered there. Without this a
+	// subsystem the server actively serves is invisible to the agents it is for.
+	for _, ep := range routes.SchedulerEndpoints() {
+		addOp(ep.Path, ep.Method, operationFor(ep))
+	}
+
 	// Non-catalog meta/docs/alias routes (registered outside the catalog loop).
 	// Management routes (/ensure-*, /shutdown, /openapi.json) stay undocumented.
 	addOp("/health", "GET", map[string]any{"summary": "Health"})

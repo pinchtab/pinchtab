@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
 
@@ -198,5 +199,193 @@ func TestAGrantDoesNotReopenADisabledServerCapability(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 	if strings.Contains(rr.Body.String(), "capability") && rr.Code == http.StatusForbidden {
 		t.Errorf("with the capability on the request was still refused by the gate: %s", rr.Body.String())
+	}
+}
+
+// registeredElsewhere are routes a grant matcher admits that the route catalogue
+// does not declare because a different mux registers them, each naming its
+// registrar. They are recorded rather than exempted by prefix so a matcher cannot
+// grow a new path into an unowned namespace unnoticed.
+var registeredElsewhere = map[string]string{
+	"GET /api/activity":                    "internal/activity.RegisterHandlers on the front door",
+	"GET /api/agents/{id}/events":          "internal/dashboard.RegisterHandlers on the front door",
+	"POST /api/agents/{id}/events":         "internal/dashboard.RegisterHandlers on the front door",
+	"GET /sessions/me":                     "internal/session's SessionAPI on the front door",
+	"GET /health":                          "the front door and the bridge each answer their own",
+	"GET /openapi.json":                    "served by Handlers.ServeOpenAPI on both front doors",
+	"GET /help":                            "the /openapi.json alias",
+	"GET /console":                         "bridge diagnostics, registered by registerSpecialRoutes",
+	"GET /errors":                          "bridge diagnostics, registered by registerSpecialRoutes",
+	"POST /console/clear":                  "bridge diagnostics, registered by registerSpecialRoutes",
+	"POST /errors/clear":                   "bridge diagnostics, registered by registerSpecialRoutes",
+	"GET /clipboard/read":                  "clipboard family, registered by registerSpecialRoutes",
+	"GET /clipboard/paste":                 "clipboard family, registered by registerSpecialRoutes",
+	"POST /clipboard/write":                "clipboard family, registered by registerSpecialRoutes",
+	"POST /clipboard/copy":                 "clipboard family, registered by registerSpecialRoutes",
+	"GET /network/stream":                  "streaming variant, registered by registerSpecialRoutes",
+	"GET /network/export":                  "export variant, registered by registerSpecialRoutes",
+	"GET /network/export/stream":           "export streaming variant, registered by registerSpecialRoutes",
+	"GET /tabs/{id}/network/stream":        "tab-scoped streaming variant",
+	"GET /tabs/{id}/network/export":        "tab-scoped export variant",
+	"GET /tabs/{id}/network/export/stream": "tab-scoped export streaming variant",
+	"POST /lock":                           "tab lock family, registered by registerSpecialRoutes",
+	"POST /unlock":                         "tab lock family, registered by registerSpecialRoutes",
+	"POST /tabs/{id}/lock":                 "tab lock family, registered by registerSpecialRoutes",
+	"POST /tabs/{id}/unlock":               "tab lock family, registered by registerSpecialRoutes",
+	"GET /tabs":                            "tab listing, registered by registerSpecialRoutes",
+	"POST /tab":                            "tab open/close, registered by registerSpecialRoutes",
+	"GET /navigate":                        "the query-parameter form of POST /navigate",
+	"GET /action":                          "the query-parameter form of POST /action",
+	"GET /config/autosolver":               "autosolver config read, registered by registerSpecialRoutes",
+}
+
+// grantRouteUniverse is every route a matcher could be asked about: the catalogue
+// (root and tab-scoped forms), the scheduler family, the bridge's special cases,
+// and the recorded elsewhere-registered set.
+func grantRouteUniverse() map[string]bool {
+	universe := map[string]bool{}
+	for _, ep := range routes.Core() {
+		universe[ep.Route()] = true
+		if ep.TabScoped {
+			universe[ep.TabRoute()] = true
+		}
+	}
+	for _, ep := range routes.SchedulerEndpoints() {
+		universe[ep.Route()] = true
+	}
+	for _, p := range specialCaseRoutes {
+		universe[p] = true
+	}
+	for route := range registeredElsewhere {
+		universe[route] = true
+	}
+	return universe
+}
+
+// routePatternMatches compares a concrete path with a registered pattern, treating
+// a {placeholder} as exactly one segment. String equality cannot answer this: a
+// matcher is asked about /tasks/abc, and the route that serves it is /tasks/{id}.
+func routePatternMatches(pattern, path string) bool {
+	patternParts := strings.Split(pattern, "/")
+	pathParts := strings.Split(path, "/")
+	if len(patternParts) != len(pathParts) {
+		return false
+	}
+	for i, part := range patternParts {
+		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+			if pathParts[i] == "" {
+				return false
+			}
+			continue
+		}
+		if part != pathParts[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func resolvesToARoute(universe map[string]bool, method, path string) bool {
+	for route := range universe {
+		routeMethod, routePath, ok := strings.Cut(route, " ")
+		if !ok || routeMethod != method {
+			continue
+		}
+		if routePatternMatches(routePath, path) {
+			return true
+		}
+	}
+	return false
+}
+
+// grantProbePaths instantiates every route in the universe as a concrete path, so
+// a matcher written as a prefix test is asked about real paths rather than about
+// the patterns it never sees at runtime.
+func grantProbePaths(universe map[string]bool) []string {
+	seen := map[string]bool{}
+	var paths []string
+	for route := range universe {
+		_, path, ok := strings.Cut(route, " ")
+		if !ok {
+			continue
+		}
+		parts := strings.Split(path, "/")
+		for i, part := range parts {
+			if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+				parts[i] = "probe1"
+			}
+		}
+		concrete := strings.Join(parts, "/")
+		if !seen[concrete] {
+			seen[concrete] = true
+			paths = append(paths, concrete)
+		}
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+// A matcher must not outlive the routes it guards: every path a grant admits has
+// to resolve to a route the server actually serves for that method. A grant that
+// admits a path nothing serves promises a capability that does not exist, and a
+// matcher left behind by a deleted route is invisible until someone tries it.
+func TestEveryPathAGrantAdmitsResolvesToARegisteredRoute(t *testing.T) {
+	universe := grantRouteUniverse()
+	if len(universe) < 100 {
+		t.Fatalf("route universe holds %d routes; the census stopped seeing the catalogue", len(universe))
+	}
+	paths := grantProbePaths(universe)
+
+	admitted := 0
+	var dangling []string
+	for _, grant := range session.GrantNames() {
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPut} {
+			for _, path := range paths {
+				if !sessionGrantAllows(grant, method, path) {
+					continue
+				}
+				admitted++
+				if !resolvesToARoute(universe, method, path) {
+					dangling = append(dangling, grant+": "+method+" "+path)
+				}
+			}
+		}
+	}
+	if admitted < 50 {
+		t.Fatalf("the matchers admitted only %d probes; the census would pass vacuously", admitted)
+	}
+
+	sort.Strings(dangling)
+	if len(dangling) > 0 {
+		t.Errorf("%d grant matcher entr(ies) admit a route the server does not serve:\n  %s\nthe grant promises a capability that does not exist; drop the matcher entry, fix its method, or catalogue the route",
+			len(dangling), strings.Join(dangling, "\n  "))
+	}
+}
+
+// Every session must be able to ask what it is. Driven off GrantNames() so a
+// twelfth grant is covered the day it is added — a test naming grants literally
+// would pass while leaving the new one unable to introspect itself.
+func TestEverySessionCanDescribeItselfWhateverItsGrants(t *testing.T) {
+	selfDescription := []struct{ method, path string }{
+		{http.MethodGet, "/sessions/me"},
+		{http.MethodGet, "/health"},
+		{http.MethodGet, "/openapi.json"},
+		{http.MethodGet, "/help"},
+	}
+
+	for _, grant := range session.GrantNames() {
+		if grant == session.GrantAll {
+			continue
+		}
+		t.Run(grant, func(t *testing.T) {
+			sess := &session.Session{Grants: []string{grant}}
+			for _, route := range selfDescription {
+				refusal, refused := sessionRequestRefusal(requestFor(route.method, route.path), sess)
+				if refused {
+					t.Errorf("%s %s is refused under the %q grant (%s); a session that cannot ask what it is has to be told out of band",
+						route.method, route.path, grant, refusal.hint)
+				}
+			}
+		})
 	}
 }

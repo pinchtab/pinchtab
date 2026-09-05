@@ -26,6 +26,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/pinchtab/internal/strategy"
@@ -280,6 +281,8 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		sched = scheduler.New(schedCfg, resolver)
 		sched.RegisterHandlers(mux)
 		slog.Info("scheduler enabled (on-demand)", "strategy", schedCfg.Strategy, "workers", schedCfg.WorkerCount)
+	} else {
+		registerDisabledSchedulerRoutes(mux)
 	}
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
@@ -416,4 +419,17 @@ func profileInstanceHolder(instances []bridge.Instance, profileID string) (strin
 		}
 	}
 	return "", false
+}
+
+// registerDisabledSchedulerRoutes answers the catalogued scheduler family when the
+// subsystem is off. Leaving the routes unregistered gave a bare 404, which a
+// caller cannot tell from an endpoint that does not exist — and the family IS
+// catalogued, so a client that discovered it in /openapi.json is entitled to an
+// answer that names the setting. The refusal is the capability gates' own, so
+// there is one disabled-endpoint vocabulary rather than two.
+func registerDisabledSchedulerRoutes(mux *http.ServeMux) {
+	refuse := httpx.DisabledEndpointHandler(routes.SchedulerLabel, routes.SchedulerSetting, routes.SchedulerDisabled)
+	for _, ep := range routes.SchedulerEndpoints() {
+		mux.HandleFunc(ep.Route(), refuse)
+	}
 }
