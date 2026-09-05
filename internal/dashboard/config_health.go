@@ -9,6 +9,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli/report"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
 
 type healthInstanceInfo struct {
@@ -55,23 +56,8 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 
 	profileCount, temporaryCount, quarantinedCount := 0, 0, 0
 	if c.profiles != nil {
-		profiles, err := c.profiles.List()
-		if err == nil {
-			for _, p := range profiles {
-				// Temporary is checked before Quarantined to match GET /profiles'
-				// own precedence, which hides Temporary first: a quarantined
-				// temporary (an instance-*.quarantine-* dir) is a temporary the
-				// listing hides, so counting it as quarantined would break the
-				// reconciliation profiles + quarantinedProfiles == default list length.
-				switch {
-				case p.Temporary:
-					temporaryCount++
-				case p.Quarantined:
-					quarantinedCount++
-				default:
-					profileCount++
-				}
-			}
+		if profiles, err := c.profiles.List(); err == nil {
+			profileCount, temporaryCount, quarantinedCount = tallyProfiles(profiles)
 		}
 	}
 
@@ -119,6 +105,20 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 	return out, nil
 }
 
+func tallyProfiles(profiles []bridge.ProfileInfo) (live, temporary, quarantined int) {
+	for _, p := range profiles {
+		switch {
+		case p.Temporary:
+			temporary++
+		case p.Quarantined:
+			quarantined++
+		default:
+			live++
+		}
+	}
+	return live, temporary, quarantined
+}
+
 func healthSecurityVisibleTo(r *http.Request) bool {
 	switch authn.CredentialsFromRequest(r).Method {
 	case authn.MethodHeader, authn.MethodCookie:
@@ -141,23 +141,6 @@ func runtimeSecurityInfo(cfg *config.RuntimeConfig) healthSecurityInfo {
 		AllowedDomains:            domains,
 		IDPIEnabled:               cfg.IDPI.Enabled,
 		EnabledSensitiveEndpoints: enabled,
-		GuardsDown:                isGuardsDownPosture(cfg),
+		GuardsDown:                workflow.GuardsDownPostureActive(cfg),
 	}
-}
-
-// isGuardsDownPosture reports whether the runtime config matches the
-// guards-down preset signature (all sensitive endpoints + attach + IDPI off).
-func isGuardsDownPosture(cfg *config.RuntimeConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	return cfg.AllowEvaluate &&
-		cfg.AllowMacro &&
-		cfg.AllowScreencast &&
-		cfg.AllowDownload &&
-		cfg.AllowCookies &&
-		cfg.AllowUpload &&
-		cfg.AllowNetworkIntercept &&
-		cfg.AttachEnabled &&
-		!cfg.IDPI.Enabled
 }

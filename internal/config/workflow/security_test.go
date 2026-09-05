@@ -104,3 +104,31 @@ func TestApplyGuardsDownPreset(t *testing.T) {
 		t.Fatalf("expected IDPI protections disabled, got %+v", cfg.IDPI)
 	}
 }
+
+func TestGuardsDownPostureActiveMirrorsThePreset(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	if _, err := BuildGuardsDownConfig(&fc); err != nil {
+		t.Fatalf("BuildGuardsDownConfig() error = %v", err)
+	}
+	if !GuardsDownPostureActive(config.NextRuntimeConfig(config.Load(), &fc)) {
+		t.Fatal("GuardsDownPostureActive() = false right after applying the preset")
+	}
+	if GuardsDownPostureActive(config.NextRuntimeConfig(config.Load(), ptr(config.DefaultFileConfig()))) {
+		t.Fatal("GuardsDownPostureActive() = true for the default config")
+	}
+	for cap := range routes.CapabilityEndpoints() {
+		if cap == guardsDownExcludedCapability {
+			continue
+		}
+		meta, _ := routes.Meta(cap)
+		relaxed := fc
+		if err := config.SetConfigValue(&relaxed, meta.Setting, "false"); err != nil {
+			t.Fatalf("set %s: %v", meta.Setting, err)
+		}
+		if GuardsDownPostureActive(config.NextRuntimeConfig(config.Load(), &relaxed)) {
+			t.Errorf("GuardsDownPostureActive() = true with capability %q disabled; the detector must track every preset capability", cap)
+		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

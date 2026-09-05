@@ -147,6 +147,21 @@ func BuildGuardsDownConfig(fc *config.FileConfig) (bool, error) {
 	return originalJSON != nextJSON, nil
 }
 
+func GuardsDownPostureActive(cfg *config.RuntimeConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	for cap := range routes.CapabilityEndpoints() {
+		if cap == guardsDownExcludedCapability {
+			continue
+		}
+		if !cfg.CapabilityEnabled(cap) {
+			return false
+		}
+	}
+	return cfg.AttachEnabled && !cfg.IDPI.Enabled
+}
+
 func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
 	fc, configPath, err := config.LoadFileConfig()
 	if err != nil {
