@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -160,11 +161,12 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
 
 	if resp.StatusCode != 200 {
-		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+		apiclient.ExitWithAPIError(resp.StatusCode, body)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "data: ") {
