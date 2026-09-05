@@ -23,12 +23,9 @@ type AuthAPI struct {
 
 func NewAuthAPI(live *config.Live, sessions *browsersession.Manager) *AuthAPI {
 	return &AuthAPI{
-		live:     live,
-		sessions: sessions,
-		loginLimiter: authn.NewAttemptLimiter(authn.AttemptLimiterConfig{
-			Window:      authn.DefaultLoginRateLimitWindow,
-			MaxAttempts: authn.DefaultLoginRateLimitMaxAttempt,
-		}),
+		live:         live,
+		sessions:     sessions,
+		loginLimiter: authn.NewAttemptLimiter(authn.AttemptLimiterConfig{}),
 	}
 }
 
