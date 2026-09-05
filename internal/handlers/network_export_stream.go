@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -68,8 +67,7 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 // running entry count. Its methods split the controller into setup (startExportStream),
 // per-entry encode/emit (exportEntry), and finalization (finalize/sendDone).
 type exportStreamSession struct {
-	w             http.ResponseWriter
-	flusher       http.Flusher
+	stream        *httpx.EventStream
 	enc           observe.ExportEncoder
 	f             *os.File
 	nm            *bridge.NetworkMonitor
@@ -127,18 +125,14 @@ func (h *Handlers) startExportStream(w http.ResponseWriter, r *http.Request, ec 
 	subID, ch := buf.Subscribe()
 	completionSubID, completions := buf.SubscribeCompletions()
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
+	stream := httpx.NewEventStream(w, flusher)
 
 	// Clear the per-write deadline for long-lived SSE; the stream timer in run()
 	// caps total duration instead.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 	return &exportStreamSession{
-		w:               w,
-		flusher:         flusher,
+		stream:          stream,
 		enc:             enc,
 		f:               f,
 		nm:              nm,
@@ -188,8 +182,7 @@ func (s *exportStreamSession) run(r *http.Request) {
 				return
 			}
 			s.finalize()
-			data, _ := json.Marshal(map[string]any{"entries": s.count, "reason": "max_duration_reached"})
-			_, _ = fmt.Fprintf(s.w, "event: timeout\ndata: %s\n\n", data)
+			_ = s.stream.Event("timeout", map[string]any{"entries": s.count, "reason": "max_duration_reached"})
 			s.sendDone()
 			return
 
@@ -248,8 +241,7 @@ func (s *exportStreamSession) run(r *http.Request) {
 			}
 
 		case <-keepalive.C:
-			_, _ = fmt.Fprintf(s.w, ": keepalive\n\n")
-			s.flusher.Flush()
+			_ = s.stream.Keepalive()
 		}
 	}
 }
@@ -274,9 +266,7 @@ func (s *exportStreamSession) exportEntry(entry bridge.NetworkEntry) (stop bool)
 		return true
 	}
 	s.count++
-	data, _ := json.Marshal(map[string]any{"entries": s.count, "url": sanitize.TruncateUTF8BytesWithEllipsis(entry.URL, maxProgressURLBytes)})
-	_, _ = fmt.Fprintf(s.w, "event: export\ndata: %s\n\n", data)
-	s.flusher.Flush()
+	_ = s.stream.Event("export", map[string]any{"entries": s.count, "url": sanitize.TruncateUTF8BytesWithEllipsis(entry.URL, maxProgressURLBytes)})
 	return false
 }
 
@@ -325,9 +315,7 @@ func (s *exportStreamSession) sendDone() {
 	if s.count > 0 {
 		result["path"] = s.absPath
 	}
-	data, _ := json.Marshal(result)
-	_, _ = fmt.Fprintf(s.w, "event: done\ndata: %s\n\n", data)
-	s.flusher.Flush()
+	_ = s.stream.Event("done", result)
 }
 
 // HandleTabNetworkExportStream handles GET /tabs/{id}/network/export/stream.
