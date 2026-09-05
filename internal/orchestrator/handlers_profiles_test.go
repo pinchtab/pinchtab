@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"encoding/json"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -112,11 +113,7 @@ func TestHandleProfileInstanceDistinguishesMissingFromStopped(t *testing.T) {
 			w := httptest.NewRecorder()
 			o.handleProfileInstance(w, req)
 
-			var body struct {
-				Exists  bool   `json:"exists"`
-				Status  string `json:"status"`
-				Message string `json:"message"`
-			}
+			var body types.ProfileInstanceStatus
 			if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 				t.Fatalf("decode: %v", err)
 			}

@@ -227,3 +227,15 @@ type LaunchInstanceRequest struct {
 	Port      string `json:"port,omitempty"`      // port number as string
 	Browser   string `json:"browser,omitempty"`   // browser override (chrome, cloak, ghost-chrome)
 }
+
+const ProfileStatusMissing = "missing"
+
+type ProfileInstanceStatus struct {
+	Name    string `json:"name"`
+	Exists  bool   `json:"exists"`
+	Running bool   `json:"running"`
+	Status  string `json:"status"`
+	Port    string `json:"port"`
+	ID      string `json:"id,omitempty"`
+	Message string `json:"message,omitempty"`
+}

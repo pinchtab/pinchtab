@@ -313,17 +313,6 @@ func topLevelCount(top map[string]json.RawMessage, key string) (int, bool) {
 	return int(n), true
 }
 
-type profileInstanceStatus struct {
-	Name    string `json:"name"`
-	Exists  bool   `json:"exists"`
-	Running bool   `json:"running"`
-	Status  string `json:"status"`
-	Port    string `json:"port"`
-	ID      string `json:"id"`
-	Error   string `json:"error"`
-	Message string `json:"message"`
-}
-
 func jsonResult(v any) (*mcp.CallToolResult, error) {
 	body, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

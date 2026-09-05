@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"net/url"
 	"strings"
 
@@ -155,7 +156,7 @@ func handleConnectProfile(c *Client) func(context.Context, mcp.CallToolRequest) 
 			return resultFromBytes(body, code)
 		}
 
-		var status profileInstanceStatus
+		var status types.ProfileInstanceStatus
 		if err := json.Unmarshal(body, &status); err != nil {
 			return resultFromBytes(body, code)
 		}
@@ -168,10 +169,7 @@ func handleConnectProfile(c *Client) func(context.Context, mcp.CallToolRequest) 
 			"id":      status.ID,
 			"port":    status.Port,
 		}
-		if status.Error != "" {
-			resp["error"] = status.Error
-		}
-		if !status.Exists || status.Status == "missing" {
+		if !status.Exists || status.Status == types.ProfileStatusMissing {
 			resp["status"] = "missing"
 			resp["message"] = status.Message
 			if status.Message == "" {

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
@@ -76,39 +77,29 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	name, err := o.resolveProfileName(id)
-	if err != nil {
-		httpx.JSON(w, 200, map[string]any{
-			"name":    id,
-			"exists":  false,
-			"running": false,
-			"status":  "missing",
-			"port":    "",
-			"message": fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", id),
-		})
-		return
-	}
+	httpx.JSON(w, 200, o.profileInstanceStatus(r.PathValue("id")))
+}
 
-	instances := o.List()
-	for _, inst := range instances {
-		if inst.ProfileName == name && (inst.Status == bridge.InstanceStatusRunning || inst.Status == bridge.InstanceStatusStarting) {
-			httpx.JSON(w, 200, map[string]any{
-				"name":    name,
-				"exists":  true,
-				"running": inst.Status == bridge.InstanceStatusRunning,
-				"status":  inst.Status,
-				"port":    inst.Port,
-				"id":      inst.ID,
-			})
-			return
+func (o *Orchestrator) profileInstanceStatus(idOrName string) types.ProfileInstanceStatus {
+	name, err := o.resolveProfileName(idOrName)
+	if err != nil {
+		return types.ProfileInstanceStatus{
+			Name:    idOrName,
+			Status:  types.ProfileStatusMissing,
+			Message: fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", idOrName),
 		}
 	}
-	httpx.JSON(w, 200, map[string]any{
-		"name":    name,
-		"exists":  true,
-		"running": false,
-		"status":  "stopped",
-		"port":    "",
-	})
+	for _, inst := range o.List() {
+		if inst.ProfileName == name && (inst.Status == bridge.InstanceStatusRunning || inst.Status == bridge.InstanceStatusStarting) {
+			return types.ProfileInstanceStatus{
+				Name:    name,
+				Exists:  true,
+				Running: inst.Status == bridge.InstanceStatusRunning,
+				Status:  inst.Status,
+				Port:    inst.Port,
+				ID:      inst.ID,
+			}
+		}
+	}
+	return types.ProfileInstanceStatus{Name: name, Exists: true, Status: bridge.InstanceStatusStopped}
 }
