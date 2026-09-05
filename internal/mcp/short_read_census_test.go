@@ -35,6 +35,7 @@ const (
 	peeksWithoutTaking = "peeks a prefix and leaves the stream whole for its consumer"
 	unreachableCap     = "the cap cannot be reached by anything that passed the guard in front of it"
 	loudOnTruncation   = "a truncated value cannot parse, so the request is refused rather than accepted"
+	renderedForDisplay = "an error body rendered for the operator; a truncated message misleads no parser, and refusing above the cap would hide the server's reason entirely"
 )
 
 var cappedReads = map[string]string{
@@ -50,7 +51,8 @@ var cappedReads = map[string]string{
 	// Loud but misattributed, and left as it is: a truncated config PUT does not
 	// parse, so it answers 400 rather than writing a partial config. The only cost
 	// is that bad_config_json blames the client for a truncation PinchTab performed.
-	"internal/dashboard/config_api.go::parseConfigUpdate": loudOnTruncation,
+	"internal/dashboard/config_api.go::parseConfigUpdate":    loudOnTruncation,
+	"internal/cli/actions/actions_network.go::NetworkStream": renderedForDisplay,
 }
 
 // cappedSite is one io.LimitReader call, attributed to the function that holds it —
