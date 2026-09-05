@@ -155,13 +155,10 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		"title":         title,
 	}
 
-	// If a challenge was detected but the solver couldn't resolve it, flip the
-	// tab into paused_handoff so subsequent actions block and the caller can
-	// escalate to a human.
 	if !result.Solved && result.Attempts > 0 && challengeType != "" {
 		h.autoHandoffAfterFailure(resolvedTabID, challengeType)
 		resp["handoff"] = "paused_handoff"
-		resp["hint"] = handoffHintMessage
+		resp["hint"] = handoffHint(resolvedTabID)
 	}
 
 	httpx.JSON(w, 200, resp)

@@ -101,7 +101,7 @@ func assertHandoffRefusal(t *testing.T, w *httptest.ResponseRecorder) {
 	if !strings.Contains(resp.Error, "paused for human handoff") {
 		t.Fatalf("error should name the pause: %s", resp.Error)
 	}
-	if resp.Details["hint"] != handoffHintMessage {
+	if resp.Details["hint"] != handoffHint("tab1") {
 		t.Fatalf("details hint = %v, want the shared handoff hint", resp.Details["hint"])
 	}
 	if resp.Details["reason"] != "manual_handoff" {
@@ -289,5 +289,17 @@ func TestResumedTabAllowsNavigateReloadAndBack(t *testing.T) {
 	h.HandleBack(w, httptest.NewRequest("POST", "/back?tabId=tab1", nil))
 	if w.Code != 200 || b.backs != 1 {
 		t.Fatalf("back after resume: status %d backs %d: %s", w.Code, b.backs, w.Body.String())
+	}
+}
+
+func TestHandoffHintNamesBothRunnableFormsWithTheRealTabID(t *testing.T) {
+	hint := handoffHint("93FEEE70")
+	for _, want := range []string{"return control to the user", "solve the challenge in the browser window", "pinchtab resume 93FEEE70", "POST /tabs/93FEEE70/resume"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("hint %q does not carry %q", hint, want)
+		}
+	}
+	if strings.Contains(hint, "{id}") {
+		t.Fatalf("hint %q carries an unsubstituted placeholder the caller has to edit before running it", hint)
 	}
 }

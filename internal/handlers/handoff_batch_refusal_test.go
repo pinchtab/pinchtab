@@ -83,8 +83,8 @@ func TestBatchAndMacroCarryThePausedTabRefusalPerItem(t *testing.T) {
 				t.Errorf("%s per-item code = %q, want %q — a client must detect this by code, not by matching the message", tc.path, entry.Code, "tab_paused_handoff")
 			}
 			hint, _ := entry.Details["hint"].(string)
-			if !strings.Contains(hint, "/tabs/{id}/resume") {
-				t.Errorf("%s per-item details.hint = %q, want the remedy naming the resume route", tc.path, hint)
+			if !strings.Contains(hint, "pinchtab resume tab1") || !strings.Contains(hint, "POST /tabs/tab1/resume") {
+				t.Errorf("%s per-item details.hint = %q, want the remedy naming both runnable resume forms for the paused tab", tc.path, hint)
 			}
 			if entry.Error == "" {
 				t.Errorf("%s dropped the human-readable reason; the code is added beside it, not instead of it", tc.path)

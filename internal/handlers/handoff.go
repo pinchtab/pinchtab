@@ -26,17 +26,14 @@ func (h *Handlers) handoffController() (tabHandoffController, bool) {
 	return ctrl, ok
 }
 
-// handoffHintMessage is included in error responses and dashboard events when
-// the agent must yield control to a human operator.
-const handoffHintMessage = "return control to the user and ask them to manually solve the challenge in the browser window, then call POST /tabs/{id}/resume to continue"
+func handoffHint(tabID string) string {
+	return fmt.Sprintf("return control to the user and ask them to manually solve the challenge in the browser window, then resume the tab when they are done: pinchtab resume %s, or POST /tabs/%s/resume", tabID, tabID)
+}
 
 const handoffPausedCode = "tab_paused_handoff"
 
-// handoffErrorDetails builds the details payload attached to 409 responses
-// when an action hits a tab that is paused for handoff. Always includes the
-// agent hint; when known, also includes the current reason and pausedAt.
 func (h *Handlers) handoffErrorDetails(tabID string) map[string]any {
-	details := map[string]any{"hint": handoffHintMessage}
+	details := map[string]any{"hint": handoffHint(tabID)}
 	if ctrl, ok := h.handoffController(); ok {
 		if state, exists := ctrl.TabHandoffState(tabID); exists {
 			if state.Reason != "" {
@@ -113,7 +110,7 @@ func (h *Handlers) pauseTabForHandoff(tabID, reason, source string, timeout time
 			"status":      "paused_handoff",
 			"reason":      reason,
 			"source":      source,
-			"hint":        handoffHintMessage,
+			"hint":        handoffHint(tabID),
 			"requestedAt": time.Now().UTC().Format(time.RFC3339),
 		}
 		if timeout > 0 {
@@ -179,7 +176,7 @@ func (h *Handlers) HandleTabHandoff(w http.ResponseWriter, r *http.Request) {
 		"status":    "paused_handoff",
 		"reason":    reason,
 		"timeoutMs": req.TimeoutMs,
-		"hint":      handoffHintMessage,
+		"hint":      handoffHint(resolvedTabID),
 	}
 	if timeout > 0 {
 		resp["expiresAt"] = time.Now().UTC().Add(timeout).Format(time.RFC3339)
