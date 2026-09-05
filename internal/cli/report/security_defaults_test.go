@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
@@ -78,5 +80,49 @@ func TestNoHandListedCapabilityDisableLineRemains(t *testing.T) {
 	}
 	if found < 2 {
 		t.Fatalf("checked only %d capabilities; this guard would prove little", found)
+	}
+}
+
+func TestRecommendedDefaultsAreSatisfiedBySecurityUp(t *testing.T) {
+	fc := config.DefaultFileConfig()
+	workflow.ApplyRecommendedSecurityDefaults(&fc)
+	if lines := RecommendedSecurityDefaultLines(config.NextRuntimeConfig(config.Load(), &fc)); len(lines) > 0 {
+		t.Fatalf("RecommendedSecurityDefaultLines() = %v after security up; the report sends the operator back to a command that changes nothing", lines)
+	}
+}
+
+func TestEveryRecommendedLineStatesTheValueSecurityUpWrites(t *testing.T) {
+	relaxed := config.DefaultFileConfig()
+	for cap := range routes.CapabilityEndpoints() {
+		meta, _ := routes.Meta(cap)
+		if err := config.SetConfigValue(&relaxed, meta.Setting, "true"); err != nil {
+			t.Fatalf("set %s: %v", meta.Setting, err)
+		}
+	}
+	relaxed.Server.Bind = "0.0.0.0"
+	enabled := true
+	relaxed.Security.Attach.Enabled = &enabled
+	relaxed.Security.Attach.AllowHosts = []string{"chrome.internal"}
+	relaxed.Security.IDPI = &config.IDPIConfig{}
+	lines := RecommendedSecurityDefaultLines(config.NextRuntimeConfig(config.Load(), &relaxed))
+	if len(lines) < 5 {
+		t.Fatalf("RecommendedSecurityDefaultLines() = %v on a fully relaxed config; too few lines for this check to prove anything", lines)
+	}
+	hardened := config.DefaultFileConfig()
+	workflow.ApplyRecommendedSecurityDefaults(&hardened)
+	for _, line := range lines {
+		path, value, ok := strings.Cut(line, " = ")
+		if !ok {
+			t.Errorf("line %q is not of the form <path> = <value>", line)
+			continue
+		}
+		got, err := config.GetConfigValue(&hardened, path)
+		if err != nil {
+			t.Errorf("line %q names %s, which security up cannot address: %v", line, path, err)
+			continue
+		}
+		if got != value {
+			t.Errorf("line %q promises %s = %s but security up writes %q", line, path, value, got)
+		}
 	}
 }

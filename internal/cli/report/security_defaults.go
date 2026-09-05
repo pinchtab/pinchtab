@@ -1,22 +1,23 @@
 package report
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
-// capabilityDisableLines is the one owner of the "disable capability X" recommendation
-// lines, derived from the canonical capability table rather than restated: a ninth
-// capability appears here — and in the sensitive-endpoints recommendation that reuses
-// these lines — with no edit. Sorted so the report output is stable.
 func capabilityDisableLines() []string {
+	return capabilityDisableLinesWhere(func(routes.Capability) bool { return true })
+}
+
+func capabilityDisableLinesWhere(include func(routes.Capability) bool) []string {
 	lines := make([]string, 0)
 	for cap := range routes.CapabilityEndpoints() {
 		meta, ok := routes.Meta(cap)
-		if !ok {
+		if !ok || !include(cap) {
 			continue
 		}
 		lines = append(lines, meta.Setting+" = false")
@@ -25,75 +26,36 @@ func capabilityDisableLines() []string {
 	return lines
 }
 
-func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	workflow.ApplyRecommendedSecurityDefaults(fc)
-}
-
-func applyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	ApplyRecommendedSecurityDefaults(fc)
-}
-
-func RestoreSecurityDefaults() (string, bool, error) {
-	return workflow.RestoreSecurityDefaults()
-}
-
-func restoreSecurityDefaults() (string, bool, error) {
-	return RestoreSecurityDefaults()
-}
-
 func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
-	posture := AssessSecurityPosture(cfg)
-	capabilityLines := capabilityDisableLines()
-	ordered := []string{"server.bind = 127.0.0.1"}
-	ordered = append(ordered, capabilityLines...)
-	ordered = append(ordered,
-		"security.attach.enabled = false",
-		"security.attach.allowHosts = 127.0.0.1,localhost,::1",
-		"security.attach.allowSchemes = ws,wss",
-		"security.idpi.enabled = true",
-		"security.allowedDomains = 127.0.0.1,localhost,::1",
-		"security.idpi.strictMode = true",
-		"security.idpi.scanContent = true",
-		"security.idpi.wrapContent = true",
-	)
-	needed := make(map[string]bool, len(ordered))
-
-	for _, check := range posture.Checks {
-		if check.Passed {
-			continue
-		}
-		switch check.ID {
-		case "bind_loopback":
-			needed["server.bind = 127.0.0.1"] = true
-		case "sensitive_endpoints_disabled":
-			for _, line := range capabilityLines {
-				needed[line] = true
-			}
-		case "attach_disabled", "attach_local_only":
-			for _, line := range []string{
-				"security.attach.enabled = false",
-				"security.attach.allowHosts = 127.0.0.1,localhost,::1",
-				"security.attach.allowSchemes = ws,wss",
-			} {
-				needed[line] = true
-			}
-		case "idpi_whitelist_scoped", "idpi_strict_mode", "idpi_content_protection":
-			for _, line := range []string{
-				"security.idpi.enabled = true",
-				"security.allowedDomains = 127.0.0.1,localhost,::1",
-				"security.idpi.strictMode = true",
-				"security.idpi.scanContent = true",
-				"security.idpi.wrapContent = true",
-			} {
-				needed[line] = true
-			}
-		}
+	if cfg == nil {
+		return nil
 	}
-
-	lines := make([]string, 0, len(needed))
-	for _, line := range ordered {
-		if needed[line] {
-			lines = append(lines, line)
+	want := config.DefaultFileConfig()
+	lines := make([]string, 0)
+	if cfg.Bind != want.Server.Bind {
+		lines = append(lines, "server.bind = "+want.Server.Bind)
+	}
+	lines = append(lines, capabilityDisableLinesWhere(cfg.CapabilityEnabled)...)
+	attach := want.Security.Attach
+	if attach.Enabled != nil && cfg.AttachEnabled != *attach.Enabled {
+		lines = append(lines, fmt.Sprintf("security.attach.enabled = %t", *attach.Enabled))
+	}
+	if attachAllowsNonLocalHosts(cfg.AttachAllowHosts) {
+		lines = append(lines, "security.attach.allowHosts = "+strings.Join(attach.AllowHosts, ","))
+	}
+	if idpi := want.Security.IDPI; idpi != nil {
+		for _, flag := range []struct {
+			path       string
+			have, want bool
+		}{
+			{"security.idpi.enabled", cfg.IDPI.Enabled, idpi.Enabled},
+			{"security.idpi.strictMode", cfg.IDPI.StrictMode, idpi.StrictMode},
+			{"security.idpi.scanContent", cfg.IDPI.ScanContent, idpi.ScanContent},
+			{"security.idpi.wrapContent", cfg.IDPI.WrapContent, idpi.WrapContent},
+		} {
+			if flag.have != flag.want {
+				lines = append(lines, fmt.Sprintf("%s = %t", flag.path, flag.want))
+			}
 		}
 	}
 	return lines

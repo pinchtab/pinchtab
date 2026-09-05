@@ -44,10 +44,6 @@ func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 	return report.RecommendedSecurityDefaultLines(cfg)
 }
 
-func RestoreSecurityDefaults() (string, bool, error) {
-	return report.RestoreSecurityDefaults()
-}
-
 func LogSecurityWarnings(cfg *config.RuntimeConfig) {
 	report.LogSecurityWarnings(cfg)
 }
