@@ -142,8 +142,11 @@ func TestHealthTellsTheFrontDoorsConfiguredPolicyApartFromWhatInstancesEnforce(t
 	if health.Security == nil || health.EnforcedSecurity == nil {
 		t.Fatalf("health carries no configured/enforced pair: %+v", health)
 	}
-	if health.Security.Scope != frontDoorConfigurationScope {
-		t.Errorf("security.scope = %q, want %q: the block is one process's configuration, not the fleet's posture", health.Security.Scope, frontDoorConfigurationScope)
+	// The literal, not the constant: a client branches on this string, so
+	// comparing the response against the same constant that produced it would
+	// stay green while the label empties or is renamed under it.
+	if health.Security.Scope != "frontDoorConfiguration" {
+		t.Errorf("security.scope = %q, want \"frontDoorConfiguration\": the block is one process's configuration, not the fleet's posture", health.Security.Scope)
 	}
 	if !health.Security.IDPIEnabled {
 		t.Errorf("security.idpiEnabled = false, want the front door's own configured value")
@@ -191,6 +194,29 @@ func TestHealthReportsNoDivergenceWhenTheInstanceEnforcesTheConfiguredPolicy(t *
 	}
 	if got := health.EnforcedSecurity.Instances[0].Comparison; got != "match" {
 		t.Errorf("comparison = %q, want match", got)
+	}
+}
+
+// One instance, and it diverges. The two-policy fixture above carries an
+// unreachable instance too, which raises divergent on its own — so only a lone
+// diverging instance can pin the flag for the comparison path.
+func TestHealthReportsDivergenceForASingleInstanceEnforcingAnotherPolicy(t *testing.T) {
+	cfg := config.Load()
+	cfg.IDPI.Enabled = true
+	cfg.AllowedDomains = []string{"example.com"}
+
+	health := securedHealth(t, postureInstances{
+		instances: []bridge.Instance{{ID: "inst_lagging", Status: "running"}},
+		postures: map[string]*workflow.EnforcedSecurity{
+			"inst_lagging": {IDPIEnabled: false, AllowedDomains: []string{"*"}},
+		},
+	}, cfg)
+
+	if !health.EnforcedSecurity.Divergent {
+		t.Errorf("divergent = false while the only instance enforces IDPI off under a wildcard: %+v", health.EnforcedSecurity.Instances)
+	}
+	if got := health.EnforcedSecurity.Instances[0].Comparison; got != "diverges" {
+		t.Errorf("comparison = %q, want diverges", got)
 	}
 }
 
