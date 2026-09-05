@@ -57,6 +57,105 @@ func TestRestartReasonsOmitStateDirWhenUnchanged(t *testing.T) {
 	}
 }
 
+type configSectionDisposition string
+
+const (
+	configAppliesLive  configSectionDisposition = "applies live"
+	configNeedsRestart configSectionDisposition = "needs restart"
+	configIsInert      configSectionDisposition = "deliberately inert"
+)
+
+type configSectionCensusRow struct {
+	disposition configSectionDisposition
+	evidence    string
+	mutate      func(*config.FileConfig)
+	wantReason  string
+}
+
+// fileConfigSectionCensus is the review point for PUT /api/config semantics.
+// Live rows are published by persistAndApply through NextRuntimeConfig; restart
+// rows name a representative frozen setting whose clause is exercised below;
+// the two metadata fields are persisted but intentionally have no runtime effect.
+// Profiles.BaseDir is the only effective section value derived from another
+// section: when empty it follows Server.StateDir. effectiveProfilesDir is therefore
+// deliberately part of the restart check instead of comparing the literal fields.
+var fileConfigSectionCensus = map[string]configSectionCensusRow{
+	"Schema":           {configIsInert, "$schema is editor metadata only", nil, ""},
+	"ConfigVersion":    {configIsInert, "configVersion selects file compatibility while loading", nil, ""},
+	"Server":           {configNeedsRestart, "listener and state stores are constructed at boot", func(c *config.FileConfig) { c.Server.StateDir += "-moved" }, "Server state directory (server.stateDir)"},
+	"Browser":          {configAppliesLive, "ApplyFileConfigToRuntime publishes browser settings for subsequent browser work", nil, ""},
+	"InstanceDefaults": {configNeedsRestart, "the running default instance keeps its boot stealth level", func(c *config.FileConfig) { c.InstanceDefaults.StealthLevel = "full" }, "Stealth level"},
+	"Security": {configNeedsRestart, "the front-door security policy is assembled at boot", func(c *config.FileConfig) {
+		c.Security.AllowedDomains = append(c.Security.AllowedDomains, "census.invalid")
+	}, "Security policy"},
+	"Profiles":      {configNeedsRestart, "profile storage is opened at boot", func(c *config.FileConfig) { c.Profiles.BaseDir += "-moved" }, "Profiles directory"},
+	"MultiInstance": {configNeedsRestart, "routing strategy and restart supervisor are constructed at boot", func(c *config.FileConfig) { c.MultiInstance.Strategy = "explicit" }, "Routing strategy"},
+	"Timeouts":      {configAppliesLive, "ApplyFileConfigToRuntime publishes request timeouts", nil, ""},
+	"Scheduler":     {configAppliesLive, "ApplyRuntimeConfig updates the orchestrator scheduler", nil, ""},
+	"Observability": {configAppliesLive, "activity consumers resolve the published runtime config", nil, ""},
+	"Sessions":      {configNeedsRestart, "enabling the agent route family requires boot-time route registration", func(c *config.FileConfig) { enabled := true; c.Sessions.Agent.Enabled = &enabled }, "Agent sessions"},
+	"AutoSolver":    {configAppliesLive, "ApplyFileConfigToRuntime publishes solver settings", nil, ""},
+	"Browsers":      {configAppliesLive, "ApplyFileConfigToRuntime publishes provider selection", nil, ""},
+}
+
+func TestEveryFileConfigSectionHasAnEffectiveDisposition(t *testing.T) {
+	typ := reflect.TypeOf(config.FileConfig{})
+	seen := make(map[string]bool, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		seen[field.Name] = true
+		row, ok := fileConfigSectionCensus[field.Name]
+		if !ok {
+			t.Errorf("FileConfig.%s is unclassified: add it to fileConfigSectionCensus as live, restart-required, or deliberately inert; an unclassified section can make PUT /api/config report an unapplied save as applied", field.Name)
+			continue
+		}
+		if row.evidence == "" {
+			t.Errorf("FileConfig.%s has no evidence for its %q classification", field.Name, row.disposition)
+		}
+		switch row.disposition {
+		case configAppliesLive, configIsInert:
+			if row.mutate != nil || row.wantReason != "" {
+				t.Errorf("FileConfig.%s is %q but declares a restart mutation/reason", field.Name, row.disposition)
+			}
+		case configNeedsRestart:
+			if row.mutate == nil || row.wantReason == "" {
+				t.Errorf("FileConfig.%s is restart-required but does not exercise a reason clause", field.Name)
+			}
+		default:
+			t.Errorf("FileConfig.%s has unknown disposition %q", field.Name, row.disposition)
+		}
+	}
+	for name := range fileConfigSectionCensus {
+		if !seen[name] {
+			t.Errorf("fileConfigSectionCensus contains %q, which is no longer a FileConfig field; update the census with the type", name)
+		}
+	}
+}
+
+func TestEveryRestartRequiredConfigSectionHasAWorkingClause(t *testing.T) {
+	for name, row := range fileConfigSectionCensus {
+		if row.disposition != configNeedsRestart {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			boot := config.DefaultFileConfig()
+			// The sessions clause is directional, so establish its disabled boot state.
+			if name == "Sessions" {
+				disabled := false
+				boot.Sessions.Agent.Enabled = &disabled
+			}
+			next := boot
+			row.mutate(&next)
+
+			api := newConfigAPIForTest(config.Load(), nil, nil, nil, nil, "test", time.Now())
+			api.boot = boot
+			if reasons := api.restartReasonsFor(next); !containsString(reasons, row.wantReason) {
+				t.Fatalf("restartReasonsFor() = %v, want %q for FileConfig.%s; its frozen setting would otherwise be saved and reported applied", reasons, row.wantReason, name)
+			}
+		})
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
