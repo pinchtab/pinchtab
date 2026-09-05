@@ -90,9 +90,9 @@ func TestTheHopCountWalksBackThroughAChainOfTrustedProxies(t *testing.T) {
 	}
 }
 
-// Fewer real proxies than configured is exactly the shape a forging client
-// produces, so it must fail closed to the transport peer rather than reaching for
-// whichever element is left.
+// A chain shorter than the count fails closed to the transport peer rather than
+// reaching for whichever element is left. It is the only fail-closed the count
+// gives; see the over-configured test below for what it cannot give.
 func TestAChainShorterThanTheHopCountFallsBackToThePeer(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -244,5 +244,31 @@ func TestOnlyTheClientIPResolverReadsTheForwardedForDirective(t *testing.T) {
 	want := "RequestHost,RequestScheme,forwardedClientIP"
 	if got := strings.Join(callers, ","); got != want {
 		t.Fatalf("forwardedDirective is called from %q, want %q; the Forwarded 'for' directive is client identity and forwardedClientIP owns it", got, want)
+	}
+}
+
+// The hazard the docs must not soften: the server cannot tell a client-written
+// element from a proxy-appended one, so a count higher than the proxies that
+// really append lets a client pad the chain to that length and choose the
+// identity. One appending proxy (peer 198.51.100.10 appends 10.0.0.1) with the
+// count set to two or three resolves to whatever the client put in front.
+func TestAnOverConfiguredHopCountHandsTheIdentityBackToAPaddingClient(t *testing.T) {
+	cases := []struct {
+		name  string
+		hops  int
+		value string
+		want  string
+	}{
+		{"two hops, client pads one element", 2, "203.0.113.9, 10.0.0.1", "203.0.113.9"},
+		{"three hops, client pads two elements", 3, "203.0.113.9, 5.6.7.8, 10.0.0.1", "203.0.113.9"},
+		{"one hop, the correct count, is not fooled", 1, "203.0.113.9, 5.6.7.8, 10.0.0.1", "10.0.0.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveClientIP(trustedRequest(map[string]string{"X-Forwarded-For": tc.value}), true, tc.hops)
+			if got != tc.want {
+				t.Fatalf("ResolveClientIP = %q, want %q; the docs promise exactly this", got, tc.want)
+			}
+		})
 	}
 }

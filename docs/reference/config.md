@@ -744,12 +744,15 @@ element. Reading the client-most element would let a caller pick its own rate-li
 and its own audit identity by rotating that value; reading the Nth from the right reads only
 what a trusted proxy wrote.
 
-Set the count to the number of proxies you actually run. Configuring **more** hops than
-exist fails closed: a chain shorter than the count is the shape a forging client produces,
-so PinchTab falls back to the transport peer address instead of accepting it. Configuring
-**fewer** hops than exist attributes requests to your own proxy rather than to the client,
-which flattens every caller into one bucket. A proxy that strips and rebuilds the header
-leaves a single element, where a hop count of `1` reads exactly what it wrote.
+Set the count to **exactly** the number of proxies that append. Setting it too **high** is
+unsafe: PinchTab cannot tell a client-written element from a proxy-appended one, so a
+client pads its own `X-Forwarded-For` up to the configured length and the element the
+count points at is one it chose — the bypass this setting exists to close. The
+peer-address fallback covers only a chain shorter than the count, which a forging client
+simply avoids by sending enough elements. Setting it too **low** attributes requests to
+your own proxy rather than to the client, which flattens every caller into one bucket:
+useless, but not spoofable. A proxy that strips and rebuilds the header leaves a single
+element, where a hop count of `1` reads exactly what it wrote.
 
 ## Legacy Flat Format
 

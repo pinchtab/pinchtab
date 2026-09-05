@@ -52,9 +52,11 @@ func forwardedClientIP(r *http.Request, trustedHops int) string {
 }
 
 // trustedChainElement returns the element the trusted hop count points at, or the
-// empty string when the chain is SHORTER than that count. Short is the shape a
-// forging client produces — an under-configured hop count must fall back to the
-// transport peer, never to whichever element happens to be left.
+// empty string when the chain is shorter than that count, so a short chain falls
+// back to the transport peer rather than to whichever element is left. That is
+// the only protection a count can give: a client pads its own header to any
+// length, so a count HIGHER than the proxies that really append hands the
+// identity back to the client. The count must equal the appending proxies.
 func trustedChainElement(header string, trustedHops int) string {
 	hops := config.TrustedProxyHopsOrDefault(trustedHops)
 	elements := forwardedElements(header)
