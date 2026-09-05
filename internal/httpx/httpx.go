@@ -37,22 +37,28 @@ type ProblemDetails struct {
 	Details   map[string]any `json:"details,omitempty"`
 }
 
-// JSONError writes a hand-shaped error body — one the standard envelope cannot express,
-// such as a health payload a client parses by key — and records the reason with it. Every
-// non-2xx JSON response goes through here or through ErrorCode, so no failure reaches the
-// log, the metrics or the activity record with the response body as its only witness.
 func JSONError(w http.ResponseWriter, status int, code, message string, payload any) {
-	logFailureCause(w, status, code, message)
-	RecordFailureReason(w, code, SanitizeErrorMessage(message))
+	recordFailure(w, status, code, message)
 	JSON(w, status, payload)
 }
 
 func JSON(w http.ResponseWriter, code int, data any) {
-	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, code, "application/json", data)
+}
+
+func writeJSON(w http.ResponseWriter, code int, contentType string, data any) {
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		slog.Error("json encode", "err", err)
 	}
+}
+
+func recordFailure(w http.ResponseWriter, status int, code, message string) string {
+	logFailureCause(w, status, code, message)
+	sanitized := SanitizeErrorMessage(message)
+	RecordFailureReason(w, code, sanitized)
+	return sanitized
 }
 
 func Error(w http.ResponseWriter, code int, err error) {
@@ -67,11 +73,8 @@ func Error(w http.ResponseWriter, code int, err error) {
 }
 
 func ErrorCode(w http.ResponseWriter, status int, code, message string, retryable bool, details map[string]any) {
-	logFailureCause(w, status, code, message)
-	sanitized := SanitizeErrorMessage(message)
-	RecordFailureReason(w, code, sanitized)
 	payload := map[string]any{
-		"error": sanitized,
+		"error": recordFailure(w, status, code, message),
 		"code":  code,
 	}
 	if retryable {
@@ -139,27 +142,15 @@ func Problem(w http.ResponseWriter, status int, code, detail string, retryable b
 	if title == "" {
 		title = "Error"
 	}
-
-	logFailureCause(w, status, code, detail)
-	sanitized := SanitizeErrorMessage(detail)
-	RecordFailureReason(w, code, sanitized)
-	payload := ProblemDetails{
-		Type:    "about:blank",
-		Title:   title,
-		Status:  status,
-		Detail:  sanitized,
-		Code:    code,
-		Details: sanitizeDetails(details),
-	}
-	if retryable {
-		payload.Retryable = true
-	}
-
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		slog.Error("problem encode", "err", err)
-	}
+	writeJSON(w, status, "application/problem+json", ProblemDetails{
+		Type:      "about:blank",
+		Title:     title,
+		Status:    status,
+		Detail:    recordFailure(w, status, code, detail),
+		Code:      code,
+		Retryable: retryable,
+		Details:   sanitizeDetails(details),
+	})
 }
 
 func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
