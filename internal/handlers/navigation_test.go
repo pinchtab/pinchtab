@@ -756,6 +756,11 @@ func TestANewTabIsClosedUnlessTheResponseNamesIt(t *testing.T) {
 			wantStatus: http.StatusBadGateway, wantTabID: "", wantClosed: true,
 		},
 		{
+			name:       "a navigate error closes the created tab and names none",
+			mock:       &mockBridge{navigateErr: context.DeadlineExceeded},
+			wantStatus: http.StatusServiceUnavailable, wantTabID: "", wantClosed: true,
+		},
+		{
 			name:       "a loaded page keeps the created tab and names it",
 			mock:       &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{URL: target}},
 			wantStatus: 200, wantTabID: "tab_abc12345", wantClosed: false,
