@@ -643,35 +643,43 @@ func (rec persistedSession) toSession() (*Session, bool) {
 
 func (s *Store) loadPersisted() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.cfg.PersistPath == "" {
+		s.mu.Unlock()
 		return
 	}
 
 	data, err := os.ReadFile(s.cfg.PersistPath)
 	if err != nil {
+		s.mu.Unlock()
 		return
 	}
 	var persisted persistedStore
 	if err := json.Unmarshal(data, &persisted); err != nil {
+		s.mu.Unlock()
 		return
 	}
 
 	now := s.now()
+	dropped := 0
 	for _, rec := range persisted.Sessions {
 		sess, ok := rec.toSession()
-		if !ok {
-			continue
-		}
-		if sess.Status != StatusActive {
-			continue
-		}
-		if s.isExpired(sess, now) {
+		if !ok || sess.Status != StatusActive || s.isExpired(sess, now) {
+			dropped++
 			continue
 		}
 		s.sessions[sess.ID] = sess
 		s.byTokenHash[sess.TokenHash] = sess
+	}
+	var (
+		job     snapshotJob
+		persist bool
+	)
+	if dropped > 0 {
+		job, persist = s.snapshotLocked()
+	}
+	s.mu.Unlock()
+	if persist {
+		s.writeSnapshot(job)
 	}
 }
 
@@ -738,7 +746,9 @@ func (s *Store) writeSnapshot(job snapshotJob) {
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return
 	}
-	_ = os.Rename(tmpPath, job.path)
+	if err := os.Rename(tmpPath, job.path); err != nil {
+		_ = os.Remove(tmpPath)
+	}
 }
 
 func generateSessionID() (string, error) {

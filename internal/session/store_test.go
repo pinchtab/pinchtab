@@ -440,3 +440,37 @@ func TestModeServesOnlyTheValuesTheValidatorAccepts(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadCompactsDroppedRecordsOutOfTheFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	cfg := Config{Enabled: true, PersistPath: path, MaxLifetime: time.Hour, IdleTimeout: 30 * time.Minute}
+
+	s1 := NewStore(cfg)
+	now := time.Now()
+	s1.now = func() time.Time { return now }
+	_, _, _ = s1.Create("agent-1", "will expire", "")
+
+	s2 := &Store{
+		sessions:    make(map[string]*Session),
+		byTokenHash: make(map[[32]byte]*Session),
+		now:         func() time.Time { return now.Add(2 * time.Hour) },
+	}
+	s2.applyConfig(cfg)
+	s2.loadPersisted()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var store persistedStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Sessions) != 0 {
+		t.Fatalf("persisted file still holds %d expired record(s) after load; their token hashes must not outlive the session", len(store.Sessions))
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Fatalf("persist dir has %d entries, want only the sessions file", len(entries))
+	}
+}
