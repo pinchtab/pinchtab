@@ -2,12 +2,17 @@ package orchestrator
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
+
+func instanceIsRunning(inst *InstanceInternal) bool {
+	return inst != nil && inst.Status == bridge.InstanceStatusRunning && instanceIsActive(inst)
+}
 
 func instanceIsActive(inst *InstanceInternal) bool {
 	if inst == nil {
@@ -16,7 +21,7 @@ func instanceIsActive(inst *InstanceInternal) bool {
 	if inst.cmd != nil {
 		return isProcessAlive(inst.cmd.PID())
 	}
-	return inst.Status == "starting" || inst.Status == "running" || inst.Status == "stopping"
+	return inst.Status == bridge.InstanceStatusStarting || inst.Status == bridge.InstanceStatusRunning || inst.Status == bridge.InstanceStatusStopping
 }
 
 func waitForProcessExit(pid int, timeout time.Duration) bool {

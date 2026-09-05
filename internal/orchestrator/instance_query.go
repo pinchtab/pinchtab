@@ -85,7 +85,7 @@ func (o *Orchestrator) refreshInstanceHealth() {
 	stale := time.Since(o.enforcedAt) >= instanceHealthTTL
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -201,7 +201,7 @@ func (o *Orchestrator) firstRunningURL(match func(*InstanceInternal) bool) strin
 	}
 	var candidates []candidate
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			if inst.URL == "" {
 				continue
 			}
@@ -308,7 +308,7 @@ func (o *Orchestrator) allTabs(fresh bool) []bridge.InstanceTab {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -333,7 +333,7 @@ func (o *Orchestrator) FindInstanceByTab(tabID string) (*bridge.Instance, bool) 
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -358,7 +358,7 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			instances = append(instances, inst)
 		}
 	}

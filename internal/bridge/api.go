@@ -305,6 +305,14 @@ func normalizeInstanceMode(mode string, headless bool) string {
 	}
 }
 
+const (
+	InstanceStatusStarting = "starting"
+	InstanceStatusRunning  = "running"
+	InstanceStatusStopping = "stopping"
+	InstanceStatusStopped  = "stopped"
+	InstanceStatusError    = "error"
+)
+
 type Instance struct {
 	ID             string          `json:"id"`            // Hash-based ID: inst_XXXXXXXX
 	ProfileID      string          `json:"profileId"`     // Hash-based profile ID: prof_XXXXXXXX
@@ -313,7 +321,7 @@ type Instance struct {
 	URL            string          `json:"url,omitempty"` // Canonical base URL for bridge-backed instances
 	Mode           string          `json:"mode"`          // API mode: "headless" or "headed"
 	Headless       bool            `json:"headless"`      // Mode: headless vs headed
-	Status         string          `json:"status"`        // Status: starting/running/stopping/stopped/error
+	Status         string          `json:"status"`
 	StartTime      time.Time       `json:"startTime"`
 	Error          string          `json:"error,omitempty"`      // Error message if status=error
 	Attached       bool            `json:"attached"`             // True if attached rather than locally launched

@@ -172,7 +172,7 @@ func (c *ConfigAPI) enforcedSecurityInfo(cfg *config.RuntimeConfig) *healthEnfor
 
 	out := healthEnforcedSecurity{Instances: []healthEnforcedInstance{}}
 	for _, inst := range c.instances.List() {
-		if inst.Status != "running" {
+		if inst.Status != bridge.InstanceStatusRunning {
 			continue
 		}
 		entry := healthEnforcedInstance{ID: inst.ID, Comparison: "unknown"}

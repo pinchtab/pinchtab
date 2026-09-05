@@ -181,7 +181,7 @@ func (p LaunchPlanner) LaunchWithFallback(
 			continue
 		}
 
-		if outcome.Status == "running" {
+		if outcome.Status == bridge.InstanceStatusRunning {
 			result := &PlannedLaunch{Instance: inst}
 			if i > 0 {
 				result.FallbackFrom = firstFailTarget
@@ -315,10 +315,10 @@ func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Dura
 		}
 
 		switch status {
-		case "running":
-			return "running", ReasonUnknown, nil
-		case "error":
-			return "error", reason, nil
+		case bridge.InstanceStatusRunning:
+			return bridge.InstanceStatusRunning, ReasonUnknown, nil
+		case bridge.InstanceStatusError:
+			return bridge.InstanceStatusError, reason, nil
 		}
 
 		select {
@@ -361,7 +361,7 @@ func (o *Orchestrator) detachFailedAttempt(instanceID string) *InstanceInternal 
 		o.mu.Unlock()
 		return nil
 	}
-	inst.Status = "stopping"
+	inst.Status = bridge.InstanceStatusStopping
 	delete(o.instances, instanceID)
 	o.mu.Unlock()
 

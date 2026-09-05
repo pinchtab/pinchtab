@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,7 +26,7 @@ func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Requ
 		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
-	if inst.Status != "running" {
+	if inst.Status != bridge.InstanceStatusRunning {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}

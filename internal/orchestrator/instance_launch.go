@@ -103,7 +103,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	profileID := o.idMgr.ProfileID(name)
 	instanceID := o.idMgr.InstanceID(profileID, name)
 
-	if inst, ok := o.instances[instanceID]; ok && inst.Status == "running" {
+	if inst, ok := o.instances[instanceID]; ok && inst.Status == bridge.InstanceStatusRunning {
 		o.mu.Unlock()
 		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}

@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"log/slog"
 	"net/http"
 	"os"
@@ -31,12 +32,12 @@ func (o *Orchestrator) Stop(id string) error {
 		o.mu.Unlock()
 		return fmt.Errorf("instance %q not found", id)
 	}
-	if inst.Status == "stopped" && !instanceIsActive(inst) {
+	if inst.Status == bridge.InstanceStatusStopped && !instanceIsActive(inst) {
 		o.mu.Unlock()
 		o.markStopped(id)
 		return nil
 	}
-	inst.Status = "stopping"
+	inst.Status = bridge.InstanceStatusStopping
 	o.mu.Unlock()
 
 	if inst.cmd == nil {
@@ -268,7 +269,7 @@ func (o *Orchestrator) setStopError(id, msg string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if inst, ok := o.instances[id]; ok {
-		inst.Status = "error"
+		inst.Status = bridge.InstanceStatusError
 		inst.Error = msg
 	}
 }

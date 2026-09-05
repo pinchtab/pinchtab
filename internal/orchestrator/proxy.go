@@ -96,7 +96,7 @@ func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inst.Status != "running" {
+	if inst.Status != bridge.InstanceStatusRunning {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}
@@ -178,7 +178,7 @@ func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceIntern
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if instanceIsRunning(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -204,7 +204,7 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 	o.mu.RLock()
 	inst, ok := o.instances[id]
 	o.mu.RUnlock()
-	if !ok || inst.Status != "running" {
+	if !ok || inst.Status != bridge.InstanceStatusRunning {
 		httpx.Error(w, 404, fmt.Errorf("instance not found or not running"))
 		return
 	}
@@ -514,7 +514,7 @@ func (o *Orchestrator) singleRunningInstance() *InstanceInternal {
 
 	var only *InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status != "running" || !instanceIsActive(inst) {
+		if !instanceIsRunning(inst) {
 			continue
 		}
 		if only != nil {
