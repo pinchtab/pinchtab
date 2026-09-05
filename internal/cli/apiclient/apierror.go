@@ -159,17 +159,17 @@ func renderAPIErrorBody(statusCode int, body []byte) string {
 	}
 
 	if err := json.Unmarshal(body, &errResp); err != nil {
-		return fmt.Sprintf("Error %d: %s\n", statusCode, string(body))
+		return fmt.Sprintf("Error %d: %s%s\n", statusCode, string(body), requestIDSuffix())
 	}
 
 	var b strings.Builder
 	switch {
 	case errResp.Error != "" && codeAddsInformation(errResp.Code, errResp.Error):
-		fmt.Fprintf(&b, "Error %d: %s (%s)\n", statusCode, errResp.Error, errResp.Code)
+		fmt.Fprintf(&b, "Error %d: %s (%s)%s\n", statusCode, errResp.Error, errResp.Code, requestIDSuffix())
 	case errResp.Error != "":
-		fmt.Fprintf(&b, "Error %d: %s\n", statusCode, errResp.Error)
+		fmt.Fprintf(&b, "Error %d: %s%s\n", statusCode, errResp.Error, requestIDSuffix())
 	default:
-		fmt.Fprintf(&b, "Error %d: %s\n", statusCode, string(body))
+		fmt.Fprintf(&b, "Error %d: %s%s\n", statusCode, string(body), requestIDSuffix())
 	}
 
 	if errResp.Details != nil {
@@ -180,6 +180,15 @@ func renderAPIErrorBody(statusCode int, body []byte) string {
 	b.WriteString(renderGuidance(rejectedTokenProvenance(statusCode, errResp.Code), remedy.None))
 	b.WriteString(renderGuidance(staleTabAdvice(statusCode, body)))
 	return b.String()
+}
+
+// requestIDSuffix names the id the server logged this failure under, so the
+// documented grep has an input. Empty when no response arrived.
+func requestIDSuffix() string {
+	if lastRequestID == "" {
+		return ""
+	}
+	return " [requestId " + lastRequestID + "]"
 }
 
 // TokenSource is where the credential the CLI just sent came from — resolved at

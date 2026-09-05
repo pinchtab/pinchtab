@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -244,6 +245,28 @@ func resolveXY(r mcp.CallToolRequest) (float64, float64, bool) {
 		return x, y, true
 	}
 	return 0, 0, false
+}
+
+// withRequestID decorates every error result a tool returns with the id the server
+// logged the failing request under, so an agent can quote it. resultFromBytes's two
+// error branches are the funnel it serves; the id is attached here because the
+// funnel has no context and the transport is the one place the header is read.
+func withRequestID(h func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx, capture := withRequestIDCapture(ctx)
+		res, err := h(ctx, r)
+		if res == nil || !res.IsError || capture.get() == "" {
+			return res, err
+		}
+		for i, content := range res.Content {
+			if text, ok := content.(mcp.TextContent); ok {
+				text.Text += " [requestId " + capture.get() + "]"
+				res.Content[i] = text
+				break
+			}
+		}
+		return res, err
+	}
 }
 
 func resultFromBytes(body []byte, code int) (*mcp.CallToolResult, error) {

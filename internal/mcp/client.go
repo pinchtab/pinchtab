@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 const vocabHeader = "X-PinchTab-Vocab"
@@ -42,6 +43,40 @@ func (v *vocabStore) get(tabKey string) string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.m[tabKey]
+}
+
+// requestIDCapture rides the tool call's context so the transport can hand the
+// server's correlation id to the result decorator without every handler
+// threading a header through. The last response wins: a handler returns on its
+// first failure, so that is the id the failure belongs to.
+type requestIDCapture struct {
+	mu sync.Mutex
+	id string
+}
+
+type requestIDCaptureKey struct{}
+
+func withRequestIDCapture(ctx context.Context) (context.Context, *requestIDCapture) {
+	capture := &requestIDCapture{}
+	return context.WithValue(ctx, requestIDCaptureKey{}, capture), capture
+}
+
+func (c *requestIDCapture) set(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.id = id
+}
+
+func (c *requestIDCapture) get() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.id
+}
+
+func recordRequestID(ctx context.Context, id string) {
+	if capture, ok := ctx.Value(requestIDCaptureKey{}).(*requestIDCapture); ok {
+		capture.set(id)
+	}
 }
 
 // Client is an HTTP client for PinchTab's REST API.
@@ -103,6 +138,7 @@ func (c *Client) doWithHeaders(req *http.Request) ([]byte, int, http.Header, err
 		return nil, 0, nil, fmt.Errorf("request %s %s: %w", req.Method, req.URL.Path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	recordRequestID(req.Context(), resp.Header.Get(httpx.RequestIDHeader))
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
 	if err != nil {

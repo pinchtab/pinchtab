@@ -268,6 +268,9 @@ func TestTerminalPathsClearTheCachedTabAndSayTheyDid(t *testing.T) {
 	}
 
 	for _, mode := range []string{"ExitWithAPIError", "DoGetRaw"} {
+		// Both terminal paths print the id the server returned for the request
+		// they are ending, and ExitWithAPIError has no request of its own, so the
+		// child primes it through the transport funnel first.
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "current-tab-127.0.0.1-9867")
@@ -293,6 +296,9 @@ func TestTerminalPathsClearTheCachedTabAndSayTheyDid(t *testing.T) {
 			if !strings.Contains(out, "now cleared") {
 				t.Errorf("the terminal path cleared the cache without saying so:\n%s", out)
 			}
+			if !strings.Contains(out, "[requestId child-request-id]") {
+				t.Errorf("the terminal path lost the server's request id:\n%s", out)
+			}
 			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 				t.Fatalf("the cached tab survived a command that failed on it (%v), so the remedy's retry advice is false", statErr)
 			}
@@ -310,15 +316,18 @@ func runTerminalChild(mode string) {
 		StateFile: os.Getenv("PINCHTAB_TEST_TAB_STATE_FILE"),
 	})
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(requestIDHeader, "child-request-id")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
 	switch mode {
 	case "ExitWithAPIError":
-		ExitWithAPIError(http.StatusNotFound, body)
+		status, respBody, _ := DoPostQuietWithStatus(srv.Client(), srv.URL, "", "/tabs/CACHED-TAB/action", nil)
+		ExitWithAPIError(status, respBody)
 	case "DoGetRaw":
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write(body)
-		}))
-		defer srv.Close()
 		DoGetRaw(srv.Client(), srv.URL, "", "/tabs/CACHED-TAB/text", nil)
 	}
 	fmt.Fprintf(os.Stderr, "child mode %q returned instead of exiting\n", mode)

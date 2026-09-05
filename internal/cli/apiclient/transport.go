@@ -24,6 +24,16 @@ type request struct {
 	respHeaders *http.Header
 }
 
+// requestIDHeader is the correlation id the server stamps on every response. Declared
+// here rather than imported: the CLI is a client of the wire, and the test pins the
+// bytes against httpx.RequestIDHeader.
+const requestIDHeader = "X-Request-Id"
+
+// lastRequestID is the id the server used for the most recent response, recorded at
+// the one transport funnel so every error renderer can print it. It is cleared before
+// each request, so a failure with no response never carries a stale id.
+var lastRequestID string
+
 func buildURL(base, path string, params url.Values) string {
 	u := base + path
 	if len(params) > 0 {
@@ -49,11 +59,13 @@ func doRequest(client *http.Client, token string, r request) (int, []byte, error
 	for key, value := range r.headers {
 		req.Header.Set(key, value)
 	}
+	lastRequestID = ""
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	lastRequestID = resp.Header.Get(requestIDHeader)
 	if r.respHeaders != nil {
 		*r.respHeaders = resp.Header
 	}

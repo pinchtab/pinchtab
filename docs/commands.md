@@ -45,6 +45,13 @@ grep '"request failed"' <stateDir>/server.log        # causes, with requestId an
 grep <requestId> ~/.pinchtab/activity/*.jsonl        # the access-log line it belongs to
 ```
 
+The `<requestId>` comes from the server: every response carries it as the
+`X-Request-Id` header, and the two places a failure is actually read hand it on. A
+failing CLI command ends its error line with `[requestId <id>]`, and an MCP tool error
+ends its text the same way, so the id to grep for is the one on the failure you are
+looking at. A failure that never got a response — connection refused, a timeout — has
+no id, because the server logged nothing to join.
+
 The message that crosses the HTTP boundary is still path-sanitized (`fork/exec [path]`),
 so the unredacted copy exists only in the server's own log. Server faults (5xx) log at
 error level; a 4xx is the caller's input and logs at debug.

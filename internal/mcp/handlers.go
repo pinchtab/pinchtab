@@ -16,7 +16,7 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 	raw := rawHandlerMap(c)
 	checked := make(map[string]func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error), len(raw))
 	for name, h := range raw {
-		checked[name] = withTypedArgChecks(name, h)
+		checked[name] = withRequestID(withTypedArgChecks(name, h))
 	}
 	return checked
 }
