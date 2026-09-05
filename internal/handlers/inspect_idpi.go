@@ -43,6 +43,17 @@ func (h *Handlers) scanInspectContentForIDPI(w http.ResponseWriter, kind inspect
 	return result.Warning, false
 }
 
+// inspectTrustBoundary attaches the standing boundary to the kinds that
+// disclose page-derived content, the same two the scanner reads; /title and
+// /url carry neither a scan nor a boundary, for the reason inspectScanCorpus
+// records.
+func (h *Handlers) inspectTrustBoundary(kind inspectKind) trustBoundary {
+	if kind != inspectKindHTML && kind != inspectKindStyles {
+		return trustBoundary{}
+	}
+	return h.trustBoundary()
+}
+
 // inspectScanCorpus returns the page-derived text an inspect response would
 // disclose, or "" for the kinds that disclose none.
 //

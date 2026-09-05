@@ -23,6 +23,7 @@ type inspectResponse struct {
 	// IDPIWarning carries the scanner's advisory when a threat was detected but
 	// not blocked, so a caller reading only the body still sees it.
 	IDPIWarning string `json:"idpiWarning,omitempty"`
+	trustBoundary
 }
 
 type inspectPayload struct {
@@ -128,6 +129,7 @@ func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind in
 		return
 	}
 	resp.IDPIWarning = warning
+	resp.trustBoundary = h.inspectTrustBoundary(kind)
 
 	h.recordResolvedURL(r, resp.URL)
 	httpx.JSON(w, 200, resp)

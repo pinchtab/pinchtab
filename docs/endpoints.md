@@ -191,6 +191,17 @@ appears in `failures.recent` with the failed count and the first step's code and
 logs at `WARN`, and carries `steps: {total, successful, failed}` plus the code and message
 on its activity record — see [reference/metrics.md](reference/metrics.md).
 
+**Untrusted-content boundary.** Every read of page-derived content tells the caller it
+came from a web page, in the form its payload allows. The structured readers — `/snapshot`,
+`/capture`, `/find`, `/html` and `/styles` — carry `untrustedContent: true` and
+`idpiNotice` (the boundary text) on every response while `security.idpi.enabled` and
+`security.idpi.wrapContent` are on, which they are by default; that is a standing
+boundary, not a detection, and it is independent of `idpiWarning`, which any scanning
+endpoint adds only when the scanner matched something. `/text` wraps the boundary
+in-band around its prose instead of adding keys, so one payload never carries two
+boundaries. `/pdf` is binary and carries only the `X-IDPI-*` headers. `/title` and `/url`
+disclose no scanned content and carry neither.
+
 **A selector that matches nothing is a `404` on every read verb**, with code
 `element_not_found`: `/html`, `/styles`, `/title`, `/url`, `/screenshot`, `/capture`,
 `/annotate`, `/box`, `/visible`, `/enabled`, `/checked`, `/value`, `/text`, `/snapshot`

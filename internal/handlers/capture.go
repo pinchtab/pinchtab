@@ -249,10 +249,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	if idpiResult.Threat {
 		resp["idpiWarning"] = idpiResult.Reason
 	}
-	if idpiResult.WrapContent {
-		resp["untrustedContent"] = true
-		resp["idpiNotice"] = idpiNoticeText
-	}
+	h.trustBoundary().attach(resp)
 	httpx.JSON(w, 200, resp)
 }
 

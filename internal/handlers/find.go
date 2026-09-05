@@ -35,6 +35,7 @@ type findResponse struct {
 	LatencyMs    int64                   `json:"latency_ms"`
 	ElementCount int                     `json:"element_count"`
 	IDPIWarning  string                  `json:"idpiWarning,omitempty"`
+	trustBoundary
 }
 
 // HandleFind performs semantic element matching against the accessibility
@@ -106,7 +107,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := buildFindResponse(req, result, idpiWarning, start)
+	resp := buildFindResponse(req, result, idpiWarning, h.trustBoundary(), start)
 
 	h.recordActivity(r, activity.Update{Action: "find"})
 	h.recordFindIntent(resolvedTabID, req, result, descs, resp.Confidence)
@@ -216,17 +217,18 @@ func (h *Handlers) scanFindCorpusForIDPI(w http.ResponseWriter, ctx context.Cont
 	return scanResult.Warning, false
 }
 
-func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, start time.Time) findResponse {
+func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, boundary trustBoundary, start time.Time) findResponse {
 	resp := findResponse{
-		BestRef:      result.BestRef,
-		Confidence:   result.ConfidenceLabel(),
-		Score:        result.BestScore,
-		Matches:      result.Matches,
-		Strategy:     result.Strategy,
-		Threshold:    req.Threshold,
-		LatencyMs:    time.Since(start).Milliseconds(),
-		ElementCount: result.ElementCount,
-		IDPIWarning:  idpiWarning,
+		trustBoundary: boundary,
+		BestRef:       result.BestRef,
+		Confidence:    result.ConfidenceLabel(),
+		Score:         result.BestScore,
+		Matches:       result.Matches,
+		Strategy:      result.Strategy,
+		Threshold:     req.Threshold,
+		LatencyMs:     time.Since(start).Milliseconds(),
+		ElementCount:  result.ElementCount,
+		IDPIWarning:   idpiWarning,
 	}
 	if resp.Matches == nil {
 		resp.Matches = []semantic.ElementMatch{}
