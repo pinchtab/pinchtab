@@ -33,7 +33,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "openclaw": "2026.7.1",
+    "openclaw": "2026.9.2",
     "tsx": "^4.20.6",
     "typescript": "^7.0.2"
   },
