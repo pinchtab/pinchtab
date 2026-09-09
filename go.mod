@@ -7,7 +7,7 @@ require (
 	github.com/chromedp/chromedp v0.16.0
 	github.com/gobwas/ws v1.4.0
 	github.com/gost-dom/browser v0.12.0
-	github.com/mark3labs/mcp-go v0.58.0
+	github.com/mark3labs/mcp-go v1.0.0
 	github.com/pinchtab/idpishield v0.1.4
 	github.com/pinchtab/seaportal v0.2.0
 	github.com/pinchtab/semantic v0.1.3
