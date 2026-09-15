@@ -45,7 +45,7 @@
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.2.1",
-    "typescript": "~5.9.3",
+    "typescript": "~7.0.2",
     "typescript-eslint": "^8.69.0",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
