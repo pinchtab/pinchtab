@@ -325,3 +325,115 @@ func TestDetectChallengeIntent_None(t *testing.T) {
 		t.Fatalf("expected nil intent, got %+v", intent)
 	}
 }
+
+// Pages that talk about captchas are not captchas.
+//
+// Every case here was classified as a challenge before, most of them at 0.90 or
+// 0.95 — the confidence the detector reserves for having identified a specific
+// vendor. The cost of a false positive is not a wasted call: the agent believes
+// it is blocked, hands the page to a solver or to a human, and never does the
+// thing it was asked to do on a page that was never blocking it.
+//
+// The shared flaw was matching a word rather than the thing the word names.
+// "Attention required" is ordinary English, a turnstile is a thing in a stadium,
+// and a URL is allowed to contain "recaptcha" without being one.
+func TestDetectChallengeIntent_PagesAboutCaptchasAreNotCaptchas(t *testing.T) {
+	for _, tc := range []struct {
+		what  string
+		title string
+		url   string
+		html  string
+	}{
+		{
+			what:  "an article explaining reCAPTCHA, named in its own URL",
+			title: "How reCAPTCHA works",
+			url:   "https://example.com/blog/how-recaptcha-works",
+			html:  `<article><p>A walk through the challenge flow.</p></article>`,
+		},
+		{
+			what:  "a legal notice whose heading is ordinary English",
+			title: "Attention Required Before You Sign",
+			url:   "https://example.com/legal/notice",
+			html:  `<main><p>Please read the following carefully.</p></main>`,
+		},
+		{
+			what:  "a support page that asks the reader to wait",
+			title: "Just a moment while we finish setup",
+			url:   "https://example.com/support/account-setup",
+			html:  `<main><p>Your account is being created.</p></main>`,
+		},
+		{
+			what:  "an operations report about actual turnstiles",
+			title: "Stadium turnstile throughput, Q3",
+			url:   "https://example.com/ops/turnstile-report",
+			html:  `<main><p>Gate counts by entrance.</p></main>`,
+		},
+	} {
+		t.Run(tc.what, func(t *testing.T) {
+			if got := DetectChallengeIntent(tc.title, tc.url, tc.html); got != nil {
+				t.Errorf("classified as %s at %.2f confidence (%s); this page is about captchas, it is not one",
+					got.ChallengeType, got.Confidence, got.Details)
+			}
+		})
+	}
+}
+
+// The corroboration rule cuts one way only: with no page in hand there is nothing
+// to check a title against, so the title still decides. heuristics.go depends on
+// this, calling DetectChallengeIntent(title, "", "") to classify by title alone.
+func TestDetectChallengeIntent_TitleStillDecidesWithNoPage(t *testing.T) {
+	for _, title := range []string{
+		"Just a moment...",
+		"Attention Required! | Cloudflare",
+		"Checking your browser before accessing",
+	} {
+		intent := DetectChallengeIntent(strings.ToLower(title), "", "")
+		if intent == nil {
+			t.Fatalf("%q with no url or html returned no intent; the title-only path is what heuristics.go asks for", title)
+		}
+		if intent.ChallengeType != "turnstile" {
+			t.Errorf("%q classified as %q, want turnstile", title, intent.ChallengeType)
+		}
+	}
+}
+
+// A real interstitial arrives with the script that runs it, so tightening the
+// title never costs a true positive: the markers alone are enough.
+func TestDetectChallengeIntent_RealInterstitialNeedsNoTitle(t *testing.T) {
+	intent := DetectChallengeIntent(
+		"",
+		"https://example.com/",
+		`<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script>`,
+	)
+	if intent == nil {
+		t.Fatal("a challenge-platform script with no title was not detected")
+	}
+	if intent.ChallengeType != "turnstile" {
+		t.Errorf("classified as %q, want turnstile", intent.ChallengeType)
+	}
+}
+
+// The shape that matters most: a Cloudflare interstitial as actually served —
+// the address the caller asked for, the familiar title, and the script that runs
+// the challenge. Detection must rest on the script, because the title is the part
+// an ordinary page can imitate by accident.
+func TestDetectChallengeIntent_RealCloudflareInterstitial(t *testing.T) {
+	const page = `<!DOCTYPE html><html><head><title>Just a moment...</title></head>
+<body class="no-js">
+<div class="main-wrapper" role="main">
+  <div id="challenge-running">Checking your browser before accessing example.com.</div>
+</div>
+<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=8f1a2b3c4d5e"></script>
+</body></html>`
+
+	intent := DetectChallengeIntent("just a moment...", "https://example.com/pricing", strings.ToLower(page))
+	if intent == nil {
+		t.Fatal("a served Cloudflare interstitial was not detected")
+	}
+	if intent.ChallengeType != "turnstile" {
+		t.Errorf("classified as %q at %.2f, want turnstile", intent.ChallengeType, intent.Confidence)
+	}
+	if intent.Confidence < 0.9 {
+		t.Errorf("confidence %.2f is too low for a page carrying the challenge script", intent.Confidence)
+	}
+}

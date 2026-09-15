@@ -166,8 +166,13 @@ var detectIntentGolden = []struct {
 	{"Home page", "https://example.com/challenge/step", autosolver.IntentCaptcha, "", 0.8, "captcha detected via semantic analysis"},
 	{"Home page", "https://example.com/verify-me", autosolver.IntentCaptcha, "", 0.8, "captcha detected via semantic analysis"},
 	{"Home page", "https://example.com/captcha", autosolver.IntentCaptcha, "captcha-generic", 0.7, "generic captcha challenge detected"},
-	{"Home page", "https://example.com/recaptcha", autosolver.IntentCaptcha, "recaptcha-v2", 0.9, "reCAPTCHA v2 challenge detected"},
-	{"Home page", "https://example.com/hcaptcha", autosolver.IntentCaptcha, "hcaptcha", 0.9, "hCaptcha challenge detected"},
+	// A URL that merely contains a vendor's name, on a page titled "Home page",
+	// used to be named as that vendor's challenge at 0.9. It is a word in a path;
+	// /blog/how-recaptcha-works is the same shape. Naming a vendor is a claim
+	// about the page, and the URL alone does not support one — these land on
+	// generic at 0.7 now, which says captcha-ish without asserting which.
+	{"Home page", "https://example.com/recaptcha", autosolver.IntentCaptcha, "captcha-generic", 0.7, "generic captcha challenge detected"},
+	{"Home page", "https://example.com/hcaptcha", autosolver.IntentCaptcha, "captcha-generic", 0.7, "generic captcha challenge detected"},
 	{"Log In", "", autosolver.IntentLogin, "", 0.7, "login page detected via semantic title analysis"},
 	{"Login", "", autosolver.IntentLogin, "", 0.7, "login page detected via semantic title analysis"},
 	{"Sign In", "", autosolver.IntentLogin, "", 0.7, "login page detected via semantic title analysis"},
