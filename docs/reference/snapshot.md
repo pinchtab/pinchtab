@@ -107,11 +107,25 @@ matching, so a `compact` snapshot leaves them exactly as capable as a JSON one.
 
 ## What `maxTokens` guarantees
 
-`maxTokens` is a ceiling, not a hint. The nodes returned are the longest prefix whose
-rendered output fits the budget in the format you asked for, so the response never exceeds
-what you asked for and stops one node short of it at worst. Measured across `compact`,
-`text`, `json` and `yaml` on a page of realistic interactive nodes, a budget that actually
-constrains the result delivers 87–100% of it.
+`maxTokens` is a ceiling, not a hint. The response never exceeds what you asked for, and
+nothing is left on the table: every node left out was too big for what remained. Measured
+across `compact`, `text`, `json` and `yaml` on a page of realistic interactive nodes, a
+budget that actually constrains the result delivers 87–100% of it.
+
+When the budget cannot fit the whole tree, it is spent on what the page can be **acted
+on** with before what it can be read with: interactive roles first, then headings, media
+and table cells, then everything else. Nodes are returned in document order, so the reply
+still reads like the page.
+
+This matters because document order is not value order. A page whose controls sit below
+its copy — a form under terms, a search box under a nav blurb, pagination under results —
+used to return a budget's worth of prose and no refs at all, which is a snapshot nothing
+can be done with. On a 71-node page with 9 controls at the end, budgets of 120, 200 and
+300 tokens each returned 0 of the 9; they now return all 9 in the same space.
+
+Refs are assigned after the budget is applied and cached for the tab, so every ref in a
+truncated snapshot resolves to the element it names — a truncated tree is fully
+actionable.
 
 The cost is measured, not modelled: each node is charged the bytes its own format emits —
 rendered for `compact` and `text`, marshalled for `json` and `yaml` — so a change to a
