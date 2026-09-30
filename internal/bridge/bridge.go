@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
@@ -421,7 +422,7 @@ func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams
 		}
 		return &NavigateResult{URL: url}, nil
 	}
-	if err := NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects); err != nil {
+	if err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects, b.routeMgr); err != nil {
 		return nil, err
 	}
 

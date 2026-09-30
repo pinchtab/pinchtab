@@ -25,10 +25,6 @@ func NavigatePage(ctx context.Context, url string) error {
 	return bridgecdpops.NavigatePage(ctx, url)
 }
 
-func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int) error {
-	return bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, maxRedirects)
-}
-
 func DispatchNavigation(ctx context.Context, url string) error {
 	return bridgecdpops.DispatchNavigation(ctx, url)
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
-	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -50,62 +49,75 @@ func dispatchBackgroundNavigation(ctx context.Context, url string, replaceInitia
 
 var ErrTooManyRedirects = fmt.Errorf("too many redirects")
 
-func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int) error {
+type RedirectLimit struct {
+	max     int
+	count   atomic.Int32
+	blocked atomic.Bool
+}
+
+func NewRedirectLimit(max int) *RedirectLimit {
+	return &RedirectLimit{max: max}
+}
+
+func (l *RedirectLimit) Admit(e *fetch.EventRequestPaused) bool {
+	if e.RedirectedRequestID == "" {
+		return true
+	}
+	if int(l.count.Add(1)) > l.max {
+		l.blocked.Store(true)
+		return false
+	}
+	return true
+}
+
+func (l *RedirectLimit) Err() error {
+	if !l.blocked.Load() {
+		return nil
+	}
+	return fmt.Errorf("%w: got %d, max %d", ErrTooManyRedirects, l.count.Load(), l.max)
+}
+
+type RedirectInterceptor interface {
+	BeginRedirectLimit(ctx context.Context, limit *RedirectLimit) (end func(), err error)
+}
+
+func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int, interceptor RedirectInterceptor) error {
 	replaceInitialBlank, _ := shouldReplaceInitialBlankNavigation(ctx)
 
 	if maxRedirects < 0 {
 		return navigateAndWait(ctx, url, replaceInitialBlank)
 	}
-
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return fetch.Enable().Do(ctx)
-	})); err != nil {
-		return fmt.Errorf("fetch enable: %w", err)
+	if interceptor == nil {
+		return fmt.Errorf("redirect limit requested but no request interceptor is available")
 	}
+
+	limit := NewRedirectLimit(maxRedirects)
+	end, err := interceptor.BeginRedirectLimit(ctx, limit)
+	if err != nil {
+		return err
+	}
+	defer end()
+
 	waiter, err := newNavigationLifecycleWaiter(ctx)
 	if err != nil {
 		return err
 	}
 	defer waiter.close()
 
-	var redirectCount atomic.Int32
-	var blocked atomic.Bool
-
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		e, ok := ev.(*fetch.EventRequestPaused)
-		if !ok {
-			return
-		}
-		go func() {
-			reqID := e.RequestID
-			if e.RedirectedRequestID != "" {
-				count := int(redirectCount.Add(1))
-				if count > maxRedirects {
-					blocked.Store(true)
-					_ = fetch.FailRequest(reqID, network.ErrorReasonBlockedByClient).Do(cdp.WithExecutor(ctx, chromedp.FromContext(ctx).Target))
-					return
-				}
-			}
-			_ = fetch.ContinueRequest(reqID).Do(cdp.WithExecutor(ctx, chromedp.FromContext(ctx).Target))
-		}()
-	})
-
 	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return startNavigation(ctx, url, replaceInitialBlank)
 	}))
-
-	_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return fetch.Disable().Do(ctx)
-	}))
-
-	if blocked.Load() {
-		return fmt.Errorf("%w: got %d, max %d", ErrTooManyRedirects, redirectCount.Load(), maxRedirects)
+	if limitErr := limit.Err(); limitErr != nil {
+		return limitErr
 	}
 	if err != nil {
 		return err
 	}
-
-	return waiter.wait(ctx)
+	waitErr := waiter.wait(ctx)
+	if limitErr := limit.Err(); limitErr != nil {
+		return limitErr
+	}
+	return waitErr
 }
 
 // ShouldReplaceBlankHistoryEntry reports whether the first navigation should replace an untouched about:blank entry.

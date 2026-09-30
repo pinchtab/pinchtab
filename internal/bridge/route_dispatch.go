@@ -10,6 +10,7 @@ import (
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 const (
@@ -25,6 +26,7 @@ type routeDispatchJob struct {
 	e       *fetch.EventRequestPaused
 	rule    RouteRule
 	matched bool
+	refuse  bool
 }
 
 type routeDispatchPool struct {
@@ -74,7 +76,7 @@ func (rm *RouteManager) registerListener(listenCtx context.Context, tabID string
 		return
 	}
 	pool := newRouteDispatchPool(listenCtx, maxRouteDispatchWorkers, func(job routeDispatchJob) {
-		rm.dispatch(listenCtx, tabID, job.e, job.rule, job.matched)
+		rm.dispatch(listenCtx, tabID, job)
 	})
 	chromedp.ListenTarget(listenCtx, func(ev interface{}) {
 		if listenCtx.Err() != nil {
@@ -86,18 +88,19 @@ func (rm *RouteManager) registerListener(listenCtx context.Context, tabID string
 		}
 		eventResourceType := strings.ToLower(string(e.ResourceType))
 		eventMethod := strings.ToUpper(strings.TrimSpace(e.Request.Method))
+		limit := rm.redirectLimitFor(tabID)
 		rule, matched, hasRules := rm.match(tabID, e.Request.URL, eventResourceType, eventMethod)
-		// Teardown in progress: rules drained but fetch.Disable not yet
-		// landed. Skip dispatch — fetch.Disable will release pending requests.
-		if !hasRules {
+		// Teardown in progress: nothing left to intercept but fetch.Disable not
+		// yet landed. Skip dispatch — fetch.Disable will release pending requests.
+		if !hasRules && limit == nil {
 			return
 		}
-		job := routeDispatchJob{e: e, rule: rule, matched: matched}
+		job := routeDispatchJob{e: e, rule: rule, matched: matched, refuse: limit != nil && !limit.Admit(e)}
 		if !pool.submit(job) {
 			// Queue saturated: fall back to a one-off goroutine (the prior
 			// behavior) so the request is still resolved and the callback never
 			// blocks. Bounded in the common case; no worse than before under flood.
-			go rm.dispatch(listenCtx, tabID, e, rule, matched)
+			go rm.dispatch(listenCtx, tabID, job)
 		}
 	})
 }
@@ -105,11 +108,19 @@ func (rm *RouteManager) registerListener(listenCtx context.Context, tabID string
 // dispatch issues the CDP response for a paused request. Errors are logged at
 // Debug level — fetch operations frequently fail benignly when a tab navigates
 // while a request is paused, and elevating those to Warn would be noisy.
-func (rm *RouteManager) dispatch(listenCtx context.Context, tabID string, e *fetch.EventRequestPaused, rule RouteRule, matched bool) {
+func (rm *RouteManager) dispatch(listenCtx context.Context, tabID string, job routeDispatchJob) {
 	if listenCtx.Err() != nil {
 		return
 	}
 	executor := cdp.WithExecutor(listenCtx, chromedp.FromContext(listenCtx).Target)
+	e, rule, matched := job.e, job.rule, job.matched
+
+	if job.refuse {
+		if err := fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executor); err != nil {
+			slog.Debug("fetch.failRequest (redirect limit) failed", "tabId", tabID, "url", e.Request.URL, "err", err)
+		}
+		return
+	}
 
 	if !matched || rule.Action == RouteActionContinue {
 		if err := fetch.ContinueRequest(e.RequestID).Do(executor); err != nil {
@@ -164,6 +175,15 @@ func (rm *RouteManager) dispatch(listenCtx context.Context, tabID string, e *fet
 //     Operators who genuinely want to mock OPTIONS set Method:"OPTIONS".
 //   - Rule.Method == "" + OPTIONS event + Action != fulfill → match.
 //     Aborting/passing-through preflights is benign.
+func (rm *RouteManager) redirectLimitFor(tabID string) *bridgecdpops.RedirectLimit {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if state := rm.perTab[tabID]; state != nil {
+		return state.redirectLimit
+	}
+	return nil
+}
+
 func (rm *RouteManager) match(tabID, url, resourceType, method string) (rule RouteRule, matched bool, hasRules bool) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
