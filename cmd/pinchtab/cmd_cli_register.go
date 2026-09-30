@@ -553,8 +553,6 @@ func addPostActionFlags(cmd *cobra.Command, verb string, withText bool) {
 	}
 }
 
-// addVocabRefusal refuses a flag value outside its bridge vocabulary before any request
-// is sent, with the wording MCP uses, and rewrites the flag to the normalized value.
 func addVocabRefusal(cmd *cobra.Command, flag string, parse func(string) (string, error)) {
 	previous := cmd.PreRunE
 	cmd.PreRunE = func(c *cobra.Command, args []string) error {

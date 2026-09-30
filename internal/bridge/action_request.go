@@ -400,13 +400,10 @@ func ClickModes() []string { return []string{ClickModeDOM, ClickModeDispatch} }
 
 func DialogActions() []string { return []string{DialogActionAccept, DialogActionDismiss} }
 
-// ParseClickMode normalizes a click delivery mode and refuses one outside ClickModes.
 func ParseClickMode(mode string) (string, error) {
 	return parseVocab("mode", mode, ClickModes())
 }
 
-// ParseDialogAction normalizes a dialog action and refuses one outside DialogActions,
-// naming field in the refusal so each surface reports its own parameter.
 func ParseDialogAction(field, action string) (string, error) {
 	return parseVocab(field, action, DialogActions())
 }
