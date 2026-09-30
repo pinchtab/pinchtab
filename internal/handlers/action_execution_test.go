@@ -12,7 +12,7 @@ import (
 // for a ref yields the same Composite() (role/name/value) as before the switch
 // from rebuilding the full descriptor slice to a direct single-node descriptor.
 func TestCacheActionIntent_DescriptorComposite(t *testing.T) {
-	mb := &visibleMockBridge{
+	mb := &mockBridge{
 		refCache: &bridge.RefCache{
 			Nodes: []bridge.A11yNode{
 				{Ref: "e1", Role: "link", Name: "Home"},
@@ -37,7 +37,7 @@ func TestCacheActionIntent_DescriptorComposite(t *testing.T) {
 // TestCacheActionIntent_UnknownRefKeepsRefDefault asserts the not-found default
 // (a descriptor carrying just the ref) is preserved when the ref is absent.
 func TestCacheActionIntent_UnknownRefKeepsRefDefault(t *testing.T) {
-	mb := &visibleMockBridge{
+	mb := &mockBridge{
 		refCache: &bridge.RefCache{
 			Nodes: []bridge.A11yNode{{Ref: "e1", Role: "link", Name: "Home"}},
 		},

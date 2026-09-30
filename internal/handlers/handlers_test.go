@@ -53,6 +53,7 @@ type mockBridge struct {
 	evaluateExprs     []string
 	evaluateFn        func(expression string, result any) error
 	createTabContexts []string
+	refCache          *bridge.RefCache
 }
 
 // BrowserContext answers the browser-context generation lookup the error paths
@@ -146,7 +147,7 @@ func (m *mockBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
-func (m *mockBridge) GetRefCache(tabID string) *bridge.RefCache        { return nil }
+func (m *mockBridge) GetRefCache(tabID string) *bridge.RefCache        { return m.refCache }
 func (m *mockBridge) SetRefCache(tabID string, cache *bridge.RefCache) {}
 func (m *mockBridge) DeleteRefCache(tabID string)                      {}
 
